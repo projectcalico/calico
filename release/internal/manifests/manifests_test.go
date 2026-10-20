@@ -96,7 +96,7 @@ const (
 	productRegistry = "registry.example/product"
 )
 
-func productImage(ver string) string {
+func productRef(ver string) string {
 	return testRegistry + "/product:" + ver
 }
 
@@ -332,11 +332,11 @@ func TestAssertVersions(t *testing.T) {
 		}{
 			{
 				name:   "product and operator images at their own versions",
-				images: []string{productImage(productVersion), operatorRef(operatorVersion)},
+				images: []string{productRef(productVersion), operatorRef(operatorVersion)},
 			},
 			{
 				name:    "product image at the wrong version",
-				images:  []string{productImage("v0.0.1")},
+				images:  []string{productRef("v0.0.1")},
 				wantErr: "expected " + productVersion,
 			},
 			{
@@ -379,9 +379,9 @@ func TestAssertVersions(t *testing.T) {
 	t.Run("reads only its file list", func(t *testing.T) {
 		m := testManifests(t)
 		for _, name := range Files() {
-			writeManifest(t, m.RepoRoot, name, productImage(productVersion))
+			writeManifest(t, m.RepoRoot, name, productRef(productVersion))
 		}
-		writeManifest(t, m.RepoRoot, "not-in-the-list.yaml", productImage("v0.0.1"))
+		writeManifest(t, m.RepoRoot, "not-in-the-list.yaml", productRef("v0.0.1"))
 		if err := AssertVersions(m, WithRunner(&fakeRunner{})); err != nil {
 			t.Fatalf("AssertVersions: %v", err)
 		}
@@ -468,6 +468,43 @@ func TestRegistry(t *testing.T) {
 	t.Run("errors when the file is missing", func(t *testing.T) {
 		if _, err := Registry(t.TempDir()); err == nil {
 			t.Error("expected an error for a missing manifest")
+		}
+	})
+}
+
+func TestVersions(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		productTag   string
+		wantProduct  string
+		wantOperator string
+	}{
+		{name: "release tags", productTag: "v3.30.1", wantProduct: "v3.30.1", wantOperator: "v1.38.2"},
+		{name: "master tag is the v0.0.0 dev version", productTag: "master", wantProduct: "v0.0.0", wantOperator: "v1.38.2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeManifest(t, root, "ocp/02-tigera-operator.yaml", "quay.io/"+productImage+":"+tc.productTag)
+			writeManifest(t, root, "tigera-operator.yaml", "quay.io/tigera/operator:v1.38.2")
+
+			product, operator, err := Versions(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if product.String() != tc.wantProduct {
+				t.Errorf("product = %q, want %q", product, tc.wantProduct)
+			}
+			if operator.String() != tc.wantOperator {
+				t.Errorf("operator = %q, want %q", operator, tc.wantOperator)
+			}
+		})
+	}
+
+	t.Run("missing image is an error", func(t *testing.T) {
+		root := t.TempDir()
+		writeManifest(t, root, "ocp/02-tigera-operator.yaml", "quay.io/other/image:v1.0.0")
+		if _, _, err := Versions(root); err == nil {
+			t.Error("want an error")
 		}
 	})
 }

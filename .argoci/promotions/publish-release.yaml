@@ -9,7 +9,7 @@ timeout: 14h
 
 defaults:
   # A promotion inherits nothing from the CI workflow's defaults.
-  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.3
+  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
   jobSize: medium
   services:
     - docker

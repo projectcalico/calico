@@ -224,13 +224,13 @@ of no-encap.
 ## 4. Transitioning a running cluster
 
 A cluster moves between BIRD-programmed and Felix-programmed IPIP cluster routes
-in one of two ways, and they do not behave the same.
+in one of two ways, and only one of them has a gap.
 
 **Upgrading the code.**  On upgrade to v3.33, a cluster with IPIP pools and no
-explicit configuration changes owner without anything in the datastore changing
-at all: both `programClusterRoutes` fields are unset before and after, and what
-moves is the *default* each component derives from unset.  The calico-node pod
-is replaced, so:
+explicit configuration changes owner without anything in the datastore changing:
+both `programClusterRoutes` fields are unset before and after, and what moves is
+the *default* each component derives from unset.  The calico-node pod is
+replaced, so:
 
 1. The old BIRD exits.  Its kernel protocol is configured with `persist`, so it
    deliberately leaves its routes in the kernel instead of withdrawing them.
@@ -244,12 +244,10 @@ is replaced, so:
    alien routes that it learns rather than removes; what is left to reconcile is
    whatever Felix did not want.
 
-There is no window in which a destination Felix wants has no route.  When Felix
-wants a route to exist, it atomically replaces any previous route for the same
-prefix, regardless of whether that previous route was within its logical
-ownership — it programs with `RouteReplace` (`felix/routetable/route_table.go`).
-That is long-standing behaviour and does not depend on the ownership rule
-described below.
+There is no window in which a destination Felix wants has no route: Felix
+programs with `RouteReplace` (`felix/routetable/route_table.go`), which
+atomically replaces any previous route for the same prefix whether or not it was
+within Felix's logical ownership.
 
 **Changing the configuration on a running cluster.**  Setting either
 `programClusterRoutes` field explicitly is picked up live: confd re-renders and
@@ -257,19 +255,16 @@ BIRD reconfigures in place.  That BIRD knows it exported those routes, so it
 withdraws them itself.  Felix restarts on the config change and starts
 programming the same CIDRs.
 
-The two paths differ in whether there is a gap, and not in the direction one
-might expect.  Replacing the pod has none, as above.  Changing the configuration
-on a running cluster does: BIRD withdraws promptly, while Felix *restarts*
-because its configuration changed, and only programs the destinations once it is
-back.  The gap is therefore about the length of a Felix restart, and it is
-unmeasured.  A cluster that cannot tolerate any cross-node packet loss should
-prefer the upgrade path, or make the change during a maintenance window.
+This is the path with the gap: BIRD withdraws promptly, while Felix *restarts*
+because its configuration changed and only programs the destinations once it is
+back.  The gap is the length of a Felix restart, and it is unmeasured.  A cluster
+that cannot tolerate any cross-node packet loss should prefer the upgrade path,
+or make the change during a maintenance window.
 
-Once Felix has re-programmed a destination, BIRD can no longer withdraw it out
-from under Felix: the kernel matches on route protocol when the delete specifies
-one, so a delete carrying `RTPROT_BIRD` does not match a route that is now
-Felix's proto 80.  (Verified against the kernel; it assumes BIRD sets the
-protocol on its delete messages, which its kernel protocol does.)
+Once Felix has re-programmed a destination, BIRD cannot withdraw it out from
+under Felix: a delete carrying `RTPROT_BIRD` does not match a route that is now
+Felix's proto 80, since the kernel matches on protocol when the delete specifies
+one.
 
 **Where BIRD does not come back.**  Step 3 is what removes BIRD's persisted
 routes in the ordinary upgrade, and it does not happen if BGP is disabled as
@@ -281,13 +276,11 @@ BIRD's protocol, whenever Felix is the configured owner of the IPIP cluster
 routes (`OwnBIRDIPIPRoutes`, `felix/routetable/ownershippol`), so that
 reconciliation removes them.
 
-Note what this does and does not cover.  Destinations Felix *does* want were
-already handled, by the atomic replace above; the rule adds nothing there.  What
-it adds is the removal of BIRD's routes to destinations Felix does **not** want
-— a block released while the node was down, a node that has left the cluster, a
-pool that has been deleted.  Those have no desired route to overwrite them, so
-without the rule, and without a BIRD to reconcile them, they would stay in the
-kernel indefinitely.
+The rule matters only for destinations Felix does **not** want — a block
+released while the node was down, a node that has left the cluster, a deleted
+pool.  Destinations it does want are covered by the atomic replace above; these
+have no desired route to overwrite them, so without the rule and without a BIRD
+to reconcile them they would stay in the kernel indefinitely.
 
 ### Review notes — §4
 
