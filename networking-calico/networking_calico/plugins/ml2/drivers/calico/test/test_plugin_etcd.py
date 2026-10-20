@@ -2093,6 +2093,9 @@ class TestLiveMigration(TestPluginEtcdBase):
         # Clear initial writes.
         self.recent_writes = {}
         self.recent_deletes = set()
+        # The plugin mock is module-level and so shared between tests; without this,
+        # notifications sent by an earlier test are still visible here.
+        self.db.nova_notifier.notify_port_active_direct.reset_mock()
 
     def _ep_key(self, host):
         """Build WEP etcd key for port1 on the given host."""
@@ -2855,6 +2858,181 @@ class TestLiveMigration(TestPluginEtcdBase):
                 new_key,
             )
 
+    def _complete_migration(self):
+        """Simulate Nova's cutover: the binding moves to the destination host."""
+        self.osdb_ports[0]["binding:host_id"] = self.DEST_HOST
+        self.osdb_ports[0]["binding:profile"] = {}
+
+    def _rollback_migration(self):
+        """Simulate a failed migration: the binding stays at the source host."""
+        self.osdb_ports[0]["binding:profile"] = {}
+
+    def _status_key(self, hostname):
+        """The key of Felix's status for port1 at ``hostname``, under its VM."""
+        workload_id = mech_calico.datamodel_v2.felix_status_workload_id(
+            self.driver._status_namespace, lib.port1["device_id"]
+        )
+        return (hostname, workload_id, lib.port1["id"])
+
+    def _report_status(self, hostname, port_id, status=None):
+        """Drive _try_to_update_port_status as the status writer thread would.
+
+        ``status`` is the Calico endpoint status now cached for ``hostname``; None
+        models Felix having deleted that host's status key.  Returns the
+        update_port_status mock, for the caller to assert on.
+        """
+        self.driver._get_db()
+        key = self._status_key(hostname)
+        if status is None:
+            self.driver._port_status_cache.pop(key, None)
+        else:
+            self.driver._port_status_cache[key] = status
+        self.db.update_port_status = mock.Mock()
+        context = mock.Mock()
+        with mock.patch("eventlet.spawn_after", autospec=True):
+            self.driver._try_to_update_port_status(context, key)
+        return self.db.update_port_status
+
+    def test_dest_up_during_migration_sets_active(self):
+        """The destination may report the port up before Nova's cutover."""
+        self._do_initial_resync()
+        self._pre_migrate()
+
+        m_update = self._report_status(
+            self.DEST_HOST, self.port["id"], datamodel_v1.ENDPOINT_STATUS_UP
+        )
+
+        m_update.assert_called_once_with(
+            mock.ANY,
+            self.port["id"],
+            mech_calico.constants.PORT_STATUS_ACTIVE,
+            host=self.DEST_HOST,
+        )
+
+    def test_source_deletion_after_migration_leaves_port_active(self):
+        """The source's endpoint deletion must not flip a migrated port to ERROR.
+
+        This was a reported bug: the destination reports "up" and then the source's
+        status key is deleted, and with a single Neutron status field the deletion
+        used to land last and win.
+        """
+        self._do_initial_resync()
+        self._pre_migrate()
+        self._complete_migration()
+        self.driver._port_status_cache[self._status_key(self.DEST_HOST)] = (
+            datamodel_v1.ENDPOINT_STATUS_UP
+        )
+
+        m_update = self._report_status(self.SOURCE_HOST, self.port["id"])
+
+        m_update.assert_called_once_with(
+            mock.ANY,
+            self.port["id"],
+            mech_calico.constants.PORT_STATUS_ACTIVE,
+            host=self.SOURCE_HOST,
+        )
+
+    def test_failed_migration_dest_deletion_heals_port(self):
+        """A rolled-back migration re-asserts the source's status.
+
+        The VM never left the source, so Felix there has nothing new to report and the
+        only event is the destination WEP being cleaned up.  That event has to carry
+        the source's status, or a port left DOWN by the rebind would stay there.
+        """
+        self._do_initial_resync()
+        self._pre_migrate()
+        self._rollback_migration()
+        self.driver._port_status_cache[self._status_key(self.SOURCE_HOST)] = (
+            datamodel_v1.ENDPOINT_STATUS_UP
+        )
+
+        m_update = self._report_status(self.DEST_HOST, self.port["id"])
+
+        m_update.assert_called_once_with(
+            mock.ANY,
+            self.port["id"],
+            mech_calico.constants.PORT_STATUS_ACTIVE,
+            host=self.DEST_HOST,
+        )
+
+    def test_source_deletion_during_cutover_rebind_leaves_port_active(self):
+        """Status owners are the hosts with a WEP, even mid-rebind.
+
+        At the cutover's intermediate commit ``binding:host_id`` is already the dest,
+        ``migrating_to`` has gone, and ``vif_type`` is transiently "unbound".  The dest
+        WEP stays in place throughout, so the dest is still an owner, and a source
+        deletion landing then re-asserts the dest's status.
+        """
+        self._do_initial_resync()
+        self._pre_migrate()
+        self._complete_migration()
+        self.osdb_ports[0]["binding:vif_type"] = "unbound"
+        self.driver._port_status_cache[self._status_key(self.DEST_HOST)] = (
+            datamodel_v1.ENDPOINT_STATUS_UP
+        )
+
+        m_update = self._report_status(self.SOURCE_HOST, self.port["id"])
+
+        m_update.assert_called_once_with(
+            mock.ANY,
+            self.port["id"],
+            mech_calico.constants.PORT_STATUS_ACTIVE,
+            host=self.SOURCE_HOST,
+        )
+
+    def test_owner_status_under_old_workload_does_not_count(self):
+        """An owning host's status counts only under the port's current VM.
+
+        Here the destination still has an "up" under a VM the port has since left,
+        alongside a "down" under its current VM.
+        """
+        self._do_initial_resync()
+        self._pre_migrate()
+        self._complete_migration()
+        old_workload_key = (
+            self.DEST_HOST,
+            mech_calico.datamodel_v2.felix_status_workload_id(
+                self.driver._status_namespace, "old-vm"
+            ),
+            self.port["id"],
+        )
+        self.driver._port_status_cache[old_workload_key] = (
+            datamodel_v1.ENDPOINT_STATUS_UP
+        )
+        self.driver._port_status_cache[self._status_key(self.DEST_HOST)] = (
+            datamodel_v1.ENDPOINT_STATUS_DOWN
+        )
+
+        m_update = self._report_status(self.SOURCE_HOST, self.port["id"])
+
+        m_update.assert_called_once_with(
+            mock.ANY,
+            self.port["id"],
+            mech_calico.constants.PORT_STATUS_DOWN,
+            host=self.SOURCE_HOST,
+        )
+
+    def test_deletion_at_owning_host_still_reports_error(self):
+        """A port still bound here, with no Calico endpoint, is a genuine error."""
+        self._do_initial_resync()
+
+        m_update = self._report_status(self.SOURCE_HOST, self.port["id"])
+
+        m_update.assert_called_once_with(
+            mock.ANY,
+            self.port["id"],
+            mech_calico.constants.PORT_STATUS_ERROR,
+            host=self.SOURCE_HOST,
+        )
+
+    def test_status_from_unrelated_host_is_ignored(self):
+        """A host that owns no endpoint for this port cannot move its status."""
+        self._do_initial_resync()
+
+        m_update = self._report_status("some-other-host", self.port["id"])
+
+        m_update.assert_not_called()
+
     def test_resync_at_cutover_with_dest_equal_to_binding_host(self):
         """A port whose ``migrating_to`` is its binding host has one WEP slot there.
 
@@ -3440,7 +3618,13 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
     def _status_key_for_db_port(self, host, port_id, device_id="vm-1"):
         """A status key for ``port_id`` at ``host``, with the port in the DB."""
         self.db.get_port = mock.Mock(
-            return_value={"id": port_id, "device_id": device_id, "binding:profile": {}}
+            return_value={
+                "id": port_id,
+                "device_id": device_id,
+                "device_owner": "compute:nova",
+                "binding:host_id": host,
+                "binding:profile": {},
+            }
         )
         workload_id = mech_calico.datamodel_v2.felix_status_workload_id(
             self.driver._status_namespace, device_id
@@ -3465,7 +3649,10 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         self.assertEqual(
             [
                 mock.call(
-                    context, "p1", mech_calico.constants.PORT_STATUS_ERROR, host="host"
+                    context,
+                    "p1",
+                    mech_calico.constants.PORT_STATUS_ERROR,
+                    host="host",
                 )
             ],
             mock_calls,
@@ -3553,7 +3740,10 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         self.assertEqual(
             [
                 mock.call(
-                    context, "p1", mech_calico.constants.PORT_STATUS_ACTIVE, host="host"
+                    context,
+                    "p1",
+                    mech_calico.constants.PORT_STATUS_ACTIVE,
+                    host="host",
                 )
             ],
             mock_calls,
