@@ -3,9 +3,9 @@
 
 This repo automates and documents every step needed to build and
 publish Calico packages, for use [with
-OpenStack](https://docs.projectcalico.org/master/getting-started/openstack/installation/)
+OpenStack](https://docs.tigera.io/calico/latest/getting-started/openstack/installation)
 or [on bare metal
-hosts](https://docs.projectcalico.org/master/getting-started/bare-metal/installation/).
+hosts](https://docs.tigera.io/calico/latest/getting-started/bare-metal/installation).
 
 A single
 
@@ -83,7 +83,7 @@ We build and publish packages for these platforms:
 
 -  CentOS 7 or RHEL 7.  The hosting for these packages is in RPM repos
    at binaries.projectcalico.org (for example
-   http://binaries.projectcalico.org/rpm/calico-3.8/).
+   https://binaries.projectcalico.org/rpm/calico-3.8/).
 
 ## Debian source packages and versioning
 
@@ -144,7 +144,7 @@ The components that we package and host are:
 -  etcd3gw - for CentOS/RHEL 7 only.
 
    Note: for Ubuntu there is no packaging for etcd3gw, and we instead
-   [document](https://docs.projectcalico.org/master/getting-started/openstack/installation/ubuntu)
+   [document](https://docs.tigera.io/calico/latest/getting-started/openstack/installation/ubuntu)
    that the installer must do `pip install etcd3gw`.
 
 -  dnsmasq - see below.

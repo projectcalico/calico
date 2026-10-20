@@ -25,7 +25,7 @@ Typha is generally not required for Calico deployments using an etcdv3 datastore
 ## How can I start using Typha?
 
 Follow the "more than 50 nodes" section in the
-[Calico for Kubernetes getting started guide](https://docs.projectcalico.org/getting-started/kubernetes/self-managed-onprem/onpremises).
+[Calico for Kubernetes getting started guide](https://docs.tigera.io/calico/latest/getting-started/kubernetes/self-managed-onprem/onpremises).
 
 ## How can I get support for contributing to Project Calico?
 
