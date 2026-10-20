@@ -11,7 +11,7 @@ LLVM_VERSION=21.1.8
 # Set when go-build is rebuilt for the same Go/LLVM/Kubernetes versions, which is
 # published as -1, -2 and so on. Empty for a normal tag; clear it whenever any of
 # those three versions moves.
-GO_BUILD_VER_SUFFIX=
+GO_BUILD_VER_SUFFIX=-cacheprog
 GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)$(GO_BUILD_VER_SUFFIX)
 RUST_BUILD_VER=1.96.0
 
@@ -92,4 +92,3 @@ LIBNFTNL_SHA256=37fea5d6b5c9b08de7920d298de3cdc942e7ae64b1a3e8b880b2d390ae67ad95
 
 # quay.io expiry time for hashrelease/dev images
 QUAY_EXPIRE_DAYS=90
-

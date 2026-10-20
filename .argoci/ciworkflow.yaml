@@ -73,6 +73,15 @@ globalPrologue: |
       sleep 10
     done
   fi
+  # A VM step gets no secrets, so it builds without the remote cache. Image
+  # layers and cached directories are content-addressed, so a PR can read what
+  # its branch wrote; only branch builds write, as with the Go cache below.
+  if [ -n "${GOCACHE_ACCESS_KEY:-}" ]; then
+    export REMOTE_BUILD_CACHE=true
+    if [ "${CI_GIT_REF_TYPE}" != PR ] && [ "${CI_GIT_REF_TYPE}" != TAG ]; then
+      export REMOTE_BUILD_CACHE_WRITE=true
+    fi
+  fi
   # One place for the Go build cache, whether a build runs in docker or on the
   # host, so what is restored is what the build reads.
   export LOCAL_GO_PKG_CACHE="${CI_HOME}/${CI_GIT_DIR}/.go-pkg-cache"
@@ -129,6 +138,7 @@ defaults:
     - goproxy
   secretBundles:
     - docker-hub
+    - argoci-gcp-gocache-s3api-hmac
 
 includes:
   # Each check inside carries its own gate.
