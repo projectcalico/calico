@@ -188,8 +188,12 @@ check "boot disk follows the family" \
 check "the chosen disk is reported for replacements" [ "$vm_boot_disk_type" = hyperdisk-balanced ]
 
 run 0 "c4d stockout" "n4d stockout" "c3 stockout" "n4 stockout"
-check "gives up at the deadline after a full pass" [ "$rc" = 1 -a "$(calls)" = "create c4d create n4d create c3 create n4" ]
-check "failure banner reports the attempts" output_has "no capacity or quota after 4 attempts"
+check "gives up at the deadline mid-pass" [ "$rc" = 1 -a "$(calls)" = "create c4d" ]
+check "failure banner reports the attempts" output_has "no capacity or quota after 1 attempts"
+
+run 1 "c4d stockout" "n4d stockout" "c3 stockout" "n4 stockout"
+check "no backoff that would end past the deadline" \
+  [ "$rc" = 1 -a "$(calls)" = "create c4d create n4d create c3 create n4" ]
 
 if [ "$fails" -gt 0 ]; then
   echo "$fails check(s) FAILED"
