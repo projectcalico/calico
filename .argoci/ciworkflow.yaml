@@ -129,6 +129,7 @@ defaults:
     - goproxy
   secretBundles:
     - docker-hub
+    - argoci-gcp-gocache-s3api-hmac
 
 includes:
   # Each check inside carries its own gate.
