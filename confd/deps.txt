@@ -112,6 +112,7 @@ local:confd/pkg/log
 local:confd/pkg/resource/template
 local:confd/pkg/run
 local:crypto/pkg/tls
+local:lib/std/intervals
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
 local:libcalico-go/lib/apiconfig
