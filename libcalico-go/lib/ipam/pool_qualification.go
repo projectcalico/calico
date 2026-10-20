@@ -91,7 +91,8 @@ func (q poolQualification) filter(keep func(rejectReason) bool) []v3.IPPool {
 }
 
 // qualifyPools decides which pools an automatic assignment may draw from. The input must already be limited to
-// allocatable pools, as GetEnabledPools returns them.
+// allocatable pools, as GetEnabledPools returns them. It returns ErrNoQualifiedPool, possibly wrapped, when no pool's
+// block size fits or no pool allows the use.
 func qualifyPools(req poolRequest, enabledPools []v3.IPPool) (poolQualification, error) {
 	log.Debugf("enabled pools: %v", enabledPools)
 	log.Debugf("requested pools: %v", req.requested)

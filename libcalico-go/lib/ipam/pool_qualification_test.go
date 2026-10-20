@@ -15,8 +15,6 @@
 package ipam
 
 import (
-	"net"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -30,10 +28,10 @@ import (
 // Pool 1 of each family is written unnormalized (host bit set, full IPv6 form) so that naming it in a request
 // exercises CIDR normalization.
 const (
-	qualV4Pool1 = "10.0.0.1/24"
-	qualV4Pool2 = "20.0.0.0/24"
-	qualV6Pool1 = "5001:0000:0000:001a:0000:0000:0000:0000/64"
-	qualV6Pool2 = "5001:0:0:1b::/64"
+	v4Pool1 = "10.0.0.1/24"
+	v4Pool2 = "20.0.0.0/24"
+	v6Pool1 = "5001:0000:0000:001a:0000:0000:0000:0000/64"
+	v6Pool2 = "5001:0:0:1b::/64"
 )
 
 // testPool holds the IP pool fields that pool qualification reads.
@@ -46,6 +44,7 @@ type testPool struct {
 	manual            bool
 }
 
+// build returns the IP pool, defaulting to Automatic assignment, block size 26, and workload and tunnel uses.
 func (p testPool) build() v3.IPPool {
 	mode := v3.Automatic
 	if p.manual {
@@ -151,87 +150,87 @@ var _ = DescribeTable("qualifyPools",
 
 	// Node selectors, with and without named pools. A disabled pool is one GetEnabledPools leaves out.
 	Entry("no selectors, nothing named", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool1}, {cidr: qualV4Pool2}},
-		qualified: []string{qualV4Pool1, qualV4Pool2},
-		selecting: []string{qualV4Pool1, qualV4Pool2},
+		pools:     []testPool{{cidr: v4Pool1}, {cidr: v4Pool2}},
+		qualified: []string{v4Pool1, v4Pool2},
+		selecting: []string{v4Pool1, v4Pool2},
 	}),
 	Entry("no selectors, pool1 named", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool1}, {cidr: qualV4Pool2}},
-		requested: []string{qualV4Pool1},
-		qualified: []string{qualV4Pool1},
-		selecting: []string{qualV4Pool1},
+		pools:     []testPool{{cidr: v4Pool1}, {cidr: v4Pool2}},
+		requested: []string{v4Pool1},
+		qualified: []string{v4Pool1},
+		selecting: []string{v4Pool1},
 	}),
 	Entry("only pool1 selects the node", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool1, nodeSelector: `foo == "bar"`}, {cidr: qualV4Pool2, nodeSelector: `foo != "bar"`}},
-		qualified: []string{qualV4Pool1},
-		selecting: []string{qualV4Pool1},
+		pools:     []testPool{{cidr: v4Pool1, nodeSelector: `foo == "bar"`}, {cidr: v4Pool2, nodeSelector: `foo != "bar"`}},
+		qualified: []string{v4Pool1},
+		selecting: []string{v4Pool1},
 	}),
 	Entry("pool1 doesn't select the node, pool2 selects all()", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool1, nodeSelector: `foo != "bar"`}, {cidr: qualV4Pool2, nodeSelector: "all()"}},
-		qualified: []string{qualV4Pool2},
-		selecting: []string{qualV4Pool2},
+		pools:     []testPool{{cidr: v4Pool1, nodeSelector: `foo != "bar"`}, {cidr: v4Pool2, nodeSelector: "all()"}},
+		qualified: []string{v4Pool2},
+		selecting: []string{v4Pool2},
 	}),
 	Entry("pool2 named although pool1 selects the node", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool1, nodeSelector: `foo == "bar"`}, {cidr: qualV4Pool2}},
-		requested: []string{qualV4Pool2},
-		qualified: []string{qualV4Pool2},
-		selecting: []string{qualV4Pool2},
+		pools:     []testPool{{cidr: v4Pool1, nodeSelector: `foo == "bar"`}, {cidr: v4Pool2}},
+		requested: []string{v4Pool2},
+		qualified: []string{v4Pool2},
+		selecting: []string{v4Pool2},
 	}),
 	Entry("pool1 disabled, nothing named", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool2}},
-		qualified: []string{qualV4Pool2},
-		selecting: []string{qualV4Pool2},
+		pools:     []testPool{{cidr: v4Pool2}},
+		qualified: []string{v4Pool2},
+		selecting: []string{v4Pool2},
 	}),
 	Entry("pool1 disabled and named", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool2}},
-		requested: []string{qualV4Pool1},
+		pools:     []testPool{{cidr: v4Pool2}},
+		requested: []string{v4Pool1},
 		err:       "the given pool (10.0.0.0/24) does not exist, or is not enabled",
 	}),
 	Entry("a disabled pool named alongside an enabled one", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool2}},
-		requested: []string{qualV4Pool2, qualV4Pool1},
+		pools:     []testPool{{cidr: v4Pool2}},
+		requested: []string{v4Pool2, v4Pool1},
 		err:       "the given pool (10.0.0.0/24) does not exist, or is not enabled",
 	}),
 	Entry("pool1 disabled, pool2 named", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool2}},
-		requested: []string{qualV4Pool2},
-		qualified: []string{qualV4Pool2},
-		selecting: []string{qualV4Pool2},
+		pools:     []testPool{{cidr: v4Pool2}},
+		requested: []string{v4Pool2},
+		qualified: []string{v4Pool2},
+		selecting: []string{v4Pool2},
 	}),
 	Entry("the only enabled pool doesn't select the node", qualificationCase{
-		pools: []testPool{{cidr: qualV4Pool2, nodeSelector: `foo != "bar"`}},
+		pools: []testPool{{cidr: v4Pool2, nodeSelector: `foo != "bar"`}},
 		err:   "no configured Calico pools for node host1",
 	}),
 	Entry("IPv6 pools, nothing named", qualificationCase{
-		pools:     []testPool{{cidr: qualV6Pool1}, {cidr: qualV6Pool2}},
-		qualified: []string{qualV6Pool1, qualV6Pool2},
-		selecting: []string{qualV6Pool1, qualV6Pool2},
+		pools:     []testPool{{cidr: v6Pool1}, {cidr: v6Pool2}},
+		qualified: []string{v6Pool1, v6Pool2},
+		selecting: []string{v6Pool1, v6Pool2},
 	}),
 	Entry("IPv6 pool named in full representation", qualificationCase{
-		pools:     []testPool{{cidr: qualV6Pool1, nodeSelector: `foo == "bar"`}, {cidr: qualV6Pool2, nodeSelector: `foo != "bar"`}},
-		requested: []string{qualV6Pool1},
-		qualified: []string{qualV6Pool1},
-		selecting: []string{qualV6Pool1},
+		pools:     []testPool{{cidr: v6Pool1, nodeSelector: `foo == "bar"`}, {cidr: v6Pool2, nodeSelector: `foo != "bar"`}},
+		requested: []string{v6Pool1},
+		qualified: []string{v6Pool1},
+		selecting: []string{v6Pool1},
 	}),
 
 	// Namespace selectors.
 	Entry("namespace selector matches", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool2, namespaceSelector: "environment == 'production'"}},
+		pools:     []testPool{{cidr: v4Pool2, namespaceSelector: "environment == 'production'"}},
 		namespace: testNamespace(map[string]string{"environment": "production"}),
-		qualified: []string{qualV4Pool2},
-		selecting: []string{qualV4Pool2},
+		qualified: []string{v4Pool2},
+		selecting: []string{v4Pool2},
 	}),
 	Entry("namespace selector doesn't match", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool2, namespaceSelector: "environment == 'production'"}},
+		pools:     []testPool{{cidr: v4Pool2, namespaceSelector: "environment == 'production'"}},
 		namespace: testNamespace(map[string]string{"environment": "development"}),
 		err:       "no configured Calico pools for node host1",
 	}),
 	Entry("namespace selector against no namespace", qualificationCase{
-		pools: []testPool{{cidr: qualV4Pool2, namespaceSelector: "environment == 'production'"}},
+		pools: []testPool{{cidr: v4Pool2, namespaceSelector: "environment == 'production'"}},
 		err:   "no configured Calico pools for node host1",
 	}),
 	Entry("node selector matches but namespace selector doesn't", qualificationCase{
-		pools:      []testPool{{cidr: qualV4Pool2, nodeSelector: "zone == 'us-west'", namespaceSelector: "environment == 'production'"}},
+		pools:      []testPool{{cidr: v4Pool2, nodeSelector: "zone == 'us-west'", namespaceSelector: "environment == 'production'"}},
 		nodeLabels: map[string]string{"zone": "us-west"},
 		namespace:  testNamespace(map[string]string{"environment": "development"}),
 		err:        "no configured Calico pools for node host1",
@@ -261,10 +260,10 @@ var _ = DescribeTable("qualifyPools",
 
 	// Named pools skip the node selector, namespace selector and AssignmentMode, and nothing else.
 	Entry("named pool skips a mismatched node selector", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool1, nodeSelector: `foo != "bar"`}},
-		requested: []string{qualV4Pool1},
-		qualified: []string{qualV4Pool1},
-		selecting: []string{qualV4Pool1},
+		pools:     []testPool{{cidr: v4Pool1, nodeSelector: `foo != "bar"`}},
+		requested: []string{v4Pool1},
+		qualified: []string{v4Pool1},
+		selecting: []string{v4Pool1},
 	}),
 	Entry("named pool skips a mismatched namespace selector", qualificationCase{
 		pools:     []testPool{{cidr: "10.0.0.0/24", namespaceSelector: "environment == 'production'"}},
@@ -274,81 +273,76 @@ var _ = DescribeTable("qualifyPools",
 		selecting: []string{"10.0.0.0/24"},
 	}),
 	Entry("named pool skips Manual assignment mode", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool1, manual: true}},
-		requested: []string{qualV4Pool1},
-		qualified: []string{qualV4Pool1},
-		selecting: []string{qualV4Pool1},
+		pools:     []testPool{{cidr: v4Pool1, manual: true}},
+		requested: []string{v4Pool1},
+		qualified: []string{v4Pool1},
+		selecting: []string{v4Pool1},
 	}),
 	Entry("named pool still needs a matching use", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool1}},
-		requested: []string{qualV4Pool1},
+		pools:     []testPool{{cidr: v4Pool1}},
+		requested: []string{v4Pool1},
 		use:       v3.IPPoolAllowedUseLoadBalancer,
 		err:       "cannot find a qualified ippool, no pools match the required use (LoadBalancer)",
 	}),
 	Entry("named pool still needs a block size within maxPrefixLen", qualificationCase{
-		pools:        []testPool{{cidr: qualV4Pool1, blockSize: 31}, {cidr: qualV4Pool2}},
-		requested:    []string{qualV4Pool1},
+		pools:        []testPool{{cidr: v4Pool1, blockSize: 31}, {cidr: v4Pool2}},
+		requested:    []string{v4Pool1},
 		maxPrefixLen: 29,
 		err:          "the given pool (10.0.0.0/24) does not exist, or is not enabled",
 	}),
 	Entry("named pools keep the order they were named in", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool1}, {cidr: qualV4Pool2}},
-		requested: []string{qualV4Pool2, qualV4Pool1},
-		qualified: []string{qualV4Pool2, qualV4Pool1},
-		selecting: []string{qualV4Pool2, qualV4Pool1},
+		pools:     []testPool{{cidr: v4Pool1}, {cidr: v4Pool2}},
+		requested: []string{v4Pool2, v4Pool1},
+		qualified: []string{v4Pool2, v4Pool1},
+		selecting: []string{v4Pool2, v4Pool1},
 	}),
 
 	// Rules that only automatic selection applies.
 	Entry("Manual pool is skipped when nothing is named", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool1, manual: true}, {cidr: qualV4Pool2}},
-		qualified: []string{qualV4Pool2},
-		selecting: []string{qualV4Pool2},
+		pools:     []testPool{{cidr: v4Pool1, manual: true}, {cidr: v4Pool2}},
+		qualified: []string{v4Pool2},
+		selecting: []string{v4Pool2},
 	}),
 	Entry("automatic selection doesn't check each pool's block size", qualificationCase{
-		pools:        []testPool{{cidr: qualV4Pool1, blockSize: 31}, {cidr: qualV4Pool2}},
+		pools:        []testPool{{cidr: v4Pool1, blockSize: 31}, {cidr: v4Pool2}},
 		maxPrefixLen: 29,
-		qualified:    []string{qualV4Pool1, qualV4Pool2},
-		selecting:    []string{qualV4Pool1, qualV4Pool2},
+		qualified:    []string{v4Pool1, v4Pool2},
+		selecting:    []string{v4Pool1, v4Pool2},
 	}),
 
 	// Allowed use separates qualified pools from pools that only select the node.
 	Entry("pool rejected for use still selects the node", qualificationCase{
-		pools:     []testPool{{cidr: qualV4Pool1, uses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}}, {cidr: qualV4Pool2}},
-		qualified: []string{qualV4Pool2},
-		selecting: []string{qualV4Pool1, qualV4Pool2},
+		pools:     []testPool{{cidr: v4Pool1, uses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}}, {cidr: v4Pool2}},
+		qualified: []string{v4Pool2},
+		selecting: []string{v4Pool1, v4Pool2},
 	}),
 	Entry("no pool allows the use", qualificationCase{
-		pools: []testPool{{cidr: qualV4Pool1}, {cidr: qualV4Pool2}},
+		pools: []testPool{{cidr: v4Pool1}, {cidr: v4Pool2}},
 		use:   v3.IPPoolAllowedUseLoadBalancer,
 		err:   "cannot find a qualified ippool, no pools match the required use (LoadBalancer)",
 	}),
 )
 
 var _ = Describe("qualifyPools errors", func() {
-	node := internalapi.Node{}
-
 	It("returns ErrNoQualifiedPool when no pool's block size fits", func() {
-		_, err := qualifyPools(poolRequest{node: node, use: v3.IPPoolAllowedUseWorkload, maxPrefixLen: 29}, buildPools([]testPool{{cidr: qualV4Pool1, blockSize: 31}}))
+		_, err := qualifyPools(poolRequest{use: v3.IPPoolAllowedUseWorkload, maxPrefixLen: 29}, buildPools([]testPool{{cidr: v4Pool1, blockSize: 31}}))
 		Expect(err).To(Equal(ErrNoQualifiedPool))
 	})
 
 	It("wraps ErrNoQualifiedPool when no pool allows the use", func() {
-		_, err := qualifyPools(poolRequest{node: node, use: v3.IPPoolAllowedUseLoadBalancer, maxPrefixLen: 32}, buildPools([]testPool{{cidr: qualV4Pool1}}))
+		_, err := qualifyPools(poolRequest{use: v3.IPPoolAllowedUseLoadBalancer, maxPrefixLen: 32}, buildPools([]testPool{{cidr: v4Pool1}}))
 		Expect(err).To(MatchError(ErrNoQualifiedPool))
 	})
 
 	It("returns the error from an unparseable node selector", func() {
-		_, err := qualifyPools(
-			poolRequest{node: node, use: v3.IPPoolAllowedUseWorkload, maxPrefixLen: 32},
-			buildPools([]testPool{{cidr: qualV4Pool1, nodeSelector: "invalid selector syntax ["}}),
-		)
+		_, err := qualifyPools(poolRequest{use: v3.IPPoolAllowedUseWorkload, maxPrefixLen: 32}, buildPools([]testPool{{cidr: v4Pool1, nodeSelector: "invalid selector syntax ["}}))
 		Expect(err).To(HaveOccurred())
 	})
 
 	It("returns the error from an unparseable namespace selector", func() {
 		_, err := qualifyPools(
-			poolRequest{node: node, use: v3.IPPoolAllowedUseWorkload, maxPrefixLen: 32, namespace: testNamespace(nil)},
-			buildPools([]testPool{{cidr: qualV4Pool1, namespaceSelector: "invalid selector syntax ["}}),
+			poolRequest{use: v3.IPPoolAllowedUseWorkload, maxPrefixLen: 32, namespace: testNamespace(nil)},
+			buildPools([]testPool{{cidr: v4Pool1, namespaceSelector: "invalid selector syntax ["}}),
 		)
 		Expect(err).To(HaveOccurred())
 	})
@@ -357,7 +351,7 @@ var _ = Describe("qualifyPools errors", func() {
 var _ = DescribeTable("qualifyPoolForIP",
 	func(use v3.IPPoolAllowedUse, expectedErr string) {
 		pool := testPool{cidr: "10.0.0.0/24", uses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload}}.build()
-		err := qualifyPoolForIP(cnet.IP{IP: net.ParseIP("10.0.0.1")}, pool, use)
+		err := qualifyPoolForIP(cnet.MustParseIP("10.0.0.1"), pool, use)
 		if expectedErr == "" {
 			Expect(err).NotTo(HaveOccurred())
 		} else {

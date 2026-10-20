@@ -294,7 +294,7 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, config *IP
 
 	allPools, err := c.pools.GetEnabledPools(ctx, version)
 	if err != nil {
-		log.WithError(err).Errorf("Error getting IP pools")
+		log.WithError(err).Error("Error getting IP pools")
 		return nil, nil, err
 	}
 
