@@ -182,9 +182,9 @@ check "after a failed pass, backs off and restarts from the top" \
 check "one backoff between the passes" \
   grep -qE "^create c4d create n4d create c3 create n4 sleep (6|7|8)[0-9] create c4d$" <<<"$(calls)"
 
-VM_MACHINE_TYPES="t2d c4d" run 15 "t2d stockout" "c4d ok"
-check "boot disk follows the family" \
-  [ "$(tr '\n' ' ' <"$STUB_STATE/disks")" = "t2d pd-balanced c4d hyperdisk-balanced " ]
+VM_MACHINE_TYPES="t2d-standard-4 z3-highmem-8 c4d-standard-4" run 15 "t2d-standard-4 stockout" "z3-highmem-8 stockout" "c4d-standard-4 ok"
+check "boot disk follows the family, Hyperdisk unless known older" \
+  [ "$(tr '\n' ' ' <"$STUB_STATE/disks")" = "t2d-standard-4 pd-balanced z3-highmem-8 hyperdisk-balanced c4d-standard-4 hyperdisk-balanced " ]
 check "the chosen disk is reported for replacements" [ "$vm_boot_disk_type" = hyperdisk-balanced ]
 
 run 0 "c4d stockout" "n4d stockout" "c3 stockout" "n4 stockout"

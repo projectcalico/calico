@@ -79,12 +79,12 @@ bulk_create_vms() {
   return 1
 }
 
-# The third and fourth generations boot only from Hyperdisk, and the older
-# families can't at this size; the two give the same baseline IOPS here.
+# Newer families boot only from Hyperdisk, which these older ones can't attach;
+# both give the same baseline IOPS here.
 boot_disk_type_for() {
   case "$1" in
-    c3* | c4* | n4*) echo hyperdisk-balanced ;;
-    *) echo pd-balanced ;;
+    n1-* | n2-* | n2d-* | e2-* | t2d-* | t2a-* | c2-* | c2d-*) echo pd-balanced ;;
+    *) echo hyperdisk-balanced ;;
   esac
 }
 
