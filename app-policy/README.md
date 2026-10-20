@@ -16,9 +16,9 @@ processed.  We compute policy based on a global store which is distributed to Di
 
 Application Layer Policy is described in the [Project Calico docs][docs].
 
- - [Enabling Application Layer Policy](https://docs.projectcalico.org/master/security/app-layer-policy)
+ - [Enabling Application Layer Policy](https://docs.tigera.io/calico/latest/network-policy/istio/app-layer-policy)
 
- [calico]: https://projectcalico.org
+ [calico]: https://www.tigera.io/project-calico/
  [istio]: https://istio.io
- [docs]: https://docs.projectcalico.org/latest
+ [docs]: https://docs.tigera.io/calico/latest/about
  

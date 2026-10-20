@@ -21,7 +21,7 @@
 #
 # This module is the OpenStack-specific implementation of the Plugin component
 # of the new Calico architecture (described by the "Calico Architecture"
-# document at http://docs.projectcalico.org/en/latest/architecture.html).
+# document at https://docs.tigera.io/calico/latest/reference/architecture/overview).
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 import inspect

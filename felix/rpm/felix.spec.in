@@ -6,7 +6,7 @@ Version:        -- filled in by 'make rpm' when building packages --
 Release:        -- filled in by 'make rpm' when building packages --
 # All code is Apache 2.0 except files in bpf-gpl which are GPL-2.
 License:        ASL 2.0 and GPLv2
-URL:            http://projectcalico.org
+URL:            https://www.tigera.io/project-calico/
 Source0:        felix-%{version}.tar.gz
 Source1:        calico-felix.logrotate
 Source35:       calico-felix.init
