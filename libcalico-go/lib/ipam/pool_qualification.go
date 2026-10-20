@@ -29,8 +29,7 @@ import (
 
 // poolRequest is what an automatic assignment asks of the IP pools.
 type poolRequest struct {
-	// requested names the pools the caller asked for. Named pools skip the node selector, namespace selector and
-	// AssignmentMode checks.
+	// requested names the pools the caller asked for.
 	requested []net.IPNet
 
 	// host names the requester in errors. The node's own name can be empty, depending on the datastore.
@@ -208,18 +207,18 @@ func checkSelection(pool v3.IPPool, req poolRequest) (rejectReason, error) {
 }
 
 func checkUse(pool v3.IPPool, use v3.IPPoolAllowedUse) rejectReason {
-	if slices.Contains(accounting.AllowedUses(&pool), use) {
-		return ""
+	if !slices.Contains(accounting.AllowedUses(&pool), use) {
+		return rejectUse
 	}
-	return rejectUse
+	return ""
 }
 
 // qualifyPoolForIP applies the rules for assigning a specific IP. Only allowed uses are checked, and only when the
 // caller declares a use.
 func qualifyPoolForIP(ip net.IP, pool v3.IPPool, use v3.IPPoolAllowedUse) error {
 	allowed := accounting.AllowedUses(&pool)
-	if use == "" || slices.Contains(allowed, use) {
-		return nil
+	if use != "" && !slices.Contains(allowed, use) {
+		return fmt.Errorf("IP address %s is in IP pool %q, which is not allowed for use %q (allowedUses: %v)", ip, pool.Name, use, allowed)
 	}
-	return fmt.Errorf("IP address %s is in IP pool %q, which is not allowed for use %q (allowedUses: %v)", ip, pool.Name, use, allowed)
+	return nil
 }

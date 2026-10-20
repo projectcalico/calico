@@ -760,7 +760,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		})
 
 		It("should allow any use when IntendedUse is unset (back-compat)", func() {
-			// Historical callers leave IntendedUse empty; they must be unaffected.
 			Expect(assign("10.0.0.3", "")).To(Succeed())
 		})
 
