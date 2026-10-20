@@ -640,6 +640,9 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         else:
             LOG.debug("Refresh already known port: %s", port)
         names = self.local_endpoint_names[endpoint_id]
+
+        # Python dicts are ordered by time of insertion.  Hence pop here, before
+        # re-inserting, so that the current name will be at the end of `names.keys()`.
         names.pop(name, None)
         names[name] = port
 
@@ -775,6 +778,9 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         if names is not None:
             names.pop(name, None)
             if names:
+                # Thanks to Python dict ordering, the last entry in `names.items()` will
+                # be the remaining (i.e. not since deleted) name and port that we saw
+                # most recently in `on_endpoint_set`.
                 remaining_name, remaining_port = next(reversed(names.items()))
                 LOG.info(
                     "Deleted %s, but port %s is still served by %s",
