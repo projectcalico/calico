@@ -15,16 +15,19 @@
 
 # Defines bulk_create_vms; source it rather than running it.
 
-# A stocked-out pool can refill and each machine family has its own CPU quota,
-# so these are worth another attempt.  Any other failure would recur.
-retryable_vm_create_codes_re='^(ZONE_RESOURCE_POOL_EXHAUSTED|ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS|QUOTA_EXCEEDED)$'
+# A stocked-out pool can refill, each machine family has its own CPU quota, and
+# GCE asks for an INTERNAL_ERROR to be retried, so these are worth another
+# attempt.  VM_MIN_COUNT_NOT_REACHED only summarises whichever of them stopped a
+# bulk insert short.  Any other failure would recur.
+retryable_vm_create_codes_re='^(ZONE_RESOURCE_POOL_EXHAUSTED|ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS|REGION_INSUFFICIENT_CAPACITY|QUOTA_EXCEEDED|INTERNAL_ERROR|VM_MIN_COUNT_NOT_REACHED)$'
 
 # bulk_create_vms <comma-separated names> <region> <gcloud create args...>
 #
 # Creates all the VMs with the first machine type in VM_MACHINE_TYPES that has
 # capacity and quota, in priority order.  After each failed pass over the list
 # it backs off and starts again from the top, until VM_CREATE_RETRY_MINUTES
-# have passed.  On success, sets vm_machine_type and vm_create_summary.
+# have passed.  On success, sets vm_machine_type, vm_boot_disk_type and
+# vm_create_summary.
 bulk_create_vms() {
   local names="$1" region="$2"
   shift 2
@@ -44,6 +47,7 @@ bulk_create_vms() {
       echo "VM creation attempt ${attempt}: ${num_vms} × ${type}..."
       if codes=$(bulk_create_vms_attempt "$type" "$names" "$region" "$@"); then
         vm_machine_type="$type"
+        vm_boot_disk_type=$(boot_disk_type_for "$type")
         vm_create_summary="Test VMs: ${num_vms} × ${type} in ${region} (attempt ${attempt}, $((SECONDS - start))s"
         if [ ${#failures[@]} -gt 0 ]; then
           vm_create_summary+="; earlier failures: $(IFS=,; echo "${failures[*]}")"
@@ -73,6 +77,15 @@ bulk_create_vms() {
   done
 }
 
+# The third and fourth generations boot only from Hyperdisk, and the older
+# families can't at this size; the two give the same baseline IOPS here.
+boot_disk_type_for() {
+  case "$1" in
+    c3* | c4* | n4*) echo hyperdisk-balanced ;;
+    *) echo pd-balanced ;;
+  esac
+}
+
 # bulk_create_vms_attempt <machine type> <names> <region> <create args...>
 #
 # Prints the error codes of a failed attempt, one per line.  Reading them from
@@ -87,15 +100,19 @@ bulk_create_vms_attempt() {
   if ! group_id=$(gcloud --quiet compute instances bulk create \
       --async --format='value(operationGroupId)' \
       --machine-type="$type" \
+      --boot-disk-type="$(boot_disk_type_for "$type")" \
       --predefined-names="$names" \
       --region="$region" \
       --target-distribution-shape=any \
       "$@" 2>"$err_file"); then
     # Rejected before an operation existed, so there are no codes to read;
-    # recognise the quota rejection by its message.
+    # recognise the retryable rejections by their messages.  A whole region
+    # short of a family is refused here with a 503, not in the operation.
     cat "$err_file" >&2
     if grep -qE "Quota '[A-Z0-9_]+' exceeded" "$err_file"; then
       echo QUOTA_EXCEEDED
+    elif grep -qE "'reason': 'insufficientCapacity'|\"reason\": \"insufficientCapacity\"|does not currently have sufficient capacity" "$err_file"; then
+      echo REGION_INSUFFICIENT_CAPACITY
     else
       echo REQUEST_REJECTED
     fi

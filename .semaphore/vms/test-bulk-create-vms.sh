@@ -38,9 +38,11 @@ trap 'rm -rf "$work"' EXIT
 stub_dir="$work/bin"
 mkdir -p "$stub_dir"
 
-# Outcomes: ok, slow-ok (RUNNING on the first poll), stockout, quota (in the
-# operation), quota-sync (rejected up front), invalid (a non-retryable
-# operation error) and reject (a non-retryable up-front rejection).
+# Outcomes: ok, slow-ok (RUNNING on the first poll), stockout, quota and
+# internal (in the operation), quota-sync and capacity-sync (rejected up front),
+# invalid (a non-retryable operation error) and reject (a non-retryable up-front
+# rejection).  Operation failures carry VM_MIN_COUNT_NOT_REACHED beside their
+# cause, as GCE reports them.
 cat >"$stub_dir/gcloud" <<'STUB'
 #!/usr/bin/env bash
 state="$STUB_STATE"
@@ -49,12 +51,20 @@ case "$*" in
   *"instances bulk create"*)
     type=$(arg machine-type "$@")
     echo "create $type" >>"$state/calls"
+    echo "$type $(arg boot-disk-type "$@")" >>"$state/disks"
     n=$(( $(cat "$state/n-$type" 2>/dev/null || echo 0) + 1 ))
     echo "$n" >"$state/n-$type"
     outcome=$(grep "^$type " "$state/outcomes" | cut -d' ' -f2 | tr ',' '\n' | sed -n "${n}p")
     case "$outcome" in
       quota-sync)
         printf "ERROR: (gcloud.compute.instances.bulk.create) Could not fetch resource:\n - Quota 'C4D_CPUS' exceeded.  Limit: 24.0 in region us-central1.\n" >&2
+        exit 1 ;;
+      capacity-sync)
+        printf '%s\n' "ERROR: (gcloud.compute.instances.bulk.create) HttpError accessing <https://compute.googleapis.com/compute/v1/projects/p/regions/us-central1/instances/bulkInsert?alt=json>: response: <{'status': '503'}>, content <{" \
+          '  "error": {' '    "code": 503,' \
+          '    "message": "Region does not currently have sufficient capacity for the requested resources.",' \
+          '    "errors": [{"message": "Region does not currently have sufficient capacity for the requested resources.", "domain": "global", "reason": "insufficientCapacity"}]' \
+          '  }' '}' >&2
         exit 1 ;;
       reject)
         printf "ERROR: (gcloud.compute.instances.bulk.create) Invalid value for field 'resource.machineType'\n" >&2
@@ -73,13 +83,15 @@ case "$*" in
     fi
     case "$outcome" in
       ok|slow-ok) echo '[{"status": "DONE"}]' ;;
-      stockout) code=ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS ;;
-      quota) code=QUOTA_EXCEEDED ;;
-      invalid) code=INVALID_FIELD_VALUE ;;
+      stockout) codes="VM_MIN_COUNT_NOT_REACHED ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS" ;;
+      quota) codes=QUOTA_EXCEEDED ;;
+      internal) codes="VM_MIN_COUNT_NOT_REACHED INTERNAL_ERROR" ;;
+      invalid) codes="VM_MIN_COUNT_NOT_REACHED INVALID_FIELD_VALUE" ;;
       *) echo "stub: no outcome for group $group" >&2; exit 1 ;;
     esac
-    if [ -n "${code:-}" ]; then
-      printf '[{"status": "DONE", "error": {"errors": [{"code": "%s"}]}}]\n' "$code"
+    if [ -n "${codes:-}" ]; then
+      errs=$(printf '{"code": "%s"},' $codes)
+      printf '[{"status": "DONE", "error": {"errors": [%s]}}]\n' "${errs%,}"
     fi
     ;;
   *) echo "stub gcloud: unexpected call: $*" >&2; exit 1 ;;
@@ -124,17 +136,25 @@ run 15 "c4d stockout" "n4d ok"
 check "stockout falls back to the next type" [ "$rc" = 0 -a "$vm_machine_type" = n4d ]
 check "no sleep within a pass" [ "$(calls)" = "create c4d create n4d" ]
 check "summary records the earlier stockout" \
-  grep -qF "earlier failures: c4d: ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS" <<<"$vm_create_summary"
+  grep -qF "earlier failures: c4d: VM_MIN_COUNT_NOT_REACHED ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS" <<<"$vm_create_summary"
 
 run 15 "c4d quota" "n4d quota-sync" "c3 ok"
 check "both kinds of quota error fall back" [ "$rc" = 0 -a "$vm_machine_type" = c3 ]
+
+run 15 "c4d capacity-sync" "n4d ok"
+check "a region short of a family up front falls back" [ "$rc" = 0 -a "$vm_machine_type" = n4d ]
+check "the up-front shortage is named" \
+  grep -qF "earlier failures: c4d: REGION_INSUFFICIENT_CAPACITY" <<<"$vm_create_summary"
+
+run 15 "c4d internal" "n4d ok"
+check "a GCE internal error falls back" [ "$rc" = 0 -a "$vm_machine_type" = n4d ]
 
 run 15 "c4d slow-ok"
 check "polls until the operation is done" [ "$rc" = 0 -a "$(calls)" = "create c4d sleep 10" ]
 
 run 15 "c4d invalid" "n4d ok"
 check "non-retryable operation error fails at once" [ "$rc" = 1 -a "$(calls)" = "create c4d" ]
-check "failure banner names the error" output_has "non-retryable error (INVALID_FIELD_VALUE)"
+check "failure banner names the error" output_has "non-retryable error (VM_MIN_COUNT_NOT_REACHED INVALID_FIELD_VALUE)"
 
 run 15 "c4d reject" "n4d ok"
 check "non-quota rejection fails at once" [ "$rc" = 1 -a "$(calls)" = "create c4d" ]
@@ -144,6 +164,11 @@ check "after a failed pass, backs off and restarts from the top" \
   [ "$rc" = 0 -a "$vm_machine_type" = c4d ]
 check "one backoff between the passes" \
   grep -qE "^create c4d create n4d create c3 create n4 sleep (6|7|8)[0-9] create c4d$" <<<"$(calls)"
+
+VM_MACHINE_TYPES="t2d c4d" run 15 "t2d stockout" "c4d ok"
+check "boot disk follows the family" \
+  [ "$(tr '\n' ' ' <"$STUB_STATE/disks")" = "t2d pd-balanced c4d hyperdisk-balanced " ]
+check "the chosen disk is reported for replacements" [ "$vm_boot_disk_type" = hyperdisk-balanced ]
 
 run 0 "c4d stockout" "n4d stockout" "c3 stockout" "n4 stockout"
 check "gives up at the deadline after a full pass" [ "$rc" = 1 -a "$(calls)" = "create c4d create n4d create c3 create n4" ]
