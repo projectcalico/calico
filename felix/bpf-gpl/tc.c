@@ -938,7 +938,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 
 					ct_ctx_nat->allow_return = true;
 					if (!np_tun_dst(ctx, &rt->next_hop, &ct_ctx_nat->tun_ip)) {
-						deny_reason(ctx, CALI_REASON_RT_UNKNOWN);
+						deny_reason(ctx, CALI_REASON_ENCAP_FAIL);
 						goto deny;
 					}
 					STATE->ip_dst = ct_ctx_nat->tun_ip;
