@@ -759,6 +759,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(assign("10.0.0.2", v3.IPPoolAllowedUseWorkload)).To(Succeed())
 		})
 
+		It("should allow any use when IntendedUse is unset (back-compat)", func() {
+			// Historical callers leave IntendedUse empty; they must be unaffected.
+			Expect(assign("10.0.0.3", "")).To(Succeed())
+		})
+
 		It("should allow Tunnel from a default pool (empty AllowedUses defaults to Workload+Tunnel)", func() {
 			// Guards node tunnel-IP assignment, which draws from the default pool
 			// with IntendedUse: Tunnel, against regression.

@@ -362,3 +362,39 @@ var _ = DescribeTable("qualifyPoolForIP",
 	Entry("no use declared", v3.IPPoolAllowedUse(""), ""),
 	Entry("use isn't allowed", v3.IPPoolAllowedUseTunnel, `IP address 10.0.0.1 is in IP pool "10.0.0.0/24", which is not allowed for use "Tunnel" (allowedUses: [Workload])`),
 )
+
+// undefaultedPool returns a pool as a caller might build it before clientv3 defaults it, with no assignment mode
+// and no allowed uses.
+func undefaultedPool(cidr string) v3.IPPool {
+	pool := testPool{cidr: cidr}.build()
+	pool.Spec.AssignmentMode = nil
+	pool.Spec.AllowedUses = nil
+	return pool
+}
+
+var _ = Describe("pool qualification of undefaulted pools", func() {
+	It("treats a missing assignment mode as Automatic", func() {
+		q, err := qualifyPools(poolRequest{use: v3.IPPoolAllowedUseWorkload, maxPrefixLen: 32}, []v3.IPPool{undefaultedPool(v4Pool1)})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(collectCIDRs(q.qualified())).To(Equal([]string{v4Pool1}))
+	})
+
+	It("allows tunnel use when allowed uses are empty", func() {
+		q, err := qualifyPools(poolRequest{use: v3.IPPoolAllowedUseTunnel, maxPrefixLen: 32}, []v3.IPPool{undefaultedPool(v4Pool1)})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(collectCIDRs(q.qualified())).To(Equal([]string{v4Pool1}))
+	})
+
+	It("still rejects LoadBalancer use when allowed uses are empty", func() {
+		_, err := qualifyPools(poolRequest{use: v3.IPPoolAllowedUseLoadBalancer, maxPrefixLen: 32}, []v3.IPPool{undefaultedPool(v4Pool1)})
+		Expect(err).To(MatchError(ErrNoQualifiedPool))
+	})
+
+	It("allows a specific IP for workload use when allowed uses are empty", func() {
+		Expect(qualifyPoolForIP(cnet.MustParseIP("10.0.0.1"), undefaultedPool("10.0.0.0/24"), v3.IPPoolAllowedUseWorkload)).To(Succeed())
+	})
+
+	It("rejects a specific IP for LoadBalancer use when allowed uses are empty", func() {
+		Expect(qualifyPoolForIP(cnet.MustParseIP("10.0.0.1"), undefaultedPool("10.0.0.0/24"), v3.IPPoolAllowedUseLoadBalancer)).NotTo(Succeed())
+	})
+})
