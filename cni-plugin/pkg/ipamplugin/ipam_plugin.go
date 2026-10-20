@@ -712,7 +712,8 @@ func getVMIInfoForPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPI
 	if errors.Is(err, errPodNotFound) {
 		logger.Info("Pod not found, it may have been deleted")
 		return nil, err
-	} else if err != nil {
+	}
+	if err != nil {
 		logger.WithError(err).Error("Failed to get pod for VMI detection")
 		return nil, err
 	}
@@ -1037,7 +1038,10 @@ func getPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPIdentifiers
 	if kerrors.IsNotFound(err) {
 		return nil, errPodNotFound
 	}
-	return pod, err
+	if err != nil {
+		return nil, err
+	}
+	return pod, nil
 }
 
 // getNamespace returns the named namespace, or nil for an empty name. It uses the namespace the
