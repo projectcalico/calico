@@ -18,7 +18,9 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/projectcalico/calico/app-policy/policyscale"
 )
@@ -74,5 +76,79 @@ func TestDestinationRoundRobin(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("got %v, want %v", got, want)
 		}
+	}
+}
+
+func TestParsePorts(t *testing.T) {
+	got, err := parsePorts("9000, 80,8000-8002")
+	want := []int{9000, 80, 8000, 8001, 8002}
+	if err != nil || len(got) != len(want) {
+		t.Fatalf("got %v %v, want %v", got, err, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+	for _, bad := range []string{"", "x", "0", "65536", "10-5", "1-x"} {
+		if _, err := parsePorts(bad); err == nil {
+			t.Errorf("%q: expected an error", bad)
+		}
+	}
+}
+
+// Hold mode against listen mode on loopback: every connection opens, stays open through several
+// writes, and the listener sees each of them.
+func TestHoldAgainstListen(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	_ = ln.Close()
+
+	type listenResult struct {
+		accepted, open uint64
+		err            error
+	}
+	listened := make(chan listenResult, 1)
+	go func() {
+		a, o, err := runListen("127.0.0.1", []int{port}, 3*time.Second)
+		listened <- listenResult{a, o, err}
+	}()
+	// Wait for the listener.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		c, err := net.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+		if err == nil {
+			_ = c.Close()
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("listener never came up: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	fx := policyscale.Build(policyscale.EgressAllowList())
+	const n = 50
+	res := runHold(fx.NewSampler(1, policyscale.FlowModel{Direction: policyscale.Egress}), holdConfig{
+		connections: n,
+		rate:        1000,
+		duration:    time.Second,
+		dialTimeout: time.Second,
+		interval:    100 * time.Millisecond,
+		payload:     []byte("hold"),
+		port:        port,
+		shards:      4,
+		targets:     []net.IP{net.ParseIP("127.0.0.1")},
+	})
+	if res.opened != n || res.openAtEnd != n || res.failed != 0 || res.closed != 0 {
+		t.Fatalf("hold: %+v", res)
+	}
+	lr := <-listened
+	// The probe connection above plus the held ones.
+	if lr.err != nil || lr.accepted != n+1 {
+		t.Fatalf("listen: %+v", lr)
 	}
 }
