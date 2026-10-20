@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Defines bulk_create_vms; source it rather than running it.
+
+# A stocked-out pool can refill and each machine family has its own CPU quota,
+# so these are worth another attempt.  Any other failure would recur.
+retryable_vm_create_codes_re='^(ZONE_RESOURCE_POOL_EXHAUSTED|ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS|QUOTA_EXCEEDED)$'
+
+# bulk_create_vms <comma-separated names> <region> <gcloud create args...>
+#
+# Creates all the VMs with the first machine type in VM_MACHINE_TYPES that has
+# capacity and quota, in priority order.  After each failed pass over the list
+# it backs off and starts again from the top, until VM_CREATE_RETRY_MINUTES
+# have passed.  On success, sets vm_machine_type and vm_create_summary.
+bulk_create_vms() {
+  local names="$1" region="$2"
+  shift 2
+  local -a types
+  read -r -a types <<<"${VM_MACHINE_TYPES:?}"
+  local num_vms
+  num_vms=$(tr ',' '\n' <<<"$names" | grep -c .)
+  local start=$SECONDS
+  local deadline=$((SECONDS + ${VM_CREATE_RETRY_MINUTES:-15} * 60))
+  local backoff=60 attempt=0 type codes
+  local -a failures=()
+
+  echo "Creating ${num_vms} test VMs in region ${region}; machine types in priority order: ${types[*]}"
+  while true; do
+    for type in "${types[@]}"; do
+      attempt=$((attempt + 1))
+      echo "VM creation attempt ${attempt}: ${num_vms} × ${type}..."
+      if codes=$(bulk_create_vms_attempt "$type" "$names" "$region" "$@"); then
+        vm_machine_type="$type"
+        vm_create_summary="Test VMs: ${num_vms} × ${type} in ${region} (attempt ${attempt}, $((SECONDS - start))s"
+        if [ ${#failures[@]} -gt 0 ]; then
+          vm_create_summary+="; earlier failures: $(IFS=,; echo "${failures[*]}")"
+        fi
+        vm_create_summary+=")"
+        echo "===== ${vm_create_summary} ====="
+        return 0
+      fi
+      codes="${codes:-UNKNOWN}"
+      echo "VM creation attempt ${attempt} with ${type} failed: ${codes//$'\n'/ }"
+      failures+=("${type}: ${codes//$'\n'/ }")
+      if grep -qvE "$retryable_vm_create_codes_re" <<<"$codes"; then
+        echo "===== Test VM creation FAILED: ${type} hit a non-retryable error (${codes//$'\n'/ }) =====" >&2
+        return 1
+      fi
+    done
+    local remaining=$((deadline - SECONDS))
+    if [ "$remaining" -le 0 ]; then
+      echo "===== Test VM creation FAILED: no capacity or quota after ${attempt} attempts over $((SECONDS - start))s =====" >&2
+      return 1
+    fi
+    local pause=$((backoff + RANDOM % 30))
+    [ "$pause" -le "$remaining" ] || pause=$remaining
+    echo "Every machine type is out of capacity or quota; retrying in ${pause}s..."
+    sleep "$pause"
+    backoff=$((backoff + 60 > 180 ? 180 : backoff + 60))
+  done
+}
+
+# bulk_create_vms_attempt <machine type> <names> <region> <create args...>
+#
+# Prints the error codes of a failed attempt, one per line.  Reading them from
+# the operation, rather than from gcloud's human-readable error, needs --async.
+bulk_create_vms_attempt() {
+  local type="$1" names="$2" region="$3"
+  shift 3
+  local err_file group_id
+  err_file=$(mktemp)
+  # Bulk create is all-or-nothing (min count defaults to the full count), so a
+  # failed attempt leaves no VMs behind to collide with the next one's names.
+  if ! group_id=$(gcloud --quiet compute instances bulk create \
+      --async --format='value(operationGroupId)' \
+      --machine-type="$type" \
+      --predefined-names="$names" \
+      --region="$region" \
+      --target-distribution-shape=any \
+      "$@" 2>"$err_file"); then
+    # Rejected before an operation existed, so there are no codes to read;
+    # recognise the quota rejection by its message.
+    cat "$err_file" >&2
+    if grep -qE "Quota '[A-Z0-9_]+' exceeded" "$err_file"; then
+      echo QUOTA_EXCEEDED
+    else
+      echo REQUEST_REJECTED
+    fi
+    rm -f "$err_file"
+    return 1
+  fi
+  rm -f "$err_file"
+
+  # Instance inserts in the group are zonal; the regional op is the bulk insert.
+  local op_json status poll_deadline=$((SECONDS + 600))
+  while true; do
+    op_json=$(gcloud --quiet compute operations list --regions="$region" \
+      --filter="operationGroupId=${group_id}" --format=json) || op_json='[]'
+    status=$(jq -r '.[0].status // empty' <<<"$op_json")
+    [ "$status" != DONE ] || break
+    if [ "$SECONDS" -ge "$poll_deadline" ]; then
+      echo "Bulk create operation group ${group_id} not done after 10 minutes." >&2
+      echo OPERATION_TIMEOUT
+      return 1
+    fi
+    sleep 10
+  done
+
+  if jq -e '.[0].error.errors | length > 0' <<<"$op_json" >/dev/null; then
+    jq '.[0].error' <<<"$op_json" >&2
+    jq -r '.[0].error.errors[].code' <<<"$op_json"
+    return 1
+  fi
+}

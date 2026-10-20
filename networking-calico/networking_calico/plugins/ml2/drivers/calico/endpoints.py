@@ -171,8 +171,11 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             # The dest-side names come from a transient copy with the dest host
             # overlaid.  We don't keep the copy - the neutron_map value is (port,
             # dest_host) so the dest_host survives a reread inside the update path.
+            # At cutover ``migrating_to`` can already equal the binding host, and then
+            # the dest-side WEP is the same slot as the source-side one above.
             dest_host = port.get("binding:profile", {}).get("migrating_to")
-            if self._wep_desired_present(port, dest_host, device_id):
+            same_slot = dest_host == port.get("binding:host_id")
+            if not same_slot and self._wep_desired_present(port, dest_host, device_id):
                 dest_wep_name = endpoint_name({**port, "binding:host_id": dest_host})
                 neutron_map["dest-wep " + dest_wep_name] = (port, dest_host)
             if self._lm_desired_present(port, dest_host, device_id):
@@ -389,6 +392,36 @@ class WorkloadEndpointSyncer(ResourceSyncer):
     def delete_legacy_etcd_data(self):
         if self.namespace != datamodel_v3.NO_REGION_NAMESPACE:
             datamodel_v3.delete_legacy("WorkloadEndpoint", "")
+
+    def compare_order_key_fn(self, neutron_map):
+        # A stale slot is deleted before the creates when nothing replaces it on the
+        # same host, because a WEP for the same port on another node has the same IPs
+        # (break first, as for a cold migration).  When a new name replaces it on the
+        # same host, it is deleted straight after that name is written, because that is
+        # the same interface, which must not be left without a WEP (make first, as for a
+        # ``device_id`` change) -- nor have two WEPs for longer than necessary.
+        replacements = {}
+        for name in neutron_map:
+            slot = _slot_kind_host_port(name)
+            if slot is not None:
+                replacements[slot] = name
+
+        def lm_first(name):
+            # LiveMigrations go first so that, when a mid-migration port is being
+            # created from scratch in etcd, Felix sees the LiveMigration before the
+            # destination WEP -- matching the dynamic postcommit path's ordering on
+            # migration start.
+            return 0 if name.startswith("lm ") else 1
+
+        def order_key(name):
+            if name in neutron_map:
+                return (1, lm_first(name), name, 0)
+            replacement = replacements.get(_slot_kind_host_port(name))
+            if replacement is not None:
+                return (1, lm_first(replacement), replacement, 1)
+            return (0, lm_first(name), name, 0)
+
+        return order_key
 
     # The following methods differ from those for other resources for two reasons.
     #
@@ -754,14 +787,11 @@ class WorkloadEndpointSyncer(ResourceSyncer):
 
         Every path that decides whether a WEP exists -- the dynamic hooks via
         ``sync_wep``, and the resync's map and re-read -- goes through here, so that
-        they cannot disagree.
+        they cannot disagree.  The one shortcut is ``create_port_postcommit``, which
+        leaves an unbound port to the bind's ``update_port_postcommit`` that follows in
+        the same API call, and to the resync if that is lost.
         """
-        if db_port is None or not host or not device_id:
-            return False
-
-        # ``device_id`` is part of the WEP name, so a slot named for one VM must not
-        # hold the port once it is attached to another one.
-        if db_port.get("device_id") != device_id:
+        if not _etcd_slots_can_exist_for(db_port, host, device_id):
             return False
 
         # ``binding:host_id`` specifies the host that a port should exist on in steady
@@ -794,10 +824,9 @@ class WorkloadEndpointSyncer(ResourceSyncer):
     @staticmethod
     def _lm_desired_present(db_port, dest_host, device_id):
         """Decide whether the LiveMigration slot at ``dest_host`` should exist."""
-        if db_port is None or not dest_host or not device_id:
+        if not _etcd_slots_can_exist_for(db_port, dest_host, device_id):
             return False
-        if db_port.get("device_id") != device_id:
-            return False
+
         return db_port.get("binding:profile", {}).get("migrating_to") == dest_host
 
     def add_port_interface_name(self, port, port_extra):
@@ -1170,6 +1199,37 @@ def endpoint_name(port):
         escape_dashes(port["device_id"]),
         escape_dashes(port["id"]),
     )
+
+
+def _etcd_slots_can_exist_for(db_port, host, device_id):
+    """Whether slots can exist in etcd for ( db_port["id"], host, device_id ).
+
+    A "slot" can be for a WEP or a LiveMigration, named by port ID, host and device_id.
+    """
+    if db_port is None or not host or not device_id:
+        return False
+
+    # The resync only considers endpoint ports, but the dynamic hooks can see a port
+    # that has just stopped being one.
+    if not _port_is_endpoint_port(db_port):
+        return False
+
+    # ``device_id`` is part of the slot's name, so a slot named for one VM must not
+    # hold the port once it is attached to another one.
+    return db_port.get("device_id") == device_id
+
+
+def _slot_kind_host_port(name):
+    """Map a "wep ", "dest-wep " or "lm " map key to (kind, host, port_id).
+
+    Returns None if the WEP name after the prefix isn't in our format, such as a
+    legacy or hand-edited one.
+    """
+    kind, wep_name = name.split(" ", 1)
+    parts = datamodel_v3.split_endpoint_name(wep_name)
+    if len(parts) != 4 or parts[1] != "openstack":
+        return None
+    return ("lm" if kind == "lm" else "wep", parts[0], parts[3])
 
 
 def endpoint_name_without_host(name):

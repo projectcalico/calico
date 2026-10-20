@@ -415,7 +415,11 @@ func TestHashreleaseChartDirMatchesTheHashreleaseFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pinnedChart: %v", err)
 	}
-	want := chartsCLIHashreleaseChartDir(pin.Hashrelease(baseHashreleaseOutputDir(root), false).Source)
+	h, err := pin.Hashrelease(baseHashreleaseOutputDir(root), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := chartsCLIHashreleaseChartDir(h.Source)
 	if chart.BaseDir != want {
 		t.Errorf("BaseDir = %q, want %q", chart.BaseDir, want)
 	}

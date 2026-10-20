@@ -608,6 +608,14 @@ func init() {
 			ObjectMeta: v1.ObjectMeta{Name: "test", Namespace: "default"},
 			Spec:       api.NetworkPolicySpec{Ingress: []api.Rule{{Action: "Allow", IPVersion: &V0}}},
 		}, false),
+		Entry("should accept IP version 4 in a Profile", &api.Profile{
+			ObjectMeta: v1.ObjectMeta{Name: "test"},
+			Spec:       api.ProfileSpec{Ingress: []api.Rule{{Action: "Allow", IPVersion: &V4}}},
+		}, true),
+		Entry("should reject IP version 0 in a Profile", &api.Profile{
+			ObjectMeta: v1.ObjectMeta{Name: "test"},
+			Spec:       api.ProfileSpec{Ingress: []api.Rule{{Action: "Allow", IPVersion: &V0}}},
+		}, false),
 
 		// (API) ProtoPort.
 		Entry("should accept ProtoPort.Protocol: UDP", api.ProtoPort{Protocol: "UDP", Port: 0}, true),

@@ -2358,6 +2358,7 @@ class TestLiveMigration(TestPluginEtcdBase):
             self.recent_writes[self._ep_key(self.DEST_HOST)]["spec"]["node"],
             self.DEST_HOST,
         )
+
         # The source WEP and the LiveMigration are deleted: the VM has left.
         self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
         self.assertIn(self._lm_key(self.DEST_HOST), self.recent_deletes)
@@ -2434,6 +2435,26 @@ class TestLiveMigration(TestPluginEtcdBase):
             self.driver.create_port_postcommit(context)
         sync_wep.assert_not_called()
 
+    def test_delete_at_cutover_syncs_the_slot_once(self):
+        """Deleting a port whose ``migrating_to`` is its binding host syncs it once."""
+        self._do_initial_resync()
+        context = self._make_port_context()
+        context._port = {
+            **self.port,
+            "binding:profile": {"migrating_to": self.SOURCE_HOST},
+        }
+        self.osdb_ports = []
+
+        syncer = self.driver.endpoint_syncer
+        with mock.patch.object(syncer, "sync_wep", wraps=syncer.sync_wep) as sync_wep:
+            self.driver.delete_port_postcommit(context)
+
+        self.assertEqual(
+            [mock.call(context._port, self.SOURCE_HOST, mock.ANY)],
+            sync_wep.mock_calls,
+        )
+        self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
+
     def test_nova_detach_removes_wep(self):
         """Nova's interface detach removes the WEP.
 
@@ -2455,6 +2476,27 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.driver.update_port_postcommit(context)
 
         self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
+
+    def test_port_that_stops_being_an_endpoint_port_loses_its_wep(self):
+        """A port whose ``device_owner`` is no longer a VM's has no WEP.
+
+        ``update_port_postcommit`` still proceeds when only the original port was an
+        endpoint port, and the resync doesn't consider non-endpoint ports at all, so
+        the two would otherwise disagree about the WEP.
+        """
+        self._do_initial_resync()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        context = self._make_port_context()
+        context.original = copy.deepcopy(self.port)
+        context._port = {**self.port, "device_owner": "network:dhcp"}
+        self.osdb_ports[0]["device_owner"] = "network:dhcp"
+        self.driver.update_port_postcommit(context)
+
+        wep_writes = [k for k in self.recent_writes if "/workloadendpoints/" in k]
+        self.assertEqual(wep_writes, [])
+        self.assertEqual(self.recent_deletes, {self._ep_key(self.SOURCE_HOST)})
 
     def test_nova_detach_then_reattach_on_same_host(self):
         """A reattach that overtakes the detach's sync leaves only the new VM's WEP.
@@ -2650,11 +2692,16 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.driver._get_db()
         self.db.update_port_status = mock.Mock()
         context = mock.Mock()
-        self.driver._port_status_cache[(hostname, port_id)] = (
-            datamodel_v1.ENDPOINT_STATUS_UP
+        key = (
+            hostname,
+            mech_calico.datamodel_v2.felix_status_workload_id(
+                self.driver._status_namespace, lib.port1["device_id"]
+            ),
+            port_id,
         )
+        self.driver._port_status_cache[key] = datamodel_v1.ENDPOINT_STATUS_UP
         with mock.patch("eventlet.spawn_after", autospec=True):
-            self.driver._try_to_update_port_status(context, (hostname, port_id))
+            self.driver._try_to_update_port_status(context, key)
 
     def test_vif_plug_notification(self):
         """Felix status 'up' on migration dest triggers Nova notification."""
@@ -2678,6 +2725,16 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.db.nova_notifier.notify_port_active_direct.assert_called_once_with(
             mock_db_port
         )
+
+    def test_vif_plug_no_notification_for_detached_port(self):
+        """Felix 'up' on the dest of a port detached mid-migration is harmless."""
+        self._do_initial_resync()
+        self._pre_migrate()
+        self.osdb_ports[0]["device_id"] = ""
+
+        self._call_try_to_update_port_status(self.DEST_HOST, self.port["id"])
+
+        self.db.nova_notifier.notify_port_active_direct.assert_not_called()
 
     def test_vif_plug_no_notification_for_non_migration(self):
         """Felix 'up' on source host does NOT trigger Nova notification."""
@@ -2742,6 +2799,27 @@ class TestLiveMigration(TestPluginEtcdBase):
         wep_writes = [k for k in self.recent_writes if "/workloadendpoints/" in k]
         self.assertEqual(wep_writes, [])
 
+    def test_resync_deletes_before_creating_on_host_change(self):
+        """A port found on a new host is removed from the old one first.
+
+        As for a cold migration on the dynamic path: the two WEPs would have the same
+        IPs on different nodes.
+        """
+        self._do_initial_resync()
+        old_key = self._ep_key(self.SOURCE_HOST)
+        new_key = self._ep_key(self.DEST_HOST)
+        self.osdb_ports[0]["binding:host_id"] = self.DEST_HOST
+        self.recent_writes = {}
+        self.recent_deletes = set()
+        self.etcd_ops = []
+
+        self._trigger_resync()
+
+        self.assertLess(
+            self.etcd_ops.index(("delete", old_key)),
+            self.etcd_ops.index(("put", new_key)),
+        )
+
     def test_resync_creates_before_deleting_on_device_id_change(self):
         """When a port's ``device_id`` changes, resync makes before it breaks.
 
@@ -2768,12 +2846,14 @@ class TestLiveMigration(TestPluginEtcdBase):
 
         self._trigger_resync()
 
+        # Each old name goes straight after its replacement, so that the interface
+        # has two WEPs for no longer than one step of the resync.
         for old_key in old_keys:
             new_key = old_key.replace("-openstack-instance--1-", "-openstack-zzz--vm-")
             self.assertIn(new_key, self.recent_writes)
             self.assertIn(old_key, self.recent_deletes)
-            self.assertLess(
-                self.etcd_ops.index(("put", new_key)),
+            self.assertEqual(
+                self.etcd_ops.index(("put", new_key)) + 1,
                 self.etcd_ops.index(("delete", old_key)),
                 new_key,
             )
@@ -2787,6 +2867,13 @@ class TestLiveMigration(TestPluginEtcdBase):
         """Simulate a failed migration: the binding stays at the source host."""
         self.osdb_ports[0]["binding:profile"] = {}
 
+    def _status_key(self, hostname):
+        """The key of Felix's status for port1 at ``hostname``, under its VM."""
+        workload_id = mech_calico.datamodel_v2.felix_status_workload_id(
+            self.driver._status_namespace, lib.port1["device_id"]
+        )
+        return (hostname, workload_id, lib.port1["id"])
+
     def _report_status(self, hostname, port_id, status=None):
         """Drive _try_to_update_port_status as the status writer thread would.
 
@@ -2795,14 +2882,15 @@ class TestLiveMigration(TestPluginEtcdBase):
         update_port_status mock, for the caller to assert on.
         """
         self.driver._get_db()
+        key = self._status_key(hostname)
         if status is None:
-            self.driver._port_status_cache.pop((hostname, port_id), None)
+            self.driver._port_status_cache.pop(key, None)
         else:
-            self.driver._port_status_cache[(hostname, port_id)] = status
+            self.driver._port_status_cache[key] = status
         self.db.update_port_status = mock.Mock()
         context = mock.Mock()
         with mock.patch("eventlet.spawn_after", autospec=True):
-            self.driver._try_to_update_port_status(context, (hostname, port_id))
+            self.driver._try_to_update_port_status(context, key)
         return self.db.update_port_status
 
     def test_dest_up_during_migration_sets_active(self):
@@ -2831,7 +2919,7 @@ class TestLiveMigration(TestPluginEtcdBase):
         self._do_initial_resync()
         self._pre_migrate()
         self._complete_migration()
-        self.driver._port_status_cache[(self.DEST_HOST, self.port["id"])] = (
+        self.driver._port_status_cache[self._status_key(self.DEST_HOST)] = (
             datamodel_v1.ENDPOINT_STATUS_UP
         )
 
@@ -2854,7 +2942,7 @@ class TestLiveMigration(TestPluginEtcdBase):
         self._do_initial_resync()
         self._pre_migrate()
         self._rollback_migration()
-        self.driver._port_status_cache[(self.SOURCE_HOST, self.port["id"])] = (
+        self.driver._port_status_cache[self._status_key(self.SOURCE_HOST)] = (
             datamodel_v1.ENDPOINT_STATUS_UP
         )
 
@@ -2879,7 +2967,7 @@ class TestLiveMigration(TestPluginEtcdBase):
         self._pre_migrate()
         self._complete_migration()
         self.osdb_ports[0]["binding:vif_type"] = "unbound"
-        self.driver._port_status_cache[(self.DEST_HOST, self.port["id"])] = (
+        self.driver._port_status_cache[self._status_key(self.DEST_HOST)] = (
             datamodel_v1.ENDPOINT_STATUS_UP
         )
 
@@ -2889,6 +2977,38 @@ class TestLiveMigration(TestPluginEtcdBase):
             mock.ANY,
             self.port["id"],
             mech_calico.constants.PORT_STATUS_ACTIVE,
+            host=self.SOURCE_HOST,
+        )
+
+    def test_owner_status_under_old_workload_does_not_count(self):
+        """An owning host's status counts only under the port's current VM.
+
+        Here the destination still has an "up" under a VM the port has since left,
+        alongside a "down" under its current VM.
+        """
+        self._do_initial_resync()
+        self._pre_migrate()
+        self._complete_migration()
+        old_workload_key = (
+            self.DEST_HOST,
+            mech_calico.datamodel_v2.felix_status_workload_id(
+                self.driver._status_namespace, "old-vm"
+            ),
+            self.port["id"],
+        )
+        self.driver._port_status_cache[old_workload_key] = (
+            datamodel_v1.ENDPOINT_STATUS_UP
+        )
+        self.driver._port_status_cache[self._status_key(self.DEST_HOST)] = (
+            datamodel_v1.ENDPOINT_STATUS_DOWN
+        )
+
+        m_update = self._report_status(self.SOURCE_HOST, self.port["id"])
+
+        m_update.assert_called_once_with(
+            mock.ANY,
+            self.port["id"],
+            mech_calico.constants.PORT_STATUS_DOWN,
             host=self.SOURCE_HOST,
         )
 
@@ -2913,6 +3033,24 @@ class TestLiveMigration(TestPluginEtcdBase):
 
         m_update.assert_not_called()
 
+    def test_resync_at_cutover_with_dest_equal_to_binding_host(self):
+        """A port whose ``migrating_to`` is its binding host has one WEP slot there.
+
+        If the resync listed it as both a source-side and a dest-side WEP, the etcd
+        entry would match only one of them, and every resync would try, and fail, to
+        create the other.
+        """
+        self._do_initial_resync()
+        self.osdb_ports[0]["binding:profile"] = {"migrating_to": self.SOURCE_HOST}
+        self._trigger_resync()
+
+        syncer = self.driver.endpoint_syncer
+        with mock.patch.object(
+            syncer, "create_in_etcd", wraps=syncer.create_in_etcd
+        ) as create:
+            self._trigger_resync()
+        create.assert_not_called()
+
     def test_resync_creates_missing_live_migration(self):
         """Resync creates LiveMigration and dest WEP for migrating port."""
         self._do_initial_resync()
@@ -2922,12 +3060,18 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.osdb_ports[0]["binding:profile"] = {
             "migrating_to": self.DEST_HOST,
         }
+        self.etcd_ops = []
 
         self._trigger_resync()
 
-        # The resync should have created the LiveMigration and dest WEP.
+        # The resync should have created the LiveMigration and dest WEP, in that order,
+        # so that Felix knows the dest WEP is a migration target as soon as it sees it.
         self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
         self.assertIn(self._ep_key(self.DEST_HOST), self.recent_writes)
+        self.assertLess(
+            self.etcd_ops.index(("put", self._lm_key(self.DEST_HOST))),
+            self.etcd_ops.index(("put", self._ep_key(self.DEST_HOST))),
+        )
 
     def test_resync_deletes_stale_live_migration(self):
         """Resync deletes orphaned LiveMigration with no migrating port."""
@@ -3127,6 +3271,36 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.assertNotIn(self._lm_key(self.DEST_HOST), self.recent_deletes)
         self.assertNotIn(self._ep_key(self.DEST_HOST), self.recent_deletes)
 
+    def test_slot_kind_host_port(self):
+        """Names parse to their kind, host and port, whatever the host is called."""
+        from networking_calico.plugins.ml2.drivers.calico.endpoints import (
+            _slot_kind_host_port,
+        )
+
+        cases = {
+            "wep felix--host--1-openstack-vm--id-port--id": (
+                "wep",
+                "felix-host-1",
+                "port-id",
+            ),
+            "dest-wep openstack--ctrl--1-openstack-vm--id-port--id": (
+                "wep",
+                "openstack-ctrl-1",
+                "port-id",
+            ),
+            "lm host--openstack-openstack-vm--id-port--id": (
+                "lm",
+                "host-openstack",
+                "port-id",
+            ),
+            "wep openstack-openstack-vm--id-port--id": ("wep", "openstack", "port-id"),
+            # Not in our format.
+            "lm stale--lm--name": None,
+            "wep host-other-vm-port": None,
+        }
+        for name, expected in cases.items():
+            self.assertEqual(_slot_kind_host_port(name), expected, name)
+
     def test_endpoint_name_without_host_with_openstack_in_host(self):
         """endpoint_name_without_host strips host even when it contains 'openstack'.
 
@@ -3229,6 +3403,8 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         # Mock out config.
         lib.m_oslo_config.cfg.CONF.calico.etcd_host = "localhost"
         lib.m_oslo_config.cfg.CONF.calico.etcd_port = 4001
+        lib.m_oslo_config.cfg.CONF.calico.openstack_region = None
+        calico_config._reset_globals()
 
     def test_felix_agent_state(self):
         self.assertEqual(
@@ -3356,50 +3532,58 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
             m_queue.qsize.return_value = 100
             self.driver.on_port_status_changed(
-                "host", "port_id", {"status": "up"}, priority="high"
+                "host", "port_id", "up", workload_id="wl", priority="high"
             )
-            self.assertEqual("up", self.driver._port_status_cache[("host", "port_id")])
             self.assertEqual(
-                [mock.call(((0, mock.ANY), ("host", "port_id")))],
+                "up", self.driver._port_status_cache[("host", "wl", "port_id")]
+            )
+            self.assertEqual(
+                [mock.call(((0, mock.ANY), ("host", "wl", "port_id")))],
                 m_queue.put.mock_calls,
             )
             m_queue.put.reset_mock()
             # Send a duplicate low-priority change.
             self.driver.on_port_status_changed(
-                "host", "port_id", {"status": "up"}, priority="low"
+                "host", "port_id", "up", workload_id="wl", priority="low"
             )
             # Should have no effect on the cache.
-            self.assertEqual("up", self.driver._port_status_cache[("host", "port_id")])
+            self.assertEqual(
+                "up", self.driver._port_status_cache[("host", "wl", "port_id")]
+            )
             # And the queue update should be skipped.
             self.assertEqual([], m_queue.put.mock_calls)
             m_queue.put.reset_mock()
 
             # Send a duplicate high-priority change.
             self.driver.on_port_status_changed(
-                "host", "port_id", {"status": "up"}, priority="high"
+                "host", "port_id", "up", workload_id="wl", priority="high"
             )
             # Should have no effect on the cache.
-            self.assertEqual("up", self.driver._port_status_cache[("host", "port_id")])
+            self.assertEqual(
+                "up", self.driver._port_status_cache[("host", "wl", "port_id")]
+            )
             # But the queue update should happen.
             self.assertEqual(
-                [mock.call(((0, mock.ANY), ("host", "port_id")))],
+                [mock.call(((0, mock.ANY), ("host", "wl", "port_id")))],
                 m_queue.put.mock_calls,
             )
             m_queue.put.reset_mock()
 
             # Deletion takes a different code path.
-            self.driver.on_port_status_changed("host", "port_id", None, priority="low")
+            self.driver.on_port_status_changed(
+                "host", "port_id", None, workload_id="wl", priority="low"
+            )
             self.assertEqual({}, self.driver._port_status_cache)
             # Unknown value should be treated as deletion.
             self.driver.on_port_status_changed(
-                "host", "port_id", {"status": "unknown"}, priority="low"
+                "host", "port_id", "unknown", workload_id="wl", priority="low"
             )
             self.assertEqual({}, self.driver._port_status_cache)
             # One queue put for each deletion.
             self.assertEqual(
                 [
-                    mock.call(((1, mock.ANY), ("host", "port_id"))),
-                    mock.call(((1, mock.ANY), ("host", "port_id"))),
+                    mock.call(((1, mock.ANY), ("host", "wl", "port_id"))),
+                    mock.call(((1, mock.ANY), ("host", "wl", "port_id"))),
                 ],
                 m_queue.put.mock_calls,
             )
@@ -3431,10 +3615,27 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         # from the outer `finally` when StopIteration propagates.
         self.assertEqual(2, m_close.call_count)
 
+    def _status_key_for_db_port(self, host, port_id, device_id="vm-1"):
+        """A status key for ``port_id`` at ``host``, with the port in the DB."""
+        self.db.get_port = mock.Mock(
+            return_value={
+                "id": port_id,
+                "device_id": device_id,
+                "device_owner": "compute:nova",
+                "binding:host_id": host,
+                "binding:profile": {},
+            }
+        )
+        workload_id = mech_calico.datamodel_v2.felix_status_workload_id(
+            self.driver._status_namespace, device_id
+        )
+        return (host, workload_id, port_id)
+
     @mock.patch("eventlet.spawn")
     def test_try_to_update_port_status(self, _m_spawn):
         self.driver._get_db()
         self.driver._init_start_endpoint_status_watcher()
+        key = self._status_key_for_db_port("host", "p1")
 
         mock_calls = []
 
@@ -3442,19 +3643,16 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             mock_calls.append(mock.call(context, port_id, status, host=host))
 
         self.db.update_port_status = m_update_port_status
-        self.osdb_ports = [copy.deepcopy(lib.port1)]
-        host = lib.port1["binding:host_id"]
-        port_id = lib.port1["id"]
         context = mock.Mock()
         with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
-            self.driver._try_to_update_port_status(context, (host, port_id))
+            self.driver._try_to_update_port_status(context, key)
         self.assertEqual(
             [
                 mock.call(
                     context,
-                    port_id,
+                    "p1",
                     mech_calico.constants.PORT_STATUS_ERROR,
-                    host=host,
+                    host="host",
                 )
             ],
             mock_calls,
@@ -3462,55 +3660,71 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         self.assertEqual([], m_spawn.mock_calls)  # No retry on success
 
     @mock.patch("eventlet.spawn")
-    def test_try_to_update_port_status_port_gone(self, _m_spawn):
-        # A port that Neutron no longer has is not worth a write: update_port_status()
-        # would ignore it anyway.
-        self.driver._get_db()
-        self.driver._init_start_endpoint_status_watcher()
+    def test_try_to_update_port_status_ignores_stale_workload(self, _m_spawn):
+        """A status under a VM the port has left is not the port's status.
 
-        self.db.update_port_status = mock.Mock()
-        self.osdb_ports = []
-        context = mock.Mock()
-        with mock.patch("eventlet.spawn_after", autospec=True):
-            self.driver._try_to_update_port_status(context, ("host", "p1"))
-        self.db.update_port_status.assert_not_called()
-
-    def _read_failure_is_retried(self, exception):
-        """The hoisted port read must retry, not drop the queued update.
-
-        Our caller only logs exceptions, and the status cache was already updated
-        before this key was queued, so a dropped update is never re-queued by a
-        resync -- Neutron would keep a stale status indefinitely.
+        When a port moves to another VM on the same host, Felix's status key for the
+        old VM is typically deleted after the new one's "up" -- and a snapshot can
+        deliver the old VM's "up" late too.  Neither may be written.
         """
         self.driver._get_db()
         self.driver._init_start_endpoint_status_watcher()
-
+        self._status_key_for_db_port("host", "p1", device_id="vm-2")
+        old_key = (
+            "host",
+            mech_calico.datamodel_v2.felix_status_workload_id(
+                self.driver._status_namespace, "vm-1"
+            ),
+            "p1",
+        )
         self.db.update_port_status = mock.Mock()
-        self.db.get_port.side_effect = exception
-        context = mock.Mock()
-        with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
-            self.driver._try_to_update_port_status(context, ("host", "p1"))
+
+        for old_status in [None, "up"]:
+            if old_status:
+                self.driver._port_status_cache[old_key] = old_status
+            with mock.patch("eventlet.spawn_after", autospec=True):
+                self.driver._try_to_update_port_status(mock.Mock(), old_key)
 
         self.db.update_port_status.assert_not_called()
-        self.assertEqual(
-            [mock.call(5, self.driver._retry_port_status_update, ("host", "p1"))],
-            m_spawn.mock_calls,
-        )
+
+    @mock.patch("eventlet.spawn")
+    def test_try_to_update_port_status_port_gone(self, _m_spawn):
+        self.driver._get_db()
+        self.driver._init_start_endpoint_status_watcher()
+        key = self._status_key_for_db_port("host", "p1")
+        self.db.get_port.side_effect = mech_calico.n_exc.PortNotFound(port_id="p1")
+        self.db.update_port_status = mock.Mock()
+
+        with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
+            self.driver._try_to_update_port_status(mock.Mock(), key)
+
+        self.db.update_port_status.assert_not_called()
+        self.assertEqual([], m_spawn.mock_calls)
 
     @mock.patch("eventlet.spawn")
     def test_try_to_update_port_status_read_fail(self, _m_spawn):
-        self._read_failure_is_retried(lib.DBError())
+        """A failed port read is retried, not dropped."""
+        self.driver._get_db()
+        self.driver._init_start_endpoint_status_watcher()
+        key = self._status_key_for_db_port("host", "p1")
+        self.db.update_port_status = mock.Mock()
 
-    @mock.patch("eventlet.spawn")
-    def test_try_to_update_port_status_read_fail_sqlalchemy(self, _m_spawn):
-        # Worth its own case: SQLAlchemyError only reaches the handler when it is not
-        # also a DBError, so this guards the second half of the except tuple.
-        self._read_failure_is_retried(lib.SQLAlchemyError())
+        for error in [lib.DBError(), lib.SQLAlchemyError()]:
+            self.db.get_port.side_effect = error
+            with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
+                self.driver._try_to_update_port_status(mock.Mock(), key)
+            self.assertEqual(
+                [mock.call(5, self.driver._retry_port_status_update, key)],
+                m_spawn.mock_calls,
+            )
+
+        self.db.update_port_status.assert_not_called()
 
     @mock.patch("eventlet.spawn")
     def test_try_to_update_port_status_fail(self, _m_spawn):
         self.driver._get_db()
         self.driver._init_start_endpoint_status_watcher()
+        key = self._status_key_for_db_port("host", "p1")
 
         mock_calls = []
 
@@ -3519,26 +3733,23 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             raise lib.DBError()
 
         self.db.update_port_status = m_update_port_status
-        self.osdb_ports = [copy.deepcopy(lib.port1)]
-        host = lib.port1["binding:host_id"]
-        port_id = lib.port1["id"]
-        self.driver._port_status_cache[(host, port_id)] = "up"
+        self.driver._port_status_cache[key] = "up"
         context = mock.Mock()
         with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
-            self.driver._try_to_update_port_status(context, (host, port_id))
+            self.driver._try_to_update_port_status(context, key)
         self.assertEqual(
             [
                 mock.call(
                     context,
-                    port_id,
+                    "p1",
                     mech_calico.constants.PORT_STATUS_ACTIVE,
-                    host=host,
+                    host="host",
                 )
             ],
             mock_calls,
         )
         self.assertEqual(
-            [mock.call(5, self.driver._retry_port_status_update, (host, port_id))],
+            [mock.call(5, self.driver._retry_port_status_update, key)],
             m_spawn.mock_calls,
         )
 
@@ -3549,20 +3760,18 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         # when something other than a DBError reaches it.
         self.driver._get_db()
         self.driver._init_start_endpoint_status_watcher()
+        key = self._status_key_for_db_port("host", "p1")
 
         def m_update_port_status(context, port_id, status, host=None):
             raise lib.SQLAlchemyError()
 
         self.db.update_port_status = m_update_port_status
-        self.osdb_ports = [copy.deepcopy(lib.port1)]
-        host = lib.port1["binding:host_id"]
-        port_id = lib.port1["id"]
-        self.driver._port_status_cache[(host, port_id)] = "up"
+        self.driver._port_status_cache[key] = "up"
         context = mock.Mock()
         with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
-            self.driver._try_to_update_port_status(context, (host, port_id))
+            self.driver._try_to_update_port_status(context, key)
         self.assertEqual(
-            [mock.call(5, self.driver._retry_port_status_update, (host, port_id))],
+            [mock.call(5, self.driver._retry_port_status_update, key)],
             m_spawn.mock_calls,
         )
 
@@ -3704,8 +3913,8 @@ class TestStatusWatcher(TestStatusWatcherBase):
 
         self.driver.on_port_status_changed.assert_has_calls(
             [
-                mock.call("unknown", "ep2", {"status": "up"}, priority="low"),
-                mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
+                mock.call("unknown", "ep2", "up", workload_id="wlid", priority="low"),
+                mock.call("hostname", "ep1", "up", workload_id="wlid", priority="low"),
             ],
             any_order=True,
         )
@@ -3717,8 +3926,8 @@ class TestStatusWatcher(TestStatusWatcherBase):
         self.endpoint_watcher.start()
         self.driver.on_port_status_changed.assert_has_calls(
             [
-                mock.call("unknown", "ep2", {"status": "up"}, priority="low"),
-                mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
+                mock.call("unknown", "ep2", "up", workload_id="wlid", priority="low"),
+                mock.call("hostname", "ep1", "up", workload_id="wlid", priority="low"),
             ],
             any_order=True,
         )
@@ -3731,8 +3940,8 @@ class TestStatusWatcher(TestStatusWatcherBase):
         self.endpoint_watcher.start()
         self.driver.on_port_status_changed.assert_has_calls(
             [
-                mock.call("unknown", "ep2", None, priority="low"),
-                mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
+                mock.call("unknown", "ep2", None, workload_id="wlid", priority="low"),
+                mock.call("hostname", "ep1", "up", workload_id="wlid", priority="low"),
             ],
             any_order=True,
         )
@@ -3756,7 +3965,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
         self.endpoint_watcher.start()
         self.driver.on_port_status_changed.assert_has_calls(
             [
-                mock.call("hostname", "ep1", {"status": "up"}, priority="high"),
+                mock.call("hostname", "ep1", "up", workload_id="wlid", priority="high"),
             ],
             any_order=True,
         )
@@ -3770,8 +3979,8 @@ class TestStatusWatcher(TestStatusWatcherBase):
 
         self.assertEqual(
             [
-                mock.call("hostname", "ep1", {"status": "up"}, priority="high"),
-                mock.call("hostname", "ep1", None, priority="high"),
+                mock.call("hostname", "ep1", "up", workload_id="wlid", priority="high"),
+                mock.call("hostname", "ep1", None, workload_id="wlid", priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
@@ -3788,11 +3997,25 @@ class TestStatusWatcher(TestStatusWatcherBase):
 
         self.assertEqual(
             [
-                mock.call("hostname", "ep1", None, priority="high"),
+                mock.call("hostname", "ep1", None, workload_id="wlid", priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
         self.assertEqual({}, self.endpoint_watcher._endpoints_by_host)
+
+    def test_endpoint_status_add_json_not_a_dict(self):
+        m_port_status_node = mock.Mock()
+        m_port_status_node.key = (
+            "/calico/felix/v2/no-region/host/hostname/workload/"
+            "openstack/wlid/endpoint/ep1"
+        )
+        m_port_status_node.value = '"up"'
+        self.endpoint_watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
+
+        self.assertEqual(
+            [mock.call("hostname", "ep1", None, workload_id="wlid", priority="high")],
+            self.driver.on_port_status_changed.mock_calls,
+        )
 
     def test_endpoint_status_add_bad_id(self):
         m_port_status_node = mock.Mock()
@@ -3831,7 +4054,9 @@ class TestStatusWatcher(TestStatusWatcherBase):
         # impact at high scale.)
         self.assertEqual(
             [
-                mock.call("hostname", "epid", {"status": "up"}, priority="high"),
+                mock.call(
+                    "hostname", "epid", "up", workload_id="wlid", priority="high"
+                ),
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
@@ -3852,8 +4077,8 @@ class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
 
         self.assertEqual(
             [
-                mock.call("hostname", "ep1", {"status": "up"}, priority="high"),
-                mock.call("hostname", "ep1", None, priority="high"),
+                mock.call("hostname", "ep1", "up", workload_id="wlid", priority="high"),
+                mock.call("hostname", "ep1", None, workload_id="wlid", priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
@@ -3872,7 +4097,7 @@ class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
         self.endpoint_watcher.dispatcher.handle_event(m_port_status_node)
         self.assertEqual(
             [
-                mock.call("hostname", "ep1", {"status": "up"}, priority="high"),
+                mock.call("hostname", "ep1", "up", workload_id="wlid", priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls,
         )

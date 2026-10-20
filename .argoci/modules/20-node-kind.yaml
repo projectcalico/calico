@@ -2,7 +2,7 @@
 version: condensed-module
 
 defaults:
-  timeout: 2h15m
+  timeout: 2h30m
 
 steps:
   - name: node-kind-cluster-tests
@@ -20,10 +20,11 @@ steps:
         value: calico
       - name: COMPONENT
         value: node
-      # A capacity pool the fleets don't exhaust, and a family that takes a
-      # hyperdisk boot disk.
-      - name: VM_MACHINE_TYPE
-        value: c3-standard-4
+      # In priority order, falling back on a stockout or exhausted quota.  C3
+      # first because the Felix fleets favour C4D.  All take a hyperdisk boot
+      # disk.
+      - name: VM_MACHINE_TYPES
+        value: c3-standard-4 c4d-standard-4 n4d-standard-4 n4-standard-4
       - name: VM_DISK_SIZE
         value: 80GB
       - name: CI_GROUP_LABEL
@@ -31,7 +32,7 @@ steps:
       - name: CI_JOB_LABEL
         value: kind-cluster-tests
       # The fleet's watchdog, which captures a hung VM's console; the step
-      # timeout leaves it room.
+      # timeout leaves it room, and 15 minutes for VM creation retries.
       - name: JOB_TIMEOUT_MINUTES
         value: "120"
     commands: |

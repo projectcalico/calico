@@ -38,5 +38,5 @@ func (d Site) URL() (string, error) {
 }
 
 func (d Site) DownloadsURL() (string, error) {
-	return url.JoinPath(BaseArtifactsURL, d.Version.FormattedString())
+	return url.JoinPath(BaseArtifactsURL, d.Version.String())
 }
