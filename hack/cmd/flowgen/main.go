@@ -27,7 +27,8 @@
 //	kubectl exec flowgen -- flowgen -preset composite -rate 10000 -duration 30m
 //
 // -override-dst sends every flow to one address, keeping the generated ports, for a lab run
-// against a single sink; -dry-run draws the flows without sending anything.
+// against a single sink; -targets spreads them round-robin over several, for an ingress run
+// against many target pods; -dry-run draws the flows without sending anything.
 package main
 
 import (
@@ -38,10 +39,12 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/projectcalico/calico/app-policy/policyscale"
 )
@@ -57,10 +60,11 @@ func main() {
 		miss        = flag.Float64("miss-fraction", 0.1, "fraction of flows that match no rule")
 		repeat      = flag.Float64("repeat-fraction", 0.5, "fraction of flows that repeat an earlier flow's destination on a new source port")
 		overrideDst = flag.String("override-dst", "", "send every flow to this address instead of the generated one (lab use)")
+		targetList  = flag.String("targets", "", "send flows round-robin to these addresses instead of the generated ones: a comma-separated list, or @file with addresses separated by commas, spaces or newlines (# starts a comment). With -direction ingress, the pods the policies select")
 		dryRun      = flag.Bool("dry-run", false, "draw the flows without sending")
 		tcpTimeout  = flag.Duration("tcp-timeout", 5*time.Millisecond, "how long a TCP connection attempt waits before it is abandoned")
 		spread      = flag.Bool("spread-source", true, "with -direction ingress: send flows whose generated source is the shared TEST-NET address from across its /24 instead, as many clients would; verdicts are unchanged because no rule names those addresses")
-		direction   = flag.String("direction", "egress", "egress: flows leave this pod for the generated destinations. ingress: flows go to -override-dst (a pod the policies select) from the generated source addresses, which needs workload source spoofing allowed for this pod")
+		direction   = flag.String("direction", "egress", "egress: flows leave this pod for the generated destinations. ingress: flows go to -override-dst or -targets (pods the policies select) from the generated source addresses, which needs workload source spoofing allowed for this pod")
 	)
 	flag.Parse()
 
@@ -78,13 +82,18 @@ func main() {
 	}
 	spec.Seed = *seed
 	fx := policyscale.Build(spec)
+	targets, err := parseTargets(*overrideDst, *targetList)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
 	dir := policyscale.Egress
 	switch *direction {
 	case "egress":
 	case "ingress":
 		dir = policyscale.Ingress
-		if *overrideDst == "" {
-			fmt.Fprintln(os.Stderr, "-direction ingress needs -override-dst: the address of a pod the policies select")
+		if len(targets) == 0 {
+			fmt.Fprintln(os.Stderr, "-direction ingress needs -override-dst or -targets: the addresses of pods the policies select")
 			os.Exit(2)
 		}
 	default:
@@ -99,16 +108,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "unknown protocol %q\n", *protocol)
 		os.Exit(2)
 	}
-	var override net.IP
-	if *overrideDst != "" {
-		if override = net.ParseIP(*overrideDst); override == nil {
-			fmt.Fprintf(os.Stderr, "bad -override-dst %q\n", *overrideDst)
-			os.Exit(2)
-		}
-	}
-
 	sampler := fx.NewSampler(*seed, policyscale.FlowModel{Direction: dir, MissFraction: *miss, RepeatFraction: *repeat})
-	send := sender(*protocol, override, *tcpTimeout, *dryRun, dir == policyscale.Ingress, *spread)
+	send := sender(*protocol, targets, *tcpTimeout, *dryRun, dir == policyscale.Ingress, *spread)
 
 	var (
 		opened, failed atomic.Uint64
@@ -144,7 +145,11 @@ func main() {
 	remainder := *rate % ticksPerSecond
 	var lastOpened uint64
 	start := time.Now()
-	fmt.Fprintf(os.Stderr, "flowgen: %s, %d flows/s for %s over %s, %d senders\n", *preset, *rate, *duration, *protocol, *concurrency)
+	fmt.Fprintf(os.Stderr, "flowgen: %s, %d flows/s for %s over %s, %d senders", *preset, *rate, *duration, *protocol, *concurrency)
+	if len(targets) > 0 {
+		fmt.Fprintf(os.Stderr, ", %d destination addresses", len(targets))
+	}
+	fmt.Fprintln(os.Stderr)
 	tick := 0
 run:
 	for time.Now().Before(deadline) {
@@ -177,18 +182,55 @@ run:
 	}
 }
 
+// parseTargets returns the addresses flows are sent to instead of the generated destinations:
+// -override-dst's one, or -targets' list. None means the generated destinations.
+func parseTargets(overrideDst, targetList string) ([]net.IP, error) {
+	if overrideDst != "" && targetList != "" {
+		return nil, errors.New("-override-dst and -targets are alternatives; give one")
+	}
+	if overrideDst != "" {
+		ip := net.ParseIP(overrideDst)
+		if ip == nil {
+			return nil, fmt.Errorf("bad -override-dst %q", overrideDst)
+		}
+		return []net.IP{ip}, nil
+	}
+	if targetList == "" {
+		return nil, nil
+	}
+	text := targetList
+	if file, ok := strings.CutPrefix(targetList, "@"); ok {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("-targets: %w", err)
+		}
+		var lines []string
+		for _, l := range strings.Split(string(b), "\n") {
+			l, _, _ = strings.Cut(l, "#")
+			lines = append(lines, l)
+		}
+		text = strings.Join(lines, ",")
+	}
+	var ips []net.IP
+	for _, f := range strings.FieldsFunc(text, func(r rune) bool { return r == ',' || unicode.IsSpace(r) }) {
+		ip := net.ParseIP(f)
+		if ip == nil {
+			return nil, fmt.Errorf("-targets: bad address %q", f)
+		}
+		ips = append(ips, ip)
+	}
+	if len(ips) == 0 {
+		return nil, errors.New("-targets: no addresses")
+	}
+	return ips, nil
+}
+
 // sender returns the function that opens one flow.
-func sender(protocol string, override net.IP, tcpTimeout time.Duration, dryRun, spoofSource, spread bool) func(*policyscale.Flow) error {
+func sender(protocol string, targets []net.IP, tcpTimeout time.Duration, dryRun, spoofSource, spread bool) func(*policyscale.Flow) error {
 	if dryRun {
 		return func(*policyscale.Flow) error { return nil }
 	}
-	dst := func(f *policyscale.Flow) string {
-		ip := f.DstIP
-		if override != nil {
-			ip = override
-		}
-		return net.JoinHostPort(ip.String(), strconv.Itoa(f.DstPort))
-	}
+	dst := destination(targets)
 	if protocol == "udp" {
 		payload := []byte("policyscale")
 		return func(f *policyscale.Flow) error {
@@ -262,5 +304,18 @@ func sender(protocol string, override net.IP, tcpTimeout time.Duration, dryRun, 
 			return nil
 		}
 		return err
+	}
+}
+
+// destination returns the function that gives a flow's "address:port": the generated address,
+// or the targets in turn, with the generated port.
+func destination(targets []net.IP) func(*policyscale.Flow) string {
+	var next atomic.Uint64
+	return func(f *policyscale.Flow) string {
+		ip := f.DstIP
+		if len(targets) > 0 {
+			ip = targets[(next.Add(1)-1)%uint64(len(targets))]
+		}
+		return net.JoinHostPort(ip.String(), strconv.Itoa(f.DstPort))
 	}
 }
