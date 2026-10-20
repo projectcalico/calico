@@ -190,6 +190,8 @@ $(ISTIO_CNI_IMAGE): $(ISTIO_CNI_IMAGE_CREATED)
 # builds, fresh local builds). Other base images are pinned by tag so cache
 # freshness is fine without --pull.
 $(ISTIO_CNI_IMAGE_CREATED): DOCKER_PULL :=
+# The s3 cache's builder cannot see the locally loaded nft-rpms image either.
+$(ISTIO_CNI_IMAGE_CREATED): DOCKER_BUILD_CACHE :=
 $(ISTIO_CNI_IMAGE_CREATED): Dockerfile.install-cni bin/install-cni-$(ARCH) bin/istio-cni-$(ARCH) | register nft-rpms-image
 	$(DOCKER_BUILD) --build-context nft-rpms=docker-image://$(NFT_RPMS_IMAGE) -t $(ISTIO_CNI_IMAGE):latest-$(ARCH) -f Dockerfile.install-cni .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(ISTIO_CNI_IMAGE) VALIDARCHES=$(ARCH) IMAGETAG=latest

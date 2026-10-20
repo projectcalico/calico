@@ -408,7 +408,8 @@ DOCKER_PULL =
 endif
 
 # DOCKER_BUILD is the base build command used for building all images.
-DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) \
+# DOCKER_BUILD_PREFIX and DOCKER_BUILD_CACHE are set by the remote build cache.
+DOCKER_BUILD=$(DOCKER_BUILD_PREFIX) docker buildx build $(DOCKER_BUILD_CACHE) --load --platform=linux/$(ARCH) $(DOCKER_PULL) \
 	--build-arg CALICO_BASE=$(CALICO_BASE) \
 	--build-arg GIT_VERSION=$(GIT_VERSION) \
 	--build-arg UBI_IMAGE=$(UBI_IMAGE)
@@ -435,7 +436,75 @@ ifeq ($(strip $(LOCAL_GO_PKG_CACHE)),)
 override LOCAL_GO_PKG_CACHE := $(or $(filter /%,$(GOENV_GOCACHE)),$(DEFAULT_GO_CACHE_PATH))
 endif
 
-DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
+###############################################################################
+# Remote build cache
+#
+# Off unless REMOTE_BUILD_CACHE is set; CI sets it when the bucket credentials
+# are present. Secrets reach commands only through the environment, never as
+# expanded make variables, because make echoes every recipe line to the log.
+###############################################################################
+ifdef REMOTE_BUILD_CACHE
+export REMOTE_CACHE_S3_ENDPOINT ?= https://storage.googleapis.com
+export REMOTE_CACHE_S3_REGION ?= auto
+export REMOTE_CACHE_S3_BUCKET ?= $(GOCACHE_BUCKET_NAME)
+export REMOTE_CACHE_S3_ACCESS_KEY_ID ?= $(GOCACHE_ACCESS_KEY)
+export REMOTE_CACHE_S3_ACCESS_KEY_SECRET ?= $(GOCACHE_SECRET_KEY)
+
+# Go. On the host only when cacheprog is installed there, since Go fails every
+# build when GOCACHEPROG names a missing binary. The root directory is mounted
+# at the same path inside docker, so host and container builds share it.
+export GOCACHEPROG := $(shell command -v cacheprog 2>/dev/null)
+export CACHEPROG_ROOT_DIRECTORY := $(LOCAL_GO_PKG_CACHE)/cacheprog
+export CACHEPROG_REMOTE_STORAGE_TYPE := s3
+export CACHEPROG_S3_ENDPOINT := $(REMOTE_CACHE_S3_ENDPOINT)
+export CACHEPROG_S3_REGION := $(REMOTE_CACHE_S3_REGION)
+export CACHEPROG_S3_BUCKET := $(REMOTE_CACHE_S3_BUCKET)
+export CACHEPROG_S3_EXCLUDE_HEADERS_FROM_SIGNING := Accept-Encoding
+export CACHEPROG_S3_EXPIRATION := 168h
+export CACHEPROG_S3_PREFIX := gobuildcache-objects
+export CACHEPROG_S3_ACCESS_KEY_ID := $(REMOTE_CACHE_S3_ACCESS_KEY_ID)
+export CACHEPROG_S3_ACCESS_KEY_SECRET := $(REMOTE_CACHE_S3_ACCESS_KEY_SECRET)
+
+DOCKER_REMOTE_CACHE_ARGS := \
+	-v $(CACHEPROG_ROOT_DIRECTORY):$(CACHEPROG_ROOT_DIRECTORY):rw \
+	-e GOCACHEPROG=cacheprog \
+	-e CACHEPROG_ROOT_DIRECTORY \
+	-e CACHEPROG_REMOTE_STORAGE_TYPE \
+	-e CACHEPROG_S3_ENDPOINT \
+	-e CACHEPROG_S3_REGION \
+	-e CACHEPROG_S3_BUCKET \
+	-e CACHEPROG_S3_EXCLUDE_HEADERS_FROM_SIGNING \
+	-e CACHEPROG_S3_EXPIRATION \
+	-e CACHEPROG_S3_PREFIX \
+	-e CACHEPROG_S3_ACCESS_KEY_ID \
+	-e CACHEPROG_S3_ACCESS_KEY_SECRET
+
+# Images. BuildKit's s3 cache needs a docker-container builder, and that
+# builder resolves FROM and --build-context images from the registry, never the
+# local daemon; a build that depends on an image it only has locally clears
+# DOCKER_BUILD_CACHE. buildx reads its credentials from AWS_* itself.
+BUILDX_REMOTE_CACHE_BUILDER ?= calico-remote-cache
+# Keyed on the target, since one directory can build several images.
+BUILDX_CACHE_NAME ?= $(notdir $(CURDIR))/$(ARCH)/$(notdir $@)
+BUILDX_S3_CACHE = type=s3,endpoint_url=$(REMOTE_CACHE_S3_ENDPOINT),region=$(REMOTE_CACHE_S3_REGION),bucket=$(REMOTE_CACHE_S3_BUCKET),prefix=buildx-cache/,use_path_style=true,name=$(BUILDX_CACHE_NAME)
+# Tolerates a concurrent make having created the builder first.
+DOCKER_BUILD_PREFIX = { docker buildx inspect $(BUILDX_REMOTE_CACHE_BUILDER) >/dev/null 2>&1 || \
+	docker buildx create --name $(BUILDX_REMOTE_CACHE_BUILDER) --driver docker-container >/dev/null 2>&1 || \
+	docker buildx inspect $(BUILDX_REMOTE_CACHE_BUILDER) >/dev/null; } && \
+	AWS_ACCESS_KEY_ID="$$REMOTE_CACHE_S3_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$$REMOTE_CACHE_S3_ACCESS_KEY_SECRET"
+DOCKER_BUILD_CACHE = --builder=$(BUILDX_REMOTE_CACHE_BUILDER) --cache-from=$(BUILDX_S3_CACHE) \
+	$(if $(filter true,$(REMOTE_BUILD_CACHE_WRITE)),--cache-to=$(BUILDX_S3_CACHE)$(comma)mode=max$(comma)ignore-error=true)
+
+# Anything else: one tarball per key, so a key must hash every input that
+# changes the directory's contents. Writes are gated like the image cache's.
+remote_cache_restore = $(REPO_ROOT)/hack/remote-cache restore $(1) $(2)
+remote_cache_store = $(if $(filter true,$(REMOTE_BUILD_CACHE_WRITE)),$(REPO_ROOT)/hack/remote-cache store $(1) $(2))
+else
+remote_cache_restore =
+remote_cache_store =
+endif
+
+DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) $(CACHEPROG_ROOT_DIRECTORY) bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
@@ -451,20 +520,8 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 		-e "GOFLAGS=$(GOFLAGS)" \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
 		-v $(LOCAL_GO_PKG_CACHE):/go-cache:rw \
-		-w /go/src/$(PACKAGE_NAME) \
-		-e GOCACHEPROG=cacheprog \
-		-e CACHEPROG_ROOT_DIRECTORY=/go-cache/cacheprog \
-		-e CACHEPROG_REMOTE_STORAGE_TYPE=$(CACHEPROG_REMOTE_STORAGE_TYPE) \
-		-e CACHEPROG_S3_ENDPOINT=$(CACHEPROG_S3_ENDPOINT) \
-		-e CACHEPROG_S3_REGION=$(CACHEPROG_S3_REGION) \
-		-e CACHEPROG_S3_BUCKET=$(CACHEPROG_S3_BUCKET) \
-		-e CACHEPROG_S3_EXCLUDE_HEADERS_FROM_SIGNING=$(CACHEPROG_S3_EXCLUDE_HEADERS_FROM_SIGNING) \
-		-e CACHEPROG_S3_EXPIRATION=$(CACHEPROG_S3_EXPIRATION) \
-		-e CACHEPROG_S3_PREFIX=$(CACHEPROG_S3_PREFIX) \
-		-e CACHEPROG_S3_ACCESS_KEY_ID=$(CACHEPROG_S3_ACCESS_KEY_ID) \
-		-e CACHEPROG_S3_ACCESS_KEY_SECRET=$(CACHEPROG_S3_ACCESS_KEY_SECRET) \
-
-
+		$(DOCKER_REMOTE_CACHE_ARGS) \
+		-w /go/src/$(PACKAGE_NAME)
 
 DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
