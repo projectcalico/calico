@@ -29,6 +29,10 @@
 // -override-dst sends every flow to one address, keeping the generated ports, for a lab run
 // against a single sink; -targets spreads them round-robin over several, for an ingress run
 // against many target pods; -dry-run draws the flows without sending anything.
+//
+// -mode hold opens -connections TCP connections instead, at -rate per second, and keeps them
+// open for the run, writing a few bytes on each every -hold-interval; -mode listen accepts and
+// holds connections for it (see hold.go).
 package main
 
 import (
@@ -51,10 +55,11 @@ import (
 
 func main() {
 	var (
+		mode        = flag.String("mode", "flows", "flows: open short flows at -rate. hold: open -connections long-lived TCP connections at -rate and keep them open for the run. listen: accept TCP connections on -listen-ports and hold them, reading and discarding data")
 		preset      = flag.String("preset", "composite", "policy set the cluster has applied: baseline, egress or composite")
 		seed        = flag.Int64("seed", policyscale.DefaultSeed, "generator seed; must match the applied policy set")
 		rate        = flag.Int("rate", 1000, "new flows per second to open")
-		duration    = flag.Duration("duration", 30*time.Second, "how long to run")
+		duration    = flag.Duration("duration", 30*time.Second, "how long to run; with -mode hold or listen, 0 runs until interrupted")
 		protocol    = flag.String("protocol", "udp", "udp (one datagram per flow) or tcp (one connection attempt per flow)")
 		concurrency = flag.Int("concurrency", 64, "sender goroutines")
 		miss        = flag.Float64("miss-fraction", 0.1, "fraction of flows that match no rule")
@@ -65,8 +70,35 @@ func main() {
 		tcpTimeout  = flag.Duration("tcp-timeout", 5*time.Millisecond, "how long a TCP connection attempt waits before it is abandoned")
 		spread      = flag.Bool("spread-source", true, "with -direction ingress: send flows whose generated source is the shared TEST-NET address from across its /24 instead, as many clients would; verdicts are unchanged because no rule names those addresses")
 		direction   = flag.String("direction", "egress", "egress: flows leave this pod for the generated destinations. ingress: flows go to -override-dst or -targets (pods the policies select) from the generated source addresses, which needs workload source spoofing allowed for this pod")
+
+		connections  = flag.Int("connections", 1000, "-mode hold: connections to open and hold")
+		holdPort     = flag.Int("hold-port", 0, "-mode hold: connect to this port instead of the generated one, e.g. the port a -mode listen sink accepts on")
+		holdInterval = flag.Duration("hold-interval", 10*time.Second, "-mode hold: how often to write on each held connection")
+		holdBytes    = flag.Int("hold-bytes", 8, "-mode hold: bytes written on each held connection every -hold-interval")
+		dialTimeout  = flag.Duration("dial-timeout", 3*time.Second, "-mode hold: how long a connection attempt waits before it counts as failed")
+		listenAddr   = flag.String("listen-addr", "0.0.0.0", "-mode listen: address to listen on")
+		listenPorts  = flag.String("listen-ports", "9000", "-mode listen: ports to listen on: a comma-separated list of ports and ranges, e.g. 9000 or 80,443,8000-8010")
 	)
 	flag.Parse()
+
+	switch *mode {
+	case "flows", "hold":
+	case "listen":
+		// Needs no policy set: it only accepts.
+		ports, err := parsePorts(*listenPorts)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "-listen-ports: %v\n", err)
+			os.Exit(2)
+		}
+		if _, _, err := runListen(*listenAddr, ports, *duration); err != nil {
+			fmt.Fprintf(os.Stderr, "flowgen: listen: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown mode %q\n", *mode)
+		os.Exit(2)
+	}
 
 	var spec policyscale.Spec
 	switch *preset {
@@ -109,6 +141,29 @@ func main() {
 		os.Exit(2)
 	}
 	sampler := fx.NewSampler(*seed, policyscale.FlowModel{Direction: dir, MissFraction: *miss, RepeatFraction: *repeat})
+	if *mode == "hold" {
+		// A held connection needs the replies, so it always comes from this pod's own address:
+		// with -direction ingress it goes to the targets without the generated source.
+		if *connections < 1 || *holdBytes < 1 || *holdInterval <= 0 || *rate < 1 || *holdPort < 0 || *holdPort > 65535 {
+			fmt.Fprintln(os.Stderr, "-mode hold needs -connections, -rate, -hold-bytes and -hold-interval above zero, and -hold-port in 0-65535")
+			os.Exit(2)
+		}
+		res := runHold(sampler, holdConfig{
+			connections: *connections,
+			rate:        *rate,
+			duration:    *duration,
+			dialTimeout: *dialTimeout,
+			interval:    *holdInterval,
+			payload:     []byte(strings.Repeat("h", *holdBytes)),
+			port:        *holdPort,
+			shards:      max(*concurrency, 1),
+			targets:     targets,
+		})
+		if res.failed > 0 {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	send := sender(*protocol, targets, *tcpTimeout, *dryRun, dir == policyscale.Ingress, *spread)
 
 	var (
