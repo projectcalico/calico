@@ -40,8 +40,8 @@ mkdir -p "$stub_dir"
 
 # Outcomes: ok, slow-ok (RUNNING on the first poll), stockout, quota and
 # internal (in the operation), quota-sync and capacity-sync (rejected up front),
-# invalid (a non-retryable operation error) and reject (a non-retryable up-front
-# rejection).  Operation failures carry VM_MIN_COUNT_NOT_REACHED beside their
+# invalid (a non-retryable operation error), mincount (the summary code alone)
+# and reject (a non-retryable up-front rejection).  Operation failures carry VM_MIN_COUNT_NOT_REACHED beside their
 # cause, as GCE reports them.
 cat >"$stub_dir/gcloud" <<'STUB'
 #!/usr/bin/env bash
@@ -87,6 +87,7 @@ case "$*" in
       quota) codes=QUOTA_EXCEEDED ;;
       internal) codes="VM_MIN_COUNT_NOT_REACHED INTERNAL_ERROR" ;;
       invalid) codes="VM_MIN_COUNT_NOT_REACHED INVALID_FIELD_VALUE" ;;
+      mincount) codes=VM_MIN_COUNT_NOT_REACHED ;;
       *) echo "stub: no outcome for group $group" >&2; exit 1 ;;
     esac
     if [ -n "${codes:-}" ]; then
@@ -155,6 +156,9 @@ check "polls until the operation is done" [ "$rc" = 0 -a "$(calls)" = "create c4
 run 15 "c4d invalid" "n4d ok"
 check "non-retryable operation error fails at once" [ "$rc" = 1 -a "$(calls)" = "create c4d" ]
 check "failure banner names the error" output_has "non-retryable error (VM_MIN_COUNT_NOT_REACHED INVALID_FIELD_VALUE)"
+
+run 15 "c4d mincount" "n4d ok"
+check "the summary code without a cause fails at once" [ "$rc" = 1 -a "$(calls)" = "create c4d" ]
 
 run 15 "c4d reject" "n4d ok"
 check "non-quota rejection fails at once" [ "$rc" = 1 -a "$(calls)" = "create c4d" ]

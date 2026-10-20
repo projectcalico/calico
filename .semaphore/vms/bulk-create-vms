@@ -17,9 +17,8 @@
 
 # A stocked-out pool can refill, each machine family has its own CPU quota, and
 # GCE asks for an INTERNAL_ERROR to be retried, so these are worth another
-# attempt.  VM_MIN_COUNT_NOT_REACHED only summarises whichever of them stopped a
-# bulk insert short.  Any other failure would recur.
-retryable_vm_create_codes_re='^(ZONE_RESOURCE_POOL_EXHAUSTED|ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS|REGION_INSUFFICIENT_CAPACITY|QUOTA_EXCEEDED|INTERNAL_ERROR|VM_MIN_COUNT_NOT_REACHED)$'
+# attempt.  Any other failure would recur.
+retryable_vm_create_codes_re='^(ZONE_RESOURCE_POOL_EXHAUSTED|ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS|REGION_INSUFFICIENT_CAPACITY|QUOTA_EXCEEDED|INTERNAL_ERROR)$'
 
 # bulk_create_vms <comma-separated names> <region> <gcloud create args...>
 #
@@ -37,7 +36,7 @@ bulk_create_vms() {
   num_vms=$(tr ',' '\n' <<<"$names" | grep -c .)
   local start=$SECONDS
   local deadline=$((SECONDS + ${VM_CREATE_RETRY_MINUTES:-15} * 60))
-  local backoff=60 attempt=0 type codes
+  local backoff=60 attempt=0 type codes causes
   local -a failures=()
 
   echo "Creating ${num_vms} test VMs in region ${region}; machine types in priority order: ${types[*]}"
@@ -59,7 +58,9 @@ bulk_create_vms() {
       codes="${codes:-UNKNOWN}"
       echo "VM creation attempt ${attempt} with ${type} failed: ${codes//$'\n'/ }"
       failures+=("${type}: ${codes//$'\n'/ }")
-      if grep -qvE "$retryable_vm_create_codes_re" <<<"$codes"; then
+      # VM_MIN_COUNT_NOT_REACHED only summarises the cause, so it is not one.
+      causes=$(grep -vx VM_MIN_COUNT_NOT_REACHED <<<"$codes")
+      if [ -z "$causes" ] || grep -qvE "$retryable_vm_create_codes_re" <<<"$causes"; then
         echo "===== Test VM creation FAILED: ${type} hit a non-retryable error (${codes//$'\n'/ }) =====" >&2
         return 1
       fi
