@@ -40,7 +40,8 @@ mkdir -p "$stub_dir"
 
 # Outcomes: ok, slow-ok (RUNNING on the first poll), stockout, quota and
 # internal (in the operation), quota-sync and capacity-sync (rejected up front),
-# invalid (a non-retryable operation error), mincount (the summary code alone)
+# partial (an internal error that leaves vm-1 behind), invalid (a non-retryable
+# operation error), mincount (the summary code alone)
 # and reject (a non-retryable up-front rejection).  Operation failures carry VM_MIN_COUNT_NOT_REACHED beside their
 # cause, as GCE reports them.
 cat >"$stub_dir/gcloud" <<'STUB'
@@ -70,6 +71,7 @@ case "$*" in
         printf "ERROR: (gcloud.compute.instances.bulk.create) Invalid value for field 'resource.machineType'\n" >&2
         exit 1 ;;
     esac
+    [ "$outcome" != partial ] || echo vm-1,us-central1-a >"$state/leftover"
     echo "$outcome" >"$state/group-$type-$n"
     echo "$type-$n"
     ;;
@@ -85,7 +87,7 @@ case "$*" in
       ok|slow-ok) echo '[{"status": "DONE"}]' ;;
       stockout) codes="VM_MIN_COUNT_NOT_REACHED ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS" ;;
       quota) codes=QUOTA_EXCEEDED ;;
-      internal) codes="VM_MIN_COUNT_NOT_REACHED INTERNAL_ERROR" ;;
+      internal|partial) codes="VM_MIN_COUNT_NOT_REACHED INTERNAL_ERROR" ;;
       invalid) codes="VM_MIN_COUNT_NOT_REACHED INVALID_FIELD_VALUE" ;;
       mincount) codes=VM_MIN_COUNT_NOT_REACHED ;;
       *) echo "stub: no outcome for group $group" >&2; exit 1 ;;
@@ -94,6 +96,13 @@ case "$*" in
       errs=$(printf '{"code": "%s"},' $codes)
       printf '[{"status": "DONE", "error": {"errors": [%s]}}]\n' "${errs%,}"
     fi
+    ;;
+  *"instances list"*)
+    cat "$state/leftover" 2>/dev/null
+    ;;
+  *"instances delete"*)
+    echo "delete $5 $(arg zone "$@")" >>"$state/calls"
+    rm -f "$state/leftover"
     ;;
   *) echo "stub gcloud: unexpected call: $*" >&2; exit 1 ;;
 esac
@@ -149,6 +158,10 @@ check "the up-front shortage is named" \
 
 run 15 "c4d internal" "n4d ok"
 check "a GCE internal error falls back" [ "$rc" = 0 -a "$vm_machine_type" = n4d ]
+
+run 15 "c4d partial" "n4d ok"
+check "VMs left by a failed attempt are deleted before the next" \
+  [ "$rc" = 0 -a "$(calls)" = "create c4d delete vm-1 us-central1-a create n4d" ]
 
 run 15 "c4d slow-ok"
 check "polls until the operation is done" [ "$rc" = 0 -a "$(calls)" = "create c4d sleep 10" ]
