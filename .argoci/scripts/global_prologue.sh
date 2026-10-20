@@ -24,6 +24,9 @@ sleep $((RANDOM % 60))
 createLocalSecret "marvin" "${HOME}/.keys/marvin" || true
 createLocalSecret "banzai-google-service-account.json" "${HOME}/secrets/banzai-google-service-account.json" || true
 createLocalSecret "docker_cfg.json" "${HOME}/.docker/config.json" || true
+# Separate pristine copy: gcloud configure-docker below rewrites ~/.docker/config.json
+# to use a credHelper, which is useless once the file becomes an in-cluster pull secret.
+createLocalSecret "docker_cfg.json" "${HOME}/secrets/docker_cfg.json" || true
 # Red Hat pull secret for aws-openshift provisioning; no-op until the secret is
 # added to the argoci store (see aws-openshift:check-prereqs). Staged into the
 # bz profile below.
@@ -277,6 +280,11 @@ if [[ -f "${HOME}/.docker/config.json" ]]; then
   echo "[INFO] staged docker_auth.json into ${BZ_LOCAL_DIR}/config"
 else
   echo "[WARN] ${HOME}/.docker/config.json missing; docker_auth not staged"
+fi
+# sto:install (benchmarks) turns this file into the sto-system image pull secrets.
+if [[ -f "${HOME}/secrets/docker_cfg.json" ]]; then
+  install -m 0600 "${HOME}/secrets/docker_cfg.json" "${BZ_LOCAL_DIR}/config/docker_cfg.json"
+  echo "[INFO] staged docker_cfg.json into ${BZ_LOCAL_DIR}/config"
 fi
 # aws-openshift:check-prereqs expects the Red Hat pull secret at this path.
 if [[ -f "${HOME}/secrets/redhat-pull-secret.txt" ]]; then
