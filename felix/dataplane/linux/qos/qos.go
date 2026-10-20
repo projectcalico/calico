@@ -196,6 +196,69 @@ func ReadEgressQdisc(intf string) (*TokenBucketState, error) {
 const maxIfbDeviceLength = 15
 const ifbDevicePrefix = "bwcali"
 
+// CleanupOrphanedIfbDevices removes Calico IFB devices that no longer have a
+// corresponding workload interface. IFB devices outlive their workload veth
+// when the veth is deleted while Felix is stopped, so they cannot be cleaned
+// up by the normal WorkloadEndpoint removal path.
+func CleanupOrphanedIfbDevices(workloadIfacePrefixes []string) error {
+	links, err := netlink.LinkList()
+	if err != nil {
+		return fmt.Errorf("failed to list links while cleaning up orphaned ifb devices: %w", err)
+	}
+
+	orphaned := orphanedIfbLinks(links, workloadIfacePrefixes)
+	var errs []error
+	for _, link := range orphaned {
+		name := link.Attrs().Name
+		if err := netlink.LinkDel(link); err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); ok {
+				continue
+			}
+			errs = append(errs, fmt.Errorf("failed to delete orphaned ifb device %s: %w", name, err))
+			continue
+		}
+		logrus.WithField("ifbDevice", name).Info("Deleted orphaned QoS IFB device")
+	}
+
+	return errors.Join(errs...)
+}
+
+// orphanedIfbLinks returns the Calico IFB links that do not correspond to a
+// currently present workload interface. Keep this separate from the netlink
+// mutation above so the ownership decision can be tested without requiring
+// CAP_NET_ADMIN.
+func orphanedIfbLinks(links []netlink.Link, workloadIfacePrefixes []string) []netlink.Link {
+	activeIfbNames := make(map[string]struct{})
+	for _, link := range links {
+		attrs := link.Attrs()
+		if attrs == nil || !isWorkloadIface(attrs.Name, workloadIfacePrefixes) {
+			continue
+		}
+		activeIfbNames[GetIfbDeviceName(attrs.Name)] = struct{}{}
+	}
+
+	var orphaned []netlink.Link
+	for _, link := range links {
+		attrs := link.Attrs()
+		if attrs == nil || !strings.HasPrefix(attrs.Name, ifbDevicePrefix) {
+			continue
+		}
+		if _, ok := activeIfbNames[attrs.Name]; !ok {
+			orphaned = append(orphaned, link)
+		}
+	}
+	return orphaned
+}
+
+func isWorkloadIface(name string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func GetMTU(deviceName string) (int, error) {
 	link, err := netlink.LinkByName(deviceName)
 	if err != nil {

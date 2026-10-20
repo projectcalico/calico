@@ -60,6 +60,7 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	linuxqos "github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -2712,6 +2713,9 @@ func (d *InternalDataplane) processIfaceUpdate(ifaceUpdate any) {
 func (d *InternalDataplane) processIfaceInSync() {
 	if d.ifaceMonitorInSync {
 		return
+	}
+	if err := linuxqos.CleanupOrphanedIfbDevices(d.config.RulesConfig.WorkloadIfacePrefixes); err != nil {
+		log.WithError(err).Warn("Failed to clean up orphaned QoS IFB devices")
 	}
 	log.Info("Interface monitor now in sync.")
 	d.ifaceMonitorInSync = true
