@@ -36,3 +36,4 @@ output
 report.json
 junit
 junit.xml
+.cache
