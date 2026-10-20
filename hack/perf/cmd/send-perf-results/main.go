@@ -86,9 +86,10 @@ func main() {
 		if *requirePublication {
 			log.Fatalf("send failed: %v (--require-publication set)", err)
 		}
-		log.Printf("warning: walkAndSend returned an error: %v", err)
+		log.Printf("warning: publication hit an error: %v", err)
 		return
 	}
+
 	// The counts, not the returned error, are what catch the likely failures
 	// here: a rejected credential fails each POST separately and walkAndSend
 	// logs those as warnings, so it still returns nil.  Having nothing to send
@@ -194,7 +195,25 @@ func publish(client *http.Client, esURL, auth, dir, tmplDir string, metadata map
 	var fields fieldFilter
 	switch {
 	case dryRun:
+		// A dry run won't touch ES at all, even for reading.  (It might not have ES
+		// credentials.)  Hence it also doesn't filter the new perf records against the
+		// fields that are known already to be mapped in ES, before printing those records
+		// out.
 	case prRun:
+		// A PR run will not write the index template or update the mappings of an existing
+		// index, and it also takes care to filter the new perf records down to the set of
+		// fields that are already mapped in the index, so as not to accidentally push a
+		// field that would acquire an ES-inferred mapping.  Hence we construct a
+		// fieldFilter here that is limited to the fields that are mapped in the current
+		// index.
+		//
+		// (A PR run will also not create the index if it does not yet exist.)
+		//
+		// When perf records include new fields - i.e. those not yet in the live mapping -
+		// we also want to check that those new fields have been declared in the index
+		// template file (hack/perf/index-templates/<family>.json) and report any missing
+		// declarations.  Hence `declaredFields` reads that index template file and returns
+		// the set of declared field names.
 		log.Printf("PR run: leaving index templates and mappings unchanged")
 		fields = func(family string) (mapped, declared set.Set[string], err error) {
 			live, err := liveProperties(client, esURL, auth, family+"_"+year)
@@ -204,6 +223,19 @@ func publish(client *http.Client, esURL, auth, dir, tmplDir string, metadata map
 			return live.names(), declaredFields(tmplDir, family), nil
 		}
 	default:
+		// A non-dry non-PR run - e.g. a post-merge or weekly cron run - will write the
+		// index template, so as to be ready for when the next annual index is created, will
+		// create the index if it does not already exist, and will add new field mappings,
+		// as defined in the index template, to the mappings of the live index.  Hence we
+		// know that mappings should be present and correct for all perf record fields, and
+		// should do not need to filter any of those out, or detect any missing
+		// declarations.
+		//
+		// If warnings were ignored on previous PR runs, it's possible, at this point, for
+		// new perf records to include new fields that have not been declared in the index
+		// template file.  But we don't want this to cause failure of non-PR CI.  In this
+		// case the new fields will be dynamically mapped by ES.
+		//
 		// Failures here are warnings -- a missing mapping means new fields get default
 		// mappings, which is a Kibana inconvenience, not a data-loss event.
 		if err := applyTemplates(client, esURL, auth, tmplDir, year); err != nil {
