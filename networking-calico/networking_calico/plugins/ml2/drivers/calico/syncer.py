@@ -176,14 +176,11 @@ class ResourceSyncer(object):
         n_deleted = 0
         n_created = 0
 
-        # Process "lm <name>" entries before everything else so that, when a
-        # mid-migration port is being created from scratch in etcd, Felix sees the
-        # LiveMigration resource before the destination WorkloadEndpoint -- matching the
-        # ordering the dynamic postcommit path uses on migration start.  The key is a
-        # no-op for resource kinds that don't have "lm " prefixed names; the secondary
-        # sort by name keeps the order deterministic across runs.
+        # The final sort by name keeps the order deterministic across runs.
+        order_key = self.compare_order_key_fn(neutron_map)
+
         def _iter_order(n):
-            return (0 if n.startswith("lm ") else 1, n)
+            return (order_key(n), n)
 
         for name in sorted(set(etcd_map) | set(neutron_map), key=_iter_order):
             in_etcd = name in etcd_map
@@ -298,6 +295,14 @@ class ResourceSyncer(object):
         source-side WEPs.
         """
         return etcd_map
+
+    def compare_order_key_fn(self, neutron_map):
+        """Optional hook for subclasses to order the compare loop.
+
+        Returns a function from a name to a sort key; names are processed in key order,
+        then by name.  The default processes everything by name.
+        """
+        return lambda name: ()
 
     def delete_legacy_etcd_data(self):
         # By default this is a no-op, but subclasses may override.
