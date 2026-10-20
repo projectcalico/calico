@@ -937,11 +937,11 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 					}
 
 					ct_ctx_nat->allow_return = true;
-					if (!np_tun_dst(ctx, &rt->next_hop, &STATE->ip_dst)) {
+					if (!np_tun_dst(ctx, &rt->next_hop, &ct_ctx_nat->tun_ip)) {
 						deny_reason(ctx, CALI_REASON_RT_UNKNOWN);
 						goto deny;
 					}
-					ct_ctx_nat->tun_ip = STATE->ip_dst;
+					STATE->ip_dst = ct_ctx_nat->tun_ip;
 				} else if (cali_rt_is_workload(rt) &&
 						!ip_equal(STATE->ip_dst, STATE->post_nat_ip_dst) &&
 						!CALI_F_NAT_IF) {

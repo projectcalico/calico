@@ -28,9 +28,10 @@ static CALI_BPF_INLINE bool np_tun_src(struct cali_tc_ctx *ctx, ipv46_addr_t *sr
 }
 
 /* np_tun_dst sets *dst to the tunnel's outer destination for the node whose
- * primary IP is *node_ip.  Returns false if that node is unreachable.
+ * primary IP is *node_ip.  Returns false, leaving *dst untouched, if that node
+ * is unreachable.
  */
-static CALI_BPF_INLINE bool np_tun_dst(struct cali_tc_ctx *ctx, ipv46_addr_t *node_ip,
+static CALI_BPF_INLINE bool np_tun_dst(struct cali_tc_ctx *ctx, const ipv46_addr_t *node_ip,
 				       ipv46_addr_t *dst)
 {
 	*dst = *node_ip;
