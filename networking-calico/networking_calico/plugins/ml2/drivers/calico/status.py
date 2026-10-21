@@ -254,7 +254,7 @@ class EndpointStatusWatcher(StatusWatcher):
             status_dict = json.loads(raw_json)
         except (ValueError, TypeError):
             LOG.error("Bad JSON data for %s: %s", status_id, raw_json)
-            status = None  # Report as error
+            status = None  # As if the status were deleted.
             self._status_ids.discard(status_id)
         else:
             self._status_ids.add(status_id)
