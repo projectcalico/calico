@@ -16,6 +16,8 @@ static CALI_BPF_INLINE void __compile_state_asserts(void) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-local-typedef"
 COMPILE_TIME_ASSERT(sizeof(struct cali_tc_state) <= STATE_SIZE);
+/* TC globals and the packet scratch area share one state-map slot. */
+COMPILE_TIME_ASSERT(sizeof(struct cali_tc_globals) + sizeof(struct pkt_scratch) <= STATE_SIZE);
 #pragma clang diagnostic pop
 }
 
