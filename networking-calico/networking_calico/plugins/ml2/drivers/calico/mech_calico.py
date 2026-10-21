@@ -911,11 +911,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         migration would leave a healthy VM's port in ERROR.
 
         We therefore ignore who reported, and answer for the owning hosts instead: the
-        port is ACTIVE if any owner has it up, and otherwise takes the binding host's
-        status.  Answering on behalf of a host that did not report is also what makes
-        this self-healing, because a non-owner's deletion is precisely the event that
-        re-asserts the owner's status: Felix writes a status key only when it changes,
-        so the owner itself will not report again.
+        port is ACTIVE if any owner has it up, and otherwise takes the status of the
+        first owner that has one, the binding host first.  Only if no owner has a
+        status, and the reporting host is one, is the port in ERROR.  Answering on
+        behalf of a host that did not report is also what makes this self-healing,
+        because a non-owner's deletion is precisely the event that re-asserts the
+        owner's status: Felix writes a status key only when it changes, so the owner
+        itself will not report again.
 
         Returns None if there is nothing worth writing.
         """
