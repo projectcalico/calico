@@ -82,6 +82,12 @@ globalPrologue: |
       export REMOTE_BUILD_CACHE_WRITE=true
     fi
   fi
+  # The image cache lives in Artifact Registry, which the HMAC key cannot reach.
+  # Without this login the build still works, just with no image cache.
+  if [ -n "${GOCACHE_GAR_KEY_JSON:-}" ] && docker info >/dev/null 2>&1; then
+    printf '%s' "$GOCACHE_GAR_KEY_JSON" | docker login --username _json_key --password-stdin https://us-central1-docker.pkg.dev ||
+      echo "[WARN] Artifact Registry login failed; building without the image cache"
+  fi
   # One place for the Go build cache, whether a build runs in docker or on the
   # host, so what is restored is what the build reads.
   export LOCAL_GO_PKG_CACHE="${CI_HOME}/${CI_GIT_DIR}/.go-pkg-cache"
