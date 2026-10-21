@@ -666,15 +666,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         )
 
     def _init_start_endpoint_status_watcher(self):
-        # Mapping from (hostname, workload, port-id) -- the identity of Felix's
-        # status key -- to Calico's status for a port.  The hostname is included to
+        # Mapping from (hostname, device_id, port-id) -- the identity of Felix's status
+        # key -- to Calico's status for a port.  The hostname is included to
         # disambiguate between multiple copies of a port, which may exist during a
-        # migration or a re-schedule.  The workload segment is derived from the port's
-        # device_id, which changes when a port moves to another VM.
+        # migration or a re-schedule.  The device_id changes when a port moves to
+        # another VM.
         self._port_status_cache = {}
-        self._status_namespace = datamodel_v3.get_namespace(
-            calico_config.get_region_string()
-        )
 
         # Queue used to fan out port status updates to worker threads.  Notes:
         # * the queue contains tuples (priority, <status key>); we use a
@@ -758,7 +755,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         )
 
     def on_port_status_changed(
-        self, hostname, port_id, calico_status, *, workload_id, priority="low"
+        self, hostname, port_id, calico_status, *, device_id, priority="low"
     ):
         """Called when etcd tells us that a port status has changed.
 
@@ -766,10 +763,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         :param port_id: the port ID.
         :param calico_status: new status for the port, or None if the status
                was deleted.
-        :param workload_id: the workload segment of Felix's status key, as it
-               appears in the key.
+        :param device_id: the device_id that Felix's status key was written under.
         """
-        port_status_key = (intern_string(hostname), intern_string(workload_id), port_id)
+        port_status_key = (intern_string(hostname), intern_string(device_id), port_id)
 
         # Check whether this update gives us new information to pass to
         # Neutron.  "high" priority updates come from changes spotted by Felix,
@@ -896,17 +892,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             )
         ]
 
-    def _neutron_status_for_port(self, port, workload_id, port_id, hostname):
+    def _neutron_status_for_port(self, port, port_id, hostname):
         """Work out the Neutron status to write for ``port``.
 
-        ``workload_id`` is the workload segment of Felix's status keys for the port's
-        current device_id; statuses under any other workload are not the port's.
-        ``hostname`` is the host whose Calico endpoint status just changed, which is not
-        necessarily a host that still owns the port.  Calico keeps endpoint status per
-        host, so across a live migration both the destination's "up" and the source's
-        subsequent deletion arrive for the same Neutron port -- which has only a single
-        status field.  Whichever landed last used to win, so a completed migration could
-        leave a healthy VM's port in ERROR.
+        Only statuses under the port's current device_id count; any other is for a VM
+        the port has left.  ``hostname`` is the host whose Calico endpoint status just
+        changed, which is not necessarily a host that still owns the port.  Calico keeps
+        endpoint status per host, so across a live migration both the destination's "up"
+        and the source's subsequent deletion arrive for the same Neutron port -- which
+        has only a single status field.  Whichever landed last used to win, so a
+        completed migration could leave a healthy VM's port in ERROR.
 
         We therefore ignore who reported, and answer for the owning hosts instead: the
         port is ACTIVE if any owner has it up, and otherwise takes the binding host's
@@ -918,8 +913,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         Returns None if there is nothing worth writing.
         """
         owners = self._owning_hosts(port)
+        device_id = port.get("device_id")
         statuses = [
-            self._port_status_cache.get((host, workload_id, port_id)) for host in owners
+            self._port_status_cache.get((host, device_id, port_id)) for host in owners
         ]
 
         if datamodel_v1.ENDPOINT_STATUS_UP in statuses:
@@ -946,9 +942,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         :param admin_context: Admin context to pass to Neutron.  Should be
                unique for each thread.
-        :param port_status_key: tuple of hostname, workload, port_id.
+        :param port_status_key: tuple of hostname, device_id, port_id.
         """
-        hostname, workload_id, port_id = port_status_key
+        hostname, device_id, port_id = port_status_key
         calico_status = self._port_status_cache.get(port_status_key)
 
         # Read the port once, up front.  Its device_id decides whether this status is
@@ -974,23 +970,18 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             )
             return
 
-        # A status under another workload is for a VM the port has left (or not yet
+        # A status under another device_id is for a VM the port has left (or not yet
         # reached), such as the old VM's status, deleted after the new VM's is set.
-        current_workload_id = datamodel_v2.felix_status_workload_id(
-            self._status_namespace, port.get("device_id") or ""
-        )
-        if workload_id != current_workload_id:
+        if device_id != port.get("device_id"):
             LOG.info(
-                "Ignoring status for port %s under workload %s; it is now %s",
+                "Ignoring status for port %s under device_id %s; it is now %s",
                 port_id,
-                workload_id,
-                current_workload_id,
+                device_id,
+                port.get("device_id"),
             )
             return
 
-        neutron_status = self._neutron_status_for_port(
-            port, workload_id, port_id, hostname
-        )
+        neutron_status = self._neutron_status_for_port(port, port_id, hostname)
         if neutron_status is None:
             LOG.info(
                 "Ignoring status report for port %s from host %s, which no longer"

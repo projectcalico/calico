@@ -2694,9 +2694,7 @@ class TestLiveMigration(TestPluginEtcdBase):
         context = mock.Mock()
         key = (
             hostname,
-            mech_calico.datamodel_v2.felix_status_workload_id(
-                self.driver._status_namespace, lib.port1["device_id"]
-            ),
+            lib.port1["device_id"],
             port_id,
         )
         self.driver._port_status_cache[key] = datamodel_v1.ENDPOINT_STATUS_UP
@@ -2869,10 +2867,7 @@ class TestLiveMigration(TestPluginEtcdBase):
 
     def _status_key(self, hostname):
         """The key of Felix's status for port1 at ``hostname``, under its VM."""
-        workload_id = mech_calico.datamodel_v2.felix_status_workload_id(
-            self.driver._status_namespace, lib.port1["device_id"]
-        )
-        return (hostname, workload_id, lib.port1["id"])
+        return (hostname, lib.port1["device_id"], lib.port1["id"])
 
     def _report_status(self, hostname, port_id, status=None):
         """Drive _try_to_update_port_status as the status writer thread would.
@@ -2991,9 +2986,7 @@ class TestLiveMigration(TestPluginEtcdBase):
         self._complete_migration()
         old_workload_key = (
             self.DEST_HOST,
-            mech_calico.datamodel_v2.felix_status_workload_id(
-                self.driver._status_namespace, "old-vm"
-            ),
+            "old-vm",
             self.port["id"],
         )
         self.driver._port_status_cache[old_workload_key] = (
@@ -3532,7 +3525,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
             m_queue.qsize.return_value = 100
             self.driver.on_port_status_changed(
-                "host", "port_id", "up", workload_id="wl", priority="high"
+                "host", "port_id", "up", device_id="wl", priority="high"
             )
             self.assertEqual(
                 "up", self.driver._port_status_cache[("host", "wl", "port_id")]
@@ -3544,7 +3537,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             m_queue.put.reset_mock()
             # Send a duplicate low-priority change.
             self.driver.on_port_status_changed(
-                "host", "port_id", "up", workload_id="wl", priority="low"
+                "host", "port_id", "up", device_id="wl", priority="low"
             )
             # Should have no effect on the cache.
             self.assertEqual(
@@ -3556,7 +3549,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
 
             # Send a duplicate high-priority change.
             self.driver.on_port_status_changed(
-                "host", "port_id", "up", workload_id="wl", priority="high"
+                "host", "port_id", "up", device_id="wl", priority="high"
             )
             # Should have no effect on the cache.
             self.assertEqual(
@@ -3571,12 +3564,12 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
 
             # Deletion takes a different code path.
             self.driver.on_port_status_changed(
-                "host", "port_id", None, workload_id="wl", priority="low"
+                "host", "port_id", None, device_id="wl", priority="low"
             )
             self.assertEqual({}, self.driver._port_status_cache)
             # Unknown value should be treated as deletion.
             self.driver.on_port_status_changed(
-                "host", "port_id", "unknown", workload_id="wl", priority="low"
+                "host", "port_id", "unknown", device_id="wl", priority="low"
             )
             self.assertEqual({}, self.driver._port_status_cache)
             # One queue put for each deletion.
@@ -3626,10 +3619,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
                 "binding:profile": {},
             }
         )
-        workload_id = mech_calico.datamodel_v2.felix_status_workload_id(
-            self.driver._status_namespace, device_id
-        )
-        return (host, workload_id, port_id)
+        return (host, device_id, port_id)
 
     @mock.patch("eventlet.spawn")
     def test_try_to_update_port_status(self, _m_spawn):
@@ -3672,9 +3662,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         self._status_key_for_db_port("host", "p1", device_id="vm-2")
         old_key = (
             "host",
-            mech_calico.datamodel_v2.felix_status_workload_id(
-                self.driver._status_namespace, "vm-1"
-            ),
+            "vm-1",
             "p1",
         )
         self.db.update_port_status = mock.Mock()
@@ -3811,11 +3799,11 @@ class TestStatusWatcherBase(_TestEtcdBase):
         m_port_status_node = mock.Mock()
         m_port_status_node.key = (
             "/calico/felix/v2/%s/host/hostname/workload/"
-            + "openstack/wlid/endpoint/ep1"
+            + "openstack/openstack%%2fwlid/endpoint/ep1"
         ) % self.region_string
         m_port_status_node.value = '{"status": "up"}'
         self.endpoint_watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
-        ep_id = datamodel_v1.WloadEndpointId("hostname", "openstack", "wlid", "ep1")
+        ep_id = datamodel_v2.PortStatusId("hostname", "wlid", "ep1")
         self.assertEqual(
             {"hostname": set([ep_id])}, self.endpoint_watcher._endpoints_by_host
         )
@@ -3879,11 +3867,11 @@ class TestStatusWatcher(TestStatusWatcherBase):
 
         ep_on_that_host_key = (
             "/calico/felix/v2/no-region/host/hostname/workload/"
-            + "openstack/wlid/endpoint/ep1"
+            + "openstack/openstack%2fwlid/endpoint/ep1"
         )
         ep_on_unknown_host_key = (
             "/calico/felix/v2/no-region/host/unknown/workload/"
-            + "openstack/wlid/endpoint/ep2"
+            + "openstack/openstack%2fwlid/endpoint/ep2"
         )
 
         self.etcd_data = {
@@ -3913,8 +3901,8 @@ class TestStatusWatcher(TestStatusWatcherBase):
 
         self.driver.on_port_status_changed.assert_has_calls(
             [
-                mock.call("unknown", "ep2", "up", workload_id="wlid", priority="low"),
-                mock.call("hostname", "ep1", "up", workload_id="wlid", priority="low"),
+                mock.call("unknown", "ep2", "up", device_id="wlid", priority="low"),
+                mock.call("hostname", "ep1", "up", device_id="wlid", priority="low"),
             ],
             any_order=True,
         )
@@ -3926,8 +3914,8 @@ class TestStatusWatcher(TestStatusWatcherBase):
         self.endpoint_watcher.start()
         self.driver.on_port_status_changed.assert_has_calls(
             [
-                mock.call("unknown", "ep2", "up", workload_id="wlid", priority="low"),
-                mock.call("hostname", "ep1", "up", workload_id="wlid", priority="low"),
+                mock.call("unknown", "ep2", "up", device_id="wlid", priority="low"),
+                mock.call("hostname", "ep1", "up", device_id="wlid", priority="low"),
             ],
             any_order=True,
         )
@@ -3940,8 +3928,8 @@ class TestStatusWatcher(TestStatusWatcherBase):
         self.endpoint_watcher.start()
         self.driver.on_port_status_changed.assert_has_calls(
             [
-                mock.call("unknown", "ep2", None, workload_id="wlid", priority="low"),
-                mock.call("hostname", "ep1", "up", workload_id="wlid", priority="low"),
+                mock.call("unknown", "ep2", None, device_id="wlid", priority="low"),
+                mock.call("hostname", "ep1", "up", device_id="wlid", priority="low"),
             ],
             any_order=True,
         )
@@ -3953,7 +3941,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
                 "kv": {
                     "key": (
                         "/calico/felix/v2/no-region/host/hostname/workload/"
-                        + "openstack/wlid/endpoint/ep1"
+                        + "openstack/openstack%2fwlid/endpoint/ep1"
                     ).encode(),
                     "value": '{"status": "up"}'.encode(),
                 },
@@ -3965,7 +3953,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
         self.endpoint_watcher.start()
         self.driver.on_port_status_changed.assert_has_calls(
             [
-                mock.call("hostname", "ep1", "up", workload_id="wlid", priority="high"),
+                mock.call("hostname", "ep1", "up", device_id="wlid", priority="high"),
             ],
             any_order=True,
         )
@@ -3979,8 +3967,8 @@ class TestStatusWatcher(TestStatusWatcherBase):
 
         self.assertEqual(
             [
-                mock.call("hostname", "ep1", "up", workload_id="wlid", priority="high"),
-                mock.call("hostname", "ep1", None, workload_id="wlid", priority="high"),
+                mock.call("hostname", "ep1", "up", device_id="wlid", priority="high"),
+                mock.call("hostname", "ep1", None, device_id="wlid", priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
@@ -3990,14 +3978,14 @@ class TestStatusWatcher(TestStatusWatcherBase):
         m_port_status_node = mock.Mock()
         m_port_status_node.key = (
             "/calico/felix/v2/no-region/host/hostname/workload/"
-            "openstack/wlid/endpoint/ep1"
+            "openstack/openstack%2fwlid/endpoint/ep1"
         )
         m_port_status_node.value = '{"status": "up"'
         self.endpoint_watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
 
         self.assertEqual(
             [
-                mock.call("hostname", "ep1", None, workload_id="wlid", priority="high"),
+                mock.call("hostname", "ep1", None, device_id="wlid", priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
@@ -4007,20 +3995,37 @@ class TestStatusWatcher(TestStatusWatcherBase):
         m_port_status_node = mock.Mock()
         m_port_status_node.key = (
             "/calico/felix/v2/no-region/host/hostname/workload/"
-            "openstack/wlid/endpoint/ep1"
+            "openstack/openstack%2fwlid/endpoint/ep1"
         )
         m_port_status_node.value = '"up"'
         self.endpoint_watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
 
         self.assertEqual(
-            [mock.call("hostname", "ep1", None, workload_id="wlid", priority="high")],
+            [mock.call("hostname", "ep1", None, device_id="wlid", priority="high")],
             self.driver.on_port_status_changed.mock_calls,
         )
+
+    def test_endpoint_status_undecodable_workload_is_ignored(self):
+        """A key whose workload has no device_id is ignored on set and delete alike."""
+        m_port_status_node = mock.Mock()
+        m_port_status_node.key = (
+            "/calico/felix/v2/no-region/host/hostname/workload/"
+            "openstack/wlid/endpoint/ep1"
+        )
+        m_port_status_node.value = '{"status": "up"}'
+        self.endpoint_watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
+        self.endpoint_watcher._on_ep_delete(
+            m_port_status_node, "hostname", "wlid", "ep1"
+        )
+
+        self.assertEqual([], self.driver.on_port_status_changed.mock_calls)
+        self.assertEqual({}, self.endpoint_watcher._endpoints_by_host)
 
     def test_endpoint_status_add_bad_id(self):
         m_port_status_node = mock.Mock()
         m_port_status_node.key = (
-            "/calico/felix/v2/no-region/host/hostname/workload/openstack/wlid/endpoint"
+            "/calico/felix/v2/no-region/host/hostname/workload/"
+            "openstack/openstack%2fwlid/endpoint"
         )
         self.endpoint_watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
         self.assertEqual([], self.driver.on_port_status_changed.mock_calls)
@@ -4039,7 +4044,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
         m_response = mock.Mock()
         m_response.key = (
             "/calico/felix/v2/no-region/host/hostname/workload/"
-            "openstack/wlid/endpoint/epid"
+            "openstack/openstack%2fwlid/endpoint/epid"
         )
         m_response.value = '{"status": "up"}'
         self.endpoint_watcher._on_ep_set(m_response, "hostname", "wlid", "epid")
@@ -4054,9 +4059,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
         # impact at high scale.)
         self.assertEqual(
             [
-                mock.call(
-                    "hostname", "epid", "up", workload_id="wlid", priority="high"
-                ),
+                mock.call("hostname", "epid", "up", device_id="wlid", priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
@@ -4077,8 +4080,8 @@ class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
 
         self.assertEqual(
             [
-                mock.call("hostname", "ep1", "up", workload_id="wlid", priority="high"),
-                mock.call("hostname", "ep1", None, workload_id="wlid", priority="high"),
+                mock.call("hostname", "ep1", "up", device_id="wlid", priority="high"),
+                mock.call("hostname", "ep1", None, device_id="wlid", priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
@@ -4090,14 +4093,14 @@ class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
         m_port_status_node.key = (
             "/calico/felix/v2/"
             + self.region_string
-            + "/host/hostname/workload/openstack/wlid/endpoint/ep1"
+            + "/host/hostname/workload/openstack/openstack%2fwlid/endpoint/ep1"
         )
         m_port_status_node.value = '{"status": "up"}'
         m_port_status_node.action = "set"
         self.endpoint_watcher.dispatcher.handle_event(m_port_status_node)
         self.assertEqual(
             [
-                mock.call("hostname", "ep1", "up", workload_id="wlid", priority="high"),
+                mock.call("hostname", "ep1", "up", device_id="wlid", priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
@@ -4107,7 +4110,7 @@ class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
         m_port_status_node = mock.Mock()
         m_port_status_node.key = (
             "/calico/felix/v2/region-other/host/hostname/workload/"
-            + "openstack/wlid/endpoint/ep1"
+            + "openstack/openstack%2fwlid/endpoint/ep1"
         )
         m_port_status_node.value = '{"status": "up"}'
         m_port_status_node.action = "set"

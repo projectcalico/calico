@@ -118,13 +118,13 @@ class StatusWatcher(etcdutils.EtcdWatcher):
             new_ep_ids = self._endpoints_by_host.get(hostname, set())
             # Check for particular endpoints that have disappeared, and
             # signal those.
-            for ep_id in ep_ids.difference(new_ep_ids):
-                LOG.info("signal None for %s", ep_id.endpoint)
+            for status_id in ep_ids.difference(new_ep_ids):
+                LOG.info("signal None for %s", status_id.port_id)
                 self.calico_driver.on_port_status_changed(
                     hostname,
-                    ep_id.endpoint,
+                    status_id.port_id,
                     None,
-                    workload_id=ep_id.workload,
+                    device_id=status_id.device_id,
                     priority="low",
                 )
         self.processing_snapshot = False
@@ -252,37 +252,39 @@ class EndpointStatusWatcher(StatusWatcher):
         Reports the status to the driver and caches the existence of the
         endpoint.
         """
-        ep_id = datamodel_v2.get_endpoint_id_from_key(self.region_string, response.key)
-        if not ep_id:
+        status_id = datamodel_v2.get_port_status_id_from_key(
+            self.region_string, response.key
+        )
+        if not status_id:
             LOG.error(
                 "Failed to extract endpoint ID from: %s.  Ignoring update!",
                 response.key,
             )
             return
-        self._report_status(ep_id, response.value)
+        self._report_status(status_id, response.value)
 
-    def _report_status(self, endpoint_id, raw_json):
+    def _report_status(self, status_id, raw_json):
         try:
             status_dict = json.loads(raw_json)
         except (ValueError, TypeError):
-            LOG.error("Bad JSON data for %s: %s", endpoint_id, raw_json)
+            LOG.error("Bad JSON data for %s: %s", status_id, raw_json)
             status = None  # Report as error
-            self._endpoints_by_host[endpoint_id.host].discard(endpoint_id)
-            if not self._endpoints_by_host[endpoint_id.host]:
-                del self._endpoints_by_host[endpoint_id.host]
+            self._endpoints_by_host[status_id.host].discard(status_id)
+            if not self._endpoints_by_host[status_id.host]:
+                del self._endpoints_by_host[status_id.host]
         else:
-            self._endpoints_by_host[endpoint_id.host].add(endpoint_id)
+            self._endpoints_by_host[status_id.host].add(status_id)
 
             # Unwrap the dict around the actual status.
             status = (
                 status_dict.get("status") if isinstance(status_dict, dict) else None
             )
-        LOG.debug("Port %s updated to status %s", endpoint_id, status)
+        LOG.debug("Port %s updated to status %s", status_id, status)
         self.calico_driver.on_port_status_changed(
-            endpoint_id.host,
-            endpoint_id.endpoint,
+            status_id.host,
+            status_id.port_id,
             status,
-            workload_id=endpoint_id.workload,
+            device_id=status_id.device_id,
             priority="low" if self.processing_snapshot else "high",
         )
 
@@ -293,16 +295,23 @@ class EndpointStatusWatcher(StatusWatcher):
         the deletion to the driver.
         """
         LOG.debug("Port %s/%s/%s deleted", hostname, workload, endpoint)
-        endpoint_id = datamodel_v2.get_endpoint_id_from_key(
+        status_id = datamodel_v2.get_port_status_id_from_key(
             self.region_string, response.key
         )
-        self._endpoints_by_host[hostname].discard(endpoint_id)
+        if not status_id:
+            # As on a set, which would have ignored this key too.
+            LOG.error(
+                "Failed to extract endpoint ID from: %s.  Ignoring deletion!",
+                response.key,
+            )
+            return
+        self._endpoints_by_host[hostname].discard(status_id)
         if not self._endpoints_by_host[hostname]:
             del self._endpoints_by_host[hostname]
         self.calico_driver.on_port_status_changed(
             hostname,
-            endpoint,
+            status_id.port_id,
             None,
-            workload_id=workload,
+            device_id=status_id.device_id,
             priority="low" if self.processing_snapshot else "high",
         )
