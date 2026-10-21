@@ -18,7 +18,6 @@
 
 # Etcd-based transport for the Calico/OpenStack Plugin.
 
-import collections
 from datetime import datetime, timezone
 import json
 
@@ -42,17 +41,6 @@ STALE_STATUS_WARN_INTERVAL_SECS = 300
 
 
 LOG = log.getLogger(__name__)
-
-# Objects for lightly wrapping etcd return values for use in the mechanism
-# driver.
-# These namedtuples are getting pretty heavyweight at this point. If you find
-# yourself wanting to add more fields to them, consider rewriting them as full
-# classes. Note that several of the properties of namedtuples are desirable for
-# these objects (immutability being the biggest), so if you rewrite as classes
-# attempt to preserve those properties.
-Endpoint = collections.namedtuple(
-    "Endpoint", ["id", "key", "mod_revision", "host", "data"]
-)
 
 
 class StatusWatcher(etcdutils.EtcdWatcher):
