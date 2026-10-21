@@ -97,6 +97,8 @@ bulk_create_vms_attempt() {
   shift 3
   local err_file group_id
   err_file=$(mktemp)
+  # Bulk create is all-or-nothing (min count defaults to the full count), so a
+  # failed attempt leaves no VMs behind to collide with the next one's names.
   if ! group_id=$(gcloud --quiet compute instances bulk create \
       --async --format='value(operationGroupId)' \
       --machine-type="$type" \
@@ -138,20 +140,7 @@ bulk_create_vms_attempt() {
 
   if jq -e '.[0].error.errors | length > 0' <<<"$op_json" >/dev/null; then
     jq '.[0].error' <<<"$op_json" >&2
-    delete_leftover_vms "$names"
     jq -r '.[0].error.errors[].code' <<<"$op_json"
     return 1
   fi
-}
-
-# A failed bulk insert can still leave VMs whose names the next attempt reuses.
-delete_leftover_vms() {
-  local name zone
-  while IFS=, read -r name zone; do
-    [ -n "$name" ] || continue
-    echo "Deleting ${name}, left in ${zone} by the failed attempt..." >&2
-    gcloud --quiet compute instances delete "$name" --zone="$zone" >&2 ||
-      echo "WARNING: could not delete ${name}" >&2
-  done < <(gcloud --quiet compute instances list --filter="name=( ${1//,/ } )" \
-             --format='csv[no-heading](name,zone.basename())')
 }
