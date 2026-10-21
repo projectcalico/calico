@@ -3,7 +3,7 @@ PACKAGE_NAME = github.com/projectcalico/calico
 include metadata.mk
 include lib.Makefile
 
-DOCKER_RUN := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
+DOCKER_RUN := mkdir -p $(LOCAL_GO_PKG_CACHE) $(CACHEPROG_ROOT_DIRECTORY) bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
 		--init \
@@ -18,6 +18,7 @@ DOCKER_RUN := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 		-e "GOFLAGS=$(GOFLAGS)" \
 		-v $(CURDIR):/go/src/github.com/projectcalico/calico:rw \
 		-v $(LOCAL_GO_PKG_CACHE):/go-cache:rw \
+		$(DOCKER_REMOTE_CACHE_ARGS) \
 		-w /go/src/$(PACKAGE_NAME)
 
 .PHONY: update-file-copyrights
@@ -110,6 +111,13 @@ protobuf:
 	$(MAKE) -C felix protobuf
 	$(MAKE) -C pod2daemon protobuf
 	$(MAKE) -C goldmane protobuf
+
+GENFILES_DIRS := lib api libcalico-go felix goldmane kube-controllers operator
+
+gen-files: $(addprefix gen-files-,$(GENFILES_DIRS))
+
+gen-files-%:
+	$(MAKE) -C $* gen-files
 
 generate:
 	$(MAKE) gen-semaphore-yaml
