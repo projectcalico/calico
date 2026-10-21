@@ -1746,6 +1746,34 @@ var vxlanWithWEPIPsAndWEPDuplicate = vxlanWithWEPIPsAndWEP.withKVUpdates(
 	},
 )
 
+// As vxlanWithWEPIPs, but remoteHost2's Node lists its interface CIDRs. The
+// entries that aren't valid CIDRs should be dropped.
+var vxlanWithWEPIPsIfaceCIDRs = vxlanWithWEPIPs.withKVUpdates(
+	KVPair{Key: remoteNode2ResKey, Value: nodeBGPv4ResWithInterfaces(remoteHostname2, remoteHost2IP,
+		internalapi.NodeInterface{Name: "eth0", CIDRs: []string{remoteHost2IP.String() + "/24", "fd00::3/64"}},
+		internalapi.NodeInterface{Name: "eth1", CIDRs: []string{"10.0.1.3", "not-a-cidr", "10.0.1.3/26"}},
+	)},
+).withName("VXLAN using WorkloadIPs with node interface CIDRs").withHostMetadata(
+	&proto.HostMetadataUpdate{
+		Hostname:       remoteHostname2,
+		Ipv4Addr:       remoteHost2IP.String() + "/32",
+		InterfaceCidrs: []string{remoteHost2IP.String() + "/24", "fd00::3/64", "10.0.1.3/26"},
+	},
+)
+
+// As vxlanWithWEPIPsIfaceCIDRs, but only the interface CIDRs have changed.
+var vxlanWithWEPIPsIfaceCIDRsChanged = vxlanWithWEPIPs.withKVUpdates(
+	KVPair{Key: remoteNode2ResKey, Value: nodeBGPv4ResWithInterfaces(remoteHostname2, remoteHost2IP,
+		internalapi.NodeInterface{Name: "eth0", CIDRs: []string{remoteHost2IP.String() + "/16"}},
+	)},
+).withName("VXLAN using WorkloadIPs with changed node interface CIDRs").withHostMetadata(
+	&proto.HostMetadataUpdate{
+		Hostname:       remoteHostname2,
+		Ipv4Addr:       remoteHost2IP.String() + "/32",
+		InterfaceCidrs: []string{remoteHost2IP.String() + "/16"},
+	},
+)
+
 // Minimal VXLAN set-up using Calico IPAM, all the data needed for a remote VTEP, a pool and a block.
 var vxlanWithBlock = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
@@ -1798,6 +1826,13 @@ func nodeBGPv4Res(name string, ip calinet.IP) *internalapi.Node {
 			BGP: &internalapi.NodeBGPSpec{IPv4Address: ip.String() + "/32"},
 		},
 	}
+}
+
+// nodeBGPv4ResWithInterfaces is nodeBGPv4Res with the given interfaces.
+func nodeBGPv4ResWithInterfaces(name string, ip calinet.IP, ifaces ...internalapi.NodeInterface) *internalapi.Node {
+	n := nodeBGPv4Res(name, ip)
+	n.Spec.Interfaces = ifaces
+	return n
 }
 
 // As vxlanWithBlock but with a host sharing the same IP.  No route update because we tie-break on host name.
