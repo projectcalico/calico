@@ -222,6 +222,7 @@ PORT_STATUS_MAPPING = {
 MASTER_CHECK_INTERVAL_SECS = 5
 # Delay before retrying a failed port status update to the Neutron DB.
 PORT_UPDATE_RETRY_DELAY_SECS = 5
+
 # Number of locks that serialize port status updates, each port hashing to one.
 PORT_STATUS_LOCK_COUNT = 64
 
