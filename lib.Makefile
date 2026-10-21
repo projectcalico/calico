@@ -145,10 +145,10 @@ NUM_BUILD_JOBS ?= 4
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
-GO_BUILD_IMAGE ?= calico/go-build
+GO_BUILD_IMAGE ?= quay.io/danieljfox/go-build
 CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 
-RUST_BUILD_IMAGE ?= calico/rust-build
+RUST_BUILD_IMAGE ?= quay.io/danieljfox/rust-build
 CALICO_RUST_BUILD = $(RUST_BUILD_IMAGE):$(RUST_BUILD_VER)
 
 # On amd64 we build with CGO enabled (libbpf and other cgo deps require it);
@@ -408,7 +408,8 @@ DOCKER_PULL =
 endif
 
 # DOCKER_BUILD is the base build command used for building all images.
-DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) \
+# DOCKER_BUILD_PREFIX and DOCKER_BUILD_CACHE are set by the remote build cache.
+DOCKER_BUILD=$(DOCKER_BUILD_PREFIX) docker buildx build $(DOCKER_BUILD_CACHE) --load --platform=linux/$(ARCH) $(DOCKER_PULL) \
 	--build-arg CALICO_BASE=$(CALICO_BASE) \
 	--build-arg GIT_VERSION=$(GIT_VERSION) \
 	--build-arg UBI_IMAGE=$(UBI_IMAGE)
@@ -435,7 +436,99 @@ ifeq ($(strip $(LOCAL_GO_PKG_CACHE)),)
 override LOCAL_GO_PKG_CACHE := $(or $(filter /%,$(GOENV_GOCACHE)),$(DEFAULT_GO_CACHE_PATH))
 endif
 
-DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
+###############################################################################
+# Remote build cache
+#
+# Off unless REMOTE_BUILD_CACHE is set; CI sets it when the bucket credentials
+# are present. Secrets reach commands only through the environment, never as
+# expanded make variables, because make echoes every recipe line to the log.
+###############################################################################
+ifdef REMOTE_BUILD_CACHE
+export REMOTE_CACHE_S3_ENDPOINT ?= https://storage.googleapis.com
+export REMOTE_CACHE_S3_REGION ?= auto
+export REMOTE_CACHE_S3_BUCKET ?= $(GOCACHE_BUCKET_NAME)
+export REMOTE_CACHE_S3_ACCESS_KEY_ID ?= $(GOCACHE_ACCESS_KEY)
+export REMOTE_CACHE_S3_ACCESS_KEY_SECRET ?= $(GOCACHE_SECRET_KEY)
+
+# Go. On the host only when cacheprog is installed there, since Go fails every
+# build when GOCACHEPROG names a missing binary. The root directory is mounted
+# at the same path inside docker, so host and container builds share it.
+export GOCACHEPROG := $(shell command -v cacheprog 2>/dev/null)
+export CACHEPROG_ROOT_DIRECTORY := $(LOCAL_GO_PKG_CACHE)/cacheprog
+export CACHEPROG_REMOTE_STORAGE_TYPE := s3
+export CACHEPROG_S3_ENDPOINT := $(REMOTE_CACHE_S3_ENDPOINT)
+export CACHEPROG_S3_REGION := $(REMOTE_CACHE_S3_REGION)
+export CACHEPROG_S3_BUCKET := $(REMOTE_CACHE_S3_BUCKET)
+export CACHEPROG_S3_EXCLUDE_HEADERS_FROM_SIGNING := Accept-Encoding
+export CACHEPROG_S3_EXPIRATION := 168h
+export CACHEPROG_S3_PREFIX := gobuildcache-objects
+export CACHEPROG_S3_ACCESS_KEY_ID := $(REMOTE_CACHE_S3_ACCESS_KEY_ID)
+export CACHEPROG_S3_ACCESS_KEY_SECRET := $(REMOTE_CACHE_S3_ACCESS_KEY_SECRET)
+
+DOCKER_REMOTE_CACHE_ARGS := \
+	-v $(CACHEPROG_ROOT_DIRECTORY):$(CACHEPROG_ROOT_DIRECTORY):rw \
+	-e GOCACHEPROG=cacheprog \
+	-e CACHEPROG_ROOT_DIRECTORY \
+	-e CACHEPROG_REMOTE_STORAGE_TYPE \
+	-e CACHEPROG_S3_ENDPOINT \
+	-e CACHEPROG_S3_REGION \
+	-e CACHEPROG_S3_BUCKET \
+	-e CACHEPROG_S3_EXCLUDE_HEADERS_FROM_SIGNING \
+	-e CACHEPROG_S3_EXPIRATION \
+	-e CACHEPROG_S3_PREFIX \
+	-e CACHEPROG_S3_ACCESS_KEY_ID \
+	-e CACHEPROG_S3_ACCESS_KEY_SECRET
+
+# Images. A registry rather than the bucket: GCS rejects BuildKit's s3 cache
+# requests, because the AWS SDK signs Accept-Encoding and nothing in BuildKit
+# can exclude it. The cache needs a docker-container builder, and that builder
+# resolves FROM and --build-context images from the registry, never the local
+# daemon; a build that depends on an image it only has locally clears
+# DOCKER_BUILD_CACHE. Registry auth is the docker client's own login.
+BUILDX_REMOTE_CACHE_BUILDER ?= calico-remote-cache
+BUILDX_CACHE_REPO ?= us-central1-docker.pkg.dev/unique-caldron-775/calico-docker-build-cache-uscentral1
+# Keyed on the target, since one directory can build several images. Image
+# targets are mostly dotfiles, and a tag cannot start with a dot.
+BUILDX_CACHE_REF ?= $(BUILDX_CACHE_REPO)/$(notdir $(CURDIR)):$(ARCH)-$(patsubst .%,%,$(notdir $@))
+BUILDX_REGISTRY_CACHE = type=registry,ref=$(BUILDX_CACHE_REF)
+# Tolerates a concurrent make having created the builder first.
+DOCKER_BUILD_PREFIX = { docker buildx inspect $(BUILDX_REMOTE_CACHE_BUILDER) >/dev/null 2>&1 || \
+	docker buildx create --name $(BUILDX_REMOTE_CACHE_BUILDER) --driver docker-container >/dev/null 2>&1 || \
+	docker buildx inspect $(BUILDX_REMOTE_CACHE_BUILDER) >/dev/null; } &&
+# image-manifest stores the cache as a plain OCI image, which Artifact Registry
+# handles more reliably than BuildKit's default cache manifest list.
+DOCKER_BUILD_CACHE = --builder=$(BUILDX_REMOTE_CACHE_BUILDER) --cache-from=$(BUILDX_REGISTRY_CACHE) \
+	$(if $(filter true,$(REMOTE_BUILD_CACHE_WRITE)),--cache-to=$(BUILDX_REGISTRY_CACHE)$(comma)mode=max$(comma)image-manifest=true$(comma)oci-mediatypes=true$(comma)ignore-error=true)
+
+# Rust. sccache compiles locally rather than failing the build when the bucket
+# errors mid-build, and the image's entrypoint drops the wrapper when it cannot
+# be reached at all. Its local state goes to /tmp because the container runs as
+# a user that cannot write to HOME.
+DOCKER_RUST_REMOTE_CACHE_ARGS := \
+	-e RUSTC_WRAPPER=sccache \
+	-e SCCACHE_IGNORE_SERVER_IO_ERROR=1 \
+	-e SCCACHE_DIR=/tmp/sccache \
+	-e SCCACHE_ENDPOINT=$(REMOTE_CACHE_S3_ENDPOINT) \
+	-e SCCACHE_REGION=$(REMOTE_CACHE_S3_REGION) \
+	-e SCCACHE_BUCKET=$(REMOTE_CACHE_S3_BUCKET) \
+	-e SCCACHE_S3_USE_SSL=true \
+	-e SCCACHE_S3_KEY_PREFIX=sccache/ \
+	-e SCCACHE_S3_RW_MODE=$(if $(filter true,$(REMOTE_BUILD_CACHE_WRITE)),READ_WRITE,READ_ONLY) \
+	-e AWS_ACCESS_KEY_ID="$$REMOTE_CACHE_S3_ACCESS_KEY_ID" \
+	-e AWS_SECRET_ACCESS_KEY="$$REMOTE_CACHE_S3_ACCESS_KEY_SECRET"
+# Appended to a cargo build, so the log shows whether the cache was hit.
+SCCACHE_SHOW_STATS := && sccache --show-stats
+
+# Anything else: one tarball per key, so a key must hash every input that
+# changes the directory's contents. Writes are gated like the image cache's.
+remote_cache_restore = $(REPO_ROOT)/hack/remote-cache restore $(1) $(2)
+remote_cache_store = $(if $(filter true,$(REMOTE_BUILD_CACHE_WRITE)),$(REPO_ROOT)/hack/remote-cache store $(1) $(2))
+else
+remote_cache_restore =
+remote_cache_store =
+endif
+
+DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) $(CACHEPROG_ROOT_DIRECTORY) bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
@@ -451,6 +544,7 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 		-e "GOFLAGS=$(GOFLAGS)" \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
 		-v $(LOCAL_GO_PKG_CACHE):/go-cache:rw \
+		$(DOCKER_REMOTE_CACHE_ARGS) \
 		-w /go/src/$(PACKAGE_NAME)
 
 DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
@@ -562,6 +656,7 @@ DOCKER_RUST_BUILD := mkdir -p bin && \
 		$(EXTRA_DOCKER_ARGS) \
 		-e CARGO_BUILD_TARGET=$(RUST_TARGET) \
 		$(RUST_CROSS_ENV) \
+		$(DOCKER_RUST_REMOTE_CACHE_ARGS) \
 		-v $(REPO_ROOT):/rust/src/github.com/projectcalico/calico:rw \
 		-w /rust/src/$(PACKAGE_NAME) \
 		$(CALICO_RUST_BUILD)
