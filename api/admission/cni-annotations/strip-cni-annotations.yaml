@@ -1,7 +1,9 @@
 # MutatingAdmissionPolicy that removes the pod annotations the Calico CNI plugin
-# writes when a pod is created. Their values describe a previous sandbox, so a
-# pod created with them (from a dumped manifest, say) would otherwise be refused
-# by protect-cni-annotations.projectcalico.org.
+# writes, and the AWS VPC CNI's pod IP annotation, when a pod is created. Their
+# values describe a previous sandbox, so a pod created with them (from a dumped
+# manifest, say) would otherwise be refused by
+# protect-cni-annotations.projectcalico.org or
+# protect-aws-vpc-annotations.projectcalico.org.
 apiVersion: admissionregistration.k8s.io/v1beta1
 kind: MutatingAdmissionPolicy
 metadata:
@@ -19,7 +21,8 @@ spec:
     - name: has-annotations
       expression: "has(object.metadata.annotations)"
   variables:
-    # Must match protectedKeys in protect-cni-annotations.yaml.
+    # Must match protectedKeys in protect-cni-annotations.yaml, and awsKeys in
+    # ../aws-vpc-annotations/protect-aws-vpc-annotations.yaml.
     - name: protectedKeys
       expression: >-
         object.metadata.annotations.filter(k,
@@ -28,7 +31,8 @@ spec:
             'cni.projectcalico.org/podIPs',
             'cni.projectcalico.org/containerID',
             'cni.projectcalico.org/podNetns',
-            'cni.projectcalico.org/network-status'
+            'cni.projectcalico.org/network-status',
+            'vpc.amazonaws.com/pod-ips'
           ] ||
           (k.startsWith('cni.projectcalico.org/') && k.endsWith('.network-status')))
   mutations:
