@@ -64,3 +64,14 @@ class TestPortStatusId(unittest.TestCase):
             "/calico/felix/v2/no-region/host/h/status",
         ]:
             self.assertIsNone(self._decode("no-region", key), key)
+
+    def test_parts_are_interned(self):
+        """Repeated keys for one port share their strings, as the caches hold many."""
+        key = (
+            "/calico/felix/v2/no-region/host/h/workload/openstack/"
+            "openstack%2fvm-1/endpoint/port-1"
+        )
+        first = self._decode("no-region", key)
+        second = self._decode("no-region", "".join(list(key)))
+        for a, b in zip(first, second):
+            self.assertIs(a, b)

@@ -86,7 +86,7 @@ def get_port_status_id_from_key(region_string, key):
     return PortStatusId(
         intern_string(m.group("hostname")),
         intern_string(device_id),
-        m.group("endpoint_id"),
+        intern_string(m.group("endpoint_id")),
     )
 
 
