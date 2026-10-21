@@ -93,7 +93,6 @@ vm_create_args=(
        --image-family="${IMAGE_FAMILY}"
        --image-project=ubuntu-os-cloud
        --boot-disk-size="$disk_size"
-       --boot-disk-type=hyperdisk-balanced
        --max-run-duration="${MAX_RUN_DURATION}"
        --instance-termination-action=DELETE
        --labels="${labels}"
@@ -101,7 +100,7 @@ vm_create_args=(
        --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f "$HOME/.ssh/id_rsa")",enable-guest-attributes=TRUE
 )
 bulk_create_vms "$names" "$region" "${vm_create_args[@]}"
-vm_create_args+=( --machine-type="$vm_machine_type" )
+vm_create_args+=( --machine-type="$vm_machine_type" --boot-disk-type="$vm_boot_disk_type" )
 
 # Since the VMs are spread across the region's zones, we can no longer assume a
 # single zone for the downstream describe/ssh/delete commands.  Build a

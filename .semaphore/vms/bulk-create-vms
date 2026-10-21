@@ -15,16 +15,19 @@
 
 # Defines bulk_create_vms; source it rather than running it.
 
-# A stocked-out pool can refill and each machine family has its own CPU quota,
-# so these are worth another attempt.  Any other failure would recur.
-retryable_vm_create_codes_re='^(ZONE_RESOURCE_POOL_EXHAUSTED|ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS|QUOTA_EXCEEDED)$'
+# A stocked-out pool can refill, each machine family has its own CPU quota, and
+# GCE asks for an INTERNAL_ERROR to be retried, so these are worth another
+# attempt.  VM_MIN_COUNT_NOT_REACHED only summarises whichever of them stopped a
+# bulk insert short.  Any other failure would recur.
+retryable_vm_create_codes_re='^(ZONE_RESOURCE_POOL_EXHAUSTED|ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS|REGION_INSUFFICIENT_CAPACITY|QUOTA_EXCEEDED|INTERNAL_ERROR|VM_MIN_COUNT_NOT_REACHED)$'
 
 # bulk_create_vms <comma-separated names> <region> <gcloud create args...>
 #
 # Creates all the VMs with the first machine type in VM_MACHINE_TYPES that has
 # capacity and quota, in priority order.  After each failed pass over the list
-# it backs off and starts again from the top, until VM_CREATE_RETRY_MINUTES
-# have passed.  On success, sets vm_machine_type and vm_create_summary.
+# it backs off and starts again from the top.  No attempt starts after
+# VM_CREATE_RETRY_MINUTES.  On success, sets vm_machine_type, vm_boot_disk_type
+# and vm_create_summary.
 bulk_create_vms() {
   local names="$1" region="$2"
   shift 2
@@ -34,16 +37,21 @@ bulk_create_vms() {
   num_vms=$(tr ',' '\n' <<<"$names" | grep -c .)
   local start=$SECONDS
   local deadline=$((SECONDS + ${VM_CREATE_RETRY_MINUTES:-15} * 60))
-  local backoff=60 attempt=0 type codes
+  local backoff=60 attempt=0 type codes pause
   local -a failures=()
 
   echo "Creating ${num_vms} test VMs in region ${region}; machine types in priority order: ${types[*]}"
   while true; do
     for type in "${types[@]}"; do
+      # A pass over a long list can outlast the deadline by itself.
+      if [ "$attempt" -gt 0 ] && [ "$SECONDS" -ge "$deadline" ]; then
+        break 2
+      fi
       attempt=$((attempt + 1))
       echo "VM creation attempt ${attempt}: ${num_vms} × ${type}..."
       if codes=$(bulk_create_vms_attempt "$type" "$names" "$region" "$@"); then
         vm_machine_type="$type"
+        vm_boot_disk_type=$(boot_disk_type_for "$type")
         vm_create_summary="Test VMs: ${num_vms} × ${type} in ${region} (attempt ${attempt}, $((SECONDS - start))s"
         if [ ${#failures[@]} -gt 0 ]; then
           vm_create_summary+="; earlier failures: $(IFS=,; echo "${failures[*]}")"
@@ -60,17 +68,23 @@ bulk_create_vms() {
         return 1
       fi
     done
-    local remaining=$((deadline - SECONDS))
-    if [ "$remaining" -le 0 ]; then
-      echo "===== Test VM creation FAILED: no capacity or quota after ${attempt} attempts over $((SECONDS - start))s =====" >&2
-      return 1
-    fi
-    local pause=$((backoff + RANDOM % 30))
-    [ "$pause" -le "$remaining" ] || pause=$remaining
+    pause=$((backoff + RANDOM % 30))
+    [ $((SECONDS + pause)) -lt "$deadline" ] || break
     echo "Every machine type is out of capacity or quota; retrying in ${pause}s..."
     sleep "$pause"
     backoff=$((backoff + 60 > 180 ? 180 : backoff + 60))
   done
+  echo "===== Test VM creation FAILED: no capacity or quota after ${attempt} attempts over $((SECONDS - start))s =====" >&2
+  return 1
+}
+
+# Newer families boot only from Hyperdisk, which these older ones can't attach;
+# both give the same baseline IOPS here.
+boot_disk_type_for() {
+  case "$1" in
+    n1-* | n2-* | n2d-* | e2-* | t2d-* | t2a-* | c2-* | c2d-*) echo pd-balanced ;;
+    *) echo hyperdisk-balanced ;;
+  esac
 }
 
 # bulk_create_vms_attempt <machine type> <names> <region> <create args...>
@@ -87,15 +101,19 @@ bulk_create_vms_attempt() {
   if ! group_id=$(gcloud --quiet compute instances bulk create \
       --async --format='value(operationGroupId)' \
       --machine-type="$type" \
+      --boot-disk-type="$(boot_disk_type_for "$type")" \
       --predefined-names="$names" \
       --region="$region" \
       --target-distribution-shape=any \
       "$@" 2>"$err_file"); then
     # Rejected before an operation existed, so there are no codes to read;
-    # recognise the quota rejection by its message.
+    # recognise the retryable rejections by their messages.  A whole region
+    # short of a family is refused here with a 503, not in the operation.
     cat "$err_file" >&2
     if grep -qE "Quota '[A-Z0-9_]+' exceeded" "$err_file"; then
       echo QUOTA_EXCEEDED
+    elif grep -qE "'reason': 'insufficientCapacity'|\"reason\": \"insufficientCapacity\"|does not currently have sufficient capacity" "$err_file"; then
+      echo REGION_INSUFFICIENT_CAPACITY
     else
       echo REQUEST_REJECTED
     fi
