@@ -772,7 +772,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                was deleted.
         :param device_id: the device_id that Felix's status key was written under.
         """
-        port_status_key = (intern_string(hostname), intern_string(device_id), port_id)
+        port_status_key = (hostname, device_id, port_id)
 
         # Check whether this update gives us new information to pass to
         # Neutron.  "high" priority updates come from changes spotted by Felix,
