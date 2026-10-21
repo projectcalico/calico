@@ -147,11 +147,9 @@ class EtcdWatcher(object):
         this can be called again before that is.  Keep any state that reconciliation
         needs on the object.
         """
-        pass
 
     def _post_snapshot_hook(self):
         """Called once a snapshot has been loaded completely."""
-        pass
 
     def start(self):
         LOG.info("Start watching %s", self.prefix)
