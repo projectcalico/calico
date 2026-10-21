@@ -900,8 +900,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         changed, which is not necessarily a host that still owns the port.  Calico keeps
         endpoint status per host, so across a live migration both the destination's "up"
         and the source's subsequent deletion arrive for the same Neutron port -- which
-        has only a single status field.  Whichever landed last used to win, so a
-        completed migration could leave a healthy VM's port in ERROR.
+        has only a single status field.  If whichever landed last won, a completed
+        migration would leave a healthy VM's port in ERROR.
 
         We therefore ignore who reported, and answer for the owning hosts instead: the
         port is ACTIVE if any owner has it up, and otherwise takes the binding host's
