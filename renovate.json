@@ -27,8 +27,8 @@
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": ["/^metadata\\.mk$/"],
-      "matchStrings": ["GO_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "managerFilePatterns": ["/^metadata\\.mk$/", "/^\\.argoci\\/config\\.yaml$/"],
+      "matchStrings": ["GO_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)", "goBuildVersion: (?<currentValue>\\d+\\.\\d+\\.\\d+)-llvm"],
       "depNameTemplate": "golang",
       "datasourceTemplate": "golang-version"
     },
@@ -41,8 +41,8 @@
     },
     {
       "customType": "regex",
-      "managerFilePatterns": ["/^metadata\\.mk$/"],
-      "matchStrings": ["K8S_VERSION=v(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "managerFilePatterns": ["/^metadata\\.mk$/", "/^\\.argoci\\/config\\.yaml$/"],
+      "matchStrings": ["K8S_VERSION=v(?<currentValue>\\d+\\.\\d+\\.\\d+)", "-k8s(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
       "depNameTemplate": "kubernetes/kubernetes",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v(?<version>.*)$"
