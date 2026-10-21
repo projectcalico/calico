@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,19 +67,19 @@ func TestScannerMetricsPerIPFamily(t *testing.T) {
 		nil, "Disabled", nil, 6, nil)
 
 	// Counters are process-global and other tests in this binary scan too, so compare deltas.
-	before := gatherByFamily(t)
+	before := gatherMetrics(t)
 	s4.Scan()
 	s6.Scan()
-	after := gatherByFamily(t)
+	after := gatherMetrics(t)
 
 	gauges := map[string]float64{
-		"felix_bpf_conntrack_used/4":        4,
-		"felix_bpf_conntrack_used/6":        1,
-		"felix_bpf_conntrack_cleaned/4":     1,
-		"felix_bpf_conntrack_cleaned/6":     0,
-		"felix_bpf_conntrack_expired/4":     1,
-		"felix_bpf_conntrack_max_entries/4": 1000,
-		"felix_bpf_conntrack_max_entries/6": 2000,
+		`felix_bpf_conntrack_used{ip_version="4"}`:        4,
+		`felix_bpf_conntrack_used{ip_version="6"}`:        1,
+		`felix_bpf_conntrack_cleaned{ip_version="4"}`:     1,
+		`felix_bpf_conntrack_cleaned{ip_version="6"}`:     0,
+		`felix_bpf_conntrack_expired{ip_version="4"}`:     1,
+		`felix_bpf_conntrack_max_entries{ip_version="4"}`: 1000,
+		`felix_bpf_conntrack_max_entries{ip_version="6"}`: 2000,
 	}
 	for name, want := range gauges {
 		if v, ok := after[name]; !ok || v != want {
@@ -86,10 +87,12 @@ func TestScannerMetricsPerIPFamily(t *testing.T) {
 		}
 	}
 	counterDeltas := map[string]float64{
-		"felix_bpf_conntrack_sweeps/4":        1,
-		"felix_bpf_conntrack_sweeps/6":        1,
-		"felix_bpf_conntrack_cleaned_total/4": 1,
-		"felix_bpf_conntrack_cleaned_total/6": 0,
+		`felix_bpf_conntrack_sweeps{ip_version="4"}`:        1,
+		`felix_bpf_conntrack_sweeps{ip_version="6"}`:        1,
+		`felix_bpf_conntrack_cleaned_total{ip_version="4"}`: 1,
+		`felix_bpf_conntrack_cleaned_total{ip_version="6"}`: 0,
+		`felix_bpf_conntrack_expired_total{ip_version="4",reason="no traffic on UDP flow for too long"}`: 1,
+		`felix_bpf_conntrack_expired_total{ip_version="6",reason="no traffic on UDP flow for too long"}`: 0,
 	}
 	for name, want := range counterDeltas {
 		if d := after[name] - before[name]; d != want {
@@ -120,8 +123,9 @@ func TestScannerSurvivesBPFCleanerError(t *testing.T) {
 	if cleaner.runs == 0 {
 		t.Fatal("BPF cleaner was not run")
 	}
-	if v := gatherByFamily(t)["felix_bpf_conntrack_cleaned/4"]; v != 0 {
-		t.Errorf("felix_bpf_conntrack_cleaned/4 = %v, want 0", v)
+	const cleaned = `felix_bpf_conntrack_cleaned{ip_version="4"}`
+	if v := gatherMetrics(t)[cleaned]; v != 0 {
+		t.Errorf("%s = %v, want 0", cleaned, v)
 	}
 }
 
@@ -189,7 +193,8 @@ func (m *orderedMap) Iter(f maps.IterCallback) error {
 	return nil
 }
 
-func gatherByFamily(t *testing.T) map[string]float64 {
+// gatherMetrics keys each gauge and counter by name and all its labels, e.g. foo{a="1",b="2"}.
+func gatherMetrics(t *testing.T) map[string]float64 {
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
 		t.Fatal(err)
@@ -197,17 +202,17 @@ func gatherByFamily(t *testing.T) map[string]float64 {
 	out := map[string]float64{}
 	for _, mf := range mfs {
 		for _, m := range mf.GetMetric() {
+			var labels []string
 			for _, l := range m.GetLabel() {
-				if l.GetName() != "ip_version" {
-					continue
-				}
-				name := fmt.Sprintf("%s/%s", mf.GetName(), l.GetValue())
-				switch {
-				case m.GetGauge() != nil:
-					out[name] = m.GetGauge().GetValue()
-				case m.GetCounter() != nil:
-					out[name] = m.GetCounter().GetValue()
-				}
+				labels = append(labels, fmt.Sprintf("%s=%q", l.GetName(), l.GetValue()))
+			}
+			sort.Strings(labels)
+			name := fmt.Sprintf("%s{%s}", mf.GetName(), strings.Join(labels, ","))
+			switch {
+			case m.GetGauge() != nil:
+				out[name] = m.GetGauge().GetValue()
+			case m.GetCounter() != nil:
+				out[name] = m.GetCounter().GetValue()
 			}
 		}
 	}
