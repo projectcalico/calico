@@ -35,7 +35,7 @@ var (
 	summaryCleanerExecTime = prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Name: "felix_bpf_conntrack_cleaner_seconds",
 		Help: "Time taken to run the conntrack cleaner BPF program.",
-	}, []string{"ip_family"})
+	}, []string{"ip_version"})
 )
 
 func registerConntrackMetrics() {

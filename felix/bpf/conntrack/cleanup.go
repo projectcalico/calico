@@ -34,19 +34,19 @@ var (
 	conntrackGaugeExpired = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_expired",
 		Help: "Number of entries cleaned during a conntrack table sweep due to expiration",
-	}, []string{"ip_family"})
+	}, []string{"ip_version"})
 	conntrackCountersExpired = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "felix_bpf_conntrack_expired_total",
 		Help: "Total number of entries cleaned during conntrack table sweep due to expiration - by reason",
-	}, []string{"reason", "ip_family"})
+	}, []string{"reason", "ip_version"})
 	conntrackGaugeStaleNAT = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_stale_nat",
 		Help: "Number of entries cleaned during a conntrack table sweep due to stale NAT",
-	}, []string{"ip_family"})
+	}, []string{"ip_version"})
 	conntrackCounterStaleNAT = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "felix_bpf_conntrack_stale_nat_total",
 		Help: "Total number of entries cleaned during conntrack table sweeps due to stale NAT",
-	}, []string{"ip_family"})
+	}, []string{"ip_version"})
 )
 
 func init() {

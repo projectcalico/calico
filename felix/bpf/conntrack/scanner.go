@@ -38,27 +38,27 @@ var (
 	conntrackCounterSweeps = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "felix_bpf_conntrack_sweeps",
 		Help: "Number of contrack table sweeps made so far",
-	}, []string{"ip_family"})
+	}, []string{"ip_version"})
 	conntrackGaugeUsed = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_used",
 		Help: "Number of used entries visited during a conntrack table sweep",
-	}, []string{"ip_family"})
+	}, []string{"ip_version"})
 	conntrackGaugeCleaned = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_cleaned",
 		Help: "Number of entries cleaned during a conntrack table sweep",
-	}, []string{"ip_family"})
+	}, []string{"ip_version"})
 	conntrackCounterCleaned = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "felix_bpf_conntrack_cleaned_total",
 		Help: "Total number of entries cleaned during conntrack table sweeps",
-	}, []string{"ip_family"})
+	}, []string{"ip_version"})
 	conntrackGaugeSweepDuration = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_sweep_duration",
 		Help: "Conntrack sweep execution time (ns)",
-	}, []string{"ip_family"})
+	}, []string{"ip_version"})
 	conntrackGaugeMaxEntries = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_max_entries",
 		Help: "Capacity of the conntrack table; compare with used minus cleaned to get how full it is",
-	}, []string{"ip_family"})
+	}, []string{"ip_version"})
 	conntrackGaugeMaglevTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_maglev_entries_total",
 		Help: "Total number of Maglev entries in conntrack table broken down by IP version, and, whether destination backend is remote (we're acting as a frontend) or local (we're the backend node).",
@@ -579,7 +579,7 @@ func (s *Scanner) AddFirstUnlocked(scanner EntryScanner) {
 	s.scanners = append([]EntryScanner{scanner}, s.scanners...)
 }
 
-// ipFamilyLabel returns the ip_family metric label value for ipFamily.
+// ipFamilyLabel returns the ip_version metric label value for ipFamily.
 func ipFamilyLabel(ipFamily int) string {
 	if ipFamily != 4 && ipFamily != 6 {
 		log.Panicf("Invalid IP family %d", ipFamily)

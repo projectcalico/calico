@@ -31,7 +31,7 @@ var (
 	conntrackInfoReaderBlocks = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "felix_bpf_conntrack_inforeader_blocks",
 		Help: "Conntrack InfoReader blocks",
-	}, []string{"ip_family"})
+	}, []string{"ip_version"})
 )
 
 func init() {

@@ -103,7 +103,7 @@ func gatherByFamily(t *testing.T) map[string]float64 {
 	for _, mf := range mfs {
 		for _, m := range mf.GetMetric() {
 			for _, l := range m.GetLabel() {
-				if l.GetName() != "ip_family" {
+				if l.GetName() != "ip_version" {
 					continue
 				}
 				name := fmt.Sprintf("%s/%s", mf.GetName(), l.GetValue())
