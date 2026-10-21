@@ -1,6 +1,6 @@
 module github.com/projectcalico/calico
 
-go 1.27.1
+go 1.27.3
 
 tool golang.org/x/tools/cmd/goimports
 
