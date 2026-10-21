@@ -100,3 +100,20 @@ class TestCheckForStaleStatus(unittest.TestCase):
         # An unparseable time does not count as a stale-status warning for rate-limiting
         # purposes.
         self.assertEqual(float("-inf"), self.watcher._last_stale_warn)
+
+
+class TestSnapshotFlag(unittest.TestCase):
+    """The agent watcher's snapshot hooks set and clear processing_snapshot.
+
+    _check_for_stale_status relies on it, and the endpoint watcher's hooks are its own.
+    """
+
+    def test_agent_watcher_snapshot_hooks(self):
+        watcher = status.AgentStatusWatcher.__new__(status.AgentStatusWatcher)
+        watcher.processing_snapshot = False
+
+        snapshot_data = watcher._pre_snapshot_hook()
+        self.assertTrue(watcher.processing_snapshot)
+
+        watcher._post_snapshot_hook(snapshot_data)
+        self.assertFalse(watcher.processing_snapshot)
