@@ -1035,6 +1035,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             )
         else:
             LOG.debug("Updated port status for %s", port_id)
+
             # Keyed on the reporting host's own status rather than on the status we
             # just wrote: Nova is waiting to hear that the VIF is plugged on this host,
             # and a status redirected from another owner says nothing about that.
