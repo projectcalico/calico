@@ -945,7 +945,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         :param port_status_key: tuple of hostname, device_id, port_id.
         """
         hostname, device_id, port_id = port_status_key
-        calico_status = self._port_status_cache.get(port_status_key)
 
         # Read the port once, up front.  Its device_id decides whether this status is
         # still the port's, its binding which hosts' reports count for it, and the same
@@ -981,6 +980,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             )
             return
 
+        # Only now, after the port read, so that this and the owners' statuses come from
+        # the same moment.
+        calico_status = self._port_status_cache.get(port_status_key)
         neutron_status = self._neutron_status_for_port(port, hostname)
         if neutron_status is None:
             LOG.info(

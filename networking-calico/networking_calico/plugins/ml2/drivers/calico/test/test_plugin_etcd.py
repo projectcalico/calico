@@ -2734,6 +2734,27 @@ class TestLiveMigration(TestPluginEtcdBase):
 
         self.db.nova_notifier.notify_port_active_direct.assert_not_called()
 
+    def test_vif_plug_no_notification_if_dest_goes_down_during_read(self):
+        """Nova isn't told the VIF is plugged if it goes down while the port is read."""
+        self._do_initial_resync()
+        self._pre_migrate()
+        key = self._status_key(self.DEST_HOST)
+        real_get_port = self.db.get_port
+
+        def get_port_while_dest_goes_down(context, port_id):
+            self.driver._port_status_cache[key] = datamodel_v1.ENDPOINT_STATUS_DOWN
+            return real_get_port(context, port_id)
+
+        self.driver._get_db()
+        self.db.update_port_status = mock.Mock()
+        self.driver._port_status_cache[key] = datamodel_v1.ENDPOINT_STATUS_UP
+        with mock.patch.object(
+            self.db, "get_port", side_effect=get_port_while_dest_goes_down
+        ), mock.patch("eventlet.spawn_after", autospec=True):
+            self.driver._try_to_update_port_status(mock.Mock(), key)
+
+        self.db.nova_notifier.notify_port_active_direct.assert_not_called()
+
     def test_vif_plug_no_notification_for_non_migration(self):
         """Felix 'up' on source host does NOT trigger Nova notification."""
         self._do_initial_resync()
