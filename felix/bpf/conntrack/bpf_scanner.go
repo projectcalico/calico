@@ -84,12 +84,12 @@ func NewBPFProgCleaner(
 		ipVersion: ipVersion,
 		timeouts:  timeouts,
 		logLevel:  bpfLogLevel,
-		execTime:  summaryCleanerExecTime.WithLabelValues(ipFamilyLabel(ipVersion)),
 	}
 	_, err := s.ensureBPFExpiryProgram()
 	if err != nil {
 		return nil, err
 	}
+	s.execTime = summaryCleanerExecTime.WithLabelValues(ipFamilyLabel(ipVersion))
 	registerConntrackMetrics()
 	return s, nil
 }
