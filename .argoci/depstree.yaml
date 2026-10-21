@@ -1613,6 +1613,7 @@ components:
     in:
       - ^api/admission/[^/]*\.go$
       - ^api/admission/[^/]*\.yaml$
+      - ^api/admission/aws-vpc-annotations/[^/]*\.yaml$
       - ^api/admission/cni-annotations/[^/]*\.yaml$
       - ^api/config/crd/[^/]*\.go$
       - ^api/config/crd/[^/]*\.yaml$
