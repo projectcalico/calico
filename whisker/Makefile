@@ -18,8 +18,7 @@ BUILD_IMAGE_NAME=node:22.15
 include ../lib.Makefile
 
 YARN_CACHE_DIR := .cache/yarn
-# The node image is in the key because yarn caches packages' native builds.
-YARN_CACHE_KEY = whisker/yarn-$(shell { echo $(BUILD_IMAGE_NAME); cat yarn.lock; } | sha256sum | cut -c1-16)
+YARN_CACHE_KEY = whisker/yarn-$(shell sha256sum yarn.lock | cut -c1-16)
 
 DOCKER_RUN_RM:=docker run --rm \
 	--env CYPRESS_CACHE_FOLDER=/code/.cache/Cypress \
