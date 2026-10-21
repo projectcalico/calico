@@ -32,6 +32,7 @@ import time
 
 import eventlet
 from eventlet.queue import PriorityQueue
+from eventlet.semaphore import Semaphore
 
 from neutron.agent import rpc as agent_rpc
 from neutron.conf.agent import common as config
@@ -221,6 +222,8 @@ PORT_STATUS_MAPPING = {
 MASTER_CHECK_INTERVAL_SECS = 5
 # Delay before retrying a failed port status update to the Neutron DB.
 PORT_UPDATE_RETRY_DELAY_SECS = 5
+# Number of locks that serialize port status updates, each port hashing to one.
+PORT_STATUS_LOCK_COUNT = 64
 
 # Set a low refresh interval on the master key.  This reduces the chance of
 # the etcd event buffer wrapping while non-masters are waiting for the key to
@@ -678,6 +681,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         #   higher priority for events and a lower priority for snapshot
         #   keys, so that current data skips the queue.
         self._port_status_queue = PriorityQueue()
+        self._port_status_locks = [Semaphore() for _ in range(PORT_STATUS_LOCK_COUNT)]
         self._port_status_queue_too_long = False
 
         self.endpoint_status_watch_thread = eventlet.spawn(
@@ -944,6 +948,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                unique for each thread.
         :param port_status_key: tuple of hostname, device_id, port_id.
         """
+        # A port's status is worked out from all its hosts' statuses, so two updates
+        # for one port, from different keys, must not interleave: the one computed
+        # first could otherwise be written last.  Serialized, each is computed from the
+        # cache as it is when its turn comes, so the last write is also the latest.
+        port_id = port_status_key[2]
+        lock = self._port_status_locks[hash(port_id) % PORT_STATUS_LOCK_COUNT]
+        with lock:
+            self._update_port_status_from_cache(admin_context, port_status_key)
+
+    def _update_port_status_from_cache(self, admin_context, port_status_key):
         hostname, device_id, port_id = port_status_key
 
         # Read the port once, up front.  Its device_id decides whether this status is

@@ -3026,6 +3026,46 @@ class TestLiveMigration(TestPluginEtcdBase):
             host=self.SOURCE_HOST,
         )
 
+    def test_status_updates_for_one_port_do_not_interleave(self):
+        """Of two status updates for one port, the later-computed one is written last.
+
+        The source's deletion is computed as ACTIVE from the destination's "up", and
+        its write is held up; meanwhile the destination goes down.  Unless the two
+        updates are serialized, the destination's DOWN can be written first and then
+        overwritten by the stale ACTIVE.
+        """
+        self._do_initial_resync()
+        self._pre_migrate()
+        self._complete_migration()
+        self.driver._get_db()
+        dest_key = self._status_key(self.DEST_HOST)
+        self.driver._port_status_cache[dest_key] = datamodel_v1.ENDPOINT_STATUS_UP
+
+        written = []
+
+        def slow_active_write(context, port_id, status, host=None):
+            if status == mech_calico.constants.PORT_STATUS_ACTIVE:
+                eventlet.sleep()
+            written.append(status)
+
+        self.db.update_port_status = slow_active_write
+        with mock.patch("eventlet.spawn_after", autospec=True):
+            source_update = self.real_eventlet_spawn(
+                self.driver._try_to_update_port_status,
+                mock.Mock(),
+                self._status_key(self.SOURCE_HOST),
+            )
+            self.real_eventlet_sleep(0)
+
+            self.driver._port_status_cache[dest_key] = datamodel_v1.ENDPOINT_STATUS_DOWN
+            dest_update = self.real_eventlet_spawn(
+                self.driver._try_to_update_port_status, mock.Mock(), dest_key
+            )
+            source_update.wait()
+            dest_update.wait()
+
+        self.assertEqual(mech_calico.constants.PORT_STATUS_DOWN, written[-1])
+
     def test_deletion_at_owning_host_still_reports_error(self):
         """A port still bound here, with no Calico endpoint, is a genuine error."""
         self._do_initial_resync()
