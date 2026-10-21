@@ -70,12 +70,6 @@ class StatusWatcher(etcdutils.EtcdWatcher):
 
         self.processing_snapshot = False
 
-        # Map of live Felix notifications: hostname -> the latest mod_revision
-        # that we have handled for that host.  We track mod_revision because
-        # EtcdWatcher has to emit duplicate notifications to us, and we want to
-        # deduplicate before passing on to the Neutron DB.
-        self._felix_live_rev = {}
-
         # Monotonic time of the last stale-status WARNING we logged.  Used to rate-limit
         # the warning so we do not flood the log when the whole cluster is backlogged.
         # Initialised to -inf so the first stale-update encountered always passes the
@@ -156,6 +150,12 @@ class AgentStatusWatcher(StatusWatcher):
 
     def __init__(self, calico_driver):
         super().__init__(calico_driver)
+
+        # Map of live Felix notifications: hostname -> the latest mod_revision
+        # that we have handled for that host.  We track mod_revision because
+        # EtcdWatcher has to emit duplicate notifications to us, and we want to
+        # deduplicate before passing on to the Neutron DB.
+        self._felix_live_rev = {}
 
         # Register for felix uptime updates.
         self.register_path(
