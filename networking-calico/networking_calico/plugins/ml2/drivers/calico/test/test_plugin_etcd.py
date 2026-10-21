@@ -4064,6 +4064,42 @@ class TestStatusWatcher(TestStatusWatcherBase):
             self.driver.on_port_status_changed.mock_calls,
         )
 
+    def test_snapshot_retried_after_failing_partway(self):
+        """A status deleted while a snapshot failed and was retried is still signalled.
+
+        A snapshot that fails partway is retried without its post-snapshot hook, so the
+        retry has to check against the statuses from before the failed one too.
+        """
+
+        def ep_node(endpoint):
+            node = mock.Mock()
+            node.key = (
+                "/calico/felix/v2/no-region/host/hostname/workload/"
+                "openstack/openstack%2fwlid/endpoint/"
+                + endpoint
+            )
+            node.value = '{"status": "up"}'
+            return node
+
+        watcher = self.endpoint_watcher
+        watcher._on_ep_set(ep_node("ep1"), "hostname", "wlid", "ep1")
+        watcher._on_ep_set(ep_node("ep2"), "hostname", "wlid", "ep2")
+
+        # A snapshot that loads ep1, then fails.
+        watcher._pre_snapshot_hook()
+        watcher._on_ep_set(ep_node("ep1"), "hostname", "wlid", "ep1")
+
+        # The retry, during which ep2's status turns out to have been deleted.
+        snapshot_data = watcher._pre_snapshot_hook()
+        watcher._on_ep_set(ep_node("ep1"), "hostname", "wlid", "ep1")
+        self.driver.on_port_status_changed.reset_mock()
+        watcher._post_snapshot_hook(snapshot_data)
+
+        self.assertEqual(
+            [mock.call("hostname", "ep2", None, device_id="wlid", priority="low")],
+            self.driver.on_port_status_changed.mock_calls,
+        )
+
     def test_endpoint_status_undecodable_workload_is_ignored(self):
         """A key whose workload has no device_id is ignored on set and delete alike."""
         m_port_status_node = mock.Mock()

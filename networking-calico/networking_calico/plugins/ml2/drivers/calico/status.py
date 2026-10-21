@@ -204,6 +204,11 @@ class EndpointStatusWatcher(StatusWatcher):
         # removed while we weren't watching.
         self._status_ids = set()
 
+        # The statuses to check against while a snapshot is under way.  A snapshot that
+        # fails partway is retried without finishing, and the statuses from before it
+        # still need checking then, not just those it had loaded.
+        self._unreconciled_status_ids = set()
+
         self.register_path(
             self.status_path
             + "/<hostname>/workload/openstack/<workload>/endpoint/<endpoint>",
@@ -214,7 +219,8 @@ class EndpointStatusWatcher(StatusWatcher):
     def _pre_snapshot_hook(self):
         # Save off the current statuses, then start afresh, so that we can spot which
         # are missing from the new snapshot.
-        old_status_ids = self._status_ids
+        old_status_ids = self._unreconciled_status_ids | self._status_ids
+        self._unreconciled_status_ids = old_status_ids
         self._status_ids = set()
         super()._pre_snapshot_hook()
         return old_status_ids
@@ -230,6 +236,7 @@ class EndpointStatusWatcher(StatusWatcher):
                 device_id=status_id.device_id,
                 priority="low",
             )
+        self._unreconciled_status_ids = set()
         super()._post_snapshot_hook(None)
 
     def _on_ep_set(self, response, hostname, workload, endpoint):
