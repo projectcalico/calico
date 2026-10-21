@@ -25,9 +25,10 @@ changing these, we still need to consider upgrading an existing
 Calico/OpenStack deployment.
 
 """
+import collections
 import re
 
-from networking_calico import datamodel_v1
+from networking_calico.common import intern_string
 
 # Region string used when no region name has been configured.
 NO_REGION = "no-region"
@@ -48,12 +49,19 @@ def felix_status_dir(region_string=NO_REGION):
     return "/calico/felix/v2/%s/host" % region_string
 
 
-# Regex to match endpoints, captures "hostname" and "endpoint_id".
-# Works for endpoint status paths.
+# The identity of an OpenStack port's status as Felix reports it, decoded from the
+# status key.
+PortStatusId = collections.namedtuple("PortStatusId", ["host", "device_id", "port_id"])
+
 _cached_endpoint_key_re = None
 
 
-def get_endpoint_id_from_key(region_string, key):
+def get_port_status_id_from_key(region_string, key):
+    """Decode a Felix endpoint status key into a PortStatusId.
+
+    Returns None if the key isn't an endpoint status key in the form Felix writes for
+    an OpenStack port.
+    """
     global _cached_endpoint_key_re
     if _cached_endpoint_key_re is None:
         _cached_endpoint_key_re = re.compile(
@@ -65,26 +73,21 @@ def get_endpoint_id_from_key(region_string, key):
             r"endpoint/(?P<endpoint_id>[^/]+)"
         )
     m = _cached_endpoint_key_re.match(key)
-    if m:
-        # Got an endpoint.
-        host = m.group("hostname")
-        orch = m.group("orchestrator")
-        workload_id = m.group("workload_id")
-        endpoint_id = m.group("endpoint_id")
-        combined_id = datamodel_v1.WloadEndpointId(host, orch, workload_id, endpoint_id)
-        return combined_id
-    else:
+    if not m:
         return None
 
+    # Felix's WorkloadID for an OpenStack WEP is "<namespace>/<device_id>", with the
+    # "/" escaped as "%2f" in the key.  The namespace is the same for every key this
+    # server watches, since the region is already in the key's path.
+    _, separator, device_id = m.group("workload_id").partition("%2f")
+    if not separator or not device_id:
+        return None
 
-def felix_status_workload_id(namespace, device_id):
-    """The workload segment of the status key Felix writes for an OpenStack port.
-
-    Felix's WorkloadID for an OpenStack WEP is ``<namespace>/<device_id>``, and the
-    key escapes its "/" as "%2f".  Neither part can itself contain "/" or "%": the
-    namespace is a DNS label and ``device_id`` a Nova UUID.
-    """
-    return namespace + "%2f" + device_id
+    return PortStatusId(
+        intern_string(m.group("hostname")),
+        intern_string(device_id),
+        intern_string(m.group("endpoint_id")),
+    )
 
 
 def _reset_globals():
