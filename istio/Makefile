@@ -139,7 +139,7 @@ bin/pilot-discovery-$(ARCH): $(ISTIO_DOWNLOADED)
 
 bin/ztunnel-$(ARCH): $(ZTUNNEL_DOWNLOADED)
 	$(DOCKER_RUST_BUILD) \
-		sh -c 'cd ztunnel && cargo build --release $(if $(GOMAXPROCS),--jobs $(GOMAXPROCS))'
+		sh -c 'cd ztunnel && cargo build --release $(if $(GOMAXPROCS),--jobs $(GOMAXPROCS)) $(SCCACHE_SHOW_STATS)'
 	cp ztunnel/out/rust/$(RUST_TARGET)/release/ztunnel bin/ztunnel-$(ARCH)
 
 ###############################################################################
