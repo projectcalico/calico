@@ -212,9 +212,9 @@ class EndpointStatusWatcher(StatusWatcher):
     def __init__(self, calico_driver):
         super().__init__(calico_driver)
 
-        # Track the set of endpoints that are on each host so we can spot
-        # removed endpoints during a resync.
-        self._endpoints_by_host = collections.defaultdict(set)
+        # The port statuses currently in etcd, so that a new snapshot can spot those
+        # removed while we weren't watching.
+        self._status_ids = set()
 
         self.register_path(
             self.status_path
@@ -224,32 +224,24 @@ class EndpointStatusWatcher(StatusWatcher):
         )
 
     def _pre_snapshot_hook(self):
-        # Save off current endpoint status, then reset current state, so we
-        # will be able to identify any changes in the new snapshot.
-        old_endpoints_by_host = self._endpoints_by_host
-        self._endpoints_by_host = collections.defaultdict(set)
+        # Save off the current statuses, then start afresh, so that we can spot which
+        # are missing from the new snapshot.
+        old_status_ids = self._status_ids
+        self._status_ids = set()
         super()._pre_snapshot_hook()
-        return old_endpoints_by_host
+        return old_status_ids
 
-    def _post_snapshot_hook(self, old_endpoints_by_host):
-        # Look for previous endpoints that are no longer present...
-        for hostname, ep_ids in old_endpoints_by_host.items():
-            LOG.info("host: %s", hostname)
-            # Avoid self._endpoints_by_host[hostname] since that would
-            # auto-create the entry in the new dict, which would cause a
-            # leak.
-            new_ep_ids = self._endpoints_by_host.get(hostname, set())
-            # Check for particular endpoints that have disappeared, and
-            # signal those.
-            for status_id in ep_ids.difference(new_ep_ids):
-                LOG.info("signal None for %s", status_id.port_id)
-                self.calico_driver.on_port_status_changed(
-                    hostname,
-                    status_id.port_id,
-                    None,
-                    device_id=status_id.device_id,
-                    priority="low",
-                )
+    def _post_snapshot_hook(self, old_status_ids):
+        # Signal the statuses that have disappeared.
+        for status_id in old_status_ids - self._status_ids:
+            LOG.info("signal None for %s", status_id)
+            self.calico_driver.on_port_status_changed(
+                status_id.host,
+                status_id.port_id,
+                None,
+                device_id=status_id.device_id,
+                priority="low",
+            )
         super()._post_snapshot_hook(None)
 
     def _on_ep_set(self, response, hostname, workload, endpoint):
@@ -275,11 +267,9 @@ class EndpointStatusWatcher(StatusWatcher):
         except (ValueError, TypeError):
             LOG.error("Bad JSON data for %s: %s", status_id, raw_json)
             status = None  # Report as error
-            self._endpoints_by_host[status_id.host].discard(status_id)
-            if not self._endpoints_by_host[status_id.host]:
-                del self._endpoints_by_host[status_id.host]
+            self._status_ids.discard(status_id)
         else:
-            self._endpoints_by_host[status_id.host].add(status_id)
+            self._status_ids.add(status_id)
 
             # Unwrap the dict around the actual status.
             status = (
@@ -311,11 +301,9 @@ class EndpointStatusWatcher(StatusWatcher):
                 response.key,
             )
             return
-        self._endpoints_by_host[hostname].discard(status_id)
-        if not self._endpoints_by_host[hostname]:
-            del self._endpoints_by_host[hostname]
+        self._status_ids.discard(status_id)
         self.calico_driver.on_port_status_changed(
-            hostname,
+            status_id.host,
             status_id.port_id,
             None,
             device_id=status_id.device_id,

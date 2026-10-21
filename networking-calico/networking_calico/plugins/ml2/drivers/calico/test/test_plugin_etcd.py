@@ -3804,9 +3804,7 @@ class TestStatusWatcherBase(_TestEtcdBase):
         m_port_status_node.value = '{"status": "up"}'
         self.endpoint_watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
         ep_id = datamodel_v2.PortStatusId("hostname", "wlid", "ep1")
-        self.assertEqual(
-            {"hostname": set([ep_id])}, self.endpoint_watcher._endpoints_by_host
-        )
+        self.assertEqual({ep_id}, self.endpoint_watcher._status_ids)
         return m_port_status_node
 
 
@@ -3972,7 +3970,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
-        self.assertEqual({}, self.endpoint_watcher._endpoints_by_host)
+        self.assertEqual(set(), self.endpoint_watcher._status_ids)
 
     def test_endpoint_status_add_bad_json(self):
         m_port_status_node = mock.Mock()
@@ -3989,7 +3987,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
-        self.assertEqual({}, self.endpoint_watcher._endpoints_by_host)
+        self.assertEqual(set(), self.endpoint_watcher._status_ids)
 
     def test_endpoint_status_add_json_not_a_dict(self):
         m_port_status_node = mock.Mock()
@@ -4019,7 +4017,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
         )
 
         self.assertEqual([], self.driver.on_port_status_changed.mock_calls)
-        self.assertEqual({}, self.endpoint_watcher._endpoints_by_host)
+        self.assertEqual(set(), self.endpoint_watcher._status_ids)
 
     def test_endpoint_status_add_bad_id(self):
         m_port_status_node = mock.Mock()
@@ -4029,7 +4027,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
         )
         self.endpoint_watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
         self.assertEqual([], self.driver.on_port_status_changed.mock_calls)
-        self.assertEqual({}, self.endpoint_watcher._endpoints_by_host)
+        self.assertEqual(set(), self.endpoint_watcher._status_ids)
 
     def test_status_bad_json(self):
         for value in ["{", 10, "foo"]:
@@ -4085,7 +4083,7 @@ class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
-        self.assertEqual({}, self.endpoint_watcher._endpoints_by_host)
+        self.assertEqual(set(), self.endpoint_watcher._status_ids)
 
     def test_handle_port_this_region(self):
         # Simulate status update for a workload in this region.
