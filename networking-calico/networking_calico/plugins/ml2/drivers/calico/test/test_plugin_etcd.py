@@ -2928,9 +2928,9 @@ class TestLiveMigration(TestPluginEtcdBase):
     def test_source_deletion_after_migration_leaves_port_active(self):
         """The source's endpoint deletion must not flip a migrated port to ERROR.
 
-        This was a reported bug: the destination reports "up" and then the source's
-        status key is deleted, and with a single Neutron status field the deletion
-        used to land last and win.
+        The destination reports "up" and then the source's status key is deleted.
+        With a single Neutron status field, letting the deletion win because it lands
+        last would leave a healthy migrated VM's port in ERROR.
         """
         self._do_initial_resync()
         self._pre_migrate()
