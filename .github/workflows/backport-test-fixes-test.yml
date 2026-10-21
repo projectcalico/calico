@@ -1,0 +1,24 @@
+# Fixture tests for the test-fix backport scripts.
+name: Backport test fixes (script tests)
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/scripts/backport-*
+      - .github/workflows/scripts/pick-resolve.sh
+      - .github/workflows/backport-test-fixes*.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - run: bash .github/workflows/scripts/backport-test-fixes_test.sh

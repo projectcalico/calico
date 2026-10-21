@@ -1,0 +1,165 @@
+# Daily batch backport of merged test fixes from master to the supported release
+# branches, one PR per branch.
+#
+# Two jobs, so the write token never shares a runner with Claude:
+#   pick  (Job A) read token: select, classify and pick, resolve conflicts with
+#         Claude, export one mbox per branch plus report.json.
+#   apply (Job B) fresh runner, no agent: verify every pick against its master
+#         commit, then push and open the PRs as marvin-tigera.
+#
+# Auth (secrets/vars):
+#   CLAUDE_TOKEN              Anthropic API key                      (Job A)
+#   TIGERA_BOT_PAT            write token, live runs only            (Job B)
+#   BACKPORT_LIVE (var)       "true" lets scheduled runs open PRs; otherwise they dry-run
+
+name: Backport test fixes
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Verify and show the PRs without pushing
+        type: boolean
+        default: true
+      as_of:
+        description: Replay as of this date (YYYY-MM-DD); implies dry run
+        type: string
+        default: ""
+      prs:
+        description: Only these master PRs (comma-separated numbers)
+        type: string
+        default: ""
+      since_days:
+        description: Look back this many days of master merges
+        type: string
+        default: "14"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: backport-test-fixes
+  cancel-in-progress: false
+
+env:
+  REPO: ${{ github.repository }}
+  DRY_RUN: ${{ (github.event_name == 'schedule' && vars.BACKPORT_LIVE != 'true') || (github.event_name == 'workflow_dispatch' && (inputs.dry_run || inputs.as_of != '')) }}
+  AS_OF: ${{ inputs.as_of }}
+  PRS: ${{ inputs.prs }}
+  SINCE_DAYS: ${{ inputs.since_days || '14' }}
+  SCRIPTS_DIR: ${{ github.workspace }}/../backport-scripts
+  WORKDIR: ${{ github.workspace }}/repo
+
+jobs:
+  # =========================================================================
+  # Job A: select + classify + pick. Read-only token, runs Claude.
+  # =========================================================================
+  pick:
+    if: github.repository == 'projectcalico/calico' || github.repository == 'tigera/calico-private'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STATE_DIR: ${{ github.workspace }}/../backport-state
+      OUT_DIR: ${{ github.workspace }}/../backport-out
+      # Overrides repo config, so a planted hook or fsmonitor cannot run code through git.
+      GIT_CONFIG_COUNT: "3"
+      GIT_CONFIG_KEY_0: core.hooksPath
+      GIT_CONFIG_VALUE_0: /dev/null
+      GIT_CONFIG_KEY_1: core.fsmonitor
+      GIT_CONFIG_VALUE_1: "false"
+      GIT_CONFIG_KEY_2: commit.gpgSign
+      GIT_CONFIG_VALUE_2: "false"
+    steps:
+      - name: Check inputs
+        run: |
+          [[ -z "$AS_OF" || "$AS_OF" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::bad as_of"; exit 1; }
+          [[ -z "$PRS" || "$PRS" =~ ^[0-9]+(,[0-9]+)*$ ]] || { echo "::error::bad prs"; exit 1; }
+          [[ "$SINCE_DAYS" =~ ^[0-9]+$ ]] || { echo "::error::bad since_days"; exit 1; }
+          echo "dry run: $DRY_RUN, as of: ${AS_OF:-now}, since days: $SINCE_DAYS, prs: ${PRS:-all}"
+
+      # Scripts come from this workflow's own commit, outside the workspace the agent may edit.
+      - name: Fetch scripts
+        env:
+          SCRIPTS_REF: ${{ github.sha }}
+        run: |
+          mkdir -p "$SCRIPTS_DIR"
+          for f in backport-lib.sh backport-pick.sh pick-resolve.sh; do
+            gh api "repos/${REPO}/contents/.github/workflows/scripts/${f}?ref=${SCRIPTS_REF}" \
+              --jq '.content' | base64 -d > "$SCRIPTS_DIR/${f}"
+            test -s "$SCRIPTS_DIR/${f}"
+          done
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      # CLAUDE_CODE_SUBPROCESS_ENV_SCRUB sandboxes the agent's subprocesses with bubblewrap.
+      - name: Install Claude Code and bubblewrap
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap
+          npm install -g @anthropic-ai/claude-code@2.1.305
+
+      - name: Clone
+        run: bash "$SCRIPTS_DIR/backport-pick.sh" clone
+
+      - name: Select candidates
+        run: bash "$SCRIPTS_DIR/backport-pick.sh" select
+
+      - name: Classify candidates
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.CLAUDE_TOKEN }}
+        run: bash "$SCRIPTS_DIR/backport-pick.sh" classify
+
+      - name: Pick
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.CLAUDE_TOKEN }}
+          GOTOOLCHAIN: auto
+        run: bash "$SCRIPTS_DIR/backport-pick.sh" pick
+
+      - name: Upload picks
+        uses: actions/upload-artifact@v4
+        with:
+          name: backport-out-${{ github.run_id }}
+          path: ${{ github.workspace }}/../backport-out
+          retention-days: 3
+          if-no-files-found: error
+          overwrite: true
+
+  # =========================================================================
+  # Job B: verify + push + open PRs. Fresh runner, no agent, write token.
+  # =========================================================================
+  apply:
+    needs: pick
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      IN_DIR: ${{ github.workspace }}/../backport-out
+    steps:
+      - name: Fetch scripts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCRIPTS_REF: ${{ github.sha }}
+        run: |
+          mkdir -p "$SCRIPTS_DIR"
+          for f in backport-lib.sh backport-apply.sh; do
+            gh api "repos/${REPO}/contents/.github/workflows/scripts/${f}?ref=${SCRIPTS_REF}" \
+              --jq '.content' | base64 -d > "$SCRIPTS_DIR/${f}"
+            test -s "$SCRIPTS_DIR/${f}"
+          done
+
+      - name: Download picks
+        uses: actions/download-artifact@v4
+        with:
+          name: backport-out-${{ github.run_id }}
+          path: ${{ github.workspace }}/../backport-out
+
+      # The write token exists only here, and only on a live run.
+      - name: Verify and open PRs
+        env:
+          TARGET_TOKEN: ${{ env.DRY_RUN == 'true' && github.token || secrets.TIGERA_BOT_PAT }}
+        run: bash "$SCRIPTS_DIR/backport-apply.sh"
