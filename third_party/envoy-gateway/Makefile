@@ -7,7 +7,7 @@ BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
 # For updating this version please see
 # operator/docs/common_tasks.md, "Updating the bundled version of Envoy Gateway".
-ENVOY_GATEWAY_VERSION=v1.9.1
+ENVOY_GATEWAY_VERSION=v1.9.2
 
 ##############################################################################
 # Include lib.Makefile before anything else
