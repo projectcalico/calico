@@ -892,7 +892,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             )
         ]
 
-    def _neutron_status_for_port(self, port, port_id, hostname):
+    def _neutron_status_for_port(self, port, hostname):
         """Work out the Neutron status to write for ``port``.
 
         Only statuses under the port's current device_id count; any other is for a VM
@@ -913,7 +913,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         Returns None if there is nothing worth writing.
         """
         owners = self._owning_hosts(port)
-        device_id = port.get("device_id")
+        device_id, port_id = port.get("device_id"), port["id"]
         statuses = [
             self._port_status_cache.get((host, device_id, port_id)) for host in owners
         ]
@@ -981,7 +981,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             )
             return
 
-        neutron_status = self._neutron_status_for_port(port, port_id, hostname)
+        neutron_status = self._neutron_status_for_port(port, hostname)
         if neutron_status is None:
             LOG.info(
                 "Ignoring status report for port %s from host %s, which no longer"
