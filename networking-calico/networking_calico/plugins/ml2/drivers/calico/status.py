@@ -82,10 +82,6 @@ class StatusWatcher(etcdutils.EtcdWatcher):
 
         self.processing_snapshot = False
 
-        # Track the set of endpoints that are on each host so we can spot
-        # removed endpoints during a resync.
-        self._endpoints_by_host = collections.defaultdict(set)
-
         # Map of live Felix notifications: hostname -> the latest mod_revision
         # that we have handled for that host.  We track mod_revision because
         # EtcdWatcher has to emit duplicate notifications to us, and we want to
@@ -101,32 +97,9 @@ class StatusWatcher(etcdutils.EtcdWatcher):
         self._last_stale_warn = float("-inf")
 
     def _pre_snapshot_hook(self):
-        # Save off current endpoint status, then reset current state, so we
-        # will be able to identify any changes in the new snapshot.
-        old_endpoints_by_host = self._endpoints_by_host
-        self._endpoints_by_host = collections.defaultdict(set)
         self.processing_snapshot = True
-        return old_endpoints_by_host
 
-    def _post_snapshot_hook(self, old_endpoints_by_host):
-        # Look for previous endpoints that are no longer present...
-        for hostname, ep_ids in old_endpoints_by_host.items():
-            LOG.info("host: %s", hostname)
-            # Avoid self._endpoints_by_host[hostname] since that would
-            # auto-create the entry in the new dict, which would cause a
-            # leak.
-            new_ep_ids = self._endpoints_by_host.get(hostname, set())
-            # Check for particular endpoints that have disappeared, and
-            # signal those.
-            for status_id in ep_ids.difference(new_ep_ids):
-                LOG.info("signal None for %s", status_id.port_id)
-                self.calico_driver.on_port_status_changed(
-                    hostname,
-                    status_id.port_id,
-                    None,
-                    device_id=status_id.device_id,
-                    priority="low",
-                )
+    def _post_snapshot_hook(self, _):
         self.processing_snapshot = False
 
     def _check_for_stale_status(self, hostname, value):
@@ -239,12 +212,45 @@ class EndpointStatusWatcher(StatusWatcher):
     def __init__(self, calico_driver):
         super().__init__(calico_driver)
 
+        # Track the set of endpoints that are on each host so we can spot
+        # removed endpoints during a resync.
+        self._endpoints_by_host = collections.defaultdict(set)
+
         self.register_path(
             self.status_path
             + "/<hostname>/workload/openstack/<workload>/endpoint/<endpoint>",
             on_set=self._on_ep_set,
             on_del=self._on_ep_delete,
         )
+
+    def _pre_snapshot_hook(self):
+        # Save off current endpoint status, then reset current state, so we
+        # will be able to identify any changes in the new snapshot.
+        old_endpoints_by_host = self._endpoints_by_host
+        self._endpoints_by_host = collections.defaultdict(set)
+        super()._pre_snapshot_hook()
+        return old_endpoints_by_host
+
+    def _post_snapshot_hook(self, old_endpoints_by_host):
+        # Look for previous endpoints that are no longer present...
+        for hostname, ep_ids in old_endpoints_by_host.items():
+            LOG.info("host: %s", hostname)
+            # Avoid self._endpoints_by_host[hostname] since that would
+            # auto-create the entry in the new dict, which would cause a
+            # leak.
+            new_ep_ids = self._endpoints_by_host.get(hostname, set())
+            # Check for particular endpoints that have disappeared, and
+            # signal those.
+            for status_id in ep_ids.difference(new_ep_ids):
+                LOG.info("signal None for %s", status_id.port_id)
+                self.calico_driver.on_port_status_changed(
+                    hostname,
+                    status_id.port_id,
+                    None,
+                    device_id=status_id.device_id,
+                    priority="low",
+                )
+        super()._post_snapshot_hook(None)
 
     def _on_ep_set(self, response, hostname, workload, endpoint):
         """Called when the status key for a particular endpoint is updated.
