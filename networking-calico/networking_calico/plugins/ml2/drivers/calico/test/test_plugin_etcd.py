@@ -4090,10 +4090,10 @@ class TestStatusWatcher(TestStatusWatcherBase):
         watcher._on_ep_set(ep_node("ep1"), "hostname", "wlid", "ep1")
 
         # The retry, during which ep2's status turns out to have been deleted.
-        snapshot_data = watcher._pre_snapshot_hook()
+        watcher._pre_snapshot_hook()
         watcher._on_ep_set(ep_node("ep1"), "hostname", "wlid", "ep1")
         self.driver.on_port_status_changed.reset_mock()
-        watcher._post_snapshot_hook(snapshot_data)
+        watcher._post_snapshot_hook()
 
         self.assertEqual(
             [mock.call("hostname", "ep2", None, device_id="wlid", priority="low")],

@@ -819,9 +819,8 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
         # Suppress Dnsmasq updates until we've processed the whole snapshot.
         self.suppress_dnsmasq_updates = True
-        return None
 
-    def _post_snapshot_hook(self, _):
+    def _post_snapshot_hook(self):
         LOG.debug("End of new snapshot")
 
         # Now do Dnsmasq updates.
@@ -883,9 +882,8 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
         # leftovers, i.e. the subnets that no longer exist.  subnets_by_id
         # itself continues to serve lookups throughout.
         self._possibly_stale_subnet_ids = set(self.subnets_by_id.keys())
-        return None
 
-    def _post_snapshot_hook(self, _):
+    def _post_snapshot_hook(self):
         for subnet_id in self._possibly_stale_subnet_ids:
             LOG.info("Subnet %s no longer exists; discarding", subnet_id)
             self.subnets_by_id.pop(subnet_id, None)

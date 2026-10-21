@@ -112,8 +112,8 @@ class TestSnapshotFlag(unittest.TestCase):
         watcher = status.AgentStatusWatcher.__new__(status.AgentStatusWatcher)
         watcher.processing_snapshot = False
 
-        snapshot_data = watcher._pre_snapshot_hook()
+        watcher._pre_snapshot_hook()
         self.assertTrue(watcher.processing_snapshot)
 
-        watcher._post_snapshot_hook(snapshot_data)
+        watcher._post_snapshot_hook()
         self.assertFalse(watcher.processing_snapshot)

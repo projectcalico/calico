@@ -81,7 +81,7 @@ class StatusWatcher(etcdutils.EtcdWatcher):
     def _pre_snapshot_hook(self):
         self.processing_snapshot = True
 
-    def _post_snapshot_hook(self, _):
+    def _post_snapshot_hook(self):
         self.processing_snapshot = False
 
     def _check_for_stale_status(self, hostname, value):
@@ -217,17 +217,15 @@ class EndpointStatusWatcher(StatusWatcher):
         )
 
     def _pre_snapshot_hook(self):
-        # Save off the current statuses, then start afresh, so that we can spot which
-        # are missing from the new snapshot.
-        old_status_ids = self._unreconciled_status_ids | self._status_ids
-        self._unreconciled_status_ids = old_status_ids
+        # Add the current statuses to those to check against, then start afresh, so
+        # that we can spot which are missing from the new snapshot.
+        self._unreconciled_status_ids |= self._status_ids
         self._status_ids = set()
         super()._pre_snapshot_hook()
-        return old_status_ids
 
-    def _post_snapshot_hook(self, old_status_ids):
+    def _post_snapshot_hook(self):
         # Signal the statuses that have disappeared.
-        for status_id in old_status_ids - self._status_ids:
+        for status_id in self._unreconciled_status_ids - self._status_ids:
             LOG.info("signal None for %s", status_id)
             self.calico_driver.on_port_status_changed(
                 status_id.host,
@@ -237,7 +235,7 @@ class EndpointStatusWatcher(StatusWatcher):
                 priority="low",
             )
         self._unreconciled_status_ids = set()
-        super()._post_snapshot_hook(None)
+        super()._post_snapshot_hook()
 
     def _on_ep_set(self, response, hostname, workload, endpoint):
         """Called when the status key for a particular endpoint is updated.
