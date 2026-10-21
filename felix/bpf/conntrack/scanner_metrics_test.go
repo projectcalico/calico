@@ -87,10 +87,10 @@ func TestScannerMetricsPerIPFamily(t *testing.T) {
 		}
 	}
 	counterDeltas := map[string]float64{
-		`felix_bpf_conntrack_sweeps{ip_version="4"}`:        1,
-		`felix_bpf_conntrack_sweeps{ip_version="6"}`:        1,
-		`felix_bpf_conntrack_cleaned_total{ip_version="4"}`: 1,
-		`felix_bpf_conntrack_cleaned_total{ip_version="6"}`: 0,
+		`felix_bpf_conntrack_sweeps{ip_version="4"}`:                                                     1,
+		`felix_bpf_conntrack_sweeps{ip_version="6"}`:                                                     1,
+		`felix_bpf_conntrack_cleaned_total{ip_version="4"}`:                                              1,
+		`felix_bpf_conntrack_cleaned_total{ip_version="6"}`:                                              0,
 		`felix_bpf_conntrack_expired_total{ip_version="4",reason="no traffic on UDP flow for too long"}`: 1,
 		`felix_bpf_conntrack_expired_total{ip_version="6",reason="no traffic on UDP flow for too long"}`: 0,
 	}
