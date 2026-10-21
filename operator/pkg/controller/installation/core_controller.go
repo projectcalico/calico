@@ -84,8 +84,9 @@ const (
 
 	// awsNodeName names the AWS VPC CNI's DaemonSet in kube-system, and the service account AWS runs it as.
 	awsNodeName = "aws-node"
-	// awsNodeServiceAccountWarning keys the warning shown while aws-node runs as another account.
-	awsNodeServiceAccountWarning = "aws-node-service-account"
+	// awsVPCAnnotationsWarning keys the warning shown while the AWS VPC CNI's annotation is left
+	// unprotected.
+	awsVPCAnnotationsWarning = "aws-vpc-annotations-unprotected"
 )
 
 const InstallationName string = "calico"
@@ -207,7 +208,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		}
 	}
 
-	// The AWS VPC CNI's service account decides whether its annotation is protected.
+	// On AWS VPC CNI installs, aws-node's service account decides whether its annotation is protected.
 	awsNode := &appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: awsNodeName, Namespace: metav1.NamespaceSystem}}
 	if err = utils.AddNamespacedWatch(c, awsNode, &handler.EnqueueRequestForObject{}); err != nil {
 		return fmt.Errorf("tigera-installation-controller failed to watch the aws-node DaemonSet: %w", err)
@@ -1384,20 +1385,18 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	// AWS's manifests, add-on and docs run the AWS VPC CNI as kube-system:aws-node, which is who
-	// calico-aws-vpc-annotations is bound to. Under any other account its annotation writes would be
-	// refused, failing every CNI ADD, so its annotation is left unprotected instead.
-	unexpectedAWSNodeSA, err := unexpectedAWSNodeServiceAccount(ctx, r.client)
+	// calico-aws-vpc-annotations is bound to. Under any other account, including a renamed DaemonSet's,
+	// its annotation writes would be refused, failing every CNI ADD, so its annotation is left
+	// unprotected instead.
+	awsVPCUnprotected, err := awsVPCAnnotationsUnprotected(ctx, r.client, defaulted.Spec.CNI)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Unable to read the aws-node DaemonSet", err, reqLogger)
 		return reconcile.Result{}, err
 	}
-	if unexpectedAWSNodeSA != "" {
-		r.status.SetWarning(awsNodeServiceAccountWarning, fmt.Sprintf(
-			"The aws-node DaemonSet runs as service account %q, not %q, so the vpc.amazonaws.com/pod-ips pod annotation is not protected",
-			unexpectedAWSNodeSA, awsNodeName,
-		))
+	if awsVPCUnprotected != "" {
+		r.status.SetWarning(awsVPCAnnotationsWarning, awsVPCUnprotected+", so the vpc.amazonaws.com/pod-ips pod annotation is not protected")
 	} else {
-		r.status.ClearWarning(awsNodeServiceAccountWarning)
+		r.status.ClearWarning(awsVPCAnnotationsWarning)
 	}
 
 	// Build a configuration for rendering calico/node.
@@ -1419,7 +1418,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		FelixConfiguration:    felixConfiguration,
 		V3CRDs:                r.opts.UseV3CRDs,
 
-		OmitAWSVPCAnnotationsGrant: unexpectedAWSNodeSA != "",
+		OmitAWSVPCAnnotationsGrant: awsVPCUnprotected != "",
 	}
 
 	if bgpConfiguration.Spec.BindMode != nil {
@@ -1519,7 +1518,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	// The AWS VPC CNI's policy comes out before its grant, which the components below remove.
-	if unexpectedAWSNodeSA != "" {
+	if awsVPCUnprotected != "" {
 		if err = r.removeValidatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetAWSVPCAnnotations); err != nil {
 			return reconcile.Result{}, err
 		}
@@ -1540,7 +1539,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
-	if unexpectedAWSNodeSA == "" {
+	if awsVPCUnprotected == "" {
 		if err = r.updateValidatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetAWSVPCAnnotations); err != nil {
 			return reconcile.Result{}, err
 		}
@@ -2028,13 +2027,19 @@ func isHostedOpenShift(ctx context.Context, client client.Client) (bool, error) 
 	return (infra.Status.ControlPlaneTopology == "External"), nil
 }
 
-// unexpectedAWSNodeServiceAccount returns the service account the aws-node DaemonSet runs as when
-// that isn't aws-node. It returns "" when it is, or when there is no aws-node DaemonSet.
-func unexpectedAWSNodeServiceAccount(ctx context.Context, c client.Client) (string, error) {
+// awsVPCAnnotationsUnprotected says why the AWS VPC CNI's annotation must be left unprotected, or
+// returns "" when it can be protected. Only an AWS VPC CNI install needs aws-node to be let through,
+// and there it must run as kube-system:aws-node. A renamed DaemonSet is treated as missing, since
+// its account is unknown.
+func awsVPCAnnotationsUnprotected(ctx context.Context, c client.Client, cni *operatorv1.CNISpec) (string, error) {
+	if cni == nil || cni.Type != operatorv1.PluginAmazonVPC {
+		return "", nil
+	}
+
 	ds := &appsv1.DaemonSet{}
 	err := c.Get(ctx, types.NamespacedName{Name: awsNodeName, Namespace: metav1.NamespaceSystem}, ds)
 	if apierrors.IsNotFound(err) {
-		return "", nil
+		return fmt.Sprintf("The AWS VPC CNI is in use but there is no %s/%s DaemonSet", metav1.NamespaceSystem, awsNodeName), nil
 	} else if err != nil {
 		return "", err
 	}
@@ -2049,7 +2054,7 @@ func unexpectedAWSNodeServiceAccount(ctx context.Context, c client.Client) (stri
 	if sa == awsNodeName {
 		return "", nil
 	}
-	return sa, nil
+	return fmt.Sprintf("The %s DaemonSet runs as service account %q, not %q", awsNodeName, sa, awsNodeName), nil
 }
 
 func updateInstallationForAWSNode(i *operatorv1.Installation, ds *appsv1.DaemonSet) error {

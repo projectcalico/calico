@@ -3323,8 +3323,8 @@ var _ = Describe("CNI annotation admission policies", func() {
 	})
 })
 
-// The AWS VPC CNI's annotation is protected by its own policy, left out while aws-node runs as an
-// account the calico-aws-vpc-annotations binding doesn't name.
+// The AWS VPC CNI's annotation is protected by its own policy, left out on AWS VPC CNI installs
+// while aws-node is missing or runs as an account the calico-aws-vpc-annotations binding doesn't name.
 var _ = Describe("AWS VPC CNI annotation admission policy", func() {
 	const vapName = "protect-aws-vpc-annotations.projectcalico.org"
 
@@ -3376,22 +3376,31 @@ var _ = Describe("AWS VPC CNI annotation admission policy", func() {
 		}
 	})
 
-	DescribeTable("should report aws-node's service account only when it isn't aws-node",
-		func(ds *appsv1.DaemonSet, want string) {
+	// Only an AWS VPC CNI install needs aws-node let through. There, a missing aws-node DaemonSet
+	// may be one renamed along with its account, so it leaves the annotation unprotected too.
+	DescribeTable("should leave the annotation unprotected only when the AWS VPC CNI can't be let through",
+		func(cni *operator.CNISpec, ds *appsv1.DaemonSet, wantUnprotected string) {
 			var initial []client.Object
 			if ds != nil {
 				initial = append(initial, ds)
 			}
 			r := reconcilerWith(initial...)
-			got, err := unexpectedAWSNodeServiceAccount(ctx, r.client)
+			got, err := awsVPCAnnotationsUnprotected(ctx, r.client, cni)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(got).To(Equal(want))
+			if wantUnprotected == "" {
+				Expect(got).To(BeEmpty())
+			} else {
+				Expect(got).To(ContainSubstring(wantUnprotected))
+			}
 		},
-		Entry("no aws-node DaemonSet", nil, ""),
-		Entry("aws-node", awsNode("aws-node", ""), ""),
-		Entry("aws-node, in the deprecated field", awsNode("", "aws-node"), ""),
-		Entry("another account", awsNode("custom-cni", ""), "custom-cni"),
-		Entry("no account named, so default", awsNode("", ""), "default"),
+		Entry("Calico CNI, no aws-node DaemonSet", &operator.CNISpec{Type: operator.PluginCalico}, nil, ""),
+		Entry("Calico CNI, aws-node as another account", &operator.CNISpec{Type: operator.PluginCalico}, awsNode("custom-cni", ""), ""),
+		Entry("no CNI set", nil, nil, ""),
+		Entry("AWS VPC CNI, aws-node", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode("aws-node", ""), ""),
+		Entry("AWS VPC CNI, aws-node in the deprecated field", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode("", "aws-node"), ""),
+		Entry("AWS VPC CNI, no aws-node DaemonSet (renamed)", &operator.CNISpec{Type: operator.PluginAmazonVPC}, nil, "no kube-system/aws-node DaemonSet"),
+		Entry("AWS VPC CNI, another account", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode("custom-cni", ""), `service account "custom-cni"`),
+		Entry("AWS VPC CNI, no account named, so default", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode("", ""), `service account "default"`),
 	)
 
 	It("should install the policy in its own set", func() {
