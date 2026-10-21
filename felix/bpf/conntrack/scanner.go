@@ -273,7 +273,6 @@ func (s *Scanner) Scan() {
 
 	used := 0
 	cleaned := 0
-	numExpired := 0
 	maglevEntriesToLocal, maglevEntriesToRemote := 0, 0
 
 	batchK := make([][]byte, 0, rstBatchSize)
@@ -316,7 +315,6 @@ func (s *Scanner) Scan() {
 				continue
 			case ScanVerdictDelete, ScanVerdictDeleteImmediate:
 				// Entry should be deleted.
-				numExpired++
 			case ScanVerdictSendRST:
 				if ctVal.Flags()&v4.FlagSendRST != 0 {
 					// RST already set, no need to update.
@@ -375,7 +373,7 @@ func (s *Scanner) Scan() {
 			dummy := s.versionHelper.dummyKey()
 			s.updateCleanupMap(ctKey, dummy, uint64(ts), uint64(ts))
 		}
-		if numExpired > 0 && numExpired%cleanupBatchSize == 0 {
+		if s.bpfCleaner != nil && s.ctCleanupMap.Desired().Len() >= cleanupBatchSize {
 			cleaned += s.runBPFCleaner()
 		}
 		return maps.IterNone

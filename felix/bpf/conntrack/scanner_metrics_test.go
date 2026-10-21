@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/cleanupv1"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 )
@@ -123,6 +125,38 @@ func TestScannerSurvivesBPFCleanerError(t *testing.T) {
 	}
 }
 
+// Live entries visited after a full batch must not trigger more BPF cleaner runs.
+func TestScannerRunsBPFCleanerOncePerBatch(t *testing.T) {
+	now := mocktime.StartKTime
+	ctMap := &orderedMap{Map: mock.NewMockMap(conntrack.MapParams)}
+	// Expired entries sort before live ones, so every live entry is visited after the batch fills.
+	addEntries := func(firstOctet byte, n int, lastSeen time.Duration) {
+		for i := 0; i < n; i++ {
+			src := net.IPv4(10, firstOctet, byte(i>>8), byte(i)).To4()
+			k := conntrack.NewKey(conntrack.ProtoUDP, src, 1000, net.ParseIP("10.255.0.1").To4(), 53)
+			v := conntrack.NewValueNormal(lastSeen, 0, conntrack.Leg{}, conntrack.Leg{})
+			if err := ctMap.Update(k.AsBytes(), v.AsBytes()); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	addEntries(0, 1000, now-time.Hour)
+	addEntries(1, 100, now)
+
+	cleaner := &failingCleaner{}
+	lc := conntrack.NewLivenessScanner(timeouts.DefaultTimeouts(), false, 4,
+		conntrack.WithTimeShim(mocktime.New()))
+	s := conntrack.NewScanner(ctMap, conntrack.KeyFromBytes, conntrack.ValueFromBytes,
+		nil, "Disabled", mock.NewMockMap(cleanupv1.MapParams), 4, cleaner, lc)
+
+	s.Scan()
+
+	// One run for the full batch, one for the final flush.
+	if cleaner.runs != 2 {
+		t.Errorf("BPF cleaner ran %d times, want 2", cleaner.runs)
+	}
+}
+
 type failingCleaner struct {
 	runs int
 }
@@ -133,6 +167,25 @@ func (c *failingCleaner) Run(...conntrack.RunOpt) (*conntrack.CleanupContext, er
 }
 
 func (c *failingCleaner) Close() error {
+	return nil
+}
+
+// orderedMap iterates in key order; mock.Map iterates in Go map order.
+type orderedMap struct {
+	*mock.Map
+}
+
+func (m *orderedMap) Iter(f maps.IterCallback) error {
+	var keys []string
+	for k := range m.Contents {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if f([]byte(k), []byte(m.Contents[k])) == maps.IterDelete {
+			delete(m.Contents, k)
+		}
+	}
 	return nil
 }
 
