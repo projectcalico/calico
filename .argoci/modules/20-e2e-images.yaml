@@ -4,7 +4,7 @@ version: condensed-module
 defaults:
   timeout: 1h
   # In the build image directly, saving a nested container and a second pull.
-  useGoBuild: true
+  image: quay.io/danieljfox/go-build:1.27.1-llvm21.1.8-k8s1.37.1-cacheprog
 
 steps:
   - name: e2e-images-rapidclient-ci
