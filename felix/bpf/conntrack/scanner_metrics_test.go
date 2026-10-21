@@ -155,9 +155,9 @@ func TestScannerRunsBPFCleanerOncePerBatch(t *testing.T) {
 
 	s.Scan()
 
-	// One run for the full batch, one for the final flush.
-	if cleaner.runs != 2 {
-		t.Errorf("BPF cleaner ran %d times, want 2", cleaner.runs)
+	// The full batch empties the queue, so the final flush has nothing to run.
+	if cleaner.runs != 1 {
+		t.Errorf("BPF cleaner ran %d times, want 1", cleaner.runs)
 	}
 }
 

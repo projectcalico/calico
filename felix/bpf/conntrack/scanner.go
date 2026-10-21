@@ -383,11 +383,9 @@ func (s *Scanner) Scan() {
 	// We have scanned the entire map.
 	// Lets add it to the cleanup map.
 	if len(s.revNATKeyToFwdNATInfo) > 0 {
-		keysProcessed := 0
 		for k, v := range s.revNATKeyToFwdNATInfo {
 			// This is a forward entry and we haven't seen the rev entry.
 			// Maybe deleted by LRU
-			keysProcessed++
 			revKey := v.OtherNATKey()
 			ts := v.Timestamp()
 			revTS := v.RevTimestamp()
@@ -397,8 +395,7 @@ func (s *Scanner) Scan() {
 				s.updateCleanupMap(k, revKey, ts, revTS)
 			}
 			delete(s.revNATKeyToFwdNATInfo, k)
-			if keysProcessed%cleanupBatchSize == 0 {
-				// Run the bpf cleaner
+			if s.ctCleanupMap.Desired().Len() >= cleanupBatchSize {
 				cleaned += s.runBPFCleaner()
 			}
 		}
@@ -468,7 +465,7 @@ func (s *Scanner) Scan() {
 
 func (s *Scanner) runBPFCleaner() int {
 	// Run the BPF cleanup program.
-	if s.bpfCleaner != nil {
+	if s.bpfCleaner != nil && s.ctCleanupMap.Desired().Len() > 0 {
 		if err := s.ctCleanupMap.ApplyAllChanges(); err != nil {
 			log.WithError(err).Warn("Failed to write updates to conntrack cleanup BPF map.")
 		}
