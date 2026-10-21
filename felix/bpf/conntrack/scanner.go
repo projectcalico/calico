@@ -580,7 +580,7 @@ func (s *Scanner) AddFirstUnlocked(scanner EntryScanner) {
 	s.scanners = append([]EntryScanner{scanner}, s.scanners...)
 }
 
-// ipFamilyLabel returns the ip_version metric label value for ipFamily.
+// ipFamilyLabel panics on anything but 4 or 6, so a bad family fails loudly, not as a stray series.
 func ipFamilyLabel(ipFamily int) string {
 	if ipFamily != 4 && ipFamily != 6 {
 		log.Panicf("Invalid IP family %d", ipFamily)
