@@ -480,6 +480,9 @@ func (s *Scanner) runBPFCleaner() int {
 		}
 		s.ctCleanupMap.Desired().DeleteAll()
 		s.ctCleanupMap.Dataplane().DeleteAll()
+		if cr == nil {
+			return 0
+		}
 		return int(cr.NumKVsCleaned)
 	}
 	return 0

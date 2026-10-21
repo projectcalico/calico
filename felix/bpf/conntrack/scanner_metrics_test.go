@@ -15,6 +15,7 @@
 package conntrack_test
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"testing"
@@ -23,6 +24,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/conntrack/cleanupv1"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
@@ -92,6 +94,46 @@ func TestScannerMetricsPerIPFamily(t *testing.T) {
 			t.Errorf("%s increased by %v, want %v", name, d, want)
 		}
 	}
+}
+
+// A failing BPF cleaner must not panic the sweep, and its batch is not counted as cleaned.
+func TestScannerSurvivesBPFCleanerError(t *testing.T) {
+	now := mocktime.StartKTime
+	ctMap := mock.NewMockMap(conntrack.MapParams)
+	k := conntrack.NewKey(conntrack.ProtoUDP, net.ParseIP("10.0.0.1").To4(), 1000,
+		net.ParseIP("10.0.0.2").To4(), 53)
+	v := conntrack.NewValueNormal(now-time.Hour, 0, conntrack.Leg{}, conntrack.Leg{})
+	if err := ctMap.Update(k.AsBytes(), v.AsBytes()); err != nil {
+		t.Fatal(err)
+	}
+
+	cleaner := &failingCleaner{}
+	lc := conntrack.NewLivenessScanner(timeouts.DefaultTimeouts(), false, 4,
+		conntrack.WithTimeShim(mocktime.New()))
+	s := conntrack.NewScanner(ctMap, conntrack.KeyFromBytes, conntrack.ValueFromBytes,
+		nil, "Disabled", mock.NewMockMap(cleanupv1.MapParams), 4, cleaner, lc)
+
+	s.Scan()
+
+	if cleaner.runs == 0 {
+		t.Fatal("BPF cleaner was not run")
+	}
+	if v := gatherByFamily(t)["felix_bpf_conntrack_cleaned/4"]; v != 0 {
+		t.Errorf("felix_bpf_conntrack_cleaned/4 = %v, want 0", v)
+	}
+}
+
+type failingCleaner struct {
+	runs int
+}
+
+func (c *failingCleaner) Run(...conntrack.RunOpt) (*conntrack.CleanupContext, error) {
+	c.runs++
+	return nil, errors.New("injected failure")
+}
+
+func (c *failingCleaner) Close() error {
+	return nil
 }
 
 func gatherByFamily(t *testing.T) map[string]float64 {
