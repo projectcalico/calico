@@ -107,7 +107,10 @@ case "${cmd}" in
       echo "remote-cache: ${dir} does not exist, not storing ${key}" >&2
       exit 0
     fi
-    tar -C "${dir}" -cf - . | zstd -q -T0 -3 -o "${tmp}/cache.tar.zst"
+    if ! tar -C "${dir}" -cf - . | zstd -q -T0 -3 -o "${tmp}/cache.tar.zst"; then
+      echo "remote-cache: could not pack ${dir}, not storing ${key}" >&2
+      exit 0
+    fi
     if ! s3_curl PUT "$(sha256sum "${tmp}/cache.tar.zst" | cut -d' ' -f1)" \
       -T "${tmp}/cache.tar.zst" -o /dev/null; then
       echo "remote-cache: failed to store ${key}" >&2

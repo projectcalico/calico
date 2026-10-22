@@ -42,7 +42,8 @@ fetch_image() {
 # Fetch the pre-built images if they are available, and re-upload them into the
 # GCS fv-artifacts directory for the test VM. These were built by the "Build: *"
 # blocks in the Prerequisites stage.
-for img in calico-image.tar.zst node-image.tar.zst whisker-image.tar.zst; do
+for img in calico-image.tar.zst node-image.tar.zst whisker-image.tar.zst \
+    operator-image.tar.zst third-party-images.tar.zst; do
   if fetch_image "${img}"; then
     echo "Found pre-built ${img}, including in artifacts."
     gcloud storage cp "/tmp/${img}" "${GCS_WORKFLOW_DIR}/node/fv-artifacts/${img}"
@@ -51,7 +52,10 @@ for img in calico-image.tar.zst node-image.tar.zst whisker-image.tar.zst; do
   fi
 done
 
+# The VM builds without the remote cache, and the restored Go cache is most of
+# the tree's size.
 tar -czf /tmp/working-copy.tgz \
+  --exclude=${CALICO_DIR_NAME}/.go-pkg-cache \
   --exclude=${CALICO_DIR_NAME}/artifacts \
   ${CALICO_DIR_NAME}
 gcloud storage cp /tmp/working-copy.tgz "${GCS_WORKFLOW_DIR}/node/fv-artifacts/"

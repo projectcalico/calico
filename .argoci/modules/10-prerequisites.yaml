@@ -111,6 +111,9 @@ steps:
       make check-dirty
 
   - name: check-manifests
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     requests: {cpu: 2750m, memory: 2.5Gi}
     services: [docker]
     changes:

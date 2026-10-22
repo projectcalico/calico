@@ -137,10 +137,26 @@ bin/pilot-agent-$(ARCH): $(ISTIO_DOWNLOADED)
 bin/pilot-discovery-$(ARCH): $(ISTIO_DOWNLOADED)
 	$(call build_binary_dir,istio,./pilot/cmd/pilot-discovery,../$@)
 
+# sccache cannot cache crates that link (binaries, proc-macros), so a warm
+# compile cache still leaves minutes of cargo. The binary itself is keyed on
+# everything that goes into it.
+ZTUNNEL_CACHE_KEY = istio/ztunnel-$(ARCH)-$(shell ( \
+		echo $(ISTIO_VERSION) $(CALICO_RUST_BUILD) $(RUST_TARGET) && \
+		cat ztunnel-patches/01-custom-patches/*.patch \
+	) | sha256sum | cut -c1-16)
+ZTUNNEL_CACHE_DIR = .cache/$(ZTUNNEL_CACHE_KEY)
+
 bin/ztunnel-$(ARCH): $(ZTUNNEL_DOWNLOADED)
-	$(DOCKER_RUST_BUILD) \
-		sh -c 'cd ztunnel && cargo build --release $(if $(GOMAXPROCS),--jobs $(GOMAXPROCS)) $(SCCACHE_SHOW_STATS)'
-	cp ztunnel/out/rust/$(RUST_TARGET)/release/ztunnel bin/ztunnel-$(ARCH)
+	$(call remote_cache_restore,$(ZTUNNEL_CACHE_KEY),$(ZTUNNEL_CACHE_DIR))
+	if [ ! -f $(ZTUNNEL_CACHE_DIR)/ztunnel ]; then \
+		$(DOCKER_RUST_BUILD) \
+			sh -c 'cd ztunnel && cargo build --release $(if $(GOMAXPROCS),--jobs $(GOMAXPROCS)) $(SCCACHE_SHOW_STATS)' && \
+		mkdir -p $(ZTUNNEL_CACHE_DIR) && \
+		cp ztunnel/out/rust/$(RUST_TARGET)/release/ztunnel $(ZTUNNEL_CACHE_DIR)/ztunnel; \
+	fi
+	$(call remote_cache_store,$(ZTUNNEL_CACHE_KEY),$(ZTUNNEL_CACHE_DIR))
+	mkdir -p bin
+	cp $(ZTUNNEL_CACHE_DIR)/ztunnel bin/ztunnel-$(ARCH)
 
 ###############################################################################
 # Image
@@ -182,18 +198,13 @@ include ../hack/rpms/nftables/image.mk
 nft-rpms-image: | register
 	$(MAKE) -C ../hack/rpms/nftables image ARCH=$(ARCH)
 
+$(NFT_RPMS_CONTEXT): | nft-rpms-image
+	$(NFT_RPMS_EXPORT_CONTEXT)
+
 # istio-install-cni image
 $(ISTIO_CNI_IMAGE): $(ISTIO_CNI_IMAGE_CREATED)
-# Drop --pull from DOCKER_BUILD: with --pull=always, buildkit treats the
-# nft-rpms build context (docker-image://calico/nftables-rpms:<sha>-<arch>)
-# as a registry pull and fails when that tag hasn't been pushed yet (PR
-# builds, fresh local builds). Other base images are pinned by tag so cache
-# freshness is fine without --pull.
-$(ISTIO_CNI_IMAGE_CREATED): DOCKER_PULL :=
-# The s3 cache's builder cannot see the locally loaded nft-rpms image either.
-$(ISTIO_CNI_IMAGE_CREATED): DOCKER_BUILD_CACHE :=
-$(ISTIO_CNI_IMAGE_CREATED): Dockerfile.install-cni bin/install-cni-$(ARCH) bin/istio-cni-$(ARCH) | register nft-rpms-image
-	$(DOCKER_BUILD) --build-context nft-rpms=docker-image://$(NFT_RPMS_IMAGE) -t $(ISTIO_CNI_IMAGE):latest-$(ARCH) -f Dockerfile.install-cni .
+$(ISTIO_CNI_IMAGE_CREATED): Dockerfile.install-cni bin/install-cni-$(ARCH) bin/istio-cni-$(ARCH) | register $(NFT_RPMS_CONTEXT)
+	$(DOCKER_BUILD) --build-context nft-rpms=$(NFT_RPMS_CONTEXT) -t $(ISTIO_CNI_IMAGE):latest-$(ARCH) -f Dockerfile.install-cni .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(ISTIO_CNI_IMAGE) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 

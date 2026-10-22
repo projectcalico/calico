@@ -40,7 +40,11 @@ function upload_fv_scripts() {
   ${ASO_DIR}/scp-to-windows.sh 0 ./windows/run-fv.ps1 'c:\k\run-fv.ps1'
   echo "Copied run-fv.ps1 to Windows node"
 
-  make -C "$CALICO_HOME/felix" fv/win-fv.exe
+  # CI can supply the binary from an earlier build. Make would still build the
+  # Linux calico image and libbpf it lists as prerequisites.
+  if [[ -z "${WIN_FV_PREBUILT:-}" ]]; then
+    make -C "$CALICO_HOME/felix" fv/win-fv.exe
+  fi
 
   ${ASO_DIR}/scp-to-windows.sh 0 $CALICO_HOME/felix/fv/win-fv.exe 'c:\k\win-fv.exe'
   echo "Copied win-fv.exe to Windows node"

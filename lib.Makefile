@@ -985,9 +985,17 @@ static-checks: $(LOCAL_CHECKS)
 
 LINT_ARGS ?= --max-issues-per-linter 0 --max-same-issues 0 --timeout 8m
 
+# Under GOCACHE, so it is the same directory whether lint runs in docker or on
+# the host. The remote copy is keyed by week because a key is never rewritten:
+# entries are content-addressed, so a stale copy is still partly useful.
+GOLANGCI_LINT_CACHE_DIR = $(LOCAL_GO_PKG_CACHE)/golangci-lint
+GOLANGCI_LINT_CACHE_KEY = golangci-lint/$(subst /,-,$(PACKAGE_NAME))-$(GO_BUILD_VER)-$(shell date -u +%G-W%V)
+
 .PHONY: golangci-lint
 golangci-lint: $(GENERATED_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) golangci-lint run $(LINT_ARGS)'
+	$(call remote_cache_restore,$(GOLANGCI_LINT_CACHE_KEY),$(GOLANGCI_LINT_CACHE_DIR))
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) GOLANGCI_LINT_CACHE=$${GOCACHE}/golangci-lint golangci-lint run $(LINT_ARGS)'
+	$(call remote_cache_store,$(GOLANGCI_LINT_CACHE_KEY),$(GOLANGCI_LINT_CACHE_DIR))
 
 REPO_REL_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else echo '..'; fi )
 

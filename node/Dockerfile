@@ -22,13 +22,12 @@ FROM ${BPFTOOL_IMAGE} AS bpftool
 
 FROM ${BIRD_IMAGE} AS bird
 
-# nft-rpms is supplied as a named build context
-# (--build-context nft-rpms=docker-image://<NFT_RPMS_IMAGE>) by node/Makefile.
-# Using a build context rather than FROM ${NFT_RPMS_IMAGE} avoids buildkit's
-# `--pull=always` trying to fetch our locally-built/loaded producer image
-# from a registry. The image is built by hack/rpms/nftables/ and carries the
-# patched nftables + libnftnl RPMs (referenced via COPY --from=nft-rpms
-# below). The tag is content-addressed; see hack/rpms/nftables/Makefile.
+# nft-rpms is a named build context: a directory holding the /rpms and /src
+# of the image hack/rpms/nftables/ builds, with the patched nftables +
+# libnftnl RPMs (referenced via COPY --from=nft-rpms below). A directory rather
+# than FROM ${NFT_RPMS_IMAGE}, because that image may exist only in the local
+# daemon, where neither a registry pull nor the docker-container builder can
+# reach it. See hack/rpms/nftables/image.mk.
 
 # Use this build stage to install iptables-legacy and build runit binaries.
 # We need to build runit because there aren't any rpms for it in AlmaLinux or ubi repositories.

@@ -6,7 +6,8 @@ defaults:
 
 steps:
   - name: node-kind-cluster-tests
-    depends: [build-calico-image, build-node-image, build-whisker-image, check-go]
+    depends: [build-calico-image, build-node-image, build-whisker-image,
+              build-operator-image, build-third-party-images, check-go]
     requests: {cpu: 2000m, memory: 4Gi}
     services:
       - docker
@@ -16,8 +17,6 @@ steps:
           - name: google-service-account-for-gce-key.json
             as: GCE_SERVICE_ACCOUNT_KEY
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
       - name: COMPONENT
         value: node
       # In priority order, falling back on a stockout or exhausted quota.  C3

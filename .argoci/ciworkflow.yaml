@@ -76,9 +76,12 @@ globalPrologue: |
   # A VM step gets no secrets, so it builds without the remote cache. Image
   # layers and cached directories are content-addressed, so a PR can read what
   # its branch wrote; only branch builds write, as with the Go cache below.
+  #
+  # TEMPORARY: PR runs write too, so this PR can measure warm image and Rust
+  # caches. Restore the PR exclusion before merging.
   if [ -n "${GOCACHE_ACCESS_KEY:-}" ]; then
     export REMOTE_BUILD_CACHE=true
-    if [ "${CI_GIT_REF_TYPE}" != PR ] && [ "${CI_GIT_REF_TYPE}" != TAG ]; then
+    if [ "${CI_GIT_REF_TYPE}" != TAG ]; then
       export REMOTE_BUILD_CACHE_WRITE=true
     fi
   fi
@@ -99,11 +102,17 @@ globalPrologue: |
   # VMs, and it must be the directory the docker builds mount modules from.
   GO_MOD_ROOT="${GOPATH:-${HOME}/go}"
   export GO_MOD_ROOT="${GO_MOD_ROOT%%:*}"
+  #
+  # The remote Go cache serves builds object by object, so the whole-directory
+  # tarball would only cost its download.
   if [ -n "${BUILD_CACHE_GROUP:-}" ]; then
     mkdir -p "${GO_MOD_ROOT}"
-    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache restore "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) & build=$!
+    build=
+    if [ "${REMOTE_BUILD_CACHE:-}" != true ]; then
+      ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache restore "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) & build=$!
+    fi
     ( cd "${GO_MOD_ROOT}" && artifact cache restore "go-mod-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) & mods=$!
-    wait "$build" "$mods" || true
+    wait $build "$mods" || true
   fi
 
 # Only a passing branch build is worth handing to the next run; a PR's cache
