@@ -2556,13 +2556,11 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             m_spawn.mock_calls,
         )
 
-    @mock.patch("eventlet.spawn")
-    def test_try_to_update_port_status_fail_sqlalchemy(self, _m_spawn):
+    def test_try_to_update_port_status_fail_sqlalchemy(self):
         # As above, but for the non-DBError arm of the handler.  Worth its own
         # test because that "except sa_exc.SQLAlchemyError" is only evaluated
         # when something other than a DBError reaches it.
         self.driver._get_db()
-        self.driver._init_start_endpoint_status_watcher()
 
         def m_update_port_status(context, port_id, status, host=None):
             raise lib.SQLAlchemyError()
