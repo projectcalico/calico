@@ -25,6 +25,7 @@
 # as `calico-dhcp-agent`) does the monkey_patch *before* importing this
 # module, so all the imports below still happen under the patched socket /
 # threading machinery in production.
+import collections
 import logging
 import os
 import re
@@ -164,11 +165,6 @@ def make_net_model(net_spec):
         net_model._ns_name = None
 
     return net_model
-
-
-def split_endpoint_name(name):
-    parts = name.replace("--", "#").split("-")
-    return tuple([p.replace("#", "-") for p in parts])
 
 
 class MTUWatcher(object):
@@ -478,8 +474,13 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             self, datamodel_v2.subnet_dir(self.region_string)
         )
 
-        # Cache of current local endpoint IDs.
-        self.local_endpoint_ids = set()
+        # Map from each local endpoint ID to the WEPs in etcd for it, each as the port
+        # data its name last gave, most recently set last.  The cache below holds one
+        # port per ID, but a port's WEP name includes the VM's ID, so while a port
+        # moves to another VM there can briefly be a WEP under each name, with
+        # different data (such as the VM's hostname), and their sets and deletions can
+        # arrive in any order.
+        self.local_endpoint_names = collections.defaultdict(dict)
 
     def start(self):
         eventlet.spawn(self.dnsmasq_updater.start)
@@ -533,7 +534,9 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
           'ipv6_ra_mode': 'dhcpv6-stateful' | 'dhcpv6-stateless' }
         """
         try:
-            hostname, orchestrator, workload_id, endpoint_id = split_endpoint_name(name)
+            hostname, orchestrator, workload_id, endpoint_id = (
+                datamodel_v3.split_endpoint_name(name)
+            )
         except ValueError:
             # For some reason this endpoint's name does not have the expected
             # form.  Ignore it.
@@ -632,11 +635,16 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # Report this at INFO level if it is a new port.  Note, we
         # come through this code periodically for existing ports also,
         # because of how we watch the etcd DB for changes.
-        if endpoint_id not in self.local_endpoint_ids:
+        if endpoint_id not in self.local_endpoint_names:
             LOG.info("New port: %s", port)
-            self.local_endpoint_ids.add(endpoint_id)
         else:
             LOG.debug("Refresh already known port: %s", port)
+        names = self.local_endpoint_names[endpoint_id]
+
+        # Python dicts are ordered by time of insertion.  Hence pop here, before
+        # re-inserting, so that the current name will be at the end of `names.keys()`.
+        names.pop(name, None)
+        names[name] = port
 
         # Add this port into the NetModel.
         self.agent.cache.put_port(dhcp.DictModel(port))
@@ -661,6 +669,10 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
     # Note, on_mtu_change is called from MTU watcher's thread.
     def on_mtu_change(self, id, mtu):
+        # Each WEP name's stored data too, in case it is put back in the cache.
+        for named_port in self.local_endpoint_names.get(id, {}).values():
+            named_port["extra_dhcp_opts"] = [self.get_mtu_option(mtu)]
+
         port = self.agent.cache.get_port_by_id(id)
         if port:
             LOG.info("MTU changed to %s for %s (%s)", mtu, port.device_id, id)
@@ -749,17 +761,40 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
     def on_endpoint_delete(self, response_ignored, name):
         """Handler for endpoint deletion."""
         try:
-            hostname, orchestrator, workload_id, endpoint_id = split_endpoint_name(name)
+            hostname, orchestrator, workload_id, endpoint_id = (
+                datamodel_v3.split_endpoint_name(name)
+            )
         except ValueError:
             # For some reason this endpoint's name does not have the expected
             # form.  Ignore it.
             LOG.warning("Unexpected form for endpoint name: %s", name)
             return
 
-        # Remove endpoint ID from our cache.  Note, it might not be
-        # there because we haven't checked whether the endpoint just
-        # deleted is a local one; hence 'discard' instead of 'remove'.
-        self.local_endpoint_ids.discard(endpoint_id)
+        # Keep the port while any other WEP name for it still exists, with that name's
+        # data, since the cache may hold the deleted name's.  Note, the endpoint might
+        # not be in our map at all, because we haven't checked whether the endpoint
+        # just deleted is a local one.
+        names = self.local_endpoint_names.get(endpoint_id)
+        if names is not None:
+            names.pop(name, None)
+            if names:
+                # Thanks to Python dict ordering, the last entry in `names.items()` will
+                # be the remaining (i.e. not since deleted) name and port that we saw
+                # most recently in `on_endpoint_set`.
+                remaining_name, remaining_port = next(reversed(names.items()))
+                LOG.info(
+                    "Deleted %s, but port %s is still served by %s",
+                    name,
+                    endpoint_id,
+                    remaining_name,
+                )
+                self.agent.cache.put_port(dhcp.DictModel(remaining_port))
+
+                # As when a port is first set, wait for its MTU before updating.
+                if remaining_port["extra_dhcp_opts"]:
+                    self._update_dnsmasq(remaining_port["network_id"])
+                return
+            del self.local_endpoint_names[endpoint_id]
 
         # Find the corresponding port in the DHCP agent's cache.
         port = self.agent.cache.get_port_by_id(endpoint_id)
@@ -776,6 +811,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # Dnsmasqs if no longer needed.  Also remove all port and subnet
         # information.
         LOG.debug("Reset cache for new snapshot")
+        self.local_endpoint_names.clear()
         for network_id in list(self.agent.cache.get_network_ids()):
             self.dirty_networks.add(network_id)
             _fix_network_cache_port_lookup(self.agent, network_id)
