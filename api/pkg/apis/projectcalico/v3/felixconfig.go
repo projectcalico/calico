@@ -1366,7 +1366,7 @@ type ProtoPort struct {
 	Net string `json:"net,omitempty"`
 }
 
-// +kubebuilder:validation:Pattern=`^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$`
+// +kubebuilder:validation:Pattern=`^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$`
 type BPFConntrackTimeout string
 
 type BPFConntrackTimeouts struct {
