@@ -34,6 +34,7 @@ run_test() {
   NEW_PR_LABELS=""
   EXTRA_LABELS=""
   META_BLOCK=""
+  PULL_SHAS=()
   SRC_MAIN_REPO_ORG="projectcalico"
   SRC_MAIN_REPO_NAME="calico"
   DST_MAIN_REPO_ORG="projectcalico"
@@ -348,6 +349,105 @@ PULLLINK=( "projectcalico/calico#100" "projectcalico/calico#101" )
 build-pr-description
 
 assert_equals "$NEW_PR_LABELS" "release-note-not-required" "labels" &&
+pass
+
+###############################################################################
+# Test 12: Merge Cat details block generated for a single merged PR
+###############################################################################
+run_test "details block for a single PR"
+
+rel="release-v3.14"
+PULL_TITLES=( "A change" )
+PULL_BODIES=( "Body." )
+PULL_LABELS=( "enhancement" )
+PULLLINK=( "projectcalico/calico#100" )
+PULL_SHAS=( "0123456789abcdef0123456789abcdef01234567" )
+
+build-pr-description
+
+expected_body="**Cherry-pick history**
+- Pick onto **release-v3.14**: projectcalico/calico#100
+
+Body.
+<details>
+<summary><b>Cherry-Pick PR details</b></summary>
+
+- **Original PR ID**: 100
+- **Original Commit SHA**: 0123456789
+- **Source Repo**: \`projectcalico/calico\`
+- **Target Repo**: \`projectcalico/calico\`
+- **Target Branch**: \`release-v3.14\`
+</details>"
+assert_equals "$NEW_PR_BODY" "$expected_body" "body" &&
+pass
+
+###############################################################################
+# Test 13: Merge Cat details block generated for a multi-PR pick
+###############################################################################
+run_test "details block for a multi-PR pick"
+
+rel="release-v3.14"
+SRC_MAIN_REPO_ORG="tigera"
+SRC_MAIN_REPO_NAME="calico-private"
+PULL_TITLES=( "First" "Second" )
+PULL_BODIES=( "One." "Two." )
+PULL_LABELS=( "bug" "bug" )
+PULLLINK=( "tigera/calico-private#100" "tigera/calico-private#101" )
+PULL_SHAS=( "aaaaaaaaaaaaaaaaaaaa" "bbbbbbbbbbbbbbbbbbbb" )
+
+build-pr-description
+
+expected_meta="<details>
+<summary><b>Cherry-Pick PR details</b></summary>
+
+- **Original PR IDs**: #100, #101
+- **Original Commit SHAs**: aaaaaaaaaa, bbbbbbbbbb
+- **Source Repo**: \`tigera/calico-private\`
+- **Target Repo**: \`projectcalico/calico\`
+- **Target Branch**: \`release-v3.14\`
+</details>"
+assert_equals "${NEW_PR_BODY#*$'\n'Two.$'\n'}" "$expected_meta" "details block" &&
+pass
+
+###############################################################################
+# Test 14: No details block when any picked PR is unmerged
+###############################################################################
+run_test "no details block for an unmerged PR"
+
+rel="release-v3.14"
+PULL_TITLES=( "First" "Second" )
+PULL_BODIES=( "One." "Two." )
+PULL_LABELS=( "bug" "bug" )
+PULLLINK=( "projectcalico/calico#100" "projectcalico/calico#101" )
+PULL_SHAS=( "aaaaaaaaaaaaaaaaaaaa" "" )
+
+build-pr-description
+
+assert_equals "${NEW_PR_BODY##*$'\n'}" "" "body ends without a details block" &&
+assert_equals "$(grep -c 'Original' <<<"$NEW_PR_BODY")" "0" "no Original lines" &&
+pass
+
+###############################################################################
+# Test 15: META_BLOCK replaces the generated details block
+###############################################################################
+run_test "META_BLOCK overrides the details block"
+
+rel="release-v3.14"
+META_BLOCK="custom block"
+PULL_TITLES=( "A change" )
+PULL_BODIES=( "Body." )
+PULL_LABELS=( "enhancement" )
+PULLLINK=( "projectcalico/calico#100" )
+PULL_SHAS=( "0123456789abcdef" )
+
+build-pr-description
+
+expected_body="**Cherry-pick history**
+- Pick onto **release-v3.14**: projectcalico/calico#100
+
+Body.
+custom block"
+assert_equals "$NEW_PR_BODY" "$expected_body" "body" &&
 pass
 
 ###############################################################################
