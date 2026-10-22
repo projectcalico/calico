@@ -43,6 +43,7 @@ type StagedNetworkPolicy struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))",message="services are not allowed in an egress rule source",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.ingress) || self.ingress.all(r, !has(r.destination) || !has(r.destination.services))",message="services are not allowed in an ingress rule destination",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.egress) || self.egress.all(r, !has(r.http))",message="HTTP match is not allowed in egress rules",reason=FieldValueForbidden
 type StagedNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
 	// +kubebuilder:default=Set

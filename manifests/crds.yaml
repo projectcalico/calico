@@ -5152,6 +5152,9 @@ spec:
                     "!has(self.ingress) || self.ingress.all(r, !has(r.source) || !has(r.source.services)
                     || (has(r.source.services.namespace) && size(r.source.services.namespace)
                     > 0))"
+                - message: HTTP match is not allowed in egress rules
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.http))"
           type: object
       served: true
       storage: true
@@ -7909,6 +7912,9 @@ spec:
                   rule:
                     "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
                     || !has(r.destination.services))"
+                - message: HTTP match is not allowed in egress rules
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.http))"
           type: object
       served: true
       storage: true
@@ -9440,6 +9446,9 @@ spec:
                     "!has(self.ingress) || self.ingress.all(r, !has(r.source) || !has(r.source.services)
                     || (has(r.source.services.namespace) && size(r.source.services.namespace)
                     > 0))"
+                - message: HTTP match is not allowed in egress rules
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.http))"
           type: object
       served: true
       storage: true
@@ -11380,6 +11389,9 @@ spec:
                   rule:
                     "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
                     || !has(r.destination.services))"
+                - message: HTTP match is not allowed in egress rules
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.http))"
           type: object
       served: true
       storage: true
