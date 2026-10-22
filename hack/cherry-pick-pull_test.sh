@@ -316,6 +316,41 @@ assert_equals "$NEW_PR_BODY" "$expected_body" "body" &&
 pass
 
 ###############################################################################
+# Test 10: release-note-required wins over release-note-not-required
+###############################################################################
+run_test "release-note-required wins in a multi-PR pick"
+
+rel="release-v3.14"
+PULL_TITLES=( "Test lib cleanup" "Fix widget rendering" )
+PULL_BODIES=( "Test body." "Fix body." )
+PULL_LABELS=( "docs-not-required
+release-note-not-required" "docs-not-required
+release-note-required
+cherry-pick-candidate" )
+PULLLINK=( "projectcalico/calico#100" "projectcalico/calico#101" )
+
+build-pr-description
+
+assert_equals "$NEW_PR_LABELS" "docs-not-required,release-note-required" "labels" &&
+pass
+
+###############################################################################
+# Test 11: release-note-not-required kept when no PR needs a release note
+###############################################################################
+run_test "release-note-not-required kept when unanimous"
+
+rel="release-v3.14"
+PULL_TITLES=( "Test lib cleanup" "CI tweak" )
+PULL_BODIES=( "Test body." "CI body." )
+PULL_LABELS=( "release-note-not-required" "release-note-not-required" )
+PULLLINK=( "projectcalico/calico#100" "projectcalico/calico#101" )
+
+build-pr-description
+
+assert_equals "$NEW_PR_LABELS" "release-note-not-required" "labels" &&
+pass
+
+###############################################################################
 # Summary
 ###############################################################################
 echo
