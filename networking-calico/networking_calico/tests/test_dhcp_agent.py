@@ -127,8 +127,8 @@ class TestDhcpAgent(base.BaseTestCase):
             etcdobj.start.assert_called_with()
 
         # Notify initial snapshot (empty).
-        snapshot_data = agent.etcd._pre_snapshot_hook()
-        agent.etcd._post_snapshot_hook(snapshot_data)
+        agent.etcd._pre_snapshot_hook()
+        agent.etcd._post_snapshot_hook()
         agent.etcd.dnsmasq_updater.update_network.assert_not_called()
 
         # Notify subnets.
@@ -355,9 +355,9 @@ class TestDhcpAgent(base.BaseTestCase):
 
         # The old name was deleted while the watcher was disconnected, so the new
         # snapshot has only the new one.
-        snapshot_data = agent.etcd._pre_snapshot_hook()
+        agent.etcd._pre_snapshot_hook()
         agent.etcd.on_endpoint_set(self.ENDPOINT, new_name)
-        agent.etcd._post_snapshot_hook(snapshot_data)
+        agent.etcd._post_snapshot_hook()
 
         agent.etcd.on_endpoint_delete(None, new_name)
 
@@ -374,7 +374,7 @@ class TestDhcpAgent(base.BaseTestCase):
 
         with mock.patch.object(agent, "call_driver") as call_driver:
             # Notify a non-empty initial snapshot.
-            snapshot_data = agent.etcd._pre_snapshot_hook()
+            agent.etcd._pre_snapshot_hook()
             agent.etcd.on_endpoint_set(
                 EtcdResponse(
                     value=json.dumps(
@@ -391,7 +391,7 @@ class TestDhcpAgent(base.BaseTestCase):
                 ),
                 make_endpoint_name("endpoint-4"),
             )
-            agent.etcd._post_snapshot_hook(snapshot_data)
+            agent.etcd._post_snapshot_hook()
 
             # Check DHCP driver was not troubled - because the subnet data was
             # missing and so the port could not be processed further.
