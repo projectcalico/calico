@@ -351,6 +351,10 @@ var _ = Describe("Static", func() {
 								},
 								// Outgoing host endpoint chains.
 								{Action: iptables.JumpAction{Target: ChainDispatchToHostEndpointForward}},
+								{
+									Match:  iptables.Match().InInterface("cali+"),
+									Action: iptables.JumpAction{Target: ChainLBNoEndpoints},
+								},
 								{Action: iptables.JumpAction{Target: ChainCIDRBlock}},
 							},
 						}))
@@ -1672,6 +1676,10 @@ var _ = Describe("Static", func() {
 						},
 						// Outgoing host endpoint chains.
 						{Action: iptables.JumpAction{Target: ChainDispatchToHostEndpointForward}},
+						{
+							Match:  iptables.Match().InInterface("cali+"),
+							Action: iptables.JumpAction{Target: ChainLBNoEndpoints},
+						},
 						{Action: iptables.JumpAction{Target: ChainCIDRBlock}},
 					},
 				}))
