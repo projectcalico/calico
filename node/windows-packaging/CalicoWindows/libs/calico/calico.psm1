@@ -27,7 +27,7 @@ function Test-CalicoConfiguration()
     Write-Host "Validating configuration..."
     if (!$env:CNI_BIN_DIR)
     {
-        throw "Config not loaded?."
+        throw "Configuration is not loaded."
     }
     if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp" -OR $env:CALICO_NETWORKING_BACKEND -EQ "vxlan") {
         if (fileIsMissing($env:CNI_BIN_DIR))
@@ -60,7 +60,7 @@ function Test-CalicoConfiguration()
     {
         if (fileIsMissing($env:KUBECONFIG))
         {
-            throw "kubeconfig file $env:KUBECONFIG doesn't exist.  Please update the configuration to match. " +  `
+            throw "kubeconfig file $env:KUBECONFIG doesn't exist.  Please update the configuration to match " +  `
                     "the location of your kubeconfig file."
         }
     }

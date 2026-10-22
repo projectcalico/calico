@@ -16,6 +16,8 @@ describe('<Error />', () => {
 
         renderWithRouter(<Error buttonLabel={buttonLabel} navigateTo={path} />);
 
+        expect(screen.getByText('Oops, something went wrong.')).toBeInTheDocument();
+
         fireEvent.click(screen.getByRole('button', { name: buttonLabel }));
 
         expect(navigateMock).toHaveBeenCalledWith(path);
