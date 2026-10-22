@@ -181,9 +181,13 @@ trap return_to_kansas EXIT
 #   PULL_LABELS[]     - array of PR labels (one element per PR, labels
 #                       within each element separated by newlines)
 #   PULLLINK[]        - array of PR links (e.g. "org/repo#123")
+#   PULL_SHAS[]       - (optional) array of the PRs' merge commit SHAs, empty
+#                       for an unmerged PR
 #   SRC_MAIN_REPO_ORG, SRC_MAIN_REPO_NAME
 #   DST_MAIN_REPO_ORG, DST_MAIN_REPO_NAME
 #   EXTRA_LABELS      - (optional) extra comma-separated labels to append
+#   META_BLOCK        - (optional) text to end the body with, in place of the
+#                       generated cherry-pick details block
 #
 # Outputs (set after calling):
 #   NEW_PR_TITLE       - generated PR title (without [relshort] prefix)
@@ -268,9 +272,56 @@ function build-pr-description() {
     fi
   fi
 
+  local meta_block="${META_BLOCK:-}"
+  if [[ -z "${meta_block}" ]]; then
+    meta_block=$(build-meta-block)
+  fi
+
   NEW_PR_TITLE="${new_title}"
-  NEW_PR_BODY="${new_header}${new_body}"$'\n'"${META_BLOCK:-}"
+  NEW_PR_BODY="${new_header}${new_body}"$'\n'"${meta_block}"
   NEW_PR_LABELS="${new_labels}"
+}
+
+# Merge Cat (the backport-tracking bot) recognises a pick by exact match on the
+# "**Original PR ID**:" and "**Original Commit SHA**:" labels below, and
+# otherwise keeps reminding the author that the pick is outstanding.  An
+# unmerged PR has no SHA to match on, so then no block is generated.
+function build-meta-block() {
+  local -a shas=( "${PULL_SHAS[@]+"${PULL_SHAS[@]}"}" )
+  if [[ "${#shas[@]}" -ne "${#PULLLINK[@]}" ]]; then
+    return
+  fi
+  local sha
+  for sha in "${shas[@]}"; do
+    if [[ -z "${sha}" ]]; then
+      return
+    fi
+  done
+
+  local plural="" ids="" sha_list="" idx
+  if [[ "${#PULLLINK[@]}" -gt 1 ]]; then
+    plural="s"
+  fi
+  for idx in "${!PULLLINK[@]}"; do
+    if [[ -n "${plural}" ]]; then
+      ids+="${ids:+, }#${PULLLINK[idx]##*#}"
+    else
+      ids="${PULLLINK[idx]##*#}"
+    fi
+    sha_list+="${sha_list:+, }${shas[idx]:0:10}"
+  done
+
+  cat <<EOF
+<details>
+<summary><b>Cherry-Pick PR details</b></summary>
+
+- **Original PR ID${plural}**: ${ids}
+- **Original Commit SHA${plural}**: ${sha_list}
+- **Source Repo**: \`${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME}\`
+- **Target Repo**: \`${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}\`
+- **Target Branch**: \`${rel}\`
+</details>
+EOF
 }
 
 function make-a-pr() {
@@ -287,11 +338,13 @@ function make-a-pr() {
   local -a PULL_TITLES=()
   local -a PULL_BODIES=()
   local -a PULL_LABELS=()
+  local -a PULL_SHAS=()
   for pullnumber in "${PULLS[@]}"; do
-    local pull_json=$(gh pr view -R "${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME}" "${pullnumber}" --json title,body,labels)
+    local pull_json=$(gh pr view -R "${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME}" "${pullnumber}" --json title,body,labels,mergeCommit)
     PULL_TITLES+=( "$(echo "${pull_json}" | jq -r '.title')" )
     PULL_BODIES+=( "$(echo "${pull_json}" | jq -r '.body')" )
     PULL_LABELS+=( "$(echo "${pull_json}" | jq -r '.labels[].name' | paste -sd$'\n')" )
+    PULL_SHAS+=( "$(echo "${pull_json}" | jq -r '.mergeCommit.oid // ""')" )
   done
 
   # Build the PR description (pure text processing, no API calls).
