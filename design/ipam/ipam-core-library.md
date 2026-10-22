@@ -59,7 +59,7 @@ Three invariants frame this section:
 - **`StrictAffinity=true` is the only way to suppress non-affine fallback.** Anything that needs "borrow nothing" semantics must set it, not invent a parallel switch.
 
 `AutoAssign` is the hot path. Entry point is `autoAssign` in [`ipam.go`](../../libcalico-go/lib/ipam/ipam.go). The walk splits at three chokepoints:
-`prepareAffinityBlocksForHost` resolves the node + pools and lists existing affinities; `findOrClaimBlock` walks affine blocks and lazily reconstructs an `IPAMBlock` if an affinity
+`prepareAffinityBlocksForHost` resolves the node, asks pool qualification which pools the request may use, and lists existing affinities; `findOrClaimBlock` walks affine blocks and lazily reconstructs an `IPAMBlock` if an affinity
 exists but the block doesn't (recovery for a node that crashed mid-claim); `findUsableBlock` claims a new block via the two-phase `pending → confirmed` protocol or, with
 `StrictAffinity=false`, falls back to `randomBlockGenerator` over non-affine blocks.
 
@@ -71,6 +71,8 @@ A few non-obvious design points:
   release](./ipam-gc.md#empty-block-release) safe.
 - The block cap is `min(global MaxBlocksPerHost, request-level)`, defaulting to 20 if both are zero. Once a node reaches it, `allowNewClaim` is forced false; existing blocks still
   fill.
+- Pool qualification ([`pool_qualification.go`](../../libcalico-go/lib/ipam/pool_qualification.go)) is the one place that decides which pools a request may draw from: AutoAssign and
+  EnsureBlock use its full rule set, AssignIP a narrower one. A new eligibility criterion goes there, not in a caller. Pools a request names skip the selectors and `AssignmentMode`, nothing else.
 - `GetEnabledPools` skips a pool that lacks `Allocatable=True` when an allocatable or terminating pool covers its CIDR. The IP pool controller resolves overlap asynchronously, so
   without this a pool created over an active one is allocatable until the controller's first status write - unbounded while kube-controllers is down. A pool already marked
   `Allocatable=True` is taken at its word and never tested against the others. Administratively disabled pools never mask, including while they are terminating, which matches the
