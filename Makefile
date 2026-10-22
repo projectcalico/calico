@@ -71,7 +71,7 @@ update-x-libraries:
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
 
-check-images-availability: bin/crane bin/yq
+check-images-availability: bin/crane
 	cd ./hack && RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) ./check-images-availability.sh
 
 check-language:
@@ -127,7 +127,7 @@ generate:
 	$(MAKE) -C e2e gen-test-set
 	$(MAKE) fix-changed
 
-gen-manifests: bin/helm bin/yq
+gen-manifests: bin/helm
 	cd ./manifests && ./generate.sh
 
 # The operator's go:embed directives need these on disk before any target can
@@ -140,10 +140,10 @@ gen-semaphore-yaml: operator-charts
 ifdef CI_WORKFLOW_NAME
 	@echo "Skipping Semaphore config generation under ArgoCI"
 else
-	$(DOCKER_GO_BUILD) sh -c "DEFAULT_BRANCH_OVERRIDE=$(DEFAULT_BRANCH_OVERRIDE) \
-	                          SEMAPHORE_GIT_BRANCH=$(SEMAPHORE_GIT_BRANCH) \
-	                          RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) \
-	                          go run ./hack/cmd/deps $(DEPS_ARGS) generate-semaphore-yamls"
+	DEFAULT_BRANCH_OVERRIDE=$(DEFAULT_BRANCH_OVERRIDE) \
+	SEMAPHORE_GIT_BRANCH=$(SEMAPHORE_GIT_BRANCH) \
+	RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) \
+	go tool deps $(DEPS_ARGS) generate-semaphore-yamls
 endif
 
 GO_DIRS=$(shell ./hack/list-go-sources.sh dirs)
@@ -157,8 +157,8 @@ ARGOCI_DEPS_FILE=.argoci/depstree.yaml
 # They get a depstree entry but no deps.txt.
 ARGOCI_DEPS_SUBPACKAGES=felix/nftables test-tools/mocknode
 
-# Each job starts its own go-build container, so it is sized from the CPU a CI
-# step was given where there is one; nproc counts the node's cores instead.
+# Each job is a whole-repo `go list` pass, so it is sized from the CPU a CI step
+# was given where there is one; nproc counts the node's cores instead.
 gen-deps-files: operator-charts
 	$(MAKE) -j$(or $(GOMAXPROCS),$$(nproc)) $(DEP_FILES)
 	$(MAKE) $(ARGOCI_DEPS_FILE)
@@ -169,13 +169,13 @@ $(DEP_FILES): $(DEPS_SOURCES)
 	  echo "Run 'make gen-deps-files' to regenerate." && \
 	  echo && \
 	  grep '^go' go.mod && \
-	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
+	  go tool deps combined $(patsubst %/,%,$(dir $@)); \
 	} > $@
 
 # One invocation for every component, since each is a whole-repo `go list` pass.
 # Via a temporary, because a truncated file would silently gate nothing.
 $(ARGOCI_DEPS_FILE): $(DEPS_SOURCES)
-	@$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps gen-argoci-deps $(GO_DIRS) $(ARGOCI_DEPS_SUBPACKAGES)" > $@.tmp \
+	@go tool deps gen-argoci-deps $(GO_DIRS) $(ARGOCI_DEPS_SUBPACKAGES) > $@.tmp \
 	  && mv $@.tmp $@ || { rm -f $@.tmp; exit 1; }
 
 # The pin file is what onboards a component: one without it is left out,
@@ -564,17 +564,17 @@ create-release-branch: release/bin/release
 
 # Test the release code
 release-test:
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r hack/release/pkg
+	$(DOCKER_RUN) $(CALICO_BUILD) $(GINKGO) -cover -r hack/release/pkg
 
 # Currently our openstack builds either build *or* build and publish,
 # hence why we have two separate jobs here that do almost the same thing.
-build-openstack: bin/yq
-	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
+build-openstack:
+	$(eval VERSION=$(shell go tool yq '.version' charts/calico/values.yaml))
 	$(info Building openstack packages for version $(VERSION))
 	$(MAKE) -C release/packaging release VERSION=$(VERSION)
 
-publish-openstack: bin/yq
-	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
+publish-openstack:
+	$(eval VERSION=$(shell go tool yq '.version' charts/calico/values.yaml))
 	$(info Publishing openstack packages for version $(VERSION))
 	$(MAKE) -C release/packaging release-publish VERSION=$(VERSION)
 
@@ -588,7 +588,7 @@ helm-index:
 			     $(MAKE) semaphore-run-workflow
 
 # Creates the tar file used for installing Calico on OpenShift.
-bin/ocp.tgz: manifests/ocp/ bin/yq
+bin/ocp.tgz: manifests/ocp/
 	tar czvf $@ --exclude='.gitattributes' -C manifests/ ocp
 
 ## Generates release notes for the given version.
@@ -616,8 +616,5 @@ endif
 ###############################################################################
 # Post-release validation
 ###############################################################################
-bin/gotestsum:
-	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
-
 postrelease-checks release-validate: release/bin/release bin/gotestsum
 	@release/bin/release release validate

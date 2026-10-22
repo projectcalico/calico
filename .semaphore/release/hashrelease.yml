@@ -68,6 +68,8 @@ blocks:
         commands:
           - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
           - export LOGS_DIR=${SEMAPHORE_GIT_DIR}/release/_logs
+          # The hashrelease regenerates manifests, which reads the chart with yq.
+          - . hack/ensure-go.sh
           - cd release
       epilogue:
         always:

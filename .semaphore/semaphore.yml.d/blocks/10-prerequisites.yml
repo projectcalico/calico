@@ -8,6 +8,7 @@
     jobs:
       - name: Check semaphore files
         commands:
+          - . hack/ensure-go.sh
           - make gen-semaphore-yaml
           - make check-dirty
 - name: Check YAML files
@@ -25,7 +26,7 @@
   run:
     when: >-
       ${FORCE_RUN} or
-      change_in(['/go.mod', '/go.sum', '/**/*.go', '/**/deps.txt', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+      change_in(['/go.mod', '/go.sum', '/**/*.go', '/**/deps.txt', '/Makefile', '/lib.Makefile', '/metadata.mk', '/hack/ensure-go.sh'], {pipeline_file: 'ignore'})
   dependencies: []
   task:
     env_vars:
@@ -41,6 +42,7 @@
           - name: STORE_BUILD_CACHE
             value: "true"
         commands:
+          - . hack/ensure-go.sh
           - make check-ginkgo-v2
           - make check-go-mod
           - make verify-go-mods
@@ -87,24 +89,26 @@
   run:
     when: >-
       ${FORCE_RUN} or
-      change_in(['/**/*.pb.go', '/**/*.proto', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+      change_in(['/**/*.pb.go', '/**/*.proto', '/Makefile', '/lib.Makefile', '/metadata.mk', '/hack/ensure-go.sh'], {pipeline_file: 'ignore'})
   dependencies: []
   task:
     jobs:
       - name: Check protobufs
         commands:
+          - . hack/ensure-go.sh
           - make protobuf fix-changed
           - make check-dirty
 - name: Manifests and API docs
   run:
     when: >-
       ${FORCE_RUN} or
-      change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/operator/api', '/operator/pkg/crds', '/operator/pkg/admission', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+      change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/operator/api', '/operator/pkg/crds', '/operator/pkg/admission', '/Makefile', '/lib.Makefile', '/metadata.mk', '/hack/ensure-go.sh'], {pipeline_file: 'ignore'})
   dependencies: []
   task:
     jobs:
       - name: Check manifests and API docs
         commands:
+          - . hack/ensure-go.sh
           - make -C lib gen-files
           - make -C api gen-files
           - make -C libcalico-go gen-files

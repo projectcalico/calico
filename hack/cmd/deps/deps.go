@@ -1088,7 +1088,7 @@ func loadPackageDeps(pkg string, mainDepsOnly bool) ([]goPackage, error) {
 }
 
 func findMainPackages(pkg string) ([]string, error) {
-	command := exec.Command("go", "list", "-find", "-f", "{{.Name}} {{.ImportPath}}", "./...")
+	command := goCommand("list", "-find", "-f", "{{.Name}} {{.ImportPath}}", "./...")
 	command.Dir = pkg
 	raw, err := command.Output()
 	if err != nil {
@@ -1118,7 +1118,7 @@ func loadGoMods() ([]module, error) {
 }
 
 func loadGoToolJSON[Item any](dir string, args ...string) ([]Item, error) {
-	cmd := exec.Command("go", args...)
+	cmd := goCommand(args...)
 	cmd.Dir = dir
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -1138,6 +1138,19 @@ func loadGoToolJSON[Item any](dir string, args ...string) ([]Item, error) {
 		logrus.Debugf("Loaded item: %+v", item)
 	}
 	return items, nil
+}
+
+// goListEnv pins the build context the import graph is read in, so the result
+// is the one CI sees whatever machine runs it: GOOS, GOARCH and cgo each select
+// which files, and so which imports, a package has.
+var goListEnv = []string{"GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=1"}
+
+// goCommand pins only the go commands this tool runs, not the tool itself,
+// which `go tool` must still build for the machine it runs on.
+func goCommand(args ...string) *exec.Cmd {
+	cmd := exec.Command("go", args...)
+	cmd.Env = append(os.Environ(), goListEnv...)
+	return cmd
 }
 
 type templateData struct {

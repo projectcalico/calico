@@ -355,6 +355,30 @@ endif
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
+# The path DOCKER_RUN mounts the repo at inside the build container.
+CONTAINER_REPO_ROOT := /go/src/github.com/projectcalico/calico
+
+# Build tools (crane, ginkgo, gotestsum, setup-envtest, goimports, yq) are
+# declared with `tool` directives in the root go.mod, which pins their
+# versions. Apart from goimports (golang.org/x/tools, which follows Renovate's
+# golang.org/x rules), Renovate raises PRs for them only for security fixes;
+# otherwise bump one by hand with `go get -tool <pkg>@<version>`.
+#
+# Tools that run inside the build container use CONTAINER_GO_TOOL, which
+# resolves the directives from the root module wherever the container's working
+# directory is (api/ is a separate module, and DOCKER_GO_BUILD can land in a
+# directory with no go.mod at all). Because it moves the tool's working
+# directory, only pass it absolute paths. Tools that run on the host (crane,
+# gotestsum, test2json) are built into bin/ - see HOST_TOOLS. yq runs on the
+# host as plain `go tool yq`.
+CONTAINER_GO_TOOL := go -C $(CONTAINER_REPO_ROOT) tool
+
+# The ginkgo CLI, run in the build container from the component directory so
+# that -r and relative paths stay relative to it. `go tool` resolves it from the
+# module that directory is in, so the CLI always matches the library version the
+# tests link against (api/ declares it in its own go.mod for that reason).
+GINKGO := go tool ginkgo
+
 # Support for git worktrees.  In a worktree, .git is a file pointing to
 # <main-repo>/.git/worktrees/<name>.  When Docker containers need git access,
 # the main .git directory must also be mounted, and GIT_DIR / GIT_WORK_TREE
@@ -905,23 +929,21 @@ fix-changed go-fmt-changed goimports-changed:
 	  if [ -z "$(CI_GIT_COMMIT_RANGE)" ]; then \
 	    parent_branch=`release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) $(REPO_REL_DIR)/hack/find-parent-release-branch.sh`; \
 	  fi; \
-	  $(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
-	                -e git_repo_slug=$(GIT_REPO_SLUG) \
-	                -e parent_branch=$$parent_branch \
-	                -e CI_GIT_COMMIT_RANGE=$(CI_GIT_COMMIT_RANGE) \
-	                $(CALICO_BUILD) $(REPO_REL_DIR)/hack/format-changed-files.sh; \
+	  release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
+	  git_repo_slug=$(GIT_REPO_SLUG) \
+	  parent_branch=$$parent_branch \
+	  CI_GIT_COMMIT_RANGE=$(CI_GIT_COMMIT_RANGE) \
+	  $(REPO_REL_DIR)/hack/format-changed-files.sh; \
 	fi
 
 .PHONY: fix-all go-fmt-all goimports-all
-# $(DOCKER_GO_BUILD) is empty under NATIVE_GO_BUILD, so this runs the formatter directly.
 fix-all go-fmt-all goimports-all:
-	$(DOCKER_GO_BUILD) $(REPO_REL_DIR)/hack/format-all-files.sh
+	$(REPO_REL_DIR)/hack/format-all-files.sh
 
-GOMODDER=$(REPO_REL_DIR)/hack/cmd/gomodder/main.go
-
+# gomodder checks every module in the repo, so it always runs from the root.
 .PHONY: verify-go-mods
 verify-go-mods:
-	$(DOCKER_RUN) $(CALICO_BUILD) go run $(GOMODDER)
+	go -C $(REPO_ROOT) tool gomodder
 
 .PHONY: pre-commit
 pre-commit:
@@ -1540,34 +1562,23 @@ check-dirty:
 	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
 	echo "The following files are dirty"; git --no-pager diff; exit 1; fi
 
-bin/yq:
-	mkdir -p bin
-	$(eval TMP := $(shell mktemp -d))
-	$(call fetch_file,https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz,$(TMP)/yq4.tar.gz)
-	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
-	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
+# Host-run Go tools are built in the build container, at the version the root
+# go.mod's `tool` directives pin, so the host needs only docker - not a Go
+# toolchain. Depending on go.mod rebuilds them when Renovate bumps one; the
+# build cache makes that cheap when nothing they use changed. test2json ships
+# with the Go toolchain rather than in a module, so it has no `tool` directive
+# and its version follows the build image's Go.
+HOST_TOOLS              := crane gotestsum test2json
+HOST_TOOL_PKG_crane     := github.com/google/go-containerregistry/cmd/crane
+HOST_TOOL_PKG_gotestsum := gotest.tools/gotestsum
+HOST_TOOL_PKG_test2json := cmd/test2json
 
-# This setup is used to download and install the `crane` binary into $(REPO_ROOT)/bin/crane.
-# Normalize architecture for go-containerregistry filenames
-CRANE_ARCH = $(subst amd64,x86_64,$(BUILDARCH))
-ifeq ($(OS),Windows_NT)
-CRANE_OS = Windows
-else
-CRANE_OS = $(shell uname -s)
-endif
-CRANE_URL = https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/go-containerregistry_$(CRANE_OS)_$(CRANE_ARCH).tar.gz
-
-.PHONY: bin/crane
-bin/crane: $(REPO_ROOT)/bin/crane
-# Moved into place last: a half-extracted binary looks complete to make.
-$(REPO_ROOT)/bin/crane:
-	$(info ::: Downloading crane from $(CRANE_URL))
-	@mkdir -p $(REPO_ROOT)/bin
-	@tmp=$$(mktemp -d $(REPO_ROOT)/bin/.crane.XXXXXX) && trap 'rm -rf "$$tmp"' EXIT && \
-		$(call fetch_file,$(CRANE_URL),"$$tmp/crane.tar.gz") && \
-		tar xz -C "$$tmp" -f "$$tmp/crane.tar.gz" crane && \
-		chmod +x "$$tmp/crane" && \
-		mv "$$tmp/crane" "$@"
+# Not .PHONY: at the repo root bin/<tool> is the real file, and targets such as
+# bin/ocp.tgz that depend on it must not rebuild every time.
+$(addprefix bin/,$(HOST_TOOLS)): bin/%: $(REPO_ROOT)/bin/%
+$(addprefix $(REPO_ROOT)/bin/,$(HOST_TOOLS)): $(REPO_ROOT)/bin/%: $(REPO_ROOT)/go.mod
+	$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) \
+		go -C $(CONTAINER_REPO_ROOT) build -o $(CONTAINER_REPO_ROOT)/bin/$* $(HOST_TOOL_PKG_$*)
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
@@ -1968,7 +1979,7 @@ kind-reload:
 # Common functions for setting up a local envtest environment.
 ###############################################################################
 ENVTEST_DIR := $(REPO_ROOT)/hack/test/envtest
-ENVTEST_CONTAINER_DIR := /go/src/github.com/projectcalico/calico/hack/test/envtest
+ENVTEST_CONTAINER_DIR := $(CONTAINER_REPO_ROOT)/hack/test/envtest
 # Derive major.minor from K8S_VERSION (e.g. v1.34.3 -> 1.34.x) for setup-envtest.
 # Envtest publishes binaries per minor version, not per patch, so we use a wildcard.
 # Skip on Windows: envtest is Linux-only test infra; bash sed/cut would error otherwise.
@@ -1998,7 +2009,7 @@ $(ENVTEST_ASSETS_MARKER):
 		case "$(K8S_VERSION)" in \
 			*-alpha*) echo "K8S_VERSION $(K8S_VERSION) is an alpha; envtest does not pin to alphas." >&2; exit 1;; \
 		esac; \
-		if go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+		if $(CONTAINER_GO_TOOL) setup-envtest \
 			use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION); then \
 			exit 0; \
 		fi; \
@@ -2039,7 +2050,7 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 	@echo "Setting up envtest binaries for minimum K8s $(ENVTEST_MIN_K8S_VERSION)..."
 	mkdir -p $(ENVTEST_DIR)
 	$(DOCKER_GO_BUILD) sh -c \
-		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+		'$(CONTAINER_GO_TOOL) setup-envtest \
 		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_MIN_K8S_VERSION)'
 	touch $@
 

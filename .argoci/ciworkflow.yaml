@@ -252,6 +252,7 @@ includes:
         - ^\.argoci/cron/
         - ^\.argoci/scripts/
         - ^\.argoci/scripts/test_scripts/
+        - ^hack/ensure-go\.sh$
         - ^\.argoci/modules/20-e2e-validation\.yaml$
 
   - path: .argoci/modules/30-key-cert-provisioner.yaml
@@ -336,6 +337,7 @@ includes:
       in:
         - ^charts/
         - ^manifests/
+        - ^hack/ensure-go\.sh$
         - ^\.argoci/modules/10-check-images\.yaml$
 
   # The chart is what the FV installs the operator from, so it belongs in the
