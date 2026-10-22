@@ -1224,7 +1224,7 @@ func TestProcessMeshPeers_PeerASFallsBackToGlobal(t *testing.T) {
 		ASNumber: "64513",
 	}
 
-	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "", 4)
+	err := c.processMeshPeers(config, "", 4)
 	require.NoError(t, err)
 
 	peerAS := make(map[string]string)
