@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -417,6 +417,7 @@ func (c *PendingUpdatesView[K, V]) Get(k K) (V, bool) {
 // IterActionUpdateDataplane then the pending update is cleared, and, the KV is applied
 // to the dataplane cache (as if the function had called Dataplane().Set(k, v)).
 func (c *PendingUpdatesView[K, V]) Iter(f func(k K, v V) IterAction) {
+iterLoop:
 	for k, v := range c.desiredUpdates {
 		updateDataplane := f(k, v)
 		switch updateDataplane {
@@ -426,7 +427,9 @@ func (c *PendingUpdatesView[K, V]) Iter(f func(k K, v V) IterAction) {
 			delete(c.desiredUpdates, k)
 			c.inDataplaneAndDesired[k] = v
 		case IterActionNoOpStopIteration:
-			break
+			// A bare break would only break the switch; label the loop so we
+			// actually stop iterating.
+			break iterLoop
 		}
 	}
 }
@@ -517,6 +520,7 @@ func (c *PendingDeletionsView[K, V]) Get(k K) (V, bool) {
 // IterActionUpdateDataplane then the pending deletion is cleared, and, the KV is applied
 // to the dataplane cache (as if the function had called Dataplane().Delete(k)).
 func (c *PendingDeletionsView[K, V]) Iter(f func(k K) IterAction) {
+iterLoop:
 	for k := range c.inDataplaneNotDesired {
 		updateDataplane := f(k)
 		switch updateDataplane {
@@ -525,7 +529,9 @@ func (c *PendingDeletionsView[K, V]) Iter(f func(k K) IterAction) {
 		case IterActionUpdateDataplane:
 			delete(c.inDataplaneNotDesired, k)
 		case IterActionNoOpStopIteration:
-			break
+			// A bare break would only break the switch; label the loop so we
+			// actually stop iterating.
+			break iterLoop
 		}
 	}
 }
