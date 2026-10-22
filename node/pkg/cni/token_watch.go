@@ -81,7 +81,7 @@ func NamespaceOfUsedServiceAccount() string {
 func BuildClientSet() (kubernetes.Interface, error) {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	cfg, err := winutils.BuildConfigFromFlags("", kubeconfig)
-	logrus.WithFields(logrus.Fields{"KUBECONFIG": kubeconfig, "cfg": cfg}).Debug("running cni.BuildClientSet")
+	logrus.WithFields(logrus.Fields{"KUBECONFIG": kubeconfig}).Debug("running cni.BuildClientSet")
 	if err != nil {
 		return nil, err
 	}

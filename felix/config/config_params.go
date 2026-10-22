@@ -694,7 +694,7 @@ func (config *Config) UpdateFromConfigUpdate(configUpdate *proto.ConfigUpdate) (
 // If there is a config value already loaded from a higher-priority source, then
 // the new value will be ignored (after validation).
 func (config *Config) UpdateFrom(rawData map[string]string, source Source) (changed bool, err error) {
-	log.Infof("Merging in config from %v: %v", source, rawData)
+	log.Infof("Merging in config from %v", source)
 	// Defensively take a copy of the raw data, in case we've been handed
 	// a mutable map by mistake.
 	rawDataCopy := make(map[string]string)
@@ -826,13 +826,11 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 			metadata := param.GetMetadata()
 			name := metadata.Name
 			if metadata.Local && !source.Local() {
-				log.Warningf("Ignoring local-only configuration %v=%q from %v",
-					name, rawValue, source)
+				log.Warningf("Ignoring local-only configuration for %v from %v", name, source)
 				continue valueLoop
 			}
 
-			log.Infof("Parsing value for %v: %v (from %v)",
-				name, rawValue, source)
+			log.Infof("Parsing value for %v (from %v)", name, source)
 			var value any
 			if strings.ToLower(rawValue) == "none" {
 				// Special case: we allow a value of "none" to force the value to
@@ -842,8 +840,7 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 				if metadata.NonZero {
 					err = errors.New("non-zero field cannot be set to none")
 					log.Errorf(
-						"Failed to parse value for %v: %v from source %v. %v",
-						name, rawValue, source, err)
+						"Failed to parse value for %v from source %v. %v", name, source, err)
 					config.Err = err
 					return
 				}
@@ -867,8 +864,7 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 				}
 			}
 
-			log.Infof("Parsed value for %v: %v (from %v)",
-				name, value, source)
+			log.Infof("Parsed value for %v (from %v)", name, source)
 			if source < currentSource {
 				log.Infof("Skipping config value for %v from %v; "+
 					"already have a value from %v", name,

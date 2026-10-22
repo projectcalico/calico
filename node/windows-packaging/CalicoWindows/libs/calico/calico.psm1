@@ -99,10 +99,10 @@ function Set-EnvVarIfNotSet {
     )
     if (-not (Test-Path "env:$var"))
     {
-        Write-Host ("Environment variable $var is not set. Setting it to the default value: {0}" -f $defaultValue)
+        Write-Host "Environment variable $var is not set. Setting it to the default value."
         [Environment]::SetEnvironmentVariable($var, $defaultValue, 'Process')
     } else {
-        Write-Host ("Environment variable $var is already set: {0}" -f (gci env:$var | select -expand Value))
+        Write-Host "Environment variable $var is already set."
     }
 }
 
