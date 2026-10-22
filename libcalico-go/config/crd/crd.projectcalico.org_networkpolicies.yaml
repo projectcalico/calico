@@ -609,6 +609,29 @@ spec:
                           "!has(self.notProtocol) || (type(self.notProtocol) == int
                           ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
                           in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          rules that specify ports must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          in [6, 17, 132] : self.protocol in ['TCP', 'UDP', 'SCTP'])
+                          || ((!has(self.source) || ((!has(self.source.ports) || size(self.source.ports)
+                          == 0) && (!has(self.source.notPorts) || size(self.source.notPorts)
+                          == 0))) && (!has(self.destination) || ((!has(self.destination.ports)
+                          || size(self.destination.ports) == 0) && (!has(self.destination.notPorts)
+                          || size(self.destination.notPorts) == 0))))"
+                      - message:
+                          rules with a numeric port must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          has(self.protocol) || ((!has(self.source) || ((!has(self.source.ports)
+                          || self.source.ports.all(p, type(p) == string)) && (!has(self.source.notPorts)
+                          || self.source.notPorts.all(p, type(p) == string)))) && (!has(self.destination)
+                          || ((!has(self.destination.ports) || self.destination.ports.all(p,
+                          type(p) == string)) && (!has(self.destination.notPorts) || self.destination.notPorts.all(p,
+                          type(p) == string)))))
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -1185,6 +1208,29 @@ spec:
                           "!has(self.notProtocol) || (type(self.notProtocol) == int
                           ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
                           in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          rules that specify ports must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          in [6, 17, 132] : self.protocol in ['TCP', 'UDP', 'SCTP'])
+                          || ((!has(self.source) || ((!has(self.source.ports) || size(self.source.ports)
+                          == 0) && (!has(self.source.notPorts) || size(self.source.notPorts)
+                          == 0))) && (!has(self.destination) || ((!has(self.destination.ports)
+                          || size(self.destination.ports) == 0) && (!has(self.destination.notPorts)
+                          || size(self.destination.notPorts) == 0))))"
+                      - message:
+                          rules with a numeric port must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          has(self.protocol) || ((!has(self.source) || ((!has(self.source.ports)
+                          || self.source.ports.all(p, type(p) == string)) && (!has(self.source.notPorts)
+                          || self.source.notPorts.all(p, type(p) == string)))) && (!has(self.destination)
+                          || ((!has(self.destination.ports) || self.destination.ports.all(p,
+                          type(p) == string)) && (!has(self.destination.notPorts) || self.destination.notPorts.all(p,
+                          type(p) == string)))))
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
