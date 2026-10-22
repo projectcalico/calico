@@ -250,7 +250,16 @@ function build-pr-description() {
     new_body+="${pull_body}"
   done
 
-  new_labels=$(echo -e "${new_labels}" | sort -u | grep '.' | grep -v 'cherry-pick-candidate' | paste -sd,)
+  new_labels=$(echo -e "${new_labels}" | sort -u | grep '.' | grep -v 'cherry-pick-candidate' || true)
+
+  # When picking several PRs, a fix with a release note can be combined with
+  # (e.g.) a test-only PR that has none.  The combined PR then needs a release
+  # note, and carrying both labels makes the PR bot drop release-note-required.
+  if grep -qx 'release-note-required' <<<"${new_labels}"; then
+    new_labels=$(grep -vx 'release-note-not-required' <<<"${new_labels}")
+  fi
+  new_labels=$(paste -sd, <<<"${new_labels}")
+
   if [[ -n "${EXTRA_LABELS:-}" ]]; then
     if [[ -n "${new_labels}" ]]; then
       new_labels+=",${EXTRA_LABELS}"
