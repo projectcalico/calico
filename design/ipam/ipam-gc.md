@@ -43,11 +43,14 @@ leakGracePeriod set:             markLeak(leakGracePeriod)
 
 After the walk, if every allocation on a node is released and no valid ones remain, the node's tunnel IPs are confirmed-leaked and the node is added to `nodesToRelease`.
 
-`allocationIsValid` (`ipam.go:999`) is the truth check. The design-relevant rules:
+`allocationIsValid` (`ipam.go:1083`) is the truth check. The design-relevant rules:
 
 - **Tunnel IPs validate via node existence only.** They never validate via pods. Mixing the paths would release a live tunnel IP whenever the pod-side check failed.
 - **Missing `pod` / `namespace` attributes ⇒ assume valid.** Conservative on purpose. Tightening this without a real reason will release allocations made by paths that don't
   stamp the attrs.
+- **A live IP beats a stale node attribute.** `pod.Spec.NodeName` vs. the allocation's recorded node is only a leak signal before the pod has reported an IP (the migration
+  case). Once an IP is reported, only the IP match against `wep.Spec.IPNetworks` determines validity - a node mismatch alone is not sufficient once there's IP evidence to
+  check.
 - **Multus produces multiple WorkloadEndpoints per pod.** The IP must appear in at least one `wep.Spec.IPNetworks` to be valid. A single-WEP check would falsely release
   secondary-network IPs.
 - **Pod lookup mode is preferCache vs live.** Cache for the node-deleted path (where the source data is presumed stale), live for sync. A live read can win against the cache in the
@@ -58,13 +61,16 @@ later sync re-validates the allocation. The transition is what the [grace period
 
 **Review notes**
 
-- `allocationIsValid` compares `pod.Spec.NodeName` against `attrs["node"]`. Stale source data makes valid allocations look like leaks -
-  https://github.com/projectcalico/calico/issues/12257. Don't expand the comparison without thinking about stale-source-data scenarios.
+- `allocationIsValid`'s node-mismatch check no longer overrides IP-match evidence once the pod has reported an IP - https://github.com/projectcalico/calico/issues/12257 was
+  exactly this: a stale on-disk CNI identity stamped the wrong node into `attrs["node"]` at ADD time while the pod's real IP kept working, and the old node comparison released
+  it anyway. Don't revert to trusting the node comparison over a matching reported IP without re-litigating #12257.
 - Missing `pod` / `namespace` attributes must remain "assume valid." Tightening this without a real reason will cause spurious releases.
 - Tunnel IPs do not validate via pods. Only the node-existence path releases them.
 - Don't add per-IP API GETs in this loop. The hot path uses informer cache reads after https://github.com/projectcalico/calico/pull/10333.
-- The `ipam.go:1043` TODO on pod-NodeName mismatch is unresolved. Currently releases the old allocation; the comment expresses uncertainty. Don't touch without understanding the
-  migration cases.
+- The pod-NodeName-mismatch TODO is resolved: node mismatch is now only a fast leak signal in the window before the pod has reported an IP (the migration case - a pod
+  recreated on a new node before it has an IP). Once an IP is reported, node mismatch is corroborating evidence only, logged but not gating - see #12257. A brief false-candidate
+  window can still occur for a brand-new pod between its allocation and its first status report (no IP evidence yet, node already mismatched); this self-heals via the standard
+  grace-period/re-validate mechanism and is not a gap to close here.
 
 ## Grace periods
 
