@@ -2539,8 +2539,8 @@
           "Required": false,
           "OnParseFailure": "Exit",
           "AllowedConfigSources": "All",
-          "Description": "Calico programs additional Linux route tables for various purposes.\nRouteTableRanges specifies a set of table index ranges that Calico should use.\nDeprecates`RouteTableRange`, overrides `RouteTableRange`.",
-          "DescriptionHTML": "<p>Calico programs additional Linux route tables for various purposes.\nRouteTableRanges specifies a set of table index ranges that Calico should use.\nDeprecates<code>RouteTableRange</code>, overrides <code>RouteTableRange</code>.</p>",
+          "Description": "Calico programs additional Linux route tables for various purposes.\nRouteTableRanges specifies a set of table index ranges that Calico should use.\nDeprecates`RouteTableRange`, overrides `RouteTableRange`. The ranges may target at most 65535\ntables in total.",
+          "DescriptionHTML": "<p>Calico programs additional Linux route tables for various purposes.\nRouteTableRanges specifies a set of table index ranges that Calico should use.\nDeprecates<code>RouteTableRange</code>, overrides <code>RouteTableRange</code>. The ranges may target at most 65535\ntables in total.</p>",
           "UserEditable": true,
           "GoType": "*v3.RouteTableRanges"
         },
