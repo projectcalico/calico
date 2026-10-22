@@ -90,6 +90,8 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 
 	hasIPv4, hasIPv6 := hasIPv4AndIPv6(servicesIPPort)
 
+	// Felix owns map sizes; resizing here would copy every map twice and can fail on a full conntrack map.
+	bpfmap.KeepPinnedSizes(hasIPv6)
 	bpfMaps, err := bpfmap.CreateBPFMaps(hasIPv6)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create bpf maps.")

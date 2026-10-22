@@ -158,7 +158,7 @@ func getIPMaps(ipFamily int) *IPMaps {
 	}
 }
 
-func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
+func newMaps(ipV6Enabled bool) *Maps {
 	ret := new(Maps)
 
 	ret.CommonMaps = getCommonMaps()
@@ -166,6 +166,31 @@ func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
 	if ipV6Enabled {
 		ret.V6 = getIPMaps(6)
 	}
+	return ret
+}
+
+// KeepPinnedSizes makes CreateBPFMaps keep the size of maps already pinned, so it does not resize maps Felix sized.
+func KeepPinnedSizes(ipV6Enabled bool) {
+	for _, m := range newMaps(ipV6Enabled).slice() {
+		pm, ok := m.(*maps.PinnedMap)
+		if !ok {
+			continue
+		}
+		fd, err := maps.GetMapFDByPin(pm.Path())
+		if err != nil {
+			continue
+		}
+		info, err := maps.GetMapInfo(fd)
+		_ = fd.Close()
+		if err != nil || info.KeySize != pm.KeySize || info.ValueSize != pm.ValueSize {
+			continue
+		}
+		maps.SetSize(pm.GetName(), info.MaxEntries)
+	}
+}
+
+func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
+	ret := newMaps(ipV6Enabled)
 
 	mps := ret.slice()
 	for i, bpfMap := range mps {

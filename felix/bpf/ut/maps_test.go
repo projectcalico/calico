@@ -113,6 +113,32 @@ func TestMapDownSize(t *testing.T) {
 	Expect(err.Error()).To(Equal(expectedError))
 }
 
+func TestKeepPinnedSizes(t *testing.T) {
+	k, err := setUpMapTestWithSingleKV(t)
+	Expect(err).NotTo(HaveOccurred(), "Failed to create ct entry")
+
+	conntrack.SetMapSize(600)
+	maps, err := bpfmap.CreateBPFMaps(false)
+	Expect(err).NotTo(HaveOccurred())
+	maps.V4.CtMap.(*bpfmaps.PinnedMap).Close()
+	os.Remove(ctMap.Path() + "_old")
+
+	// A process without Felix's config sees only the default sizes.
+	bpfmaps.ResetSizes()
+	bpfmap.KeepPinnedSizes(false)
+	maps, err = bpfmap.CreateBPFMaps(false)
+	Expect(err).NotTo(HaveOccurred())
+	defer restoreMaps(maps)
+
+	ctMapInfo, err := bpfmaps.GetMapInfo(maps.V4.CtMap.MapFD())
+	Expect(err).NotTo(HaveOccurred(), "Failed to get ct map info")
+	Expect(ctMapInfo.MaxEntries).To(Equal(600))
+	_, err = os.Stat(ctMap.Path() + "_old")
+	Expect(os.IsNotExist(err)).To(BeTrue(), "ct map was migrated")
+	_, err = maps.V4.CtMap.Get(k.AsBytes())
+	Expect(err).NotTo(HaveOccurred(), "ct entry lost")
+}
+
 func TestCTDeltaMigration(t *testing.T) {
 	// Add 1 k,v pair in old ctmap
 	k, err := setUpMapTestWithSingleKV(t)
