@@ -16,7 +16,7 @@ steps:
   # Cross-compiles only, so it needs no daemon.
   - name: envoy-ratelimit-build
     requests: {cpu: 2500m, memory: 1Gi}
-    useGoBuild: true
+    image: quay.io/danieljfox/go-build:1.27.1-llvm21.1.8-k8s1.37.1-cacheprog
     workspaceVolumes: none
     matrix:
       - name: arm64
