@@ -51,7 +51,7 @@ spec:
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
-          image: {{.Values.calico.registry}}/{{.Values.calico.image}}:{{ .Values.version }}
+          image: {{.Values.calico.registry | lower }}/{{.Values.calico.image | lower }}:{{ .Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           command: ["/usr/bin/calico-ipam", "-upgrade"]
           envFrom:
@@ -95,7 +95,7 @@ spec:
         # references (portmap, host-local, loopback, tuning, flannel) for
         # install-cni to copy onto the host.
         - name: cni-plugins
-          image: {{.Values.cniPlugins.registry}}/{{.Values.cniPlugins.image}}:{{ .Values.version }}
+          image: {{.Values.cniPlugins.registry | lower }}/{{.Values.cniPlugins.image | lower }}:{{ .Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           volumeMounts:
             - mountPath: /stage
@@ -105,7 +105,7 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: {{.Values.calico.registry}}/{{.Values.calico.image}}:{{ .Values.version }}
+          image: {{.Values.calico.registry | lower }}/{{.Values.calico.image | lower }}:{{ .Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           args: ["component", "cni", "install"]
           envFrom:
@@ -208,7 +208,7 @@ spec:
         # networking to allow communication with the API Server. Calico-node initialization is executed
         # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptables mode.
         - name: "ebpf-bootstrap"
-          image: {{.Values.node.registry}}/{{.Values.node.image}}:{{.Values.version}}
+          image: {{.Values.node.registry | lower }}/{{.Values.node.image | lower }}:{{.Values.version}}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           command: ["calico", "component", "node", "init", "--best-effort"]
           volumeMounts:
@@ -234,7 +234,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: {{.Values.node.registry}}/{{.Values.node.image}}:{{.Values.version}}
+          image: {{.Values.node.registry | lower }}/{{.Values.node.image | lower }}:{{.Values.version}}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           envFrom:
             - configMapRef:
@@ -494,7 +494,7 @@ spec:
         # This container runs flannel using the kube-subnet-mgr backend
         # for allocating subnets.
         - name: kube-flannel
-          image: {{.Values.flannel.image}}:{{.Values.flannel.tag}}
+          image: {{.Values.flannel.image | lower }}:{{.Values.flannel.tag}}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           command: ["/opt/bin/flanneld", "--ip-masq", "--kube-subnet-mgr"]
           securityContext:
@@ -531,7 +531,7 @@ spec:
         # Runs the flannel daemon to enable vxlan networking between
         # container hosts.
         - name: flannel
-          image: {{ .Values.flannel.image }}:{{ .Values.flannel.tag }}
+          image: {{ .Values.flannel.image | lower }}:{{ .Values.flannel.tag }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           env:
             # The location of the etcd cluster.

@@ -42,7 +42,7 @@ spec:
       hostNetwork: true
       containers:
         - name: calico-kube-controllers
-          image: {{.Values.calico.registry}}/{{.Values.calico.image}}:{{ .Values.version }}
+          image: {{.Values.calico.registry | lower }}/{{.Values.calico.image | lower }}:{{ .Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           args: ["component", "kube-controllers", "--health-port=9440"]
           env:
@@ -116,7 +116,7 @@ spec:
 {{- else }}
       containers:
         - name: calico-kube-controllers
-          image: {{.Values.calico.registry}}/{{.Values.calico.image}}:{{ .Values.version }}
+          image: {{.Values.calico.registry | lower }}/{{.Values.calico.image | lower }}:{{ .Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           args: ["component", "kube-controllers", "--health-port=9440"]
           env:

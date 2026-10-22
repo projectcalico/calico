@@ -16,6 +16,7 @@ package registry
 
 import (
 	"fmt"
+	"strings"
 )
 
 // Component represents a component in the pinned version file.
@@ -29,7 +30,7 @@ type Component struct {
 // The string representation is in the format of registry/image:version.
 func (c Component) String() string {
 	if c.Registry == "" {
-		return fmt.Sprintf("%s:%s", c.Image, c.Version)
+		return fmt.Sprintf("%s:%s", strings.ToLower(c.Image), c.Version)
 	}
-	return fmt.Sprintf("%s/%s:%s", c.Registry, c.Image, c.Version)
+	return fmt.Sprintf("%s/%s:%s", strings.ToLower(c.Registry), strings.ToLower(c.Image), c.Version)
 }
