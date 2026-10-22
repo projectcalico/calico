@@ -260,9 +260,10 @@ type Config struct {
 	FelixHostname string `config:"hostname;;local,non-zero"`
 
 	// EtcdAddr: when using the `etcdv3` datastore driver, the etcd server and port to connect to.  If EtcdEndpoints
-	// is also specified, it takes precedence.
+	// is also specified, it takes precedence.  Felix uses EtcdAddr only when it is set explicitly; the default
+	// address is not used to connect.
 	EtcdAddr string `config:"authority;127.0.0.1:2379;local"`
-	// EtcdAddr: when using the `etcdv3` datastore driver, the URL scheme to use. If EtcdEndpoints
+	// EtcdScheme: when using the `etcdv3` datastore driver, the URL scheme to use. If EtcdEndpoints
 	// is also specified, it takes precedence.
 	EtcdScheme string `config:"oneof(http,https);http;local"`
 	// EtcdKeyFile: when using the `etcdv3` datastore driver, path to TLS private key file to use when connecting to
@@ -280,7 +281,7 @@ type Config struct {
 
 	// TyphaAddr if set, tells Felix to connect to Typha at the given address and port.  Overrides TyphaK8sServiceName.
 	TyphaAddr string `config:"authority;;local"`
-	// TyphaK8sServiceName if set, tells Felix to connect to Typha by looking up the Endpoints of the given Kubernetes
+	// TyphaK8sServiceName if set, tells Felix to connect to Typha by looking up the EndpointSlices of the given Kubernetes
 	// Service in namespace specified by TyphaK8sNamespace.
 	TyphaK8sServiceName string `config:"string;;local"`
 	// TyphaK8sNamespace namespace to look in when looking for Typha's service (see TyphaK8sServiceName).
@@ -357,7 +358,7 @@ type Config struct {
 	LogSeveritySys    string `config:"oneof(TRACE,DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
 	// LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
 	// Only logs from files with names that match the given regular expression are included.  The filter only applies
-	// to Debug level logs.
+	// to Debug and Trace level logs.
 	LogDebugFilenameRegex *regexp.Regexp `config:"regexp(nil-on-empty);"`
 
 	// Optional: VXLAN encap is now determined by the existing IP pools (Encapsulation struct)
