@@ -119,6 +119,9 @@ spec:
                               - message: notNets entries must be CIDRs
                                 reason: FieldValueInvalid
                                 rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -440,6 +443,9 @@ spec:
                               - message: notNets entries must be CIDRs
                                 reason: FieldValueInvalid
                                 rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -738,6 +744,9 @@ spec:
                               - message: notNets entries must be CIDRs
                                 reason: FieldValueInvalid
                                 rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -1059,6 +1068,9 @@ spec:
                               - message: notNets entries must be CIDRs
                                 reason: FieldValueInvalid
                                 rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
