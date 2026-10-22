@@ -250,12 +250,9 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	InterfaceRefreshInterval *metav1.Duration `json:"interfaceRefreshInterval,omitempty" configv1timescale:"seconds"`
 
-	// IptablesRefreshInterval is the period at which Felix re-checks the IP sets
+	// IptablesRefreshInterval is the period at which Felix re-checks the iptables rules
 	// in the dataplane to ensure that no other process has accidentally broken Calico's rules.
-	// Set to 0 to disable IP sets refresh. Note: the default for this value is lower than the
-	// other refresh intervals as a workaround for a Linux kernel bug that was fixed in kernel
-	// version 4.11. If you are using v4.11 or greater you may want to set this to, a higher value
-	// to reduce Felix CPU usage. [Default: 10s]
+	// Set to 0 to disable iptables refresh. [Default: 10s]
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	IptablesRefreshInterval *metav1.Duration `json:"iptablesRefreshInterval,omitempty" configv1timescale:"seconds"`
@@ -319,7 +316,7 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	NetlinkTimeout *metav1.Duration `json:"netlinkTimeout,omitempty" configv1timescale:"seconds" confignamev1:"NetlinkTimeoutSecs"`
 
-	// MetadataAddr is the IP address or domain name of the server that can answer VM queries for
+	// MetadataAddr is the IP address of the server that can answer VM queries for
 	// cloud-init metadata. In OpenStack, this corresponds to the machine running nova-api (or in
 	// Ubuntu, nova-api-metadata). A value of none (case-insensitive) means that Felix should not
 	// set up any NAT rule for the metadata path. [Default: 127.0.0.1]
@@ -422,7 +419,8 @@ type FelixConfigurationSpec struct {
 	// 5-tuple unswapped. A logged connection with no follow-up log never received a response.
 	// Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log
 	// either, so every follow-up log pairs with an initial one. Enabling this consumes one bit
-	// from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+	// from the Iptables/NftablesMarkMask space. Not supported in eBPF mode or for untracked
+	// (doNotTrack) policies.
 	// [Default: Disabled]
 	// +optional
 	LogConnectionTransitions *LogConnectionTransitionsMode `json:"logConnectionTransitions,omitempty" validate:"omitempty,oneof=Disabled FirstResponseAfterLog"`
@@ -439,22 +437,23 @@ type FelixConfigurationSpec struct {
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
 	LogFilePath string `json:"logFilePath,omitempty"`
 
-	// LogSeverityFile is the log severity above which logs are sent to the log file. [Default: Info]
+	// LogSeverityFile is the log severity at or above which logs are sent to the log file. [Default: Info]
 	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
 	LogSeverityFile string `json:"logSeverityFile,omitempty"`
 
-	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
+	// LogSeverityScreen is the log severity at or above which logs are sent to the stdout. [Default: Info]
 	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty"`
 
-	// LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog.
+	// LogSeveritySys is the log severity at or above which logs are sent to the syslog. Set to None for no logging to
+	// syslog (configuration file and environment variable only).
 	// [Default: Info]
 	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
 	LogSeveritySys string `json:"logSeveritySys,omitempty"`
 
 	// LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
 	// Only logs from files with names that match the given regular expression are included.  The filter only applies
-	// to Debug level logs.
+	// to Debug and Trace level logs.
 	LogDebugFilenameRegex string `json:"logDebugFilenameRegex,omitempty" validate:"omitempty,regexp"`
 
 	// IPIPEnabled overrides whether Felix should configure an IPIP interface on the host. Optional as Felix
@@ -495,7 +494,8 @@ type FelixConfigurationSpec struct {
 	AllowIPIPPacketsFromWorkloads *bool `json:"allowIPIPPacketsFromWorkloads,omitempty"`
 
 	// ReportingInterval is the interval at which Felix reports its status into the datastore or 0 to disable.
-	// Must be non-zero in OpenStack deployments. [Default: 30s]
+	// Must be non-zero in OpenStack deployments. calico-node sets this to `0s` in the `default`
+	// FelixConfiguration if it is not already set. [Default: 30s]
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	ReportingInterval *metav1.Duration `json:"reportingInterval,omitempty" configv1timescale:"seconds" confignamev1:"ReportingIntervalSecs"`
@@ -565,8 +565,8 @@ type FelixConfigurationSpec struct {
 	// set to false. This reduces the number of metrics reported, reducing Prometheus load. [Default: true]
 	PrometheusProcessMetricsEnabled *bool `json:"prometheusProcessMetricsEnabled,omitempty"`
 
-	// PrometheusWireGuardMetricsEnabled disables wireguard metrics collection, which the Prometheus client does by default, when
-	// set to false. This reduces the number of metrics reported, reducing Prometheus load. [Default: true]
+	// PrometheusWireGuardMetricsEnabled disables wireguard metrics collection, which Felix does by default when WireGuard
+	// is enabled, when set to false. This reduces the number of metrics reported, reducing Prometheus load. [Default: true]
 	PrometheusWireGuardMetricsEnabled *bool `json:"prometheusWireGuardMetricsEnabled,omitempty"`
 
 	// PrometheusMetricsCAFile defines the absolute path to the TLS CA certificate file used for securing the /metrics endpoint.
@@ -585,11 +585,13 @@ type FelixConfigurationSpec struct {
 	// This determines how the server validates client certificates. Default is "NoClientCert".
 	PrometheusMetricsClientAuth *PrometheusMetricsClientAuthType `json:"prometheusMetricsClientAuth,omitempty" validate:"omitempty,oneof=RequireAndVerifyClientCert RequireAnyClientCert VerifyClientCertIfGiven NoClientCert"`
 
-	// FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will
+	// FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP ports and CIDRs that Felix will
 	// allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally
-	// cutting off a host with incorrect configuration. For backwards compatibility, if the protocol is not specified,
-	// it defaults to "tcp". If a CIDR is not specified, it will allow traffic from all addresses. To disable all inbound host ports,
-	// use the value "[]". The default value allows ssh access, DHCP, BGP, etcd and the Kubernetes API.
+	// cutting off a host with incorrect configuration. In the configuration file and environment variable, if the protocol
+	// is not specified, it defaults to "tcp"; in the FelixConfiguration resource, set the protocol to "TCP" or "UDP". If a
+	// CIDR is not specified, it will allow traffic from all addresses. To disable all inbound host ports, use the value "[]"
+	// in the FelixConfiguration resource, or "none" in the configuration file and environment variable. The default value
+	// allows ssh access, DHCP, BGP, etcd and the Kubernetes API.
 	// [Default: tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, tcp:5473, tcp:6443, tcp:6666, tcp:6667 ]
 	FailsafeInboundHostPorts *[]ProtoPort `json:"failsafeInboundHostPorts,omitempty"`
 
@@ -611,8 +613,10 @@ type FelixConfigurationSpec struct {
 	// like Application layer policy. [Default: Empty]
 	PolicySyncPathPrefix string `json:"policySyncPathPrefix,omitempty"`
 
-	// UsageReportingEnabled reports anonymous Calico version number and cluster size to projectcalico.org. Logs warnings returned by the usage
-	// server. For example, if a significant security vulnerability has been discovered in the version of Calico being used. [Default: true]
+	// UsageReportingEnabled reports anonymous usage data to projectcalico.org: the Calico version and git revision, the
+	// Kubernetes version, a cluster GUID, the cluster type, whether application layer policy is enabled, and the numbers
+	// of hosts, workload endpoints, host endpoints, policies, profiles and application layer policies. Logs warnings
+	// returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of Calico being used. [Default: true]
 	UsageReportingEnabled *bool `json:"usageReportingEnabled,omitempty"`
 
 	// UsageReportingInitialDelay controls the minimum delay before Felix makes a report. [Default: 300s]
@@ -637,8 +641,8 @@ type FelixConfigurationSpec struct {
 
 	// When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
 	// Configure which type of destinations is excluded from being masqueraded.
-	// - IPPoolsOnly: destinations outside of this IP pool will be masqueraded.
-	// - IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded.
+	// - IPPoolsOnly: destinations outside of all IP pools, or in a LoadBalancer-only IP pool, will be masqueraded.
+	// - IPPoolsAndHostIPs: destinations outside of all IP pools and all hosts, or in a LoadBalancer-only IP pool, will be masqueraded.
 	// [Default: IPPoolsOnly]
 	NATOutgoingExclusions *NATOutgoingExclusionsType `json:"natOutgoingExclusions,omitempty" validate:"omitempty,oneof=IPPoolsOnly IPPoolsAndHostIPs"`
 
@@ -843,9 +847,9 @@ type FelixConfigurationSpec struct {
 	// [Default: Userspace]
 	BPFConntrackCleanupMode *BPFConntrackMode `json:"bpfConntrackMode,omitempty" validate:"omitempty,oneof=Auto Userspace BPFProgram"`
 
-	// BPFConntrackTimers overrides the default values for the specified conntrack timer if
-	// set. Each value can be either a duration or `Auto` to pick the value from
-	// a Linux conntrack timeout.
+	// BPFConntrackTimeouts overrides the default values for the specified conntrack timer if
+	// set. Each value can be a duration. TCPSynSent, TCPEstablished, TCPFinsSeen, GenericTimeout
+	// and ICMPTimeout also accept `Auto` to pick the value from a Linux conntrack timeout.
 	//
 	// Configurable timers are: CreationGracePeriod, TCPSynSent,
 	// TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPTimeout, GenericTimeout,
@@ -901,7 +905,9 @@ type FelixConfigurationSpec struct {
 	// and it improves the performance of pod-to-service connections.  The only reason to disable it is for debugging
 	// purposes.
 	//
-	// Deprecated: Use BPFConnectTimeLoadBalancing [Default: true]
+	// Deprecated: Use BPFConnectTimeLoadBalancing. Felix does not read this field. When calicoctl or the Calico API
+	// server writes the resource, they set BPFConnectTimeLoadBalancing to `Enabled` or `Disabled` to match it, and set
+	// BPFHostNetworkedNATWithoutCTLB to `Disabled`. [Default: true]
 	BPFConnectTimeLoadBalancingEnabled *bool `json:"bpfConnectTimeLoadBalancingEnabled,omitempty" validate:"omitempty"`
 
 	// BPFConnectTimeLoadBalancing when in BPF mode, controls whether Felix installs the connect-time load
@@ -1023,7 +1029,7 @@ type FelixConfigurationSpec struct {
 	// packets from external sources are dropped. [Default: true]
 	BPFIPFragmentReassemblyEnabled *bool `json:"bpfIPFragmentReassemblyEnabled,omitempty" validate:"omitempty"`
 
-	// BPFEnforceRPF enforce strict RPF on all host interfaces with BPF programs regardless of
+	// BPFEnforceRPF enforces RPF on all host interfaces with BPF programs regardless of
 	// what is the per-interfaces or global setting. Possible values are Disabled, Strict
 	// or Loose. [Default: Loose]
 	// +kubebuilder:validation:Pattern=`^(?i)(Disabled|Strict|Loose)?$`
@@ -1102,7 +1108,7 @@ type FelixConfigurationSpec struct {
 	// printed in their entirety.
 	FlowLogsCollectorDebugTrace *bool `json:"flowLogsCollectorDebugTrace,omitempty"`
 
-	// FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
+	// FlowLogsGoldmaneServer is the flow server endpoint to which flow data should be published.
 	FlowLogsGoldmaneServer *string `json:"flowLogsGoldmaneServer,omitempty"`
 
 	// FlowLogsGoldmaneIncludeIPs controls whether flow data sent to Goldmane (and the local flow
@@ -1252,8 +1258,10 @@ type FelixConfigurationSpec struct {
 	// LocalSubnetL2Reachability controls whether Felix automatically responds to
 	// ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
 	// selected LoadBalancer VIPs that fall within the same subnet as the host
-	// interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
-	// subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
+	// interface. Felix responds only for addresses in an IP pool with ipipMode and
+	// vxlanMode both set to Never. When set to PodsAndLoadBalancers, pods and LB VIPs
+	// on the host subnet are reachable from the local L2 segment without BGP.
+	// [Default: Disabled]
 	// +optional
 	LocalSubnetL2Reachability *LocalSubnetL2ReachabilityMode `json:"localSubnetL2Reachability,omitempty" validate:"omitempty,oneof=Disabled PodsAndLoadBalancers"`
 
