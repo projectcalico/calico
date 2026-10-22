@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# remote-cache: keep a directory in the remote build cache bucket as one
+# tarball, with requests signed here so no S3 client is needed.
+#
+#   remote-cache restore <key> <dir>
+#   remote-cache store <key> <dir>
+#
+# A key names immutable content, so store skips a key that already exists.
+# Neither command fails the build over a cache problem: a cache that cannot be
+# reached is a cold build, not a broken one.
+#
+# Reads REMOTE_CACHE_S3_{ENDPOINT,REGION,BUCKET,ACCESS_KEY_ID,ACCESS_KEY_SECRET}.
+
+set -euo pipefail
+
+usage() {
+  echo "usage: $0 restore|store <key> <dir>" >&2
+  exit 2
+}
+
+[[ $# -eq 3 ]] || usage
+cmd=$1 key=$2 dir=$3
+
+: "${REMOTE_CACHE_S3_ENDPOINT:?}" "${REMOTE_CACHE_S3_BUCKET:?}"
+: "${REMOTE_CACHE_S3_ACCESS_KEY_ID:?}" "${REMOTE_CACHE_S3_ACCESS_KEY_SECRET:?}"
+
+# The path goes into the signature unescaped, so keep keys to safe characters.
+[[ "${key}" =~ ^[A-Za-z0-9._/-]+$ ]] || {
+  echo "remote-cache: key ${key} has characters that would need escaping" >&2
+  exit 2
+}
+
+region=${REMOTE_CACHE_S3_REGION:-auto}
+endpoint=${REMOTE_CACHE_S3_ENDPOINT%/}
+host=${endpoint#*://}
+path="/${REMOTE_CACHE_S3_BUCKET}/dir-cache/${key}.tar.zst"
+
+hmac_hex() { # <hex key> <data>
+  printf '%s' "$2" | openssl dgst -sha256 -mac HMAC -macopt "hexkey:$1" -r | cut -d' ' -f1
+}
+
+# SigV4 by hand rather than curl --aws-sigv4: curl before 7.86 leaves
+# x-amz-content-sha256 out of the signed headers, which S3 rejects.
+s3_curl() { # <method> <payload sha256> [curl args...]
+  local method=$1 payload=$2
+  shift 2
+  local now day scope canonical to_sign key_hex
+  now=$(date -u +%Y%m%dT%H%M%SZ)
+  day=${now%%T*}
+  scope="${day}/${region}/s3/aws4_request"
+  canonical=$(printf '%s\n%s\n\nhost:%s\nx-amz-content-sha256:%s\nx-amz-date:%s\n\nhost;x-amz-content-sha256;x-amz-date\n%s' \
+    "${method}" "${path}" "${host}" "${payload}" "${now}" "${payload}")
+  to_sign=$(printf 'AWS4-HMAC-SHA256\n%s\n%s\n%s' "${now}" "${scope}" \
+    "$(printf '%s' "${canonical}" | sha256sum | cut -d' ' -f1)")
+  key_hex=$(printf '%s' "AWS4${REMOTE_CACHE_S3_ACCESS_KEY_SECRET}" | od -An -tx1 | tr -d ' \n')
+  for part in "${day}" "${region}" s3 aws4_request; do
+    key_hex=$(hmac_hex "${key_hex}" "${part}")
+  done
+  # The method is the caller's curl args' to set; it is only signed here. The
+  # signature goes in through a config file rather than argv, which any process
+  # on the machine can read.
+  curl --fail --silent --show-error --retry 3 \
+    --config <(printf 'header = "Authorization: AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=%s"\n' \
+      "${REMOTE_CACHE_S3_ACCESS_KEY_ID}" "${scope}" "$(hmac_hex "${key_hex}" "${to_sign}")") \
+    -H "x-amz-content-sha256: ${payload}" -H "x-amz-date: ${now}" \
+    "$@" "${endpoint}${path}"
+}
+
+empty_hash=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+tmp=$(mktemp -d)
+trap 'rm -rf "${tmp}"' EXIT
+
+case "${cmd}" in
+  restore)
+    if ! s3_curl GET "${empty_hash}" -o "${tmp}/cache.tar.zst" 2>"${tmp}/err"; then
+      echo "remote-cache: no ${key} ($(tr -d '\n' <"${tmp}/err")), building cold" >&2
+      exit 0
+    fi
+    mkdir -p "${dir}"
+    if ! zstd -dc "${tmp}/cache.tar.zst" | tar -C "${dir}" -xf -; then
+      echo "remote-cache: ${key} did not unpack, building cold" >&2
+      exit 0
+    fi
+    echo "remote-cache: restored ${key} into ${dir}" >&2
+    ;;
+  store)
+    if s3_curl HEAD "${empty_hash}" --head -o /dev/null 2>/dev/null; then
+      echo "remote-cache: ${key} already stored" >&2
+      exit 0
+    fi
+    if [[ ! -d "${dir}" ]]; then
+      echo "remote-cache: ${dir} does not exist, not storing ${key}" >&2
+      exit 0
+    fi
+    if ! tar -C "${dir}" -cf - . | zstd -q -T0 -3 -o "${tmp}/cache.tar.zst"; then
+      echo "remote-cache: could not pack ${dir}, not storing ${key}" >&2
+      exit 0
+    fi
+    if ! s3_curl PUT "$(sha256sum "${tmp}/cache.tar.zst" | cut -d' ' -f1)" \
+      -T "${tmp}/cache.tar.zst" -o /dev/null; then
+      echo "remote-cache: failed to store ${key}" >&2
+      exit 0
+    fi
+    echo "remote-cache: stored ${key} from ${dir}" >&2
+    ;;
+  *)
+    usage
+    ;;
+esac

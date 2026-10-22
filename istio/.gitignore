@@ -8,3 +8,4 @@
 .ztunnel.downloaded
 istio/
 ztunnel/
+.cache/

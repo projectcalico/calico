@@ -253,9 +253,8 @@ steps:
       export REPORT_DIR="${CI_HOME}/${CI_GIT_DIR}/process/testing/winfv-felix/report"
       az login --service-principal -u "$AZ_SP_ID" -p "$AZ_SP_PASSWORD" --tenant "$AZ_TENANT_ID" --output none
       .argoci/scripts/load-cached-images calico node
-      # Touched: make would rebuild anything older than the checkout.
       artifact pull workflow win-fv.exe --destination felix/fv/win-fv.exe
-      touch felix/fv/win-fv.exe
+      export WIN_FV_PREBUILT=true
       ( cd /tmp && artifact pull workflow operator-image-dockerio.tar.zst )
       zstd -dc /tmp/operator-image-dockerio.tar.zst | docker load
       export OPERATOR_PREBUILT=true
