@@ -63,10 +63,15 @@ hashrelease: hashrelease-build hashrelease-publish
 ../bin/helm:
 	@$(MAKE) -C ../ helm
 
+# Ensures crane is in the bin dir relative to repo root. Publishing helm charts
+# needs it to add the semver tag alongside the "v"-prefixed chart version.
+../bin/crane:
+	@$(MAKE) -C ../ bin/crane
+
 hashrelease-build: bin/release var-require-all-GITHUB_TOKEN
 	@bin/release hashrelease build
 
-hashrelease-publish: bin/release var-require-all-GITHUB_TOKEN ../bin/helm
+hashrelease-publish: bin/release var-require-all-GITHUB_TOKEN ../bin/helm ../bin/crane
 	@bin/release hashrelease publish
 
 hashrelease-svr-gc: bin/release
