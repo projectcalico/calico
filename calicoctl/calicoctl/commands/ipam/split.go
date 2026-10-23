@@ -45,7 +45,7 @@ func SplitPool(ctx context.Context, config, cidr, poolName string, splitNum int)
 	if err != nil {
 		return fmt.Errorf("error while checking if datastore was locked: %s", err)
 	} else if !locked {
-		return fmt.Errorf("datastore is not locked. Run the `calicoctl datastore migrate lock` command in order split the IP pools")
+		return fmt.Errorf("datastore is not locked. Run the `calicoctl datastore migrate lock` command in order to split the IP pools")
 	}
 
 	var oldPool *apiv3.IPPool

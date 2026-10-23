@@ -54,7 +54,7 @@ func (k *kubectlCmd) Execute(cmdStr string) (string, error) {
 // ExecCmd is a convenience function that wraps exec.Command.
 func ExecCmd(cmdStr string) (*bytes.Buffer, error) {
 	parts := strings.Fields(cmdStr)
-	log.Debugf("cmd tokens: [%+v]", parts)
+	log.WithField("command", commandName(parts)).Debug("Executing command")
 
 	if len(parts) == 0 {
 		return nil, fmt.Errorf("no command to execute")
@@ -75,7 +75,7 @@ func Exec(cmdParts []string) (*bytes.Buffer, error) {
 	cmd := exec.Command(cmdParts[0], cmdParts[1:]...)
 	cmd.Stdout = &result
 
-	log.Debugf("Executing command: %+v ...", cmd)
+	log.WithField("command", cmdParts[0]).Debug("Executing command")
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("command execution failed: %s", err)
 	}
@@ -96,10 +96,12 @@ func KubectlExists() error {
 // Cmd is a struct to hold a command to execute, info description to print and a
 // filepath location for where output should be written to.
 type Cmd struct {
-	Info     string
-	CmdStr   string
-	FilePath string
-	SymLink  string
+	// SanitizeOutput removes sensitive fields before command output is printed or saved.
+	SanitizeOutput func([]byte) ([]byte, error)
+	Info           string
+	CmdStr         string
+	FilePath       string
+	SymLink        string
 
 	// FallbackCmdStr, if set, is run when CmdStr exits non-zero — for example
 	// when collecting from an older component that doesn't understand a newer
@@ -128,13 +130,13 @@ func ExecCmdWriteToFile(logPrefix string, c Cmd) {
 	}
 
 	parts := strings.Fields(c.CmdStr)
-	logCtx.Debugf("cmd tokens: [%+v]", parts)
+	logCtx.WithField("command", commandName(parts)).Debug("Executing command")
 	if len(parts) == 0 {
 		fmt.Printf("%s No command to execute\n", logPrefix)
 		return
 	}
 
-	logCtx.Debugf("Executing command: %+v ... ", c.CmdStr)
+	logCtx.WithField("command", commandName(parts)).Debug("Executing command")
 	content, err := exec.Command(parts[0], parts[1:]...).CombinedOutput()
 
 	// Determine where the output should land. If the primary command failed and
@@ -143,7 +145,7 @@ func ExecCmdWriteToFile(logPrefix string, c Cmd) {
 	// plain-text output). The fallback output replaces the primary output.
 	filePath := c.FilePath
 	if err != nil && c.FallbackCmdStr != "" {
-		logCtx.Debugf("Command failed, trying fallback: %s", c.FallbackCmdStr)
+		logCtx.Debug("Command failed, trying fallback")
 		fParts := strings.Fields(c.FallbackCmdStr)
 		if len(fParts) == 0 {
 			logCtx.Warn("Empty fallback command, skipping")
@@ -155,6 +157,19 @@ func ExecCmdWriteToFile(logPrefix string, c Cmd) {
 					filePath = c.FallbackFilePath
 				}
 			}
+		}
+	}
+
+	if c.SanitizeOutput != nil {
+		if err != nil {
+			logCtx.Warn("Diagnostic collection failed; skipping unsanitized command output")
+			return
+		}
+		var sanitizeErr error
+		content, sanitizeErr = c.SanitizeOutput(content)
+		if sanitizeErr != nil {
+			logCtx.Warn("Unable to sanitize diagnostic output; skipping file")
+			return
 		}
 	}
 
@@ -216,4 +231,12 @@ func ExecAllCmdsWriteToFile(cmds []Cmd) {
 	if err != nil {
 		log.Errorf("Unexpected error from background commands: %v", err)
 	}
+}
+
+// commandName returns only the executable; command arguments may contain credentials.
+func commandName(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	return parts[0]
 }

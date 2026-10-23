@@ -50,6 +50,8 @@ func TestComponentString(t *testing.T) {
 			},
 			expected: "quay.io/calico/operator:1.2.3",
 		},
+		{name: "mixed-case repository", component: Component{Registry: "Quay.IO/Team", Image: "Mixed/Image", Version: "v1.RC1"}, expected: "quay.io/team/mixed/image:v1.RC1"},
+		{name: "mixed-case image without registry", component: Component{Image: "Mixed/Image", Version: "v1.RC1"}, expected: "mixed/image:v1.RC1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.component.String(); got != tc.expected {

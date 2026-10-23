@@ -71,14 +71,14 @@ func (ns *nodeService) NodePublishVolume(ctx context.Context, req *csi.NodePubli
 	podInfo, err := extractPodInfo(req)
 	if err != nil {
 		log.Errorf("Could not extract pod info: %v", err)
-		return nil, status.Errorf(codes.Internal, "Could not extractPodInfo :%v", err)
+		return nil, status.Errorf(codes.Internal, "Could not extract pod information: %v", err)
 	}
 
 	// Mount in the relevant directories at the TargetPath
 	err = ns.mount(req.TargetPath, req.VolumeId)
 	if err != nil {
 		log.Errorf("Could not bind mount %s to /var/run/nodeagent/mount/%s", req.TargetPath, req.VolumeId)
-		return nil, status.Errorf(codes.Internal, "Could not bind mount %s to /var/run/nodeagent/mount/%s : %v", req.TargetPath, req.VolumeId, err)
+		return nil, status.Errorf(codes.Internal, "Could not bind mount %s to /var/run/nodeagent/mount/%s: %v", req.TargetPath, req.VolumeId, err)
 	}
 
 	// Create a credentials file that will store the pod info for the volume. This is important for the nodeagent to watch specific pods.

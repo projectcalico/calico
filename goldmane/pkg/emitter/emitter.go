@@ -156,7 +156,10 @@ func (e *Emitter) Run(ctx context.Context) {
 		// Emit the bucket.
 		if err := e.emit(bucket); err != nil {
 			// Do not log the raw emitter URL — use redactURL to mask userinfo.
-			logrus.Errorf("Error emitting flows to %s: %v", logrusr.RedactURL(e.url), err)
+			logrus.WithFields(logrus.Fields{
+				"url":       logrusr.RedactURL(e.url),
+				"errorType": fmt.Sprintf("%T", err),
+			}).Error("Error emitting flows")
 			e.retry(key)
 			continue
 		}

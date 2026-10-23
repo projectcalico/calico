@@ -5,11 +5,11 @@ PACKAGE_NAME = github.com/projectcalico/calico/node
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 NODE_IMAGE            ?=node
-WINDOWS_IMAGE         ?=$(NODE_IMAGE)-windows
+WINDOWS_IMAGE         ?=$(call lower-repository,$(NODE_IMAGE))-windows
 
 # We don't include the windows images here because we build them differently
 # using targets within this makefile.
-BUILD_IMAGES ?=$(NODE_IMAGE)
+BUILD_IMAGES ?=$(call lower-repository,$(NODE_IMAGE))
 
 # Paths within the build container for BPF source.
 LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/libbpf/src/
@@ -164,8 +164,8 @@ clean: clean-windows
 	# We build these as part of the node build, so clean them as part of the clean.
 	make -C ../felix clean
 	# Delete images that we built in this repo
-	-docker image rm -f $$(docker images $(NODE_IMAGE) -a -q)
-	-docker image rm -f $$(docker images $(NODE_IMAGE) -a -q)
+	-docker image rm -f $$(docker images $(call lower-repository,$(NODE_IMAGE)) -a -q)
+	-docker image rm -f $$(docker images $(call lower-repository,$(NODE_IMAGE)) -a -q)
 	-docker image rm -f $$(docker images $(TEST_CONTAINER_NAME) -a -q)
 
 clean-windows: clean-windows-builder
@@ -244,7 +244,7 @@ dist/LICENSE: ../LICENSE.md
 	mkdir -p dist
 	cp ../LICENSE.md $@
 
-image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER)
+image $(call lower-repository,$(NODE_IMAGE)): $(NODE_CONTAINER_MARKER)
 
 # nft-rpms-image builds (or no-ops on cache hit) the per-arch producer image
 # carrying our patched nftables + libnftnl RPMs. It's an order-only prereq;
@@ -270,7 +270,7 @@ $(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOU
 		--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
 		--build-context nft-rpms=docker-image://$(NFT_RPMS_IMAGE) \
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
-		-t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile .
+		-t $(call lower-repository,$(NODE_IMAGE)):latest-$(ARCH) -f ./Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 

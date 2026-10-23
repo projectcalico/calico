@@ -99,7 +99,11 @@ func newConfig() (*Config, error) {
 }
 
 func (cfg *Config) String() string {
-	data, err := json.Marshal(cfg)
+	safe := *cfg
+	safe.VoltronURL = logrusr.RedactURL(safe.VoltronURL)
+	safe.K8sEndpoint = logrusr.RedactURL(safe.K8sEndpoint)
+	safe.GoldmaneEndpoint = logrusr.RedactURL(safe.GoldmaneEndpoint)
+	data, err := json.Marshal(&safe)
 	if err != nil {
 		return "{}"
 	}
@@ -150,7 +154,7 @@ func (cfg *Config) TLSConfig() (*tls.Config, *tls.Certificate, error) {
 	} else {
 		u, err := url.Parse(cfg.VoltronURL)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse voltron url %s: %w", cfg.VoltronURL, err)
+			return nil, nil, fmt.Errorf("failed to parse voltron URL")
 		}
 
 		tlsConfig.ServerName = u.Hostname()

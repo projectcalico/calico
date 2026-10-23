@@ -815,7 +815,7 @@ func (r *CalicoManager) assertImageVersions() error {
 		switch img {
 		case "calico":
 			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion.String()), "version"}, nil)
+				out, err := r.runner.Run("docker", []string{"run", "--rm", (registry.Component{Registry: reg, Image: img, Version: r.calicoVersion.String()}).String(), "version"}, nil)
 				if err != nil {
 					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
 				} else if len(buildInfoVersionRegex.FindStringSubmatch(out)) == 0 {
@@ -826,7 +826,7 @@ func (r *CalicoManager) assertImageVersions() error {
 			// Skip windows images
 		case "third-party-cni-plugins", "envoy-gateway", "envoy-proxy", "envoy-ratelimit", "istio-install-cni", "istio-pilot", "istio-proxyv2", "istio-ztunnel", "whisker":
 			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion.String())}, nil)
+				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, (registry.Component{Registry: reg, Image: img, Version: r.calicoVersion.String()}).String()}, nil)
 				if err != nil {
 					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
 				} else if !strings.Contains(out, r.calicoVersion.String()) {
@@ -835,7 +835,7 @@ func (r *CalicoManager) assertImageVersions() error {
 			}
 		case "node":
 			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion.String()), "versions"}, nil)
+				out, err := r.runner.Run("docker", []string{"run", "--rm", (registry.Component{Registry: reg, Image: img, Version: r.calicoVersion.String()}).String(), "versions"}, nil)
 				if err != nil {
 					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
 				} else if len(buildInfoVersionRegex.FindStringSubmatch(out)) == 0 {
@@ -852,7 +852,7 @@ func (r *CalicoManager) assertImageVersions() error {
 // assertOperatorImageVersion checks the operator image reports the version it was published at.
 // The operator publishes to registries of its own, so it is absent from the release images.
 func (r *CalicoManager) assertOperatorImageVersion() error {
-	img := fmt.Sprintf("%s/%s:%s", r.operatorRegistry, r.operatorImage, r.operatorVersion)
+	img := r.operatorComponent().String()
 	out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, img}, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get version from operator image %s: %w", img, err)
