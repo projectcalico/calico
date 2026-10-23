@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2018 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,11 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
+
+from keystoneauth1 import session
+from keystoneauth1.identity import v3
+from keystoneclient.v3.client import Client as KeystoneClient
+
 from neutron.db import models_v2
 from neutron.db.models.l3 import FloatingIP
 from neutron.db.qos import models as qos_models
-
 from neutron_lib import exceptions as n_exc
+from neutron_lib.db import api as db_api
 
 from oslo_config import cfg
 
@@ -29,6 +35,7 @@ from networking_calico.common import config as calico_config
 from networking_calico.plugins.ml2.drivers.calico.policy import SG_LABEL_PREFIX
 from networking_calico.plugins.ml2.drivers.calico.policy import SG_NAME_LABEL_PREFIX
 from networking_calico.plugins.ml2.drivers.calico.policy import SG_NAME_MAX_LENGTH
+from networking_calico.plugins.ml2.drivers.calico.syncer import MAX_CAS_ATTEMPTS
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceGone
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
 
@@ -75,166 +82,470 @@ NETWORK_NAME_MAX_LENGTH = datamodel_v3.SANITIZE_LABEL_MAX_LENGTH
 
 
 class WorkloadEndpointSyncer(ResourceSyncer):
-
-    def __init__(self, db, txn_from_context, policy_syncer, keystone_client):
-        super(WorkloadEndpointSyncer, self).__init__(
-            db, txn_from_context, "WorkloadEndpoint"
-        )
+    def __init__(self, db, policy_syncer):
+        super(WorkloadEndpointSyncer, self).__init__(db, "WorkloadEndpoint")
         self.policy_syncer = policy_syncer
-        self.keystone = keystone_client
+        self.keystone = make_keystone_client()
         self.proj_data_cache = {}
         self.region_string = calico_config.get_region_string()
         self.namespace = datamodel_v3.get_namespace(self.region_string)
+
+        # Bulk-prefetched per-port data.  Set to a dict for the duration
+        # of a resync by _prefetch_bulk_port_data(); read by
+        # get_extra_port_information() which falls back to per-port
+        # queries when this is None (e.g. postcommit hooks, single-port
+        # writes via write_endpoint()).
+        #
+        # Concurrency note: this cache is process-local and assumes the
+        # resync runs in a different OS process from the API / RPC forks
+        # that handle dynamic postcommit hooks.  That is how the driver
+        # is wired today: CalicoStartupResyncWorker (and the calico-resync
+        # CLI) get their own WorkloadEndpointSyncer instance, distinct
+        # from the one used by the API forks' postcommit handlers, so a
+        # concurrent dynamic update cannot transitively read stale data
+        # from this cache.  If the architecture ever shares a single
+        # syncer instance across resync and postcommit paths in the same
+        # process, this needs revisiting -- a concurrent postcommit could
+        # then read self._bulk and produce a stale WEP write.
+        self._bulk = None
 
         # Prime the project data cache now so that we do not pay a fill
         # penalty the first time we need to annotate a port on a cold start.
         self.cache_port_project_data()
 
-    def resync(self, context):
-        super(WorkloadEndpointSyncer, self).resync(context)
-        self._resync_live_migrations(context)
+    def resync(self, context, scope):
+        # Clear the bulk-port-data cache after the resync completes.  In
+        # production this is dead code: ``_do_startup_resync`` builds a
+        # fresh syncer instance via ``Scope(self.db).run()`` (no
+        # ``driver=``), and that instance gets GC'd as ``Scope.run()``
+        # returns.  But the test framework reuses the driver's syncer
+        # across resync and postcommit calls (``_trigger_resync(
+        # driver=self.driver)``), and in that scenario a subsequent
+        # ``get_extra_port_information()`` on the postcommit-hook path
+        # would otherwise read stale prefetch data from a previous
+        # resync.  Reset is cheap, test-correct, and defensive against
+        # any future architecture that shares the instance.
+        try:
+            return super(WorkloadEndpointSyncer, self).resync(context, scope)
+        finally:
+            self._bulk = None
 
-    def _resync_live_migrations(self, context):
-        """Ensure LiveMigration resources and destination WEPs are consistent.
+    def get_from_neutron(self, context, scope):
+        if scope.all():
+            ports = self.db.get_ports(context)
+        else:
+            ports = self.db.get_ports(context, filters={"id": list(scope.ids())})
 
-        For each Neutron port with migrating_to set, ensure a destination WEP
-        and LiveMigration resource exist.  For each LiveMigration in etcd that
-        doesn't correspond to a migrating port, delete it.
-        """
-        LOG.info("Starting LiveMigration resync")
-        namespace = self.namespace
+        endpoint_ports = [p for p in ports if _port_is_endpoint_port(p)]
 
-        # Read etcd first and Neutron second, as ResourceSyncer.resync does.  Only the
-        # LiveMigrations in this snapshot are candidates for deletion below, so a
-        # migration that starts after this read - writing its LiveMigration to etcd too
-        # late to be reflected in the Neutron snapshot we take next - cannot be mistaken
-        # for an orphan.
+        # Pre-fetch every piece of per-port side data we need during the
+        # compare phase in a handful of bulk queries, indexed by port_id /
+        # network_id / qos_policy_id.  get_extra_port_information() then
+        # uses the cache in O(1) instead of doing N+1 DB round-trips.
+        self._prefetch_bulk_port_data(context, endpoint_ports)
+
+        # neutron_map keys carry one of three prefixes:
         #
-        # Reading etcd first also gives the mod_revision CAS on the delete something to
-        # do: a LiveMigration rewritten between the two reads is now at a newer revision
-        # than the one recorded here, so the delete fails harmlessly instead of
-        # discarding a resource that has moved on since we read it.
-        existing_lms = datamodel_v3.get_all("LiveMigration", namespace)
+        # * "wep <name>"      - source-side WorkloadEndpoint for the port at its
+        #                       current binding:host_id.  Value is the port dict.
+        # * "dest-wep <name>" - destination-side WorkloadEndpoint for a port
+        #                       that's mid-migration (binding:profile
+        #                       migrating_to set).  Value is (port, dest_host) -
+        #                       carrying dest_host as scope-defined data rather
+        #                       than baking it into a port-dict copy means a
+        #                       reread inside the update path can refetch the
+        #                       port without losing the destination binding.
+        # * "lm <name>"       - LiveMigration resource, paired with the
+        #                       dest-side WEP.  Value is (port, dest_host) for
+        #                       the same reason as dest-wep.
+        neutron_map = {}
+        for port in endpoint_ports:
+            device_id = port.get("device_id")
+            if self._wep_desired_present(port, port.get("binding:host_id"), device_id):
+                neutron_map["wep " + endpoint_name(port)] = port
 
-        # Build the set of LiveMigration names that should exist, based on
-        # Neutron ports with migrating_to set.
-        expected_lm_names = set()
-        with self.txn_from_context(context, "resync-live-migrations"):
-            for port in self.db.get_ports(context):
-                if not _port_is_endpoint_port(port):
-                    continue
-                dest_host = port.get("binding:profile", {}).get("migrating_to")
-                if dest_host is None:
-                    continue
-
-                dest_port = port.copy()
-                dest_port["binding:host_id"] = dest_host
-                dest_wep_name = endpoint_name(dest_port)
-                expected_lm_names.add(dest_wep_name)
-
-                # Ensure LiveMigration and destination WEP exist.
-                self.write_live_migration(port, dest_port)
-                self.write_endpoint(dest_port, context, reread=False)
-                LOG.info(
-                    "LiveMigration resync: ensured LM and dest WEP for %s",
-                    dest_wep_name,
-                )
-
-        # Delete orphaned LiveMigration resources.
-        for name, _, mod_revision in existing_lms:
-            if name not in expected_lm_names:
-                LOG.warning("LiveMigration resync: deleting orphaned LM %s", name)
-                self.delete_live_migration(name, mod_revision=mod_revision)
-
-        LOG.info("LiveMigration resync done")
-
-    def get_protected_names(self, neutron_map):
-        """Return the destination WEP names for in-flight live migrations.
-
-        While a live migration is in flight, the Neutron port still has
-        binding:host_id set to the source host, so the Neutron map only
-        contains the source WEP name.  The destination WEP - created by the
-        pre-migration update and needed until the migration completes - would
-        therefore look orphaned to the generic deletion sweep, and deleting it
-        would cause Felix on the destination host to tear the endpoint down
-        mid-migration.  Protect those names from deletion;
-        _resync_live_migrations keeps the corresponding data in the correct
-        state.
-        """
-        protected = set()
-        for port in neutron_map.values():
-
-            # Note: binding:profile may carry migrating_to=None, so require a
-            # truthy value here.
+            # The dest-side names come from a transient copy with the dest host
+            # overlaid.  We don't keep the copy - the neutron_map value is (port,
+            # dest_host) so the dest_host survives a reread inside the update path.
+            # At cutover ``migrating_to`` can already equal the binding host, and then
+            # the dest-side WEP is the same slot as the source-side one above.
             dest_host = port.get("binding:profile", {}).get("migrating_to")
-            if dest_host:
-                dest_port = port.copy()
-                dest_port["binding:host_id"] = dest_host
-                protected.add(endpoint_name(dest_port))
-        return protected
+            same_slot = dest_host == port.get("binding:host_id")
+            if not same_slot and self._wep_desired_present(port, dest_host, device_id):
+                dest_wep_name = endpoint_name({**port, "binding:host_id": dest_host})
+                neutron_map["dest-wep " + dest_wep_name] = (port, dest_host)
+            if self._lm_desired_present(port, dest_host, device_id):
+                lm_name = endpoint_name({**port, "binding:host_id": dest_host})
+                neutron_map["lm " + lm_name] = (port, dest_host)
+
+        return neutron_map
+
+    def _prefetch_bulk_port_data(self, context, endpoint_ports):
+        """Populate self._bulk with all per-port side data in one pass.
+
+        The five session.query() calls in get_extra_port_information()
+        (plus the plugin-API calls for subnets and SG names) are
+        replaced here by bulk queries indexed by port_id / network_id /
+        policy_id.  get_extra_port_information() then looks them up in
+        O(1) per port from self._bulk.
+        """
+        port_ids = [p["id"] for p in endpoint_ports]
+        network_ids = list({p["network_id"] for p in endpoint_ports})
+        qos_ids = {
+            p.get("qos_policy_id") or p.get("qos_network_policy_id")
+            for p in endpoint_ports
+        }
+        qos_ids.discard(None)
+        qos_ids = list(qos_ids)
+
+        # The ``context.session.query(...)`` calls below need
+        # ``session.in_transaction()`` to be True, or SQLAlchemy emits "ORM session: SQL
+        # execution without transaction in progress" warnings and (depending on the
+        # Neutron release) drops their results.  We arrange that here via
+        # ``CONTEXT_READER.using(...)`` -- mirroring the wrap in
+        # ``get_extra_port_information`` for the per-port (non-bulk) path.  The wrap is
+        # scoped to this function alone so it does not subsume the resync's other
+        # ``self.db.get_*`` calls (in the subnet / policy syncers, and in the resync
+        # compare loop), which are ``@retry_if_session_inactive``-decorated and manage
+        # their own transactions -- per the Neutron devref, an outer transaction would
+        # render that retry "useless".
+        with db_api.CONTEXT_READER.using(context):
+            # IPAllocation rows, grouped by port_id.
+            ip_allocs_by_port = {}
+            if port_ids:
+                q = context.session.query(models_v2.IPAllocation).filter(
+                    models_v2.IPAllocation.port_id.in_(port_ids)
+                )
+                for ip in q:
+                    ip_allocs_by_port.setdefault(ip.port_id, []).append(
+                        {
+                            "subnet_id": ip.subnet_id,
+                            "ip_address": ip.ip_address,
+                        }
+                    )
+
+            # FloatingIP rows, grouped by fixed_port_id.
+            float_ips_by_port = {}
+            if port_ids:
+                q = context.session.query(FloatingIP).filter(
+                    FloatingIP.fixed_port_id.in_(port_ids)
+                )
+                for fip in q:
+                    float_ips_by_port.setdefault(fip.fixed_port_id, []).append(
+                        {
+                            "int_ip": fip.fixed_ip_address,
+                            "ext_ip": fip.floating_ip_address,
+                        }
+                    )
+
+            # Network rows, indexed by id.  We materialise just the columns we need
+            # ({"name": ...}) inside the reader, rather than caching the ORM instance:
+            # that way the downstream attribute access happens while the row is
+            # guaranteed attached to an active session, and we do not rely on oslo.db's
+            # expire_on_commit / detached-attribute behaviour after the reader exits.
+            networks_by_id = {}
+            if network_ids:
+                q = context.session.query(models_v2.Network).filter(
+                    models_v2.Network.id.in_(network_ids)
+                )
+                for net in q:
+                    networks_by_id[net.id] = {"name": net.name}
+
+            # SG bindings, grouped by port_id (a port can have multiple SGs).  Use the
+            # plugin API (with a list filter) rather than
+            # session.query(SecurityGroupPortBinding) so this path is consistent with
+            # the per-port code that uses the same API.
+            sg_ids_by_port = {}
+            if port_ids:
+                bindings = self.db._get_port_security_group_bindings(
+                    context, filters={"port_id": port_ids}
+                )
+                for b in bindings:
+                    sg_ids_by_port.setdefault(b["port_id"], []).append(
+                        b["security_group_id"]
+                    )
+
+            # QoS bandwidth + packet-rate rules, grouped by qos_policy_id.  Materialise
+            # each rule into a plain dict containing only the columns build_qos_controls
+            # reads, so that subsequent access (in
+            # _get_extra_port_information_from_bulk, after the reader exits) does not
+            # depend on the ORM instances still being attached to a live session.  This
+            # mirrors the per-port path's choice to call build_qos_controls inside its
+            # CONTEXT_READER block.
+            qos_bw_by_policy = {}
+            qos_pr_by_policy = {}
+            if qos_ids:
+                q = context.session.query(qos_models.QosBandwidthLimitRule).filter(
+                    qos_models.QosBandwidthLimitRule.qos_policy_id.in_(qos_ids)
+                )
+                for r in q:
+                    qos_bw_by_policy.setdefault(r.qos_policy_id, []).append(
+                        {
+                            "direction": r.direction,
+                            "max_kbps": r.max_kbps,
+                            "max_burst_kbps": r.max_burst_kbps,
+                        }
+                    )
+                q = context.session.query(qos_models.QosPacketRateLimitRule).filter(
+                    qos_models.QosPacketRateLimitRule.qos_policy_id.in_(qos_ids)
+                )
+                for r in q:
+                    qos_pr_by_policy.setdefault(r.qos_policy_id, []).append(
+                        {
+                            "direction": r.direction,
+                            "max_kpps": r.max_kpps,
+                        }
+                    )
+
+        # Subnet rows for every subnet referenced by any fixed IP (for gateway_ip).
+        subnet_ids = list(
+            {ip["subnet_id"] for ips in ip_allocs_by_port.values() for ip in ips}
+        )
+        subnets_by_id = {}
+        if subnet_ids:
+            for s in self.db.get_subnets(context, filters={"id": subnet_ids}):
+                subnets_by_id[s["id"]] = s
+
+        # Names of every security group referenced by any port.
+        all_sg_ids = list(
+            {sg_id for sg_ids in sg_ids_by_port.values() for sg_id in sg_ids}
+        )
+        sg_names_by_id = {}
+        if all_sg_ids:
+            sgs = self.db.get_security_groups(
+                context, filters={"id": all_sg_ids}, default_sg=True
+            )
+            for sg in sgs:
+                sg_names_by_id[sg["id"]] = sg["name"]
+
+        self._bulk = {
+            "ip_allocs_by_port": ip_allocs_by_port,
+            "float_ips_by_port": float_ips_by_port,
+            "networks_by_id": networks_by_id,
+            "sg_ids_by_port": sg_ids_by_port,
+            "qos_bw_by_policy": qos_bw_by_policy,
+            "qos_pr_by_policy": qos_pr_by_policy,
+            "subnets_by_id": subnets_by_id,
+            "sg_names_by_id": sg_names_by_id,
+        }
+
+    def get_from_etcd(self, scope):
+        # Scan all WEPs and LMs from etcd.  At scale this is cheap: in our benchmarks
+        # even 3000 WEPs read in ~270ms, two orders of magnitude less than the per-port
+        # DB queries in the compare phase.  All entries are keyed "wep <name>" / "lm
+        # <name>" initially; the WEP syncer's post_process_etcd_map relabels
+        # destination-side entries once neutron_map is known.
+        etcd_map = {
+            "wep " + name: (spec, revision)
+            for name, spec, revision in datamodel_v3.get_all(
+                "WorkloadEndpoint", self.namespace, with_labels_and_annotations=True
+            )
+        }
+        etcd_map.update(
+            {
+                "lm " + name: (spec, revision)
+                for name, spec, revision in datamodel_v3.get_all(
+                    "LiveMigration", self.namespace
+                )
+            }
+        )
+
+        if scope.all():
+            return etcd_map
+
+        # Narrow port scope.  WEP and LM etcd names can't be synthesised from a port_id
+        # alone (the name also encodes host and device_id), so we filter the scanned
+        # entries by trailing port_id rather than fetching by name.  This also
+        # automatically picks up any stale WEPs at old binding hosts or stale LMs from
+        # cancelled migrations, which would otherwise be invisible to a narrow resync.
+        escaped_port_ids = {pid.replace("-", "--") for pid in scope.ids()}
+
+        def _key_matches_scope(key):
+            # The "wep " / "lm " prefix can't itself match "-<escaped port_id>" (the
+            # prefixes end with a space), so endswith on the full key gives the same
+            # answer as stripping the prefix first.
+            return any(
+                key.endswith("-" + escaped_pid) for escaped_pid in escaped_port_ids
+            )
+
+        return {
+            key: value for key, value in etcd_map.items() if _key_matches_scope(key)
+        }
+
+    def post_process_etcd_map(self, scope, etcd_map, neutron_map):
+        # Rekey any WEPs whose name corresponds to a dest-wep entry in neutron_map, so
+        # the compare loop sees both sides of the dest WEP under the same key.  Etcd has
+        # no source/dest distinction; the rekey lets the compare branch on the dest-wep
+        # prefix and apply the dest_host overlay when computing write_data.
+        for name in list(neutron_map):
+            if name.startswith("dest-wep "):
+                wep_name = remove_prefix(name, "dest-wep ")
+                src_key = "wep " + wep_name
+                if src_key in etcd_map:
+                    etcd_map[name] = etcd_map.pop(src_key)
+        return etcd_map
 
     def delete_legacy_etcd_data(self):
         if self.namespace != datamodel_v3.NO_REGION_NAMESPACE:
-            datamodel_v3.delete_legacy(self.resource_kind, "")
+            datamodel_v3.delete_legacy("WorkloadEndpoint", "")
 
-    # The following methods differ from those for other resources because for
-    # endpoints we need to read, compare and write labels and annotations as
-    # well as spec.
+    def compare_order_key_fn(self, neutron_map):
+        # A stale slot is deleted before the creates when nothing replaces it on the
+        # same host, because a WEP for the same port on another node has the same IPs
+        # (break first, as for a cold migration).  When a new name replaces it on the
+        # same host, it is deleted straight after that name is written, because that is
+        # the same interface, which must not be left without a WEP (make first, as for a
+        # ``device_id`` change) -- nor have two WEPs for longer than necessary.
+        replacements = {}
+        for name in neutron_map:
+            slot = _slot_kind_host_port(name)
+            if slot is not None:
+                replacements[slot] = name
 
-    def get_all_from_etcd(self):
-        return datamodel_v3.get_all(
-            self.resource_kind, self.namespace, with_labels_and_annotations=True
-        )
+        def lm_first(name):
+            # LiveMigrations go first so that, when a mid-migration port is being
+            # created from scratch in etcd, Felix sees the LiveMigration before the
+            # destination WEP -- matching the dynamic postcommit path's ordering on
+            # migration start.
+            return 0 if name.startswith("lm ") else 1
 
-    def etcd_write_data_matches_existing(self, write_data, existing):
-        rspec, rlabels, rannotations = existing
-        wspec, wlabels, wannotations = write_data
-        return rspec == wspec and rlabels == wlabels and rannotations == wannotations
+        def order_key(name):
+            if name in neutron_map:
+                return (1, lm_first(name), name, 0)
+            replacement = replacements.get(_slot_kind_host_port(name))
+            if replacement is not None:
+                return (1, lm_first(replacement), replacement, 1)
+            return (0, lm_first(name), name, 0)
+
+        return order_key
+
+    # The following methods differ from those for other resources for two reasons.
+    #
+    # 1. For endpoints we need to read, compare and write labels and annotations as well
+    # as spec.
+    #
+    # 2. This syncer writes LiveMigration resources as well as WorkloadEndpoints, and
+    # distinguishes source- and dest-side WEPs of a live migration.  These all share
+    # the WorkloadEndpoint etcd kind and key shape; the "wep ", "dest-wep " and "lm "
+    # prefixes on the neutron_map / etcd_map keys are what disambiguate them inside
+    # the resync.
+
+    @staticmethod
+    def _wep_etcd_name(name):
+        """If `name` is a "wep " or "dest-wep " entry, return the bare WEP
+        etcd name (i.e. without prefix); otherwise return None."""
+        if name.startswith("wep "):
+            return remove_prefix(name, "wep ")
+        if name.startswith("dest-wep "):
+            return remove_prefix(name, "dest-wep ")
+        return None
 
     def create_in_etcd(self, name, write_data):
-        spec, labels, annotations = write_data
+        wep_name = self._wep_etcd_name(name)
+        if wep_name is not None:
+            spec, labels, annotations = write_data
+            return datamodel_v3.put(
+                "WorkloadEndpoint",
+                self.namespace,
+                wep_name,
+                spec,
+                labels=labels,
+                annotations=annotations,
+                mod_revision=0,
+            )
+
+        # LiveMigration case.
         return datamodel_v3.put(
-            self.resource_kind,
+            "LiveMigration",
             self.namespace,
-            name,
-            spec,
-            labels=labels,
-            annotations=annotations,
+            remove_prefix(name, "lm "),
+            write_data,
             mod_revision=0,
         )
 
     def update_in_etcd(self, name, write_data, mod_revision=etcdv3.MUST_UPDATE):
-        spec, labels, annotations = write_data
+        wep_name = self._wep_etcd_name(name)
+        if wep_name is not None:
+            spec, labels, annotations = write_data
+            return datamodel_v3.put(
+                "WorkloadEndpoint",
+                self.namespace,
+                wep_name,
+                spec,
+                labels=labels,
+                annotations=annotations,
+                mod_revision=mod_revision,
+            )
+
+        # LiveMigration case.
         return datamodel_v3.put(
-            self.resource_kind,
+            "LiveMigration",
             self.namespace,
-            name,
-            spec,
-            labels=labels,
-            annotations=annotations,
+            remove_prefix(name, "lm "),
+            write_data,
             mod_revision=mod_revision,
         )
 
     def delete_from_etcd(self, name, mod_revision):
+        wep_name = self._wep_etcd_name(name)
+        if wep_name is not None:
+            return datamodel_v3.delete(
+                "WorkloadEndpoint",
+                self.namespace,
+                wep_name,
+                mod_revision=mod_revision,
+            )
+
+        # LiveMigration case.
         return datamodel_v3.delete(
-            self.resource_kind, self.namespace, name, mod_revision=mod_revision
+            "LiveMigration",
+            self.namespace,
+            remove_prefix(name, "lm "),
+            mod_revision=mod_revision,
         )
 
-    def get_all_from_neutron(self, context):
-        # TODO(lukasa): We could reduce the amount of data we load from Neutron
-        # here by filtering in the get_ports call.
-        return dict(
-            (endpoint_name(port), port)
-            for port in self.db.get_ports(context)
-            if _port_is_endpoint_port(port)
-        )
+    def neutron_to_etcd_write_data(self, name, value, context, reread=False):
+        if name.startswith("lm "):
+            port, dest_host = value
+            return self.neutron_to_live_migration_etcd_write_data(
+                port, dest_host, context, reread
+            )
+        if name.startswith("dest-wep "):
+            port, dest_host = value
+            return self.neutron_to_port_etcd_write_data(
+                port, context, reread, dest_host=dest_host
+            )
+        # "wep " - plain source-side WEP.
+        return self.neutron_to_port_etcd_write_data(value, context, reread)
 
-    def neutron_to_etcd_write_data(self, port, context, reread=False):
+    def neutron_to_port_etcd_write_data(self, port, context, reread, dest_host=None):
+        """Build the etcd write-data tuple for a WEP from a Neutron port.
+
+        If ``dest_host`` is given, this is the destination-side WEP of a live migration,
+        and we overlay ``dest_host`` onto the (possibly re-read) port so
+        endpoint_spec/labels/annotations see the dest binding.  A reread that finds the
+        port no longer wants a WEP at ``dest_host`` raises ResourceGone, letting the
+        resync skip the entry -- the next pass sees no matching dest-wep in neutron_map
+        and the in-etcd-only branch deletes the orphan dest WEP.
+
+        Without ``dest_host`` this is the source-side WEP.  Either way, the reread
+        applies the same ``_wep_desired_present`` test that ``sync_wep`` does, to the
+        host and ``device_id`` the entry is keyed on: a port that has been unbound,
+        moved or attached to a different VM in the meantime raises ResourceGone and is
+        skipped the same way.
+        """
         if reread:
+            # Captured before the re-read, because they are what the entry is keyed on.
+            intended_host = dest_host or port.get("binding:host_id")
+            intended_device_id = port.get("device_id")
             try:
                 port = self.db.get_port(context, port["id"])
             except n_exc.PortNotFound:
                 raise ResourceGone()
+            if not self._wep_desired_present(port, intended_host, intended_device_id):
+                raise ResourceGone()
+        if dest_host is not None:
+            port = {**port, "binding:host_id": dest_host}
         port_extra = self.get_extra_port_information(context, port)
         return (
             endpoint_spec(port, port_extra),
@@ -242,130 +553,280 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             endpoint_annotations(port),
         )
 
-    def write_endpoint(self, port, context, must_update=False, reread=True):
-        if reread:
-            # Reread the current port. This protects against concurrent writes
-            # breaking our state.
-            port = self.db.get_port(context, port["id"])
+    def neutron_to_live_migration_etcd_write_data(
+        self, port, dest_host, context, reread
+    ):
+        """Build the etcd write-data dict for a LiveMigration resource.
 
-        # Fill out other information we need on the port.
-        port_extra = self.get_extra_port_information(context, port)
-
-        # Write the security policies for this port.
-        self.policy_syncer.write_sgs_to_etcd(port_extra.security_groups, context)
-
-        # Implementation note: we could arguably avoid holding the transaction
-        # for this length and instead release it here, then use atomic CAS. The
-        # problem there is that we potentially have to repeatedly respin and
-        # regain the transaction. Let's not do that for now, and performance
-        # test to see if it's a problem later.
-        mod_revision = etcdv3.MUST_UPDATE if must_update else None
-        datamodel_v3.put(
-            "WorkloadEndpoint",
-            self.namespace,
-            endpoint_name(port),
-            endpoint_spec(port, port_extra),
-            labels=endpoint_labels(port, self.namespace, port_extra),
-            annotations=endpoint_annotations(port),
-            mod_revision=mod_revision,
-        )
-
-    def delete_endpoint(self, port):
-        return datamodel_v3.delete(
-            "WorkloadEndpoint", self.namespace, endpoint_name(port)
-        )
-
-    def write_live_migration(self, source_port, dest_port):
-        """Write a LiveMigration resource for a migrating port.
-
-        The LiveMigration name is derived from the destination WEP name.
-        Returns the UID assigned by etcd (or the existing UID if already
-        present).
+        ``dest_host`` is the scope-defined destination host; reconstructing the
+        dest_port copy here (rather than carrying a stale fork in the neutron_map value)
+        means a reread is always safe -- the dest_host survives, and an interrupted
+        migration is detected and skipped via ResourceGone.
         """
-        namespace = self.namespace
-        wep_id_fields = {
-            "orchestratorID": "openstack",
-            "workloadID": namespace + "/" + source_port["device_id"],
-            "endpointID": source_port["id"],
-        }
-        return datamodel_v3.put(
-            "LiveMigration",
-            namespace,
-            endpoint_name(dest_port),
-            {
-                "source": {
-                    "workloadEndpoint": dict(
-                        hostname=source_port["binding:host_id"],
-                        **wep_id_fields,
-                    ),
-                },
-                "target": {
-                    "workloadEndpoint": dict(
-                        hostname=dest_port["binding:host_id"],
-                        **wep_id_fields,
-                    ),
-                },
-            },
-        )
+        if reread:
+            intended_device_id = port.get("device_id")
+            try:
+                port = self.db.get_port(context, port["id"])
+            except n_exc.PortNotFound:
+                raise ResourceGone()
+            if not self._lm_desired_present(port, dest_host, intended_device_id):
+                raise ResourceGone()
+        dest_port = {**port, "binding:host_id": dest_host}
+        return live_migration_spec(self.namespace, port, dest_port)
 
-    def delete_live_migration(self, name, mod_revision=None):
-        """Delete a LiveMigration resource by name."""
-        return datamodel_v3.delete(
-            "LiveMigration", self.namespace, name, mod_revision=mod_revision
+    def sync_wep(self, port, host, context):
+        """Sync the WorkloadEndpoint for this port at ``host`` to etcd.
+
+        The etcd key is ``endpoint_name(port_at_host)`` --
+        ``<host>-openstack-<device_id>-<port_id>`` -- so the slot is identified by
+        ``(port_id, host, device_id)``, with ``device_id`` taken from ``port``.  When
+        an update changes ``device_id`` (a detach, or a reattach to another VM), the
+        caller syncs both the original and the updated port, and the re-read decides
+        which of those slots should exist.
+
+        A given port can own up to two WEP slots in etcd: one at its current
+        ``binding:host_id`` (the "source" WEP, in the bound steady state) and one at its
+        ``binding:profile.migrating_to`` (the "dest" WEP, during live migration).  Both
+        share the same key shape and the same WorkloadEndpoint resource type; they only
+        differ in which host's binding the spec describes.  ``sync_wep`` is therefore
+        agnostic as to "source" vs "dest" -- the caller passes the host they want
+        synced, and the function decides whether that slot should hold a WEP based on a
+        re-read of the port from the Neutron DB.  An empty ``host`` or ``device_id``
+        names no slot, so there is nothing to do.
+
+        Each CAS attempt:
+          1. Read the slot's mod_revision (KeyNotFound -> 0).
+          2. Re-read the port from the Neutron DB.  PortNotFound -> the
+             slot's desired state is "absent".
+          3. Desired present iff ``_wep_desired_present``: the DB port's
+             ``device_id`` is the slot's, and its ``binding:host_id`` is
+             ``host`` (source role) or its ``migrating_to`` is ``host`` (dest
+             role).  ``binding:vif_type`` is deliberately not consulted.
+          4a. Absent: CAS-delete at the observed mod_revision (a no-op if
+             mod_revision == 0; mandatory CAS otherwise, else a re-created
+             WEP could be clobbered).
+          4b. Present: compose spec/labels/annotations from the port
+             overlaid with ``binding:host_id=host``, re-sync the port's
+             SGs (CAS-protected itself, idempotent on retry), then CAS-put.
+
+        On CAS conflict, retry from step 1.  After ``MAX_CAS_ATTEMPTS`` log a warning
+        and return None; persistent drift is repaired by the next resync.
+        """
+        device_id = port.get("device_id")
+        if not host or not device_id:
+            return True
+
+        port_id = port["id"]
+
+        # Overlay binding:host_id=host before computing the etcd name so the caller can
+        # pass either ``port`` or ``original`` -- the caller-provided dict's
+        # ``binding:host_id`` does not matter.
+        name = endpoint_name({**port, "binding:host_id": host})
+        for attempt in range(MAX_CAS_ATTEMPTS):
+            try:
+                _, mod_revision = datamodel_v3.get_namespaced(
+                    "WorkloadEndpoint", self.namespace, name
+                )
+            except etcdv3.KeyNotFound:
+                mod_revision = 0
+
+            try:
+                db_port = self.db.get_port(context, port_id)
+            except n_exc.PortNotFound:
+                db_port = None
+
+            if not self._wep_desired_present(db_port, host, device_id):
+                if mod_revision == 0:
+                    return True
+                if datamodel_v3.delete(
+                    "WorkloadEndpoint",
+                    self.namespace,
+                    name,
+                    mod_revision=mod_revision,
+                ):
+                    return True
+                LOG.debug(
+                    "WorkloadEndpoint delete CAS retry %d/%d for %s",
+                    attempt + 1,
+                    MAX_CAS_ATTEMPTS,
+                    name,
+                )
+                continue
+
+            # Present-branch: compose with binding:host_id overlaid.  For the
+            # source-role case the overlay is a no-op (db_port["binding:host_id"] ==
+            # host already); for the dest-role case it switches the host so
+            # endpoint_spec / labels / annotations see the dest binding.
+            write_port = {**db_port, "binding:host_id": host}
+            port_extra = self.get_extra_port_information(context, write_port)
+
+            # Sync the port's SGs first, so Felix sees the policy before the WEP that
+            # references it.  sync_sgs_to_etcd is CAS-protected per SG and idempotent
+            # across retries.
+            self.policy_syncer.sync_sgs_to_etcd(port_extra.security_groups, context)
+            if datamodel_v3.put(
+                "WorkloadEndpoint",
+                self.namespace,
+                name,
+                endpoint_spec(write_port, port_extra),
+                labels=endpoint_labels(write_port, self.namespace, port_extra),
+                annotations=endpoint_annotations(write_port),
+                mod_revision=mod_revision,
+            ):
+                return True
+            LOG.debug(
+                "WorkloadEndpoint CAS retry %d/%d for %s",
+                attempt + 1,
+                MAX_CAS_ATTEMPTS,
+                name,
+            )
+
+        LOG.warning(
+            "WorkloadEndpoint CAS exhausted %d retries for %s; relying on"
+            " resync to repair any drift",
+            MAX_CAS_ATTEMPTS,
+            name,
         )
+        return None
+
+    def sync_lm(self, port, dest_host, context):
+        """Sync the LiveMigration resource for this port at ``dest_host`` to etcd.
+
+        Like ``sync_wep``, the etcd key is
+        ``<dest_host>-openstack-<device_id>-<port_id>`` so the slot is identified by
+        ``(port_id, dest_host, device_id)``, with ``device_id`` taken from ``port``.
+        The slot shares its key shape (and resource name) with the dest-side WEP at the
+        same host, though the two are stored as different resource types.
+
+        Each CAS attempt:
+          1. Read the slot's mod_revision (KeyNotFound -> 0).
+          2. Re-read the port from the Neutron DB.  PortNotFound -> absent.
+          3. Desired present iff ``_lm_desired_present``: the DB port's
+             ``device_id`` is the slot's and its ``migrating_to`` is
+             ``dest_host``.
+          4a. Absent: CAS-delete (no-op at mod_revision == 0).
+          4b. Present: compose live_migration_spec from the re-read port
+             plus dest_host overlay, then CAS-put.
+
+        On CAS conflict, retry.  After ``MAX_CAS_ATTEMPTS`` log a warning and return
+        None.
+
+        Callers that need the LiveMigration UID for logging should call
+        ``datamodel_v3.get_uid("LiveMigration", namespace, name)`` separately -- either
+        before invoking ``sync_lm`` (for end-of-migration logs, where the UID will be
+        lost once the LM is deleted) or after (for start-of-migration logs).
+        """
+        device_id = port.get("device_id")
+        if not dest_host or not device_id:
+            return True
+
+        port_id = port["id"]
+        name = endpoint_name({**port, "binding:host_id": dest_host})
+        for attempt in range(MAX_CAS_ATTEMPTS):
+            try:
+                _, mod_revision = datamodel_v3.get_namespaced(
+                    "LiveMigration", self.namespace, name
+                )
+            except etcdv3.KeyNotFound:
+                mod_revision = 0
+
+            try:
+                db_port = self.db.get_port(context, port_id)
+            except n_exc.PortNotFound:
+                db_port = None
+
+            if not self._lm_desired_present(db_port, dest_host, device_id):
+                if mod_revision == 0:
+                    return True
+                if datamodel_v3.delete(
+                    "LiveMigration",
+                    self.namespace,
+                    name,
+                    mod_revision=mod_revision,
+                ):
+                    return True
+                LOG.debug(
+                    "LiveMigration delete CAS retry %d/%d for %s",
+                    attempt + 1,
+                    MAX_CAS_ATTEMPTS,
+                    name,
+                )
+                continue
+
+            dest_port = {**db_port, "binding:host_id": dest_host}
+            if datamodel_v3.put(
+                "LiveMigration",
+                self.namespace,
+                name,
+                live_migration_spec(self.namespace, db_port, dest_port),
+                mod_revision=mod_revision,
+            ):
+                return True
+            LOG.debug(
+                "LiveMigration CAS retry %d/%d for %s",
+                attempt + 1,
+                MAX_CAS_ATTEMPTS,
+                name,
+            )
+
+        LOG.warning(
+            "LiveMigration CAS exhausted %d retries for %s; relying on"
+            " resync to repair any drift",
+            MAX_CAS_ATTEMPTS,
+            name,
+        )
+        return None
+
+    @staticmethod
+    def _wep_desired_present(db_port, host, device_id):
+        """Decide whether the WEP slot at ``host`` for ``device_id`` should exist.
+
+        Every path that decides whether a WEP exists -- the dynamic hooks via
+        ``sync_wep``, and the resync's map and re-read -- goes through here, so that
+        they cannot disagree.  The one shortcut is ``create_port_postcommit``, which
+        leaves an unbound port to the bind's ``update_port_postcommit`` that follows in
+        the same API call, and to the resync if that is lost.
+        """
+        if not _etcd_slots_can_exist_for(db_port, host, device_id):
+            return False
+
+        # ``binding:host_id`` specifies the host that a port should exist on in steady
+        # state, or - during a live migration - the host that the port is initially on
+        # (and migrating away from).  In both of those cases a WEP should exist on
+        # ``binding:host_id``.
+        #
+        # We intentionally do not also check ``binding:vif_type``, because Neutron
+        # rebinds the port whenever a binding attribute changes - notably both when a
+        # live migration operation begins, and when it completes - and during that
+        # rebind it commits ``vif_type = "unbound"`` in one transaction and the new
+        # binding in a second one (see ``_process_port_binding`` in ML2's plugin.py).
+        # We definitely do not want ``update_port_postcommit`` for the first commit to
+        # briefly delete the WEP, even if a second quickly following
+        # ``update_port_postcommit`` call will recreate it again.
+        #
+        # A genuine persistent unbind would also clear ``binding:host_id``, and then we
+        # would correctly delete the WEP from its old host.
+        if db_port.get("binding:host_id") == host:
+            return True
+
+        # During a live migration, ``port["binding:profile"]["migrating_to"]`` specifies
+        # the host that the port is migrating to.  In this case a WEP should also exist
+        # on that destination host.
+        if db_port.get("binding:profile", {}).get("migrating_to") == host:
+            return True
+
+        return False
+
+    @staticmethod
+    def _lm_desired_present(db_port, dest_host, device_id):
+        """Decide whether the LiveMigration slot at ``dest_host`` should exist."""
+        if not _etcd_slots_can_exist_for(db_port, dest_host, device_id):
+            return False
+
+        return db_port.get("binding:profile", {}).get("migrating_to") == dest_host
 
     def add_port_interface_name(self, port, port_extra):
         port_extra.interface_name = "tap" + port["id"][:11]
-
-    def get_security_groups_for_port(self, context, port):
-        """Checks which security groups apply for a given port.
-
-        Frustratingly, the port dict provided to us when we call get_port may
-        actually be out of date, and I don't know why. This change ensures that
-        we get the most recent information.
-        """
-        filters = {"port_id": [port["id"]]}
-        bindings = self.db._get_port_security_group_bindings(context, filters=filters)
-        return [binding["security_group_id"] for binding in bindings]
-
-    def get_fixed_ips_for_port(self, context, port):
-        """Obtains a complete list of fixed IPs for a port.
-
-        Much like with security groups, for some insane reason we're given an
-        out of date port dictionary when we call get_port. This forces an
-        explicit query of the IPAllocation table to get the right data out of
-        Neutron.
-        """
-        return [
-            {"subnet_id": ip["subnet_id"], "ip_address": ip["ip_address"]}
-            for ip in context.session.query(models_v2.IPAllocation).filter_by(
-                port_id=port["id"]
-            )
-        ]
-
-    def get_floating_ips_for_port(self, context, port):
-        """Obtains a list of floating IPs for a port."""
-        return [
-            {"int_ip": ip["fixed_ip_address"], "ext_ip": ip["floating_ip_address"]}
-            for ip in context.session.query(FloatingIP).filter_by(
-                fixed_port_id=port["id"]
-            )
-        ]
-
-    def get_network_properties_for_port(self, context, port, port_extra):
-        network = (
-            context.session.query(models_v2.Network)
-            .filter_by(id=port["network_id"])
-            .first()
-        )
-
-        try:
-            port_extra.network_name = datamodel_v3.sanitize_label_name_value(
-                network["name"],
-                NETWORK_NAME_MAX_LENGTH,
-            )
-        except Exception:
-            LOG.warning(f"Failed to find network name for port {port['id']}")
 
     def get_extra_port_information(self, context, port):
         """get_extra_port_information
@@ -374,28 +835,173 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         etcd.
         """
         LOG.debug("port = %r", port)
+        if self._bulk is not None:
+            return self._get_extra_port_information_from_bulk(context, port)
         port_extra = PortExtra()
-        port_extra.fixed_ips = self.get_fixed_ips_for_port(context, port)
-        port_extra.floating_ips = self.get_floating_ips_for_port(context, port)
-        port_extra.security_groups = self.get_security_groups_for_port(context, port)
-        self.get_network_properties_for_port(context, port, port_extra)
 
+        # Collect information that uses raw queries into the Neutron DB.  These queries
+        # need ``session.in_transaction()`` to be True, or else SQLAlchemy drops huge
+        # WARNING tracebacks saying "ORM session: SQL execution without transaction in
+        # progress".  We arrange for that by using the ``CONTEXT_READER`` wrapper.
+        with db_api.CONTEXT_READER.using(context):
+            # We may have an out of date or incomplete port dict at this point.
+            # Explicitly query the IPAllocation table to get latest fixed IP data.
+            port_extra.fixed_ips = [
+                {"subnet_id": ip["subnet_id"], "ip_address": ip["ip_address"]}
+                for ip in context.session.query(models_v2.IPAllocation).filter_by(
+                    port_id=port["id"]
+                )
+            ]
+
+            # Similarly for floating IPs.
+            port_extra.floating_ips = [
+                {"int_ip": ip["fixed_ip_address"], "ext_ip": ip["floating_ip_address"]}
+                for ip in context.session.query(FloatingIP).filter_by(
+                    fixed_port_id=port["id"]
+                )
+            ]
+
+            # And security groups.
+            port_extra.security_groups = [
+                binding["security_group_id"]
+                for binding in self.db._get_port_security_group_bindings(
+                    context, filters={"port_id": [port["id"]]}
+                )
+            ]
+
+            # Read the Network so we can get its name.
+            network = (
+                context.session.query(models_v2.Network)
+                .filter_by(id=port["network_id"])
+                .first()
+            )
+            try:
+                port_extra.network_name = datamodel_v3.sanitize_label_name_value(
+                    network["name"],
+                    NETWORK_NAME_MAX_LENGTH,
+                )
+            except Exception:
+                LOG.warning("Failed to find network name for port %s", port["id"])
+
+            # Read QoS rules.  We build port_extra.qos here, inside the reader, so that
+            # the per-rule attribute accesses inside build_qos_controls happen while the
+            # rule ORM objects are still attached to the session.  Calling
+            # build_qos_controls after the reader exited would work today (the columns
+            # we access are simple eager-loaded ones, and oslo.db's reader mode
+            # typically leaves detached attributes readable), but would tie our
+            # correctness to oslo.db's expire_on_commit / rollback_reader_sessions
+            # configuration.  Calling build_qos_controls inside the reader is cheap and
+            # decouples us from those internals.
+            qos_policy_id = port.get("qos_policy_id") or port.get(
+                "qos_network_policy_id"
+            )
+            LOG.debug("QoS Policy ID = %r", qos_policy_id)
+            if qos_policy_id:
+                bw_rules = context.session.query(
+                    qos_models.QosBandwidthLimitRule
+                ).filter_by(qos_policy_id=qos_policy_id)
+                pr_rules = context.session.query(
+                    qos_models.QosPacketRateLimitRule
+                ).filter_by(qos_policy_id=qos_policy_id)
+            else:
+                bw_rules = []
+                pr_rules = []
+            port_extra.qos = self.build_qos_controls(bw_rules, pr_rules)
+
+        # Now processing that either MUST be outside of any transaction - because it
+        # will call @retry_if_session_inactive-decorated calls that only work correctly
+        # when not in an outer transaction - or that doesn't involve the DB at all and
+        # so doesn't care about transaction state.
         self.add_port_gateways(context, port_extra)
         self.add_port_interface_name(port, port_extra)
         self.add_port_project_data(port, context, port_extra)
         self.add_port_sg_names(context, port_extra)
-        self.add_port_qos(port, context, port_extra)
+
+        return port_extra
+
+    def _get_extra_port_information_from_bulk(self, context, port):
+        """Build a PortExtra for `port` using self._bulk prefetched data.
+
+        Assumes _prefetch_bulk_port_data() has populated self._bulk at
+        the start of resync.  Produces the same result as the per-port
+        code path, but without any per-port DB round-trips.
+        """
+        bulk = self._bulk
+        port_id = port["id"]
+
+        port_extra = PortExtra()
+
+        # Fixed IPs, with gateway filled in from the subnet cache.  Fall
+        # back to a per-subnet get_subnet() for IDs the bulk prefetch
+        # didn't see -- matches the per-port path in add_port_gateways
+        # which always uses the singular API.
+        port_extra.fixed_ips = []
+        for ip in bulk["ip_allocs_by_port"].get(port_id, []):
+            subnet = bulk["subnets_by_id"].get(ip["subnet_id"])
+            if subnet is None:
+                subnet = self.db.get_subnet(context, ip["subnet_id"])
+            port_extra.fixed_ips.append(
+                {
+                    "subnet_id": ip["subnet_id"],
+                    "ip_address": ip["ip_address"],
+                    "gateway": subnet["gateway_ip"] if subnet else None,
+                }
+            )
+
+        # Floating IPs.
+        port_extra.floating_ips = bulk["float_ips_by_port"].get(port_id, [])
+
+        # Security groups + names.
+        port_extra.security_groups = bulk["sg_ids_by_port"].get(port_id, [])
+        for sg_id in port_extra.security_groups:
+            name = bulk["sg_names_by_id"].get(sg_id)
+            if name is not None:
+                port_extra.security_group_names[sg_id] = (
+                    datamodel_v3.sanitize_label_name_value(name, SG_NAME_MAX_LENGTH)
+                )
+
+        # Network name.
+        network = bulk["networks_by_id"].get(port["network_id"])
+        if network is not None:
+            try:
+                port_extra.network_name = datamodel_v3.sanitize_label_name_value(
+                    network["name"],
+                    NETWORK_NAME_MAX_LENGTH,
+                )
+            except Exception:
+                LOG.warning("Failed to sanitize network name for port %s", port_id)
+
+        # Interface name.
+        self.add_port_interface_name(port, port_extra)
+
+        # Project data — still uses the keystone-backed in-process cache;
+        # no DB round-trip in the common case.
+        self.add_port_project_data(port, context, port_extra)
+
+        # QoS — use bulk-prefetched rules.
+        qos_policy_id = port.get("qos_policy_id") or port.get("qos_network_policy_id")
+        LOG.debug("QoS Policy ID = %r", qos_policy_id)
+        if qos_policy_id:
+            bw_rules = bulk["qos_bw_by_policy"].get(qos_policy_id, [])
+            pr_rules = bulk["qos_pr_by_policy"].get(qos_policy_id, [])
+        else:
+            bw_rules = []
+            pr_rules = []
+
+        port_extra.qos = self.build_qos_controls(bw_rules, pr_rules)
 
         return port_extra
 
     def add_port_gateways(self, context, port_extra):
         """add_port_gateways
 
-        Determine the gateway IP addresses for a given port's IP addresses, and
-        adds them to the port dict.
+        Determine the gateway IP addresses for a given port's IP addresses, and adds
+        them to the port dict.
 
-        This method assumes it's being called from within a database
-        transaction and does not take out another one.
+        The ``self.db.get_subnet`` call is ``@retry_if_session_inactive`` +
+        ``@CONTEXT_READER``-decorated, so this method MUST run without any outer
+        transaction we own (otherwise the retry decorator would be disabled).  Each call
+        opens and closes its own reader transaction internally.
         """
         for ip in port_extra.fixed_ips:
             subnet = self.db.get_subnet(context, ip["subnet_id"])
@@ -406,14 +1012,16 @@ class WorkloadEndpointSyncer(ResourceSyncer):
 
         Determine and store the name of each security group that a port uses.
 
-        This method assumes it's being called from within a database
-        transaction and does not take out another one.
+        The ``self.db.get_security_groups`` call is ``@retry_if_session_inactive`` +
+        ``@CONTEXT_READER``-decorated, so this method MUST run without any outer
+        transaction we own.  The retry decorator does the recovery for the
+        ``_ensure_default_security_group`` race that ``default_sg=True`` (below) is
+        meant to side-step.
         """
-        # Oddly, get_security_groups normally tries to create the default SG
-        # for the current tenant, and that can hit a
-        # NeutronDbObjectDuplicateEntry exception - presumably if there's a
-        # race with multiple servers or threads trying to do this at the same
-        # time.  Adding "default_sg=True" here suppresses that creation
+        # Oddly, get_security_groups normally tries to create the default SG for the
+        # current tenant, and that can hit a NeutronDbObjectDuplicateEntry exception -
+        # presumably if there's a race with multiple servers or threads trying to do
+        # this at the same time.  Adding "default_sg=True" here suppresses that creation
         # attempt.
         filters = {"id": port_extra.security_groups}
         for sg in self.db.get_security_groups(
@@ -424,14 +1032,9 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             )
             port_extra.security_group_names[sg["id"]] = sg_name
 
-    def add_port_qos(self, port, context, port_extra):
-        """add_port_qos
-
-        Determine and store QoS parameters for a port.
-
-        This method assumes it's being called from within a database
-        transaction and does not take out another one.
-        """
+    @staticmethod
+    def build_qos_controls(bw_rules, pr_rules):
+        """Build QoSControls dict, from the given rules and config."""
         qos = {}
 
         # Minima, maxima and defaults as specified in the WorkloadEndpoint API,
@@ -455,34 +1058,25 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 setting = max
             return setting
 
-        qos_policy_id = port.get("qos_policy_id") or port.get("qos_network_policy_id")
-        LOG.debug("QoS Policy ID = %r", qos_policy_id)
-        if qos_policy_id:
-            rules = context.session.query(qos_models.QosBandwidthLimitRule).filter_by(
-                qos_policy_id=qos_policy_id
-            )
-            for r in rules:
-                LOG.debug("BW rule = %r", r)
-                direction = r.get("direction", "egress")
-                if r["max_kbps"] != 0:
-                    qos[direction + "Bandwidth"] = cap(
-                        r["max_kbps"] * 1000, MINMAX_BANDWIDTH
-                    )
-                if r["max_burst_kbps"] != 0:
-                    qos[direction + "Peakrate"] = cap(
-                        r["max_burst_kbps"] * 1000, MINMAX_BW_PEAKRATE
-                    )
+        for r in bw_rules:
+            LOG.debug("BW rule = %r", r)
+            direction = r.get("direction", "egress")
+            if r["max_kbps"] != 0:
+                qos[direction + "Bandwidth"] = cap(
+                    r["max_kbps"] * 1000, MINMAX_BANDWIDTH
+                )
+            if r["max_burst_kbps"] != 0:
+                qos[direction + "Peakrate"] = cap(
+                    r["max_burst_kbps"] * 1000, MINMAX_BW_PEAKRATE
+                )
 
-            rules = context.session.query(qos_models.QosPacketRateLimitRule).filter_by(
-                qos_policy_id=qos_policy_id
-            )
-            for r in rules:
-                LOG.debug("PR rule = %r", r)
-                direction = r.get("direction", "egress")
-                if r["max_kpps"] != 0:
-                    qos[direction + "PacketRate"] = cap(
-                        r["max_kpps"] * 1000, MINMAX_PACKET_RATE
-                    )
+        for r in pr_rules:
+            LOG.debug("PR rule = %r", r)
+            direction = r.get("direction", "egress")
+            if r["max_kpps"] != 0:
+                qos[direction + "PacketRate"] = cap(
+                    r["max_kpps"] * 1000, MINMAX_PACKET_RATE
+                )
 
         if cfg.CONF.calico.max_ingress_connections_per_port != 0:
             qos["ingressMaxConnections"] = cap(
@@ -533,7 +1127,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             else:
                 qos["egressPacketBurst"] = calico_config.DEFAULT_PR_BURST
 
-        port_extra.qos = qos
+        return qos
 
     def add_port_project_data(self, port, context, port_extra):
         """add_port_project_data
@@ -583,7 +1177,16 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             LOG.exception("Failed to query Keystone DB")
 
 
+# This can be replaced by `s.removeprefix(prefix)` in Python 3.9+, but for OpenStack
+# Caracal the minimum Python version is 3.8, so we should remain compatible with that.
+def remove_prefix(s, prefix):
+    return s[len(prefix) :] if s.startswith(prefix) else s
+
+
 def endpoint_name(port):
+    assert port["binding:host_id"], "No WEP name without a host: %s" % port["id"]
+    assert port["device_id"], "No WEP name without a device_id: %s" % port["id"]
+
     def escape_dashes(s):
         return s.replace("-", "--")
 
@@ -592,6 +1195,52 @@ def endpoint_name(port):
         escape_dashes(port["device_id"]),
         escape_dashes(port["id"]),
     )
+
+
+def _etcd_slots_can_exist_for(db_port, host, device_id):
+    """Whether slots can exist in etcd for ( db_port["id"], host, device_id ).
+
+    A "slot" can be for a WEP or a LiveMigration, named by port ID, host and device_id.
+    """
+    if db_port is None or not host or not device_id:
+        return False
+
+    # The resync only considers endpoint ports, but the dynamic hooks can see a port
+    # that has just stopped being one.
+    if not _port_is_endpoint_port(db_port):
+        return False
+
+    # ``device_id`` is part of the slot's name, so a slot named for one VM must not
+    # hold the port once it is attached to another one.
+    return db_port.get("device_id") == device_id
+
+
+def _slot_kind_host_port(name):
+    """Map a "wep ", "dest-wep " or "lm " map key to (kind, host, port_id).
+
+    Returns None if the WEP name after the prefix isn't in our format, such as a
+    legacy or hand-edited one.
+    """
+    kind, wep_name = name.split(" ", 1)
+    parts = datamodel_v3.split_endpoint_name(wep_name)
+    if len(parts) != 4 or parts[1] != "openstack":
+        return None
+    return ("lm" if kind == "lm" else "wep", parts[0], parts[3])
+
+
+def endpoint_name_without_host(name):
+    # The `device_id` and `id` parts of the name are UUIDs and so cannot contain
+    # "openstack".  Hence...
+    parts = name.split("-")
+    try:
+        openstack_pos = len(parts) - 1 - parts[::-1].index("openstack")
+    except ValueError:
+        # No "openstack" segment in the name.  Can happen if etcd contains a legacy or
+        # hand-edited resource with a non-standard name; return the input unchanged so
+        # the caller's dict lookup misses cleanly and the bad entry is left for an
+        # operator to deal with.
+        return name
+    return "-".join(parts[openstack_pos:])
 
 
 def endpoint_labels(port, namespace, port_extra):
@@ -710,3 +1359,51 @@ def _port_is_endpoint_port(port):
     # Otherwise log and return False.
     LOG.debug("Not a VM port: %s" % port)
     return False
+
+
+def make_keystone_client():
+    """Build a Keystone v3 client from oslo.config.
+
+    Used both by mech_calico (when constructing the driver's EndpointWriter) and by the
+    resync runner (when constructing a fresh EndpointWriter for the CLI).  Tests inject
+    a mock by patching this function.
+    """
+    authcfg = cfg.CONF.keystone_authtoken
+    LOG.debug("authcfg = %r", authcfg)
+    for key in authcfg:
+        if "password" in key:
+            LOG.debug("authcfg[%s] = %s", key, "***")
+        else:
+            LOG.debug("authcfg[%s] = %s", key, authcfg[key])
+
+    auth = v3.Password(
+        user_domain_name=authcfg.user_domain_name,
+        username=authcfg.username,
+        password=authcfg.password,
+        project_domain_name=authcfg.project_domain_name,
+        project_name=authcfg.project_name,
+        auth_url=re.sub(r"/v3/?$", "", authcfg.auth_url) + "/v3",
+    )
+    return KeystoneClient(session=session.Session(auth=auth))
+
+
+def live_migration_spec(namespace, source_port, dest_port):
+    wep_id_fields = {
+        "orchestratorID": "openstack",
+        "workloadID": namespace + "/" + source_port["device_id"],
+        "endpointID": source_port["id"],
+    }
+    return {
+        "source": {
+            "workloadEndpoint": dict(
+                hostname=source_port["binding:host_id"],
+                **wep_id_fields,
+            ),
+        },
+        "target": {
+            "workloadEndpoint": dict(
+                hostname=dest_port["binding:host_id"],
+                **wep_id_fields,
+            ),
+        },
+    }
