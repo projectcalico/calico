@@ -196,6 +196,117 @@ func TestBlockAddedAfterReservationsCountsOverlap(t *testing.T) {
 	Expect(mustSummarize(tr, "p").InUseReserved).To(Equal(1))
 }
 
+const extraReservedClass reservedClass = "extra"
+
+// withExtraReservedClass puts pools that disable BGP export in a class that also withholds *extra.
+func withExtraReservedClass(t *testing.T, extra *[]string) {
+	classes, class, cidrs := reservedClasses, poolReservedClass, extraReservedCIDRs
+	t.Cleanup(func() { reservedClasses, poolReservedClass, extraReservedCIDRs = classes, class, cidrs })
+	reservedClasses = []reservedClass{defaultReservedClass, extraReservedClass}
+	poolReservedClass = func(p *v3.IPPool) reservedClass {
+		if p.Spec.DisableBGPExport {
+			return extraReservedClass
+		}
+		return defaultReservedClass
+	}
+	extraReservedCIDRs = func(_ *Tracker, c reservedClass) []cnet.IPNet {
+		if c != extraReservedClass {
+			return nil
+		}
+		var out []cnet.IPNet
+		for _, s := range *extra {
+			out = append(out, cnet.MustParseNetwork(s))
+		}
+		return out
+	}
+}
+
+func TestReservedClassFollowsPoolSpec(t *testing.T) {
+	RegisterTestingT(t)
+	extra := []string{"192.0.2.0/32", "192.0.2.1/32", "192.0.2.255/32"}
+	withExtraReservedClass(t, &extra)
+	plain := pool("p", "192.0.2.0/24", 26)
+	classed := plain.DeepCopy()
+	classed.Spec.DisableBGPExport = true
+
+	b := testBlock("192.0.2.0/26", "host:node-a")
+	allocatePod(b, 0, "node-a")
+
+	tr := NewTracker()
+	tr.AddPools(plain)
+	tr.AddBlocks(b)
+	tr.AddReservations(reservation("r", "192.0.2.10"))
+
+	c := mustSummarize(tr, "p")
+	Expect(c.Reserved.String()).To(Equal("1"))
+	Expect(c.InUseReserved).To(Equal(0))
+	bc, _ := tr.BlockCounts(b.CIDR)
+	Expect(bc.Reserved).To(Equal(1))
+
+	tr.AddPools(classed)
+	c = mustSummarize(tr, "p")
+	Expect(c.Reserved.String()).To(Equal("4"))
+	Expect(c.InUseReserved).To(Equal(1))
+	bc, _ = tr.BlockCounts(b.CIDR)
+	Expect(bc.Reserved).To(Equal(3))
+
+	tr.AddPools(plain)
+	fresh := NewTracker()
+	fresh.AddPools(plain)
+	fresh.AddBlocks(b)
+	fresh.AddReservations(reservation("r", "192.0.2.10"))
+	Expect(mustSummarize(tr, "p")).To(Equal(mustSummarize(fresh, "p")))
+	Expect(tr.PoolBlockCounts("p")).To(Equal(fresh.PoolBlockCounts("p")))
+
+	tr.AddPools(classed)
+	tr.RemovePool("p")
+	bc, _ = tr.BlockCounts(b.CIDR)
+	Expect(bc.Reserved).To(Equal(1))
+	Expect(bc.InUseReserved).To(Equal(0))
+}
+
+func TestExtraReservedChangeReachesOnlyItsClass(t *testing.T) {
+	RegisterTestingT(t)
+	extra := []string{"192.0.2.0/32", "198.51.100.0/32"}
+	withExtraReservedClass(t, &extra)
+	classed := pool("a", "192.0.2.0/24", 26)
+	classed.Spec.DisableBGPExport = true
+
+	tr := NewTracker()
+	tr.AddPools(classed, pool("b", "198.51.100.0/24", 26))
+	tr.AddReservations()
+	Expect(mustSummarize(tr, "a").Reserved.String()).To(Equal("1"))
+	Expect(mustSummarize(tr, "b").Reserved.String()).To(Equal("0"))
+
+	extra = nil
+	tr.AddReservations()
+	Expect(mustSummarize(tr, "a").Reserved.String()).To(Equal("0"))
+}
+
+func TestBlockLeavingPoolThatChangesClassDropsExtraReserved(t *testing.T) {
+	RegisterTestingT(t)
+	extra := []string{"192.0.2.128/32", "192.0.2.129/32"}
+	withExtraReservedClass(t, &extra)
+	classed := pool("a", "192.0.2.0/24", 26)
+	classed.Spec.DisableBGPExport = true
+
+	b := testBlock("192.0.2.128/26", "host:node-a")
+	allocatePod(b, 0, "node-a")
+
+	tr := NewTracker()
+	tr.AddPools(classed)
+	tr.AddBlocks(b)
+	tr.AddReservations()
+	bc, _ := tr.BlockCounts(b.CIDR)
+	Expect(bc.Reserved).To(Equal(2))
+	Expect(bc.InUseReserved).To(Equal(1))
+
+	tr.AddPools(pool("a", "192.0.2.0/25", 26))
+	bc, _ = tr.BlockCounts(b.CIDR)
+	Expect(bc.Reserved).To(Equal(0))
+	Expect(bc.InUseReserved).To(Equal(0))
+}
+
 func TestIPv6CountsExceedInt(t *testing.T) {
 	RegisterTestingT(t)
 	tr := NewTracker()
