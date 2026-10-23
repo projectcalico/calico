@@ -33,11 +33,10 @@ global_job_config:
       - install-package --no-install-recommends devscripts moreutils patchelf jq
       - ssh-add ~/.ssh/id_rsa
 blocks:
-  # This promotion is only _automatic_ for the master branch.  For other
-  # branches, and PRs, it is available but not automatic.  This means a
-  # developer can trigger the building and publishing of release branch and
-  # pre-merge packages by clicking the "Publish openstack packages" button in
-  # the Semaphore UI.  When building from the master branch, packages are
+  # This promotion is only _automatic_ for the master and release branches.  For
+  # other branches, and PRs, it is available but not automatic.  This means a
+  # developer can trigger the building and publishing of pre-merge packages by
+  # clicking the "Publish openstack packages" button in the Semaphore UI.  When building from the master branch, packages are
   # published to the "master" PPA.  When building from a release branch like
   # release-v3.32, packages are published to the corresponding "release-3.32"
   # PPA (and "release-332" Artifact Registry repo).  When building from a PR,
