@@ -20,9 +20,9 @@ These tests validate:
   - ``_post_fork_init(voting=False)`` never creates an Elector.
   - ``post_fork_initialize`` (the AFTER_INIT callback) dispatches correctly:
     API workers (``neutron.wsgi.WorkerService``) get ``voting=False`` so they
-    never become master (per PR #11580); ``CalicoStartupResyncWorker`` runs
-    only the one-shot resync; any other worker (RPC etc.) gets
+    never become master (per PR #11580); any other worker (RPC etc.) gets
     ``voting=True``.
+  - Only ``voting=True`` starts the periodic resync and resync monitor threads.
   - A worker initialization does not override the parent elector.
 """
 
@@ -61,7 +61,8 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
 
     def _disable_background_threads(self, driver):
         """Disable background threads that would touch etcd or do unrelated things."""
-        driver._do_startup_resync = mock.Mock()
+        driver.periodic_resync_thread = mock.Mock()
+        driver.resync_monitor_thread = mock.Mock()
         driver._status_updating_thread = mock.Mock()
 
     @mock.patch.object(mech_calico, "Elector")
@@ -104,34 +105,42 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
         m_elector.assert_not_called()
         self.assertIsNone(driver.elector)
 
-    @mock.patch.object(mech_calico, "_trigger_class")
     @mock.patch.object(mech_calico, "Elector")
-    def test_resync_worker_runs_resync_only(self, m_elector, m_trigger_class):
-        """``CalicoStartupResyncWorker`` triggers run only the one-shot
-        resync; they don't join the elector or set up the master-only
-        background threads."""
+    def test_voter_starts_periodic_resync(self, m_elector):
         driver = mech_calico.CalicoMechanismDriver()
         self._disable_background_threads(driver)
         driver._my_pid = None
 
-        m_trigger_class.return_value = mech_calico.CalicoStartupResyncWorker
-        driver.post_fork_initialize(mock.Mock(), mock.Mock(), mock.Mock())
+        with mock.patch("eventlet.spawn") as m_spawn:
+            driver._post_fork_init(voting=True)
 
-        driver._do_startup_resync.assert_called_once()
-        m_elector.assert_not_called()
-        self.assertIsNone(driver.elector)
+        spawned = [c.args[0] for c in m_spawn.call_args_list]
+        self.assertIn(driver.periodic_resync_thread, spawned)
+        self.assertIn(driver.resync_monitor_thread, spawned)
+
+    @mock.patch.object(mech_calico, "Elector")
+    def test_non_voter_does_not_start_periodic_resync(self, m_elector):
+        driver = mech_calico.CalicoMechanismDriver()
+        self._disable_background_threads(driver)
+        driver._my_pid = None
+
+        with mock.patch("eventlet.spawn") as m_spawn:
+            driver._post_fork_init(voting=False)
+
+        spawned = [c.args[0] for c in m_spawn.call_args_list]
+        self.assertNotIn(driver.periodic_resync_thread, spawned)
+        self.assertNotIn(driver.resync_monitor_thread, spawned)
 
     @mock.patch.object(mech_calico, "_trigger_class")
     @mock.patch.object(mech_calico, "Elector")
     def test_other_worker_becomes_voter(self, m_elector, m_trigger_class):
-        """Workers that aren't API workers or the resync worker (RPC,
-        state-report, etc.) get ``voting=True`` and join the master
-        election."""
+        """Workers that aren't API workers (RPC, state-report, etc.) get
+        ``voting=True`` and join the master election."""
         driver = mech_calico.CalicoMechanismDriver()
         self._disable_background_threads(driver)
         driver._my_pid = None
 
-        # An arbitrary non-WSGI, non-resync trigger class.
+        # An arbitrary non-WSGI trigger class.
         class _RpcWorker:
             pass
 

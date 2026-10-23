@@ -367,7 +367,6 @@ class TestPluginEtcdBase(_TestEtcdBase):
         lib.m_oslo_config.cfg.CONF.calico.egress_minburst_bytes = 0
         lib.m_oslo_config.cfg.CONF.calico.ingress_burst_packets = 0
         lib.m_oslo_config.cfg.CONF.calico.egress_burst_packets = 0
-        lib.m_oslo_config.cfg.CONF.calico.startup_resync = "always"
         calico_config._reset_globals()
         datamodel_v2._reset_globals()
 
@@ -1631,12 +1630,6 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 "protocol": 6,
             },
         )
-
-    def test_startup_resync_disabled(self):
-        """With startup_resync=never, nothing is written."""
-        lib.m_oslo_config.cfg.CONF.calico.startup_resync = "never"
-        self.do_post_fork_actions()
-        self.assertEtcdWrites({})
 
     def assertNeutronToEtcd(self, neutron_rule, exp_etcd_rule):
         etcd_rule = policy._neutron_rule_to_etcd_rule(neutron_rule)

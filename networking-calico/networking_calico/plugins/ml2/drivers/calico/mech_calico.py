@@ -25,6 +25,7 @@
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 import contextlib
+from datetime import datetime, timedelta
 import inspect
 import os
 import threading
@@ -80,9 +81,6 @@ from networking_calico.plugins.ml2.drivers.calico.endpoints import (
 from networking_calico.plugins.ml2.drivers.calico.policy import PolicySyncer
 from networking_calico.plugins.ml2.drivers.calico.status import StatusWatcher
 from networking_calico.plugins.ml2.drivers.calico.subnets import SubnetSyncer
-from networking_calico.plugins.ml2.drivers.calico.workers import (
-    CalicoStartupResyncWorker,
-)
 from networking_calico.resync import scope as resync
 
 
@@ -92,6 +90,12 @@ config.register_agent_state_opts_helper(cfg.CONF)
 
 LOG = log.getLogger(__name__)
 
+
+# The default interval between periodic resyncs, in seconds.
+DEFAULT_RESYNC_INTERVAL_SECS = 60
+
+# The default maximum interval between resync completions, in seconds.
+DEFAULT_RESYNC_MAX_INTERVAL_SECS = 3600
 
 calico_opts = [
     cfg.IntOpt(
@@ -126,37 +130,23 @@ calico_opts = [
         default=100,
         help="The maximum allowed size of our cache of project names.",
     ),
-    cfg.StrOpt(
-        "startup_resync",
-        default="always",
-        choices=["always", "never"],
-        help=(
-            "Whether the driver should run a full Neutron DB -> etcd "
-            "resync when neutron-server starts.  Note that a resync "
-            "can also be run on demand using the calico-resync CLI."
-        ),
-    ),
     cfg.IntOpt(
         "resync_interval_secs",
-        default=0,
-        deprecated_for_removal=True,
-        deprecated_reason=(
-            "The driver no longer runs a periodic resync thread. "
-            "Resync is now driven once on startup and on demand "
-            "via the calico-resync CLI.  This option has no effect."
+        default=DEFAULT_RESYNC_INTERVAL_SECS,
+        help=(
+            "If non-zero, configures how frequently Calico rechecks its state against"
+            " the Neutron DB.  Zero means to disable any periodic rechecking.  Please"
+            " note that Calico _always_ performs an _initial_ check when the Neutron"
+            " server starts or is restarted."
         ),
-        help="Deprecated and unused.  Retained to avoid neutron.conf errors.",
     ),
     cfg.IntOpt(
         "resync_max_interval_secs",
-        default=0,
-        deprecated_for_removal=True,
-        deprecated_reason=(
-            "The driver no longer runs a periodic resync thread, so "
-            "there is no inter-resync interval to police.  This option "
-            "has no effect."
+        default=DEFAULT_RESYNC_MAX_INTERVAL_SECS,
+        help=(
+            "Calico will log an error if the interval between periodic"
+            " resync completions surpasses this maximum (in seconds)."
         ),
-        help="Deprecated and unused.  Retained to avoid neutron.conf errors.",
     ),
 ]
 cfg.CONF.register_opts(calico_opts, "calico")
@@ -360,13 +350,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # safe to compare this with other values returned by monotonic_time().
         self._last_status_queue_log_time = monotonic_time()
 
+        # Last resync completion time
+        self.last_resync_time = datetime.now()
+
         LOG.info("Created Calico mechanism driver %s", self)
 
     def initialize(self):
         """Called once by ML2 in the parent process, before any forks.
 
         We use this hook to subscribe to Neutron's process-AFTER_INIT callback so that
-        we get a chance to run code in each worker process we own (see ``get_workers``)
+        we get a chance to run code in each Neutron worker process (API, RPC and so on)
         once it has been forked.
         """
         super(CalicoMechanismDriver, self).initialize()
@@ -377,22 +370,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             cancellable=True,
         )
 
-    def get_workers(self):
-        """Workers that neutron-server should fork on our behalf.
-
-        Returns a list of ``neutron_lib.worker.BaseWorker`` instances, each of which
-        becomes one OS process.  Today we ask for a single worker that runs the
-        one-shot resync.
-
-        ``[calico] startup_resync = never`` suppresses the worker entirely so the
-        operator can take responsibility for resync (typically by running
-        ``calico-resync`` from a CD pipeline, or by leaving ``always`` set on exactly
-        one neutron-server in the deployment).
-        """
-        if cfg.CONF.calico.startup_resync == "never":
-            return []
-        return [CalicoStartupResyncWorker()]
-
     def post_fork_initialize(self, resource, event, trigger, payload=None):
         """Per-worker-process initialisation, fired by Neutron after fork.
 
@@ -400,22 +377,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         We dispatch on the worker's class so each worker process runs only the code
         it's responsible for:
 
-        * ``CalicoStartupResyncWorker`` -> just the one-shot resync.
-
         * ``neutron.wsgi.WorkerService`` -> connection state only, ``voting=False``.
           Per PR #11580, API workers must never be elected master, because their
           primary job is to serve API requests quickly: getting tied up running the
-          master-only background threads (status watcher, port-status writers,
-          periodic compaction) would hurt API response latency, and the resync work
-          specifically now lives in ``CalicoStartupResyncWorker`` anyway.
+          master-only background threads (periodic resync, status watcher,
+          port-status writers, periodic compaction) would hurt API response latency.
 
         * Anything else (RPC / state-report / similar) -> connection state plus the
           elector and master-only background threads.
         """
         trigger_cls = _trigger_class(trigger)
-        if trigger_cls is CalicoStartupResyncWorker:
-            self._do_startup_resync()
-        elif trigger_cls is wsgi.WorkerService:
+        if trigger_cls is wsgi.WorkerService:
             self._post_fork_init(voting=False)
         else:
             self._post_fork_init(voting=True)
@@ -508,13 +480,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # We deliberately do this last, to ensure that all of the setup above is
                 # complete before we start running.
                 self._epoch += 1
+                eventlet.spawn(self.resync_monitor_thread, self._epoch)
+                eventlet.spawn(self.periodic_resync_thread, self._epoch)
                 if cfg.CONF.calico.etcd_compaction_period_mins > 0:
                     eventlet.spawn(self.periodic_compaction_thread, self._epoch)
                 eventlet.spawn(self._status_updating_thread, self._epoch)
                 for _ in range(cfg.CONF.calico.num_port_status_threads):
                     eventlet.spawn(self._loop_writing_port_statuses, self._epoch)
-                # Note, resync runs in a dedicated worker process spawned via
-                # ``get_workers``, not here.  See ``post_fork_initialize``.
             else:
                 LOG.info(
                     "PID %s: Not a voting participant; "
@@ -1269,40 +1241,105 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.info("Port unbound, attempting delete if needed.")
             self.endpoint_syncer.delete_endpoint(port)
 
-    @logging_exceptions(LOG)
-    def _do_startup_resync(self):
-        """Run one-shot resync.
+    def resync_monitor_thread(self, launch_epoch):
+        """Monitor the interval between completed resyncs.
 
-        Called from ``post_fork_initialize`` inside the dedicated
-        ``CalicoStartupResyncWorker`` process when ``[calico] startup_resync`` is
-        ``always`` (the default).  Also called from the test framework to simulate the
-        worker's behaviour.
+        Logs an error if the periodic resync duration surpasses
+        the configured maximum time in seconds.
+        """
+        try:
+            LOG.info("Resync monitor thread started")
 
-        Failures are logged loudly but not retried.  Operators can drive a retry by
-        running ``calico-resync`` (with no scope flags, which means resync everything)
-        or by restarting neutron-server.
+            while self._epoch == launch_epoch:
+                # Only monitor the resync if we are the master node.
+                if self.elector.master():
+                    LOG.info("I am master: monitoring periodic resync")
+
+                    curr_time = datetime.now()
+                    time_delta = curr_time - self.last_resync_time
+                    if (
+                        time_delta.total_seconds()
+                        > cfg.CONF.calico.resync_max_interval_secs
+                    ):
+                        LOG.error(
+                            "The time since the last resync completion has surpassed"
+                            f" {cfg.CONF.calico.resync_max_interval_secs} seconds"
+                        )
+
+                    deadline = self.last_resync_time + timedelta(
+                        seconds=cfg.CONF.calico.resync_max_interval_secs
+                    )
+                    time_left = (deadline - curr_time).total_seconds()
+                    polling_rate = cfg.CONF.calico.resync_max_interval_secs / 5
+                    sleep_time = time_left if deadline > curr_time else polling_rate
+                    eventlet.sleep(sleep_time)
+                else:
+                    LOG.debug("I am not master")
+                    eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
+        except Exception:
+            # TODO(nj) Should we tear down the process.
+            LOG.exception("Resync monitor thread died!")
+            if self.elector:
+                # Stop the elector so that we give up the mastership.
+                self.elector.stop()
+            raise
+
+    def periodic_resync_thread(self, launch_epoch):
+        """Periodic Neutron DB -> etcd resynchronization logic.
+
+        On a fixed interval, spin over relevant Neutron DB objects and
+        reconcile them with etcd, ensuring that the etcd database and Neutron
+        are in synchronization with each other.
         """
         TrackTask("RESYNC")
-        LOG.info("One-shot resync starting")
+        try:
+            LOG.info("Periodic resync thread started")
+            while self._epoch == launch_epoch:
+                # Only do the resync if we are the master node.
+                if self.elector.master():
+                    LOG.info("I am master: doing periodic resync")
+                    self._do_resync()
 
-        # (Re)init the DB.  The resync worker is its own OS process and doesn't share
-        # connection state with the API/RPC forks.  Scope.run() builds its own
-        # subnet/policy/endpoint syncers from the DB plus its module-level
-        # _txn_from_context helper; we don't need to set the driver's syncer attributes
-        # here because nothing else in this worker process uses them.
-        self.db = None
-        self._get_db()
+                    if cfg.CONF.calico.resync_interval_secs == 0:
+                        # No continuing periodic resync.
+                        break
 
-        result = resync.Scope(self.db).run()
-        if result.ok:
-            LOG.info("One-shot resync done: %s", result.to_dict())
+                    # Reschedule ourselves.
+                    eventlet.sleep(cfg.CONF.calico.resync_interval_secs)
+                else:
+                    # Shorter sleep interval before we check if we've become
+                    # the master.  Avoids waiting a whole resync_interval_secs
+                    # if we just miss the master update.
+                    LOG.debug("I am not master")
+                    eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
+        except Exception:
+            # TODO(nj) Should we tear down the process.
+            LOG.exception("Periodic resync thread died!")
+            if self.elector:
+                # Stop the elector so that we give up the mastership.
+                self.elector.stop()
+            raise
         else:
-            LOG.error(
-                "One-shot resync FAILED: %s.  "
-                "Run `calico-resync` (with no scope flags) to retry, or "
-                "restart neutron-server.",
+            LOG.warning("Periodic resync thread exiting.")
+
+    def _do_resync(self):
+        """Do one full Neutron DB -> etcd resync pass.
+
+        A failed pass is logged and otherwise left for the next periodic pass to put
+        right; only a successful pass counts as a completion for the resync monitor.
+        """
+        start_time = datetime.now()
+        result = resync.Scope(self.db, driver=self).run()
+        if result.ok:
+            self.last_resync_time = datetime.now()
+            LOG.info(
+                "The periodic resync finished after %s: %s",
+                self.last_resync_time - start_time,
                 result.to_dict(),
             )
+        else:
+            LOG.error("Error in periodic resync: %s", result.to_dict())
+        return result
 
     def periodic_compaction_thread(self, launch_epoch):
         """Periodic etcd compaction logic.

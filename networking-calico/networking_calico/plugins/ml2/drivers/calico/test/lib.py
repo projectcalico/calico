@@ -554,18 +554,16 @@ class Lib(object):
     def do_post_fork_actions(self, uuid_str=None):
         """Simulate the post-fork actions that Neutron runs in production.
 
-        In production the Neutron server comprises (at least) three processes:
+        In production the Neutron server comprises (at least) two processes:
 
         - an "API worker" process, responsible for Neutron API requests, i.e. dynamic
           CRUD of ports and other networking resources
 
         - an "RPC worker" process, which is designed for RPC between the Neutron server
           and compute node agents, but which we use for other work that is not driven
-          from the Neutron API, including port and agent status reporting and periodic
-          etcd compaction
-
-        - a "Calico resync" process, whose purpose is to sync from the Neutron DB to the
-          Calico datastore following Neutron server startup.
+          from the Neutron API, including periodic resync from the Neutron DB to the
+          Calico datastore, port and agent status reporting and periodic etcd
+          compaction.
 
         In UT there is only one process, and we want to get the effects of all those in
         the one UT process, which means:
@@ -578,17 +576,22 @@ class Lib(object):
         - Spawn the threads for "other work" (as above) as the RPC worker process would
           do.  This is achieved by calling ``_post_fork_init()`` with ``voting=True``.
 
-        - Do the startup resync that the Calico resync process would do.  This is coded
-          in ``_do_startup_resync()``.
+        - Do the first pass of the periodic resync, which is coded in ``_do_resync()``.
+          We call that directly, and stop ``_post_fork_init()`` from spawning the
+          periodic resync and resync monitor threads, so that tests see exactly one
+          resync pass, done by the time this method returns.  Those threads are tested
+          separately.
 
         ``uuid_str`` controls the UUID generated during init (used for
         ClusterInformation's clusterGUID).
         """
         cm = FixedUUID(uuid_str) if uuid_str else contextlib.nullcontext()
         with cm:
-            self.driver._post_fork_init(voting=True)
-            if mech_calico.cfg.CONF.calico.startup_resync == "always":
-                self.driver._do_startup_resync()
+            with mock.patch.object(
+                self.driver, "periodic_resync_thread"
+            ), mock.patch.object(self.driver, "resync_monitor_thread"):
+                self.driver._post_fork_init(voting=True)
+            self.driver._do_resync()
 
     def check_update_port_status_called(self, context):
         self.db.update_port_status.assert_called_once_with(
