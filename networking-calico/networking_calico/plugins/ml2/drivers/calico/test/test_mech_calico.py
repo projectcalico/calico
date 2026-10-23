@@ -58,6 +58,45 @@ class TestMechanismDriver(lib.Lib, unittest.TestCase):
         self.assertIsNotNone(self.driver.policy_syncer)
         self.assertIsNotNone(self.driver.endpoint_syncer)
 
+    def test_get_workers_includes_resource_syncer(self):
+        # neutron_lib is mocked in UT, so substitute a real class for the worker.
+        class _ResourceSyncerWorker:
+            pass
+
+        with mock.patch.object(
+            mech_calico, "CalicoResourceSyncerWorker", _ResourceSyncerWorker
+        ):
+            workers = self.driver.get_workers()
+
+        self.assertIn(_ResourceSyncerWorker, [type(w) for w in workers])
+
+    @mock.patch.object(mech_calico, "_trigger_class")
+    def test_resource_syncer_worker_starts_only_resync(self, m_trigger_class):
+        class _ResourceSyncerWorker:
+            pass
+
+        m_trigger_class.return_value = _ResourceSyncerWorker
+        with mock.patch.object(
+            mech_calico, "CalicoResourceSyncerWorker", _ResourceSyncerWorker
+        ), mock.patch.object(
+            self.driver, "_init_start_calico_resource_syncer"
+        ) as m_syncer, mock.patch.object(
+            self.driver, "_init_start_calico_manager"
+        ) as m_manager:
+            self.driver.post_fork_initialize(mock.Mock(), mock.Mock(), mock.Mock())
+
+        m_syncer.assert_called_once_with()
+        m_manager.assert_not_called()
+
+    @mock.patch("eventlet.spawn")
+    def test_driver_init_calico_resource_syncer(self, m_spawn):
+        m_spawn.return_value = True
+
+        self.driver._init_start_calico_resource_syncer()
+
+        self.assertTrue(self.driver.periodic_resync_thread)
+        self.assertTrue(self.driver.resync_monitor_thread)
+
     @mock.patch("eventlet.spawn")
     @mock.patch.object(mech_calico, "Elector")
     def test_driver_init_calico_manager(self, m_elector, m_spawn):
@@ -66,8 +105,6 @@ class TestMechanismDriver(lib.Lib, unittest.TestCase):
         self.driver._init_start_calico_manager()
 
         self.assertTrue(self.driver.election_thread)
-        self.assertTrue(self.driver.periodic_resync_thread)
-        self.assertTrue(self.driver.resync_monitor_thread)
         self.assertTrue(self.driver.periodic_compaction_thread)
 
         m_elector.assert_called_once()

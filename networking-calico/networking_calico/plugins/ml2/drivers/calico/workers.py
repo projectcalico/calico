@@ -30,6 +30,28 @@ from oslo_log import log
 LOG = log.getLogger(__name__)
 
 
+class CalicoResourceSyncerWorker(worker.BaseWorker):
+    """Service for the periodic resync from the Neutron DB to etcd.
+
+    The super class will trigger the post_fork_initialize in the mech driver.
+    """
+
+    def start(self, name="calico-resource-syncer", desc=None):
+        """Start service."""
+        super(CalicoResourceSyncerWorker, self).start(name, desc)
+
+    def stop(self):
+        """Stop service."""
+        super(CalicoResourceSyncerWorker, self).stop()
+
+    def wait(self):
+        """Wait for service to complete."""
+        super(CalicoResourceSyncerWorker, self).wait()
+
+    def reset(self):
+        config.reset_service()
+
+
 class CalicoManagerWorker(worker.BaseWorker):
     """Service for doing election and compaction.
 

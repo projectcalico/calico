@@ -442,13 +442,14 @@ class TestPluginEtcdBase(_TestEtcdBase):
         }
 
         self.driver._post_fork_init()
-        self.driver._init_start_agent_status_watcher()
         # Tests drive resync themselves, via do_post_fork_actions(); the periodic
         # resync threads are tested separately.
         with mock.patch.object(self.driver, "do_periodic_resync"), mock.patch.object(
             self.driver, "do_resync_monitoring"
         ):
-            self.driver._init_start_calico_manager()
+            self.driver._init_start_calico_resource_syncer()
+        self.driver._init_start_agent_status_watcher()
+        self.driver._init_start_calico_manager()
         self.driver._init_start_endpoint_status_watcher()
 
     def make_context(self):

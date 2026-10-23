@@ -84,6 +84,7 @@ from networking_calico.plugins.ml2.drivers.calico.status import (
 )
 from networking_calico.plugins.ml2.drivers.calico.subnets import SubnetSyncer
 from networking_calico.plugins.ml2.drivers.calico.workers import (
+    CalicoResourceSyncerWorker,
     CalicoManagerWorker,
     CalicoAgentStatusWatcherWorker,
     CalicoEndpointStatusWatcherWorker,
@@ -433,6 +434,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         becomes one OS process.
         """
         return [
+            CalicoResourceSyncerWorker(),
             CalicoManagerWorker(),
             CalicoAgentStatusWatcherWorker(),
             CalicoEndpointStatusWatcherWorker(),
@@ -459,6 +461,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self._post_fork_init()
 
         worker_mapping = {
+            CalicoResourceSyncerWorker: self._init_start_calico_resource_syncer,
             CalicoManagerWorker: self._init_start_calico_manager,
             CalicoAgentStatusWatcherWorker: self._init_start_agent_status_watcher,
             CalicoEndpointStatusWatcherWorker: (
@@ -513,6 +516,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self.policy_syncer = PolicySyncer(self.db)
         self.endpoint_syncer = WorkloadEndpointSyncer(self.db, self.policy_syncer)
 
+    def _init_start_calico_resource_syncer(self):
+        self.periodic_resync_thread = eventlet.spawn(self.do_periodic_resync)
+        self.resync_monitor_thread = eventlet.spawn(self.do_resync_monitoring)
+
     def _init_start_calico_manager(self):
         self.elector = Elector(
             cfg.CONF.calico.elector_name,
@@ -524,9 +531,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         )
 
         self.election_thread = self.elector.start()
-
-        self.periodic_resync_thread = eventlet.spawn(self.do_periodic_resync)
-        self.resync_monitor_thread = eventlet.spawn(self.do_resync_monitoring)
 
         if cfg.CONF.calico.etcd_compaction_period_mins > 0:
             self.periodic_compaction_thread = eventlet.spawn(
