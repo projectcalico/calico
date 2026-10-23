@@ -91,11 +91,25 @@ class TestMechanismDriver(lib.Lib, unittest.TestCase):
     @mock.patch("eventlet.spawn")
     def test_driver_init_calico_resource_syncer(self, m_spawn):
         m_spawn.return_value = True
+        lib.m_oslo_config.cfg.CONF.calico.resync_interval_secs = 60
 
         self.driver._init_start_calico_resource_syncer()
 
         self.assertTrue(self.driver.periodic_resync_thread)
         self.assertTrue(self.driver.resync_monitor_thread)
+
+    @mock.patch("eventlet.spawn")
+    def test_no_resync_monitor_without_periodic_resync(self, m_spawn):
+        """With resync_interval_secs = 0 there is only the initial resync, so no
+        monitor."""
+        m_spawn.return_value = True
+        lib.m_oslo_config.cfg.CONF.calico.resync_interval_secs = 0
+
+        self.driver._init_start_calico_resource_syncer()
+
+        self.assertTrue(self.driver.periodic_resync_thread)
+        self.assertIsNone(self.driver.resync_monitor_thread)
+        m_spawn.assert_called_once_with(self.driver.do_periodic_resync)
 
     @mock.patch("eventlet.spawn")
     @mock.patch.object(mech_calico, "Elector")

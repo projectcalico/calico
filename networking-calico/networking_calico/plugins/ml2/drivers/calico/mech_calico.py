@@ -518,7 +518,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     def _init_start_calico_resource_syncer(self):
         self.periodic_resync_thread = eventlet.spawn(self.do_periodic_resync)
-        self.resync_monitor_thread = eventlet.spawn(self.do_resync_monitoring)
+        # With resync_interval_secs = 0 there is only the initial resync, so nothing
+        # for the monitor to police; it would otherwise log an error every
+        # resync_max_interval_secs / 5 from resync_max_interval_secs onwards.
+        if cfg.CONF.calico.resync_interval_secs > 0:
+            self.resync_monitor_thread = eventlet.spawn(self.do_resync_monitoring)
+        else:
+            self.resync_monitor_thread = None
 
     def _init_start_calico_manager(self):
         self.elector = Elector(
