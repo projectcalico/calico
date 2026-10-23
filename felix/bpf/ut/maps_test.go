@@ -125,8 +125,7 @@ func TestKeepPinnedSizes(t *testing.T) {
 
 	// A process without Felix's config sees only the default sizes.
 	bpfmaps.ResetSizes()
-	bpfmap.KeepPinnedSizes(false)
-	maps, err = bpfmap.CreateBPFMaps(false)
+	maps, err = bpfmap.CreateBPFMapsKeepingPinnedSizes(false)
 	Expect(err).NotTo(HaveOccurred())
 	defer restoreMaps(maps)
 
@@ -153,8 +152,7 @@ func TestKeepPinnedSizesMidMigration(t *testing.T) {
 	Expect(os.Rename(ctMap.Path(), ctMap.Path()+"_old")).To(Succeed())
 
 	bpfmaps.ResetSizes()
-	bpfmap.KeepPinnedSizes(false)
-	maps, err = bpfmap.CreateBPFMaps(false)
+	maps, err = bpfmap.CreateBPFMapsKeepingPinnedSizes(false)
 	Expect(err).NotTo(HaveOccurred())
 	defer restoreMaps(maps)
 

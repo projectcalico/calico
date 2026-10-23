@@ -172,8 +172,14 @@ func newMaps(ipV6Enabled bool) *Maps {
 	return ret
 }
 
-// KeepPinnedSizes makes CreateBPFMaps keep the size of maps already pinned, so it does not resize maps Felix sized.
-func KeepPinnedSizes(ipV6Enabled bool) {
+// CreateBPFMapsKeepingPinnedSizes is CreateBPFMaps for processes other than Felix, which owns the map sizes.
+func CreateBPFMapsKeepingPinnedSizes(ipV6Enabled bool) (*Maps, error) {
+	keepPinnedSizes(ipV6Enabled)
+	return CreateBPFMaps(ipV6Enabled)
+}
+
+// keepPinnedSizes registers the size of each pinned map, which NewPinnedMap then uses.
+func keepPinnedSizes(ipV6Enabled bool) {
 	for _, m := range newMaps(ipV6Enabled).slice() {
 		pm, ok := m.(*maps.PinnedMap)
 		if !ok {
