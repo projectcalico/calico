@@ -304,11 +304,6 @@ var _ = infrastructure.DatastoreDescribe(
 					}
 				})
 
-				AfterEach(func() {
-					tc.Stop()
-					infra.Stop()
-				})
-
 				It("should block pod-to-pod traffic when wildcard HEPs carry an AoF deny-ingress policy", func() {
 					// AoF deny-ingress allow-egress: denies ingress into either
 					// HEP (including the tunnel iface on the receiving node);

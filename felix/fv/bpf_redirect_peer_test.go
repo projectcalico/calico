@@ -98,15 +98,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ BPF peer redirect policy en
 				tc.Felixes[0].Exec("calico-bpf", "counters", "dump")
 				tc.Felixes[0].Exec("calico-bpf", "policy", "dump", w[1].InterfaceName, "all")
 			}
-
-			for i := range w {
-				w[i].Stop()
-			}
-			tc.Stop()
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-			infra.Stop()
 		})
 
 		denyClientToServer := func() {
