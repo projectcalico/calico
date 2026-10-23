@@ -38,13 +38,15 @@ blocks:
   # developer can trigger the building and publishing of release branch and
   # pre-merge packages by clicking the "Publish openstack packages" button in
   # the Semaphore UI.  When building from the master branch, packages are
-  # published to the "master" PPA.  When building from any other branch,
-  # packages are published to the "testing" PPA.  When building from a PR,
-  # packages are published to the "pr-${SEMAPHORE_GIT_PR_NUMBER}" PPA, and that
-  # PPA must have been created manually first.  PRs requiring packaging must
-  # use a branch on github.com/projectcalico/calico, instead of on a fork repo,
-  # because packaging requires secrets that we do not (and should not!) expose
-  # to fork PRs.
+  # published to the "master" PPA.  When building from a release branch like
+  # release-v3.32, packages are published to the corresponding "release-3.32"
+  # PPA (and "release-332" Artifact Registry repo).  When building from a PR,
+  # packages are published to the "pr-${SEMAPHORE_GIT_PR_NUMBER}" PPA.  Those
+  # release and PR PPAs (and Artifact Registry repo) must have been created
+  # manually first.  PRs requiring packaging must use a branch on
+  # github.com/projectcalico/calico, instead of on a fork repo, because
+  # packaging requires secrets that we do not (and should not!) expose to fork
+  # PRs.
   - name: "Publish openstack packages"
     task:
       jobs:
