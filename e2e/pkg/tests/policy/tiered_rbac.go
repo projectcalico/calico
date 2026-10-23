@@ -295,7 +295,7 @@ var _ = describe.CalicoDescribe(
 				gnp.Name = "rbac-test-allow-gnp"
 				gnp.Spec.Tier = testTier
 				gnp.Spec.Order = ptr.To(100.0)
-				gnp.Spec.Selector = "all()"
+				gnp.Spec.NamespaceSelector = "kubernetes.io/metadata.name == '" + f.Namespace.Name + "'"
 				gnp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
 
 				err := cli.Create(ctx, gnp)
@@ -311,7 +311,7 @@ var _ = describe.CalicoDescribe(
 				gnp.Name = "rbac-test-deny-gnp"
 				gnp.Spec.Tier = testTier
 				gnp.Spec.Order = ptr.To(100.0)
-				gnp.Spec.Selector = "all()"
+				gnp.Spec.NamespaceSelector = "kubernetes.io/metadata.name == '" + f.Namespace.Name + "'"
 				gnp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
 
 				err := cli.Create(ctx, gnp)
@@ -330,7 +330,7 @@ var _ = describe.CalicoDescribe(
 				gnp.Name = "rbac-test-other-allowed"
 				gnp.Spec.Tier = otherTier
 				gnp.Spec.Order = ptr.To(100.0)
-				gnp.Spec.Selector = "all()"
+				gnp.Spec.NamespaceSelector = "kubernetes.io/metadata.name == '" + f.Namespace.Name + "'"
 				gnp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
 
 				err := cli.Create(ctx, gnp)
@@ -342,7 +342,7 @@ var _ = describe.CalicoDescribe(
 				gnp2.Name = "rbac-test-other-denied"
 				gnp2.Spec.Tier = testTier
 				gnp2.Spec.Order = ptr.To(100.0)
-				gnp2.Spec.Selector = "all()"
+				gnp2.Spec.NamespaceSelector = "kubernetes.io/metadata.name == '" + f.Namespace.Name + "'"
 				gnp2.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
 
 				err = cli.Create(ctx, gnp2)
