@@ -176,7 +176,12 @@ func KeepPinnedSizes(ipV6Enabled bool) {
 		if !ok {
 			continue
 		}
-		fd, err := maps.GetMapFDByPin(pm.Path())
+		// EnsureExists restores an interrupted migration's _old map, so that is the map to size.
+		path := pm.Path()
+		if _, err := os.Stat(path + "_old"); err == nil {
+			path += "_old"
+		}
+		fd, err := maps.GetMapFDByPin(path)
 		if err != nil {
 			continue
 		}
