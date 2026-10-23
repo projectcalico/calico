@@ -56,6 +56,17 @@ func (in *trackerInputs) rebuild() *Tracker {
 // makes the incremental indexes safe to trust.
 func TestIncrementalMatchesRebuild(t *testing.T) {
 	RegisterTestingT(t)
+	expectIncrementalMatchesRebuild()
+}
+
+func TestIncrementalMatchesRebuildWithReservedClasses(t *testing.T) {
+	RegisterTestingT(t)
+	extra := []string{"10.0.0.64/29", "10.0.0.129/32", "10.0.1.200/32", "fd00::8/125"}
+	withExtraReservedClass(t, &extra)
+	expectIncrementalMatchesRebuild()
+}
+
+func expectIncrementalMatchesRebuild() {
 	for seed := range uint64(20) {
 		rng := rand.New(rand.NewPCG(seed, 1))
 		tr := NewTracker()
@@ -95,6 +106,7 @@ func propertyPool(rng *rand.Rand) *v3.IPPool {
 	}
 	p := candidates[rng.IntN(len(candidates))].DeepCopy()
 	p.Spec.Disabled = rng.IntN(4) == 0
+	p.Spec.DisableBGPExport = rng.IntN(2) == 0
 	if rng.IntN(5) == 0 {
 		p.Status = &v3.IPPoolStatus{Conditions: []metav1.Condition{{
 			Type:   v3.IPPoolConditionAllocatable,

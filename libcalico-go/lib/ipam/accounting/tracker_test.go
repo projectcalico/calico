@@ -198,7 +198,6 @@ func TestBlockAddedAfterReservationsCountsOverlap(t *testing.T) {
 
 const extraReservedClass reservedClass = "extra"
 
-// withExtraReservedClass puts pools that disable BGP export in a class that also withholds *extra.
 func withExtraReservedClass(t *testing.T, extra *[]string) {
 	classes, class, cidrs := reservedClasses, poolReservedClass, extraReservedCIDRs
 	t.Cleanup(func() { reservedClasses, poolReservedClass, extraReservedCIDRs = classes, class, cidrs })
@@ -219,6 +218,18 @@ func withExtraReservedClass(t *testing.T, extra *[]string) {
 		}
 		return out
 	}
+}
+
+func TestUnknownReservedClassFallsBackToDefault(t *testing.T) {
+	RegisterTestingT(t)
+	extra := []string{"10.0.0.1/32"}
+	withExtraReservedClass(t, &extra)
+	poolReservedClass = func(*v3.IPPool) reservedClass { return "unlisted" }
+
+	tr := NewTracker()
+	tr.AddPools(pool("p", "10.0.0.0/24", 26))
+	tr.AddReservations(reservation("r", "10.0.0.10"))
+	Expect(mustSummarize(tr, "p").Reserved.String()).To(Equal("1"))
 }
 
 func TestReservedClassFollowsPoolSpec(t *testing.T) {
@@ -272,15 +283,26 @@ func TestExtraReservedChangeReachesOnlyItsClass(t *testing.T) {
 	classed := pool("a", "192.0.2.0/24", 26)
 	classed.Spec.DisableBGPExport = true
 
+	blockA := testBlock("192.0.2.0/26", "host:node-a")
+	allocatePod(blockA, 0, "node-a")
+	blockB := testBlock("198.51.100.0/26", "host:node-a")
+	allocatePod(blockB, 0, "node-a")
+
 	tr := NewTracker()
 	tr.AddPools(classed, pool("b", "198.51.100.0/24", 26))
-	tr.AddReservations()
-	Expect(mustSummarize(tr, "a").Reserved.String()).To(Equal("1"))
-	Expect(mustSummarize(tr, "b").Reserved.String()).To(Equal("0"))
+	tr.AddBlocks(blockA, blockB)
+	a, b := mustSummarize(tr, "a"), mustSummarize(tr, "b")
+	Expect(a.Reserved.String()).To(Equal("1"))
+	Expect(a.InUseReserved).To(Equal(1))
+	Expect(b.Reserved.String()).To(Equal("0"))
+	Expect(b.InUseReserved).To(Equal(0))
 
 	extra = nil
-	tr.AddReservations()
-	Expect(mustSummarize(tr, "a").Reserved.String()).To(Equal("0"))
+	tr.applyReservedChange()
+	a = mustSummarize(tr, "a")
+	Expect(a.Reserved.String()).To(Equal("0"))
+	Expect(a.InUseReserved).To(Equal(0))
+	Expect(mustSummarize(tr, "b")).To(Equal(b))
 }
 
 func TestBlockLeavingPoolThatChangesClassDropsExtraReserved(t *testing.T) {
@@ -296,7 +318,6 @@ func TestBlockLeavingPoolThatChangesClassDropsExtraReserved(t *testing.T) {
 	tr := NewTracker()
 	tr.AddPools(classed)
 	tr.AddBlocks(b)
-	tr.AddReservations()
 	bc, _ := tr.BlockCounts(b.CIDR)
 	Expect(bc.Reserved).To(Equal(2))
 	Expect(bc.InUseReserved).To(Equal(1))
