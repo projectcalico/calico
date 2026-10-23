@@ -715,6 +715,21 @@ from workloads.
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `false` |
 
+### `CRISocketPath` (config file) / `criSocketPath` (YAML)
+
+The path to the local container-runtime CRI socket
+(e.g. /run/containerd/containerd.sock). When empty, Felix probes a
+small set of well-known paths at startup.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_CRISocketPath` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `criSocketPath` (YAML) `CRISocketPath` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
 ### `CgroupV2Path` (config file) / `cgroupV2Path` (YAML)
 
 Overrides the default location where to find the cgroup hierarchy.
@@ -1266,6 +1281,23 @@ routes, rules, and other kernel objects.
 | `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `10s` |
 
+### `PodNetnsAnnotation` (config file) / `podNetnsAnnotation` (YAML)
+
+Controls whether Felix trusts the
+cni.projectcalico.org/podNetns pod annotation when resolving a local
+pod's network namespace. Enable it only where the annotation is
+protected by the protect-cni-annotations admission policy;
+when Disabled, Felix falls back to the CRI and /proc lookups.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_PodNetnsAnnotation` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `podNetnsAnnotation` (YAML) `PodNetnsAnnotation` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Disabled` |
+
 ### `PolicySyncPathPrefix` (config file) / `policySyncPathPrefix` (YAML)
 
 Used to by Felix to communicate policy changes to external services,
@@ -1279,6 +1311,22 @@ like Application layer policy.
 | `FelixConfiguration` field | `policySyncPathPrefix` (YAML) `PolicySyncPathPrefix` (Go API) |
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
+
+### `ProcRootPath` (config file) / `procRootPath` (YAML)
+
+The path at which Felix reads the procfs of the host
+the pods run on, when resolving a local pod's network namespace. When
+Felix does not share the host PID namespace, the operator bind-mounts
+the host procfs (typically at /nodeproc) and points Felix at it here.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_ProcRootPath` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | `/proc` |
+| `FelixConfiguration` field | `procRootPath` (YAML) `ProcRootPath` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | `/proc` |
 
 ### `ProgramClusterRoutes` (config file) / `programClusterRoutes` (YAML)
 
