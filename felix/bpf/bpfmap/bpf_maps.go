@@ -83,16 +83,31 @@ type Maps struct {
 }
 
 func (m *Maps) Destroy() {
+	for _, m := range m.pinned() {
+		os.Remove(m.Path())
+		m.Close()
+	}
+}
+
+// Close closes every map and keeps the pins.
+func (m *Maps) Close() {
+	for _, m := range m.pinned() {
+		m.Close()
+	}
+}
+
+func (m *Maps) pinned() []pinnedMap {
 	mps := []maps.Map{}
 	mps = append(mps, m.CommonMaps.slice()...)
 	mps = append(mps, m.V4.slice()...)
 	if m.V6 != nil {
 		mps = append(mps, m.V6.slice()...)
 	}
+	ret := make([]pinnedMap, 0, len(mps))
 	for _, m := range mps {
-		os.Remove(m.(pinnedMap).Path())
-		m.(pinnedMap).Close()
+		ret = append(ret, m.(pinnedMap))
 	}
+	return ret
 }
 
 func getCommonMaps() *CommonMaps {

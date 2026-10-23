@@ -114,43 +114,32 @@ func TestMapDownSize(t *testing.T) {
 }
 
 func TestKeepPinnedSizes(t *testing.T) {
-	k, err := setUpMapTestWithSingleKV(t)
-	Expect(err).NotTo(HaveOccurred(), "Failed to create ct entry")
-
-	conntrack.SetMapSize(600)
-	maps, err := bpfmap.CreateBPFMaps(false)
-	Expect(err).NotTo(HaveOccurred())
-	maps.V4.CtMap.(*bpfmaps.PinnedMap).Close()
-	os.Remove(ctMap.Path() + "_old")
-
-	// A process without Felix's config sees only the default sizes.
-	bpfmaps.ResetSizes()
-	maps, err = bpfmap.CreateBPFMapsKeepingPinnedSizes(false)
-	Expect(err).NotTo(HaveOccurred())
-	defer restoreMaps(maps)
-
-	ctMapInfo, err := bpfmaps.GetMapInfo(maps.V4.CtMap.MapFD())
-	Expect(err).NotTo(HaveOccurred(), "Failed to get ct map info")
-	Expect(ctMapInfo.MaxEntries).To(Equal(600))
-	_, err = os.Stat(ctMap.Path() + "_old")
-	Expect(os.IsNotExist(err)).To(BeTrue(), "ct map was migrated")
-	_, err = maps.V4.CtMap.Get(k.AsBytes())
-	Expect(err).NotTo(HaveOccurred(), "ct entry lost")
+	t.Run("pinned", func(t *testing.T) {
+		testKeepPinnedSizes(t, func() {
+			Expect(os.Remove(ctMap.Path() + "_old")).To(Succeed())
+		})
+	})
+	t.Run("pinned at _old", func(t *testing.T) {
+		// Felix died after repinning the live map to _old, before creating the new one.
+		testKeepPinnedSizes(t, func() {
+			Expect(os.Remove(ctMap.Path() + "_old")).To(Succeed())
+			Expect(os.Rename(ctMap.Path(), ctMap.Path()+"_old")).To(Succeed())
+		})
+	})
 }
 
-func TestKeepPinnedSizesMidMigration(t *testing.T) {
+func testKeepPinnedSizes(t *testing.T, arrangePins func()) {
 	k, err := setUpMapTestWithSingleKV(t)
 	Expect(err).NotTo(HaveOccurred(), "Failed to create ct entry")
 
 	conntrack.SetMapSize(600)
+	defer bpfmaps.ResetSizes()
 	maps, err := bpfmap.CreateBPFMaps(false)
 	Expect(err).NotTo(HaveOccurred())
-	maps.V4.CtMap.(*bpfmaps.PinnedMap).Close()
+	maps.Close()
+	arrangePins()
 
-	// Felix died after repinning the live map to _old, before creating the new one.
-	Expect(os.Remove(ctMap.Path() + "_old")).To(Succeed())
-	Expect(os.Rename(ctMap.Path(), ctMap.Path()+"_old")).To(Succeed())
-
+	// A process without Felix's config sees only the default sizes.
 	bpfmaps.ResetSizes()
 	maps, err = bpfmap.CreateBPFMapsKeepingPinnedSizes(false)
 	Expect(err).NotTo(HaveOccurred())
