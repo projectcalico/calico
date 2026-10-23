@@ -178,10 +178,18 @@ ut-kubevirt: $(UT_PREREQS)
 	$(MAKE) install-kubevirt-crds
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes CNI_SPEC_VERSION=1.0.0 JUNIT_REPORT_NAME=cni_plugin_ut_kubevirt.xml GINKGO_ARGS='--label-filter=KubeVirt $(GINKGO_ARGS)'
 
+# A cache of its own, shared by the three datastore passes: the tests run as
+# root, and root-owned entries in the main cache would break later builds that
+# run as the invoking user.
+UT_GO_CACHE = $(LOCAL_GO_PKG_CACHE)/ut-root
+
 ut-datastore:
 	# The tests need to run as root
+	mkdir -p $(UT_GO_CACHE)
 	docker run --rm -t --privileged --net=host \
 	$(EXTRA_DOCKER_ARGS) \
+	-e GOCACHE=/go-cache \
+	-v $(UT_GO_CACHE):/go-cache:rw \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
 	-e RUN_AS_ROOT=true \
 	-e ARCH=$(ARCH) \

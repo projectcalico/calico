@@ -21,3 +21,20 @@ NFT_RPMS_TAG := $(shell ( \
 	) | sha256sum | cut -c1-12)
 
 NFT_RPMS_IMAGE ?= $(firstword $(DEV_REGISTRIES))/nftables-rpms:$(NFT_RPMS_TAG)-$(ARCH)
+
+# The image's /rpms and /src as a directory, which consumers pass as their
+# nft-rpms build context. A directory travels with the build to any builder;
+# an image only in the local daemon is invisible to the docker-container
+# builder that the remote layer cache needs. Consumers add a rule:
+#
+#   $(NFT_RPMS_CONTEXT): | nft-rpms-image
+#   	$(NFT_RPMS_EXPORT_CONTEXT)
+NFT_RPMS_CONTEXT = $(NFT_RPMS_DIR)context-$(NFT_RPMS_TAG)-$(ARCH)
+
+define NFT_RPMS_EXPORT_CONTEXT
+rm -rf $@.tmp && mkdir -p $@.tmp
+ctr=$$(docker create --platform linux/$(ARCH) $(NFT_RPMS_IMAGE)) && \
+	{ docker cp $$ctr:/rpms $@.tmp/rpms && docker cp $$ctr:/src $@.tmp/src; rc=$$?; \
+	  docker rm -f $$ctr >/dev/null; exit $$rc; }
+mv $@.tmp $@
+endef
