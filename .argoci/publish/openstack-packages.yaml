@@ -1,14 +1,16 @@
 # Builds and publishes the OpenStack packages: debs to a Launchpad PPA, and RPMs
 # to binaries-projectcalico-org.
 #
-# Publishing is automatic only for merges to master. For other branches, and for
-# PRs, it is available but not automatic: a developer can build and publish
+# Publishing is automatic only for merges to master.  For other branches, and
+# for PRs, it is available but not automatic: a developer can build and publish
 # release-branch or pre-merge packages with the "openstack-packages" promotion
-# button on a run. Packages built from master go to the "master" PPA, from any
-# other branch to the "testing" PPA, and from a PR to the "pr-<number>" PPA, which
-# must have been created by hand first. A PR that needs packaging must use a
-# branch on github.com/projectcalico/calico rather than a fork, because packaging
-# needs secrets that we do not (and should not!) expose to fork PRs.
+# button on a run.  Packages built from master go to the "master" PPA, from a
+# release branch like release-v3.32 to the "release-3.32" PPA (and "release-332"
+# Artifact Registry repo), and from a PR to the "pr-<number>" PPA; the release
+# and PR PPAs (and Artifact Registry repo) must have been created by hand
+# first.  A PR that needs packaging must use a branch on
+# github.com/projectcalico/calico rather than a fork, because packaging needs
+# secrets that we do not (and should not!) expose to fork PRs.
 version: condensed
 generateName: openstack-packages-
 timeout: 1h
