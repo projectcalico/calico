@@ -18,7 +18,6 @@
 
 # Etcd-based transport for the Calico/OpenStack Plugin.
 
-import collections
 from datetime import datetime, timezone
 import json
 
@@ -42,17 +41,6 @@ STALE_STATUS_WARN_INTERVAL_SECS = 300
 
 
 LOG = log.getLogger(__name__)
-
-# Objects for lightly wrapping etcd return values for use in the mechanism
-# driver.
-# These namedtuples are getting pretty heavyweight at this point. If you find
-# yourself wanting to add more fields to them, consider rewriting them as full
-# classes. Note that several of the properties of namedtuples are desirable for
-# these objects (immutability being the biggest), so if you rewrite as classes
-# attempt to preserve those properties.
-Endpoint = collections.namedtuple(
-    "Endpoint", ["id", "key", "mod_revision", "host", "data"]
-)
 
 
 class StatusWatcher(etcdutils.EtcdWatcher):
@@ -82,16 +70,6 @@ class StatusWatcher(etcdutils.EtcdWatcher):
 
         self.processing_snapshot = False
 
-        # Track the set of endpoints that are on each host so we can spot
-        # removed endpoints during a resync.
-        self._endpoints_by_host = collections.defaultdict(set)
-
-        # Map of live Felix notifications: hostname -> the latest mod_revision
-        # that we have handled for that host.  We track mod_revision because
-        # EtcdWatcher has to emit duplicate notifications to us, and we want to
-        # deduplicate before passing on to the Neutron DB.
-        self._felix_live_rev = {}
-
         # Monotonic time of the last stale-status WARNING we logged.  Used to rate-limit
         # the warning so we do not flood the log when the whole cluster is backlogged.
         # Initialised to -inf so the first stale-update encountered always passes the
@@ -101,32 +79,9 @@ class StatusWatcher(etcdutils.EtcdWatcher):
         self._last_stale_warn = float("-inf")
 
     def _pre_snapshot_hook(self):
-        # Save off current endpoint status, then reset current state, so we
-        # will be able to identify any changes in the new snapshot.
-        old_endpoints_by_host = self._endpoints_by_host
-        self._endpoints_by_host = collections.defaultdict(set)
         self.processing_snapshot = True
-        return old_endpoints_by_host
 
-    def _post_snapshot_hook(self, old_endpoints_by_host):
-        # Look for previous endpoints that are no longer present...
-        for hostname, ep_ids in old_endpoints_by_host.items():
-            LOG.info("host: %s", hostname)
-            # Avoid self._endpoints_by_host[hostname] since that would
-            # auto-create the entry in the new dict, which would cause a
-            # leak.
-            new_ep_ids = self._endpoints_by_host.get(hostname, set())
-            # Check for particular endpoints that have disappeared, and
-            # signal those.
-            for ep_id in ep_ids.difference(new_ep_ids):
-                LOG.info("signal None for %s", ep_id.endpoint)
-                self.calico_driver.on_port_status_changed(
-                    hostname,
-                    ep_id.endpoint,
-                    None,
-                    workload_id=ep_id.workload,
-                    priority="low",
-                )
+    def _post_snapshot_hook(self):
         self.processing_snapshot = False
 
     def _check_for_stale_status(self, hostname, value):
@@ -196,6 +151,12 @@ class AgentStatusWatcher(StatusWatcher):
     def __init__(self, calico_driver):
         super().__init__(calico_driver)
 
+        # Map of live Felix notifications: hostname -> the latest mod_revision
+        # that we have handled for that host.  We track mod_revision because
+        # EtcdWatcher has to emit duplicate notifications to us, and we want to
+        # deduplicate before passing on to the Neutron DB.
+        self._felix_live_rev = {}
+
         # Register for felix uptime updates.
         self.register_path(
             self.status_path + "/<hostname>/status",
@@ -239,6 +200,15 @@ class EndpointStatusWatcher(StatusWatcher):
     def __init__(self, calico_driver):
         super().__init__(calico_driver)
 
+        # The port statuses currently in etcd, so that a new snapshot can spot those
+        # removed while we weren't watching.
+        self._status_ids = set()
+
+        # The statuses to check against while a snapshot is under way.  A snapshot that
+        # fails partway is retried without finishing, and the statuses from before it
+        # still need checking then, not just those it had loaded.
+        self._unreconciled_status_ids = set()
+
         self.register_path(
             self.status_path
             + "/<hostname>/workload/openstack/<workload>/endpoint/<endpoint>",
@@ -246,43 +216,64 @@ class EndpointStatusWatcher(StatusWatcher):
             on_del=self._on_ep_delete,
         )
 
+    def _pre_snapshot_hook(self):
+        # Add the current statuses to those to check against, then start afresh, so
+        # that we can spot which are missing from the new snapshot.
+        self._unreconciled_status_ids |= self._status_ids
+        self._status_ids = set()
+        super()._pre_snapshot_hook()
+
+    def _post_snapshot_hook(self):
+        # Signal the statuses that have disappeared.
+        for status_id in self._unreconciled_status_ids - self._status_ids:
+            LOG.info("signal None for %s", status_id)
+            self.calico_driver.on_port_status_changed(
+                status_id.host,
+                status_id.port_id,
+                None,
+                device_id=status_id.device_id,
+                priority="low",
+            )
+        self._unreconciled_status_ids = set()
+        super()._post_snapshot_hook()
+
     def _on_ep_set(self, response, hostname, workload, endpoint):
         """Called when the status key for a particular endpoint is updated.
 
         Reports the status to the driver and caches the existence of the
         endpoint.
         """
-        ep_id = datamodel_v2.get_endpoint_id_from_key(self.region_string, response.key)
-        if not ep_id:
+        status_id = datamodel_v2.get_port_status_id_from_key(
+            self.region_string, response.key
+        )
+        if not status_id:
             LOG.error(
                 "Failed to extract endpoint ID from: %s.  Ignoring update!",
                 response.key,
             )
             return
-        self._report_status(ep_id, response.value)
+        self._report_status(status_id, response.value)
 
-    def _report_status(self, endpoint_id, raw_json):
+    def _report_status(self, status_id, raw_json):
         try:
             status_dict = json.loads(raw_json)
         except (ValueError, TypeError):
-            LOG.error("Bad JSON data for %s: %s", endpoint_id, raw_json)
-            status = None  # Report as error
-            self._endpoints_by_host[endpoint_id.host].discard(endpoint_id)
-            if not self._endpoints_by_host[endpoint_id.host]:
-                del self._endpoints_by_host[endpoint_id.host]
+            LOG.error("Bad JSON data for %s: %s", status_id, raw_json)
+            status = None  # As if the status were deleted.
+            self._status_ids.discard(status_id)
         else:
-            self._endpoints_by_host[endpoint_id.host].add(endpoint_id)
+            self._status_ids.add(status_id)
 
             # Unwrap the dict around the actual status.
             status = (
                 status_dict.get("status") if isinstance(status_dict, dict) else None
             )
-        LOG.debug("Port %s updated to status %s", endpoint_id, status)
+        LOG.debug("Port %s updated to status %s", status_id, status)
         self.calico_driver.on_port_status_changed(
-            endpoint_id.host,
-            endpoint_id.endpoint,
+            status_id.host,
+            status_id.port_id,
             status,
-            workload_id=endpoint_id.workload,
+            device_id=status_id.device_id,
             priority="low" if self.processing_snapshot else "high",
         )
 
@@ -293,16 +284,21 @@ class EndpointStatusWatcher(StatusWatcher):
         the deletion to the driver.
         """
         LOG.debug("Port %s/%s/%s deleted", hostname, workload, endpoint)
-        endpoint_id = datamodel_v2.get_endpoint_id_from_key(
+        status_id = datamodel_v2.get_port_status_id_from_key(
             self.region_string, response.key
         )
-        self._endpoints_by_host[hostname].discard(endpoint_id)
-        if not self._endpoints_by_host[hostname]:
-            del self._endpoints_by_host[hostname]
+        if not status_id:
+            # As on a set, which would have ignored this key too.
+            LOG.error(
+                "Failed to extract endpoint ID from: %s.  Ignoring deletion!",
+                response.key,
+            )
+            return
+        self._status_ids.discard(status_id)
         self.calico_driver.on_port_status_changed(
-            hostname,
-            endpoint,
+            status_id.host,
+            status_id.port_id,
             None,
-            workload_id=workload,
+            device_id=status_id.device_id,
             priority="low" if self.processing_snapshot else "high",
         )
