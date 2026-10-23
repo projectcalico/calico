@@ -17,8 +17,11 @@
 package bpfmap
 
 import (
+	"errors"
 	"fmt"
 	"os"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/allowsources"
 	"github.com/projectcalico/calico/felix/bpf/arp"
@@ -181,13 +184,23 @@ func KeepPinnedSizes(ipV6Enabled bool) {
 		if _, err := os.Stat(path + "_old"); err == nil {
 			path += "_old"
 		}
+		logCtx := log.WithField("name", pm.GetName())
 		fd, err := maps.GetMapFDByPin(path)
-		if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			logCtx.Debug("No pinned map, creating it at the default size.")
+			continue
+		} else if err != nil {
+			logCtx.WithError(err).Warn("Failed to open the pinned map, its size may be reset to the default.")
 			continue
 		}
 		info, err := maps.GetMapInfo(fd)
 		_ = fd.Close()
-		if err != nil || info.KeySize != pm.KeySize || info.ValueSize != pm.ValueSize {
+		if err != nil {
+			logCtx.WithError(err).Warn("Failed to read the pinned map's size, its size may be reset to the default.")
+			continue
+		}
+		if info.KeySize != pm.KeySize || info.ValueSize != pm.ValueSize {
+			logCtx.Debug("Pinned map has a different key or value size, it will be recreated.")
 			continue
 		}
 		maps.SetSize(pm.GetName(), info.MaxEntries)
