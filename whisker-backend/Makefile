@@ -25,3 +25,6 @@ ci: static-checks ut
 ut:
 	mkdir -p report
 	$(DOCKER_GO_BUILD) gotestsum --junitfile report/whisker_backend_ut.xml -- ./... -cover -count 1
+
+gen-mocks:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'

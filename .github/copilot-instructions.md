@@ -115,7 +115,7 @@ make go-vet                # Go static analysis
 ## Critical Build Notes
 
 ### Docker Dependencies
-- All builds run inside Docker containers using `calico/go-build:1.24.6-llvm18.1.8-k8s1.32.7`
+- All builds run inside Docker containers using `calico/go-build:$(GO_BUILD_VER)`, built from `toolchain/` (see `toolchain/README.md`)
 - **NEVER** run `make ci` or `make cd` locally - these are destructive CI-only targets
 - Build errors like "docker image rm" failures during clean are normal and ignored
 

@@ -1,0 +1,13 @@
+template: testify
+inpackage: false
+dir: "{{.InterfaceDir}}/mocks"
+filename: "{{.InterfaceName}}.go"
+packages:
+  github.com/projectcalico/calico/whisker-backend/pkg/apis/v1:
+    config:
+      pkgname: "mocks"
+      structname: "{{.InterfaceName}}"
+    interfaces:
+      FlowsBackend:
+      StreamingFlowsBackend:
+      FlowStream:

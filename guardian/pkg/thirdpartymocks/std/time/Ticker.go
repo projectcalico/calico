@@ -16,10 +16,19 @@ func NewTicker(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *Ticker {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &Ticker{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -73,8 +82,8 @@ func (_c *Ticker_Chan_Call) Run(run func()) *Ticker_Chan_Call {
 	return _c
 }
 
-func (_c *Ticker_Chan_Call) Return(vCh <-chan time.Time) *Ticker_Chan_Call {
-	_c.Call.Return(vCh)
+func (_c *Ticker_Chan_Call) Return(timeCh <-chan time.Time) *Ticker_Chan_Call {
+	_c.Call.Return(timeCh)
 	return _c
 }
 
@@ -96,7 +105,7 @@ type Ticker_Reset_Call struct {
 
 // Reset is a helper method to define mock.On call
 //   - d time.Duration
-func (_e *Ticker_Expecter) Reset(d interface{}) *Ticker_Reset_Call {
+func (_e *Ticker_Expecter) Reset(d any) *Ticker_Reset_Call {
 	return &Ticker_Reset_Call{Call: _e.mock.On("Reset", d)}
 }
 

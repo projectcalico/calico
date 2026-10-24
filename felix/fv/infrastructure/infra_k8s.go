@@ -251,8 +251,9 @@ func (kds *K8sDatastoreInfra) runK8sApiserver() {
 	args := []string{
 		"-v", os.Getenv("CERTS_PATH") + ":/home/user/certs", // Mount in location of certificates.
 		"-v", fmt.Sprintf("%s/../../%s:/crds", pwd, crdPath), // Mount in location of CRDs.
+		"-v", k8sBinVolume(),
 		utils.Config.K8sImage,
-		"kube-apiserver",
+		k8sBinMount + "/kube-apiserver",
 		"--v=0",
 		// NOTE! We must disable UnauthenticatedHTTP2DOSMitigation in our FV's.
 		// Felix uses the anonymous user for API requests in the FVs, which triggers the above feature and leads to very slow networking, and test timeouts.
@@ -290,8 +291,9 @@ func (kds *K8sDatastoreInfra) runK8sApiserver() {
 func (kds *K8sDatastoreInfra) runK8sControllerManager() {
 	args := []string{
 		"-v", os.Getenv("CERTS_PATH") + "/:/home/user/certs", // Mount in location of certificates.
+		"-v", k8sBinVolume(),
 		utils.Config.K8sImage,
-		"kube-controller-manager",
+		k8sBinMount + "/kube-controller-manager",
 		fmt.Sprintf("--master=https://%v:6443", kds.containerGetIPForURL(kds.k8sApiContainer)),
 		"--kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig",
 		// We run trivially small clusters, so increase the QPS to get the
@@ -322,6 +324,16 @@ func (kds *K8sDatastoreInfra) runK8sControllerManager() {
 	)
 
 	kds.k8sControllerManager = c
+}
+
+// k8sBinMount is where K8sImage containers see utils.Config.K8sBinDir.
+const k8sBinMount = "/usr/local/k8s/bin"
+
+func k8sBinVolume() string {
+	if utils.Config.K8sBinDir == "" {
+		log.Panic("FV_K8SBINDIR must name the host directory holding kube-apiserver, kube-controller-manager and kubectl")
+	}
+	return utils.Config.K8sBinDir + ":" + k8sBinMount + ":ro"
 }
 
 func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err error) {
@@ -408,7 +420,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 	delay = 100 * time.Millisecond
 	for {
 		err := kds.k8sApiContainer.ExecMayFail(
-			"kubectl", "create", "clusterrolebinding",
+			k8sBinMount+"/kubectl", "create", "clusterrolebinding",
 			"anonymous-admin",
 			"--insecure-skip-tls-verify=true",
 			"--client-key=/home/user/certs/admin-key.pem",
@@ -457,7 +469,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 	log.Info("Started controller manager.")
 
 	// Apply CRDs (mounted as docker volume)
-	err = kds.k8sApiContainer.ExecMayFail("kubectl", "--kubeconfig=/home/user/certs/kubeconfig", "apply", "-f", "/crds/")
+	err = kds.k8sApiContainer.ExecMayFail(k8sBinMount+"/kubectl", "--kubeconfig=/home/user/certs/kubeconfig", "apply", "-f", "/crds/")
 	if err != nil {
 		return nil, err
 	}

@@ -18,10 +18,19 @@ func NewClock(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *Clock {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &Clock{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -65,7 +74,7 @@ type Clock_After_Call struct {
 
 // After is a helper method to define mock.On call
 //   - t time.Duration
-func (_e *Clock_Expecter) After(t interface{}) *Clock_After_Call {
+func (_e *Clock_Expecter) After(t any) *Clock_After_Call {
 	return &Clock_After_Call{Call: _e.mock.On("After", t)}
 }
 
@@ -82,8 +91,8 @@ func (_c *Clock_After_Call) Run(run func(t time.Duration)) *Clock_After_Call {
 	return _c
 }
 
-func (_c *Clock_After_Call) Return(vCh <-chan time.Time) *Clock_After_Call {
-	_c.Call.Return(vCh)
+func (_c *Clock_After_Call) Return(timeCh <-chan time.Time) *Clock_After_Call {
+	_c.Call.Return(timeCh)
 	return _c
 }
 
@@ -118,7 +127,7 @@ type Clock_NewTicker_Call struct {
 
 // NewTicker is a helper method to define mock.On call
 //   - d time.Duration
-func (_e *Clock_Expecter) NewTicker(d interface{}) *Clock_NewTicker_Call {
+func (_e *Clock_Expecter) NewTicker(d any) *Clock_NewTicker_Call {
 	return &Clock_NewTicker_Call{Call: _e.mock.On("NewTicker", d)}
 }
 
@@ -171,7 +180,7 @@ type Clock_NewTimer_Call struct {
 
 // NewTimer is a helper method to define mock.On call
 //   - d time.Duration
-func (_e *Clock_Expecter) NewTimer(d interface{}) *Clock_NewTimer_Call {
+func (_e *Clock_Expecter) NewTimer(d any) *Clock_NewTimer_Call {
 	return &Clock_NewTimer_Call{Call: _e.mock.On("NewTimer", d)}
 }
 
@@ -232,8 +241,8 @@ func (_c *Clock_Now_Call) Run(run func()) *Clock_Now_Call {
 	return _c
 }
 
-func (_c *Clock_Now_Call) Return(v time.Time) *Clock_Now_Call {
-	_c.Call.Return(v)
+func (_c *Clock_Now_Call) Return(time1 time.Time) *Clock_Now_Call {
+	_c.Call.Return(time1)
 	return _c
 }
 
@@ -266,7 +275,7 @@ type Clock_Since_Call struct {
 
 // Since is a helper method to define mock.On call
 //   - t time.Time
-func (_e *Clock_Expecter) Since(t interface{}) *Clock_Since_Call {
+func (_e *Clock_Expecter) Since(t any) *Clock_Since_Call {
 	return &Clock_Since_Call{Call: _e.mock.On("Since", t)}
 }
 
@@ -306,7 +315,7 @@ type Clock_Sleep_Call struct {
 
 // Sleep is a helper method to define mock.On call
 //   - d time.Duration
-func (_e *Clock_Expecter) Sleep(d interface{}) *Clock_Sleep_Call {
+func (_e *Clock_Expecter) Sleep(d any) *Clock_Sleep_Call {
 	return &Clock_Sleep_Call{Call: _e.mock.On("Sleep", d)}
 }
 
@@ -358,7 +367,7 @@ type Clock_Unix_Call struct {
 // Unix is a helper method to define mock.On call
 //   - sec int64
 //   - nsec int64
-func (_e *Clock_Expecter) Unix(sec interface{}, nsec interface{}) *Clock_Unix_Call {
+func (_e *Clock_Expecter) Unix(sec any, nsec any) *Clock_Unix_Call {
 	return &Clock_Unix_Call{Call: _e.mock.On("Unix", sec, nsec)}
 }
 
@@ -380,8 +389,8 @@ func (_c *Clock_Unix_Call) Run(run func(sec int64, nsec int64)) *Clock_Unix_Call
 	return _c
 }
 
-func (_c *Clock_Unix_Call) Return(v time.Time) *Clock_Unix_Call {
-	_c.Call.Return(v)
+func (_c *Clock_Unix_Call) Return(time1 time.Time) *Clock_Unix_Call {
+	_c.Call.Return(time1)
 	return _c
 }
 
@@ -414,7 +423,7 @@ type Clock_Until_Call struct {
 
 // Until is a helper method to define mock.On call
 //   - t time.Time
-func (_e *Clock_Expecter) Until(t interface{}) *Clock_Until_Call {
+func (_e *Clock_Expecter) Until(t any) *Clock_Until_Call {
 	return &Clock_Until_Call{Call: _e.mock.On("Until", t)}
 }
 
