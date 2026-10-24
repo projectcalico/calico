@@ -1,5 +1,5 @@
 // Resolves the merged PR to cherry-pick and writes outputs
-// proceed/pr/sha/login/merger/trusted. Two entry points:
+// proceed/pr/sha/login/merger/trusted/owner. Two entry points:
 //   - MERGE_SHA  (automatic push): find the PR whose merge commit is this pushed
 //                commit; a direct push has none, which is a normal quiet no-op.
 //   - PR_NUMBER  (manual dispatch): the PR is named directly, so skip the
@@ -150,7 +150,10 @@ function main() {
   const trusted = isOrgMember(login);
   console.log(`Resolved merged PR #${pr} (merge ${sha}, author ${login}, ` +
     `${env.MEMBER_ORG || 'org'} member: ${trusted})`);
-  setOutputs({ proceed: true, pr, sha, login, merger, trusted });
+  // A non-member cannot be assigned in the target repo, so the tigera merger
+  // owns the pick: they get the PR and every DM about it.
+  const owner = trusted ? login : merger;
+  setOutputs({ proceed: true, pr, sha, login, merger, trusted, owner });
 }
 
 main();

@@ -16,7 +16,7 @@
 # pick/apply: TARGET_TOKEN (read for pick, write for apply), SOURCE_TOKEN
 # export    : EXPORT_DIR OUTCOME CONFLICT_SEVERITY RESOLUTION_REPORT
 # apply     : EXPORT_DIR EXTRA_LABELS TITLE_PREFIX OUTCOME CONFLICT_SEVERITY
-#             AUTHOR_LOGIN AUTHOR_TRUSTED MERGER_LOGIN (who to assign the PR to)
+#             ASSIGNEE (the pick's owner; empty leaves it unassigned)
 # Optional  : SOURCE_REF(=master) BRANCH_NAME WORKDIR(=PWD) CARRY_SOURCE_LABELS(=true)
 #             PICK_PATHS_FILE(=$RUNNER_TEMP/pick-paths, outside the agent's reach)
 #             PICK_CONFLICTS_FILE(=$RUNNER_TEMP/pick-conflicts) ESCALATION_NOTES
@@ -497,28 +497,22 @@ do_apply() {
   assign_pr "$pr_url"
 }
 
-# The PR is opened by the bot, so the assignee is who owns it: the author, or
-# the merger when the author is not a member and so cannot be assigned here.
-# Runs after the PR exists, so a failed assignment never costs the pick.
+# The bot opens the PR, so the assignee is what marks its human owner. Runs
+# after the PR exists, so a failed assignment never costs the pick.
 assign_pr() {
-  local pr_url="$1" assignee
-  if [ "${AUTHOR_TRUSTED:-}" = "true" ]; then
-    assignee="${AUTHOR_LOGIN:-}"
-  else
-    assignee="${MERGER_LOGIN:-}"
-  fi
+  local pr_url="$1" assignee="${ASSIGNEE:-}"
   if [ -z "$assignee" ]; then
     echo "::notice::no assignee for ${pr_url}"; return 0
   fi
-  # REST, not `gh pr edit`: it skips a login GitHub cannot assign instead of
-  # failing, so the response is checked for the login instead.
+  # The endpoint drops a login it cannot assign (not a collaborator here)
+  # without an error, so the response is checked for it.
   local got
   if ! got="$(gh api "repos/${TARGET_REPO}/issues/${pr_url##*/}/assignees" \
       -f "assignees[]=${assignee}" --jq '.assignees[].login')"; then
     echo "::warning::could not assign ${assignee} to ${pr_url}"; return 0
   fi
   if ! grep -qxF "$assignee" <<<"$got"; then
-    echo "::warning::${assignee} cannot be assigned on ${TARGET_REPO}; ${pr_url} is unassigned"
+    echo "::warning::${assignee} cannot be assigned on ${TARGET_REPO}; not assigned to ${pr_url}"
   fi
   return 0
 }

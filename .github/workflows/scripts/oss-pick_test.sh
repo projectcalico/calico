@@ -52,36 +52,34 @@ run() {
 
 URL_CALL="api repos/tigera/calico-private/issues/42/assignees -f assignees[]="
 
-# A member author owns the pick.
-AUTHOR_LOGIN=alice AUTHOR_TRUSTED=true MERGER_LOGIN=bob GH_ASSIGNED=alice GH_EXIT=0
-run
-check "member author: assigns author" "$GH_CALLS" "${URL_CALL}alice --jq .assignees[].login"
-check "member author: no warning" "$OUT" ""
+ASSIGN_CALL="${URL_CALL}alice --jq .assignees[].login"
 
-# A non-member's pick goes to the tigera merger.
-AUTHOR_LOGIN=outsider AUTHOR_TRUSTED=false MERGER_LOGIN=bob GH_ASSIGNED=bob
+ASSIGNEE=alice GH_ASSIGNED=alice GH_EXIT=0
 run
-check "non-member author: assigns merger" "$GH_CALLS" "${URL_CALL}bob --jq .assignees[].login"
+check "assigns the owner" "$GH_CALLS" "$ASSIGN_CALL"
+check "assigned: no warning" "$OUT" ""
 
-# The membership check failing open reads as untrusted, never as the author.
-AUTHOR_LOGIN=alice AUTHOR_TRUSTED="" MERGER_LOGIN=bob GH_ASSIGNED=bob
+# Someone assigned by hand stays; only the owner's presence matters.
+ASSIGNEE=alice GH_ASSIGNED=$'carol\nalice'
 run
-check "unknown trust: assigns merger" "$GH_CALLS" "${URL_CALL}bob --jq .assignees[].login"
+check "alongside an existing assignee: no warning" "$OUT" ""
 
 # Nobody to assign: no API call, no failure.
-AUTHOR_LOGIN=outsider AUTHOR_TRUSTED=false MERGER_LOGIN="" GH_ASSIGNED=""
+ASSIGNEE="" GH_ASSIGNED=""
 run
-check "no merger: no call" "$GH_CALLS" ""
-check "no merger: rc" "$RC" "0"
+check "no owner: no call" "$GH_CALLS" ""
+check "no owner: rc" "$RC" "0"
+check "no owner: notice" "$OUT" "::notice::no assignee for https://github.com/tigera/calico-private/pull/42"
 
-# GitHub accepts the call but drops an unassignable login.
-AUTHOR_LOGIN=alice AUTHOR_TRUSTED=true MERGER_LOGIN=bob GH_ASSIGNED=""
+# GitHub accepts the call but drops an unassignable login, leaving only
+# whoever was assigned already.
+ASSIGNEE=alice GH_ASSIGNED=carol
 run
 check "dropped login: rc" "$RC" "0"
-check "dropped login: warns" "$OUT" "::warning::alice cannot be assigned on tigera/calico-private; https://github.com/tigera/calico-private/pull/42 is unassigned"
+check "dropped login: warns" "$OUT" "::warning::alice cannot be assigned on tigera/calico-private; not assigned to https://github.com/tigera/calico-private/pull/42"
 
 # An API failure must not fail the step that already opened the PR.
-AUTHOR_LOGIN=alice AUTHOR_TRUSTED=true MERGER_LOGIN=bob GH_ASSIGNED=alice GH_EXIT=1
+ASSIGNEE=alice GH_ASSIGNED=alice GH_EXIT=1
 run
 check "api error: rc" "$RC" "0"
 check "api error: warns" "$OUT" "::warning::could not assign alice to https://github.com/tigera/calico-private/pull/42"
