@@ -7,7 +7,7 @@
 #   pick    (Job A) clone (READ token) + cherry-pick + Claude resolve, then export
 #           the result as a git-format-patch artifact. No write token, no Slack.
 #   open-pr (Job B) fresh runner: git am the artifact (WRITE token), push, open
-#           the PR, DM the author.
+#           the PR, assign it to the author (or merger), DM the author.
 #
 # Auth (secrets/vars on projectcalico/calico):
 #   CLAUDE_TOKEN              Anthropic API key                       (Job A)
@@ -90,6 +90,8 @@ jobs:
       pr: ${{ steps.resolve.outputs.pr }}
       sha: ${{ steps.resolve.outputs.sha }}
       login: ${{ steps.resolve.outputs.login }}
+      merger: ${{ steps.resolve.outputs.merger }}
+      trusted: ${{ steps.resolve.outputs.trusted }}
       notify: ${{ steps.escalation.outputs.notify }}
       outcome: ${{ steps.pick.outputs.outcome }}
       escalated: ${{ steps.escalation.outputs.escalated }}
@@ -497,6 +499,9 @@ jobs:
           OUTCOME: ${{ needs.pick.outputs.outcome }}
           CONFLICT_SEVERITY: ${{ needs.pick.outputs.severity }}
           EXPORT_DIR: /tmp/pick-export
+          AUTHOR_LOGIN: ${{ needs.pick.outputs.login }}
+          AUTHOR_TRUSTED: ${{ needs.pick.outputs.trusted }}
+          MERGER_LOGIN: ${{ needs.pick.outputs.merger }}
         run: bash "$RUNNER_TEMP/oss-pick.sh" apply
 
       # Notify steps each set only SLACK_BOT_TOKEN (kept out of the job env), the
