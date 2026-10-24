@@ -16,6 +16,7 @@
 # pick/apply: TARGET_TOKEN (read for pick, write for apply), SOURCE_TOKEN
 # export    : EXPORT_DIR OUTCOME CONFLICT_SEVERITY RESOLUTION_REPORT
 # apply     : EXPORT_DIR EXTRA_LABELS TITLE_PREFIX OUTCOME CONFLICT_SEVERITY
+#             ASSIGNEE (the pick's owner; empty leaves it unassigned)
 # Optional  : SOURCE_REF(=master) BRANCH_NAME WORKDIR(=PWD) CARRY_SOURCE_LABELS(=true)
 #             PICK_PATHS_FILE(=$RUNNER_TEMP/pick-paths, outside the agent's reach)
 #             PICK_CONFLICTS_FILE(=$RUNNER_TEMP/pick-conflicts) ESCALATION_NOTES
@@ -493,7 +494,31 @@ do_apply() {
     ${PR_LABELS_OUT:+--label "$PR_LABELS_OUT"})"
   echo "$pr_url"
   emit "pr_url=$pr_url"
+  assign_pr "$pr_url"
 }
+
+# The bot opens the PR, so the assignee is what marks its human owner. Runs
+# after the PR exists, so a failed assignment never costs the pick.
+assign_pr() {
+  local pr_url="$1" assignee="${ASSIGNEE:-}"
+  if [ -z "$assignee" ]; then
+    echo "::notice::no assignee for ${pr_url}"; return 0
+  fi
+  # The endpoint drops a login it cannot assign (not a collaborator here)
+  # without an error, so the response is checked for it.
+  local got
+  if ! got="$(gh api "repos/${TARGET_REPO}/issues/${pr_url##*/}/assignees" \
+      -f "assignees[]=${assignee}" --jq '.assignees[].login')"; then
+    echo "::warning::could not assign ${assignee} to ${pr_url}"; return 0
+  fi
+  if ! grep -qxF "$assignee" <<<"$got"; then
+    echo "::warning::${assignee} cannot be assigned on ${TARGET_REPO}; not assigned to ${pr_url}"
+  fi
+  return 0
+}
+
+# Sourced by the tests for its functions only.
+[ "${BASH_SOURCE[0]}" = "$0" ] || return 0
 
 case "${1:-}" in
   pick)     do_pick ;;
