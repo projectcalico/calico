@@ -95,11 +95,7 @@ func generatePacketLengths(mtu int) (getLengths, postLengths, udpLengths []int) 
 // manifest-based installs, where the Installation CRD doesn't exist.
 func measurePodMTU(f *framework.Framework, nodeName string) int {
 	ct := conncheck.NewConnectionTester(f)
-	probe := conncheck.NewClient(
-		utils.GenerateRandomName("mtu-probe"),
-		f.Namespace,
-		conncheck.WithClientCustomizer(conncheck.WithNodeName(nodeName)),
-	)
+	probe := conncheck.NewClient(utils.GenerateRandomName("mtu-probe"), f.Namespace, conncheck.WithClientCustomizer(conncheck.WithNodeName(nodeName)))
 	ct.AddClient(probe)
 	ct.Deploy()
 	defer ct.Stop()
