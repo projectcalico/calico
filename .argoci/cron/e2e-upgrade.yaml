@@ -58,18 +58,20 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/upgrade/eks-bpf-aws-manifest.yaml
+        value: e2e/config/upgrade/eks-bpf-aws.yaml
       - name: PROVISIONER
         value: aws-eks
     matrix:
-      - name: stable-1-calico-manual-calicobpf
+      - name: stable-1-calico-operator-calicobpf
         env:
           - name: K8S_VERSION
             value: stable-1
           - name: EKS_CNI
             value: calico
+          - name: ENCAPSULATION_TYPE
+            value: VXLAN
           - name: INSTALLER
-            value: manual
+            value: operator
           - name: DATAPLANE
             value: CalicoBPF
     commands: |
