@@ -1,5 +1,8 @@
 [sig-calico] [Team:CORE] [Category:Networking] [Feature:HostPorts] HostPorts tests with host port resources active on :8080 should support Pod HostPorts [Conformance] [Serial]
 [sig-calico] [Team:CORE] [Category:Networking] [Feature:Pods] Pod Termination Grace Period should allow client to reach server while client is terminating [Conformance]
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedGlobalNetworkPolicy Validate name, tier, action [Conformance]
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedKubernetesNetworkPolicy Validate name, tier, action [Conformance]
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedNetworkPolicy Validate name, tier, action [Conformance]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests should allow connections using a named port [Conformance] [Serial]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-Policy] [RunsOnWindows] Tiered policy tests with a single tier taking precedence over the default tier can pass to the default tier, and allow traffic explicitly. [Conformance]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] Tiered RBAC with tier-prefixed names should allow create and deny based on tier RBAC with prefixed names
@@ -19,6 +22,7 @@
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC list via tier RBAC [RequiresCalicoAPIServer] should deny listing when user lacks tier policy access
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC namespace-scoped tier access should confine a namespaced tier grant to its own namespace [Conformance]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC old-style vs new-style name disambiguation [RequiresCalicoAPIServer] should independently authorize bare and tier-prefixed policy names
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC operator-rendered passthrough [RequiresOperator] should grant the tiered policy write verbs and no read verbs in v3 CRD mode
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC read-only access should allow reading but deny writing for a read-only user [Conformance]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC resource-name exact match [RequiresCalicoAPIServer] should allow access to the named policy but deny access to others
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC staged policies should allow staged global policy writes by a user with full tier RBAC
