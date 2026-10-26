@@ -84,7 +84,7 @@ func (d *LinuxDataplane) DoNetworking(
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create host netlink handle: %v", err)
 	}
-	defer hostNlHandle.Close()
+	defer func() { _ = hostNlHandle.Close() }()
 
 	contVethMAC, err = d.DoWorkloadNetnsSetUp(
 		hostNlHandle,

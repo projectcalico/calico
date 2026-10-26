@@ -72,6 +72,16 @@ var _ = DescribeTable("vxlanLinksIncompat",
 	}, &netlink.Vxlan{
 		VxlanId: 4096, VtepDevIndex: 2, Port: 4789,
 	}, "flow-based mode: true vs false"),
+	Entry("flow-based without to with VNI filter (upgrade)", &netlink.Vxlan{
+		FlowBased: true, Port: 4789,
+	}, &netlink.Vxlan{
+		FlowBased: true, VniFilter: true, Port: 4789,
+	}, "vni filter: false vs true"),
+	Entry("identical VNI-filtering devices", &netlink.Vxlan{
+		FlowBased: true, VniFilter: true, Port: 4789,
+	}, &netlink.Vxlan{
+		FlowBased: true, VniFilter: true, Port: 4789,
+	}, ""),
 	Entry("VNI mismatch", &netlink.Vxlan{
 		VxlanId: 4096, Port: 4789,
 	}, &netlink.Vxlan{
@@ -889,5 +899,199 @@ var _ = Describe("VXLANManager", func() {
 		Expect(ok).To(BeTrue())
 		Expect(vxlan.PortLow).To(Equal(49152))
 		Expect(vxlan.PortHigh).To(Equal(65535))
+	})
+})
+
+var _ = Describe("VXLANManager in BPF mode", func() {
+	var (
+		dataplane *mocknetlink.MockNetlinkDataplane
+		dpConfig  Config
+	)
+
+	BeforeEach(func() {
+		dataplane = mocknetlink.New()
+		_, err := dataplane.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		dataplane.ImmediateLinkUp = true
+		eth0 := dataplane.AddIface(2, "eth0", true, true)
+		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
+		dataplane.ResetDeltas()
+
+		dpConfig = Config{
+			MaxIPSetSize: 5,
+			Hostname:     "node1",
+			BPFEnabled:   true,
+			RulesConfig: rules.Config{
+				VXLANVNI:  4096,
+				VXLANPort: 4789,
+			},
+		}
+	})
+
+	newMgr := func(opts ...vxlanMgrOption) *vxlanManager {
+		mgr := newVXLANManagerWithShims(
+			dpsets.NewMockIPSets(),
+			&mockRouteTable{currentRoutes: map[string][]routetable.Target{}},
+			&mockVXLANFDB{},
+			dataplanedefs.VXLANIfaceNameV4,
+			4,
+			0,
+			dpConfig,
+			logrusr.NewSummarizer("test"),
+			dataplane,
+			opts...,
+		)
+		mgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+			Node:           "node1",
+			Mac:            "00:0a:74:9d:68:16",
+			Ipv4Addr:       "10.0.0.0",
+			ParentDeviceIp: "172.0.0.2",
+		})
+		mgr.routeMgr.OnParentDeviceUpdate("eth0")
+		return mgr
+	}
+
+	configure := func(mgr *vxlanManager) error {
+		parent, err := mgr.routeMgr.detectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+		link, addr, err := mgr.device(parent)
+		Expect(err).NotTo(HaveOccurred())
+		return mgr.routeMgr.configureTunnelDevice(link, addr, 0, false)
+	}
+
+	configureDevice := func(opts ...vxlanMgrOption) error {
+		return configure(newMgr(opts...))
+	}
+
+	withVNIFilter := func() vxlanMgrOption {
+		return vxlanMgrWithVNIFilter(bpfOverlayTunnelID(&dpConfig.RulesConfig))
+	}
+
+	vxlanDevice := func() (*netlink.Vxlan, *mocknetlink.MockLink) {
+		ml := dataplane.NameToLink[dataplanedefs.VXLANIfaceNameV4]
+		Expect(ml).NotTo(BeNil())
+		vx, ok := ml.ConcreteLink.(*netlink.Vxlan)
+		Expect(ok).To(BeTrue())
+		return vx, ml
+	}
+
+	addExistingDevice := func(vniFilter bool, vnis ...uint32) {
+		la := netlink.NewLinkAttrs()
+		la.Name = dataplanedefs.VXLANIfaceNameV4
+		vx := &netlink.Vxlan{LinkAttrs: la, FlowBased: true, VniFilter: vniFilter, Port: 4789}
+		Expect(dataplane.LinkAdd(vx)).To(Succeed())
+		for _, vni := range vnis {
+			Expect(dataplane.BridgeVniAdd(vx, vni)).To(Succeed())
+		}
+		dataplane.ResetDeltas()
+	}
+
+	It("creates a plain flow-based device without the VNI filter option", func() {
+		Expect(configureDevice()).To(Succeed())
+		vx, ml := vxlanDevice()
+		Expect(vx.FlowBased).To(BeTrue())
+		Expect(vx.VniFilter).To(BeFalse())
+		Expect(ml.VNIs).To(BeNil())
+	})
+
+	It("creates a VNI-filtering device that accepts only the overlay and NAT VNIs", func() {
+		Expect(configureDevice(withVNIFilter())).To(Succeed())
+		vx, ml := vxlanDevice()
+		Expect(vx.FlowBased).To(BeTrue())
+		Expect(vx.VniFilter).To(BeTrue())
+		Expect(ml.VNIs.Slice()).To(ConsistOf(uint32(4096), uint32(0xca11c0)))
+	})
+
+	DescribeTable("filters on the BPF tunnel ID when another overlay is enabled",
+		func(enable func(rc *rules.Config)) {
+			enable(&dpConfig.RulesConfig)
+			Expect(configureDevice(withVNIFilter())).To(Succeed())
+			_, ml := vxlanDevice()
+			Expect(ml.VNIs.Slice()).To(ConsistOf(uint32(1), uint32(0xca11c0)))
+		},
+		Entry("IPIP", func(rc *rules.Config) { rc.IPIPEnabled = true }),
+		Entry("WireGuard", func(rc *rules.Config) { rc.WireguardEnabled = true }),
+		Entry("WireGuard v6", func(rc *rules.Config) { rc.WireguardEnabledV6 = true }),
+	)
+
+	It("recreates an existing plain flow-based device with the VNI filter", func() {
+		addExistingDevice(false)
+		Expect(configureDevice(withVNIFilter())).To(Succeed())
+		Expect(dataplane.NumLinkDeleteCalls).To(Equal(1))
+		vx, ml := vxlanDevice()
+		Expect(vx.VniFilter).To(BeTrue())
+		Expect(ml.VNIs.Slice()).To(ConsistOf(uint32(4096), uint32(0xca11c0)))
+	})
+
+	It("removes stale VNIs from an existing VNI-filtering device", func() {
+		addExistingDevice(true, 4096, 7777)
+		Expect(configureDevice(withVNIFilter())).To(Succeed())
+		Expect(dataplane.NumLinkDeleteCalls).To(Equal(0))
+		_, ml := vxlanDevice()
+		Expect(ml.VNIs.Slice()).To(ConsistOf(uint32(4096), uint32(0xca11c0)))
+	})
+
+	It("removes a stale VNI range in one call", func() {
+		addExistingDevice(true, 4096)
+		vx := dataplane.NameToLink[dataplanedefs.VXLANIfaceNameV4].ConcreteLink
+		Expect(dataplane.BridgeVniAddRange(vx, 1, 100000)).To(Succeed())
+		dataplane.ResetDeltas()
+
+		Expect(configureDevice(withVNIFilter())).To(Succeed())
+		Expect(dataplane.NumBridgeVniDelCalls).To(Equal(1))
+		_, ml := vxlanDevice()
+		Expect(ml.VNIs.Slice()).To(ConsistOf(uint32(4096), uint32(0xca11c0)))
+	})
+
+	It("keeps a range that holds only wanted VNIs", func() {
+		dpConfig.RulesConfig.VXLANVNI = 0xca11bf
+		addExistingDevice(true, 0xca11bf, 0xca11c0)
+		Expect(configureDevice(withVNIFilter())).To(Succeed())
+		Expect(dataplane.NumBridgeVniDelCalls).To(Equal(0))
+		_, ml := vxlanDevice()
+		Expect(ml.VNIs.Slice()).To(ConsistOf(uint32(0xca11bf), uint32(0xca11c0)))
+	})
+
+	It("restores a VNI removed from the live device", func() {
+		mgr := newMgr(withVNIFilter())
+		Expect(configure(mgr)).To(Succeed())
+
+		vx, ml := vxlanDevice()
+		Expect(dataplane.BridgeVniDel(vx, 4096)).To(Succeed())
+		dataplane.ResetDeltas()
+
+		Expect(configure(mgr)).To(Succeed())
+		Expect(dataplane.NumLinkDeleteCalls).To(Equal(0))
+		Expect(dataplane.NumBridgeVniListCalls).To(Equal(1))
+		Expect(ml.VNIs.Slice()).To(ConsistOf(uint32(4096), uint32(0xca11c0)))
+	})
+
+	It("keeps an unfiltered device when the kernel ignores the VNI filter", func() {
+		dataplane.KernelLacksVniFilter = true
+		mgr := newMgr(withVNIFilter())
+		Expect(configure(mgr)).To(Succeed())
+		deletes := dataplane.NumLinkDeleteCalls
+
+		Expect(configure(mgr)).To(Succeed())
+		Expect(dataplane.NumLinkDeleteCalls).To(Equal(deletes), "device should not be recreated again")
+		Expect(dataplane.NumBridgeVniListCalls).To(BeZero())
+		vx, _ := vxlanDevice()
+		Expect(vx.VniFilter).To(BeFalse())
+	})
+
+	It("names the conflict when another device on the port owns the overlay VNI", func() {
+		la := netlink.NewLinkAttrs()
+		la.Name = "vxlan-other"
+		other := &netlink.Vxlan{LinkAttrs: la, FlowBased: true, VniFilter: true, Port: 4789}
+		Expect(dataplane.LinkAdd(other)).To(Succeed())
+		Expect(dataplane.BridgeVniAdd(other, 4096)).To(Succeed())
+
+		Expect(configureDevice(withVNIFilter())).To(MatchError(
+			ContainSubstring("VNI 4096 is already used by another VXLAN device on port 4789")))
+	})
+
+	It("returns an error if the VNI filter cannot be listed", func() {
+		dataplane.FailuresToSimulate = mocknetlink.FailNextBridgeVni
+		Expect(configureDevice(withVNIFilter())).To(MatchError(ContainSubstring("VNI filter")))
 	})
 })
