@@ -6,8 +6,8 @@ include ../lib.Makefile
 # libbpf headers are needed because the e2e tests import felix/bpf packages
 # that use CGO with libbpf.h. These flags mirror felix/Makefile, which links the
 # same static libbpf.a.
-LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/libbpf/src
-BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl
+LIBBPF_CONTAINER_PATH=$(BUILD_REPO_ROOT)/felix/bpf-gpl/libbpf/src
+BPFGPL_CONTAINER_PATH=$(BUILD_REPO_ROOT)/felix/bpf-gpl
 LIBBPF_A=../felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
 # Normalize userspace types to ensure consistency across architectures.
