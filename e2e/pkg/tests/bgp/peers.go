@@ -59,7 +59,7 @@ var _ = describe.CalicoDescribe(
 			// Create a connection tester for the test.
 			checker = conncheck.NewConnectionTester(f)
 
-			cli, err = client.New(f.ClientConfig())
+			cli, err = client.NewDatastoreClient(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
 			// We need a minimum of two nodes for BGP peering tests.
