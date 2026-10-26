@@ -71,36 +71,44 @@ var _ = describe.CalicoDescribe(
 		var defaultAllow *v3.GlobalNetworkPolicy
 		var allowLogCollection *v3.GlobalNetworkPolicy
 
-		// avoidNodeCustomizer is used to ensure our client pod is not on the same node
-		// as the hostEndpoint, and that it isn't on the master node.
-		avoidNodeCustomizer := func(pod *v1.Pod) {
-			pod.Spec.Affinity = &v1.Affinity{
-				NodeAffinity: &v1.NodeAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &v1.NodeSelector{
-						NodeSelectorTerms: []v1.NodeSelectorTerm{
-							{
-								MatchExpressions: []v1.NodeSelectorRequirement{
-									{
-										Key:      "node-role.kubernetes.io/master",
-										Operator: v1.NodeSelectorOpDoesNotExist,
-									},
-									{
-										Key:      "node-role.kubernetes.io/control-plane",
-										Operator: v1.NodeSelectorOpDoesNotExist,
-									},
+		// avoidControlPlane keeps a pod off control-plane nodes. The server needs it too: its
+		// HostEndpoint denies ingress on the kube-apiserver port, and on a control-plane node
+		// that locks the test out of the cluster.
+		avoidControlPlane := func(pod *v1.Pod) {
+			if pod.Spec.Affinity == nil {
+				pod.Spec.Affinity = &v1.Affinity{}
+			}
+			pod.Spec.Affinity.NodeAffinity = &v1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &v1.NodeSelector{
+					NodeSelectorTerms: []v1.NodeSelectorTerm{
+						{
+							MatchExpressions: []v1.NodeSelectorRequirement{
+								{
+									Key:      "node-role.kubernetes.io/master",
+									Operator: v1.NodeSelectorOpDoesNotExist,
+								},
+								{
+									Key:      "node-role.kubernetes.io/control-plane",
+									Operator: v1.NodeSelectorOpDoesNotExist,
 								},
 							},
 						},
 					},
 				},
-				PodAntiAffinity: &v1.PodAntiAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: []v1.PodAffinityTerm{
-						{
-							LabelSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{"pod-name": "server"},
-							},
-							TopologyKey: "kubernetes.io/hostname",
+			}
+		}
+
+		// avoidNodeCustomizer is used to ensure our client pod is not on the same node
+		// as the hostEndpoint, and that it isn't on the master node.
+		avoidNodeCustomizer := func(pod *v1.Pod) {
+			avoidControlPlane(pod)
+			pod.Spec.Affinity.PodAntiAffinity = &v1.PodAntiAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: []v1.PodAffinityTerm{
+					{
+						LabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"pod-name": "server"},
 						},
+						TopologyKey: "kubernetes.io/hostname",
 					},
 				},
 			}
@@ -118,7 +126,13 @@ var _ = describe.CalicoDescribe(
 
 			// Launch a hostNetworked server pod.
 			checker = conncheck.NewConnectionTester(f)
-			hepServer1 = conncheck.NewServer("server", f.Namespace, conncheck.WithPorts(hepPort1, hepPort2), conncheck.WithHostNetworking())
+			hepServer1 = conncheck.NewServer(
+				"server",
+				f.Namespace,
+				conncheck.WithPorts(hepPort1, hepPort2),
+				conncheck.WithHostNetworking(),
+				conncheck.WithServerPodCustomizer(avoidControlPlane),
+			)
 			client1 = conncheck.NewClient("client", f.Namespace, conncheck.WithClientCustomizer(avoidNodeCustomizer))
 			checker.AddServer(hepServer1)
 			checker.AddClient(client1)
