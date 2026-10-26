@@ -57,7 +57,7 @@ var _ = describe.CalicoDescribe(
 			checker = conncheck.NewConnectionTester(f)
 
 			var err error
-			cli, err = client.New(f.ClientConfig())
+			cli, err = client.NewDatastoreClient(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred(), "failed to create API client")
 
 			// We need a minimum of two nodes for BGP peering tests.
