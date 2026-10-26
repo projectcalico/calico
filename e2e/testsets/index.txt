@@ -99,7 +99,7 @@
 .argoci/cron/e2e-patch-verification.yaml | operator-helmerator-windows-aws-kubeadm-docker | patch-verification/xtables-aws | 91
 .argoci/cron/e2e-test.yaml | calico-tests | test/bpf | 27
 .argoci/cron/e2e-upgrade.yaml | calico-tests-aks-byo-cni-w-azurelinux | upgrade/aks-xtables | 91
-.argoci/cron/e2e-upgrade.yaml | calico-tests-eks | upgrade/eks-bpf-aws-manifest | 78
+.argoci/cron/e2e-upgrade.yaml | calico-tests-eks | upgrade/eks-bpf-aws | 82
 .argoci/cron/e2e-upgrade.yaml | calico-tests-kubeadm-bpf | upgrade/bpf | 91
 .argoci/cron/e2e-upgrade.yaml | calico-tests-kubeadm-iptables | upgrade/xtables-aws | 91
 .argoci/cron/e2e-upgrade.yaml | calico-tests-openshift | upgrade/xtables-aws | 91
