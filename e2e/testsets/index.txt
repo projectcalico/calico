@@ -43,21 +43,21 @@
 .argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-aks-arm64 [stable-1-none-] | iptables/aks-xtables-encap | 223
 .argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-eks-arm64-calico-cni | iptables/eks-xtables-encap-aws | 216
 .argoci/cron/e2e-iptables.yaml | autohep-test | iptables/xtables-autohep | 233
-.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-etcd | iptables/xtables-manifest-v3crd | 214
-.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-new | iptables/xtables-manifest | 218
-.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-old | iptables/xtables-manifest | 218
+.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-etcd | iptables/xtables-manifest-v3crd | 213
+.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-new | iptables/xtables-manifest | 217
+.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-old | iptables/xtables-manifest | 217
 .argoci/cron/e2e-iptables.yaml | distro-support | iptables/xtables-encap-nobgp | 225
-.argoci/cron/e2e-iptables.yaml | dual-stack-k8s-e2e-etcd | iptables/xtables-manifest-v3crd | 214
-.argoci/cron/e2e-iptables.yaml | dual-stack-k8s-e2e-kdd | iptables/xtables-manifest | 218
+.argoci/cron/e2e-iptables.yaml | dual-stack-k8s-e2e-etcd | iptables/xtables-manifest-v3crd | 213
+.argoci/cron/e2e-iptables.yaml | dual-stack-k8s-e2e-kdd | iptables/xtables-manifest | 217
 .argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-aks-w-azure-cni | wireguard | 1
 .argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-aks-with-calico-cni | wireguard | 1
 .argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-eks-kdd-aws-cni | wireguard | 1
 .argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-eks-kdd-calico-cni | iptables/eks-xtables-encap-wireguard-aws | 191
 .argoci/cron/e2e-iptables.yaml | ipvs | iptables/xtables-v3crd | 226
-.argoci/cron/e2e-iptables.yaml | k8s-beta-runs | iptables/xtables-manifest | 218
+.argoci/cron/e2e-iptables.yaml | k8s-beta-runs | iptables/xtables-manifest | 217
 .argoci/cron/e2e-iptables.yaml | k8s-distros | iptables/xtables | 230
 .argoci/cron/e2e-iptables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 9
-.argoci/cron/e2e-iptables.yaml | migration | iptables/xtables-manifest | 218
+.argoci/cron/e2e-iptables.yaml | migration | iptables/xtables-manifest | 217
 .argoci/cron/e2e-iptables.yaml | migration [pre-migration] | pre-migration-smoke | 1
 .argoci/cron/e2e-iptables.yaml | native-v3-crds-aks | iptables/aks-xtables-nobgp-v3crd | 202
 .argoci/cron/e2e-iptables.yaml | native-v3-crds-eks | iptables/eks-xtables-nobgp-v3crd | 195

@@ -110,7 +110,6 @@
 [sig-calico] [Team:CORE] [Feature:IPIP] [Category:Networking] [NoEncap] [RequiresBGP] IP-in-IP tests should assign an IPIP address to the tunl0 interface [Serial]
 [sig-calico] [Team:CORE] [Feature:IPIP] [Category:Networking] [NoEncap] [RequiresBGP] IP-in-IP tests should support toggling IPIP on and off [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] Istio OpenShift Platform Configuration should deploy Istio with correct OpenShift platform configuration [Serial]
-[sig-calico] [Team:CORE] [Feature:MTU] [Category:Networking] Automatic MTU tests should select the correct MTU for the platform
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should correctly isolate namespaces [Conformance]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should provide a default allow [Conformance]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should support a 'deny egress' policy [Conformance]
