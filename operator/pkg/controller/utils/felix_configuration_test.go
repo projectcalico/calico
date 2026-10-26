@@ -32,6 +32,8 @@ import (
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 )
 
+const testFieldOwner = "operator.tigera.io/test"
+
 var _ = Describe("PatchFelixConfiguration", func() {
 	var c client.Client
 	var ctx context.Context
@@ -50,7 +52,7 @@ var _ = Describe("PatchFelixConfiguration", func() {
 	})
 
 	It("should create the default FelixConfiguration when it doesn't exist", func() {
-		_, err := utils.PatchFelixConfiguration(ctx, c, func(fc *v3.FelixConfiguration) (bool, error) {
+		_, err := utils.PatchFelixConfiguration(ctx, c, testFieldOwner, func(fc *v3.FelixConfiguration) (bool, error) {
 			fc.Spec.HealthPort = ptr.To(9099)
 			return true, nil
 		})
@@ -64,7 +66,7 @@ var _ = Describe("PatchFelixConfiguration", func() {
 			Spec:       v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)},
 		})).NotTo(HaveOccurred())
 
-		_, err := utils.PatchFelixConfiguration(ctx, c, func(fc *v3.FelixConfiguration) (bool, error) {
+		_, err := utils.PatchFelixConfiguration(ctx, c, testFieldOwner, func(fc *v3.FelixConfiguration) (bool, error) {
 			fc.Spec.BPFEnabled = ptr.To(true)
 			return true, nil
 		})
@@ -79,7 +81,7 @@ var _ = Describe("PatchFelixConfiguration", func() {
 		Expect(c.Create(ctx, &v3.FelixConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "default"}})).NotTo(HaveOccurred())
 		before := getFelixConfig().ResourceVersion
 
-		_, err := utils.PatchFelixConfiguration(ctx, c, func(fc *v3.FelixConfiguration) (bool, error) {
+		_, err := utils.PatchFelixConfiguration(ctx, c, testFieldOwner, func(fc *v3.FelixConfiguration) (bool, error) {
 			fc.Spec.BPFEnabled = ptr.To(true)
 			return false, nil
 		})
@@ -91,7 +93,7 @@ var _ = Describe("PatchFelixConfiguration", func() {
 	})
 
 	It("should return the patch function's error without writing", func() {
-		_, err := utils.PatchFelixConfiguration(ctx, c, func(fc *v3.FelixConfiguration) (bool, error) {
+		_, err := utils.PatchFelixConfiguration(ctx, c, testFieldOwner, func(fc *v3.FelixConfiguration) (bool, error) {
 			fc.Spec.BPFEnabled = ptr.To(true)
 			return true, errors.New("user modified bpfEnabled")
 		})
@@ -105,7 +107,7 @@ var _ = Describe("PatchFelixConfiguration", func() {
 			Annotations: map[string]string{"projectcalico.org/metadata": `{"annotations":{"team":"networking"}}`},
 		}})).NotTo(HaveOccurred())
 
-		_, err := utils.PatchFelixConfiguration(ctx, c, func(fc *v3.FelixConfiguration) (bool, error) {
+		_, err := utils.PatchFelixConfiguration(ctx, c, testFieldOwner, func(fc *v3.FelixConfiguration) (bool, error) {
 			fc.Spec.BPFEnabled = ptr.To(true)
 			return true, nil
 		})
@@ -131,12 +133,12 @@ var _ = Describe("PatchFelixConfiguration", func() {
 		}
 
 		It("should create under its own field manager", func() {
-			_, err := utils.PatchFelixConfiguration(ctx, c, func(fc *v3.FelixConfiguration) (bool, error) {
+			_, err := utils.PatchFelixConfiguration(ctx, c, testFieldOwner, func(fc *v3.FelixConfiguration) (bool, error) {
 				fc.Spec.HealthPort = ptr.To(9099)
 				return true, nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(managers()).To(ConsistOf(utils.FelixConfigurationPatchFieldOwner))
+			Expect(managers()).To(ConsistOf(testFieldOwner))
 		})
 
 		It("should patch under its own field manager", func() {
@@ -145,12 +147,12 @@ var _ = Describe("PatchFelixConfiguration", func() {
 				Spec:       v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)},
 			}, client.FieldOwner("someone-else"))).NotTo(HaveOccurred())
 
-			_, err := utils.PatchFelixConfiguration(ctx, c, func(fc *v3.FelixConfiguration) (bool, error) {
+			_, err := utils.PatchFelixConfiguration(ctx, c, testFieldOwner, func(fc *v3.FelixConfiguration) (bool, error) {
 				fc.Spec.BPFEnabled = ptr.To(true)
 				return true, nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(managers()).To(ConsistOf("someone-else", utils.FelixConfigurationPatchFieldOwner))
+			Expect(managers()).To(ConsistOf("someone-else", testFieldOwner))
 		})
 	})
 })

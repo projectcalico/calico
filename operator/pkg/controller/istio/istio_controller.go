@@ -48,6 +48,9 @@ import (
 
 const IstioName = "istio"
 
+// fieldOwner names this controller's FelixConfiguration writes in managed fields.
+const fieldOwner = "operator.tigera.io/istio"
+
 var (
 	// blank assignment to verify that ReconcileIstio implements reconcile.Reconciler
 	_ reconcile.Reconciler = &ReconcileIstio{}
@@ -274,7 +277,7 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
-	_, err = utils.PatchFelixConfiguration(ctx, r.Client, func(fc *v3.FelixConfiguration) (bool, error) {
+	_, err = utils.PatchFelixConfiguration(ctx, r.Client, fieldOwner, func(fc *v3.FelixConfiguration) (bool, error) {
 		return r.setIstioFelixConfiguration(ctx, instance, fc, false)
 	})
 	if err != nil {
@@ -425,7 +428,7 @@ func (r *ReconcileIstio) configurePolicySyncPathPrefix(ctx context.Context, inst
 func (r *ReconcileIstio) maintainFinalizer(ctx context.Context, instance *operatorv1.Istio, reqLogger logr.Logger) (res reconcile.Result, err error, finalized bool) {
 	// Executing clean up on finalizing
 	if !instance.DeletionTimestamp.IsZero() {
-		if _, err = utils.PatchFelixConfiguration(ctx, r.Client, func(fc *v3.FelixConfiguration) (bool, error) {
+		if _, err = utils.PatchFelixConfiguration(ctx, r.Client, fieldOwner, func(fc *v3.FelixConfiguration) (bool, error) {
 			return r.setIstioFelixConfiguration(ctx, instance, fc, true)
 		}); err != nil {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Error cleaning up felix configuration", err, reqLogger)
