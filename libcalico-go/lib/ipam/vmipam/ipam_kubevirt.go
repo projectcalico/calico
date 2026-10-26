@@ -20,6 +20,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"iter"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -90,6 +92,24 @@ func CreateVMHandleID(networkName, namespace, vmName string) string {
 	// with an unhashed suffix, which always contains the namespace/name '.'.
 	sum := sha256.Sum256([]byte(suffix))
 	return prefix + hex.EncodeToString(sum[:])
+}
+
+// VMHandleNetworks yields each network name CreateVMHandleID could have built the handle from. A network name
+// may itself contain VMHandleInfix, so this is the text before every occurrence of the infix, shortest first.
+// A handle without the infix yields nothing.
+func VMHandleNetworks(handle string) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		for i := 0; ; i++ {
+			j := strings.Index(handle[i:], VMHandleInfix)
+			if j < 0 {
+				return
+			}
+			i += j
+			if !yield(handle[:i]) {
+				return
+			}
+		}
+	}
 }
 
 // EnsureActiveVMOwnerAttrs atomically verifies the target pod is in AlternateOwnerAttrs
