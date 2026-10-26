@@ -52,6 +52,9 @@ func TestICMPttlExceeded(t *testing.T) {
 func TestICMPttlExceededFromHEP(t *testing.T) {
 	RegisterTestingT(t)
 
+	defer resetMap(natMap)
+	defer resetMap(natBEMap)
+
 	iphdr := *ipv4Default
 	iphdr.TTL = 1
 
