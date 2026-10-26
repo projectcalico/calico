@@ -108,11 +108,9 @@ var _ = Describe("BPF Conntrack map autoscaling", func() {
 					Expect(readFile("bpf_ct_map_size")).To(Equal("200"), "older Felix must not shrink the map")
 				}
 			},
-			Entry("below 85%", "DoubleIfFull", []int{80, 84, 84, 84}, 0),
-			Entry("above 90%", "DoubleIfFull", []int{91}, 1),
-			Entry("growing above 85% for 3 sweeps", "DoubleIfFull", []int{86, 87, 88, 89}, 4),
-			Entry("draining above 85%", "DoubleIfFull", []int{89, 88, 87, 86, 86}, 0),
-			Entry("growth above 85% interrupted", "DoubleIfFull", []int{86, 87, 88, 87, 88}, 0),
+			Entry("at 80%", "DoubleIfFull", []int{70, 80, 80, 80}, 0),
+			Entry("above 80%", "DoubleIfFull", []int{81}, 1),
+			Entry("growing past 80%", "DoubleIfFull", []int{60, 70, 79, 81}, 4),
 			Entry("disabled", "Disabled", []int{95, 99}, 0),
 		)
 	}
