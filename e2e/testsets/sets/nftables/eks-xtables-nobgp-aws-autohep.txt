@@ -109,7 +109,7 @@
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] Istio OpenShift Platform Configuration should deploy Istio with correct OpenShift platform configuration [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should allow UDP traffic to bypass ztunnel while Calico enforces UDP policy [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should encrypt traffic with ambient mode and enforce Calico NetworkPolicy [Serial]
-[sig-calico] [Team:CORE] [Feature:MTU] [Category:Networking] Automatic MTU tests should select the correct MTU for the platform
+[sig-calico] [Team:CORE] [Feature:MTU] [Category:Networking] [RequiresOperator] Automatic MTU tests should select the correct MTU for the platform
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should correctly isolate namespaces [Conformance]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should provide a default allow [Conformance]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should support a 'deny egress' policy [Conformance]
