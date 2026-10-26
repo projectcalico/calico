@@ -21,6 +21,8 @@ import (
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/felix/bpf/nat"
 )
 
 func TestNatEncap(t *testing.T) {
@@ -125,7 +127,7 @@ func checkVxlan(pktR gopacket.Packet) gopacket.Packet {
 	Expect(vxlanL).NotTo(BeNil())
 	fmt.Printf("vxlanL = %+v\n", vxlanL)
 	Expect(vxlanL.Layer(layers.LayerTypeVXLAN)).
-		To(layersMatchFields(&layers.VXLAN{ValidIDFlag: true, VNI: 0xca11c0}))
+		To(layersMatchFields(&layers.VXLAN{ValidIDFlag: true, VNI: nat.NodePortVXLANTunnelVNI}))
 
 	ethL := vxlanL.Layer(layers.LayerTypeEthernet)
 	Expect(ethL).NotTo(BeNil())
