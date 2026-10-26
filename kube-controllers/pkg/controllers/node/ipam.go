@@ -1004,7 +1004,7 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 			}
 
 			if !a.isPodIP() && !a.isTunnelAddress() && !a.isVMAllocation() {
-				// Skip any allocations which are not either a Kubernetes pod, or a node's
+				// Skip any allocations which are not a Kubernetes pod, a KubeVirt VM, or a node's
 				// IPIP, VXLAN or Wireguard address. In practice, we don't expect these, but they might exist.
 				// When they do, they will need to be released outside of this controller in order for
 				// the block to be cleaned up.
