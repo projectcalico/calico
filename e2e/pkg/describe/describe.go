@@ -108,6 +108,14 @@ func RequiresCalicoAPIServer() any {
 	return framework.WithLabel("RequiresCalicoAPIServer")
 }
 
+// RequiresV3CRDs marks tests that need kube-apiserver to serve projectcalico.org/v3
+// itself, from the v3 CRDs. Tests that disable the BGP mesh withdraw the route to the
+// calico-apiserver pod, so on a lane running the aggregated API server they lose the
+// Calico API mid-test and cannot restore the mesh. Exclude it on those lanes.
+func RequiresV3CRDs() any {
+	return framework.WithLabel("RequiresV3CRDs")
+}
+
 // RequiresNoEncap marks tests that require unencapsulated traffic to function.
 // This is typically used for tests that verify BGP functionality without IPIP, or other similar tests.
 // Such tests must be run on clusters that support unencapsulated traffic, such as bare-metal clusters
