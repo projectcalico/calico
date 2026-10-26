@@ -436,7 +436,9 @@ func (s *Scanner) Scan() {
 	}
 
 	newLiveEntries := int(used - cleaned)
-	if newLiveEntries > s.liveEntries {
+	// Slower growth reaches the 90% threshold long before the map fills, so only fast growth resizes early.
+	growth := newLiveEntries - s.liveEntries
+	if growth > 0 && growth >= s.maxEntries/100 {
 		s.higherCount++
 	} else {
 		s.higherCount = 0
