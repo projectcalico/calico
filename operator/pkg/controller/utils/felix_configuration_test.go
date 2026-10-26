@@ -112,4 +112,45 @@ var _ = Describe("PatchFelixConfiguration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(getFelixConfig().Annotations).To(HaveKey("projectcalico.org/metadata"))
 	})
+
+	// The managedfields package treats fields held by "operator" as a pre-apply operator's, and
+	// clears or force-takes them on its first apply.
+	Context("with the API server tracking ownership", func() {
+		BeforeEach(func() {
+			scheme := runtime.NewScheme()
+			Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
+			c = ctrlrfake.DefaultFakeClientBuilder(scheme).WithReturnManagedFields().Build()
+		})
+
+		managers := func() []string {
+			var names []string
+			for _, entry := range getFelixConfig().ManagedFields {
+				names = append(names, entry.Manager)
+			}
+			return names
+		}
+
+		It("should create under its own field manager", func() {
+			_, err := utils.PatchFelixConfiguration(ctx, c, func(fc *v3.FelixConfiguration) (bool, error) {
+				fc.Spec.HealthPort = ptr.To(9099)
+				return true, nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(managers()).To(ConsistOf(utils.FelixConfigurationPatchFieldOwner))
+		})
+
+		It("should patch under its own field manager", func() {
+			Expect(c.Create(ctx, &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)},
+			}, client.FieldOwner("someone-else"))).NotTo(HaveOccurred())
+
+			_, err := utils.PatchFelixConfiguration(ctx, c, func(fc *v3.FelixConfiguration) (bool, error) {
+				fc.Spec.BPFEnabled = ptr.To(true)
+				return true, nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(managers()).To(ConsistOf("someone-else", utils.FelixConfigurationPatchFieldOwner))
+		})
+	})
 })
