@@ -12696,8 +12696,7 @@ rules:
     verbs:
       - create
       - update
-  # calico/node creates the default IPAMConfiguration at startup, even when
-  # Calico IPAM is not in use.
+  # calico/node creates the default IPAMConfiguration at startup when Calico IPAM is in use.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - ipamconfigurations
@@ -13048,6 +13047,9 @@ spec:
             # No IP address needed.
             - name: IP
               value: ""
+            # The IPAM plugin in use. calico/node only creates IPAM config for Calico IPAM.
+            - name: CALICO_IPAM_TYPE
+              value: "HostLocal"
             # The default IPv4 pool to create on startup if none exists. Pod IPs will be
             # chosen from this range. Changing this value after installation will have
             # no effect. This should fall within `--cluster-cidr`.
