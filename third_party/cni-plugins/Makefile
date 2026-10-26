@@ -39,12 +39,12 @@ BIN = bin/$(ARCH)
 
 CN_FLAGS = -ldflags "-X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=$(GIT_VERSION)"
 
-# in_clone runs the command that follows it in a cloned repo ($(1)), mounted at $(2) in a
-# go-build container, or in place under NATIVE_GO_BUILD.
+# run_in runs the command that follows it in a repo fetch_repo checked out ($(1)), mounted at
+# $(2) in a go-build container, or in place under NATIVE_GO_BUILD.
 ifeq ($(NATIVE_GO_BUILD),true)
-in_clone = cd $(CURDIR)/$(1) &&
+run_in = cd $(CURDIR)/$(1) &&
 else
-in_clone = docker run $(EXTRA_DOCKER_ARGS) -v $(CURDIR)/$(1):$(2):z \
+run_in = docker run $(EXTRA_DOCKER_ARGS) -v $(CURDIR)/$(1):$(2):z \
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w $(2) --rm $(CALICO_BUILD)
 endif
 
@@ -53,14 +53,14 @@ endif
 # the container unable to write to /go/pkg/mod (e.g. fresh CI workers).
 $(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning &: $(CONTAINERNETWORKING_PLUGINS_CLONED)
 	mkdir -p $(GOMOD_CACHE)
-	$(call in_clone,containernetworking-plugins,/go/src/github.com/containernetworking/plugins) \
+	$(call run_in,containernetworking-plugins,/go/src/github.com/containernetworking/plugins) \
 		/bin/sh -xe -c 'GOFLAGS="-buildvcs=false" CGO_ENABLED=0 GOARCH=$(ARCH) ./build_linux.sh $(CN_FLAGS)'
 	mkdir -p $(BIN)
 	@$(foreach file,$(CN_FILES),cp containernetworking-plugins/bin/$(file) $(BIN)/$(file);)
 
 $(BIN)/flannel: $(FLANNEL_CNI_PLUGIN_CLONED)
 	mkdir -p $(GOMOD_CACHE)
-	$(call in_clone,flannel-cni-plugin,/go/src/github.com/flannel-io/cni-plugin) \
+	$(call run_in,flannel-cni-plugin,/go/src/github.com/flannel-io/cni-plugin) \
 		/bin/sh -xe -c 'ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) make build_linux'
 	mkdir -p $(BIN)
 	cp flannel-cni-plugin/dist/flannel-$(ARCH) $(BIN)/flannel
