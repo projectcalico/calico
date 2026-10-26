@@ -3961,7 +3961,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfMapSizeConntrackScaling": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size. 'DoubleIfFull' doubles the size of an IP family's map when it is pretty much full even after cleanups. [Default: DoubleIfFull]",
+							Description: "BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size. 'DoubleIfFull' doubles the size of an IP family's map when it is more than 80% full after cleanups. [Default: DoubleIfFull]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
