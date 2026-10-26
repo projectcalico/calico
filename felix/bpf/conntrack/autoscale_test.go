@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/mock"
 )
 
-const autoscaleMapSize = 100
+const autoscaleMapSize = 1000
 
 var _ = Describe("BPF Conntrack map autoscaling", func() {
 	var dir string
@@ -104,16 +104,17 @@ var _ = Describe("BPF Conntrack map autoscaling", func() {
 					Expect(readFile(sizeFiles[ipVersion])).To(BeEmpty())
 					Expect(readFile("bpf_ct_map_size")).To(BeEmpty())
 				} else {
-					Expect(readFile(sizeFiles[ipVersion])).To(Equal("200"))
-					Expect(readFile("bpf_ct_map_size")).To(Equal("200"), "older Felix must not shrink the map")
+					Expect(readFile(sizeFiles[ipVersion])).To(Equal("2000"))
+					Expect(readFile("bpf_ct_map_size")).To(Equal("2000"), "older Felix must not shrink the map")
 				}
 			},
-			Entry("below 85%", "DoubleIfFull", []int{80, 84, 84, 84}, 0),
-			Entry("above 90%", "DoubleIfFull", []int{91}, 1),
-			Entry("growing above 85% for 3 sweeps", "DoubleIfFull", []int{86, 87, 88, 89}, 4),
-			Entry("draining above 85%", "DoubleIfFull", []int{89, 88, 87, 86, 86}, 0),
-			Entry("growth above 85% interrupted", "DoubleIfFull", []int{86, 87, 88, 87, 88}, 0),
-			Entry("disabled", "Disabled", []int{95, 99}, 0),
+			Entry("below 85%", "DoubleIfFull", []int{800, 840, 840, 840}, 0),
+			Entry("above 90%", "DoubleIfFull", []int{910}, 1),
+			Entry("growing above 85% for 3 sweeps", "DoubleIfFull", []int{860, 870, 880, 890}, 4),
+			Entry("creeping above 85%", "DoubleIfFull", []int{880, 881, 882, 883, 889}, 0),
+			Entry("draining above 85%", "DoubleIfFull", []int{890, 880, 870, 860, 860}, 0),
+			Entry("growth above 85% interrupted", "DoubleIfFull", []int{860, 870, 880, 870, 880}, 0),
+			Entry("disabled", "Disabled", []int{950, 990}, 0),
 		)
 	}
 
