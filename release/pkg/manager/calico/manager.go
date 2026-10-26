@@ -1368,6 +1368,15 @@ func (r *CalicoManager) buildContainerImages() error {
 		env = append(env, fmt.Sprintf("ARCHES=%s", strings.Join(r.architectures, " ")))
 	}
 
+	// Releases are built from a build-vX.Y.Z branch forked from the release branch, but
+	// branch-tagged base images (e.g. istio-ztunnel) are only published for the release branch.
+	// Point BRANCH_NAME at the release branch unless the caller has set it explicitly.
+	if _, ok := os.LookupEnv("BRANCH_NAME"); !ok && !r.isHashRelease {
+		ver := version.New(r.calicoVersion)
+		branch := fmt.Sprintf("%s-%s", r.releaseBranchPrefix, ver.Stream())
+		env = append(env, fmt.Sprintf("BRANCH_NAME=%s", branch))
+	}
+
 	for _, dir := range releaseDirs {
 		// Use an absolute path for the directory to build.
 		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-build", env...)
