@@ -162,7 +162,7 @@ var _ = Describe("CalicoCni", func() {
 			// Assert if the host side route is programmed correctly.
 			nlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
 			Expect(err).ShouldNot(HaveOccurred())
-			defer nlHandle.Close()
+			defer func() { _ = nlHandle.Close() }()
 			hostRoutes, err := netlinkutils.RouteListRetryEINTR(nlHandle, hostVeth, syscall.AF_INET)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(hostRoutes[0]).Should(Equal(netlink.Route{
@@ -870,7 +870,7 @@ var _ = Describe("CalicoCni", func() {
 
 				hostNlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
 				Expect(err).ShouldNot(HaveOccurred())
-				defer hostNlHandle.Close()
+				defer func() { _ = hostNlHandle.Close() }()
 
 				// CNI plugin generates host side vEth name from containerID if used for "cni" orchestrator.
 				hostVethName := "cali" + containerID[:min(11, len(containerID))] // "cali" + containerID
