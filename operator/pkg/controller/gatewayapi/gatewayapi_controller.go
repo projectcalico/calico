@@ -672,9 +672,12 @@ func GetGatewayAPI(ctx context.Context, client client.Client) (*operatorv1.Gatew
 	return resource, "", nil
 }
 
+// fieldOwner names this controller's FelixConfiguration writes in managed fields.
+const fieldOwner = "operator.tigera.io/gatewayapi"
+
 // patchFelixConfiguration patches the FelixConfiguration resource with the desired policy sync path prefix.
 func (r *ReconcileGatewayAPI) patchFelixConfiguration(ctx context.Context) error {
-	_, err := utils.PatchFelixConfiguration(ctx, r.client, func(fc *v3.FelixConfiguration) (bool, error) {
+	_, err := utils.PatchFelixConfiguration(ctx, r.client, fieldOwner, func(fc *v3.FelixConfiguration) (bool, error) {
 		policySyncPrefix := r.getPolicySyncPathPrefix(&fc.Spec)
 		policySyncPrefixSetDesired := DefaultPolicySyncPrefix == policySyncPrefix
 
