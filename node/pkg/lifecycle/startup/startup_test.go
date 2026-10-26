@@ -781,6 +781,9 @@ var _ = Describe("FV tests against a real etcd", func() {
 		DescribeTable("should only create the default IPAMConfiguration for Calico IPAM",
 			func(ipamType string, expectCreated bool) {
 				defer temporarilySetEnv("CALICO_IPAM_TYPE", ipamType)()
+				if ipamType == "" {
+					Expect(os.Unsetenv("CALICO_IPAM_TYPE")).To(Succeed())
+				}
 
 				cfg, err := apiconfig.LoadClientConfigFromEnvironment()
 				Expect(err).NotTo(HaveOccurred())
@@ -803,6 +806,8 @@ var _ = Describe("FV tests against a real etcd", func() {
 				}
 			},
 			Entry("Calico", "Calico", true),
+			Entry("lowercase calico", "calico", true),
+			Entry("unset", "", true),
 			Entry("HostLocal", "HostLocal", false),
 			Entry("AmazonVPC", "AmazonVPC", false),
 		)

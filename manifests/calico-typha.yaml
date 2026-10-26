@@ -12654,8 +12654,7 @@ rules:
     verbs:
       - create
       - update
-  # calico/node creates the default IPAMConfiguration at startup, even when
-  # Calico IPAM is not in use.
+  # calico/node creates the default IPAMConfiguration at startup when Calico IPAM is in use.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - ipamconfigurations

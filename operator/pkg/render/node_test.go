@@ -1083,6 +1083,7 @@ var _ = Describe("Node rendering tests", func() {
 						corev1.EnvVar{Name: "CALICO_NETWORKING_BACKEND", Value: "none"},
 						corev1.EnvVar{Name: "NO_DEFAULT_POOLS", Value: "true"},
 						corev1.EnvVar{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
+						corev1.EnvVar{Name: "CALICO_IPAM_TYPE", Value: string(ipam)},
 					)
 					for _, expected := range expectedEnvs {
 						Expect(ds.Spec.Template.Spec.Containers[0].Env).To(ContainElement(expected))
