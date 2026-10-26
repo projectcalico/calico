@@ -464,6 +464,10 @@ DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 # override -- api/Makefile mounts itself as .../api for its own local builds (e.g. list-gnp).
 DOCKER_GO_BUILD_RECURSIVE = $(DOCKER_RUN) $(CALICO_BUILD)
 
+# The repo root as a go-build recipe sees it: the container's mount, or the checkout itself
+# natively. For absolute paths handed to the build, e.g. CGO include and library dirs.
+BUILD_REPO_ROOT := /go/src/github.com/projectcalico/calico
+
 # NATIVE_GO_BUILD=true (already inside calico/go-build, e.g. a CI go-build pod): null the
 # go-build prefixes so those recipes run on the host, and export the Go env the container
 # used to pass via -e. Targets that spell out their own docker invocation keep
@@ -471,6 +475,7 @@ DOCKER_GO_BUILD_RECURSIVE = $(DOCKER_RUN) $(CALICO_BUILD)
 ifeq ($(NATIVE_GO_BUILD),true)
 DOCKER_GO_BUILD :=
 DOCKER_GO_BUILD_RECURSIVE :=
+BUILD_REPO_ROOT := $(REPO_ROOT)
 export GOARCH := $(ARCH)
 export GOOS := $(BUILDOS)
 export GOFLAGS := $(GOFLAGS)
