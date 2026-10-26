@@ -138,11 +138,11 @@ export KOPS_STATE_STORE_NAME=${KOPS_STATE_STORE_NAME:-kops-tigera-dev-ci}
 export KOPS_AWS_DNS_ZONE=${KOPS_AWS_DNS_ZONE:-kops.ci.aws.eng.tigera.net}
 export OPENSHIFT_BASE_DOMAIN=${OPENSHIFT_BASE_DOMAIN:-openshift.ci.aws.eng.tigera.net}
 
-# RELEASE_STREAM: release-vX.Y -> vX.Y, else master. BRANCH is passed by the
-# workflow (from the cron's `branch` parameter).
+# RELEASE_STREAM: release-vX.Y or build-vX.Y.Z -> vX.Y, else master. BRANCH is
+# passed by the workflow (from the cron's `branch` parameter).
 # Branch comes from the ArgoCI handler (CI_GIT_CLONED_BRANCH); fall back to
-# BRANCH then master. release-vX.Y -> vX.Y, else master.
-export RELEASE_STREAM=${RELEASE_STREAM:-$( _b="${CI_GIT_CLONED_BRANCH:-${BRANCH:-master}}"; [[ "${_b}" =~ ^release-(v[0-9]+\.[0-9]+)$ ]] && echo "${BASH_REMATCH[1]}" || echo "master" )}
+# BRANCH then master.
+export RELEASE_STREAM=${RELEASE_STREAM:-$( _b="${CI_GIT_CLONED_BRANCH:-${BRANCH:-master}}"; [[ "${_b}" =~ ^(release|build)-(v[0-9]+\.[0-9]+)(\.[0-9]+)?$ ]] && echo "${BASH_REMATCH[2]}" || echo "master" )}
 
 export K8S_VERSION=${K8S_VERSION:-stable-3}
 export K8S_E2E_EXTRA_FLAGS=${K8S_E2E_EXTRA_FLAGS:-" --e2ecfg.calicoctl-opensource-image=calico/ctl:release-${RELEASE_STREAM} "}
