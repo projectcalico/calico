@@ -34,8 +34,6 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
-
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
@@ -85,37 +83,6 @@ func NewAPIClient(cfg *rest.Config) (client.Client, error) {
 	return WithRetry(c), nil
 }
 
-// NewDatastoreClient returns a client that reads and writes the Calico CRDs directly through
-// kube-apiserver, the way calico-node does, so it keeps working while the aggregated
-// calico-apiserver is unreachable. Use it in specs that can cut the control plane off from that
-// pod, such as ones that disable the BGP mesh. In v3 CRD mode the CRDs are the v3 API, so it
-// returns the same client as New.
-func NewDatastoreClient(cfg *rest.Config) (client.Client, error) {
-	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-	groups, err := discoveryClient.ServerGroups()
-	if err != nil {
-		return nil, fmt.Errorf("listing API groups: %w", err)
-	}
-	for _, g := range groups.Groups {
-		if g.Name == v1scheme.GroupName {
-			scheme, err := newSchemeWithCalico(v1scheme.AddCalicoResourcesToScheme)
-			if err != nil {
-				return nil, err
-			}
-			c, err := client.New(cfg, client.Options{Scheme: scheme})
-			if err != nil {
-				return nil, err
-			}
-			logrus.Infof("Using %s directly for Calico resources", v1scheme.GroupVersion)
-			return WithRetry(c), nil
-		}
-	}
-	return New(cfg)
-}
-
 // NewCalicoctlExecClient returns a new controller-runtime client that uses exec commands into a calicoctl pod to interact with the projectcalico.org/v3 API.
 // This is useful for testing purposes when the Calico API server is not running, however it requires that the cluster has a
 // calicoctl pod running in the kube-system namespace.
@@ -132,15 +99,9 @@ func NewCalicoctlExecClient(base client.Client) (client.Client, error) {
 }
 
 func newScheme() (*runtime.Scheme, error) {
-	return newSchemeWithCalico(v3.AddToScheme)
-}
-
-// newSchemeWithCalico builds the client scheme, registering the Calico types with addCalico. The
-// v3 Go types can only be registered under one group per scheme, so the caller picks between
-// projectcalico.org/v3 and crd.projectcalico.org/v1.
-func newSchemeWithCalico(addCalico func(*runtime.Scheme) error) (*runtime.Scheme, error) {
+	// Create a new Scheme and add the projectcalico.org/v3 API group to it.
 	scheme := runtime.NewScheme()
-	if err := addCalico(scheme); err != nil {
+	if err := v3.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 
