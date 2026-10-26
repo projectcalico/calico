@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"maps"
 	"math/big"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -39,6 +40,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -709,6 +711,57 @@ var _ = Describe("IPAM controller UTs", func() {
 				return a != nil && a.leakedAt == nil && !a.confirmedLeak
 			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "allocation should be marked valid after VM reappears")
 		})
+	})
+
+	Describe("pod allocation validation", func() {
+		currentSandbox := strings.Repeat("b", 64)
+		replacedSandbox := strings.Repeat("a", 64)
+
+		// createSandboxPod creates a pod on node kname that has not reported an IP. A non-empty
+		// containerID is recorded the way the CNI plugin records the pod's current sandbox.
+		createSandboxPod := func(phase v1.PodPhase, containerID string) {
+			pod := v1.Pod{}
+			pod.Name = "test-pod"
+			pod.Namespace = "test-namespace"
+			pod.Spec.NodeName = "kname"
+			pod.Status.Phase = phase
+			if containerID != "" {
+				pod.Annotations = map[string]string{conversion.AnnotationContainerID: containerID}
+			}
+			_, err := createPod(context.TODO(), cs, &pod)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		podAllocation := func(handle string) *allocation {
+			return &allocation{
+				ip:     "10.0.0.1",
+				handle: handle,
+				knode:  "kname",
+				attrs: map[string]string{
+					ipam.AttributeNode:      "cnode",
+					ipam.AttributePod:       "test-pod",
+					ipam.AttributeNamespace: "test-namespace",
+				},
+			}
+		}
+
+		DescribeTable("should judge an allocation by its pod's current sandbox and phase",
+			func(phase v1.PodPhase, podContainerID, handle string, valid bool) {
+				c.Start(stopChan)
+				createSandboxPod(phase, podContainerID)
+				Expect(c.allocationIsValid(podAllocation(handle), false)).To(Equal(valid))
+			},
+			Entry("valid on the current sandbox", v1.PodPending, currentSandbox, "k8s-pod-network."+currentSandbox, true),
+			Entry("leaked from a replaced sandbox", v1.PodPending, currentSandbox, "k8s-pod-network."+replacedSandbox, false),
+			Entry("leaked from a replaced sandbox on a dotted network name", v1.PodPending, currentSandbox, "secondary.network."+replacedSandbox, false),
+			Entry("valid on the current sandbox with an interface suffix", v1.PodPending, currentSandbox, "secondary-network."+currentSandbox+".net1", true),
+			Entry("leaked from a replaced sandbox with an interface suffix", v1.PodPending, currentSandbox, "secondary-network."+replacedSandbox+".net1", false),
+			Entry("valid when the pod records no sandbox", v1.PodPending, "", "k8s-pod-network."+replacedSandbox, true),
+			Entry("valid when the handle names no sandbox", v1.PodPending, currentSandbox, "k8s-pod-network.test-namespace.test-pod", true),
+			Entry("valid while running without a reported IP", v1.PodRunning, currentSandbox, "k8s-pod-network."+currentSandbox, true),
+			Entry("leaked once the pod has succeeded", v1.PodSucceeded, currentSandbox, "k8s-pod-network."+currentSandbox, false),
+			Entry("leaked once the pod has failed", v1.PodFailed, "", "k8s-pod-network."+currentSandbox, false),
+		)
 	})
 
 	It("should handle node updates and maintain its node cache", func() {
@@ -1702,6 +1755,83 @@ var _ = Describe("IPAM controller UTs", func() {
 				return !ok
 			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 		})
+	})
+
+	It("should clean up a replaced sandbox's IP while the pod has no IP", func() {
+		n := internalapi.Node{}
+		n.Name = "cnode"
+		n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		kn := v1.Node{}
+		kn.Name = "kname"
+		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		var node *v1.Node
+		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+
+		// The pod's sandbox was rebuilt without ever reporting an IP. Each sandbox got an
+		// allocation of its own, and the CNI plugin recorded the newer one on the pod.
+		currentSandbox := strings.Repeat("b", 64)
+		replacedSandbox := strings.Repeat("a", 64)
+		currentHandle := "k8s-pod-network." + currentSandbox
+		replacedHandle := "k8s-pod-network." + replacedSandbox
+
+		pod := v1.Pod{}
+		pod.Name = "test-pod"
+		pod.Namespace = "test-namespace"
+		pod.Spec.NodeName = "kname"
+		pod.Status.Phase = v1.PodPending
+		pod.Annotations = map[string]string{conversion.AnnotationContainerID: currentSandbox}
+		_, err = createPod(context.TODO(), cs, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		var gotPod *v1.Pod
+		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+
+		c.Start(stopChan)
+
+		replacedIdx := 0
+		currentIdx := 1
+		cidr := net.MustParseCIDR("10.0.0.0/30")
+		aff := "host:cnode"
+		podAttrs := map[string]string{
+			ipam.AttributeNode:      "cnode",
+			ipam.AttributePod:       pod.Name,
+			ipam.AttributeNamespace: pod.Namespace,
+		}
+		b := model.AllocationBlock{
+			CIDR:        cidr,
+			Affinity:    &aff,
+			Allocations: []*int{&replacedIdx, &currentIdx, nil, nil},
+			Unallocated: []int{2, 3},
+			Attributes: []model.AllocationAttribute{
+				{HandleID: &replacedHandle, ActiveOwnerAttrs: podAttrs},
+				{HandleID: &currentHandle, ActiveOwnerAttrs: maps.Clone(podAttrs)},
+			},
+		}
+		kvp := model.KVPair{
+			Key:   model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)},
+			Value: &b,
+		}
+		deliver(bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew})
+
+		Eventually(func() int {
+			done := c.pause()
+			defer done()
+			return len(c.allocationState.allocationsByNode["cnode"])
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(2))
+
+		c.onStatusUpdate(bapi.InSync)
+
+		fakeClient, ok := cli.IPAM().(*fakeIPAMClient)
+		Expect(ok).To(BeTrue())
+		Eventually(func() bool {
+			return fakeClient.handlesReleased[replacedHandle]
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
+		Consistently(func() bool {
+			return fakeClient.handlesReleased[currentHandle]
+		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
 	})
 
 	It("should not clean up leaked addresses if no grace period set", func() {
