@@ -87,9 +87,6 @@ func generatePacketLengths(mtu int) (getLengths, postLengths, udpLengths []int) 
 	return getLengths, postLengths, udpLengths
 }
 
-// withPacketSizeServer is a conncheck server pod customizer that replaces the
-// default image with the multi-mode rapidclient image run as the packet-size
-// server.
 // measurePodMTU returns the MTU of eth0 in a pod on the given node. Reading it from a pod rather
 // than from the operator's Installation status keeps the packet size tests runnable on
 // manifest-based installs, where the Installation CRD doesn't exist.
@@ -107,6 +104,9 @@ func measurePodMTU(f *framework.Framework, nodeName string) int {
 	return mtu
 }
 
+// withPacketSizeServer is a conncheck server pod customizer that replaces the
+// default image with the multi-mode rapidclient image run as the packet-size
+// server.
 func withPacketSizeServer(pod *v1.Pod) {
 	for i := range pod.Spec.Containers {
 		pod.Spec.Containers[i].Image = images.RapidClient

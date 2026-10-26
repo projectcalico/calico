@@ -97,9 +97,6 @@
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC staged policies should deny staged global policy creation by a user without tier GET access
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC staged policies should deny staged policy creation by a user without tier GET access [Conformance]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC tier isolation should restrict a user to only their permitted tier [Conformance]
-[sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [RequiresV3CRDs] [Category:Networking] BGP password should enforce BGP password authentication [Serial]
-[sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [RequiresV3CRDs] [Category:Networking] [RequiresBGPMesh] BGP export tests should not export pools with export disabled [Serial]
-[sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [RequiresV3CRDs] [Category:Networking] [RequiresBGPMesh] BGPPeer should support BGP peers [Serial]
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes external client [ExternalNode] using UDP and TCP external to nodeport
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes using UDP and TCP host to nodeport, different nodes
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes using UDP and TCP host to pod, different nodes

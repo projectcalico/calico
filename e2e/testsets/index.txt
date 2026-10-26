@@ -17,7 +17,7 @@
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-kubeadm-dual-stack [dual-calicoiptables] | bpf/xtables-encap-extnode-aws | 230
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-lb-bpf | bpf/eks-bpf-encap-extnode-aws | 216
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-lb-iptables | bpf/eks-xtables-encap-extnode-aws | 220
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-single-subnet-dual-ip-family | bpf-aws-single-subnet | 562
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-single-subnet-dual-ip-family | bpf-aws-single-subnet | 559
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-talos-no-encap-dsr | bpf/bpf-aws | 223
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-bpf-aks-w-aks-cni-overlay | bpf/aks-bpf-encap-nobgp | 216
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-eks-w-aws-cni | bpf/bpf-nobgp-extnode-aws | 222
