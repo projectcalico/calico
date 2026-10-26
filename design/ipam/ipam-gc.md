@@ -50,6 +50,7 @@ After the walk, if every allocation on a node is released and no valid ones rema
   stamp the attrs.
 - **Multus produces multiple WorkloadEndpoints per pod.** The IP must appear in at least one `wep.Spec.IPNetworks` to be valid. A single-WEP check would falsely release
   secondary-network IPs.
+- **An allocation outlives its sandbox, not its pod.** Allocations of a pod in a terminal phase are leaks, and so are those whose handle names a container ID other than the pod's `cni.projectcalico.org/containerID` annotation, even before the pod reports an IP. This holds only while CNI DEL leaves that annotation in place and the pod cache keeps it.
 - **Pod lookup mode is preferCache vs live.** Cache for the node-deleted path (where the source data is presumed stale), live for sync. A live read can win against the cache in the
   rare case the cache is behind.
 
