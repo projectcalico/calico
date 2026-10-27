@@ -612,7 +612,7 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 			attrs:          attr.ActiveOwnerAttrs,
 			sequenceNumber: b.GetSequenceNumberForOrdinal(ord),
 			block:          blockCIDR,
-			affineNode:     n,
+			blockNode:      n,
 		}
 
 		currentAllocations[alloc.id()] = true

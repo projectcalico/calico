@@ -564,7 +564,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			It("should be a VM allocation filed under its block's node", func() {
 				c.Start(stopChan)
 				a := makeOwnerless(vmipam.CreateVMHandleID("", "default", "test-vm"))
-				a.affineNode = "cnode"
+				a.blockNode = "cnode"
 				Expect(a.isVMAllocation()).To(BeTrue())
 				Expect(a.node()).To(Equal("cnode"))
 			})
@@ -572,7 +572,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			It("should not be a VM allocation on a pod handle", func() {
 				c.Start(stopChan)
 				a := makeOwnerless("k8s-pod-network.0123456789abcdef")
-				a.affineNode = "cnode"
+				a.blockNode = "cnode"
 				Expect(a.isVMAllocation()).To(BeFalse())
 				Expect(a.node()).To(BeEmpty())
 			})
@@ -1000,11 +1000,11 @@ var _ = Describe("IPAM controller UTs", func() {
 		deliver(update)
 
 		expectedAllocation := &allocation{
-			ip:         "10.0.0.0",
-			handle:     handle,
-			attrs:      b.Attributes[0].ActiveOwnerAttrs,
-			block:      "10.0.0.0/30",
-			affineNode: "cnode",
+			ip:        "10.0.0.0",
+			handle:    handle,
+			attrs:     b.Attributes[0].ActiveOwnerAttrs,
+			block:     "10.0.0.0/30",
+			blockNode: "cnode",
 		}
 
 		// Unique ID we expect for this allocation.

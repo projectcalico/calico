@@ -123,8 +123,9 @@ type allocation struct {
 	sequenceNumber uint64
 	block          string
 
-	// affineNode is the node the block was affine to when the allocation was seen.
-	affineNode string
+	// blockNode is the block's Calico node when the GC first saw this allocation. node() files a VM address
+	// with no owner under it. It's never updated, since the filing key must stay fixed.
+	blockNode string
 
 	// The Kubernetes node name hosting this allocation.
 	knode string
@@ -183,7 +184,7 @@ func (a *allocation) node() string {
 		return node
 	}
 	if a.isVMAllocation() {
-		return a.affineNode
+		return a.blockNode
 	}
 	return ""
 }
