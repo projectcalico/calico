@@ -783,8 +783,11 @@ var IsTcxSupported = sync.OnceValue(func() bool {
 	return err == nil
 })
 
+// NetkitProbeIface is the short-lived device that IsNetkitSupported creates.
+const NetkitProbeIface = "cali_nk_probe"
+
 var IsNetkitSupported = sync.OnceValue(func() bool {
-	name := "cali_nk_probe"
+	name := NetkitProbeIface
 	// Clean up a stale probe device that may have been left behind by a
 	// previous crash before the deferred cleanup could run.
 	if old, err := netlink.LinkByName(name); err == nil {
