@@ -37,8 +37,12 @@ from oslo_config import fixture as config_fixture
 # for an exception class is not a class, so "except that_attribute" raises
 # TypeError if it is ever evaluated, and a hand-written stand-in drifts from the
 # real thing without anything noticing.
+from neutron_lib import context as neutron_context
+from neutron_lib import fixture as neutron_lib_fixture
 from neutron_lib.constants import IP_PROTOCOL_MAP
 from neutron_lib.exceptions import PortNotFound
+from neutron_lib.plugins import constants as plugin_constants
+from neutron_lib.plugins import directory as plugin_dir
 from oslo_db import options as oslo_db_options
 from oslo_db.exception import DBError
 from sqlalchemy.exc import SQLAlchemyError
@@ -110,6 +114,11 @@ m_sqlalchemy.exc.SQLAlchemyError = SQLAlchemyError
 # The real [database] options, so that mech_calico can register them with the real
 # oslo.config and read their real defaults.
 m_oslo_db.options = oslo_db_options
+
+# The real admin context factory and plugin directory, so that tests can use the
+# standard fixture for the latter and patch only what they need of the former.
+m_neutron_lib.context = neutron_context
+m_neutron_lib.plugins.directory = plugin_dir
 
 port1 = {
     "binding:vif_type": "tap",
@@ -384,9 +393,21 @@ class Lib(object):
         # Create an instance of CalicoMechanismDriver.
         self.driver = mech_calico.CalicoMechanismDriver()
 
-        # Hook the (mock) Neutron database.
-        self.db = mech_calico.plugin_dir.get_plugin()
-        self.db_context = mech_calico.ctx.get_admin_context()
+        # Register a mock core plugin, standing in for the Neutron database.
+        plugin_dir_fixture = neutron_lib_fixture.PluginDirectoryFixture()
+        plugin_dir_fixture.setUp()
+        self.addCleanup(plugin_dir_fixture.cleanUp)
+        self.db = mock.Mock()
+        plugin_dir.add_plugin(plugin_constants.CORE, self.db)
+
+        # Hand the code under test a single admin context whose session queries
+        # are answered from the osdb_* data below.
+        self.db_context = mock.MagicMock()
+        get_admin_context_p = mock.patch.object(
+            neutron_context, "get_admin_context", return_value=self.db_context
+        )
+        get_admin_context_p.start()
+        self.addCleanup(get_admin_context_p.stop)
         self.db_context.to_dict.return_value = {}
         self.db_context.session.query.side_effect = self.db_query
 
