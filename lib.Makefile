@@ -1014,9 +1014,14 @@ $(if $(filter amd64,$(VALIDARCHES)),
 	docker tag $(2):$(LATEST_IMAGE_TAG)-$(ARCH) $(1)/$(2):$(IMAGETAG))
 endef
 
+# Pushes are dominated by per-request latency rather than bandwidth, so registries (and manifests) are pushed
+# concurrently. -Orecurse keeps each registry's output together in the log.
+PUSH_JOBS ?= 6
+
 # push-images-to-registries pushes the build / arch images specified by BUILD_IMAGES and VALIDARCHES to the registries
 # specified by DEV_REGISTRY.
-push-images-to-registries: $(addprefix push-images-to-registry-,$(call escapefs,$(DEV_REGISTRIES)))
+push-images-to-registries:
+	$(MAKE) -j$(PUSH_JOBS) -Orecurse $(addprefix push-images-to-registry-,$(call escapefs,$(DEV_REGISTRIES)))
 
 # push-images-to-registry-% pushes the build / arch images specified by BUILD_IMAGES and VALIDARCHES to the registry
 # specified by %*.
@@ -1030,15 +1035,12 @@ push-images-to-registry-%:
 # on those images, either adding an expiry for normal pushes or removing it for releases, if we're pushing to quay.io
 # that is.
 push-image-to-registry-%:
-	$(eval BUILD_IMAGE=$(call unescapefs,$*))
-	$(eval EXPIRY_IMAGES_LIST=$(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG) $(addprefix $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG)-,$(VALIDARCHES)))
-
-	$(MAKE) -j6 $(addprefix push-image-arch-to-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(BUILD_IMAGE)
+	$(MAKE) -j6 $(addprefix push-image-arch-to-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(call unescapefs,$*)
 
 ifeq ($(findstring quay.io,$(REGISTRY)),quay.io)
 	$(if $(RELEASE), \
-		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) remove $(EXPIRY_IMAGES_LIST), \
-		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $(EXPIRY_IMAGES_LIST) \
+		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) remove $(REGISTRY)/$(call unescapefs,$*):$(IMAGETAG) $(addprefix $(REGISTRY)/$(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES)), \
+		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $(REGISTRY)/$(call unescapefs,$*):$(IMAGETAG) $(addprefix $(REGISTRY)/$(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES)) \
 	)
 endif
 
@@ -1070,7 +1072,9 @@ push-image-arch-to-registry-%:
 	)
 
 # push multi-arch manifest where supported.
-push-manifests: var-require-all-IMAGETAG  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
+push-manifests: var-require-all-IMAGETAG
+	$(MAKE) -j$(PUSH_JOBS) -Orecurse $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
+
 sub-manifest-%:
 	@if [ -z "$(MANIFEST_RETRIES)" ] || ! printf '%s\n' "$(MANIFEST_RETRIES)" | grep -Eq '^[0-9]+$$' || [ "$(MANIFEST_RETRIES)" -lt 1 ]; then \
 		echo "ERROR: MANIFEST_RETRIES must be a positive integer, got '$(MANIFEST_RETRIES)'"; \
