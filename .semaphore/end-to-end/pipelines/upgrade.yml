@@ -80,16 +80,18 @@ blocks:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: E2E_TEST_CONFIG
-              value: "e2e/config/upgrade/eks-bpf-aws-manifest.yaml"
+              value: "e2e/config/upgrade/eks-bpf-aws.yaml"
             - name: PROVISIONER
               value: aws-eks
+            - name: ENCAPSULATION_TYPE
+              value: "VXLAN"
           matrix:
             - env_var: K8S_VERSION
               values: ["stable-1"]
             - env_var: EKS_CNI
               values: ["calico"]
             - env_var: INSTALLER
-              values: ["manual"]
+              values: ["operator"]
             - env_var: DATAPLANE
               values: ["CalicoBPF"]
 
