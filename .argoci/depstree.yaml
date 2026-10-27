@@ -1293,6 +1293,7 @@ components:
       - ^libcalico-go/lib/informerutil/[^/]*\.go$
       - ^libcalico-go/lib/ipam/[^/]*\.go$
       - ^libcalico-go/lib/ipam/accounting/[^/]*\.go$
+      - ^libcalico-go/lib/ipam/vmipam/[^/]*\.go$
       - ^libcalico-go/lib/kubevirt/[^/]*\.go$
       - ^libcalico-go/lib/names/[^/]*\.go$
       - ^libcalico-go/lib/namespace/[^/]*\.go$
