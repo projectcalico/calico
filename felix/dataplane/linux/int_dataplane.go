@@ -1112,6 +1112,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				conntrackInfoReaderV4 := bpfconntrack.NewInfoReader(
 					config.BPFConntrackTimeouts,
 					config.BPFNodePortDSREnabled,
+					4,
 					nil,
 					collectorCtInfoReader,
 				)
@@ -1121,6 +1122,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				conntrackInfoReaderV6 := bpfconntrack.NewInfoReader(
 					config.BPFConntrackTimeouts,
 					config.BPFNodePortDSREnabled,
+					6,
 					nil,
 					collectorCtInfoReader,
 				)
@@ -3112,7 +3114,7 @@ func startBPFDataplaneComponents(
 	bpfRTMgr := newBPFRouteManager(config, maps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
-	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled)
+	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled, int(ipFamily))
 	ctLogLevel := bpfconntrack.BPFLogLevelNone
 	// The debug cleanup program references bpf_trace_printk; skip it under
 	// lockdown=confidentiality where that would spam the kernel log on load.
@@ -3157,7 +3159,7 @@ func startBPFDataplaneComponents(
 
 		bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
 		bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
-		conntrackScanner.AddUnlocked(bpfconntrack.NewStaleNATScanner(kp))
+		conntrackScanner.AddUnlocked(bpfconntrack.NewStaleNATScanner(kp, int(ipFamily)))
 	} else {
 		log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 	}
