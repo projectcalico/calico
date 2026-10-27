@@ -1001,26 +1001,18 @@ unescapefs = $(subst ---,:,$(subst ___,/,$(1)))
 # retag-build-images-with-registries retags the build / arch images specified by BUILD_IMAGES and VALIDARCHES with
 # the registries specified by DEV_REGISTRIES. The end tagged images are of the format
 # $(REGISTRY)/$(BUILD_IMAGES):<tag>-$(ARCH).
-retag-build-images-with-registries: $(addprefix retag-build-images-with-registry-,$(call escapefs,$(DEV_REGISTRIES)))
+#
+# All tags are emitted from a single recipe: every recursive $(MAKE) re-parses lib.Makefile (~1s of $(shell) calls),
+# which dwarfs the cost of the docker tag itself.
+retag-build-images-with-registries: var-require-all-BUILD_IMAGES-IMAGETAG
+	$(foreach registry,$(DEV_REGISTRIES),$(foreach image,$(BUILD_IMAGES),$(call retag-build-image,$(registry),$(image))))
 
-# retag-build-images-with-registry-% retags the build / arch images specified by BUILD_IMAGES and VALIDARCHES with
-# the registry specified by $*.
-retag-build-images-with-registry-%:
-	$(MAKE) $(addprefix retag-build-image-with-registry-,$(call escapefs,$(BUILD_IMAGES))) REGISTRY=$(call unescapefs,$*)
-
-# retag-build-image-with-registry-% retags the build arch images specified by $* and VALIDARCHES with the
-# registry specified by REGISTRY.
-retag-build-image-with-registry-%: var-require-all-REGISTRY-BUILD_IMAGES
-	$(MAKE) -j12 $(addprefix retag-build-image-arch-with-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(call unescapefs,$*)
-
-# retag-build-image-arch-with-registry-% retags the build / arch image specified by $* and BUILD_IMAGE with the
-# registry specified by REGISTRY.
-retag-build-image-arch-with-registry-%: var-require-all-REGISTRY-BUILD_IMAGE-IMAGETAG
-	docker tag $(BUILD_IMAGE):$(LATEST_IMAGE_TAG)-$* $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*
-	$(if $(filter $*,amd64),\
-		docker tag $(BUILD_IMAGE):$(LATEST_IMAGE_TAG)-$(ARCH) $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),\
-		$(NOECHO) $(NOOP)\
-	)
+define retag-build-image
+$(foreach arch,$(VALIDARCHES),
+	docker tag $(2):$(LATEST_IMAGE_TAG)-$(arch) $(call filter-registry,$(1))$(2):$(IMAGETAG)-$(arch))
+$(if $(filter amd64,$(VALIDARCHES)),
+	docker tag $(2):$(LATEST_IMAGE_TAG)-$(ARCH) $(1)/$(2):$(IMAGETAG))
+endef
 
 # push-images-to-registries pushes the build / arch images specified by BUILD_IMAGES and VALIDARCHES to the registries
 # specified by DEV_REGISTRY.
