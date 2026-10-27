@@ -97,7 +97,7 @@
 .argoci/cron/e2e-patch-verification.yaml | operator-helmerator-windows-aws-kubeadm-docker | patch-verification/xtables-aws | 83
 .argoci/cron/e2e-test.yaml | calico-tests | test/bpf | 23
 .argoci/cron/e2e-upgrade.yaml | calico-tests-aks-byo-cni-w-azurelinux | upgrade/aks-xtables | 83
-.argoci/cron/e2e-upgrade.yaml | calico-tests-eks | upgrade/eks-bpf-aws-manifest | 71
+.argoci/cron/e2e-upgrade.yaml | calico-tests-eks | upgrade/eks-bpf-aws | 74
 .argoci/cron/e2e-upgrade.yaml | calico-tests-kubeadm-bpf | upgrade/bpf | 83
 .argoci/cron/e2e-upgrade.yaml | calico-tests-kubeadm-iptables | upgrade/xtables-aws | 83
 .argoci/cron/e2e-upgrade.yaml | calico-tests-openshift | upgrade/xtables-aws | 83
@@ -213,7 +213,7 @@
 .semaphore/end-to-end/pipelines/test.yml | calico tests / kubeadm - bpf | test/bpf | 23
 .semaphore/end-to-end/pipelines/upgrade.yml | calico tests - openshift / Openshift | upgrade/xtables-aws | 83
 .semaphore/end-to-end/pipelines/upgrade.yml | calico tests / AKS - BYO CNI w/ AzureLinux | upgrade/aks-xtables | 83
-.semaphore/end-to-end/pipelines/upgrade.yml | calico tests / EKS | upgrade/eks-bpf-aws-manifest | 71
+.semaphore/end-to-end/pipelines/upgrade.yml | calico tests / EKS | upgrade/eks-bpf-aws | 74
 .semaphore/end-to-end/pipelines/upgrade.yml | calico tests / RKE2 | upgrade/xtables | 83
 .semaphore/end-to-end/pipelines/upgrade.yml | calico tests / kubeadm - bpf | upgrade/bpf | 83
 .semaphore/end-to-end/pipelines/upgrade.yml | calico tests / kubeadm - iptables | upgrade/xtables-aws | 83
