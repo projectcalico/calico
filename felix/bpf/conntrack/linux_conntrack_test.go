@@ -59,7 +59,7 @@ func TestLivenessScannerRSTReapWaitsForLinuxConntrack(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lookups := 0
-			ls := NewLivenessScanner(timeouts.DefaultTimeouts(), false,
+			ls := NewLivenessScanner(timeouts.DefaultTimeouts(), false, 4,
 				WithTimeShim(mocktime.New()),
 				WithLinuxConntrack(func(KeyInterface, ValueInterface) (bool, error) {
 					lookups++
