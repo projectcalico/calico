@@ -1139,18 +1139,25 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 		return false
 	}
 
+	// Kubelet tears down every sandbox of a pod in a terminal phase, so none of its
+	// allocations can still be in use.
+	if p.Status.Phase == v1.PodSucceeded || p.Status.Phase == v1.PodFailed {
+		logc.WithField("phase", p.Status.Phase).Debug("Pod has terminated. Allocation no longer valid")
+		return false
+	}
+
 	// Check to see if the pod actually has the IP in question. Gate based on the presence of the
 	// status field, which is populated by kubelet.
 	if p.Status.PodIP == "" || len(p.Status.PodIPs) == 0 {
-		// The pod hasn't received an IP yet.
+		// A pod whose sandboxes keep failing never reports an IP but collects an allocation per
+		// attempt. The annotation is trusted only here, since a slow ADD from an abandoned
+		// sandbox can overwrite it.
+		if fromReplacedSandbox(a, p) {
+			logc.Debug("Allocation belongs to a replaced sandbox. Allocation no longer valid")
+			return false
+		}
 		log.Debugf("Pod IP has not yet been reported, consider allocation valid")
 		return true
-	}
-
-	// Pod evicted by agent like kubelet, failed forever, safe to release IP resource
-	if p.Status.Phase == v1.PodFailed && p.Status.Reason == "Evicted" {
-		logc.Debugf("Pod has failed with Evicted. Allocation no longer valid")
-		return false
 	}
 
 	// Convert the pod to a workload endpoint. This takes advantage of the IP
@@ -1192,6 +1199,19 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 
 	logc.Debugf("Allocated IP no longer in-use by pod")
 	return false
+}
+
+// fromReplacedSandbox reports whether the allocation was made for a sandbox other than the
+// pod's current one. The CNI plugin records the current sandbox's container ID on the pod at
+// every ADD and leaves it in place on DEL, so an allocation whose handle names a different
+// container ID belongs to a sandbox kubelet has replaced. Without both IDs it reports false.
+func fromReplacedSandbox(a *allocation, p *v1.Pod) bool {
+	current := p.Annotations[conversion.AnnotationContainerID]
+	if current == "" {
+		return false
+	}
+	sandbox, ok := ipam.ParsePodHandleIDAnyNetwork(a.handle)
+	return ok && sandbox.ContainerID != current
 }
 
 // isVMAllocationValid checks whether the backing VM or standalone VMI for

@@ -149,7 +149,7 @@ Conventions in use:
 
 | Caller | Handle ID format |
 |---|---|
-| CNI workload (default) | `<network-name>.<container-id>` via `cni-plugin/internal/pkg/utils.GetHandleID`. For the default network, `<network-name>` is `k8s-pod-network`. |
+| CNI workload (default) | `<network-name>.<container-id>` via `ipam.PodHandleID`. For the default network, `<network-name>` is `k8s-pod-network`. |
 | CNI workload (KubeVirt persistent) | `<network-name>.vmi.<namespace>.<vm-name>` via `vmipam.CreateVMHandleID`, so live-migrated VMs keep the same handle. Hashed if it would exceed 128 characters. |
 | IPIP tunnel | `ipip-tunnel-addr-<node>` |
 | VXLAN tunnel | `vxlan-tunnel-addr-<node>`; IPv6 variant is `vxlan-v6-tunnel-addr-<node>` (note the `-v6-` infix, not a suffix) |
