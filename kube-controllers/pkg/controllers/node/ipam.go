@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"math/big"
 	"net"
-	"regexp"
 	"strings"
 	"time"
 
@@ -1202,33 +1201,17 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 	return false
 }
 
-// containerIDPattern matches the 64-character hex IDs that container runtimes give sandboxes.
-var containerIDPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
-
 // fromReplacedSandbox reports whether the allocation was made for a sandbox other than the
 // pod's current one. The CNI plugin records the current sandbox's container ID on the pod at
 // every ADD and leaves it in place on DEL, so an allocation whose handle names a different
 // container ID belongs to a sandbox kubelet has replaced. Without both IDs it reports false.
 func fromReplacedSandbox(a *allocation, p *v1.Pod) bool {
 	current := p.Annotations[conversion.AnnotationContainerID]
-	if !containerIDPattern.MatchString(current) {
+	if current == "" {
 		return false
 	}
-	sandbox, ok := handleContainerID(a.handle)
-	return ok && sandbox != current
-}
-
-// handleContainerID returns the container ID that a pod's IPAM handle names. Handles take the
-// form <network>.<containerID>, optionally followed by .<interface>, and network names may
-// contain dots, so the container ID is found by its shape rather than its position. Handles
-// that name a workload or VM rather than a sandbox have no such field.
-func handleContainerID(handle string) (string, bool) {
-	for field := range strings.SplitSeq(handle, ".") {
-		if containerIDPattern.MatchString(field) {
-			return field, true
-		}
-	}
-	return "", false
+	sandbox, ok := ipam.ParsePodHandleIDAnyNetwork(a.handle)
+	return ok && sandbox.ContainerID != current
 }
 
 // isVMAllocationValid checks whether the backing VM or standalone VMI for

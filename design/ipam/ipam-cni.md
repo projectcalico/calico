@@ -149,7 +149,7 @@ entire budget on lock contention and then fail the ADD with no allocation attemp
 
 ## Pod handle form
 
-`GetHandleID` builds it and `ParsePodHandleID` parses it, both in `cni-plugin/internal/pkg/utils`.
+`PodHandleID` builds it and `ParsePodHandleID` parses it, both in `libcalico-go/lib/ipam`. `ParsePodHandleIDAnyNetwork` parses it without the network name, for the IPAM GC, and accepts only runtime-shaped (64 hex character) container IDs.
 
 | Form | Written by | Accepted |
 |---|---|---|
