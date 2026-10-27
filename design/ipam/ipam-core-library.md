@@ -48,7 +48,8 @@ here. A few methods carry design-relevant constraints worth calling out:
 - There is one implementation of the reserved-set arithmetic, in [`accounting/reserved.go`](../../libcalico-go/lib/ipam/accounting/reserved.go), beside the shared pool counts,
   block attribution and leak predicate. `GetUtilization` and `NumReservedIPsInCIDR` are both thin callers of it. Don't grow a second copy in a consumer - a reporting
   surface that disagrees with `calicoctl ipam show` is worse than no surface.
-  Addresses withheld from only some pools go through the tracker's reserved classes (`extraReservedCIDRs`), so a block's counts follow its pool's class wherever it moves.
+  Addresses that allocation skips for only some pools are counted through the tracker's reserved classes (`setExtraReserved`), so a block's counts follow its pool's class
+  wherever it moves. The classes only count: the allocation path must skip those addresses itself, and `NumReservedIPsInCIDR`, which takes a CIDR rather than a pool, sees none of them.
 
 ## AutoAssign and host affinity
 

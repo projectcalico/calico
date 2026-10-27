@@ -198,35 +198,34 @@ func TestBlockAddedAfterReservationsCountsOverlap(t *testing.T) {
 
 const extraReservedClass reservedClass = "extra"
 
-func withExtraReservedClass(t *testing.T, extra *[]string) {
-	classes, class, cidrs := reservedClasses, poolReservedClass, extraReservedCIDRs
-	t.Cleanup(func() { reservedClasses, poolReservedClass, extraReservedCIDRs = classes, class, cidrs })
-	reservedClasses = []reservedClass{defaultReservedClass, extraReservedClass}
+func withExtraReservedClass(t *testing.T) {
+	class := poolReservedClass
+	t.Cleanup(func() { poolReservedClass = class })
 	poolReservedClass = func(p *v3.IPPool) reservedClass {
 		if p.Spec.DisableBGPExport {
 			return extraReservedClass
 		}
 		return defaultReservedClass
 	}
-	extraReservedCIDRs = func(_ *Tracker, c reservedClass) []cnet.IPNet {
-		if c != extraReservedClass {
-			return nil
-		}
-		var out []cnet.IPNet
-		for _, s := range *extra {
-			out = append(out, cnet.MustParseNetwork(s))
-		}
-		return out
-	}
 }
 
-func TestUnknownReservedClassFallsBackToDefault(t *testing.T) {
+func setExtraReserved(tr *Tracker, cidrs ...string) {
+	var nets []cnet.IPNet
+	for _, s := range cidrs {
+		nets = append(nets, cnet.MustParseNetwork(s))
+	}
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+	tr.setExtraReserved(extraReservedClass, nets)
+}
+
+func TestClassWithoutExtraReservedCountsDefaultSet(t *testing.T) {
 	RegisterTestingT(t)
-	extra := []string{"10.0.0.1/32"}
-	withExtraReservedClass(t, &extra)
+	withExtraReservedClass(t)
 	poolReservedClass = func(*v3.IPPool) reservedClass { return "unlisted" }
 
 	tr := NewTracker()
+	setExtraReserved(tr, "10.0.0.1/32")
 	tr.AddPools(pool("p", "10.0.0.0/24", 26))
 	tr.AddReservations(reservation("r", "10.0.0.10"))
 	Expect(mustSummarize(tr, "p").Reserved.String()).To(Equal("1"))
@@ -234,8 +233,7 @@ func TestUnknownReservedClassFallsBackToDefault(t *testing.T) {
 
 func TestReservedClassFollowsPoolSpec(t *testing.T) {
 	RegisterTestingT(t)
-	extra := []string{"192.0.2.0/32", "192.0.2.1/32", "192.0.2.255/32"}
-	withExtraReservedClass(t, &extra)
+	withExtraReservedClass(t)
 	plain := pool("p", "192.0.2.0/24", 26)
 	classed := plain.DeepCopy()
 	classed.Spec.DisableBGPExport = true
@@ -244,6 +242,7 @@ func TestReservedClassFollowsPoolSpec(t *testing.T) {
 	allocatePod(b, 0, "node-a")
 
 	tr := NewTracker()
+	setExtraReserved(tr, "192.0.2.0/32", "192.0.2.1/32", "192.0.2.255/32")
 	tr.AddPools(plain)
 	tr.AddBlocks(b)
 	tr.AddReservations(reservation("r", "192.0.2.10"))
@@ -263,6 +262,7 @@ func TestReservedClassFollowsPoolSpec(t *testing.T) {
 
 	tr.AddPools(plain)
 	fresh := NewTracker()
+	setExtraReserved(fresh, "192.0.2.0/32", "192.0.2.1/32", "192.0.2.255/32")
 	fresh.AddPools(plain)
 	fresh.AddBlocks(b)
 	fresh.AddReservations(reservation("r", "192.0.2.10"))
@@ -278,8 +278,7 @@ func TestReservedClassFollowsPoolSpec(t *testing.T) {
 
 func TestExtraReservedChangeReachesOnlyItsClass(t *testing.T) {
 	RegisterTestingT(t)
-	extra := []string{"192.0.2.0/32", "198.51.100.0/32"}
-	withExtraReservedClass(t, &extra)
+	withExtraReservedClass(t)
 	classed := pool("a", "192.0.2.0/24", 26)
 	classed.Spec.DisableBGPExport = true
 
@@ -291,14 +290,15 @@ func TestExtraReservedChangeReachesOnlyItsClass(t *testing.T) {
 	tr := NewTracker()
 	tr.AddPools(classed, pool("b", "198.51.100.0/24", 26))
 	tr.AddBlocks(blockA, blockB)
-	a, b := mustSummarize(tr, "a"), mustSummarize(tr, "b")
+	b := mustSummarize(tr, "b")
+
+	setExtraReserved(tr, "192.0.2.0/32", "198.51.100.0/32")
+	a := mustSummarize(tr, "a")
 	Expect(a.Reserved.String()).To(Equal("1"))
 	Expect(a.InUseReserved).To(Equal(1))
-	Expect(b.Reserved.String()).To(Equal("0"))
-	Expect(b.InUseReserved).To(Equal(0))
+	Expect(mustSummarize(tr, "b")).To(Equal(b))
 
-	extra = nil
-	tr.applyReservedChange()
+	setExtraReserved(tr)
 	a = mustSummarize(tr, "a")
 	Expect(a.Reserved.String()).To(Equal("0"))
 	Expect(a.InUseReserved).To(Equal(0))
@@ -307,8 +307,7 @@ func TestExtraReservedChangeReachesOnlyItsClass(t *testing.T) {
 
 func TestBlockLeavingPoolThatChangesClassDropsExtraReserved(t *testing.T) {
 	RegisterTestingT(t)
-	extra := []string{"192.0.2.128/32", "192.0.2.129/32"}
-	withExtraReservedClass(t, &extra)
+	withExtraReservedClass(t)
 	classed := pool("a", "192.0.2.0/24", 26)
 	classed.Spec.DisableBGPExport = true
 
@@ -316,6 +315,7 @@ func TestBlockLeavingPoolThatChangesClassDropsExtraReserved(t *testing.T) {
 	allocatePod(b, 0, "node-a")
 
 	tr := NewTracker()
+	setExtraReserved(tr, "192.0.2.128/32", "192.0.2.129/32")
 	tr.AddPools(classed)
 	tr.AddBlocks(b)
 	bc, _ := tr.BlockCounts(b.CIDR)

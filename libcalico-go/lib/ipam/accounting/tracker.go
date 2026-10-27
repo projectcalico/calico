@@ -44,8 +44,9 @@ type Tracker struct {
 	blocks           map[string]*trackedBlock
 	blocksWithNoPool *blockSet
 
-	reservations map[string]*v3.IPReservation
-	reserved     reservedSets
+	reservations  map[string]*v3.IPReservation
+	extraReserved map[reservedClass][]cnet.IPNet
+	reserved      reservedSets
 
 	// nodes stays nil until AddNodes is called, so a caller that never names nodes sees no stale affinity.
 	nodes set.Set[string]
@@ -90,17 +91,14 @@ type trackedBlock struct {
 	borrowedByNode  map[string]int
 }
 
-// reservedClass picks the reserved set a pool counts against.
+// reservedClass picks the reserved set a pool counts against. A class with no extra CIDRs counts the default set.
 type reservedClass string
 
 const defaultReservedClass reservedClass = ""
 
-// extraReservedCIDRs runs with t.mu held; whatever changes what it reads calls applyReservedChange.
-var (
-	reservedClasses    = []reservedClass{defaultReservedClass}
-	poolReservedClass  = func(*v3.IPPool) reservedClass { return defaultReservedClass }
-	extraReservedCIDRs = func(*Tracker, reservedClass) []cnet.IPNet { return nil }
-)
+// poolReservedClass is the hook for adding reserved classes; by default every pool is in the default class. Pools
+// are classified only when added or updated, so it must depend on nothing but the pool.
+var poolReservedClass = func(*v3.IPPool) reservedClass { return defaultReservedClass }
 
 type reservedSet struct {
 	cidrs []cnet.IPNet
@@ -108,6 +106,14 @@ type reservedSet struct {
 }
 
 type reservedSets map[reservedClass]reservedSet
+
+// of is the class's set, or the default set for a class with no extra CIDRs.
+func (s reservedSets) of(class reservedClass) reservedSet {
+	if set, ok := s[class]; ok {
+		return set
+	}
+	return s[defaultReservedClass]
+}
 
 // blockSet is a set of blocks kept in address order as they come and go, so reading it in order writes nothing.
 type blockSet struct {
@@ -156,6 +162,7 @@ func NewTracker() *Tracker {
 		blocks:           make(map[string]*trackedBlock),
 		blocksWithNoPool: newBlockSet(),
 		reservations:     make(map[string]*v3.IPReservation),
+		extraReserved:    make(map[reservedClass][]cnet.IPNet),
 		refsByAddress:    make(map[netip.Addr][]addressRefKey),
 	}
 	t.reserved = t.buildReserved()
@@ -183,7 +190,7 @@ func (t *Tracker) AddPools(ipPools ...*v3.IPPool) {
 			t.pools[ipPool.Name] = pool
 		}
 		ownBlocks := slices.Clone(pool.blocks.inOrder())
-		pool.ipPool, pool.net, pool.reservedClass = ipPool, poolNet, reservedClassOf(ipPool)
+		pool.ipPool, pool.net, pool.reservedClass = ipPool, poolNet, poolReservedClass(ipPool)
 		pool.prefix, _ = poolNet.Mask.Size()
 		pool.blockSize, pool.lostOverlap = BlockSize(ipPool), LostOverlap(ipPool)
 		if !existed {
@@ -236,7 +243,7 @@ func (t *Tracker) AddBlocks(allocationBlocks ...*model.AllocationBlock) {
 
 		// Walk the block once for its counts, then add them to whichever pool owns it.
 		pool := t.poolFor(&b.CIDR.IPNet)
-		block := newTrackedBlock(key, b, t.reserved[pool.class()].ips)
+		block := newTrackedBlock(key, b, t.reserved.of(pool.class()).ips)
 		block.pool, block.reservedClass = pool, pool.class()
 		t.blocks[key] = block
 		t.place(block)
@@ -486,7 +493,7 @@ func (t *Tracker) attributeToPool(block *trackedBlock) {
 
 // place adds block to its pool, or to the blocks no pool claims.
 func (t *Tracker) place(block *trackedBlock) {
-	t.matchReserved(block)
+	t.recountReservedIfClassChanged(block)
 	if block.pool == nil {
 		t.blocksWithNoPool.add(block)
 		return
@@ -572,15 +579,6 @@ func (pool *trackedPool) class() reservedClass {
 	return pool.reservedClass
 }
 
-func reservedClassOf(ipPool *v3.IPPool) reservedClass {
-	class := poolReservedClass(ipPool)
-	if !slices.Contains(reservedClasses, class) {
-		logrus.WithFields(logrus.Fields{"pool": ipPool.Name, "class": class}).Warn("IPPool has an unknown reserved class; counting it in the default one")
-		return defaultReservedClass
-	}
-	return class
-}
-
 // incrementBy adds n to m[k], leaving no entry for a zero count.
 func incrementBy[K comparable](m map[K]int, k K, n int) {
 	if n != 0 {
@@ -609,13 +607,13 @@ func (t *Tracker) recountPool(pool *trackedPool) {
 	}
 	t.countPoolReserved(pool)
 	for _, block := range pool.blocks.inOrder() {
-		t.matchReserved(block)
+		t.recountReservedIfClassChanged(block)
 		t.addToCounts(pool.counts, block)
 	}
 }
 
 func (t *Tracker) countPoolReserved(pool *trackedPool) {
-	r, err := countReserved(cnet.IPNet{IPNet: *pool.net}, t.reserved[pool.class()].cidrs)
+	r, err := countReserved(cnet.IPNet{IPNet: *pool.net}, t.reserved.of(pool.class()).cidrs)
 	if err != nil {
 		logrus.WithError(err).WithField("pool", pool.ipPool.Name).Warn("Cannot count the reserved addresses in an IPPool")
 		pool.counts.Reserved = big.NewInt(0)
@@ -634,19 +632,25 @@ func (t *Tracker) recountStale(pool *trackedPool) {
 	}
 }
 
-// applyReservedChange rebuilds the reserved set and recounts only the blocks and pools whose addresses it changed.
+// setExtraReserved replaces the CIDRs the class withholds on top of the IPReservations. The caller holds t.mu.
+func (t *Tracker) setExtraReserved(class reservedClass, cidrs []cnet.IPNet) {
+	t.extraReserved[class] = cidrs
+	t.applyReservedChange()
+}
+
+// applyReservedChange rebuilds the reserved sets and recounts only the blocks and pools whose addresses it changed.
 func (t *Tracker) applyReservedChange() {
 	next := t.buildReserved()
-	diffs := make(map[reservedClass]*ReservedIPs, len(next))
+	diffs := make(reservedSets, len(next))
 	var errs []error
 	changed := false
 	for class, set := range next {
-		diff, err := set.ips.changedSince(t.reserved[class].ips)
+		diff, err := set.ips.changedSince(t.reserved.of(class).ips)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		diffs[class] = &ReservedIPs{set: diff}
+		diffs[class] = reservedSet{ips: &ReservedIPs{set: diff}}
 		changed = changed || len(diff.Prefixes()) > 0
 	}
 	t.reserved = next
@@ -672,9 +676,9 @@ func (t *Tracker) applyReservedChange() {
 			}
 		}
 	}
-	recountOverlapping(t.blocksWithNoPool, diffs[defaultReservedClass])
+	recountOverlapping(t.blocksWithNoPool, diffs.of(defaultReservedClass).ips)
 	for _, pool := range t.pools {
-		if diff := diffs[pool.class()]; diff.overlaps(*pool.net) {
+		if diff := diffs.of(pool.class()).ips; diff.overlaps(*pool.net) {
 			t.countPoolReserved(pool)
 			recountOverlapping(pool.blocks, diff)
 		}
@@ -689,23 +693,24 @@ func (t *Tracker) recountReserved(block *trackedBlock) {
 	}
 }
 
-// matchReserved must run before the block's counts are added to a pool.
-func (t *Tracker) matchReserved(block *trackedBlock) {
+// recountReservedIfClassChanged recounts block against its pool's reserved class. It must run before the block's
+// counts join the pool.
+func (t *Tracker) recountReservedIfClassChanged(block *trackedBlock) {
 	if block.reservedClass != block.pool.class() {
 		t.countBlockReserved(block)
 	}
 }
 
 func (t *Tracker) countBlockReserved(block *trackedBlock) {
-	block.countReserved(t.reserved[block.pool.class()].ips)
+	block.countReserved(t.reserved.of(block.pool.class()).ips)
 	block.reservedClass = block.pool.class()
 }
 
 func (t *Tracker) buildReserved() reservedSets {
 	reservations := ReservationCIDRs(slices.Collect(maps.Values(t.reservations)))
-	sets := make(reservedSets, len(reservedClasses))
-	for _, class := range reservedClasses {
-		cidrs := append(slices.Clip(reservations), extraReservedCIDRs(t, class)...)
+	sets := make(reservedSets, len(t.extraReserved)+1)
+	for _, class := range append([]reservedClass{defaultReservedClass}, slices.Collect(maps.Keys(t.extraReserved))...) {
+		cidrs := slices.Concat(reservations, t.extraReserved[class])
 		ips, err := newReservedIPs(cidrs)
 		if err != nil {
 			logrus.WithError(err).WithField("class", class).Warn("Cannot build the reserved address set")
