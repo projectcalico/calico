@@ -45,6 +45,7 @@ import (
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	rsecret "github.com/projectcalico/calico/operator/pkg/render/common/secret"
 	rgateway "github.com/projectcalico/calico/operator/pkg/render/gateway"
 	"github.com/projectcalico/calico/operator/pkg/render/whisker"
 	"github.com/projectcalico/calico/operator/pkg/tls"
@@ -258,6 +259,40 @@ var _ = Describe("whisker controller tests", func() {
 			Expect(cli.Get(ctx, types.NamespacedName{Name: whisker.GatewayTLSSecretName, Namespace: whisker.WhiskerNamespace}, secret)).NotTo(HaveOccurred())
 			Expect(cli.Get(ctx, types.NamespacedName{Name: whisker.GatewayTLSSecretName, Namespace: common.OperatorNamespace()}, secret)).NotTo(HaveOccurred(),
 				"the truth-namespace copy must persist so the certificate is not re-minted every reconcile")
+		})
+
+		It("degrades when a user-provided gateway certificate does not cover the gateway hostname", func() {
+			createGatewayAPI()
+
+			// Sign with a CA that is not the operator's own, so the keypair reads
+			// as bring-your-own rather than an operator-minted cert to re-issue.
+			byoCA, err := tls.MakeCA("gateway-byo-test")
+			Expect(err).NotTo(HaveOccurred())
+			byoSecret, err := rsecret.CreateTLSSecret(
+				byoCA, whisker.GatewayTLSSecretName, common.OperatorNamespace(),
+				corev1.TLSPrivateKeyKey, corev1.TLSCertKey, tls.DefaultCertificateDuration, nil,
+				"wrong.test.local")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, byoSecret)).NotTo(HaveOccurred())
+
+			setIngressGateway(nil)
+
+			var degradedMsg, degradedErr string
+			mockStatus.On("SetDegraded", operatorv1.InvalidConfigurationError, mock.Anything, mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					degradedMsg = args.String(1)
+					degradedErr = args.String(2)
+				}).Return()
+
+			_, err = doReconcile()
+			Expect(err).To(HaveOccurred())
+
+			Expect(degradedMsg).To(Equal("Gateway certificate hostname mismatch"))
+			Expect(degradedErr).To(ContainSubstring("whisker.test.local"))
+
+			gw := &gapi.Gateway{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: gatewayName, Namespace: whisker.WhiskerNamespace}, gw)).To(HaveOccurred(),
+				"no gateway should be rendered while the certificate does not cover the hostname")
 		})
 
 		It("creates a user-chosen gateway namespace and renders the Gateway there", func() {
