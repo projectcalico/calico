@@ -673,11 +673,14 @@ func (r *CalicoManager) buildHelmIndex(chartDir, chartURL string) error {
 	if err := os.MkdirAll(tmpChartsDir, utils.DirPerms); err != nil {
 		return fmt.Errorf("create temp dir for building helm index: %w", err)
 	}
-	defer func() {
-		if err := os.RemoveAll(tmpChartsDir); err != nil {
-			logrus.WithError(err).Warnf("failed to remove helm index staging dir %s", tmpChartsDir)
-		}
-	}()
+	// Releases must keep the staging dir: updateHelmChartIndex uploads index.yaml from it at publish time.
+	if r.isHashRelease {
+		defer func() {
+			if err := os.RemoveAll(tmpChartsDir); err != nil {
+				logrus.WithError(err).Warnf("failed to remove helm index staging dir %s", tmpChartsDir)
+			}
+		}()
+	}
 
 	for _, chart := range utils.AllReleaseCharts() {
 		srcChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion()))
