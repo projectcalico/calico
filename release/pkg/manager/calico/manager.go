@@ -28,6 +28,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"go.yaml.in/yaml/v3"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
@@ -62,6 +63,9 @@ var (
 	helmIndexFileName = "index.yaml"
 
 	s3ACLPublicRead = []string{"--acl", "public-read"}
+
+	// Number of image release directories published at once.
+	publishDirConcurrency = 3
 )
 
 func NewManager(opts ...Option) *CalicoManager {
@@ -1513,10 +1517,18 @@ func (r *CalicoManager) publishContainerImages() error {
 			return nil
 		}
 	}
+	// Each directory already pushes to every registry concurrently, so a small limit is
+	// enough to saturate the uplink without tripping registry rate limits.
+	var g errgroup.Group
+	g.SetLimit(publishDirConcurrency)
 	for _, dir := range imageReleaseDirs {
-		if err := publish(dir, "release-publish"); err != nil {
-			return err
-		}
+		g.Go(func() error {
+			logrus.WithField("dir", dir).Info("Publishing images")
+			return publish(dir, "release-publish")
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return err
 	}
 	// Publish Windows images in a separate trailing loop, mirroring the build
 	// step: release-windows runs setup-windows-builder, which switches the
