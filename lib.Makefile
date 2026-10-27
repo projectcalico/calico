@@ -1191,13 +1191,14 @@ push-images-to-registry-%:
 #
 # We also build a list of all of the iamges we're going to be pushing and then, once we're done, we set the expiry
 # on those images, either adding an expiry for normal pushes or removing it for releases, if we're pushing to quay.io
-# that is.
+# that is. Releases don't push the bare tag (see push-image-arch-to-registry-%), so it isn't in the list: the expiry
+# script exits on the first tag it can't find.
 push-image-to-registry-%:
 	$(MAKE) -j6 $(addprefix push-image-arch-to-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(call unescapefs,$*)
 
 ifeq ($(findstring quay.io,$(REGISTRY)),quay.io)
 	$(if $(RELEASE), \
-		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) remove $(REGISTRY)/$(call unescapefs,$*):$(IMAGETAG) $(addprefix $(REGISTRY)/$(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES)), \
+		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) remove $(addprefix $(REGISTRY)/$(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES)), \
 		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $(REGISTRY)/$(call unescapefs,$*):$(IMAGETAG) $(addprefix $(REGISTRY)/$(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES)) \
 	)
 endif
@@ -1238,12 +1239,15 @@ endef
 
 # push-image-arch-to-registry-% pushes the build / arch image specified by $* and BUILD_IMAGE to the registry
 # specified by REGISTRY.
+#
+# Releases always follow with push-manifests, whose `manifest push --purge` overwrites the bare tag, so pushing the
+# amd64 image to it first is a wasted round trip.
 push-image-arch-to-registry-%:
 # If the registry we want to push to doesn't not support manifests don't push the ARCH image.
 	@$(call log_step,start,push $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*)
 	$(call retry_docker_cmd,docker push with quiet flag,$(DOCKER) push --quiet $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*,$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
 	@$(call log_step,end,push $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*)
-	$(if $(filter $*,amd64),\
+	$(if $(and $(filter $*,amd64),$(if $(RELEASE),,true)),\
 		$(call log_step,start,push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG)); \
 		$(call retry_docker_cmd,docker push,$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY)); \
 		$(call log_step,end,push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG)) \
