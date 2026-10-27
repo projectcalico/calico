@@ -993,7 +993,7 @@ type FelixConfigurationSpec struct {
 
 	// BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending
 	// on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size.
-	// 'DoubleIfFull' doubles the size of an IP family's map when it is pretty much full even
+	// 'DoubleIfFull' doubles the size of an IP family's map when it is more than 80% full
 	// after cleanups. [Default: DoubleIfFull]
 	// +kubebuilder:validation:Pattern=`^(?i)(Disabled|DoubleIfFull)?$`
 	BPFMapSizeConntrackScaling string `json:"bpfMapSizeConntrackScaling,omitempty"`
