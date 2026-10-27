@@ -485,7 +485,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         result = resync.Scope(
             self.db,
             driver=self.driver if hasattr(self.driver, "endpoint_syncer") else None,
-            admin_context=mech_calico.ctx.get_admin_context(),
+            admin_context=self.db_context,
             **scope_kwargs,
         ).run()
         if expect_ok:
