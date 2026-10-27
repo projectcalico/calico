@@ -308,7 +308,7 @@ func RunCNIPluginWithIdContext(
 			return err
 		}
 
-		defer nlHandle.Close()
+		defer func() { _ = nlHandle.Close() }()
 		contVeth, err = nlHandle.LinkByName(ifName)
 		if err != nil {
 			return err
