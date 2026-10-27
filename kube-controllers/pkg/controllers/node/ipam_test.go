@@ -762,6 +762,30 @@ var _ = Describe("IPAM controller UTs", func() {
 			Entry("leaked once the pod has succeeded", v1.PodSucceeded, currentSandbox, "k8s-pod-network."+currentSandbox, false),
 			Entry("leaked once the pod has failed", v1.PodFailed, "", "k8s-pod-network."+currentSandbox, false),
 		)
+
+		It("should trust a reported pod IP over a container ID annotation from an abandoned sandbox", func() {
+			c.Start(stopChan)
+
+			// An abandoned sandbox's ADD finished after the live sandbox's ADD, so the
+			// annotation names the abandoned sandbox while the pod reports the live one's IP.
+			pod := v1.Pod{}
+			pod.Name = "test-pod"
+			pod.Namespace = "test-namespace"
+			pod.Spec.NodeName = "kname"
+			pod.Status.Phase = v1.PodRunning
+			pod.Status.PodIP = "10.0.0.1"
+			pod.Status.PodIPs = []v1.PodIP{{IP: "10.0.0.1"}}
+			pod.Annotations = map[string]string{conversion.AnnotationContainerID: replacedSandbox}
+			_, err := createPod(context.TODO(), cs, &pod)
+			Expect(err).NotTo(HaveOccurred())
+
+			live := podAllocation("k8s-pod-network." + currentSandbox)
+			Expect(c.allocationIsValid(live, false)).To(BeTrue())
+
+			abandoned := podAllocation("k8s-pod-network." + replacedSandbox)
+			abandoned.ip = "10.0.0.2"
+			Expect(c.allocationIsValid(abandoned, false)).To(BeFalse())
+		})
 	})
 
 	It("should handle node updates and maintain its node cache", func() {

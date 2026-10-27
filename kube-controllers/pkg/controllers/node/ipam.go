@@ -1147,17 +1147,16 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 		return false
 	}
 
-	// Checked before the pod IP gate below, because a pod whose sandboxes keep failing never
-	// reports an IP but still collects an allocation per attempt.
-	if fromReplacedSandbox(a, p) {
-		logc.Debug("Allocation belongs to a replaced sandbox. Allocation no longer valid")
-		return false
-	}
-
 	// Check to see if the pod actually has the IP in question. Gate based on the presence of the
 	// status field, which is populated by kubelet.
 	if p.Status.PodIP == "" || len(p.Status.PodIPs) == 0 {
-		// The pod hasn't received an IP yet.
+		// A pod whose sandboxes keep failing never reports an IP but collects an allocation per
+		// attempt. The annotation is trusted only here, since a slow ADD from an abandoned
+		// sandbox can overwrite it.
+		if fromReplacedSandbox(a, p) {
+			logc.Debug("Allocation belongs to a replaced sandbox. Allocation no longer valid")
+			return false
+		}
 		log.Debugf("Pod IP has not yet been reported, consider allocation valid")
 		return true
 	}
