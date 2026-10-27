@@ -17,6 +17,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"iter"
 	"math/big"
 	"net"
 	"strings"
@@ -46,6 +47,7 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -610,20 +612,20 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 			attrs:          attr.ActiveOwnerAttrs,
 			sequenceNumber: b.GetSequenceNumberForOrdinal(ord),
 			block:          blockCIDR,
+			blockNode:      n,
 		}
 
 		currentAllocations[alloc.id()] = true
 
 		// Check if we already know about this allocation.
 		if existing, ok := c.allocationsByBlock[blockCIDR][alloc.id()]; ok {
-			// If the sequence number has changed for an existing allocation, it means
-			// it has been reallocated. Update the allocation in place and mark it as valid.
-			if existing.sequenceNumber != alloc.sequenceNumber {
-				existing.sequenceNumber = alloc.sequenceNumber
-				existing.attrs = alloc.attrs
-				existing.markValid()
+			if existing.sequenceNumber == alloc.sequenceNumber {
+				continue
 			}
-			continue
+
+			// The address was reallocated or changed owner. A new owner can be on another node, so re-register the
+			// allocation rather than updating it in place; it starts out valid.
+			c.releaseAllocation(existing)
 		}
 
 		// This is a new allocation.
@@ -1001,8 +1003,8 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 				continue
 			}
 
-			if !a.isPodIP() && !a.isTunnelAddress() {
-				// Skip any allocations which are not either a Kubernetes pod, or a node's
+			if !a.isPodIP() && !a.isTunnelAddress() && !a.isVMAllocation() {
+				// Skip any allocations which are not a Kubernetes pod, a KubeVirt VM, or a node's
 				// IPIP, VXLAN or Wireguard address. In practice, we don't expect these, but they might exist.
 				// When they do, they will need to be released outside of this controller in order for
 				// the block to be cleaned up.
@@ -1198,22 +1200,74 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 // a VMI-type IP allocation still exists. Returns true on any error or missing
 // data to avoid incorrectly releasing in-use IPs.
 func (c *IPAMController) isVMAllocationValid(a *allocation) bool {
-	ns := a.attrs[ipam.AttributeNamespace]
-	vmiName := a.attrs[ipam.AttributeVMIName]
 	logc := log.WithFields(a.fields())
 
 	vmIndexer := c.deferredInformers.VMIndexer()
 	vmiIndexer := c.deferredInformers.VMInstanceIndexer()
-
-	// If we can't reason about it, don't GC it.
-	// (We can tighten this later once attrs are guaranteed.)
-	if ns == "" || vmiName == "" || vmIndexer == nil || vmiIndexer == nil {
-		logc.Debug("Insufficient data to validate VMI allocation, assuming valid")
+	if vmIndexer == nil || vmiIndexer == nil {
+		logc.Debug("KubeVirt informers not available, assuming VM allocation is valid")
 		return true
 	}
 
-	// Build the cache key using the same format as cache.MetaNamespaceKeyFunc.
-	key := cache.NewObjectName(ns, vmiName).String()
+	if !a.hasOwner() {
+		// A stopped VM's address has no owner, so its handle is all that names the VM.
+		for key := range vmKeysForHandle(a.handle, vmIndexer, vmiIndexer) {
+			if vmBacksKey(logc, key, vmIndexer, vmiIndexer) {
+				return true
+			}
+		}
+		logc.Debug("No VM or standalone VMI matches the allocation's handle")
+		return false
+	}
+
+	// If we can't reason about it, don't GC it.
+	// (We can tighten this later once attrs are guaranteed.)
+	ns := a.attrs[ipam.AttributeNamespace]
+	vmiName := a.attrs[ipam.AttributeVMIName]
+	if ns == "" || vmiName == "" {
+		logc.Debug("Insufficient data to validate VMI allocation, assuming valid")
+		return true
+	}
+	return vmBacksKey(logc, cache.NewObjectName(ns, vmiName).String(), vmIndexer, vmiIndexer)
+}
+
+// vmKeysForHandle yields the cache key of each VM or VMI that CNI could have given the handle. Usually the
+// namespace and name can be read back out of it. A long pair is hashed into the handle instead, so that form is
+// matched by rebuilding the handle of every VM and VMI in the caches.
+func vmKeysForHandle(handle string, indexers ...cache.Indexer) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		for network := range vmipam.VMHandleNetworks(handle) {
+			suffix := handle[len(network)+len(vmipam.VMHandleInfix):]
+
+			// A namespace has no dots, so the first one ends it.
+			if ns, name, ok := strings.Cut(suffix, "."); ok {
+				if vmipam.CreateVMHandleID(network, ns, name) == handle && !yield(cache.NewObjectName(ns, name).String()) {
+					return
+				}
+				continue
+			}
+
+			for _, indexer := range indexers {
+				for _, key := range indexer.ListKeys() {
+					ns, name, err := cache.SplitMetaNamespaceKey(key)
+					if err != nil {
+						log.WithError(err).WithField("key", key).Warn("Unable to parse KubeVirt cache key")
+						continue
+					}
+					if vmipam.CreateVMHandleID(network, ns, name) == handle && !yield(key) {
+						return
+					}
+				}
+			}
+		}
+	}
+}
+
+// vmBacksKey is whether a VirtualMachine, or a VMI no VirtualMachine owns, exists in the caches under the key.
+// A VMI whose VirtualMachine is gone is only awaiting deletion, so it doesn't count. A failed lookup counts as
+// existing, so an in-use address is never released on a cache error.
+func vmBacksKey(logc *log.Entry, key string, vmIndexer, vmiIndexer cache.Indexer) bool {
+	logc = logc.WithField("vm", key)
 
 	// Check if the VM exists in the informer cache.
 	_, vmExists, err := vmIndexer.GetByKey(key)
