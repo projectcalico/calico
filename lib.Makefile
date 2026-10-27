@@ -1577,12 +1577,17 @@ $(REPO_ROOT)/bin/crane:
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
 ###############################################################################
+# Shell test that passes only while the named container is up. A stopped container
+# still answers docker inspect, so checking for existence alone reuses a dead one.
+container_running = [ "$$(docker inspect -f '{{.State.Running}}' $(1) 2>/dev/null)" = "true" ]
+
 ## Kubernetes apiserver used for tests
 APISERVER_NAME := calico-local-apiserver
 run-k8s-apiserver: run-etcd
-	@if docker inspect $(APISERVER_NAME) >/dev/null 2>&1; then \
+	@if $(call container_running,$(APISERVER_NAME)); then \
 		echo "$(APISERVER_NAME) already running"; \
 	else \
+		docker rm -f $(APISERVER_NAME) >/dev/null 2>&1 || true; \
 		docker run --detach --net=host \
 			--name $(APISERVER_NAME) \
 			-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico \
@@ -1611,7 +1616,8 @@ run-k8s-apiserver: run-etcd
 			--proxy-client-cert-file=/home/user/certs/kubernetes.pem \
 			--proxy-client-key-file=/home/user/certs/kubernetes-key.pem; \
 		while ! docker exec $(APISERVER_NAME) kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done; \
-		while ! docker exec $(APISERVER_NAME) kubectl create \
+		while ! docker exec $(APISERVER_NAME) kubectl get clusterrolebinding anonymous-admin >/dev/null 2>&1 && \
+			! docker exec $(APISERVER_NAME) kubectl create \
 			clusterrolebinding anonymous-admin \
 			--clusterrole=cluster-admin \
 			--user=system:anonymous 2>/dev/null; \
@@ -1632,9 +1638,10 @@ stop-k8s-apiserver:
 # Run a local Kubernetes controller-manager in a docker container, useful for tests.
 CONTROLLER_MANAGER_NAME := calico-local-controller-manager
 run-k8s-controller-manager: run-k8s-apiserver
-	@if docker inspect $(CONTROLLER_MANAGER_NAME) >/dev/null 2>&1; then \
+	@if $(call container_running,$(CONTROLLER_MANAGER_NAME)); then \
 		echo "$(CONTROLLER_MANAGER_NAME) already running"; \
 	else \
+		docker rm -f $(CONTROLLER_MANAGER_NAME) >/dev/null 2>&1 || true; \
 		docker run --detach --net=host \
 			--name $(CONTROLLER_MANAGER_NAME) \
 			-v $(CERTS_PATH):/home/user/certs \
@@ -2055,7 +2062,8 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 # TODO: We shouldn't need to enable the v2 API, but some of our test code still relies on it.
 .PHONY: run-etcd stop-etcd
 run-etcd:
-	@if ! docker inspect calico-etcd >/dev/null 2>&1; then \
+	@if ! $(call container_running,calico-etcd); then \
+		docker rm -f calico-etcd >/dev/null 2>&1 || true; \
 		$(call retry_docker_cmd,pull $(ETCD_IMAGE),docker pull -q $(ETCD_IMAGE),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY)); \
 		docker run --detach \
 			--net=host \
