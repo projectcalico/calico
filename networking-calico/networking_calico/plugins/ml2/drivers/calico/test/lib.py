@@ -37,17 +37,23 @@ from oslo_config import fixture as config_fixture
 # for an exception class is not a class, so "except that_attribute" raises
 # TypeError if it is ever evaluated, and a hand-written stand-in drifts from the
 # real thing without anything noticing.
+from neutron.db import models_v2
+from neutron.db.models import l3 as l3_models
+from neutron.db.qos import models as qos_models
 from neutron.plugins.ml2.drivers import mech_agent
+from neutron_lib import constants as neutron_constants
 from neutron_lib import context as neutron_context
 from neutron_lib import fixture as neutron_lib_fixture
-from neutron_lib.constants import IP_PROTOCOL_MAP
+from neutron_lib.db import constants as db_constants
 from neutron_lib.exceptions import PortNotFound
 from neutron_lib.plugins import constants as plugin_constants
 from neutron_lib.plugins import directory as plugin_dir
 from neutron_lib.plugins.ml2 import api as ml2_api
-from oslo_db import options as oslo_db_options
-from oslo_db.exception import DBError
-from sqlalchemy.exc import SQLAlchemyError
+
+# Not used here, but importing it now leaves the real module in sys.modules, where
+# qos_driver's own import finds it.  Imported after the mocks below, it would resolve
+# through the neutron_lib mock instead.
+from neutron_lib.services.qos import base as qos_base  # noqa: F401
 
 # When you're working on a test and need to see logging - both from the test
 # code and the code _under_ test - uncomment the following line.
@@ -67,9 +73,6 @@ sys.modules["neutron.common.exceptions"] = m_neutron.common.exceptions
 sys.modules["neutron.conf"] = m_neutron.conf
 sys.modules["neutron.conf.agent"] = m_neutron.conf.agent
 sys.modules["neutron.db"] = m_neutron.db
-sys.modules["neutron.db.models"] = m_neutron.db.models
-sys.modules["neutron.db.models.l3"] = m_neutron.db.models.l3
-sys.modules["neutron.db.qos"] = m_neutron.db.qos
 sys.modules["neutron.objects"] = m_neutron.objects
 sys.modules["neutron.objects.qos"] = m_neutron.objects.qos
 sys.modules["neutron.openstack"] = m_neutron.openstack
@@ -87,40 +90,31 @@ sys.modules["neutron_lib.callbacks.events"] = m_neutron_lib.callbacks.events
 sys.modules["neutron_lib.callbacks.registry"] = m_neutron_lib.callbacks.registry
 sys.modules["neutron_lib.callbacks.resources"] = m_neutron_lib.callbacks.resources
 sys.modules["neutron_lib.db"] = m_neutron_lib.db
-sys.modules["neutron_lib.constants"] = m_neutron_lib.constants
 sys.modules["neutron_lib.plugins"] = m_neutron_lib.plugins
 sys.modules["neutron_lib.plugins.ml2"] = m_neutron_lib.plugins.ml2
 sys.modules["neutron_lib.worker"] = m_neutron_lib.worker
 sys.modules["oslo_concurrency"] = m_oslo_concurrency = mock.Mock()
 sys.modules["oslo_context"] = m_oslo_context = mock.Mock()
-sys.modules["oslo_db"] = m_oslo_db = mock.Mock()
 sys.modules["oslo_log"] = m_oslo_log = mock.Mock()
-sys.modules["sqlalchemy"] = m_sqlalchemy = mock.Mock()
-sys.modules["networking_calico.plugins.ml2.drivers.calico.qos_driver"] = (
-    m_qos_driver
-) = mock.Mock()
 
-# Expose the real protocol map, so that policy.py maps the same protocol names
-# in test as it does in production.
-m_neutron_lib.constants.IP_PROTOCOL_MAP = IP_PROTOCOL_MAP
+# Expose the real constants, so that the code under test maps protocol names, port
+# statuses and QoS rule limits the same in test as in production.
+m_neutron_lib.constants = neutron_constants
+m_neutron_lib.db.constants = db_constants
 
-# Likewise the real exception classes, so that the code under test raises and
-# catches what it really would.  sqlalchemy.exc is not itself mocked, so without
-# this SQLAlchemyError would be a MagicMock attribute, and the "except
-# sa_exc.SQLAlchemyError" in mech_calico would raise TypeError the first time a
-# non-DBError exception reached it.
+# Likewise the real exception class, so that the code under test raises and
+# catches what it really would.
 m_neutron_lib.exceptions.PortNotFound = PortNotFound
-m_oslo_db.exception.DBError = DBError
-m_sqlalchemy.exc.SQLAlchemyError = SQLAlchemyError
-
-# The real [database] options, so that mech_calico can register them with the real
-# oslo.config and read their real defaults.
-m_oslo_db.options = oslo_db_options
 
 # The real admin context factory and plugin directory, so that tests can use the
 # standard fixture for the latter and patch only what they need of the former.
 m_neutron_lib.context = neutron_context
 m_neutron_lib.plugins.directory = plugin_dir
+
+# The real Neutron DB models, so that the code under test builds real queries;
+# only the session that runs them is mocked.  The l3 and qos model modules need no
+# hookup here: imported above, they are found in sys.modules by their full names.
+m_neutron.db.models_v2 = models_v2
 
 # The real ML2 agent base class, so that CalicoMechanismDriver is tested with the
 # superclass that it really has.  The real ML2 API alongside it, so that the two
@@ -242,6 +236,7 @@ from networking_calico.plugins.ml2.drivers.calico import election
 from networking_calico.plugins.ml2.drivers.calico import endpoints
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
 from networking_calico.plugins.ml2.drivers.calico import policy
+from networking_calico.plugins.ml2.drivers.calico import qos_driver
 from networking_calico.plugins.ml2.drivers.calico import status
 from networking_calico.plugins.ml2.drivers.calico import subnets
 from networking_calico.plugins.ml2.drivers.calico import syncer
@@ -380,6 +375,12 @@ class Lib(object):
 
         # If an arg mismatch occurs, we want to see the complete diff of it.
         self.maxDiff = None
+
+        # qos_driver registers only the first mechanism driver in the process, so start
+        # each test without one, for its own driver to be the one registered.
+        qos_driver_p = mock.patch.object(qos_driver, "DRIVER", None)
+        qos_driver_p.start()
+        self.addCleanup(qos_driver_p.stop)
 
         # Create an instance of CalicoMechanismDriver.
         self.driver = mech_calico.CalicoMechanismDriver()
@@ -742,23 +743,23 @@ class Lib(object):
         # rows across all ports/policies; the caller groups them by the
         # relevant id (port_id, qos_policy_id, ...) and looks up per
         # item.  Returning more rows than strictly needed is harmless.
-        if "IPAllocation" in str(model.name):
+        if model is models_v2.IPAllocation:
             m.filter_by.side_effect = self.db_query_ip_allocation
             m.filter.side_effect = self.db_query_ip_allocation_bulk
             return m
-        if "FloatingIP" in str(model.name):
+        if model is l3_models.FloatingIP:
             m.filter_by.side_effect = self.db_query_floating_ip
             m.filter.side_effect = self.db_query_floating_ip_bulk
             return m
-        if "Network" in str(model.name):
+        if model is models_v2.Network:
             m.filter_by.side_effect = self.db_query_network
             m.filter.side_effect = self.db_query_network_bulk
             return m
-        if "QosBandwidthLimitRule" in str(model.name):
+        if model is qos_models.QosBandwidthLimitRule:
             m.filter_by.side_effect = self.db_query_qos_policy_bw_rule
             m.filter.side_effect = self.db_query_qos_policy_bw_rule_bulk
             return m
-        if "QosPacketRateLimitRule" in str(model.name):
+        if model is qos_models.QosPacketRateLimitRule:
             m.filter_by.side_effect = self.db_query_qos_policy_pr_rule
             m.filter.side_effect = self.db_query_qos_policy_pr_rule_bulk
             return m
