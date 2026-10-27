@@ -17,8 +17,11 @@
 package bpfmap
 
 import (
+	"errors"
 	"fmt"
 	"os"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/allowsources"
 	"github.com/projectcalico/calico/felix/bpf/arp"
@@ -77,16 +80,31 @@ type Maps struct {
 }
 
 func (m *Maps) Destroy() {
+	for _, m := range m.pinned() {
+		os.Remove(m.Path())
+		m.Close()
+	}
+}
+
+// Close closes every map and keeps the pins.
+func (m *Maps) Close() {
+	for _, m := range m.pinned() {
+		m.Close()
+	}
+}
+
+func (m *Maps) pinned() []pinnedMap {
 	mps := []maps.Map{}
 	mps = append(mps, m.CommonMaps.slice()...)
 	mps = append(mps, m.V4.slice()...)
 	if m.V6 != nil {
 		mps = append(mps, m.V6.slice()...)
 	}
+	ret := make([]pinnedMap, 0, len(mps))
 	for _, m := range mps {
-		os.Remove(m.(pinnedMap).Path())
-		m.(pinnedMap).Close()
+		ret = append(ret, m.(pinnedMap))
 	}
+	return ret
 }
 
 func getCommonMaps() *CommonMaps {
@@ -149,7 +167,7 @@ func getIPMaps(ipFamily int) *IPMaps {
 	}
 }
 
-func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
+func newMaps(ipV6Enabled bool) *Maps {
 	ret := new(Maps)
 
 	ret.CommonMaps = getCommonMaps()
@@ -157,6 +175,52 @@ func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
 	if ipV6Enabled {
 		ret.V6 = getIPMaps(6)
 	}
+	return ret
+}
+
+// CreateBPFMapsKeepingPinnedSizes is CreateBPFMaps for processes other than Felix, which owns the map sizes.
+func CreateBPFMapsKeepingPinnedSizes(ipV6Enabled bool) (*Maps, error) {
+	keepPinnedSizes(ipV6Enabled)
+	return CreateBPFMaps(ipV6Enabled)
+}
+
+// keepPinnedSizes registers the size of each pinned map, which NewPinnedMap then uses.
+func keepPinnedSizes(ipV6Enabled bool) {
+	for _, m := range newMaps(ipV6Enabled).slice() {
+		pm, ok := m.(*maps.PinnedMap)
+		if !ok {
+			continue
+		}
+		// EnsureExists restores an interrupted migration's _old map, so that is the map to size.
+		path := pm.Path()
+		if _, err := os.Stat(path + "_old"); err == nil {
+			path += "_old"
+		}
+		logCtx := log.WithField("name", pm.GetName())
+		fd, err := maps.GetMapFDByPin(path)
+		if errors.Is(err, os.ErrNotExist) {
+			logCtx.Debug("No pinned map, creating it at the default size.")
+			continue
+		} else if err != nil {
+			logCtx.WithError(err).Warn("Failed to open the pinned map, its size may be reset to the default.")
+			continue
+		}
+		info, err := maps.GetMapInfo(fd)
+		_ = fd.Close()
+		if err != nil {
+			logCtx.WithError(err).Warn("Failed to read the pinned map's size, its size may be reset to the default.")
+			continue
+		}
+		if info.KeySize != pm.KeySize || info.ValueSize != pm.ValueSize {
+			logCtx.Debug("Pinned map has a different key or value size, it will be recreated.")
+			continue
+		}
+		maps.SetSize(pm.GetName(), info.MaxEntries)
+	}
+}
+
+func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
+	ret := newMaps(ipV6Enabled)
 
 	mps := ret.slice()
 	for i, bpfMap := range mps {
