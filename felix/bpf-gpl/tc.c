@@ -608,6 +608,7 @@ syn_force_policy:
 		) {
 		/* Do RPF check since it's our responsibility to police that. */
 		if (wep_rpf_check(ctx, src_rt) == RPF_RES_FAIL) {
+			deny_reason(ctx, CALI_REASON_RPF_FAIL);
 			goto deny;
 		}
 

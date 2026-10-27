@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	MaxCounterNumber    int = 27
+	MaxCounterNumber    int = 29
 	counterMapKeySize   int = 8
 	counterMapValueSize int = 8
 )
@@ -86,6 +86,8 @@ const (
 	Reserved1
 	DroppedMaglevNoBackend
 	DroppedNoHostIP
+	Reserved2
+	DroppedRPF
 )
 
 type Description struct {
@@ -215,6 +217,10 @@ var descriptions DescList = DescList{
 	{
 		Counter:  DroppedNoHostIP,
 		Category: "Dropped", Caption: "VXLAN encap when host IP unknown",
+	},
+	{
+		Counter:  DroppedRPF,
+		Category: "Dropped", Caption: "by workload RPF check",
 	},
 }
 
