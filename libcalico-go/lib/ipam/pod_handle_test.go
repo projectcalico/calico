@@ -15,6 +15,7 @@
 package ipam_test
 
 import (
+	"regexp"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -74,7 +75,7 @@ var _ = Describe("Pod handle IDs", func() {
 	It("rejects both forms of VM handle on any network", func() {
 		unhashed := vmipam.CreateVMHandleID("k8s-pod-network", "default", "vm1")
 		hashed := vmipam.CreateVMHandleID("secondary.network", "default", strings.Repeat("v", 200))
-		Expect(hashed).To(MatchRegexp(`\.vmi\.[0-9a-f]{64}$`), "the VM name should be long enough to hash")
+		Expect(hashed).To(MatchRegexp(regexp.QuoteMeta(vmipam.VMHandleInfix)+"[0-9a-f]{64}$"), "the VM name should be long enough to hash")
 
 		for _, handle := range []string{unhashed, hashed} {
 			_, ok := ipam.ParsePodHandleIDAnyNetwork(handle)
