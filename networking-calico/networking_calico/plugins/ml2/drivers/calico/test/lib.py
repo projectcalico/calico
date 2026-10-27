@@ -26,6 +26,8 @@ from types import SimpleNamespace
 
 import eventlet
 import mock
+from oslo_config import cfg
+from oslo_config import fixture as config_fixture
 
 # Grab the real classes and constants that the mocks below need to expose, while
 # the real packages are still importable: once sys.modules has been overwritten,
@@ -37,6 +39,7 @@ import mock
 # real thing without anything noticing.
 from neutron_lib.constants import IP_PROTOCOL_MAP
 from neutron_lib.exceptions import PortNotFound
+from oslo_db import options as oslo_db_options
 from oslo_db.exception import DBError
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -83,7 +86,6 @@ sys.modules["neutron_lib.plugins"] = m_neutron_lib.plugins
 sys.modules["neutron_lib.plugins.ml2"] = m_neutron_lib.plugins.ml2
 sys.modules["neutron_lib.worker"] = m_neutron_lib.worker
 sys.modules["oslo_concurrency"] = m_oslo_concurrency = mock.Mock()
-sys.modules["oslo_config"] = m_oslo_config = mock.MagicMock()
 sys.modules["oslo_context"] = m_oslo_context = mock.Mock()
 sys.modules["oslo_db"] = m_oslo_db = mock.Mock()
 sys.modules["oslo_log"] = m_oslo_log = mock.Mock()
@@ -104,6 +106,10 @@ m_neutron_lib.constants.IP_PROTOCOL_MAP = IP_PROTOCOL_MAP
 m_neutron_lib.exceptions.PortNotFound = PortNotFound
 m_oslo_db.exception.DBError = DBError
 m_sqlalchemy.exc.SQLAlchemyError = SQLAlchemyError
+
+# The real [database] options, so that mech_calico can register them with the real
+# oslo.config and read their real defaults.
+m_oslo_db.options = oslo_db_options
 
 port1 = {
     "binding:vif_type": "tap",
@@ -356,6 +362,11 @@ class Lib(object):
     def setUp(self):
         # Announce the current test case.
         _log.info("TEST CASE: %s", self.id())
+
+        # Each test's config overrides are undone when it ends.
+        self.cfg_fixture = config_fixture.Config(cfg.CONF)
+        self.cfg_fixture.setUp()
+        self.addCleanup(self.cfg_fixture.cleanUp)
 
         # Mock calls to sys.exit.
         self.sys_exit_p = mock.patch("sys.exit")
@@ -613,7 +624,7 @@ class Lib(object):
         cm = FixedUUID(uuid_str) if uuid_str else contextlib.nullcontext()
         with cm:
             self.driver._post_fork_init()
-            if mech_calico.cfg.CONF.calico.startup_resync == "always":
+            if cfg.CONF.calico.startup_resync == "always":
                 self.driver._do_startup_resync()
 
     def check_update_port_status_called(self, context):
