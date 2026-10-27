@@ -861,8 +861,8 @@ type FelixConfigurationSpec struct {
 	BPFMapSizePerCPUConntrack *int `json:"bpfMapSizePerCpuConntrack,omitempty"`
 
 	// BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending
-	// on its usage. 'Disabled' make the size stay at the default or whatever is set by
-	// BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even
+	// on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size.
+	// 'DoubleIfFull' doubles the size of an IP family's map when it is more than 80% full
 	// after cleanups. [Default: DoubleIfFull]
 	// +kubebuilder:validation:Pattern=`^(?i)(Disabled|DoubleIfFull)?$`
 	BPFMapSizeConntrackScaling string `json:"bpfMapSizeConntrackScaling,omitempty"`
