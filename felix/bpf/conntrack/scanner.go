@@ -15,9 +15,7 @@
 package conntrack
 
 import (
-	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,27 +33,30 @@ import (
 )
 
 var (
-	conntrackCounterSweeps = prometheus.NewCounter(prometheus.CounterOpts{
+	conntrackCounterSweeps = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "felix_bpf_conntrack_sweeps",
 		Help: "Number of contrack table sweeps made so far",
-	})
-	conntrackGaugeUsed = prometheus.NewGauge(prometheus.GaugeOpts{
+	}, []string{"ip_version"})
+	conntrackGaugeUsed = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_used",
 		Help: "Number of used entries visited during a conntrack table sweep",
-	})
-	conntrackGaugeCleaned = prometheus.NewGauge(prometheus.GaugeOpts{
+	}, []string{"ip_version"})
+	conntrackGaugeCleaned = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_cleaned",
 		Help: "Number of entries cleaned during a conntrack table sweep",
-	})
-	conntrackCounterCleaned = prometheus.NewGauge(prometheus.GaugeOpts{
+	}, []string{"ip_version"})
+	conntrackCounterCleaned = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "felix_bpf_conntrack_cleaned_total",
-		Help: "Total number of entries cleaned during conntrack table sweeps, " +
-			"incremented for each clean individualy",
-	})
-	conntrackGaugeSweepDuration = prometheus.NewGauge(prometheus.GaugeOpts{
+		Help: "Total number of entries cleaned during conntrack table sweeps",
+	}, []string{"ip_version"})
+	conntrackGaugeSweepDuration = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_sweep_duration",
 		Help: "Conntrack sweep execution time (ns)",
-	})
+	}, []string{"ip_version"})
+	conntrackGaugeMaxEntries = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_bpf_conntrack_max_entries",
+		Help: "Capacity of the conntrack table; compare with used minus cleaned to get how full it is",
+	}, []string{"ip_version"})
 	conntrackGaugeMaglevTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_maglev_entries_total",
 		Help: "Total number of Maglev entries in conntrack table broken down by IP version, and, whether destination backend is remote (we're acting as a frontend) or local (we're the backend node).",
@@ -70,6 +71,7 @@ func init() {
 	prometheus.MustRegister(conntrackGaugeCleaned)
 	prometheus.MustRegister(conntrackCounterCleaned)
 	prometheus.MustRegister(conntrackGaugeSweepDuration)
+	prometheus.MustRegister(conntrackGaugeMaxEntries)
 	prometheus.MustRegister(conntrackGaugeMaglevTotal)
 }
 
@@ -117,8 +119,6 @@ type Scanner struct {
 	keyFromBytes                 func([]byte) KeyInterface
 	valueFromBytes               func([]byte) ValueInterface
 	scanners                     []EntryScanner
-	liveEntries                  int
-	higherCount                  int
 	maxEntries                   int
 	autoScale                    bool
 	configChangedRestartCallback func()
@@ -127,6 +127,11 @@ type Scanner struct {
 	revNATKeyToFwdNATInfo        map[KeyInterface]cleanupv1.ValueInterface
 	ipFamily                     int
 
+	conntrackCounterSweeps              prometheus.Counter
+	conntrackGaugeUsed                  prometheus.Gauge
+	conntrackGaugeCleaned               prometheus.Gauge
+	conntrackCounterCleaned             prometheus.Counter
+	conntrackGaugeSweepDuration         prometheus.Gauge
 	conntrackGaugeMaglevToLocalBackend  prometheus.Gauge
 	conntrackGaugeMaglevToRemoteBackend prometheus.Gauge
 
@@ -150,7 +155,6 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 		valueFromBytes:               vfb,
 		scanners:                     scanners,
 		stopCh:                       make(chan struct{}),
-		liveEntries:                  ctMap.Size(),
 		maxEntries:                   ctMap.Size(),
 		autoScale:                    strings.ToLower(autoScalingMode) == "doubleiffull",
 		configChangedRestartCallback: configChangedRestartCallback,
@@ -184,14 +188,22 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 		}
 	}
 
+	family := ipFamilyLabel(s.ipFamily)
+	s.conntrackCounterSweeps = conntrackCounterSweeps.WithLabelValues(family)
+	s.conntrackGaugeUsed = conntrackGaugeUsed.WithLabelValues(family)
+	s.conntrackGaugeCleaned = conntrackGaugeCleaned.WithLabelValues(family)
+	s.conntrackCounterCleaned = conntrackCounterCleaned.WithLabelValues(family)
+	s.conntrackGaugeSweepDuration = conntrackGaugeSweepDuration.WithLabelValues(family)
+	conntrackGaugeMaxEntries.WithLabelValues(family).Set(float64(s.maxEntries))
+
 	var err error
 
-	s.conntrackGaugeMaglevToLocalBackend, err = conntrackGaugeMaglevTotal.GetMetricWithLabelValues("local", strconv.Itoa(s.ipFamily))
+	s.conntrackGaugeMaglevToLocalBackend, err = conntrackGaugeMaglevTotal.GetMetricWithLabelValues("local", family)
 	if err != nil {
 		log.WithError(err).Panic("Couldn't init (local) Maglev conntrack metric gauge")
 	}
 
-	s.conntrackGaugeMaglevToRemoteBackend, err = conntrackGaugeMaglevTotal.GetMetricWithLabelValues("remote", strconv.Itoa(s.ipFamily))
+	s.conntrackGaugeMaglevToRemoteBackend, err = conntrackGaugeMaglevTotal.GetMetricWithLabelValues("remote", family)
 	if err != nil {
 		log.WithError(err).Panic("Couldn't get (remote) Maglev conntrack metric gauge")
 	}
@@ -256,7 +268,6 @@ func (s *Scanner) Scan() {
 
 	used := 0
 	cleaned := 0
-	numExpired := 0
 	maglevEntriesToLocal, maglevEntriesToRemote := 0, 0
 
 	batchK := make([][]byte, 0, rstBatchSize)
@@ -273,7 +284,6 @@ func (s *Scanner) Scan() {
 		ctFlags := ctVal.Flags()
 
 		used++
-		conntrackCounterCleaned.Inc()
 
 		if debug {
 			log.WithFields(log.Fields{
@@ -300,7 +310,6 @@ func (s *Scanner) Scan() {
 				continue
 			case ScanVerdictDelete, ScanVerdictDeleteImmediate:
 				// Entry should be deleted.
-				numExpired++
 			case ScanVerdictSendRST:
 				if ctVal.Flags()&v4.FlagSendRST != 0 {
 					// RST already set, no need to update.
@@ -359,7 +368,7 @@ func (s *Scanner) Scan() {
 			dummy := s.versionHelper.dummyKey()
 			s.updateCleanupMap(ctKey, dummy, uint64(ts), uint64(ts))
 		}
-		if numExpired > 0 && numExpired%cleanupBatchSize == 0 {
+		if s.bpfCleaner != nil && s.ctCleanupMap.Desired().Len() >= cleanupBatchSize {
 			cleaned += s.runBPFCleaner()
 		}
 		return maps.IterNone
@@ -369,11 +378,9 @@ func (s *Scanner) Scan() {
 	// We have scanned the entire map.
 	// Lets add it to the cleanup map.
 	if len(s.revNATKeyToFwdNATInfo) > 0 {
-		keysProcessed := 0
 		for k, v := range s.revNATKeyToFwdNATInfo {
 			// This is a forward entry and we haven't seen the rev entry.
 			// Maybe deleted by LRU
-			keysProcessed++
 			revKey := v.OtherNATKey()
 			ts := v.Timestamp()
 			revTS := v.RevTimestamp()
@@ -383,8 +390,7 @@ func (s *Scanner) Scan() {
 				s.updateCleanupMap(k, revKey, ts, revTS)
 			}
 			delete(s.revNATKeyToFwdNATInfo, k)
-			if keysProcessed%cleanupBatchSize == 0 {
-				// Run the bpf cleaner
+			if s.ctCleanupMap.Desired().Len() >= cleanupBatchSize {
 				cleaned += s.runBPFCleaner()
 			}
 		}
@@ -392,6 +398,7 @@ func (s *Scanner) Scan() {
 
 	if err != nil {
 		log.WithError(err).Warn("Failed to iterate over conntrack map")
+		s.conntrackCounterCleaned.Add(float64(cleaned))
 		return
 	}
 
@@ -416,34 +423,27 @@ func (s *Scanner) Scan() {
 	log.WithField("value", maglevEntriesToRemote).Debug("Setting remote maglev conntrack entries gauge")
 	s.conntrackGaugeMaglevToRemoteBackend.Set(float64(maglevEntriesToRemote))
 
-	conntrackCounterSweeps.Inc()
-	conntrackGaugeUsed.Set(float64(used))
-	conntrackGaugeCleaned.Set(float64(cleaned))
-	conntrackGaugeSweepDuration.Set(float64(time.Since(start)))
+	s.conntrackCounterSweeps.Inc()
+	s.conntrackGaugeUsed.Set(float64(used))
+	s.conntrackGaugeCleaned.Set(float64(cleaned))
+	s.conntrackCounterCleaned.Add(float64(cleaned))
+	s.conntrackGaugeSweepDuration.Set(float64(time.Since(start)))
 	if !s.autoScale {
 		return
 	}
 
-	newLiveEntries := int(used - cleaned)
-	if s.liveEntries > newLiveEntries {
-		s.higherCount++
-	} else {
-		s.higherCount = 0
-	}
-	s.liveEntries = newLiveEntries
-
-	full := float64(newLiveEntries) / float64(s.maxEntries)
+	full := float64(used-cleaned) / float64(s.maxEntries)
 	log.Debugf("full %f, total %d, totalDeleted %d", full, used, cleaned)
 
-	// If the ct map keeps filling up and gets over 85% full or if it hits 90%
-	// no matter what, resize the map.
-	if s.higherCount >= 3 && full > 0.85 || full > 0.90 {
-		if err := s.writeNewSizeFile(); err != nil {
+	// Leave headroom: the map keeps filling while Felix restarts to resize it.
+	if full > 0.80 {
+		newSize := 2 * s.ctMap.Size()
+		if err := recordGrowth(s.ipFamily, newSize); err != nil {
 			log.WithError(err).Warn("Failed to start resizing conntrack map when running out of space")
 		} else {
 			if s.configChangedRestartCallback != nil {
 				log.Warnf("The eBPF conntrack table is becoming full. To prevent connections from failing, "+
-					"resizing from %d to %d entries. Restarting Felix to apply the new size.", s.maxEntries, 2*s.maxEntries)
+					"resizing from %d to %d entries. Restarting Felix to apply the new size.", s.maxEntries, newSize)
 				s.configChangedRestartCallback()
 			}
 		}
@@ -452,7 +452,7 @@ func (s *Scanner) Scan() {
 
 func (s *Scanner) runBPFCleaner() int {
 	// Run the BPF cleanup program.
-	if s.bpfCleaner != nil {
+	if s.bpfCleaner != nil && s.ctCleanupMap.Desired().Len() > 0 {
 		if err := s.ctCleanupMap.ApplyAllChanges(); err != nil {
 			log.WithError(err).Warn("Failed to write updates to conntrack cleanup BPF map.")
 		}
@@ -462,26 +462,12 @@ func (s *Scanner) runBPFCleaner() int {
 		}
 		s.ctCleanupMap.Desired().DeleteAll()
 		s.ctCleanupMap.Dataplane().DeleteAll()
+		if cr == nil {
+			return 0
+		}
 		return int(cr.NumKVsCleaned)
 	}
 	return 0
-}
-
-func (s *Scanner) writeNewSizeFile() error {
-	// Make sure directory exists.
-	if err := os.MkdirAll("/var/lib/calico", os.ModePerm); err != nil {
-		return fmt.Errorf("failed to create directory /var/lib/calico: %s", err)
-	}
-
-	newSize := 2 * s.ctMap.Size()
-
-	// Write the new map size to disk so that restarts will pick it up.
-	filename := "/var/lib/calico/bpf_ct_map_size"
-	log.Debugf("Writing %d to "+filename, newSize)
-	if err := os.WriteFile(filename, fmt.Appendf(nil, "%d", newSize), 0o644); err != nil {
-		return fmt.Errorf("unable to write to %s: %w", filename, err)
-	}
-	return nil
 }
 
 func (s *Scanner) get(k KeyInterface) (ValueInterface, error) {
@@ -559,6 +545,14 @@ func (s *Scanner) AddUnlocked(scanner EntryScanner) {
 // the first scanner to be called.
 func (s *Scanner) AddFirstUnlocked(scanner EntryScanner) {
 	s.scanners = append([]EntryScanner{scanner}, s.scanners...)
+}
+
+// ipFamilyLabel panics on anything but 4 or 6, so a bad family fails loudly, not as a stray series.
+func ipFamilyLabel(ipFamily int) string {
+	if ipFamily != 4 && ipFamily != 6 {
+		log.Panicf("Invalid IP family %d", ipFamily)
+	}
+	return strconv.Itoa(ipFamily)
 }
 
 type Cleaner interface {
