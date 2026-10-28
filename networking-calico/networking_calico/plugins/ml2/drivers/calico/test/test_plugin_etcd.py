@@ -1601,6 +1601,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
 
     def test_bind_port_dead_agent(self):
         context = self._bind_port(agent_alive=False)
+        context.host_agents.assert_called_once_with(mech_calico.AGENT_TYPE_FELIX)
         context.set_binding.assert_not_called()
 
     def test_get_vif_details_derives_tap_mac_from_port_mac(self):
