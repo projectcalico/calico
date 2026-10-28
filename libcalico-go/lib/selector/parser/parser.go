@@ -27,8 +27,17 @@ import (
 
 const parserDebug = false
 
-// MaxNestingDepth limits the nesting of parentheses in a selector.
-const MaxNestingDepth = 100
+const (
+	// MaxNestingDepth limits the nesting of parentheses in a selector supplied
+	// via the API.
+	MaxNestingDepth = 100
+	// MaxParseDepth limits the nesting of parentheses in any selector, bounding
+	// the parser's recursion.  Calico combines API selectors and re-renders them
+	// with String(), which parenthesises every && and || node, so a selector at
+	// MaxNestingDepth can end up roughly twice as deep.  This limit must leave
+	// room for that.  Parse enforces this limit.
+	MaxParseDepth = 1000
+)
 
 var (
 	sharedParserLock sync.Mutex
@@ -48,11 +57,14 @@ var (
 	sharedValidator     = NewParser()
 )
 
-func Validate(selector string) (err error) {
+// Validate checks the syntax of the given selector and that its parentheses
+// are nested at most maxDepth deep.  Use MaxNestingDepth for selectors from
+// the API and MaxParseDepth for selectors that Calico derived from them.
+func Validate(selector string, maxDepth int) (err error) {
 	sharedValidatorLock.Lock()
 	defer sharedValidatorLock.Unlock()
 
-	return sharedValidator.Validate(selector)
+	return sharedValidator.Validate(selector, maxDepth)
 }
 
 func NewParser() *Parser {
@@ -62,25 +74,27 @@ func NewParser() *Parser {
 }
 
 type Parser struct {
-	tokBuf []tokenizer.Token
+	tokBuf   []tokenizer.Token
+	maxDepth int
 }
 
 func (p *Parser) Parse(selector string) (sel *Selector, err error) {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.Debugf("Parsing %q", selector)
 	}
-	return p.parseRoot(selector, false)
+	return p.parseRoot(selector, false, MaxParseDepth)
 }
 
-func (p *Parser) Validate(selector string) (err error) {
+func (p *Parser) Validate(selector string, maxDepth int) (err error) {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.Debugf("Validating %q", selector)
 	}
-	_, err = p.parseRoot(selector, true)
+	_, err = p.parseRoot(selector, true, maxDepth)
 	return
 }
 
-func (p *Parser) parseRoot(selector string, validateOnly bool) (sel *Selector, err error) {
+func (p *Parser) parseRoot(selector string, validateOnly bool, maxDepth int) (sel *Selector, err error) {
+	p.maxDepth = maxDepth
 	// Tokenize the input.  We re-use the same shared buffer to avoid
 	// allocations.
 	tokens, err := tokenizer.AppendTokens(p.tokBuf[:0], selector)
@@ -220,7 +234,7 @@ var (
 	ErrExpectedRBrace = errors.New("expected }")
 	ErrExpectedString = errors.New("expected string")
 	ErrExpectedSetLit = errors.New("expected set literal")
-	ErrNestingTooDeep = fmt.Errorf("parentheses nested more than %d deep", MaxNestingDepth)
+	ErrNestingTooDeep = errors.New("parentheses nested too deep")
 )
 
 // parseOperations parses a single, possibly negated operation (i.e. ==, !=, has()).
@@ -359,8 +373,8 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, depth int, validateOnl
 		}
 	case tokenizer.TokLParen:
 		// We hit a paren, skip past it, then recurse.
-		if depth >= MaxNestingDepth {
-			err = ErrNestingTooDeep
+		if depth >= p.maxDepth {
+			err = fmt.Errorf("%w (limit %d)", ErrNestingTooDeep, p.maxDepth)
 			return
 		}
 		sel, remTokens, err = p.parseOrExpression(tokens[1:], depth+1, validateOnly)
@@ -380,7 +394,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, depth int, validateOnl
 	}
 	if negated && err == nil {
 		if !validateOnly {
-			sel = &NotNode{sel}
+			sel = negate(sel)
 		}
 	}
 	return

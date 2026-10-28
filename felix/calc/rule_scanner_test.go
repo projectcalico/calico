@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/hash"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -49,6 +50,9 @@ var (
 
 	combinedSrcSelsOnlySelID = selectorID("(a == 'b') && !(has(foo3))")
 	combinedDstSelsOnlySelID = selectorID("(b == 'c') && !(d in {'a', 'b'})")
+
+	// sel1 at the parser's depth limit, so combining it via a string would exceed the limit.
+	deepSel1 = strings.Repeat("(", parser.MaxParseDepth) + sel1 + strings.Repeat(")", parser.MaxParseDepth)
 )
 
 var _ = DescribeTable("RuleScanner rule conversion should generate correct ParsedRule for",
@@ -190,6 +194,15 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 			// them all.
 			SrcIPSetIDs: []string{combinedSrcSelsOnlySelID},
 			DstIPSetIDs: []string{combinedDstSelsOnlySelID},
+		},
+	),
+	Entry("positive selector at the depth limit should be combined with negative one",
+		model.Rule{
+			SrcSelector:    deepSel1,
+			NotSrcSelector: sel3,
+		},
+		ParsedRule{
+			SrcIPSetIDs: []string{combinedSrcSelsOnlySelID},
 		},
 	),
 )
