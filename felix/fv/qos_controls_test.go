@@ -30,6 +30,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/qos"
+	linuxqos "github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -499,6 +500,64 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Waiting for the config to appear in 'tc qdisc'")
 						// ingress config should be present
 						Eventually(getQdisc, "10s", "1s").Should(MatchRegexp(`qdisc tbf \d+: dev ` + regexp.QuoteMeta(w[1].InterfaceName) + ` root refcnt \d+ rate ` + regexp.QuoteMeta("10Mbit") + `.* peakrate ` + regexp.QuoteMeta("100Mbit")))
+					})
+
+					Describe("with an egress limit on workload 1", func() {
+						var ifbName string
+
+						getIfbs := func() string {
+							out, err := tc.Felixes[1].ExecOutput("ip", "-o", "link", "show", "type", "ifb")
+							Expect(err).NotTo(HaveOccurred())
+							return out
+						}
+						getEgressRedirect := func() string {
+							out, _ := tc.Felixes[1].ExecOutput("tc", "filter", "show", "dev", w[1].InterfaceName, "parent", "ffff:")
+							return out
+						}
+						whileFelixIsDown := func(action func()) {
+							startFelix := tc.Felixes[1].RestartWithDelayedStartup()
+							Eventually(func() []int { return tc.Felixes[1].GetPIDs("calico-felix") }, "10s", "100ms").Should(BeEmpty())
+							action()
+							startFelix()
+							tc.Felixes[1].WaitForReady()
+						}
+
+						JustBeforeEach(func() {
+							ifbName = linuxqos.GetIfbDeviceName(w[1].InterfaceName)
+							w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+								EgressBandwidth: 10000000,
+								EgressBurst:     300000000,
+							}
+							w[1].UpdateInInfra(infra)
+							Eventually(getEgressRedirect, "10s", "1s").Should(ContainSubstring(ifbName))
+						})
+
+						It("should remove the IFB device of a workload deleted while Felix is down", func() {
+							whileFelixIsDown(func() {
+								w[1].RemoveFromInfra(infra)
+								w[1].Stop()
+							})
+
+							Eventually(getIfbs, "10s", "1s").ShouldNot(ContainSubstring(ifbName))
+						})
+
+						It("should remove the IFB device when the veth disappears after the WorkloadEndpoint", func() {
+							whileFelixIsDown(func() { w[1].RemoveFromInfra(infra) })
+							Expect(getIfbs()).To(ContainSubstring(ifbName), "veth still exists, so its IFB should be kept")
+
+							w[1].Stop()
+
+							Eventually(getIfbs, "10s", "1s").ShouldNot(ContainSubstring(ifbName))
+						})
+
+						It("should restore the egress redirect when the IFB exists without one", func() {
+							tc.Felixes[1].Exec("tc", "filter", "del", "dev", w[1].InterfaceName, "parent", "ffff:")
+							Expect(getEgressRedirect()).NotTo(ContainSubstring(ifbName))
+
+							tc.Felixes[1].Restart()
+
+							Eventually(getEgressRedirect, "10s", "1s").Should(ContainSubstring(ifbName))
+						})
 					})
 				})
 
