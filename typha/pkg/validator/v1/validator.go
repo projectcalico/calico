@@ -206,8 +206,9 @@ func validateSelector(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate selector: %s", s)
 
-	// We use the selector parser to validate a selector string.
-	err := selector.Validate(s)
+	// We use the selector parser to validate a selector string.  v1 selectors
+	// are derived from API selectors, so they can be deeper than the API allows.
+	err := selector.Validate(s, selector.MaxParseDepth)
 	if err != nil {
 		log.Debugf("Selector %#v was invalid: %v", s, err)
 		return false
