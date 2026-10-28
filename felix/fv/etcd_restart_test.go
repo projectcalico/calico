@@ -64,7 +64,7 @@ var _ = infrastructure.DatastoreDescribe("etcd connection interruption", []apico
 			if err != nil {
 				return err
 			}
-			defer nlHandle.Close()
+			defer func() { _ = nlHandle.Close() }()
 			links, err := netlinkutils.LinkListRetryEINTR(nlHandle)
 			if err != nil {
 				return err
