@@ -151,6 +151,7 @@ type ICMPFields struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.services) || size(self.services.name) > 0",message="services must specify a service name",reason=FieldValueRequired
 // +kubebuilder:validation:XValidation:rule="!has(self.services) || (!has(self.selector) || size(self.selector) == 0) && (!has(self.notSelector) || size(self.notSelector) == 0)",message="cannot specify Selector/NotSelector and Services on the same rule",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.services) || (!has(self.nets) || size(self.nets) == 0) && (!has(self.notNets) || size(self.notNets) == 0)",message="cannot specify Nets/NotNets and Services on the same rule",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(') || self.namespaceSelector.matches('^ *global[(] *[)] *$')",message="a namespaceSelector that uses global() must be exactly global()",reason=FieldValueInvalid
 type EntityRule struct {
 	// Nets is an optional field that restricts the rule to only apply to traffic that
 	// originates from (or terminates at) IP addresses in any of the given subnets.
