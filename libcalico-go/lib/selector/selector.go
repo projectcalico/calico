@@ -54,6 +54,17 @@ func Validate(selector string) (err error) {
 	return parser.Validate(selector)
 }
 
+// ValidateAPI checks the syntax of the given selector and that it is within
+// the nesting limit for selectors in API resources.
+func ValidateAPI(selector string) (err error) {
+	return parser.ValidateAPI(selector)
+}
+
+// AndNot returns a selector equivalent to "(sel) && (!(notSel))".
+func AndNot(sel, notSel *Selector) *Selector {
+	return parser.AndNot(sel, notSel)
+}
+
 // Normalise converts the given selector to the form returned by
 // Selector.String(), i.e. "" is converted to "all()" and whitespace is
 // tidied up.  If the input string cannot be parsed, it is returned unaltered.
