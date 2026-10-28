@@ -317,9 +317,7 @@ release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-
-	# Push Windows images.
-	$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM)
+	# Windows images are pushed separately via release-windows; the release tool runs it after all Linux publishes.
 	touch $@
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
