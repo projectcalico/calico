@@ -321,24 +321,33 @@ var _ = Describe("Parser", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	DescribeTable("AndNot should match parsing (sel) && (!(notSel))",
-		func(sel, notSel string) {
-			parsedSel, err := parser.Parse(sel)
-			Expect(err).NotTo(HaveOccurred())
-			parsedNotSel, err := parser.Parse(notSel)
-			Expect(err).NotTo(HaveOccurred())
-			expected, err := parser.Parse(fmt.Sprintf("(%s) && (!(%s))", sel, notSel))
-			Expect(err).NotTo(HaveOccurred())
+	DescribeTable("And and Inverted should match parsing the equivalent string",
+		func(a, b string) {
+			mustParse := func(s string) *parser.Selector {
+				sel, err := parser.Parse(s)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred())
+				return sel
+			}
+			expectSame := func(actual *parser.Selector, expected string) {
+				ExpectWithOffset(1, actual.String()).To(Equal(mustParse(expected).String()))
+				ExpectWithOffset(1, actual.UniqueID()).To(Equal(mustParse(expected).UniqueID()))
+			}
+			parsedA, parsedB := mustParse(a), mustParse(b)
 
-			combined := parser.AndNot(parsedSel, parsedNotSel)
-			Expect(combined.String()).To(Equal(expected.String()))
-			Expect(combined.UniqueID()).To(Equal(expected.UniqueID()))
+			expectSame(parsedB.Inverted(), fmt.Sprintf("!(%s)", b))
+			expectSame(parsedA.And(parsedB), fmt.Sprintf("(%s) && (%s)", a, b))
+			// Redundant parentheses don't affect the parsed form.
+			expectSame(parsedA.And(parsedB.Inverted()), fmt.Sprintf("(%s) && (!(%s))", a, b))
+			expectSame(parsedA.And(parsedB.Inverted()), fmt.Sprintf("(%s) && !(%s)", a, b))
 		},
 		Entry("simple", "a == 'b'", "has(c)"),
 		Entry("all()", "all()", "all()"),
 		Entry("ANDs", "a == 'b' && c == 'd'", "e == 'f' && g == 'h'"),
 		Entry("ORs", "a == 'b' || c == 'd'", "e == 'f' || g == 'h'"),
 		Entry("negations", "!has(a)", "!has(b)"),
+		// Adjacent "!"s cancel when parsed, but "!(!x)" keeps both negations.
+		Entry("double negations", "!!has(a)", "!!has(b)"),
+		Entry("parenthesised double negations", "!(!has(a))", "!(!has(b))"),
 	)
 
 	for _, test := range canonicalisationTests {

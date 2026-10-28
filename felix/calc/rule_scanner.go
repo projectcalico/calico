@@ -617,7 +617,7 @@ func combineMatchesIfPossible(positiveSel, negatedSel *selector.Selector) (*sele
 	// Combine the parsed selectors rather than re-parsing a combined string, which could
 	// exceed the parser's depth limit.
 	if negatedSel != nil {
-		positiveSel = selector.AndNot(positiveSel, negatedSel)
+		positiveSel = positiveSel.And(negatedSel.Inverted())
 		negatedSel = nil
 	}
 	return positiveSel, negatedSel

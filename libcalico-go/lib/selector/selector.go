@@ -61,11 +61,6 @@ func Validate(selector string, maxDepth int) (err error) {
 	return parser.Validate(selector, maxDepth)
 }
 
-// AndNot returns a selector equivalent to "(sel) && (!(notSel))".
-func AndNot(sel, notSel *Selector) *Selector {
-	return parser.AndNot(sel, notSel)
-}
-
 // Normalise converts the given selector to the form returned by
 // Selector.String(), i.e. "" is converted to "all()" and whitespace is
 // tidied up.  If the input string cannot be parsed, it is returned unaltered.
