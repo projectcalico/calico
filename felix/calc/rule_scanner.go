@@ -567,31 +567,41 @@ func splitNamedAndNumericPorts(ports []numorstring.Port) (numericPorts []numorst
 func extractSelectors(rule *model.Rule) (src, dst, notSrc, notDst []*selector.Selector) {
 	// Calculate a minimal set of selectors.  combineMatchesIfPossible will try to combine the
 	// negative matches into that single selector, if possible.
-	srcRawSel, notSrcSel := combineMatchesIfPossible(rule.SrcSelector, rule.NotSrcSelector)
-	dstRawSel, notDstSel := combineMatchesIfPossible(rule.DstSelector, rule.NotDstSelector)
+	srcSel, notSrcSel := combineMatchesIfPossible(
+		parseValidatedSelector(rule.SrcSelector), parseValidatedSelector(rule.NotSrcSelector))
+	dstSel, notDstSel := combineMatchesIfPossible(
+		parseValidatedSelector(rule.DstSelector), parseValidatedSelector(rule.NotDstSelector))
 
-	parseAndAppendSelectorIfNonZero := func(slice []*selector.Selector, rawSelector string) []*selector.Selector {
-		if rawSelector == "" {
+	appendIfNonNil := func(slice []*selector.Selector, sel *selector.Selector) []*selector.Selector {
+		if sel == nil {
 			return slice
-		}
-		sel, err := selector.Parse(rawSelector)
-		if err != nil {
-			// Should have been validated further back in the pipeline.
-			log.WithField("selector", rawSelector).Panic(
-				"Failed to parse selector that should have been validated already.")
 		}
 		return append(slice, sel)
 	}
-	src = parseAndAppendSelectorIfNonZero(src, srcRawSel)
-	dst = parseAndAppendSelectorIfNonZero(dst, dstRawSel)
-	notSrc = parseAndAppendSelectorIfNonZero(notSrc, notSrcSel)
-	notDst = parseAndAppendSelectorIfNonZero(notDst, notDstSel)
+	src = appendIfNonNil(src, srcSel)
+	dst = appendIfNonNil(dst, dstSel)
+	notSrc = appendIfNonNil(notSrc, notSrcSel)
+	notDst = appendIfNonNil(notDst, notDstSel)
 
 	return
 }
 
-func combineMatchesIfPossible(positiveSel, negatedSel string) (string, string) {
-	if positiveSel == "" {
+// parseValidatedSelector parses a selector from the rule, returning nil for an empty selector.
+func parseValidatedSelector(rawSelector string) *selector.Selector {
+	if rawSelector == "" {
+		return nil
+	}
+	sel, err := selector.Parse(rawSelector)
+	if err != nil {
+		// Should have been validated further back in the pipeline.
+		log.WithField("selector", rawSelector).Panic(
+			"Failed to parse selector that should have been validated already.")
+	}
+	return sel
+}
+
+func combineMatchesIfPossible(positiveSel, negatedSel *selector.Selector) (*selector.Selector, *selector.Selector) {
+	if positiveSel == nil {
 		// There were no positive matches, we can't do any further optimization.
 		return positiveSel, negatedSel
 	}
@@ -603,9 +613,12 @@ func combineMatchesIfPossible(positiveSel, negatedSel string) (string, string) {
 	// If we have no positive selector, this optimization wouldn't be valid because, in that
 	// case, the negative match criteria should match packets that come from outside the
 	// set of known endpoints too.
-	if negatedSel != "" {
-		positiveSel = fmt.Sprintf("(%s) && (!(%s))", positiveSel, negatedSel)
-		negatedSel = ""
+	//
+	// Combine the parsed selectors rather than re-parsing a combined string, which could
+	// exceed the parser's depth limit.
+	if negatedSel != nil {
+		positiveSel = positiveSel.And(negatedSel.Inverted())
+		negatedSel = nil
 	}
 	return positiveSel, negatedSel
 }

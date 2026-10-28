@@ -213,6 +213,25 @@ func (sel *Selector) Root() Node {
 	return sel.root
 }
 
+// And returns a selector equivalent to parsing "(sel) && (other)".  Building
+// the AST directly avoids re-parsing, which could exceed MaxParseDepth.  The
+// result shares nodes with its inputs.
+func (sel *Selector) And(other *Selector) *Selector {
+	return newSelector(&AndNode{Operands: []Node{sel.root, other.root}})
+}
+
+// Inverted returns a selector equivalent to parsing "!(sel)".  The result
+// shares nodes with sel.
+func (sel *Selector) Inverted() *Selector {
+	return newSelector(&NotNode{sel.root})
+}
+
+func newSelector(root Node) *Selector {
+	sel := &Selector{root: root}
+	sel.updateFields()
+	return sel
+}
+
 func (sel *Selector) updateFields() {
 	fragments := sel.root.collectFragments([]string{})
 	str := strings.Join(fragments, "")
