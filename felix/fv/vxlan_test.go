@@ -174,6 +174,30 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				cc.CheckConnectivity()
 			})
 
+			_ = BPFMode() && It("should share the VXLAN port with another VNI-filtering device", func() {
+				if !kernelSupportsVNIFilter(felixes[0]) {
+					Skip("kernel does not support VXLAN vnifilter")
+				}
+				for _, felix := range felixes {
+					Eventually(felix.ExecOutputFn("ip", "-d", "link", "show", "vxlan.calico"), "60s", "500ms").
+						Should(ContainSubstring("vnifilter"))
+					Eventually(felix.ExecOutputFn("bridge", "vni", "show", "dev", "vxlan.calico"), "10s", "100ms").
+						Should(And(ContainSubstring("4096"), ContainSubstring(fmt.Sprint(0xca11c0))))
+
+					felix.Exec("ip", "link", "add", "vxlan-other", "type", "vxlan", "external", "vnifilter", "dstport", "4789")
+					felix.Exec("bridge", "vni", "add", "dev", "vxlan-other", "vni", "1010")
+					felix.Exec("ip", "link", "set", "vxlan-other", "up")
+				}
+
+				cc.ExpectSome(w[0], w[1])
+				cc.ExpectSome(w[1], w[0])
+				if enableIPv6 {
+					cc.ExpectSome(w6[0], w6[1])
+					cc.ExpectSome(w6[1], w6[0])
+				}
+				cc.CheckConnectivity()
+			})
+
 			It("should have some blackhole routes installed", func() {
 				if routeSource == "WorkloadIPs" {
 					Skip("not applicable for workload ips")
@@ -1297,4 +1321,14 @@ func waitForVXLANDevice(tc infrastructure.TopologyContainers, enableIPv6 bool) {
 
 func vxlanTunnelSupported(vxlanMode api.VXLANMode, routeSource string) bool {
 	return vxlanMode != api.VXLANModeAlways || routeSource != "WorkloadIPs"
+}
+
+// kernelSupportsVNIFilter checks with a throwaway device, since kernels without vnifilter silently ignore it.
+func kernelSupportsVNIFilter(felix *infrastructure.Felix) bool {
+	if err := felix.ExecMayFail("ip", "link", "add", "vnif-check", "type", "vxlan", "external", "vnifilter", "dstport", "4999"); err != nil {
+		return false
+	}
+	defer felix.Exec("ip", "link", "del", "vnif-check")
+	out, err := felix.ExecOutput("ip", "-d", "link", "show", "vnif-check")
+	return err == nil && strings.Contains(out, "vnifilter")
 }
