@@ -16,7 +16,6 @@
 Tests for CalicoMechanismDriver initialization.
 """
 
-import unittest
 import mock
 
 from oslo_config import cfg
@@ -26,7 +25,7 @@ from networking_calico.plugins.ml2.drivers.calico import mech_calico
 from networking_calico import etcdv3
 
 
-class TestMechanismDriver(lib.Lib, unittest.TestCase):
+class TestMechanismDriver(lib.Lib):
 
     def setUp(self):
         super(TestMechanismDriver, self).setUp()
