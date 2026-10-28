@@ -37,12 +37,14 @@ from oslo_config import fixture as config_fixture
 # for an exception class is not a class, so "except that_attribute" raises
 # TypeError if it is ever evaluated, and a hand-written stand-in drifts from the
 # real thing without anything noticing.
+from neutron.plugins.ml2.drivers import mech_agent
 from neutron_lib import context as neutron_context
 from neutron_lib import fixture as neutron_lib_fixture
 from neutron_lib.constants import IP_PROTOCOL_MAP
 from neutron_lib.exceptions import PortNotFound
 from neutron_lib.plugins import constants as plugin_constants
 from neutron_lib.plugins import directory as plugin_dir
+from neutron_lib.plugins.ml2 import api as ml2_api
 from oslo_db import options as oslo_db_options
 from oslo_db.exception import DBError
 from sqlalchemy.exc import SQLAlchemyError
@@ -119,6 +121,12 @@ m_oslo_db.options = oslo_db_options
 # standard fixture for the latter and patch only what they need of the former.
 m_neutron_lib.context = neutron_context
 m_neutron_lib.plugins.directory = plugin_dir
+
+# The real ML2 agent base class, so that CalicoMechanismDriver is tested with the
+# superclass that it really has.  The real ML2 API alongside it, so that the two
+# agree on the keys of a segment.
+m_neutron.plugins.ml2.drivers.mech_agent = mech_agent
+m_neutron_lib.plugins.ml2.api = ml2_api
 
 port1 = {
     "binding:vif_type": "tap",
@@ -209,20 +217,7 @@ class EtcdKeyNotFound(Exception):
     pass
 
 
-# Define a stub class, that we will use as the base class for CalicoMechanismDriver.
-# The real ``neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase``
-# stashes ``vif_details`` on the instance and exposes a ``get_vif_details`` accessor;
-# mirror both so overrides that call up to ``super().get_vif_details(...)`` behave the
-# same in tests as they do in production.
-class DriverBase(object):
-    def __init__(self, agent_type, vif_type, vif_details):
-        self.vif_details = dict(vif_details)
-
-    def get_vif_details(self, context, agent, segment):
-        return self.vif_details
-
-
-# Define another stub class that mocks out leader election: assume we're always
+# Define a stub class that mocks out leader election: assume we're always
 # the leader. This is a fake elector: it never votes (get it!?).
 class GrandDukeOfSalzburg(object):
     def __init__(self, *args, **kwargs):
@@ -237,10 +232,6 @@ class GrandDukeOfSalzburg(object):
     def stop(self):
         pass
 
-
-# Replace Neutron's SimpleAgentMechanismDriverBase - which is the base class
-# that CalicoMechanismDriver inherits from - with this stub class.
-m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = DriverBase
 
 # Import all modules used by the mechanism driver so we can hook their logging.
 from networking_calico import datamodel_v3

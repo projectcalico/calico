@@ -1557,6 +1557,53 @@ class TestPluginEtcd(TestPluginEtcdBase):
             )
         )
 
+    def _bind_port(self, agent_alive=True):
+        context = mock.MagicMock()
+        context.current = copy.deepcopy(lib.port1)
+        context.network.current = lib.network1
+        context.segments_to_bind = [
+            {
+                mech_calico.api.ID: "vlan-segment",
+                mech_calico.api.NETWORK_TYPE: "vlan",
+                "network_id": lib.network1["id"],
+            },
+            {
+                mech_calico.api.ID: "flat-segment",
+                mech_calico.api.NETWORK_TYPE: "flat",
+                "network_id": lib.network1["id"],
+            },
+        ]
+        context._plugin = self.db
+        context.host_agents.return_value = [
+            {
+                "agent_type": mech_calico.AGENT_TYPE_FELIX,
+                "alive": agent_alive,
+                "host": lib.port1["binding:host_id"],
+                "configurations": {},
+            }
+        ]
+        self.driver.bind_port(context)
+        return context
+
+    def test_bind_port(self):
+        """bind_port, via Neutron's base class, binds the segment Calico supports."""
+        context = self._bind_port()
+        context.host_agents.assert_called_once_with(mech_calico.AGENT_TYPE_FELIX)
+        context.set_binding.assert_called_once_with(
+            "flat-segment",
+            "tap",
+            {
+                "connectivity": "legacy",
+                "port_filter": True,
+                "mac_address": "fe:11:22:33:44:55",
+            },
+        )
+
+    def test_bind_port_dead_agent(self):
+        context = self._bind_port(agent_alive=False)
+        context.host_agents.assert_called_once_with(mech_calico.AGENT_TYPE_FELIX)
+        context.set_binding.assert_not_called()
+
     def test_get_vif_details_derives_tap_mac_from_port_mac(self):
         """tap MAC must match what the VM's ARP cache expects.
 
@@ -1568,9 +1615,10 @@ class TestPluginEtcd(TestPluginEtcdBase):
         context.current = {"mac_address": "fa:16:3e:aa:bb:cc"}
         details = self.driver.get_vif_details(context, agent=None, segment=None)
         self.assertEqual(details["mac_address"], "fe:16:3e:aa:bb:cc")
-        # port_filter (and any other keys the base class populated) still
+        # port_filter, and the connectivity that Neutron's base class adds, still
         # flow through.
         self.assertTrue(details["port_filter"])
+        self.assertEqual(details["connectivity"], "legacy")
 
     def test_get_vif_details_falls_back_when_port_mac_missing(self):
         context = mock.MagicMock()
