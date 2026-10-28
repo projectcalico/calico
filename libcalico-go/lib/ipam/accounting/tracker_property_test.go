@@ -38,11 +38,12 @@ type trackerInputs struct {
 	namedNodes   bool
 	refs         map[string]AddressRef
 	extra        []string
+	newTracker   func() *Tracker
 }
 
 // rebuild is the answer the incremental tracker must match: everything added at once to a new tracker.
 func (in *trackerInputs) rebuild() *Tracker {
-	tr := NewTracker()
+	tr := in.newTracker()
 	setExtraReserved(tr, in.extra...)
 	tr.AddPools(slices.Collect(maps.Values(in.pools))...)
 	tr.AddReservations(slices.Collect(maps.Values(in.reservations))...)
@@ -58,25 +59,25 @@ func (in *trackerInputs) rebuild() *Tracker {
 // makes the incremental indexes safe to trust.
 func TestIncrementalMatchesRebuild(t *testing.T) {
 	RegisterTestingT(t)
-	expectIncrementalMatchesRebuild()
+	expectIncrementalMatchesRebuild(NewTracker)
 }
 
 func TestIncrementalMatchesRebuildWithReservedClasses(t *testing.T) {
 	RegisterTestingT(t)
-	withExtraReservedClass(t)
-	expectIncrementalMatchesRebuild()
+	expectIncrementalMatchesRebuild(newClassedTracker)
 }
 
-func expectIncrementalMatchesRebuild() {
+func expectIncrementalMatchesRebuild(newTracker func() *Tracker) {
 	for seed := range uint64(20) {
 		rng := rand.New(rand.NewPCG(seed, 1))
-		tr := NewTracker()
+		tr := newTracker()
 		in := &trackerInputs{
 			pools:        map[string]*v3.IPPool{},
 			blocks:       map[string]*model.AllocationBlock{},
 			reservations: map[string]*v3.IPReservation{},
 			nodes:        map[string]bool{},
 			refs:         map[string]AddressRef{},
+			newTracker:   newTracker,
 		}
 		for step := range 200 {
 			op := randomOp(rng, tr, in)

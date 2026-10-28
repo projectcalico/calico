@@ -198,15 +198,15 @@ func TestBlockAddedAfterReservationsCountsOverlap(t *testing.T) {
 
 const extraReservedClass reservedClass = "extra"
 
-func withExtraReservedClass(t *testing.T) {
-	class := poolReservedClass
-	t.Cleanup(func() { poolReservedClass = class })
-	poolReservedClass = func(p *v3.IPPool) reservedClass {
+func newClassedTracker() *Tracker {
+	tr := NewTracker()
+	tr.classOf = func(p *v3.IPPool) reservedClass {
 		if p.Spec.DisableBGPExport {
 			return extraReservedClass
 		}
 		return defaultReservedClass
 	}
+	return tr
 }
 
 func setExtraReserved(tr *Tracker, cidrs ...string) {
@@ -214,17 +214,13 @@ func setExtraReserved(tr *Tracker, cidrs ...string) {
 	for _, s := range cidrs {
 		nets = append(nets, cnet.MustParseNetwork(s))
 	}
-	tr.mu.Lock()
-	defer tr.mu.Unlock()
 	tr.setExtraReserved(extraReservedClass, nets)
 }
 
 func TestClassWithoutExtraReservedCountsDefaultSet(t *testing.T) {
 	RegisterTestingT(t)
-	withExtraReservedClass(t)
-	poolReservedClass = func(*v3.IPPool) reservedClass { return "unlisted" }
-
 	tr := NewTracker()
+	tr.classOf = func(*v3.IPPool) reservedClass { return "unlisted" }
 	setExtraReserved(tr, "10.0.0.1/32")
 	tr.AddPools(pool("p", "10.0.0.0/24", 26))
 	tr.AddReservations(reservation("r", "10.0.0.10"))
@@ -233,7 +229,6 @@ func TestClassWithoutExtraReservedCountsDefaultSet(t *testing.T) {
 
 func TestReservedClassFollowsPoolSpec(t *testing.T) {
 	RegisterTestingT(t)
-	withExtraReservedClass(t)
 	plain := pool("p", "192.0.2.0/24", 26)
 	classed := plain.DeepCopy()
 	classed.Spec.DisableBGPExport = true
@@ -241,7 +236,7 @@ func TestReservedClassFollowsPoolSpec(t *testing.T) {
 	b := testBlock("192.0.2.0/26", "host:node-a")
 	allocatePod(b, 0, "node-a")
 
-	tr := NewTracker()
+	tr := newClassedTracker()
 	setExtraReserved(tr, "192.0.2.0/32", "192.0.2.1/32", "192.0.2.255/32")
 	tr.AddPools(plain)
 	tr.AddBlocks(b)
@@ -261,7 +256,7 @@ func TestReservedClassFollowsPoolSpec(t *testing.T) {
 	Expect(bc.Reserved).To(Equal(3))
 
 	tr.AddPools(plain)
-	fresh := NewTracker()
+	fresh := newClassedTracker()
 	setExtraReserved(fresh, "192.0.2.0/32", "192.0.2.1/32", "192.0.2.255/32")
 	fresh.AddPools(plain)
 	fresh.AddBlocks(b)
@@ -278,7 +273,6 @@ func TestReservedClassFollowsPoolSpec(t *testing.T) {
 
 func TestExtraReservedChangeReachesOnlyItsClass(t *testing.T) {
 	RegisterTestingT(t)
-	withExtraReservedClass(t)
 	classed := pool("a", "192.0.2.0/24", 26)
 	classed.Spec.DisableBGPExport = true
 
@@ -287,7 +281,7 @@ func TestExtraReservedChangeReachesOnlyItsClass(t *testing.T) {
 	blockB := testBlock("198.51.100.0/26", "host:node-a")
 	allocatePod(blockB, 0, "node-a")
 
-	tr := NewTracker()
+	tr := newClassedTracker()
 	tr.AddPools(classed, pool("b", "198.51.100.0/24", 26))
 	tr.AddBlocks(blockA, blockB)
 	b := mustSummarize(tr, "b")
@@ -307,14 +301,13 @@ func TestExtraReservedChangeReachesOnlyItsClass(t *testing.T) {
 
 func TestBlockLeavingPoolThatChangesClassDropsExtraReserved(t *testing.T) {
 	RegisterTestingT(t)
-	withExtraReservedClass(t)
 	classed := pool("a", "192.0.2.0/24", 26)
 	classed.Spec.DisableBGPExport = true
 
 	b := testBlock("192.0.2.128/26", "host:node-a")
 	allocatePod(b, 0, "node-a")
 
-	tr := NewTracker()
+	tr := newClassedTracker()
 	setExtraReserved(tr, "192.0.2.128/32", "192.0.2.129/32")
 	tr.AddPools(classed)
 	tr.AddBlocks(b)
