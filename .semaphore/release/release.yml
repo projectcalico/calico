@@ -28,6 +28,9 @@ blocks:
           # Checkout the code and unshallow it.
           - checkout
           - retry git fetch --quiet --unshallow
+          # Start warm from the Go caches that CI pushed to this workflow's artifacts.
+          - export LOCAL_GO_PKG_CACHE=$HOME/${SEMAPHORE_GIT_DIR}/.go-pkg-cache
+          - .semaphore/release/restore-build-cache.sh
           # Log in to container registries needed for release.
           - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
           - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
