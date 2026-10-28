@@ -633,9 +633,9 @@ func init() {
 		Entry("should accept valid selector with 'has' and two '/' and '-.'", api.EntityRule{Selector: "has(calico/k8s_NS-.1/role)"}, true),
 		Entry("should reject invalid selector", api.EntityRule{Selector: "thing=hello &"}, false),
 		Entry("should accept selector at the nesting limit",
-			api.EntityRule{Selector: strings.Repeat("(", parser.MaxNestingDepth) + "all()" + strings.Repeat(")", parser.MaxNestingDepth)}, true),
+			api.EntityRule{Selector: strings.Repeat("(", parser.MaxAPIDepth) + "all()" + strings.Repeat(")", parser.MaxAPIDepth)}, true),
 		Entry("should reject selector over the nesting limit",
-			api.EntityRule{Selector: strings.Repeat("(", parser.MaxNestingDepth+1) + "all()" + strings.Repeat(")", parser.MaxNestingDepth+1)}, false),
+			api.EntityRule{Selector: strings.Repeat("(", parser.MaxAPIDepth+1) + "all()" + strings.Repeat(")", parser.MaxAPIDepth+1)}, false),
 
 		// (API) Labels and Annotations.
 		Entry("should accept a valid labelsToApply", api.ProfileSpec{LabelsToApply: map[string]string{"project.calico.org/my-valid-label": value63}}, true),

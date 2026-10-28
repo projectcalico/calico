@@ -43,7 +43,7 @@ func BenchmarkValidate(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		var err error
-		err = p.Validate(`! (a == "b"&&! c != "d") || !(a == "b" && !c != "d")`, parser.MaxNestingDepth)
+		err = p.Validate(`! (a == "b"&&! c != "d") || !(a == "b" && !c != "d")`, parser.MaxAPIDepth)
 		if err != nil {
 			b.Errorf("Failed to parse selector: %v", err)
 		}

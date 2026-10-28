@@ -195,7 +195,7 @@ func init() {
 			OriginalDstServiceAccountNames: []string{"summary"},
 		}, true),
 		Entry("should accept source selector nested deeper than the API allows (m)", model.Rule{
-			SrcSelector: nestedParens(selector.MaxNestingDepth + 1),
+			SrcSelector: nestedParens(selector.MaxAPIDepth + 1),
 		}, true),
 		Entry("should reject source selector nested deeper than the parser allows (m)", model.Rule{
 			SrcSelector: nestedParens(selector.MaxParseDepth + 1),

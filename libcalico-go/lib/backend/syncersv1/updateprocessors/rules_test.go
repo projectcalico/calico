@@ -582,10 +582,10 @@ var _ = Describe("Rule selector nesting depth", func() {
 		// Alternating || and && doubles in depth when String() re-renders it;
 		// conversion then wraps it in further parentheses.
 		sel := "a == 'x'"
-		for range parser.MaxNestingDepth {
+		for range parser.MaxAPIDepth {
 			sel = fmt.Sprintf("a == 'x' || b == 'y' && (%s)", sel)
 		}
-		Expect(selector.Validate(sel, selector.MaxNestingDepth)).To(Succeed())
+		Expect(selector.Validate(sel, selector.MaxAPIDepth)).To(Succeed())
 
 		er := apiv3.EntityRule{
 			Selector:          sel,

@@ -28,13 +28,13 @@ import (
 const parserDebug = false
 
 const (
-	// MaxNestingDepth limits the nesting of parentheses in a selector supplied
+	// MaxAPIDepth limits the nesting of parentheses in a selector supplied
 	// via the API.
-	MaxNestingDepth = 100
+	MaxAPIDepth = 100
 	// MaxParseDepth limits the nesting of parentheses in any selector, bounding
 	// the parser's recursion.  Calico combines API selectors and re-renders them
 	// with String(), which parenthesises every && and || node, so a selector at
-	// MaxNestingDepth can end up roughly twice as deep.  This limit must leave
+	// MaxAPIDepth can end up roughly twice as deep.  This limit must leave
 	// room for that.  Parse enforces this limit.
 	MaxParseDepth = 1000
 )
@@ -58,7 +58,7 @@ var (
 )
 
 // Validate checks the syntax of the given selector and that its parentheses
-// are nested at most maxDepth deep.  Use MaxNestingDepth for selectors from
+// are nested at most maxDepth deep.  Use MaxAPIDepth for selectors from
 // the API and MaxParseDepth for selectors that Calico derived from them.
 func Validate(selector string, maxDepth int) (err error) {
 	sharedValidatorLock.Lock()
