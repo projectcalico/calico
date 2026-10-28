@@ -3684,9 +3684,7 @@ func (m *bpfEndpointManager) setRPFilter(iface string, val int) error {
 	// We only support IPv4 for now.
 	path := fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", iface)
 	numval := strconv.Itoa(val)
-	err := writeProcSys(path, numval)
-	if err != nil {
-		logrus.WithField("err", err).Errorf("Failed to  set %s to %s", path, numval)
+	if err := writeProcSys(path, numval); err != nil {
 		return err
 	}
 
