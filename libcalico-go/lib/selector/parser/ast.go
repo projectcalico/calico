@@ -213,6 +213,17 @@ func (sel *Selector) Root() Node {
 	return sel.root
 }
 
+// AndNot returns a selector equivalent to parsing "(sel) && (!(notSel))".
+// Building the AST directly avoids re-parsing, which could exceed
+// MaxParseDepth.  The result shares nodes with its inputs.
+func AndNot(sel, notSel *Selector) *Selector {
+	combined := &Selector{
+		root: &AndNode{Operands: []Node{sel.root, &NotNode{notSel.root}}},
+	}
+	combined.updateFields()
+	return combined
+}
+
 func (sel *Selector) updateFields() {
 	fragments := sel.root.collectFragments([]string{})
 	str := strings.Join(fragments, "")

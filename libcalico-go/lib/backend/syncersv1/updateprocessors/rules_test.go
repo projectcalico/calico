@@ -25,6 +25,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
 
 var _ = Describe("Test the Rules Conversion Functions", func() {
@@ -572,5 +574,28 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(outRules[0].DstSelector).To(Equal("(pcns.namespace == \"red\") && (has(label1))"))
 		Expect(outRules[1].DstSelector).To(Equal("(has(projectcalico.org/namespace)) && (has(label2))"))
 		Expect(outRules[2].DstSelector).To(Equal("(!has(projectcalico.org/namespace)) && (has(label3))"))
+	})
+})
+
+var _ = Describe("Rule selector nesting depth", func() {
+	It("should produce parseable selectors from API selectors at the nesting limit", func() {
+		// Alternating || and && doubles in depth when String() re-renders it;
+		// conversion then wraps it in further parentheses.
+		sel := "a == 'x'"
+		for range parser.MaxNestingDepth {
+			sel = fmt.Sprintf("a == 'x' || b == 'y' && (%s)", sel)
+		}
+		Expect(selector.ValidateAPI(sel)).To(Succeed())
+
+		er := apiv3.EntityRule{
+			Selector:          sel,
+			NamespaceSelector: sel,
+			NotSelector:       sel,
+			ServiceAccounts:   &apiv3.ServiceAccountMatch{Selector: sel, Names: []string{"sa"}},
+		}
+		rule := updateprocessors.RuleAPIV3ToBackend(apiv3.Rule{Action: apiv3.Allow, Source: er}, "ns")
+
+		Expect(selector.Validate(rule.SrcSelector)).To(Succeed())
+		Expect(selector.Validate(rule.NotSrcSelector)).To(Succeed())
 	})
 })
