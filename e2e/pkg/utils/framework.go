@@ -26,5 +26,6 @@ import (
 func NewDefaultFramework(name string) *framework.Framework {
 	f := framework.NewDefaultFramework(name)
 	f.NamespacePodSecurityEnforceLevel = admission.LevelPrivileged
+	registerInlineDiagnosis(f)
 	return f
 }
