@@ -30,6 +30,12 @@ import eventlet
 
 import mock
 
+from neutron_lib.constants import IP_PROTOCOL_MAP
+
+from oslo_db.exception import DBError
+
+from sqlalchemy.exc import SQLAlchemyError
+
 import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
@@ -1718,7 +1724,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         for (
             neutron_protocol_spec,
             calico_protocol_spec,
-        ) in lib.m_neutron_lib.constants.IP_PROTOCOL_MAP.items():
+        ) in IP_PROTOCOL_MAP.items():
             if neutron_protocol_spec in ("icmp", "ipv6-icmp"):
                 # _neutron_rule_to_etcd_rule maps these to Calico's ICMP and
                 # ICMPv6 names before it consults IP_PROTOCOL_MAP, so they do
@@ -3824,7 +3830,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         key = self._status_key_for_db_port("host", "p1")
         self.db.update_port_status = mock.Mock()
 
-        for error in [lib.DBError(), lib.SQLAlchemyError()]:
+        for error in [DBError(), SQLAlchemyError()]:
             self.db.get_port.side_effect = error
             with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
                 self.driver._try_to_update_port_status(mock.Mock(), key)
@@ -3845,7 +3851,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
 
         def m_update_port_status(context, port_id, status, host=None):
             mock_calls.append(mock.call(context, port_id, status, host=host))
-            raise lib.DBError()
+            raise DBError()
 
         self.db.update_port_status = m_update_port_status
         self.driver._port_status_cache[key] = "up"
@@ -3878,7 +3884,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         key = self._status_key_for_db_port("host", "p1")
 
         def m_update_port_status(context, port_id, status, host=None):
-            raise lib.SQLAlchemyError()
+            raise SQLAlchemyError()
 
         self.db.update_port_status = m_update_port_status
         self.driver._port_status_cache[key] = "up"
