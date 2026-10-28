@@ -193,6 +193,57 @@ func ReadEgressQdisc(intf string) (*TokenBucketState, error) {
 	return nil, nil
 }
 
+// HasEgressRedirect reports whether intf redirects into its IFB. A reused orphan IFB has a TBF but no redirect.
+func HasEgressRedirect(intf string) (bool, error) {
+	ifbDeviceName := GetIfbDeviceName(intf)
+	ifbDevice, err := netlink.LinkByName(ifbDeviceName)
+	if err != nil {
+		if _, ok := err.(netlink.LinkNotFoundError); ok {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to get link %s: %w", ifbDeviceName, err)
+	}
+	link, err := netlink.LinkByName(intf)
+	if err != nil {
+		if _, ok := err.(netlink.LinkNotFoundError); ok {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to get link %s: %w", intf, err)
+	}
+
+	qdiscs, err := netlink.QdiscList(link)
+	if err != nil {
+		return false, fmt.Errorf("failed to list qdiscs on link %s: %w", intf, err)
+	}
+	hasIngressQdisc := false
+	for _, qdisc := range qdiscs {
+		if _, ok := qdisc.(*netlink.Ingress); ok {
+			hasIngressQdisc = true
+			break
+		}
+	}
+	if !hasIngressQdisc {
+		return false, nil
+	}
+
+	filters, err := netlink.FilterList(link, netlink.HANDLE_INGRESS)
+	if err != nil {
+		return false, fmt.Errorf("failed to list filters on link %s: %w", intf, err)
+	}
+	for _, filter := range filters {
+		u32Filter, ok := filter.(*netlink.U32)
+		if !ok {
+			continue
+		}
+		for _, action := range u32Filter.Actions {
+			if mirred, ok := action.(*netlink.MirredAction); ok && mirred.Ifindex == ifbDevice.Attrs().Index {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 const maxIfbDeviceLength = 15
 const ifbDevicePrefix = "bwcali"
 
@@ -207,6 +258,43 @@ func GetMTU(deviceName string) (int, error) {
 
 func GetIfbDeviceName(deviceName string) string {
 	return utils.MustFormatHashWithPrefix(maxIfbDeviceLength, ifbDevicePrefix, deviceName)
+}
+
+// CleanupOrphanedIfbDevices deletes Calico IFB devices whose workload interface is gone, e.g.
+// a veth removed while Felix was down.
+func CleanupOrphanedIfbDevices(isWorkloadIface func(string) bool) error {
+	links, err := netlink.LinkList()
+	if err != nil {
+		return fmt.Errorf("failed to list links: %w", err)
+	}
+
+	var errs []error
+	for _, name := range orphanedIfbNames(links, isWorkloadIface) {
+		if err := TeardownIfb(name); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		logrus.WithField("ifbDevice", name).Info("Deleted orphaned QoS IFB device")
+	}
+	return errors.Join(errs...)
+}
+
+func orphanedIfbNames(links []netlink.Link, isWorkloadIface func(string) bool) []string {
+	inUse := map[string]bool{}
+	for _, link := range links {
+		if isWorkloadIface(link.Attrs().Name) {
+			inUse[GetIfbDeviceName(link.Attrs().Name)] = true
+		}
+	}
+
+	var orphaned []string
+	for _, link := range links {
+		name := link.Attrs().Name
+		if link.Type() == "ifb" && strings.HasPrefix(name, ifbDevicePrefix) && !inUse[name] {
+			orphaned = append(orphaned, name)
+		}
+	}
+	return orphaned
 }
 
 const latencyMillis = 25
