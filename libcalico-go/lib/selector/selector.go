@@ -49,15 +49,16 @@ func Parse(selector string) (sel *Selector, err error) {
 	return parser.Parse(selector)
 }
 
-// Validate checks the syntax of the given selector.
-func Validate(selector string) (err error) {
-	return parser.Validate(selector)
-}
+const (
+	MaxNestingDepth = parser.MaxNestingDepth
+	MaxParseDepth   = parser.MaxParseDepth
+)
 
-// ValidateAPI checks the syntax of the given selector and that it is within
-// the nesting limit for selectors in API resources.
-func ValidateAPI(selector string) (err error) {
-	return parser.ValidateAPI(selector)
+// Validate checks the syntax of the given selector and that its parentheses
+// are nested at most maxDepth deep.  Use MaxNestingDepth for selectors from
+// the API and MaxParseDepth for selectors that Calico derived from them.
+func Validate(selector string, maxDepth int) (err error) {
+	return parser.Validate(selector, maxDepth)
 }
 
 // AndNot returns a selector equivalent to "(sel) && (!(notSel))".

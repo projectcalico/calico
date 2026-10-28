@@ -29,13 +29,13 @@ const parserDebug = false
 
 const (
 	// MaxNestingDepth limits the nesting of parentheses in a selector supplied
-	// via the API; enforced by ValidateAPI.
+	// via the API.
 	MaxNestingDepth = 100
 	// MaxParseDepth limits the nesting of parentheses in any selector, bounding
 	// the parser's recursion.  Calico combines API selectors and re-renders them
 	// with String(), which parenthesises every && and || node, so a selector at
 	// MaxNestingDepth can end up roughly twice as deep.  This limit must leave
-	// room for that.
+	// room for that.  Parse enforces this limit.
 	MaxParseDepth = 1000
 )
 
@@ -57,20 +57,14 @@ var (
 	sharedValidator     = NewParser()
 )
 
-func Validate(selector string) (err error) {
+// Validate checks the syntax of the given selector and that its parentheses
+// are nested at most maxDepth deep.  Use MaxNestingDepth for selectors from
+// the API and MaxParseDepth for selectors that Calico derived from them.
+func Validate(selector string, maxDepth int) (err error) {
 	sharedValidatorLock.Lock()
 	defer sharedValidatorLock.Unlock()
 
-	return sharedValidator.Validate(selector)
-}
-
-// ValidateAPI is like Validate but enforces the tighter MaxNestingDepth limit
-// that applies to selectors in API resources.
-func ValidateAPI(selector string) (err error) {
-	sharedValidatorLock.Lock()
-	defer sharedValidatorLock.Unlock()
-
-	return sharedValidator.ValidateAPI(selector)
+	return sharedValidator.Validate(selector, maxDepth)
 }
 
 func NewParser() *Parser {
@@ -91,19 +85,11 @@ func (p *Parser) Parse(selector string) (sel *Selector, err error) {
 	return p.parseRoot(selector, false, MaxParseDepth)
 }
 
-func (p *Parser) Validate(selector string) (err error) {
+func (p *Parser) Validate(selector string, maxDepth int) (err error) {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.Debugf("Validating %q", selector)
 	}
-	_, err = p.parseRoot(selector, true, MaxParseDepth)
-	return
-}
-
-func (p *Parser) ValidateAPI(selector string) (err error) {
-	if log.IsLevelEnabled(log.DebugLevel) {
-		log.Debugf("Validating API selector %q", selector)
-	}
-	_, err = p.parseRoot(selector, true, MaxNestingDepth)
+	_, err = p.parseRoot(selector, true, maxDepth)
 	return
 }
 

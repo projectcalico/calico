@@ -585,7 +585,7 @@ var _ = Describe("Rule selector nesting depth", func() {
 		for range parser.MaxNestingDepth {
 			sel = fmt.Sprintf("a == 'x' || b == 'y' && (%s)", sel)
 		}
-		Expect(selector.ValidateAPI(sel)).To(Succeed())
+		Expect(selector.Validate(sel, selector.MaxNestingDepth)).To(Succeed())
 
 		er := apiv3.EntityRule{
 			Selector:          sel,
@@ -595,7 +595,7 @@ var _ = Describe("Rule selector nesting depth", func() {
 		}
 		rule := updateprocessors.RuleAPIV3ToBackend(apiv3.Rule{Action: apiv3.Allow, Source: er}, "ns")
 
-		Expect(selector.Validate(rule.SrcSelector)).To(Succeed())
-		Expect(selector.Validate(rule.NotSrcSelector)).To(Succeed())
+		Expect(selector.Validate(rule.SrcSelector, selector.MaxParseDepth)).To(Succeed())
+		Expect(selector.Validate(rule.NotSrcSelector, selector.MaxParseDepth)).To(Succeed())
 	})
 })

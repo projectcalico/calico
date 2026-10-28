@@ -230,7 +230,7 @@ var _ = Describe("Parser", func() {
 			BeforeEach(func() {
 				sel, err = parser.Parse(test.sel)
 				Expect(err).To(BeNil())
-				err = parser.Validate(test.sel)
+				err = parser.Validate(test.sel, parser.MaxNestingDepth)
 				Expect(err).To(BeNil())
 			})
 			It("should match", func() {
@@ -274,7 +274,7 @@ var _ = Describe("Parser", func() {
 			Expect(err).To(HaveOccurred())
 
 			By(fmt.Sprint("Rejecting Validate()", sel))
-			err = parser.Validate(sel)
+			err = parser.Validate(sel, parser.MaxNestingDepth)
 			Expect(err).To(HaveOccurred())
 		}
 	})
@@ -291,8 +291,8 @@ var _ = Describe("Parser", func() {
 
 			_, err := parser.Parse(sel)
 			expectErr(err, expParseErr)
-			expectErr(parser.Validate(sel), expParseErr)
-			expectErr(parser.ValidateAPI(sel), expAPIErr)
+			expectErr(parser.Validate(sel, parser.MaxParseDepth), expParseErr)
+			expectErr(parser.Validate(sel, parser.MaxNestingDepth), expAPIErr)
 		},
 		Entry("parens at the API limit", nestedParens(parser.MaxNestingDepth), nil, nil),
 		Entry("parens just over the API limit", nestedParens(parser.MaxNestingDepth+1), nil, parser.ErrNestingTooDeep),
@@ -313,7 +313,7 @@ var _ = Describe("Parser", func() {
 		for range parser.MaxNestingDepth {
 			sel = fmt.Sprintf("a == 'x' || b == 'y' && (%s)", sel)
 		}
-		Expect(parser.ValidateAPI(sel)).To(Succeed())
+		Expect(parser.Validate(sel, parser.MaxNestingDepth)).To(Succeed())
 		parsed, err := parser.Parse(sel)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -396,7 +396,7 @@ var _ = Describe("Visitor", func() {
 			By(fmt.Sprintf("parsing the selector %s", inSelector), func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
-			err = parser.Validate(inSelector)
+			err = parser.Validate(inSelector, parser.MaxNestingDepth)
 			By(fmt.Sprintf("validating the selector %s", inSelector), func() {
 				Expect(err).NotTo(HaveOccurred())
 			})

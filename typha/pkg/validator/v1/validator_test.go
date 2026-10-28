@@ -15,6 +15,8 @@
 package v1_test
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -23,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/scope"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	validator "github.com/projectcalico/calico/typha/pkg/validator/v1"
 )
 
@@ -191,6 +194,12 @@ func init() {
 			DstSelector:                    "projectcalico.org/serviceaccount in {\"summary\"}",
 			OriginalDstServiceAccountNames: []string{"summary"},
 		}, true),
+		Entry("should accept source selector nested deeper than the API allows (m)", model.Rule{
+			SrcSelector: nestedParens(selector.MaxNestingDepth + 1),
+		}, true),
+		Entry("should reject source selector nested deeper than the parser allows (m)", model.Rule{
+			SrcSelector: nestedParens(selector.MaxParseDepth + 1),
+		}, false),
 		Entry("should reject original source selector with error (m)", model.Rule{
 			OriginalSrcSelector: "not a selector",
 		}, false),
@@ -1142,4 +1151,8 @@ func ProtocolFromStringV1(s string) *numorstring.Protocol {
 func protocolFromInt(i uint8) *numorstring.Protocol {
 	p := numorstring.ProtocolFromInt(i)
 	return &p
+}
+
+func nestedParens(depth int) string {
+	return strings.Repeat("(", depth) + "all()" + strings.Repeat(")", depth)
 }
