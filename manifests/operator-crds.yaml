@@ -30772,6 +30772,14 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+                - message: services are not allowed in an egress rule source
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))"
+                - message: services are not allowed in an ingress rule destination
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
+                    || !has(r.destination.services))"
           type: object
       served: true
       storage: true
@@ -33521,6 +33529,14 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
+                - message: services are not allowed in an egress rule source
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))"
+                - message: services are not allowed in an ingress rule destination
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
+                    || !has(r.destination.services))"
           type: object
       served: true
       storage: true
@@ -35032,6 +35048,14 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+                - message: services are not allowed in an egress rule source
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))"
+                - message: services are not allowed in an ingress rule destination
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
+                    || !has(r.destination.services))"
           type: object
       served: true
       storage: true
@@ -36964,6 +36988,14 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
+                - message: services are not allowed in an egress rule source
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))"
+                - message: services are not allowed in an ingress rule destination
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
+                    || !has(r.destination.services))"
           type: object
       served: true
       storage: true

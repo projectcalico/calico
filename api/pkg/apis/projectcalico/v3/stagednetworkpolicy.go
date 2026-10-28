@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,6 +41,8 @@ type StagedNetworkPolicy struct {
 
 // +kubebuilder:validation:XValidation:rule="!has(self.selector) || !self.selector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))",message="services are not allowed in an egress rule source",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.ingress) || self.ingress.all(r, !has(r.destination) || !has(r.destination.services))",message="services are not allowed in an ingress rule destination",reason=FieldValueForbidden
 type StagedNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
 	// +kubebuilder:default=Set
