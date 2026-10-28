@@ -132,3 +132,39 @@ class TestMechanismDriver(lib.Lib):
         self.assertIsNotNone(self.driver._port_status_cache)
         self.assertIsNotNone(self.driver._port_status_queue)
         self.assertIsNotNone(self.driver._port_status_queue_too_long)
+
+    def _handle_qos_policy_update(self, bound_networks, bound_ports):
+        self.osdb_ports = [
+            {"id": "net-port", "network_id": "net-a", "qos_policy_id": None},
+            {"id": "own-policy-port", "network_id": "net-a", "qos_policy_id": "p2"},
+            {"id": "other-net-port", "network_id": "net-b", "qos_policy_id": None},
+            {"id": "direct-port", "network_id": "net-b", "qos_policy_id": "p1"},
+        ]
+        policy = mock.Mock()
+        policy.get_bound_networks.return_value = bound_networks
+        policy.get_bound_ports.return_value = bound_ports
+        context = mock.Mock()
+        self.driver._get_db()
+        with mock.patch.object(
+            mech_calico.policy_object.QosPolicy, "get_policy_obj", return_value=policy
+        ) as m_get_policy_obj, mock.patch.object(
+            self.driver, "update_existing_ports"
+        ) as m_update:
+            self.driver.handle_qos_policy_update(context, "p1")
+        m_get_policy_obj.assert_called_once_with(context, "p1")
+        m_update.assert_called_once_with(mock.ANY, context, mock.ANY)
+        return [p["id"] for p in m_update.call_args[0][0]]
+
+    def test_handle_qos_policy_update(self):
+        """Updates the ports that the policy applies to, and only those.
+
+        A port on a network bound to the policy is updated unless the port has a QoS
+        policy of its own, which takes precedence over its network's.
+        """
+        self.assertEqual(
+            self._handle_qos_policy_update(["net-a"], ["direct-port"]),
+            ["net-port", "direct-port"],
+        )
+
+    def test_handle_qos_policy_update_unbound(self):
+        self.assertEqual(self._handle_qos_policy_update([], []), [])
