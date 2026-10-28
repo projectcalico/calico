@@ -394,7 +394,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, depth int, validateOnl
 	}
 	if negated && err == nil {
 		if !validateOnly {
-			sel = &NotNode{sel}
+			sel = negate(sel)
 		}
 	}
 	return

@@ -206,6 +206,11 @@ var canonicalisationTests = []struct {
 	{" (all() )", "all()", "s:5y5I3VdRZfDU01O--xXAPx2yxCQQqMf0M6IWug"},
 	{`! (has( b)||! has(a ))`, "!(has(b) || !has(a))", "s:Iss0uCleLYv1GSv_pNm7hAO58kE9jAx1NKyG3Q"},
 	{`! (a == "b"&&! c != "d")`, `!(a == "b" && !c != "d")`, "s:lh3haoY1ikTRkd4UZu0nWSaIBknYLPJLX16d-w"},
+	// Double negations cancel, with or without parentheses between them.
+	{`!!has(a)`, `has(a)`, ""},
+	{`!(!has(a))`, `has(a)`, ""},
+	{`!(!(!has(a)))`, `!has(a)`, ""},
+	{`!(!(a == "b" || c == "d"))`, `(a == "b" || c == "d")`, ""},
 	{`a == "'"`, `a == "'"`, ""},
 	{`a == '"'`, `a == '"'`, ""},
 	{`a contains '"'`, `a contains '"'`, ""},
@@ -335,6 +340,7 @@ var _ = Describe("Parser", func() {
 			parsedA, parsedB := mustParse(a), mustParse(b)
 
 			expectSame(parsedB.Inverted(), fmt.Sprintf("!(%s)", b))
+			expectSame(parsedB.Inverted().Inverted(), b)
 			expectSame(parsedA.And(parsedB), fmt.Sprintf("(%s) && (%s)", a, b))
 			// Redundant parentheses don't affect the parsed form.
 			expectSame(parsedA.And(parsedB.Inverted()), fmt.Sprintf("(%s) && (!(%s))", a, b))
@@ -345,7 +351,6 @@ var _ = Describe("Parser", func() {
 		Entry("ANDs", "a == 'b' && c == 'd'", "e == 'f' && g == 'h'"),
 		Entry("ORs", "a == 'b' || c == 'd'", "e == 'f' || g == 'h'"),
 		Entry("negations", "!has(a)", "!has(b)"),
-		// Adjacent "!"s cancel when parsed, but "!(!x)" keeps both negations.
 		Entry("double negations", "!!has(a)", "!!has(b)"),
 		Entry("parenthesised double negations", "!(!has(a))", "!(!has(b))"),
 	)

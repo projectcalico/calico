@@ -223,7 +223,16 @@ func (sel *Selector) And(other *Selector) *Selector {
 // Inverted returns a selector equivalent to parsing "!(sel)".  The result
 // shares nodes with sel.
 func (sel *Selector) Inverted() *Selector {
-	return newSelector(&NotNode{sel.root})
+	return newSelector(negate(sel.root))
+}
+
+// negate returns the negation of n, cancelling a double negation so that
+// equivalent selectors render (and hash) the same.
+func negate(n Node) Node {
+	if not, ok := n.(*NotNode); ok {
+		return not.Operand
+	}
+	return &NotNode{n}
 }
 
 func newSelector(root Node) *Selector {
