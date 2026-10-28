@@ -21,7 +21,7 @@ set -o pipefail
 echo "[INFO] starting prologue"
 
 echo "[INFO] Clean out language tools we don't use to free up disk"
-sudo rm -rf ~/{.kerl,.kiex,.npm,.nvm,.phpbrew,.rbenv,.sbt} /opt/{apache-maven*,firefox*,scala} /usr/lib/jvm /usr/local/{aws2,golang,phantomjs*} /root/.local/share/heroku /usr/local/lib/heroku
+sudo rm -rf ~/{.kerl,.kiex,.npm,.nvm,.phpbrew,.rbenv,.sbt} /opt/{apache-maven*,firefox*,scala} /usr/lib/jvm /usr/local/{aws2,phantomjs*} /root/.local/share/heroku /usr/local/lib/heroku
 
 # Set up the DNS resolver to use OpenDNS servers, which appear to be more reliable.
 echo "nameserver 208.67.222.222" | sudo tee /etc/resolv.conf
