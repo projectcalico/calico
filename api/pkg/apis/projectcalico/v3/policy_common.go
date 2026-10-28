@@ -220,6 +220,7 @@ type EntityRule struct {
 	// +kubebuilder:validation:MaxItems=256
 	// +kubebuilder:validation:items:MaxLength=49
 	// +kubebuilder:validation:XValidation:rule="self.all(n, isCIDR(n))",message="notNets entries must be CIDRs",reason=FieldValueInvalid
+	// +kubebuilder:validation:XValidation:rule="self.all(n, n != '0.0.0.0/0' && n != '::/0')",message="a catch-all CIDR in notNets matches no traffic",reason=FieldValueInvalid
 	NotNets []string `json:"notNets,omitempty" validate:"omitempty,dive,net"`
 
 	// NotSelector is the negated version of the Selector field.  See Selector field for
