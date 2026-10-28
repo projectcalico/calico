@@ -26,6 +26,8 @@ from types import SimpleNamespace
 
 import eventlet
 import mock
+from oslo_config import cfg
+from oslo_config import fixture as config_fixture
 
 # Grab the real classes and constants that the mocks below need to expose, while
 # the real packages are still importable: once sys.modules has been overwritten,
@@ -35,8 +37,13 @@ import mock
 # for an exception class is not a class, so "except that_attribute" raises
 # TypeError if it is ever evaluated, and a hand-written stand-in drifts from the
 # real thing without anything noticing.
+from neutron_lib import context as neutron_context
+from neutron_lib import fixture as neutron_lib_fixture
 from neutron_lib.constants import IP_PROTOCOL_MAP
 from neutron_lib.exceptions import PortNotFound
+from neutron_lib.plugins import constants as plugin_constants
+from neutron_lib.plugins import directory as plugin_dir
+from oslo_db import options as oslo_db_options
 from oslo_db.exception import DBError
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -83,7 +90,6 @@ sys.modules["neutron_lib.plugins"] = m_neutron_lib.plugins
 sys.modules["neutron_lib.plugins.ml2"] = m_neutron_lib.plugins.ml2
 sys.modules["neutron_lib.worker"] = m_neutron_lib.worker
 sys.modules["oslo_concurrency"] = m_oslo_concurrency = mock.Mock()
-sys.modules["oslo_config"] = m_oslo_config = mock.MagicMock()
 sys.modules["oslo_context"] = m_oslo_context = mock.Mock()
 sys.modules["oslo_db"] = m_oslo_db = mock.Mock()
 sys.modules["oslo_log"] = m_oslo_log = mock.Mock()
@@ -104,6 +110,15 @@ m_neutron_lib.constants.IP_PROTOCOL_MAP = IP_PROTOCOL_MAP
 m_neutron_lib.exceptions.PortNotFound = PortNotFound
 m_oslo_db.exception.DBError = DBError
 m_sqlalchemy.exc.SQLAlchemyError = SQLAlchemyError
+
+# The real [database] options, so that mech_calico can register them with the real
+# oslo.config and read their real defaults.
+m_oslo_db.options = oslo_db_options
+
+# The real admin context factory and plugin directory, so that tests can use the
+# standard fixture for the latter and patch only what they need of the former.
+m_neutron_lib.context = neutron_context
+m_neutron_lib.plugins.directory = plugin_dir
 
 port1 = {
     "binding:vif_type": "tap",
@@ -357,6 +372,11 @@ class Lib(object):
         # Announce the current test case.
         _log.info("TEST CASE: %s", self.id())
 
+        # Each test's config overrides are undone when it ends.
+        self.cfg_fixture = config_fixture.Config(cfg.CONF)
+        self.cfg_fixture.setUp()
+        self.addCleanup(self.cfg_fixture.cleanUp)
+
         # Mock calls to sys.exit.
         self.sys_exit_p = mock.patch("sys.exit")
         self.sys_exit_p.start()
@@ -373,9 +393,21 @@ class Lib(object):
         # Create an instance of CalicoMechanismDriver.
         self.driver = mech_calico.CalicoMechanismDriver()
 
-        # Hook the (mock) Neutron database.
-        self.db = mech_calico.plugin_dir.get_plugin()
-        self.db_context = mech_calico.ctx.get_admin_context()
+        # Register a mock core plugin, standing in for the Neutron database.
+        plugin_dir_fixture = neutron_lib_fixture.PluginDirectoryFixture()
+        plugin_dir_fixture.setUp()
+        self.addCleanup(plugin_dir_fixture.cleanUp)
+        self.db = mock.Mock()
+        plugin_dir.add_plugin(plugin_constants.CORE, self.db)
+
+        # Hand the code under test a single admin context whose session queries
+        # are answered from the osdb_* data below.
+        self.db_context = mock.MagicMock()
+        get_admin_context_p = mock.patch.object(
+            neutron_context, "get_admin_context", return_value=self.db_context
+        )
+        get_admin_context_p.start()
+        self.addCleanup(get_admin_context_p.stop)
         self.db_context.to_dict.return_value = {}
         self.db_context.session.query.side_effect = self.db_query
 
@@ -613,7 +645,7 @@ class Lib(object):
         cm = FixedUUID(uuid_str) if uuid_str else contextlib.nullcontext()
         with cm:
             self.driver._post_fork_init()
-            if mech_calico.cfg.CONF.calico.startup_resync == "always":
+            if cfg.CONF.calico.startup_resync == "always":
                 self.driver._do_startup_resync()
 
     def check_update_port_status_called(self, context):

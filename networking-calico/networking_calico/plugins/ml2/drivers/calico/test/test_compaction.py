@@ -24,7 +24,11 @@ from etcd3gw.exceptions import Etcd3Exception
 
 import mock
 
-import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
+from oslo_config import cfg
+from oslo_config import fixture as config_fixture
+
+# For its side effect of mocking out Neutron before mech_calico is imported.
+import networking_calico.plugins.ml2.drivers.calico.test.lib  # noqa: F401
 from networking_calico import etcdv3
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
 
@@ -69,9 +73,15 @@ class TestCompaction(unittest.TestCase):
 
         self.pid = str(os.getpid())
 
-        # Provide default config.
-        lib.m_oslo_config.cfg.CONF.calico.etcd_compaction_period_mins = 60
-        lib.m_oslo_config.cfg.CONF.calico.etcd_compaction_min_revisions = 1000
+        # The expected revisions and TTLs below are worked out from these.
+        cfg_fixture = config_fixture.Config(cfg.CONF)
+        cfg_fixture.setUp()
+        self.addCleanup(cfg_fixture.cleanUp)
+        cfg_fixture.config(
+            group="calico",
+            etcd_compaction_period_mins=60,
+            etcd_compaction_min_revisions=1000,
+        )
 
     def tearDown(self):
         etcdv3._client = None
