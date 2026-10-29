@@ -155,6 +155,9 @@ the source alone.
   IPAM). Pointer stubs may sit in consumer subdirectories, but the canonical
   content lives here.
 - `<component>/CLAUDE.md` — operational guidance only. Not architecture.
+- [`.github/instructions/*.instructions.md`](../.github/instructions/) —
+  path-scoped review rules, shared with Copilot. When reviewing, apply every
+  file whose `applyTo` globs match the changed paths.
 
 Complex components split their design across a directory with an "applies to"
 glob per topic — Felix uses [`felix/DESIGN.md`](../felix/DESIGN.md) as an index
