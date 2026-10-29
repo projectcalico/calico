@@ -159,6 +159,12 @@ type RouteTable struct {
 	kernelRoutes  *deltatracker.DeltaTracker[RouteKey, kernelRoute]
 	permanentARPs map[string]map[ip.Addr]net.HardwareAddr
 
+	// onProgrammedCallbacks holds the OnProgrammed callback of the Target that won conflict
+	// resolution for each RouteKey, where that Target has one.  It is kept apart from
+	// kernelRoutes because a kernelRoute must compare equal to its read-back from the kernel,
+	// and the DeltaTracker keeps the dataplane's copy of a value when the two are equal.
+	onProgrammedCallbacks map[RouteKey]func()
+
 	ifaceNameToIndex      map[string]int
 	ifaceIndexToName      map[int]string
 	ifaceIndexToState     map[int]ifacemonitor.State
@@ -315,7 +321,8 @@ func New(
 				return a.Equals(b)
 			}),
 		),
-		permanentARPs: map[string]map[ip.Addr]net.HardwareAddr{},
+		permanentARPs:         map[string]map[ip.Addr]net.HardwareAddr{},
+		onProgrammedCallbacks: map[RouteKey]func(){},
 
 		ifaceIndexToGraceInfo: map[int]graceInfo{},
 		ifaceNameToIndex:      map[string]int{},
@@ -758,6 +765,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(routeKey RouteKey) {
 
 		// Clean up the old entries.
 		r.kernelRoutes.Desired().Delete(routeKey)
+		delete(r.onProgrammedCallbacks, routeKey)
 		r.conntrackTracker.RemoveCIDROwner(routeKey.CIDR)
 		return
 	}
@@ -812,6 +820,11 @@ func (r *RouteTable) recalculateDesiredKernelRoute(routeKey RouteKey) {
 	}
 
 	r.kernelRoutes.Desired().Set(routeKey, kernRoute)
+	if bestTarget.OnProgrammed != nil {
+		r.onProgrammedCallbacks[routeKey] = bestTarget.OnProgrammed
+	} else {
+		delete(r.onProgrammedCallbacks, routeKey)
+	}
 	r.conntrackTracker.UpdateCIDROwner(routeKey.CIDR, bestIfaceIdx, bestRouteClass)
 }
 
@@ -1523,6 +1536,10 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 
 			updateErrs[routeKey] = err
 			return deltatracker.IterActionNoOp
+		}
+
+		if onProgrammed := r.onProgrammedCallbacks[routeKey]; onProgrammed != nil {
+			onProgrammed()
 		}
 
 		// Route is updated, clean up the dataplane side of the tracker.

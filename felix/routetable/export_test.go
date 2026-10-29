@@ -30,3 +30,9 @@ func (r *RouteTable) IfacesToARPAdd(ifaceName string) {
 func (r *RouteTable) GraceInfoCount() int {
 	return len(r.ifaceIndexToGraceInfo)
 }
+
+// OnProgrammedCallbacksLen returns the number of OnProgrammed callbacks
+// currently held.
+func (r *RouteTable) OnProgrammedCallbacksLen() int {
+	return len(r.onProgrammedCallbacks)
+}
