@@ -293,6 +293,12 @@ E2E_TIMEOUT ?= 90m
 E2E_TEST_CONFIG ?= e2e/config/kind/conformance.yaml
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
+# Optional command prefix for the ginkgo invocation in the kind e2e lanes. Empty
+# by default, so a local run is unaffected; CI points it at
+# .semaphore/end-to-end/scripts/with-inline-diag.sh, which sets up sandcat's
+# inline per-spec failure diagnosis. It is applied around the run rather than the
+# whole target because the setup needs the cluster to already be up.
+E2E_RUN_WRAPPER ?=
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
 
@@ -353,7 +359,7 @@ kind-manifest-install-test:
 e2e-test:
 	$(E2E_BUILD)
 	$(MAKE) kind-up
-	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
+	KUBECONFIG=$(KIND_KUBECONFIG) $(E2E_RUN_WRAPPER) $(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
 
 ## Create a kind cluster with the BPF dataplane plus an external node, and run
 ## the sig-calico BPF e2e tests (including the ExternalNode specs).
@@ -367,13 +373,16 @@ e2e-test-bpf:
 	$(KIND_DIR)/external-node.sh up
 	$(MAKE) external-node-load-rapidclient
 	# EXT_* / SSH_AUTH_SOCK are passed as environment (the e2e binary reads them
-	# via os.Getenv); KIND_NAME/KUBECONFIG/E2E_TEST_CONFIG are make variables.
+	# via os.Getenv); KIND_NAME/E2E_TEST_CONFIG are make variables. KUBECONFIG is
+	# deliberately both: the wrapper reads it from the environment.
 	# SSH_AUTH_SOCK is cleared so the framework's ssh uses only EXT_KEY and does
 	# not trip over unrelated agent keys.
 	EXT_USER=ubuntu \
 	EXT_IP="$$(cat $(KIND_DIR)/external-node-ip)" \
 	EXT_KEY=$(KIND_DIR)/external-node-key \
 	SSH_AUTH_SOCK= \
+	KUBECONFIG=$(KIND_KUBECONFIG) \
+	$(E2E_RUN_WRAPPER) \
 	$(MAKE) e2e-run \
 		KIND_NAME=kind \
 		KUBECONFIG=$(KIND_KUBECONFIG) \
@@ -419,7 +428,7 @@ endif
 e2e-run: bin/ginkgo
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
-	KUBECONFIG=$(KUBECONFIG) ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --non-blocking-taints=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
+	KUBECONFIG=$(KUBECONFIG) ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --json-report=report.json --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --non-blocking-taints=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
 
 # Version from go.mod. Built with whichever of Go and docker the host has: the
 # kind lanes have only docker, the remote-cluster lanes only Go.
