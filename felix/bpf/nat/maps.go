@@ -97,6 +97,9 @@ const backendValueSize = 8
 
 const BlackHoleCount uint32 = 0xffffffff
 
+// NodePortVXLANTunnelVNI is CALI_VXLAN_VNI in nat_types.h, the VNI that BPF uses to forward NodePort traffic.
+const NodePortVXLANTunnelVNI uint32 = 0xca11c0
+
 // (sizeof(addr) + sizeof(port) + sizeof(proto)) in bits
 const ZeroCIDRPrefixLen = 56
 
