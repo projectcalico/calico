@@ -35,6 +35,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
+var _ DryRunClient = (*customResourceClient)(nil)
+
 // customResourceClient implements the K8sResourceClient interface and provides a generic
 // mechanism for a 1:1 mapping between a Calico Resource and an equivalent Kubernetes
 // custom resource type.

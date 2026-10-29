@@ -23,6 +23,7 @@ import (
 	k8swatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
 
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/util"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -110,7 +111,10 @@ func (rs *resourceStore) CompactRevision() int64 {
 	return 0
 }
 
-var _ storage.Interface = (*resourceStore)(nil)
+var (
+	_ storage.Interface = (*resourceStore)(nil)
+	_ util.DryRunWriter = (*resourceStore)(nil)
+)
 
 func CreateClientFromConfig() clientv3.Interface {
 	// TODO(doublek): nicer errors returned

@@ -5,6 +5,7 @@ package util
 import (
 	"context"
 
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
@@ -69,6 +70,7 @@ func (s *Store) withDryRunCreate(next rest.ValidateObjectFunc) rest.ValidateObje
 		}
 		w, ok := s.Storage.Storage.(DryRunWriter)
 		if !ok {
+			logrus.WithField("resource", s.DefaultQualifiedResource).Warn("Storage can't dry run; skipping datastore validation")
 			return nil
 		}
 		name, key, err := s.nameAndKey(ctx, obj)
@@ -90,6 +92,7 @@ func (s *Store) withDryRunUpdate(next rest.ValidateObjectUpdateFunc) rest.Valida
 		}
 		w, ok := s.Storage.Storage.(DryRunWriter)
 		if !ok {
+			logrus.WithField("resource", s.DefaultQualifiedResource).Warn("Storage can't dry run; skipping datastore validation")
 			return nil
 		}
 		name, key, err := s.nameAndKey(ctx, obj)
