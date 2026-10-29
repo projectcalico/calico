@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -150,6 +150,16 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 	return &etcdV3Client{etcdClient: client}, nil
 }
 
+// writeOp is the operation a Create or Update transaction runs once its preconditions
+// hold. A dry run reads the key instead, so the caller still gets the same
+// already-exists and conflict errors as a real write.
+func writeOp(ctx context.Context, key, value string, putOpts []clientv3.OpOption) clientv3.Op {
+	if api.IsDryRun(ctx) {
+		return clientv3.OpGet(key)
+	}
+	return clientv3.OpPut(key, value, putOpts...)
+}
+
 // Create an entry in the datastore.  If the entry already exists, this will return
 // an ErrorResourceAlreadyExists error and the current entry.
 func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
@@ -186,7 +196,7 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 	txnResp, err := c.etcdClient.Txn(ctx).If(
 		clientv3.Compare(clientv3.Version(key), "=", 0),
 	).Then(
-		clientv3.OpPut(key, value, putOpts...),
+		writeOp(ctx, key, value, putOpts),
 	).Else(
 		clientv3.OpGet(key),
 	).Commit()
@@ -261,7 +271,7 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 	txnResp, err := c.etcdClient.Txn(ctx).If(
 		conds...,
 	).Then(
-		clientv3.OpPut(key, value, opts...),
+		writeOp(ctx, key, value, opts),
 	).Else(
 		clientv3.OpGet(key),
 	).Commit()
@@ -305,6 +315,14 @@ func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPai
 	// Do not log d.Value, it may contain sensitive resource specs.
 	logCxt := log.WithFields(log.Fields{"etcdKey": d.Key, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Apply request")
+
+	if api.IsDryRun(ctx) {
+		return nil, cerrors.ErrorOperationNotSupported{
+			Identifier: d.Key,
+			Operation:  "Apply",
+			Reason:     "dry run is not supported",
+		}
+	}
 
 	err := defaultPolicyName(d)
 	if err != nil {
