@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -640,7 +641,7 @@ func GetIdentifiers(args *skel.CmdArgs, nodename string) (*WEPIdentifiers, error
 }
 
 func GetHandleID(netName, containerID, workload string) string {
-	handleID := fmt.Sprintf("%s.%s", netName, containerID)
+	handleID := ipam.PodHandleID(netName, containerID)
 
 	logrus.WithFields(logrus.Fields{
 		"HandleID":    handleID,
@@ -649,38 +650,6 @@ func GetHandleID(netName, containerID, workload string) string {
 		"ContainerID": containerID,
 	}).Debug("Generated IPAM handle")
 	return handleID
-}
-
-// ParsedPodHandle is a pod's IPAM handle broken into its components.
-type ParsedPodHandle struct {
-	Network     string
-	ContainerID string
-}
-
-// ParsePodHandleID splits a pod's IPAM handle for the given network. Workload, VM and
-// load balancer handles use their own formats and are rejected; see
-// design/ipam/ipam-cni.md for the pod form.
-func ParsePodHandleID(handleID, netName string) (ParsedPodHandle, bool) {
-	// Handles written during the host-local migration can carry a trailing carriage
-	// return; see https://github.com/projectcalico/cni-plugin/issues/821.
-	handleID = strings.Split(handleID, "\r")[0]
-
-	containerID, ok := strings.CutPrefix(handleID, netName+".")
-	if !ok {
-		return ParsedPodHandle{}, false
-	}
-
-	// A dot left in the container ID means this is not a sandbox handle: pre-v3 handles
-	// name the workload (k8s-pod-network.default.mypod), VM handles name the VMI
-	// (k8s-pod-network.vmi.default.vm1).
-	if containerID == "" || strings.Contains(containerID, ".") {
-		return ParsedPodHandle{}, false
-	}
-
-	return ParsedPodHandle{
-		Network:     netName,
-		ContainerID: containerID,
-	}, true
 }
 
 func CreateClient(conf types.NetConf) (client.Interface, error) {

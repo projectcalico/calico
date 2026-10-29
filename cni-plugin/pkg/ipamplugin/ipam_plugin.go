@@ -561,7 +561,7 @@ func transferFromPriorSandbox(
 	}
 
 	currentHandle := *attr.HandleID
-	parsed, ok := utils.ParsePodHandleID(currentHandle, netName)
+	parsed, ok := ipam.ParsePodHandleID(currentHandle, netName)
 	if !ok {
 		logger.WithField("fromHandle", currentHandle).Info("Requested address is not held by a pod sandbox")
 		return fmt.Errorf("address %s is not held by a pod sandbox and cannot be transferred", ip)
