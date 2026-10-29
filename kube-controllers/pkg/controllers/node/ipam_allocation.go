@@ -123,10 +123,6 @@ type allocation struct {
 	sequenceNumber uint64
 	block          string
 
-	// blockNode is the block's Calico node when the GC first saw this allocation. node() files a VM address
-	// with no owner under it. It's never updated, since the filing key must stay fixed.
-	blockNode string
-
 	// The Kubernetes node name hosting this allocation.
 	knode string
 
@@ -177,14 +173,14 @@ func (a *allocation) fields() log.Fields {
 	return f
 }
 
-// node is the Calico node the GC files the allocation under: its owner's node, or for a VM address with no
-// owner, the node its block is affine to. It must not change while the allocation is registered.
+// node is the Calico node the GC files the allocation under: its owner's node, or stoppedVMNode for a VM address
+// that no node holds. It must not change while the allocation is registered.
 func (a *allocation) node() string {
 	if node, ok := a.attrs[ipam.AttributeNode]; ok {
 		return node
 	}
 	if a.isVMAllocation() {
-		return a.blockNode
+		return stoppedVMNode
 	}
 	return ""
 }

@@ -48,7 +48,7 @@ After the walk, if every allocation on a node is released and no valid ones rema
 - **Tunnel IPs validate via node existence only.** They never validate via pods. Mixing the paths would release a live tunnel IP whenever the pod-side check failed.
 - **Missing `pod` / `namespace` attributes ⇒ assume valid.** Conservative on purpose. Tightening this without a real reason will release allocations made by paths that don't
   stamp the attrs.
-- **The exception is a stopped VM's address.** CNI DEL clears its owner but keeps it on the VM handle, so the GC files it under its block's node and holds it only while a VM or standalone VMI rebuilds that handle.
+- **The exception is a stopped VM's address.** CNI DEL clears its owner but keeps it on the VM handle, so the GC holds it only while a VM or standalone VMI rebuilds that handle. No node holds it, so it's filed in an in-memory stopped-VM bucket rather than under any node: deleting a node neither skips its VM grace period nor waits on it.
 - **Multus produces multiple WorkloadEndpoints per pod.** The IP must appear in at least one `wep.Spec.IPNetworks` to be valid. A single-WEP check would falsely release
   secondary-network IPs.
 - **Pod lookup mode is preferCache vs live.** Cache for the node-deleted path (where the source data is presumed stale), live for sync. A live read can win against the cache in the

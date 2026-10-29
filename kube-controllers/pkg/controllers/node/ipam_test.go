@@ -104,6 +104,10 @@ func assertConsistentState(c *IPAMController) {
 		for id, a := range allocations {
 			ExpectWithOffset(1, c.allocationsByBlock[a.block][id]).To(Equal(a), fmt.Sprintf("Allocation %s not present in allocationsByBlock", id))
 		}
+		if node == stoppedVMNode {
+			// No block is ever affine to it.
+			continue
+		}
 		ExpectWithOffset(1, c.blocksByNode).To(HaveKey(node), fmt.Sprintf("Node %s not present in blocksByNode", node))
 	}
 }
@@ -561,18 +565,16 @@ var _ = Describe("IPAM controller UTs", func() {
 			}
 			longName := strings.Repeat("v", 120)
 
-			It("should be a VM allocation filed under its block's node", func() {
+			It("should be a VM allocation filed under the stopped-VM bucket", func() {
 				c.Start(stopChan)
 				a := makeOwnerless(vmipam.CreateVMHandleID("", "default", "test-vm"))
-				a.blockNode = "cnode"
 				Expect(a.isVMAllocation()).To(BeTrue())
-				Expect(a.node()).To(Equal("cnode"))
+				Expect(a.node()).To(Equal(stoppedVMNode))
 			})
 
 			It("should not be a VM allocation on a pod handle", func() {
 				c.Start(stopChan)
 				a := makeOwnerless("k8s-pod-network.0123456789abcdef")
-				a.blockNode = "cnode"
 				Expect(a.isVMAllocation()).To(BeFalse())
 				Expect(a.node()).To(BeEmpty())
 			})
@@ -791,16 +793,16 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		Describe("for a stopped VM's address", func() {
 			var vmHandle string
+			var blockAffinity *string
 
 			// deliverStoppedVMBlock sends a block holding one address on the VM's handle, owned as given. CNI DEL
 			// clears the owner when the VM stops, which bumps the address's sequence number.
 			deliverStoppedVMBlock := func(owner map[string]string, seq uint64) {
 				idx := 0
 				cidr := net.MustParseCIDR("10.0.0.0/30")
-				aff := "host:cnode"
 				b := model.AllocationBlock{
 					CIDR:           cidr,
-					Affinity:       &aff,
+					Affinity:       blockAffinity,
 					Allocations:    []*int{&idx, nil, nil, nil},
 					Unallocated:    []int{1, 2, 3},
 					SequenceNumber: seq,
@@ -824,8 +826,17 @@ var _ = Describe("IPAM controller UTs", func() {
 				return ""
 			}
 
+			// released reports whether the GC has released the VM's handle.
+			released := func() bool {
+				fakeClient, ok := cli.IPAM().(*fakeIPAMClient)
+				Expect(ok).To(BeTrue())
+				return fakeClient.handlesReleased[vmHandle]
+			}
+
 			BeforeEach(func() {
 				vmHandle = vmipam.CreateVMHandleID("", "default", "test-vm")
+				aff := "host:cnode"
+				blockAffinity = &aff
 			})
 
 			It("should hold the address while the VM exists and release it once the VM is deleted", func() {
@@ -836,22 +847,47 @@ var _ = Describe("IPAM controller UTs", func() {
 				c.Start(stopChan)
 				setupVMNodes()
 				deliverStoppedVMBlock(nil, 1)
-				Eventually(filedUnder, time.Second, 100*time.Millisecond).Should(Equal("cnode"))
+				Eventually(filedUnder, time.Second, 100*time.Millisecond).Should(Equal(stoppedVMNode))
 				c.onStatusUpdate(bapi.InSync)
 
-				fakeClient, ok := cli.IPAM().(*fakeIPAMClient)
-				Expect(ok).To(BeTrue())
-				Consistently(func() bool {
-					return fakeClient.handlesReleased[vmHandle]
-				}, assertionTimeout, 100*time.Millisecond).Should(BeFalse(), "address released while its VM exists")
+				Consistently(released, assertionTimeout, 100*time.Millisecond).Should(BeFalse(), "address released while its VM exists")
 
 				Expect(vmIndexer.Delete(vm)).NotTo(HaveOccurred())
-				Eventually(func() bool {
-					return fakeClient.handlesReleased[vmHandle]
-				}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "address not released after its VM was deleted")
+				Eventually(released, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "address not released after its VM was deleted")
 			})
 
-			It("should move a borrowed address to its block's node when CNI DEL clears its owner", func() {
+			It("should release the address of a deleted VM in a block with no affinity", func() {
+				c.vmRecreationGracePeriod = gracePeriod
+				blockAffinity = nil
+
+				c.Start(stopChan)
+				deliverStoppedVMBlock(nil, 1)
+				Eventually(filedUnder, time.Second, 100*time.Millisecond).Should(Equal(stoppedVMNode))
+				c.onStatusUpdate(bapi.InSync)
+
+				Eventually(released, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "address not released after its VM was deleted")
+			})
+
+			It("should keep the VM grace period when the block's node is deleted", func() {
+				c.vmRecreationGracePeriod = 1 * time.Hour
+
+				// The block stays affine to cnode, but no Calico or Kubernetes node exists for it.
+				c.Start(stopChan)
+				deliverStoppedVMBlock(nil, 1)
+				Eventually(filedUnder, time.Second, 100*time.Millisecond).Should(Equal(stoppedVMNode))
+				c.onStatusUpdate(bapi.InSync)
+
+				allocID := fmt.Sprintf("%s/%s", vmHandle, "10.0.0.0")
+				Eventually(func() bool {
+					done := c.pause()
+					defer done()
+					a := c.allocationState.allocationsByNode[stoppedVMNode][allocID]
+					return a != nil && a.isCandidateLeak()
+				}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "allocation should be a candidate leak")
+				Consistently(released, assertionTimeout, 100*time.Millisecond).Should(BeFalse(), "address released inside the VM grace period")
+			})
+
+			It("should move an address from its pod's node to the stopped-VM bucket when CNI DEL clears its owner", func() {
 				c.Start(stopChan)
 				deliverStoppedVMBlock(map[string]string{
 					ipam.AttributeNode:      "other-node",
@@ -862,7 +898,7 @@ var _ = Describe("IPAM controller UTs", func() {
 				Eventually(filedUnder, time.Second, 100*time.Millisecond).Should(Equal("other-node"))
 
 				deliverStoppedVMBlock(nil, 2)
-				Eventually(filedUnder, time.Second, 100*time.Millisecond).Should(Equal("cnode"))
+				Eventually(filedUnder, time.Second, 100*time.Millisecond).Should(Equal(stoppedVMNode))
 			})
 		})
 	})
@@ -1000,11 +1036,10 @@ var _ = Describe("IPAM controller UTs", func() {
 		deliver(update)
 
 		expectedAllocation := &allocation{
-			ip:        "10.0.0.0",
-			handle:    handle,
-			attrs:     b.Attributes[0].ActiveOwnerAttrs,
-			block:     "10.0.0.0/30",
-			blockNode: "cnode",
+			ip:     "10.0.0.0",
+			handle: handle,
+			attrs:  b.Attributes[0].ActiveOwnerAttrs,
+			block:  "10.0.0.0/30",
 		}
 
 		// Unique ID we expect for this allocation.

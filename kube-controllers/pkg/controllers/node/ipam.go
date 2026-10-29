@@ -79,6 +79,10 @@ const (
 	// Labels a block that no IP pool owns.
 	unknownPoolLabel = "no_ippool"
 
+	// stoppedVMNode files stopped VMs' addresses, which no node holds. The spaces keep it from colliding with a real
+	// node name, and it is never written to the datastore.
+	stoppedVMNode = "stopped VMs (virtual node)"
+
 	// key for ratelimited sync retries.
 	retryKey = "ipamSyncRetry"
 
@@ -612,7 +616,6 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 			attrs:          attr.ActiveOwnerAttrs,
 			sequenceNumber: b.GetSequenceNumberForOrdinal(ord),
 			block:          blockCIDR,
-			blockNode:      n,
 		}
 
 		currentAllocations[alloc.id()] = true
@@ -952,6 +955,12 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 	nodesToRelease := []string{}
 
 	for cnode, allocations := range nodesToCheck {
+		if cnode == stoppedVMNode {
+			c.checkStoppedVMAllocations(allocations)
+			c.allocationState.markClean(cnode, "stopped VM addresses checked")
+			continue
+		}
+
 		// Lookup the corresponding Kubernetes node for each Calico node we found in IPAM.
 		// In KDD mode, these are identical. However, in etcd mode its possible that the Calico node has a
 		// different name from the Kubernetes node.
@@ -1034,29 +1043,14 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 				a.markConfirmedLeak()
 			} else if a.isVMAllocation() {
 				// VM/VMI allocation with no backing VM or standalone VMI.
-				// Use a dedicated grace period to tolerate transient gaps
-				// during VM restarts and migrations. If the operator configured
-				// a longer LeakGracePeriod, respect that as well.
-				gracePeriod := c.vmRecreationGracePeriod
-				if c.config.LeakGracePeriod != nil && c.config.LeakGracePeriod.Duration > gracePeriod {
-					gracePeriod = c.config.LeakGracePeriod.Duration
-				}
-				a.markLeak(gracePeriod)
+				a.markLeak(c.vmGracePeriod())
 			} else if c.config.LeakGracePeriod != nil {
 				// The allocation is NOT valid, but the Kubernetes node still exists, so our confidence is lower.
 				// Mark as a candidate leak. If this state remains, it will switch
 				// to confirmed after the grace period.
 				a.markLeak(c.config.LeakGracePeriod.Duration)
 			}
-
-			if a.isConfirmedLeak() {
-				// If the address is determined to be a confirmed leak, add it to the index.
-				c.confirmedLeaks[a.id()] = a
-			} else if _, ok := c.confirmedLeaks[a.id()]; ok {
-				// Address used to be a leak, but is no longer.
-				logc.Info("Leaked IP has been resurrected")
-				delete(c.confirmedLeaks, a.id())
-			}
+			c.indexConfirmedLeak(a)
 		}
 
 		if !kubernetesNodeExists {
@@ -1084,6 +1078,39 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 		}
 	}
 	return nodesToRelease, nil
+}
+
+// checkStoppedVMAllocations checks the addresses of stopped VMs, which no node holds. Each is kept while its VM or a
+// standalone VMI exists, and released after the VM grace period once neither does. With no node behind them, a node
+// deletion neither skips that grace period nor waits on them.
+func (c *IPAMController) checkStoppedVMAllocations(allocations map[string]*allocation) {
+	for _, a := range allocations {
+		if c.allocationIsValid(a, true) {
+			a.markValid()
+		} else {
+			a.markLeak(c.vmGracePeriod())
+		}
+		c.indexConfirmedLeak(a)
+	}
+}
+
+// vmGracePeriod is how long a VM allocation with no backing VM or standalone VMI waits before it's a confirmed leak.
+// It tolerates the gap while a VM restarts, migrates or is recreated, and a longer LeakGracePeriod still wins.
+func (c *IPAMController) vmGracePeriod() time.Duration {
+	if c.config.LeakGracePeriod != nil && c.config.LeakGracePeriod.Duration > c.vmRecreationGracePeriod {
+		return c.config.LeakGracePeriod.Duration
+	}
+	return c.vmRecreationGracePeriod
+}
+
+// indexConfirmedLeak keeps confirmedLeaks in step with the allocation's state after a check.
+func (c *IPAMController) indexConfirmedLeak(a *allocation) {
+	if a.isConfirmedLeak() {
+		c.confirmedLeaks[a.id()] = a
+	} else if _, ok := c.confirmedLeaks[a.id()]; ok {
+		log.WithFields(a.fields()).Info("Leaked IP has been resurrected")
+		delete(c.confirmedLeaks, a.id())
+	}
 }
 
 // allocationIsValid returns true if the allocation is still in use, and false if the allocation
