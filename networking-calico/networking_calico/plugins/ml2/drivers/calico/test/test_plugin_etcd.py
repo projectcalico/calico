@@ -30,6 +30,12 @@ import eventlet
 
 import mock
 
+from neutron_lib.constants import IP_PROTOCOL_MAP
+
+from oslo_db.exception import DBError
+
+from sqlalchemy.exc import SQLAlchemyError
+
 import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
@@ -1557,6 +1563,53 @@ class TestPluginEtcd(TestPluginEtcdBase):
             )
         )
 
+    def _bind_port(self, agent_alive=True):
+        context = mock.MagicMock()
+        context.current = copy.deepcopy(lib.port1)
+        context.network.current = lib.network1
+        context.segments_to_bind = [
+            {
+                mech_calico.api.ID: "vlan-segment",
+                mech_calico.api.NETWORK_TYPE: "vlan",
+                "network_id": lib.network1["id"],
+            },
+            {
+                mech_calico.api.ID: "flat-segment",
+                mech_calico.api.NETWORK_TYPE: "flat",
+                "network_id": lib.network1["id"],
+            },
+        ]
+        context._plugin = self.db
+        context.host_agents.return_value = [
+            {
+                "agent_type": mech_calico.AGENT_TYPE_FELIX,
+                "alive": agent_alive,
+                "host": lib.port1["binding:host_id"],
+                "configurations": {},
+            }
+        ]
+        self.driver.bind_port(context)
+        return context
+
+    def test_bind_port(self):
+        """bind_port, via Neutron's base class, binds the segment Calico supports."""
+        context = self._bind_port()
+        context.host_agents.assert_called_once_with(mech_calico.AGENT_TYPE_FELIX)
+        context.set_binding.assert_called_once_with(
+            "flat-segment",
+            "tap",
+            {
+                "connectivity": "legacy",
+                "port_filter": True,
+                "mac_address": "fe:11:22:33:44:55",
+            },
+        )
+
+    def test_bind_port_dead_agent(self):
+        context = self._bind_port(agent_alive=False)
+        context.host_agents.assert_called_once_with(mech_calico.AGENT_TYPE_FELIX)
+        context.set_binding.assert_not_called()
+
     def test_get_vif_details_derives_tap_mac_from_port_mac(self):
         """tap MAC must match what the VM's ARP cache expects.
 
@@ -1568,9 +1621,10 @@ class TestPluginEtcd(TestPluginEtcdBase):
         context.current = {"mac_address": "fa:16:3e:aa:bb:cc"}
         details = self.driver.get_vif_details(context, agent=None, segment=None)
         self.assertEqual(details["mac_address"], "fe:16:3e:aa:bb:cc")
-        # port_filter (and any other keys the base class populated) still
+        # port_filter, and the connectivity that Neutron's base class adds, still
         # flow through.
         self.assertTrue(details["port_filter"])
+        self.assertEqual(details["connectivity"], "legacy")
 
     def test_get_vif_details_falls_back_when_port_mac_missing(self):
         context = mock.MagicMock()
@@ -1665,7 +1719,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         for (
             neutron_protocol_spec,
             calico_protocol_spec,
-        ) in lib.m_neutron_lib.constants.IP_PROTOCOL_MAP.items():
+        ) in IP_PROTOCOL_MAP.items():
             if neutron_protocol_spec in ("icmp", "ipv6-icmp"):
                 # _neutron_rule_to_etcd_rule maps these to Calico's ICMP and
                 # ICMPv6 names before it consults IP_PROTOCOL_MAP, so they do
@@ -3731,7 +3785,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         key = self._status_key_for_db_port("host", "p1")
         self.db.update_port_status = mock.Mock()
 
-        for error in [lib.DBError(), lib.SQLAlchemyError()]:
+        for error in [DBError(), SQLAlchemyError()]:
             self.db.get_port.side_effect = error
             with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
                 self.driver._try_to_update_port_status(mock.Mock(), key)
@@ -3752,7 +3806,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
 
         def m_update_port_status(context, port_id, status, host=None):
             mock_calls.append(mock.call(context, port_id, status, host=host))
-            raise lib.DBError()
+            raise DBError()
 
         self.db.update_port_status = m_update_port_status
         self.driver._port_status_cache[key] = "up"
@@ -3785,7 +3839,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         key = self._status_key_for_db_port("host", "p1")
 
         def m_update_port_status(context, port_id, status, host=None):
-            raise lib.SQLAlchemyError()
+            raise SQLAlchemyError()
 
         self.db.update_port_status = m_update_port_status
         self.driver._port_status_cache[key] = "up"
