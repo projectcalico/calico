@@ -80,7 +80,7 @@ steps:
   - name: check-language-dockerfiles
     jobSize: small
     requests: {cpu: 2250m, memory: 548Mi}
-    useGoBuild: true
+    image: quay.io/danieljfox/go-build:1.27.1-llvm21.1.8-k8s1.37.1-cacheprog
     workspaceVolumes: none
     changes:
       in:
@@ -111,6 +111,9 @@ steps:
       make check-dirty
 
   - name: check-manifests
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     requests: {cpu: 2750m, memory: 2.5Gi}
     services: [docker]
     changes:

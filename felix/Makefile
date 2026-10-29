@@ -717,4 +717,6 @@ update-tools:
 # Override the default golangci-lint target from the library makefile with a version that uses the right CGO
 # argument for Felix.
 golangci-lint: $(GENERATED_FILES)  $(LIBBPF_A)
-	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) golangci-lint run $(LINT_ARGS)'
+	$(call remote_cache_restore,$(GOLANGCI_LINT_CACHE_KEY),$(GOLANGCI_LINT_CACHE_DIR))
+	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) GOLANGCI_LINT_CACHE=$${GOCACHE}/golangci-lint golangci-lint run $(LINT_ARGS)'
+	$(call remote_cache_store,$(GOLANGCI_LINT_CACHE_KEY),$(GOLANGCI_LINT_CACHE_DIR))

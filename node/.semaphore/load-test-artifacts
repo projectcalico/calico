@@ -30,7 +30,8 @@ calico_image=
 for item in \
     calico-image:cmd/calico:calico:latest-${ARCH} \
     node-image:node:node:latest-${ARCH} \
-    whisker-image:whisker:whisker:latest-${ARCH}; do
+    whisker-image:whisker:whisker:latest-${ARCH} \
+    operator-image:operator:localhost:5000/calico/operator:test-build; do
   tarball="${item%%:*}.tar.zst"
   rest="${item#*:}"
   marker_dir="${rest%%:*}"
@@ -60,6 +61,23 @@ for item in \
     echo "WARNING: /tmp/${tarball} missing; ${image_ref} will be built from source."
   fi
 done
+
+# One tarball for all four; their stamps record no image ref, so a touch is
+# enough.
+if [ -f /tmp/third-party-images.tar.zst ]; then
+  echo "Loading cached third-party-images.tar.zst..."
+  zstd -dc /tmp/third-party-images.tar.zst | docker load
+  rm -f /tmp/third-party-images.tar.zst
+  for marker in \
+      third_party/envoy-gateway/.envoy-gateway.created-${ARCH} \
+      third_party/envoy-proxy/.envoy-proxy.created-${ARCH} \
+      third_party/envoy-ratelimit/.envoy-ratelimit.created-${ARCH} \
+      third_party/cni-plugins/.cni-plugins.created-${ARCH}; do
+    touch "${REPO_ROOT}/${marker}"
+  done
+else
+  echo "WARNING: /tmp/third-party-images.tar.zst missing; the third-party images will be built from source."
+fi
 
 # The k8st suite mounts cmd/calico/bin/calico-$ARCH, which only the image build
 # we just skipped would have produced. Take it out of the image instead.

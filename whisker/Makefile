@@ -17,8 +17,12 @@ BUILD_IMAGE_NAME=node:22.15
 ###############################################################################
 include ../lib.Makefile
 
+YARN_CACHE_DIR := .cache/yarn
+YARN_CACHE_KEY = whisker/yarn-$(shell sha256sum yarn.lock | cut -c1-16)
+
 DOCKER_RUN_RM:=docker run --rm \
 	--env CYPRESS_CACHE_FOLDER=/code/.cache/Cypress \
+	--env YARN_CACHE_FOLDER=/code/$(YARN_CACHE_DIR) \
 	--env NPM_TOKEN=${NPM_TOKEN} \
 	--user $(shell id -u):$(shell id -g) \
 	-v $${PWD}:/code \
@@ -37,8 +41,13 @@ bin/LICENSE: ../LICENSE.md
 .PHONY: image build
 image: $(IMAGE_BUILD_MARKER)
 
-build:
+.PHONY: yarn-cache-restore
+yarn-cache-restore:
+	$(call remote_cache_restore,$(YARN_CACHE_KEY),$(YARN_CACHE_DIR))
+
+build: yarn-cache-restore
 	$(DOCKER_RUN_RM) $(BUILD_IMAGE_NAME) yarn install -g
+	$(call remote_cache_store,$(YARN_CACHE_KEY),$(YARN_CACHE_DIR))
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn build
 
 image-nginx-test: $(IMAGE_BUILD_MARKER)
@@ -49,8 +58,9 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 	$(MAKE) image-nginx-test ARCH=$*
 
-install:
+install: yarn-cache-restore
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn install -g
+	$(call remote_cache_store,$(YARN_CACHE_KEY),$(YARN_CACHE_DIR))
 
 # jest sizes its pool from the host's cores, not the container's. Cap it where
 # they differ, or a starved worker trips the 5s per-test timeout.
