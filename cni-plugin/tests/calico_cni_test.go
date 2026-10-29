@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
@@ -162,7 +163,11 @@ var _ = Describe("CalicoCni", func() {
 			// Assert if the host side route is programmed correctly.
 			nlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
 			Expect(err).ShouldNot(HaveOccurred())
-			defer func() { _ = nlHandle.Close() }()
+			defer func() {
+				if err := nlHandle.Close(); err != nil {
+					log.WithError(err).Warn("Failed to close netlink handle")
+				}
+			}()
 			hostRoutes, err := netlinkutils.RouteListRetryEINTR(nlHandle, hostVeth, syscall.AF_INET)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(hostRoutes[0]).Should(Equal(netlink.Route{
@@ -870,7 +875,11 @@ var _ = Describe("CalicoCni", func() {
 
 				hostNlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
 				Expect(err).ShouldNot(HaveOccurred())
-				defer func() { _ = hostNlHandle.Close() }()
+				defer func() {
+					if err := hostNlHandle.Close(); err != nil {
+						log.WithError(err).Warn("Failed to close netlink handle")
+					}
+				}()
 
 				// CNI plugin generates host side vEth name from containerID if used for "cni" orchestrator.
 				hostVethName := "cali" + containerID[:min(11, len(containerID))] // "cali" + containerID

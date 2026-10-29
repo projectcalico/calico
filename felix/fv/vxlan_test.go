@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -176,7 +177,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			})
 
 			_ = BPFMode() && It("should share the VXLAN port with another VNI-filtering device", func() {
-				if !kernelSupportsVNIFilter(felixes[0]) {
+				if !kernelSupportsVNIFilter() {
 					Skip("kernel does not support VXLAN vnifilter")
 				}
 				for _, felix := range felixes {
@@ -1324,12 +1325,11 @@ func vxlanTunnelSupported(vxlanMode api.VXLANMode, routeSource string) bool {
 	return vxlanMode != api.VXLANModeAlways || routeSource != "WorkloadIPs"
 }
 
-// kernelSupportsVNIFilter checks with a throwaway device, since kernels without vnifilter silently ignore it.
-func kernelSupportsVNIFilter(felix *infrastructure.Felix) bool {
-	if err := felix.ExecMayFail("ip", "link", "add", "vnif-check", "type", "vxlan", "external", "vnifilter", "dstport", "4999"); err != nil {
-		return false
-	}
-	defer felix.Exec("ip", "link", "del", "vnif-check")
-	out, err := felix.ExecOutput("ip", "-d", "link", "show", "vnif-check")
-	return err == nil && strings.Contains(out, "vnifilter")
+// kernelSupportsVNIFilter checks the kernel version, independently of Felix's own device probe.
+func kernelSupportsVNIFilter() bool {
+	versionReader, err := environment.GetKernelVersionReader()
+	Expect(err).NotTo(HaveOccurred())
+	kernelVersion, err := environment.GetKernelVersion(versionReader)
+	Expect(err).NotTo(HaveOccurred())
+	return kernelVersion.Compare(environment.MustParseVersion("5.18.0")) >= 0
 }

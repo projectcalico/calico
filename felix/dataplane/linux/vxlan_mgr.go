@@ -87,6 +87,7 @@ func vxlanMgrWithDualStack() vxlanMgrOption {
 func vxlanMgrWithVNIFilter(overlayVNI uint32) vxlanMgrOption {
 	return func(m *vxlanManager) {
 		m.vniFilter = true
+		m.routeMgr.vniFilterSupported = true
 		m.routeMgr.tunnelVNIs = []uint32{overlayVNI, bpfnat.NodePortVXLANTunnelVNI}
 	}
 }

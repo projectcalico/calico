@@ -83,8 +83,8 @@ type routeManager struct {
 
 	// tunnelVNIs, if set, is the exact VNI filter of a VNI-filtering VXLAN device.
 	tunnelVNIs []uint32
-	// vniFilterUnsupported is set once the kernel creates the device without the requested VNI filter.
-	vniFilterUnsupported bool
+	// vniFilterSupported starts from feature detection and is cleared if the kernel drops the filter.
+	vniFilterSupported bool
 }
 
 func newRouteManager(
@@ -641,7 +641,7 @@ func (m *routeManager) configureTunnelDevice(
 	}
 
 	if m.vxlanEnabled() {
-		if vx, ok := newLink.(*netlink.Vxlan); ok && m.vniFilterUnsupported {
+		if vx, ok := newLink.(*netlink.Vxlan); ok && !m.vniFilterSupported {
 			vx.VniFilter = false
 		}
 		// At this point, we have successfully queried the existing device, or made sure it exists if it didn't
@@ -667,12 +667,12 @@ func (m *routeManager) configureTunnelDevice(
 			// Only a FeatureDetectOverride can request the filter from a kernel that lacks it.
 			m.logCtx.Error("Kernel created the VXLAN device without the VNI filter; using it unfiltered. " +
 				"Check FeatureDetectOverride for VXLANVNIFilter=true.")
-			m.vniFilterUnsupported = true
+			m.vniFilterSupported = false
 		}
 	}
 
 	// Checked every pass: other programs manage VNIs on the shared port and may remove ours.
-	if len(m.tunnelVNIs) > 0 && !m.vniFilterUnsupported {
+	if m.vniFilterSupported {
 		if err := m.ensureVNIFilter(link); err != nil {
 			return fmt.Errorf("failed to set VNI filter: %w", err)
 		}
