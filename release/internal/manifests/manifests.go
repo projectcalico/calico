@@ -68,7 +68,7 @@ func Include(_, _, relPath string) bool {
 	return true
 }
 
-// S3Excludes are aws filters for what Include leaves out. In aws filters
+// S3Excludes are S3 filters for what Include leaves out. In S3 filters
 // * also matches /, so */name excludes name at any depth.
 func S3Excludes() []string {
 	var patterns []string
