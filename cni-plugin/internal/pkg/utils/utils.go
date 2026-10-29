@@ -28,10 +28,10 @@ import (
 	"strings"
 
 	"github.com/DeRuina/timberjack"
+	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/azure"
@@ -132,9 +132,23 @@ func CreateOrUpdate(ctx context.Context, client client.Interface, wep *internala
 	return client.WorkloadEndpoints().Create(ctx, wep, options.SetOptions{})
 }
 
+// IPAMExec runs the IPAM plugin for ExecIPAMAdd and ExecIPAMDel. Nil execs the plugin binary,
+// which is the CNI library's default.
+var IPAMExec invoke.Exec
+
+// ExecIPAMAdd runs an ADD on the named IPAM plugin with IPAMExec.
+func ExecIPAMAdd(ctx context.Context, plugin string, netconf []byte) (cnitypes.Result, error) {
+	return invoke.DelegateAdd(ctx, plugin, netconf, IPAMExec)
+}
+
+// ExecIPAMDel runs a DEL on the named IPAM plugin with IPAMExec.
+func ExecIPAMDel(ctx context.Context, plugin string, netconf []byte) error {
+	return invoke.DelegateDel(ctx, plugin, netconf, IPAMExec)
+}
+
 // AddIPAM calls through to the configured IPAM plugin.
 // It also contains IPAM plugin specific logic based on the configured plugin.
-func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
+func AddIPAM(ctx context.Context, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
 	// Check if we're configured to use the Azure IPAM plugin.
 	var an *azure.AzureNetwork
 	if conf.IPAM.Type == "azure-vnet-ipam" {
@@ -152,7 +166,7 @@ func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cni
 
 	// Actually call the IPAM plugin.
 	logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
-	ipamResult, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+	ipamResult, err := ExecIPAMAdd(ctx, conf.IPAM.Type, args.StdinData)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +214,7 @@ func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cni
 // DeleteIPAM calls IPAM plugin to release the IP address.
 // It also contains IPAM plugin specific logic based on the configured plugin,
 // and is the logical counterpart to AddIPAM.
-func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) error {
+func DeleteIPAM(ctx context.Context, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) error {
 	logger.Info("Calico CNI releasing IP address")
 	logger.WithFields(logrus.Fields{
 		"paths": os.Getenv("CNI_PATH"),
@@ -212,9 +226,9 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 	case "host-local":
 		// We need to replace "usePodCidr" with a valid, but dummy podCidr string with "host-local" IPAM.
 		// host-local IPAM releases the IP by ContainerID, so podCidr isn't really used to release the IP.
-		// It just needs a valid CIDR, but it doesn't have to be the CIDR associated with the host.
-		dummyPodCidrv4 := "0.0.0.0/0"
-		dummyPodCidrv6 := "::/0"
+		// It just needs a valid CIDR that doesn't overlap the other configured ranges.
+		dummyPodCidrv4 := "0.0.0.0/24"
+		dummyPodCidrv6 := "::/120"
 		var stdinData map[string]any
 		err := json.Unmarshal(args.StdinData, &stdinData)
 		if err != nil {
@@ -261,7 +275,7 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 	}
 
 	// Call the CNI plugin.
-	err := ipam.ExecDel(conf.IPAM.Type, args.StdinData)
+	err := ExecIPAMDel(ctx, conf.IPAM.Type, args.StdinData)
 	if err != nil {
 		logger.Error(err)
 	} else if ae != nil {
@@ -278,8 +292,7 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 
 // ReplaceHostLocalIPAMPodCIDRs extracts the host-local IPAM config section and replaces our special-case "usePodCidr"
 // subnet value with pod CIDR retrieved by the passed-in getPodCIDR function.  Typically, the passed-in function
-// would access the datastore to retrieve the podCIDR. However, for tear-down we use a dummy value that returns
-// 0.0.0.0/0.
+// would access the datastore to retrieve the podCIDR. However, for tear-down we use dummy values instead.
 //
 // To make sure that unknown fields are round-tripped, we manipulate the JSON as maps and slices rather than by
 // unmarshaling it into a struct.  The structure of the JSON is as follows; we support replacing usePodCidr in
@@ -768,7 +781,7 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 
 // ReleaseIPAllocation is called to cleanup IPAM allocations if something goes wrong during
 // CNI ADD execution. It forces the CNI_COMMAND to be DEL for the duration of the cleanup.
-func ReleaseIPAllocation(logger *logrus.Entry, conf types.NetConf, args *skel.CmdArgs) {
+func ReleaseIPAllocation(ctx context.Context, logger *logrus.Entry, conf types.NetConf, args *skel.CmdArgs) {
 	logger.Info("Cleaning up IP allocations for failed ADD")
 
 	// The caller may carry on with the ADD after a cleanup it can recover from.
@@ -783,7 +796,8 @@ func ReleaseIPAllocation(logger *logrus.Entry, conf types.NetConf, args *skel.Cm
 		// Failed to set CNI_COMMAND to DEL.
 		logger.Warning("Failed to set CNI_COMMAND=DEL")
 	} else {
-		if err := DeleteIPAM(conf, args, logger); err != nil {
+		// Cleanup runs even when the ADD's context has been canceled.
+		if err := DeleteIPAM(context.WithoutCancel(ctx), conf, args, logger); err != nil {
 			// Failed to cleanup the IP allocation.
 			logger.Warning("Failed to clean up IP allocations for failed ADD")
 		}

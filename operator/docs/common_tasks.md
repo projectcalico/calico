@@ -58,8 +58,8 @@ To tear down the cluster:
 
 ### Running a custom image in your existing Calico (Enterprise) cluster
 
-These steps assume that you already have installed the operator in a Calico (Enterprise) cluster after following either
-docs.projectcalico.org or docs.tigera.io. To verify, run `kubectl get deployment -n tigera-operator tigera-operator`.
+These steps assume that you already have installed the operator in a Calico (Enterprise) cluster after following
+docs.tigera.io. To verify, run `kubectl get deployment -n tigera-operator tigera-operator`.
 You should see an existing deployment.
 The steps also assume that you have setup your docker such that you can push to a registry.
 
@@ -84,8 +84,8 @@ These are the steps:
 
 ### Set breakpoints in Goland IDE and run the code against your existing Calico (Enterprise) cluster
 
-These steps assume that you already have installed the operator in a Calico (Enterprise) cluster after following either
-https://docs.projectcalico.org or https://docs.tigera.io. To verify, run `kubectl get deployment -n tigera-operator tigera-operator`.
+These steps assume that you already have installed the operator in a Calico (Enterprise) cluster after following
+https://docs.tigera.io. To verify, run `kubectl get deployment -n tigera-operator tigera-operator`.
 You should see an existing deployment. Install [kubefwd](https://kubefwd.com/).
 
 1. Scale down the operator, so it does not interfere with your own:

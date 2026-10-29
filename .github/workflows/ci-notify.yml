@@ -1,5 +1,6 @@
-# DMs a PR author on Slack when their PR's Semaphore CI finishes. The DM is
-# event-driven off `status`.
+# DMs a PR author on Slack when their PR's ArgoCI run finishes. The DM is
+# event-driven off `status`. Semaphore's status is ignored: it runs no tests
+# and always passes.
 #
 # An approval DM exists too, but only on the manual `workflow_dispatch` path.
 # It cannot be driven by `pull_request_review`: that event is
@@ -49,8 +50,9 @@ on:
         type: choice
         options: [success, failure, error, approved]
 
-# Semaphore re-posts the same terminal status several times per commit.
-# Dedup claims a git ref named refs/ci-notify/<yyyymmdd>-<commit>-<state>
+# Each posted status gets one DM, even when a retry reuses the run name and
+# state; only a redelivery of the same status is a duplicate. Dedup claims a
+# git ref named refs/ci-notify/<yyyymmdd>-<run>-<state>-<status-id>
 # atomically — see "Claim dedup marker" below — so concurrent duplicate
 # events race to create the same ref and exactly one wins. No concurrency
 # group is needed: the claim is atomic on GitHub's side, so runs don't need
@@ -64,20 +66,20 @@ permissions:
   # git ref create/delete (the dedup marker) lives under contents. This
   # replaced an actions/cache-based marker: GitHub's Jun 2026 change to
   # issue read-only cache tokens for "untrusted trigger" events (a `status`
-  # event from Semaphore's GitHub App qualifies) made actions/cache/save
-  # silently no-op forever here, so the old marker never persisted and every
-  # duplicate status event kept sending its own DM.
+  # event qualifies) made actions/cache/save silently no-op forever here, so
+  # the old marker never persisted and every duplicate status event kept
+  # sending its own DM.
   contents: write
 
 jobs:
   notify:
-    # Fire once when the aggregate Semaphore status reaches a terminal
+    # Fire once when the aggregate ArgoCI status reaches a terminal
     # state. Skip 'pending' — that's CI starting/running, not finishing.
     # Approvals arrive only as a manual workflow_dispatch (state comes from
     # the input either way).
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event.context == 'ci/semaphoreci/pr: Calico' &&
+      (github.event.context == 'continuous-integration/calico' &&
        (github.event.state == 'success' ||
         github.event.state == 'failure' ||
         github.event.state == 'error'))
@@ -92,10 +94,12 @@ jobs:
       # the CI path, 'approved' the review path. A missing property evaluates
       # to empty, so this picks the status event's state or the input.
       STATE: ${{ github.event.state || inputs.state }}
-      # Status events only — the commit to resolve a PR from, and the commit
-      # the dedup marker is named after. Empty on a dispatch, which takes the
-      # PR number from its input and claims no marker.
+      # Status events only — the commit to resolve a PR from, and the run URL
+      # and status id the dedup marker is named after. Empty on a dispatch,
+      # which takes the PR number from its input and claims no marker.
       SHA: ${{ github.event.sha }}
+      TARGET_URL: ${{ github.event.target_url }}
+      STATUS_ID: ${{ github.event.id }}
     steps:
       - name: Skip if not configured
         id: gate
@@ -208,7 +212,7 @@ jobs:
           # A GitHub login is [A-Za-z0-9-], so it is safe via GITHUB_OUTPUT.
           echo "login=$LOGIN" >> "$GITHUB_OUTPUT"
 
-      # Dedup: claim a git ref named after (commit, state) before sending.
+      # Dedup: claim a git ref named after the status before sending.
       # Ref creation is atomic on GitHub's side, so concurrent duplicate
       # status events race to create the same ref and exactly one wins —
       # no concurrency group or serialization required. A non-"already
@@ -220,11 +224,17 @@ jobs:
         if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true' && steps.lookup.outputs.skip != 'true' && github.event_name == 'status'
         run: |
           # The marker name carries everything dedup and pruning need: the
-          # claim date, then the (commit, state) this DM is for. Duplicates
+          # claim date, then the status this DM is for. Duplicates
           # that straddle midnight UTC compute different names and so both
           # send — one extra DM at most, once a day, in exchange for keeping
           # age in the name.
-          REF="refs/ci-notify/$(date -u +%Y%m%d)-${SHA}-${STATE}"
+          # The ArgoCI run name only makes the ref readable; an unparsable URL
+          # falls back to the commit.
+          RUN=${TARGET_URL##*/}
+          if [[ ! "$RUN" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+            RUN=$SHA
+          fi
+          REF="refs/ci-notify/$(date -u +%Y%m%d)-${RUN}-${STATE}-${STATUS_ID}"
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
           # The ref *target* is GITHUB_SHA — the default-branch tip this run
           # was resolved from — deliberately not the status sha. A status sha
@@ -242,7 +252,7 @@ jobs:
           if [[ $RC -eq 0 ]]; then
             echo "claimed=true" >> "$GITHUB_OUTPUT"
           elif [[ "$ERR" == *"Reference already exists"* ]]; then
-            echo "::notice::already notified for $SHA ($STATE) — skipping duplicate status event"
+            echo "::notice::already notified for $RUN ($STATE, status $STATUS_ID) — skipping duplicate status event"
             echo "claimed=false" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::dedup ref-claim failed unexpectedly ($ERR) — proceeding without dedup for this run"
@@ -255,9 +265,11 @@ jobs:
       # Poll briefly for it so the DM can deep-link to the analysis. A pass
       # and an approval never get a triage comment, so the poll is skipped
       # on every state but failure/error.
+      # Disabled: sem-ai triage cannot read ArgoCI runs yet, so the comment never appears.
       - name: Wait for sem-ai-triage comment
         id: triage
         if: >-
+          false &&
           steps.gate.outputs.skip != 'true' &&
           steps.resolve.outputs.skip != 'true' &&
           steps.lookup.outputs.skip != 'true' &&

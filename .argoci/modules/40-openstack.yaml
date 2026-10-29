@@ -28,8 +28,16 @@ steps:
     # Building the control plane is mostly package installs, which is CPU and
     # small-file IO an e2 with a pd-balanced disk is slow at.
     vm:
-      machineType: c3-standard-8
-      # c3 capacity runs out zone by zone.
+      # Cheapest first, all families that can attach a hyperdisk. A region can run
+      # short of any one of them.
+      machineTypes:
+        - n4d-standard-8
+        - n4-standard-8
+        - c3d-standard-8
+        - c4d-standard-8
+        - c4-standard-8
+        - c3-standard-8
+      # Capacity runs out zone by zone.
       zone: us-central1
       diskType: hyperdisk-balanced
       diskSize: 100GB
@@ -44,6 +52,9 @@ steps:
           - name: LENS_ELASTICSEARCH_USER
           - name: LENS_ELASTICSEARCH_TOKEN
     commands: |
+      # Launchpad's PPA returns 503s in bursts, and apt's default three retries
+      # are spent in under half a minute; ten back off for about three.
+      echo 'Acquire::Retries "10";' | sudo tee /etc/apt/apt.conf.d/80-ci-retries >/dev/null
       sudo apt-get remove -y python3-wrapt || true
       sudo apt-get update -y && sudo apt-get install -y make
       # The default is not where this checkout lands.
@@ -67,8 +78,20 @@ steps:
       export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
       export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
       export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
-      TEMPEST=true OPENSTACK_RELEASE=caracal ./devstack/bootstrap.sh
+      # A failed stack.sh leaves its log filter and an async FIFO reader holding
+      # this SSH session's output, so the step would wait out its timeout.
+      rc=0
+      TEMPEST=true OPENSTACK_RELEASE=caracal ./devstack/bootstrap.sh || rc=$?
+      # Bracketed so the patterns don't match the sudo running pkill.
+      sudo pkill -f '/opt/stack/devstack/tools/[o]utfilter\.py' || true
+      sudo pkill -f '^[c]at /opt/stack/async/' || true
+      exit $rc
     epilogue: |
       sshOnVirtualMachine 'mkdir -p ~/logs && sudo journalctl > ~/logs/journalctl.txt'
       copyFromVirtualMachine '~/logs' logs
       artifact push job logs || true
+
+      # The perf documents are written on the machine, which is deleted after this step.  Keep
+      # them, so they can be inspected even when Lens did not get them.
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/artifacts/perf" perf || true
+      artifact push job perf -d perf -f || true

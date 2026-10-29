@@ -70,6 +70,9 @@ func Publish(o Operator, variants []Variant, hashrelease bool, opts ...PublishOp
 			s.Logger().WithField("variant", v.Name).Info("Already published, skipping")
 			return nil
 		}
+		if s.dryRun {
+			s.Logger().WithField("variant", v.Name).Info("Dry run, not publishing operator images")
+		}
 		// Recorded even when the push failed, so a resume knows what landed.
 		return errors.Join(s.run(publishTarget, v, hashrelease, env), s.record(v))
 	})

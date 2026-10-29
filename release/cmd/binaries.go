@@ -45,12 +45,12 @@ var (
 			if err != nil {
 				return err
 			}
-			dest, err := outputDir(cfg, c, ver.FormattedString())
+			dest, err := outputDir(cfg, c, ver.String())
 			if err != nil {
 				return err
 			}
 			return binaries.Build(
-				cfg.RepoRootDir, ver.FormattedString(),
+				cfg.RepoRootDir, ver.String(),
 				binaries.Release(dest),
 				binaries.WithRunner(commandRunner),
 				binaries.WithLogsDir(cfg.LogsDir),

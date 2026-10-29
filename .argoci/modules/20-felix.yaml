@@ -135,11 +135,12 @@ steps:
   # FELIX_TEST_GROUP is parsed for the Ubuntu release, dataplane and UTs, not
   # just a label.
   #
-  # The timeout outlasts JOB_TIMEOUT_MINUTES so the fleet's own watchdog can
-  # capture a hung VM's console first.
+  # The timeout outlasts JOB_TIMEOUT_MINUTES by up to 15 minutes of VM creation
+  # retries, plus slack so the fleet's own watchdog can capture a hung VM's
+  # console first.
   - name: felix-fv
     depends: [felix-build]
-    timeout: 1h15m
+    timeout: 1h30m
     requests: {cpu: 2000m, memory: 4Gi}
     secretBundles:
       - name: google-service-account-for-gce
@@ -207,10 +208,10 @@ steps:
       source felix/.semaphore/fv-prologue
       # Both after the prologue, which sets its own.
       export REGION="${ARGOCI_GCP_REGION}"
-      # A capacity pool sixty-at-once doesn't empty, and a family that takes a
-      # hyperdisk boot disk.  2026-10-13: C3 was working well; N4 hit stockouts.
-      # Trying C4D as cheaper and faster than C3.
-      export VM_MACHINE_TYPE=c4d-highcpu-4
+      # In priority order, falling back on a stockout or exhausted quota; the
+      # older families after the fourth only when every newer one is short.
+      # Standard where highcpu would drop below 8GB, or has no such shape.
+      export VM_MACHINE_TYPES="c4d-highcpu-4 n4d-highcpu-4 c3-highcpu-4 n4-highcpu-4 t2d-standard-4 c3d-highcpu-4 n1-standard-4 n2-standard-4 c4-highcpu-4"
       if [ -n "${FV_BATCHES_OVERRIDE:-}" ]; then
         export NUM_FV_BATCHES="${FV_BATCHES_OVERRIDE}"
       fi

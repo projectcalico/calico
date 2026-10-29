@@ -67,6 +67,9 @@ type Driver struct {
 	// Publish pushes the branch changes to the remote.
 	Publish bool
 
+	// DryRun pushes with --dry-run, so the remote is checked but not changed.
+	DryRun bool
+
 	// Plan prints what each step would do without acting.
 	Plan bool
 
@@ -134,6 +137,10 @@ func (d *Driver) CutReleaseBranch(plan *CutPlan) error {
 	if plan.Source == plan.Derived {
 		return fmt.Errorf("source %q cannot be the same as derived %q branch", plan.Source, plan.Derived)
 	}
+	// The main check is skipped for a tag source, so a tag cut must not advance main.
+	if t, ok := plan.mainTarget(); ok && strings.HasPrefix(plan.Source, tagRefPrefix) {
+		return fmt.Errorf("a cut from %s cannot advance %s", strings.TrimPrefix(plan.Source, tagRefPrefix), t.Branch)
+	}
 	g := gitIn(d.RepoRoot)
 	if d.Plan {
 		logPlan(plan)
@@ -181,6 +188,11 @@ func (d *Driver) validateFreshCut(g git, p *CutPlan) error {
 // checkBases verifies each base is current with its remote. Main is always
 // required (its upstream is .git/config); the source only under BranchCheck.
 func (d *Driver) checkBases(g git, p *CutPlan) error {
+	// A cut from a tag never touches main; the tag just has to be the one the
+	// remote released.
+	if tagName, ok := strings.CutPrefix(p.Source, tagRefPrefix); ok {
+		return checkTagOnRemote(g, tagName, p.Remote, d.Plan)
+	}
 	mainFix := fmt.Sprintf("run `git checkout %s && git pull` before cutting", d.MainBranch)
 	if err := checkBranchCurrent(g, d.MainBranch, "", true, d.Plan, mainFix); err != nil {
 		return fmt.Errorf("check %s is current: %w", d.MainBranch, err)
@@ -296,9 +308,9 @@ func (d *Driver) steps(g git, p *CutPlan) []Step {
 		{
 			Name: stepPushRefs,
 			Done: func() (bool, error) {
-				// A local run pushes nothing, so there is nothing to probe: report done.
+				// With publishing off nothing is pushed, so there is nothing to probe.
 				if !d.Publish {
-					logrus.WithField("step", stepPushRefs).Info("skipping push (local run)")
+					logrus.WithField("step", stepPushRefs).Info("skipping push (publish off)")
 					return true, nil
 				}
 				// Done only when every ref is on the remote at the local sha. A stale
@@ -323,15 +335,15 @@ func (d *Driver) steps(g git, p *CutPlan) []Step {
 			},
 			Do: func() error {
 				if !d.Publish {
-					logrus.WithField("step", stepPushRefs).Info("skipping push (local run)")
+					logrus.WithField("step", stepPushRefs).Info("skipping push (publish off)")
 					return nil
 				}
-				return pushRefs(g, p.Remote, d.pushRefs(p)...)
+				return pushRefs(g, p.Remote, d.DryRun, d.pushRefs(p)...)
 			},
 		},
 		{
 			Name: stepPostPush,
-			// Local runs still run the hook, which honors dry-run itself.
+			// The hook runs even when nothing was pushed; it checks dry-run itself.
 			Done: func() (bool, error) {
 				if d.PostDerivedPush == nil {
 					logrus.WithField("step", stepPostPush).Info("skipping post-push (no hook)")

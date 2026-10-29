@@ -349,6 +349,8 @@ type bpfEndpointManager struct {
 	epToHostAction          string
 	vxlanMTU                int
 	vxlanPort               uint16
+	vxlanSrcPortMin         uint16
+	vxlanSrcPortMax         uint16
 	wgPort                  uint16
 	wg6Port                 uint16
 	dsrEnabled              bool
@@ -626,6 +628,8 @@ func NewBPFEndpointManager(
 		epToHostAction:          config.RulesConfig.EndpointToHostAction,
 		vxlanMTU:                config.VXLANMTU,
 		vxlanPort:               uint16(config.VXLANPort),
+		vxlanSrcPortMin:         uint16(config.VXLANSrcPortMin),
+		vxlanSrcPortMax:         uint16(config.VXLANSrcPortMax),
 		overlayTunnelID:         uint32(config.RulesConfig.VXLANVNI),
 		wgPort:                  uint16(config.Wireguard.ListeningPort),
 		wg6Port:                 uint16(config.Wireguard.ListeningPortV6),
@@ -1434,6 +1438,11 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	logrus.Debugf("Interface update for %v, state %v", update.Name, update.State)
 
+	if update.Name == tc.NetkitProbeIface {
+		// Felix's own feature probe, not an endpoint; it is gone before we could configure it.
+		return
+	}
+
 	if !m.isDataIface(update.Name) && !m.isWorkloadIface(update.Name) && !m.isL3Iface(update.Name) {
 		if update.State == ifacemonitor.StateUp {
 			if ai, ok := m.initAttaches[update.Name]; ok {
@@ -1549,7 +1558,21 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 				}
 			default:
 				if m.v4 != nil {
-					if err := m.dp.setRPFilter(update.Name, 2); err != nil {
+					rpFilter := 2
+					if !m.bpfOverlayIPOnDevice &&
+						(iface.info.ifaceType == IfaceTypeIPIP || iface.info.ifaceType == IfaceTypeVXLAN) {
+						// In BPFOverlayHostSourceIP=HostAddress mode the overlay
+						// device has no IP address, and the kernel drops packets
+						// arriving on an address-less device unless their source
+						// routes back via that device, even in loose RPF mode.
+						// Replies of host-networked connections to remote service
+						// backends are reverse-NATted here on tunnel ingress, so
+						// their source is the service IP, routed via bpfin.cali.
+						// Turn kernel RPF off like on the bpfin/bpfout devices;
+						// BPF does the RPF on its own.
+						rpFilter = 0
+					}
+					if err := m.dp.setRPFilter(update.Name, rpFilter); err != nil {
 						logrus.WithError(err).Warnf("Failed to set rp_filter for %s.", update.Name)
 					}
 				}
@@ -3790,6 +3813,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.DSROptoutCIDRs = m.dsrOptoutCidrs
 	ap.LogLevel, ap.LogFilter = m.apLogFilter(ap, ifaceName)
 	ap.VXLANPort = m.vxlanPort
+	ap.VXLANSrcPortMin = m.vxlanSrcPortMin
+	ap.VXLANSrcPortMax = m.vxlanSrcPortMax
 	ap.PSNATStart = m.psnatPorts.MinPort
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.TunnelMTU = uint16(m.vxlanMTU)
@@ -4238,9 +4263,7 @@ func (m *bpfEndpointManager) setRPFilter(iface string, val int) error {
 	// We only support IPv4 for now.
 	path := fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", iface)
 	numval := strconv.Itoa(val)
-	err := writeProcSys(path, numval)
-	if err != nil {
-		logrus.WithField("err", err).Errorf("Failed to  set %s to %s", path, numval)
+	if err := writeProcSys(path, numval); err != nil {
 		return err
 	}
 

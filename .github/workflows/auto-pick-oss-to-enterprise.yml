@@ -7,7 +7,8 @@
 #   pick    (Job A) clone (READ token) + cherry-pick + Claude resolve, then export
 #           the result as a git-format-patch artifact. No write token, no Slack.
 #   open-pr (Job B) fresh runner: git am the artifact (WRITE token), push, open
-#           the PR, DM the author.
+#           the PR, assign it to its owner (the author, or the merger for a
+#           non-member's PR) and DM them.
 #
 # Auth (secrets/vars on projectcalico/calico):
 #   CLAUDE_TOKEN              Anthropic API key                       (Job A)
@@ -53,6 +54,8 @@ env:
   TARGET_BRANCH: master
   EXTRA_LABELS: merge-oss-cherry-pick
   TITLE_PREFIX: "[OSS pick] "
+  # Enterprise names the API module github.com/tigera/api.
+  IMPORT_REWRITES: github.com/projectcalico/api=github.com/tigera/api
 
 jobs:
   # =========================================================================
@@ -88,7 +91,7 @@ jobs:
       pr: ${{ steps.resolve.outputs.pr }}
       sha: ${{ steps.resolve.outputs.sha }}
       login: ${{ steps.resolve.outputs.login }}
-      notify: ${{ steps.escalation.outputs.notify }}
+      owner: ${{ steps.resolve.outputs.owner }}
       outcome: ${{ steps.pick.outputs.outcome }}
       escalated: ${{ steps.escalation.outputs.escalated }}
       reason: ${{ steps.escalation.outputs.reason }}
@@ -192,7 +195,7 @@ jobs:
           steps.resolve.outputs.proceed == 'true' &&
           steps.resolve.outputs.trusted == 'true' &&
           steps.pick.outputs.outcome == 'conflict'
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@2dca132ff0e0c4094ce6048b422c6915a071210b # v1.0.247
         continue-on-error: true
         env:
           MERGE_SHA: ${{ steps.resolve.outputs.sha }}
@@ -246,6 +249,9 @@ jobs:
             - Match Enterprise conventions: keep Enterprise branding/wording,
               keep Enterprise copyright headers (do not revert them to Apache),
               keep Enterprise import groupings.
+            - Go imports: Enterprise renames some OSS modules (`${{ env.IMPORT_REWRITES }}`,
+              as old=new). Code you write or keep must import the Enterprise path;
+              a later step also rewrites them in every file the pick touches.
             - Generated goldens under `confd/tests/compiled_templates/**`: take
               the incoming OSS side (write the `.theirs` file's contents) for
               every conflicted snapshot,
@@ -335,8 +341,6 @@ jobs:
         env:
           CLAUDE_OUTCOME: ${{ steps.claude.outcome }}
           TRUSTED: ${{ steps.resolve.outputs.trusted }}
-          AUTHOR: ${{ steps.resolve.outputs.login }}
-          MERGER: ${{ steps.resolve.outputs.merger }}
           FINALIZE: ${{ steps.finalize.outputs.finalize }}
           FINALIZE_REASON: ${{ steps.finalize.outputs.reason }}
         run: |
@@ -345,13 +349,11 @@ jobs:
           echo "severity=$severity" >> "$GITHUB_OUTPUT"
           if [ "$TRUSTED" != "true" ]; then
             {
-              echo "notify=$MERGER"
               echo "escalated=true"
               echo "reason=conflict on a PR by a non-tigera author, not AI-resolved"
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "notify=$AUTHOR" >> "$GITHUB_OUTPUT"
           if [ -f /tmp/pick-escalated ]; then
             echo "escalated=true" >> "$GITHUB_OUTPUT"
             echo "reason=agent escalated (irreconcilable or major refactor)" >> "$GITHUB_OUTPUT"
@@ -412,7 +414,7 @@ jobs:
 
       - name: Upload pick artifact
         if: steps.encrypt.outputs.artifact == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: pick-export-${{ github.run_id }}
           path: /tmp/pick-export.tgz.gpg
@@ -461,7 +463,7 @@ jobs:
 
       - name: Download pick artifact
         if: needs.pick.outputs.artifact == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: pick-export-${{ github.run_id }}
           path: /tmp/pick-dl
@@ -492,6 +494,7 @@ jobs:
           OUTCOME: ${{ needs.pick.outputs.outcome }}
           CONFLICT_SEVERITY: ${{ needs.pick.outputs.severity }}
           EXPORT_DIR: /tmp/pick-export
+          ASSIGNEE: ${{ needs.pick.outputs.owner }}
         run: bash "$RUNNER_TEMP/oss-pick.sh" apply
 
       # Notify steps each set only SLACK_BOT_TOKEN (kept out of the job env), the
@@ -499,12 +502,13 @@ jobs:
       # the source PR url/title itself, so the attacker-controlled title never
       # flows through a step output. All soft-fail.
 
-      # Picked: DM the author that their change was auto-cherry-picked.
+      # Picked: DM the owner that their change was auto-cherry-picked.
       - name: Notify author on Slack
         if: steps.openpr.outputs.pr_url != ''
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
-          AUTHOR_LOGIN: ${{ needs.pick.outputs.login }}
+          AUTHOR_LOGIN: ${{ needs.pick.outputs.owner }}
+          NOTIFY_AS: ${{ needs.pick.outputs.owner != needs.pick.outputs.login && 'merger' || 'author' }}
           SRC_PR: ${{ needs.pick.outputs.pr }}
           EE_PR_URL: ${{ steps.openpr.outputs.pr_url }}
           OUTCOME: ${{ needs.pick.outputs.outcome }}
@@ -521,8 +525,8 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
           ALERT_CHANNEL: ${{ vars.ALERT_SLACK_CHANNEL }}
-          AUTHOR_LOGIN: ${{ needs.pick.outputs.notify }}
-          NOTIFY_AS: ${{ needs.pick.outputs.notify != needs.pick.outputs.login && 'merger' || 'author' }}
+          AUTHOR_LOGIN: ${{ needs.pick.outputs.owner }}
+          NOTIFY_AS: ${{ needs.pick.outputs.owner != needs.pick.outputs.login && 'merger' || 'author' }}
           SRC_PR: ${{ needs.pick.outputs.pr }}
           MODE: escalated
           ESCALATION_REASON: ${{ needs.pick.outputs.reason }}

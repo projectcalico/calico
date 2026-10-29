@@ -6,7 +6,7 @@
 
 <blockquote>
 Note that the documentation in this repo is targeted at Calico contributors.
-<h1>Documentation for Calico users is here:<br><a href="http://docs.projectcalico.org">http://docs.projectcalico.org</a></h1>
+<h1>Documentation for Calico users is here:<br><a href="https://docs.tigera.io/">https://docs.tigera.io/</a></h1>
 </blockquote>
 
 This repository contains the Project Calico network plugin for CNI.  This plugin allows you to use Calico networking for
