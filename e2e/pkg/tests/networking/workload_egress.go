@@ -216,10 +216,11 @@ var _ = describe.CalicoDescribe(
 			serverName := fmt.Sprintf("server-%d", scenario.dstPod)
 			// Host-networked pods bind directly to the node's network stack, so
 			// port 80 (the default) can conflict with other host-networked pods or
-			// services on the same node. Use a random high port instead.
+			// services on the same node. Use a random port below the kernel's
+			// ephemeral range (32768+), which outgoing connections on the node may hold.
 			serverPort := 80
 			if scenario.dstHostNetworked {
-				serverPort = 10000 + rand.Intn(50000)
+				serverPort = 10000 + rand.Intn(22768)
 			}
 			serverOpts := []conncheck.ServerOption{
 				conncheck.WithEchoServer(),
