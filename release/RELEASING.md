@@ -236,9 +236,8 @@ You need them for the steps you run yourself.
 make release-notes
 ```
 
-This writes `release-notes/<VERSION>-release-notes.md`. It reads PRs from
-GitHub with the token in `GITHUB_TOKEN` or from `gh auth login`. Without one,
-requests are rate-limited.
+This needs `GITHUB_TOKEN` set and writes
+`release-notes/<VERSION>-release-notes.md`.
 
 A merged PR's note is included only if the PR:
 
