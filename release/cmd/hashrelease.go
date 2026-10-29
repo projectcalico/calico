@@ -25,15 +25,15 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/ci"
-	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
+	"github.com/projectcalico/calico/release/internal/plan"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 )
@@ -135,14 +135,7 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 
 		productRegistriesFromFlag := c.StringSlice(registryFlag.Name)
 
-		// Build the operator
 		o := pinnedOperator(cfg, c, pin.Operator, pin.ProductVersion)
-		if c.Bool(operatorFlagName) {
-			if err := operator.Build(o, operatorVariants(c), true,
-				operatorBuildOptions(c, filepath.Join(cfg.LogsDir, pin.ProductVersion))...); err != nil {
-				return fmt.Errorf("operator build: %w", err)
-			}
-		}
 
 		// Extract the pinned version as a hashrelease.
 		hashrel, err := pin.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false)
@@ -157,6 +150,7 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 			calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 			calico.WithVersion(pin.ProductVersion),
 			calico.WithOperatorImage(operator.Registry(o), o.Image, o.Version),
+			calico.WithOperator(operatorBuild(c, o, true, filepath.Join(cfg.LogsDir, pin.ProductVersion))),
 			calico.WithOutputDir(hashrel.Source),
 			calico.WithRecordsDir(outputs.RecordsDir(cfg.OutputDir, hashrel.Hash)),
 			calico.WithTmpDir(cfg.TmpDir),
@@ -174,10 +168,16 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 			calico.WithTarball(c.Bool(tarballFlag.Name)),
 			calico.WithWindowsArchive(c.Bool(windowsArchiveFlagName)),
 			calico.WithE2EBinaries(c.Bool(e2eBinariesFlag.Name)),
+			calico.WithReleaseNotes(c.Bool(releaseNotesFlag.Name)),
+			calico.WithDevTagIdentifier(c.String(devTagSuffixFlag.Name)),
 			calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
 			calico.WithValidation(c.Bool(validationFlag.Name)),
 			calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 			calico.WithDryRun(c.Bool(localFlag.Name)),
+			calico.WithPlanOptions(plan.Options{
+				Preview: c.Bool(planFlag.Name),
+				Skip:    skipSet(c.StringSlice(skipFlagName)),
+			}),
 		}
 		if len(productRegistriesFromFlag) > 0 {
 			opts = append(opts, calico.WithImageRegistries(productRegistriesFromFlag))
@@ -189,29 +189,12 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 		if err := r.Build(); err != nil {
 			return fmt.Errorf("calico manager build: %w", err)
 		}
-
-		// For real releases, release notes are generated prior to building the release.
-		// For hash releases, generate a set of release notes and add them to the hashrelease directory.
-		if !c.Bool(releaseNotesFlag.Name) {
-			logrus.Info("Skipping release notes generation")
-		} else if c.String(orgFlag.Name) != defaults.ProjectCalicoOrg || c.String(repoFlag.Name) != defaults.CalicoRepoName {
-			logrus.Warn("Release notes are not supported for non-Calico releases, skipping...")
-		} else {
-			pinVer, err := version.New(pin.ProductVersion)
-			if err != nil {
-				return err
-			}
-			releaseVersion, err := version.DetermineReleaseVersion(pinVer, c.String(devTagSuffixFlag.Name))
-			if err != nil {
-				return fmt.Errorf("failed to determine release version: %v", err)
-			}
-			if _, err := outputs.ReleaseNotes(defaults.ProjectCalicoOrg, cfg.RepoRootDir, filepath.Join(hashrel.Source, outputs.ReleaseNotesDir), releaseVersion); err != nil {
-				return err
-			}
+		if c.Bool(planFlag.Name) {
+			return nil
 		}
 
 		// Adjust the formatting of the generated outputs to match the legacy hashrelease format.
-		return tasks.ReformatHashrelease(pin, hashrel.Source, c.Bool(helmChartsFlagName))
+		return tasks.ReformatHashrelease(pin, hashrel.Source, buildingCharts(c))
 	}
 }
 
@@ -259,13 +242,10 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		}
 
 		o := pinnedOperator(cfg, c, hashrel.Operator, hashrel.ProductVersion)
-		if c.Bool(operatorFlagName) {
-			opts, err := operatorPublishOptions(c, outputs.RecordsDir(cfg.OutputDir, hashrel.Hash), filepath.Join(cfg.LogsDir, hashrel.ProductVersion))
-			if err != nil {
-				return fmt.Errorf("operator publish options: %w", err)
-			}
+		publishOperator := operatorPublish(c, o, true, outputs.RecordsDir(cfg.OutputDir, hashrel.Hash), filepath.Join(cfg.LogsDir, hashrel.ProductVersion))
+		if publishOperator != nil {
 			// Before PublishRelease: its scan sends the operator to ISS.
-			if err := operator.Publish(o, operatorVariants(c), true, opts...); err != nil {
+			if err := publishOperator(); err != nil {
 				return fmt.Errorf("operator publish: %w", err)
 			}
 		}
@@ -276,7 +256,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 			calico.WithRepoRoot(cfg.RepoRootDir),
 			calico.WithVersion(hashrel.ProductVersion),
 			calico.WithOperatorImage(operator.Registry(o), o.Image, o.Version),
-			calico.WithOperator(c.Bool(operatorFlagName)),
+			calico.WithOperator(publishOperator),
 			calico.WithOutputDir(hashrel.Source),
 			calico.WithRecordsDir(outputs.RecordsDir(cfg.OutputDir, hashrel.Hash)),
 			calico.WithTmpDir(cfg.TmpDir),
@@ -348,7 +328,9 @@ var hashreleaseBuildFlags = func() []cli.Flag {
 	f = append(f,
 		branchCheckFlag,
 		validationFlag,
-		localFlag)
+		localFlag,
+		planFlag,
+		skipFlag(calico.HashreleaseBuildSteps()))
 	return f
 }
 
@@ -427,6 +409,10 @@ var validateHashreleasePublishFlags = func(c *cli.Command) error {
 		}
 	}
 	return nil
+}
+
+func buildingCharts(c *cli.Command) bool {
+	return c.Bool(helmChartsFlagName) && !slices.Contains(c.StringSlice(skipFlagName), charts.Step)
 }
 
 // ciJobURL returns the URL to the CI job if the command is running on CI. An

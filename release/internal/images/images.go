@@ -35,13 +35,12 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-// Steps that drive images. The name becomes the log directory and the verb in
-// a failure, so a new step adds one here rather than passing a literal.
 const (
-	buildStep   = "images-build"
-	PublishStep = "images-publish"
-	archiveStep = "images-archive"
-	ResolveStep = "images-resolve"
+	Step        = "images"
+	buildStep   = Step + "-build"
+	PublishStep = Step + "-publish"
+	archiveStep = Step + "-archive"
+	ResolveStep = Step + "-resolve"
 )
 
 // Caps units and each unit's lookups alike, so a registry sees at most its

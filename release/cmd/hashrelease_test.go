@@ -15,9 +15,13 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+
+	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 )
@@ -81,5 +85,66 @@ func TestBaseHashreleaseOutputDir(t *testing.T) {
 	got := baseHashreleaseOutputDir("/repo")
 	if want := filepath.Join("/repo", "release", "_output", "hashrelease"); got != want {
 		t.Errorf("want %q, got %q", want, got)
+	}
+}
+
+func TestPinLoader(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want pinnedversion.Loader
+	}{
+		{name: "a build writes the pin", args: []string{"build"}, want: pinnedversion.LocalLoader{}},
+		{name: "a plan leaves the pin on disk alone", args: []string{"build", "--plan"}, want: pinnedversion.PreviewLoader{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got pinnedversion.Loader
+			cmd := &cli.Command{
+				Flags: freshFlags(hashreleaseBuildFlags()),
+				Action: func(_ context.Context, c *cli.Command) error {
+					got = pinLoader(pinnedversion.Config{}, c)
+					return nil
+				},
+			}
+			if err := cmd.Run(context.Background(), tc.args); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if reflect.TypeOf(got) != reflect.TypeOf(tc.want) {
+				t.Errorf("loader is a %T, want a %T", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBuildingCharts(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "on by default", want: true},
+		{name: "off by flag", args: []string{"--no-helm-charts"}},
+		{name: "off when its step is skipped", args: []string{"--skip", "charts"}},
+		{name: "on when another step is skipped", args: []string{"--skip", "images"}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got bool
+			cmd := &cli.Command{
+				Flags: []cli.Flag{
+					&cli.BoolWithInverseFlag{Name: helmChartsFlagName, Value: true},
+					&cli.StringSliceFlag{Name: skipFlagName},
+				},
+				Action: func(_ context.Context, c *cli.Command) error {
+					got = buildingCharts(c)
+					return nil
+				},
+			}
+			if err := cmd.Run(context.Background(), append([]string{"build"}, tc.args...)); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("buildingCharts = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
