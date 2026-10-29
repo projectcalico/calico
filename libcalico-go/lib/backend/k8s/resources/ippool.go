@@ -105,6 +105,7 @@ func IPPoolV3ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 			DisableBGPExport: v3res.Spec.DisableBGPExport,
 			AssignmentMode:   *v3res.Spec.AssignmentMode,
 			AllowedUses:      v3res.Spec.AllowedUses,
+			NodeSelector:     v3res.Spec.NodeSelector,
 		},
 		Revision: kvp.Revision,
 	}, nil
