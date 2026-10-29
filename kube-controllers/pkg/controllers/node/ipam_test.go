@@ -746,21 +746,26 @@ var _ = Describe("IPAM controller UTs", func() {
 		}
 
 		DescribeTable("should judge an allocation by its pod's current sandbox and phase",
-			func(phase v1.PodPhase, podContainerID, handle string, valid bool) {
+			func(phase v1.PodPhase, podContainerID, handle string, want allocationVerdict) {
 				c.Start(stopChan)
 				createSandboxPod(phase, podContainerID)
-				Expect(c.allocationIsValid(podAllocation(handle), false)).To(Equal(valid))
+				Expect(c.judgeAllocation(podAllocation(handle), false)).To(Equal(want))
 			},
-			Entry("valid on the current sandbox", v1.PodPending, currentSandbox, "k8s-pod-network."+currentSandbox, true),
-			Entry("leaked from a replaced sandbox", v1.PodPending, currentSandbox, "k8s-pod-network."+replacedSandbox, false),
-			Entry("leaked from a replaced sandbox on a dotted network name", v1.PodPending, currentSandbox, "secondary.network."+replacedSandbox, false),
-			Entry("valid when a hashed VM handle ends in a runtime-shaped ID", v1.PodPending, currentSandbox, "k8s-pod-network.vmi."+replacedSandbox, true),
-			Entry("valid when the pod records no sandbox", v1.PodPending, "", "k8s-pod-network."+replacedSandbox, true),
-			Entry("valid when the handle names no sandbox", v1.PodPending, currentSandbox, "k8s-pod-network.test-namespace.test-pod", true),
-			Entry("valid while running without a reported IP", v1.PodRunning, currentSandbox, "k8s-pod-network."+currentSandbox, true),
-			Entry("leaked once the pod has succeeded", v1.PodSucceeded, currentSandbox, "k8s-pod-network."+currentSandbox, false),
-			Entry("leaked once the pod has failed", v1.PodFailed, "", "k8s-pod-network."+currentSandbox, false),
+			Entry("in use on the current sandbox", v1.PodPending, currentSandbox, "k8s-pod-network."+currentSandbox, allocationInUse),
+			Entry("unused from a replaced sandbox", v1.PodPending, currentSandbox, "k8s-pod-network."+replacedSandbox, allocationUnused),
+			Entry("unused from a replaced sandbox on a dotted network name", v1.PodPending, currentSandbox, "secondary.network."+replacedSandbox, allocationUnused),
+			Entry("in use when a hashed VM handle ends in a runtime-shaped ID", v1.PodPending, currentSandbox, "k8s-pod-network.vmi."+replacedSandbox, allocationInUse),
+			Entry("in use when the pod records no sandbox", v1.PodPending, "", "k8s-pod-network."+replacedSandbox, allocationInUse),
+			Entry("in use when the handle names no sandbox", v1.PodPending, currentSandbox, "k8s-pod-network.test-namespace.test-pod", allocationInUse),
+			Entry("in use while running without a reported IP", v1.PodRunning, currentSandbox, "k8s-pod-network."+currentSandbox, allocationInUse),
+			Entry("unused once the pod has succeeded", v1.PodSucceeded, currentSandbox, "k8s-pod-network."+currentSandbox, allocationUnused),
+			Entry("unused once the pod has failed", v1.PodFailed, "", "k8s-pod-network."+currentSandbox, allocationUnused),
 		)
+
+		It("should judge an allocation whose pod doesn't exist as owner gone", func() {
+			c.Start(stopChan)
+			Expect(c.judgeAllocation(podAllocation("k8s-pod-network."+currentSandbox), false)).To(Equal(allocationOwnerGone))
+		})
 
 		It("should trust a reported pod IP over a container ID annotation from an abandoned sandbox", func() {
 			c.Start(stopChan)
@@ -1855,6 +1860,91 @@ var _ = Describe("IPAM controller UTs", func() {
 		Consistently(func() bool {
 			return fakeClient.handlesReleased[currentHandle]
 		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
+	})
+
+	It("should wait out the grace period for a live pod's IP when its node can't be found", func() {
+		c.config.LeakGracePeriod = &metav1.Duration{Duration: time.Hour}
+
+		// No Calico or Kubernetes node exists, as when a node lookup misses a live node. The
+		// pod is mid-ADD: its new sandbox has an allocation, but the annotation still names
+		// the sandbox before it.
+		currentSandbox := strings.Repeat("b", 64)
+		replacedSandbox := strings.Repeat("a", 64)
+		handle := "k8s-pod-network." + currentSandbox
+
+		pod := v1.Pod{}
+		pod.Name = "test-pod"
+		pod.Namespace = "test-namespace"
+		pod.Spec.NodeName = "node1"
+		pod.Status.Phase = v1.PodPending
+		pod.Annotations = map[string]string{conversion.AnnotationContainerID: replacedSandbox}
+		_, err := createPod(context.TODO(), cs, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		var gotPod *v1.Pod
+		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+
+		c.Start(stopChan)
+
+		idx := 0
+		cidr := net.MustParseCIDR("10.0.0.0/30")
+		aff := "host:node1"
+		block := model.AllocationBlock{
+			CIDR:        cidr,
+			Affinity:    &aff,
+			Allocations: []*int{&idx, nil, nil, nil},
+			Unallocated: []int{1, 2, 3},
+			Attributes: []model.AllocationAttribute{
+				{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
+						ipam.AttributeNode:      "node1",
+						ipam.AttributePod:       pod.Name,
+						ipam.AttributeNamespace: pod.Namespace,
+					},
+				},
+			},
+		}
+		kvp := model.KVPair{
+			Key:   model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)},
+			Value: &block,
+		}
+		deliver(bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew})
+
+		Eventually(func() int {
+			done := c.pause()
+			defer done()
+			return len(c.allocationState.allocationsByNode["node1"])
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(1))
+
+		c.onStatusUpdate(bapi.InSync)
+
+		allocID := handle + "/10.0.0.0"
+		fakeClient, ok := cli.IPAM().(*fakeIPAMClient)
+		Expect(ok).To(BeTrue())
+		By("holding the live pod's IP as a candidate leak", func() {
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				a := c.allocationState.allocationsByNode["node1"][allocID]
+				return a != nil && a.isCandidateLeak()
+			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
+			Consistently(func() bool {
+				return fakeClient.handlesReleased[handle]
+			}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
+			Expect(fakeClient.affinityReleased("node1")).To(BeFalse())
+		})
+
+		By("releasing it at once when the pod is deleted", func() {
+			err := cs.CoreV1().Pods(pod.Namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			var deleted *v1.Pod
+			Eventually(pods).WithTimeout(time.Second).Should(Receive(&deleted))
+			c.OnKubernetesPodDeleted(deleted)
+
+			Eventually(func() bool {
+				return fakeClient.handlesReleased[handle]
+			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
+		})
 	})
 
 	It("should not clean up leaked addresses if no grace period set", func() {

@@ -35,15 +35,17 @@ Invariants:
 windows-reserved:                skip
 not pod and not tunnel:          mark node "can't delete"
 tunnel address:                  defer until node-deletion decision
-allocationIsValid(preferCache):  markValid
-!kubernetesNodeExists:           markConfirmedLeak (immediate)
+judgeAllocation: in use:         markValid
+!kubernetesNodeExists, owner gone: markConfirmedLeak (immediate)
 isVMAllocation:                  markLeak(max(5min, leakGracePeriod))
 leakGracePeriod set:             markLeak(leakGracePeriod)
 ```
 
+Only an owner that is gone skips the grace period on a missing node: a node lookup can miss a live node, and an owner that still exists may be mid-ADD. Until such a leak is confirmed, the node's affinities stay.
+
 After the walk, if every allocation on a node is released and no valid ones remain, the node's tunnel IPs are confirmed-leaked and the node is added to `nodesToRelease`.
 
-`allocationIsValid` (`ipam.go:999`) is the truth check. The design-relevant rules:
+`judgeAllocation` is the truth check, and `allocationIsValid` wraps it. The design-relevant rules:
 
 - **Tunnel IPs validate via node existence only.** They never validate via pods. Mixing the paths would release a live tunnel IP whenever the pod-side check failed.
 - **Missing `pod` / `namespace` attributes ⇒ assume valid.** Conservative on purpose. Tightening this without a real reason will release allocations made by paths that don't
