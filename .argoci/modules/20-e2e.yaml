@@ -20,9 +20,18 @@ steps:
       - name: E2E_RUN_WRAPPER
         value: .semaphore/end-to-end/scripts/with-inline-diag.sh
     secretBundles:
-      - sandcat-upload
-      - sandcat-nightly
-      - sandcat-db
+      - name: sandcat-upload
+        keys:
+          - name: SANDCAT_UPLOAD_URL
+          - name: SANDCAT_INGEST_TOKEN
+      - name: sandcat-nightly
+        keys:
+          - name: GH_TOKEN
+          - name: SANDCAT_GEMINI_KEY
+      - name: sandcat-db
+        keys:
+          - name: SANDCAT_DB_URL
+          - name: SANDCAT_DB_TOKEN
     vm:
       # Cheapest first, all families that can attach a hyperdisk. A region can run
       # short of any one of them.
