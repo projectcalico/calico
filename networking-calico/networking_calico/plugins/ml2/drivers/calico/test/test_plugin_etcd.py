@@ -53,7 +53,7 @@ _log = logging.getLogger(__name__)
 logging.getLogger().addHandler(logging.NullHandler())
 
 
-class _TestEtcdBase(lib.Lib, unittest.TestCase):
+class _TestEtcdBase(lib.Lib):
 
     def setUp(self):
         """Setup before each test case."""
@@ -3478,7 +3478,7 @@ class TestPluginEtcdRegion(TestPluginEtcdBase):
         )
 
 
-class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
+class TestDriverStatusReporting(lib.Lib):
     """Tests of the driver's status reporting function."""
 
     def setUp(self):

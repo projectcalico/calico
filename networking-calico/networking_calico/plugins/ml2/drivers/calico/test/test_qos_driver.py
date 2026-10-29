@@ -17,8 +17,6 @@ Tests for the Calico QoS driver, which tells Neutron's QoS service which rules C
 can enforce, and passes QoS policy updates on to the mechanism driver.
 """
 
-import unittest
-
 import mock
 
 import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
@@ -33,7 +31,7 @@ class _Rule(dict):
         self.rule_type = rule_type
 
 
-class TestQoSDriver(lib.Lib, unittest.TestCase):
+class TestQoSDriver(lib.Lib):
 
     def test_registered_for_mechanism_driver(self):
         self.assertIsInstance(qos_driver.DRIVER, qos_driver.CalicoQoSDriver)
