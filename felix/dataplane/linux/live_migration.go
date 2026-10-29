@@ -135,14 +135,11 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 		if oldRole != newRole {
 			switch newRole {
 			case proto.LiveMigrationRole_NO_ROLE:
-				m.executeFSM(id, liveMigrationInputNoRole)
+				m.executeFSM(id, liveMigrationInputNoRole, "")
 			case proto.LiveMigrationRole_SOURCE:
-				m.executeFSM(id, liveMigrationInputSource)
+				m.executeFSM(id, liveMigrationInputSource, "")
 			case proto.LiveMigrationRole_TARGET:
-				if _, exists := m.fsms[id]; !exists {
-					m.fsms[id] = m.newFSM(id, msg.Endpoint.LiveMigrationUid)
-				}
-				m.executeFSM(id, liveMigrationInputTarget)
+				m.executeFSM(id, liveMigrationInputTarget, msg.Endpoint.LiveMigrationUid)
 			}
 		}
 	case *proto.WorkloadEndpointRemove:
@@ -150,14 +147,14 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 		delete(m.roles, id)
 		delete(m.ifaceNames, id)
 		delete(m.vmiNames, id)
-		m.executeFSM(id, liveMigrationInputDeleted)
+		m.executeFSM(id, liveMigrationInputDeleted, "")
 	}
 }
 
-// newFSM creates the FSM for a workload that is becoming the target of a live migration.  The
-// FSM is discarded when it returns to the Base state, so it normally lives for one migration,
-// and the migration's UID can be fixed in its log context.  That way the UID is still logged
-// after the LiveMigration resource has been deleted, which clears it from the workload.
+// newFSM creates the FSM for a workload that is becoming the target of a live migration.  The FSM
+// is discarded when it returns to the Base state, so it normally lives for one migration, and the
+// migration's UID can be fixed in its log context.  That way the UID is still logged after the
+// LiveMigration resource has been deleted, which clears it from the workload.
 func (m *liveMigrationMonitor) newFSM(id types.WorkloadEndpointID, migrationUID string) *liveMigrationFSM {
 	return &liveMigrationFSM{
 		logCtx: logrus.WithFields(logrus.Fields{
@@ -170,16 +167,25 @@ func (m *liveMigrationMonitor) newFSM(id types.WorkloadEndpointID, migrationUID 
 	}
 }
 
-func (m *liveMigrationMonitor) executeFSM(id types.WorkloadEndpointID, input liveMigrationInput) {
+// executeFSM delivers an input to the workload's FSM.  No FSM means the Base state, where only a
+// Target input does anything, so only a Target input creates an FSM, with the given migrationUID.
+// For any other input, migrationUID is ignored.
+func (m *liveMigrationMonitor) executeFSM(
+	id types.WorkloadEndpointID,
+	input liveMigrationInput,
+	migrationUID string,
+) {
 	fsm, exists := m.fsms[id]
 	if !exists {
-		// No FSM means the Base state, where only a Target input does anything, and OnUpdate
-		// creates the FSM before delivering that.
-		logrus.WithFields(logrus.Fields{
-			"id":    id,
-			"input": input,
-		}).Debug("Ignoring live migration input for workload with no FSM")
-		return
+		if input != liveMigrationInputTarget {
+			logrus.WithFields(logrus.Fields{
+				"id":    id,
+				"input": input,
+			}).Debug("Ignoring live migration input for workload with no FSM")
+			return
+		}
+		fsm = m.newFSM(id, migrationUID)
+		m.fsms[id] = fsm
 	}
 	fsm.handleInput(input)
 	if fsm.currentState == liveMigrationStateBase {
@@ -455,7 +461,7 @@ func (f *liveMigrationFSM) stopElevatedRoutingTimer() {
 // OnGARPDetected is called by the main loop when a GARP/RARP packet is
 // detected on a workload's interface.
 func (m *liveMigrationMonitor) OnGARPDetected(id types.WorkloadEndpointID) {
-	m.executeFSM(id, liveMigrationInputGARPDetected)
+	m.executeFSM(id, liveMigrationInputGARPDetected, "")
 }
 
 // OnTimerPop is called by the main loop when a timer fires for a workload.  Stale deliveries are
@@ -468,7 +474,7 @@ func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
 		logrus.WithField("id", id).Debug("Ignoring stale timer pop for workload not in TimeWait")
 		return
 	}
-	m.executeFSM(id, liveMigrationInputTimerPop)
+	m.executeFSM(id, liveMigrationInputTimerPop, "")
 }
 
 // detectGARP reads packets from the given handle and sends the workload ID

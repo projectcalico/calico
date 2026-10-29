@@ -1032,18 +1032,33 @@ func TestMigrationUIDTracking(t *testing.T) {
 	})
 }
 
-func TestNoFSMForInputsInBase(t *testing.T) {
-	g := NewWithT(t)
-	m := newTestMonitor(testConvergenceTime)
+func TestFSMCreation(t *testing.T) {
+	t.Run("inputs other than Target do not create an FSM", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
 
-	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
-	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
-	m.OnGARPDetected(wepID1)
-	m.OnTimerPop(wepID1)
-	m.OnUpdate(wepRemove(wepID1))
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
+		m.OnGARPDetected(wepID1)
+		m.OnUpdate(wepRemove(wepID1))
+		m.executeFSM(wepID1, liveMigrationInputTimerPop, "uid-ignored")
 
-	g.Expect(m.fsms).To(BeEmpty())
-	g.Expect(drainUpdates(m)).To(BeEmpty())
+		g.Expect(m.fsms).To(BeEmpty())
+		g.Expect(drainUpdates(m)).To(BeEmpty())
+	})
+
+	t.Run("a Target input creates the FSM with the given UID", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.executeFSM(wepID1, liveMigrationInputTarget, "uid-abc-123")
+
+		fsm := m.fsms[wepID1]
+		g.Expect(fsm).NotTo(BeNil())
+		g.Expect(fsm.currentState).To(Equal(liveMigrationStateTarget))
+		g.Expect(fsm.logCtx.Data["migrationUID"]).To(Equal("uid-abc-123"))
+		expectUpdate(g, m, liveMigrationStateTarget)
+	})
 }
 
 func TestVMINameTracking(t *testing.T) {
