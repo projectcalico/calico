@@ -1,226 +1,348 @@
 # Releasing Calico
 
-> **NOTE:** These instructions apply only to this branch.
-> For older releases, refer to the instructions in the corresponding `release-vX.Y` branch.
+> [!IMPORTANT]
+> These instructions apply only to this branch. For older releases, refer to the
+> instructions in the corresponding `release-vX.Y` branch.
 
-## Table of contents
+This is a runbook. Work through it top to bottom. Each step has:
 
-- [Releasing Calico](#releasing-calico)
-  - [Table of contents](#table-of-contents)
-  - [1. Prerequisites](#1-prerequisites)
-  - [2. Verify the code is ready for release](#2-verify-the-code-is-ready-for-release)
-  - [3. Create a release branch](#3-create-a-release-branch)
-    - [Setting up the branch](#setting-up-the-branch)
-    - [Updating milestones for the new branch](#updating-milestones-for-the-new-branch)
-  - [4. Performing a release](#4-performing-a-release)
-    - [4.a Prepare the release branch](#4a-prepare-the-release-branch)
-    - [4.b Build and publish the repository in Semaphore](#4b-build-and-publish-the-repository-in-semaphore)
-    - [4.c Publish the release on Github](#4c-publish-the-release-on-github)
-    - [4.d Update the docs with the new version](#4d-update-the-docs-with-the-new-version)
-  - [5. Post-release](#5-post-release)
-    - [Update milestones](#update-milestones)
-    - [Post-release verification](#post-release-verification)
-    - [Update API repository](#update-api-repository)
-- [Release notes](#release-notes)
+- **Run:** what to do.
+- **Check:** how to tell it worked. Don't move on until it passes.
+- **If it fails:** what is safe to do next.
 
-## 1. Prerequisites
+Steps tagged **Manual** need a person: a web UI, a CI button, or a judgement
+call.
 
-Generally, the release environment is managed through Semaphore and will already meet these requirements.
+Commands run from the repo root unless a step says otherwise. Replace `vX.Y.Z`
+with the version being released and `release-vX.Y` with its release branch.
 
-However, parts of the process will still require that the following requirements must be met.
+## Pick a path
 
-To publish Calico, you need **the following permissions**:
+> [!NOTE]
+> These are separate tasks, done at different times.
 
-- Write access to the projectcalico/calico GitHub repository.
-  - Generate a GitHub personal access token and export it as `GITHUB_TOKEN` in your environment.
-- Push access to the following repositories
-  - Calico DockerHub
-  - Calico Quay
-  - Tigera Quay
-  - projectcalico-org GAR
-- You must be a member of the Project Calico team on Launchpad, and have uploaded a GPG identity to your account, for which you have the secret key.
+- **Cut a release branch:** once per minor version, ahead of its `vX.Y.0`
+  release. See [Cut the release branch](#cut-the-release-branch).
+- **Release a version (`vX.Y.0` or a patch):** its `release-vX.Y` branch must
+  already exist. See [Release](#release).
+- **Build a hashrelease:** a pre-release build of one commit, for testing. See
+  [Hashrelease](#hashrelease).
 
-## 2. Verify the code is ready for release
+## Cut the release branch
 
-To verify that the code and GitHub are in the right state for releasing the chosen version (vX.Y.Z).
+Once per minor version, ahead of its `vX.Y.0` release. This creates
+`release-vX.Y` from `master`, plus the dev tags for the next releases.
 
-1. [Make sure the Milestone is empty](https://github.com/projectcalico/calico/pulls?q=is:open+is:pr+milestone:%22Calico+vX.Y.Z%22) either by merging PRs, or kicking them out of the Milestone.
-2. [Make sure that there are no pending cherry-pick PRs](https://github.com/projectcalico/calico/pulls?q=is%3Aopen+is%3Apr+label%3Acherry-pick-candidate+) relevant to the release.
-3. [Make sure CI is passing](https://tigera.semaphoreci.com/projects/calico) for the target release branch.
-4. Make sure release notes has been drafted and reviewed. See [Release notes](#release-notes) for more information.
+1. **Run:** see what the cut will do, without acting.
 
-Check the status of each of these items daily in the week leading up to the release.
+   ```sh
+   git checkout master && git pull origin master
+   make -C release build
+   release/bin/release branch cut --plan
+   ```
 
-## 3. Create a release branch
+   **Check:** the plan names `release-vX.Y` and the dev tags you expect.
+2. **Run:** cut the branch.
 
-When starting development on a new minor release, the first step is to create a release branch.
+   ```sh
+   make create-release-branch
+   ```
 
-**For patch releases, this section can be skipped and you can go directly to [Performing a release](#4-performing-a-release)**
+   **Check:** `git ls-remote --heads origin release-vX.Y` prints the new branch.
 
-### Setting up the branch
+   **If it fails:** run it again. Each step checks whether its effect already
+   exists and skips it if so. To skip a step on purpose, pass `--skip <step>` to
+   `release/bin/release branch cut`; `--help` lists the step names.
+3. **Run (Manual):** on the [milestones
+   page](https://github.com/projectcalico/calico/milestones), create
+   `Calico vX.Y+1.0`. Move the open PRs from `Calico vX.Y.0` into it. Leave
+   `Calico vX.Y.0` open.
 
-Create a new branch off of the latest master and publish it, along with a dev tag for the next release.
-The new release branch is typically `release-vX.Y` where `X.Y` is the new minor version and all the files
-in the repository are updated to reflect the new version.
+## Release
 
-  ```sh
-  git checkout master && git pull origin master
-  ```
+Work through these in order.
 
-  ```sh
-  make create-release-branch
-  ```
+### Before you start
 
-### Updating milestones for the new branch
+You need:
 
-Once a new branch is cut, we need to ensure a new milestone exists to represent the next release that will be cut from the master branch.
+- Write access to `projectcalico/calico`, and a GitHub token for it in
+  `GITHUB_TOKEN`.
+- Push access to the Calico image registries (Quay, Docker Hub, and
+  `gcr.io/projectcalico-org` with its regional mirrors).
+- For a `vX.Y.0` release: membership of the Project Calico team on Launchpad,
+  with an uploaded GPG identity whose secret key you hold.
 
-1. Go to the [Calico milestones page](https://github.com/projectcalico/calico/milestones)
+The official build and publish run in CI, which already holds these credentials.
+You need them for the steps you run yourself.
 
-1. Create a new release of the form `Calico vX.Y+1.0`. Leave the existing `Calico vX.Y.0` milestone open.
+> [!TIP]
+> Check these often in the week leading up to the release.
 
-1. Move any open PRs in the `Calico vX.Y.0` milestone into the new milestone `Calico vX.Y+1.0`.
+1. **Run (Manual):** clear the milestone. On the [milestones
+   page](https://github.com/projectcalico/calico/milestones), create the next
+   one (`Calico vX.Y.Z+1`, or `Calico vX.Y+1.0` for a `vX.Y.0` release) if it
+   doesn't exist. Merge each open PR in `Calico vX.Y.Z`, or move it and any open
+   issue to the next milestone.
 
-## 4. Performing a release
+   **Check:**
 
-### 4.a Prepare the release branch
+   ```sh
+   gh pr list -R projectcalico/calico --search 'milestone:"Calico vX.Y.Z"'
+   ```
 
-1. Checkout the release branch `release-vX.Y` and pull the latest changes.
+   This prints nothing.
+2. **Run:** confirm no cherry-pick PR for this release is still open.
+
+   **Check:**
+
+   ```sh
+   gh pr list -R projectcalico/calico --label cherry-pick-candidate \
+     --base release-vX.Y
+   ```
+
+   This lists none you need. For a `vX.Y.0` release, use `--base master`.
+3. **Run (Manual):** confirm CI is green on the target branch.
+4. **Run:** draft the release notes early, so review isn't on the critical path.
+
+   > [!IMPORTANT]
+   > Ensure this is done to avoid last-minute delays.
+   > See [Release notes](#release-notes) for guidance.
+
+### 1. Prepare the release
+
+1. **Run:**
 
    ```sh
    git checkout release-vX.Y && git pull origin release-vX.Y
-   ```
-
-1. Run `make release-prep` to create a `build-vX.Y.Z` branch with updated charts, manifests, and release notes.
-
-   ```sh
    make release-prep
    ```
 
-   This creates a `build-vX.Y.Z` branch, updates version references in charts and manifests,
-   runs `make generate`, generates release notes, and commits the changes.
-   The version is auto-detected from git state.
+   This works out the version from git, generates the release notes, and creates
+   `build-vX.Y.Z`. That branch holds one commit: the version bump in charts and
+   manifests, `make generate`, and the notes. It then pushes the branch and
+   opens a PR against `release-vX.Y`.
 
-1. Review the generated release notes in `release-notes/<VERSION>-release-notes.md` for accuracy and format appropriately. Amend the commit if changes are needed.
+   > [!WARNING]
+   > `make release-prep` overwrites the release notes, and a rerun drops any
+   > commits pushed to `build-vX.Y.Z`. Keep your draft outside the repo.
 
-1. Get the PR reviewed and ensure it passes CI before moving to the next step.
+   **Check:** `gh pr list -R projectcalico/calico --head build-vX.Y.Z` shows the
+   PR.
 
-1. If this is the first release from this release branch i.e. `vX.Y.0`, create a new Calico X.Y.x PPA in launchpad
-
-### 4.b Build and publish the repository in Semaphore
-
-To build and publish the release artifacts, find the desired commit [in Semaphore](https://tigera.semaphoreci.com/projects/calico), verify that all tests for that
-commit have passed, and press the `Publish official release` manual promotion button.
-
-Wait for this job to complete before moving on to the next step.
-
-### 4.c Publish the release on Github
-
-Go to the [Calico release page](https://github.com/projectcalico/calico/releases) and publish the draft release.
-
-### 4.d Update the docs with the new version
-
-1. Merge the PR branch created in step 4.a - `build-vX.Y.Z` and delete the branch from the repository.
-
-  > [!WARNING]
-  > Do not merge using "Squash and merge" as this will lose the version bump commit history.
-
-## 5. Post-release
-
-### Update milestones
-
-1. Go to the [Calico milestones page](https://github.com/projectcalico/calico/milestones)
-
-1. Open a new milestone of the form `Calico vX.Y.Z+1` for the next patch release in the series if it does not yet exist.
-
-1. Close out the milestone for the release that was just published, moving any remaining open issues and PRs to the newly created milestone.
-
-### Post-release verification
-
-1. Using the [post-release task in Semaphore](https://tigera.semaphoreci.com/projects/calico/schedulers/5eedc2d9-fbbb-4595-b7a5-50fac8068cf2/just_run),
-  Specify either the tag `vX.Y.Z` or the `build-vX.Y.Z` branch and click "Run".
-
-1. Check the output of the tests - if any test failed, dig in and understand why.
-
-1. Kick off some e2e tests to test the contents of the release.
-
-### Update API repository
-
-The `projectcalico/api` repository needs to be updated to stay in sync with the Calico API.
-
-**First**, ensure that you have [Github CLI tool](https://github.com/cli/cli#installation)
-
-1. Clone the API repository
+   **If it fails:** fix the cause and run it again. It force-pushes
+   `build-vX.Y.Z`.
+2. **Run (Manual):** put the final release notes on `build-vX.Y.Z` as a new
+   commit. Copy your draft from [Before you start](#before-you-start) over the
+   generated file, or edit the generated file directly.
 
    ```sh
-   git clone git@github.com:projectcalico/api.git
+   git switch build-vX.Y.Z
+   git add release-notes/vX.Y.Z-release-notes.md
+   git commit -m "Update vX.Y.Z release notes"
+   git push origin build-vX.Y.Z
    ```
 
-1. Create or checkout the release branch `release-vX.Y`.
+   **Check:** the PR shows the new commit and the notes read as intended.
+3. **Run (Manual):** get the PR approved. Do not merge it yet: the release is
+   built from this branch.
 
-   For a major/minor release:
+   **Check:** `gh pr checks <PR number> -R projectcalico/calico` shows every
+   check passing.
+4. **Run (Manual):** for a `vX.Y.0` release only, create a Calico X.Y.x PPA in
+   Launchpad.
+
+### 2. Build and publish
+
+1. **Run (Manual):** in CI, find the head commit of `build-vX.Y.Z`. Confirm its
+   tests passed. Then start the official release job on it ("Publish official
+   release"). The job runs `make release`, `make release-publish`, then
+   `make publish-openstack`.
+
+   **Check:**
+   - The job passed.
+   - `gh release view vX.Y.Z -R projectcalico/calico` shows a draft release with
+     its assets.
+   - `docker buildx imagetools inspect quay.io/calico/calico:vX.Y.Z` finds the
+     image.
+
+   **If it fails:** fix the cause and run the job again on the same commit.
+   Publish is safe to repeat: it skips what is already published.
+
+### 3. Publish the GitHub release
+
+1. **Run (Manual):** publish the draft. Mark it latest only if `vX.Y` is the
+   newest minor series.
 
    ```sh
-   git checkout -b release-vX.Y && git push origin release-vX.Y
+   gh release edit vX.Y.Z -R projectcalico/calico \
+     --draft=false --latest=<true|false>
    ```
 
-   For a patch release:
+   **Check:** `gh release view vX.Y.Z -R projectcalico/calico --json isDraft`
+   prints `"isDraft": false`.
+
+### 4. Merge the release PR
+
+1. **Run (Manual):** merge the `build-vX.Y.Z` PR with a merge commit, then
+   delete the branch.
+
+   > [!WARNING]
+   > Do not use "Squash and merge". The `vX.Y.Z` tag sits on the `build-vX.Y.Z`
+   > commit. A squash leaves that commit, and so the tag, out of `release-vX.Y`.
+
+   **Check:**
 
    ```sh
-   git checkout release-vX.Y && git pull origin release-vX.Y
+   git fetch origin --tags
+   git merge-base --is-ancestor vX.Y.Z origin/release-vX.Y && echo ok
    ```
 
-1. Update APIs by running the following command
+   This prints `ok`.
+
+### After the release
+
+1. **Run (Manual):** close the `Calico vX.Y.Z` milestone. Move anything still
+   open in it to the next milestone first.
+2. **Run (Manual):** in CI, start the post-release job for tag `vX.Y.Z` (or
+   branch `build-vX.Y.Z`). It runs `make postrelease-checks`.
+
+   **Check:** the job passed. If a test failed, find out why before calling the
+   release done.
+3. **Run (Manual):** start e2e tests against the released version.
+4. **Run:** update the `projectcalico/api` repository to match this release.
 
    ```sh
-   make -f Makefile.local pr CALICO_GIT_REF=vX.Y.Z`
+   git clone git@github.com:projectcalico/api.git && cd api
+   git checkout -b release-vX.Y && git push origin release-vX.Y   # vX.Y.0 only
+   git checkout release-vX.Y && git pull origin release-vX.Y      # patches
+   make -f Makefile.local pr CALICO_GIT_REF=vX.Y.Z
    ```
 
-   This runs a script that clones `projectcalico/calico`, import the updated files and creates a PR.
+   This imports the API files from `projectcalico/calico` at `vX.Y.Z` and opens
+   a PR. It needs the [GitHub CLI](https://github.com/cli/cli#installation).
 
-   > NOTE: if an auto-api PR already exists for this version,
-   > it will print an error about the PR existing already.
-   > The existing PR still gets updated with changes
+   > [!NOTE]
+   > If an auto-api PR for this version already exists, the command prints an
+   > error but still updates that PR.
 
-1. Get the PR reviewed, approved and merged
+   **Check (Manual):** the PR is reviewed and merged.
 
-# Release notes
+### Release notes
 
-Release notes for a Calico release contain notable changes across Calico repositories. To write release notes for a given version, perform the following steps.
+`make release-prep` generates the notes. To draft them earlier, run:
 
-1. Check the merged pull requests in the milestone and make sure each has a release note if it needs one.
+```sh
+make release-notes
+```
 
-   Use this URL to query for PRs, replacing `vX.Y.Z` with your desired version.
+This writes `release-notes/<VERSION>-release-notes.md`. It reads PRs from
+GitHub with the token in `GITHUB_TOKEN` or from `gh auth login`. Without one,
+requests are rate-limited.
+
+A merged PR's note is included only if the PR:
+
+- is in the `Calico vX.Y.Z` milestone,
+- has the `release-note-required` label, and
+- has a release note in its description.
+
+To check, list the milestone's PRs:
+
+```sh
+gh pr list -R projectcalico/calico --state merged \
+  --search 'milestone:"Calico vX.Y.Z"'
+```
+
+The generated file opens with the date and two placeholder headings,
+`#### Headline feature 1` and `#### Headline feature 2`. Every PR then lands
+under `#### Other changes`, one line each with its link and author, and
+`#### Bug fixes` is left empty. When editing:
+
+- For a `vX.Y.0` release, replace the placeholders with one
+  `#### Headline features` heading. Give each major feature a `#####` heading
+  that links its PR, and a short paragraph on what it does for users.
+- Say in that paragraph if the feature breaks, deprecates, or changes existing
+  behaviour, or needs a step before a downgrade.
+- For a patch, delete the placeholders.
+- Move each bug fix from `Other changes` to `Bug fixes`. Fix wording, not
+  layout.
+
+For the expected format, see the [v3.33.0 notes
+(minor)](https://github.com/projectcalico/calico/blob/release-v3.33/release-notes/v3.33.0-release-notes.md)
+and the [v3.32.2 notes
+(patch)](https://github.com/projectcalico/calico/blob/release-v3.32/release-notes/v3.32.2-release-notes.md).
+
+## Hashrelease
+
+A hashrelease is a build of one commit, named by its git hash, for testing
+before a release. CI builds one on a schedule and publishes it to the
+hashrelease server; that needs nothing from you. This section is for building
+one yourself and pushing it to your own registries, for example to test a change
+to the release code.
+
+### What you need
+
+- Your own image registry, with `docker login` done.
+- Your own Helm chart registry, with `helm registry login` done.
+- Optionally, a GitHub token in `GITHUB_TOKEN` or from `gh auth login`. The
+  build reads PRs from GitHub to write release notes, and requests without a
+  token are rate-limited. To skip the notes, add `--no-release-notes`.
+
+You don't need write access to `projectcalico/calico`.
+
+> [!WARNING]
+> Use your own registries, not the Calico ones. Without `--registry`,
+> `--operator-registry` and `--helm-registry`, publish pushes to the Calico
+> registries.
+
+### Flags
+
+`--help` lists most on/off flags as `--[no-]<name>`, with a default. `--<name>`
+turns one on and `--no-<name>` turns it off. Each also reads the environment
+variables shown beside it. The ones a hashrelease run most often needs:
+
+- `--images`: images are off by default for a hashrelease. Add this to build and
+  publish them.
+- `--no-validation`: skips checks a CI run needs, such as being on a release
+  branch.
+- `--no-publish-to-hashrelease-server`: the server is on by default. Add this
+  unless you are publishing to it, which also needs
+  `--hashrelease-server-bucket`.
+- `--no-latest`: publishing to the hashrelease server marks the hashrelease as
+  latest by default. Only CI may do that, so add this when you publish to the
+  server yourself.
+- `--no-release-notes`: skips the release notes.
+
+### Build and publish
+
+Commands run from `release/`, after `make build`.
+
+> [!TIP]
+> Check a command's `--help` before copying an example. It lists the flags this
+> build accepts.
+
+1. **Run:** build it. `--operator-registry` is required whenever `--registry` is
+   set. See [Flags](#flags) for the others.
 
    ```sh
-   https://github.com/issues?utf8=%E2%9C%93&q=user%3Aprojectcalico+milestone%3A%22Calico+vX.Y.Z%22+
+   ARCHS=amd64 ./bin/release hashrelease build --no-validation --images \
+     --registry <YOUR REGISTRY> --operator-registry <YOUR REGISTRY>
    ```
 
-   Each PR that wants a release note must meet the following conditions to have its release note considered:
-
-   - It is in the correct `Calico vX.Y.Z` GitHub milestone
-   - It has the `release-note-required` label
-   - It has one or more release notes included in the description.
-
-2. Run the following command to collect all release notes for the given version.
+   **Check:** the release images, an operator image, and `_output/hashrelease`
+   exist.
+2. **Run:** publish it to your own registries, without the hashrelease server or
+   the image scan.
 
    ```sh
-   make release-notes
+   ./bin/release hashrelease publish --no-validation --images \
+     --registry <YOUR REGISTRY> --operator-registry <YOUR REGISTRY> \
+     --helm-registry <YOUR HELM REGISTRY> \
+     --no-publish-to-hashrelease-server --no-image-scan
    ```
 
-   A file called `release-notes/<VERSION>-release-notes.md` will be created with the raw release note content.
+## Dry runs with `--local`
 
-3. Edit the generated file.
-
-   The release notes should be edited to highlight a few major enhancements and their value to the user. Bug fixes and other changes should be summarized in a bulleted list at the end of the release notes. Any breaking changes, limitations or incompatible changes in behavior should be explicitly noted.
-
-   Consistent release note formatting is important. Here are some examples for reference:
-
-   - [Example release notes for a major/minor release](https://github.com/projectcalico/calico/blob/release-v3.30/release-notes/v3.30.0-release-notes.md)
-   - [Example release notes for a patch release](https://github.com/projectcalico/calico/blob/release-v3.30/release-notes/v3.30.4-release-notes.md)
-
-4. Add the generated file to git.
-
-   ```sh
-   git add release-notes/
-   ```
+`--local` runs local work as normal and turns every remote change (push, upload,
+tag) into a dry run. Reads still happen. Add it to any `build`, `publish`,
+`prep` or `branch cut` command to check a run before it touches anything remote.
