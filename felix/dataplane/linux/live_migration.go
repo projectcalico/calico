@@ -67,7 +67,6 @@ type liveMigrationMonitor struct {
 	timerC          chan types.WorkloadEndpointID
 	garpC           chan types.WorkloadEndpointID
 	ifaceNames      map[types.WorkloadEndpointID]string
-	migrationUIDs   map[types.WorkloadEndpointID]string
 	vmiNames        map[types.WorkloadEndpointID]string
 	newGARPHandle   func(string) (garpHandle, error)
 	convergenceTime time.Duration
@@ -87,13 +86,12 @@ type liveMigrationMonitor struct {
 
 func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Interface) *liveMigrationMonitor {
 	return &liveMigrationMonitor{
-		roles:         make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
-		fsms:          make(map[types.WorkloadEndpointID]*liveMigrationFSM),
-		timerC:        make(chan types.WorkloadEndpointID),
-		garpC:         make(chan types.WorkloadEndpointID),
-		ifaceNames:    make(map[types.WorkloadEndpointID]string),
-		migrationUIDs: make(map[types.WorkloadEndpointID]string),
-		vmiNames:      make(map[types.WorkloadEndpointID]string),
+		roles:      make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
+		fsms:       make(map[types.WorkloadEndpointID]*liveMigrationFSM),
+		timerC:     make(chan types.WorkloadEndpointID),
+		garpC:      make(chan types.WorkloadEndpointID),
+		ifaceNames: make(map[types.WorkloadEndpointID]string),
+		vmiNames:   make(map[types.WorkloadEndpointID]string),
 		newGARPHandle: func(ifaceName string) (garpHandle, error) {
 			return pcapgo.NewEthernetHandle(ifaceName)
 		},
@@ -128,13 +126,6 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 	case *proto.WorkloadEndpointUpdate:
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
 		m.ifaceNames[id] = msg.Endpoint.Name
-		// Intentionally we don't clear the UID when the LiveMigration resource
-		// is deleted (i.e. when uid becomes "").  If there are any remaining FSM
-		// transitions for this workload, it's clearer for the logs to continue
-		// showing the UID that was associated with the migration.
-		if uid := msg.Endpoint.LiveMigrationUid; uid != "" {
-			m.migrationUIDs[id] = uid
-		}
 		if vmiName := msg.Endpoint.LiveMigrationVmiName; vmiName != "" {
 			m.vmiNames[id] = vmiName
 		}
@@ -144,36 +135,57 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 		if oldRole != newRole {
 			switch newRole {
 			case proto.LiveMigrationRole_NO_ROLE:
-				m.executeFSM(id, liveMigrationInputNoRole)
+				m.executeFSM(id, liveMigrationInputNoRole, "")
 			case proto.LiveMigrationRole_SOURCE:
-				m.executeFSM(id, liveMigrationInputSource)
+				m.executeFSM(id, liveMigrationInputSource, "")
 			case proto.LiveMigrationRole_TARGET:
-				m.executeFSM(id, liveMigrationInputTarget)
+				m.executeFSM(id, liveMigrationInputTarget, msg.Endpoint.LiveMigrationUid)
 			}
 		}
 	case *proto.WorkloadEndpointRemove:
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
 		delete(m.roles, id)
 		delete(m.ifaceNames, id)
-		delete(m.migrationUIDs, id)
 		delete(m.vmiNames, id)
-		m.executeFSM(id, liveMigrationInputDeleted)
+		m.executeFSM(id, liveMigrationInputDeleted, "")
 	}
 }
 
-func (m *liveMigrationMonitor) executeFSM(id types.WorkloadEndpointID, input liveMigrationInput) {
+// newFSM creates the FSM for a workload that is becoming the target of a live migration.  The FSM
+// is discarded when it returns to the Base state, so it normally lives for one migration, and the
+// migration's UID can be fixed in its log context.  That way the UID is still logged after the
+// LiveMigration resource has been deleted, which clears it from the workload.
+func (m *liveMigrationMonitor) newFSM(id types.WorkloadEndpointID, migrationUID string) *liveMigrationFSM {
+	return &liveMigrationFSM{
+		logCtx: logrus.WithFields(logrus.Fields{
+			"id":           id,
+			"migrationUID": migrationUID,
+		}),
+		id:           id,
+		monitor:      m,
+		currentState: liveMigrationStateBase,
+	}
+}
+
+// executeFSM delivers an input to the workload's FSM.  No FSM means the Base state, where only a
+// Target input does anything, so only a Target input creates an FSM, with the given migrationUID.
+// For any other input, migrationUID is ignored.
+func (m *liveMigrationMonitor) executeFSM(
+	id types.WorkloadEndpointID,
+	input liveMigrationInput,
+	migrationUID string,
+) {
 	fsm, exists := m.fsms[id]
 	if !exists {
-		fsm = &liveMigrationFSM{
-			logCtx:       logrus.WithField("id", id),
-			id:           id,
-			monitor:      m,
-			currentState: liveMigrationStateBase,
+		if input != liveMigrationInputTarget {
+			logrus.WithFields(logrus.Fields{
+				"id":    id,
+				"input": input,
+			}).Debug("Ignoring live migration input for workload with no FSM")
+			return
 		}
+		fsm = m.newFSM(id, migrationUID)
 		m.fsms[id] = fsm
-	}
-	if uid := m.migrationUIDs[id]; uid != "" {
-		fsm.migrationUID = uid
 	}
 	fsm.handleInput(input)
 	if fsm.currentState == liveMigrationStateBase {
@@ -254,7 +266,6 @@ type liveMigrationFSM struct {
 	id           types.WorkloadEndpointID
 	monitor      *liveMigrationMonitor
 	currentState liveMigrationState
-	migrationUID string
 	timerStopC   chan struct{}
 	timerWG      sync.WaitGroup
 	pcapHandle   garpHandle
@@ -315,9 +326,8 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 
 	if next != f.currentState {
 		logCtx.WithFields(logrus.Fields{
-			"migrationUID": f.migrationUID,
-			"from":         f.currentState,
-			"to":           next,
+			"from": f.currentState,
+			"to":   next,
 		}).Info("Live migration state transition")
 
 		// Do actions that we should always do when leaving a state.
@@ -451,7 +461,7 @@ func (f *liveMigrationFSM) stopElevatedRoutingTimer() {
 // OnGARPDetected is called by the main loop when a GARP/RARP packet is
 // detected on a workload's interface.
 func (m *liveMigrationMonitor) OnGARPDetected(id types.WorkloadEndpointID) {
-	m.executeFSM(id, liveMigrationInputGARPDetected)
+	m.executeFSM(id, liveMigrationInputGARPDetected, "")
 }
 
 // OnTimerPop is called by the main loop when a timer fires for a workload.  Stale deliveries are
@@ -464,7 +474,7 @@ func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
 		logrus.WithField("id", id).Debug("Ignoring stale timer pop for workload not in TimeWait")
 		return
 	}
-	m.executeFSM(id, liveMigrationInputTimerPop)
+	m.executeFSM(id, liveMigrationInputTimerPop, "")
 }
 
 // detectGARP reads packets from the given handle and sends the workload ID

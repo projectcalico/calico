@@ -27,7 +27,6 @@ import (
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
@@ -81,12 +80,8 @@ func drainUpdates(m *liveMigrationMonitor) []liveMigrationStateUpdate {
 func testFSM(state liveMigrationState) (*liveMigrationFSM, *liveMigrationMonitor) {
 	m := newTestMonitor(testConvergenceTime)
 	id := types.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "test-pod", EndpointId: "ep"}
-	fsm := &liveMigrationFSM{
-		logCtx:       logrus.WithField("id", id),
-		id:           id,
-		monitor:      m,
-		currentState: state,
-	}
+	fsm := m.newFSM(id, "test-uid")
+	fsm.currentState = state
 	return fsm, m
 }
 
@@ -996,49 +991,73 @@ func (f *fakeGARPHandle) IsClosed() bool {
 // --- Section 7: Migration UID tracking ---
 
 func TestMigrationUIDTracking(t *testing.T) {
-	t.Run("UID stored from WEP update and set on FSM", func(t *testing.T) {
+	loggedUID := func(fsm *liveMigrationFSM) any {
+		return fsm.logCtx.Data["migrationUID"]
+	}
+
+	t.Run("UID is in the FSM's log context from creation", func(t *testing.T) {
 		g := NewWithT(t)
 		m := newTestMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-abc-123"))
 
-		g.Expect(m.migrationUIDs[wepID1]).To(Equal("uid-abc-123"))
-		g.Expect(m.fsms[wepID1].migrationUID).To(Equal("uid-abc-123"))
+		g.Expect(loggedUID(m.fsms[wepID1])).To(Equal("uid-abc-123"))
 	})
 
-	t.Run("UID cleaned up on WEP remove", func(t *testing.T) {
-		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
-
-		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-abc-123"))
-		g.Expect(m.migrationUIDs).To(HaveKey(wepID1))
-
-		m.OnUpdate(wepRemove(wepID1))
-		g.Expect(m.migrationUIDs).NotTo(HaveKey(wepID1))
-	})
-
-	t.Run("empty UID is not stored", func(t *testing.T) {
-		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
-
-		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		g.Expect(m.migrationUIDs).NotTo(HaveKey(wepID1))
-	})
-
-	t.Run("UID preserved through FSM state transitions", func(t *testing.T) {
+	t.Run("UID is still logged after the LiveMigration is deleted", func(t *testing.T) {
 		g := NewWithT(t)
 		m := newTestMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-xyz-789"))
-		drainUpdates(m)
-
-		// GARP detected → Live
 		m.OnGARPDetected(wepID1)
-		g.Expect(m.fsms[wepID1].migrationUID).To(Equal("uid-xyz-789"))
 
-		// NoRole → TimeWait
-		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_NO_ROLE, "uid-xyz-789"))
-		g.Expect(m.fsms[wepID1].migrationUID).To(Equal("uid-xyz-789"))
+		// Deleting the LiveMigration clears both the role and the UID from the workload.
+		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_NO_ROLE, ""))
+
+		fsm := m.fsms[wepID1]
+		g.Expect(fsm.currentState).To(Equal(liveMigrationStateTimeWait))
+		g.Expect(loggedUID(fsm)).To(Equal("uid-xyz-789"))
+	})
+
+	t.Run("the next migration's FSM has the next migration's UID", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-first"))
+		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_SOURCE, "uid-away"))
+		g.Expect(m.fsms).NotTo(HaveKey(wepID1))
+
+		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-back"))
+		g.Expect(loggedUID(m.fsms[wepID1])).To(Equal("uid-back"))
+	})
+}
+
+func TestFSMCreation(t *testing.T) {
+	t.Run("inputs other than Target do not create an FSM", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
+		m.OnGARPDetected(wepID1)
+		m.OnUpdate(wepRemove(wepID1))
+		m.executeFSM(wepID1, liveMigrationInputTimerPop, "uid-ignored")
+
+		g.Expect(m.fsms).To(BeEmpty())
+		g.Expect(drainUpdates(m)).To(BeEmpty())
+	})
+
+	t.Run("a Target input creates the FSM with the given UID", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.executeFSM(wepID1, liveMigrationInputTarget, "uid-abc-123")
+
+		fsm := m.fsms[wepID1]
+		g.Expect(fsm).NotTo(BeNil())
+		g.Expect(fsm.currentState).To(Equal(liveMigrationStateTarget))
+		g.Expect(fsm.logCtx.Data["migrationUID"]).To(Equal("uid-abc-123"))
+		expectUpdate(g, m, liveMigrationStateTarget)
 	})
 }
 
