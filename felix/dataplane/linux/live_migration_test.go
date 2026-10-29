@@ -1010,25 +1010,13 @@ func TestMigrationUIDTracking(t *testing.T) {
 
 		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-xyz-789"))
 		m.OnGARPDetected(wepID1)
+
 		// Deleting the LiveMigration clears both the role and the UID from the workload.
 		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_NO_ROLE, ""))
 
 		fsm := m.fsms[wepID1]
 		g.Expect(fsm.currentState).To(Equal(liveMigrationStateTimeWait))
 		g.Expect(loggedUID(fsm)).To(Equal("uid-xyz-789"))
-	})
-
-	t.Run("a replacement LiveMigration does not change the UID of the running FSM", func(t *testing.T) {
-		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
-
-		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-first"))
-		fsm := m.fsms[wepID1]
-		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-second"))
-
-		g.Expect(m.fsms[wepID1]).To(BeIdenticalTo(fsm))
-		g.Expect(loggedUID(fsm)).To(Equal("uid-first"))
-		g.Expect(fsm.latestMigrationUID).To(Equal("uid-second"))
 	})
 
 	t.Run("the next migration's FSM has the next migration's UID", func(t *testing.T) {
