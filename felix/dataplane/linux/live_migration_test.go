@@ -27,7 +27,11 @@ import (
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
+	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -37,13 +41,21 @@ import (
 
 var testConvergenceTime = 30 * time.Second
 
-// fakeLiveMigrationListener captures state updates for test assertions.
+// fakeLiveMigrationListener captures state updates for test assertions.  It
+// keeps the route-programmed callback of the latest update apart from the
+// updates themselves, so that tests can compare the updates with Equal.
 type fakeLiveMigrationListener struct {
-	updates []liveMigrationStateUpdate
+	updates           []liveMigrationStateUpdate
+	onRouteProgrammed func(ip.CIDR)
 }
 
-func (f *fakeLiveMigrationListener) OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState) {
+func (f *fakeLiveMigrationListener) OnLiveMigrationStateUpdate(
+	id types.WorkloadEndpointID,
+	state liveMigrationState,
+	onRouteProgrammed func(ip.CIDR),
+) {
 	f.updates = append(f.updates, liveMigrationStateUpdate{ID: id, State: state})
+	f.onRouteProgrammed = onRouteProgrammed
 }
 
 func (f *fakeLiveMigrationListener) drain() []liveMigrationStateUpdate {
@@ -808,6 +820,164 @@ func TestTimerPopRaceWithTimeWaitExit(t *testing.T) {
 	// Reap episode 2's timer goroutine rather than leak it into the rest of the
 	// test binary.
 	m.OnUpdate(wepRemove(wepID1))
+}
+
+// --- Section 5a: Completion outcomes and route programming reports ---
+
+func completionCount(outcome string) float64 {
+	return testutil.ToFloat64(countLiveMigrationCompletions.WithLabelValues(outcome))
+}
+
+func routeProgrammingSampleCount(t *testing.T) uint64 {
+	t.Helper()
+	var m dto.Metric
+	if err := histogramLiveMigrationRouteProgramming.Write(&m); err != nil {
+		t.Fatalf("failed to read histogram: %v", err)
+	}
+	return m.GetHistogram().GetSampleCount()
+}
+
+func TestLiveMigrationCompletionOutcomes(t *testing.T) {
+	tests := []struct {
+		name         string
+		garpDetected bool
+		input        liveMigrationInput
+		wantState    liveMigrationState
+		wantOutcome  string
+	}{
+		{"GARP processed", true, liveMigrationInputGARPDetected, liveMigrationStateLive, liveMigrationOutcomeCompletedWithGARP},
+		{"GARP detected but overtaken by completion", true, liveMigrationInputNoRole, liveMigrationStateTimeWait, liveMigrationOutcomeCompletedWithGARP},
+		{"no GARP detected", false, liveMigrationInputNoRole, liveMigrationStateTimeWait, liveMigrationOutcomeCompletedNoGARP},
+		{"re-migrated away", true, liveMigrationInputSource, liveMigrationStateBase, liveMigrationOutcomeAborted},
+		{"workload deleted", false, liveMigrationInputDeleted, liveMigrationStateBase, liveMigrationOutcomeAborted},
+	}
+	allOutcomes := []string{
+		liveMigrationOutcomeCompletedWithGARP,
+		liveMigrationOutcomeCompletedNoGARP,
+		liveMigrationOutcomeAborted,
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			fsm, m := testFSM(liveMigrationStateTarget)
+			if tt.garpDetected {
+				fsm.garpDetectedAt = time.Now().Add(-time.Second)
+			}
+			countsBefore := map[string]float64{}
+			for _, o := range allOutcomes {
+				countsBefore[o] = completionCount(o)
+			}
+
+			fsm.handleInput(tt.input)
+
+			g.Expect(fsm.currentState).To(Equal(tt.wantState))
+			for _, o := range allOutcomes {
+				wantIncrease := 0.0
+				if o == tt.wantOutcome {
+					wantIncrease = 1
+				}
+				g.Expect(completionCount(o)-countsBefore[o]).To(Equal(wantIncrease), "count for outcome %s", o)
+			}
+
+			g.Expect(m.pendingUpdates).To(HaveLen(1))
+			if tt.wantOutcome == liveMigrationOutcomeAborted {
+				g.Expect(fsm.routeReporter).To(BeNil())
+				g.Expect(m.pendingUpdates[0].OnRouteProgrammed).To(BeNil())
+			} else {
+				g.Expect(fsm.routeReporter).NotTo(BeNil())
+				g.Expect(fsm.routeReporter.garpDetectedAt).To(Equal(fsm.garpDetectedAt))
+				g.Expect(m.pendingUpdates[0].OnRouteProgrammed).NotTo(BeNil())
+			}
+		})
+	}
+
+	t.Run("completion is counted once, and reporting continues through TimeWait", func(t *testing.T) {
+		g := NewWithT(t)
+		fsm, m := testFSM(liveMigrationStateTarget)
+		fsm.garpDetectedAt = time.Now()
+		fsm.handleInput(liveMigrationInputGARPDetected)
+		reporter := fsm.routeReporter
+		countAfterLive := completionCount(liveMigrationOutcomeCompletedWithGARP)
+
+		fsm.handleInput(liveMigrationInputNoRole)
+		g.Expect(fsm.currentState).To(Equal(liveMigrationStateTimeWait))
+		g.Expect(completionCount(liveMigrationOutcomeCompletedWithGARP)).To(Equal(countAfterLive))
+		g.Expect(fsm.routeReporter).To(BeIdenticalTo(reporter))
+		g.Expect(m.pendingUpdates[1].OnRouteProgrammed).NotTo(BeNil())
+
+		fsm.handleInput(liveMigrationInputTimerPop)
+		g.Expect(fsm.currentState).To(Equal(liveMigrationStateBase))
+		g.Expect(fsm.routeReporter).To(BeNil())
+		g.Expect(m.pendingUpdates[2].OnRouteProgrammed).To(BeNil())
+	})
+}
+
+// TestGARPDetectionTimeSurvivesAbortedReport covers the case where the main loop never processes
+// the GARP, because the migration's completion overtakes it: the GARP must still count, and be
+// timed from when it was detected.
+func TestGARPDetectionTimeSurvivesAbortedReport(t *testing.T) {
+	g := NewWithT(t)
+	m := newTestMonitor(testConvergenceTime)
+	fakeHandle := newFakeGARPHandle(buildGARPPacketBytes(t))
+	m.newGARPHandle = func(ifaceName string) (garpHandle, error) {
+		return fakeHandle, nil
+	}
+	countBefore := completionCount(liveMigrationOutcomeCompletedWithGARP)
+
+	beforeDetection := time.Now()
+	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
+	expectUpdate(g, m, liveMigrationStateTarget)
+	g.Eventually(garpSenderBlocked, time.Second, time.Millisecond).Should(BeTrue())
+	afterDetection := time.Now()
+
+	// Simulate the main loop being busy for a while before it processes the completion.
+	time.Sleep(50 * time.Millisecond)
+	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
+	expectUpdate(g, m, liveMigrationStateTimeWait)
+
+	g.Expect(completionCount(liveMigrationOutcomeCompletedWithGARP) - countBefore).To(Equal(1.0))
+	fsm := m.fsms[wepID1]
+	g.Expect(fsm.routeReporter).NotTo(BeNil())
+	g.Expect(fsm.routeReporter.garpDetectedAt).To(BeTemporally(">=", beforeDetection))
+	g.Expect(fsm.routeReporter.garpDetectedAt).To(BeTemporally("<=", afterDetection))
+	g.Expect(testListener(m).onRouteProgrammed).NotTo(BeNil())
+}
+
+func TestLiveMigrationRouteReporter(t *testing.T) {
+	cidrV4 := ip.MustParseCIDROrIP("10.0.0.1/32")
+	cidrV6 := ip.MustParseCIDROrIP("2001:db8::1/128")
+
+	t.Run("each route is observed once, from concurrent callers", func(t *testing.T) {
+		g := NewWithT(t)
+		garpTime := time.Now().Add(-2 * time.Second)
+		r := newLiveMigrationRouteReporter(logrus.WithField("test", t.Name()), garpTime)
+		samplesBefore := routeProgrammingSampleCount(t)
+
+		// As from the IPv4 and IPv6 route tables, with the IPv4 route then rewritten by a
+		// resync.
+		var wg sync.WaitGroup
+		for _, cidr := range []ip.CIDR{cidrV4, cidrV6, cidrV4} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				r.onRouteProgrammed(cidr)
+			}()
+		}
+		wg.Wait()
+
+		g.Expect(routeProgrammingSampleCount(t) - samplesBefore).To(Equal(uint64(2)))
+	})
+
+	t.Run("nothing is observed without a GARP time", func(t *testing.T) {
+		g := NewWithT(t)
+		r := newLiveMigrationRouteReporter(logrus.WithField("test", t.Name()), time.Time{})
+		samplesBefore := routeProgrammingSampleCount(t)
+
+		r.onRouteProgrammed(cidrV4)
+
+		g.Expect(routeProgrammingSampleCount(t)).To(Equal(samplesBefore))
+	})
 }
 
 // --- Section 6: GARP/RARP packet matching ---
