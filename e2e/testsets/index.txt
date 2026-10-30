@@ -65,11 +65,11 @@
 .argoci/cron/e2e-iptables.yaml | operator-migration-kind-dual-stack | iptables/xtables | 227
 .argoci/cron/e2e-iptables.yaml | operator-migration-kind-ipv6 | iptables/xtables | 227
 .argoci/cron/e2e-iptables.yaml | usage-reporting | (usage-reporting) | -
-.argoci/cron/e2e-iptables.yaml | wireguard-k8s-e2e | iptables/xtables-wireguard | 226
+.argoci/cron/e2e-iptables.yaml | wireguard-k8s-e2e | iptables/xtables-wireguard | 213
 .argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay | iptables/aks-xtables-nobgp-wireguard | 207
-.argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-new | iptables/xtables-aws | 228
-.argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-old | iptables/xtables-v3crd-aws | 227
-.argoci/cron/e2e-iptables.yaml | wireguard-vxlan-k8s-e2e | iptables/xtables-wireguard | 226
+.argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-new | iptables/xtables-aws | 213
+.argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-old | iptables/xtables-v3crd-aws | 209
+.argoci/cron/e2e-iptables.yaml | wireguard-vxlan-k8s-e2e | iptables/xtables-wireguard | 213
 .argoci/cron/e2e-nftables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 9
 .argoci/cron/e2e-nftables.yaml | nftables-mode-arm64-wg | nftables/xtables-autohep | 230
 .argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-aws-cni | nftables/eks-xtables-nobgp-aws-autohep | 216
