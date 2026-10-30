@@ -202,13 +202,13 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				if v := c.String(s3BucketFlag.Name); v != "" {
 					opts = append(opts, calico.WithS3Bucket(v))
 				}
-				publishOperator := operatorPublish(c, *o, false, outputs.RecordsDir(cfg.OutputDir, o.ProductVersion), filepath.Join(cfg.LogsDir, o.ProductVersion))
-				if publishOperator != nil {
-					if err := publishOperator(); err != nil {
-						return fmt.Errorf("operator publish: %w", err)
-					}
-				}
-				opts = append(opts, calico.WithOperator(publishOperator))
+				opts = append(opts,
+					calico.WithOperator(operatorPublish(c, *o, false, outputs.RecordsDir(cfg.OutputDir, o.ProductVersion), filepath.Join(cfg.LogsDir, o.ProductVersion))),
+					calico.WithPlanOptions(plan.Options{
+						Preview: c.Bool(planFlag.Name),
+						Skip:    skipSet(c.StringSlice(skipFlagName)),
+					}),
+				)
 
 				r, err := calico.NewManager(opts...)
 				if err != nil {
@@ -335,6 +335,8 @@ func releasePublishFlags() []cli.Flag {
 		branchCheckFlag,
 		validationFlag,
 		localFlag,
+		planFlag,
+		skipFlag(calico.PublishSteps()),
 	)
 	return f
 }

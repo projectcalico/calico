@@ -36,6 +36,7 @@ type Node struct {
 	// Validate runs for every node that is on, before any node's Do.
 	Validate func() error
 
+	// Do may be nil for a node that only checks.
 	Do func() error
 
 	// Verify checks this node's own output, straight after its Do.
@@ -68,7 +69,7 @@ func New(opts Options, nodes ...Node) (*Plan, error) {
 			errs = append(errs, fmt.Errorf("node %d has no name", i))
 		case in[n.Name]:
 			errs = append(errs, fmt.Errorf("node %q appears more than once", n.Name))
-		case n.Do == nil:
+		case n.Do == nil && n.Validate == nil:
 			errs = append(errs, fmt.Errorf("node %q has nothing to do", n.Name))
 		}
 		in[n.Name] = true
@@ -158,6 +159,9 @@ func (p *Plan) Run() (err error) {
 	}()
 	for _, n := range p.nodes {
 		if !p.on[n.Name] {
+			continue
+		}
+		if n.Do == nil {
 			continue
 		}
 		logrus.WithField("step", n.Name).Info("Running")

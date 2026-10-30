@@ -71,6 +71,10 @@ func TestNew(t *testing.T) {
 			wantErr: "node 0 has no name",
 		},
 		{
+			name:  "a node that only checks is accepted",
+			nodes: []Node{{Name: "a", Validate: noop}},
+		},
+		{
 			name:    "a node with nothing to do fails",
 			nodes:   []Node{{Name: "a"}},
 			wantErr: `node "a" has nothing to do`,
@@ -209,6 +213,22 @@ func TestRun(t *testing.T) {
 			t.Fatalf("Run: %v", err)
 		}
 		if diff := cmp.Diff([]string{"validate a", "validate b"}, calls); diff != "" {
+			t.Errorf("calls (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a node that only checks validates and runs nothing", func(t *testing.T) {
+		var calls []string
+		check := node(&calls, "check", "")
+		check.Do, check.Verify, check.Rollback = nil, nil, nil
+		p, err := New(Options{}, check, node(&calls, "a", ""))
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if err := p.Run(); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		if diff := cmp.Diff([]string{"validate check", "validate a", "do a", "verify a"}, calls); diff != "" {
 			t.Errorf("calls (-want +got):\n%s", diff)
 		}
 	})

@@ -732,8 +732,10 @@ func TestPrepPrereqs(t *testing.T) {
 	root := t.TempDir()
 	for _, args := range [][]string{
 		{"init", "-q", "-b", "release-v3.30"},
-		{"-c", "user.email=test@example.com", "-c", "user.name=test", "-c", "commit.gpgsign=false",
-			"commit", "-q", "--allow-empty", "-m", "initial"},
+		{
+			"-c", "user.email=test@example.com", "-c", "user.name=test", "-c", "commit.gpgsign=false",
+			"commit", "-q", "--allow-empty", "-m", "initial",
+		},
 	} {
 		if _, err := command.GitInDir(root, args...); err != nil {
 			t.Fatalf("git %v: %v", args, err)
@@ -1312,7 +1314,7 @@ func TestResolveContainerImages(t *testing.T) {
 		for _, u := range withoutImages(t, newFakeRunner()).uploads() {
 			kinds = append(kinds, u.Handler.Name())
 		}
-		resolve, meta := slices.Index(kinds, "images"), slices.Index(kinds, metadataKey)
+		resolve, meta := slices.Index(kinds, "images"), slices.Index(kinds, outputs.MetadataStep)
 		if resolve != 0 || meta < resolve {
 			t.Errorf("uploads %v: images must come first, before metadata", kinds)
 		}
@@ -2173,31 +2175,65 @@ func assertRegistry(t *testing.T, m *CalicoManager, want string) {
 	}
 }
 
-// The chart index lists download URLs served by the github release, so
-// publishing it first advertises links that 404 until the release is live.
-func TestChartIndexPublishesAfterTheGithubRelease(t *testing.T) {
-	r := &CalicoManager{
-		githubRelease: true,
-		helmCharts:    true,
-		helmIndex:     true,
-		calicoVersion: testVersion(t, "v3.30.0"),
-		githubOrg:     "projectcalico",
-		repo:          "calico",
-		s3Bucket:      "bucket",
-		outputDir:     t.TempDir(),
+func TestPublishNodes(t *testing.T) {
+	names := func(r *CalicoManager) []string {
+		var got []string
+		for _, n := range r.publishPlan() {
+			got = append(got, n.Name)
+		}
+		return got
 	}
-	var names []string
-	for _, u := range r.uploads() {
-		names = append(names, u.Name)
-	}
-	index := slices.Index(names, "chart index")
-	release := slices.Index(names, "github release")
-	if index < 0 || release < 0 {
-		t.Fatalf("expected both uploads, got %v", names)
-	}
-	if index < release {
-		t.Errorf("chart index publishes before the github release: %v", names)
-	}
+
+	t.Run("a release tags, then releases, then indexes the charts", func(t *testing.T) {
+		r := &CalicoManager{calicoVersion: testVersion(t, "v3.30.0"), githubOrg: "projectcalico", repo: "calico", outputDir: t.TempDir()}
+		want := []string{
+			prepPublishStep, operator.Step, images.Step, charts.Step, outputs.MetadataStep, distribution.ChecksumStep,
+			distribution.GithubTagStep, distribution.GithubReleaseStep, helmIndexStep,
+		}
+		if diff := cmp.Diff(want, names(r)); diff != "" {
+			t.Errorf("nodes (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a hashrelease ends with the hashrelease upload", func(t *testing.T) {
+		r := &CalicoManager{isHashRelease: true, calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir()}
+		want := []string{prepPublishStep, operator.Step, images.Step, charts.Step, outputs.MetadataStep, distribution.ChecksumStep, distribution.HashreleasePublishStep}
+		if diff := cmp.Diff(want, names(r)); diff != "" {
+			t.Errorf("nodes (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("each mode's skip list names every step but the checks", func(t *testing.T) {
+		for _, tc := range []struct {
+			r    *CalicoManager
+			want []string
+		}{
+			{r: &CalicoManager{calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir()}, want: PublishSteps()},
+			{r: &CalicoManager{isHashRelease: true, calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir()}, want: HashreleasePublishSteps()},
+		} {
+			if diff := cmp.Diff(tc.want, names(tc.r)[1:]); diff != "" {
+				t.Errorf("skip list (-want +got):\n%s", diff)
+			}
+		}
+	})
+}
+
+func TestPublishRelease(t *testing.T) {
+	t.Run("a failed check publishes nothing, the operator included", func(t *testing.T) {
+		published := false
+		r := &CalicoManager{
+			calicoVersion: testVersion(t, "v3.30.0"),
+			outputDir:     t.TempDir(),
+			operator:      func() error { published = true; return nil },
+		}
+		err := r.PublishRelease()
+		if err == nil || !strings.Contains(err.Error(), "no records directory specified") {
+			t.Fatalf("PublishRelease() error = %v, want no records directory", err)
+		}
+		if published {
+			t.Error("published the operator before the checks passed")
+		}
+	})
 }
 
 // A hashrelease built with --no-manifests never writes a manifest copy, so the

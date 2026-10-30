@@ -241,21 +241,12 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		}
 
 		o := pinnedOperator(cfg, c, hashrel.Operator, hashrel.ProductVersion)
-		publishOperator := operatorPublish(c, o, true, outputs.RecordsDir(cfg.OutputDir, hashrel.Hash), filepath.Join(cfg.LogsDir, hashrel.ProductVersion))
-		if publishOperator != nil {
-			// Before PublishRelease: its scan sends the operator to ISS.
-			if err := publishOperator(); err != nil {
-				return fmt.Errorf("operator publish: %w", err)
-			}
-		}
-
 		opts := []calico.Option{
 			calico.IsHashRelease(),
 			calico.WithHashrelease(*hashrel, *serverCfg),
 			calico.WithRepoRoot(cfg.RepoRootDir),
 			calico.WithVersion(hashrel.ProductVersion),
 			calico.WithOperatorImage(operator.Registry(o), o.Image, o.Version),
-			calico.WithOperator(publishOperator),
 			calico.WithOutputDir(hashrel.Source),
 			calico.WithRecordsDir(outputs.RecordsDir(cfg.OutputDir, hashrel.Hash)),
 			calico.WithTmpDir(cfg.TmpDir),
@@ -270,6 +261,11 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 			calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 			calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 			calico.WithDryRun(c.Bool(localFlag.Name)),
+			calico.WithOperator(operatorPublish(c, o, true, outputs.RecordsDir(cfg.OutputDir, hashrel.Hash), filepath.Join(cfg.LogsDir, hashrel.ProductVersion))),
+			calico.WithPlanOptions(plan.Options{
+				Preview: c.Bool(planFlag.Name),
+				Skip:    skipSet(c.StringSlice(skipFlagName)),
+			}),
 		}
 		if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 			opts = append(opts,
@@ -289,6 +285,9 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		}
 		if err := r.PublishRelease(); err != nil {
 			return fmt.Errorf("publish release: %w", err)
+		}
+		if c.Bool(planFlag.Name) {
+			return nil
 		}
 
 		if c.Bool(imageScanFlag.Name) && c.Bool(localFlag.Name) {
@@ -381,6 +380,8 @@ var hashreleasePublishFlags = func() []cli.Flag {
 		branchCheckFlag,
 		validationFlag,
 		localFlag,
+		planFlag,
+		skipFlag(calico.HashreleasePublishSteps()),
 	)
 	f = append(f, operatorPublishCommandFlags...)
 	f = append(f, imageScanFlags...)
