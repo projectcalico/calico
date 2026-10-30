@@ -65,28 +65,28 @@ spec:
                 bpfConntrackTimeouts:
                   properties:
                     creationGracePeriod:
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     genericTimeout:
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     icmpTimeout:
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpEstablished:
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpFinsSeen:
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpResetSeen:
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpSynSent:
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     udpTimeout:
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                   type: object
                 bpfDSROptoutCIDRs:
