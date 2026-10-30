@@ -66,6 +66,7 @@ type EntityRuleApplyConfiguration struct {
 	//
 	// Since only some protocols have ports, if any ports are specified it requires the
 	// Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+	// Named ports are at most 15 characters, like Kubernetes port names.
 	Ports []numorstring.Port `json:"ports,omitempty"`
 	// NotNets is the negated version of the Nets field.
 	NotNets []string `json:"notNets,omitempty"`
