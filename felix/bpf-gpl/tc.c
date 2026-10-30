@@ -81,6 +81,8 @@ int calico_tc_main(struct __sk_buff *skb)
 	/* Optimisation: if another BPF program has already pre-approved the packet,
 	 * skip all processing. */
 	if (CALI_F_FROM_HOST && skb_mark_equals(skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS) &&
+			/* MASQ to self still needs to-WEP policy, matched on the pod's own address. */
+			!(CALI_F_TO_WEP && skb_mark_equals(skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_MASQ)) &&
 			/* If we are on tunnel and we do not have the key set, we cannot short-circuit */
 			!(CALI_F_TUNNEL &&  !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
 		if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
@@ -787,7 +789,7 @@ do_policy:
 	}
 #endif
 
-	if (CALI_F_TO_WEP && ctx->skb->mark == CALI_SKB_MARK_MASQ) {
+	if (CALI_F_TO_WEP && skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_MASQ)) {
 		CALI_DEBUG("MASQ to self - using dest as source for policy.");
 		ctx->state->ip_src_masq = ctx->state->ip_src;
 		ctx->state->ip_src = ctx->state->ip_dst;
@@ -1356,7 +1358,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 
 	if (!policy_skipped) {
 		counter_inc(ctx, CALI_REASON_ACCEPTED_BY_POLICY);
-		if (CALI_F_TO_WEP && ctx->skb->mark == CALI_SKB_MARK_MASQ) {
+		if (CALI_F_TO_WEP && skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_MASQ)) {
 			/* Restore state->ip_src */
 			CALI_DEBUG("Accepted MASQ to self - restoring source for conntrack.");
 			ctx->state->ip_src = ctx->state->ip_src_masq;
