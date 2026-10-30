@@ -248,7 +248,7 @@ func parallel[T, R any](items []T, max int, fn func(T) R) []R {
 }
 
 // pyxisGetJSON performs an authenticated GET against the catalog.redhat.com
-// Pyxis API and decodes a 2xx response into out.
+// Pyxis API and decodes a 200 response into out.
 //
 // The header is set directly (not via http.Header.Set) because the API
 // rejects the canonicalised X-Api-Key form; it requires X-API-KEY.

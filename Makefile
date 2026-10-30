@@ -468,5 +468,9 @@ bin/gotestsum:
 postrelease-checks release-validate: release/bin/release bin/gotestsum
 	@release/bin/release release validate
 
+.PHONY: rh-cert-preflight
 rh-cert-preflight:
-	@go run ./hack/cmd/rhcert check 
+ifndef RH_API_KEY
+	$(error RH_API_KEY must be set)
+endif
+	@go run ./hack/cmd/rhcert check
