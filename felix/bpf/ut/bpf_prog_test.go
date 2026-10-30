@@ -380,7 +380,11 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 			obj += "to_"
 		}
 
-		if strings.Contains(section, "host") {
+		if strings.Contains(section, "host") && topts.ifaceEncaps {
+			// Encapsulation is a compile-time flag here, so load the vxlan object.
+			obj += "vxlan_"
+			topts.progLog = "HEP"
+		} else if strings.Contains(section, "host") {
 			obj += "hep_"
 			topts.progLog = "HEP"
 		} else if strings.Contains(section, "nat") {
@@ -439,7 +443,7 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		ipFamily += " debug"
 	}
 
-	hasMaglev := strings.Contains(obj, "from_hep")
+	hasMaglev := strings.Contains(obj, "from_hep") || strings.Contains(obj, "from_vxlan")
 	obj += ".o"
 	o, err := objLoad(obj, bpfFsDir, ipFamily, topts, rules != nil, true, hasMaglev, useIngressProgMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -541,15 +545,20 @@ func runBpfTest(t *testing.T, section string, rules *polprog.Rules, testFn func(
 
 	ctxIn := make([]byte, 18*4)
 	binary.LittleEndian.PutUint32(ctxIn[2*4:3*4], skbMark)
-	if xdp {
-		// XDP tests cannot take context and would fail.
-		ctxIn = nil
-	}
 
 	topts := testOpts{}
 
 	for _, o := range opts {
 		o(&topts)
+	}
+
+	if topts.ingressIfindex != 0 {
+		// __sk_buff.ingress_ifindex; BPF_PROG_RUN copies it to skb->skb_iif.
+		binary.LittleEndian.PutUint32(ctxIn[9*4:10*4], topts.ingressIfindex)
+	}
+	if xdp {
+		// XDP tests cannot take context and would fail.
+		ctxIn = nil
 	}
 
 	cllr := caller(2)
@@ -931,6 +940,14 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.Flags |= libbpf.GlobalsRedirectPeer
 				}
 
+				if topts.rpfEnabled {
+					globals.Flags |= libbpf.GlobalsRPFOptionEnabled
+				}
+				if topts.rpfStrict {
+					globals.Flags |= libbpf.GlobalsRPFOptionEnabled |
+						libbpf.GlobalsRPFOptionStrict
+				}
+
 				globals.DSCP = -1
 				if topts.dscp >= 0 {
 					globals.DSCP = topts.dscp
@@ -1306,6 +1323,7 @@ type testOpts struct {
 	objname                       string
 	flowLogsEnabled               bool
 	natOutExcludeHosts            bool
+	ifaceEncaps                   bool
 	ingressQoSPacketRate          bool
 	egressQoSPacketRate           bool
 	ingressQoSConnLimit           bool
@@ -1316,9 +1334,32 @@ type testOpts struct {
 	ipfragTimeout                 uint32
 	wgPort                        uint16
 	redirectPeer                  bool
+	rpfEnabled                    bool
+	rpfStrict                     bool
+	ingressIfindex                uint32
 }
 
 type testOption func(opts *testOpts)
+
+func withRPFEnabled() testOption {
+	return func(o *testOpts) {
+		o.rpfEnabled = true
+	}
+}
+
+func withRPFStrict() testOption {
+	return func(o *testOpts) {
+		o.rpfStrict = true
+	}
+}
+
+// withIngressIfindex sets __sk_buff.ingress_ifindex for the test run, which is
+// what hep_rpf_check compares the reverse route's device against.
+func withIngressIfindex(ifindex uint32) testOption {
+	return func(o *testOpts) {
+		o.ingressIfindex = ifindex
+	}
+}
 
 func withSubtests(v bool) testOption {
 	return func(o *testOpts) {
@@ -1374,6 +1415,12 @@ func withFlowLogs() testOption {
 func withNATOutExcludeHosts() testOption {
 	return func(o *testOpts) {
 		o.natOutExcludeHosts = true
+	}
+}
+
+func withIfaceEncaps() testOption {
+	return func(o *testOpts) {
+		o.ifaceEncaps = true
 	}
 }
 

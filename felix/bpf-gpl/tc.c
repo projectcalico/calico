@@ -213,18 +213,6 @@ int calico_tc_main(struct __sk_buff *skb)
 	 * For packets that are leaving the host namespace, routing has already been done. */
 	fwd_fib_set(&ctx->state->fwd, CALI_F_TO_HOST);
 
-	if (CALI_F_TO_HEP || CALI_F_TO_WEP) {
-		/* We're leaving the host namespace, check for other bypass mark bits.
-		 * These are a bit more complex to handle so we do it after creating the
-		 * context/state. */
-		switch (skb->mark & CALI_SKB_MARK_BYPASS_MASK) {
-		case CALI_SKB_MARK_BYPASS_FWD:
-			CALI_DEBUG("Packet approved for forward.");
-			counter_inc(ctx, CALI_REASON_BYPASS);
-			goto allow;
-		}
-	}
-
 	/* Parse the packet as far as the IP header; as a side-effect this validates the packet size
 	 * is large enough for UDP. */
 	switch (parse_packet_ip(ctx)) {
@@ -571,7 +559,7 @@ syn_force_policy:
 
 			ctx->state->ip_proto != IPPROTO_ICMPV6 &&
 #endif
-			(hep_rpf_check(ctx) == RPF_RES_FAIL)) {
+			(hep_rpf_check(ctx, NULL) == RPF_RES_FAIL)) {
 			goto deny;
 		}
 	}
@@ -1537,21 +1525,25 @@ deny:
 	return TC_ACT_SHOT;
 }
 
-static CALI_BPF_INLINE void update_fib_mark(struct cali_tc_ctx *ctx, __u32 *seen_mark)
+/* Returns true if the packet must go through the host stack with the mark set here. */
+static CALI_BPF_INLINE bool update_fib_mark(struct cali_tc_ctx *ctx, __u32 *seen_mark)
 {
-	if (CALI_F_FROM_WEP && (ctx->state->flags & CALI_ST_NAT_OUTGOING)) {
-		// We are going to SNAT this traffic, using iptables SNAT so set the mark
-		// to trigger that and leave the fib lookup disabled.
+	if (CALI_F_TO_HOST && (ctx->state->flags & CALI_ST_NAT_OUTGOING)) {
+		// iptables does the SNAT, so both directions go via the host stack,
+		// where its conntrack sees them. Leave the fib lookup disabled.
 		fwd_fib_set(&ctx->state->fwd, false);
 		*seen_mark = CALI_SKB_MARK_NAT_OUT;
 		CALI_DEBUG("Disabling FIB lookup due to outgoing SNAT");
+		return true;
 	} else {
 		if (ctx->state->flags & CALI_ST_SKIP_FIB) {
 			fwd_fib_set(&ctx->state->fwd, false);
 			*seen_mark = CALI_SKB_MARK_SKIP_FIB;
 			CALI_DEBUG("Disabling FIB lookup due to SKIP_FIB flag");
+			return true;
 		}
 	}
+	return false;
 }
 
 SEC("tc")
@@ -1654,7 +1646,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 			 * rules are used by the host. So don't mess with it.
 			 */
 			ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
-		} else if ((ctx->skb->mark & CALI_SKB_MARK_SKIP_FIB) == CALI_SKB_MARK_SKIP_FIB) {
+		} else if (skb_mark_equals(ctx->skb, CALI_SKB_MARK_CODE_MASK, CALI_SKB_MARK_SKIP_FIB)) {
 			/* Packets received at WEP with CALI_CT_FLAG_SKIP_FIB mark signal
 			 * that all traffic on this connection must flow via host
 			 * namespace as it was originally meant for host, but got
@@ -1696,6 +1688,21 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 			ct_ctx_nat->flags |= CALI_CT_FLAG_NP_NO_DSR;
 			CALI_DEBUG("CALI_CT_FLAG_NP_NO_DSR");
 		}
+	}
+
+	/* In HostAddress mode (no tunnel-device IP) a host-networked client's request to a
+	 * local workload arrives over the overlay with the client node IP as inner source;
+	 * the reply targets a bare node IP (CALI_RT_HOST, not tunneled) and would leave
+	 * un-encapsulated with a pod source, which source-checking fabrics (e.g. GCP) drop.
+	 * Mark the flow so fib_co_re.h re-encapsulates the reply to that node.  Scoped to
+	 * ingress on an encapsulating device (IFACE_ENCAPS) with a remote-host
+	 * source, which excludes tunnel=none.  ip_void(HOST_TUNNEL_IP) selects HostAddress
+	 * mode: it is void only for IPIP/VXLAN without a device IP, and set for
+	 * TunnelAddress and for WireGuard, so both are excluded. */
+	if (ip_void(HOST_TUNNEL_IP) && IFACE_ENCAPS && CALI_F_FROM_HEP &&
+			rt_addr_is_remote_host(&state->ip_src)) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_OVERLAY_REPLY;
+		CALI_DEBUG("CALI_CT_FLAG_OVERLAY_REPLY");
 	}
 
 	if (state->ip_proto == IPPROTO_TCP && !(state->flags & CALI_ST_NO_L4_HDR)) {
@@ -1815,7 +1822,7 @@ static CALI_BPF_INLINE void calico_tc_skb_accepted(struct cali_tc_ctx *ctx)
 		state->post_nat_dport = 0;
 	}
 
-	update_fib_mark(ctx, &seen_mark);
+	bool via_host_stack = update_fib_mark(ctx, &seen_mark);
 
 	/* We check the ttl here to avoid needing complicated handling of
 	 * related traffic back from the host if we let the host to handle it.
@@ -1948,8 +1955,13 @@ static CALI_BPF_INLINE void calico_tc_skb_accepted(struct cali_tc_ctx *ctx)
 
 	case CALI_CT_ESTABLISHED_BYPASS:
 		if (!is_tcp_syn(ctx)) {
-			seen_mark = CALI_SKB_MARK_BYPASS;
-			CALI_DEBUG("marking CALI_SKB_MARK_BYPASS");
+			if (!via_host_stack) {
+				seen_mark = CALI_SKB_MARK_BYPASS;
+			} else if (seen_mark == CALI_SKB_MARK_SKIP_FIB) {
+				/* Netfilter matches the code, not the flag. NAT_OUT stays plain: HEP egress must see the SNAT. */
+				seen_mark |= CALI_SKB_MARK_BYPASS;
+			}
+			CALI_DEBUG("marking 0x%x", seen_mark);
 		}
 		// fall through
 	case CALI_CT_ESTABLISHED:

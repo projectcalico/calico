@@ -49,6 +49,7 @@ enum cali_ct_type {
 /* Set at to-wep when policy was skipped because the source is a local host
  * route. The ingress connlimit check is skipped for the same reason. */
 #define CALI_CT_FLAG_HOST_ORIGIN	0x400000
+#define CALI_CT_FLAG_OVERLAY_REPLY	0x800000 /* reply of a host-originated overlay flow must be re-encapsulated (BPFOverlayHostSourceIP=HostAddress) */
 
 /* Flags kept in calico_ct_leg's bits_word. felix/bpf/conntrack/v4 map.go and
  * map6.go mirror these bit positions.
@@ -60,6 +61,31 @@ enum cali_ct_type {
 #define CALI_CT_LEG_APPROVED	(1U << 4)
 #define CALI_CT_LEG_OPENER	(1U << 5)
 #define CALI_CT_LEG_WORKLOAD	(1U << 6) /* This leg was created from workload */
+#define CALI_CT_LEG_TUNNEL	(1U << 7) /* ifindex is a validated egress for this
+					   * flow's encap-flagged destinations, a device
+					   * that encapsulates. Written only by whoever
+					   * has authority over the device: the program
+					   * attached to it for an ingress record, or
+					   * the validator for a leg it pinned. Cleared
+					   * before the ifindex store and re-set only
+					   * after, so a writer adding it is never seen
+					   * ahead of its device; one dropping it can be
+					   * straddled.
+					   */
+#define CALI_CT_LEG_PINNED	(1U << 8) /* ifindex is a resolved egress for the
+					   * opposite direction, not this direction's
+					   * ingress record. Bookkeeping for userspace
+					   * cleanup; the dataplane still reconciles the
+					   * leg against routing like any other mismatch.
+					   */
+#define CALI_CT_LEG_CHECKED	(1U << 9) /* ifindex has been validated against the
+					   * route to this leg's source, no need to
+					   * resolve it again
+					   */
+
+/* What the leg claims about the device in its ifindex. */
+#define CALI_CT_LEG_CLAIMS	(CALI_CT_LEG_TUNNEL | CALI_CT_LEG_PINNED | \
+				 CALI_CT_LEG_CHECKED)
 
 struct calico_ct_leg {
 	__u64 bytes;
@@ -71,7 +97,8 @@ struct calico_ct_leg {
 	__u32 ifindex; /* For a CT leg where packets ingress through an interface towards
 			* the host, this is the ingress interface index.  For a CT leg
 			* where packets originate _from_ the host, it's CT_INVALID_IFINDEX
-			* (0).
+			* (0).  While CALI_CT_LEG_PINNED is set it is instead a resolved
+			* egress for the opposite direction.
 			*/
 };
 
@@ -91,6 +118,40 @@ static CALI_BPF_INLINE void ct_leg_clear_flags(struct calico_ct_leg *leg, __u32 
 }
 
 #define CT_INVALID_IFINDEX	0
+
+/* ct_leg_repoint points a leg at ifindex and leaves it claiming exactly
+ * claims, which must describe that device.
+ *
+ * Claims the new device does not carry are cleared before the ifindex store
+ * and the new ones set only after, so a reader never sees a claim this call
+ * is adding ahead of its device. A claim being dropped can still be read
+ * beside the device that replaced it.
+ *
+ * Reaffirming the device the leg already names only adds claims: clearing
+ * there would void the other direction's kind stamp on every packet.
+ *
+ * Each write is guarded by a read, so a leg that already holds the wanted
+ * state costs no atomic.
+ */
+static CALI_BPF_INLINE void ct_leg_repoint(struct calico_ct_leg *leg, __u32 ifindex,
+					   __u32 claims)
+{
+	__u32 bits = leg->bits_word;
+
+	if (leg->ifindex != ifindex) {
+		__u32 stale = bits & CALI_CT_LEG_CLAIMS & ~claims;
+
+		if (stale) {
+			ct_leg_clear_flags(leg, stale);
+			bits &= ~stale;
+		}
+		leg->ifindex = ifindex;
+	}
+
+	if (claims & ~bits) {
+		ct_leg_set_flags(leg, claims & ~bits);
+	}
+}
 struct calico_ct_value {
 	__u64 rst_seen;
 	__u64 last_seen;	// 8
@@ -122,6 +183,9 @@ struct calico_ct_value {
 			struct calico_ct_leg b_to_a;	// 48
 
 			// CALI_CT_TYPE_NAT_REV
+			// tun_ip is set only when a NodePort connection is forwarded to a
+			// backend on another node; it holds that node's IP so the reply can
+			// be tunneled back via the forwarding node (dnat_return_should_encap).
 			ipv46_addr_t tun_ip;	// 72
 			ipv46_addr_t orig_ip;	// 76
 			__u16 orig_port;	// 80
@@ -282,20 +346,28 @@ enum calico_ct_result_type {
 #define ct_result_is_confirmed(rc)	((rc) & CT_RES_CONFIRMED)
 #define ct_result_is_to_workload(rc)	((rc) & CT_RES_TO_WORKLOAD)
 
+#define CT_FWD_FLAG_TUNNEL	0x1 /* ifindex_fwd is a tunnel device */
+
 struct calico_ct_result {
 	__s16 rc;
-	__u16 pad;
+	__u16 fwd_flags; /* CT_FWD_FLAG_* properties of ifindex_fwd */
 	__u32 flags;
 	ipv46_addr_t nat_ip;
 	ipv46_addr_t nat_sip;
 	__u16 nat_port;
 	__u16 nat_sport;
-	ipv46_addr_t tun_ip;
+	ipv46_addr_t tun_ip;   /* NodePort-forwarding node IP from the NAT_REV entry;
+				* a reply with tun_ip set must encap back to that node. */
 	__u32 ifindex_fwd; /* if set, the ifindex where the packet should be forwarded */
 	__u32 ifindex_created; /* For a CT state that was created by a packet ingressing
 				* through an interface towards the host, this is the
 				* ingress interface index.  For a CT state created by a
 				* packet _from_ the host, it's CT_INVALID_IFINDEX (0).
+				*
+				* Meaningful only for WEP- or host-opened flows - what
+				* DNS snooping keys on. A HEP-opened flow's opener leg
+				* can be pinned (an egress record), but no consumer
+				* reads those flows.
 				*/
 };
 
