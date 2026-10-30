@@ -148,3 +148,36 @@ func TestBuildingCharts(t *testing.T) {
 		})
 	}
 }
+
+func TestPublishingHashrelease(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "on by default", want: true},
+		{name: "off by flag", args: []string{"--no-publish-to-hashrelease-server"}},
+		{name: "off when its step is skipped", args: []string{"--skip", "hashrelease"}},
+		{name: "on when another step is skipped", args: []string{"--skip", "images"}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got bool
+			cmd := &cli.Command{
+				Flags: []cli.Flag{
+					&cli.BoolWithInverseFlag{Name: publishHashreleaseFlag.Name, Value: true},
+					&cli.StringSliceFlag{Name: skipFlagName},
+				},
+				Action: func(_ context.Context, c *cli.Command) error {
+					got = publishingHashrelease(c)
+					return nil
+				},
+			}
+			if err := cmd.Run(context.Background(), append([]string{"publish"}, tc.args...)); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("publishingHashrelease = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

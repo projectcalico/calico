@@ -27,6 +27,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/ci"
+	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/operator"
@@ -242,21 +243,12 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		}
 
 		o := pinnedOperator(cfg, c, hashrel.Operator, hashrel.ProductVersion)
-		publishOperator := operatorPublish(c, o, true, outputs.RecordsDir(cfg.OutputDir, hashrel.Hash), filepath.Join(cfg.LogsDir, hashrel.ProductVersion))
-		if publishOperator != nil {
-			// Before PublishRelease: its scan sends the operator to ISS.
-			if err := publishOperator(); err != nil {
-				return fmt.Errorf("operator publish: %w", err)
-			}
-		}
-
 		opts := []calico.Option{
 			calico.IsHashRelease(),
 			calico.WithHashrelease(*hashrel, *serverCfg),
 			calico.WithRepoRoot(cfg.RepoRootDir),
 			calico.WithVersion(hashrel.ProductVersion),
 			calico.WithOperatorImage(operator.Registry(o), o.Image, o.Version),
-			calico.WithOperator(publishOperator),
 			calico.WithOutputDir(hashrel.Source),
 			calico.WithRecordsDir(outputs.RecordsDir(cfg.OutputDir, hashrel.Hash)),
 			calico.WithTmpDir(cfg.TmpDir),
@@ -266,11 +258,16 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 			calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 			calico.WithImages(c.Bool(imagesFlagName)),
 			calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
-			calico.WithPublishHashrelease(c.Bool(publishHashreleaseFlag.Name)),
+			calico.WithPublishHashrelease(publishingHashrelease(c)),
 			calico.WithValidation(c.Bool(validationFlag.Name)),
 			calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 			calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 			calico.WithDryRun(c.Bool(localFlag.Name)),
+			calico.WithOperator(operatorPublish(c, o, true, outputs.RecordsDir(cfg.OutputDir, hashrel.Hash), filepath.Join(cfg.LogsDir, hashrel.ProductVersion))),
+			calico.WithPlanOptions(plan.Options{
+				Preview: c.Bool(planFlag.Name),
+				Skip:    skipSet(c.StringSlice(skipFlagName)),
+			}),
 		}
 		if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 			opts = append(opts,
@@ -291,6 +288,9 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		if err := r.PublishRelease(); err != nil {
 			return fmt.Errorf("publish release: %w", err)
 		}
+		if c.Bool(planFlag.Name) {
+			return nil
+		}
 
 		if c.Bool(imageScanFlag.Name) && c.Bool(localFlag.Name) {
 			logrus.Info("Dry run, no image scan result URL added to the hashrelease")
@@ -307,9 +307,9 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		}
 
 		// Send a slack message to notify that the hashrelease has been published.
-		if c.Bool(publishHashreleaseFlag.Name) && c.Bool(notifyFlag.Name) && c.Bool(localFlag.Name) {
+		if publishingHashrelease(c) && c.Bool(notifyFlag.Name) && c.Bool(localFlag.Name) {
 			logrus.Info("Dry run, not announcing the hashrelease on Slack")
-		} else if c.Bool(publishHashreleaseFlag.Name) && c.Bool(notifyFlag.Name) {
+		} else if publishingHashrelease(c) && c.Bool(notifyFlag.Name) {
 			if _, err := tasks.AnnounceHashrelease(slackConfig(c), hashrel, ciJobURL(c)); err != nil {
 				logrus.WithError(err).Warn("Failed to send hashrelease announcement to Slack")
 			}
@@ -382,6 +382,8 @@ var hashreleasePublishFlags = func() []cli.Flag {
 		branchCheckFlag,
 		validationFlag,
 		localFlag,
+		planFlag,
+		skipFlag(calico.HashreleasePublishSteps()),
 	)
 	f = append(f, operatorPublishCommandFlags...)
 	f = append(f, imageScanFlags...)
@@ -391,7 +393,7 @@ var hashreleasePublishFlags = func() []cli.Flag {
 // validateHashreleasePublishFlags checks that the flags are set correctly for the hashrelease publish command.
 var validateHashreleasePublishFlags = func(c *cli.Command) error {
 	// If publishing the hashrelease
-	if c.Bool(publishHashreleaseFlag.Name) {
+	if publishingHashrelease(c) {
 		//  check that hashrelease server configuration is set.
 		if !hashreleaseServerConfig(c).Valid() {
 			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s is set",
@@ -413,6 +415,10 @@ var validateHashreleasePublishFlags = func(c *cli.Command) error {
 
 func buildingCharts(c *cli.Command) bool {
 	return c.Bool(helmChartsFlagName) && !slices.Contains(c.StringSlice(skipFlagName), charts.Step)
+}
+
+func publishingHashrelease(c *cli.Command) bool {
+	return c.Bool(publishHashreleaseFlag.Name) && !slices.Contains(c.StringSlice(skipFlagName), distribution.HashreleasePublishStep)
 }
 
 // ciJobURL returns the URL to the CI job if the command is running on CI. An

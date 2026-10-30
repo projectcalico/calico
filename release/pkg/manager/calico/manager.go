@@ -50,9 +50,8 @@ import (
 
 // Global configuration for releases.
 const (
-	binDir      = "bin"
-	chartsDir   = "charts"
-	metadataKey = "metadata"
+	binDir    = "bin"
+	chartsDir = "charts"
 
 	gitTrailerReleaseBranch = "Release-branch"
 )
@@ -60,6 +59,9 @@ const (
 const (
 	prepBuildStep = "prep-build"
 	tagStep       = "tag-commit"
+
+	prepPublishStep = "prep-publish"
+	helmIndexStep   = "helm-index"
 )
 
 // BuildSteps are the steps a release build can skip, in the order they run.
@@ -71,6 +73,15 @@ func HashreleaseBuildSteps() []string {
 	return slices.Concat(hashreleaseBuildSteps, sharedBuildSteps)
 }
 
+// PublishSteps are the steps a release publish can skip, in the order they run.
+func PublishSteps() []string { return slices.Concat(sharedPublishSteps, releasePublishSteps) }
+
+// HashreleasePublishSteps are the steps a hashrelease publish can skip, in the
+// order they run.
+func HashreleasePublishSteps() []string {
+	return slices.Concat(sharedPublishSteps, hashreleasePublishSteps)
+}
+
 var (
 	releaseBuildSteps     = []string{tagStep}
 	hashreleaseBuildSteps = []string{outputs.ReleaseNotesStep}
@@ -78,6 +89,9 @@ var (
 		operator.Step, images.Step, binaries.Step, charts.Step, manifests.Step,
 		archives.WindowsStep, archives.Step,
 	}
+	sharedPublishSteps      = []string{operator.Step, images.Step, charts.Step, outputs.MetadataStep, distribution.ChecksumStep}
+	releasePublishSteps     = []string{distribution.GithubTagStep, distribution.GithubReleaseStep, helmIndexStep}
+	hashreleasePublishSteps = []string{distribution.HashreleasePublishStep}
 )
 
 var (
@@ -293,9 +307,10 @@ type CalicoManager struct {
 	e2eBinaries    bool
 	releaseNotes   bool
 
-	planOptions plan.Options
-	buildNodes  func() []plan.Node
-	operator    func() error
+	planOptions  plan.Options
+	buildNodes   func() []plan.Node
+	publishNodes func() []plan.Node
+	operator     func() error
 
 	retagImages  bool
 	fromRegistry string
@@ -804,7 +819,7 @@ func (r *CalicoManager) helmRepo() (string, error) {
 
 func (r *CalicoManager) hashreleaseUpload() distribution.Upload {
 	return distribution.Upload{
-		Name:   "hashrelease",
+		Name:   distribution.HashreleasePublishStep,
 		Source: r.uploadDir(),
 		Skip:   !r.publishHashrelease,
 		Handler: distribution.HashreleaseServer{
@@ -817,23 +832,40 @@ func (r *CalicoManager) hashreleaseUpload() distribution.Upload {
 }
 
 func (r *CalicoManager) PublishRelease() error {
-	if err := r.publishPrereqs(); err != nil {
+	nodes := r.publishPlan
+	if r.publishNodes != nil {
+		nodes = r.publishNodes
+	}
+	p, err := plan.New(r.planOptions, nodes()...)
+	if err != nil {
 		return err
 	}
-	return distribution.Publish(r.uploads(), distribution.WithRunner(r.runner))
+	return p.Run()
+}
+
+func (r *CalicoManager) publishPlan() []plan.Node {
+	nodes := []plan.Node{
+		{Name: prepPublishStep, Validate: r.publishPrereqs},
+		// Before images, whose scan sends the operator to ISS.
+		r.operatorNode(),
+	}
+	for _, u := range r.uploads() {
+		nodes = append(nodes, distribution.Node(u, distribution.WithRunner(r.runner)))
+	}
+	return nodes
 }
 
 func (r *CalicoManager) uploads() []distribution.Upload {
 	// The registries go first: metadata records the digests they produce
 	uploads := []distribution.Upload{
-		{Handler: distribution.Publisher{Kind: "images", Action: r.imagesAction()}},
+		{Handler: distribution.Publisher{Kind: images.Step, Action: r.imagesAction()}},
 		{Handler: distribution.Publisher{Kind: chartsDir, Action: r.publishHelmCharts}},
 	}
 	uploads = append(uploads,
-		distribution.Upload{Handler: distribution.Preparer{Kind: metadataKey, Action: r.buildMetadata}},
+		distribution.Upload{Handler: distribution.Preparer{Kind: outputs.MetadataStep, Action: r.buildMetadata}},
 		// After metadata, so the sums cover it. Both destinations ship the
 		// same directory, so neither can own this.
-		distribution.Upload{Handler: distribution.Preparer{Kind: "checksums", Action: r.writeChecksums}},
+		distribution.Upload{Handler: distribution.Preparer{Kind: distribution.ChecksumStep, Action: r.writeChecksums}},
 	)
 
 	if r.isHashRelease {
@@ -1164,11 +1196,6 @@ func (r *CalicoManager) buildContainerImages() error {
 }
 
 func (r *CalicoManager) publishGitTag() error {
-	if !r.gitRef {
-		logrus.Info("Skipping git tag")
-		return nil
-	}
-
 	lsRemote, err := r.git("ls-remote", "--tags", r.remote, "refs/tags/"+r.calicoVersion.String())
 	if err != nil {
 		return fmt.Errorf("query remote tag: %w", err)
@@ -1222,7 +1249,16 @@ func remoteTagCommit(lsRemoteOutput, ver string) string {
 }
 
 func (r *CalicoManager) githubTagUpload() distribution.Upload {
-	return distribution.Upload{Handler: distribution.Preparer{Kind: "git tag", Action: r.publishGitTag}}
+	return distribution.Upload{Name: distribution.GithubTagStep, Skip: !r.gitRef, Handler: distribution.Preparer{
+		Kind:   "git tag",
+		Action: r.publishGitTag,
+		Check: func() error {
+			if _, err := r.git("rev-parse", "--verify", "refs/tags/"+r.calicoVersion.String()); err != nil {
+				return fmt.Errorf("no local tag %s: %w", r.calicoVersion.String(), err)
+			}
+			return nil
+		},
+	}}
 }
 
 func (r *CalicoManager) githubReleaseUpload() distribution.Upload {
@@ -1260,9 +1296,10 @@ Additional links:
 	releaseNote := replacer.Replace(releaseNoteTemplate)
 
 	return distribution.Upload{
-		Name:   "github release",
-		Source: r.uploadDir(),
-		Skip:   !r.githubRelease,
+		Name:     distribution.GithubReleaseStep,
+		Source:   r.uploadDir(),
+		Skip:     !r.githubRelease,
+		Requires: []string{outputs.MetadataStep, distribution.ChecksumStep, distribution.GithubTagStep},
 		Handler: distribution.GithubRelease{
 			Repo:   github.Repo{Org: r.githubOrg, Name: r.repo},
 			Tag:    r.calicoVersion.String(),
@@ -1567,7 +1604,7 @@ func (r *CalicoManager) publishHelmCharts() error {
 
 func (r *CalicoManager) helmIndexUpload() distribution.Upload {
 	return distribution.Upload{
-		Name:   "chart index",
+		Name:   helmIndexStep,
 		Source: charts.IndexFilePath(charts.IndexDir(r.uploadDir())),
 		Skip:   !r.helmCharts || !r.helmIndex,
 		Handler: distribution.S3{
