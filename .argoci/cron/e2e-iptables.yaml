@@ -337,6 +337,8 @@ steps:
         value: e2e/config/iptables/xtables-autohep.yaml
       - name: ENABLE_AUTOHEP
         value: "true"
+      - name: K8S_VERSION
+        value: stable-1
       - name: PROVISIONER
         value: local-kind
     commands: |
@@ -594,10 +596,10 @@ steps:
       - name: VPC_SUBNETS
         value: '["172.16.101.0/24"]'
     matrix:
-      - name: stable-3
+      - name: stable-1
         env:
           - name: K8S_VERSION
-            value: stable-3
+            value: stable-1
     commands: |
       .argoci/scripts/body_standard.sh
   - name: wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay
@@ -752,6 +754,8 @@ steps:
         value: e2e/config/iptables/xtables-encap-nobgp.yaml
       - name: CLUSTER_ROUTING_MODE
         value: Felix
+      - name: K8S_VERSION
+        value: stable-1
     matrix:
       - name: ubuntu-2404-lts-gcp-kubeadm
         env:
