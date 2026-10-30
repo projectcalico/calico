@@ -45,7 +45,9 @@
 .argoci/cron/e2e-iptables.yaml | autohep-test | iptables/xtables-autohep | 230
 .argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-etcd | iptables/xtables-manifest-v3crd | 208
 .argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-new | iptables/xtables-manifest | 212
+.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-new [beta-or-stable-canal-yaml] | iptables/xtables-manifest-canal | 210
 .argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-old | iptables/xtables-manifest | 212
+.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-old [stable-1-canal-yaml] | iptables/xtables-manifest-canal | 210
 .argoci/cron/e2e-iptables.yaml | distro-support | iptables/xtables-encap-nobgp | 225
 .argoci/cron/e2e-iptables.yaml | dual-stack-k8s-e2e-etcd | iptables/xtables-manifest-v3crd | 208
 .argoci/cron/e2e-iptables.yaml | dual-stack-k8s-e2e-kdd | iptables/xtables-manifest | 212

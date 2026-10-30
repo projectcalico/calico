@@ -823,6 +823,8 @@ steps:
             value: calico-typha.yaml
       - name: stable-1-canal-yaml
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/iptables/xtables-manifest-canal.yaml
           - name: K8S_VERSION
             value: stable-1
           - name: MANIFEST_FILE
@@ -855,6 +857,8 @@ steps:
             value: calico-typha.yaml
       - name: beta-or-stable-canal-yaml
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/iptables/xtables-manifest-canal.yaml
           - name: K8S_VERSION
             value: beta-or-stable
           - name: MANIFEST_FILE
