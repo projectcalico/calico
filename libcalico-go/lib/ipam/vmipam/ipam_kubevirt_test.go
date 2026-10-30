@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -60,6 +61,26 @@ var _ = Describe("CreateVMHandleID", func() {
 		Expect(CreateVMHandleID("", "test-ns", longName)).To(Equal(handle))
 		Expect(CreateVMHandleID("", "test-ns", longName+"x")).NotTo(Equal(handle))
 		Expect(CreateVMHandleID("", "other-ns", longName)).NotTo(Equal(handle))
+	})
+})
+
+var _ = Describe("VMHandleNetworks", func() {
+	It("should yield the network a handle was built from", func() {
+		Expect(slices.Collect(VMHandleNetworks(CreateVMHandleID("net1", "ns", "vm1")))).To(Equal([]string{"net1"}))
+	})
+
+	It("should yield the network of a hashed handle", func() {
+		handle := CreateVMHandleID("net1", "ns", strings.Repeat("v", 120))
+		Expect(slices.Collect(VMHandleNetworks(handle))).To(Equal([]string{"net1"}))
+	})
+
+	It("should yield every prefix when the network name contains the infix", func() {
+		handle := CreateVMHandleID("a.vmi.b", "ns", "vm1")
+		Expect(slices.Collect(VMHandleNetworks(handle))).To(Equal([]string{"a", "a.vmi.b"}))
+	})
+
+	It("should yield nothing for a pod handle", func() {
+		Expect(slices.Collect(VMHandleNetworks("k8s-pod-network.0123456789abcdef"))).To(BeEmpty())
 	})
 })
 

@@ -685,14 +685,8 @@ func (c *IPAMChecker) recordVMRefs(vms set.Set[types.NamespacedName]) int {
 	networks := set.New[string]()
 	for _, allocs := range c.allocations {
 		for _, a := range allocs {
-			// A network name may itself contain the infix, so every prefix before one is a candidate.
-			for i := 0; ; i++ {
-				j := strings.Index(a.Handle[i:], vmipam.VMHandleInfix)
-				if j < 0 {
-					break
-				}
-				i += j
-				networks.Add(a.Handle[:i])
+			for network := range vmipam.VMHandleNetworks(a.Handle) {
+				networks.Add(network)
 			}
 		}
 	}
