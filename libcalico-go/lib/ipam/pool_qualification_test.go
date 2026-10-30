@@ -108,10 +108,10 @@ type qualificationCase struct {
 	use          v3.IPPoolAllowedUse
 	maxPrefixLen int
 
-	// Either both pool lists or the error message is checked.
-	qualified []string
-	selecting []string
-	err       string
+	// Either both pool lists or the error message is checked. releasable is unordered, and empty when left out.
+	qualified  []string
+	releasable []string
+	err        string
 }
 
 var _ = DescribeTable("qualifyPools",
@@ -145,41 +145,37 @@ var _ = DescribeTable("qualifyPools",
 		}
 		Expect(err).NotTo(HaveOccurred())
 		Expect(collectCIDRs(q.qualified())).To(Equal(tc.qualified))
-		Expect(collectCIDRs(q.selecting())).To(Equal(tc.selecting))
+		Expect(collectCIDRs(q.releasable())).To(ConsistOf(tc.releasable))
 	},
 
 	// Node selectors, with and without named pools. A disabled pool is one GetEnabledPools leaves out.
 	Entry("no selectors, nothing named", qualificationCase{
 		pools:     []testPool{{cidr: v4Pool1}, {cidr: v4Pool2}},
 		qualified: []string{v4Pool1, v4Pool2},
-		selecting: []string{v4Pool1, v4Pool2},
 	}),
 	Entry("no selectors, pool1 named", qualificationCase{
 		pools:     []testPool{{cidr: v4Pool1}, {cidr: v4Pool2}},
 		requested: []string{v4Pool1},
 		qualified: []string{v4Pool1},
-		selecting: []string{v4Pool1},
 	}),
 	Entry("only pool1 selects the node", qualificationCase{
-		pools:     []testPool{{cidr: v4Pool1, nodeSelector: `foo == "bar"`}, {cidr: v4Pool2, nodeSelector: `foo != "bar"`}},
-		qualified: []string{v4Pool1},
-		selecting: []string{v4Pool1},
+		pools:      []testPool{{cidr: v4Pool1, nodeSelector: `foo == "bar"`}, {cidr: v4Pool2, nodeSelector: `foo != "bar"`}},
+		qualified:  []string{v4Pool1},
+		releasable: []string{v4Pool2},
 	}),
 	Entry("pool1 doesn't select the node, pool2 selects all()", qualificationCase{
-		pools:     []testPool{{cidr: v4Pool1, nodeSelector: `foo != "bar"`}, {cidr: v4Pool2, nodeSelector: "all()"}},
-		qualified: []string{v4Pool2},
-		selecting: []string{v4Pool2},
+		pools:      []testPool{{cidr: v4Pool1, nodeSelector: `foo != "bar"`}, {cidr: v4Pool2, nodeSelector: "all()"}},
+		qualified:  []string{v4Pool2},
+		releasable: []string{v4Pool1},
 	}),
 	Entry("pool2 named although pool1 selects the node", qualificationCase{
 		pools:     []testPool{{cidr: v4Pool1, nodeSelector: `foo == "bar"`}, {cidr: v4Pool2}},
 		requested: []string{v4Pool2},
 		qualified: []string{v4Pool2},
-		selecting: []string{v4Pool2},
 	}),
 	Entry("pool1 disabled, nothing named", qualificationCase{
 		pools:     []testPool{{cidr: v4Pool2}},
 		qualified: []string{v4Pool2},
-		selecting: []string{v4Pool2},
 	}),
 	Entry("pool1 disabled and named", qualificationCase{
 		pools:     []testPool{{cidr: v4Pool2}},
@@ -195,7 +191,6 @@ var _ = DescribeTable("qualifyPools",
 		pools:     []testPool{{cidr: v4Pool2}},
 		requested: []string{v4Pool2},
 		qualified: []string{v4Pool2},
-		selecting: []string{v4Pool2},
 	}),
 	Entry("the only enabled pool doesn't select the node", qualificationCase{
 		pools: []testPool{{cidr: v4Pool2, nodeSelector: `foo != "bar"`}},
@@ -204,13 +199,12 @@ var _ = DescribeTable("qualifyPools",
 	Entry("IPv6 pools, nothing named", qualificationCase{
 		pools:     []testPool{{cidr: v6Pool1}, {cidr: v6Pool2}},
 		qualified: []string{v6Pool1, v6Pool2},
-		selecting: []string{v6Pool1, v6Pool2},
 	}),
 	Entry("IPv6 pool named in full representation", qualificationCase{
-		pools:     []testPool{{cidr: v6Pool1, nodeSelector: `foo == "bar"`}, {cidr: v6Pool2, nodeSelector: `foo != "bar"`}},
-		requested: []string{v6Pool1},
-		qualified: []string{v6Pool1},
-		selecting: []string{v6Pool1},
+		pools:      []testPool{{cidr: v6Pool1, nodeSelector: `foo == "bar"`}, {cidr: v6Pool2, nodeSelector: `foo != "bar"`}},
+		requested:  []string{v6Pool1},
+		qualified:  []string{v6Pool1},
+		releasable: []string{v6Pool2},
 	}),
 
 	// Namespace selectors.
@@ -218,7 +212,6 @@ var _ = DescribeTable("qualifyPools",
 		pools:     []testPool{{cidr: v4Pool2, namespaceSelector: "environment == 'production'"}},
 		namespace: testNamespace(map[string]string{"environment": "production"}),
 		qualified: []string{v4Pool2},
-		selecting: []string{v4Pool2},
 	}),
 	Entry("namespace selector doesn't match", qualificationCase{
 		pools:     []testPool{{cidr: v4Pool2, namespaceSelector: "environment == 'production'"}},
@@ -245,7 +238,6 @@ var _ = DescribeTable("qualifyPools",
 			"tier":        "frontend",
 		}),
 		qualified: []string{"10.0.0.0/24"},
-		selecting: []string{"10.0.0.0/24"},
 	}),
 	Entry("several pools with different namespace selectors", qualificationCase{
 		pools: []testPool{
@@ -255,7 +247,6 @@ var _ = DescribeTable("qualifyPools",
 		},
 		namespace: testNamespace(map[string]string{"environment": "production"}),
 		qualified: []string{"10.0.0.0/24", "10.2.0.0/24"},
-		selecting: []string{"10.0.0.0/24", "10.2.0.0/24"},
 	}),
 
 	// Named pools skip the node selector, namespace selector and AssignmentMode, and nothing else.
@@ -263,20 +254,17 @@ var _ = DescribeTable("qualifyPools",
 		pools:     []testPool{{cidr: v4Pool1, nodeSelector: `foo != "bar"`}},
 		requested: []string{v4Pool1},
 		qualified: []string{v4Pool1},
-		selecting: []string{v4Pool1},
 	}),
 	Entry("named pool skips a mismatched namespace selector", qualificationCase{
 		pools:     []testPool{{cidr: "10.0.0.0/24", namespaceSelector: "environment == 'production'"}},
 		requested: []string{"10.0.0.0/24"},
 		namespace: testNamespace(map[string]string{"environment": "development"}),
 		qualified: []string{"10.0.0.0/24"},
-		selecting: []string{"10.0.0.0/24"},
 	}),
 	Entry("named pool skips Manual assignment mode", qualificationCase{
 		pools:     []testPool{{cidr: v4Pool1, manual: true}},
 		requested: []string{v4Pool1},
 		qualified: []string{v4Pool1},
-		selecting: []string{v4Pool1},
 	}),
 	Entry("named pool still needs a matching use", qualificationCase{
 		pools:     []testPool{{cidr: v4Pool1}},
@@ -294,27 +282,48 @@ var _ = DescribeTable("qualifyPools",
 		pools:     []testPool{{cidr: v4Pool1}, {cidr: v4Pool2}},
 		requested: []string{v4Pool2, v4Pool1},
 		qualified: []string{v4Pool2, v4Pool1},
-		selecting: []string{v4Pool2, v4Pool1},
 	}),
 
 	// Rules that only automatic selection applies.
 	Entry("Manual pool is skipped when nothing is named", qualificationCase{
 		pools:     []testPool{{cidr: v4Pool1, manual: true}, {cidr: v4Pool2}},
 		qualified: []string{v4Pool2},
-		selecting: []string{v4Pool2},
 	}),
 	Entry("automatic selection doesn't check each pool's block size", qualificationCase{
 		pools:        []testPool{{cidr: v4Pool1, blockSize: 31}, {cidr: v4Pool2}},
 		maxPrefixLen: 29,
 		qualified:    []string{v4Pool1, v4Pool2},
-		selecting:    []string{v4Pool1, v4Pool2},
 	}),
 
 	// Allowed use separates qualified pools from pools that only select the node.
 	Entry("pool rejected for use still selects the node", qualificationCase{
 		pools:     []testPool{{cidr: v4Pool1, uses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}}, {cidr: v4Pool2}},
 		qualified: []string{v4Pool2},
-		selecting: []string{v4Pool1, v4Pool2},
+	}),
+
+	// Release follows the node selector alone, whatever else rejected the pool, and never touches a named pool.
+	Entry("a Manual pool whose node selector skips the node is releasable", qualificationCase{
+		pools:      []testPool{{cidr: v4Pool1, manual: true, nodeSelector: `foo != "bar"`}, {cidr: v4Pool2}},
+		qualified:  []string{v4Pool2},
+		releasable: []string{v4Pool1},
+	}),
+	Entry("a pool rejected only by its namespace selector keeps its blocks", qualificationCase{
+		pools: []testPool{
+			{cidr: v4Pool1, namespaceSelector: "environment == 'production'"},
+			{cidr: v4Pool2},
+		},
+		namespace: testNamespace(map[string]string{"environment": "development"}),
+		qualified: []string{v4Pool2},
+	}),
+	Entry("an unnamed pool that skips the node is releasable, a named one is not", qualificationCase{
+		pools:      []testPool{{cidr: v4Pool1, nodeSelector: `foo != "bar"`}, {cidr: v4Pool2, nodeSelector: `foo != "bar"`}},
+		requested:  []string{v4Pool1},
+		qualified:  []string{v4Pool1},
+		releasable: []string{v4Pool2},
+	}),
+	Entry("a pool whose node selector doesn't parse keeps its blocks", qualificationCase{
+		pools:     []testPool{{cidr: v4Pool1, manual: true, nodeSelector: "invalid selector syntax ["}, {cidr: v4Pool2}},
+		qualified: []string{v4Pool2},
 	}),
 	Entry("no pool allows the use", qualificationCase{
 		pools: []testPool{{cidr: v4Pool1}, {cidr: v4Pool2}},

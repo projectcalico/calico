@@ -49,12 +49,20 @@ const (
 	rejectNodeSelector      rejectReason = "node selector does not match"
 	rejectNamespaceSelector rejectReason = "namespace selector does not match"
 	rejectUse               rejectReason = "allowed uses do not match"
+	rejectNotRequested      rejectReason = "not one of the requested pools"
 )
 
 // poolCandidate is a pool considered for a request, with the reason it was rejected.
 type poolCandidate struct {
 	pool   v3.IPPool
 	reason rejectReason
+
+	// requested is whether the request named the pool. IPAM never releases a named pool's blocks for the request.
+	requested bool
+
+	// selectsNode is whether the pool's node selector picks the request's node, recorded for every enabled pool
+	// whatever its reason, since it decides which of the node's affine blocks IPAM may release.
+	selectsNode bool
 }
 
 // poolQualification holds every candidate pool in preference order.
@@ -91,7 +99,7 @@ func qualifyPools(req poolRequest, enabledPools []v3.IPPool) (poolQualification,
 	var qualification poolQualification
 	var err error
 	if len(req.requested) > 0 {
-		qualification, err = qualifyRequested(req, fitting)
+		qualification, err = qualifyRequested(req, enabledPools, fitting)
 	} else {
 		qualification, err = qualifyBySelection(req, enabledPools)
 	}
@@ -109,17 +117,24 @@ func qualifyPools(req poolRequest, enabledPools []v3.IPPool) (poolQualification,
 	return qualification, nil
 }
 
-// qualifyRequested checks the pools the caller named, in the order named. A named pool must fit the block size, and
-// only its allowed uses are checked.
-func qualifyRequested(req poolRequest, fitting map[string]v3.IPPool) (poolQualification, error) {
+// qualifyRequested checks the pools the caller named, in the order named, then records every other enabled pool as
+// not requested. A named pool must fit the block size, and only its allowed uses are checked.
+func qualifyRequested(req poolRequest, enabledPools []v3.IPPool, fitting map[string]v3.IPPool) (poolQualification, error) {
 	var q poolQualification
+	named := map[string]bool{}
 	for _, rp := range req.requested {
 		cidr := rp.Network()
 		pool, ok := fitting[cidr.String()]
 		if !ok {
 			return poolQualification{}, fmt.Errorf("the given pool (%s) does not exist, or is not enabled", cidr.String())
 		}
-		q.add(pool, checkUse(pool, req.use))
+		q.add(req.candidate(pool, checkUse(pool, req.use), true))
+		named[pool.Name] = true
+	}
+	for _, pool := range enabledPools {
+		if !named[pool.Name] {
+			q.add(req.candidate(pool, rejectNotRequested, false))
+		}
 	}
 	return q, nil
 }
@@ -136,17 +151,29 @@ func qualifyBySelection(req poolRequest, enabledPools []v3.IPPool) (poolQualific
 		if reason == "" {
 			reason = checkUse(pool, req.use)
 		}
-		q.add(pool, reason)
+		q.add(req.candidate(pool, reason, false))
 	}
 	return q, nil
 }
 
-// add records a candidate and logs why it was rejected, if it was.
-func (q *poolQualification) add(pool v3.IPPool, reason rejectReason) {
-	if reason != "" {
-		log.Debugf("IP pool %s rejected: %s", pool.Name, reason)
+// candidate builds the request's candidate for a pool, recording whether the pool's node selector picks the node. A
+// selector that does not parse counts as picking it, so a bad selector keeps the node's blocks rather than releasing
+// them.
+func (r poolRequest) candidate(pool v3.IPPool, reason rejectReason, requested bool) poolCandidate {
+	selects, err := SelectsNode(pool, r.node)
+	if err != nil {
+		log.WithError(err).WithField("pool", pool.Name).Error("Failed to determine if node matches pool, keeping its blocks")
+		selects = true
 	}
-	q.candidates = append(q.candidates, poolCandidate{pool: pool, reason: reason})
+	return poolCandidate{pool: pool, reason: reason, requested: requested, selectsNode: selects}
+}
+
+// add records a candidate and logs why it was rejected, if it was.
+func (q *poolQualification) add(c poolCandidate) {
+	if c.reason != "" {
+		log.Debugf("IP pool %s rejected: %s", c.pool.Name, c.reason)
+	}
+	q.candidates = append(q.candidates, c)
 }
 
 // qualified returns the pools the request may allocate from.
@@ -154,10 +181,16 @@ func (q poolQualification) qualified() []v3.IPPool {
 	return q.filter(isQualified)
 }
 
-// selecting returns the pools that pass every rule except allowed use. Affine blocks from these pools are kept even
-// when this request can't allocate from them.
-func (q poolQualification) selecting() []v3.IPPool {
-	return q.filter(isSelecting)
+// releasable returns the pools whose blocks affine to the node IPAM may release: those whose node selector skips the
+// node, other than pools the request named. A block is released only once it is empty.
+func (q poolQualification) releasable() []v3.IPPool {
+	var pools []v3.IPPool
+	for _, c := range q.candidates {
+		if !c.requested && !c.selectsNode {
+			pools = append(pools, c.pool)
+		}
+	}
+	return pools
 }
 
 // filter returns the pools whose rejection reason satisfies keep, in candidate order.

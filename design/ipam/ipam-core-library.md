@@ -71,7 +71,7 @@ A few non-obvious design points:
   release](./ipam-gc.md#empty-block-release) safe.
 - The block cap is `min(global MaxBlocksPerHost, request-level)`, defaulting to 20 if both are zero. Once a node reaches it, `allowNewClaim` is forced false; existing blocks still
   fill.
-- Pool qualification ([`pool_qualification.go`](../../libcalico-go/lib/ipam/pool_qualification.go)) is the one place that decides which pools a request may draw from: AutoAssign and
+- Pool qualification ([`pool_qualification.go`](../../libcalico-go/lib/ipam/pool_qualification.go)) is the one place that decides which pools a request may draw from, and which of the node's affine blocks it may release: AutoAssign and
   EnsureBlock use its full rule set, AssignIP a narrower one. A new eligibility criterion goes there, not in a caller. Pools a request names skip the selectors and `AssignmentMode`, nothing else.
 - `GetEnabledPools` skips a pool that lacks `Allocatable=True` when an allocatable or terminating pool covers its CIDR. The IP pool controller resolves overlap asynchronously, so
   without this a pool created over an active one is allocatable until the controller's first status write - unbounded while kube-controllers is down. A pool already marked
