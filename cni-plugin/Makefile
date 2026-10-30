@@ -17,12 +17,6 @@ include ../lib.Makefile
 ## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 
-# fail if unable to download
-CURL=curl -C - -sSf
-
-CNI_ARTIFACTS_URL=https://github.com/projectcalico/containernetworking-plugins/releases/download
-FLANNEL_ARTIFACTS_URL=https://github.com/projectcalico/flannel-cni-plugin/releases/download
-
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
 
@@ -102,12 +96,15 @@ FLANNEL_CNI_PLUGIN_CLONED=.flannel-cni-plugin-$(FLANNEL_VERSION).cloned
 $(FLANNEL_CNI_PLUGIN_CLONED):
 	rm -rf flannel-cni-plugin .flannel-cni-plugin-*.cloned
 	-rm -rf $(WINDOWS_BIN)/flannel.exe
-	git clone --single-branch --branch $(FLANNEL_VERSION) https://github.com/projectcalico/flannel-cni-plugin.git
+	$(call fetch_repo,$(FLANNEL_CNI_PLUGIN_REPO),$(FLANNEL_VERSION),flannel-cni-plugin)
 	touch $@
 
+# EXTRA_DOCKER_ARGS carries RUN_AS_ROOT when the caller is root, without which
+# the build image tries to useradd uid 0 and cannot.
 $(WINDOWS_BIN)/flannel.exe: $(FLANNEL_CNI_PLUGIN_CLONED)
 	docker run \
 		-v $(CURDIR)/flannel-cni-plugin:/go/src/github.com/flannel-io/cni-plugin:z \
+		$(EXTRA_DOCKER_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/flannel-io/cni-plugin --rm $(CALICO_BUILD) \
 		/bin/sh -xe -c ' \
 			ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) make build_windows'

@@ -1462,6 +1462,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.LogConnectionTransitions != nil {
+		in, out := &in.LogConnectionTransitions, &out.LogConnectionTransitions
+		*out = new(LogConnectionTransitionsMode)
+		**out = **in
+	}
 	if in.IPIPEnabled != nil {
 		in, out := &in.IPIPEnabled, &out.IPIPEnabled
 		*out = new(bool)
@@ -1489,6 +1494,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	}
 	if in.VXLANPort != nil {
 		in, out := &in.VXLANPort, &out.VXLANPort
+		*out = new(int)
+		**out = **in
+	}
+	if in.VXLANSrcPortMin != nil {
+		in, out := &in.VXLANSrcPortMin, &out.VXLANSrcPortMin
+		*out = new(int)
+		**out = **in
+	}
+	if in.VXLANSrcPortMax != nil {
+		in, out := &in.VXLANSrcPortMax, &out.VXLANSrcPortMax
 		*out = new(int)
 		**out = **in
 	}
@@ -1953,6 +1968,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	}
 	if in.FlowLogsGoldmaneServer != nil {
 		in, out := &in.FlowLogsGoldmaneServer, &out.FlowLogsGoldmaneServer
+		*out = new(string)
+		**out = **in
+	}
+	if in.FlowLogsGoldmaneIncludeIPs != nil {
+		in, out := &in.FlowLogsGoldmaneIncludeIPs, &out.FlowLogsGoldmaneIncludeIPs
 		*out = new(string)
 		**out = **in
 	}
@@ -3053,6 +3073,11 @@ func (in *KubeControllersConfigurationSpec) DeepCopyInto(out *KubeControllersCon
 	if in.DebugProfilePort != nil {
 		in, out := &in.DebugProfilePort, &out.DebugProfilePort
 		*out = new(int32)
+		**out = **in
+	}
+	if in.DebugProfileHost != nil {
+		in, out := &in.DebugProfileHost, &out.DebugProfileHost
+		*out = new(string)
 		**out = **in
 	}
 	return

@@ -68,10 +68,13 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			Namespace:        &apiv3.NamespaceControllerConfig{ReconcilerPeriod: &metav1.Duration{Duration: time.Minute * 6}},
 		},
 	}
+	defaultMetricsPort := 9094
 	status1 := apiv3.KubeControllersConfigurationStatus{
+		// runningConfig reuses the spec type, so the CRD defaults its port too.
 		RunningConfig: &apiv3.KubeControllersConfigurationSpec{
-			LogSeverityScreen: "Debug",
-			HealthChecks:      apiv3.Enabled,
+			LogSeverityScreen:     "Debug",
+			HealthChecks:          apiv3.Enabled,
+			PrometheusMetricsPort: &defaultMetricsPort,
 			Controllers: apiv3.ControllersConfig{
 				Node: &apiv3.NodeControllerConfig{
 					ReconcilerPeriod: &metav1.Duration{Duration: time.Second * 330},
@@ -91,7 +94,8 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 	}
 	status2 := apiv3.KubeControllersConfigurationStatus{
 		RunningConfig: &apiv3.KubeControllersConfigurationSpec{
-			HealthChecks: apiv3.Disabled,
+			HealthChecks:          apiv3.Disabled,
+			PrometheusMetricsPort: &defaultMetricsPort,
 			Controllers: apiv3.ControllersConfig{
 				Node: &apiv3.NodeControllerConfig{
 					ReconcilerPeriod: &metav1.Duration{Duration: time.Second * 330},

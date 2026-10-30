@@ -34,6 +34,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -424,28 +425,22 @@ func streamInPod(t testing.TB, pod *corev1.Pod, command []string, stdin string, 
 // ----------------------------------------------------------------------------
 // Diags.
 
-// CollectDiagsOnFailure registers a t.Cleanup that prints diagnostics if the
-// test (or any of its parents) failed. It mirrors utils.py:DiagsCollector,
-// which is used as a context manager around test bodies.
-//
-// Usage:
+// CollectDiagsOnFailure returns a func that prints diagnostics if the test has
+// failed. Defer it from the test body, not a setup helper: a defer runs before
+// any t.Cleanup, so the dump sees the state that explains the failure.
+// It mirrors utils.py:DiagsCollector, which wraps test bodies.
 //
 //	func TestSomething(t *testing.T) {
 //	    defer utils.CollectDiagsOnFailure(t)()
 //	    ...
 //	}
-//
-// The returned func is intentionally a no-op so it can be used with defer
-// or ignored; the actual diag dump runs from t.Cleanup.
 func CollectDiagsOnFailure(t testing.TB) func() {
 	t.Helper()
-	t.Cleanup(func() {
-		if !t.Failed() {
-			return
+	return func() {
+		if t.Failed() {
+			dumpDiags(t)
 		}
-		dumpDiags(t)
-	})
-	return func() {}
+	}
 }
 
 func dumpDiags(t testing.TB) {
@@ -579,24 +574,62 @@ func logCalicoNodeLogs(t testing.TB) {
 // ----------------------------------------------------------------------------
 // Pod-status assertions.
 
-// CheckPodStatus fails the test if any pod in the namespace is not in the Running phase.
+// CheckPodStatus waits for every pod in the namespace to be Running and Ready,
+// and fails the test if they don't settle.
+//
+// Ready matters as much as Running: a calico-node pod reports Running as soon as
+// its container starts, minutes before Felix has finished its first sync. Tests
+// that run after this one assume a settled dataplane.
 func CheckPodStatus(t testing.TB, namespace string) {
 	t.Helper()
 	cs := K8sClient(t)
-	pods, err := cs.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		t.Fatalf("listing pods in %s: %v", namespace, err)
+
+	var last []corev1.Pod
+	err := wait.PollUntilContextTimeout(context.Background(), time.Second, podSettleTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			pods, err := cs.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+			if err != nil {
+				// Keep polling through apiserver blips rather than reporting a
+				// stuck rollout with no pods collected to log.
+				t.Logf("listing pods in %s: %v", namespace, err)
+				return false, nil
+			}
+			last = pods.Items
+			for _, p := range pods.Items {
+				if p.DeletionTimestamp != nil || p.Status.Phase != corev1.PodRunning || !podReady(&p) {
+					return false, nil
+				}
+			}
+			return true, nil
+		})
+
+	for i := range last {
+		t.Logf("%s\t%s\t%s\tready=%v", last[i].Name, last[i].Namespace, last[i].Status.Phase, podReady(&last[i]))
 	}
-	for _, p := range pods.Items {
-		t.Logf("%s\t%s\t%s", p.Name, p.Namespace, p.Status.Phase)
-		if p.Status.Phase != corev1.PodRunning {
+	if err == nil {
+		return
+	}
+	for i := range last {
+		p := &last[i]
+		if p.DeletionTimestamp != nil || p.Status.Phase != corev1.PodRunning || !podReady(p) {
 			// Surface conditions, container statuses and events to help
 			// debug (the client-go replacement for `kubectl describe po`).
-			logPodDebug(t, &p)
-			t.Fatalf("pod %s/%s is in phase %s, expected Running",
-				p.Namespace, p.Name, p.Status.Phase)
+			logPodDebug(t, p)
 		}
 	}
+	t.Fatalf("pods in %s did not become Running and Ready within %s: %v", namespace, podSettleTimeout, err)
+}
+
+// podSettleTimeout covers a calico-node rollout, which several tests trigger.
+const podSettleTimeout = 3 * time.Minute
+
+func podReady(pod *corev1.Pod) bool {
+	for _, c := range pod.Status.Conditions {
+		if c.Type == corev1.PodReady {
+			return c.Status == corev1.ConditionTrue
+		}
+	}
+	return false
 }
 
 // logPodDebug logs the pod's conditions, container statuses and events.
@@ -668,7 +701,7 @@ func WaitForPodsReady(t testing.TB, namespace, labelSelector string, timeout tim
 			return fmt.Errorf("no pods found in namespace %s", namespace)
 		}
 		for _, p := range pods.Items {
-			if !podIsReady(&p) {
+			if !podReady(&p) {
 				return fmt.Errorf("pod %s/%s is not ready", p.Namespace, p.Name)
 			}
 		}
@@ -686,20 +719,11 @@ func WaitForPodReady(t testing.TB, namespace, name string, timeout time.Duration
 		if err != nil {
 			return err
 		}
-		if !podIsReady(pod) {
+		if !podReady(pod) {
 			return fmt.Errorf("pod %s/%s is not ready", namespace, name)
 		}
 		return nil
 	}, timeout, time.Second).Should(Succeed(), "pod %s/%s did not become ready within %s", namespace, name, timeout)
-}
-
-func podIsReady(pod *corev1.Pod) bool {
-	for _, c := range pod.Status.Conditions {
-		if c.Type == corev1.PodReady {
-			return c.Status == corev1.ConditionTrue
-		}
-	}
-	return false
 }
 
 // DeletePodAndWait deletes the named pod and blocks until it is fully gone

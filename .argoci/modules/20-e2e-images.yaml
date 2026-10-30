@@ -1,0 +1,20 @@
+# CI for the e2e helper images; only rapidclient has any.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  # In the build image directly, saving a nested container and a second pull.
+  useGoBuild: true
+
+steps:
+  - name: e2e-images-rapidclient-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    jobSize: small
+    requests: {cpu: 2750m, memory: 548Mi}
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    commands: |
+      # Empty wrappers run each recipe here rather than in a nested container.
+      make -C e2e/images/rapidclient ci DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=

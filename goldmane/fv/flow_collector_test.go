@@ -28,7 +28,7 @@ type testSink struct {
 	flows []*types.Flow
 }
 
-func (t *testSink) Receive(f *types.Flow) {
+func (t *testSink) Receive(f *types.Flow, _ string) {
 	t.Lock()
 	defer t.Unlock()
 	t.flows = append(t.flows, f)

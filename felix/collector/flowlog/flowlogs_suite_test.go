@@ -34,6 +34,6 @@ func init() {
 func TestFlowlogs(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../report/felix_collector_flowlog_suite.xml"
+	testutils.RegisterJUnitReporter("felix_collector_flowlog_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/collector/flowlog", suiteConfig, reporterConfig)
 }

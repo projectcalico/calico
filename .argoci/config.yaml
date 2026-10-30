@@ -1,6 +1,36 @@
-# ArgoCI config: scheduled e2e only. Suites are CronWorkflows in
-# .argoci/cron/*.yaml, registered on merge to the default branch. No per-PR
-# workflow (empty `workflows`, no `ciFile`). Required to onboard the repo —
-# without it the handler treats ArgoCI as not set up and skips cron registration.
+# Which workflows run on which events. The crons in .argoci/cron/ register on
+# merge to the default branch.
 version: v2
-workflows: []
+
+# Fork PRs from non-writers get no CI either way; this gives a maintainer a
+# per-commit checkbox to release the run rather than withholding it silently.
+requireApproval: true
+
+# The calico/go-build tag `useGoBuild` steps run. It must match the GO_BUILD_VER
+# metadata.mk resolves to, and CI fails when the two differ.
+goBuildVersion: 1.27.1-llvm21.1.8-k8s1.37.1
+
+workflows:
+  # Always runs, so its status can be a required check; gating happens inside.
+  - name: calico
+    workflowFile: .argoci/ciworkflow.yaml
+    runWhen:
+      alwaysRunOnPR: true
+      alwaysRunOnMerge: true
+
+  # Separate workflows, so a publish failing doesn't colour the build's status.
+  - name: fossa-scan
+    workflowFile: .argoci/publish/fossa-scan.yaml
+    runWhen:
+      alwaysRunOnMerge: true
+
+  # Also a promotion button, for packaging a branch or PR.
+  - name: openstack-packages
+    workflowFile: .argoci/publish/openstack-packages.yaml
+    runWhen:
+      alwaysRunOnMerge: true
+
+  - name: e2e-images
+    workflowFile: .argoci/publish/e2e-images.yaml
+    runWhen:
+      alwaysRunOnMerge: true

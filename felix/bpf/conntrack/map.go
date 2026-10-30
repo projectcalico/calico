@@ -32,10 +32,14 @@ import (
 
 func init() {
 	SetMapSize(MaxEntries)
+	SetMapSizeV6(MaxEntries)
 }
 
 func SetMapSize(size int) {
 	maps.SetSize(curVer.MapParams.VersionedName(), size)
+}
+
+func SetMapSizeV6(size int) {
 	maps.SetSize(curVer.MapParamsV6.VersionedName(), size)
 }
 
@@ -166,6 +170,7 @@ const (
 	ProtoTCP   = 6
 	ProtoUDP   = 17
 	ProtoICMP6 = 58
+	ProtoSCTP  = 132
 )
 
 func KeyFromBytes(k []byte) KeyInterface {

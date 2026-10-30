@@ -1,0 +1,34 @@
+# Whisker CI and its arm64 image.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+
+steps:
+  # Jest sizes its pool from the node's cores, not the pod's, and a worker short
+  # of CPU trips the 5s per-test timeout. Two leaves each about two cores.
+  - name: whisker-ci
+    requests: {cpu: 4000m, memory: 4.25Gi}
+    env:
+      - name: JEST_MAX_WORKERS
+        value: "2"
+    commands: |
+      cd whisker
+      make ci
+
+  # The CI step already builds amd64.
+  - name: whisker-image
+    requests: {cpu: 1750m, memory: 2.5Gi}
+    # Native, because the Dockerfile's dnf install would be emulated on amd64.
+    runOn: arm
+    timeout: 1h
+    matrix:
+      - name: arm64
+        env:
+          - name: ARCH
+            value: arm64
+    commands: |
+      cd whisker
+      make image ARCH=$ARCH

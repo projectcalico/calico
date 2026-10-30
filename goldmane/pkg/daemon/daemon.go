@@ -197,7 +197,6 @@ func Run(ctx context.Context, cfg Config) {
 	// Create a flow collector to receive flows from clients, connected goldmane.
 	collector := server.NewFlowCollector(gm)
 	collector.RegisterWith(grpcServer)
-	go collector.Run(ctx)
 
 	// Start Goldmane, waiting for it to be ready to receive requests before continuing.
 	<-gm.Run(storage.GetStartTime(int(cfg.AggregationWindow.Seconds())))

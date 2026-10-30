@@ -20,11 +20,39 @@ import (
 )
 
 // ProfileInformer provides access to a shared informer and lister for
-// Profiles.
+// Profiles. Prefer using the type-safe variant (see [TypedProfileInformer]).
 type ProfileInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.ProfileLister
 }
+
+// TypedProfileInformer provides access to a shared informer and lister for
+// Profiles, including the type-safe TypedInformer variant.
+// It is a superset of ProfileInformer.
+type TypedProfileInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() ProfileIndexInformer
+	Lister() projectcalicov3.ProfileLister
+}
+
+// ProfileIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type ProfileIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.Profile]
+
+// ProfileHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for Profile.
+type ProfileHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.Profile]
+
+// ProfileDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for Profile.
+type ProfileDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.Profile]
+
+// ProfileFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for Profile.
+type ProfileFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.Profile]
+
+// ProfileIndexers is a specialization of [cache.TypedIndexers] for Profile.
+type ProfileIndexers = cache.TypedIndexers[*apisprojectcalicov3.Profile]
+
+// DeletedProfile is a specialization of [cache.DeletedObject] for Profile.
+type DeletedProfile = cache.DeletedObject[*apisprojectcalicov3.Profile]
 
 type profileInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type profileInformer struct {
 // NewProfileInformer constructs a new informer for Profile type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedProfileInformer]).
 func NewProfileInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewProfileInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedProfileInformer constructs a new informer for Profile type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedProfileInformer(client clientset.Interface, resyncPeriod time.Duration, indexers ProfileIndexers) ProfileIndexInformer {
+	return NewTypedProfileInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredProfileInformer constructs a new informer for Profile type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredProfileInformer]).
 func NewFilteredProfileInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewProfileInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedProfileInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredProfileInformer constructs a new informer for Profile type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredProfileInformer(client clientset.Interface, resyncPeriod time.Duration, indexers ProfileIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) ProfileIndexInformer {
+	return NewTypedProfileInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewProfileInformerWithOptions constructs a new informer for Profile type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedProfileInformerWithOptions]).
 func NewProfileInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedProfileInformerWithOptions(client, options)
+}
+
+// NewTypedProfileInformerWithOptions constructs a new informer for Profile type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedProfileInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) ProfileIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "profiles"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.Profile](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewProfileInformerWithOptions(client clientset.Interface, options internali
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *profileInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewProfileInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedProfileInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *profileInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.Profile{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *profileInformer) TypedInformer() ProfileIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.Profile](f.factory.InformerFor(&apisprojectcalicov3.Profile{}, f.defaultInformer))
 }
 
 func (f *profileInformer) Lister() projectcalicov3.ProfileLister {
 	return projectcalicov3.NewProfileLister(f.Informer().GetIndexer())
+}
+
+// ToTypedProfileInformer converts an untyped informer into a TypedProfileInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *Profile. If that is not the case, calling type-safe methods of the returned
+// TypedProfileInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedProfileInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedProfileInformer(informer ProfileInformer) TypedProfileInformer {
+	if informer, ok := informer.(TypedProfileInformer); ok {
+		return informer
+	}
+	return &profileTypedInformerAdapter{informer}
+}
+
+type profileTypedInformerAdapter struct {
+	ProfileInformer
+}
+
+func (a *profileTypedInformerAdapter) TypedInformer() ProfileIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.Profile](a.Informer())
+}
+
+// ToProfileIndexInformer converts an untyped informer into a ProfileIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *Profile. If that is not the case, calling type-safe methods of the returned
+// ProfileIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a ProfileIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToProfileIndexInformer(informer cache.SharedIndexInformer) ProfileIndexInformer {
+	if informer, ok := informer.(ProfileIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.Profile](informer)
 }

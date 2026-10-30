@@ -72,6 +72,7 @@ spec:
             - component
             - apiserver
             - --secure-port=5443
+            - --cert-dir=/code/apiserver.local.config/certificates
             - -v=5
           env:
             - name: DATASTORE_TYPE
@@ -181,6 +182,13 @@ rules:
       - create
       - update
       - delete
+  # The API server marks the IP pools it creates allocatable.
+  - apiGroups:
+      - crd.projectcalico.org
+    resources:
+      - ippools/status
+    verbs:
+      - update
   - apiGroups:
       - policy
     resourceNames:

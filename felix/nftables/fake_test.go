@@ -16,6 +16,7 @@ package nftables_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -64,6 +65,9 @@ type fakeNFT struct {
 	// Allow overriding the next ListAll response to be an error.
 	ListAllError error
 
+	// Number of subsequent Run calls to fail without touching the underlying fake.
+	RunErrors int
+
 	// Track the number of List calls (simulates nft process spawns).
 	ListCallCount int
 }
@@ -111,6 +115,10 @@ func (f *fakeNFT) NewTransaction() *knftables.Transaction {
 // IsAlreadyExists methods can be used to test the result.
 func (f *fakeNFT) Run(ctx context.Context, tx *knftables.Transaction) error {
 	f.preRun(tx)
+	if err := f.takeRunError(); err != nil {
+		logrus.WithError(err).Info("Returning test error from Run")
+		return err
+	}
 
 	// Real nftables interval sets (those created with knftables.IntervalFlag) reject
 	// overlapping or nested elements with EEXIST, but the upstream knftables fake does
@@ -122,6 +130,17 @@ func (f *fakeNFT) Run(ctx context.Context, tx *knftables.Transaction) error {
 	}
 
 	return f.fake.Run(ctx, tx)
+}
+
+func (f *fakeNFT) takeRunError() error {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	if f.RunErrors == 0 {
+		return nil
+	}
+	f.RunErrors--
+	return errors.New("injected nft failure")
 }
 
 // checkIntervalOverlaps replays tx against a copy of the current dataplane state and

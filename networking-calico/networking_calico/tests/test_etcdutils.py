@@ -229,7 +229,6 @@ class TestEtcdWatcher(unittest.TestCase):
         self.m_client.watch_prefix.side_effect = etcdv3.KeyNotFound()
 
         with patch.object(self.watcher, "_pre_snapshot_hook", autospec=True) as m_pre:
-            m_pre.return_value = None
             with patch.object(
                 self.watcher, "_post_snapshot_hook", autospec=True
             ) as m_post:
@@ -239,7 +238,7 @@ class TestEtcdWatcher(unittest.TestCase):
         self.assertEqual(m_pre.mock_calls, [call(), call(), call()])
 
         # _post_snapshot_hook() called twice.
-        self.assertEqual(m_post.mock_calls, [call(None), call(None)])
+        self.assertEqual(m_post.mock_calls, [call(), call()])
 
         # watch_prefix called twice.
         self.assertEqual(

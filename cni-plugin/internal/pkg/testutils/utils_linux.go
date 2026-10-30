@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2015-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -206,6 +206,27 @@ func RunCNIPluginWithId(
 	contRoutes []netlink.Route,
 	err error,
 ) {
+	return RunCNIPluginWithIdContext(context.Background(), netconf, podName, podNamespace, ip, containerId, ifName, targetNs)
+}
+
+// RunCNIPluginWithIdContext is RunCNIPluginWithId with a context that, when canceled, kills
+// the plugin process the way a container runtime does when its request deadline passes.
+func RunCNIPluginWithIdContext(
+	ctx context.Context,
+	netconf,
+	podName,
+	podNamespace,
+	ip,
+	containerId,
+	ifName string,
+	targetNs ns.NetNS,
+) (
+	result *cniv1.Result,
+	contVeth netlink.Link,
+	contAddr []netlink.Addr,
+	contRoutes []netlink.Route,
+	err error,
+) {
 	// Set up the env for running the CNI plugin
 	k8sEnv := ""
 	if podName != "" {
@@ -241,7 +262,7 @@ func RunCNIPluginWithId(
 	log.Debugf("Calling CNI plugin with the following env vars: %v", env)
 	var r types.Result
 	pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
-	r, err = invoke.ExecPluginWithResult(context.Background(), pluginPath, []byte(netconf), args, customExec)
+	r, err = invoke.ExecPluginWithResult(ctx, pluginPath, []byte(netconf), args, customExec)
 	if err != nil {
 		log.Debugf("config is: %s", netconf)
 		err = je.Trace(err)

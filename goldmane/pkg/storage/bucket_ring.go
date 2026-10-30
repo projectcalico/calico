@@ -21,6 +21,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/time"
@@ -74,14 +75,27 @@ type BucketRing struct {
 
 	// nextID is used to assign unique IDs to DiachronicFlows as they are created.
 	nextID int64
+
+	// nodeIDs assigns each reporting node a small identifier, so per-bucket dedup state
+	// can key on an integer rather than on an address string.
+	nodeIDs    map[string]uint32
+	nextNodeID uint32
+
+	// dedupBuckets is how many buckets back from the head keep their dedup state.
+	dedupBuckets int
 }
 
 func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *BucketRing {
+	if n >= windowSlots {
+		// Each live window needs its own bit in the per-IP window bitmap.
+		panic(fmt.Sprintf("NewBucketRing: %d buckets exceeds the IP window bitmap (max %d)", n, windowSlots-1))
+	}
 	ring := &BucketRing{
 		buckets:     make([]*AggregationBucket, n),
 		headIndex:   0,
 		interval:    interval,
 		diachronics: make(map[types.FlowKey]*DiachronicFlow),
+		nodeIDs:     make(map[string]uint32),
 		indices: map[proto.SortBy]Index[string]{
 			proto.SortBy_DestName:        NewIndex(func(k *types.FlowKey) string { return k.DestName() }),
 			proto.SortBy_DestNamespace:   NewIndex(func(k *types.FlowKey) string { return k.DestNamespace() }),
@@ -91,6 +105,7 @@ func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *Bucket
 	}
 	// Use a time-based Ring index by default.
 	ring.defaultIndex = NewRingIndex(ring)
+	ring.dedupBuckets = dedupWindowBuckets(interval, n)
 
 	for _, opt := range opts {
 		opt(ring)
@@ -118,7 +133,7 @@ func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *Bucket
 	oldestBucketEnd := time.Unix(oldestBucketStart.Unix()+int64(interval), 0)
 	ring.buckets[0] = NewAggregationBucket(oldestBucketStart, oldestBucketEnd)
 	for range n {
-		ring.Rollover(nil)
+		ring.rollover(nil, false)
 	}
 
 	// Tell each bucket its absolute index and initialize the lookup function.
@@ -279,6 +294,12 @@ func (r *BucketRing) FilterHints(req *proto.FilterHintsRequest) ([]string, *type
 // It also clears data from the bucket that is now the head. The start time of the newest bucket
 // is returned, as well as a set of DiachronicFlow objects that were in the now obsolete bucket.
 func (r *BucketRing) Rollover(sink Sink) int64 {
+	return r.rollover(sink, true)
+}
+
+// rollover is Rollover with control over streaming. Seeding marks buckets ready for backfill without
+// sending them, because a queued empty bucket is later reused for real flows.
+func (r *BucketRing) rollover(sink Sink, stream bool) int64 {
 	start := r.nowFunc()
 	defer func() {
 		if r.nowFunc().Sub(start) > 1*time.Second {
@@ -291,7 +312,11 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 	endTime := startTime + int64(r.interval)
 
 	// Send flows to the stream manager.
-	r.flushToStreams()
+	if stream {
+		r.flushToStreams()
+	} else {
+		r.streamingBucket().markReady()
+	}
 
 	// Move the head index to the next bucket.
 	r.headIndex = r.nextBucketIndex(r.headIndex)
@@ -308,13 +333,15 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 	// is the end time of the previous bucket.
 	r.buckets[r.headIndex].Reset(startTime, endTime)
 
+	// No client will replay this far back, so the bucket that just aged out of the window
+	// can drop its dedup state.
+	r.buckets[r.bucketIndexBehind(r.dedupBuckets)].forgetEmissions()
+
 	// Update DiachronicFlows. We need to remove any windows from the DiachronicFlows that have expired.
 	// Find the oldest bucket's start time and remove any data from the DiachronicFlows that is older than that.
 	for d := range flows.All() {
 		// Rollover the DiachronicFlow. This will remove any expired data from it.
-		d.Rollover(r.BeginningOfHistory())
-
-		if d.Empty() {
+		if d.Rollover(r.BeginningOfHistory()) {
 			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
 			// flow updates in a long time.
 			if logrus.IsLevelEnabled(logrus.DebugLevel) {
@@ -335,7 +362,18 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 	return startTime
 }
 
-func (r *BucketRing) AddFlow(flow *types.Flow) {
+// FlowFromNode pairs a flow with the node that reported it. The node is not part of the
+// FlowKey, so it has to be carried alongside.
+type FlowFromNode struct {
+	Flow *types.Flow
+	Node string
+}
+
+// AddFlow indexes one flow, reporting whether it was skipped because the node that sent it
+// had already reported it into the same bucket.
+func (r *BucketRing) AddFlow(f FlowFromNode) bool {
+	flow := f.Flow
+
 	// Find the bucket for this flow's timestamp. This determines the time window for
 	// the DiachronicFlow as well, so we only need one lookup.
 	_, bucket := r.findBucket(flow.StartTime)
@@ -346,18 +384,19 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 			"newest": r.EndOfHistory(),
 		}).WithFields(flow.Key.Fields()).
 			Warn("Unable to sort flow into a bucket")
-		return
+		return false
 	}
 
 	// Check if we are tracking a DiachronicFlow for this FlowKey, and create one if not.
 	// Then, add this Flow to the DiachronicFlow.
-	if _, ok := r.diachronics[*flow.Key]; !ok {
+	d, ok := r.diachronics[*flow.Key]
+	if !ok {
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
 			// Unpacking the key is a bit expensive, so only do it in debug mode.
 			logrus.WithFields(flow.Key.Fields()).Debug("Creating new DiachronicFlow for flow")
 		}
 		r.nextID++
-		d := NewDiachronicFlow(flow.Key, r.nextID)
+		d = NewDiachronicFlow(flow.Key, r.nextID)
 		r.diachronics[*flow.Key] = d
 
 		// Add the DiachronicFlow to all indices.
@@ -365,12 +404,55 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 			idx.Add(d)
 		}
 	}
-	r.diachronics[*flow.Key].AddFlow(flow, bucket.StartTime, bucket.EndTime)
+
+	// A flow with no reporting node has nothing to scope a claim to, so callers that do not
+	// name one accumulate the way they always have.
+	if f.Node != "" && !bucket.claimEmission(emissionKey{
+		flowID: d.ID,
+		start:  flow.StartTime,
+		end:    flow.EndTime,
+		node:   r.nodeID(f.Node),
+	}) {
+		return true
+	}
+
+	d.AddFlow(flow, bucket.StartTime, bucket.EndTime)
 
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		logrus.WithFields(bucket.Fields()).WithField("flowStart", flow.StartTime).WithField("head", r.headIndex).Debug("Adding flow to bucket")
 	}
 	bucket.AddFlow(flow)
+	return false
+}
+
+// nodeID returns this node's identifier, assigning one if it is the first flow from it.
+func (r *BucketRing) nodeID(node string) uint32 {
+	if id, ok := r.nodeIDs[node]; ok {
+		return id
+	}
+	r.nextNodeID++
+	r.nodeIDs[node] = r.nextNodeID
+	return r.nextNodeID
+}
+
+// dedupWindowBuckets is how many buckets have to keep dedup state, taken from the length of
+// the flow cache a client replays after a reconnect. A short aggregation window can make
+// that exceed the ring, and dropping state that far back would wrap onto a live bucket.
+func dedupWindowBuckets(interval, numBuckets int) int {
+	if interval <= 0 || numBuckets <= 1 {
+		return 1
+	}
+	// The two spare buckets cover the partial bucket at each end of the replay window,
+	// which also absorbs whatever this division truncates.
+	want := int(flowcache.Expiry.Seconds())/interval + 2
+	if want < numBuckets {
+		return want
+	}
+	logrus.WithFields(logrus.Fields{
+		"aggregationWindow": interval,
+		"numBuckets":        numBuckets,
+	}).Warn("Ring holds less history than clients replay, so some duplicate flows will be counted twice")
+	return numBuckets - 1
 }
 
 // FlowSet returns the set of flows that exist across buckets within the given time range.
@@ -400,6 +482,11 @@ func (r *BucketRing) BeginningOfHistory() int64 {
 
 func (r *BucketRing) EndOfHistory() int64 {
 	return r.buckets[r.headIndex].EndTime
+}
+
+// bucketIndexBehind returns the index of the bucket n rollovers behind the head.
+func (r *BucketRing) bucketIndexBehind(n int) int {
+	return ((r.headIndex-n)%len(r.buckets) + len(r.buckets)) % len(r.buckets)
 }
 
 // nextBucketIndex returns the next bucket index, wrapping around if necessary.

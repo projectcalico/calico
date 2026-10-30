@@ -45,6 +45,6 @@ func (a *ALPCheckProvider) EnabledForRequest(ps *policystore.PolicyStore, _ *aut
 // for the local workload endpoint and returns the authorization decision.
 func (a *ALPCheckProvider) Check(ps *policystore.PolicyStore, req *authz.CheckRequest) (*authz.CheckResponse, error) {
 	flow := NewCheckRequestToFlowAdapter(req)
-	st := checkStore(ps, ps.Endpoint, rules.RuleDirIngress, flow)
+	st := checkStore(EnforcedOnly, ps, ps.Endpoint, rules.RuleDirIngress, flow)
 	return &authz.CheckResponse{Status: &st}, nil
 }

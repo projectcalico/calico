@@ -43,7 +43,9 @@ protobuf proto/udsver.pb.go: proto/udsver.proto
 	$(MAKE) fix-changed
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
-UPSTREAM_REGISTRAR_TAG     ?= 2d18e12bc5077c36cbd564be7eab9ea94c0c85fb #https://github.com/kubernetes-csi/node-driver-registrar/commit/2d18e12bc5077c36cbd564be7eab9ea94c0c85fb
+UPSTREAM_REGISTRAR_REPO    ?= https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
+# https://github.com/kubernetes-csi/node-driver-registrar/commit/2d18e12bc5077c36cbd564be7eab9ea94c0c85fb
+UPSTREAM_REGISTRAR_TAG     ?= 2d18e12bc5077c36cbd564be7eab9ea94c0c85fb
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
 	go build -tags $(TAGS) -buildvcs=false -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
@@ -74,21 +76,19 @@ $(BINDIR)/node-driver-registrar-%: clone-registrar-upstream
 			mv $(REGISTRAR_IMAGE)/$(BINDIR)/csi-node-driver-registrar $@
 
 clone-registrar-upstream:
-ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
-	@echo "Directory does not exist."
-	git clone --depth 1 --single-branch https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
-else
-	@echo "Upstream repo already cloned."
-endif
-	cd $(REGISTRAR_IMAGE) && \
-	  git checkout $(UPSTREAM_REGISTRAR_TAG) || \
-	  git fetch --tags origin $(UPSTREAM_REGISTRAR_TAG) && \
-	  git checkout $(UPSTREAM_REGISTRAR_TAG)
+	$(call fetch_repo,$(UPSTREAM_REGISTRAR_REPO),$(UPSTREAM_REGISTRAR_TAG),$(REGISTRAR_IMAGE))
 	rm -rf ./$(REGISTRAR_IMAGE)/vendor
-	# Reset go.mod/go.sum to the pinned commit and (re-)apply the CVE dependency
-	# patch. The reset keeps this idempotent across repeated incremental builds.
+	# Reset first so re-applying is idempotent.
 	cd $(REGISTRAR_IMAGE) && git checkout -- go.mod go.sum
-	patch -d $(REGISTRAR_IMAGE) -p1 < node-driver-registrar-patches/0001-CVE-dependency-fixes.patch
+	# One directory per class, applied in name order. No dep-pins.txt here, so
+	# the dependency patch stays hand-maintained -- the generator would read the
+	# missing pin file as "no pins" and delete it.
+	found=; \
+	for patch in node-driver-registrar-patches/*/*.patch; do \
+		[ -f "$$patch" ] || continue; found=1; \
+		patch -d $(REGISTRAR_IMAGE) -p1 -F0 < "$$patch" || exit 1; \
+	done; \
+	[ -n "$$found" ] || { echo "error: no patches in node-driver-registrar-patches/" >&2; exit 1; }
 
 clean-registrar:
 	rm -rf ./$(REGISTRAR_IMAGE)

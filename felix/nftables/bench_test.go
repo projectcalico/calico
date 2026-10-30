@@ -31,7 +31,8 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/nftables"
-	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
+	"github.com/projectcalico/calico/felix/rules/rulesdefs"
 	"github.com/projectcalico/calico/lib/logrusr"
 )
 
@@ -162,8 +163,8 @@ func BenchmarkChainUpdate(b *testing.B) {
 					Name: chainName,
 					Rules: []generictables.Rule{
 						{
-							Match:  nftables.Match().Protocol("tcp").SourceIPSet(setName).DestPorts(port),
-							Action: nftables.ReturnAction{},
+							Match:  nftrender.Match().Protocol("tcp").SourceIPSet(setName).DestPorts(port),
+							Action: nftrender.ReturnAction{},
 						},
 					},
 				})
@@ -204,7 +205,7 @@ func newRealTable(b *testing.B) (*nftables.NftablesTable, *ipsets.IPVersionConfi
 	table := nftables.NewTable(
 		benchTableName,
 		4,
-		rules.RuleHashPrefix,
+		rulesdefs.RuleHashPrefix,
 		environment.NewFeatureDetector(nil),
 		nftables.TableOptions{
 			OpRecorder: logrusr.NewSummarizer("bench"),
@@ -255,17 +256,17 @@ func buildState(table *nftables.NftablesTable, ipv *ipsets.IPVersionConfig, s sc
 		for r := range s.rulesPerChain {
 			setName := setNames[(p*s.rulesPerChain+r)%s.numIPSets]
 			policyRules[r] = generictables.Rule{
-				Match: nftables.Match().
+				Match: nftrender.Match().
 					Protocol("tcp").
 					SourceIPSet(setName).
 					DestPorts(uint16(1000 + r)),
-				Action: nftables.ReturnAction{},
+				Action: nftrender.ReturnAction{},
 			}
 		}
 		table.UpdateChain(&generictables.Chain{Name: chainName, Rules: policyRules})
 		jumps[p] = generictables.Rule{
-			Match:  nftables.Match(),
-			Action: nftables.JumpAction{Target: chainName},
+			Match:  nftrender.Match(),
+			Action: nftrender.JumpAction{Target: chainName},
 		}
 	}
 	table.InsertOrAppendRules("filter-FORWARD", jumps)

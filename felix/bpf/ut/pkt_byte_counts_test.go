@@ -522,3 +522,89 @@ func TestCountsPodToExternalNATOutgoing(t *testing.T) {
 		Expect(e.B2A.Bytes).To(Equal(uint64(i*len(respPkt))), "B->A bytes should increment for NAT-out return traffic")
 	}
 }
+
+// TestCountsPodToExternalNATOutgoingNoSNAT covers a NAT-outgoing flow that
+// iptables did not SNAT, so HEP programs find the workload's NAT_OUT entry too.
+func TestCountsPodToExternalNATOutgoingNoSNAT(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "CNT6"
+	defer func() { bpfIfaceName = "" }()
+
+	_, ipv4, udpL, _, pktBytes, err := testPacketUDPDefault()
+	Expect(err).NotTo(HaveOccurred())
+	udp := udpL.(*layers.UDP)
+
+	resetCTMap(ctMap) // ensure it is clean
+	resetMap(natMap)
+
+	defer resetRTMap(rtMap)
+
+	hostIP = node1ip
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool|routes.FlagNATOutgoing, 1).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+
+	countTX := 3
+	countRX := 5
+
+	k := conntrack.NewKey(17, ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+
+	expectCounts := func(a2b, b2a int, respLen int) {
+		ct, err := conntrack.LoadMapMem(ctMap)
+		Expect(err).NotTo(HaveOccurred())
+		v, ok := ct[k]
+		Expect(ok).To(BeTrue(), "missing NAT-outgoing entry")
+		e := v.Data()
+		Expect(e.A2B.Packets).To(Equal(uint32(a2b)))
+		Expect(e.A2B.Bytes).To(Equal(uint64(a2b * len(pktBytes))))
+		Expect(e.B2A.Packets).To(Equal(uint32(b2a)))
+		Expect(e.B2A.Bytes).To(Equal(uint64(b2a * respLen)))
+	}
+
+	for i := 1; i <= countTX; i++ {
+		skbMark = 0
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		})
+		expectCounts(i, 0, 0)
+
+		// No SNAT, so HEP egress sees the original tuple.
+		skbMark = tcdefs.MarkSeenNATOutgoing
+		runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		})
+		dumpCTMap(ctMap)
+		expectCounts(i, 0, 0)
+	}
+
+	respPkt := udpResponseRaw(pktBytes)
+
+	for i := 1; i <= countRX; i++ {
+		var pktOut []byte
+
+		skbMark = 0
+		runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(respPkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+			pktOut = res.dataOut
+		})
+		expectCounts(countTX, i-1, len(respPkt))
+
+		skbMark = tcdefs.MarkSeenNATOutgoing
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktOut)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		})
+		dumpCTMap(ctMap)
+		expectCounts(countTX, i, len(respPkt))
+	}
+}

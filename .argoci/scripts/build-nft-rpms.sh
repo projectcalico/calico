@@ -1,0 +1,49 @@
+#!/bin/bash
+set -e
+set -o pipefail
+
+# build-nft-rpms.sh: Builds and caches nftables RPMs for a specific architecture.
+# It produces a log file at /tmp/nft-build-${ARCH}.log.
+
+ARCH=$1
+if [ -z "$ARCH" ]; then
+  echo "Usage: $0 <arch>"
+  exit 1
+fi
+if [ -z "$BUILD_LOG" ]; then
+  echo "Error: BUILD_LOG environment variable must be set to the path of the log file."
+  exit 1
+fi
+
+S3_CMD="$(git rev-parse --show-toplevel)/.semaphore/s3-cmd"
+
+NFT_RPMS_TAG=$(make --no-print-directory -C hack/rpms/nftables print-tag)
+NFT_RPMS_IMAGE="calico/nftables-rpms:${NFT_RPMS_TAG}-${ARCH}"
+CACHE_NAME="nft-rpms-${ARCH}.tar.zst"
+CACHE_PATH="${S3_WORKFLOW_DIR}/${CACHE_NAME}"
+
+# Use a subshell to capture all output to the log file while still printing to stdout.
+{
+  echo "Building nftables RPMs for ${ARCH}..."
+  echo "NFT_RPMS_TAG: ${NFT_RPMS_TAG}"
+  echo "NFT_RPMS_IMAGE: ${NFT_RPMS_IMAGE}"
+
+  if docker manifest inspect "$NFT_RPMS_IMAGE"; then
+    echo "Cache hit for $NFT_RPMS_IMAGE, pulling"
+    docker pull "$NFT_RPMS_IMAGE"
+  else
+    echo "Cache miss for $NFT_RPMS_IMAGE, building"
+    docker run --privileged --rm tonistiigi/binfmt --install all
+    make -C hack/rpms/nftables image ARCH="$ARCH"
+
+  fi
+
+  echo "Saving and uploading image tarball..."
+  docker save "$NFT_RPMS_IMAGE" -o "/tmp/${CACHE_NAME%.zst}"
+  zstd -3 --rm "/tmp/${CACHE_NAME%.zst}"
+  if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
+    artifact push workflow "/tmp/${CACHE_NAME}"
+  else
+    "$S3_CMD" cp "/tmp/${CACHE_NAME}" "$CACHE_PATH"
+  fi
+} 2>&1 | tee "$BUILD_LOG"
