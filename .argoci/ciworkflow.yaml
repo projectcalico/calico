@@ -408,13 +408,26 @@ includes:
         - (^|/)README\.md$
         - (^|/)LICENSE$
 
-  # The FV lanes run Typha alongside Felix, and the fleet scripts drive them all.
+  # The FV lanes run Typha alongside Felix, both from the calico image, and the
+  # fleet scripts drive them all.  The FV cache keys hash what this matches, and
+  # felix-fv-memo fails if it misses part of the FV build.
   - path: .argoci/modules/20-felix.yaml
     changes:
       dependsOn: [felix, typha]
       in:
+        - ^go\.(mod|sum)$
+        - ^cmd/calico/
+        - ^docker/calico/
+        - ^node/pkg/node/[^/]*\.go$
+        # Imported by the FV tests, which the generated component leaves out.
+        - ^libcalico-go/lib/testutils/[^/]*\.go$
         - ^\.semaphore/vms/
+        - ^\.semaphore/collect-artifacts$
+        - ^\.semaphore/scripts/load-felix-prereqs\.sh$
+        - ^\.argoci/scripts/load-cached-images$
         - ^\.argoci/scripts/vm-fleet-setup\.sh$
+        - ^\.argoci/scripts/felix-fv-plan$
+        - ^hack/cmd/felix-fv-memo/
         - ^process/testing/aso/
         - ^process/testing/util/
         - ^process/testing/winfv-felix/
