@@ -310,6 +310,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 	if err != nil {
 		log.WithError(err).Panic("Failed to create datastore config")
 	}
+	cfg.Spec.UserAgent = apiconfig.UserAgentFor("calico-typha")
 	return *cfg
 }
 
