@@ -312,6 +312,81 @@ func TestChanUtil_Clear(t *testing.T) {
 	}
 }
 
+func TestChanUtil_WriteWithDeadline(t *testing.T) {
+	t.Run("channel has room", func(t *testing.T) {
+		ch := make(chan string, 1)
+		if err := chanutil.WriteWithDeadline(context.Background(), ch, "foo", time.Hour); err != nil {
+			t.Fatalf("Expected nil error, got '%v'", err)
+		}
+		if v := <-ch; v != "foo" {
+			t.Fatalf("Expected 'foo' on the channel, got '%s'", v)
+		}
+	})
+
+	t.Run("channel full until a reader drains it", func(t *testing.T) {
+		ch := make(chan string, 1)
+		ch <- "first"
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			<-ch
+		}()
+		if err := chanutil.WriteWithDeadline(context.Background(), ch, "second", time.Hour); err != nil {
+			t.Fatalf("Expected nil error, got '%v'", err)
+		}
+		if v := <-ch; v != "second" {
+			t.Fatalf("Expected 'second' on the channel, got '%s'", v)
+		}
+	})
+
+	t.Run("channel stays full past the deadline", func(t *testing.T) {
+		ch := make(chan string, 1)
+		ch <- "first"
+		err := chanutil.WriteWithDeadline(context.Background(), ch, "second", 10*time.Millisecond)
+		if !errors.Is(err, chanutil.ErrDeadlineExceeded) {
+			t.Fatalf("Expected deadline exceeded error, got '%v'", err)
+		}
+		if len(ch) != 1 || <-ch != "first" {
+			t.Fatal("Expected only the original value on the channel")
+		}
+	})
+
+	t.Run("context canceled before the write", func(t *testing.T) {
+		ch := make(chan string)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		err := chanutil.WriteWithDeadline(ctx, ch, "foo", time.Hour)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Expected context canceled error, got '%v'", err)
+		}
+	})
+
+	t.Run("context canceled while the channel is full", func(t *testing.T) {
+		ch := make(chan string, 1)
+		ch <- "first"
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			cancel()
+		}()
+		err := chanutil.WriteWithDeadline(ctx, ch, "second", time.Hour)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Expected context canceled error, got '%v'", err)
+		}
+	})
+}
+
+func BenchmarkWriteWithDeadline(b *testing.B) {
+	ch := make(chan int, 1)
+	ctx := context.Background()
+	b.ReportAllocs()
+	for b.Loop() {
+		if err := chanutil.WriteWithDeadline(ctx, ch, 1, time.Minute); err != nil {
+			b.Fatal(err)
+		}
+		<-ch
+	}
+}
+
 func TestChanUtil_WaitForCloseWithDeadline(t *testing.T) {
 	t.Run("channel closes before deadline", func(t *testing.T) {
 		ch := make(chan string)

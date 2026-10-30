@@ -18,6 +18,7 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -168,21 +169,43 @@ func (b *AggregationBucket) markReady() {
 	b.ready = true
 }
 
-func (b *AggregationBucket) Iter(fn func(FlowBuilder) bool) {
+// Iter calls fn with a builder for each flow in the bucket that matches filter, stopping when
+// fn returns true. fn runs without the bucket lock, so a slow consumer does not block AddFlow.
+func (b *AggregationBucket) Iter(filter *proto.Filter, fn func(FlowBuilder) bool) {
+	flows, start, end := b.matchingFlows(filter)
+	for _, d := range flows {
+		if fn(NewDeferredFlowBuilder(d, start, end)) {
+			return
+		}
+	}
+}
+
+// matchingFlows returns the flows in the bucket that match filter, along with the bucket's
+// time range, or nothing if the bucket has been reset since it was marked ready.
+func (b *AggregationBucket) matchingFlows(filter *proto.Filter) ([]*DiachronicFlow, int64, int64) {
 	b.RLock()
 	defer b.RUnlock()
 
 	if !b.ready {
-		// Bucket has been reset since it was streamed. Skip it.
 		logrus.WithFields(b.Fields()).Info("Skipping bucket that has since rolled over")
-		return
+		return nil, 0, 0
 	}
 
+	// An empty filter matches everything, so skip the per-flow match for it.
+	if googleproto.Size(filter) == 0 {
+		filter = nil
+	}
+
+	var flows []*DiachronicFlow
+	if filter == nil {
+		flows = make([]*DiachronicFlow, 0, b.Flows.Len())
+	}
 	for d := range b.Flows.All() {
-		if fn(NewDeferredFlowBuilder(d, b.StartTime, b.EndTime)) {
-			break
+		if types.Matches(filter, &d.Key) {
+			flows = append(flows, d)
 		}
 	}
+	return flows, b.StartTime, b.EndTime
 }
 
 func (b *AggregationBucket) QueryStatistics(q *proto.StatisticsRequest) map[StatisticsKey]*counts {
