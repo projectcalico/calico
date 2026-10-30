@@ -160,6 +160,7 @@ func istioEntry(path string, field func(*operatorv1.IstioSpec) any, target func(
 				},
 				IstioNamespace: istio.IstioNamespace,
 				Scheme:         overrideScheme(),
+				ClusterID:      "0123456789abcdef0123456789abcdef",
 			}
 			fill(field(&cfg.Istio.Spec))
 			_, comp, err := istio.Istio(cfg)
