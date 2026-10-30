@@ -90,12 +90,18 @@ func TestManifestInputs(t *testing.T) {
 		{classBPF, `^felix/calc/[^/]*_test\.go$`, false},
 		{classNonBPF, `^felix/calc/[^/]*\.go$`, true},
 		{classNonBPF, `^felix/fv/[^/]*_test\.go$`, true},
-		// Only the BPF dataplane loads the bpf-gpl programs.
-		{classNonBPF, `^felix/bpf-gpl/`, false},
-		{classBPF, `^felix/bpf-gpl/`, true},
+		// Only the BPF dataplane loads the bpf-gpl programs, but Felix's cgo
+		// code compiles some of their headers.
+		{classNonBPF, `^felix/bpf-gpl/[^/]*\.c$`, false},
+		{classBPF, `^felix/bpf-gpl/[^/]*\.c$`, true},
+		{classNonBPF, `^felix/bpf-gpl/globals\.h$`, true},
+		{classNonBPF, `^felix/bpf-gpl/bpf_inline\.h$`, true},
 		{classNonBPF, `^felix/bpf-apache/`, true},
+		// The BPF lanes' "ut" batch runs both of these.
 		{classBPF, `^felix/bpf/ut/`, true},
+		{classBPF, `^felix/bpf/bpf_test\.go$`, true},
 		{classNonBPF, `^felix/bpf/ut/`, false},
+		{classNonBPF, `^felix/bpf/bpf_test\.go$`, false},
 		// cmd/calico links every component, but FV only runs felix and typha.
 		{classNonBPF, `^kube-controllers/`, false},
 		{classNonBPF, `^typha/pkg/`, true},

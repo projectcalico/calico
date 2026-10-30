@@ -11,7 +11,7 @@ defaults:
 
 steps:
   # On a PR, decides which FV lanes an earlier run already passed with the same
-  # inputs (see hack/cmd/felix-fv-memo); felix-build and the lanes skip what it
+  # inputs; felix-build and the lanes skip what it
   # says passed.  FELIX_FV_MEMO=off runs everything.
   - name: felix-fv-plan
     useGoBuild: true
@@ -219,9 +219,9 @@ steps:
         export FV_FOCUS="${FV_FOCUS_OVERRIDE}"
       fi
       source .semaphore/vms/batch-memo
-      batch_memo_init "${FELIX_TEST_GROUP}"
+      batch_memo_init "${FELIX_TEST_GROUP}" || exit 1
       if [ "${BATCH_MEMO_LANE_HIT}" = true ]; then
-        batch_memo_restore_lane artifacts
+        batch_memo_restore_lane artifacts || exit 1
       else
         .semaphore/vms/run-tests-on-vms "${VM_PREFIX}"
       fi

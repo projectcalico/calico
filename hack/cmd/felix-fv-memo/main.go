@@ -41,6 +41,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -116,8 +117,8 @@ var nonBPFInputs = inputs{
 }
 
 var bpfInputs = nonBPFInputs.with(inputs{
-	// The BPF lanes also run a "ut" batch.
-	goRoots: []string{"./felix/bpf/ut"},
+	// The BPF lanes also run a "ut" batch, which runs both packages' tests.
+	goRoots: []string{"./felix/bpf", "./felix/bpf/ut"},
 	files:   []string{"felix/bpf-gpl"},
 })
 
@@ -233,7 +234,7 @@ func readLanes(modulePath string) ([]lane, error) {
 	return lanes, nil
 }
 
-// classOf mirrors felix/.semaphore/fv-prologue, which runs a group in BPF mode
+// classOf must agree with the FV prologue, which runs a group in BPF mode
 // if its name contains "bpf".
 func classOf(group string) class {
 	if strings.Contains(group, "bpf") {
@@ -248,6 +249,15 @@ func buildManifest(repoRoot string, in inputs) ([]byte, error) {
 	files := map[string]bool{}
 	modules := map[string]bool{}
 
+	trackedOut, err := gitOutput("-C", repoRoot, "ls-files")
+	if err != nil {
+		return nil, err
+	}
+	tracked := map[string]bool{}
+	for _, f := range strings.Split(strings.TrimSpace(trackedOut), "\n") {
+		tracked[f] = true
+	}
+
 	for _, cfg := range goBuildConfigs {
 		args := slices.Concat([]string{"list", "-deps", "-test", "-json"}, cfg.flags, in.goRoots)
 		pkgs, err := goList(repoRoot, cfg.env, args)
@@ -260,17 +270,17 @@ func buildManifest(repoRoot string, in inputs) ([]byte, error) {
 			return nil, err
 		}
 		for _, p := range slices.Concat(pkgs, shallow) {
-			if err := addPackage(repoRoot, p, files, modules); err != nil {
+			if err := addPackage(repoRoot, tracked, p, files, modules); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	tracked, err := gitOutput(slices.Concat([]string{"-C", repoRoot, "ls-files", "--"}, in.files)...)
+	listed, err := gitOutput(slices.Concat([]string{"-C", repoRoot, "ls-files", "--"}, in.files)...)
 	if err != nil {
 		return nil, err
 	}
-	for _, f := range strings.Fields(tracked) {
+	for _, f := range strings.Fields(listed) {
 		files[f] = true
 	}
 	// A renamed input would otherwise silently leave the key.
@@ -308,10 +318,11 @@ type goPackage struct {
 		}
 	}
 	GoFiles, CgoFiles, CFiles, CXXFiles, HFiles, SFiles, SysoFiles, EmbedFiles []string
+	CgoCFLAGS                                                                  []string
 	Error                                                                      *struct{ Err string }
 }
 
-func addPackage(repoRoot string, p goPackage, files, modules map[string]bool) error {
+func addPackage(repoRoot string, tracked map[string]bool, p goPackage, files, modules map[string]bool) error {
 	if p.Error != nil {
 		return fmt.Errorf("go list: %s: %s", p.ImportPath, p.Error.Err)
 	}
@@ -340,6 +351,63 @@ func addPackage(repoRoot string, p goPackage, files, modules map[string]bool) er
 	}
 	for _, f := range slices.Concat(p.GoFiles, p.CgoFiles, p.CFiles, p.CXXFiles, p.HFiles, p.SFiles, p.SysoFiles, p.EmbedFiles) {
 		files[filepath.ToSlash(filepath.Join(rel, f))] = true
+	}
+	if len(p.CgoFiles) == 0 {
+		return nil
+	}
+	return addCgoIncludes(repoRoot, tracked, p, files)
+}
+
+var quotedInclude = regexp.MustCompile(`(?m)^\s*(?://\s*)?#\s*include\s+"([^"]+)"`)
+
+// addCgoIncludes adds the tracked headers a cgo package's C code includes,
+// transitively; they live outside the package directory, so go list does not
+// report them.  Untracked headers, such as the libbpf checkout, are pinned by
+// version variables in the Makefiles.
+func addCgoIncludes(repoRoot string, tracked map[string]bool, p goPackage, files map[string]bool) error {
+	var includeDirs []string
+	for _, flag := range p.CgoCFLAGS {
+		if dir, ok := strings.CutPrefix(flag, "-I"); ok {
+			includeDirs = append(includeDirs, filepath.Clean(dir))
+		}
+	}
+
+	var queue []string
+	for _, f := range slices.Concat(p.CgoFiles, p.CFiles, p.HFiles) {
+		queue = append(queue, filepath.Join(p.Dir, f))
+	}
+	seen := map[string]bool{}
+	for len(queue) > 0 {
+		path := queue[0]
+		queue = queue[1:]
+		if seen[path] {
+			continue
+		}
+		seen[path] = true
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		for _, m := range quotedInclude.FindAllSubmatch(content, -1) {
+			name := string(m[1])
+			for _, dir := range slices.Concat([]string{filepath.Dir(path)}, includeDirs) {
+				candidate := filepath.Join(dir, name)
+				rel, err := filepath.Rel(repoRoot, candidate)
+				if err != nil {
+					return err
+				}
+				rel = filepath.ToSlash(rel)
+				if _, err := os.Stat(candidate); err != nil {
+					continue
+				}
+				// The compiler uses the first match, tracked or not.
+				if tracked[rel] {
+					files[rel] = true
+					queue = append(queue, candidate)
+				}
+				break
+			}
+		}
 	}
 	return nil
 }

@@ -18,6 +18,11 @@ check() {
   fi
 }
 
+# fails <cmd>... succeeds if <cmd> fails, keeping its stdout in $out.
+fails() {
+  ! "$@" >"$out" 2>/dev/null
+}
+
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/bin" "$work/cache" "$work/workflow"
@@ -55,10 +60,7 @@ write_plan() { # <scope> then "<group> <class> <key> <state>" lines on stdin
 echo "== batch_memo_init"
 rm -rf "$STUB_WORKFLOW/felix-fv-plan"
 out="$work/out"
-batch_memo_init 22.04-ipt >/dev/null
-check "no plan: memo off" [ -z "$BATCH_MEMO_PREFIX" ]
-batch_memo_report "$work" 16 0 >"$out"
-check "no plan: reported" grep -qE '^FV-MEMO-LANE lane=22.04-ipt outcome=off batches=16 cached=0 ran=16 result=pass .*reason=no-plan$' "$out"
+check "no plan: init fails" fails batch_memo_init 22.04-ipt
 
 write_plan felix-fv-memo/pr-1 <<'EOF'
 22.04-ipt nonbpf k1 miss
@@ -77,6 +79,8 @@ write_plan "" <<'EOF'
 EOF
 batch_memo_init 22.04-ipt >/dev/null
 check "no scope (not a PR): memo off" [ -z "$BATCH_MEMO_PREFIX" ]
+batch_memo_report "$work" 16 0 >"$out"
+check "memo off: reported" grep -qE '^FV-MEMO-LANE lane=22.04-ipt outcome=off batches=16 cached=0 ran=16 result=pass .*reason=no-scope$' "$out"
 
 echo "== skip, record, and restore"
 export BATCH_MEMO_PREFIX=felix-fv-memo/pr-1/k1
@@ -86,6 +90,12 @@ for b in ut 2; do
   echo "<testsuites/>" >"$run1/$b/report/felix_fv_$b.xml"
   batch_memo_record "$run1" "$b" >/dev/null
 done
+# Passed, but its reports never came off the VM.
+mkdir -p "$run1/3"
+batch_memo_record "$run1" 3 >/dev/null
+check "a batch without reports is not recorded" [ ! -e "$STUB_CACHE/$BATCH_MEMO_PREFIX/batch-3" ]
+# A cache entry without reports must not count as a pass.
+mkdir -p "$work/bare/1" && (cd "$work/bare" && artifact cache store "$BATCH_MEMO_PREFIX/batch-1" 1)
 
 run2="$work/run2/artifacts"
 batches=(ut 1 2 3)
@@ -107,6 +117,8 @@ check "miss: reported" grep -qE '^FV-MEMO-LANE .* outcome=miss batches=2 cached=
 for b in 1 3; do
   mkdir -p "$run2/$b/report" && echo "<testsuites/>" >"$run2/$b/report/felix_fv_$b.xml"
 done
+batch_memo_record_lane "$run2" ut 1 2 3 4 >/dev/null
+check "a lane with a batch lacking reports is not recorded" [ ! -e "$STUB_CACHE/$BATCH_MEMO_PREFIX/lane" ]
 batch_memo_record_lane "$run2" ut 1 2 3 >/dev/null
 run3="$work/run3/artifacts"
 batch_memo_restore_lane "$run3" >"$out"
@@ -114,6 +126,11 @@ check "lane hit: reported" grep -qE '^FV-MEMO-LANE .* outcome=lane batches=4 cac
 for b in ut 1 2 3; do
   check "a lane hit restores batch $b" [ -f "$run3/$b/report/felix_fv_$b.xml" ]
 done
+
+rm "$STUB_CACHE/$BATCH_MEMO_PREFIX/lane"
+run4="$work/run4/artifacts"
+check "a lane hit whose entry is gone fails" fails batch_memo_restore_lane "$run4"
+check "a failed lane restore is reported" grep -qE '^FV-MEMO-LANE .* outcome=lane .*result=fail .*reason=restore-failed$' "$out"
 
 echo
 if [ "$fails" -ne 0 ]; then

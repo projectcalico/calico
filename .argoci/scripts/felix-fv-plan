@@ -24,7 +24,9 @@ git config --global --add safe.directory '*'
 # A broken key tool must not take Felix CI down with it: without keys, every
 # lane just runs in full.
 keys_ok=true
-if ! GOFLAGS=-buildvcs=false go run ./hack/cmd/felix-fv-memo .argoci/modules/20-felix.yaml > "$plan/keys"; then
+if [ -z "$scope" ]; then
+  : > "$plan/keys"
+elif ! GOFLAGS=-buildvcs=false go run ./hack/cmd/felix-fv-memo .argoci/modules/20-felix.yaml > "$plan/keys"; then
   echo "WARNING: could not compute the FV cache keys; every lane will run in full." >&2
   keys_ok=false
   scope=""

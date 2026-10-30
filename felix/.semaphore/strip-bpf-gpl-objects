@@ -15,7 +15,7 @@
 
 # Deletes the bpf-gpl programs from the objects the FVs mount into Felix,
 # keeping the bpf-apache ones that the iptables and nftables dataplanes load.
-# The non-BPF lanes' cache keys leave out bpf-gpl (see hack/cmd/felix-fv-memo),
+# The non-BPF lanes' cache keys leave out the bpf-gpl programs,
 # so a test that needs one must fail rather than pass on a stale entry.
 
 set -euo pipefail
