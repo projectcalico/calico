@@ -152,6 +152,29 @@ func TestLinkAddrMgr_IPV6(t *testing.T) {
 	Expect(addrs).To(ConsistOf(v6AddrOSAssigned, v4Addr200, v6Addr179))
 }
 
+// A workload interface that disappears between resync() listing it and apply() looking it up
+// (a pod deleted while Felix starts) must not leave a pending deletion that fails forever.
+func TestLinkAddrMgr_IfaceGoneBeforeResyncDeletion(t *testing.T) {
+	dataplane, mgr := setup(t, 6)
+
+	linkCali := dataplane.AddIface(5, "cali1", true, true)
+	nl, err := mgr.nl.Handle()
+	Expect(err).NotTo(HaveOccurred())
+	err = nl.AddrAdd(linkCali, toNetlinkAddr(v6AddrOSAssigned))
+	Expect(err).NotTo(HaveOccurred())
+
+	dataplane.FailuresToSimulate = mocknetlink.FailNextLinkByNameNotFound
+	err = mgr.Apply()
+	Expect(err).NotTo(HaveOccurred())
+	dataplane.DelIface("cali1")
+
+	for range 3 {
+		err = mgr.Apply()
+		Expect(err).NotTo(HaveOccurred())
+	}
+	Expect(mgr.ifaceNameToAddrs.PendingDeletions().Len()).To(BeZero())
+}
+
 func toNetlinkAddr(s string) *netlink.Addr {
 	net, err := netlink.ParseIPNet(s)
 	Expect(err).NotTo(HaveOccurred())
