@@ -926,7 +926,7 @@ type localDeps struct {
 }
 
 func loadLocalDirs(pkg string, mainDepsOnly bool) (localDeps, error) {
-	packageDeps, err := loadPackageDeps(pkg, mainDepsOnly)
+	packageDeps, err := loadPackageDeps(pkg, mainDepsOnly, false)
 	if err != nil {
 		logrus.Fatalln("Failed to load package deps:", err)
 		os.Exit(1)
@@ -1005,7 +1005,8 @@ func embedGlobsForPattern(dir, pattern string) []string {
 }
 
 func printModules(pkg string) {
-	packageDeps, err := loadPackageDeps(pkg, false)
+	// A module that only the tests import still changes what they test.
+	packageDeps, err := loadPackageDeps(pkg, false, true)
 	if err != nil {
 		logrus.Fatalf("Failed to load package deps for package %s: %s", pkg, err)
 		os.Exit(1)
@@ -1057,7 +1058,7 @@ type goPackage struct {
 	EmbedPatterns []string
 }
 
-func loadPackageDeps(pkg string, mainDepsOnly bool) ([]goPackage, error) {
+func loadPackageDeps(pkg string, mainDepsOnly, withTests bool) ([]goPackage, error) {
 	pkgs := []string{"./..."}
 
 	if mainDepsOnly {
@@ -1072,7 +1073,11 @@ func loadPackageDeps(pkg string, mainDepsOnly bool) ([]goPackage, error) {
 		}
 	}
 
-	args := append([]string{"list", "-deps", "-json=ImportPath,EmbedPatterns"}, pkgs...)
+	args := []string{"list", "-deps", "-json=ImportPath,EmbedPatterns"}
+	if withTests {
+		args = append(args, "-test")
+	}
+	args = append(args, pkgs...)
 	out, err := loadGoToolJSON[goPackage](pkg, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load package deps for %v: %w", pkgs, err)
