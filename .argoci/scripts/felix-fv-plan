@@ -1,0 +1,58 @@
+#!/bin/bash
+# Publishes the Felix FV memo plan: each lane's cache key, and whether an
+# earlier run of this PR already passed that lane with the same inputs.
+# felix-build and the lanes act on this plan rather than querying the cache
+# themselves, so that they all act on one decision.
+#
+# Only PR runs read or write the cache; it is scoped to the PR so that a run
+# can only ever skip on its own PR's results.
+
+set -euo pipefail
+
+plan=felix-fv-plan
+mkdir -p "$plan"
+: > "$plan/lanes"
+
+scope=""
+if [ "${CI_GIT_REF_TYPE:-}" = PR ] && [ "${FELIX_FV_MEMO:-on}" = on ]; then
+  scope="felix-fv-memo/pr-${CI_GIT_PR_NUMBER}"
+fi
+
+# The checkout belongs to another user in this image, and git refuses to read
+# it otherwise.
+git config --global --add safe.directory '*'
+# A broken key tool must not take Felix CI down with it: without keys, every
+# lane just runs in full.
+keys_ok=true
+if ! GOFLAGS=-buildvcs=false go run ./hack/cmd/felix-fv-memo .argoci/modules/20-felix.yaml > "$plan/keys"; then
+  echo "WARNING: could not compute the FV cache keys; every lane will run in full." >&2
+  keys_ok=false
+  scope=""
+  : > "$plan/keys"
+fi
+echo "$scope" > "$plan/scope"
+
+build=run
+if [ -n "$scope" ] && [ -s "$plan/keys" ]; then
+  build=skip
+fi
+while read -r group class key; do
+  state=miss
+  if [ -n "$scope" ] && artifact cache has_key "$scope/$key/lane" >/dev/null; then
+    state=hit
+  fi
+  [ "$state" = hit ] || build=run
+  echo "$group $class $key $state" >> "$plan/lanes"
+done < "$plan/keys"
+echo "$build" > "$plan/build"
+
+echo "Cache scope: ${scope:-none (not a PR, or disabled)}"
+echo "Lanes (group class key state):"
+sed 's/^/  /' "$plan/lanes"
+# One line per run for mining the logs; see .semaphore/vms/batch-memo for the
+# per-lane lines.
+echo "FV-MEMO-PLAN felix-build=${build} lanes=$(wc -l < "$plan/lanes")" \
+  "lanes-hit=$(awk '$4 == "hit"' "$plan/lanes" | wc -l) keys=${keys_ok}" \
+  "pr=${CI_GIT_PR_NUMBER:-none} workflow=${CI_WORKFLOW_NAME:-unknown}"
+
+artifact push workflow "$plan"

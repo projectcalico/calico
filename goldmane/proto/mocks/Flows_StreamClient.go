@@ -7,10 +7,9 @@ package mocks
 import (
 	"context"
 
+	"github.com/projectcalico/calico/goldmane/proto"
 	mock "github.com/stretchr/testify/mock"
 	"google.golang.org/grpc/metadata"
-
-	"github.com/projectcalico/calico/goldmane/proto"
 )
 
 // NewFlows_StreamClient creates a new instance of Flows_StreamClient. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -19,10 +18,19 @@ func NewFlows_StreamClient(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *Flows_StreamClient {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &Flows_StreamClient{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }

@@ -7,9 +7,8 @@ package mocks
 import (
 	"context"
 
-	mock "github.com/stretchr/testify/mock"
-
 	"github.com/projectcalico/calico/goldmane/proto"
+	mock "github.com/stretchr/testify/mock"
 )
 
 // NewFlowsClient creates a new instance of FlowsClient. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -18,10 +17,19 @@ func NewFlowsClient(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *FlowsClient {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &FlowsClient{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
