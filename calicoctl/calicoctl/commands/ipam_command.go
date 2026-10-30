@@ -21,7 +21,7 @@ import (
 	"strconv"
 
 	"github.com/spf13/cobra"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
@@ -81,9 +81,16 @@ to ipam release.`,
 
 			bc := client.(bapi.BackendAccessor).Backend()
 
-			var kubeClient kubernetes.Interface
-			if kc, ok := bc.(*k8s.KubeClient); ok {
-				kubeClient = kc.ClientSet
+			var restConfig *rest.Config
+			if _, ok := bc.(*k8s.KubeClient); ok {
+				cfg, err := clientmgr.LoadClientConfig(config)
+				if err != nil {
+					return err
+				}
+				restConfig, _, err = k8s.CreateKubernetesClientset(&cfg.Spec)
+				if err != nil {
+					return err
+				}
 			} else {
 				kubeConfigPath := os.Getenv("KUBECONFIG")
 				if kubeconfig != "" {
@@ -96,10 +103,11 @@ to ipam release.`,
 				if err != nil {
 					return err
 				}
-				kubeClient, err = kubernetes.NewForConfig(kubeConfig)
-				if err != nil {
-					return err
-				}
+				restConfig = kubeConfig
+			}
+			kubeClient, err := ipam.NewKubeClient(restConfig)
+			if err != nil {
+				return err
 			}
 
 			showProblemIPs = showAllIPs || showProblemIPs

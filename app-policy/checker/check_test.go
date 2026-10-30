@@ -1261,3 +1261,88 @@ func TestEvaluateRecordsStagedPolicyInPendingTraceOnly(t *testing.T) {
 			0, rules.RuleDirIngress, rules.RuleActionAllow),
 	}))
 }
+
+// A rule whose HTTP criteria would reject a malformed request path no longer decides the
+// request when the rule does not apply to it in the first place. Ordering the criteria
+// cheapest-first drops such a rule on its protocol, before matchRequest can panic on the
+// path, so the walk carries on to a rule that does apply.
+func TestMalformedHTTPPathOnlyFailsRulesThatReachIt(t *testing.T) {
+	RegisterTestingT(t)
+
+	udpWithPaths := &proto.PolicyID{Name: "udp-with-paths", Kind: v3.KindGlobalNetworkPolicy}
+	allowsTCP := &proto.PolicyID{Name: "allows-tcp", Kind: v3.KindGlobalNetworkPolicy}
+
+	httpRule := func(protocol string) *proto.Rule {
+		return &proto.Rule{
+			Action:   "allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: protocol}},
+			HttpMatch: &proto.HTTPMatch{
+				Paths: []*proto.HTTPMatch_PathMatch{
+					{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}},
+				},
+			},
+		}
+	}
+
+	store := policystore.NewPolicyStore()
+	store.PolicyByID[types.ProtoToPolicyID(allowsTCP)] = &proto.Policy{
+		InboundRules: []*proto.Rule{{Action: "allow"}},
+	}
+	ep := &proto.WorkloadEndpoint{Tiers: tierInfos(policyIDs(udpWithPaths, allowsTCP))}
+
+	// A TCP request whose path is missing its leading "/". Envoy should not send one, so the
+	// evaluator treats it as bad data from the data plane rather than as a non-match.
+	badPath := "no-leading-slash"
+	flow := &MockFlow{Protocol: 6, DestPort: 80, HttpPath: &badPath}
+
+	// The UDP rule cannot apply to a TCP request, so its HTTP criteria are never reached and
+	// the next policy allows.
+	store.PolicyByID[types.ProtoToPolicyID(udpWithPaths)] = &proto.Policy{
+		InboundRules: []*proto.Rule{httpRule("UDP")},
+	}
+	Expect(checkStore(EnforcedOnly, store, ep, rules.RuleDirIngress, flow).Code).To(Equal(OK))
+
+	// The same rule on TCP does reach them, and the malformed path still fails the request.
+	store.PolicyByID[types.ProtoToPolicyID(udpWithPaths)] = &proto.Policy{
+		InboundRules: []*proto.Rule{httpRule("TCP")},
+	}
+	st := checkStore(EnforcedOnly, store, ep, rules.RuleDirIngress, flow)
+	Expect(st.Code).To(Equal(INVALID_ARGUMENT))
+	Expect(st.Message).To(ContainSubstring(badPath))
+}
+
+// countingFlow counts how often the evaluator asks the data plane for the flow's protocol.
+type countingFlow struct {
+	Flow
+	protocolCalls int
+}
+
+func (c *countingFlow) GetProtocol() int {
+	c.protocolCalls++
+	return c.Flow.GetProtocol()
+}
+
+// The protocol is the first criterion every rule is tested against, so the evaluator must not
+// ask the data plane for it per rule: the Envoy adapter derives it from an enum name via a
+// lowercased map lookup, which allocates.
+func TestProtocolResolvedOncePerRequest(t *testing.T) {
+	RegisterTestingT(t)
+
+	// Rules that no request matches, so that every one of them tests the protocol.
+	var noMatch []*proto.Rule
+	for range 50 {
+		noMatch = append(noMatch, &proto.Rule{
+			Action:   "allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 132}},
+		})
+	}
+
+	policy := &proto.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}
+	store := policystore.NewPolicyStore()
+	store.PolicyByID[types.ProtoToPolicyID(policy)] = &proto.Policy{InboundRules: noMatch}
+	ep := &proto.WorkloadEndpoint{Tiers: tierInfos(policyIDs(policy))}
+
+	flow := &countingFlow{Flow: &MockFlow{Protocol: 6, DestPort: 80}}
+	Expect(checkStore(EnforcedOnly, store, ep, rules.RuleDirIngress, flow).Code).To(Equal(PERMISSION_DENIED))
+	Expect(flow.protocolCalls).To(Equal(1))
+}

@@ -1976,7 +1976,7 @@ var _ = Describe("Static", func() {
 				Comment: []string{"link-local"},
 			},
 			{
-				Match:   iptables.Match().MarkMatchesWithMask(0x1100000, 0x1100000),
+				Match:   iptables.Match().MarkMatchesWithMask(0x1100000, 0x1f00000),
 				Action:  iptables.ReturnAction{},
 				Comment: []string{"MarkSeenSkipFIB Mark"},
 			},
@@ -2078,7 +2078,7 @@ var _ = Describe("Static", func() {
 })
 
 var _ = Describe("Flowtable offload", func() {
-	config := Config{
+	flowtableConfig := Config{
 		IPSetConfigV4:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
 		IPSetConfigV6:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
 		MarkAccept:          0x8,
@@ -2096,50 +2096,63 @@ var _ = Describe("Flowtable offload", func() {
 
 		NFTablesFlowTableOffload: true,
 	}
-	renderer := NewRenderer(config, true).(*DefaultRuleRenderer)
+	renderer := NewRenderer(flowtableConfig, true).(*DefaultRuleRenderer)
 
 	noOffloadSetName := ipSetName(IPSetIDNoFlowOffload, 4)
 	offloadRule := generictables.Rule{
 		Match: nftrender.Match().
-			ConntrackState("RELATED,ESTABLISHED").
 			NotSourceIPSet(noOffloadSetName).
 			NotDestIPSet(noOffloadSetName),
 		Action:  nftrender.FlowOffloadAction{},
 		Comment: []string{"Offload established Calico flows."},
 	}
 
-	It("should offload established flows at the top of the forward chain, ahead of the workload dispatch jump", func() {
+	It("should jump to the flow-offload chain at the top of the forward chain, ahead of the workload dispatch jump", func() {
 		chains := renderer.StaticFilterForwardChains(4)
 		chain := findChain(chains, ChainFilterForward)
 		Expect(chain).NotTo(BeNil())
-		Expect(chain.Rules).To(ContainElement(offloadRule))
 
-		offloadIdx := indexOfRuleWithAction(chain.Rules, offloadRule.Action)
+		offloadIdx := indexOfJumpTo(chain.Rules, ChainFlowOffload)
+		Expect(offloadIdx).To(BeNumerically(">=", 0), "expected a jump to the flow-offload chain")
 		dispatchIdx := indexOfJumpTo(chain.Rules, ChainFromWorkloadDispatch)
 		Expect(dispatchIdx).To(BeNumerically(">=", 0), "expected a jump to the workload dispatch chain")
-		Expect(offloadIdx).To(BeNumerically("<", dispatchIdx), "offload rule must precede the workload dispatch jump")
+		Expect(offloadIdx).To(BeNumerically("<", dispatchIdx), "offload jump must precede the workload dispatch jump")
+		Expect(chain.Rules[offloadIdx].Match).To(Equal(nftrender.Match().ConntrackState("RELATED,ESTABLISHED")),
+			"NEW and INVALID packets must not pay for the jump")
+	})
+
+	It("should offload established flows from the flow-offload chain", func() {
+		chain := renderer.FlowOffloadChain(4)
+		Expect(chain).NotTo(BeNil())
+		Expect(chain.Name).To(Equal(ChainFlowOffload))
+		Expect(chain.Rules).To(ConsistOf(offloadRule))
+	})
+
+	It("should render the flow-offload chain as part of the static filter chains", func() {
+		Expect(findChain(renderer.StaticFilterTableChains(4), ChainFlowOffload)).NotTo(BeNil())
 	})
 
 	It("should not offload flows when flow table offload is disabled", func() {
-		disabledConfig := config
+		disabledConfig := flowtableConfig
 		disabledConfig.NFTablesFlowTableOffload = false
 		disabledRenderer := NewRenderer(disabledConfig, true).(*DefaultRuleRenderer)
 
 		chains := disabledRenderer.StaticFilterForwardChains(4)
 		chain := findChain(chains, ChainFilterForward)
 		Expect(chain).NotTo(BeNil())
-		Expect(chain.Rules).NotTo(ContainElement(offloadRule))
+		Expect(indexOfJumpTo(chain.Rules, ChainFlowOffload)).To(Equal(-1))
+		Expect(findChain(disabledRenderer.StaticFilterTableChains(4), ChainFlowOffload)).To(BeNil())
+	})
+
+	It("should not offload flows in iptables mode", func() {
+		iptablesRenderer := NewRenderer(flowtableConfig, false).(*DefaultRuleRenderer)
+
+		chain := findChain(iptablesRenderer.StaticFilterForwardChains(4), ChainFilterForward)
+		Expect(chain).NotTo(BeNil())
+		Expect(indexOfJumpTo(chain.Rules, ChainFlowOffload)).To(Equal(-1))
+		Expect(findChain(iptablesRenderer.StaticFilterTableChains(4), ChainFlowOffload)).To(BeNil())
 	})
 })
-
-func indexOfRuleWithAction(rules []generictables.Rule, action generictables.Action) int {
-	for i, r := range rules {
-		if r.Action == action {
-			return i
-		}
-	}
-	return -1
-}
 
 func indexOfJumpTo(rules []generictables.Rule, chainName string) int {
 	for i, r := range rules {
@@ -2271,6 +2284,31 @@ var _ = Describe("Static with connection transition logging", func() {
 			Expect(chain.Rules[0].Action).To(Equal(iptables.LogAction{Prefix: "abcdefghijklmnopqrstuvw-rst"}))
 			Expect(chain.Rules[3].Action).To(Equal(iptables.LogAction{Prefix: "abcdefghijklmnopqr-icmp-err"}))
 			Expect(chain.Rules[6].Action).To(Equal(iptables.LogAction{Prefix: "abcdefghijklmnopqrstuvw-est"}))
+		})
+	})
+
+	Describe("with a long prefix in nftables mode", func() {
+		const base = "abcdefghijklmnopqrstuvwxyz" +
+			"abcdefghijklmnopqrstuvwxyz" +
+			"abcdefghijklmnopqrstuvwxyz" +
+			"abcdefghijklmnopqrstuvwxyz" +
+			"abcdefghijklmnopqrstuvwxyz" // 130 characters.
+
+		BeforeEach(func() {
+			conf.LogConnectionTransitionsPrefix = base
+		})
+
+		JustBeforeEach(func() {
+			rr = NewRenderer(conf, true).(*DefaultRuleRenderer)
+		})
+
+		It("should truncate the base so the suffix and trailing colon-space fit nftables' 126 character limit", func() {
+			chain := findChain(rr.StaticFilterTableChains(4), "cali-log-conn")
+			Expect(chain).NotTo(BeNil())
+			// The Log action appends ": ", so prefix+suffix must fit in 124 characters.
+			Expect(chain.Rules[0].Action).To(Equal(nftrender.LogAction{Prefix: base[:120] + "-rst"}))
+			Expect(chain.Rules[3].Action).To(Equal(nftrender.LogAction{Prefix: base[:115] + "-icmp-err"}))
+			Expect(chain.Rules[6].Action).To(Equal(nftrender.LogAction{Prefix: base[:120] + "-est"}))
 		})
 	})
 

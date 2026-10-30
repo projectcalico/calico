@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import (
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -1123,6 +1124,106 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 		return nil
 	}
 	return errors.New("Max retries hit - excessive concurrent IPAM requests")
+}
+
+// MoveIPToHandle transfers an allocated address to opts.ToHandle in one block update.
+func (c ipamClient) MoveIPToHandle(ctx context.Context, ip net.IP, opts MoveOptions) error {
+	if opts.ToHandle == "" {
+		return errors.New("no target handle specified in options")
+	}
+	if opts.ExpectedOwner == nil {
+		return errors.New("no expected owner specified in options; moving an address requires verifying who owns it")
+	}
+	if opts.ExpectedOwner.Namespace == "" || opts.ExpectedOwner.Name == "" {
+		// The empty owner matches an allocation with no owner attributes at all, which is
+		// never a workload's.
+		return errors.New("expected owner must name both a namespace and a pod")
+	}
+
+	// A move hands an address between two handles of the same workload. Letting the new
+	// attributes name someone else would be a transfer of ownership, which this is not.
+	if !opts.ExpectedOwner.Matches(opts.Attrs) {
+		return fmt.Errorf("new attributes for %s do not match the expected owner pod=%s namespace=%s; a move cannot change who owns an address",
+			ip, opts.ExpectedOwner.Name, opts.ExpectedOwner.Namespace)
+	}
+	opts.ToHandle = sanitizeHandle(opts.ToHandle)
+	opts.ExpectedHandle = sanitizeHandle(opts.ExpectedHandle)
+
+	logCtx := log.WithFields(log.Fields{
+		"ip":       ip,
+		"toHandle": opts.ToHandle,
+	})
+
+	pool, err := c.blockReaderWriter.getPoolForIP(ctx, ip, nil)
+	if err != nil {
+		return err
+	}
+	if pool == nil {
+		return fmt.Errorf("the provided IP address %s is not in a configured pool", ip)
+	}
+
+	cfg, err := c.GetIPAMConfig(ctx)
+	if err != nil {
+		logCtx.WithError(err).Error("Error getting IPAM config")
+		return err
+	}
+
+	blockCIDR := getBlockCIDRForAddress(ip, pool)
+	for range datastoreRetries {
+		obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
+		if err != nil {
+			logCtx.WithError(err).Error("Error getting block")
+			return err
+		}
+
+		block := blockFromBackend(cfg, obj.Value.(*model.AllocationBlock))
+		fromHandle, err := block.moveIPToHandle(cfg, ip, opts)
+		if err != nil {
+			logCtx.WithError(err).Error("Failed to move address to new handle")
+			return err
+		}
+		if fromHandle == opts.ToHandle {
+			logCtx.Info("Address is already owned by the target handle, nothing to move")
+			return nil
+		}
+
+		// Claim against the new handle before the block write, so we never end up with an
+		// allocation that no handle accounts for.
+		if err := c.incrementHandle(ctx, opts.ToHandle, blockCIDR, 1, 0); err != nil {
+			logCtx.WithError(err).Warn("Failed to increment target handle")
+			return fmt.Errorf("failed to increment handle %s: %w", opts.ToHandle, err)
+		}
+
+		if _, err = c.blockReaderWriter.updateBlock(ctx, obj); err != nil {
+			// Give the claim back whatever the failure was, otherwise a retry double-counts.
+			cleanupCtx, cancel := contextForCleanup(ctx)
+			if derr := c.decrementHandle(cleanupCtx, opts.ToHandle, blockCIDR, 1, nil); derr != nil {
+				logCtx.WithError(derr).Warn("Failed to decrement target handle after failed block update")
+			}
+			cancel()
+
+			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+				logCtx.WithError(err).Debug("CAS error moving address - retry")
+				continue
+			}
+			logCtx.WithError(err).Warnf("Update failed on block %s", blockCIDR.String())
+			return err
+		}
+
+		// A failed decrement strands the old handle permanently: nothing reconciles the
+		// count, though no allocation is lost.
+		if fromHandle != "" {
+			cleanupCtx, cancel := contextForCleanup(ctx)
+			if err := c.decrementHandle(cleanupCtx, fromHandle, blockCIDR, 1, nil); err != nil {
+				logCtx.WithError(err).WithField("fromHandle", fromHandle).Warn("Failed to decrement previous handle")
+			}
+			cancel()
+		}
+
+		logCtx.WithField("fromHandle", fromHandle).Info("Moved address to new handle")
+		return nil
+	}
+	return errors.New("max retries hit - excessive concurrent IPAM requests")
 }
 
 // handleMaxAllocReached handles the case where incrementHandle fails due to maxAlloc constraint.
@@ -2379,100 +2480,82 @@ func decideHostname(host string) (string, error) {
 
 // GetUtilization returns IP utilization info for the specified pools, or for all pools.
 func (c ipamClient) GetUtilization(ctx context.Context, args GetUtilizationArgs) ([]*PoolUtilization, error) {
-	var usage []*PoolUtilization
-
-	// Read all pools.
 	allPools, err := c.pools.GetAllPools(ctx)
 	if err != nil {
 		log.WithError(err).Errorf("Error getting IP pools")
 		return nil, err
 	}
-
-	// Identify the ones we want and create a PoolUtilization for each of those.
-	wantAllPools := len(args.Pools) == 0
-	wantedPools := set.FromArray(args.Pools)
-	for _, pool := range allPools {
-		if wantAllPools ||
-			wantedPools.Contains(pool.Name) ||
-			wantedPools.Contains(pool.Spec.CIDR) {
-			usage = append(usage, &PoolUtilization{
-				Name: pool.Name,
-				CIDR: net.MustParseNetwork(pool.Spec.CIDR).IPNet,
-			})
-		}
-	}
-
-	// If we've been asked for all pools, also report utilization for any allocation
-	// blocks for which there is no longer an IP pool.  Note: following code depends
-	// on this being at the end of the list; otherwise it will suck in allocation
-	// blocks that should be reported under other pools.
-	var orphanedBlocks *PoolUtilization
-	if wantAllPools {
-		orphanedBlocks = &PoolUtilization{
-			Name: "orphaned allocation blocks",
-			CIDR: net.MustParseNetwork("0.0.0.0/0").IPNet,
-		}
-		usage = append(usage, orphanedBlocks)
-	}
-
-	// IPReservations make addresses unassignable without allocating them, so
-	// they have to be discounted here as well as on the allocation path.
-	reservations, err := c.getReservedCIDRs(ctx)
+	reservations, err := c.listReservations(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Read all allocation blocks.
 	blocks, err := c.client.List(ctx, model.BlockListOptions{}, "")
 	if err != nil {
 		return nil, err
 	}
-	for _, kvp := range blocks.KVPairs {
-		b := kvp.Value.(*model.AllocationBlock)
-		log.Debugf("Got block: %v", b)
 
-		// Find which pool this block belongs to.
-		for _, poolUse := range usage {
-			if b.CIDR.IsNetOverlap(poolUse.CIDR) {
-				log.Debugf("Block CIDR %v belongs to pool %v", b.CIDR, poolUse.Name)
-				block := allocationBlock{b}
-				capacity := b.NumAddresses()
-				poolUse.Blocks = append(poolUse.Blocks, BlockUtilization{
-					CIDR:      b.CIDR.IPNet,
-					Capacity:  capacity,
-					InUse:     capacity - len(b.Unallocated),
-					Reserved:  block.NumReservedAddresses(reservations),
-					Available: block.NumFreeAddresses(reservations),
-				})
-				break
-			}
+	// Every pool goes in, wanted or not, so a block counts under the pool that owns it rather than a wanted pool around it.
+	tracker := accounting.NewTracker()
+	for i := range allPools {
+		tracker.AddPools(&allPools[i])
+	}
+	tracker.AddReservations(reservations...)
+	for _, kvp := range blocks.KVPairs {
+		if b, ok := kvp.Value.(*model.AllocationBlock); ok {
+			tracker.AddBlocks(b)
 		}
 	}
 
-	// Total up each pool.  Capacity and Reserved cover the whole pool CIDR,
-	// including space that no block has been carved from yet, so they come from
-	// the pool's own arithmetic rather than from a sum over the blocks: a
-	// reservation over unblocked space is still unassignable.
-	for _, poolUse := range usage {
-		if poolUse == orphanedBlocks {
-			// Not a real pool.  Its blocks are listed so that stray allocations
-			// stay visible, but totals over its 0.0.0.0/0 "CIDR" would be
-			// meaningless.
+	var usage []*PoolUtilization
+	wantAllPools := len(args.Pools) == 0
+	wantedPools := set.FromArray(args.Pools)
+	for _, pool := range allPools {
+		if !wantAllPools && !wantedPools.Contains(pool.Name) && !wantedPools.Contains(pool.Spec.CIDR) {
 			continue
 		}
-		for _, b := range poolUse.Blocks {
-			poolUse.InUse += b.InUse
-			poolUse.Available += b.Available
+		counts, ok := tracker.Summarize(pool.Name)
+		if !ok {
+			continue
 		}
-		capacity, reserved, availableOutsideBlocks, err := countPoolSpace(poolUse.CIDR, reservations, poolUse.Blocks)
-		if err != nil {
-			return nil, err
+		poolUse := &PoolUtilization{
+			Name:     pool.Name,
+			CIDR:     net.MustParseNetwork(pool.Spec.CIDR).IPNet,
+			Capacity: accounting.ClampToInt(counts.Total),
+			InUse:    counts.InUse,
+			Cooling:  counts.Cooling,
+			Reserved: accounting.ClampToInt(counts.Reserved),
+			Free:     accounting.ClampToInt(counts.Free()),
 		}
-		poolUse.Capacity = capacity
-		poolUse.Reserved = reserved
-		poolUse.Available += availableOutsideBlocks
+		for _, b := range tracker.PoolBlockCounts(pool.Name) {
+			poolUse.Blocks = append(poolUse.Blocks, toBlockUtilization(b))
+		}
+		usage = append(usage, poolUse)
+	}
+
+	// Blocks no pool claims are listed so stray allocations stay visible. Totals over a 0.0.0.0/0 "pool" would mean nothing, so it has none.
+	if wantAllPools {
+		orphanedBlocks := &PoolUtilization{
+			Name: "orphaned allocation blocks",
+			CIDR: net.MustParseNetwork("0.0.0.0/0").IPNet,
+		}
+		for _, counts := range tracker.NoPoolBlockCounts() {
+			orphanedBlocks.Blocks = append(orphanedBlocks.Blocks, toBlockUtilization(counts))
+		}
+		usage = append(usage, orphanedBlocks)
 	}
 	return usage, nil
+}
+
+func toBlockUtilization(b *accounting.BlockCounts) BlockUtilization {
+	return BlockUtilization{
+		CIDR:     b.Block.CIDR.IPNet,
+		Capacity: b.Total,
+		InUse:    b.InUse,
+		Cooling:  b.Cooling,
+		Reserved: b.Reserved,
+		Free:     b.Free(),
+	}
 }
 
 // EnsureBlock returns single IPv4/IPv6 IPAM block for a host as specified by the provided BlockArgs.
@@ -2605,21 +2688,18 @@ func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr,
 }
 
 func (c ipamClient) getReservedIPs(ctx context.Context) (addrFilter, error) {
-	cidrs, err := c.getReservedCIDRs(ctx)
+	reservations, err := c.listReservations(ctx)
 	if err != nil {
 		return nil, err
 	}
+	cidrs := accounting.ReservationCIDRs(reservations)
 	if len(cidrs) == 0 {
 		return nilAddrFilter{}, nil
 	}
-	return cidrs, nil
+	return cidrSliceFilter(cidrs), nil
 }
 
-// getReservedCIDRs returns the CIDRs of every IPReservation.  Callers that only
-// need to test individual addresses should use getReservedIPs; the CIDRs
-// themselves are for callers that need to measure how much space is reserved
-// (see countPoolSpace).
-func (c ipamClient) getReservedCIDRs(ctx context.Context) (cidrSliceFilter, error) {
+func (c ipamClient) listReservations(ctx context.Context) ([]*v3.IPReservation, error) {
 	reservations, err := c.reservations.List(ctx, options.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -2628,7 +2708,7 @@ func (c ipamClient) getReservedCIDRs(ctx context.Context) (cidrSliceFilter, erro
 	for i := range reservations.Items {
 		items[i] = &reservations.Items[i]
 	}
-	return reservedCIDRs(items), nil
+	return items, nil
 }
 
 func (c ipamClient) UpgradeHost(ctx context.Context, nodeName string) error {

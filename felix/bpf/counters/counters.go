@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	MaxCounterNumber    int = 27
+	MaxCounterNumber    int = 29
 	counterMapKeySize   int = 8
 	counterMapValueSize int = 8
 )
@@ -83,9 +83,14 @@ const (
 	DroppedFragReorder
 	DroppedFragUnsupported
 	DroppedQoS
-	Reserved1
+	Reserved1 // Calico Enterprise: AcceptedByEgressGW
 	DroppedMaglevNoBackend
 	DroppedNoHostIP
+	Reserved2 // Calico Enterprise: DroppedL2UnsupportedVLAN
+	DroppedRPF
+	// Add counters above this
+	AcceptedByXDP
+	WEPNotReady
 )
 
 type Description struct {
@@ -215,6 +220,10 @@ var descriptions DescList = DescList{
 	{
 		Counter:  DroppedNoHostIP,
 		Category: "Dropped", Caption: "VXLAN encap when host IP unknown",
+	},
+	{
+		Counter:  DroppedRPF,
+		Category: "Dropped", Caption: "by workload RPF check",
 	},
 }
 

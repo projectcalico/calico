@@ -524,6 +524,11 @@ func MonitorIPAddressSubnetsWithContext(ctx context.Context) error {
 			var err error
 			k8sNode, err = clientset.CoreV1().Nodes().Get(ctx, k8sNodeName, metav1.GetOptions{})
 			if err != nil {
+				if kerrors.IsNotFound(err) {
+					// Absent while kubelet re-registers it; re-check on the next tick.
+					log.WithField("node", k8sNodeName).Warn("Node not in the datastore, retrying")
+					continue
+				}
 				return fmt.Errorf("failed to read Node from datastore: %w", err)
 			}
 		}
@@ -1427,7 +1432,20 @@ func ensureDefaultConfig(
 		return err
 	}
 
-	return ensureDefaultIPAMConfigExists(ctx, c)
+	if calicoIPAMInUse() {
+		if err := ensureDefaultIPAMConfigExists(ctx, c); err != nil {
+			return err
+		}
+	} else {
+		log.WithField("CALICO_IPAM_TYPE", os.Getenv("CALICO_IPAM_TYPE")).Info("Calico IPAM not in use, skipping default IPAMConfiguration")
+	}
+	return nil
+}
+
+// calicoIPAMInUse treats an unset CALICO_IPAM_TYPE as Calico IPAM, since older manifests don't set it.
+func calicoIPAMInUse() bool {
+	ipamType := os.Getenv("CALICO_IPAM_TYPE")
+	return ipamType == "" || strings.EqualFold(ipamType, "Calico")
 }
 
 func ensureDefaultBGPConfigExists(ctx context.Context, c client.Interface) error {

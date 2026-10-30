@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cilanes resolves the test selection of every e2e lane under
-// .argoci/cron and .semaphore/end-to-end/pipelines.
+// Package cilanes resolves the test selection of every e2e lane CI declares.
 package cilanes
 
 import (
@@ -28,8 +27,16 @@ import (
 )
 
 const (
-	argoDir      = ".argoci/cron"
-	semaphoreDir = ".semaphore/end-to-end/pipelines"
+	argoDir   = ".argoci/cron"
+	blocksDir = ".semaphore/semaphore.yml.d/blocks"
+
+	// The per-PR lanes are composed from modules, one file each, in the same
+	// format as a cron.
+	modulesDir = ".argoci/modules"
+
+	// The end-to-end body scripts drive a provisioned cluster and take their
+	// selection from the environment.
+	provisionedSuiteScript = "body_"
 
 	// The flannel migration script runs the suite once before migrating with a
 	// hardcoded config, then again with the job's own.
@@ -37,6 +44,22 @@ const (
 	flannelMigrationPreConfig = "e2e/config/pre-migration-smoke.yaml"
 	flannelMigrationPreName   = " [pre-migration]"
 )
+
+// kindTargets maps each make target that runs the calico e2e binary to where
+// its selection comes from. The provisioned lanes get a config from
+// run_tests.sh; the kind lanes call make directly, so the target decides.
+var kindTargets = map[string]struct {
+	// fixed is the config the target hardcodes, ignoring the environment.
+	fixed string
+	// fallback is the config the Makefile's ?= supplies when the environment
+	// names none.
+	fallback string
+}{
+	"e2e-test":                   {fallback: "e2e/config/kind/conformance.yaml"},
+	"e2e-test-bpf":               {fixed: "e2e/config/kind/bpf.yaml"},
+	"kind-manifest-install-test": {fixed: "e2e/config/kind/manifest-install.yaml"},
+	"e2e-run":                    {},
+}
 
 // Selection variables. run_tests.sh runs the e2e binary against the config
 // named here and refuses to run at all without one.
@@ -87,13 +110,14 @@ func (l Lane) SelectionArgs(repoRoot string) ([]string, error) {
 	return []string{"--calico.test-config=" + abs}, nil
 }
 
-// Load resolves every lane declared under .argoci/cron and
-// .semaphore/end-to-end/pipelines, sorted by source then name.
+// Load resolves every lane declared under .argoci/cron, .argoci/modules and
+// .semaphore/semaphore.yml.d/blocks, sorted by source then name.
 func Load(repoRoot string) ([]Lane, error) {
 	var lanes []Lane
 	for dir, parse := range map[string]func(string, []byte) ([]Lane, error){
-		argoDir:      parseArgo,
-		semaphoreDir: parseSemaphore,
+		argoDir:    parseArgo,
+		modulesDir: parseArgoModule,
+		blocksDir:  parseSemaphoreBlocks,
 	} {
 		entries, err := os.ReadDir(filepath.Join(repoRoot, dir))
 		if err != nil {
@@ -205,6 +229,54 @@ type argoMatrix struct {
 	Env  []envVar `yaml:"env"`
 }
 
+// parseArgoModule keeps only the steps that run the e2e binary. A module is
+// mostly build and lint steps, which would otherwise default their way into
+// lanes, and its kind steps can take the make target from a matrix entry.
+func parseArgoModule(source string, data []byte) ([]Lane, error) {
+	var wf argoWorkflow
+	if err := yaml.Unmarshal(data, &wf); err != nil {
+		return nil, err
+	}
+
+	var lanes []Lane
+	for _, step := range wf.Steps {
+		base := env{}.apply(step.Env)
+		entries := step.Matrix
+		if len(entries) == 0 {
+			entries = []argoMatrix{{}}
+		}
+		baseConfig, _ := moduleStepConfig(base, step.Commands)
+		for _, m := range entries {
+			e := base.apply(m.Env)
+			config, ok := moduleStepConfig(e, step.Commands)
+			if !ok {
+				continue
+			}
+			e[envConfig] = config
+			name := step.Name
+			if m.Name != "" && config != baseConfig {
+				name += " [" + m.Name + "]"
+			}
+			lanes = append(lanes, e.lanes(source, name, step.Commands)...)
+		}
+	}
+	return dedupe(lanes), nil
+}
+
+// moduleStepConfig returns the config a module step runs the e2e binary with,
+// and false when it does not run the binary.
+func moduleStepConfig(e env, commands string) (string, bool) {
+	expanded := os.Expand(commands, func(name string) string { return e[name] })
+	if target, ok := e2eMakeTarget(expanded); ok {
+		config := kindConfig(target, e[envConfig])
+		return config, config != ""
+	}
+	if strings.Contains(commands, provisionedSuiteScript) && e[envConfig] != "" {
+		return e[envConfig], true
+	}
+	return "", false
+}
+
 func parseArgo(source string, data []byte) ([]Lane, error) {
 	var wf argoWorkflow
 	if err := yaml.Unmarshal(data, &wf); err != nil {
@@ -267,37 +339,40 @@ func prologueDefaults(prologue string) env {
 	return e
 }
 
-type semPipeline struct {
-	GlobalJobConfig struct {
+type semBlock struct {
+	Name string `yaml:"name"`
+	Task struct {
 		EnvVars []envVar `yaml:"env_vars"`
-	} `yaml:"global_job_config"`
-	Blocks []struct {
-		Name string `yaml:"name"`
-		Task struct {
-			EnvVars []envVar `yaml:"env_vars"`
-			Jobs    []struct {
-				Name     string   `yaml:"name"`
-				EnvVars  []envVar `yaml:"env_vars"`
-				Commands []string `yaml:"commands"`
-				Matrix   []struct {
-					EnvVar string   `yaml:"env_var"`
-					Values []string `yaml:"values"`
-				} `yaml:"matrix"`
-			} `yaml:"jobs"`
-		} `yaml:"task"`
-	} `yaml:"blocks"`
+		Jobs    []struct {
+			Name     string   `yaml:"name"`
+			EnvVars  []envVar `yaml:"env_vars"`
+			Commands []string `yaml:"commands"`
+			Matrix   []struct {
+				EnvVar string   `yaml:"env_var"`
+				Values []string `yaml:"values"`
+			} `yaml:"matrix"`
+		} `yaml:"jobs"`
+	} `yaml:"task"`
 }
 
-func parseSemaphore(source string, data []byte) ([]Lane, error) {
-	var p semPipeline
-	if err := yaml.Unmarshal(data, &p); err != nil {
+// parseSemaphoreBlocks reads the per-component block files, a bare sequence of
+// blocks with no global_job_config. Most declare no e2e lane at all, so blocks
+// that do not run the suite are dropped rather than treated as lanes.
+func parseSemaphoreBlocks(source string, data []byte) ([]Lane, error) {
+	var blocks []semBlock
+	if err := yaml.Unmarshal(data, &blocks); err != nil {
 		return nil, err
 	}
-	global := env{}.apply(p.GlobalJobConfig.EnvVars)
+	return blockLanes(source, blocks)
+}
 
+// blockLanes resolves the lanes in a sequence of Semaphore blocks. A kind job
+// invokes make itself, so its target names the config; a provisioned job gets
+// one from run_tests.sh in the environment.
+func blockLanes(source string, blocks []semBlock) ([]Lane, error) {
 	var lanes []Lane
-	for _, block := range p.Blocks {
-		blockEnv := global.apply(block.Task.EnvVars)
+	for _, block := range blocks {
+		blockEnv := env{}.apply(block.Task.EnvVars)
 		for _, job := range block.Task.Jobs {
 			base := blockEnv.apply(job.EnvVars)
 			name := block.Name + " / " + job.Name
@@ -308,8 +383,43 @@ func parseSemaphore(source string, data []byte) ([]Lane, error) {
 					return nil, fmt.Errorf("job %q: matrix on %s is not modelled", name, axis.EnvVar)
 				}
 			}
+			if target, ok := e2eMakeTarget(commands); ok {
+				base = base.clone()
+				base[envConfig] = kindConfig(target, base[envConfig])
+			} else if !strings.Contains(commands, provisionedSuiteScript) {
+				continue
+			}
 			lanes = append(lanes, base.lanes(source, name, commands)...)
 		}
 	}
 	return dedupe(lanes), nil
+}
+
+// makeTarget matches the `make <target>` a kind job runs, including through the
+// run-and-monitor wrapper.
+var makeTarget = regexp.MustCompile(`\bmake\s+([a-z0-9-]+)`)
+
+// e2eMakeTarget returns the first target in commands that runs the e2e binary.
+// Jobs that run something else, the ClusterNetworkPolicy binary among them, are
+// not lanes even when they set E2E_TEST_CONFIG.
+func e2eMakeTarget(commands string) (string, bool) {
+	for _, m := range makeTarget.FindAllStringSubmatch(commands, -1) {
+		if _, ok := kindTargets[m[1]]; ok {
+			return m[1], true
+		}
+	}
+	return "", false
+}
+
+// kindConfig resolves the config a kind target selects with, given whatever the
+// job put in the environment.
+func kindConfig(target, fromEnv string) string {
+	t := kindTargets[target]
+	if t.fixed != "" {
+		return t.fixed
+	}
+	if fromEnv != "" {
+		return fromEnv
+	}
+	return t.fallback
 }

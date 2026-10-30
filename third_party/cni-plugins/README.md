@@ -3,7 +3,7 @@
 Image containing the upstream CNI plugins that Calico installs onto each node:
 
 - `host-local`, `portmap`, `loopback`, `tuning` from
-  [projectcalico/containernetworking-plugins](https://github.com/projectcalico/containernetworking-plugins)
+  [containernetworking/plugins](https://github.com/containernetworking/plugins)
 - `flannel` from
   [projectcalico/flannel-cni-plugin](https://github.com/projectcalico/flannel-cni-plugin)
 

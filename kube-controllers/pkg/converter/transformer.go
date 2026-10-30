@@ -146,6 +146,7 @@ func PodTransformer(podControllerEnabled bool) cache.TransformFunc {
 				conversion.AnnotationPodIP,
 				conversion.AnnotationPodIPs,
 				conversion.AnnotationAWSPodIPs,
+				conversion.AnnotationContainerID,
 			} {
 				if value, ok := pod.Annotations[annotation]; ok {
 					if p.Annotations == nil {

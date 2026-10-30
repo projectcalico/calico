@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	. "github.com/projectcalico/calico/typha/pkg/syncserver"
 )
 
@@ -47,6 +48,23 @@ var _ = Describe("With zero config", func() {
 			ShutdownMaxDropInterval:        time.Second,
 			MaxConns:                       math.MaxInt32,
 			Port:                           5473,
+			PreferredCompressionAlgorithmOrder: []syncproto.CompressionAlgorithm{
+				syncproto.CompressionZstd,
+				syncproto.CompressionSnappy,
+			},
+		}))
+	})
+	It("should drop unknown and duplicate compression algorithms", func() {
+		config.PreferredCompressionAlgorithmOrder = []syncproto.CompressionAlgorithm{
+			syncproto.CompressionZstd,
+			"bogus",
+			syncproto.CompressionZstd,
+			syncproto.CompressionSnappy,
+		}
+		config.ApplyDefaults()
+		Expect(config.PreferredCompressionAlgorithmOrder).To(Equal([]syncproto.CompressionAlgorithm{
+			syncproto.CompressionZstd,
+			syncproto.CompressionSnappy,
 		}))
 	})
 	It("should convert random port to 0", func() {

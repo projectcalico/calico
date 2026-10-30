@@ -90,6 +90,18 @@ bpfnat feature is enabled; per-interface sysctls are set to loose
 (`2`) on interfaces where Calico forwards packets that may appear
 misrouted to the kernel. BPF does the real check.
 
+Loose is not relaxed enough on a device with **no IPv4 address**: the
+kernel's `__fib_validate_source()` short-circuits on such devices
+(`no_addr`) and drops any packet whose source does not route back out
+that device, for *any* non-zero `rp_filter` — the loose-mode fallback
+lookup is never reached. This bites the overlay device in
+`BPFOverlayHostSourceIP=HostAddress` mode (the tunnel deliberately has
+no IP): replies of host-networked connections to remote service
+backends are reverse-NATted on tunnel ingress, so they enter the stack
+with the service IP as source, which routes via `bpfin.cali`, not the
+tunnel. Felix therefore sets `rp_filter = 0` (like on the bpfnat veths)
+on IPIP/VXLAN devices in that mode.
+
 ### Review notes for this section
 
 - A change that makes a new interface type Calico-managed must decide
@@ -138,6 +150,90 @@ Readers and writers alike have to reach it: a `NAT_FWD` hit gives
 `calico_ct_lookup()` the stub, so it redirects
 `src_to_dst`/`dst_to_src` into the tracking entry's legs and uses
 `tracking_v` for the fields hanging off the value itself.
+
+#### Tunnel return address and overlay-reply re-encap
+
+Two mechanisms let a node send a reply back through the overlay,
+and it is important not to conflate them:
+
+- **`tun_ip` (NAT-reverse entries only).** The reverse entry of a
+  service/NodePort flow that crossed nodes stores the peer node's
+  address in `tun_ip`. On the forwarding node it is the backend
+  node to tunnel *to* (`CALI_CT_FLAG_NP_FWD`); on the backend node
+  it is the node the request came *from*, so the reply is tunneled
+  back the way it arrived. It is written only for
+  `CALI_CT_TYPE_NAT_REV` (`conntrack.h`) and consumed only by the
+  service/NodePort return-encap paths
+  (`dnat_return_should_encap()`). Normal (non-NAT) entries never
+  populate it.
+
+- **`CALI_CT_FLAG_OVERLAY_REPLY` (normal entries).** With
+  `BPFOverlayHostSourceIP=HostAddress` the tunnel device has no IP,
+  so a host-networked client's request arrives over the overlay
+  with the node IP as its inner source. The workload's reply then
+  targets a bare remote node IP — a `CALI_RT_HOST` route, which is
+  *not* tunneled — and would leave the node un-encapsulated with a
+  pod-CIDR source, which a source-checking fabric (e.g. GCP) drops.
+  The flag is set at conntrack creation on ingress of a Calico-owned
+  encapsulating device (`IFACE_ENCAPS && CALI_F_FROM_HEP`). That scopes
+  the flag to overlay ingress and excludes `tunnel=none` (host→pod
+  arrives on the main host endpoint, with no tunnel to re-encapsulate
+  into). It is
+  further gated on HostAddress mode (absent tunnel IP) and a remote-host
+  inner source, which restricts it to host-originated flows. It is read
+  on the reply's workload-egress path, where it forces the overlay encap
+  even though the destination route is a bare host. It carries no
+  address: a remote-host route already holds the node IP as its
+  `next_hop`, which is the tunnel endpoint (equivalently, the reply
+  re-encaps to its own destination). This is deliberately *not*
+  `tun_ip` — that field's meaning is NodePort/service-specific and must
+  stay so.
+
+### The forwarding hint on a leg
+
+Each leg records the ifindex where that direction's packets ingress, and
+the *opposite* direction reads it as an egress hint
+(`result.ifindex_fwd`) so it can `bpf_redirect` without a FIB lookup.
+That equivalence holds only while a flow is symmetric.
+
+Two flags (`CALI_CT_LEG_*` in `conntrack_types.h`) make the hint
+self-describing rather than assumed:
+
+- **`TUNNEL`** — the recorded device is a validated egress for this
+  flow's encap-flagged destinations. A hint without it must not be used
+  for an encap destination: `bpf_redirect` writes no headers, so a
+  physical device ignores the tunnel key and puts the raw inner frame on
+  the wire. The consumer pairs `cali_rt_needs_tunnel_egress` (does this
+  destination need encap right now?) with this flag (can the recorded
+  device perform it?). Only whoever has authority over the device writes
+  it: the program attached to it for an ingress record, the validator
+  for a leg it pinned. An attached program reads the device's nature
+  from its own `IFACE_ENCAPS` global; the compiled object cannot say,
+  since wireguard and a plain L3-classified NIC share the `l3` object.
+- **`PINNED`** — the ifindex is a resolved egress for the opposite
+  direction, not this direction's ingress record.
+
+A hint is repaired at two points, both while the entry is held. From the
+reply side, once per leg generation (`CALI_CT_LEG_CHECKED`): where the
+destination needs encapsulation and the hint is not a tunnel, the egress
+is resolved by FIB and pinned, but only onto a device that encapsulates
+(per its ifstate flags). That is the asymmetrically-routed flow —
+natively-routed forward, tunneled reply — whose reply would otherwise
+leave a physical NIC raw; NAT'd flows validate against the post-NAT
+destination. From the forward side, in the loose-RPF arm: `hep_rpf_check`
+has just computed the device that reaches the packet's source, so it is
+recorded rather than discarded.
+
+Neither writer names a device on a `tun_ip` flow's leg: that hint is half
+of the `{tun_ip, ifindex}` ARP-map key of the return-encap fast path, so
+route inference must not write it. The loose arm still discards a record
+the packet contradicts.
+
+Stale state heals from packets: a route move re-pins via the loose arm,
+and a packet confirming the recorded ingress refreshes the leg's claims
+from the program's own provenance. A flow whose forward traffic has
+stopped never re-enters the reconcile, so only a userspace scanner can
+repair it.
 
 ### Cleanup: three layers
 
@@ -220,6 +316,11 @@ and the Go-side reader must agree on units and reference clock.
   (`cali_v4_ct`/`cali_v6_ct` have `Version: 4` at the time of
   writing). The kernel refuses to pin two layouts under the same
   name, and older Felixes reading a newer map will misparse.
+- A flag change on a *live* conntrack entry must be an atomic set
+  or clear, never a read-modify-write: both directions of a flow,
+  and parallel packets on other CPUs, write the same per-leg and
+  per-value flag words. The create path is exempt, as it fills the
+  entry on the stack and publishes it in one update.
 - A new scanner should return the smallest verdict that does the job
   (`ScanVerdictOK` for no-op) and should be idempotent across
   iterations. Scanners may be called once or many times per sweep
@@ -269,7 +370,7 @@ unambiguously a mid-flow packet. BPF and `*tables` cooperate to let
 it through:
 
 - On host ingress, a BPF program that sees a mid-flow TCP miss sets
-  `CALI_SKB_MARK_FALLTHROUGH` on the packet (`bpf.h` enum
+  `CALI_SKB_MARK_FALLTHROUGH` on the packet (`cali_bpf.h` enum
   `calico_skb_mark`) and returns `TC_ACT_UNSPEC`, letting the packet
   continue into netfilter.
 - Felix installs a rule
@@ -381,7 +482,7 @@ comment: "Mark traffic towards the host - it is TRACKed"
 
 The mark is `tcdefs.MarkSeenSkipFIB`, which equals
 `CALI_SKB_MARK_SKIP_FIB` on the BPF side
-(see `felix/bpf-gpl/bpf.h` `enum calico_skb_mark`). Because this
+(see `felix/bpf-gpl/cali_bpf.h` `enum calico_skb_mark`). Because this
 happens in raw-PREROUTING, it runs _before_ any DNAT chain, so the
 destination is still the host IP at match time.
 

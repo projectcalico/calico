@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
+
+var _ DryRunClient = (*customResourceClient)(nil)
 
 // customResourceClient implements the K8sResourceClient interface and provides a generic
 // mechanism for a 1:1 mapping between a Calico Resource and an equivalent Kubernetes
@@ -105,11 +107,11 @@ func (c *customResourceClient) Create(ctx context.Context, kvp *model.KVPair) (*
 	// Send the update request using the REST interface.
 	resOut := reflect.New(c.k8sResourceType).Interface().(Resource)
 	namespace := kvp.Key.(model.ResourceKey).Namespace
-	err = c.restClient.Post().
+	req := c.restClient.Post().
 		NamespaceIfScoped(namespace, c.namespaced).
 		Resource(c.resource).
-		Body(resIn).
-		Do(ctx).Into(resOut)
+		Body(resIn)
+	err = dryRunRequest(ctx, req).Do(ctx).Into(resOut)
 	if err != nil {
 		logContext.WithError(err).Debug("Error creating resource")
 		return nil, K8sErrorToCalico(err, kvp.Key)
@@ -125,6 +127,20 @@ func (c *customResourceClient) Create(ctx context.Context, kvp *model.KVPair) (*
 	kvp.Revision = resOut.GetObjectMeta().GetResourceVersion()
 
 	return kvp, nil
+}
+
+// SupportsDryRun reports that Create, Update and UpdateStatus honor api.WithDryRun.
+func (c *customResourceClient) SupportsDryRun() bool {
+	return true
+}
+
+// dryRunRequest asks the Kubernetes API server to run a write through its full
+// validation and admission chain without persisting it, when ctx is a dry run.
+func dryRunRequest(ctx context.Context, req *rest.Request) *rest.Request {
+	if api.IsDryRun(ctx) {
+		return req.Param("dryRun", metav1.DryRunAll)
+	}
+	return req
 }
 
 // Update updates an existing Custom K8s Resource instance in the k8s API from the supplied KVPair.
@@ -159,12 +175,12 @@ func (c *customResourceClient) Update(ctx context.Context, kvp *model.KVPair) (*
 	namespace := resIn.GetObjectMeta().GetNamespace()
 	logContext = logContext.WithField("Name", name)
 	logContext.Debug("Update resource by name")
-	updateError = c.restClient.Put().
+	req := c.restClient.Put().
 		Resource(c.resource).
 		NamespaceIfScoped(namespace, c.namespaced).
 		Body(resIn).
-		Name(name).
-		Do(ctx).Into(resOut)
+		Name(name)
+	updateError = dryRunRequest(ctx, req).Do(ctx).Into(resOut)
 	if updateError != nil {
 		// Failed to update the resource. Log at debug to avoid spammy warnings
 		// for CAS errors and the like, which need to bubble up for handling.
@@ -209,13 +225,13 @@ func (c *customResourceClient) UpdateStatus(ctx context.Context, kvp *model.KVPa
 	namespace := resIn.GetObjectMeta().GetNamespace()
 	logContext = logContext.WithField("Name", name)
 	logContext.Debug("Update resource status by name")
-	updateError = c.restClient.Put().
+	req := c.restClient.Put().
 		Resource(c.resource).
 		SubResource("status").
 		NamespaceIfScoped(namespace, c.namespaced).
 		Body(resIn).
-		Name(name).
-		Do(ctx).Into(resOut)
+		Name(name)
+	updateError = dryRunRequest(ctx, req).Do(ctx).Into(resOut)
 	if updateError != nil {
 		// Failed to update the resource.
 		logContext.WithError(updateError).Error("Error updating resource status")

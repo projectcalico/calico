@@ -61,7 +61,9 @@ func (v *ValidationFilter) OnUpdates(updates []api.Update) {
 			if val.Kind() == reflect.Pointer {
 				elem := val.Elem()
 				if elem.Kind() == reflect.Struct {
-					if err := validatorFunc(elem.Interface()); err != nil {
+					// Validate the pointer: the CRD schema and CEL checks only run
+					// for a runtime.Object, which the dereferenced struct is not.
+					if err := validatorFunc(val.Interface()); err != nil {
 						logCxt.WithError(err).Warn("Validation failed; treating as missing")
 						update.Value = nil
 					}

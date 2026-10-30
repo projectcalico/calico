@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/branch"
-	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
 )
 
@@ -40,7 +40,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 		// Cut a new release branch
 		{
 			Name:  "cut",
-			Usage: fmt.Sprintf("Cut a new release branch from %s", utils.DefaultBranch),
+			Usage: fmt.Sprintf("Cut a new release branch from %s", defaults.Branch),
 			Flags: []cli.Flag{
 				orgFlag,
 				repoFlag,
@@ -48,7 +48,6 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 				mainBranchFlag,
 				releaseBranchPrefixFlag,
 				devTagSuffixFlag,
-				operatorBranchFlag,
 				localFlag,
 				validationFlag,
 				planFlag,
@@ -57,23 +56,25 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("branch-cut.log")
 
-				calicoManager := calico.NewManager(
+				calicoManager, err := calico.NewManager(
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
-					calico.WithOperatorBranch(c.String(operatorBranchFlag.Name)),
 					calico.WithMainBranch(c.String(mainBranchFlag.Name)),
 					calico.WithDevTagIdentifier(c.String(devTagSuffixFlag.Name)),
 					calico.WithValidation(c.Bool(validationFlag.Name)),
-					calico.WithGitRef(!c.Bool(localFlag.Name)),
+					calico.WithDryRun(c.Bool(localFlag.Name)),
 					calico.WithBranchCutOptions(calico.CutOptions{
 						Plan:        c.Bool(planFlag.Name),
 						Skip:        skipSet(c.StringSlice(skipFlagName)),
 						BranchCheck: c.Bool(branchCheckFlagName),
 					}),
 				)
+				if err != nil {
+					return fmt.Errorf("calico manager: %w", err)
+				}
 
 				return calicoManager.CutBranch()
 			},

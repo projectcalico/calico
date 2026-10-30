@@ -424,12 +424,13 @@ When set to FirstResponseAfterLog, each connection whose initial log was emitted
 follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
 transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
 RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
-port unreachable). The log body is the standard kernel packet log of the response packet,
-so the flow is identified by its 5-tuple and can be correlated with the original policy Log
-line (with source and destination swapped). A logged connection with no follow-up log never
-received a response. Connections whose initial log was suppressed by LogActionRateLimit get
-no follow-up log either, so every follow-up log pairs with an initial one. Enabling this
-consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+port unreachable). The log body is the standard kernel packet log of the response packet.
+For "-est" and "-rst" its 5-tuple is the original policy Log line's with source and
+destination swapped; for "-icmp-err" the bracketed inner header carries the original
+5-tuple unswapped. A logged connection with no follow-up log never received a response.
+Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log
+either, so every follow-up log pairs with an initial one. Enabling this consumes one bit
+from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
 
 | Detail |   |
 | --- | --- |
@@ -451,10 +452,10 @@ substituted and any %-specifiers are rendered literally.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogConnectionTransitionsPrefix` |
-| Encoding (env var/config file) | String |
+| Encoding (env var/config file) | String matching regex <code>^[a-zA-Z0-9%: /_-]*$</code> |
 | Default value (above encoding) | `calico-response` |
 | `FelixConfiguration` field | `logConnectionTransitionsPrefix` (YAML) `LogConnectionTransitionsPrefix` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | String matching the regular expression <code>^([a-zA-Z0-9%: /_-])*$</code>. |
 | Default value (YAML) | `calico-response` |
 
 ### `LogDebugFilenameRegex` (config file) / `logDebugFilenameRegex` (YAML)
@@ -2273,8 +2274,8 @@ for cleanup. This should be big enough to hold all the NAT entries that expire w
 ### `BPFMapSizeConntrackScaling` (config file) / `bpfMapSizeConntrackScaling` (YAML)
 
 Controls whether and how we scale the conntrack map size depending
-on its usage. 'Disabled' make the size stay at the default or whatever is set by
-BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even
+on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size.
+'DoubleIfFull' doubles the size of an IP family's map when it is more than 80% full
 after cleanups.
 
 | Detail |   |
@@ -2705,6 +2706,37 @@ The UDP port number to use for VXLAN traffic.
 | `FelixConfiguration` schema | Integer |
 | Default value (YAML) | `4789` |
 
+### `VXLANSrcPortMax` (config file) / `vxlanSrcPortMax` (YAML)
+
+The upper bound (inclusive) of the UDP source port range used by Felix for outgoing
+VXLAN-encapsulated traffic. See VXLANSrcPortMin.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_VXLANSrcPortMax` |
+| Encoding (env var/config file) | Integer: [0,65535] |
+| Default value (above encoding) | `0` |
+| `FelixConfiguration` field | `vxlanSrcPortMax` (YAML) `VXLANSrcPortMax` (Go API) |
+| `FelixConfiguration` schema | Integer: [0,65535] |
+| Default value (YAML) | `0` |
+
+### `VXLANSrcPortMin` (config file) / `vxlanSrcPortMin` (YAML)
+
+The lower bound (inclusive) of the UDP source port range used by Felix for outgoing
+VXLAN-encapsulated traffic. If both VXLANSrcPortMin and VXLANSrcPortMax are set, the kernel VXLAN tunnel
+device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANSrcPortMin, VXLANSrcPortMax].
+VXLANSrcPortMin must be strictly less than VXLANSrcPortMax.
+If unset (or zero), the kernel/dataplane default is used.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_VXLANSrcPortMin` |
+| Encoding (env var/config file) | Integer: [0,65535] |
+| Default value (above encoding) | `0` |
+| `FelixConfiguration` field | `vxlanSrcPortMin` (YAML) `VXLANSrcPortMin` (Go API) |
+| `FelixConfiguration` schema | Integer: [0,65535] |
+| Default value (YAML) | `0` |
+
 ### `VXLANVNI` (config file) / `vxlanVNI` (YAML)
 
 The VXLAN VNI to use for VXLAN traffic. You may need to change this if the default value is
@@ -2942,6 +2974,20 @@ Configures the interval at which Felix exports flow logs.
 | `FelixConfiguration` field | `flowLogsFlushInterval` (YAML) `FlowLogsFlushInterval` (Go API) |
 | `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `5m0s` |
+
+### `FlowLogsGoldmaneIncludeIPs` (config file) / `flowLogsGoldmaneIncludeIPs` (YAML)
+
+Controls whether flow data sent to Goldmane (and the local flow
+reporter) includes the source and destination IP addresses of the aggregated connections.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_FlowLogsGoldmaneIncludeIPs` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
+| Default value (above encoding) | `Enabled` |
+| `FelixConfiguration` field | `flowLogsGoldmaneIncludeIPs` (YAML) `FlowLogsGoldmaneIncludeIPs` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Enabled` |
 
 ### `FlowLogsGoldmaneServer` (config file) / `flowLogsGoldmaneServer` (YAML)
 

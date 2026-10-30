@@ -1,11 +1,9 @@
-# Keep generated and pinned-upstream content in sync. Pulls operator CRDs from
-# tigera/operator, regenerates all generated files (make generate), and bumps
-# the bundled CNI plugin pin to the latest upstream commit. Opens or updates a
-# single PR per branch carrying whatever drifted.
+# Keep generated files in sync. Regenerates them (make generate) and opens or
+# updates a single PR per branch carrying whatever drifted.
 #
 # Runs hourly, but a cheap drift check up front skips the heavy regen unless
-# something actually changed: a recent merge, an operator CRD update, or the CNI
-# pin falling behind upstream.
+# something actually changed: a recent merge or, on a release branch, an
+# operator CRD update.
 ---
 name: Sync upstream
 on:  # yamllint disable-line rule:truthy
@@ -27,14 +25,16 @@ jobs:
       - name: Discover branches
         id: branches
         run: |
-          # Get master + the two most recent release branches (by semver).
+          # Get master + the three most recent release branches (by semver).
+          # Three because the oldest of them still gets hashreleases, and those
+          # gate on check-dirty.
           # Pipe to jq separately so --slurp combines all pages before filtering.
           # Using --jq with --paginate applies the filter per-page, which can
           # produce multiple JSON arrays and break $GITHUB_OUTPUT.
           branches=$(gh api repos/${{ github.repository }}/branches --paginate | jq -sc '
             [flatten[] | select(.name | test("^release-v[0-9]+\\.[0-9]+$")) | .name]
             | sort_by(ltrimstr("release-v") | split(".") | map(tonumber))
-            | .[-2:]
+            | .[-3:]
             | ["master"] + .
           ')
           echo "branches=${branches}" >> "$GITHUB_OUTPUT"
@@ -52,7 +52,7 @@ jobs:
       matrix:
         branch: ${{ fromJson(needs.discover-branches.outputs.branches) }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ matrix.branch }}
           # Full history so generators that use git describe / changed-file
@@ -62,11 +62,9 @@ jobs:
 
       - name: Check for drift
         id: drift
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          recent=false; operator=false; cni=false; cni_sha=
+          recent=false; operator=false
 
           force=false
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -81,70 +79,56 @@ jobs:
             recent=true
           fi
 
-          # operator: reuse the same fetch the generate target uses, minus the
-          # Docker-based formatting (SKIP_FIX_CHANGED), then see if anything
-          # changed. Revert the probe's writes; the real run redoes them.
-          make get-operator-crds SKIP_FIX_CHANGED=true
-          if [ "$force" = true ] || ! git diff --quiet; then
-            operator=true
-          fi
-          git checkout -- .
-
-          # cni: pin behind upstream. Capture the target SHA here so the bump
-          # step doesn't have to query again (and can't race a moving upstream).
-          repo=projectcalico/containernetworking-plugins
-          db=$(gh api "repos/$repo" -q .default_branch)
-          cni_sha=$(gh api "repos/$repo/commits/$db" -q .sha)
-          cur=$(grep '^CNI_VERSION=' metadata.mk | cut -d= -f2)
-          if [ "$force" = true ] || [ "$cni_sha" != "$cur" ]; then
-            cni=true
+          # operator: release branches curl the operator's CRDs from
+          # tigera/operator, so they drift on the operator's schedule, not this
+          # branch's. Master has no such target -- it builds them in tree. Probe
+          # with SKIP_FIX_CHANGED so it stays Docker-free, then revert the
+          # probe's writes; the real run redoes them.
+          if grep -q '^get-operator-crds:' Makefile; then
+            make get-operator-crds SKIP_FIX_CHANGED=true
+            if [ "$force" = true ] || ! git diff --quiet; then
+              operator=true
+            fi
+            git checkout -- .
           fi
 
-          echo "drift: recent=$recent operator=$operator cni=$cni"
+          echo "drift: recent=$recent operator=$operator"
           {
             echo "recent=$recent"
             echo "operator=$operator"
-            echo "cni=$cni"
-            echo "cni_sha=$cni_sha"
           } >> "$GITHUB_OUTPUT"
 
       # make generate is the heavy step, so it only runs when something it
-      # actually regenerates drifted. A CNI-only bump skips it entirely.
+      # actually regenerates drifted.
       - name: Install tools
         if: steps.drift.outputs.recent == 'true' || steps.drift.outputs.operator == 'true'
         run: make bin/helm bin/yq
 
-      - name: Bump CNI plugin pin
-        # Only CNI_VERSION; FLANNEL_VERSION is a release tag with the Go toolchain
-        # baked into the name, so we don't auto-bump it. CNI_VERSION is a build-time
-        # clone ref, not baked into any generated file, so this needs no regen. A
-        # bump that doesn't build is caught by the PR's normal CI, so it can't merge.
-        if: steps.drift.outputs.cni == 'true'
-        env:
-          CNI_SHA: ${{ steps.drift.outputs.cni_sha }}
-        run: |
-          echo "Bumping CNI_VERSION to $CNI_SHA"
-          sed -i "s/^CNI_VERSION=.*/CNI_VERSION=$CNI_SHA/" metadata.mk
+      # Only release branches have this target, and only some of them fold it
+      # into generate, so run it explicitly. It has to come first either way:
+      # gen-manifests reads the CRDs it writes.
+      - name: Sync operator CRDs
+        if: steps.drift.outputs.operator == 'true'
+        run: make get-operator-crds
 
       - name: Regenerate
         if: steps.drift.outputs.recent == 'true' || steps.drift.outputs.operator == 'true'
         run: make generate
 
-      - uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
-        if: steps.drift.outputs.recent == 'true' || steps.drift.outputs.operator == 'true' || steps.drift.outputs.cni == 'true'
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        if: steps.drift.outputs.recent == 'true' || steps.drift.outputs.operator == 'true'
         id: cpr
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "Sync upstream: operator CRDs, generated files, CNI pin"
+          commit-message: "Sync upstream: generated files"
           branch: auto-sync-upstream-${{ matrix.branch }}
           base: ${{ matrix.branch }}
           title: "Auto: sync upstream into [${{ matrix.branch }}]"
           body: |
             Automated sync into `${{ matrix.branch }}`:
 
-            - Operator CRDs from `tigera/operator`
+            - Operator CRDs pulled from `tigera/operator` (release branches only)
             - Regenerated files (`make generate`)
-            - CNI plugin pin (`CNI_VERSION`) bumped to the latest upstream commit
 
             Only the bits that actually drifted show up in the diff. Triggered by
             scheduled workflow.

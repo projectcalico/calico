@@ -36,12 +36,12 @@ import (
 
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	operatorv1 "github.com/tigera/operator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 const (
@@ -299,6 +299,9 @@ func evictCalicoNodeFrom(
 				setLabel(ctx, n.Name, false)
 			}
 		}
+		// The other nodes' pods are already ready, so wait for the operator to schedule this one first.
+		g.Eventually(func() int { return calicoNodePodsOn(ctx, targetNode) }, "3m", "2s").
+			Should(Equal(1), "calico-node did not come back on %s", targetNode)
 		utils.WaitForPodsReady(t, "calico-system", "k8s-app=calico-node", 5*time.Minute)
 	}
 	t.Cleanup(restore)

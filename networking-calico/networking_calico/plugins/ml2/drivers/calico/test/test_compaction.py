@@ -18,13 +18,18 @@ Test compaction code.
 
 import logging
 import os
-import unittest
 
 from etcd3gw.exceptions import Etcd3Exception
 
+import fixtures
+
 import mock
 
-import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
+from oslo_config import cfg
+from oslo_config import fixture as config_fixture
+
+from oslotest import base
+
 from networking_calico import etcdv3
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
 
@@ -46,7 +51,7 @@ class MockLease(object):
             return 30000000
 
 
-class TestCompaction(unittest.TestCase):
+class TestCompaction(base.BaseTestCase):
 
     def setUp(self):
         super(TestCompaction, self).setUp()
@@ -56,22 +61,25 @@ class TestCompaction(unittest.TestCase):
         # Writes succeed by default.
         self.client.put.return_value = True
         # Insinuate our mock lease class.
-        etcdv3.Lease = MockLease
+        self.useFixture(fixtures.MockPatchObject(etcdv3, "Lease", MockLease))
 
         # Hook relevant logging.
-        import logging
-
         for module in [
             mech_calico,
             etcdv3,
         ]:
-            module.LOG = logging.getLogger("\t%-15s\t" % module.__name__.split(".")[-1])
+            logger = logging.getLogger("\t%-15s\t" % module.__name__.split(".")[-1])
+            self.useFixture(fixtures.MockPatchObject(module, "LOG", logger))
 
         self.pid = str(os.getpid())
 
-        # Provide default config.
-        lib.m_oslo_config.cfg.CONF.calico.etcd_compaction_period_mins = 60
-        lib.m_oslo_config.cfg.CONF.calico.etcd_compaction_min_revisions = 1000
+        # The expected revisions and TTLs below are worked out from these.
+        cfg_fixture = self.useFixture(config_fixture.Config(cfg.CONF))
+        cfg_fixture.config(
+            group="calico",
+            etcd_compaction_period_mins=60,
+            etcd_compaction_min_revisions=1000,
+        )
 
     def tearDown(self):
         etcdv3._client = None

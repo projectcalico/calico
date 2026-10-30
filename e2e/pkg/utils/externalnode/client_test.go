@@ -73,7 +73,7 @@ func TestTestsNeedingTheExternalNodeCarryTheLabel(t *testing.T) {
 		t.Fatal("no e2e test calls externalnode.MustNewClient, so this guard checks nothing")
 	}
 	for _, path := range paths {
-		if !fileContains(t, path, "ExternalNode") {
+		if !fileContains(t, path, "describe.WithExternalNode(") {
 			t.Errorf("%s: needs the external node but carries no describe.WithExternalNode label", path)
 		}
 	}

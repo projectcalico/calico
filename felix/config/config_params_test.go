@@ -30,6 +30,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -545,6 +546,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("BPFForceTrackPacketsFromIfaces Single invalid entry", "BPFForceTrackPacketsFromIfaces", "cali@123", []string{"docker+"}),
 	Entry("BPFForceTrackPacketsFromIfaces Multiple invalid entries", "BPFForceTrackPacketsFromIfaces", "cali-123,cali@123", []string{"docker+"}),
 
+	Entry("LogConnectionTransitionsPrefix valid", "LogConnectionTransitionsPrefix", "acme-%n", "acme-%n"),
+	Entry("LogConnectionTransitionsPrefix with quote falls back to default", "LogConnectionTransitionsPrefix", `ab"cd`, "calico-response"),
+
 	Entry("RequireMTUFile valid", "RequireMTUFile", "true", true),
 	Entry("RequireMTUFile valid", "RequireMTUFile", "y", true),
 	Entry("RequireMTUFile valid", "RequireMTUFile", "True", true),
@@ -807,7 +811,48 @@ var _ = DescribeTable("Config validation",
 	Entry("invalid RouteTableRanges", map[string]string{
 		"RouteTableRanges": "abcde",
 	}, false),
+	Entry("VXLAN port range: both unset", map[string]string{}, true),
+	Entry("VXLAN port range: valid min<max", map[string]string{
+		"VXLANSrcPortMin": "49152",
+		"VXLANSrcPortMax": "65535",
+	}, true),
+	Entry("VXLAN port range: min==max", map[string]string{
+		"VXLANSrcPortMin": "12345",
+		"VXLANSrcPortMax": "12345",
+	}, false),
+	Entry("VXLAN port range: only min set", map[string]string{
+		"VXLANSrcPortMin": "49152",
+	}, false),
+	Entry("VXLAN port range: only max set", map[string]string{
+		"VXLANSrcPortMax": "65535",
+	}, false),
+	Entry("VXLAN port range: min > max", map[string]string{
+		"VXLANSrcPortMin": "60000",
+		"VXLANSrcPortMax": "50000",
+	}, false),
 )
+
+var _ = Describe("Config RouteTableRanges", func() {
+	// The dataplane driver hands RouteTableIndices() to NewIndexAllocator, which
+	// sorts the ranges it is given.  If that reordered Felix's own copy of the
+	// config, the next config update would re-parse the raw value in its original
+	// order, see a change, and restart Felix - over and over.
+	const rawRanges = "1-250,1000-1500"
+
+	It("should survive the route-table index allocator without looking changed", func() {
+		conf := config.New()
+		changed, err := conf.UpdateFrom(map[string]string{"RouteTableRanges": rawRanges}, config.DatastoreGlobal)
+		Expect(err).To(Succeed())
+		Expect(changed).To(BeTrue())
+
+		idalloc.NewIndexAllocator(conf.RouteTableIndices(), []idalloc.IndexRange{{Min: 253, Max: 255}})
+
+		changed, err = conf.UpdateFrom(map[string]string{"RouteTableRanges": rawRanges}, config.DatastoreGlobal)
+		Expect(err).To(Succeed())
+		Expect(changed).To(BeFalse(),
+			"re-applying identical config reported a change, which would make Felix restart in a loop")
+	})
+})
 
 var _ = DescribeTable("Config InterfaceExclude",
 	func(excludeList string, expected []*regexp.Regexp) {

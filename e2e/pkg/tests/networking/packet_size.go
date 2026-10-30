@@ -87,21 +87,31 @@ func generatePacketLengths(mtu int) (getLengths, postLengths, udpLengths []int) 
 	return getLengths, postLengths, udpLengths
 }
 
+// measurePodMTU returns the MTU of eth0 in a pod on the given node. Reading it from a pod rather
+// than from the operator's Installation status keeps the packet size tests runnable on
+// manifest-based installs, where the Installation CRD doesn't exist.
+func measurePodMTU(f *framework.Framework, nodeName string) int {
+	ct := conncheck.NewConnectionTester(f)
+	probe := conncheck.NewClient(utils.GenerateRandomName("mtu-probe"), f.Namespace, conncheck.WithClientCustomizer(conncheck.WithNodeName(nodeName)))
+	ct.AddClient(probe)
+	ct.Deploy()
+	defer ct.Stop()
+
+	out, err := conncheck.ExecInPod(probe.Pod(), "sh", "-c", "cat /sys/class/net/eth0/mtu")
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "reading eth0 MTU in the probe pod")
+	mtu, err := strconv.Atoi(strings.TrimSpace(out))
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "parsing eth0 MTU %q", out)
+	return mtu
+}
+
 // withPacketSizeServer is a conncheck server pod customizer that replaces the
 // default image with the multi-mode rapidclient image run as the packet-size
-// server. See images.RapidClientImage for the endpoints the server exposes and
-// the side-load/pull-policy contract.
+// server.
 func withPacketSizeServer(pod *v1.Pod) {
-	image, preloaded := images.RapidClientImage()
 	for i := range pod.Spec.Containers {
-		pod.Spec.Containers[i].Image = image
+		pod.Spec.Containers[i].Image = images.RapidClient
 		pod.Spec.Containers[i].Args = nil
-		// When the image was side-loaded into the nodes' containerd (PR CI on
-		// gcp-kubeadm), it is not in any registry — pin to the loaded copy and
-		// fail loudly if it is somehow absent rather than pulling a stale one.
-		if preloaded {
-			pod.Spec.Containers[i].ImagePullPolicy = v1.PullNever
-		}
+
 		// The rapidclient image is multi-mode; MODE=server selects the HTTP/UDP
 		// dataplane server.
 		pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env,
@@ -127,12 +137,9 @@ var _ = describe.CalicoDescribe(
 			Expect(nodeIPs).NotTo(BeEmpty(),
 				"packet size tests require a node with an IPv4 address")
 
-			// Sample packet sizes densely around the cluster's effective pod MTU.
-			// The MTU is derived from the Installation status so the test tracks
-			// whatever encapsulation / WireGuard config is in use.
-			mtu := utils.ExpectedPodMTU(f)
-			Expect(mtu).NotTo(BeNil(), "could not detect pod MTU from Installation status")
-			getLengths, postLengths, udpLengths := generatePacketLengths(int(*mtu))
+			// Sample packet sizes densely around the cluster's effective pod MTU, measured from
+			// a pod so the test tracks whatever encapsulation and WireGuard config is in use.
+			getLengths, postLengths, udpLengths := generatePacketLengths(measurePodMTU(f, nodeNames[0]))
 
 			var serverNode string
 			if sameNode {

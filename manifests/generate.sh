@@ -80,7 +80,7 @@ ${HELM} -n tigera-operator template \
 # This manifest is used in "Calico the hard way" documentation.
 ##########################################################################
 echo "# CustomResourceDefinitions for Calico the Hard Way" > crds.yaml
-for FILE in $(ls ../charts/calico/crds); do
+for FILE in $(ls ../charts/calico/crds/*.yaml | xargs -n1 basename); do
 	${HELM} template ../charts/calico \
 		--include-crds \
 		--show-only "crds/$FILE" \
@@ -94,13 +94,20 @@ done
 ##########################################################################
 # Build manifest which includes both Calico and Operator CRDs.
 ##########################################################################
+# The operator CRDs a Calico install ships come from the operator's own generated
+# copies. A test asserts this list matches what the operator installs.
+OPERATOR_CRD_DIR=../operator/pkg/crds/operator
+append_operator_crds() {
+	local out=$1
+	for FILE in $(grep -v '^#' ../operator/pkg/crds/calico_operator_crds.txt); do
+		echo "---" >> $out
+		echo "# Source: operator/pkg/crds/operator/$FILE" >> $out
+		cat $OPERATOR_CRD_DIR/$FILE >> $out
+	done
+}
+
 echo "# crd.projectcalico.org/v1 and operator.tigera.io/v1 APIs" > v1_crd_projectcalico_org.yaml
-for FILE in $(ls ../charts/crd.projectcalico.org.v1/templates/*.yaml | xargs -n1 basename); do
-	${HELM} template \
-		--show-only templates/$FILE \
-		--set version=$CALICO_VERSION \
-		../charts/crd.projectcalico.org.v1 >> v1_crd_projectcalico_org.yaml
-done
+append_operator_crds v1_crd_projectcalico_org.yaml
 for FILE in $(ls ../charts/crd.projectcalico.org.v1/templates/calico/*.yaml | xargs -n1 basename); do
 	${HELM} template \
 		--show-only templates/calico/$FILE \
@@ -122,13 +129,16 @@ generate_v3_bundle() {
 	local out=$1
 	local map_version=$2
 	echo "# projectcalico.org/v3 and operator.tigera.io/v1 APIs" > $out
-	for FILE in $(ls ../charts/projectcalico.org.v3/templates/*.yaml | xargs -n1 basename); do
+
+	# The chart links the operator CRDs in for Helm installs; append_operator_crds adds them here.
+	for FILE in $(ls ../charts/projectcalico.org.v3/templates/*.yaml | xargs -n1 basename | grep -v '^operator\.tigera\.io_'); do
 		${HELM} template \
 			--show-only templates/$FILE \
 			--set version=$CALICO_VERSION \
 			--api-versions admissionregistration.k8s.io/$map_version/MutatingAdmissionPolicy \
 			../charts/projectcalico.org.v3 >> $out
 	done
+	append_operator_crds $out
 	for FILE in $(ls ../charts/projectcalico.org.v3/templates/calico/*.yaml | xargs -n1 basename); do
 		${HELM} template \
 			--show-only templates/calico/$FILE \
@@ -156,7 +166,9 @@ for FILE in $VALUES_FILES; do
 		-f ../charts/values/$FILE > $FILE
 done
 
-# calico-v3-crds.yaml is the only values file with admission policies, so it also needs a v1beta1 build.
+# Only calico-v3-crds.yaml gets a v1beta1 build, for its v3 admission policies. The other manifests
+# carry strip-cni-annotations at v1 only: on Kubernetes 1.34 and 1.35 that document fails to apply,
+# and pods created with the protected CNI annotations are refused instead of having them stripped.
 ${HELM} -n kube-system template \
 	../charts/calico \
 	--set version=$CALICO_VERSION \

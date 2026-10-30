@@ -20,22 +20,41 @@ limitations under the License.
 package windows
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/types"
 )
+
+const windowsLabel = "RunsOnWindows"
 
 // ClusterIsWindows returns true if the cluster supports running Windows tests and false otherwise.
 //
-// TODO: Right now, we assume that the presence of "RunsOnWindows" in the focus strings means
-// that the tests are running on a Windows cluster. This isn't necessarily true. We could be more
-// precise by either checking the cluster itself, or adding a CLi flag to control this behavior.
+// TODO: Right now, we infer this from the run selecting specs by "RunsOnWindows". This isn't
+// necessarily true. We could be more precise by either checking the cluster itself, or adding a
+// CLI flag to control this behavior.
 func ClusterIsWindows() bool {
 	cfg, _ := ginkgo.GinkgoConfiguration()
-	for _, s := range cfg.FocusStrings {
-		if strings.Contains(s, "RunsOnWindows") {
+	return selectsWindows(cfg.FocusStrings, cfg.LabelFilter, ginkgo.CurrentSpecReport().Labels())
+}
+
+// selectsWindows reports whether the run selects specs by the Windows label, either via a focus
+// string or via a label filter that would reject the current spec without it. Evaluating the
+// filter, rather than searching it for the label, keeps a negated "!RunsOnWindows" from counting.
+func selectsWindows(focusStrings []string, labelFilter string, specLabels []string) bool {
+	for _, s := range focusStrings {
+		if strings.Contains(s, windowsLabel) {
 			return true
 		}
 	}
-	return false
+	if labelFilter == "" || !slices.Contains(specLabels, windowsLabel) {
+		return false
+	}
+	filter, err := types.ParseLabelFilter(labelFilter)
+	if err != nil {
+		return false
+	}
+	without := slices.DeleteFunc(slices.Clone(specLabels), func(l string) bool { return l == windowsLabel })
+	return !filter(without)
 }

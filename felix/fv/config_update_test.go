@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -255,10 +255,11 @@ var _ = infrastructure.DatastoreDescribe("Config update tests, after starting fe
 })
 
 func waitForFelixInSync(felix *infrastructure.Felix) {
-	// The datastore should transition to in-sync.
+	// The datastore should transition to in-sync. Callers often wait just after a Felix restart, so
+	// leave room for a full startup and resync.
 	Eventually(func() (int, error) {
 		return metrics.GetFelixMetricInt(felix.IP, "felix_resync_state")
-	}, "2s").Should(Equal(3 /* in-sync */))
+	}, "10s", "100ms").Should(Equal(3), "Felix did not report in-sync (resync state 3)")
 	// And then we should see at least one apply to the dataplane.
 	// The initial resync time gauge is set after the first apply; subsequent
 	// applies are tracked by the separate apply_time summary.

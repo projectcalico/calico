@@ -80,7 +80,9 @@ To run a single test:
 - Temporarily change the `It()` block in the file to `FIt()` to "focus" the test.
 - Run the test in iptables mode:
   `make -C felix fv GINKGO_ARGS="-ginkgo.v"`
-- Run the test in eBPF mode with iptables (only tests marked BPF-SAFE should be run in this mode):
+- Run the test in eBPF mode with iptables (in CI, only tests whose name contains
+  `_BPF-SAFE_` or `_BPF_` run in this mode; name a new BPF-mode test accordingly or
+  CI will never run it):
   `make -C felix fv-bpf GINKGO_ARGS="-ginkgo.v"`
 - Run the test in nftables mode:
   `make -C felix fv(-bpf) GINKGO_ARGS="-ginkgo.v" FELIX_FV_NFTABLES=Enabled`
@@ -249,7 +251,7 @@ Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-no
 - The PR description discloses the assistance - the PR template has an **AI assistance** line for it.
 - Never add an AI co-author or `Assisted-By:` trailer to a commit.
 - The human author has to be able to explain the change without you, so leave the code and the PR description in a state they can defend.
-- Don't reply to review comments on their behalf.
+- On review threads, the only reply you may post for them is one that points at the fix commit ("Done in abc1234"). Explanations, pushback, and questions about review feedback come from the human.
 
 ## Documentation map
 

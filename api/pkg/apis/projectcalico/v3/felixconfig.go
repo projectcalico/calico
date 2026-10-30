@@ -416,12 +416,13 @@ type FelixConfigurationSpec struct {
 	// follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
 	// transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
 	// RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
-	// port unreachable). The log body is the standard kernel packet log of the response packet,
-	// so the flow is identified by its 5-tuple and can be correlated with the original policy Log
-	// line (with source and destination swapped). A logged connection with no follow-up log never
-	// received a response. Connections whose initial log was suppressed by LogActionRateLimit get
-	// no follow-up log either, so every follow-up log pairs with an initial one. Enabling this
-	// consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+	// port unreachable). The log body is the standard kernel packet log of the response packet.
+	// For "-est" and "-rst" its 5-tuple is the original policy Log line's with source and
+	// destination swapped; for "-icmp-err" the bracketed inner header carries the original
+	// 5-tuple unswapped. A logged connection with no follow-up log never received a response.
+	// Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log
+	// either, so every follow-up log pairs with an initial one. Enabling this consumes one bit
+	// from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
 	// [Default: Disabled]
 	// +optional
 	LogConnectionTransitions *LogConnectionTransitionsMode `json:"logConnectionTransitions,omitempty" validate:"omitempty,oneof=Disabled FirstResponseAfterLog"`
@@ -432,6 +433,7 @@ type FelixConfigurationSpec struct {
 	// rules that emit these logs are shared by all policies, so per-policy values cannot be
 	// substituted and any %-specifiers are rendered literally. [Default: calico-response]
 	// +optional
+	// +kubebuilder:validation:Pattern=`^([a-zA-Z0-9%: /_-])*$`
 	LogConnectionTransitionsPrefix string `json:"logConnectionTransitionsPrefix,omitempty"`
 
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
@@ -477,6 +479,23 @@ type FelixConfigurationSpec struct {
 
 	// VXLANPort is the UDP port number to use for VXLAN traffic. [Default: 4789]
 	VXLANPort *int `json:"vxlanPort,omitempty"`
+
+	// VXLANSrcPortMin is the lower bound (inclusive) of the UDP source port range used by Felix for outgoing
+	// VXLAN-encapsulated traffic. If both VXLANSrcPortMin and VXLANSrcPortMax are set, the kernel VXLAN tunnel
+	// device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANSrcPortMin, VXLANSrcPortMax].
+	// VXLANSrcPortMin must be strictly less than VXLANSrcPortMax.
+	// If unset (or zero), the kernel/dataplane default is used. [Default: 0 (unset)]
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
+	VXLANSrcPortMin *int `json:"vxlanSrcPortMin,omitempty"`
+
+	// VXLANSrcPortMax is the upper bound (inclusive) of the UDP source port range used by Felix for outgoing
+	// VXLAN-encapsulated traffic. See VXLANSrcPortMin. [Default: 0 (unset)]
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
+	VXLANSrcPortMax *int `json:"vxlanSrcPortMax,omitempty"`
 
 	// VXLANVNI is the VXLAN VNI to use for VXLAN traffic.  You may need to change this if the default value is
 	// in use on your system. [Default: 4096]
@@ -682,6 +701,7 @@ type FelixConfigurationSpec struct {
 	//
 	// [Default: EnabledIPIPOnly]
 	// +kubebuilder:validation:Enum=Enabled;Disabled;EnabledIPIPOnly;EnabledNoEncapOnly
+	// +kubebuilder:default=EnabledIPIPOnly
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
@@ -726,6 +746,8 @@ type FelixConfigurationSpec struct {
 
 	// DebugPort if set, enables Felix's debug HTTP port, which allows memory and CPU profiles
 	// to be retrieved.  The debug port is not secure, it should not be exposed to the internet.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
 	DebugPort *int `json:"debugPort,omitempty" validate:"omitempty,gte=0,lte=65535"`
 
 	// This parameter can be used to limit the host interfaces on which Calico will apply SNAT to traffic leaving a
@@ -820,7 +842,7 @@ type FelixConfigurationSpec struct {
 	// [Default: Off].
 	// +optional
 	// +kubebuilder:validation:Pattern=`^(?i)(Off|Info|Debug)?$`
-	BPFLogLevel string `json:"bpfLogLevel"`
+	BPFLogLevel string `json:"bpfLogLevel,omitempty"`
 
 	// BPFConntrackLogLevel controls the log level of the BPF conntrack cleanup program, which runs periodically
 	// to clean up expired BPF conntrack entries.
@@ -903,10 +925,12 @@ type FelixConfigurationSpec struct {
 	// balancer. The connect-time load balancer is required for the host to be able to reach Kubernetes services
 	// and it improves the performance of pod-to-service connections.When set to TCP, connect time load balancing
 	// is available only for services with TCP ports. [Default: TCP]
+	// +kubebuilder:default=TCP
 	BPFConnectTimeLoadBalancing *BPFConnectTimeLBType `json:"bpfConnectTimeLoadBalancing,omitempty" validate:"omitempty,oneof=TCP Enabled Disabled"`
 
 	// BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing
 	// determines the CTLB behavior. [Default: Enabled]
+	// +kubebuilder:default=Enabled
 	BPFHostNetworkedNATWithoutCTLB *BPFHostNetworkedNATType `json:"bpfHostNetworkedNATWithoutCTLB,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
 	// BPFExternalServiceMode in BPF mode, controls how connections from outside the cluster to services (node ports
@@ -925,6 +949,8 @@ type FelixConfigurationSpec struct {
 	// BPFExtToServiceConnmark in BPF mode, controls a 32bit mark that is set on connections from an
 	// external client to a local service. This mark allows us to control how packets of that
 	// connection are routed within the host and how is routing interpreted by RPF check. [Default: 0]
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=4294967295
 	BPFExtToServiceConnmark *int `json:"bpfExtToServiceConnmark,omitempty" validate:"omitempty,gte=0,lte=4294967295"`
 
 	// BPFKubeProxyIptablesCleanupEnabled, if enabled in BPF mode, Felix will proactively clean up the upstream
@@ -941,6 +967,8 @@ type FelixConfigurationSpec struct {
 	// BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
 	// The health check server is used by external load balancers to determine if this node should receive traffic.
 	// Set to 0 to disable the health check server.  [Default: 10256]
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
 	BPFKubeProxyHealthzPort *int `json:"bpfKubeProxyHealthzPort,omitempty" validate:"omitempty,gte=0,lte=65535" confignamev1:"BPFKubeProxyHealthzPort"`
 
 	// BPFPSNATPorts sets the range from which we randomly pick a port if there is a source port
@@ -981,8 +1009,8 @@ type FelixConfigurationSpec struct {
 	BPFMapSizePerCPUConntrack *int `json:"bpfMapSizePerCpuConntrack,omitempty"`
 
 	// BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending
-	// on its usage. 'Disabled' make the size stay at the default or whatever is set by
-	// BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even
+	// on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size.
+	// 'DoubleIfFull' doubles the size of an IP family's map when it is more than 80% full
 	// after cleanups. [Default: DoubleIfFull]
 	// +kubebuilder:validation:Pattern=`^(?i)(Disabled|DoubleIfFull)?$`
 	BPFMapSizeConntrackScaling string `json:"bpfMapSizeConntrackScaling,omitempty"`
@@ -1094,6 +1122,12 @@ type FelixConfigurationSpec struct {
 	// FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
 	FlowLogsGoldmaneServer *string `json:"flowLogsGoldmaneServer,omitempty"`
 
+	// FlowLogsGoldmaneIncludeIPs controls whether flow data sent to Goldmane (and the local flow
+	// reporter) includes the source and destination IP addresses of the aggregated connections.
+	// [Default: Enabled]
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	FlowLogsGoldmaneIncludeIPs *string `json:"flowLogsGoldmaneIncludeIPs,omitempty"`
+
 	// FlowLogsLocalReporter configures local unix socket for reporting flow data from each node. [Default: Disabled]
 	// +kubebuilder:validation:Enum=Disabled;Enabled
 	FlowLogsLocalReporter *string `json:"flowLogsLocalReporter,omitempty"`
@@ -1125,19 +1159,27 @@ type FelixConfigurationSpec struct {
 
 	// Route Priority value for a normal priority Calico-programmed IPv4 route.  Note, higher
 	// values mean lower priority. [Default: 1024]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2147483646
 	IPv4NormalRoutePriority *int `json:"ipv4NormalRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
 	// Route Priority value for an elevated priority Calico-programmed IPv4 route.  Note, higher
 	// values mean lower priority.  Elevated priority is used during VM live migration, and for
 	// optimal behaviour IPv4ElevatedRoutePriority must be less than IPv4NormalRoutePriority
 	// [Default: 512]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2147483646
 	IPv4ElevatedRoutePriority *int `json:"ipv4ElevatedRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
 	// Route Priority value for a normal priority Calico-programmed IPv6 route.  Note, higher
 	// values mean lower priority. [Default: 1024]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2147483646
 	IPv6NormalRoutePriority *int `json:"ipv6NormalRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
 	// Route Priority value for an elevated priority Calico-programmed IPv6 route.  Note, higher
 	// values mean lower priority.  Elevated priority is used during VM live migration, and for
 	// optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority
 	// [Default: 512]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2147483646
 	IPv6ElevatedRoutePriority *int `json:"ipv6ElevatedRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
 	// LiveMigrationRouteConvergenceTime is the time to keep elevated route priority after a
 	// VM live migration completes.  This allows routes to converge across the cluster before
@@ -1159,12 +1201,18 @@ type FelixConfigurationSpec struct {
 	// Workaround: Make sure your Linux kernel [includes this patch](https://github.com/torvalds/linux/commit/56364c910691f6d10ba88c964c9041b9ab777bd6) to unwedge NAPI.
 	WireguardThreadingEnabled *bool `json:"wireguardThreadingEnabled,omitempty"`
 	// WireguardListeningPort controls the listening port used by IPv4 Wireguard. [Default: 51820]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
 	WireguardListeningPort *int `json:"wireguardListeningPort,omitempty" validate:"omitempty,gt=0,lte=65535"`
 
 	// WireguardListeningPortV6 controls the listening port used by IPv6 Wireguard. [Default: 51821]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
 	WireguardListeningPortV6 *int `json:"wireguardListeningPortV6,omitempty" validate:"omitempty,gt=0,lte=65535"`
 
 	// WireguardRoutingRulePriority controls the priority value to use for the Wireguard routing rule. [Default: 99]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=32765
 	WireguardRoutingRulePriority *int `json:"wireguardRoutingRulePriority,omitempty" validate:"omitempty,gt=0,lt=32766"`
 
 	// WireguardInterfaceName specifies the name to use for the IPv4 Wireguard interface. [Default: wireguard.cali]
@@ -1215,6 +1263,7 @@ type FelixConfigurationSpec struct {
 	// floating IPs are always programmed, regardless of this setting.)
 	//
 	// +optional
+	// +kubebuilder:default=Disabled
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
 
 	// LocalSubnetL2Reachability controls whether Felix automatically responds to
@@ -1283,6 +1332,8 @@ type FelixConfigurationSpec struct {
 	//
 	// [Default: 100]
 	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=3000
 	BPFMaglevMaxEndpointsPerService *int `json:"bpfMaglevMaxEndpointsPerService,omitempty" validate:"omitempty,gt=0,lte=3000"`
 
 	// BPFMaglevMaxServices is the maximum number of expected Maglev-enabled
@@ -1290,6 +1341,8 @@ type FelixConfigurationSpec struct {
 	//
 	// [Default: 100]
 	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=3000
 	BPFMaglevMaxServices *int `json:"bpfMaglevMaxServices,omitempty" validate:"omitempty,gt=0,lte=3000"`
 }
 
@@ -1330,7 +1383,7 @@ type ProtoPort struct {
 	Net string `json:"net,omitempty"`
 }
 
-// +kubebuilder:validation:Pattern=`^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$`
+// +kubebuilder:validation:Pattern=`^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$`
 type BPFConntrackTimeout string
 
 type BPFConntrackTimeouts struct {

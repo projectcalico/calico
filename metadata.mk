@@ -2,9 +2,9 @@
 # This file contains Makefile configuration parameters and metadata for this branch.
 #################################################################################################
 # The project Go version
-GO_VERSION=1.27.0
+GO_VERSION=1.27.1
 # Version of Kubernetes to use for dependencies, tests, registry.k8s.io/kubectl, and kubectl binary release.
-K8S_VERSION=v1.37.0
+K8S_VERSION=v1.37.1
 # The version of LLVM to use for go-build and calico/base images.
 LLVM_VERSION=21.1.8
 # Calico toolchain versions and the calico/base image to use.
@@ -13,9 +13,9 @@ LLVM_VERSION=21.1.8
 # those three versions moves.
 GO_BUILD_VER_SUFFIX=
 GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)$(GO_BUILD_VER_SUFFIX)
-RUST_BUILD_VER=1.96.0
+RUST_BUILD_VER=1.99.1
 
-CALICO_BASE_VER=ubi9-1787783643
+CALICO_BASE_VER=ubi9-1790725174
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
@@ -66,14 +66,15 @@ WINDOWS_DIST = dist/windows
 # The Windows HPC container version used as base for Calico Windows images
 WINDOWS_HPC_VERSION ?= v1.0.0
 # The Windows versions used as base for Calico Windows images
-WINDOWS_VERSIONS ?= ltsc2019 ltsc2022
+WINDOWS_VERSIONS ?= ltsc2019 ltsc2022 ltsc2025
 
 # The CNI plugin and flannel code that will be cloned and rebuilt with this repo's go-build image.
 # Pinned so the content-addressed third-party-cni-plugins image hash changes when these move.
-# CNI_VERSION is a commit SHA because the fork has no release tag at the toolchain we build with;
-# bump it to pick up upstream changes.
-CNI_VERSION=9ffe547cb3b66f80dd32a00fc69a6d0082b55321
+# CNI_VERSION is a commit SHA on upstream main; bump it to pick up upstream changes.
+CNI_VERSION=268232e54c89bae2bf2b1548e03ff183a7a6f9e9
 FLANNEL_VERSION=v1.2.0-flannel2-go1.22.7
+CONTAINERNETWORKING_PLUGINS_REPO=https://github.com/containernetworking/plugins.git
+FLANNEL_CNI_PLUGIN_REPO=https://github.com/projectcalico/flannel-cni-plugin.git
 
 # The libbpf version to use
 LIBBPF_VERSION=v1.6.2
@@ -89,10 +90,6 @@ NFTABLES_SHA256=6358830f3a64f31e39b0ad421d7dadcd240b72343ded48d8ef13b8faf204865a
 LIBNFTNL_VER=1.2.8
 LIBNFTNL_SHA256=37fea5d6b5c9b08de7920d298de3cdc942e7ae64b1a3e8b880b2d390ae67ad95
 
-# The operator branch corresponding to this branch.
-OPERATOR_BRANCH       ?= master
-OPERATOR_ORGANIZATION ?= tigera
-OPERATOR_GIT_REPO     ?= operator
-
 # quay.io expiry time for hashrelease/dev images
 QUAY_EXPIRE_DAYS=90
+

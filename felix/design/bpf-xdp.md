@@ -59,7 +59,7 @@ forwarding decisions. The handoff is via packet metadata:
 - On the TC ingress hook, the program calls
   `xdp2tc_get_metadata(skb)` and, on
   `CALI_META_ACCEPTED_BY_XDP`, sets
-  `skb->mark = CALI_SKB_MARK_BYPASS_XDP` (`bpf.h`) and skips the
+  `skb->mark = CALI_SKB_MARK_BYPASS_XDP` (`cali_bpf.h`) and skips the
   policy step.
 
 The same jump-map / preamble machinery from [bpf-tc-programs.md → TC program layout](./bpf-tc-programs.md) applies. XDP has its

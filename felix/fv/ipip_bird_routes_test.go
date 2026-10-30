@@ -112,14 +112,6 @@ var _ = infrastructure.DatastoreDescribe(
 					felix.Exec("ip", "link")
 				}
 			}
-			for _, wl := range w {
-				wl.Stop()
-			}
-			tc.Stop()
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-			infra.Stop()
 		})
 
 		// Note: this one passes with or without the ownership rule -- Felix ignores routes it does
@@ -157,6 +149,8 @@ var _ = infrastructure.DatastoreDescribe(
 			felixes[0].Exec("ip", "route", "add", birdStrayCIDR, "via", felixes[1].IP,
 				"dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", birdRouteProto)
 
+			// Nothing asserts the route landed first: Felix's resync can remove it before a
+			// check could read it back, and Exec fails the test if the add does.
 			Eventually(tunl0Routes, "30s", "500ms").ShouldNot(ContainSubstring(birdStrayCIDR),
 				"Felix did not remove BIRD's stale route")
 		})
@@ -196,11 +190,6 @@ var _ = infrastructure.DatastoreDescribe(
 					felix.Exec("ip", "route")
 				}
 			}
-			tc.Stop()
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-			infra.Stop()
 		})
 
 		It("should leave BIRD's routes alone", func() {

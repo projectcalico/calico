@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 )
 
@@ -72,6 +73,7 @@ func NewNodeController(ctx context.Context,
 	cfg config.NodeControllerConfig,
 	nodeInformer, podInformer cache.SharedIndexInformer,
 	dataFeed *utils.DataFeed,
+	tracker *accounting.Tracker,
 	deferredInformers *kubevirt.DeferredInformers,
 ) controller.Controller {
 	nc := &NodeController{
@@ -88,7 +90,7 @@ func NewNodeController(ctx context.Context,
 	nodeDeletionFuncs := []func(*v1.Node){}
 	podDeletionFuncs := []func(*v1.Pod){}
 
-	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, podInformer.GetIndexer(), nodeInformer.GetIndexer(), deferredInformers)
+	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, podInformer.GetIndexer(), nodeInformer.GetIndexer(), deferredInformers, tracker)
 	nc.ipamCtrl.RegisterWith(nc.dataFeed)
 	nodeDeletionFuncs = append(nodeDeletionFuncs, nc.ipamCtrl.OnKubernetesNodeDeleted)
 	podDeletionFuncs = append(podDeletionFuncs, nc.ipamCtrl.OnKubernetesPodDeleted)

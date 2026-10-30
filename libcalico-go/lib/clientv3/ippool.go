@@ -23,9 +23,12 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
@@ -109,11 +112,51 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 	}
 
 	out, err := r.client.resources.Create(ctx, opts, apiv3.KindIPPool, res)
-	if out != nil {
-		return out.(*apiv3.IPPool), err
+	if out == nil {
+		return nil, err
 	}
-	return nil, err
+	pool, ok := out.(*apiv3.IPPool)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type %T returned when creating IPPool %s", out, res.Name)
+	}
+	if err != nil {
+		return pool, err
+	}
+	if pool.Spec.Disabled {
+		// Marking it would contradict the pool controller, which reports a disabled pool as not allocatable.
+		return pool, nil
+	}
+	if opts.DryRun {
+		// The pool was never stored, so a status update would only fail with NotFound.
+		return pool, nil
+	}
+	return r.markAllocatable(ctx, pool, opts), nil
+}
 
+// markAllocatable records that the pool cleared the overlap check. Failure is not fatal, since an
+// unmarked pool stays usable until something overlaps it. The create's options carry through so a
+// pool created with a TTL keeps it.
+func (r ipPools) markAllocatable(ctx context.Context, pool *apiv3.IPPool, opts options.SetOptions) *apiv3.IPPool {
+	marked := pool.DeepCopy()
+	if marked.Status == nil {
+		marked.Status = &apiv3.IPPoolStatus{}
+	}
+	meta.SetStatusCondition(&marked.Status.Conditions, metav1.Condition{
+		Type:    apiv3.IPPoolConditionAllocatable,
+		Status:  metav1.ConditionTrue,
+		Reason:  apiv3.IPPoolReasonOK,
+		Message: "IPPool is available for IP allocation.",
+	})
+
+	out, err := r.UpdateStatus(ctx, marked, opts)
+	if err != nil {
+		log.WithError(err).WithField("pool", pool.Name).Warn("Failed to mark new IPPool allocatable")
+		return pool
+	}
+	if out == nil {
+		return pool
+	}
+	return out
 }
 
 // Update takes the representation of an IPPool and updates it. Returns the stored
@@ -256,9 +299,7 @@ func (r ipPools) List(ctx context.Context, opts options.ListOptions) (*apiv3.IPP
 func convertIpPoolFromStorage(pool *apiv3.IPPool) error {
 	// Default the blockSize if it wasn't previously set
 	if pool.Spec.BlockSize == 0 {
-		// Get the IP address of the CIDR to find the IP version
-		ipAddr, _, err := cnet.ParseCIDR(pool.Spec.CIDR)
-		if err != nil {
+		if _, _, err := cnet.ParseCIDR(pool.Spec.CIDR); err != nil {
 			return cerrors.ErrorValidation{
 				ErroredFields: []cerrors.ErroredField{{
 					Name:   "IPPool.Spec.CIDR",
@@ -267,23 +308,10 @@ func convertIpPoolFromStorage(pool *apiv3.IPPool) error {
 				}},
 			}
 		}
-
-		if ipAddr.Version() == 4 {
-			pool.Spec.BlockSize = 26
-		} else {
-			pool.Spec.BlockSize = 122
-		}
+		pool.Spec.BlockSize = accounting.BlockSize(pool)
 	}
-
-	// Default allowed uses if not set.
-	if len(pool.Spec.AllowedUses) == 0 {
-		pool.Spec.AllowedUses = []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel}
-	}
-
-	// Default the nodeSelector if it wasn't previously set.
-	if pool.Spec.NodeSelector == "" {
-		pool.Spec.NodeSelector = "all()"
-	}
+	pool.Spec.AllowedUses = accounting.AllowedUses(pool)
+	pool.Spec.NodeSelector = accounting.NodeSelector(pool)
 
 	// Default IPIPMode to "Never" if not set.
 	if len(pool.Spec.IPIPMode) == 0 {
@@ -382,9 +410,7 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 	new.Spec.CIDR = cidr.String()
 
 	// If a nodeSelector is not specified, then this IP pool selects all nodes.
-	if new.Spec.NodeSelector == "" {
-		new.Spec.NodeSelector = "all()"
-	}
+	new.Spec.NodeSelector = accounting.NodeSelector(new)
 
 	// If there was a previous pool then this must be an Update, validate that the
 	// CIDR has not changed. Use semantic comparison to handle different textual
@@ -397,19 +423,8 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 		})
 	}
 
-	// Default the blockSize
-	if new.Spec.BlockSize == 0 {
-		if ipAddr.Version() == 4 {
-			new.Spec.BlockSize = 26
-		} else {
-			new.Spec.BlockSize = 122
-		}
-	}
-
-	// Default allowed uses if not set.
-	if len(new.Spec.AllowedUses) == 0 {
-		new.Spec.AllowedUses = []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel}
-	}
+	new.Spec.BlockSize = accounting.BlockSize(new)
+	new.Spec.AllowedUses = accounting.AllowedUses(new)
 
 	// Update, check if previously AllowedUses was LoadBalancer it has not changed
 	if old != nil {

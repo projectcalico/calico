@@ -175,22 +175,30 @@ it forwards directly and the host stack never sees the packet.
 ### Marks: the out-of-band channel between BPF and netfilter
 
 BPF and `*tables` communicate via the top bits of the skb mark. The
-full table is in `felix/bpf-gpl/bpf.h` (`enum calico_skb_mark`); the
+full table is in `felix/bpf-gpl/cali_bpf.h` (`enum calico_skb_mark`); the
 marks a reviewer encounters most often are:
 
 | Mark                          | Set by            | Meaning                                                            |
 | ----------------------------- | ----------------- | ------------------------------------------------------------------ |
 | `CALI_SKB_MARK_SEEN`          | Any BPF program   | At least one BPF program has already processed this packet.       |
-| `CALI_SKB_MARK_BYPASS`        | BPF after policy  | Packet is approved; downstream BPF does not need to re-validate.   |
+| `CALI_SKB_MARK_BYPASS`        | BPF after policy  | Packet is approved; downstream BPF skips it, except MASQ at to-WEP. |
 | `CALI_SKB_MARK_FALLTHROUGH`   | BPF on host ingress | No BPF CT entry — let `*tables` decide based on its CT state.    |
 | `CALI_SKB_MARK_CT_ESTABLISHED`| `*tables` rule    | `*tables` CT saw this as part of an established flow.             |
 | `CALI_SKB_MARK_SKIP_FIB`      | BPF or `*tables`  | Do not run the BPF FIB lookup; hand the packet to the host stack. |
-| `CALI_SKB_MARK_NAT_OUT` / `CALI_SKB_MARK_MASQ` | BPF | Flow needs SNAT; iptables MASQUERADE will handle it.    |
+| `CALI_SKB_MARK_NAT_OUT`       | BPF               | Outgoing-NAT flow, both directions; `*tables` SNATs it unless excluded. |
+| `CALI_SKB_MARK_MASQ`          | BPF               | Pod→service→self; `*tables` MASQUERADEs it.                         |
 | `CALI_SKB_MARK_FROM_NAT_IFACE_OUT` | BPF on `bpfnatout` egress | Packet has passed through the host-networking workaround veth. |
 
 Felix reserves the top three nibbles of the mark (`0x1FF00000`) for BPF
 use. `IptablesMarkMask` must include this range and leave room for any
 non-BPF `*tables` rules; Felix refuses to start if it does not.
+
+`CALI_SKB_MARK_BYPASS` is a flag; the `0x00f00000` nibble is a separate code, compared whole.
+`SKIP_FIB`, `NAT_OUT` and `MASQ` leave the decision to Linux, so `*tables` keeps them tracked;
+`BYPASS_FWD` and `BYPASS_XDP` are forwarded by BPF.
+
+`CALI_SKB_MARK_MASQ` carries the BYPASS bit but never short-circuits to-WEP: pod→service→self is
+policed there by the pod's own address, as with iptables.
 
 ### Review notes for this section
 
@@ -203,6 +211,9 @@ non-BPF `*tables` rules; Felix refuses to start if it does not.
   through the host stack must confirm that none of the "deferral"
   reasons above apply. In particular, bypassing the kernel on a flow
   that still needs SNAT will break the return path.
+- `CALI_SKB_MARK_BYPASS` never replaces a host-stack code, and never joins
+  `NAT_OUT`: HEP egress must run to see the post-SNAT tuple. A new matcher
+  on a code compares the whole nibble.
 
 
 
@@ -275,7 +286,7 @@ packet" condition); if it could and isn't, that's a red flag.
   already in cache; reading and writing them is negligible.
 - **Gate optional work on compile-time flags.** When a feature is
   off for this attach type, a `CALI_F_*` / `HAS_*` guard in
-  `bpf.h` eliminates the code at verification time. A runtime
+  `cali_bpf.h` eliminates the code at verification time. A runtime
   global flag costs a load per packet — cheap but not free.
 - **Own a sub-program for slow work.** When a feature does need
   real computation (Maglev hashing, fragment reassembly, ICMP

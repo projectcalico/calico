@@ -74,6 +74,7 @@ var features = map[string]bool{
 	"Pods":            true,
 	"QoS":             true,
 	"Datapath":        true,
+	"IngressGateway":  true,
 	"Istio":           true,
 	"KubeVirt":        true,
 	"Wireguard":       true,
@@ -105,6 +106,14 @@ func RequiresMockVirt() any {
 // works when the aggregated API server is handling requests.
 func RequiresCalicoAPIServer() any {
 	return framework.WithLabel("RequiresCalicoAPIServer")
+}
+
+// RequiresV3CRDs marks tests that need kube-apiserver to serve projectcalico.org/v3
+// itself, from the v3 CRDs. Tests that disable the BGP mesh withdraw the route to the
+// calico-apiserver pod, so on a lane running the aggregated API server they lose the
+// Calico API mid-test and cannot restore the mesh. Exclude it on those lanes.
+func RequiresV3CRDs() any {
+	return framework.WithLabel("RequiresV3CRDs")
 }
 
 // RequiresNoEncap marks tests that require unencapsulated traffic to function.
@@ -143,10 +152,11 @@ func RequiresBGP() any {
 	return framework.WithLabel("RequiresBGP")
 }
 
-// RequiresOperator marks tests that need tigera-operator running to reconcile a CR
-// they create. Manifest-installed clusters (INSTALLER=manual/packaged, i.e. a
-// MANIFEST_FILE like calico.yaml) have no operator, so such a test blocks until its
-// wait times out rather than skipping.
+// RequiresOperator marks tests that need an operator-managed cluster: they create a
+// CR for tigera-operator to reconcile, or read an operator resource such as the
+// Installation. Manifest-installed clusters (INSTALLER=manual/packaged, i.e. a
+// MANIFEST_FILE like calico.yaml) have neither, so such a test fails or waits out
+// its timeout rather than skipping.
 func RequiresOperator() any {
 	return framework.WithLabel("RequiresOperator")
 }
@@ -198,10 +208,6 @@ func RequiresAWS() any {
 // and additional configuration passed to the e2e code in order to run commands on that node.
 func WithExternalNode() any {
 	return framework.WithLabel("ExternalNode")
-}
-
-func RequiresExternalNode() any {
-	return framework.WithLabel("RequiresExternalNode")
 }
 
 // RequiresAzureIPAM marks tests that require a cluster with Azure IPAM.

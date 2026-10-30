@@ -66,8 +66,20 @@ func TestTLSVersionParsing(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name:        "Kubernetes TLS 1.2 name",
+			version:     "VersionTLS12",
+			expected:    tls.VersionTLS12,
+			expectError: false,
+		},
+		{
 			name:        "TLS 1.3",
 			version:     "1.3",
+			expected:    tls.VersionTLS13,
+			expectError: false,
+		},
+		{
+			name:        "Kubernetes TLS 1.3 name",
+			version:     "VersionTLS13",
 			expected:    tls.VersionTLS13,
 			expectError: false,
 		},

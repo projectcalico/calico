@@ -91,6 +91,10 @@ goldmane:
 whisker:
   enabled: true
 
+# Deprecated: prefer applying FelixConfiguration (and other Calico resources)
+# yourself after installing the CRDs and before installing this chart. See the
+# chart README "Installing" section. This field remains for a deprecation window
+# so existing values files keep working; it may be removed in a future release.
 defaultFelixConfiguration:
   enabled: false
 
@@ -131,12 +135,26 @@ containerSecurityContext: {}
 # Common labels for all resources created by this chart
 additionalLabels: {}
 
-# Tolerations for the tigera/operator pod.
+# Tolerations for the tigera/operator pod. The defaults allow scheduling before the CNI is up,
+# but not onto cordoned nodes.
 tolerations:
-  - effect: NoExecute
+  - key: CriticalAddonsOnly
     operator: Exists
-  - effect: NoSchedule
+  - key: node-role.kubernetes.io/master
     operator: Exists
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+  - key: node.kubernetes.io/not-ready
+    operator: Exists
+    effect: NoSchedule
+  - key: node.kubernetes.io/network-unavailable
+    operator: Exists
+    effect: NoSchedule
+  - key: node.cloudprovider.kubernetes.io/uninitialized
+    operator: Exists
+    effect: NoSchedule
 
 # NodeSelector for the tigera/operator pod.
 nodeSelector:
@@ -144,6 +162,10 @@ nodeSelector:
 
 # Affinity for the tigera/operator pod.
 affinity: {}
+
+# Deployment strategy for the tigera/operator Deployment. When unset, the Kubernetes default
+# (RollingUpdate with 25% maxSurge and 25% maxUnavailable) is used.
+strategy: {}
 
 # PriorityClassName for the tigera/operator pod.
 priorityClassName: ""
@@ -164,7 +186,7 @@ dnsConfig: {}
 
 # Image and registry configuration for the tigera/operator pod.
 tigeraOperator:
-  image: tigera/operator
+  image: calico/operator
   version: master
   registry: quay.io
 calicoctl:
