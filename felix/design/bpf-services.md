@@ -182,7 +182,9 @@ backend's veth.
 
 On return, the backend's WEP program sees a packet whose destination
 is the external client, and whose conntrack entry records that the
-ingress came from a specific ingress node. The program wraps the
+ingress came from a specific ingress node — the `tun_ip` field of the
+`NAT_REV` entry, which is set only by this NodePort-forwarding path
+(`dnat_return_should_encap()` keys off it). The program wraps the
 return packet back in VXLAN, destined for the node that originally
 received the connection, and lets the host stack route it out. That
 node decapsulates and routes the packet to the client.

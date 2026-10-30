@@ -1976,7 +1976,7 @@ var _ = Describe("Static", func() {
 				Comment: []string{"link-local"},
 			},
 			{
-				Match:   iptables.Match().MarkMatchesWithMask(0x1100000, 0x1100000),
+				Match:   iptables.Match().MarkMatchesWithMask(0x1100000, 0x1f00000),
 				Action:  iptables.ReturnAction{},
 				Comment: []string{"MarkSeenSkipFIB Mark"},
 			},

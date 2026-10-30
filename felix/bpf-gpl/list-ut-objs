@@ -36,6 +36,11 @@ for ep_type in $ep_types; do
   done
 done
 
+# Encapsulating host endpoint, for tests using withIfaceEncaps().
+for from_or_to in from to; do
+  ep_type=vxlan dsr="" emit_filename
+done
+
 echo "bin/test_from_hep_no_log_skb0x0.o"
 echo "bin/test_from_wep_no_log.o"
 echo "bin/test_xdp_debug.o"
