@@ -35,21 +35,24 @@ Invariants:
 windows-reserved:                skip
 not pod and not tunnel:          mark node "can't delete"
 tunnel address:                  defer until node-deletion decision
-allocationIsValid(preferCache):  markValid
-!kubernetesNodeExists:           markConfirmedLeak (immediate)
+judgeAllocation: in use:         markValid
+!kubernetesNodeExists, owner gone: markConfirmedLeak (immediate)
 isVMAllocation:                  markLeak(max(5min, leakGracePeriod))
 leakGracePeriod set:             markLeak(leakGracePeriod)
 ```
 
+Only an owner that is gone skips the grace period on a missing node: a node lookup can miss a live node, and an owner that still exists may be mid-ADD. Until such a leak is confirmed, the node's affinities stay.
+
 After the walk, if every allocation on a node is released and no valid ones remain, the node's tunnel IPs are confirmed-leaked and the node is added to `nodesToRelease`.
 
-`allocationIsValid` (`ipam.go:999`) is the truth check. The design-relevant rules:
+`judgeAllocation` is the truth check, and `allocationIsValid` wraps it. The design-relevant rules:
 
 - **Tunnel IPs validate via node existence only.** They never validate via pods. Mixing the paths would release a live tunnel IP whenever the pod-side check failed.
 - **Missing `pod` / `namespace` attributes ⇒ assume valid.** Conservative on purpose. Tightening this without a real reason will release allocations made by paths that don't
   stamp the attrs.
 - **Multus produces multiple WorkloadEndpoints per pod.** The IP must appear in at least one `wep.Spec.IPNetworks` to be valid. A single-WEP check would falsely release
   secondary-network IPs.
+- **An allocation outlives its sandbox, not its pod.** Allocations of a pod in a terminal phase are leaks, and so are those whose handle names a container ID other than the pod's `cni.projectcalico.org/containerID` annotation while the pod has reported no IP. Once it reports one, the IP decides, because a slow ADD from an abandoned sandbox can overwrite the annotation. This holds only while CNI DEL leaves that annotation in place and the pod cache keeps it.
 - **Pod lookup mode is preferCache vs live.** Cache for the node-deleted path (where the source data is presumed stale), live for sync. A live read can win against the cache in the
   rare case the cache is behind.
 
