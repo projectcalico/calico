@@ -26,8 +26,11 @@ steps:
           - name: SANDCAT_INGEST_TOKEN
       - name: sandcat-nightly
         keys:
-          - name: GH_TOKEN
           - name: SANDCAT_GEMINI_KEY
+      # sandcat.sh downloads its binary from the private tigera/sandcat releases.
+      - name: banzai-secrets
+        keys:
+          - name: GITHUB_ACCESS_TOKEN
       - name: sandcat-db
         keys:
           - name: SANDCAT_DB_URL
@@ -100,8 +103,6 @@ steps:
       .argoci/scripts/load-cached-images calico node whisker
       .argoci/scripts/load-e2e-binaries
       export E2E_PREBUILT=true
-      # sandcat.sh downloads its binary from the private tigera/sandcat releases.
-      export GITHUB_ACCESS_TOKEN="${GH_TOKEN:-}"
       mkdir -p artifacts
       set -o pipefail
       rc=0
