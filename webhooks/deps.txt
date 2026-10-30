@@ -50,6 +50,8 @@ github.com/prometheus/procfs v0.21.1
 github.com/sirupsen/logrus v1.9.4
 github.com/spf13/cobra v1.10.2
 github.com/spf13/pflag v1.0.10
+github.com/stretchr/objx v0.5.3
+github.com/stretchr/testify v1.12.1
 github.com/x448/float16 v0.8.4
 go.opentelemetry.io/auto/sdk v1.2.1
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.69.0
