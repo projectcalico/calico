@@ -18,9 +18,6 @@ if [ "${CI_GIT_REF_TYPE:-}" = PR ] && [ "${FELIX_FV_MEMO:-on}" = on ]; then
   scope="felix-fv-memo/pr-${CI_GIT_PR_NUMBER}"
 fi
 
-# The checkout belongs to another user in this image, and git refuses to read
-# it otherwise.
-git config --global --add safe.directory '*'
 if [ -z "$scope" ]; then
   : > "$plan/keys"
 else
