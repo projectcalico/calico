@@ -78,6 +78,11 @@ type KubeControllersConfiguration struct {
 	// For details on why this is needed see 'Node and Installation finalizer' in the core_controller.
 	Terminating bool
 
+	// MigrationActive host-networks the deployment for the duration of a
+	// DatastoreMigration. The migration locks the datastore, which stops CNI, so a
+	// pod-networked replacement could never be scheduled to finish the job.
+	MigrationActive bool
+
 	// Secrets - provided by the caller. Used to generate secrets in the destination
 	// namespace to be returned by the rendered. Expected that the calling code
 	// take care to pass the same secret on each reconcile where possible.
@@ -141,10 +146,12 @@ type (
 
 // calicoKubeControllers marks the calico-kube-controllers deployment as extendable.
 type calicoKubeControllers struct {
-	render.Component
+	render.Overridable
 
 	cfg *KubeControllersConfiguration
 }
+
+var _ render.Overridable = calicoKubeControllers{}
 
 func (c calicoKubeControllers) KubeControllersConfig() *KubeControllersConfiguration {
 	return c.cfg
@@ -202,7 +209,7 @@ func NewCalicoKubeControllers(cfg *KubeControllersConfiguration) render.Componen
 	cfg.Rules = KubeControllersRoleCommonRules(cfg)
 	cfg.EnabledControllers = []string{"node", "loadbalancer"}
 
-	return calicoKubeControllers{Component: NewKubeControllers(cfg), cfg: cfg}
+	return calicoKubeControllers{Overridable: &kubeControllersComponent{cfg: cfg}, cfg: cfg}
 }
 
 type kubeControllersComponent struct {
@@ -229,6 +236,16 @@ func (c *kubeControllersComponent) SupportedOSType() rmeta.OSType {
 }
 
 func (c *kubeControllersComponent) Objects() ([]client.Object, []client.Object) {
+	return render.ObjectsWithOverrides(c)
+}
+
+var _ render.Overridable = (*kubeControllersComponent)(nil)
+
+func (c *kubeControllersComponent) OverrideTargets() []rcomp.OverrideTarget {
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment](c.cfg.Namespace, c.cfg.Name, c.cfg.Installation.CalicoKubeControllersDeployment)}
+}
+
+func (c *kubeControllersComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
 	objectsToCreate := []client.Object{}
 	objectsToDelete := []client.Object{}
 
@@ -527,6 +544,11 @@ func (c *kubeControllersComponent) controllersDeployment() *appsv1.Deployment {
 		Volumes:            c.kubeControllersVolumes(),
 	}
 
+	if c.cfg.MigrationActive {
+		podSpec.HostNetwork = true
+		podSpec.DNSPolicy = corev1.DNSClusterFirstWithHostNet
+	}
+
 	var replicas int32 = 1
 
 	d := appsv1.Deployment{
@@ -552,10 +574,6 @@ func (c *kubeControllersComponent) controllersDeployment() *appsv1.Deployment {
 	}
 
 	render.SetClusterCriticalPod(&d.Spec.Template)
-
-	if overrides := c.cfg.Installation.CalicoKubeControllersDeployment; overrides != nil {
-		rcomp.ApplyDeploymentOverrides(&d, overrides)
-	}
 	return &d
 }
 

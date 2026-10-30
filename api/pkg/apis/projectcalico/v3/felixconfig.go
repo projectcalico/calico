@@ -416,12 +416,13 @@ type FelixConfigurationSpec struct {
 	// follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
 	// transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
 	// RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
-	// port unreachable). The log body is the standard kernel packet log of the response packet,
-	// so the flow is identified by its 5-tuple and can be correlated with the original policy Log
-	// line (with source and destination swapped). A logged connection with no follow-up log never
-	// received a response. Connections whose initial log was suppressed by LogActionRateLimit get
-	// no follow-up log either, so every follow-up log pairs with an initial one. Enabling this
-	// consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+	// port unreachable). The log body is the standard kernel packet log of the response packet.
+	// For "-est" and "-rst" its 5-tuple is the original policy Log line's with source and
+	// destination swapped; for "-icmp-err" the bracketed inner header carries the original
+	// 5-tuple unswapped. A logged connection with no follow-up log never received a response.
+	// Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log
+	// either, so every follow-up log pairs with an initial one. Enabling this consumes one bit
+	// from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
 	// [Default: Disabled]
 	// +optional
 	LogConnectionTransitions *LogConnectionTransitionsMode `json:"logConnectionTransitions,omitempty" validate:"omitempty,oneof=Disabled FirstResponseAfterLog"`
@@ -432,6 +433,7 @@ type FelixConfigurationSpec struct {
 	// rules that emit these logs are shared by all policies, so per-policy values cannot be
 	// substituted and any %-specifiers are rendered literally. [Default: calico-response]
 	// +optional
+	// +kubebuilder:validation:Pattern=`^([a-zA-Z0-9%: /_-])*$`
 	LogConnectionTransitionsPrefix string `json:"logConnectionTransitionsPrefix,omitempty"`
 
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
@@ -477,6 +479,23 @@ type FelixConfigurationSpec struct {
 
 	// VXLANPort is the UDP port number to use for VXLAN traffic. [Default: 4789]
 	VXLANPort *int `json:"vxlanPort,omitempty"`
+
+	// VXLANSrcPortMin is the lower bound (inclusive) of the UDP source port range used by Felix for outgoing
+	// VXLAN-encapsulated traffic. If both VXLANSrcPortMin and VXLANSrcPortMax are set, the kernel VXLAN tunnel
+	// device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANSrcPortMin, VXLANSrcPortMax].
+	// VXLANSrcPortMin must be strictly less than VXLANSrcPortMax.
+	// If unset (or zero), the kernel/dataplane default is used. [Default: 0 (unset)]
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
+	VXLANSrcPortMin *int `json:"vxlanSrcPortMin,omitempty"`
+
+	// VXLANSrcPortMax is the upper bound (inclusive) of the UDP source port range used by Felix for outgoing
+	// VXLAN-encapsulated traffic. See VXLANSrcPortMin. [Default: 0 (unset)]
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
+	VXLANSrcPortMax *int `json:"vxlanSrcPortMax,omitempty"`
 
 	// VXLANVNI is the VXLAN VNI to use for VXLAN traffic.  You may need to change this if the default value is
 	// in use on your system. [Default: 4096]
@@ -682,6 +701,7 @@ type FelixConfigurationSpec struct {
 	//
 	// [Default: EnabledIPIPOnly]
 	// +kubebuilder:validation:Enum=Enabled;Disabled;EnabledIPIPOnly;EnabledNoEncapOnly
+	// +kubebuilder:default=EnabledIPIPOnly
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
@@ -905,10 +925,12 @@ type FelixConfigurationSpec struct {
 	// balancer. The connect-time load balancer is required for the host to be able to reach Kubernetes services
 	// and it improves the performance of pod-to-service connections.When set to TCP, connect time load balancing
 	// is available only for services with TCP ports. [Default: TCP]
+	// +kubebuilder:default=TCP
 	BPFConnectTimeLoadBalancing *BPFConnectTimeLBType `json:"bpfConnectTimeLoadBalancing,omitempty" validate:"omitempty,oneof=TCP Enabled Disabled"`
 
 	// BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing
 	// determines the CTLB behavior. [Default: Enabled]
+	// +kubebuilder:default=Enabled
 	BPFHostNetworkedNATWithoutCTLB *BPFHostNetworkedNATType `json:"bpfHostNetworkedNATWithoutCTLB,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
 	// BPFExternalServiceMode in BPF mode, controls how connections from outside the cluster to services (node ports
@@ -987,8 +1009,8 @@ type FelixConfigurationSpec struct {
 	BPFMapSizePerCPUConntrack *int `json:"bpfMapSizePerCpuConntrack,omitempty"`
 
 	// BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending
-	// on its usage. 'Disabled' make the size stay at the default or whatever is set by
-	// BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even
+	// on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size.
+	// 'DoubleIfFull' doubles the size of an IP family's map when it is more than 80% full
 	// after cleanups. [Default: DoubleIfFull]
 	// +kubebuilder:validation:Pattern=`^(?i)(Disabled|DoubleIfFull)?$`
 	BPFMapSizeConntrackScaling string `json:"bpfMapSizeConntrackScaling,omitempty"`
@@ -1099,6 +1121,12 @@ type FelixConfigurationSpec struct {
 
 	// FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
 	FlowLogsGoldmaneServer *string `json:"flowLogsGoldmaneServer,omitempty"`
+
+	// FlowLogsGoldmaneIncludeIPs controls whether flow data sent to Goldmane (and the local flow
+	// reporter) includes the source and destination IP addresses of the aggregated connections.
+	// [Default: Enabled]
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	FlowLogsGoldmaneIncludeIPs *string `json:"flowLogsGoldmaneIncludeIPs,omitempty"`
 
 	// FlowLogsLocalReporter configures local unix socket for reporting flow data from each node. [Default: Disabled]
 	// +kubebuilder:validation:Enum=Disabled;Enabled
@@ -1235,6 +1263,7 @@ type FelixConfigurationSpec struct {
 	// floating IPs are always programmed, regardless of this setting.)
 	//
 	// +optional
+	// +kubebuilder:default=Disabled
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
 
 	// LocalSubnetL2Reachability controls whether Felix automatically responds to
@@ -1354,7 +1383,7 @@ type ProtoPort struct {
 	Net string `json:"net,omitempty"`
 }
 
-// +kubebuilder:validation:Pattern=`^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$`
+// +kubebuilder:validation:Pattern=`^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$`
 type BPFConntrackTimeout string
 
 type BPFConntrackTimeouts struct {

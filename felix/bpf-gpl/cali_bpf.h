@@ -43,27 +43,19 @@
 // relative to the workload so the ingress program is applied at egress from the host namespace
 // and vice-versa.
 #define CALI_TC_INGRESS		(1<<1)
-// CALI_TC_IPIP is set when compiling the program for the IPIP tunnel. It is *not* set
-// when compiling the wireguard or tunnel program (or VXLAN).  IPIP is a special case because
-// it is a layer 3 device, so we don't see an ethernet header on packets arriving from the IPIP
-// device.
-#define CALI_TC_IPIP		(1<<2)
 // CALI_CGROUP is set when compiling the cgroup connect-time load balancer programs.
 #define CALI_CGROUP		(1<<3)
 // CALI_TC_DSR is set when compiling programs for DSR mode.  In DSR mode, traffic to node
 // ports is encapped on the "request" leg but the response is returned directly from the
 // node with the backing workload.
 #define CALI_TC_DSR		(1<<4)
-// CALI_L3_DEV is set for any L3 device such as wireguard and IPIP tunnels that act fully
-// at layer 3. In kernels before 5.14 (rhel 4.18.0-330) IPIP tunnels on inbound
-// direction were acting differently, where they could see outer ethernet and ip headers.
+// CALI_L3_DEV is set for any L3 device such as wireguard and IPIP tunnels.
 #define CALI_TC_L3_DEV 	(1<<5)
 // CALI_XDP_PROG is set for programs attached to the XDP hook
 #define CALI_XDP_PROG 	(1<<6)
 #define CALI_TC_NAT_IF	(1<<7)
 #define CALI_TC_LO	(1<<8)
 #define CALI_CT_CLEANUP	(1<<9)
-#define CALI_TC_VXLAN	(1<<10)
 #define CALI_TC_PREAMBLE	(1<<11)
 #define CALI_TC_DEF_POLICY      (1<<12)
 
@@ -80,14 +72,13 @@
 
 #define CALI_F_HEP     	 ((CALI_COMPILE_FLAGS) & (CALI_TC_HOST_EP | CALI_TC_NAT_IF))
 #define CALI_F_WEP     	 (!CALI_F_HEP)
-#define CALI_F_IPIP  	 (((CALI_COMPILE_FLAGS) & CALI_TC_IPIP) != 0)
 #define CALI_F_L3_DEV    (((CALI_COMPILE_FLAGS) & CALI_TC_L3_DEV) != 0)
 #define CALI_F_NAT_IF    (((CALI_COMPILE_FLAGS) & CALI_TC_NAT_IF) != 0)
 #define CALI_F_LO        (((CALI_COMPILE_FLAGS) & CALI_TC_LO) != 0)
 #define CALI_F_CT_CLEANUP (((CALI_COMPILE_FLAGS) & CALI_CT_CLEANUP) != 0)
 #define CALI_F_DEF_POLICY (((CALI_COMPILE_FLAGS) & CALI_TC_DEF_POLICY) != 0)
 
-#define CALI_F_MAIN	(CALI_F_HEP && !CALI_F_IPIP && !CALI_F_L3_DEV && !CALI_F_NAT_IF && !CALI_F_LO)
+#define CALI_F_MAIN	(CALI_F_HEP && !CALI_F_L3_DEV && !CALI_F_NAT_IF && !CALI_F_LO)
 
 #define CALI_F_XDP ((CALI_COMPILE_FLAGS) & CALI_XDP_PROG)
 
@@ -100,14 +91,10 @@
 
 #define CALI_F_TO_HOST       ((CALI_F_FROM_HEP || CALI_F_FROM_WEP) != 0)
 #define CALI_F_FROM_HOST     (!CALI_F_TO_HOST)
-#define CALI_F_L3            ((CALI_F_TO_HEP && CALI_F_IPIP) || CALI_F_L3_DEV)
-#define CALI_F_IPIP_ENCAPPED ((CALI_F_INGRESS && CALI_F_IPIP))
+/* CALI_F_L3 means the skb carries no ethernet header, which is the case in both
+ * directions on an L3 device. */
+#define CALI_F_L3            CALI_F_L3_DEV
 #define CALI_F_L3_INGRESS    (CALI_F_INGRESS && CALI_F_L3_DEV)
-
-#define CALI_F_WIREGUARD	CALI_F_L3_DEV
-#define CALI_F_VXLAN		(((CALI_COMPILE_FLAGS) & CALI_TC_VXLAN) != 0)
-
-#define CALI_F_TUNNEL	(CALI_F_IPIP || CALI_F_WIREGUARD || CALI_F_VXLAN)
 
 #define CALI_F_CGROUP	(((CALI_COMPILE_FLAGS) & CALI_CGROUP) != 0)
 #define CALI_F_DSR	((CALI_COMPILE_FLAGS & CALI_TC_DSR) != 0)
@@ -150,7 +137,7 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
 		CALI_COMPILE_FLAGS == 0 ||
 		CALI_F_CT_CLEANUP ||
 		!!(CALI_COMPILE_FLAGS & CALI_CGROUP) !=
-		!!(CALI_COMPILE_FLAGS & (CALI_TC_HOST_EP | CALI_TC_INGRESS | CALI_TC_IPIP | CALI_TC_DSR | CALI_XDP_PROG | CALI_TC_PREAMBLE | CALI_TC_DEF_POLICY))
+		!!(CALI_COMPILE_FLAGS & (CALI_TC_HOST_EP | CALI_TC_INGRESS | CALI_TC_DSR | CALI_XDP_PROG | CALI_TC_PREAMBLE | CALI_TC_DEF_POLICY))
 	);
 	COMPILE_TIME_ASSERT(!CALI_F_DSR || (CALI_F_DSR && CALI_F_FROM_WEP) || (CALI_F_DSR && CALI_F_HEP));
 	COMPILE_TIME_ASSERT(CALI_F_TO_HOST || CALI_F_FROM_HOST);
@@ -209,6 +196,8 @@ enum calico_skb_mark {
 	/* Accepted by XDP untracked policy. */
 	CALI_SKB_MARK_BYPASS_XDP             = CALI_SKB_MARK_BYPASS  | 0x00500000,
 	CALI_SKB_MARK_BYPASS_MASK            = CALI_SKB_MARK_SEEN_MASK | 0x02f00000,
+	/* The 0x00f00000 nibble is a code, independent of the BYPASS flag; compare it whole. */
+	CALI_SKB_MARK_CODE_MASK              = CALI_SKB_MARK_SEEN_MASK | 0x00f00000,
 	/* The FALLTHROUGH bit is used by programs that are towards the host namespace to indicate
 	 * that the packet is not known in BPF conntrack. We have iptables rules to drop or allow
 	 * such packets based on their Linux conntrack state. This allows for us to handle flows that
@@ -268,6 +257,7 @@ static CALI_BPF_INLINE __attribute__((noreturn)) void bpf_exit(int rc) {
 #define debug_ip(ip) (&(ip))
 #define ip_is_dnf(ip) (true)
 #define ip_is_frag(ip) (false)
+#define ip_is_nonfirst_frag(ip) (false)
 
 #else
 
@@ -277,6 +267,7 @@ static CALI_BPF_INLINE __attribute__((noreturn)) void bpf_exit(int rc) {
 #define ip_is_dnf(ip) ((ip)->frag_off & bpf_htons(0x4000))
 #define ip_is_frag(ip) ((ip)->frag_off & bpf_htons(0x3fff))
 #define ip_is_first_frag(ip) (((ip)->frag_off & bpf_htons(0x3fff)) == bpf_htons(0x2000))
+#define ip_is_nonfirst_frag(ip) ((ip)->frag_off & bpf_htons(0x1fff))
 #define ip_is_last_frag(ip) (!((ip)->frag_off & bpf_htons(0x2000)))
 #endif
 
@@ -296,9 +287,9 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 }
 
 #ifdef IPVER6
-#define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && !CALI_F_IPIP && (ip)->hop_limit <= 1)
+#define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && (ip)->hop_limit <= 1)
 #else
-#define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && !CALI_F_IPIP && (ip)->ttl <= 1)
+#define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && (ip)->ttl <= 1)
 #endif
 
 /* Accessors for the configured globals (see globals.h).  Programs that are
@@ -334,11 +325,18 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define HOST_IP		CALI_CONFIGURABLE_IP(host_ip)
 #define TUNNEL_MTU 	CALI_CONFIGURABLE(tunnel_mtu)
 #define VXLAN_PORT 	CALI_CONFIGURABLE(vxlan_port)
+#define VXLAN_SRC_PORT_MIN	CALI_CONFIGURABLE(vxlan_src_port_min)
+#define VXLAN_SRC_PORT_MAX	CALI_CONFIGURABLE(vxlan_src_port_max)
 #define INTF_IP		CALI_CONFIGURABLE_IP(intf_ip)
 #define EXT_TO_SVC_MARK	CALI_CONFIGURABLE(ext_to_svc_mark)
 #define PSNAT_START	CALI_CONFIGURABLE(psnat_start)
 #define PSNAT_LEN	CALI_CONFIGURABLE(psnat_len)
+#if CALI_F_XDP
+/* The placeholder above is 1, which would read as the bit-0 flag set. */
+#define GLOBAL_FLAGS 	0
+#else
 #define GLOBAL_FLAGS 	CALI_CONFIGURABLE(flags)
+#endif
 #define HOST_TUNNEL_IP	CALI_CONFIGURABLE_IP(host_tunnel_ip)
 #define WG_PORT		CALI_CONFIGURABLE(wg_port)
 #define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
@@ -349,6 +347,10 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define MAGLEV_LUT_SIZE CALI_CONFIGURABLE(maglev_lut_size)
 #define IPFRAG_TIMEOUT CALI_CONFIGURABLE(ipfrag_timeout)
 
+/* The device this program is attached to encapsulates traffic. Compile flags
+ * cannot say: wireguard and a plain L3 NIC share the l3 object. Only a host
+ * endpoint is ever one, which keeps it out of the workload programs. */
+#define IFACE_ENCAPS (CALI_F_HEP && (GLOBAL_FLAGS & CALI_GLOBALS_IFACE_ENCAPS))
 #define FLOWLOGS_ENABLED (GLOBAL_FLAGS & CALI_GLOBALS_FLOWLOGS_ENABLED)
 #define INGRESS_PACKET_RATE_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED)
 #define EGRESS_PACKET_RATE_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED)

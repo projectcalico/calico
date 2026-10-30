@@ -3196,6 +3196,11 @@ func (in *InstallationSpec) DeepCopyInto(out *InstallationSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.TLSMinVersion != nil {
+		in, out := &in.TLSMinVersion, &out.TLSMinVersion
+		*out = new(TLSVersion)
+		**out = **in
+	}
 	if in.NonPrivileged != nil {
 		in, out := &in.NonPrivileged, &out.NonPrivileged
 		*out = new(NonPrivilegedType)

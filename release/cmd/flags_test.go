@@ -20,6 +20,9 @@ import (
 	"testing"
 
 	cli "github.com/urfave/cli/v3"
+
+	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/github"
 )
 
 // runFlags builds a *cli.Command with the given flags and runs it with args.
@@ -313,6 +316,82 @@ func TestInverseFlagName(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("inverseFlagName(%q) = %q, want %q", tc.in, got, tc.want)
 			}
+		})
+	}
+}
+
+// A subcommand that reads no CI metadata must still run under --ci without it.
+func TestCIWithoutJobIdentityIsNotAnError(t *testing.T) {
+	assertRun(t, ciFlags, []string{"--ci"}, "")
+}
+
+// A job link that cannot be built is dropped rather than failing the command.
+func TestCIJobURLEmptyWithoutJobIdentity(t *testing.T) {
+	var got string
+	cmd := &cli.Command{
+		Name:  "test",
+		Flags: ciFlags,
+		Action: func(_ context.Context, c *cli.Command) error {
+			got = ciJobURL(c)
+			return nil
+		},
+	}
+	if err := cmd.Run(context.Background(), []string{"test", "--ci"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "" {
+		t.Errorf("ciJobURL() = %q, want empty when the job is unidentified", got)
+	}
+
+	if err := cmd.Run(context.Background(), []string{"test", "--ci", "--ci-url", "https://ci.example", "--ci-job-id", "42"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "https://ci.example/jobs/42"; got != want {
+		t.Errorf("ciJobURL() = %q, want %q", got, want)
+	}
+}
+
+func TestReleaseNotesFlag(t *testing.T) {
+	flags := []cli.Flag{releaseNotesFlag, orgFlag, repoFlag, validationFlag, branchCheckFlag}
+	calico := func(rest ...string) []string {
+		return append(rest, "--org", defaults.ProjectCalicoOrg, "--repo", defaults.CalicoRepoName)
+	}
+	for _, tc := range []struct {
+		name    string
+		args    []string
+		token   string
+		wantErr string
+	}{
+		{
+			name:    "notes wanted with no credential",
+			args:    calico("--release-notes"),
+			wantErr: "release notes need GitHub authentication",
+		},
+		{
+			name:  "notes wanted with a credential",
+			args:  calico("--release-notes"),
+			token: "t",
+		},
+		{
+			name:    "another repository cannot generate notes",
+			args:    []string{"--release-notes", "--org", "example", "--repo", "fork"},
+			token:   "t",
+			wantErr: "release notes can only be generated from",
+		},
+		{
+			name: "no validation skips both checks",
+			args: []string{"--release-notes", "--no-validation", "--no-branch-check", "--org", "example", "--repo", "fork"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PATH", t.TempDir())
+			for _, key := range github.TokenEnvVars {
+				t.Setenv(key, "")
+			}
+			if tc.token != "" {
+				t.Setenv(github.TokenEnvVars[0], tc.token)
+			}
+			assertRun(t, flags, tc.args, tc.wantErr)
 		})
 	}
 }

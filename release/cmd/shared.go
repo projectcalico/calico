@@ -28,6 +28,7 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -171,6 +172,21 @@ var (
 	pinForPublish = builtPin
 )
 
+// A generated pin versions the operator like the product; a release takes the
+// operator's own version from the manifests.
+func pinForRelease(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
+	pin, err := loadPin(cfg, c)
+	if err != nil {
+		return nil, err
+	}
+	_, operatorVer, err := manifests.Versions(cfg.RepoRootDir)
+	if err != nil {
+		return nil, fmt.Errorf("operator version from manifests: %w", err)
+	}
+	pin.Operator.Version = operatorVer.String()
+	return pin, nil
+}
+
 // releaseVersion is the version being released. A hashrelease is versioned from git.
 var releaseVersion = func(cfg *Config, c *cli.Command) (*version.Version, error) {
 	if c.Bool(hashreleaseFlag.Name) {
@@ -178,25 +194,58 @@ var releaseVersion = func(cfg *Config, c *cli.Command) (*version.Version, error)
 		if err != nil {
 			return nil, fmt.Errorf("git version: %w", err)
 		}
-		ver := version.New(v)
+		ver, err := version.New(v)
+		if err != nil {
+			return nil, err
+		}
 		return &ver, nil
 	}
-	ver, _, err := version.VersionsFromManifests(cfg.RepoRootDir)
+	ver, _, err := manifests.Versions(cfg.RepoRootDir)
 	if err != nil {
 		return nil, fmt.Errorf("version from manifest: %w", err)
 	}
 	return &ver, nil
 }
 
-func publishRecord(cfg *Config, step, version string, confirm bool) ([]string, *outputs.RefsWriter, error) {
-	published, err := outputs.ReadRefs(cfg.OutputDir, step, version)
+// outputDir is where a release's artifacts are gathered.
+var outputDir = func(cfg *Config, c *cli.Command, version string) (string, error) {
+	if c.Bool(hashreleaseFlag.Name) {
+		pin := oncePin(pinForBuild)
+		p, err := pin(cfg, c)
+		if err != nil {
+			return "", err
+		}
+		h, err := p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false)
+		if err != nil {
+			return "", err
+		}
+		return h.Source, nil
+	}
+	return releaseOutputDir(cfg.RepoRootDir, version), nil
+}
+
+// recordsDir is keyed like outputDir, so a step run on its own records into the
+// same release as the manager.
+func recordsDir(cfg *Config, c *cli.Command, pin pinned, version string) (string, error) {
+	if !c.Bool(hashreleaseFlag.Name) {
+		return outputs.RecordsDir(cfg.OutputDir, version), nil
+	}
+	p, err := pin(cfg, c)
+	if err != nil {
+		return "", err
+	}
+	return outputs.RecordsDir(cfg.OutputDir, p.Hash), nil
+}
+
+func publishRecord(recordsDir, step string, confirm bool) ([]string, *outputs.RefsWriter, error) {
+	published, err := outputs.ReadRefs(recordsDir, step)
 	if err != nil {
 		return nil, nil, err
 	}
 	if !confirm {
 		return published, nil, nil
 	}
-	w, err := outputs.NewRefsWriter(cfg.OutputDir, step, version)
+	w, err := outputs.NewRefsWriter(recordsDir, step)
 	if err != nil {
 		return nil, nil, err
 	}

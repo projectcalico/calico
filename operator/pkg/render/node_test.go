@@ -15,6 +15,7 @@
 package render_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -71,7 +72,7 @@ var _ = Describe("Node rendering tests", func() {
 			var typhaNodeTLS *render.TyphaNodeTLS
 			var k8sServiceEp k8sapi.ServiceEndpoint
 			one := intstr.FromInt(1)
-			defaultNumExpectedResources := 8
+			defaultNumExpectedResources := 10
 			const defaultClusterDomain = "svc.cluster.local"
 			var defaultMode int32 = 420
 			var cfg render.NodeConfiguration
@@ -171,6 +172,18 @@ var _ = Describe("Node rendering tests", func() {
 				}))
 			})
 
+			It("should remove the AWS VPC CNI's annotation grant when told to", func() {
+				cfg.OmitAWSVPCAnnotationsGrant = true
+				component := render.Node(&cfg)
+				Expect(component.ResolveImages(nil)).To(BeNil())
+				resources, toDelete := component.Objects()
+
+				for _, kind := range []string{"ClusterRole", "ClusterRoleBinding"} {
+					Expect(rtest.GetResource(resources, "calico-aws-vpc-annotations", "", "rbac.authorization.k8s.io", "v1", kind)).To(BeNil(), kind)
+					Expect(rtest.GetResource(toDelete, "calico-aws-vpc-annotations", "", "rbac.authorization.k8s.io", "v1", kind)).NotTo(BeNil(), kind)
+				}
+			})
+
 			It("should render all resources for a default configuration", func() {
 				expectedResources := []struct {
 					name    string
@@ -185,6 +198,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -209,6 +224,32 @@ var _ = Describe("Node rendering tests", func() {
 					Resources: []string{"virtualmachineinstances", "virtualmachines"},
 					Verbs:     []string{"get"},
 				}))
+
+				// The permission protect-cni-annotations.projectcalico.org checks for, so the CNI
+				// plugin's own pods/status patch is let through.
+				Expect(cniRole.Rules).To(ContainElement(rbacv1.PolicyRule{
+					APIGroups: []string{"projectcalico.org"},
+					Resources: []string{"cniannotations"},
+					Verbs:     []string{"write"},
+				}))
+
+				// The permission protect-cni-annotations.projectcalico.org checks for on the AWS VPC CNI's
+				// pod IP annotation, granted to the account AWS runs the CNI under.
+				awsRole := rtest.GetResource(resources, "calico-aws-vpc-annotations", "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
+				Expect(awsRole.Rules).To(ConsistOf(rbacv1.PolicyRule{
+					APIGroups: []string{"projectcalico.org"},
+					Resources: []string{"awsvpcannotations"},
+					Verbs:     []string{"write"},
+				}))
+				awsBinding := rtest.GetResource(resources, "calico-aws-vpc-annotations", "", "rbac.authorization.k8s.io", "v1", "ClusterRoleBinding").(*rbacv1.ClusterRoleBinding)
+				Expect(awsBinding.RoleRef.Name).To(Equal("calico-aws-vpc-annotations"))
+				Expect(awsBinding.Subjects).To(ConsistOf(rbacv1.Subject{Kind: "ServiceAccount", Name: "aws-node", Namespace: "kube-system"}))
+
+				// calico-node never writes these annotations, so its role must not carry it.
+				nodeRole := rtest.GetResource(resources, "calico-node", "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
+				for _, rule := range nodeRole.Rules {
+					Expect(rule.Resources).NotTo(ContainElement("cniannotations"))
+				}
 
 				// Check CNI configmap.
 				cniCmResource := rtest.GetResource(resources, "cni-config", "calico-system", "", "v1", "ConfigMap")
@@ -290,6 +331,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "DATASTORE_TYPE", Value: "kubernetes"},
 					{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 					{Name: "CALICO_MANAGE_CNI", Value: "true"},
+					{Name: "CALICO_IPAM_TYPE", Value: "Calico"},
 					{Name: "CALICO_NETWORKING_BACKEND", Value: "bird"},
 					{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 					{Name: "CLUSTER_TYPE", Value: "k8s,operator,bgp"},
@@ -338,7 +380,6 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "policysync", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/nodeagent", Type: &dirOrCreate}}},
 					{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 					{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-					{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 					{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 					{
 						Name: "tigera-ca-bundle",
@@ -375,7 +416,6 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/var/log/calico", Name: "var-log-calico"},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
-					{MountPath: "/sys/kernel/security", Name: "sys-kernel-security", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -399,6 +439,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -486,6 +528,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 					{Name: "CALICO_NETWORKING_BACKEND", Value: "bird"},
 					{Name: "CALICO_MANAGE_CNI", Value: "true"},
+					{Name: "CALICO_IPAM_TYPE", Value: "Calico"},
 					{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 					{Name: "CLUSTER_TYPE", Value: "k8s,operator,bgp"},
 					{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
@@ -532,7 +575,6 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "cni-plugins-stage", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 					{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 					{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-					{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 					{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 					{Name: "policysync", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/nodeagent", Type: &dirOrCreate}}},
 					{
@@ -570,7 +612,6 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/var/log/calico", Name: "var-log-calico"},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
-					{MountPath: "/sys/kernel/security", Name: "sys-kernel-security", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -698,6 +739,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -779,6 +822,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "DATASTORE_TYPE", Value: "kubernetes"},
 					{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 					{Name: "CALICO_MANAGE_CNI", Value: "true"},
+					{Name: "CALICO_IPAM_TYPE", Value: "Calico"},
 					{Name: "CALICO_NETWORKING_BACKEND", Value: "vxlan"},
 					{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 					{Name: "CLUSTER_TYPE", Value: "k8s,operator,ecs"},
@@ -827,7 +871,6 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "policysync", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/nodeagent", Type: &dirOrCreate}}},
 					{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 					{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-					{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 					{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 					{
 						Name: "tigera-ca-bundle",
@@ -864,7 +907,6 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/var/log/calico", Name: "var-log-calico"},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
-					{MountPath: "/sys/kernel/security", Name: "sys-kernel-security", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -967,7 +1009,6 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "policysync", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/nodeagent", Type: &dirOrCreate}}},
 					{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 					{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-					{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 					{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 					{
 						Name: "tigera-ca-bundle",
@@ -1003,7 +1044,6 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/etc/pki/tls/certs", Name: "tigera-ca-bundle", ReadOnly: true},
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
-					{MountPath: "/sys/kernel/security", Name: "sys-kernel-security", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -1074,6 +1114,7 @@ var _ = Describe("Node rendering tests", func() {
 						corev1.EnvVar{Name: "CALICO_NETWORKING_BACKEND", Value: "none"},
 						corev1.EnvVar{Name: "NO_DEFAULT_POOLS", Value: "true"},
 						corev1.EnvVar{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
+						corev1.EnvVar{Name: "CALICO_IPAM_TYPE", Value: string(ipam)},
 					)
 					for _, expected := range expectedEnvs {
 						Expect(ds.Spec.Template.Spec.Containers[0].Env).To(ContainElement(expected))
@@ -1109,6 +1150,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -1191,6 +1234,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "DATASTORE_TYPE", Value: "kubernetes"},
 					{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 					{Name: "CALICO_MANAGE_CNI", Value: "true"},
+					{Name: "CALICO_IPAM_TYPE", Value: "Calico"},
 					{Name: "CALICO_NETWORKING_BACKEND", Value: "vxlan"},
 					{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 					{Name: "CLUSTER_TYPE", Value: "k8s,operator,ecs"},
@@ -1238,7 +1282,6 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "policysync", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/nodeagent", Type: &dirOrCreate}}},
 					{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 					{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-					{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 					{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 					{
 						Name: "tigera-ca-bundle",
@@ -1275,7 +1318,6 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/var/log/calico", Name: "var-log-calico"},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
-					{MountPath: "/sys/kernel/security", Name: "sys-kernel-security", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -1375,7 +1417,6 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "policysync", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/nodeagent", Type: &dirOrCreate}}},
 					{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 					{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-					{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 					{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 					{
 						Name: "tigera-ca-bundle",
@@ -1411,7 +1452,6 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/etc/pki/tls/certs", Name: "tigera-ca-bundle", ReadOnly: true},
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
-					{MountPath: "/sys/kernel/security", Name: "sys-kernel-security", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -1436,6 +1476,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -1492,7 +1534,6 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "flexvol-driver-host", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/etc/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds", Type: &dirOrCreate}}},
 					{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 					{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-					{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 					{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 					{
 						Name: "tigera-ca-bundle",
@@ -1521,6 +1562,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "DATASTORE_TYPE", Value: "kubernetes"},
 					{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 					{Name: "CALICO_MANAGE_CNI", Value: "true"},
+					{Name: "CALICO_IPAM_TYPE", Value: "Calico"},
 					{Name: "CALICO_NETWORKING_BACKEND", Value: "bird"},
 					{Name: "CLUSTER_TYPE", Value: "k8s,operator,openshift,bgp"},
 					{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
@@ -1568,6 +1610,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: render.BirdTemplatesConfigMapName, ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
@@ -1974,6 +2018,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -2583,6 +2629,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -2669,6 +2717,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 					{Name: "CALICO_NETWORKING_BACKEND", Value: "none"},
 					{Name: "CALICO_MANAGE_CNI", Value: "true"},
+					{Name: "CALICO_IPAM_TYPE", Value: "HostLocal"},
 					{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 					{Name: "CLUSTER_TYPE", Value: "k8s,operator"},
 					{Name: "USE_POD_CIDR", Value: "true"},
@@ -2818,6 +2867,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -3318,4 +3369,107 @@ func verifyInitContainers(ds *appsv1.DaemonSet, instance *operatorv1.Installatio
 	} else {
 		Expect(flexvolContainer).To(BeNil())
 	}
+}
+
+var _ = Describe("Node CNI address family selection", func() {
+	const l2Workload = operatorv1.IPPoolAllowedUse("L2Workload")
+
+	var cfg render.NodeConfiguration
+	var instance *operatorv1.InstallationSpec
+
+	// ipamConfig renders the CNI config map and returns the ipam block of the calico plugin.
+	ipamConfig := func() map[string]any {
+		component := render.Node(&cfg)
+		Expect(component.ResolveImages(nil)).To(BeNil())
+		resources, _ := component.Objects()
+
+		cm, ok := rtest.GetResource(resources, "cni-config", "calico-system", "", "v1", "ConfigMap").(*corev1.ConfigMap)
+		Expect(ok).To(BeTrue())
+
+		var parsed cniNetworkConfig
+		Expect(json.Unmarshal([]byte(cm.Data["config"]), &parsed)).NotTo(HaveOccurred())
+		Expect(parsed.Plugins).NotTo(BeEmpty())
+		return parsed.Plugins[0].IPAM
+	}
+
+	BeforeEach(func() {
+		ff := true
+		instance = &operatorv1.InstallationSpec{
+			CNI: &operatorv1.CNISpec{
+				Type: operatorv1.PluginCalico,
+				IPAM: &operatorv1.IPAMSpec{Type: operatorv1.IPAMPluginCalico},
+			},
+			CalicoNetwork: &operatorv1.CalicoNetworkSpec{
+				BGP:                        &bgpEnabled,
+				IPPools:                    []operatorv1.IPPool{{CIDR: "192.168.0.0/16"}},
+				NodeAddressAutodetectionV4: &operatorv1.NodeAddressAutodetection{FirstFound: &ff},
+			},
+		}
+		defaultCNIConfDir, defaultCNIBinDir := render.DefaultCNIDirectories(instance.KubernetesProvider)
+		instance.CNI.ConfDir, instance.CNI.BinDir = &defaultCNIConfDir, &defaultCNIBinDir
+
+		scheme := runtime.NewScheme()
+		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
+		cli := ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
+		certificateManager, err := certificatemanager.Create(cli, nil, clusterDomain, common.OperatorNamespace(), certificatemanager.AllowCACreation())
+		Expect(err).NotTo(HaveOccurred())
+
+		cfg = render.NodeConfiguration{
+			K8sServiceEp:       k8sapi.ServiceEndpoint{},
+			Installation:       instance,
+			TLS:                getTyphaNodeTLS(cli, certificateManager),
+			ClusterDomain:      clusterDomain,
+			FelixConfiguration: &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)}},
+			IPPools:            instance.CalicoNetwork.IPPools,
+		}
+	})
+
+	It("should not enable IPv6 assignment for a pool that doesn't allow workloads", func() {
+		cfg.IPPools = append(cfg.IPPools, operatorv1.IPPool{
+			CIDR:        "2001:db8:1::/122",
+			AllowedUses: []operatorv1.IPPoolAllowedUse{l2Workload},
+		})
+		ipam := ipamConfig()
+		Expect(ipam).To(HaveKeyWithValue("assign_ipv4", "true"))
+		Expect(ipam).To(HaveKeyWithValue("assign_ipv6", "false"))
+	})
+
+	It("should enable IPv6 assignment for a pool that allows workloads", func() {
+		cfg.IPPools = append(cfg.IPPools, operatorv1.IPPool{
+			CIDR:        "2001:db8:1::/122",
+			AllowedUses: []operatorv1.IPPoolAllowedUse{l2Workload, operatorv1.IPPoolAllowedUseWorkload},
+		})
+		Expect(ipamConfig()).To(HaveKeyWithValue("assign_ipv6", "true"))
+	})
+
+	It("should enable IPv6 assignment for a pool with no allowed uses set", func() {
+		cfg.IPPools = append(cfg.IPPools, operatorv1.IPPool{CIDR: "2001:db8:1::/122"})
+		Expect(ipamConfig()).To(HaveKeyWithValue("assign_ipv6", "true"))
+	})
+
+	It("should disable IPv4 assignment when the only IPv4 pool is tunnel-only", func() {
+		cfg.IPPools = []operatorv1.IPPool{{
+			CIDR:        "192.168.0.0/16",
+			AllowedUses: []operatorv1.IPPoolAllowedUse{operatorv1.IPPoolAllowedUseTunnel},
+		}}
+		Expect(ipamConfig()).To(HaveKeyWithValue("assign_ipv4", "false"))
+	})
+
+	It("should render host-local as single-stack when the IPv6 pool doesn't allow workloads", func() {
+		instance.CNI.IPAM.Type = operatorv1.IPAMPluginHostLocal
+		cfg.IPPools = append(cfg.IPPools, operatorv1.IPPool{
+			CIDR:        "2001:db8:1::/122",
+			AllowedUses: []operatorv1.IPPoolAllowedUse{l2Workload},
+		})
+		Expect(ipamConfig()).To(Equal(map[string]any{"type": "host-local", "subnet": "usePodCidr"}))
+	})
+})
+
+// cniNetworkConfig mirrors the parts of the rendered CNI network config the tests assert on.
+type cniNetworkConfig struct {
+	Plugins []cniPluginConfig `json:"plugins"`
+}
+
+type cniPluginConfig struct {
+	IPAM map[string]any `json:"ipam"`
 }

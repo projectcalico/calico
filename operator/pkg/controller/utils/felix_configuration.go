@@ -24,7 +24,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func PatchFelixConfiguration(ctx context.Context, c client.Client, patchFn func(fc *v3.FelixConfiguration) (bool, error)) (*v3.FelixConfiguration, error) {
+// PatchFelixConfiguration applies patchFn to the default FelixConfiguration, writing as fieldOwner.
+// Each caller names itself, because a write with no owner is recorded as "operator", which the
+// managedfields package reads as a pre-apply operator and force-takes or clears on its first apply.
+func PatchFelixConfiguration(ctx context.Context, c client.Client, fieldOwner string, patchFn func(fc *v3.FelixConfiguration) (bool, error)) (*v3.FelixConfiguration, error) {
 	// Fetch any existing default FelixConfiguration object.
 	fc := &v3.FelixConfiguration{}
 	err := c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
@@ -32,12 +35,12 @@ func PatchFelixConfiguration(ctx context.Context, c client.Client, patchFn func(
 		return nil, fmt.Errorf("unable to read FelixConfiguration: %w", err)
 	}
 
-	// Create a base state for the upcoming patch operation.
-	patchFrom := client.MergeFrom(fc.DeepCopy())
-
 	if err = RestoreV3Metadata(fc); err != nil {
 		return nil, err
 	}
+
+	// Diff against the restored object, so the patch leaves the v3 metadata stash alone.
+	patchFrom := client.MergeFrom(fc.DeepCopy())
 
 	// Apply desired changes to the FelixConfiguration.
 	updated, err := patchFn(fc)
@@ -48,11 +51,11 @@ func PatchFelixConfiguration(ctx context.Context, c client.Client, patchFn func(
 		// Apply the patch.
 		if fc.ResourceVersion == "" {
 			fc.Name = "default"
-			if err := c.Create(ctx, fc); err != nil {
+			if err := c.Create(ctx, fc, client.FieldOwner(fieldOwner)); err != nil {
 				return nil, err
 			}
 		} else {
-			if err := c.Patch(ctx, fc, patchFrom); err != nil {
+			if err := c.Patch(ctx, fc, patchFrom, client.FieldOwner(fieldOwner)); err != nil {
 				return nil, err
 			}
 		}

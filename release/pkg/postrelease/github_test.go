@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -12,8 +13,9 @@ import (
 	"github.com/google/go-github/v53/github"
 
 	"github.com/projectcalico/calico/release/internal/charts"
+	"github.com/projectcalico/calico/release/internal/defaults"
+	igithub "github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/outputs"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -34,13 +36,7 @@ func calicoctlBinaryList() []string {
 	return binaries
 }
 
-func githubClient() *github.Client {
-	cli := github.NewClient(http.DefaultClient)
-	if githubToken != "" {
-		cli = github.NewTokenClient(context.Background(), githubToken)
-	}
-	return cli
-}
+var githubClient = sync.OnceValue(igithub.Client)
 
 func TestGitHubRelease(t *testing.T) {
 	t.Parallel()
@@ -101,7 +97,10 @@ func TestGitHubMilestone(t *testing.T) {
 
 	checkVersion(t, releaseVersion)
 
-	ver := version.New(releaseVersion)
+	ver, err := version.New(releaseVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
 	nextVer, err := ver.NextReleaseVersion()
 	if err != nil {
 		t.Fatalf("failed to get next release version: %v", err)
@@ -110,8 +109,8 @@ func TestGitHubMilestone(t *testing.T) {
 		milestone      string
 		expectedStated string
 	}{
-		{milestone: fmt.Sprintf("%s %s", utils.ProductName, ver.FormattedString()), expectedStated: "closed"},
-		{milestone: fmt.Sprintf("%s %s", utils.ProductName, nextVer.FormattedString()), expectedStated: "open"},
+		{milestone: fmt.Sprintf("%s %s", defaults.ProductName, ver.String()), expectedStated: "closed"},
+		{milestone: fmt.Sprintf("%s %s", defaults.ProductName, nextVer.String()), expectedStated: "open"},
 	} {
 		t.Run(tt.milestone, func(t *testing.T) {
 			milestones, resp, err := githubClient().Issues.ListMilestones(context.Background(), githubOrg, githubRepo, &github.MilestoneListOptions{

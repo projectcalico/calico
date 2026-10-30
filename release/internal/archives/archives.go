@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -41,22 +42,43 @@ const (
 	// Make targets that produce the Windows archive and its install script.
 	windowsArchiveTarget = "release-windows-archive"
 	windowsScriptTarget  = windowsDistDir + "/" + windowsScript
+
+	WindowsDirName = "windows"
 )
 
-var WindowsFileName = func(version string) string {
-	return fmt.Sprintf("calico-windows-%s.zip", version)
-}
+var (
+	WindowsFileName = func(version string) string {
+		return fmt.Sprintf("calico-windows-%s.zip", version)
+	}
 
-var FileName = func(a Archive) string {
-	return fmt.Sprintf("%s-%s", filePrefix, a.Version)
-}
+	WindowsDir = func(outputDir string) string {
+		return outputDir
+	}
+
+	WindowsScriptDir = func(outputDir string) string {
+		return outputDir
+	}
+
+	WindowsHashreleaseDir = func(outputDir string) string {
+		return filepath.Join(outputDir, outputs.FilesDirName, WindowsDirName)
+	}
+
+	FileName = func(a Archive) string {
+		return fmt.Sprintf("%s-%s", filePrefix, a.Version)
+	}
+)
 
 func withExtension(name string) string {
 	return fmt.Sprintf("%s.tgz", name)
 }
 
+// ArchiveFileName is the archive as a release names it, without a directory.
+func ArchiveFileName(a Archive) string {
+	return withExtension(FileName(a))
+}
+
 func Path(a Archive) string {
-	return filepath.Join(a.OutputDir, withExtension(FileName(a)))
+	return filepath.Join(a.OutputDir, ArchiveFileName(a))
 }
 
 var validate = func(a Archive) error {
@@ -157,11 +179,6 @@ type settings struct {
 	Archive
 
 	steps.Step
-}
-
-// The Windows files a release publishes beside the tarball.
-func (a Archive) windowsFiles() []string {
-	return []string{WindowsFileName(a.Version), windowsScript}
 }
 
 type (

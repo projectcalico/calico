@@ -31,11 +31,13 @@ import (
 
 const (
 	// Common attributes which may be set on allocations by clients.
-	IPAMBlockAttributePod             = "pod"
-	IPAMBlockAttributeNamespace       = "namespace"
-	IPAMBlockAttributeNode            = "node"
-	IPAMBlockAttributeType            = "type"
-	IPAMBlockAttributeService         = "service"
+	IPAMBlockAttributePod       = "pod"
+	IPAMBlockAttributeNamespace = "namespace"
+	IPAMBlockAttributeNode      = "node"
+	IPAMBlockAttributeType      = "type"
+	IPAMBlockAttributeService   = "service"
+
+	// A new type needs a case in accounting.Allocation.Kind, or IPAM reports count it as Unknown and never report it leaked.
 	IPAMBlockAttributeTypeIPIP        = "ipipTunnelAddress"
 	IPAMBlockAttributeTypeVXLAN       = "vxlanTunnelAddress"
 	IPAMBlockAttributeTypeVXLANV6     = "vxlanV6TunnelAddress"
@@ -59,6 +61,10 @@ const (
 
 	IPAMAffinityTypeHost    = "host"
 	IPAMAffinityTypeVirtual = "virtual"
+
+	// IPAMAffinityLoadBalancer is the affinity used for blocks that back Service
+	// LoadBalancer addresses. It is a virtual affinity: no node owns the block.
+	IPAMAffinityLoadBalancer = IPAMAffinityTypeVirtual + ":load-balancer"
 )
 
 var (

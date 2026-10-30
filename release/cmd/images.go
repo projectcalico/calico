@@ -20,7 +20,9 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/operatorimages"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -52,7 +54,7 @@ var (
 				return err
 			}
 			return images.Build(
-				cfg.RepoRootDir, ver.FormattedString(),
+				cfg.RepoRootDir, ver.String(),
 				images.NarrowVariants(images.BuildVariants, c.StringSlice(imageReleaseDirsFlag.Name)),
 				images.WithRunner(commandRunner),
 				images.WithRegistries(c.StringSlice(registryFlag.Name)...),
@@ -88,13 +90,17 @@ var (
 			dirs := c.StringSlice(imageReleaseDirsFlag.Name)
 			scanDirs := dirs
 			if len(scanDirs) == 0 {
-				scanDirs = utils.ImageDiscoveryDirs()
+				scanDirs = images.ReleaseDirs()
 			}
-			scan, err := scanRequest(c, cfg, scanDirs, ver.PrimaryStream(), utils.CalicoProductCode)
+			scan, err := scanRequest(c, cfg, scanDirs, ver.PrimaryStream(), defaults.ProductCode)
 			if err != nil {
 				return err
 			}
-			published, w, err := publishRecord(cfg, imagesPublishStep, ver.FormattedString(), !c.Bool(localFlag.Name))
+			records, err := recordsDir(cfg, c, oncePin(pinForPublish), ver.String())
+			if err != nil {
+				return err
+			}
+			published, w, err := publishRecord(records, images.PublishStep, !c.Bool(localFlag.Name))
 			if err != nil {
 				return err
 			}
@@ -123,15 +129,13 @@ var (
 			}
 
 			return images.Publish(
-				cfg.RepoRootDir, ver.FormattedString(),
+				cfg.RepoRootDir, ver.String(),
 				images.NarrowVariants(images.PublishVariants, dirs),
 				!c.Bool(localFlag.Name), registryDigestResolver, opts...,
 			)
 		}
 	}
 )
-
-const imagesPublishStep = "images-publish"
 
 func imagesPublishCommand(cfg *Config) *cli.Command {
 	return &cli.Command{
@@ -145,13 +149,17 @@ func imagesPublishCommand(cfg *Config) *cli.Command {
 // releaseImageList runs make in every release directory, so a test replaces it.
 var releaseImageList = utils.BuildReleaseImageList
 
+// operatorCheckDirs lists the directories whose images the operator in this
+// repo must deploy.
+var operatorCheckDirs = images.ReleaseDirs
+
 var imagesCheckOperatorAction = func(cfg *Config) func(ctx context.Context, c *cli.Command) error {
 	return func(_ context.Context, _ *cli.Command) error {
 		configureLogging("images-check-operator.log")
 
 		// The operator publishes to registries of its own, so it is named apart from the
 		// release directories rather than discovered with them.
-		dirs := append(utils.ImageDiscoveryDirs(), utils.OperatorDir)
+		dirs := append(operatorCheckDirs(), operator.DirName)
 		built, err := releaseImageList(cfg.RepoRootDir, dirs...)
 		if err != nil {
 			return err
@@ -189,5 +197,6 @@ func scanRequest(c *cli.Command, cfg *Config, dirs []string, stream, productCode
 		Stream:      stream,
 		Release:     !c.Bool(hashreleaseFlag.Name),
 		OutputDir:   cfg.TmpDir,
+		DryRun:      c.Bool(localFlag.Name),
 	}, nil
 }

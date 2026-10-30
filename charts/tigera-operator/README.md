@@ -197,12 +197,25 @@ certs:
 resources: {}
 
 # Tolerations for the tigera/operator pod itself.
-# By default, will schedule on all possible place.
+# By default, will schedule on nodes that are not yet ready, but not on cordoned nodes.
 tolerations:
-- effect: NoExecute
+- key: CriticalAddonsOnly
   operator: Exists
-- effect: NoSchedule
+- key: node-role.kubernetes.io/master
   operator: Exists
+  effect: NoSchedule
+- key: node-role.kubernetes.io/control-plane
+  operator: Exists
+  effect: NoSchedule
+- key: node.kubernetes.io/not-ready
+  operator: Exists
+  effect: NoSchedule
+- key: node.kubernetes.io/network-unavailable
+  operator: Exists
+  effect: NoSchedule
+- key: node.cloudprovider.kubernetes.io/uninitialized
+  operator: Exists
+  effect: NoSchedule
 
 # NodeSelector for the tigera/operator pod itself.
 nodeSelector:
@@ -213,6 +226,15 @@ podAnnotations: {}
 
 # Custom labels for the tigera/operator pod itself
 podLabels: {}
+
+# Deployment strategy for the tigera-operator deployment.
+# By default no strategy is set and the Kubernetes default (RollingUpdate) applies.
+# Example: with Helm 3 `--wait` readiness checks, let the install complete before
+# any node can run the operator pod:
+#   strategy:
+#     rollingUpdate:
+#       maxUnavailable: 1
+strategy: {}
 
 # Security context applied to all containers in the tigera-operator deployment.
 # By default no security context is set; override to harden the operator pod.

@@ -20,6 +20,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 
@@ -59,6 +60,8 @@ type AttachPoint struct {
 	SkipEgressRedirect            bool
 	TunnelMTU                     uint16
 	VXLANPort                     uint16
+	VXLANSrcPortMin               uint16
+	VXLANSrcPortMax               uint16
 	WgPort                        uint16
 	Wg6Port                       uint16
 	ExtToServiceConnmark          uint32
@@ -70,6 +73,7 @@ type AttachPoint struct {
 	NATOutgoingExcludeHosts       bool
 	UDPOnly                       bool
 	RedirectPeer                  bool
+	IfaceEncaps                   bool
 	FlowLogsEnabled               bool
 	OverlayTunnelID               uint32
 	AttachType                    apiv3.BPFAttachOption
@@ -97,6 +101,9 @@ type AttachPoint struct {
 // API — Felix sets Netkit=true on the AttachPoint when it detects a netkit
 // device and derives this string from that flag.
 const AttachOptionNetkit = "Netkit"
+
+// preambleProgName is the preamble's program name as the kernel truncates it.
+const preambleProgName = "cali_tc_preambl"
 
 // IsNetkit reports whether this attach point targets a netkit device.
 func (ap *AttachPoint) IsNetkit() bool {
@@ -424,6 +431,31 @@ func ListAttachedTcxPrograms(iface, attachHook string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error querying program for %s:%s:%w", iface, attachHook, err)
 	}
+	return progNames(progId, progCnt), nil
+}
+
+// PreambleAttached reports whether the preamble is attached to hook h,
+// querying the mechanism AttachProgram uses.
+func (ap *AttachPoint) PreambleAttached(h hook.Hook) (bool, error) {
+	ingress := h == hook.Ingress
+	query := libbpf.ProgQueryTcx
+	switch {
+	case ap.IsNetkit():
+		query = libbpf.ProgQueryNetkit // Ingress is the peer side.
+	case ap.AttachType != apiv3.BPFAttachOptionTCX:
+		progs, err := ListAttachedPrograms(ap.Iface, h.String(), false)
+		return len(progs) > 0, err
+	}
+	progId, _, progCnt, err := query(ap.IfIndex, ingress)
+	if err != nil {
+		return false, fmt.Errorf("error querying programs for %s:%s: %w", ap.Iface, h, err)
+	}
+	return slices.ContainsFunc(progNames(progId, progCnt), func(name string) bool {
+		return strings.Contains(name, preambleProgName)
+	}), nil
+}
+
+func progNames(progId [64]uint32, progCnt uint32) []string {
 	progNames := []string{}
 	for i := range progCnt {
 		name, err := libbpf.ProgName(progId[i])
@@ -432,7 +464,7 @@ func ListAttachedTcxPrograms(iface, attachHook string) ([]string, error) {
 		}
 		progNames = append(progNames, name)
 	}
-	return progNames, nil
+	return progNames
 }
 
 func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedProg, error) {
@@ -459,7 +491,7 @@ func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedPro
 		if !ok {
 			continue
 		}
-		if strings.Contains(bpfFilter.Name, "cali_tc_preambl") || (includeLegacy && strings.Contains(bpfFilter.Name, "calico")) {
+		if strings.Contains(bpfFilter.Name, preambleProgName) || (includeLegacy && strings.Contains(bpfFilter.Name, "calico")) {
 			p := attachedProg{
 				Pref:   int(bpfFilter.Attrs().Priority),
 				Handle: bpfFilter.Attrs().Handle,
@@ -560,20 +592,22 @@ func (ap *AttachPoint) Config() string {
 
 func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	globalData := &libbpf.TcGlobalData{
-		ExtToSvcMark:  ap.ExtToServiceConnmark,
-		VxlanPort:     ap.VXLANPort,
-		Tmtu:          ap.TunnelMTU,
-		PSNatStart:    ap.PSNATStart,
-		PSNatLen:      ap.PSNATEnd,
-		WgPort:        ap.WgPort,
-		Wg6Port:       ap.Wg6Port,
-		NatIn:         ap.NATin,
-		NatOut:        ap.NATout,
-		LogFilterJmp:  uint32(ap.LogFilterIdx),
-		DSCP:          ap.DSCP,
-		IstioDSCP:     ap.IstioDSCP,
-		MaglevLUTSize: ap.MaglevLUTSize,
-		IPFragTimeout: ap.IPFragTimeout,
+		ExtToSvcMark:    ap.ExtToServiceConnmark,
+		VxlanPort:       ap.VXLANPort,
+		VxlanSrcPortMin: ap.VXLANSrcPortMin,
+		VxlanSrcPortMax: ap.VXLANSrcPortMax,
+		Tmtu:            ap.TunnelMTU,
+		PSNatStart:      ap.PSNATStart,
+		PSNatLen:        ap.PSNATEnd,
+		WgPort:          ap.WgPort,
+		Wg6Port:         ap.Wg6Port,
+		NatIn:           ap.NATin,
+		NatOut:          ap.NATout,
+		LogFilterJmp:    uint32(ap.LogFilterIdx),
+		DSCP:            ap.DSCP,
+		IstioDSCP:       ap.IstioDSCP,
+		MaglevLUTSize:   ap.MaglevLUTSize,
+		IPFragTimeout:   ap.IPFragTimeout,
 	}
 
 	// Only set HostIfindex for netkit interfaces. For netkit, skb->ifindex
@@ -636,6 +670,10 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 
 	if ap.RedirectPeer {
 		globalData.Flags |= libbpf.GlobalsRedirectPeer
+	}
+
+	if ap.IfaceEncaps {
+		globalData.Flags |= libbpf.GlobalsIfaceEncaps
 	}
 
 	if ap.FlowLogsEnabled {
@@ -745,8 +783,11 @@ var IsTcxSupported = sync.OnceValue(func() bool {
 	return err == nil
 })
 
+// NetkitProbeIface is the short-lived device that IsNetkitSupported creates.
+const NetkitProbeIface = "cali_nk_probe"
+
 var IsNetkitSupported = sync.OnceValue(func() bool {
-	name := "cali_nk_probe"
+	name := NetkitProbeIface
 	// Clean up a stale probe device that may have been left behind by a
 	// previous crash before the deferred cleanup could run.
 	if old, err := netlink.LinkByName(name); err == nil {

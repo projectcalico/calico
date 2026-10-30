@@ -129,7 +129,9 @@ generate_v3_bundle() {
 	local out=$1
 	local map_version=$2
 	echo "# projectcalico.org/v3 and operator.tigera.io/v1 APIs" > $out
-	for FILE in $(ls ../charts/projectcalico.org.v3/templates/*.yaml | xargs -n1 basename); do
+
+	# The chart links the operator CRDs in for Helm installs; append_operator_crds adds them here.
+	for FILE in $(ls ../charts/projectcalico.org.v3/templates/*.yaml | xargs -n1 basename | grep -v '^operator\.tigera\.io_'); do
 		${HELM} template \
 			--show-only templates/$FILE \
 			--set version=$CALICO_VERSION \
@@ -164,7 +166,9 @@ for FILE in $VALUES_FILES; do
 		-f ../charts/values/$FILE > $FILE
 done
 
-# calico-v3-crds.yaml is the only values file with admission policies, so it also needs a v1beta1 build.
+# Only calico-v3-crds.yaml gets a v1beta1 build, for its v3 admission policies. The other manifests
+# carry strip-cni-annotations at v1 only: on Kubernetes 1.34 and 1.35 that document fails to apply,
+# and pods created with the protected CNI annotations are refused instead of having them stripped.
 ${HELM} -n kube-system template \
 	../charts/calico \
 	--set version=$CALICO_VERSION \

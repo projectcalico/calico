@@ -325,11 +325,13 @@ spec:
                     should be able to access this address. This field is used by managed clusters only.
                   type: string
                 tls:
+                  default: {}
                   description:
                     TLS provides options for configuring how Managed Clusters
                     can establish an mTLS connection with the Management Cluster.
                   properties:
                     ca:
+                      default: Tigera
                       description: |-
                         CA indicates which verification method the tunnel client should use to verify the tunnel server's identity.
                         When left blank or set to 'Tigera', the tunnel client will expect a self-signed cert to be included in the certificate bundle

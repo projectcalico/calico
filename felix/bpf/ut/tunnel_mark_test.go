@@ -95,3 +95,35 @@ func TestTunnelMarkSet(t *testing.T) {
 
 	expectMark(tcdefs.MarkSeenTunnelKeySet)
 }
+
+// BYPASS_FWD without the tunnel key must still get the key set on an encapsulating HEP.
+func TestTunnelBypassForwardSetsKey(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "TNLb"
+	defer func() { bpfIfaceName = "" }()
+	defer cleanUpMaps()
+
+	_, _, _, _, pktBytes, err := testPacketUDPDefault()
+	Expect(err).NotTo(HaveOccurred())
+
+	hostIP = node1ip
+
+	defer resetRTMap(rtMap)
+	err = rtMap.Update(
+		routes.NewKey(ip.MustParseCIDROrIP("2.2.2.0/24").(ip.V4CIDR)).AsBytes(),
+		routes.NewValueWithNextHop(
+			routes.FlagsRemoteWorkload|routes.FlagInIPAMPool|routes.FlagTunneled,
+			ip.FromNetIP(node2ip).(ip.V4Addr),
+		).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Forwarding needs the destination's route, so a packet left unparsed is dropped.
+	skbMark = tcdefs.MarkSeenBypassForward
+	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).To(Equal("TC_ACT_UNSPEC"))
+	}, withIfaceEncaps())
+}

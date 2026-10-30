@@ -97,6 +97,7 @@ func convertIPAMBlock(kvp *model.KVPair) (*apiv3.IPAMBlock, error) {
 			HandleID:            a.HandleID,
 			ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
 			AlternateOwnerAttrs: a.AlternateOwnerAttrs,
+			ReleasedAt:          a.ReleasedAt,
 		}
 	}
 

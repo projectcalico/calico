@@ -142,9 +142,16 @@ func Validate(current any) error {
 				if name == "" || name == "<nil>" {
 					name = resolveKind(rObj)
 				}
+
+				// Duplicate and required errors carry no detail, so fall back
+				// to the rendered body to keep the message meaningful.
+				reason := e.Detail
+				if reason == "" {
+					reason = e.ErrorBody()
+				}
 				verr.ErroredFields = append(verr.ErroredFields, errors.ErroredField{
 					Name:   name,
-					Reason: e.Detail,
+					Reason: reason,
 				})
 			}
 		}
@@ -1055,6 +1062,13 @@ func validateRule(structLevel validator.StructLevel) {
 
 	// ICMP protocol and IPVersion consistency checks are handled by CEL
 	// XValidation rules on Rule.
+
+	// The CRD schema also limits IPVersion to 4 or 6, but Profile has no CRD, so its rules only get
+	// this check.
+	if rule.IPVersion != nil && *rule.IPVersion != 4 && *rule.IPVersion != 6 {
+		structLevel.ReportError(reflect.ValueOf(*rule.IPVersion),
+			"IPVersion", "", reason("IP version must be 4 or 6"), "")
+	}
 
 	var seenV4, seenV6 bool
 

@@ -16,37 +16,25 @@ package distribution
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
+	"cloud.google.com/go/storage"
 	"github.com/Masterminds/semver/v3"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-const (
-	gcloudCmd = "gcloud"
-	awsCmd    = "aws"
-
-	s3Cmd      = "s3"
-	storageCmd = "storage"
-
-	cpVerb    = "cp"
-	syncVerb  = "sync"
-	rsyncVerb = "rsync"
-
-	recursiveFlag = "--recursive"
-)
-
-var publicRead = []string{"--acl", "public-read"}
+const MutableCachePolicy = "max-age=60, s-maxage=300, stale-while-revalidate=60"
 
 var (
 	_ Handler = S3{}
@@ -62,32 +50,6 @@ var (
 	_ validator = HashreleaseServer{}
 )
 
-// paths is what cloud bucket handlers need to know.
-type paths struct {
-	src  string
-	dest string
-	dir  bool
-}
-
-func newPaths(src, dest string) (paths, error) {
-	dir, err := utils.DirExists(src)
-	if err != nil {
-		return paths{}, fmt.Errorf("reading %s: %w", src, err)
-	}
-	return paths{src: src, dest: dest, dir: dir}, nil
-}
-
-func (p paths) run(r command.CommandRunner, name string, args []string) error {
-	if r == nil {
-		r = &command.RealCommandRunner{}
-	}
-	logrus.WithField("args", args).Debugf("Running %s command", name)
-	if _, err := r.Run(name, args, nil); err != nil {
-		return fmt.Errorf("copying to %s: %w", p.dest, err)
-	}
-	return nil
-}
-
 type S3 struct {
 	URI string
 
@@ -95,54 +57,63 @@ type S3 struct {
 
 	Profile string
 
+	// Credentials, when set, are used alone: no env var or shared config is read.
+	Credentials aws.CredentialsProvider
+
 	Private bool
 
 	DryRun bool
 
-	Runner command.CommandRunner
+	CachePolicy string // Caching behaviour for the uploaded objects.
+
+	Exclude []string // Pattern matching for files or objects to exclude
+	Include []string // Pattern matching for files or objects to include.
+
+	store objectStore
 }
 
 func (d S3) Name() string { return d.URI }
 
-func (d S3) Publish(_ context.Context, src string) error {
-	p, err := newPaths(src, d.URI)
+func (d S3) Publish(ctx context.Context, src string) error {
+	// A dry-run copy reads nothing remote, so it needs no client or credentials.
+	t, key, err := d.transfer(ctx, d.DryRun && !d.Sync)
 	if err != nil {
 		return err
 	}
-	// A destination without the slash names one object rather than a prefix,
-	// so a directory upload would collapse into a single file.
-	if p.dir {
-		p.src, p.dest = addTrailingSlash(p.src), addTrailingSlash(p.dest)
-	}
-
-	args := []string{s3Cmd}
-	if d.Profile != "" {
-		args = append(args, "--profile", d.Profile)
-	}
-	if d.Sync {
-		// sync descends on its own, and the CLI rejects --recursive with it.
-		args = append(args, syncVerb)
-	} else {
-		args = append(args, cpVerb)
-		if p.dir {
-			args = append(args, recursiveFlag)
-		}
-	}
-	args = append(args, p.src, p.dest)
-	if !d.Private {
-		args = append(args, publicRead...)
-	}
-	if d.DryRun {
-		args = append(args, "--dryrun")
-	}
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		args = append(args, "--debug")
-	}
-	err = p.run(d.Runner, awsCmd, args)
-	if err != nil {
-		return fmt.Errorf("%s %s: %w", awsCmd, s3Cmd, err)
+	if err := t.upload(ctx, src, key); err != nil {
+		return fmt.Errorf("copying to %s: %w", d.URI, err)
 	}
 	return nil
+}
+
+// Fetch copies the tree under URI, or the one object it names, to dest.
+func (d S3) Fetch(ctx context.Context, dest string) error {
+	t, key, err := d.transfer(ctx, false)
+	if err != nil {
+		return err
+	}
+	if err := t.fetch(ctx, key, dest); err != nil {
+		return fmt.Errorf("copying from %s: %w", d.URI, err)
+	}
+	return nil
+}
+
+func (d S3) transfer(ctx context.Context, offline bool) (transfer, string, error) {
+	bucket, key, err := bucketURI(d.URI, "s3")
+	if err != nil {
+		return transfer{}, "", err
+	}
+	rules, err := filterRules(d.Exclude, d.Include)
+	if err != nil {
+		return transfer{}, "", err
+	}
+	store := d.store
+	if store == nil && !offline {
+		if store, err = newS3Store(ctx, bucket, d); err != nil {
+			return transfer{}, "", fmt.Errorf("%s: %w", d.URI, err)
+		}
+	}
+	return transfer{store: store, sync: d.Sync, dryRun: d.DryRun, rules: rules, differs: newerOrResized}, key, nil
 }
 
 func (d S3) Validate(u Upload) error {
@@ -159,50 +130,55 @@ func addTrailingSlash(s string) string {
 type GCS struct {
 	URI string
 
+	// Sync mirrors the source, deleting objects it no longer has.
 	Sync bool
 
 	DryRun bool
 
-	Runner command.CommandRunner
+	store objectStore
 }
 
 func (d GCS) Name() string { return d.URI }
 
-func (d GCS) Publish(_ context.Context, src string) error {
-	p, err := newPaths(src, d.URI)
+func (d GCS) Publish(ctx context.Context, src string) error {
+	t, key, done, err := d.transfer(ctx, d.DryRun && !d.Sync)
 	if err != nil {
 		return err
 	}
-
-	args := []string{storageCmd, cpVerb}
-	switch {
-	case d.Sync:
-		args = []string{storageCmd, rsyncVerb, recursiveFlag, "--delete-unmatched-destination-objects"}
-	case d.DryRun && p.dir:
-		args = []string{storageCmd, rsyncVerb, recursiveFlag}
-	case d.DryRun:
-		// cp has no dry-run of its own and rsync cannot take a file, so a
-		// single file is reported rather than previewed.
-		logrus.WithFields(logrus.Fields{
-			"cmd":  gcloudCmd,
-			"args": append(slices.Clone(args), p.src, p.dest),
-		}).Info("Dry run, not copying")
-		return nil
-	case p.dir:
-		args = append(args, recursiveFlag)
-	}
-	if d.DryRun {
-		args = append(args, "--dry-run")
-	}
-	args = append(args, p.src, p.dest)
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		args = append(args, "--verbosity=debug")
-	}
-	err = p.run(d.Runner, gcloudCmd, args)
-	if err != nil {
-		return fmt.Errorf("%s %s: %w", gcloudCmd, storageCmd, err)
+	defer done()
+	if err := t.upload(ctx, src, key); err != nil {
+		return fmt.Errorf("copying to %s: %w", d.URI, err)
 	}
 	return nil
+}
+
+// Fetch copies the tree under URI, or the one object it names, to dest.
+func (d GCS) Fetch(ctx context.Context, dest string) error {
+	t, key, done, err := d.transfer(ctx, false)
+	if err != nil {
+		return err
+	}
+	defer done()
+	if err := t.fetch(ctx, key, dest); err != nil {
+		return fmt.Errorf("copying from %s: %w", d.URI, err)
+	}
+	return nil
+}
+
+func (d GCS) transfer(ctx context.Context, offline bool) (transfer, string, func(), error) {
+	bucket, key, err := bucketURI(d.URI, "gs")
+	if err != nil {
+		return transfer{}, "", nil, err
+	}
+	store, done := d.store, func() {}
+	if store == nil && !offline {
+		client, err := storage.NewClient(ctx)
+		if err != nil {
+			return transfer{}, "", nil, fmt.Errorf("%s: storage client: %w", d.URI, err)
+		}
+		store, done = gcsStore{bucket: client.Bucket(bucket)}, func() { _ = client.Close() }
+	}
+	return transfer{store: store, sync: d.Sync, mirror: d.Sync, dryRun: d.DryRun, differs: contentDiffers}, key, done, nil
 }
 
 func (d GCS) Validate(u Upload) error {
@@ -260,10 +236,18 @@ func (d GithubRelease) Publish(ctx context.Context, src string) error {
 		return fmt.Errorf("create draft: %w", err)
 	}
 
-	// Collected rather than stopped at: one asset failing must not hide the
-	// rest, and a retry needs to know everything still outstanding.
-	_, err = steps.Go(files, func(path string) (struct{}, error) {
-		return struct{}{}, d.upload(ctx, rel.GetID(), path)
+	assets, err := steps.Go(files, github.NewAsset)
+	if err != nil {
+		return fmt.Errorf("release assets: %w", err)
+	}
+	missing, err := gh.SyncAssets(ctx, rel.GetID(), assets)
+	if err != nil {
+		return fmt.Errorf("check existing assets: %w", err)
+	}
+	d.log().WithFields(logrus.Fields{"upload": len(missing), "attached": len(files) - len(missing)}).Info("Release assets")
+
+	_, err = steps.GoLimit(missing, steps.MaxConcurrency, func(a github.Asset) (struct{}, error) {
+		return struct{}{}, d.upload(ctx, gh, rel.GetID(), a)
 	})
 	if err != nil {
 		return fmt.Errorf("upload assets: %w", err)
@@ -276,6 +260,14 @@ func (d GithubRelease) Publish(ctx context.Context, src string) error {
 		return fmt.Errorf("make latest: %w", err)
 	}
 	return gh.Publish(ctx, d.Tag, latest)
+}
+
+func (d GithubRelease) artifacts(src string) ([]outputs.ArtifactFile, error) {
+	base, err := github.DownloadURL(d.Repo.Org, d.Repo.Name, d.Tag)
+	if err != nil {
+		return nil, fmt.Errorf("download URL: %w", err)
+	}
+	return filesAt(src, base)
 }
 
 func (d GithubRelease) makeLatest(ctx context.Context) (bool, error) {
@@ -306,23 +298,28 @@ func (d GithubRelease) semver(tag string) (*semver.Version, error) {
 	return semver.NewVersion(strings.TrimPrefix(tag, "v"))
 }
 
-func (d GithubRelease) upload(ctx context.Context, releaseID int64, path string) error {
-	log := d.log().WithField("asset", filepath.Base(path))
-	gh, err := d.github()
-	if err != nil {
-		return fmt.Errorf("github client: %w", err)
-	}
+func (d GithubRelease) upload(ctx context.Context, gh *github.Releases, releaseID int64, a github.Asset) error {
+	log := d.log().WithField("asset", a.Name())
 	for attempt := 0; ; attempt++ {
-		err := gh.UploadAsset(ctx, releaseID, path)
+		err := gh.UploadAsset(ctx, releaseID, a.Path)
 		if err == nil {
 			log.Debug("Attached release asset")
 			return nil
 		}
-		if attempt < steps.MaxRetries {
-			log.WithError(err).WithField("attempt", attempt).Warn("Asset upload failed, retrying")
-			continue
+		if attempt >= steps.MaxRetries {
+			return fmt.Errorf("upload %s: %w", a.Path, err)
 		}
-		return fmt.Errorf("upload %s: %w", path, err)
+		log.WithError(err).WithField("attempt", attempt).Warn("Asset upload failed, retrying")
+		// The failure may have been a lost response rather than a lost
+		// upload, which would leave the name taken and reject the retry.
+		complete, stateErr := gh.AssetState(ctx, releaseID, a)
+		if stateErr != nil {
+			return fmt.Errorf("upload %s: %w", a.Path, errors.Join(err, stateErr))
+		}
+		if complete {
+			log.Debug("Asset already landed")
+			return nil
+		}
 	}
 }
 
@@ -362,7 +359,7 @@ func SHA256Sums(dir string) error {
 }
 
 func sha256Sums(dir string, files []string) ([]string, error) {
-	s, err := newSettings[Option](sumsStep, nil)
+	s, err := newSettings(sumsStep, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -388,6 +385,22 @@ func sha256Sums(dir string, files []string) ([]string, error) {
 	}
 	s.Logger().WithField("files", len(files)).Info("Wrote checksums")
 	return append(files, path), nil
+}
+
+func filesAt(dir, baseURL string) ([]outputs.ArtifactFile, error) {
+	paths, err := topLevelFiles(dir)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]outputs.ArtifactFile, len(paths))
+	for i, path := range paths {
+		u, err := url.JoinPath(baseURL, filepath.Base(path))
+		if err != nil {
+			return nil, fmt.Errorf("url for %s: %w", path, err)
+		}
+		files[i] = outputs.ArtifactFile{Name: filepath.Base(path), Path: path, URL: u}
+	}
+	return files, nil
 }
 
 func topLevelFiles(dir string) ([]string, error) {
@@ -417,8 +430,6 @@ type HashreleaseServer struct {
 	ProductCode string
 
 	DryRun bool
-
-	Runner command.CommandRunner
 }
 
 func (d HashreleaseServer) Name() string { return fmt.Sprintf("%s hashrelease", d.Release.Name) }
@@ -428,7 +439,6 @@ func (d HashreleaseServer) Publish(ctx context.Context, src string) error {
 		URI:    d.Release.BucketURI(d.Config),
 		Sync:   true,
 		DryRun: d.DryRun,
-		Runner: d.Runner,
 	}
 	if err := bucket.Publish(ctx, src); err != nil {
 		return err
@@ -438,6 +448,10 @@ func (d HashreleaseServer) Publish(ctx context.Context, src string) error {
 		return nil
 	}
 	return hashreleaseserver.Record(d.ProductCode, d.Release, d.Config)
+}
+
+func (d HashreleaseServer) artifacts(src string) ([]outputs.ArtifactFile, error) {
+	return filesAt(src, d.Release.URL())
 }
 
 func (d HashreleaseServer) Validate(u Upload) error {

@@ -22,9 +22,17 @@ import (
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/version"
 )
 
 type Option func(*CalicoManager) error
+
+func WithReleaseNotes(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.releaseNotes = enabled
+		return nil
+	}
+}
 
 func WithRepoRoot(root string) Option {
 	return func(r *CalicoManager) error {
@@ -54,14 +62,25 @@ func WithReleaseBranchValidation(validate bool) Option {
 	}
 }
 
-func WithVersion(version string) Option {
+func WithVersion(ver string) Option {
 	return func(r *CalicoManager) error {
-		r.calicoVersion = version
+		v, err := version.New(ver)
+		if err != nil {
+			return err
+		}
+		r.calicoVersion = v
 		return nil
 	}
 }
 
-func WithOperator(registry, image, version string) Option {
+func WithOperator(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.operator = enabled
+		return nil
+	}
+}
+
+func WithOperatorImage(registry, image, version string) Option {
 	return func(r *CalicoManager) error {
 		if image == "" {
 			return fmt.Errorf("operator image cannot be blank")
@@ -90,6 +109,13 @@ func WithOutputDir(outputDir string) Option {
 	}
 }
 
+func WithRecordsDir(dir string) Option {
+	return func(r *CalicoManager) error {
+		r.recordsDir = dir
+		return nil
+	}
+}
+
 func WithAWSProfile(profile string) Option {
 	return func(r *CalicoManager) error {
 		r.awsProfile = profile
@@ -114,6 +140,13 @@ func WithHelmIndex(enabled bool) Option {
 func WithHelmCharts(enabled bool) Option {
 	return func(r *CalicoManager) error {
 		r.helmCharts = enabled
+		return nil
+	}
+}
+
+func WithDryRun(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.dryRun = enabled
 		return nil
 	}
 }
@@ -259,14 +292,7 @@ func WithImageScanning(scanning bool, cfg imagescanner.Config) Option {
 
 func WithComponents(components map[string]registry.Component) Option {
 	return func(r *CalicoManager) error {
-		r.imageComponents = components
-		return nil
-	}
-}
-
-func WithGithubToken(token string) Option {
-	return func(r *CalicoManager) error {
-		r.githubToken = token
+		r.components = components
 		return nil
 	}
 }

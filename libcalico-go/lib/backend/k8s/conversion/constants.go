@@ -40,6 +40,14 @@ const (
 	// on older Pods.
 	AnnotationContainerID = "cni.projectcalico.org/containerID"
 
+	// AnnotationPodNetns stores the path of the pod's network namespace.
+	AnnotationPodNetns = "cni.projectcalico.org/podNetns"
+
+	// AnnotationNetworkStatus stores the network, VLAN and MAC of the pod's default interface. Other
+	// interfaces carry the same annotation as "cni.projectcalico.org/<ifname>" + AnnotationNetworkStatusSuffix.
+	AnnotationNetworkStatus       = "cni.projectcalico.org/network-status"
+	AnnotationNetworkStatusSuffix = ".network-status"
+
 	// NameLabel is a label that can be used to match a serviceaccount or namespace
 	// name exactly.
 	NameLabel = "projectcalico.org/name"

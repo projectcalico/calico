@@ -17,6 +17,7 @@ package crds
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing/fstest"
 
@@ -111,6 +112,17 @@ var _ = Describe("test crds pkg", func() {
 			Expect(onDisk).To(HaveKey(name))
 		}
 	})
+
+	// A Helm install takes the operator CRDs from the CRD charts, which link them in
+	// from this package.
+	for _, chart := range []string{"crd.projectcalico.org.v1", "projectcalico.org.v3"} {
+		It(fmt.Sprintf("ships every listed operator CRD in the %s chart", chart), func() {
+			for name := range calicoOperatorCRDs {
+				_, err := os.Stat(filepath.Join("../../../charts", chart, "templates", name))
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+	}
 
 	It("installs exactly those on Calico, whatever else the build generated", func() {
 		installed := map[string]bool{}

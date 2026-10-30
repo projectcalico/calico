@@ -28,7 +28,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 var dateApprovalScrubber = approvals.NewDateScrubber(`[a-zA-Z]{3}, \d{1,2} [a-zA-Z]{3} \d{4} \d{2}:\d{2}:\d{2} [A-Z]{3}`)
@@ -61,8 +60,8 @@ func testPin() *Pin {
 		ProductVersion: testProductVersion,
 		branch:         "release-v3.31",
 		Operator: registry.Component{
-			Image:    operator.DefaultImage,
-			Registry: operator.DefaultRegistries[0],
+			Image:    registry.OperatorImage,
+			Registry: registry.DefaultOperatorRegistry,
 			Version:  testProductVersion,
 		},
 		Components: testComponents(),
@@ -124,6 +123,44 @@ func TestWriteThenRead(t *testing.T) {
 	if diff := cmp.Diff(want.Components, got.Components); diff != "" {
 		t.Errorf("components differ: %s", diff)
 	}
+}
+
+func TestReleased(t *testing.T) {
+	p := testPin()
+	for _, name := range noImageComponents {
+		p.Components[name] = registry.Component{Version: testProductVersion}
+	}
+	got := p.Released()
+
+	t.Run("keeps components that produce no image, without one", func(t *testing.T) {
+		for _, name := range noImageComponents {
+			c, ok := got[name]
+			if !ok {
+				t.Errorf("%s missing from the released components", name)
+			} else if c.Image != "" {
+				t.Errorf("%s produces no image but was given %q", name, c.Image)
+			}
+		}
+	})
+
+	t.Run("names the image of a component that produces one", func(t *testing.T) {
+		if got[testImageComponent].Image != componentImage(testImageComponent) {
+			t.Errorf("%s: want image %q, got %q", testImageComponent,
+				componentImage(testImageComponent), got[testImageComponent].Image)
+		}
+	})
+
+	t.Run("names the calico image", func(t *testing.T) {
+		if got[calicoComponentName].Image != componentImage(calicoComponentName) {
+			t.Errorf("calico: want image %q, got %q", componentImage(calicoComponentName), got[calicoComponentName].Image)
+		}
+	})
+
+	t.Run("includes the operator", func(t *testing.T) {
+		if got[p.Operator.Image] != p.Operator {
+			t.Errorf("operator = %+v, want %+v", got[p.Operator.Image], p.Operator)
+		}
+	})
 }
 
 // Which components are excluded is a per-product list, so the expectation is
@@ -224,7 +261,10 @@ func TestComponentVersion(t *testing.T) {
 }
 
 func TestHashreleaseCarriesComponents(t *testing.T) {
-	h := testPin().Hashrelease("/base", true)
+	h, err := testPin().Hashrelease("/base", true)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if h.Source != filepath.Join("/base", "v3.31.0") {
 		t.Errorf("unexpected source: %q", h.Source)
 	}
@@ -295,7 +335,7 @@ func TestReusedPinKeepsStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if got, want := reused.Hashrelease("", false).Stream, fresh.Hashrelease("", false).Stream; got != want {
+	if got, want := publishStream(t, reused), publishStream(t, fresh); got != want {
 		t.Errorf("reused pin stream %q, want %q", got, want)
 	}
 }
@@ -650,7 +690,7 @@ func TestFileLoaderKeepsRecordedBranch(t *testing.T) {
 	if got.branch != "master" {
 		t.Errorf("recorded branch replaced by the checkout: got %q", got.branch)
 	}
-	if stream := got.Hashrelease("", false).Stream; stream != "master" {
+	if stream := publishStream(t, got); stream != "master" {
 		t.Errorf("stream %q, want master", stream)
 	}
 }
@@ -751,7 +791,7 @@ func TestLocalLoaderSourceErrorWritesNothing(t *testing.T) {
 		t.Fatalf("git root: %v", err)
 	}
 	original := productComponents
-	productComponents = func(Config, string) (map[string]registry.Component, error) {
+	productComponents = func(Config, string, string) (map[string]registry.Component, error) {
 		return nil, os.ErrInvalid
 	}
 	defer func() { productComponents = original }()
@@ -792,8 +832,17 @@ func TestImagesOperatorOptional(t *testing.T) {
 	if _, ok := p.Images()[""]; ok {
 		t.Error("an operator with no image was added to the map")
 	}
-	p.Operator = registry.Component{Image: operator.DefaultImage, Version: testProductVersion}
-	if _, ok := p.Images()[operator.DefaultImage]; !ok {
+	p.Operator = registry.Component{Image: registry.OperatorImage, Version: testProductVersion}
+	if _, ok := p.Images()[registry.OperatorImage]; !ok {
 		t.Error("the operator is missing from the image map")
 	}
+}
+
+func publishStream(t *testing.T, p *Pin) string {
+	t.Helper()
+	h, err := p.Hashrelease("", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h.Stream
 }

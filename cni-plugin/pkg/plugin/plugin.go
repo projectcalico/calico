@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2015-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,6 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
-	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/mcuadros/go-version"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -43,8 +42,10 @@ import (
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
+	"github.com/projectcalico/calico/cni-plugin/pkg/ipamplugin"
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	calicowait "github.com/projectcalico/calico/cni-plugin/pkg/wait"
 	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
@@ -54,7 +55,12 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
-const testConnectionTimeout = 2 * time.Second
+const (
+	testConnectionTimeout = 2 * time.Second
+
+	// nodenameFileTimeout tells how long ADD and DEL wait for calico/node to write the nodename file
+	nodenameFileTimeout = 30 * time.Second
+)
 
 func init() {
 	// This ensures that main runs only on main thread (thread group leader).
@@ -147,6 +153,22 @@ func pollEndpointReadiness(endpoint string, interval, timeout time.Duration) err
 		})
 }
 
+// waitForNodenameFile waits for calico/node to write the nodename file
+func waitForNodenameFile(conf types.NetConf) error {
+	if conf.NodenameFileOptional {
+		return nil
+	}
+	nodeNameFile := "/var/lib/calico/nodename"
+	if conf.NodenameFile != "" {
+		nodeNameFile = conf.NodenameFile
+	}
+	if err := calicowait.ForFileWithTimeout(nodeNameFile, nodenameFileTimeout); err != nil {
+		return fmt.Errorf("%s: check that the calico/node container is running and has mounted /var/lib/calico/", err)
+	}
+	logrus.Debugf("%s exists", nodeNameFile)
+	return nil
+}
+
 func cmdAdd(args *skel.CmdArgs) (err error) {
 	// Defer a panic recover, so that in case we panic we can still return
 	// a proper error to the runtime.
@@ -181,18 +203,8 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 	utils.ConfigureLogging(conf)
 
-	nodeNameFile := "/var/lib/calico/nodename"
-	if conf.NodenameFile != "" {
-		nodeNameFile = conf.NodenameFile
-	}
-
-	if !conf.NodenameFileOptional {
-		// Configured to wait for the nodename file - don't start until it exists.
-		if _, err := os.Stat(nodeNameFile); err != nil {
-			s := "%s: check that the calico/node container is running and has mounted /var/lib/calico/"
-			return fmt.Errorf(s, err)
-		}
-		logrus.Debug("/var/lib/calico/nodename exists")
+	if err := waitForNodenameFile(conf); err != nil {
+		return err
 	}
 
 	// Determine MTU to use.
@@ -235,7 +247,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := utils.WithSandboxLookups(context.Background(), utils.SandboxLookups{CalicoClient: calicoClient})
 	ci, err := calicoClient.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
 		err = fmt.Errorf("error getting ClusterInformation: %v", err)
@@ -422,7 +434,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 				"type":  conf.IPAM.Type,
 			}).Debug("Looking for IPAM plugin in paths")
 			var ipamResult cnitypes.Result
-			ipamResult, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+			ipamResult, err = utils.ExecIPAMAdd(ctx, conf.IPAM.Type, args.StdinData)
 			logger.WithField("IPAM result", ipamResult).Info("Got result from IPAM plugin")
 			if err != nil {
 				return
@@ -434,12 +446,12 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			// See CNI Spec doc for more details.
 			result, err = cniv1.NewResultFromResult(ipamResult)
 			if err != nil {
-				utils.ReleaseIPAllocation(logger, conf, args)
+				utils.ReleaseIPAllocation(ctx, logger, conf, args)
 				return
 			}
 
 			if len(result.IPs) == 0 {
-				utils.ReleaseIPAllocation(logger, conf, args)
+				utils.ReleaseIPAllocation(ctx, logger, conf, args)
 				err = errors.New("IPAM plugin returned no IP addresses in result")
 				return
 			}
@@ -473,7 +485,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			logger.WithField("endpoint", endpoint).Debug("Populated endpoint (without nets)")
 			if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf, args)
+				utils.ReleaseIPAllocation(ctx, logger, conf, args)
 				return
 			}
 			logger.WithField("endpoint", endpoint).Info("Populated endpoint (with nets)")
@@ -494,7 +506,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 				ctx, calicoClient, args, result, desiredVethName, utils.DefaultRoutes, endpoint, map[string]string{}, false)
 			if err != nil {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf, args)
+				utils.ReleaseIPAllocation(ctx, logger, conf, args)
 				return
 			}
 
@@ -512,7 +524,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			if !endpointAlreadyExisted {
 				// Only clean up the IP allocation if this was a new endpoint.  Otherwise,
 				// we'd release the IP that is already attached to the existing endpoint.
-				utils.ReleaseIPAllocation(logger, conf, args)
+				utils.ReleaseIPAllocation(ctx, logger, conf, args)
 			}
 			return
 		}
@@ -550,7 +562,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 				exists = false
 			} else {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf, args)
+				utils.ReleaseIPAllocation(ctx, logger, conf, args)
 				return
 			}
 		}
@@ -582,7 +594,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 			if _, err = calicoClient.Profiles().Create(ctx, profile, options.SetOptions{}); err != nil {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf, args)
+				utils.ReleaseIPAllocation(ctx, logger, conf, args)
 				return
 			}
 		}
@@ -626,19 +638,8 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 
 	utils.ConfigureLogging(conf)
 
-	nodeNameFile := "/var/lib/calico/nodename"
-	if conf.NodenameFile != "" {
-		nodeNameFile = conf.NodenameFile
-	}
-
-	if !conf.NodenameFileOptional {
-		// Configured to wait for the nodename file - don't start until it exists.
-		if _, err = os.Stat(nodeNameFile); err != nil {
-			s := "%s: check that the calico/node container is running and has mounted /var/lib/calico/"
-			err = fmt.Errorf(s, err)
-			return
-		}
-		logrus.Debug("/var/lib/calico/nodename exists")
+	if err = waitForNodenameFile(conf); err != nil {
+		return
 	}
 
 	// Determine which node name to use.
@@ -657,7 +658,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := utils.WithSandboxLookups(context.Background(), utils.SandboxLookups{CalicoClient: calicoClient})
 	var ci *api.ClusterInformation
 	ci, err = calicoClient.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
@@ -692,7 +693,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 	}
 
 	// Release the IP address by calling the configured IPAM plugin.
-	ipamErr := utils.DeleteIPAM(conf, args, logger)
+	ipamErr := utils.DeleteIPAM(ctx, conf, args, logger)
 
 	// Delete the WorkloadEndpoint object from the datastore.
 	if _, err = calicoClient.WorkloadEndpoints().Delete(ctx, epIDs.Namespace, epIDs.WEPName, options.DeleteOptions{}); err != nil {
@@ -784,6 +785,8 @@ func Main(version string) {
 		_ = cniError.Print()
 		os.Exit(1)
 	}
+
+	utils.IPAMExec = ipamplugin.NewInProcessExec()
 
 	funcs := skel.CNIFuncs{
 		Add:   cmdAdd,

@@ -21,17 +21,152 @@ for _var in BZ_LOCAL_DIR BZ_LOGS_DIR HOME REPORT_DIR TEST_TYPE; do
   if [[ -z "${!_var}" ]]; then echo "[ERROR] ${_var} is required but not set"; exit 1; fi
 done
 
+# check_component_logs - publish stern's verdict on the Calico component logs.
+#
+# `bz tests` used to do this; the direct-ginkgo path above bypasses it, so the
+# check has been deployed-but-unread on OSS lanes since the switch. Everything
+# here is advisory: errexit is on and the checker exits non-zero by design, so
+# each fallible command is `rc=0; cmd || rc=$?` and the function always
+# returns 0. The test exit code is never touched.
+check_component_logs() {
+  local mode rc scripts stern_scripts stern_log check_out check_err kube_err
+  local stern_xml merge_dir
+
+  mode="$(echo "${STERN_CHECK:-ERROR}" | tr '[:lower:]' '[:upper:]')"
+  [[ "${mode}" == "DISABLED" ]] && return 0
+  if [[ "${mode}" != "ERROR" && "${mode}" != "INFO" ]]; then
+    echo "[WARN] unrecognised STERN_CHECK=${mode}; treating as ERROR"
+    mode=ERROR
+  fi
+
+  local _v
+  for _v in BZ_HOME BZ_LOCAL_DIR BZ_LOGS_DIR REPORT_DIR RUN_IMAGE; do
+    if [[ -z "${!_v:-}" ]]; then
+      echo "[WARN] component-log check skipped: ${_v} is not set"
+      return 0
+    fi
+  done
+
+  scripts="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  stern_scripts="${BZ_HOME}/dependencies/stern/scripts"
+  stern_log="${BZ_LOGS_DIR}/stern.log"
+  check_out="${BZ_LOGS_DIR}/stern-check.out"
+  check_err="${BZ_LOGS_DIR}/stern-check.err"
+  kube_err="${BZ_LOGS_DIR}/stern-kubectl.err"
+  stern_xml="${BZ_LOCAL_DIR}/junit-stern.xml"
+
+  if [[ ! -d "${stern_scripts}" ]]; then
+    echo "[WARN] component-log check skipped: ${stern_scripts} not found"
+    return 0
+  fi
+
+  # --tail=-1 is required: with --selector, kubectl defaults to --tail=10.
+  # KUBECONFIG is required: it is only ever set as container env for the e2e
+  # run, never exported for the host shell.
+  rc=0
+  KUBECONFIG="${BZ_LOCAL_DIR}/kubeconfig" timeout 120 "${BZ_LOCAL_DIR}/bin/kubectl" \
+    logs --selector app=stern -n stern --tail=-1 \
+    > "${stern_log}" 2> "${kube_err}" || rc=$?
+  if [[ ${rc} -ne 0 ]]; then
+    echo "[WARN] component-log check skipped: could not read stern logs (rc=${rc})"
+    tail -n 20 "${kube_err}" 2>/dev/null || true
+    return 0
+  fi
+
+  # Read the filter config from where banzai-core rendered it, so the
+  # include/exclude lists stay single-sourced (and pick up STERN_EXCLUDES).
+  rc=0
+  STERN_CONFIG="$("${BZ_LOCAL_DIR}/bin/yq" r "${BZ_HOME}/Taskvars.yml" STERN_CONFIG 2>/dev/null)" || rc=$?
+  if [[ ${rc} -ne 0 || -z "${STERN_CONFIG}" ]]; then
+    echo "[WARN] component-log check skipped: STERN_CONFIG not readable from Taskvars.yml"
+    return 0
+  fi
+  # docker -e STERN_CONFIG forwards from the environment; unexported sends
+  # nothing and log_checker would fatal on an empty config.
+  export STERN_CONFIG
+
+  # Run in the e2e image rather than on the host: the lanes have no Go, and
+  # installing one costs an ~80MB fetch from a host outside the CI proxy. The
+  # image runs as a non-root UID against a read-only mount, hence the writable
+  # GOCACHE/HOME and -w /tmp.
+  rc=0
+  timeout 300 docker run --rm \
+    -e STERN_CONFIG -e GOCACHE=/tmp/go-cache -e HOME=/tmp \
+    -v "${stern_scripts}:/scripts:ro" \
+    -v "${stern_log}:/stern.log:ro" \
+    -w /tmp "${RUN_IMAGE}" \
+    go run /scripts/log_checker.go /stern.log \
+    > "${check_out}" 2> "${check_err}" || rc=$?
+
+  if [[ ${rc} -eq 124 ]]; then
+    echo "[WARN] component-log check timed out; not treating as a failure"
+    return 0
+  fi
+
+  if [[ ${rc} -eq 0 ]]; then
+    echo "[INFO] Calico component logs all clear"
+    # Publish a passing case too: absence of this testcase is then a signal that
+    # the check itself has broken, which is how it went unnoticed last time.
+    rc=0
+    python3 "${scripts}/stern_junit.py" --pass "${check_out}" "${stern_xml}" || rc=$?
+  else
+    echo "[ERROR] Found Calico component log ERRORs in stern log"
+    rc=0
+    python3 "${scripts}/stern_junit.py" "${check_out}" "${stern_xml}" || rc=$?
+    if [[ ${rc} -eq 2 ]]; then
+      # log_checker exits 1 for log.Fatalf as well as for a genuine hit.
+      echo "[WARN] component-log check produced no parseable output; ignoring"
+      tail -n 20 "${check_err}" 2>/dev/null || true
+      return 0
+    fi
+  fi
+  if [[ ${rc} -ne 0 ]]; then
+    echo "[WARN] component-log check: could not build JUnit report"
+    return 0
+  fi
+
+  [[ "${mode}" == "INFO" ]] && return 0
+
+  if [[ ! -f "${REPORT_DIR}/junit.xml" ]]; then
+    # ginkgo produced nothing; leave ours for the epilogue's own merge, which
+    # runs precisely when junit.xml is absent.
+    cp "${stern_xml}" "${REPORT_DIR}/junit-stern.xml" || true
+    return 0
+  fi
+
+  # Merge from a directory holding only these two documents: merge_junit.py
+  # recursively absorbs every *.xml it is pointed at, and REPORT_DIR is not ours
+  # alone. It also skips its own output, so that must be a separate path.
+  merge_dir="$(mktemp -d)" || return 0
+  if cp "${stern_xml}" "${merge_dir}/junit-stern.xml" \
+     && cp "${REPORT_DIR}/junit.xml" "${merge_dir}/junit-e2e.xml" \
+     && python3 "${scripts}/merge_junit.py" "${merge_dir}" "${merge_dir}/merged.xml" \
+     && python3 "${scripts}/stern_junit.py" --verify "${merge_dir}/merged.xml" "${REPORT_DIR}/junit.xml"; then
+    cp "${merge_dir}/merged.xml" "${REPORT_DIR}/junit.xml" || true
+  else
+    echo "[WARN] stern result not merged; junit.xml left as-is"
+  fi
+  rm -rf "${merge_dir}" || true
+  return 0
+}
+
 if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
-  # Per-PR CI: build the e2e binary from the local source tree.
-  echo "[INFO] building e2e binary from local source..."
   pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
-  make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-build.log.gz")
+  if [[ -n "${E2E_PREBUILT:-}" ]]; then
+    echo "[INFO] using the prebuilt e2e binary"
+  else
+    echo "[INFO] building e2e binary from local source..."
+    make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-build.log.gz")
+  fi
   E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
   popd || exit
 elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   # Scheduled CI: download the pre-built e2e binary from the hashrelease.
   echo "[INFO] downloading e2e binary from hashrelease..."
-  HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${RELEASE_STREAM}.txt")
+  # Upgrade runs set RELEASE_STREAM to the downlevel version they install
+  # first, but the tests run against the uplevel version.
+  E2E_STREAM=${UPLEVEL_RELEASE_STREAM:-${RELEASE_STREAM}}
+  HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${E2E_STREAM}.txt")
   echo "[INFO] hashrelease URL: ${HASHREL_URL}"
   ARCH=$(uname -m); [[ "$ARCH" == "x86_64" ]] && ARCH=amd64; [[ "$ARCH" == "aarch64" ]] && ARCH=arm64
   mkdir -p "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s"
@@ -128,6 +263,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -e GOPATH=/go \
     -e KUBECONFIG=/kubeconfig \
     -e PRODUCT=${PRODUCT:-calico} \
+    -e WINDOWS_OS \
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
     "${auth_mount[@]}" \
     "${aws_cred_env[@]}" \
@@ -150,6 +286,8 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   mkdir -p "${REPORT_DIR}"
   cp report/junit.xml "${REPORT_DIR}/junit.xml" 2>/dev/null || true
   popd || exit
+
+  check_component_logs
 
   # Propagate the original test exit code.
   exit ${e2e_rc}

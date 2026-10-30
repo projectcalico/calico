@@ -110,16 +110,19 @@ func BuildWindows(a Archive, opts ...WindowsOption) error {
 		}
 	}
 
-	if err := os.MkdirAll(s.OutputDir, utils.DirPerms); err != nil {
-		return s.Errorf("creating %s: %w", s.OutputDir, err)
+	collect := map[string]string{
+		WindowsFileName(s.Version): WindowsDir(s.OutputDir),
+		windowsScript:              WindowsScriptDir(s.OutputDir),
 	}
-	for _, name := range s.windowsFiles() {
-		src := filepath.Join(dir, windowsDistDir, name)
-		if err := utils.LinkOrCopyFile(src, filepath.Join(s.OutputDir, name)); err != nil {
+	for name, dst := range collect {
+		if err := os.MkdirAll(dst, utils.DirPerms); err != nil {
+			return s.Errorf("creating %s: %w", dst, err)
+		}
+		if err := utils.LinkOrCopyFile(filepath.Join(dir, windowsDistDir, name), filepath.Join(dst, name)); err != nil {
 			return s.Errorf("collecting %s: %w", name, err)
 		}
 	}
-	s.Logger().WithField("dir", s.OutputDir).Info("Built Windows archive")
+	s.Logger().WithField("dir", WindowsDir(s.OutputDir)).Info("Built Windows archive")
 	return nil
 }
 

@@ -428,8 +428,11 @@ func TestBuildWindowsPlacesBothFilesInTheOutputDir(t *testing.T) {
 	if err := BuildWindows(w, WithRunner(runner)); err != nil {
 		t.Fatalf("BuildWindows() = %v", err)
 	}
-	for _, name := range []string{WindowsFileName(testVersion), windowsScript} {
-		if _, err := os.Stat(filepath.Join(w.OutputDir, name)); err != nil {
+	for dir, name := range map[string]string{
+		WindowsDir(w.OutputDir):       WindowsFileName(testVersion),
+		WindowsScriptDir(w.OutputDir): windowsScript,
+	} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
 	}

@@ -1,27 +1,27 @@
 ## Append samples you want in your CSV to this file as resources ##
+## Every entry must name a file that exists in this directory, otherwise
+## `kustomize build config/samples` fails.
 resources:
-- operator_v1_installation.yaml
-- operator_v1_foo.yaml
-- operator_v1_apiserver.yaml
-- operator_v1_applicationlayer.yaml
-- operator_v1_authentication.yaml
-- operator_v1_egressgateway.yaml
-- operator_v1_gatewayapi.yaml
-- operator_v1_imageset.yaml
-- operator_v1_installation.yaml
-- operator_v1_intrusiondetection.yaml
-- operator_v1_istio.yaml
-- operator_v1_logcollector.yaml
-- operator_v1_logstorage.yaml
-- operator_v1_managementclusterconnection.yaml
-- operator_v1_managementcluster.yaml
-- operator_v1_manager.yaml
-- operator_v1_monitor.yaml
-- operator_v1_nonclusterhost.yaml
-- operator_v1_packetcaptureapi.yaml
-- operator_v1_policyrecommendation.yaml
-- operator_v1_tenant.yaml
-- operator_v1_tigerastatus.yaml
-- operator_v1_tlspassthroughroute.yaml
-- operator_v1_tlsterminatedroute.yaml
+  - operator_v1_apiserver.yaml
+  - operator_v1_applicationlayer.yaml
+  - operator_v1_authentication.yaml
+  - operator_v1_egressgateway.yaml
+  - operator_v1_gatewayapi.yaml
+  - operator_v1_imageset.yaml
+  - operator_v1_installation.yaml
+  - operator_v1_intrusiondetection.yaml
+  - operator_v1_istio.yaml
+  - operator_v1_logcollector.yaml
+  - operator_v1_logstorage.yaml
+  - operator_v1_managementcluster.yaml
+  - operator_v1_managementclusterconnection.yaml
+  - operator_v1_manager.yaml
+  - operator_v1_monitor.yaml
+  - operator_v1_nonclusterhost.yaml
+  - operator_v1_packetcaptureapi.yaml
+  - operator_v1_policyrecommendation.yaml
+  - operator_v1_tenant.yaml
+  - operator_v1_tigerastatus.yaml
+  - operator_v1_tlspassthroughroute.yaml
+  - operator_v1_tlsterminatedroute.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

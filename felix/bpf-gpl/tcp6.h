@@ -29,7 +29,9 @@ static CALI_BPF_INLINE int tcp_v6_rst(struct cali_tc_ctx *ctx) {
 	ipv6hdr_ip_to_ipv6_addr_t(&orig_src, &ip_hdr(ctx)->saddr);
 	ipv6hdr_ip_to_ipv6_addr_t(&orig_dst, &ip_hdr(ctx)->daddr);
 	struct tcphdr th_orig = *tcp_hdr(ctx);
-	int original_len = ctx->skb->len;
+	/* Must be read before the trim below, while the context still
+	 * describes the incoming packet. */
+	__u32 seq_space = tcp_seq_space(ctx, &th_orig);
 
 	/* Trim to minimum size */
 	__u32 len = skb_iphdr_offset(ctx) + IP_SIZE + TCP_SIZE /* max IP len */;
@@ -64,8 +66,7 @@ static CALI_BPF_INLINE int tcp_v6_rst(struct cali_tc_ctx *ctx) {
 	if (th_orig.ack) {
 		th->seq = th_orig.ack_seq;
 	} else {
-		th->ack_seq = bpf_htonl(bpf_ntohl(th_orig.seq) + th_orig.syn + th_orig.fin + 
-				original_len - (th_orig.doff << 2));
+		th->ack_seq = bpf_htonl(bpf_ntohl(th_orig.seq) + seq_space);
 		th->ack = 1;
 	}
 	th->check = 0;

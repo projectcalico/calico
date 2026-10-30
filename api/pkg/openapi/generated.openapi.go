@@ -3194,7 +3194,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"logConnectionTransitions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogConnectionTransitions controls whether Felix emits an additional kernel log recording the first observed response for each connection that matched a policy rule with a Log action. When set to FirstResponseAfterLog, each connection whose initial log was emitted gets one follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the transition: \"-est\" when the first reply packet is seen, \"-rst\" when the response is a TCP RST (connection refused), or \"-icmp-err\" when the response is a related ICMP error (e.g. port unreachable). The log body is the standard kernel packet log of the response packet, so the flow is identified by its 5-tuple and can be correlated with the original policy Log line (with source and destination swapped). A logged connection with no follow-up log never received a response. Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log either, so every follow-up log pairs with an initial one. Enabling this consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode. [Default: Disabled]",
+							Description: "LogConnectionTransitions controls whether Felix emits an additional kernel log recording the first observed response for each connection that matched a policy rule with a Log action. When set to FirstResponseAfterLog, each connection whose initial log was emitted gets one follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the transition: \"-est\" when the first reply packet is seen, \"-rst\" when the response is a TCP RST (connection refused), or \"-icmp-err\" when the response is a related ICMP error (e.g. port unreachable). The log body is the standard kernel packet log of the response packet. For \"-est\" and \"-rst\" its 5-tuple is the original policy Log line's with source and destination swapped; for \"-icmp-err\" the bracketed inner header carries the original 5-tuple unswapped. A logged connection with no follow-up log never received a response. Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log either, so every follow-up log pairs with an initial one. Enabling this consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode. [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3279,6 +3279,20 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"vxlanPort": {
 						SchemaProps: spec.SchemaProps{
 							Description: "VXLANPort is the UDP port number to use for VXLAN traffic. [Default: 4789]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"vxlanSrcPortMin": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VXLANSrcPortMin is the lower bound (inclusive) of the UDP source port range used by Felix for outgoing VXLAN-encapsulated traffic. If both VXLANSrcPortMin and VXLANSrcPortMax are set, the kernel VXLAN tunnel device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANSrcPortMin, VXLANSrcPortMax]. VXLANSrcPortMin must be strictly less than VXLANSrcPortMax. If unset (or zero), the kernel/dataplane default is used. [Default: 0 (unset)]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"vxlanSrcPortMax": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VXLANSrcPortMax is the upper bound (inclusive) of the UDP source port range used by Felix for outgoing VXLAN-encapsulated traffic. See VXLANSrcPortMin. [Default: 0 (unset)]",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -3947,7 +3961,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfMapSizeConntrackScaling": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending on its usage. 'Disabled' make the size stay at the default or whatever is set by BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even after cleanups. [Default: DoubleIfFull]",
+							Description: "BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size. 'DoubleIfFull' doubles the size of an IP family's map when it is more than 80% full after cleanups. [Default: DoubleIfFull]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4100,6 +4114,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"flowLogsGoldmaneServer": {
 						SchemaProps: spec.SchemaProps{
 							Description: "FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"flowLogsGoldmaneIncludeIPs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FlowLogsGoldmaneIncludeIPs controls whether flow data sent to Goldmane (and the local flow reporter) includes the source and destination IP addresses of the aggregated connections. [Default: Enabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

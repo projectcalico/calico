@@ -87,6 +87,40 @@ interface. These routes are still needed because:
 - For workloads, the initial packet of a flow may traverse the host
   FIB before BPF establishes a direct redirect.
 
+### Source-port range
+
+The wire UDP source port of a VXLAN-encapped packet is a hash,
+`STATE->sport ^ STATE->dport` in `vxlan_select_src_port()` in `nat.h`,
+chosen so that ECMP/RSS hashing spreads multiple inner flows across paths and queues. The
+exact value does not matter: the kernel/peer accepts any value as
+the wire source port, and per-flow stability matters only so that
+return traffic for an inner flow keeps the same outer 5-tuple.
+
+For operators who need a known/narrow VXLAN source-port range (for
+firewall ACLs, ECMP-hash pinning, or to align with the kernel
+VXLAN driver's `srcport min max`), `FelixConfiguration` exposes
+two optional fields:
+
+- `vxlanSrcPortMin` and `vxlanSrcPortMax` — when both are non-zero and
+  strictly `min < max`, the BPF code remaps the hash into
+  `[min, max]` via `min + (hash % (max - min + 1))`. The `+1` keeps
+  the range *inclusive* of the upper bound and matches the Linux
+  kernel's `udp_flow_src_port()` helper, which the non-BPF
+  dataplane goes through via the netlink-managed VXLAN device.
+  Dropping the `+1` would silently lose the top port on the BPF
+  side and diverge from the kernel-managed device. The macros are
+  populated from the `vxlan_src_port_min` / `vxlan_src_port_max` globals
+  in `cali_tc_global_data` (see `felix/bpf-gpl/globals.h`).
+- The same range is also pushed onto the kernel-managed VXLAN
+  device as `PortLow` / `PortHigh` (`vxlan_mgr.go`) so that the
+  iptables/nftables dataplane behaves consistently. The
+  `vxlanLinksIncompat` check compares the existing range whenever
+  the desired range is configured, including when the existing
+  device reports `0/0` for the kernel default. A mismatch recreates
+  the device so the configured bounds take effect. An unset desired
+  range remains "don't care", so removing the bounds does not reset
+  a range already present on the device.
+
 ### FDB
 
 The FDB (`vxlanfdb/`) is not used to route tunnel packets in BPF
@@ -122,6 +156,11 @@ than pinned to a specific device.
   `bpf_skb_set_tunnel_key` (or equivalent) on a flow-based device;
   the device will not apply anything that does not come in via the
   tunnel key.
+- Keep the positional arguments to `bpf_tc_set_globals` in
+  `felix/bpf/libbpf/libbpf.go` aligned with its signature in
+  `felix/bpf/libbpf/libbpf_api.h`. The C global-data struct is
+  initialized by field name, so its field order is independent
+  of the Go struct and cgo argument order.
 
 
 
@@ -134,7 +173,10 @@ Fragments are hostile to stateless BPF programs. Only the first
 fragment carries L4 headers, so only the first fragment can be keyed
 against conntrack. Fragments may arrive out of order, so even the
 first fragment may arrive second. BPF cannot pause a packet waiting
-for more; it must allow, drop or modify immediately.
+for more; it must allow, drop or modify immediately. A non-first
+fragment's payload can be shorter than any L4 header, so no program it
+can reach may demand one (`skb_refresh_validate_ptrs_l4()` in `skb.h`). Nor may
+anything read one, conntrack included (`CALI_ST_NO_L4_HDR`).
 
 ### HEP-only defrag
 
@@ -157,6 +199,9 @@ The algorithm:
   ports and the disposition reached by policy. Subsequent fragments
   match on `(src_ip, dst_ip, ip_id)` and are allowed through without
   policy re-evaluation.
+  This holds for every protocol, ICMP included. An ICMP error or TCP
+  RST that BPF sends in reply clears `CALI_ST_FIRST_FRAG`, so it
+  records no entry of its own.
 - If fragments arrive out of order, the program stores each fragment
   in the **fragment-reassembly** map (`cali_v4_frags`). Once all
   fragments are in, the program reassembles the packet in place and

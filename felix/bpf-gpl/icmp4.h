@@ -88,7 +88,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	ip_hdr(ctx)->ttl = 64; /* good default */
 	ip_hdr(ctx)->protocol = IPPROTO_ICMP;
 	ip_hdr(ctx)->check = 0;
-	ip_hdr(ctx)->tot_len = bpf_htons(len - (CALI_F_L3_DEV ? 0 : ETH_SIZE));
+	ip_hdr(ctx)->tot_len = bpf_htons(len - (CALI_F_L3 ? 0 : ETH_SIZE));
 
 	ctx->ipheader_len = 20;
 

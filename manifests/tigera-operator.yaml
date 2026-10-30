@@ -163,6 +163,13 @@ rules:
       - update
       - delete
       - watch
+  # Rancher's admission webhook rejects Namespace pod-security label changes without this verb.
+  - apiGroups:
+      - management.cattle.io
+    resources:
+      - projects
+    verbs:
+      - updatepsa
   - apiGroups:
       - ""
     resources:
@@ -177,7 +184,6 @@ rules:
     resources:
       - resourcequotas
     verbs:
-      - create
       - get
       - list
       - update
@@ -186,6 +192,12 @@ rules:
     resourceNames:
       - calico-critical-pods
       - tigera-critical-pods
+  - apiGroups:
+      - ""
+    resources:
+      - resourcequotas
+    verbs:
+      - create
   - apiGroups:
       - ""
     resources:
@@ -493,7 +505,8 @@ rules:
       - list
       - watch
   # The operator manages ValidatingAdmissionPolicy resources protecting built-in
-  # Calico tiers (e.g. protect-builtin-tiers) when serving v3 CRDs (k8s 1.30+).
+  # Calico tiers (e.g. protect-builtin-tiers) when serving v3 CRDs, and the Calico
+  # CNI plugin's pod annotations (k8s 1.30+).
   - apiGroups:
       - admissionregistration.k8s.io
     resources:
@@ -608,6 +621,7 @@ rules:
       - xbackendtrafficpolicies.gateway.networking.x-k8s.io
       - listenersets.gateway.networking.k8s.io
       - xmeshes.gateway.networking.x-k8s.io
+      - xbackends.gateway.networking.x-k8s.io
       - backends.gateway.envoyproxy.io
       - backendtrafficpolicies.gateway.envoyproxy.io
       - clienttrafficpolicies.gateway.envoyproxy.io
@@ -772,9 +786,22 @@ spec:
       nodeSelector:
         kubernetes.io/os: linux
       tolerations:
-        - effect: NoExecute
+        - key: CriticalAddonsOnly
           operator: Exists
         - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+          operator: Exists
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+          operator: Exists
+        - effect: NoSchedule
+          key: node.kubernetes.io/not-ready
+          operator: Exists
+        - effect: NoSchedule
+          key: node.kubernetes.io/network-unavailable
+          operator: Exists
+        - effect: NoSchedule
+          key: node.cloudprovider.kubernetes.io/uninitialized
           operator: Exists
       serviceAccountName: tigera-operator
       # Set the termination grace period to match how long the operator will wait for

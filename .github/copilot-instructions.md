@@ -251,7 +251,7 @@ Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-no
 - The PR description discloses the assistance - the PR template has an **AI assistance** line for it.
 - Never add an AI co-author or `Assisted-By:` trailer to a commit.
 - The human author has to be able to explain the change without you, so leave the code and the PR description in a state they can defend.
-- Don't reply to review comments on their behalf.
+- On review threads, the only reply you may post for them is one that points at the fix commit ("Done in abc1234"). Explanations, pushback, and questions about review feedback come from the human.
 
 ## Documentation map
 

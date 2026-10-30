@@ -546,6 +546,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("BPFForceTrackPacketsFromIfaces Single invalid entry", "BPFForceTrackPacketsFromIfaces", "cali@123", []string{"docker+"}),
 	Entry("BPFForceTrackPacketsFromIfaces Multiple invalid entries", "BPFForceTrackPacketsFromIfaces", "cali-123,cali@123", []string{"docker+"}),
 
+	Entry("LogConnectionTransitionsPrefix valid", "LogConnectionTransitionsPrefix", "acme-%n", "acme-%n"),
+	Entry("LogConnectionTransitionsPrefix with quote falls back to default", "LogConnectionTransitionsPrefix", `ab"cd`, "calico-response"),
+
 	Entry("RequireMTUFile valid", "RequireMTUFile", "true", true),
 	Entry("RequireMTUFile valid", "RequireMTUFile", "y", true),
 	Entry("RequireMTUFile valid", "RequireMTUFile", "True", true),
@@ -807,6 +810,25 @@ var _ = DescribeTable("Config validation",
 	}, false),
 	Entry("invalid RouteTableRanges", map[string]string{
 		"RouteTableRanges": "abcde",
+	}, false),
+	Entry("VXLAN port range: both unset", map[string]string{}, true),
+	Entry("VXLAN port range: valid min<max", map[string]string{
+		"VXLANSrcPortMin": "49152",
+		"VXLANSrcPortMax": "65535",
+	}, true),
+	Entry("VXLAN port range: min==max", map[string]string{
+		"VXLANSrcPortMin": "12345",
+		"VXLANSrcPortMax": "12345",
+	}, false),
+	Entry("VXLAN port range: only min set", map[string]string{
+		"VXLANSrcPortMin": "49152",
+	}, false),
+	Entry("VXLAN port range: only max set", map[string]string{
+		"VXLANSrcPortMax": "65535",
+	}, false),
+	Entry("VXLAN port range: min > max", map[string]string{
+		"VXLANSrcPortMin": "60000",
+		"VXLANSrcPortMax": "50000",
 	}, false),
 )
 

@@ -15,12 +15,19 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+
+	cli "github.com/urfave/cli/v3"
+
+	"github.com/projectcalico/calico/release/internal/outputs"
+	"github.com/projectcalico/calico/release/internal/pinnedversion"
+	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 // recordingRunner runs nothing and records what it was asked to run. Units run
@@ -85,11 +92,46 @@ func (r *recordingRunner) envFor(want ...string) []string {
 	return nil
 }
 
+// ranExactly is ran for callers that pass whole arguments: a target name is a
+// prefix of a longer one, so a substring match cannot tell them apart.
+func (r *recordingRunner) ranExactly(want ...string) bool {
+	return slices.ContainsFunc(r.args, func(args []string) bool {
+		for _, w := range want {
+			if !slices.Contains(args, w) {
+				return false
+			}
+		}
+		return true
+	})
+}
+
 // ran reports whether any recorded call's args contain every one of want.
 func (r *recordingRunner) ran(want ...string) bool {
 	return slices.ContainsFunc(r.args, func(args []string) bool {
 		return containsAll(args, want)
 	})
+}
+
+// cli flags are package-level and remember whether they were set, so a test
+// sharing them sees what an earlier one parsed.
+func freshFlags(flags []cli.Flag) []cli.Flag {
+	out := make([]cli.Flag, 0, len(flags))
+	for _, f := range flags {
+		switch v := f.(type) {
+		case *cli.StringFlag:
+			c := *v
+			out = append(out, &c)
+		case *cli.StringSliceFlag:
+			c := *v
+			out = append(out, &c)
+		case *cli.BoolFlag:
+			c := *v
+			out = append(out, &c)
+		default:
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func containsAll(args, want []string) bool {
@@ -136,6 +178,8 @@ calicoctl:
 	"calico": `version: master
 calico:
   registry: quay.io/calico
+cniPlugins:
+  registry: quay.io/calico
 node:
   registry: quay.io/calico
 flannelMigration:
@@ -154,4 +198,128 @@ func writeChartValues(t *testing.T, root string) {
 			t.Fatalf("write values: %v", err)
 		}
 	}
+}
+
+func TestHashreleaseBuilds(t *testing.T) {
+	// A hashrelease build may generate its pin, which needs the branch prefix.
+	t.Run("can generate the pin", func(t *testing.T) {
+		for _, tc := range []struct {
+			name  string
+			flags []cli.Flag
+		}{
+			{name: "operator", flags: operatorBuildFlags},
+			{name: "manifests", flags: manifestsBuildFlags},
+			{name: "charts", flags: chartsBuildFlags},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				var got pinnedversion.Config
+				cmd := &cli.Command{
+					Flags: freshFlags(tc.flags),
+					Action: func(_ context.Context, c *cli.Command) error {
+						got = pinConfig(&Config{RepoRootDir: "/repo"}, c)
+						return nil
+					},
+				}
+				if err := cmd.Run(context.Background(), []string{"build", "--hashrelease"}); err != nil {
+					t.Fatalf("run: %v", err)
+				}
+				if got.ReleaseBranchPrefix != releaseBranchPrefixFlag.Value {
+					t.Errorf("ReleaseBranchPrefix = %q, want %q", got.ReleaseBranchPrefix, releaseBranchPrefixFlag.Value)
+				}
+			})
+		}
+	})
+}
+
+func TestRecordsDir(t *testing.T) {
+	cfg := &Config{OutputDir: t.TempDir()}
+	parse := func(t *testing.T, args ...string) *cli.Command {
+		t.Helper()
+		c := &cli.Command{
+			Name:   "publish",
+			Flags:  []cli.Flag{hashreleaseFlag},
+			Action: func(context.Context, *cli.Command) error { return nil },
+		}
+		if err := c.Run(context.Background(), append([]string{"publish"}, args...)); err != nil {
+			t.Fatalf("parse flags: %v", err)
+		}
+		return c
+	}
+	pinWithHash := func(hash string) pinned {
+		return func(*Config, *cli.Command) (*pinnedversion.Pin, error) {
+			return &pinnedversion.Pin{Hash: hash, Operator: registry.Component{Version: "v1.38.0"}}, nil
+		}
+	}
+	noPin := func(*Config, *cli.Command) (*pinnedversion.Pin, error) {
+		t.Fatal("a release must not need a pin")
+		return nil, nil
+	}
+
+	t.Run("a release records where the manager does", func(t *testing.T) {
+		got, err := recordsDir(cfg, parse(t), noPin, "v3.30.0")
+		if err != nil {
+			t.Fatalf("recordsDir: %v", err)
+		}
+		if want := outputs.RecordsDir(cfg.OutputDir, "v3.30.0"); got != want {
+			t.Errorf("records dir = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("a hashrelease records where the manager does", func(t *testing.T) {
+		got, err := recordsDir(cfg, parse(t, "--hashrelease"), pinWithHash("abc"), "v1.38.0")
+		if err != nil {
+			t.Fatalf("recordsDir: %v", err)
+		}
+		if want := outputs.RecordsDir(cfg.OutputDir, "abc"); got != want {
+			t.Errorf("records dir = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("hashreleases with the same operator version keep records apart", func(t *testing.T) {
+		c := parse(t, "--hashrelease")
+		a, err := recordsDir(cfg, c, pinWithHash("abc"), "v1.38.0")
+		if err != nil {
+			t.Fatalf("recordsDir: %v", err)
+		}
+		b, err := recordsDir(cfg, c, pinWithHash("def"), "v1.38.0")
+		if err != nil {
+			t.Fatalf("recordsDir: %v", err)
+		}
+		if a == b {
+			t.Errorf("both hashreleases record into %q", a)
+		}
+	})
+}
+
+func TestPinForRelease(t *testing.T) {
+	root := fakeRepo(t, "v3.30.0")
+	operatorManifest := filepath.Join(root, "manifests", "tigera-operator.yaml")
+	if err := os.WriteFile(operatorManifest, []byte("          image: quay.io/calico/operator:v1.38.0\n"), 0o644); err != nil {
+		t.Fatalf("write operator manifest: %v", err)
+	}
+	prev := loadPin
+	t.Cleanup(func() { loadPin = prev })
+
+	t.Run("takes the operator version from the manifests", func(t *testing.T) {
+		loadPin = func(*Config, *cli.Command) (*pinnedversion.Pin, error) {
+			return &pinnedversion.Pin{
+				ProductVersion: "v3.30.0",
+				Operator:       registry.Component{Image: registry.OperatorImage, Version: "v3.30.0"},
+			}, nil
+		}
+		pin, err := pinForRelease(&Config{RepoRootDir: root}, nil)
+		if err != nil {
+			t.Fatalf("pinForRelease: %v", err)
+		}
+		if pin.Operator.Version != "v1.38.0" {
+			t.Errorf("operator version = %q, want the manifests' v1.38.0", pin.Operator.Version)
+		}
+	})
+
+	t.Run("fails when the manifests name no operator", func(t *testing.T) {
+		loadPin = func(*Config, *cli.Command) (*pinnedversion.Pin, error) { return &pinnedversion.Pin{}, nil }
+		if _, err := pinForRelease(&Config{RepoRootDir: t.TempDir()}, nil); err == nil {
+			t.Error("pinForRelease succeeded without manifests")
+		}
+	})
 }
