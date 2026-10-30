@@ -16,11 +16,13 @@ package clientv3_test
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	etcdclient "go.etcd.io/etcd/client/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -99,5 +101,33 @@ var _ = testutils.E2eDatastoreDescribe("Dry-run writes against CRD validation", 
 			},
 		}, options.SetOptions{DryRun: true})
 		Expect(err).To(MatchError(ContainSubstring("asNumber must be empty when peerSelector is set")))
+	})
+})
+
+var _ = testutils.E2eDatastoreDescribe("Dry-run writes with a TTL", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
+	ctx := context.Background()
+
+	It("should not grant an etcd lease", func() {
+		c, err := clientv3.New(config)
+		Expect(err).NotTo(HaveOccurred())
+		etcd, err := etcdclient.New(etcdclient.Config{Endpoints: []string{config.Spec.EtcdEndpoints}})
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(etcd.Close)
+
+		// Other specs leave short-lived leases behind, so look for this TTL rather than for no leases.
+		ttl := 97 * time.Minute
+		_, err = c.GlobalNetworkSets().Create(ctx, &apiv3.GlobalNetworkSet{
+			ObjectMeta: metav1.ObjectMeta{Name: "dryrun-ttl-set"},
+			Spec:       apiv3.GlobalNetworkSetSpec{Nets: []string{"10.0.0.0/24"}},
+		}, options.SetOptions{DryRun: true, TTL: ttl})
+		Expect(err).NotTo(HaveOccurred())
+
+		leases, err := etcd.Leases(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		for _, l := range leases.Leases {
+			resp, err := etcd.TimeToLive(ctx, l.ID)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.GrantedTTL).NotTo(Equal(int64(ttl.Seconds())))
+		}
 	})
 })

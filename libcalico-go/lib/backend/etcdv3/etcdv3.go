@@ -616,7 +616,8 @@ func (c *etcdV3Client) Close() error {
 func (c *etcdV3Client) getTTLOption(ctx context.Context, d *model.KVPair) ([]clientv3.OpOption, error) {
 	putOpts := []clientv3.OpOption{}
 
-	if d.TTL != 0 {
+	// A dry run writes nothing, and granting a lease would.
+	if d.TTL != 0 && !api.IsDryRun(ctx) {
 		resp, err := c.etcdClient.Lease.Grant(ctx, int64(d.TTL.Seconds()))
 		if err != nil {
 			log.WithError(err).Error("Failed to grant a lease")
