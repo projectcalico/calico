@@ -44,6 +44,9 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/istio"
 )
 
+// testClusterID has the shape libcalico-go generates for clusterGUID.
+const testClusterID = "0123456789abcdef0123456789abcdef"
+
 // getCalicoTestImageSet returns a standard imageSet for testing with Calico variant
 func getCalicoTestImageSet() *operatorv1.ImageSet {
 	return &operatorv1.ImageSet{
@@ -146,7 +149,65 @@ var _ = Describe("Istio Component Rendering", func() {
 			},
 			IstioNamespace: istio.IstioNamespace,
 			Scheme:         testScheme,
+			ClusterID:      testClusterID,
 		}
+	})
+
+	Describe("Cluster ID", func() {
+		It("should refuse to render without a cluster ID", func() {
+			cfg.ClusterID = ""
+
+			_, _, err := istio.Istio(cfg)
+			Expect(err).To(MatchError(ContainSubstring("cluster ID")))
+		})
+
+		It("should set CLUSTER_ID on istiod from the cluster ID", func() {
+			_, component, err := istio.Istio(cfg)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			objsToCreate, _ := component.Objects()
+
+			deployment, err := rtest.GetResourceOfType[*appsv1.Deployment](objsToCreate, istio.IstioIstiodDeploymentName, istio.IstioNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(deployment.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "CLUSTER_ID",
+				Value: testClusterID,
+			}))
+		})
+
+		It("should set ISTIO_META_CLUSTER_ID on ztunnel from the cluster ID", func() {
+			_, component, err := istio.Istio(cfg)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			objsToCreate, _ := component.Objects()
+
+			daemonset, err := rtest.GetResourceOfType[*appsv1.DaemonSet](objsToCreate, istio.IstioZTunnelDaemonSetName, istio.IstioNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(daemonset.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "ISTIO_META_CLUSTER_ID",
+				Value: testClusterID,
+			}))
+		})
+
+		It("should publish the cluster ID in the istiod values so injected proxies carry it", func() {
+			_, component, err := istio.Istio(cfg)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			objsToCreate, _ := component.Objects()
+
+			injectorConfigMap, err := rtest.GetResourceOfType[*corev1.ConfigMap](objsToCreate, istio.IstioSidecarInjectorConfigMapName, istio.IstioNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			var values struct {
+				Global struct {
+					MultiCluster struct {
+						ClusterName string `json:"clusterName"`
+					} `json:"multiCluster"`
+				} `json:"global"`
+			}
+			Expect(json.Unmarshal([]byte(injectorConfigMap.Data["values"]), &values)).To(Succeed())
+			Expect(values.Global.MultiCluster.ClusterName).To(Equal(testClusterID))
+		})
 	})
 
 	Describe("ResolveImages", func() {

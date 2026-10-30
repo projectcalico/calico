@@ -43,6 +43,10 @@ type Configuration struct {
 	Istio          *operatorv1.Istio
 	IstioNamespace string
 	Scheme         *runtime.Scheme
+	// ClusterID names this cluster to Istio, which needs it unique across a
+	// multi-cluster mesh. It is set on every install so that the ID is already
+	// stable when the cluster joins a mesh.
+	ClusterID string
 }
 
 var _ render.Component = &IstioComponent{}
@@ -99,6 +103,11 @@ type ConfiguredComponent interface {
 }
 
 func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
+	if cfg.ClusterID == "" {
+		return nil, nil, fmt.Errorf("istio cluster ID must not be empty")
+	}
+	multiCluster := &MultiClusterConfig{ClusterName: cfg.ClusterID}
+
 	// Produce Helm templates for Istio
 	istioResOpts := &ResourceOpts{
 		Namespace:                 IstioNamespace,
@@ -111,6 +120,7 @@ func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 		BaseOpts: BaseOpts{
 			Global: &GlobalConfig{
 				IstioNamespace: IstioNamespace,
+				MultiCluster:   multiCluster,
 			},
 		},
 		IstiodOpts: IstiodOpts{
@@ -123,6 +133,7 @@ func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 				ProxyInit: &ProxyInitConfig{
 					Image: istioFakeImageProxyv2,
 				},
+				MultiCluster: multiCluster,
 			},
 			Gateways: &GatewaysConfig{
 				SeccompProfile: &corev1.SeccompProfile{
@@ -135,6 +146,7 @@ func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 		IstioCNIOpts: IstioCNIOpts{
 			Global: &GlobalConfig{
 				IstioNamespace: IstioNamespace,
+				MultiCluster:   multiCluster,
 			},
 			Ambient: &AmbientConfig{
 				Enabled:                    true,
@@ -144,6 +156,7 @@ func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 		ZTunnelOpts: ZTunnelOpts{
 			Global: &GlobalConfig{
 				IstioNamespace: IstioNamespace,
+				MultiCluster:   multiCluster,
 			},
 		},
 	}
