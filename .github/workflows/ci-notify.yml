@@ -1,9 +1,5 @@
-# DMs a PR author on Slack when their PR's CI finishes. The DM is
-# event-driven off `status`: ArgoCI's for master PRs, Semaphore's for
-# release-branch PRs. On master Semaphore runs no tests and always passes, so
-# its status there is ignored. A PR one of BOT_AUTHORS opened that carries one
-# of ASSIGNEE_OWNED_LABELS was opened on someone's behalf, so its assignees
-# get the DM instead (the recipients below).
+# DMs a PR's author on Slack when its CI finishes, from ArgoCI's or Semaphore's
+# `status`. Bot PRs with an owned label go to their assignees.
 #
 # An approval DM exists too, but only on the manual `workflow_dispatch` path.
 # It cannot be driven by `pull_request_review`: that event is
@@ -53,26 +49,13 @@ on:
         type: choice
         options: [success, failure, error, approved]
 
-# Semaphore re-posts the same terminal status several times per commit.
-# ArgoCI posts each result once, and an in-place retry posts a new one under
-# the same run name, so ArgoCI statuses are never deduped. Semaphore dedup
-# claims a git ref named refs/ci-notify/<yyyymmdd>-<commit>-<state>
-# atomically — see "Claim dedup marker" below — so concurrent duplicate
-# events race to create the same ref and exactly one wins. No concurrency
-# group is needed: the claim is atomic on GitHub's side, so runs don't need
-# to be serialized to avoid a double-send race. Markers only matter for the
-# duplicate-event burst (minutes), so each run opportunistically prunes
-# markers whose date prefix is more than 2 days old — see "Prune stale dedup
-# markers" — keeping refs/ci-notify/* bounded.
+# Semaphore posts each pipeline's result several times; ArgoCI posts each once.
+# Only Semaphore statuses are deduped, by an atomic git ref per (pipeline, state).
 
 permissions:
   pull-requests: read
-  # git ref create/delete (the dedup marker) lives under contents. This
-  # replaced an actions/cache-based marker: GitHub's Jun 2026 change to
-  # issue read-only cache tokens for "untrusted trigger" events (a `status`
-  # event from Semaphore's GitHub App qualifies) made actions/cache/save
-  # silently no-op forever here, so the old marker never persisted and every
-  # duplicate status event kept sending its own DM.
+  # The dedup marker is a git ref. actions/cache can't be saved from a
+  # `status` event.
   contents: write
 
 jobs:
@@ -103,10 +86,11 @@ jobs:
       # the CI path, 'approved' the review path. A missing property evaluates
       # to empty, so this picks the status event's state or the input.
       STATE: ${{ github.event.state || inputs.state }}
-      # Status events only — the commit to resolve a PR from, and the commit
-      # the dedup marker is named after. Empty on a dispatch, which takes the
-      # PR number from its input and claims no marker.
+      # Status events only — the commit to resolve a PR from. Empty on a
+      # dispatch, which takes the PR number from its input.
       SHA: ${{ github.event.sha }}
+      # Carries Semaphore's pipeline_id, which names the dedup marker.
+      TARGET_URL: ${{ github.event.target_url }}
       # Empty on a dispatch.
       CONTEXT: ${{ github.event.context }}
     steps:
@@ -172,10 +156,15 @@ jobs:
             --jq '{login: .user.login, title: .title, url: .html_url,
                    labels: [.labels[].name], assignees: [.assignees[].login],
                    base: .base.ref}' > pr.json
-          if [[ "$CONTEXT" == "ci/semaphoreci/pr: Calico" && "$(jq -r .base pr.json)" == master ]]; then
-            echo "::notice::Semaphore status on a master PR — ArgoCI's status reports it, skipping"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
+          # Semaphore is a no-op on master and may finish before ArgoCI posts.
+          if [[ "$CONTEXT" == "ci/semaphoreci/pr: Calico" ]]; then
+            ARGO=$(gh api "repos/$REPO/commits/$SHA/statuses?per_page=100" \
+              --jq 'any(.[]; .context == "continuous-integration/calico")' || echo false)
+            if [[ "$(jq -r .base pr.json)" == master || "$ARGO" == true ]]; then
+              echo "::notice::ArgoCI reports this commit — skipping Semaphore's status"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
           echo "pr=$PR" >> "$GITHUB_OUTPUT"
 
@@ -233,7 +222,7 @@ jobs:
           # A GitHub login is [A-Za-z0-9-], so it is safe via GITHUB_OUTPUT.
           echo "login=$LOGIN" >> "$GITHUB_OUTPUT"
 
-      # Dedup: claim a git ref named after (commit, state) before sending.
+      # Dedup: claim a git ref named after (pipeline, state) before sending.
       # Ref creation is atomic on GitHub's side, so concurrent duplicate
       # status events race to create the same ref and exactly one wins —
       # no concurrency group or serialization required. A non-"already
@@ -249,11 +238,17 @@ jobs:
           env.CONTEXT == 'ci/semaphoreci/pr: Calico'
         run: |
           # The marker name carries everything dedup and pruning need: the
-          # claim date, then the (commit, state) this DM is for. Duplicates
+          # claim date, then the (pipeline, state) this DM is for. Duplicates
           # that straddle midnight UTC compute different names and so both
           # send — one extra DM at most, once a day, in exchange for keeping
           # age in the name.
-          REF="refs/ci-notify/$(date -u +%Y%m%d)-${SHA}-${STATE}"
+          # A rerun is a new pipeline, so it gets its own DM. An unparsable URL
+          # falls back to the commit.
+          PIPELINE=$SHA
+          if [[ "$TARGET_URL" =~ pipeline_id=([0-9a-f-]{36}) ]]; then
+            PIPELINE=${BASH_REMATCH[1]}
+          fi
+          REF="refs/ci-notify/$(date -u +%Y%m%d)-${PIPELINE}-${STATE}"
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
           # The ref *target* is GITHUB_SHA — the default-branch tip this run
           # was resolved from — deliberately not the status sha. A status sha
@@ -271,7 +266,7 @@ jobs:
           if [[ $RC -eq 0 ]]; then
             echo "claimed=true" >> "$GITHUB_OUTPUT"
           elif [[ "$ERR" == *"Reference already exists"* ]]; then
-            echo "::notice::already notified for $SHA ($STATE) — skipping duplicate status event"
+            echo "::notice::already notified for $PIPELINE ($STATE) — skipping duplicate status event"
             echo "claimed=false" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::dedup ref-claim failed unexpectedly ($ERR) — proceeding without dedup for this run"
@@ -283,8 +278,8 @@ jobs:
       # its LLM backend responds, so the comment usually isn't there yet.
       # Poll briefly for it so the DM can deep-link to the analysis. A pass
       # and an approval never get a triage comment, so the poll is skipped
-      # on every state but failure/error. sem-ai-triage reads Semaphore runs
-      # only, so an ArgoCI status never gets a comment.
+      # on every state but failure/error. sem-ai-triage comments on Semaphore
+      # failures only.
       - name: Wait for sem-ai-triage comment
         id: triage
         if: >-
@@ -292,7 +287,7 @@ jobs:
           steps.resolve.outputs.skip != 'true' &&
           steps.lookup.outputs.skip != 'true' &&
           steps.claim.outputs.claimed != 'false' &&
-          env.CONTEXT != 'continuous-integration/calico' &&
+          env.CONTEXT == 'ci/semaphoreci/pr: Calico' &&
           (env.STATE == 'failure' || env.STATE == 'error')
         env:
           PR: ${{ steps.resolve.outputs.pr }}
@@ -403,8 +398,7 @@ jobs:
           ok()  { printf '%s' "$1" | jq -r '.ok // false'   2>/dev/null; }
           err() { printf '%s' "$1" | jq -r '.error // "unknown"' 2>/dev/null; }
 
-          # One delivered DM is enough to keep the claim: releasing it to retry
-          # the others would re-send to everyone who already got it.
+          # One delivered DM keeps the claim; a retry would re-send to the others.
           for SLACK_ID in $SLACK_IDS; do
             OPEN=$(slack conversations.open "$(jq -n --arg u "$SLACK_ID" '{users: $u}')")
             if [[ "$(ok "$OPEN")" != "true" ]]; then
@@ -431,7 +425,7 @@ jobs:
 
       # A failed send must release the claim, or a transient Slack outage on
       # the run that won the race would permanently suppress the
-      # notification for this (sha, state) — no other duplicate event would
+      # notification for this (pipeline, state) — no other duplicate event would
       # retry, since the ref would already exist. Best-effort: a delete
       # hiccup must never fail the notifier — the DM attempt is already done.
       - name: Release dedup marker if send failed

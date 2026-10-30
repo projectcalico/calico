@@ -16,9 +16,9 @@ SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ci-notify-recipients.sh"
 PR_JSON="$(mktemp)"
 trap 'rm -f "$PR_JSON"' EXIT
 
-export CI_NOTIFY_MAP="alice:UALICE, bob:UBOB,carol:UCAROL"
+export CI_NOTIFY_MAP="alice:UALICE, bob:UBOB,carol:UCAROL, marvin-tigera:UMARVIN"
 export BOT_AUTHORS="marvin-tigera"
-export ASSIGNEE_OWNED_LABELS="merge-oss-cherry-pick, some-future-label"
+export ASSIGNEE_OWNED_LABELS="release-backport, some-future-label"
 
 PASS=0
 FAIL=0
@@ -43,40 +43,48 @@ check "plain PR: author" \
   "UALICE"
 
 check "bot PR with owned label: assignee" \
-  '{"login":"marvin-tigera","labels":["merge-oss-cherry-pick"],"assignees":["bob"]}' \
+  '{"login":"marvin-tigera","labels":["release-backport"],"assignees":["bob"]}' \
   "UBOB"
 
 check "human PR with owned label: still the author" \
-  '{"login":"alice","labels":["merge-oss-cherry-pick"],"assignees":["bob"]}' \
+  '{"login":"alice","labels":["release-backport"],"assignees":["bob"]}' \
   "UALICE"
 
-check "bot PR without owned label: author (unmapped bot)" \
+check "bot PR without owned label: author" \
   '{"login":"marvin-tigera","labels":["bug"],"assignees":["bob"]}' \
-  ""
+  "UMARVIN"
 
 check "any owned label in the list applies" \
   '{"login":"marvin-tigera","labels":["x","some-future-label"],"assignees":["carol"]}' \
   "UCAROL"
 
 check "every mapped assignee, unmapped skipped" \
-  '{"login":"marvin-tigera","labels":["merge-oss-cherry-pick"],"assignees":["carol","dave","bob"]}' \
+  '{"login":"marvin-tigera","labels":["release-backport"],"assignees":["carol","dave","bob"]}' \
   $'UBOB\nUCAROL'
 
 check "bot PR, unassigned: falls back to author" \
-  '{"login":"marvin-tigera","labels":["merge-oss-cherry-pick"],"assignees":[]}' \
-  ""
+  '{"login":"marvin-tigera","labels":["release-backport"],"assignees":[]}' \
+  "UMARVIN"
 
 check "logins match the map case-insensitively" \
-  '{"login":"Marvin-Tigera","labels":["merge-oss-cherry-pick"],"assignees":["Bob"]}' \
+  '{"login":"Marvin-Tigera","labels":["release-backport"],"assignees":["Bob"]}' \
   "UBOB"
 
 ASSIGNEE_OWNED_LABELS="" check "no owned labels configured: author" \
-  '{"login":"marvin-tigera","labels":["merge-oss-cherry-pick"],"assignees":["bob"]}' \
-  ""
+  '{"login":"marvin-tigera","labels":["release-backport"],"assignees":["bob"]}' \
+  "UMARVIN"
 
 check "null labels on a bot PR: author" \
   '{"login":"marvin-tigera","labels":null,"assignees":["bob"]}' \
+  "UMARVIN"
+
+check "null author: no crash, no recipient" \
+  '{"login":null,"labels":["release-backport"],"assignees":["bob"]}' \
   ""
+
+CI_NOTIFY_MAP="alice:UFIRST, alice:USECOND" check "first map entry wins" \
+  '{"login":"alice","labels":[],"assignees":[]}' \
+  "UFIRST"
 
 echo "${PASS} passed, ${FAIL} failed"
 [ "$FAIL" -eq 0 ]
