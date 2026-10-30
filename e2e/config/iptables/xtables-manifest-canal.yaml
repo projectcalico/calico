@@ -12,3 +12,7 @@ exclude:
   labels:
     - label: RequiresCalicoIPAM
       reason: "canal.yaml uses host-local IPAM, so there is no Calico IPAM state for these specs to read"
+    - label: NoEncap
+      reason: "flannel carries pod traffic over VXLAN, so there is no unencapsulated routing"
+    - label: RequiresBGP
+      reason: "canal.yaml sets CALICO_NETWORKING_BACKEND=none, so no BIRD runs and there is no BGP"

@@ -40,10 +40,11 @@ export KUBECONFIG=$BZ_LOCAL/kubeconfig
 export PATH=$PATH:$BZ_LOCAL/bin
 
 # Modern OSes no longer include br_netfilter by default, which breaks flannel.
-# The runner image has no modprobe, so only try when the host lacks the module.
+# Only the kind cell runs flannel on this host, and the runner image has no
+# modprobe, so a failed load warns rather than ending the job.
 if [[ ! -d /sys/module/br_netfilter ]]; then
   echo "[INFO] installing br_netfilter..."
-  sudo modprobe br_netfilter
+  sudo modprobe br_netfilter || echo "[WARN] could not load br_netfilter on the runner; only a kind cluster needs it here"
 fi
 
 mkdir -p "$BZ_LOGS_DIR"
@@ -121,8 +122,7 @@ kubectl get po -A -owide
 # job's own config selects the post-migration run, so override it here. Calico
 # is not installed yet, so its component-log check has nothing to read.
 # run_tests.sh exits when it finishes, hence a child shell.
-E2E_TEST_CONFIG='e2e/config/pre-migration-smoke.yaml' STERN_CHECK=DISABLED \
-  bash "${PHASES}/run_tests.sh"
+E2E_TEST_CONFIG='e2e/config/pre-migration-smoke.yaml' STERN_CHECK=DISABLED bash "${PHASES}/run_tests.sh"
 
 # A post-migration run that never reaches Ginkgo must not publish these passes.
 rm -f "${REPORT_DIR}/junit.xml" "${CI_HOME}/${CI_GIT_DIR}/report/junit.xml"
