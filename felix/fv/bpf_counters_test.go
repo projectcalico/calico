@@ -16,6 +16,7 @@ package fv_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -110,6 +111,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 		}
 		Eventually(func(g Gomega) {
 			checkDroppedByPolicyCounters(g, tc.Felixes[0], w[1].InterfaceName, 0, numberOfpackets)
+		}, "5s", "500ms").Should(Succeed())
+	})
+
+	It("should count packets dropped by the workload RPF check", func() {
+		// w[1]'s IP is not routed via w[0]'s device, so the RPF check drops these.
+		numberOfpackets := 10
+		for i := range numberOfpackets {
+			_, err := w[0].RunCmd("pktgen", w[1].IP, tc.Felixes[0].IP, "udp", "--port-dst", "8055", "--ip-id", strconv.Itoa(i+1))
+			Expect(err).NotTo(HaveOccurred())
+		}
+		Eventually(func(g Gomega) {
+			g.Expect(bpfIngressCounter(g, tc.Felixes[0], w[0].InterfaceName, "Dropped", "by workload RPF check")).
+				To(BeNumerically("==", numberOfpackets))
+			g.Expect(bpfIngressCounter(g, tc.Felixes[0], w[0].InterfaceName, "Total", "packets")).
+				To(BeNumerically(">=", numberOfpackets))
 		}, "5s", "500ms").Should(Succeed())
 	})
 
@@ -233,6 +249,27 @@ func checkRuleCounters(felix *infrastructure.Felix, ifName, hook, polName string
 	}
 	Expect(startOfPol).NotTo(Equal(-1))
 	Expect(strings.Contains(strOut[startOfPol+2], fmt.Sprintf("Hit count: %d", count))).To(BeTrue())
+}
+
+func bpfIngressCounter(g Gomega, felix *infrastructure.Felix, ifName, category, caption string) uint64 {
+	out, err := felix.ExecOutput("calico-bpf", "counters", "dump", "--json", fmt.Sprintf("--iface=%s", ifName))
+	g.Expect(err).NotTo(HaveOccurred())
+
+	var iface struct {
+		Counters []struct {
+			Category string  `json:"category"`
+			Type     string  `json:"type"`
+			Ingress  *uint64 `json:"ingress"`
+		} `json:"counters"`
+	}
+	g.Expect(json.Unmarshal([]byte(out), &iface)).To(Succeed(), out)
+	for _, c := range iface.Counters {
+		if c.Category == category && c.Type == caption && c.Ingress != nil {
+			return *c.Ingress
+		}
+	}
+	g.Expect(false).To(BeTrue(), "counter %s/%s not found in %s", category, caption, out)
+	return 0
 }
 
 func checkDroppedByPolicyCounters(g Gomega, felix *infrastructure.Felix, ifName string, iCount, eCount int) {
