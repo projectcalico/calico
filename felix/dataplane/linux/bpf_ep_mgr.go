@@ -189,7 +189,7 @@ type bpfDataplane interface {
 	loadDefaultPolicies(hk hook.Hook) error
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
 	interfaceByIndex(int) (*net.Interface, error)
-	queryClassifier(string, string) bool
+	preambleAttached(ap *tc.AttachPoint, h hook.Hook) bool
 	getIfaceLink(string) (netlink.Link, error)
 	netkitPinned(string) bool
 }
@@ -1420,6 +1420,11 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	logrus.Debugf("Interface update for %v, state %v", update.Name, update.State)
+
+	if update.Name == tc.NetkitProbeIface {
+		// Felix's own feature probe, not an endpoint; it is gone before we could configure it.
+		return
+	}
 
 	if !m.isDataIface(update.Name) && !m.isWorkloadIface(update.Name) && !m.isL3Iface(update.Name) {
 		if update.State == ifacemonitor.StateUp {
@@ -2826,12 +2831,18 @@ func (m *bpfEndpointManager) dataIfaceStateFillJumps(ap *tc.AttachPoint, xdpMode
 	return nil
 }
 
-func (m *bpfEndpointManager) queryClassifier(ifaceName, tcHook string) bool {
-	tcProgs, err := tc.ListAttachedPrograms(ifaceName, tcHook, false)
-	if err != nil || len(tcProgs) == 0 {
-		return false
+func (m *bpfEndpointManager) preambleAttached(ap *tc.AttachPoint, h hook.Hook) bool {
+	attached, err := ap.PreambleAttached(h)
+	if err != nil {
+		fields := logrus.Fields{"iface": ap.Iface, "hook": h}
+		// A device deleted under us; the attach that follows handles it.
+		if errors.Is(err, unix.ENODEV) || errors.As(err, &netlink.LinkNotFoundError{}) {
+			logrus.WithError(err).WithFields(fields).Debug("Device gone while querying the preamble.")
+		} else {
+			m.updateRateLimitedLog.WithError(err).WithFields(fields).Warn("Failed to query the preamble, re-attaching it.")
+		}
 	}
-	return true
+	return attached
 }
 
 // useNetkitAttach reports whether this interface should be driven through the
@@ -2932,19 +2943,6 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	v4Readiness := state.v4Readiness
 	v6Readiness := state.v6Readiness
 
-	if v4Readiness == ifaceIsReady || v6Readiness == ifaceIsReady {
-		if !m.dp.queryClassifier(ifaceName, hook.Ingress.String()) {
-			v4Readiness = ifaceNotReady
-			v6Readiness = ifaceNotReady
-			state.preambleGlobals = [hook.Count]libbpf.TcGlobalData{}
-		}
-		if !m.dp.queryClassifier(ifaceName, hook.Egress.String()) {
-			v4Readiness = ifaceNotReady
-			v6Readiness = ifaceNotReady
-			state.preambleGlobals = [hook.Count]libbpf.TcGlobalData{}
-		}
-	}
-
 	ap := m.calculateTCAttachPoint(ifaceName)
 	ap.IfIndex = ifindex
 
@@ -2963,6 +2961,15 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		// FIB path uses plain bpf_redirect instead.
 		ap.RedirectPeer = false
 	}
+
+	if v4Readiness == ifaceIsReady || v6Readiness == ifaceIsReady {
+		if !m.dp.preambleAttached(ap, hook.Ingress) || !m.dp.preambleAttached(ap, hook.Egress) {
+			v4Readiness = ifaceNotReady
+			v6Readiness = ifaceNotReady
+			state.preambleGlobals = [hook.Count]libbpf.TcGlobalData{}
+		}
+	}
+
 	if wep != nil && wep.QosControls != nil {
 		// QoSControls are present, update state
 
@@ -4207,9 +4214,7 @@ func (m *bpfEndpointManager) setRPFilter(iface string, val int) error {
 	// We only support IPv4 for now.
 	path := fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", iface)
 	numval := strconv.Itoa(val)
-	err := writeProcSys(path, numval)
-	if err != nil {
-		logrus.WithField("err", err).Errorf("Failed to  set %s to %s", path, numval)
+	if err := writeProcSys(path, numval); err != nil {
 		return err
 	}
 
