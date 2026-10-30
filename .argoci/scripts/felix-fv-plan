@@ -3,9 +3,6 @@
 # earlier run of this PR already passed that lane with the same inputs.
 # felix-build and the lanes act on this plan rather than querying the cache
 # themselves, so that they all act on one decision.
-#
-# Only PR runs read or write the cache; it is scoped to the PR so that a run
-# can only ever skip on its own PR's results.
 
 set -euo pipefail
 
@@ -13,40 +10,51 @@ plan=felix-fv-plan
 mkdir -p "$plan"
 : > "$plan/lanes"
 
+# Calculate the scope of the memoization cache: the prefix of every key.  It
+# is per PR, so a run reuses only passes from earlier runs of its own PR, and
+# empty (memoization off) for anything else.
 scope=""
 if [ "${CI_GIT_REF_TYPE:-}" = PR ] && [ "${FELIX_FV_MEMO:-on}" = on ]; then
   scope="felix-fv-memo/pr-${CI_GIT_PR_NUMBER}"
 fi
-
-if [ -z "$scope" ]; then
-  : > "$plan/keys"
-else
-  GOFLAGS=-buildvcs=false go run ./hack/cmd/felix-fv-memo \
-    .argoci/ciworkflow.yaml .argoci/modules/20-felix.yaml > "$plan/keys"
-fi
 echo "$scope" > "$plan/scope"
 
-build=run
-if [ -n "$scope" ] && [ -s "$plan/keys" ]; then
-  build=skip
+if [ -n "$scope" ]; then
+  # Memoization enabled: calculate one key per lane, hashing every file the
+  # lane executes, so the key changes whenever the lane's result could.
+  GOFLAGS=-buildvcs=false go run ./hack/cmd/felix-fv-memo \
+    .argoci/ciworkflow.yaml .argoci/modules/20-felix.yaml > "$plan/keys"
+else
+  # Memoization disabled: with no keys, every lane runs in full.
+  : > "$plan/keys"
 fi
+
+# A lane hits if an earlier run stored a pass of the whole lane under its key.
+# A lane that misses still looks up each of its batches when it runs.
+hits=0
 while read -r group class key; do
   state=miss
-  if [ -n "$scope" ] && artifact cache has_key "$scope/$key/lane" >/dev/null; then
+  if artifact cache has_key "$scope/$key/lane" >/dev/null; then
     state=hit
+    hits=$((hits + 1))
   fi
-  [ "$state" = hit ] || build=run
   echo "$group $class $key $state" >> "$plan/lanes"
 done < "$plan/keys"
+
+# felix-build builds what every lane's VMs run, so it can be skipped only when
+# no lane needs to run a batch.
+lanes=$(wc -l < "$plan/lanes")
+build=run
+if [ "$lanes" -gt 0 ] && [ "$hits" -eq "$lanes" ]; then
+  build=skip
+fi
 echo "$build" > "$plan/build"
 
 echo "Cache scope: ${scope:-none (not a PR, or disabled)}"
 echo "Lanes (group class key state):"
 sed 's/^/  /' "$plan/lanes"
-# One line per run for mining the logs; see .semaphore/vms/batch-memo for the
-# per-lane lines.
-echo "FV-MEMO-PLAN felix-build=${build} lanes=$(wc -l < "$plan/lanes")" \
-  "lanes-hit=$(awk '$4 == "hit"' "$plan/lanes" | wc -l)" \
+# One line per run, for mining the logs.
+echo "FV-MEMO-PLAN felix-build=${build} lanes=${lanes} lanes-hit=${hits}" \
   "pr=${CI_GIT_PR_NUMBER:-none} workflow=${CI_WORKFLOW_NAME:-unknown}"
 
 artifact push workflow "$plan"
