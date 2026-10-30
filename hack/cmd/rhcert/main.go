@@ -36,6 +36,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -127,7 +128,10 @@ type scanJob struct {
 	org      string
 	project  string
 	version  string
-	workdir  string
+	// workdir is where preflight leaves this scan's results. Preflight
+	// always nests artifacts under a <platform> subdirectory of --artifacts,
+	// so --artifacts must be workdir's parent.
+	workdir string
 }
 
 type scanResult struct {
@@ -740,21 +744,23 @@ func runScan(ctx context.Context, job scanJob, ro runOpts, preflightImage, apiKe
 
 // preflightCommand builds the command name + arguments to run a single scan.
 // For podman/docker, the preflight container image is invoked with
-// /artifacts mounted from the host workdir; for native, preflight is run
-// directly with absolute paths and no mount.
+// /artifacts mounted from the host workdir's parent; for native, preflight
+// is run directly with absolute paths and no mount. The logfile goes in the
+// per-platform directory so concurrent scans of one image don't share it.
 func preflightCommand(ro runOpts, abs, imageRef string, job scanJob, preflightImage string, haveToken bool) (string, []string) {
+	artifactsRoot := filepath.Dir(abs)
 	if ro.runtime.usesContainer() {
 		args := []string{"run", "--rm", "--security-opt=label=disable"}
 		if haveToken {
 			args = append(args, "--env", "PFLT_PYXIS_API_TOKEN")
 		}
 		args = append(args,
-			"-v", abs+":/artifacts",
+			"-v", artifactsRoot+":/artifacts",
 			preflightImage,
 			"check", "container", imageRef,
 			"--platform", job.platform,
 			"--artifacts", "/artifacts",
-			"--logfile", "/artifacts/preflight.log",
+			"--logfile", path.Join("/artifacts", job.platform, "preflight.log"),
 			"--certification-component-id", job.project,
 		)
 		if ro.submit {
@@ -766,7 +772,7 @@ func preflightCommand(ro runOpts, abs, imageRef string, job scanJob, preflightIm
 	args := []string{
 		"check", "container", imageRef,
 		"--platform", job.platform,
-		"--artifacts", abs,
+		"--artifacts", artifactsRoot,
 		"--logfile", filepath.Join(abs, "preflight.log"),
 		"--certification-component-id", job.project,
 	}
