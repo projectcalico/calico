@@ -20,6 +20,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 
@@ -97,6 +98,9 @@ type AttachPoint struct {
 // API — Felix sets Netkit=true on the AttachPoint when it detects a netkit
 // device and derives this string from that flag.
 const AttachOptionNetkit = "Netkit"
+
+// preambleProgName is the preamble's program name as the kernel truncates it.
+const preambleProgName = "cali_tc_preambl"
 
 // IsNetkit reports whether this attach point targets a netkit device.
 func (ap *AttachPoint) IsNetkit() bool {
@@ -424,6 +428,31 @@ func ListAttachedTcxPrograms(iface, attachHook string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error querying program for %s:%s:%w", iface, attachHook, err)
 	}
+	return progNames(progId, progCnt), nil
+}
+
+// PreambleAttached reports whether the preamble is attached to hook h,
+// querying the mechanism AttachProgram uses.
+func (ap *AttachPoint) PreambleAttached(h hook.Hook) (bool, error) {
+	ingress := h == hook.Ingress
+	query := libbpf.ProgQueryTcx
+	switch {
+	case ap.IsNetkit():
+		query = libbpf.ProgQueryNetkit // Ingress is the peer side.
+	case ap.AttachType != apiv3.BPFAttachOptionTCX:
+		progs, err := ListAttachedPrograms(ap.Iface, h.String(), false)
+		return len(progs) > 0, err
+	}
+	progId, _, progCnt, err := query(ap.IfIndex, ingress)
+	if err != nil {
+		return false, fmt.Errorf("error querying programs for %s:%s: %w", ap.Iface, h, err)
+	}
+	return slices.ContainsFunc(progNames(progId, progCnt), func(name string) bool {
+		return strings.Contains(name, preambleProgName)
+	}), nil
+}
+
+func progNames(progId [64]uint32, progCnt uint32) []string {
 	progNames := []string{}
 	for i := range progCnt {
 		name, err := libbpf.ProgName(progId[i])
@@ -432,7 +461,7 @@ func ListAttachedTcxPrograms(iface, attachHook string) ([]string, error) {
 		}
 		progNames = append(progNames, name)
 	}
-	return progNames, nil
+	return progNames
 }
 
 func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedProg, error) {
@@ -459,7 +488,7 @@ func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedPro
 		if !ok {
 			continue
 		}
-		if strings.Contains(bpfFilter.Name, "cali_tc_preambl") || (includeLegacy && strings.Contains(bpfFilter.Name, "calico")) {
+		if strings.Contains(bpfFilter.Name, preambleProgName) || (includeLegacy && strings.Contains(bpfFilter.Name, "calico")) {
 			p := attachedProg{
 				Pref:   int(bpfFilter.Attrs().Priority),
 				Handle: bpfFilter.Attrs().Handle,
@@ -745,8 +774,11 @@ var IsTcxSupported = sync.OnceValue(func() bool {
 	return err == nil
 })
 
+// NetkitProbeIface is the short-lived device that IsNetkitSupported creates.
+const NetkitProbeIface = "cali_nk_probe"
+
 var IsNetkitSupported = sync.OnceValue(func() bool {
-	name := "cali_nk_probe"
+	name := NetkitProbeIface
 	// Clean up a stale probe device that may have been left behind by a
 	// previous crash before the deferred cleanup could run.
 	if old, err := netlink.LinkByName(name); err == nil {
