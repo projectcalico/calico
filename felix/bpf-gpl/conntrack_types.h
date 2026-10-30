@@ -88,9 +88,6 @@ enum cali_ct_type {
 					   * resolve it again
 					   */
 
-/* This leg has seen the connection close, one way or the other. */
-#define CALI_CT_LEG_CLOSED	(CALI_CT_LEG_FIN_SEEN | CALI_CT_LEG_RST_SEEN)
-
 /* What the leg claims about the device in its ifindex. */
 #define CALI_CT_LEG_CLAIMS	(CALI_CT_LEG_TUNNEL | CALI_CT_LEG_PINNED | \
 				 CALI_CT_LEG_CHECKED)

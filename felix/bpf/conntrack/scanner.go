@@ -119,8 +119,6 @@ type Scanner struct {
 	keyFromBytes                 func([]byte) KeyInterface
 	valueFromBytes               func([]byte) ValueInterface
 	scanners                     []EntryScanner
-	liveEntries                  int
-	higherCount                  int
 	maxEntries                   int
 	autoScale                    bool
 	configChangedRestartCallback func()
@@ -157,7 +155,6 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 		valueFromBytes:               vfb,
 		scanners:                     scanners,
 		stopCh:                       make(chan struct{}),
-		liveEntries:                  ctMap.Size(),
 		maxEntries:                   ctMap.Size(),
 		autoScale:                    strings.ToLower(autoScalingMode) == "doubleiffull",
 		configChangedRestartCallback: configChangedRestartCallback,
@@ -435,20 +432,11 @@ func (s *Scanner) Scan() {
 		return
 	}
 
-	newLiveEntries := int(used - cleaned)
-	if newLiveEntries > s.liveEntries {
-		s.higherCount++
-	} else {
-		s.higherCount = 0
-	}
-	s.liveEntries = newLiveEntries
-
-	full := float64(newLiveEntries) / float64(s.maxEntries)
+	full := float64(used-cleaned) / float64(s.maxEntries)
 	log.Debugf("full %f, total %d, totalDeleted %d", full, used, cleaned)
 
-	// If the ct map keeps filling up and gets over 85% full or if it hits 90%
-	// no matter what, resize the map.
-	if s.higherCount >= 3 && full > 0.85 || full > 0.90 {
+	// Leave headroom: the map keeps filling while Felix restarts to resize it.
+	if full > 0.80 {
 		newSize := 2 * s.ctMap.Size()
 		if err := recordGrowth(s.ipFamily, newSize); err != nil {
 			log.WithError(err).Warn("Failed to start resizing conntrack map when running out of space")

@@ -30,6 +30,12 @@ import eventlet
 
 import mock
 
+from neutron_lib.constants import IP_PROTOCOL_MAP
+
+from oslo_db.exception import DBError
+
+from sqlalchemy.exc import SQLAlchemyError
+
 import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
@@ -47,7 +53,7 @@ _log = logging.getLogger(__name__)
 logging.getLogger().addHandler(logging.NullHandler())
 
 
-class _TestEtcdBase(lib.Lib, unittest.TestCase):
+class _TestEtcdBase(lib.Lib):
 
     def setUp(self):
         """Setup before each test case."""
@@ -372,7 +378,6 @@ class TestPluginEtcdBase(_TestEtcdBase):
         _log.info("Region %r string %r", self.region, self.region_string)
 
         # Do common plugin test setup.
-        lib.m_oslo_config.cfg.CONF.core_plugin = "ml2"
         super(TestPluginEtcdBase, self).setUp()
 
         # Mock out the status updating thread.  These tests were originally
@@ -383,43 +388,14 @@ class TestPluginEtcdBase(_TestEtcdBase):
             spec=self.driver.watch_status_updates
         )
 
-        # Mock out config.
-        lib.m_oslo_config.cfg.CONF.calico.etcd_host = "localhost"
-        lib.m_oslo_config.cfg.CONF.calico.etcd_port = 2379
-        lib.m_oslo_config.cfg.CONF.calico.etcd_cert_file = None
-        lib.m_oslo_config.cfg.CONF.calico.etcd_ca_cert_file = None
-        lib.m_oslo_config.cfg.CONF.calico.etcd_key_file = None
-        lib.m_oslo_config.cfg.CONF.calico.num_port_status_threads = 4
-        lib.m_oslo_config.cfg.CONF.calico.etcd_compaction_period_mins = 0
-        lib.m_oslo_config.cfg.CONF.calico.project_name_cache_max = 0
-        lib.m_oslo_config.cfg.CONF.calico.openstack_region = self.region
-        lib.m_oslo_config.cfg.CONF.calico.max_ingress_connections_per_port = 0
-        lib.m_oslo_config.cfg.CONF.calico.max_egress_connections_per_port = 0
-        lib.m_oslo_config.cfg.CONF.calico.ingress_burst_bits = 0
-        lib.m_oslo_config.cfg.CONF.calico.egress_burst_bits = 0
-        lib.m_oslo_config.cfg.CONF.calico.ingress_minburst_bytes = 0
-        lib.m_oslo_config.cfg.CONF.calico.egress_minburst_bytes = 0
-        lib.m_oslo_config.cfg.CONF.calico.ingress_burst_packets = 0
-        lib.m_oslo_config.cfg.CONF.calico.egress_burst_packets = 0
-        lib.m_oslo_config.cfg.CONF.calico.startup_resync = "always"
-        # Set the resync-concurrency injection knob explicitly to 0 so the
-        # syncer's ``max(0, inject_per_item_delay_ms)`` clamp gets a real
-        # int -- without this, the attribute is the default MagicMock,
-        # which raises TypeError on `>` comparison with int.  (Before the
-        # clamp landed, the auto-generated MagicMock.__float__ silently
-        # coerced this into a real time.sleep(1.0) per compare-loop item,
-        # adding ~70s of dead sleep to the suite.)
-        lib.m_oslo_config.cfg.CONF.calico.startup_resync_inject_per_item_delay_ms = 0
+        self.cfg_fixture.config(
+            group="calico",
+            etcd_compaction_period_mins=0,
+            project_name_cache_max=0,
+            openstack_region=self.region,
+        )
         calico_config._reset_globals()
         datamodel_v2._reset_globals()
-
-        # This value needs to be a string:
-        lib.m_oslo_config.cfg.CONF.keystone_authtoken.auth_url = ""
-
-        # _check_mysql_driver() reads this at start of day to validate the
-        # SQLAlchemy driver.  Without a concrete value here, the default
-        # MagicMock would let the prefix check false-positive on "mysql:".
-        lib.m_oslo_config.cfg.CONF.database.connection = None
 
         self.sg_default_key_v3 = (
             "/calico/resources/v3/projectcalico.org/networkpolicies/"
@@ -515,7 +491,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         result = resync.Scope(
             self.db,
             driver=self.driver if hasattr(self.driver, "endpoint_syncer") else None,
-            admin_context=mech_calico.ctx.get_admin_context(),
+            admin_context=self.db_context,
             **scope_kwargs,
         ).run()
         if expect_ok:
@@ -1099,14 +1075,17 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
         # Add configuration for QoS settings that are not represented on the
         # Neutron API.
-        lib.m_oslo_config.cfg.CONF.calico.max_ingress_connections_per_port = 10
-        lib.m_oslo_config.cfg.CONF.calico.max_egress_connections_per_port = 20
-        lib.m_oslo_config.cfg.CONF.calico.ingress_burst_bits = 31000
-        lib.m_oslo_config.cfg.CONF.calico.egress_burst_bits = 41000
-        lib.m_oslo_config.cfg.CONF.calico.ingress_minburst_bytes = 1651
-        lib.m_oslo_config.cfg.CONF.calico.egress_minburst_bytes = 1761
-        lib.m_oslo_config.cfg.CONF.calico.ingress_burst_packets = 81
-        lib.m_oslo_config.cfg.CONF.calico.egress_burst_packets = 91
+        self.cfg_fixture.config(
+            group="calico",
+            max_ingress_connections_per_port=10,
+            max_egress_connections_per_port=20,
+            ingress_burst_bits=31000,
+            egress_burst_bits=41000,
+            ingress_minburst_bytes=1651,
+            egress_minburst_bytes=1761,
+            ingress_burst_packets=81,
+            egress_burst_packets=91,
+        )
         self.driver.update_port_postcommit(context)
 
         # Expected changes
@@ -1152,15 +1131,18 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
 
-        # Reset for future tests.
-        lib.m_oslo_config.cfg.CONF.calico.max_ingress_connections_per_port = 0
-        lib.m_oslo_config.cfg.CONF.calico.max_egress_connections_per_port = 0
-        lib.m_oslo_config.cfg.CONF.calico.ingress_burst_bits = 0
-        lib.m_oslo_config.cfg.CONF.calico.egress_burst_bits = 0
-        lib.m_oslo_config.cfg.CONF.calico.ingress_minburst_bytes = 0
-        lib.m_oslo_config.cfg.CONF.calico.egress_minburst_bytes = 0
-        lib.m_oslo_config.cfg.CONF.calico.ingress_burst_packets = 0
-        lib.m_oslo_config.cfg.CONF.calico.egress_burst_packets = 0
+        # Back to no QoS config.
+        self.cfg_fixture.config(
+            group="calico",
+            max_ingress_connections_per_port=0,
+            max_egress_connections_per_port=0,
+            ingress_burst_bits=0,
+            egress_burst_bits=0,
+            ingress_minburst_bytes=0,
+            egress_minburst_bytes=0,
+            ingress_burst_packets=0,
+            egress_burst_packets=0,
+        )
 
         # Set a QoS policy on the network instead of directly on the port.
         _log.debug("Test getting QoS policy from network object")
@@ -1581,6 +1563,53 @@ class TestPluginEtcd(TestPluginEtcdBase):
             )
         )
 
+    def _bind_port(self, agent_alive=True):
+        context = mock.MagicMock()
+        context.current = copy.deepcopy(lib.port1)
+        context.network.current = lib.network1
+        context.segments_to_bind = [
+            {
+                mech_calico.api.ID: "vlan-segment",
+                mech_calico.api.NETWORK_TYPE: "vlan",
+                "network_id": lib.network1["id"],
+            },
+            {
+                mech_calico.api.ID: "flat-segment",
+                mech_calico.api.NETWORK_TYPE: "flat",
+                "network_id": lib.network1["id"],
+            },
+        ]
+        context._plugin = self.db
+        context.host_agents.return_value = [
+            {
+                "agent_type": mech_calico.AGENT_TYPE_FELIX,
+                "alive": agent_alive,
+                "host": lib.port1["binding:host_id"],
+                "configurations": {},
+            }
+        ]
+        self.driver.bind_port(context)
+        return context
+
+    def test_bind_port(self):
+        """bind_port, via Neutron's base class, binds the segment Calico supports."""
+        context = self._bind_port()
+        context.host_agents.assert_called_once_with(mech_calico.AGENT_TYPE_FELIX)
+        context.set_binding.assert_called_once_with(
+            "flat-segment",
+            "tap",
+            {
+                "connectivity": "legacy",
+                "port_filter": True,
+                "mac_address": "fe:11:22:33:44:55",
+            },
+        )
+
+    def test_bind_port_dead_agent(self):
+        context = self._bind_port(agent_alive=False)
+        context.host_agents.assert_called_once_with(mech_calico.AGENT_TYPE_FELIX)
+        context.set_binding.assert_not_called()
+
     def test_get_vif_details_derives_tap_mac_from_port_mac(self):
         """tap MAC must match what the VM's ARP cache expects.
 
@@ -1592,9 +1621,10 @@ class TestPluginEtcd(TestPluginEtcdBase):
         context.current = {"mac_address": "fa:16:3e:aa:bb:cc"}
         details = self.driver.get_vif_details(context, agent=None, segment=None)
         self.assertEqual(details["mac_address"], "fe:16:3e:aa:bb:cc")
-        # port_filter (and any other keys the base class populated) still
+        # port_filter, and the connectivity that Neutron's base class adds, still
         # flow through.
         self.assertTrue(details["port_filter"])
+        self.assertEqual(details["connectivity"], "legacy")
 
     def test_get_vif_details_falls_back_when_port_mac_missing(self):
         context = mock.MagicMock()
@@ -1689,7 +1719,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         for (
             neutron_protocol_spec,
             calico_protocol_spec,
-        ) in lib.m_neutron_lib.constants.IP_PROTOCOL_MAP.items():
+        ) in IP_PROTOCOL_MAP.items():
             if neutron_protocol_spec in ("icmp", "ipv6-icmp"):
                 # _neutron_rule_to_etcd_rule maps these to Calico's ICMP and
                 # ICMPv6 names before it consults IP_PROTOCOL_MAP, so they do
@@ -1815,7 +1845,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
 
     def test_startup_resync_disabled(self):
         """With startup_resync=never, nothing is written."""
-        lib.m_oslo_config.cfg.CONF.calico.startup_resync = "never"
+        self.cfg_fixture.config(group="calico", startup_resync="never")
         self.do_post_fork_actions()
         self.assertEtcdWrites({})
 
@@ -3448,16 +3478,13 @@ class TestPluginEtcdRegion(TestPluginEtcdBase):
         )
 
 
-class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
+class TestDriverStatusReporting(lib.Lib):
     """Tests of the driver's status reporting function."""
 
     def setUp(self):
         super(TestDriverStatusReporting, self).setUp()
 
-        # Mock out config.
-        lib.m_oslo_config.cfg.CONF.calico.etcd_host = "localhost"
-        lib.m_oslo_config.cfg.CONF.calico.etcd_port = 4001
-        lib.m_oslo_config.cfg.CONF.calico.openstack_region = None
+        self.cfg_fixture.config(group="calico", etcd_host="localhost", etcd_port=4001)
         calico_config._reset_globals()
 
     def test_felix_agent_state(self):
@@ -3758,7 +3785,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         key = self._status_key_for_db_port("host", "p1")
         self.db.update_port_status = mock.Mock()
 
-        for error in [lib.DBError(), lib.SQLAlchemyError()]:
+        for error in [DBError(), SQLAlchemyError()]:
             self.db.get_port.side_effect = error
             with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
                 self.driver._try_to_update_port_status(mock.Mock(), key)
@@ -3779,7 +3806,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
 
         def m_update_port_status(context, port_id, status, host=None):
             mock_calls.append(mock.call(context, port_id, status, host=host))
-            raise lib.DBError()
+            raise DBError()
 
         self.db.update_port_status = m_update_port_status
         self.driver._port_status_cache[key] = "up"
@@ -3812,7 +3839,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         key = self._status_key_for_db_port("host", "p1")
 
         def m_update_port_status(context, port_id, status, host=None):
-            raise lib.SQLAlchemyError()
+            raise SQLAlchemyError()
 
         self.db.update_port_status = m_update_port_status
         self.driver._port_status_cache[key] = "up"
@@ -3840,17 +3867,16 @@ class TestStatusWatcherBase(_TestEtcdBase):
         self.setUp_region()
         _log.info("Region %r string %r", self.region, self.region_string)
 
-        # Mock out config.
-        lib.m_oslo_config.cfg.CONF.calico.etcd_host = "localhost"
-        lib.m_oslo_config.cfg.CONF.calico.etcd_port = 4001
-        lib.m_oslo_config.cfg.CONF.calico.etcd_key_file = None
-        lib.m_oslo_config.cfg.CONF.calico.etcd_cert_file = None
-        lib.m_oslo_config.cfg.CONF.calico.etcd_ca_cert_file = None
-        lib.m_oslo_config.cfg.CONF.calico.openstack_region = self.region
+        super(TestStatusWatcherBase, self).setUp()
+        self.cfg_fixture.config(
+            group="calico",
+            etcd_host="localhost",
+            etcd_port=4001,
+            openstack_region=self.region,
+        )
         calico_config._reset_globals()
         datamodel_v2._reset_globals()
 
-        super(TestStatusWatcherBase, self).setUp()
         self.driver = mock.Mock(spec=mech_calico.CalicoMechanismDriver)
         self.agent_watcher = status.AgentStatusWatcher(self.driver)
         self.endpoint_watcher = status.EndpointStatusWatcher(self.driver)
@@ -3872,9 +3898,12 @@ class TestStatusWatcherBase(_TestEtcdBase):
 class TestStatusWatcher(TestStatusWatcherBase):
 
     def test_tls(self):
-        lib.m_oslo_config.cfg.CONF.calico.etcd_cert_file = "cert-file"
-        lib.m_oslo_config.cfg.CONF.calico.etcd_ca_cert_file = "ca-cert-file"
-        lib.m_oslo_config.cfg.CONF.calico.etcd_key_file = "key-file"
+        self.cfg_fixture.config(
+            group="calico",
+            etcd_cert_file="cert-file",
+            etcd_ca_cert_file="ca-cert-file",
+            etcd_key_file="key-file",
+        )
         _ = status.StatusWatcher(self.driver)
 
     @mock.patch("eventlet.spawn")

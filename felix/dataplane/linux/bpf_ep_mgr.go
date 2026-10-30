@@ -1438,6 +1438,11 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	logrus.Debugf("Interface update for %v, state %v", update.Name, update.State)
 
+	if update.Name == tc.NetkitProbeIface {
+		// Felix's own feature probe, not an endpoint; it is gone before we could configure it.
+		return
+	}
+
 	if !m.isDataIface(update.Name) && !m.isWorkloadIface(update.Name) && !m.isL3Iface(update.Name) {
 		if update.State == ifacemonitor.StateUp {
 			if ai, ok := m.initAttaches[update.Name]; ok {
@@ -4258,9 +4263,7 @@ func (m *bpfEndpointManager) setRPFilter(iface string, val int) error {
 	// We only support IPv4 for now.
 	path := fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", iface)
 	numval := strconv.Itoa(val)
-	err := writeProcSys(path, numval)
-	if err != nil {
-		logrus.WithField("err", err).Errorf("Failed to  set %s to %s", path, numval)
+	if err := writeProcSys(path, numval); err != nil {
 		return err
 	}
 

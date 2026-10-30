@@ -17,10 +17,11 @@ import (
 
 	calicoprinter "github.com/projectcalico/calico/apiserver/pkg/printers/projectcalico"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/util"
 )
 
 type REST struct {
-	*registry.Store
+	*util.Store
 	shortNames []string
 }
 
@@ -152,5 +153,5 @@ func NewREST(scheme *runtime.Scheme, opts server.Options, statusOpts server.Opti
 	statusStore.Storage = statusStorageInterface
 	statusStore.DestroyFunc = statusDFunc
 
-	return &REST{store, opts.ShortNames}, &StatusREST{&statusStore, opts.ShortNames}, nil
+	return &REST{util.NewStore(store), opts.ShortNames}, &StatusREST{&statusStore, opts.ShortNames}, nil
 }

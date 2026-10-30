@@ -11,8 +11,8 @@ include ../../lib.Makefile
 SRC_FILES := $(call local-deps-go-files,cmd)
 
 # Paths within the build container for BPF source (needed for CGO builds).
-LIBBPF_CONTAINER_PATH = /go/src/github.com/projectcalico/calico/felix/bpf-gpl/libbpf/src/
-BPFGPL_CONTAINER_PATH = /go/src/github.com/projectcalico/calico/felix/bpf-gpl/
+LIBBPF_CONTAINER_PATH = $(BUILD_REPO_ROOT)/felix/bpf-gpl/libbpf/src/
+BPFGPL_CONTAINER_PATH = $(BUILD_REPO_ROOT)/felix/bpf-gpl/
 LIBBPF_A = $(REPO_ROOT)/felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
 # When cross-compiling, force lld as the linker — GNU ld is single-target,

@@ -39,25 +39,28 @@ BIN = bin/$(ARCH)
 
 CN_FLAGS = -ldflags "-X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=$(GIT_VERSION)"
 
+# run_in runs the command that follows it in a repo fetch_repo checked out ($(1)), mounted at
+# $(2) in a go-build container, or in place under NATIVE_GO_BUILD.
+ifeq ($(NATIVE_GO_BUILD),true)
+run_in = cd $(CURDIR)/$(1) &&
+else
+run_in = docker run $(EXTRA_DOCKER_ARGS) -v $(CURDIR)/$(1):$(2):z \
+	-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w $(2) --rm $(CALICO_BUILD)
+endif
+
 # Pre-create the host-side module cache before docker mounts it. Without this,
 # Docker creates the path as root if it doesn't exist, leaving user 1001 inside
 # the container unable to write to /go/pkg/mod (e.g. fresh CI workers).
 $(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning &: $(CONTAINERNETWORKING_PLUGINS_CLONED)
 	mkdir -p $(GOMOD_CACHE)
-	docker run \
-		$(EXTRA_DOCKER_ARGS) \
-		-v $(CURDIR)/containernetworking-plugins:/go/src/github.com/containernetworking/plugins:z \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/containernetworking/plugins --rm $(CALICO_BUILD) \
+	$(call run_in,containernetworking-plugins,/go/src/github.com/containernetworking/plugins) \
 		/bin/sh -xe -c 'GOFLAGS="-buildvcs=false" CGO_ENABLED=0 GOARCH=$(ARCH) ./build_linux.sh $(CN_FLAGS)'
 	mkdir -p $(BIN)
 	@$(foreach file,$(CN_FILES),cp containernetworking-plugins/bin/$(file) $(BIN)/$(file);)
 
 $(BIN)/flannel: $(FLANNEL_CNI_PLUGIN_CLONED)
 	mkdir -p $(GOMOD_CACHE)
-	docker run \
-		$(EXTRA_DOCKER_ARGS) \
-		-v $(CURDIR)/flannel-cni-plugin:/go/src/github.com/flannel-io/cni-plugin:z \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/flannel-io/cni-plugin --rm $(CALICO_BUILD) \
+	$(call run_in,flannel-cni-plugin,/go/src/github.com/flannel-io/cni-plugin) \
 		/bin/sh -xe -c 'ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) make build_linux'
 	mkdir -p $(BIN)
 	cp flannel-cni-plugin/dist/flannel-$(ARCH) $(BIN)/flannel
