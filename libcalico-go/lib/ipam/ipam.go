@@ -310,7 +310,7 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, config *IP
 	if err != nil {
 		return nil, nil, err
 	}
-	poolsSelectingNode := q.selecting()
+	poolsToRelease := q.releasable()
 	poolsAllowedByUse := q.qualified()
 	log.Debugf("Pools filtered by allowed use: %v", poolsAllowedByUse)
 
@@ -329,37 +329,14 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, config *IP
 	if err != nil {
 		return nil, nil, err
 	}
-	// Further, split the non-allowed blocks into ones that are from pools that select this node and pools that
-	// don't select this node.  We'll try to release the latter below.
-	_, affBlocksToRelease, err := filterBlocksByPools(nonAllowedAffBlocks, poolsSelectingNode)
+
+	// Of the rest, the blocks in pools whose selector skips this node are released below once they're empty.
+	affBlocksToRelease, _, err := filterBlocksByPools(nonAllowedAffBlocks, poolsToRelease)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Release any emptied blocks still affine to this host but no longer part of an IP Pool which selects this node.
 	for _, block := range affBlocksToRelease {
-		// Determine the pool for each block.
-		pool, err := c.blockReaderWriter.getPoolForIP(ctx, net.IP{IP: block.IP}, allPools)
-		if err != nil {
-			log.WithError(err).Warnf("Failed to get pool for IP")
-			continue
-		}
-		if pool == nil {
-			logCtx.WithFields(log.Fields{"block": block}).Warn("No pool found for block, skipping")
-			continue
-		}
-
-		// Determine if the pool selects the current node, refusing to release this particular block affinity if so.
-		blockSelectsNode, err := SelectsNode(*pool, *v3n)
-		if err != nil {
-			logCtx.WithError(err).WithField("pool", pool).Error("Failed to determine if node matches pool, skipping")
-			continue
-		}
-		if blockSelectsNode {
-			logCtx.WithFields(log.Fields{"pool": pool, "block": block}).Debug("Block's pool still selects node, refusing to remove affinity")
-			continue
-		}
-
 		// Release the block affinity, requiring it to be empty.
 		for range datastoreRetries {
 			if err = c.blockReaderWriter.releaseBlockAffinity(ctx, config, affinityCfg, block, releaseAffinityOpts{

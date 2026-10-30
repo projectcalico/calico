@@ -19,7 +19,7 @@ The library's contract is `Interface` in [`interface.go`](../../libcalico-go/lib
 here. A few methods carry design-relevant constraints worth calling out:
 
 - **`AutoAssign`** returns block-masked CIDRs, not `/32` (or `/128`). Callers narrow at the boundary. This is load-bearing for the CNI plugin's per-block route programming.
-- **`AssignIP`** enforces the target pool's `allowedUses` when `AssignIPArgs.IntendedUse` is non-empty: it fails if the pool containing the requested IP does not permit that use, mirroring the `filterPoolsByUse` filter `AutoAssign` applies. Callers that leave `IntendedUse` empty are exempt (back-compat). This closes a gap where a specific-IP request (e.g. the CNI `ipAddrs` annotation) could draw from a pool not sanctioned for its use.
+- **`AssignIP`** enforces the target pool's `allowedUses` when `AssignIPArgs.IntendedUse` is non-empty: it fails if the pool containing the requested IP does not permit that use, using the same allowed-use check pool qualification applies for `AutoAssign`. Callers that leave `IntendedUse` empty are exempt (back-compat). This closes a gap where a specific-IP request (e.g. the CNI `ipAddrs` annotation) could draw from a pool not sanctioned for its use.
 - **`GetUtilization`** reports `Capacity`, `InUse`, `Reserved` and `Available` per pool and per block. `InUse` (allocated) and `Reserved` (covered by an `IPReservation`) overlap when an
   address was allocated before it was reserved, so `Capacity` is not their sum plus `Available`; `Available` counts addresses that are neither, and is the only one of the four that
   answers "how many can still be handed out". Consumers must read it rather than deriving it. Pool-level counts span the whole pool CIDR, including space no block covers yet - a
@@ -71,7 +71,7 @@ A few non-obvious design points:
   release](./ipam-gc.md#empty-block-release) safe.
 - The block cap is `min(global MaxBlocksPerHost, request-level)`, defaulting to 20 if both are zero. Once a node reaches it, `allowNewClaim` is forced false; existing blocks still
   fill.
-- Pool qualification ([`pool_qualification.go`](../../libcalico-go/lib/ipam/pool_qualification.go)) is the one place that decides which pools a request may draw from: AutoAssign and
+- Pool qualification ([`pool_qualification.go`](../../libcalico-go/lib/ipam/pool_qualification.go)) is the one place that decides which pools a request may draw from, and which of the node's affine blocks it may release: AutoAssign and
   EnsureBlock use its full rule set, AssignIP a narrower one. A new eligibility criterion goes there, not in a caller. Pools a request names skip the selectors and `AssignmentMode`, nothing else.
   Code outside the package that must agree with that choice, such as reporting which nodes are at their block cap, asks `PoolClaim.Draws` rather than re-deriving the rule.
 - `GetEnabledPools` skips a pool that lacks `Allocatable=True` when an allocatable or terminating pool covers its CIDR. The IP pool controller resolves overlap asynchronously, so
