@@ -222,11 +222,10 @@ func checkUse(pool v3.IPPool, use v3.IPPoolAllowedUse) rejectReason {
 }
 
 // qualifyPoolForIP applies the rules for assigning a specific IP. Only allowed uses are checked, and only when the
-// caller declares a use.
+// caller declares a use, since callers that predate the check leave the use empty and must keep working.
 func qualifyPoolForIP(ip net.IP, pool v3.IPPool, use v3.IPPoolAllowedUse) error {
-	allowed := accounting.AllowedUses(&pool)
-	if use != "" && !slices.Contains(allowed, use) {
-		return fmt.Errorf("IP address %s is in IP pool %q, which is not allowed for use %q (allowedUses: %v)", ip, pool.Name, use, allowed)
+	if use != "" && checkUse(pool, use) != "" {
+		return fmt.Errorf("IP address %s is in IP pool %q, which is not allowed for use %q (allowedUses: %v)", ip, pool.Name, use, accounting.AllowedUses(&pool))
 	}
 	return nil
 }
