@@ -15,9 +15,11 @@
 package main
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -75,6 +77,74 @@ func TestHashOfSeparatesParts(t *testing.T) {
 	}
 }
 
+func TestGateMatches(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, ".argoci/deps.yaml"), `
+components:
+  a:
+    in: ['^a/']
+    exclude: ['_test\.go$', '^shared/']
+  b:
+    in: ['^shared/']
+`)
+	writeFile(t, filepath.Join(dir, "workflow.yaml"), `
+dependencies: .argoci/deps.yaml
+includes:
+  - path: module.yaml
+    changes:
+      dependsOn: [a, b]
+      in: ['^scripts/', '^a/fv_test\.go$']
+      exclude: ['\.md$']
+`)
+	g, err := readGate(dir, filepath.Join(dir, "workflow.yaml"), "module.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]bool{
+		"a/main.go":      true,
+		"a/main_test.go": false,
+		// One source's exclusions don't suppress another's inclusions.
+		"a/fv_test.go":  true,
+		"shared/lib.go": true,
+		// The module's own exclusions apply to every source.
+		"a/README.md":       false,
+		"scripts/README.md": false,
+		"scripts/run":       true,
+		"other/x.go":        false,
+	} {
+		if got := g.matches(path); got != want {
+			t.Errorf("matches(%q) = %v, want %v", path, got, want)
+		}
+	}
+
+	writeFile(t, filepath.Join(dir, "workflow.yaml"), `
+dependencies: .argoci/deps.yaml
+includes:
+  - path: module.yaml
+    changes: {dependsOn: [c]}
+`)
+	if _, err := readGate(dir, filepath.Join(dir, "workflow.yaml"), "module.yaml"); err == nil {
+		t.Error("want an error for an unknown component")
+	}
+}
+
+func TestKeyFiles(t *testing.T) {
+	g := gate{sources: []patterns{{in: []*regexp.Regexp{regexp.MustCompile(`^x/`)}}}}
+	tracked := map[string]bool{}
+	for _, f := range []string{"x/used.go", "x/unused.go", "x/script", "x/doc/a.txt", "x/doc/compiled.h", "y/used.go"} {
+		tracked[f] = true
+	}
+	compiled := map[string]bool{"x/used.go": true, "x/doc/compiled.h": true}
+	files, err := keyFiles(g, tracked, compiled, []string{`^x/doc/`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"x/doc/compiled.h", "x/script", "x/used.go"}
+	if got := slices.Sorted(maps.Keys(files)); !slices.Equal(got, want) {
+		t.Errorf("keyFiles = %v, want %v", got, want)
+	}
+}
+
 // TestManifestInputs pins which repo files each class of lane is keyed on.
 func TestManifestInputs(t *testing.T) {
 	if testing.Short() {
@@ -90,23 +160,34 @@ func TestManifestInputs(t *testing.T) {
 		{classBPF, `^felix/calc/[^/]*_test\.go$`, false},
 		{classNonBPF, `^felix/calc/[^/]*\.go$`, true},
 		{classNonBPF, `^felix/fv/[^/]*_test\.go$`, true},
+		{classNonBPF, `^felix/fv/infrastructure/[^/]*\.go$`, true},
 		// Only the BPF dataplane loads the bpf-gpl programs, but Felix's cgo
 		// code compiles some of their headers.
 		{classNonBPF, `^felix/bpf-gpl/[^/]*\.c$`, false},
 		{classBPF, `^felix/bpf-gpl/[^/]*\.c$`, true},
 		{classNonBPF, `^felix/bpf-gpl/globals\.h$`, true},
 		{classNonBPF, `^felix/bpf-gpl/bpf_inline\.h$`, true},
-		{classNonBPF, `^felix/bpf-apache/`, true},
+		{classNonBPF, `^felix/bpf-apache/[^/]*\.c$`, true},
 		// The BPF lanes' "ut" batch runs both of these.
 		{classBPF, `^felix/bpf/ut/`, true},
 		{classBPF, `^felix/bpf/bpf_test\.go$`, true},
 		{classNonBPF, `^felix/bpf/ut/`, false},
 		{classNonBPF, `^felix/bpf/bpf_test\.go$`, false},
+		// Not compiled into anything FV runs.
+		{classNonBPF, `^felix/bpf/mock/`, false},
+		{classNonBPF, `^felix/k8sfv/`, false},
+		{classNonBPF, `^felix/dataplane/windows/`, false},
+		{classNonBPF, `^felix/docs/`, false},
+		{classNonBPF, `(^|/)README`, false},
 		// cmd/calico links every component, but FV only runs felix and typha.
 		{classNonBPF, `^kube-controllers/`, false},
+		{classNonBPF, `^cmd/calico/main\.go$`, true},
 		{classNonBPF, `^typha/pkg/`, true},
 		{classNonBPF, `^node/pkg/node/command\.go$`, true},
 		{classNonBPF, `^api/config/crd/`, true},
+		{classNonBPF, `^go\.sum$`, true},
+		{classNonBPF, `^docker/calico/Dockerfile$`, true},
+		{classNonBPF, `^\.semaphore/vms/`, true},
 	} {
 		files := manifestFiles(t, tc.class)
 		re := regexp.MustCompile(tc.pattern)
@@ -134,21 +215,39 @@ func manifestFiles(t *testing.T, c class) []string {
 	root := repoRoot(t)
 	manifestsOnce.Do(func() {
 		manifests = map[class][]string{}
-		for c, in := range map[class]inputs{classBPF: bpfInputs, classNonBPF: nonBPFInputs} {
-			m, err := buildManifest(root, in)
+		g, err := readGate(root, filepath.Join(root, ".argoci/ciworkflow.yaml"), ".argoci/modules/20-felix.yaml")
+		if err != nil {
+			manifestsErr = err
+			return
+		}
+		tracked, err := trackedFiles(root)
+		if err != nil {
+			manifestsErr = err
+			return
+		}
+		for _, c := range []class{classBPF, classNonBPF} {
+			files, err := classKeyFiles(root, g, tracked, c)
 			if err != nil {
 				manifestsErr = err
 				return
 			}
-			for line := range strings.Lines(string(m)) {
-				manifests[c] = append(manifests[c], strings.Fields(line)[0])
-			}
+			manifests[c] = slices.Collect(maps.Keys(files))
 		}
 	})
 	if manifestsErr != nil {
 		t.Fatal(manifestsErr)
 	}
 	return manifests[c]
+}
+
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func repoRoot(t *testing.T) string {

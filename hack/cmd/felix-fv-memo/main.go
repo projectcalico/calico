@@ -15,19 +15,22 @@
 // felix-fv-memo computes the cache keys that let CI skip Felix FV batches whose
 // inputs match a batch that already passed.
 //
-// A lane's key hashes the content of every file its batches can execute: the
-// Go files that `go list` says are compiled into the FV binaries, and a fixed
-// list of non-Go inputs.  Felix's unit-test files are not compiled into any FV
-// binary, so they drop out; the bpf-gpl programs are inputs only to the BPF
-// lanes, and the non-BPF lanes run with those objects deleted so that a missed
-// dependency fails rather than passing on a stale entry.
+// A lane's key hashes the tracked files that the felix module's change gate
+// matches and that its class of lane can execute: of the Go files, those
+// compiled into the FV binaries; of the rest, those memoExclusions leave in.
+// The gate decides whether FV runs at all, so it must already cover the FV
+// build; the tool fails if it does not.
+//
+// The bpf-gpl programs are inputs only to the BPF lanes; the non-BPF lanes run
+// with those objects deleted so that a missed dependency fails rather than
+// passing on a stale entry.
 //
 // Usage:
 //
-//	felix-fv-memo [-explain <class>] <felix module yaml>
+//	felix-fv-memo [-explain <class>] <workflow yaml> <felix module yaml>
 //
 // prints one "<FELIX_TEST_GROUP> <class> <lane key>" line per felix-fv matrix
-// entry.
+// entry.  Exits with exitUncovered if the gate misses part of the FV build.
 package main
 
 import (
@@ -50,7 +53,11 @@ import (
 
 // keyVersion is mixed into every key; bump it when the meaning of a cached
 // pass changes in a way the hashed files do not capture.
-const keyVersion = "v1"
+const keyVersion = "v2"
+
+// exitUncovered tells the caller that the gate or the filters need fixing, as
+// opposed to the tool failing to run.
+const exitUncovered = 3
 
 type class string
 
@@ -59,75 +66,72 @@ const (
 	classNonBPF class = "nonbpf"
 )
 
-// inputs lists what one class of lane executes.
-type inputs struct {
-	// goRoots are compiled with their full dependency closure.  Test packages
-	// contribute their _test.go files.
-	goRoots []string
-	// shallowGoRoots contribute only their own files, not their imports.
-	shallowGoRoots []string
-	// files are tracked paths (files or directories) outside the Go build.
-	files []string
+// memoExclusions drop the gated non-Go files that one class of lane cannot
+// execute.  Nothing checks these, unlike the Go files, so keep them coarse.
+// A file the FV build compiles, such as a cgo header, stays regardless.
+var memoExclusions = map[class][]string{
+	classNonBPF: slices.Concat(commonExclusions, []string{`^felix/bpf-gpl/`}),
+	classBPF:    commonExclusions,
 }
 
-var nonBPFInputs = inputs{
-	goRoots: []string{
+var commonExclusions = []string{
+	`(^|/)testdata/`,
+	`(^|/)[^/]*\.md$`,
+	`(^|/)(README|LICENSE|AUTHORS|COPYING)[^/]*$`,
+	`(^|/)\.(gitignore|gitattributes|dockerignore|golangci\.yaml)$`,
+	`(^|/)deps\.txt$`,
+	// The generated Go is what gets compiled.
+	`\.proto$`,
+	`^(felix|typha)/docs/`,
+	`^felix/(debian|rpm|etc|utils|k8sfv)/`,
+	// The gate also covers the Windows FVs.
+	`^process/testing/`,
+	// FV runs Typha from the calico image.
+	`^typha/(Makefile$|utils/)`,
+}
+
+// fvBuild is what one class of lane compiles.
+type fvBuild struct {
+	// roots are compiled with their dependency closure.
+	roots []string
+	// testedRoots also contribute their tests and the tests' imports.
+	testedRoots []string
+	// shallowRoots contribute only their own files.
+	shallowRoots []string
+}
+
+var nonBPFBuild = fvBuild{
+	roots: []string{
 		// Felix runs as the cmd/calico binary, via node's "felix" subcommand.
 		"./felix/daemon",
 		"github.com/projectcalico/calico/lib/logrusr",
 		"github.com/projectcalico/calico/pkg/buildinfo",
 		// Typha runs from the calico image as `component typha`.
 		"./typha/cmd/typha",
-		"./felix/fv",
 		"./felix/fv/test-workload",
 		"./felix/fv/test-connection",
 		"./felix/fv/pktgen",
 		"./felix/cmd/calico-bpf",
 	},
-	// cmd/calico links every component; its other subcommands never run in FV.
-	shallowGoRoots: []string{
+	testedRoots: []string{"./felix/fv"},
+	shallowRoots: []string{
+		// cmd/calico links every component, but FV runs only its felix and
+		// typha subcommands.
 		"./cmd/calico",
 		"./node/pkg/node",
-	},
-	files: []string{
-		"go.mod",
-		"go.sum",
-		"metadata.mk",
-		"lib.Makefile",
-		"cmd/calico",
-		"docker/calico",
-		"felix/Makefile",
-		"felix/docker-image",
-		"felix/fv",
-		"felix/bpf-apache",
-		// The FV API server loads these CRDs.
-		"api/config/crd",
-		"libcalico-go/config/crd",
-		"hack/test/certs",
-		// The fleet that runs the batches.
-		".argoci/modules/20-felix.yaml",
-		".argoci/scripts/load-cached-images",
-		".argoci/scripts/vm-fleet-setup.sh",
-		".semaphore/collect-artifacts",
-		".semaphore/scripts/load-felix-prereqs.sh",
-		".semaphore/vms",
-		"felix/.semaphore",
-		"hack/cmd/felix-fv-memo",
+		// Not run by FV, but a change to how keys are computed must change them.
+		"./hack/cmd/felix-fv-memo",
 	},
 }
 
-var bpfInputs = nonBPFInputs.with(inputs{
-	// The BPF lanes also run a "ut" batch, which runs both packages' tests.
-	goRoots: []string{"./felix/bpf", "./felix/bpf/ut"},
-	files:   []string{"felix/bpf-gpl"},
-})
-
-func (in inputs) with(extra inputs) inputs {
-	return inputs{
-		goRoots:        slices.Concat(in.goRoots, extra.goRoots),
-		shallowGoRoots: slices.Concat(in.shallowGoRoots, extra.shallowGoRoots),
-		files:          slices.Concat(in.files, extra.files),
-	}
+var fvBuilds = map[class]fvBuild{
+	classNonBPF: nonBPFBuild,
+	classBPF: {
+		roots: nonBPFBuild.roots,
+		// The BPF lanes also run a "ut" batch.
+		testedRoots:  slices.Concat(nonBPFBuild.testedRoots, []string{"./felix/bpf", "./felix/bpf/ut"}),
+		shallowRoots: nonBPFBuild.shallowRoots,
+	},
 }
 
 // goBuildConfigs are the build configurations the FV binaries are compiled
@@ -144,10 +148,11 @@ var goBuildConfigs = []struct {
 func main() {
 	explain := flag.String("explain", "", "print the hashed inputs of this class (bpf or nonbpf) to stderr")
 	flag.Parse()
-	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: felix-fv-memo [-explain <class>] <felix module yaml>")
+	if flag.NArg() != 2 {
+		fmt.Fprintln(os.Stderr, "usage: felix-fv-memo [-explain <class>] <workflow yaml> <felix module yaml>")
 		os.Exit(2)
 	}
+	workflowPath, modulePath := flag.Arg(0), flag.Arg(1)
 
 	repoRoot, err := gitOutput("rev-parse", "--show-toplevel")
 	if err != nil {
@@ -155,16 +160,36 @@ func main() {
 	}
 	repoRoot = strings.TrimSpace(repoRoot)
 
-	lanes, err := readLanes(flag.Arg(0))
+	lanes, err := readLanes(modulePath)
+	if err != nil {
+		fail(err)
+	}
+	g, err := readGate(repoRoot, workflowPath, modulePath)
+	if err != nil {
+		fail(err)
+	}
+	tracked, err := trackedFiles(repoRoot)
 	if err != nil {
 		fail(err)
 	}
 
 	classKeys := map[class]string{}
-	for c, in := range map[class]inputs{classBPF: bpfInputs, classNonBPF: nonBPFInputs} {
-		manifest, err := buildManifest(repoRoot, in)
+	for _, c := range []class{classBPF, classNonBPF} {
+		files, err := classKeyFiles(repoRoot, g, tracked, c)
+		var ungated ungatedError
+		if errors.As(err, &ungated) {
+			fmt.Fprintf(os.Stderr, "felix-fv-memo: %v; add them to the change gate of %s in %s:\n", err, modulePath, workflowPath)
+			for _, f := range ungated.files {
+				fmt.Fprintln(os.Stderr, "  "+f)
+			}
+			os.Exit(exitUncovered)
+		}
 		if err != nil {
-			fail(fmt.Errorf("computing %s inputs: %w", c, err))
+			fail(err)
+		}
+		manifest, err := buildManifest(repoRoot, files)
+		if err != nil {
+			fail(err)
 		}
 		if string(c) == *explain {
 			_, _ = os.Stderr.Write(manifest)
@@ -243,53 +268,173 @@ func classOf(group string) class {
 	return classNonBPF
 }
 
-// buildManifest returns one sorted line per input: "<path> <sha256>" for a file
-// in the repo, "<module>@<version>" for a dependency outside it.
-func buildManifest(repoRoot string, in inputs) ([]byte, error) {
-	files := map[string]bool{}
-	modules := map[string]bool{}
+// gate is an ArgoCI `changes` block with its dependsOn components resolved.
+// It matches the way ArgoCI does: each source is judged on its own, so one
+// component's exclusions never suppress another's inclusions, but the
+// module's own exclusions apply to every source.
+type gate struct {
+	sources []patterns
+	exclude []*regexp.Regexp
+}
 
-	trackedOut, err := gitOutput("-C", repoRoot, "ls-files")
+type patterns struct {
+	in, exclude []*regexp.Regexp
+}
+
+func (g gate) matches(path string) bool {
+	if matchesAnyRegexp(g.exclude, path) {
+		return false
+	}
+	for _, s := range g.sources {
+		if matchesAnyRegexp(s.in, path) && !matchesAnyRegexp(s.exclude, path) {
+			return true
+		}
+	}
+	return false
+}
+
+// readGate returns the change gate that workflowPath puts on the include of
+// modulePath.
+func readGate(repoRoot, workflowPath, modulePath string) (gate, error) {
+	raw, err := os.ReadFile(workflowPath)
 	if err != nil {
-		return nil, err
+		return gate{}, err
 	}
-	tracked := map[string]bool{}
-	for _, f := range strings.Split(strings.TrimSpace(trackedOut), "\n") {
-		tracked[f] = true
+	var workflow struct {
+		Dependencies stringOrList `json:"dependencies"`
+		Includes     []struct {
+			Path    string `json:"path"`
+			Changes *struct {
+				In        []string `json:"in"`
+				Exclude   []string `json:"exclude"`
+				DependsOn []string `json:"dependsOn"`
+			} `json:"changes"`
+		} `json:"includes"`
+	}
+	if err := yaml.Unmarshal(raw, &workflow); err != nil {
+		return gate{}, fmt.Errorf("parsing %s: %w", workflowPath, err)
 	}
 
-	for _, cfg := range goBuildConfigs {
-		args := slices.Concat([]string{"list", "-deps", "-test", "-json"}, cfg.flags, in.goRoots)
-		pkgs, err := goList(repoRoot, cfg.env, args)
+	components := map[string]rawPatterns{}
+	for _, path := range workflow.Dependencies {
+		raw, err := os.ReadFile(filepath.Join(repoRoot, path))
 		if err != nil {
-			return nil, err
+			return gate{}, err
 		}
-		args = slices.Concat([]string{"list", "-json"}, cfg.flags, in.shallowGoRoots)
-		shallow, err := goList(repoRoot, cfg.env, args)
-		if err != nil {
-			return nil, err
+		var deps struct {
+			Components map[string]rawPatterns `json:"components"`
 		}
-		for _, p := range slices.Concat(pkgs, shallow) {
-			if err := addPackage(repoRoot, tracked, p, files, modules); err != nil {
-				return nil, err
+		if err := yaml.Unmarshal(raw, &deps); err != nil {
+			return gate{}, fmt.Errorf("parsing %s: %w", path, err)
+		}
+		for name, c := range deps.Components {
+			components[name] = c
+		}
+	}
+
+	for _, inc := range workflow.Includes {
+		if filepath.Clean(inc.Path) != filepath.Clean(modulePath) {
+			continue
+		}
+		ch := inc.Changes
+		if ch == nil {
+			return gate{}, fmt.Errorf("%s: the include of %s has no change gate", workflowPath, modulePath)
+		}
+		var g gate
+		var err error
+		if g.exclude, err = compileAll(ch.Exclude); err != nil {
+			return gate{}, err
+		}
+		sources := []rawPatterns{{In: ch.In}}
+		for _, name := range ch.DependsOn {
+			c, ok := components[name]
+			if !ok {
+				return gate{}, fmt.Errorf("%s: dependsOn names unknown component %q", workflowPath, name)
 			}
+			sources = append(sources, c)
+		}
+		for _, s := range sources {
+			var p patterns
+			if p.in, err = compileAll(s.In); err != nil {
+				return gate{}, err
+			}
+			if p.exclude, err = compileAll(s.Exclude); err != nil {
+				return gate{}, err
+			}
+			g.sources = append(g.sources, p)
+		}
+		return g, nil
+	}
+	return gate{}, fmt.Errorf("%s does not include %s", workflowPath, modulePath)
+}
+
+type rawPatterns struct {
+	In      []string `json:"in"`
+	Exclude []string `json:"exclude"`
+}
+
+type stringOrList []string
+
+func (s *stringOrList) UnmarshalJSON(data []byte) error {
+	var single string
+	if err := json.Unmarshal(data, &single); err == nil {
+		*s = []string{single}
+		return nil
+	}
+	return json.Unmarshal(data, (*[]string)(s))
+}
+
+// classKeyFiles returns the files that the key of a class of lane hashes, or
+// an ungatedError if the gate misses part of its FV build.
+func classKeyFiles(repoRoot string, g gate, tracked map[string]bool, c class) (map[string]bool, error) {
+	compiled, err := buildFiles(repoRoot, tracked, fvBuilds[c])
+	if err != nil {
+		return nil, fmt.Errorf("listing the %s FV build: %w", c, err)
+	}
+	var ungated []string
+	for f := range compiled {
+		if !g.matches(f) {
+			ungated = append(ungated, f)
 		}
 	}
+	if len(ungated) > 0 {
+		slices.Sort(ungated)
+		return nil, ungatedError{class: c, files: ungated}
+	}
+	return keyFiles(g, tracked, compiled, memoExclusions[c])
+}
 
-	listed, err := gitOutput(slices.Concat([]string{"-C", repoRoot, "ls-files", "--"}, in.files)...)
+type ungatedError struct {
+	class class
+	files []string
+}
+
+func (e ungatedError) Error() string {
+	return fmt.Sprintf("the %s FV build uses %d files outside the felix module's change gate", e.class, len(e.files))
+}
+
+// keyFiles returns the tracked files that the gate matches and that are either
+// compiled into the FV build or non-Go files that exclusions leave in.
+func keyFiles(g gate, tracked, compiled map[string]bool, exclusions []string) (map[string]bool, error) {
+	exclude, err := compileAll(exclusions)
 	if err != nil {
 		return nil, err
 	}
-	for _, f := range strings.Fields(listed) {
+	files := map[string]bool{}
+	for f := range tracked {
+		if !g.matches(f) {
+			continue
+		}
+		if !compiled[f] && (strings.HasSuffix(f, ".go") || matchesAnyRegexp(exclude, f)) {
+			continue
+		}
 		files[f] = true
 	}
-	// A renamed input would otherwise silently leave the key.
-	for _, f := range in.files {
-		if !matchesAny(files, f) {
-			return nil, fmt.Errorf("input %q matches no tracked file", f)
-		}
-	}
+	return files, nil
+}
 
+// buildManifest returns one sorted "<path> <sha256>" line per file.
+func buildManifest(repoRoot string, files map[string]bool) ([]byte, error) {
 	var lines []string
 	for f := range files {
 		sum, err := fileSHA256(filepath.Join(repoRoot, f))
@@ -298,35 +443,52 @@ func buildManifest(repoRoot string, in inputs) ([]byte, error) {
 		}
 		lines = append(lines, f+" "+sum)
 	}
-	for m := range modules {
-		lines = append(lines, m)
-	}
 	slices.Sort(lines)
 	return []byte(strings.Join(lines, "\n") + "\n"), nil
 }
 
-type goPackage struct {
-	ImportPath string
-	Dir        string
-	Standard   bool
-	Module     *struct {
-		Path    string
-		Version string
-		Replace *struct {
-			Path    string
-			Version string
+// buildFiles returns the repo files that the FV build compiles.  Dependencies
+// outside the repo are pinned by go.mod and go.sum.
+func buildFiles(repoRoot string, tracked map[string]bool, build fvBuild) (map[string]bool, error) {
+	used := map[string]bool{}
+	for _, cfg := range goBuildConfigs {
+		for _, list := range []struct {
+			args  []string
+			roots []string
+		}{
+			{[]string{"-deps"}, build.roots},
+			{[]string{"-deps", "-test"}, build.testedRoots},
+			{nil, build.shallowRoots},
+		} {
+			pkgs, err := goList(repoRoot, cfg.env, slices.Concat([]string{"list", "-json"}, list.args, cfg.flags, list.roots))
+			if err != nil {
+				return nil, err
+			}
+			for _, p := range pkgs {
+				if err := addPackage(repoRoot, tracked, p, used); err != nil {
+					return nil, err
+				}
+			}
 		}
 	}
+	return used, nil
+}
+
+type goPackage struct {
+	ImportPath                                                                 string
+	Dir                                                                        string
+	Standard                                                                   bool
+	Module                                                                     *struct{ Path string }
 	GoFiles, CgoFiles, CFiles, CXXFiles, HFiles, SFiles, SysoFiles, EmbedFiles []string
 	CgoCFLAGS                                                                  []string
 	Error                                                                      *struct{ Err string }
 }
 
-func addPackage(repoRoot string, tracked map[string]bool, p goPackage, files, modules map[string]bool) error {
+func addPackage(repoRoot string, tracked map[string]bool, p goPackage, used map[string]bool) error {
 	if p.Error != nil {
 		return fmt.Errorf("go list: %s: %s", p.ImportPath, p.Error.Err)
 	}
-	// The toolchain is pinned by metadata.mk, which is itself an input.
+	// The toolchain is pinned by metadata.mk.
 	if p.Standard {
 		return nil
 	}
@@ -342,20 +504,17 @@ func addPackage(repoRoot string, tracked map[string]bool, p goPackage, files, mo
 		if p.Module == nil {
 			return fmt.Errorf("package %s is outside the repo but has no module", p.ImportPath)
 		}
-		m := p.Module.Path + "@" + p.Module.Version
-		if r := p.Module.Replace; r != nil {
-			m += " => " + r.Path + "@" + r.Version
-		}
-		modules[m] = true
+		used["go.mod"] = true
+		used["go.sum"] = true
 		return nil
 	}
 	for _, f := range slices.Concat(p.GoFiles, p.CgoFiles, p.CFiles, p.CXXFiles, p.HFiles, p.SFiles, p.SysoFiles, p.EmbedFiles) {
-		files[filepath.ToSlash(filepath.Join(rel, f))] = true
+		used[filepath.ToSlash(filepath.Join(rel, f))] = true
 	}
 	if len(p.CgoFiles) == 0 {
 		return nil
 	}
-	return addCgoIncludes(repoRoot, tracked, p, files)
+	return addCgoIncludes(repoRoot, tracked, p, used)
 }
 
 var quotedInclude = regexp.MustCompile(`(?m)^\s*(?://\s*)?#\s*include\s+"([^"]+)"`)
@@ -364,7 +523,7 @@ var quotedInclude = regexp.MustCompile(`(?m)^\s*(?://\s*)?#\s*include\s+"([^"]+)
 // transitively; they live outside the package directory, so go list does not
 // report them.  Untracked headers, such as the libbpf checkout, are pinned by
 // version variables in the Makefiles.
-func addCgoIncludes(repoRoot string, tracked map[string]bool, p goPackage, files map[string]bool) error {
+func addCgoIncludes(repoRoot string, tracked map[string]bool, p goPackage, used map[string]bool) error {
 	var includeDirs []string
 	for _, flag := range p.CgoCFLAGS {
 		if dir, ok := strings.CutPrefix(flag, "-I"); ok {
@@ -402,7 +561,7 @@ func addCgoIncludes(repoRoot string, tracked map[string]bool, p goPackage, files
 				}
 				// The compiler uses the first match, tracked or not.
 				if tracked[rel] {
-					files[rel] = true
+					used[rel] = true
 					queue = append(queue, candidate)
 				}
 				break
@@ -435,16 +594,32 @@ func goList(dir string, env, args []string) ([]goPackage, error) {
 	}
 }
 
-func matchesAny(files map[string]bool, pathOrDir string) bool {
-	if files[pathOrDir] {
-		return true
+func trackedFiles(repoRoot string) (map[string]bool, error) {
+	out, err := gitOutput("-C", repoRoot, "ls-files")
+	if err != nil {
+		return nil, err
 	}
-	for f := range files {
-		if strings.HasPrefix(f, pathOrDir+"/") {
-			return true
+	tracked := map[string]bool{}
+	for f := range strings.Lines(out) {
+		tracked[strings.TrimSuffix(f, "\n")] = true
+	}
+	return tracked, nil
+}
+
+func compileAll(patterns []string) ([]*regexp.Regexp, error) {
+	var out []*regexp.Regexp
+	for _, p := range patterns {
+		re, err := regexp.Compile(p)
+		if err != nil {
+			return nil, err
 		}
+		out = append(out, re)
 	}
-	return false
+	return out, nil
+}
+
+func matchesAnyRegexp(res []*regexp.Regexp, s string) bool {
+	return slices.ContainsFunc(res, func(re *regexp.Regexp) bool { return re.MatchString(s) })
 }
 
 func fileSHA256(path string) (string, error) {
