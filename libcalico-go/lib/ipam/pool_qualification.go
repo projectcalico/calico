@@ -69,6 +69,7 @@ func qualifyPools(req poolRequest, enabledPools []v3.IPPool) (poolQualification,
 	log.Debugf("enabled pools: %v", enabledPools)
 	log.Debugf("requested pools: %v", req.requested)
 
+	// Index the pools whose block size fits by CIDR, so requested pools can be looked up.
 	fitting := map[string]v3.IPPool{}
 	for _, p := range enabledPools {
 		if p.Spec.BlockSize > req.maxPrefixLen {
@@ -86,6 +87,7 @@ func qualifyPools(req poolRequest, enabledPools []v3.IPPool) (poolQualification,
 		return poolQualification{}, ErrNoQualifiedPool
 	}
 
+	// Named pools bypass the selectors; otherwise every enabled pool is checked against them.
 	var qualification poolQualification
 	var err error
 	if len(req.requested) > 0 {
@@ -97,6 +99,7 @@ func qualifyPools(req poolRequest, enabledPools []v3.IPPool) (poolQualification,
 		return poolQualification{}, err
 	}
 
+	// Distinguish "no pool selects this node" from "none allows this use" for the caller's error.
 	if !qualification.any(isSelecting) {
 		return poolQualification{}, fmt.Errorf("no configured Calico pools for node %s", req.host)
 	}
@@ -138,6 +141,7 @@ func qualifyBySelection(req poolRequest, enabledPools []v3.IPPool) (poolQualific
 	return q, nil
 }
 
+// add records a candidate and logs why it was rejected, if it was.
 func (q *poolQualification) add(pool v3.IPPool, reason rejectReason) {
 	if reason != "" {
 		log.Debugf("IP pool %s rejected: %s", pool.Name, reason)
@@ -156,6 +160,7 @@ func (q poolQualification) selecting() []v3.IPPool {
 	return q.filter(isSelecting)
 }
 
+// filter returns the pools whose rejection reason satisfies keep, in candidate order.
 func (q poolQualification) filter(keep func(rejectReason) bool) []v3.IPPool {
 	var pools []v3.IPPool
 	for _, c := range q.candidates {
@@ -171,10 +176,12 @@ func (q poolQualification) any(keep func(rejectReason) bool) bool {
 	return slices.ContainsFunc(q.candidates, func(c poolCandidate) bool { return keep(c.reason) })
 }
 
+// isQualified reports whether a candidate was not rejected.
 func isQualified(r rejectReason) bool {
 	return r == ""
 }
 
+// isSelecting reports whether a candidate was not rejected, or was rejected only for its allowed uses.
 func isSelecting(r rejectReason) bool {
 	return r == "" || r == rejectUse
 }
@@ -206,6 +213,7 @@ func checkSelection(pool v3.IPPool, req poolRequest) (rejectReason, error) {
 	return "", nil
 }
 
+// checkUse returns rejectUse when the pool's allowed uses, with the default applied, exclude use.
 func checkUse(pool v3.IPPool, use v3.IPPoolAllowedUse) rejectReason {
 	if !slices.Contains(accounting.AllowedUses(&pool), use) {
 		return rejectUse
