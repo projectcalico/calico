@@ -7,8 +7,9 @@ package mocks
 import (
 	"time"
 
-	"github.com/projectcalico/calico/lib/std/log"
 	mock "github.com/stretchr/testify/mock"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // NewContext creates a new instance of Context. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
