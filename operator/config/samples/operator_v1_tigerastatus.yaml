@@ -1,0 +1,7 @@
+# TigeraStatus is written by the operator to report the state of a functional
+# area; there is nothing for a user to configure in its spec.
+apiVersion: operator.tigera.io/v1
+kind: TigeraStatus
+metadata:
+  name: calico
+spec: {}

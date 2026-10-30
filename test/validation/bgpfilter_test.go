@@ -185,6 +185,22 @@ func TestBGPFilter_V6_Validation(t *testing.T) {
 			},
 		},
 		{
+			// The longest form a valid entry can take, at 49 characters.
+			name: "V6 cidr with embedded IPv4 is accepted",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpfilter")},
+				Spec: v3.BGPFilterSpec{
+					ExportV6: []v3.BGPFilterRuleV6{
+						{
+							CIDR:          "ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255/128",
+							MatchOperator: v3.MatchOperatorEqual,
+							Action:        v3.Accept,
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "V6 invalid matchOperator is rejected",
 			obj: &v3.BGPFilter{
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpfilter")},

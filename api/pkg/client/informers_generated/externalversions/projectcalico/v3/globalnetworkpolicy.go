@@ -20,11 +20,39 @@ import (
 )
 
 // GlobalNetworkPolicyInformer provides access to a shared informer and lister for
-// GlobalNetworkPolicies.
+// GlobalNetworkPolicies. Prefer using the type-safe variant (see [TypedGlobalNetworkPolicyInformer]).
 type GlobalNetworkPolicyInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.GlobalNetworkPolicyLister
 }
+
+// TypedGlobalNetworkPolicyInformer provides access to a shared informer and lister for
+// GlobalNetworkPolicies, including the type-safe TypedInformer variant.
+// It is a superset of GlobalNetworkPolicyInformer.
+type TypedGlobalNetworkPolicyInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() GlobalNetworkPolicyIndexInformer
+	Lister() projectcalicov3.GlobalNetworkPolicyLister
+}
+
+// GlobalNetworkPolicyIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type GlobalNetworkPolicyIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.GlobalNetworkPolicy]
+
+// GlobalNetworkPolicyHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for GlobalNetworkPolicy.
+type GlobalNetworkPolicyHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.GlobalNetworkPolicy]
+
+// GlobalNetworkPolicyDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for GlobalNetworkPolicy.
+type GlobalNetworkPolicyDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.GlobalNetworkPolicy]
+
+// GlobalNetworkPolicyFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for GlobalNetworkPolicy.
+type GlobalNetworkPolicyFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.GlobalNetworkPolicy]
+
+// GlobalNetworkPolicyIndexers is a specialization of [cache.TypedIndexers] for GlobalNetworkPolicy.
+type GlobalNetworkPolicyIndexers = cache.TypedIndexers[*apisprojectcalicov3.GlobalNetworkPolicy]
+
+// DeletedGlobalNetworkPolicy is a specialization of [cache.DeletedObject] for GlobalNetworkPolicy.
+type DeletedGlobalNetworkPolicy = cache.DeletedObject[*apisprojectcalicov3.GlobalNetworkPolicy]
 
 type globalNetworkPolicyInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type globalNetworkPolicyInformer struct {
 // NewGlobalNetworkPolicyInformer constructs a new informer for GlobalNetworkPolicy type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedGlobalNetworkPolicyInformer]).
 func NewGlobalNetworkPolicyInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewGlobalNetworkPolicyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedGlobalNetworkPolicyInformer constructs a new informer for GlobalNetworkPolicy type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedGlobalNetworkPolicyInformer(client clientset.Interface, resyncPeriod time.Duration, indexers GlobalNetworkPolicyIndexers) GlobalNetworkPolicyIndexInformer {
+	return NewTypedGlobalNetworkPolicyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredGlobalNetworkPolicyInformer constructs a new informer for GlobalNetworkPolicy type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredGlobalNetworkPolicyInformer]).
 func NewFilteredGlobalNetworkPolicyInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewGlobalNetworkPolicyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedGlobalNetworkPolicyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredGlobalNetworkPolicyInformer constructs a new informer for GlobalNetworkPolicy type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredGlobalNetworkPolicyInformer(client clientset.Interface, resyncPeriod time.Duration, indexers GlobalNetworkPolicyIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) GlobalNetworkPolicyIndexInformer {
+	return NewTypedGlobalNetworkPolicyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewGlobalNetworkPolicyInformerWithOptions constructs a new informer for GlobalNetworkPolicy type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedGlobalNetworkPolicyInformerWithOptions]).
 func NewGlobalNetworkPolicyInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedGlobalNetworkPolicyInformerWithOptions(client, options)
+}
+
+// NewTypedGlobalNetworkPolicyInformerWithOptions constructs a new informer for GlobalNetworkPolicy type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedGlobalNetworkPolicyInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) GlobalNetworkPolicyIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "globalnetworkpolicies"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.GlobalNetworkPolicy](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewGlobalNetworkPolicyInformerWithOptions(client clientset.Interface, optio
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *globalNetworkPolicyInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewGlobalNetworkPolicyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedGlobalNetworkPolicyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *globalNetworkPolicyInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.GlobalNetworkPolicy{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *globalNetworkPolicyInformer) TypedInformer() GlobalNetworkPolicyIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.GlobalNetworkPolicy](f.factory.InformerFor(&apisprojectcalicov3.GlobalNetworkPolicy{}, f.defaultInformer))
 }
 
 func (f *globalNetworkPolicyInformer) Lister() projectcalicov3.GlobalNetworkPolicyLister {
 	return projectcalicov3.NewGlobalNetworkPolicyLister(f.Informer().GetIndexer())
+}
+
+// ToTypedGlobalNetworkPolicyInformer converts an untyped informer into a TypedGlobalNetworkPolicyInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *GlobalNetworkPolicy. If that is not the case, calling type-safe methods of the returned
+// TypedGlobalNetworkPolicyInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedGlobalNetworkPolicyInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedGlobalNetworkPolicyInformer(informer GlobalNetworkPolicyInformer) TypedGlobalNetworkPolicyInformer {
+	if informer, ok := informer.(TypedGlobalNetworkPolicyInformer); ok {
+		return informer
+	}
+	return &globalNetworkPolicyTypedInformerAdapter{informer}
+}
+
+type globalNetworkPolicyTypedInformerAdapter struct {
+	GlobalNetworkPolicyInformer
+}
+
+func (a *globalNetworkPolicyTypedInformerAdapter) TypedInformer() GlobalNetworkPolicyIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.GlobalNetworkPolicy](a.Informer())
+}
+
+// ToGlobalNetworkPolicyIndexInformer converts an untyped informer into a GlobalNetworkPolicyIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *GlobalNetworkPolicy. If that is not the case, calling type-safe methods of the returned
+// GlobalNetworkPolicyIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a GlobalNetworkPolicyIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToGlobalNetworkPolicyIndexInformer(informer cache.SharedIndexInformer) GlobalNetworkPolicyIndexInformer {
+	if informer, ok := informer.(GlobalNetworkPolicyIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.GlobalNetworkPolicy](informer)
 }

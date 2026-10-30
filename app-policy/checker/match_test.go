@@ -15,17 +15,23 @@
 package checker
 
 import (
+	"fmt"
+	"io"
+	"math"
 	"strings"
 	"testing"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/app-policy/checker/mocks"
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/logrusr"
 	libnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -1106,6 +1112,161 @@ func TestMatchNets(t *testing.T) {
 	}
 }
 
+// TestMatchNamedPorts covers a rule that references a named port. Felix resolves the
+// name against the endpoints that declare it and sends an IP+port set whose members are
+// "<IP>,<protocol>:<port>", so the checker has to look that key up rather than the bare
+// port number. See https://github.com/projectcalico/calico/issues/13174.
+func TestMatchNamedPorts(t *testing.T) {
+	// A workload endpoint at 10.0.0.1 declaring a named port "http" on tcp/8080, as Felix
+	// resolves it into an IP+port set for a rule that says ports: [http].
+	store := policystore.NewPolicyStore()
+	httpSet := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
+	httpSet.AddString("10.0.0.1,tcp:8080")
+	store.IPSetByID["http"] = httpSet
+	// The same endpoint declaring a named port "diameter" on sctp/3868.
+	diameterSet := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
+	diameterSet.AddString("10.0.0.1,sctp:3868")
+	store.IPSetByID["diameter"] = diameterSet
+
+	testCases := []struct {
+		title    string
+		rule     *proto.Rule
+		srcIP    string
+		srcPort  int
+		dstIP    string
+		dstPort  int
+		protocol int
+		match    bool
+	}{
+		{
+			title:    "dst named port matches the endpoint that declares it",
+			rule:     &proto.Rule{DstNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  8080,
+			protocol: 6,
+			match:    true,
+		},
+		{
+			title:    "dst named port does not match another endpoint on the same port",
+			rule:     &proto.Rule{DstNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.2",
+			dstPort:  8080,
+			protocol: 6,
+			match:    false,
+		},
+		{
+			title:    "dst named port does not match a different port on the endpoint",
+			rule:     &proto.Rule{DstNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  9090,
+			protocol: 6,
+			match:    false,
+		},
+		{
+			title:    "dst named port does not match a different protocol",
+			rule:     &proto.Rule{DstNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  8080,
+			protocol: 17,
+			match:    false,
+		},
+		{
+			title:    "negated dst named port excludes the endpoint that declares it",
+			rule:     &proto.Rule{NotDstNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  8080,
+			protocol: 6,
+			match:    false,
+		},
+		{
+			title:    "negated dst named port admits another endpoint on the same port",
+			rule:     &proto.Rule{NotDstNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.2",
+			dstPort:  8080,
+			protocol: 6,
+			match:    true,
+		},
+		{
+			title:    "src named port matches on the source leg",
+			rule:     &proto.Rule{SrcNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.1",
+			srcPort:  8080,
+			dstIP:    "10.0.0.9",
+			dstPort:  33333,
+			protocol: 6,
+			match:    true,
+		},
+		{
+			title:    "src named port does not match the destination leg",
+			rule:     &proto.Rule{SrcNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  8080,
+			protocol: 6,
+			match:    false,
+		},
+		{
+			title:    "numeric port is ORed with the named port set",
+			rule:     &proto.Rule{DstPorts: []*proto.PortRange{{First: 9090, Last: 9090}}, DstNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.2",
+			dstPort:  9090,
+			protocol: 6,
+			match:    true,
+		},
+		{
+			title:    "dst named port on sctp matches an sctp flow",
+			rule:     &proto.Rule{DstNamedPortIpSetIds: []string{"diameter"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  3868,
+			protocol: 132,
+			match:    true,
+		},
+		{
+			title:    "dst named port on sctp does not match tcp to the same port",
+			rule:     &proto.Rule{DstNamedPortIpSetIds: []string{"diameter"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  3868,
+			protocol: 6,
+			match:    false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
+
+			fl := &mocks.Flow{}
+			fl.On("GetSourceIP").Return(libnet.ParseIP(tc.srcIP).IP)
+			fl.On("GetDestIP").Return(libnet.ParseIP(tc.dstIP).IP)
+			fl.On("GetSourcePort").Return(tc.srcPort)
+			fl.On("GetDestPort").Return(tc.dstPort)
+			fl.On("GetProtocol").Return(tc.protocol)
+			req := &requestCache{Flow: fl, store: store}
+
+			Expect(matchSrcPort(tc.rule, req) && matchDstPort(tc.rule, req)).To(Equal(tc.match))
+		})
+	}
+}
+
 func TestMatchDstIPPortSetIds(t *testing.T) {
 	RegisterTestingT(t)
 
@@ -1197,6 +1358,26 @@ func TestMatchDstIPPortSetIds(t *testing.T) {
 			proto:    6,
 			expected: false,
 		},
+		{
+			title: "match IP in sctp set",
+			rule: &proto.Rule{
+				DstIpPortSetIds: []string{"setSCTP"},
+			},
+			destIP:   "192.168.1.8",
+			destPort: 3868,
+			proto:    132,
+			expected: true,
+		},
+		{
+			title: "no match IP in sctp set with tcp",
+			rule: &proto.Rule{
+				DstIpPortSetIds: []string{"setSCTP"},
+			},
+			destIP:   "192.168.1.8",
+			destPort: 3868,
+			proto:    6,
+			expected: false,
+		},
 	}
 
 	store := policystore.NewPolicyStore()
@@ -1212,7 +1393,10 @@ func TestMatchDstIPPortSetIds(t *testing.T) {
 	store.IPSetByID["set80"] = set80
 	store.IPSetByID["set443"] = set443
 	store.IPSetByID["setMulti"] = setMulti
+	setSCTP := policystore.NewIPSet(proto.IPSetUpdate_IP)
+	setSCTP.AddString("192.168.1.8,sctp:3868")
 	store.IPSetByID["setProto"] = setProto
+	store.IPSetByID["setSCTP"] = setSCTP
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
@@ -1225,4 +1409,185 @@ func TestMatchDstIPPortSetIds(t *testing.T) {
 			Expect(matchDstIPPortSetIds(tc.rule, req)).To(Equal(tc.expected), "Test case: %s", tc.title)
 		})
 	}
+}
+
+// Port matching covers both forms a rule can take: explicit ranges, and named port
+// sets resolved through the store.
+func TestMatchPort(t *testing.T) {
+	RegisterTestingT(t)
+
+	const namedPortSetID = "namedPortSet"
+
+	testCases := []struct {
+		title    string
+		rule     *proto.Rule
+		port     int
+		expected bool
+	}{
+		{"no port criteria", &proto.Rule{}, 8080, true},
+		{
+			"in range",
+			&proto.Rule{DstPorts: []*proto.PortRange{{First: 80, Last: 90}}},
+			85, true,
+		},
+		{
+			"below range",
+			&proto.Rule{DstPorts: []*proto.PortRange{{First: 80, Last: 90}}},
+			79, false,
+		},
+		{
+			"above range",
+			&proto.Rule{DstPorts: []*proto.PortRange{{First: 80, Last: 90}}},
+			91, false,
+		},
+		{
+			"in second of two ranges",
+			&proto.Rule{DstPorts: []*proto.PortRange{{First: 80, Last: 80}, {First: 443, Last: 443}}},
+			443, true,
+		},
+		{
+			"in negated range",
+			&proto.Rule{NotDstPorts: []*proto.PortRange{{First: 80, Last: 90}}},
+			85, false,
+		},
+		{
+			"outside negated range",
+			&proto.Rule{NotDstPorts: []*proto.PortRange{{First: 80, Last: 90}}},
+			91, true,
+		},
+		{
+			"in named port set",
+			&proto.Rule{DstNamedPortIpSetIds: []string{namedPortSetID}},
+			8080, true,
+		},
+		{
+			"not in named port set",
+			&proto.Rule{DstNamedPortIpSetIds: []string{namedPortSetID}},
+			8081, false,
+		},
+		{
+			"in negated named port set",
+			&proto.Rule{NotDstNamedPortIpSetIds: []string{namedPortSetID}},
+			8080, false,
+		},
+		{
+			"not in negated named port set",
+			&proto.Rule{NotDstNamedPortIpSetIds: []string{namedPortSetID}},
+			8081, true,
+		},
+		{
+			"range misses but named port set matches",
+			&proto.Rule{
+				DstPorts:             []*proto.PortRange{{First: 80, Last: 80}},
+				DstNamedPortIpSetIds: []string{namedPortSetID},
+			},
+			8080, true,
+		},
+		{
+			"unknown named port set is skipped",
+			&proto.Rule{DstNamedPortIpSetIds: []string{"nonexistent"}},
+			8080, false,
+		},
+	}
+
+	store := policystore.NewPolicyStore()
+	namedPortSet := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
+	namedPortSet.AddString("10.0.0.1,tcp:8080")
+	store.IPSetByID[namedPortSetID] = namedPortSet
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			fl := &mocks.Flow{}
+			fl.On("GetDestPort").Return(tc.port)
+			fl.On("GetDestIP").Return(libnet.ParseIP("10.0.0.1").IP)
+			fl.On("GetProtocol").Return(6)
+			req := &requestCache{Flow: fl, store: store}
+			Expect(matchDstPort(tc.rule, req)).To(Equal(tc.expected), "Test case: %s", tc.title)
+
+			// The source criteria are the same code with the other set of fields, so
+			// mirror the case onto them.
+			srcRule := &proto.Rule{
+				SrcPorts:                tc.rule.DstPorts,
+				NotSrcPorts:             tc.rule.NotDstPorts,
+				SrcNamedPortIpSetIds:    tc.rule.DstNamedPortIpSetIds,
+				NotSrcNamedPortIpSetIds: tc.rule.NotDstNamedPortIpSetIds,
+			}
+			srcFl := &mocks.Flow{}
+			srcFl.On("GetSourcePort").Return(tc.port)
+			srcFl.On("GetSourceIP").Return(libnet.ParseIP("10.0.0.1").IP)
+			srcFl.On("GetProtocol").Return(6)
+			srcReq := &requestCache{Flow: srcFl, store: store}
+			Expect(matchSrcPort(srcRule, srcReq)).To(Equal(tc.expected), "Test case (source): %s", tc.title)
+		})
+	}
+}
+
+// Protocol is an 8-bit field, so a flow reporting a value outside 1-255 — a Unix pipe, say —
+// can match no rule, not even one with no protocol criterion of its own. match() tests this
+// first, so the warning it logs is rate limited: otherwise one such flow logs once per rule.
+func TestMatchUnsupportedL4Protocol(t *testing.T) {
+	RegisterTestingT(t)
+
+	for _, protocol := range []int{0, -1, 256, 1 << 20, math.MaxInt} {
+		t.Run(fmt.Sprintf("protocol %d", protocol), func(t *testing.T) {
+			fl := &mocks.Flow{}
+			fl.On("GetProtocol").Return(protocol)
+			req := &requestCache{Flow: fl, store: policystore.NewPolicyStore()}
+
+			Expect(match("testns", &proto.Rule{}, req)).To(BeFalse())
+		})
+	}
+}
+
+// Repeated failures on the evaluation path are rate limited: one line, then a count of what
+// was suppressed. Without this a single malformed CIDR logs once per rule, for every request.
+// The other eval-path loggers in check.go share this limiter's configuration.
+func TestEvalPathWarningsAreRateLimited(t *testing.T) {
+	RegisterTestingT(t)
+
+	logger := logrus.StandardLogger()
+	oldLevel, oldOut := logger.GetLevel(), logger.Out
+	counter := &entryCounter{}
+	hooks := make(logrus.LevelHooks)
+	hooks.Add(counter)
+	oldHooks := logger.ReplaceHooks(hooks)
+	savedLogger := rlogBadCIDR
+	defer func() {
+		logger.SetLevel(oldLevel)
+		logger.SetOutput(oldOut)
+		logger.ReplaceHooks(oldHooks)
+		rlogBadCIDR = savedLogger
+	}()
+	logger.SetLevel(logrus.WarnLevel)
+	logger.SetOutput(io.Discard)
+	// A long interval with no burst allowance: the first message is written, the rest are
+	// counted.
+	rlogBadCIDR = logrusr.NewRateLimitedLogger(logrusr.OptInterval(time.Hour))
+
+	ip := libnet.ParseIP("192.168.5.6")
+	for range 100 {
+		Expect(matchNet("test", []string{"192.168.0.0.0/16"}, ip.Network().IP)).To(BeFalse())
+	}
+
+	Expect(counter.entries).To(HaveLen(1), "expected one emitted warning for 100 bad CIDRs")
+	Expect(counter.entries[0].Message).To(ContainSubstring("192.168.0.0.0/16"))
+	Expect(counter.entries[0].Data).NotTo(HaveKey("logsSkipped"))
+
+	// The suppressed count surfaces on the next line that is allowed through, so the storm is
+	// still visible in the log.
+	rlogBadCIDR.Force().Warnf("unable to parse CIDR %s", "192.168.0.0.0/16")
+	Expect(counter.entries).To(HaveLen(2))
+	Expect(counter.entries[1].Data).To(HaveKeyWithValue("logsSkipped", 99))
+}
+
+// entryCounter collects the log entries written during a test.
+type entryCounter struct {
+	entries []*logrus.Entry
+}
+
+func (c *entryCounter) Levels() []logrus.Level { return logrus.AllLevels }
+
+func (c *entryCounter) Fire(e *logrus.Entry) error {
+	c.entries = append(c.entries, e)
+	return nil
 }

@@ -7,6 +7,10 @@ metadata:
     {{- include "tigera-operator.labels" (dict "context" .) | nindent 4 }}
 spec:
   replicas: 1
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       name: tigera-operator
@@ -57,6 +61,10 @@ spec:
         - name: tigera-operator
           image: {{ template "tigera-operator.image" .Values.tigeraOperator}}
           imagePullPolicy: {{ .Values.tigeraOperator.imagePullPolicy | default "IfNotPresent" }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command:
             - operator
           args:
@@ -106,6 +114,10 @@ spec:
         # Install CRDs first, so that APIs exist for calicoctl to use.
         - name: bootstrap-crds
           image: {{ template "tigera-operator.image" .Values.tigeraOperator}}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command:
             - operator
           args:
@@ -117,6 +129,10 @@ spec:
         # Install any v3 API resources provided in the calico-resources ConfigMap.
         - name: create-initial-resources
           image: {{.Values.calicoctl.image}}:{{.Values.calicoctl.tag}}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
             - name: DATASTORE_TYPE
               value: kubernetes

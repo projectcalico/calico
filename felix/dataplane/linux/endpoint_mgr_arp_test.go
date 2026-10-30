@@ -19,7 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/generictables"
-	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
@@ -52,7 +52,7 @@ var _ = Describe("ARP chain programming", func() {
 
 		epMgr.updateWorkloadARPChains(id, wl)
 
-		chainName := rules.EndpointChainName(rules.WorkloadARPPfx, "cali12345-ab", nftables.MaxChainNameLength)
+		chainName := rules.EndpointChainName(rules.WorkloadARPPfx, "cali12345-ab", nftrender.MaxChainNameLength)
 		Expect(arpTable.currentChains).To(HaveKey(chainName))
 
 		chain := arpTable.currentChains[chainName]
@@ -75,7 +75,7 @@ var _ = Describe("ARP chain programming", func() {
 
 		epMgr.updateWorkloadARPChains(id, wl)
 
-		chainName := rules.EndpointChainName(rules.WorkloadARPPfx, "cali67890-cd", nftables.MaxChainNameLength)
+		chainName := rules.EndpointChainName(rules.WorkloadARPPfx, "cali67890-cd", nftrender.MaxChainNameLength)
 		Expect(arpTable.currentChains).To(HaveKey(chainName))
 
 		chain := arpTable.currentChains[chainName]
@@ -97,7 +97,7 @@ var _ = Describe("ARP chain programming", func() {
 
 		epMgr.updateWorkloadARPChains(id, wl)
 
-		chainName := rules.EndpointChainName(rules.WorkloadARPPfx, "caliabcde-ef", nftables.MaxChainNameLength)
+		chainName := rules.EndpointChainName(rules.WorkloadARPPfx, "caliabcde-ef", nftrender.MaxChainNameLength)
 		Expect(arpTable.currentChains).To(HaveKey(chainName))
 
 		epMgr.removeWorkloadARPChains(id)

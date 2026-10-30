@@ -80,15 +80,20 @@ artifacts -- useful for post-mortem when a number looks off.
 On each invocation, in order:
 
 1. **Apply index templates.**  For every `hack/perf/index-templates/<family>.json`,
-   PUT it to `/_index_template/<family>` in ES.  Idempotent upsert -- see
+   PUT it to `/_index_template/<family>` in ES, and PUT to the live
+   `<family>_<UTC year>/_mapping` whichever of its fields that index has not
+   mapped yet (skipped if the index does not exist yet).  Both are idempotent
+   -- see
    [When does the PUT have effect?](#when-does-the-put-have-effect) for what
-   this is and isn't buying.
+   they are and aren't buying.  A PR run (one with a `pr_number`) skips both,
+   and instead drops from its documents any field the live index has not
+   mapped yet -- see [Adding a field](#adding-a-field).
 2. **Walk `artifacts/perf/<family>/*.json`** for every `<family>` subdirectory.
 3. **Augment each doc** with CI metadata (`@timestamp`, `git_commit`,
    `git_branch`, `code_version`, `ci_run_id`, `pr_number`, `env`) unless the
    producer already supplied that field -- producer values win.  Picked up
-   from `SEMAPHORE_GIT_SHA`, `SEMAPHORE_GIT_BRANCH`, `SEMAPHORE_JOB_ID`,
-   `SEMAPHORE_GIT_PR_NUMBER`.
+   from the CI system's own variables -- `SEMAPHORE_*` under Semaphore,
+   `CI_GIT_*` / `CI_JOB_ID` under ArgoCI.
 4. **POST to `<family>_<UTC year>/_doc`.**  The year suffix is computed at
    send time; producer side stays date-free.  ES auto-creates the dated
    index on first write using the template applied in step 1.
@@ -97,8 +102,13 @@ On each invocation, in order:
 "Lens is observability, not a critical path": the tool only returns non-zero
 in genuinely unrecoverable cases.  Missing credentials, unreachable ES,
 malformed JSON, mapping conflicts -- all log a warning and continue.  A
-`--require-creds` flag flips the missing-creds case to a hard failure, for
-places that want a strict gate on the publish step.
+`--require-publication` flag flips that default for a caller whose whole
+purpose is publishing: absent credentials, a document that failed to send, and
+finding nothing to send at all all become hard failures.
+Template and mapping PUTs stay warnings even then -- a stale template costs
+new fields their mapping, which is a Kibana inconvenience rather than data
+loss.
+The weekly OpenStack resync scale run is the one caller that sets it.
 
 ### When does the PUT have effect?
 
@@ -123,13 +133,25 @@ the PUT is a no-op.  We do it on every run anyway because (a) it's a single
 HTTP per family per CI job, effectively free, and (b) the self-heal property
 in case (4) is worth more than the cost.
 
-Mid-year template *edits* (adding/removing/renaming a field, changing a type)
-do not affect the live index.  An added field gets dynamic-mapping inference
-on first sight; a removed field still appears in old docs' `_source` and the
-live index's mapping; a type change risks a write rejection (mapping
-conflict) until the next year's index rolls over with the new template.  For
-type changes that need to take effect mid-year, reindex into a renamed index
-(`_2026_v2`) rather than fighting the existing mapping.
+Mid-year, the mapping PUT is what carries a template edit to the live index,
+and ES only lets it *add* fields.  A removed field still appears in old docs'
+`_source` and the live index's mapping.  A type change is logged as a warning
+on each run and takes effect only when the next year's index rolls over; it
+does not hold up new fields, since only unmapped fields are PUT.  For one that
+cannot wait, reindex into a renamed index (`_2026_v2`) rather than fighting
+the existing mapping.
+
+### Adding a field
+
+Declare it in `index-templates/<family>.json` in the same PR that starts
+producing it.  Once a field is mapped its type is fixed for the rest of the
+year, so a PR's own CI runs never map anything: they publish only the fields the
+live index already has, and log the ones they held back -- with a warning for
+any the template does not declare.  The first run after merge applies the
+reviewed template and publishes the new field.  If the live index's mapping
+cannot be read, or the year's index does not exist yet, a PR run sends nothing
+for that family: creating the index would build it from whatever template ES
+holds, and map by inference any field that template lacks.
 
 ## Schema: what makes a good datapoint
 
@@ -179,13 +201,25 @@ Scenario-specific scalars are the producer's responsibility:
 already supplied a value (producer wins):
 
 - **`@timestamp`** -- ISO-8601 UTC; Kibana's time field.
-- **`git_commit`** -- from `SEMAPHORE_GIT_SHA`.
-- **`git_branch`** -- from `SEMAPHORE_GIT_BRANCH`.
+- **`git_commit`** -- from `SEMAPHORE_GIT_SHA` or `CI_GIT_SHA`.
+- **`git_branch`** -- from `SEMAPHORE_GIT_BRANCH` or `CI_GIT_BRANCH`.
 - **`code_version`** -- short SHA derived from `git_commit`.
-- **`ci_run_id`** -- from `SEMAPHORE_JOB_ID`.
-- **`pr_number`** -- from `SEMAPHORE_GIT_PR_NUMBER`, if set.
-- **`env`** -- `ci` if `SEMAPHORE_JOB_ID` is set, else `dev`.  Filter
-  dashboards to `env: ci` to keep dev runs out of trend data.
+- **`ci_run_id`** -- from `SEMAPHORE_JOB_ID`, `CI_JOB_ID` or
+  `CI_WORKFLOW_NAME`.
+- **`pr_number`** -- from `SEMAPHORE_GIT_PR_NUMBER` or `CI_GIT_PR_NUMBER`, if
+  set.
+- **`env`** -- `ci` if any of those run IDs is set, else `dev`; override with
+  `PERF_ENV`.  Filter dashboards to `env != dev` to keep dev runs out of trend
+  data.
+
+  Each CI system's own variables are read, so a test that moves between them
+  keeps landing complete documents instead of blank provenance and `env: dev`.
+  Semaphore's values win where both are present.
+
+  Scheduled runs should set `PERF_ENV` to something of their own (the weekly
+  OpenStack resync scale run uses `weekly`).  They may execute on different
+  machine types from the per-PR runs, so their timings are not comparable and
+  a dashboard should be able to separate them.
 
 ### `phase` vs `iter` vs `test_step`
 

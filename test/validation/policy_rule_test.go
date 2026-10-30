@@ -21,6 +21,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -437,5 +438,84 @@ func TestNetworkPolicy_Defaults(t *testing.T) {
 	}
 	if got.Spec.Tier != "default" {
 		t.Fatalf("expected tier to default to %q, got %q", "default", got.Spec.Tier)
+	}
+}
+
+func TestRule_ProtocolValidation(t *testing.T) {
+	const wantErr = "protocol must be a name"
+
+	tests := []struct {
+		name     string
+		protocol numorstring.Protocol
+		wantErr  string
+	}{
+		{name: "TCP", protocol: numorstring.ProtocolFromString("TCP")},
+		{name: "UDPLite", protocol: numorstring.ProtocolFromString("UDPLite")},
+		{name: "numeric 6", protocol: numorstring.ProtocolFromInt(6)},
+		{name: "numeric 255", protocol: numorstring.ProtocolFromInt(255)},
+		{name: "unknown name", protocol: numorstring.ProtocolFromString("NOTAPROTO"), wantErr: wantErr},
+		{name: "numeric zero", protocol: numorstring.ProtocolFromInt(0), wantErr: wantErr},
+	}
+
+	for _, tt := range tests {
+		for field, mkRule := range map[string]func(numorstring.Protocol) v3.Rule{
+			"protocol": func(p numorstring.Protocol) v3.Rule {
+				return v3.Rule{Action: v3.Allow, Protocol: &p}
+			},
+			"notProtocol": func(p numorstring.Protocol) v3.Rule {
+				return v3.Rule{Action: v3.Allow, NotProtocol: &p}
+			},
+		} {
+			t.Run(field+" "+tt.name, func(t *testing.T) {
+				np := &v3.NetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+					Spec:       v3.NetworkPolicySpec{Ingress: []v3.Rule{mkRule(tt.protocol)}},
+				}
+				if tt.wantErr != "" {
+					expectCreateFails(t, np, tt.wantErr)
+				} else {
+					expectCreateSucceeds(t, np)
+				}
+			})
+		}
+	}
+}
+
+// numorstring canonicalises a protocol name on the way in, so the raw values a
+// kubectl apply can carry only reach the API server through an unstructured object.
+func TestRule_ProtocolValidationRawValues(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		protocol interface{}
+		wantErr  string
+	}{
+		{name: "canonical name", protocol: "TCP"},
+		{name: "lowercase name", protocol: "tcp", wantErr: "protocol must be a name"},
+		{name: "unknown name", protocol: "NOTAPROTO", wantErr: "protocol must be a name"},
+		{name: "number above 255", protocol: int64(256), wantErr: "protocol must be a name"},
+		{name: "negative number", protocol: int64(-1), wantErr: "protocol must be a name"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			obj := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "projectcalico.org/v3",
+					"kind":       "NetworkPolicy",
+					"metadata": map[string]interface{}{
+						"name":      uniqueName("np-proto"),
+						"namespace": "default",
+					},
+					"spec": map[string]interface{}{
+						"ingress": []interface{}{
+							map[string]interface{}{"action": "Allow", "protocol": tt.protocol},
+						},
+					},
+				},
+			}
+			if tt.wantErr != "" {
+				expectCreateFails(t, obj, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, obj)
+			}
+		})
 	}
 }

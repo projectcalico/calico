@@ -170,18 +170,26 @@ func parseProto(s string) RouteProto {
 	return RouteProtoUnknown
 }
 
-// expectedClusterRouteProto returns the route protocol owner that the cluster
-// is currently configured to use for IPIP and no-encap cluster routes.
-// "Felix" => proto 80, anything else (including unset) => BIRD's proto 12.
-func expectedClusterRouteProto(cli ctrlclient.Client) RouteProto {
+// expectedIPIPClusterRouteProto returns the route protocol owner that the
+// cluster is currently configured to use for IPIP cluster routes: Felix (proto
+// 80) unless FelixConfiguration explicitly hands IPIP back to BIRD (proto 12).
+// The default, with the field unset, is EnabledIPIPOnly, i.e. Felix.
+func expectedIPIPClusterRouteProto(cli ctrlclient.Client) RouteProto {
 	fc := v3.NewFelixConfiguration()
 	Expect(cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, fc)).
 		To(Succeed(), "Error querying FelixConfiguration")
-	if fc.Spec.ProgramClusterRoutes != nil &&
-		*fc.Spec.ProgramClusterRoutes == "Enabled" {
+	if fc.Spec.ProgramClusterRoutes == nil {
 		return RouteProtoFelix
 	}
-	return RouteProtoBIRD
+	switch *fc.Spec.ProgramClusterRoutes {
+	case v3.Disabled, v3.EnabledNoEncapOnly:
+		return RouteProtoBIRD
+	default:
+		// Enabled and EnabledIPIPOnly, but also anything this binary does not recognise:
+		// Felix replaces an unparseable value with the parameter's default, which is
+		// EnabledIPIPOnly, so a newer value than we know about still means Felix here.
+		return RouteProtoFelix
+	}
 }
 
 // assertRouteOwnership polls the kernel routing table on nodeName until at

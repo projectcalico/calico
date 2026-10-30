@@ -15,16 +15,14 @@
 package server
 
 import (
-	"context"
 	"io"
+	"net"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 
-	"github.com/projectcalico/calico/goldmane/pkg/client"
-	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/time"
@@ -56,7 +54,7 @@ func init() {
 }
 
 type Sink interface {
-	Receive(*types.Flow)
+	Receive(flow *types.Flow, node string)
 }
 
 type FlowCollectorService interface {
@@ -65,10 +63,8 @@ type FlowCollectorService interface {
 
 // NewFlowCollector returns a new push collector, which handles incoming flow streams from nodes in the cluster.
 func NewFlowCollector(sink Sink) *flowCollectorService {
-	return &flowCollectorService{
-		sink:         sink,
-		deduplicator: flowcache.NewExpiringFlowCache(client.FlowCacheExpiry),
-	}
+	logrus.Info("Starting flow collector")
+	return &flowCollectorService{sink: sink}
 }
 
 type flowCollectorService struct {
@@ -76,20 +72,21 @@ type flowCollectorService struct {
 
 	// sink is where we will send flows upon receipt.
 	sink Sink
-
-	// deduplicator is used to deduplicate flows received from clients upon connection resets.
-	deduplicator *flowcache.ExpiringFlowCache
-}
-
-func (p *flowCollectorService) Run(ctx context.Context) {
-	logrus.Info("Starting flow collector")
-	p.deduplicator.Run(ctx, client.FlowCacheCleanup)
 }
 
 func (p *flowCollectorService) RegisterWith(srv *grpc.Server) {
 	// Register the collector with the gRPC server.
 	proto.RegisterFlowCollectorServer(srv, p)
 	logrus.Info("Registered FlowCollector Server")
+}
+
+// nodeScope returns a scope that survives a reconnect. The peer's ephemeral port changes
+// on every reconnect, so including it would give each connection its own scope.
+func nodeScope(addr net.Addr) string {
+	if tcp, ok := addr.(*net.TCPAddr); ok {
+		return tcp.IP.String()
+	}
+	return addr.String()
 }
 
 func (p *flowCollectorService) Connect(srv proto.FlowCollector_ConnectServer) error {
@@ -101,12 +98,13 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 	numClients.Inc()
 	defer numClients.Dec()
 
+	who := "unknown"
 	scope := "unknown"
-	pr, ok := peer.FromContext(srv.Context())
-	if ok {
-		scope = pr.Addr.String()
+	if pr, ok := peer.FromContext(srv.Context()); ok {
+		who = pr.Addr.String()
+		scope = nodeScope(pr.Addr)
 	}
-	logCtx := logrus.WithField("who", scope)
+	logCtx := logrus.WithField("who", who)
 	logCtx.Info("Connection from client")
 
 	num := 0
@@ -128,26 +126,10 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 		receivedFlowCounter.WithLabelValues(scope).Inc()
 		start := time.Now()
 
-		// Convert to minified types.Flow object.
-		flow := types.ProtoToFlow(upd.Flow)
-
-		// Skip flows that we have already received from this node. This is a simple deduplication
-		// mechanism to avoid processing the same flow if the connection is reset for some reason.
-		// Should this happen, the client will resend all its flows and we must ensure we don't process
-		// the same flow twice.
-		if !p.deduplicator.Has(flow, scope) {
-
-			// Add it to the deduplicator, scoped to the client's address (i.e., per-node).
-			// The cache will automatically time out this flow in the background when it is no longer
-			// relevant.
-			p.deduplicator.Add(flow, scope)
-
-			// Send the flow to the configured Sink.
-			logCtx.Debug("Sending Flow to sink")
-			p.sink.Receive(flow)
-		} else {
-			logCtx.Debug("Skipping already learned flow")
-		}
+		// Convert to minified types.Flow object. The sink deduplicates per node and bucket,
+		// which is what covers a client replaying its cache after a connection reset.
+		logCtx.Debug("Sending Flow to sink")
+		p.sink.Receive(types.ProtoToFlow(upd.Flow), scope)
 		num++
 
 		// Tell the client we have received the flow.

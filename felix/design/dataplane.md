@@ -234,12 +234,10 @@ These are distinct mechanisms with overlapping effect:
   against **drift Felix didn't cause and wasn't told about** — the
   drift-detection job noted in
   [`DESIGN.md` §1](../DESIGN.md#dataplane-managers-and-drivers).
-  Most drivers resync everything in one pass. The **legacy ipsets
-  driver is the exception**: a periodic refresh there is satisfied
-  *incrementally* over several apply loops (see
-  [IP sets](#ip-sets)), because re-listing every set at once is too
-  slow. Start-of-day and error-triggered ipset resyncs stay full and
-  synchronous.
+  Most drivers resync everything in one pass; the legacy ipsets
+  driver satisfies a periodic refresh *incrementally* over several
+  apply loops, because re-listing every set at once is too slow (see
+  [IP sets](#ip-sets)).
 
 ### Review notes for this section
 
@@ -298,7 +296,7 @@ why the identification mechanism differs per driver:
 | Subsystem | How Felix recognises its own state |
 |---|---|
 | iptables (`iptables/`) | A **rule comment with our prefix and a hash of the input rule**. Needed because `iptables-save` output does **not** round-trip — the kernel re-canonicalises some constructs and the tools reformat others (the one concrete documented case is TCP-flag matches, per `iptables/actions.go`; MARK/CONNMARK are rendered to round-trip). The comment lets Felix (i) identify Calico rules even outside Calico-owned chains, and (ii) detect drift: read-back hash ≠ desired hash ⇒ reprogram. (Does not defend against malicious tampering that preserves the comment — out of threat model.) |
-| nftables (`nftables/`) | Inherited the iptables hash/prefix approach for porting ease, but doesn't strictly need it: **if it's in our table, it's ours.** A future simplification. |
+| nftables (`nftables/`) | Inherited the iptables hash/prefix approach for porting ease. Inside Calico's own table it isn't strictly needed — **if it's in our table, it's ours** — but it is what picks out state a previous iptables-nft Felix left in the shared tables (see [cleaning up after the other backend](#cleaning-up-after-the-other-backend)). |
 | ip rules (`routerule/`) | No marking support. Identified by **the tables they jump to being Felix-owned**. Imperfect — a config change can confuse it. |
 | routes (`routetable/`) | Heuristic, because the first implementation didn't uniformly use the route `proto` field (it should have): **in a Felix-owned table ⇒ ours; carries our proto ⇒ ours; points down a `cali`-owned veth ⇒ ours**; etc. The classifier is the `OwnershipPolicy` interface — `MainTableOwnershipPolicy.RouteIsOurs`/`IfaceIsOurs` in `routetable/ownershippol/`. (Not to be confused with `RouteClass`, which is a same-CIDR conflict tie-breaker among *desired* routes, not an ownership test.) |
 | IP sets, iptables chains, veths | Identified by **name prefix** (`cali`...). |
@@ -316,6 +314,13 @@ why the identification mechanism differs per driver:
 - A change that makes a driver mutate the kernel before in-sync
   defeats the deferred-cleanup safety and risks deleting
   not-yet-seen state.
+- Among Felix's *own* producers, `(RouteClass, ifaceName)` is the
+  ownership key: `RouteTable.SetRoutes()` **replaces** the whole
+  desired set for that pair, so two managers that write to the same
+  pair silently delete each other's routes. Each independent producer
+  therefore needs its own class — which is why the same-subnet routes
+  (shared parent device) and the IPAM-block drop routes (shared
+  `InterfaceNone`) are split per encapsulation type.
 
 ### Fail closed while Felix isn't running
 
@@ -413,6 +418,17 @@ reconciliation of `*tables` chains and rules. The model:
   free: Felix still computes the hash delta and reprograms only
   changed rules, partly to avoid resetting iptables packet/byte
   counters on rules that didn't change.
+- **nftables rebuilds the table atomically after repeated
+  failures.** When `Apply()` has failed several times in a row, the
+  nftables backend recreates the table in case the change it is
+  trying to make is incompatible with the current state. The
+  `delete table` and `add table` go in the *same* transaction as
+  the rewrite of every chain and rule, and the sets and maps in the
+  table are marked for reprogramming at the same time. A failed
+  attempt therefore leaves the existing ruleset alone rather than
+  stripping the base chains and their hooks, which would leave
+  traffic unfiltered. iptables has no equivalent; its retry loop
+  only backs off.
 
 ### iptables vs nftables: parity and divergence
 
@@ -428,8 +444,104 @@ The two backends are kept behaviourally aligned, but parity is a
   (e.g. match-action maps) for performance/scale wins, leaving
   iptables users no worse off.
 
+### nftables flowtable offload (nftables only)
+
+`NFTablesFlowTableOffload` programs a `flowtable` object plus a `flow
+offload` rule in filter FORWARD, handing established flows to the
+kernel's software fast path. The fast path fires from the **ingress**
+hook of a member device and short-circuits straight to the output
+device, so an offloaded flow **never reaches FORWARD or POSTROUTING**.
+Anything Felix renders into those hooks stops applying for the life of
+the flowtable entry.
+
+Two invariants follow:
+
+- **The offload rule sits ahead of the dispatch jumps.** FORWARD
+  jumps to `cali-flow-offload` on `RELATED,ESTABLISHED` only, so `NEW`
+  and `INVALID` packets still traverse policy and pay for neither the
+  jump nor the chain. Per-endpoint chains accept established traffic
+  before any NFLOG rule, so policy attribution in flow logs is
+  unaffected; connection byte counts come from `nf_conntrack_acct`
+  rather than from Felix.
+- **The offload rule excludes endpoints whose features need those
+  hooks, by IP.** `flowtableExclusionManager` in
+  [`flowtable_mgr.go`](../dataplane/linux/flowtable_mgr.go) maintains
+  the `no-flow-offload` IP set, holding the IPs of endpoints with DSCP
+  marking (rendered into mangle POSTROUTING) or a connection or packet
+  rate limit (rendered into the endpoint's filter chain), and the
+  offload rule in `cali-flow-offload` matches neither source nor
+  destination in that set. Bandwidth QoS is
+  enforced by tc on the veth, which the fast path still traverses, so
+  it does not disqualify an endpoint.
+
+  Keeping the endpoint's veth out of the flowtable device set is
+  **not** a substitute: the offload rule creates the entry whichever
+  devices the flow uses, and the fast path fires from the *ingress*
+  device, so a plain pod talking to a connection-limited pod still
+  short-circuits at its own veth. Only the reply direction would be
+  protected.
+
+Membership is also gated on the interface being up, in both the
+endpoint manager (workload veths) and
+[`flowtable_mgr.go`](../dataplane/linux/flowtable_mgr.go) (overlay and
+pattern-matched host devices). nft rejects the whole transaction if a
+flowtable names a device the kernel doesn't have, which takes down the
+entire table.
+
+### Cleaning up after the other backend
+
+A node can switch backends across a Felix restart, so Felix sweeps
+every dataplane it isn't currently programming. There are three, and
+`iptablesBackend: Auto` can move a node between the last two on its
+own, since detection keys off kube-proxy's chains and so depends on
+boot ordering.
+
+The shared tables (`filter`/`nat`/`mangle`/`raw`) exist twice in the
+kernel, once per iptables backend; this doc calls them the **legacy
+copies** and the **nftables copies**.
+
+| Dataplane | Swept by | Needed when |
+|---|---|---|
+| Calico's own nftables table | that table's `Table`, which deletes it wholesale (safe: nothing else writes there) | iptables mode, either backend |
+| the nftables copies of the shared tables, where `iptables-nft` writes | `nftables.IPTablesNFTCleanup` | nftables mode, or iptables mode on iptables-legacy |
+| the legacy copies of the shared tables, where `iptables-legacy` writes | `iptables.Table` pinned to iptables-legacy, `CleanupOnly` | nftables mode, or iptables mode on iptables-nft |
+
+Four constraints on the sweep:
+
+- The nftables copies are read over **netlink**, not with
+  `iptables-nft-save`, which refuses a table holding anything iptables
+  can't express — a neighbouring tool's native nft rules are enough.
+  Only **base chains** are read for rules, the only chains Felix ever
+  inserted into, which keeps the dumps off kube-proxy's thousands of
+  chains. The chain list is one dump of the whole family (netlink has
+  no per-table filter), so the sweep is paced by the refresh interval
+  rather than run every apply.
+- A `CleanupOnly` table never panics: the backend it names may have no
+  kernel support here, in which case nothing of ours is in it. It
+  retries on a latch rather than every apply, so an unreadable backend
+  doesn't burn a retry budget each time round the loop.
+- The legacy tables are built only when **both** sets of binaries are
+  present. Otherwise `FindBestBinary` falls back to the default
+  `iptables`: with the legacy binaries missing the sweep would land on
+  the backend Felix is programming, and with the nft ones missing the
+  tables Felix programs are themselves the legacy copies. The same
+  check gates the nft view in iptables mode.
+- They are also built only when the legacy modules are already loaded,
+  since `iptables-legacy-save` would autoload them onto a node running
+  pure nftables. `environment.DetectBackend` shares that check, so
+  backend detection never probes a backend the kernel hasn't got.
+
+Cleanup **never terminates**. A shared table can be written again at
+any point (kube-proxy restarting, say), so one clean read proves
+nothing about the next.
+
 ### Review notes for this section
 
+- A PR that renders a new rule into filter FORWARD or mangle
+  POSTROUTING for a subset of endpoints has to decide whether those
+  endpoints can still be offloaded. If the rule has to run, add them to
+  the `no-flow-offload` set, or return from `cali-flow-offload` for the
+  traffic it matches, and cover it in `fv/flowtable_test.go`.
 - A PR adding `*tables` rule semantics must first decide the
   iptables/nftables story explicitly (both? nft-only? — see above),
   and should carry FV coverage in the relevant mode(s)
@@ -438,6 +550,9 @@ The two backends are kept behaviourally aligned, but parity is a
   recognised touches the restart/resync identification mechanism —
   review it against [mark-and-sweep](#restart-resync-and-mark-and-sweep),
   not just the happy path.
+- A change to what Felix writes into the shared tables needs a
+  matching change to the other mode's cleanup, or a node that
+  switches backends keeps the stale rules indefinitely.
 
 ## Rules generation, dispatch chains and mark bits
 
@@ -451,9 +566,8 @@ converts lists of Calico-internal rules/endpoints/etc into concrete
   per-endpoint dispatch rules is a real per-packet tax. This really is
   per-*packet*, not per-connection: the conntrack accept lives in the
   per-endpoint chain, downstream of dispatch, so even established flows
-  traverse the dispatch chains (an earlier short-circuit further up the
-  path was moved into the per-endpoint chain because it broke setups
-  with non-Calico rules). Felix builds
+  traverse the dispatch chains; it cannot be hoisted above dispatch
+  without breaking setups that carry non-Calico rules. Felix builds
   a **shallow (typically single-level) tree of dispatch chains**,
   binning endpoints by the next character after the common
   interface-name prefix (`sortAndDivideEndpointNamesToPrefixTree` /
@@ -472,6 +586,88 @@ converts lists of Calico-internal rules/endpoints/etc into concrete
   in a BPF header file — see the BPF design family.) An allocation
   that exhausts the range, or collides with bits another subsystem
   expects, is a startup/runtime failure.
+
+### Connection transition logging
+
+`LogConnectionTransitions` (`*tables` modes only; enum, `Disabled`
+by default, `FirstResponseAfterLog` enables) extends the policy
+`Log` action with one follow-up log per logged connection,
+recording the first observed response — `<prefix>-est` (first
+genuine reply), `<prefix>-rst` (TCP RST, i.e. connection refused)
+or `<prefix>-icmp-err` (related ICMP error) — so that a user
+reading the kernel log can tell whether a logged connection was
+ever answered. No follow-up log means no response was seen.
+Mechanism and invariants:
+
+- **One connmark bit** (`MarkConnStateLog` in `rules.Config`) means
+  "matched a Log rule; no response seen yet". It is allocated from
+  `MarkBitsManager` *conditionally* (only when the feature is
+  enabled, so the endpoint-mark block isn't shrunk otherwise) and
+  *before* the endpoint-mark block grab. Reserved from packet-mark
+  space because the Log rules below also use it as a scratch packet
+  mark, and so user `CONNMARK --save-mark` rules can't corrupt it.
+- **Setting the bit** (`rules/policy.go`): a rendered `Log` rule is
+  followed by a `CONNMARK` rule with the same match. When
+  `LogActionRateLimit` is set, both must instead hang off a single
+  rate-limit decision, so that a connection gets a response log iff
+  its initial log was emitted: clear the bit in the packet mark;
+  re-evaluate the match under the limit and set it; then LOG and
+  CONNMARK, each matching that bit. The leading clear is
+  load-bearing — an earlier `Log` rule (or a user restore-mark rule)
+  may have left the bit set, which would log a packet the limiter
+  rejected. The scratch marks can't be used for this: the rule's own
+  match may depend on them (`matchBlockBuilder`). Untracked
+  (raw-table) policies skip the whole thing; CONNMARK has no effect
+  on NOTRACKed packets.
+- **Checking the bit**: `appendConntrackRules`
+  (`rules/endpoints.go`) prepends, ahead of the
+  RELATED,ESTABLISHED accept rules, a jump to the shared
+  `cali-log-conn` chain matching on the connmark bit AND ctstate
+  RELATED,ESTABLISHED. The ctstate match is load-bearing:
+  same-direction packets (e.g. a retransmitted SYN) still carry the
+  bit but are ctstate NEW and must not be logged as a response. The
+  first packet that reaches the check in RELATED/ESTABLISHED state
+  is necessarily the first response. This lands in every tracked
+  endpoint chain (workload and host, filter and mangle) except the
+  preDNAT mangle chains, which skip it: mangle `cali-PREROUTING`
+  accepts RELATED,ESTABLISHED first, so it could never match
+  there. One static-chain special case:
+  replies to workload→host connections leave via filter `cali-OUTPUT`
+  and RETURN at the workload-interface rules without traversing any
+  per-endpoint chain, so the same check rule is inserted at the top
+  of `cali-OUTPUT`.
+- **The `cali-log-conn` chain** (`rules/static.go`, emitted into
+  both the filter and mangle static chains, per IP version) has
+  three mutually exclusive branches — TCP RST, ICMP-protocol +
+  ctstate RELATED, catch-all established — each a LOG / clear-bit /
+  RETURN triplet. LOG is non-terminating, so each branch must
+  RETURN before the next branch's LOG to keep it to exactly one log
+  per packet. The ICMP branch matches the ICMP protocol explicitly
+  so only real ICMP errors get the `-icmp-err` log (conntrack
+  associates ICMP errors with the *original* connection's entry,
+  which is why they carry its connmark; other RELATED flows, e.g.
+  helper children, fall through to the established branch). The
+  chain needs no rate limiting of its own: a packet only gets here
+  if the policy LOG fired, so these logs are already bounded by
+  `LogActionRateLimit`.
+- **Log prefixes** come from the dedicated
+  `LogConnectionTransitionsPrefix` param (default
+  `calico-response`), used verbatim — the chain is static and
+  shared by all policies, so `LogPrefix`-style `%`-specifiers
+  cannot be resolved and are rendered literally (the API doc says
+  so) — with the base truncated so suffix plus the `": "` appended
+  by the Log action fit the backend limit (29 chars iptables, 126
+  nftables).
+- **RST visibility**: netfilter hooks run before the TCP stack sees
+  a packet (forwarded traffic never touches the host TCP stack at
+  all), and conntrack only *classifies* an RST (valid → ESTABLISHED
+  reply; bad-seq → INVALID, handled by the existing INVALID rule),
+  so a genuine refused-connection RST always reaches the check
+  rule.
+- **Toggle caveat** (documented, accepted): disabling and
+  re-enabling the feature with a different resulting bit layout can
+  produce at most one spurious log per pre-existing connection;
+  stale connmark bits are otherwise inert once the rules are gone.
 
 ### Review notes for this section
 
@@ -503,26 +699,19 @@ kernel constraints behind them:
   caps deletions per iteration (`MaxIPSetDeletionsPerIteration = 1`,
   rescheduling with a ~100ms floor), so a big policy teardown of
   thousands of sets doesn't stall the whole dataplane on cleanup.
-- **Periodic resyncs are incremental**, for the same reason. Felix
-  reads back each set with its own `ipset list <name>` (needed for an
-  ipset compatibility issue), so re-listing every set on each refresh
-  is far too slow. A refresh instead lists only the *names* cheaply,
-  repairs any set that vanished or appeared unexpectedly right away,
-  and re-checks the surviving sets' contents from a two-tier queue
-  (`resyncQueue`) drained a time-boxed batch per apply
-  (`BackgroundResyncTimeBudget`), paced by the same ≤100ms reschedule
-  as deletions. The **must** tier (start-of-day and error-forced
-  resyncs) is drained fully before Felix trusts the dataplane; the
-  **background** tier (periodic refresh) is spread over apply loops. A
-  desired set found missing from the name listing is repaired in the
-  *same* apply — its dataplane view is cleared so the normal
-  create-path recreates it — rather than being queued for a wasted
-  per-set list. On nodes with many sets the queue may never fully
-  drain between refreshes; re-adds keep an entry's queue position, so
-  the sweep degrades into a continuous rolling scan and a given set's
-  contents are re-checked roughly once per *sweep* time, which can
-  exceed `IpsetsRefreshInterval`. That is the intended trade-off, not
-  a pacing bug.
+- **Periodic resyncs are incremental**, for the same reason: each set
+  is read back with its own `ipset list <name>`, so re-listing every
+  set per refresh is far too slow. A refresh lists only the *names*,
+  repairs any set that vanished or appeared unexpectedly in the same
+  apply, and queues the survivors' contents for re-checking a
+  time-boxed batch per apply, paced by the same ≤100ms reschedule as
+  deletions. The queue has two tiers: **must** (start-of-day and
+  error-forced) is drained fully before Felix trusts the dataplane,
+  **background** (periodic refresh) is spread over apply loops. On
+  nodes with many sets it may never fully drain, so the sweep becomes
+  a continuous rolling scan whose effective re-check period is one
+  sweep — which can exceed `IpsetsRefreshInterval`. That is the
+  intended trade-off, not a pacing bug.
 
 **The cross-layer invariant: never reference an IP set before it is
 programmed.** This is enforced jointly by the calc graph and the
@@ -597,11 +786,40 @@ Legitimate asymmetries are rare on the `*tables` path. Two notes:
   table, but was kept as two to track the iptables structure for
   porting ease.
 
+### Cross-cutting components that feed the per-family managers
+
+Not everything is duplicated per family. Some components are
+deliberately **single instances that feed the per-family managers**.
+The live migration monitor (`dataplane/linux/live_migration.go`) is
+the model: one FSM per workload, driven by GARP detection and timers
+that have nothing to do with IP family, whose state changes are then
+pushed into the endpoint managers — which own the per-family route
+programming.
+
+For those components the dual-stack trap is not "did you duplicate
+the code" but **"did you fan out to every family's manager"**. A
+singleton holding a *single* reference to its downstream manager
+serves IPv4 only and fails silently — the IPv6 manager never learns
+the state, so its routes keep their default behaviour. Prefer a list
+plus an explicit registration call (`registerListener`) over a
+single-valued field: a missing family then shows up as a missing call
+at the construction site in `int_dataplane.go`, alongside the
+`RegisterManager` call it belongs with.
+
 ### Review notes for this section
 
 - A dataplane change must be applied symmetrically to the IPv4 and
   IPv6 manager/driver instances unless there's a specific reason not
   to. "Works on v4, forgot v6" is a recurring bug.
+- A cross-cutting (non-per-family) component that pushes state into
+  the per-family managers must be wired to **all** of them. Check the
+  construction site in `int_dataplane.go`: every per-family manager
+  the component needs should have a matching registration call. A
+  single-valued reference field where a list belongs is the smell.
+- Dual-stack behaviour needs dual-stack tests. A per-family manager's
+  own unit tests may already run for both families and still pass
+  while the family is disconnected upstream; the registration itself
+  and at least one FV path need explicit IPv6 coverage.
 
 ## Windows (contrast)
 
@@ -706,21 +924,8 @@ only to maps that genuinely can't be rebuilt.
   (rather than diffing and touching only what's wrong) will glitch
   connectivity — push back.
 
-## Keep this document in sync with the code
+## Siblings that move with this doc
 
-The repo-wide doc-update rule
-([`.claude/CLAUDE.md` → Documentation map](../../.claude/CLAUDE.md),
-mirrored in
-[`.github/copilot-instructions.md`](../../.github/copilot-instructions.md))
-applies. For the Linux dataplane, "changes how it works" means: a
-new manager or driver, or a change to the manager/driver split; a
-change to the `apply()` ordering or the `OnUpdate`/`CompleteDeferredWork`
-contract; a new kind of kernel resource or a change to how Calico
-resources are identified for resync; a change to the `*tables` Table
-reconciliation, dispatch-chain structure, mark-bit allocation, IP-set
-ordering, or route ownership classification; or a change to the
-`proto.*` dataplane API. Update the relevant section of this file in
-the same PR — and [`calc-graph.md`](./calc-graph.md) too if the
-[dataplane API contract](#the-dataplane-api-calc-graph--dataplane-contract)
-changes. This file is the source of truth for the Linux dataplane's
-invariants.
+- [`calc-graph.md`](./calc-graph.md) — whenever the
+  [dataplane API contract](#the-dataplane-api-calc-graph--dataplane-contract)
+  changes.

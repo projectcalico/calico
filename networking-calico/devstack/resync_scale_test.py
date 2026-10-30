@@ -41,6 +41,9 @@ Run as the ``stack`` user with the admin openrc sourced, plus:
                                        neutron.conf)
     RESYNC_CALICO_RESYNC_LOG=<path>   (default /tmp/calico-resync-scale.log;
                                        where calico-resync writes its logs)
+    RESYNC_SKIP_FINAL_CLEANUP=true     (default false; leave the last scale's
+                                       resources in place.  Only for a
+                                       disposable machine -- see below)
 
 One JSON document per resync iteration is also dropped into
 ``artifacts/perf/benchmark_data_neutron_resync/`` so that the
@@ -50,12 +53,21 @@ Elastic -- it just writes the files.  See ``hack/perf/README.md`` for convention
 
     RESYNC_PERF_ARTIFACTS_DIR=<path>  (default artifacts/perf; set to "" to
                                        disable JSON-file writes)
+
+Cleanup between scales is not optional: each scale has to start from a known
+state.  The *last* scale's cleanup is different -- every measurement is already
+recorded by then, so on a machine that is about to be destroyed it is pure cost.
+At 10,000 ports it took 28 minutes of an 89-minute run.  RESYNC_SKIP_FINAL_CLEANUP
+skips it.  Do not set it where the cloud resources outlive the run, nor where
+anything else uses the cluster afterwards: the fake agent rows left behind have
+no host to bind to, and instance networking fails against them.
 """
 
 import argparse
 import concurrent.futures
 import configparser
 import datetime
+import functools
 import json
 import logging
 import math
@@ -64,6 +76,7 @@ import statistics
 import subprocess
 import sys
 import tempfile
+import urllib.request
 import uuid
 from urllib.parse import urlparse
 
@@ -576,6 +589,7 @@ def _make_perf_docs(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
         "scale_sgs": num_sgs,
         "scale_hosts": num_hosts,
     }
+    common.update(_cpu_info())
 
     # iter=0 is the cold run; iter=1..N are the steady runs.
     iterations = [(0, "cold", cold)]
@@ -604,6 +618,43 @@ def _make_perf_docs(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
         docs.append(doc)
 
     return docs
+
+
+@functools.cache
+def _cpu_info():
+    """Identify the CPU these timings were measured on, as perf-doc fields.
+
+    The same machine type is not always the same CPU: GCE places an n2 VM on either of
+    two Intel generations, and week-to-week resync timings move by several percent in
+    step across every scale, which looks like the machine rather than the code.
+    Recording the CPU lets a dashboard split the series by it.
+
+    ``cpu_model`` is /proc/cpuinfo's ``model name``.  On GCE that is often a generic
+    "Intel(R) Xeon(R) CPU @ 2.80GHz", so ``cpu_platform`` adds the platform GCE reports
+    for the instance (e.g. "Intel Cascade Lake").  Either is omitted when it cannot be
+    read -- off GCE there is no metadata server -- since a missing CPU must not cost us
+    the timings.
+    """
+    info = {}
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                key, _, value = line.partition(":")
+                if key.strip() == "model name":
+                    info["cpu_model"] = value.strip()
+                    break
+    except OSError as e:
+        LOG.warning("Could not read CPU model from /proc/cpuinfo: %s", e)
+    request = urllib.request.Request(
+        "http://metadata.google.internal/computeMetadata/v1/instance/cpu-platform",
+        headers={"Metadata-Flavor": "Google"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=2) as response:
+            info["cpu_platform"] = response.read().decode().strip()
+    except Exception as e:
+        LOG.info("No GCE CPU platform (not on GCE?): %s", e)
+    return info
 
 
 def _write_perf_docs(scale, docs):
@@ -704,7 +755,9 @@ def summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
 # ---------------------------------------------------------------------------
 
 
-def run_one_scale(scale, conn, etcd_client, db_args, neutron_conf, extra_conf):
+def run_one_scale(
+    scale, conn, etcd_client, db_args, neutron_conf, extra_conf, skip_cleanup=False
+):
     """Populate, measure, clean up.  Returns True on success."""
     LOG.info("=" * 60)
     LOG.info("Scale = %d ports", scale)
@@ -763,8 +816,14 @@ def run_one_scale(scale, conn, etcd_client, db_args, neutron_conf, extra_conf):
         summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs)
         return True
     finally:
-        cleanup_neutron(conn)
-        delete_fake_agents(db_args)
+        if skip_cleanup:
+            LOG.info(
+                "Leaving scale %d's resources in place (RESYNC_SKIP_FINAL_CLEANUP)",
+                scale,
+            )
+        else:
+            cleanup_neutron(conn)
+            delete_fake_agents(db_args)
 
 
 # ---------------------------------------------------------------------------
@@ -783,6 +842,12 @@ def main():
 
     LOG.info(
         "Resync scale benchmark started at %s", datetime.datetime.utcnow().isoformat()
+    )
+    cpu = _cpu_info()
+    LOG.info(
+        "CPU model: %s; CPU platform: %s",
+        cpu.get("cpu_model", "unknown"),
+        cpu.get("cpu_platform", "unknown"),
     )
     LOG.info("Reading DB config from %s", args.neutron_conf)
     db_args = parse_db_connection(args.neutron_conf)
@@ -824,8 +889,12 @@ def main():
     scales = parse_scales()
     LOG.info("Scales: %s", scales)
 
+    skip_final_cleanup = os.environ.get(
+        "RESYNC_SKIP_FINAL_CLEANUP", "false"
+    ).strip().lower() in ("1", "true", "yes")
+
     failed = False
-    for scale in scales:
+    for index, scale in enumerate(scales):
         try:
             run_one_scale(
                 scale,
@@ -834,6 +903,7 @@ def main():
                 db_args,
                 args.neutron_conf,
                 extra_conf,
+                skip_cleanup=skip_final_cleanup and index == len(scales) - 1,
             )
         except Exception:
             # Abort the whole run on the first scale failure -- if

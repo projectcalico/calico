@@ -645,43 +645,7 @@ var policy1_order20_dst_service_account = model.Policy{
 	},
 }
 
-var profileRules1 = model.ProfileRules{
-	InboundRules: []model.Rule{
-		{SrcSelector: allSelector},
-	},
-	OutboundRules: []model.Rule{
-		{SrcSelector: "has(tag-1)"},
-	},
-}
-
-var profileRulesWithTagInherit = model.ProfileRules{
-	InboundRules: []model.Rule{
-		{SrcSelector: tagSelector},
-	},
-	OutboundRules: []model.Rule{
-		{SrcSelector: tagFoobarSelector},
-	},
-}
-
-var profileRules1TagUpdate = model.ProfileRules{
-	InboundRules: []model.Rule{
-		{SrcSelector: bEpBSelector},
-	},
-	OutboundRules: []model.Rule{
-		{SrcSelector: "has(tag-2)"},
-	},
-}
-
-var profileRules1NegatedTagSelUpdate = model.ProfileRules{
-	InboundRules: []model.Rule{
-		{NotSrcSelector: bEpBSelector},
-	},
-	OutboundRules: []model.Rule{
-		{NotSrcSelector: "has(tag-2)"},
-	},
-}
-
-var profileLabels1Tag1 = &v3.Profile{
+var profile1 = &v3.Profile{
 	ObjectMeta: metav1.ObjectMeta{
 		Name: "prof-1",
 	},
@@ -690,7 +654,44 @@ var profileLabels1Tag1 = &v3.Profile{
 			"profile": "prof-1",
 			"tag-1":   "",
 		},
+		Ingress: []v3.Rule{
+			{Source: v3.EntityRule{Selector: allSelector}},
+		},
+		Egress: []v3.Rule{
+			{Source: v3.EntityRule{Selector: "has(tag-1)"}},
+		},
 	},
+}
+
+var profile1TagUpdate = profileWithRules(profile1,
+	[]v3.Rule{{Source: v3.EntityRule{Selector: bEpBSelector}}},
+	[]v3.Rule{{Source: v3.EntityRule{Selector: "has(tag-2)"}}},
+)
+
+var profile1NegatedTagSelUpdate = profileWithRules(profile1,
+	[]v3.Rule{{Source: v3.EntityRule{NotSelector: bEpBSelector}}},
+	[]v3.Rule{{Source: v3.EntityRule{NotSelector: "has(tag-2)"}}},
+)
+
+var profile1WithTagInherit = profileWithRules(profile1,
+	[]v3.Rule{{Source: v3.EntityRule{Selector: tagSelector}}},
+	[]v3.Rule{{Source: v3.EntityRule{Selector: tagFoobarSelector}}},
+)
+
+// profile1WithTagOverridden has an explicit value for the tag-1 label.
+var profile1WithTagOverridden = func() *v3.Profile {
+	p := profile1WithTagInherit.DeepCopy()
+	p.Spec.LabelsToApply = map[string]string{
+		"tag-1": "foobar",
+	}
+	return p
+}()
+
+func profileWithRules(base *v3.Profile, ingress, egress []v3.Rule) *v3.Profile {
+	p := base.DeepCopy()
+	p.Spec.Ingress = ingress
+	p.Spec.Egress = egress
+	return p
 }
 
 var profileLabels1 = &v3.Profile{
@@ -711,17 +712,6 @@ var profileLabels2 = &v3.Profile{
 	Spec: v3.ProfileSpec{
 		LabelsToApply: map[string]string{
 			"profile": "prof-2",
-		},
-	},
-}
-
-var profileLabelsTag1 = &v3.Profile{
-	ObjectMeta: metav1.ObjectMeta{
-		Name: "prof-1",
-	},
-	Spec: v3.ProfileSpec{
-		LabelsToApply: map[string]string{
-			"tag-1": "foobar",
 		},
 	},
 }
@@ -767,6 +757,43 @@ var (
 		Nets: []net.IPNet{
 			mustParseNet("12.0.0.0/24"), // Overlaps with netset-1
 			mustParseNet("13.1.0.0/24"),
+		},
+		Labels: uniquelabels.Make(map[string]string{
+			"a": "b",
+		}),
+	}
+)
+
+// netSetOverlap* model a NetworkSet whose CIDRs nest inside one another, exercising the
+// overlap-suppression dedup (CORE-13009). The a=="b" label matches all() (allSelectorId) but not
+// b=="b" (bEqBSelectorId), so the CIDRs land only in the all() IP set.
+var (
+	netSetOverlapKey = model.NetworkSetKey{Name: "netset-overlap"}
+
+	netSetOverlapAncestor = model.NetworkSet{
+		Nets: []net.IPNet{
+			mustParseNet("10.65.0.0/16"),
+		},
+		Labels: uniquelabels.Make(map[string]string{
+			"a": "b",
+		}),
+	}
+
+	netSetOverlapNested = model.NetworkSet{
+		Nets: []net.IPNet{
+			mustParseNet("10.65.0.0/16"), // ancestor
+			mustParseNet("10.65.1.0/24"), // nested under ancestor
+			mustParseNet("10.65.1.5/32"), // nested under both
+		},
+		Labels: uniquelabels.Make(map[string]string{
+			"a": "b",
+		}),
+	}
+
+	netSetOverlapMiddleRemoved = model.NetworkSet{
+		Nets: []net.IPNet{
+			mustParseNet("10.65.0.0/16"), // ancestor still present
+			mustParseNet("10.65.1.5/32"), // leaf still present, middle /24 gone
 		},
 		Labels: uniquelabels.Make(map[string]string{
 			"a": "b",

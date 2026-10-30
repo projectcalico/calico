@@ -59,6 +59,11 @@ func StartDataplaneDriver(configParams *config.Config,
 	return winDP, nil
 }
 
+// NFTablesEnabled resolves the configured NFTablesMode; Windows has no nftables dataplane.
+func NFTablesEnabled(configParams *config.Config) bool {
+	return false
+}
+
 func SupportsBPF() error {
 	return fmt.Errorf("BPF dataplane is not supported on Windows")
 }

@@ -11,7 +11,6 @@ globalPrologue: |
   export ENABLE_AUTOHEP="${ENABLE_AUTOHEP:-true}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-nftables.yml}"
   export INSTALLER="${INSTALLER:-operator}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard)}"
   export K8S_VERSION="${K8S_VERSION:-stable-3}"
   export KUBE_PROXY_MODE="${KUBE_PROXY_MODE:-nftables}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
@@ -28,6 +27,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/nftables/xtables-autohep.yaml
       - name: ENABLE_WIREGUARD
         value: "true"
       - name: GOOGLE_MACHINE_TYPE
@@ -41,16 +42,16 @@ steps:
       - name: STERN_CHECK
         value: DISABLED
     matrix:
-      - name: stable-ubuntu-2204-lts-arm64
+      - name: beta-or-stable-ubuntu-2204-lts-arm64
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: CLUSTER_IMAGE
             value: ubuntu-2204-lts-arm64
-      - name: stable-rocky-linux-9-arm64
+      - name: beta-or-stable-rocky-linux-9-arm64
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: CLUSTER_IMAGE
             value: rocky-linux-9-arm64
     commands: |
@@ -60,6 +61,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/nftables/xtables-encap-aws-autohep.yaml
       - name: ENCAPSULATION_TYPE
         value: VXLAN
       - name: PROVISIONER
@@ -78,6 +81,8 @@ steps:
     env:
       - name: CLUSTER_ROUTING_MODE
         value: Felix
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/nftables/xtables-encap-nobgp-v3crd-autohep.yaml
       # gcp-kubeadm uses the fixed semaphore-autotest VPC + reserved IPs, which
       # exist only in us-central1; pin region/zone (the load-spread randomisation
       # in the prologue can't apply to region-fixed jobs). See arm64-wg.
@@ -98,6 +103,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/nftables/xtables-v3crd-aws-autohep.yaml
       - name: K8S_VERSION
         value: stable-3
       - name: PROVISIONER
@@ -111,6 +118,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/nftables/eks-xtables-nobgp-aws-autohep.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -127,14 +136,14 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/nftables/eks-xtables-aws-autohep.yaml
       - name: INSTALLER
         value: helmerator
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
       - name: IPV4_POD_CIDR
         value: 172.16.0.0/16
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -152,6 +161,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/nftables/xtables-encap-autohep.yaml
       - name: ENABLE_DUAL_STACK
         value: "true"
       - name: ENCAPSULATION_TYPE
@@ -176,6 +187,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/nftables/xtables-autohep.yaml
       - name: ENABLE_DUAL_STACK
         value: "true"
       - name: ENCAPSULATION_TYPE_V6
@@ -196,7 +209,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/gcp-kubevirt.yaml
+        value: e2e/config/gcp/kubevirt.yaml
       # gcp-kubeadm uses the fixed semaphore-autotest VPC + reserved IPs, which
       # exist only in us-central1; pin region/zone (the load-spread randomisation
       # in the prologue can't apply to region-fixed jobs). See arm64-wg.

@@ -23,6 +23,7 @@ import (
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
@@ -731,4 +732,54 @@ func TestICMPv6RelatedNATPodPod(t *testing.T) {
 		checkICMPv6(res.dataOut, hostIP, ipv6.SrcIP, ipv6.SrcIP, ipv6.DstIP, 17,
 			uint16(udp.SrcPort), uint16(udp.DstPort))
 	}, withIPv6())
+}
+
+// TestICMPRelatedStaleNATForwardIsInvalid checks that an ICMP error quoting a stale forward entry's tuple is invalid, not a new flow.
+func TestICMPRelatedStaleNATForwardIsInvalid(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer resetBPFMaps()
+	hostIP = node1ip
+
+	bpfIfaceName = "ICsF"
+	defer func() { bpfIfaceName = "" }()
+
+	natIP := net.IPv4(8, 8, 8, 8).To4()
+	natPort := uint16(666)
+	srcPort := uint16(54321)
+	svcPort := uint16(7890)
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+
+	// The forward entry's reverse key now holds an unrelated connection.
+	fwdKey := conntrack.NewKey(conntrack.ProtoTCP, srcIP, srcPort, dstIP, svcPort)
+	revKey := conntrack.NewKey(conntrack.ProtoTCP, srcIP, srcPort, natIP, natPort)
+	Expect(ctMap.Update(fwdKey.AsBytes(), conntrack.NewValueNATForward(0, 0, revKey).AsBytes())).NotTo(HaveOccurred())
+	Expect(ctMap.Update(revKey.AsBytes(), conntrack.NewValueNormal(0, 0,
+		conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true, Approved: true},
+		conntrack.Leg{SynSeen: true, AckSeen: true, Approved: true}).AsBytes())).NotTo(HaveOccurred())
+
+	inner := *ipv4Default
+	inner.Protocol = layers.IPProtocolTCP
+	innerTCP := &layers.TCP{
+		SrcPort:    layers.TCPPort(srcPort),
+		DstPort:    layers.TCPPort(svcPort),
+		ACK:        true,
+		DataOffset: 5,
+	}
+	icmpUnreachable := makeICMPError(&inner, innerTCP, 3, 1)
+
+	skbMark = tcdefs.MarkSeen
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(icmpUnreachable)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+	})
+
+	ct, err := conntrack.LoadMapMem(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(ct).NotTo(HaveKey(fwdKey))
+	Expect(ct).To(HaveKey(revKey))
 }

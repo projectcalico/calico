@@ -539,7 +539,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	if chainType != chainTypeUntracked {
 		// Tracked chain: install conntrack rules, which implement our stateful connections.
 		// This allows return traffic associated with a previously-permitted request.
-		rules = r.appendConntrackRules(rules, allowAction)
+		rules = r.appendConntrackRules(rules, allowAction, chainType)
 	}
 
 	// Add QoS controls for number of connections if applicable
@@ -780,7 +780,18 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	}
 }
 
-func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, allowAction generictables.Action) []generictables.Rule {
+func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, allowAction generictables.Action, chainType endpointChainType) []generictables.Rule {
+	if r.LogConnectionTransitions && chainType != chainTypePreDNAT {
+		// The connection matched a Log rule and this is the first response packet seen;
+		// log the state transition (and clear the bit) before the conntrack rules below
+		// accept the packet.  The ctstate match is required: same-direction packets (e.g.
+		// a retransmitted SYN) still carry the connmark bit but are ctstate NEW, and must
+		// not be logged as a response.  Skipped for preDNAT chains: mangle cali-PREROUTING
+		// accepts RELATED,ESTABLISHED traffic before jumping to them, so the rule could
+		// never match there; responses to preDNAT-logged connections are logged from the
+		// filter table chains instead.
+		rules = append(rules, r.connStateLogRule())
+	}
 	// Allow return packets for established connections.
 	if allowAction != (r.Allow()) {
 		// If we've been asked to return instead of accept the packet immediately,

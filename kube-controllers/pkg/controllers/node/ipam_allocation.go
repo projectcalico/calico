@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,12 +15,15 @@ package node
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 )
 
 func newBlockReleaseTracker(gracePeriod *time.Duration) *blockReleaseTracker {
@@ -170,9 +173,14 @@ func (a *allocation) fields() log.Fields {
 	return f
 }
 
+// node is the Calico node the GC files the allocation under: its owner's node, or stoppedVMNode for a VM address
+// that no node holds. It must not change while the allocation is registered.
 func (a *allocation) node() string {
 	if node, ok := a.attrs[ipam.AttributeNode]; ok {
 		return node
+	}
+	if a.isVMAllocation() {
+		return stoppedVMNode
 	}
 	return ""
 }
@@ -230,9 +238,18 @@ func (a *allocation) isPodIP() bool {
 	return ns != "" && pod != ""
 }
 
+// isVMAllocation is whether the address belongs to a KubeVirt VM. Its owner names the VMI while a virt-launcher
+// pod runs. A stopped VM keeps its address with no owner, so only its handle marks it.
 func (a *allocation) isVMAllocation() bool {
-	_, ok := a.attrs[ipam.AttributeVMIName]
-	return ok
+	if _, ok := a.attrs[ipam.AttributeVMIName]; ok {
+		return true
+	}
+	return !a.hasOwner() && strings.Contains(a.handle, vmipam.VMHandleInfix)
+}
+
+// hasOwner is whether IPAM records an active owner for the address.
+func (a *allocation) hasOwner() bool {
+	return len(a.attrs) > 0
 }
 
 func (a *allocation) isTunnelAddress() bool {
@@ -245,7 +262,7 @@ func (a *allocation) isTunnelAddress() bool {
 }
 
 func (a *allocation) isWindowsReserved() bool {
-	return a.handle == ipam.WindowsReservedHandle
+	return a.handle == accounting.WindowsReservedHandle
 }
 
 func newAllocationState() *allocationState {

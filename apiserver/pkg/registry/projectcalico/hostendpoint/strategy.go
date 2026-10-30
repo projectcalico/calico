@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/names"
 )
@@ -84,5 +83,8 @@ func MatchHostEndpoint(label labels.Selector, field fields.Selector) storage.Sel
 
 // HostEndpointToSelectableFields returns a field set that represents the object.
 func HostEndpointToSelectableFields(obj *calico.HostEndpoint) fields.Set {
-	return generic.ObjectMetaFieldsSet(&obj.ObjectMeta, false)
+	return fields.Set{
+		"metadata.name": obj.Name,
+		"spec.node":     obj.Spec.Node,
+	}
 }

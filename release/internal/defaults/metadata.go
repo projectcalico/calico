@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package defaults exposes flag-default values sourced from the repo's
-// build metadata. Values resolve once per process via sync.OnceValue.
+// Package defaults holds the per-repo values the release tool defaults to,
+// read from the repo's build metadata. Values resolve once per process.
 //
 // Constant names match metadata.mk variable names verbatim. Unknown keys
 // resolve to empty, so additional keys are added by adding a constant and
@@ -48,15 +48,14 @@ const (
 var driverLine = regexp.MustCompile(`^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$`)
 
 const (
-	KeyOrganization         = "ORGANIZATION"
-	KeyGitRepo              = "GIT_REPO"
-	KeyGitRemote            = "GIT_REMOTE"
-	KeyReleaseBranchPrefix  = "RELEASE_BRANCH_PREFIX"
-	KeyDevTagSuffix         = "DEV_TAG_SUFFIX"
-	KeyOperatorBranch       = "OPERATOR_BRANCH"
-	KeyOperatorOrganization = "OPERATOR_ORGANIZATION"
-	KeyOperatorGitRepo      = "OPERATOR_GIT_REPO"
+	KeyOrganization        = "ORGANIZATION"
+	KeyGitRepo             = "GIT_REPO"
+	KeyGitRemote           = "GIT_REMOTE"
+	KeyReleaseBranchPrefix = "RELEASE_BRANCH_PREFIX"
+	KeyDevTagSuffix        = "DEV_TAG_SUFFIX"
 )
+
+const MetadataFile = "metadata.mk"
 
 var load = sync.OnceValue(readMetadata)
 
@@ -74,7 +73,7 @@ func readMetadata() map[string]string {
 		logrus.WithError(err).Warn("Failed to locate git root for metadata.mk; release flag defaults will be empty")
 		return map[string]string{}
 	}
-	data, err := os.ReadFile(filepath.Join(root, "metadata.mk"))
+	data, err := os.ReadFile(filepath.Join(root, MetadataFile))
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to read metadata.mk; release flag defaults will be empty")
 		return map[string]string{}
@@ -126,11 +125,15 @@ func parseDriverOutput(out string) (map[string]string, error) {
 
 func get(key string) string { return load()[key] }
 
-func Organization() string         { return get(KeyOrganization) }
-func Repo() string                 { return get(KeyGitRepo) }
-func Remote() string               { return get(KeyGitRemote) }
-func ReleaseBranchPrefix() string  { return get(KeyReleaseBranchPrefix) }
-func DevTagSuffix() string         { return get(KeyDevTagSuffix) }
-func OperatorBranch() string       { return get(KeyOperatorBranch) }
-func OperatorOrganization() string { return get(KeyOperatorOrganization) }
-func OperatorRepo() string         { return get(KeyOperatorGitRepo) }
+func getOr(key, fallback string) string {
+	if v := get(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func Organization() string        { return getOr(KeyOrganization, organization) }
+func Repo() string                { return getOr(KeyGitRepo, repo) }
+func Remote() string              { return getOr(KeyGitRemote, remote) }
+func ReleaseBranchPrefix() string { return getOr(KeyReleaseBranchPrefix, releaseBranchPrefix) }
+func DevTagSuffix() string        { return getOr(KeyDevTagSuffix, devTagSuffix) }
