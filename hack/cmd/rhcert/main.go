@@ -71,16 +71,8 @@ const defaultScanConcurrency = 4
 var linuxPlatforms = []string{"amd64", "arm64", "s390x", "ppc64le"}
 
 var calicoImageProject = map[string]string{
-	"node":                         "5e61a7ab06151b52d45a1148",
-	"cni":                          "5e7e3829afa92f4963e7d9db",
-	"kube-controllers":             "5e6054f906151b52d45a1081",
-	"typha":                        "5e60724f2f3c1acdd05f6012",
-	"pod2daemon-flexvol":           "5e6054fb06151b52d45a1082",
-	"apiserver":                    "64b7c1758357ec6208cd2c72",
-	"csi":                          "64b7c10b46357734e64690ac",
-	"node-driver-registrar":        "64c01702093679e0f47fa153",
-	"flannel-migration-controller": "5e619bec2c5f183d03415978",
-	"dikastes":                     "5e619e432f3c1acdd05f6240",
+	"calico": "6ae4dd1e96a585dd527e066f",
+	"node":   "5e61a7ab06151b52d45a1148",
 }
 
 var operatorImageProject = map[string]string{
