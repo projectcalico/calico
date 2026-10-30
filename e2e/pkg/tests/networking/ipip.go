@@ -41,6 +41,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithCategory(describe.Networking),
 	describe.RequiresNoEncap(),
 	describe.RequiresBGP(),
+	describe.RequiresOperator(),
 	describe.WithSerial(),
 	"IP-in-IP tests",
 	func() {
