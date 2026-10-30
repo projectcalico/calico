@@ -40,7 +40,7 @@ source "$my_dir/bulk-create-vms"
 source "$repo_dir/$COMPONENT/.semaphore/batches.sh"
 
 all_batches=( "${batches[@]}" )
-# Set by batch_memo_init, even when it found nothing to skip.
+# Set for a lane that uses the memo, even when the memo is off for this run.
 if [ -n "${BATCH_MEMO_LANE:-}" ]; then
   source "$my_dir/batch-memo"
 fi
@@ -337,15 +337,15 @@ for batch in "${batches[@]}"; do
     else
       echo "$prefix Artifact retrieval FAILED (rc=$?)"
     fi
-    if [ $rc = 0 ] && [ -n "${BATCH_MEMO_PREFIX:-}" ]; then
-      batch_memo_record "$artifacts_dir" "$batch"
-    fi
 
     echo "$prefix Deleting test VM $vm_name"
     if timeout 300 gcloud --quiet beta compute instances delete "$vm_name" --zone="${zone}" --no-graceful-shutdown; then
       echo "$prefix Deletion of test VM $vm_name SUCCEEDED"
     else
       echo "$prefix Deletion of test VM $vm_name FAILED, will retry at end of job. "
+    fi
+    if [ $rc = 0 ] && [ -n "${BATCH_MEMO_PREFIX:-}" ]; then
+      batch_memo_record "$artifacts_dir" "$batch"
     fi
 
     # Mark the batch fully complete so the watchdog skips snapshot/kill for it.

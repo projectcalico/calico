@@ -133,8 +133,12 @@ run_batch() {
   done
 
   echo "RUNNER: Starting batch '$batch' on VM '$vm_name'" >> "$log_file"
-  if [ "${FV_STRIP_BPF_GPL:-}" = true ]; then
-    VM_NAME="$vm_name" ${remote_exec} "$CALICO_DIR_NAME/felix/.semaphore/strip-bpf-gpl-objects" >> "$log_file" 2>&1
+  # A batch that ran with the objects in place could pass on a stale cache
+  # entry, so it must not run at all.
+  if [ "${FV_STRIP_BPF_GPL:-}" = true ] &&
+    ! VM_NAME="$vm_name" ${remote_exec} "$CALICO_DIR_NAME/felix/.semaphore/strip-bpf-gpl-objects" >> "$log_file" 2>&1; then
+    echo "RUNNER: Failed to strip the bpf-gpl objects on VM '$vm_name'; failing batch '$batch'." >> "$log_file"
+    return 1
   fi
   echo "RUNNER: Command: $cmd_quot" >> "$log_file"
 

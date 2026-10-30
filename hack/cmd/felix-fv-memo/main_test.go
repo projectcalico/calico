@@ -185,7 +185,11 @@ func TestManifestInputs(t *testing.T) {
 		{classNonBPF, `^typha/pkg/`, true},
 		{classNonBPF, `^node/pkg/node/command\.go$`, true},
 		{classNonBPF, `^api/config/crd/`, true},
-		{classNonBPF, `^go\.sum$`, true},
+		// Module versions come from the deps.txt of the components FV runs.
+		{classNonBPF, `^go\.sum$`, false},
+		{classNonBPF, `^felix/deps\.txt$`, true},
+		{classNonBPF, `^typha/deps\.txt$`, true},
+		{classNonBPF, `^kube-controllers/deps\.txt$`, false},
 		{classNonBPF, `^docker/calico/Dockerfile$`, true},
 		{classNonBPF, `^\.semaphore/vms/`, true},
 	} {

@@ -415,7 +415,6 @@ includes:
     changes:
       dependsOn: [felix, typha]
       in:
-        - ^go\.(mod|sum)$
         - ^cmd/calico/
         - ^docker/calico/
         - ^node/pkg/node/[^/]*\.go$

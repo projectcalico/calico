@@ -97,6 +97,9 @@ batch_memo_skip_cached() {
     if batch_memo_has_reports "$artifacts_dir/$batch"; then
       BATCH_MEMO_CACHED+=( "$batch" )
     else
+      # The run copies its artifacts to this path, and would nest them under
+      # any partial restore left there.
+      rm -rf "${artifacts_dir:?}/$batch"
       remaining+=( "$batch" )
     fi
   done
@@ -140,7 +143,7 @@ batch_memo_record() {
     return 0
   fi
   batch_memo_source > "$artifacts_dir/$batch/batch-memo-source"
-  ( cd "$artifacts_dir" && artifact cache store "$BATCH_MEMO_PREFIX/batch-$batch" "$batch" ) >/dev/null ||
+  ( cd "$artifacts_dir" && artifact cache store "$BATCH_MEMO_PREFIX/batch-$batch" $(batch_memo_stored_paths "$artifacts_dir" "$batch") ) >/dev/null ||
     echo "Batch memo: could not record batch $batch (not fatal)."
 }
 
@@ -158,7 +161,7 @@ batch_memo_record_lane() {
       return 0
     fi
   done
-  ( cd "$artifacts_dir" && artifact cache store "$BATCH_MEMO_PREFIX/lane" "$@" ) >/dev/null ||
+  ( cd "$artifacts_dir" && artifact cache store "$BATCH_MEMO_PREFIX/lane" $(batch_memo_stored_paths "$artifacts_dir" "$@") ) >/dev/null ||
     echo "Batch memo: could not record the lane (not fatal)."
 }
 
@@ -171,6 +174,19 @@ batch_memo_log_lane() {
   echo "FV-MEMO-LANE lane=${BATCH_MEMO_LANE} outcome=${outcome} batches=${total} cached=${cached}" \
     "ran=$((total - cached)) result=${result} key=${BATCH_MEMO_KEY:-none} pr=${CI_GIT_PR_NUMBER:-none}" \
     "workflow=${CI_WORKFLOW_NAME:-unknown}" "$@"
+}
+
+# batch_memo_stored_paths <artifacts dir> <batch>... lists, relative to the
+# artifacts dir, what a cached pass keeps: only what restoring it needs, not the
+# run's logs.
+batch_memo_stored_paths() {
+  local artifacts_dir="$1" batch
+  shift
+  for batch in "$@"; do
+    echo "$batch/report"
+    [ -e "$artifacts_dir/$batch/batch-memo-source" ] && echo "$batch/batch-memo-source"
+  done
+  return 0
 }
 
 batch_memo_has_reports() {

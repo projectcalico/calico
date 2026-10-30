@@ -88,8 +88,10 @@ run1="$work/run1/artifacts"
 for b in ut 2; do
   mkdir -p "$run1/$b/report"
   echo "<testsuites/>" >"$run1/$b/report/felix_fv_$b.xml"
+  echo "log" >"$run1/$b/test.log"
   batch_memo_record "$run1" "$b" >/dev/null
 done
+check "a recorded batch keeps only its reports" bash -c "! tar -tf '$STUB_CACHE/$BATCH_MEMO_PREFIX/batch-2' | grep -q test.log"
 # Passed, but its reports never came off the VM.
 mkdir -p "$run1/3"
 batch_memo_record "$run1" 3 >/dev/null
@@ -101,6 +103,7 @@ run2="$work/run2/artifacts"
 batches=(ut 1 2 3)
 batch_memo_skip_cached "$run2" >/dev/null
 check "cached batches are skipped" [ "${batches[*]}" = "1 3" ]
+check "a restore without reports is cleared before the batch runs" [ ! -e "$run2/1" ]
 batch_memo_report "$run2" 4 1 >"$out"
 check "partial hit: reported" grep -qE '^FV-MEMO-LANE .* outcome=partial batches=4 cached=2 ran=2 result=fail ' "$out"
 check "each skipped batch: reported" [ "$(grep -c '^FV-MEMO-BATCH .* cached-from=calico-1-pr-abcde@0123abc$' "$out")" = 2 ]

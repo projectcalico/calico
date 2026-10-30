@@ -43,6 +43,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -75,7 +76,6 @@ var commonExclusions = []string{
 	`(^|/)[^/]*\.md$`,
 	`(^|/)(README|LICENSE|AUTHORS|COPYING)[^/]*$`,
 	`(^|/)\.(gitignore|gitattributes|dockerignore|golangci\.yaml)$`,
-	`(^|/)deps\.txt$`,
 	// The generated Go is what gets compiled.
 	`\.proto$`,
 	`^(felix|typha)/docs/`,
@@ -175,7 +175,7 @@ func main() {
 		var ungated ungatedError
 		if errors.As(err, &ungated) {
 			fmt.Fprintf(os.Stderr, "felix-fv-memo: %v; add them to the change gate of %s in %s:\n", err, modulePath, workflowPath)
-			for _, f := range ungated.files {
+			for _, f := range ungated.inputs {
 				fmt.Fprintln(os.Stderr, "  "+f)
 			}
 			os.Exit(1)
@@ -190,7 +190,7 @@ func main() {
 		if string(c) == *explain {
 			_, _ = os.Stderr.Write(manifest)
 		}
-		classKeys[c] = hashOf(keyVersion, os.Getenv("FELIX_FV_MEMO_SALT"), string(manifest))
+		classKeys[c] = hashOf(keyVersion, string(manifest))
 	}
 
 	for _, l := range lanes {
@@ -255,8 +255,8 @@ func readLanes(modulePath string) ([]lane, error) {
 	return lanes, nil
 }
 
-// classOf must agree with the FV prologue, which runs a group in BPF mode
-// if its name contains "bpf".
+// classOf must match how the lanes pick the dataplane: a group whose name
+// contains "bpf" runs in BPF mode.
 func classOf(group string) class {
 	if strings.Contains(group, "bpf") {
 		return classBPF
@@ -383,30 +383,55 @@ func (s *stringOrList) UnmarshalJSON(data []byte) error {
 // classKeyFiles returns the files that the key of a class of lane hashes, or
 // an ungatedError if the gate misses part of its FV build.
 func classKeyFiles(repoRoot string, g gate, tracked map[string]bool, c class) (map[string]bool, error) {
-	compiled, err := buildFiles(repoRoot, tracked, fvBuilds[c])
+	build, err := listBuild(repoRoot, tracked, fvBuilds[c])
 	if err != nil {
 		return nil, fmt.Errorf("listing the %s FV build: %w", c, err)
 	}
+	files, err := keyFiles(g, tracked, build.files, memoExclusions[c])
+	if err != nil {
+		return nil, err
+	}
+
 	var ungated []string
-	for f := range compiled {
+	for f := range build.files {
 		if !g.matches(f) {
 			ungated = append(ungated, f)
 		}
 	}
+	// Each component's deps.txt lists the versions of the modules it uses, so
+	// that a dependency bump triggers only the components that use it.
+	listed := map[string]bool{}
+	for f := range files {
+		if path.Base(f) != "deps.txt" {
+			continue
+		}
+		content, err := os.ReadFile(filepath.Join(repoRoot, f))
+		if err != nil {
+			return nil, err
+		}
+		for line := range strings.Lines(string(content)) {
+			listed[strings.TrimSpace(line)] = true
+		}
+	}
+	for m := range build.modules {
+		if !listed[m] {
+			ungated = append(ungated, "module "+m)
+		}
+	}
 	if len(ungated) > 0 {
 		slices.Sort(ungated)
-		return nil, ungatedError{class: c, files: ungated}
+		return nil, ungatedError{class: c, inputs: ungated}
 	}
-	return keyFiles(g, tracked, compiled, memoExclusions[c])
+	return files, nil
 }
 
 type ungatedError struct {
-	class class
-	files []string
+	class  class
+	inputs []string
 }
 
 func (e ungatedError) Error() string {
-	return fmt.Sprintf("the %s FV build uses %d files outside the felix module's change gate", e.class, len(e.files))
+	return fmt.Sprintf("the %s FV build uses %d inputs that the felix module's change gate misses", e.class, len(e.inputs))
 }
 
 // keyFiles returns the tracked files that the gate matches and that are either
@@ -443,10 +468,14 @@ func buildManifest(repoRoot string, files map[string]bool) ([]byte, error) {
 	return []byte(strings.Join(lines, "\n") + "\n"), nil
 }
 
-// buildFiles returns the repo files that the FV build compiles.  Dependencies
-// outside the repo are pinned by go.mod and go.sum.
-func buildFiles(repoRoot string, tracked map[string]bool, build fvBuild) (map[string]bool, error) {
-	used := map[string]bool{}
+// buildInputs are what an FV build compiles: files in the repo, and modules
+// outside it as "<path> <version>".
+type buildInputs struct {
+	files, modules map[string]bool
+}
+
+func listBuild(repoRoot string, tracked map[string]bool, build fvBuild) (buildInputs, error) {
+	used := buildInputs{files: map[string]bool{}, modules: map[string]bool{}}
 	for _, cfg := range goBuildConfigs {
 		for _, list := range []struct {
 			args  []string
@@ -458,11 +487,11 @@ func buildFiles(repoRoot string, tracked map[string]bool, build fvBuild) (map[st
 		} {
 			pkgs, err := goList(repoRoot, cfg.env, slices.Concat([]string{"list", "-json"}, list.args, cfg.flags, list.roots))
 			if err != nil {
-				return nil, err
+				return buildInputs{}, err
 			}
 			for _, p := range pkgs {
 				if err := addPackage(repoRoot, tracked, p, used); err != nil {
-					return nil, err
+					return buildInputs{}, err
 				}
 			}
 		}
@@ -474,13 +503,18 @@ type goPackage struct {
 	ImportPath                                                                 string
 	Dir                                                                        string
 	Standard                                                                   bool
-	Module                                                                     *struct{ Path string }
+	Module                                                                     *module
 	GoFiles, CgoFiles, CFiles, CXXFiles, HFiles, SFiles, SysoFiles, EmbedFiles []string
 	CgoCFLAGS                                                                  []string
 	Error                                                                      *struct{ Err string }
 }
 
-func addPackage(repoRoot string, tracked map[string]bool, p goPackage, used map[string]bool) error {
+type module struct {
+	Path, Version string
+	Replace       *module
+}
+
+func addPackage(repoRoot string, tracked map[string]bool, p goPackage, used buildInputs) error {
 	if p.Error != nil {
 		return fmt.Errorf("go list: %s: %s", p.ImportPath, p.Error.Err)
 	}
@@ -500,17 +534,21 @@ func addPackage(repoRoot string, tracked map[string]bool, p goPackage, used map[
 		if p.Module == nil {
 			return fmt.Errorf("package %s is outside the repo but has no module", p.ImportPath)
 		}
-		used["go.mod"] = true
-		used["go.sum"] = true
+		m := p.Module
+		// The replacement is the code that gets built.
+		if m.Replace != nil {
+			m = m.Replace
+		}
+		used.modules[m.Path+" "+m.Version] = true
 		return nil
 	}
 	for _, f := range slices.Concat(p.GoFiles, p.CgoFiles, p.CFiles, p.CXXFiles, p.HFiles, p.SFiles, p.SysoFiles, p.EmbedFiles) {
-		used[filepath.ToSlash(filepath.Join(rel, f))] = true
+		used.files[filepath.ToSlash(filepath.Join(rel, f))] = true
 	}
 	if len(p.CgoFiles) == 0 {
 		return nil
 	}
-	return addCgoIncludes(repoRoot, tracked, p, used)
+	return addCgoIncludes(repoRoot, tracked, p, used.files)
 }
 
 var quotedInclude = regexp.MustCompile(`(?m)^\s*(?://\s*)?#\s*include\s+"([^"]+)"`)
@@ -567,7 +605,23 @@ func addCgoIncludes(repoRoot string, tracked map[string]bool, p goPackage, used 
 	return nil
 }
 
+// goListCache saves listing the roots that the classes of lane share twice.
+var goListCache = map[string][]goPackage{}
+
 func goList(dir string, env, args []string) ([]goPackage, error) {
+	cacheKey := strings.Join(slices.Concat([]string{dir}, env, args), "\x1f")
+	if pkgs, ok := goListCache[cacheKey]; ok {
+		return pkgs, nil
+	}
+	pkgs, err := runGoList(dir, env, args)
+	if err != nil {
+		return nil, err
+	}
+	goListCache[cacheKey] = pkgs
+	return pkgs, nil
+}
+
+func runGoList(dir string, env, args []string) ([]goPackage, error) {
 	cmd := exec.Command("go", args...)
 	cmd.Dir = dir
 	cmd.Env = slices.Concat(os.Environ(), []string{"GOOS=linux", "GOARCH=amd64"}, env)
