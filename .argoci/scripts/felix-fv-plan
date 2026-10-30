@@ -21,31 +21,11 @@ fi
 # The checkout belongs to another user in this image, and git refuses to read
 # it otherwise.
 git config --global --add safe.directory '*'
-keys_ok=true
-rc=0
 if [ -z "$scope" ]; then
   : > "$plan/keys"
 else
-  # Built rather than `go run`, which reports every failure as exit status 1.
-  tool="$(mktemp -d)/felix-fv-memo"
-  if GOFLAGS=-buildvcs=false go build -o "$tool" ./hack/cmd/felix-fv-memo; then
-    "$tool" .argoci/ciworkflow.yaml .argoci/modules/20-felix.yaml > "$plan/keys" || rc=$?
-  else
-    rc=1
-  fi
-fi
-# The felix module's gate misses part of the FV build, so this PR could skip
-# Felix FV without running it.
-if [ "$rc" = 3 ]; then
-  exit 1
-fi
-# A broken key tool must not take Felix CI down with it: without keys, every
-# lane just runs in full.
-if [ "$rc" != 0 ]; then
-  echo "WARNING: could not compute the FV cache keys; every lane will run in full." >&2
-  keys_ok=false
-  scope=""
-  : > "$plan/keys"
+  GOFLAGS=-buildvcs=false go run ./hack/cmd/felix-fv-memo \
+    .argoci/ciworkflow.yaml .argoci/modules/20-felix.yaml > "$plan/keys"
 fi
 echo "$scope" > "$plan/scope"
 
@@ -69,7 +49,7 @@ sed 's/^/  /' "$plan/lanes"
 # One line per run for mining the logs; see .semaphore/vms/batch-memo for the
 # per-lane lines.
 echo "FV-MEMO-PLAN felix-build=${build} lanes=$(wc -l < "$plan/lanes")" \
-  "lanes-hit=$(awk '$4 == "hit"' "$plan/lanes" | wc -l) keys=${keys_ok}" \
+  "lanes-hit=$(awk '$4 == "hit"' "$plan/lanes" | wc -l)" \
   "pr=${CI_GIT_PR_NUMBER:-none} workflow=${CI_WORKFLOW_NAME:-unknown}"
 
 artifact push workflow "$plan"

@@ -30,7 +30,7 @@
 //	felix-fv-memo [-explain <class>] <workflow yaml> <felix module yaml>
 //
 // prints one "<FELIX_TEST_GROUP> <class> <lane key>" line per felix-fv matrix
-// entry.  Exits with exitUncovered if the gate misses part of the FV build.
+// entry.  Fails if the gate misses part of the FV build.
 package main
 
 import (
@@ -54,10 +54,6 @@ import (
 // keyVersion is mixed into every key; bump it when the meaning of a cached
 // pass changes in a way the hashed files do not capture.
 const keyVersion = "v2"
-
-// exitUncovered tells the caller that the gate or the filters need fixing, as
-// opposed to the tool failing to run.
-const exitUncovered = 3
 
 type class string
 
@@ -182,7 +178,7 @@ func main() {
 			for _, f := range ungated.files {
 				fmt.Fprintln(os.Stderr, "  "+f)
 			}
-			os.Exit(exitUncovered)
+			os.Exit(1)
 		}
 		if err != nil {
 			fail(err)
