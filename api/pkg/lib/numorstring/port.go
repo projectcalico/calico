@@ -67,6 +67,15 @@ var (
 // PortFromString creates a Port struct from its string representation.  A port
 // may either be single value "1234", a range of values "100:200" or a named port: "name".
 func PortFromString(s string) (Port, error) {
+	p, err := parsePort(s)
+	if err == nil && p.MinPort > p.MaxPort {
+		return PortFromRange(p.MinPort, p.MaxPort)
+	}
+	return p, err
+}
+
+// parsePort is PortFromString without the check that a range is ascending.
+func parsePort(s string) (Port, error) {
 	if allDigits.MatchString(s) {
 		// Port is all digits, it should parse as a single port.
 		num, err := strconv.ParseUint(s, 10, 16)
@@ -86,7 +95,7 @@ func PortFromString(s string) (Port, error) {
 			msg := fmt.Sprintf("invalid maximum port number in range (%s)", s)
 			return Port{}, errors.New(msg)
 		} else {
-			return PortFromRange(uint16(pmin), uint16(pmax))
+			return Port{MinPort: uint16(pmin), MaxPort: uint16(pmax)}, nil
 		}
 	}
 
@@ -101,7 +110,8 @@ func (p *Port) UnmarshalJSON(b []byte) error {
 			return err
 		}
 
-		if v, err := PortFromString(s); err != nil {
+		// A stored descending range must not fail the decode of a whole list; the validator rejects it.
+		if v, err := parsePort(s); err != nil {
 			return err
 		} else {
 			*p = v
