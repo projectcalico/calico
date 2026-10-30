@@ -15,6 +15,8 @@
 package ipam
 
 import (
+	"errors"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -396,5 +398,88 @@ var _ = Describe("pool qualification of undefaulted pools", func() {
 
 	It("rejects a specific IP for LoadBalancer use when allowed uses are empty", func() {
 		Expect(qualifyPoolForIP(cnet.MustParseIP("10.0.0.1"), undefaultedPool("10.0.0.0/24"), v3.IPPoolAllowedUseLoadBalancer)).NotTo(Succeed())
+	})
+})
+
+var errSelectorsConsulted = errors.New("selectors consulted")
+
+// fixedSelectors answers the selector checks with fixed results. When untouchable, it fails any check, so a case can
+// show that Draws decided without the selectors.
+type fixedSelectors struct {
+	node        bool
+	namespace   bool
+	untouchable bool
+}
+
+func (s fixedSelectors) SelectsNode(*v3.IPPool) (bool, error) {
+	if s.untouchable {
+		return false, errSelectorsConsulted
+	}
+	return s.node, nil
+}
+
+func (s fixedSelectors) SelectsNamespace(*v3.IPPool) (bool, error) {
+	if s.untouchable {
+		return false, errSelectorsConsulted
+	}
+	return s.namespace, nil
+}
+
+// drawsCase is one row of the PoolClaim.Draws table. The claim asks for Workload use.
+type drawsCase struct {
+	pool      testPool
+	named     bool
+	selectors fixedSelectors
+	want      bool
+}
+
+var _ = DescribeTable("PoolClaim.Draws",
+	func(tc drawsCase) {
+		pool := tc.pool.build()
+		claim := PoolClaim{Use: v3.IPPoolAllowedUseWorkload, Named: tc.named, Selectors: tc.selectors}
+		Expect(claim.Draws(&pool)).To(Equal(tc.want))
+	},
+	Entry("an Automatic pool whose selectors match", drawsCase{
+		pool:      testPool{cidr: v4Pool1},
+		selectors: fixedSelectors{node: true, namespace: true},
+		want:      true,
+	}),
+	Entry("not a Manual pool, for a claim naming no pool, without consulting its selectors", drawsCase{
+		pool:      testPool{cidr: v4Pool1, manual: true},
+		selectors: fixedSelectors{untouchable: true},
+	}),
+	Entry("a Manual pool the claim names", drawsCase{
+		pool:      testPool{cidr: v4Pool1, manual: true},
+		named:     true,
+		selectors: fixedSelectors{untouchable: true},
+		want:      true,
+	}),
+	Entry("not a pool whose node selector skips the node", drawsCase{
+		pool:      testPool{cidr: v4Pool1},
+		selectors: fixedSelectors{namespace: true},
+	}),
+	Entry("a pool whose selectors skip the node and namespace, when the claim names it", drawsCase{
+		pool:      testPool{cidr: v4Pool1},
+		named:     true,
+		selectors: fixedSelectors{untouchable: true},
+		want:      true,
+	}),
+	Entry("not a pool whose namespace selector skips the namespace", drawsCase{
+		pool:      testPool{cidr: v4Pool1},
+		selectors: fixedSelectors{node: true},
+	}),
+	Entry("not a named pool that doesn't allow the use", drawsCase{
+		pool:      testPool{cidr: v4Pool1, uses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
+		named:     true,
+		selectors: fixedSelectors{untouchable: true},
+	}),
+)
+
+var _ = Describe("PoolClaim.Draws errors", func() {
+	It("returns a selector's error", func() {
+		pool := testPool{cidr: v4Pool1}.build()
+		claim := PoolClaim{Use: v3.IPPoolAllowedUseWorkload, Selectors: fixedSelectors{untouchable: true}}
+		_, err := claim.Draws(&pool)
+		Expect(err).To(MatchError(errSelectorsConsulted))
 	})
 })
