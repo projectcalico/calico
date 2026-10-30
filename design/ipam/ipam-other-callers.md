@@ -55,6 +55,8 @@ tunnel is disabled), uses `IntendedUse = Tunnel` so pool selection respects `all
 - The GC recognizes tunnel allocations by `AttributeType`, and `calicoctl ipam check` reads tunnel IPs off the `Node` spec - neither parses the handle prefix. The prefix is parsed
   by `calicoctl datastore migrate`, whose list is v4-only today (`ipip-tunnel-addr-`, `vxlan-tunnel-addr-`, `wireguard-tunnel-addr-`) and so already misses the `*-v6-tunnel-addr-`
   handles. A new tunnel type needs an `AttributeType` and a migrate-prefix entry; if you touch the migrate list, add the v6 prefixes too.
+- The allocator only reconciles when its cached v1 `model.IPPool` or node data changes, so any pool field it reads, including deletion state, has to be carried into
+  `model.IPPool` by `IPPoolV3ToV1`.
 
 ## Felix
 

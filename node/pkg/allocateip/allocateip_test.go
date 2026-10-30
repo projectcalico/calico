@@ -1053,12 +1053,15 @@ var _ = Describe("Reconciliation triggers", func() {
 
 	// poolUpdate goes through the same v3 to v1 conversion as the tunnel IP
 	// syncer, so a field the conversion drops can't trigger a reconcile here either.
-	poolUpdate := func(nodeSelector string) bapi.Update {
+	poolUpdate := func(nodeSelector string, mutators ...func(*api.IPPool)) bapi.Update {
 		pool := api.NewIPPool()
 		pool.Name = "ipip-pool"
 		pool.Spec.CIDR = "10.200.0.0/24"
 		pool.Spec.IPIPMode = api.IPIPModeAlways
 		pool.Spec.NodeSelector = nodeSelector
+		for _, m := range mutators {
+			m(pool)
+		}
 		kvp, err := resources.IPPoolV3ToV1(&model.KVPair{
 			Key:   model.ResourceKey{Kind: api.KindIPPool, Name: pool.Name},
 			Value: pool,
@@ -1100,6 +1103,15 @@ var _ = Describe("Reconciliation triggers", func() {
 	It("should not trigger a reconcile when an IP pool is unchanged", func() {
 		r.OnUpdates([]bapi.Update{poolUpdate("!all()")})
 		Expect(r.ch).ToNot(Receive())
+	})
+
+	It("should trigger a reconcile when an IP pool starts deleting", func() {
+		r.OnUpdates([]bapi.Update{poolUpdate("!all()", func(p *api.IPPool) {
+			now := metav1.Now()
+			p.DeletionTimestamp = &now
+			p.Finalizers = []string{"projectcalico.org/ippool-finalizer"}
+		})})
+		Expect(r.ch).To(Receive())
 	})
 })
 
