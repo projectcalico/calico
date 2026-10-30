@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/time"
 )
 
@@ -103,5 +104,28 @@ func waitForReceived(tb testing.TB, target float64) {
 			tb.Fatalf("timed out waiting for the aggregator to index flows: %v of %v", receivedFlows(tb), target)
 		}
 		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestPolicyTraceCacheMetrics(t *testing.T) {
+	types.CachedPolicyTrace(types.ProtoToFlowLogPolicy(&proto.PolicyTrace{
+		EnforcedPolicies: []*proto.PolicyHit{{Name: "metrics-test"}},
+	}))
+
+	size := gatherMetric(t, "goldmane_policy_trace_cache_size")
+	if size == nil {
+		t.Fatal("goldmane_policy_trace_cache_size not registered")
+	}
+	got := size.GetMetric()[0].GetGauge().GetValue()
+	if got < 1 || got != float64(types.PolicyTraceCacheSize()) {
+		t.Errorf("cache size gauge reads %v, cache holds %d", got, types.PolicyTraceCacheSize())
+	}
+
+	resets := gatherMetric(t, "goldmane_policy_trace_cache_resets_total")
+	if resets == nil {
+		t.Fatal("goldmane_policy_trace_cache_resets_total not registered")
+	}
+	if got := resets.GetMetric()[0].GetCounter().GetValue(); got != float64(types.PolicyTraceCacheResets()) {
+		t.Errorf("cache resets counter reads %v, cache counted %d", got, types.PolicyTraceCacheResets())
 	}
 }
