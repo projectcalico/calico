@@ -101,6 +101,8 @@
 #define CALI_F_VXLAN		(((CALI_COMPILE_FLAGS) & CALI_TC_VXLAN) != 0)
 
 #define CALI_F_TUNNEL	(CALI_F_IPIP || CALI_F_WIREGUARD || CALI_F_VXLAN)
+/* Attached to an encapsulating device; every tunnel object is also a host-endpoint object. */
+#define IFACE_ENCAPS	CALI_F_TUNNEL
 
 #define CALI_F_CGROUP	(((CALI_COMPILE_FLAGS) & CALI_CGROUP) != 0)
 #define CALI_F_DSR	((CALI_COMPILE_FLAGS & CALI_TC_DSR) != 0)
