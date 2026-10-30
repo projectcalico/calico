@@ -19,6 +19,8 @@ Tests for CalicoMechanismDriver initialization.
 import unittest
 import mock
 
+from oslo_config import cfg
+
 import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
 from networking_calico import etcdv3
@@ -29,11 +31,12 @@ class TestMechanismDriver(lib.Lib, unittest.TestCase):
     def setUp(self):
         super(TestMechanismDriver, self).setUp()
 
-        lib.m_oslo_config.cfg.CONF.keystone_authtoken.auth_url = ""
-        lib.m_oslo_config.cfg.CONF.calico.openstack_region = "no-region"
-        lib.m_oslo_config.cfg.CONF.calico.etcd_compaction_period_mins = 10
-        lib.m_oslo_config.cfg.CONF.calico.project_name_cache_max = 0
-        lib.m_oslo_config.cfg.CONF.calico.num_port_status_threads = 4
+        self.cfg_fixture.config(
+            group="calico",
+            openstack_region="no-region",
+            etcd_compaction_period_mins=10,
+            project_name_cache_max=0,
+        )
 
         # Mock etcd3gw client so background threads don't touch real etcd.
         etcdv3._client = self.clientv3 = mock.Mock()
@@ -167,7 +170,7 @@ class TestMechanismDriver(lib.Lib, unittest.TestCase):
         self.assertTrue(self.driver.endpoint_status_watch_thread)
         self.assertEqual(
             len(self.driver.port_status_update_threads),
-            lib.m_oslo_config.cfg.CONF.calico.num_port_status_threads,
+            cfg.CONF.calico.num_port_status_threads,
         )
 
         # We will also need to ensure that the required queues components
