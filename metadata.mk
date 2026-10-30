@@ -9,7 +9,7 @@ K8S_VERSION=v1.36.5
 LLVM_VERSION=21.1.8
 # The version of calico/go-build and calico/base to use.
 GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)
-RUST_BUILD_VER=1.93.1
+RUST_BUILD_VER=1.99.1
 CALICO_BASE_VER=ubi9-1792512733
 
 # Version of various tools used in the build and tests.
