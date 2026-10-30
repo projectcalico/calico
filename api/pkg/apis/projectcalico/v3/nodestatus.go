@@ -65,6 +65,8 @@ type CalicoNodeStatusSpec struct {
 
 	// UpdatePeriodSeconds is the period at which CalicoNodeStatus should be updated.
 	// Set to 0 to disable CalicoNodeStatus refresh. Maximum update period is one day.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=86400
 	UpdatePeriodSeconds *uint32 `json:"updatePeriodSeconds,omitempty" validate:"required,gte=0,lte=86400"`
 }
 

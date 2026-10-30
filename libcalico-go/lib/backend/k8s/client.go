@@ -91,6 +91,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, err
 	}
 
+	return NewKubeClientForConfig(config, cs, group, ca.K8sUsePodCIDR)
+}
+
+// NewKubeClientForConfig builds a backend client from an existing rest.Config
+// and clientset.
+func NewKubeClientForConfig(config *rest.Config, cs kubernetes.Interface, group resources.BackingAPIGroup, usePodCIDR bool) (api.Client, error) {
 	crdRestClient, err := restClient(*config, group)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build CRD client: %v", err)
@@ -110,7 +116,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		ClientSet:                  cs,
 		RESTClient:                 crdRestClient,
 		Group:                      group,
-		UsePodCIDR:                 ca.K8sUsePodCIDR,
+		UsePodCIDR:                 usePodCIDR,
 		ClusterNetworkPolicyClient: cnpClient,
 		VMIMClientFactory: func(namespace string) resources.VMIMClient {
 			return kvClient.VirtualMachineInstanceMigrations(namespace)
@@ -595,6 +601,22 @@ func restClient(cfg rest.Config, group resources.BackingAPIGroup) (*rest.RESTCli
 	return cli, nil
 }
 
+// checkDryRunSupported refuses a dry-run write to a resource client that can't honor
+// one, since that client would persist the write instead.
+func checkDryRunSupported(ctx context.Context, client resources.K8sResourceClient, key model.Key, op string) error {
+	if !api.IsDryRun(ctx) {
+		return nil
+	}
+	if dr, ok := client.(resources.DryRunClient); ok && dr.SupportsDryRun() {
+		return nil
+	}
+	return cerrors.ErrorOperationNotSupported{
+		Identifier: key,
+		Operation:  op,
+		Reason:     "dry run is not supported for this resource",
+	}
+}
+
 // Create an entry in the datastore.  This errors if the entry already exists.
 func (c *KubeClient) Create(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	// Do not log d.Value, it may contain sensitive resource specs (e.g. BGPPassword).
@@ -606,6 +628,9 @@ func (c *KubeClient) Create(ctx context.Context, d *model.KVPair) (*model.KVPair
 			Identifier: d.Key,
 			Operation:  "Create",
 		}
+	}
+	if err := checkDryRunSupported(ctx, client, d.Key, "Create"); err != nil {
+		return nil, err
 	}
 	return client.Create(ctx, d)
 }
@@ -623,6 +648,9 @@ func (c *KubeClient) Update(ctx context.Context, d *model.KVPair) (*model.KVPair
 			Operation:  "Update",
 		}
 	}
+	if err := checkDryRunSupported(ctx, client, d.Key, "Update"); err != nil {
+		return nil, err
+	}
 	return client.Update(ctx, d)
 }
 
@@ -638,6 +666,9 @@ func (c *KubeClient) UpdateStatus(ctx context.Context, d *model.KVPair) (*model.
 			Identifier: d.Key,
 			Operation:  "UpdateStatus",
 		}
+	}
+	if err := checkDryRunSupported(ctx, client, d.Key, "UpdateStatus"); err != nil {
+		return nil, err
 	}
 	// Use the UpdateStatus method on the resource client if it supports it,
 	// otherwise fall back to Update.

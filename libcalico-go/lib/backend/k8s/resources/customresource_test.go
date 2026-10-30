@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/rest/fake"
 
 	calischeme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -304,5 +305,43 @@ var _ = Describe("Custom resource conversion methods (tested using namespaced Ne
 		logrus.Debug("URL: ", url)
 		Expect(url.Path).To(Equal("/apis/namespaces/mynamespace/networksets"))
 		Expect(url.Query().Get("fieldSelector")).To(Equal("metadata.name=foo"))
+	})
+
+	netSetKVP := func() *model.KVPair {
+		return &model.KVPair{
+			Key: model.ResourceKey{Name: "mynetset", Namespace: "mynamespace", Kind: apiv3.KindNetworkSet},
+			Value: &apiv3.NetworkSet{
+				ObjectMeta: metav1.ObjectMeta{Name: "mynetset", Namespace: "mynamespace"},
+			},
+			Revision: "1",
+		}
+	}
+
+	It("should ask the API server for a dry run on a dry-run create", func() {
+		_, err := client.Create(api.WithDryRun(context.TODO()), netSetKVP())
+		Expect(err).To(HaveOccurred())
+		Expect(fakeREST.Req.Method).To(Equal("POST"))
+		Expect(fakeREST.Req.URL.Query().Get("dryRun")).To(Equal(metav1.DryRunAll))
+	})
+
+	It("should not ask for a dry run on a normal create", func() {
+		_, err := client.Create(context.TODO(), netSetKVP())
+		Expect(err).To(HaveOccurred())
+		Expect(fakeREST.Req.Method).To(Equal("POST"))
+		Expect(fakeREST.Req.URL.Query()).NotTo(HaveKey("dryRun"))
+	})
+
+	It("should ask the API server for a dry run on a dry-run update", func() {
+		_, err := client.Update(api.WithDryRun(context.TODO()), netSetKVP())
+		Expect(err).To(HaveOccurred())
+		Expect(fakeREST.Req.Method).To(Equal("PUT"))
+		Expect(fakeREST.Req.URL.Query().Get("dryRun")).To(Equal(metav1.DryRunAll))
+	})
+
+	It("should not ask for a dry run on a normal update", func() {
+		_, err := client.Update(context.TODO(), netSetKVP())
+		Expect(err).To(HaveOccurred())
+		Expect(fakeREST.Req.Method).To(Equal("PUT"))
+		Expect(fakeREST.Req.URL.Query()).NotTo(HaveKey("dryRun"))
 	})
 })

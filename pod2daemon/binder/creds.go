@@ -55,8 +55,6 @@ func (s *workloadStore) ServerHandshake(conn net.Conn) (net.Conn, credentials.Au
 func (s *workloadStore) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{
 		SecurityProtocol: authType,
-		SecurityVersion:  "0.1",
-		ServerName:       "workloadhandler",
 	}
 }
 

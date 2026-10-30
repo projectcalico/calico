@@ -1,0 +1,26 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# EKS platform gaps: upstream conformance specs that fail here for
+# environmental reasons, plus any Calico labels the platform rules out.
+#
+# Composition-only: carries no include scope. Reference it alongside a
+# pipeline config, e.g. `extends: [pipeline.yaml, ../platform/eks.yaml]`.
+
+exclude:
+  namePatterns:
+    - group: "EKS control plane cannot reach the pod network"
+      link: "https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks"
+      patterns:
+        - 'both.pod.and.service.Proxy\b'
+        - 'proxy.through.a.service.and.a.pod'
+        - 'replica.with.a.public.image'
+        - 'DNS.for.ExternalName.services'
+        - 'DNS.for.pods.for.Hostname'
+        - 'DNS.for.pods.for.Subdomain'
+        - 'DNS.for.services'
+        - 'DNS.for.the.cluster'
+        - 'qualified.names.for.services'
+    - group: "EKS pod networking limits, see CORE-6725"
+      patterns:
+        - 'IPAM.StrictAffinity'
+        - 'DNS.should.provide./etc/hosts'

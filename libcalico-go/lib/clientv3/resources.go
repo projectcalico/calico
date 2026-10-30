@@ -1,4 +1,4 @@
-// Copyright (c) 2017,2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -111,7 +111,7 @@ func (c *resources) Create(ctx context.Context, opts options.SetOptions, kind st
 
 	// Convert the resource to a KVPair and pass that to the backend datastore, converting
 	// the response (if we get one) back to a resource.
-	kvp, err := c.backend.Create(ctx, c.resourceToKVPair(opts, kind, in))
+	kvp, err := c.backend.Create(writeContext(ctx, opts), c.resourceToKVPair(opts, kind, in))
 	if kvp != nil {
 		return c.kvPairToResource(kvp), err
 	}
@@ -156,7 +156,7 @@ func (c *resources) Update(ctx context.Context, opts options.SetOptions, kind st
 
 	// Convert the resource to a KVPair and pass that to the backend datastore, converting
 	// the response (if we get one) back to a resource.
-	kvp, err := c.backend.Update(ctx, c.resourceToKVPair(opts, kind, in))
+	kvp, err := c.backend.Update(writeContext(ctx, opts), c.resourceToKVPair(opts, kind, in))
 	if kvp != nil {
 		return c.kvPairToResource(kvp), err
 	}
@@ -203,7 +203,7 @@ func (c *resources) UpdateStatus(ctx context.Context, opts options.SetOptions, k
 
 	// If the backend supports UpdateStatus, use it. Otherwise fall back to Update.
 	if sc, ok := c.backend.(bapi.StatusClient); ok {
-		kvp, err := sc.UpdateStatus(ctx, c.resourceToKVPair(opts, kind, in))
+		kvp, err := sc.UpdateStatus(writeContext(ctx, opts), c.resourceToKVPair(opts, kind, in))
 		if kvp != nil {
 			return c.kvPairToResource(kvp), err
 		}
@@ -211,7 +211,7 @@ func (c *resources) UpdateStatus(ctx context.Context, opts options.SetOptions, k
 	}
 
 	// Fallback to regular Update for backends that don't support status subresource (e.g., etcd).
-	kvp, err := c.backend.Update(ctx, c.resourceToKVPair(opts, kind, in))
+	kvp, err := c.backend.Update(writeContext(ctx, opts), c.resourceToKVPair(opts, kind, in))
 	if kvp != nil {
 		return c.kvPairToResource(kvp), err
 	}
@@ -321,6 +321,15 @@ func (c *resources) Watch(ctx context.Context, opts options.ListOptions, kind st
 	}
 	go w.run()
 	return w, nil
+}
+
+// writeContext returns the context for a backend write, marked as a dry run when the
+// caller's options ask for one.
+func writeContext(ctx context.Context, opts options.SetOptions) context.Context {
+	if opts.DryRun {
+		return bapi.WithDryRun(ctx)
+	}
+	return ctx
 }
 
 // resourceToKVPair converts the resource to a KVPair that can be consumed by the

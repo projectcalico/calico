@@ -32,6 +32,7 @@ func NewMainTable(
 	deviceRouteProto netlink.RouteProtocol,
 	workloadIfacePrefixes []string,
 	removeExternalRoutes bool,
+	programIPIPClusterRoutes bool,
 ) *MainTableOwnershipPolicy {
 	var allRouteProtos []netlink.RouteProtocol
 	var exclusiveRouteProtos []netlink.RouteProtocol
@@ -65,11 +66,15 @@ func NewMainTable(
 			dataplanedefs.BPFInDev,
 			// Not including routetable.InterfaceNone because MainTableOwnershipPolicy
 			// automatically handles it.
-			// Not including tunl0, it is managed by BIRD.
+			// Not including tunl0: unlike the devices above, BIRD may legitimately
+			// program routes there, so claiming every protocol on the device would
+			// make Felix delete BIRD's routes even when BIRD is the configured
+			// owner.  OwnBIRDIPIPRoutes below handles it instead.
 			// Not including Wireguard, it has its own routing table.
 		},
 		AllRouteProtocols:       allRouteProtos,
 		ExclusiveRouteProtocols: exclusiveRouteProtos,
+		OwnBIRDIPIPRoutes:       programIPIPClusterRoutes,
 	}
 	return ownershipPolicy
 }
@@ -95,6 +100,28 @@ type MainTableOwnershipPolicy struct {
 	// ExclusiveRouteProtocols is a list of protocols that should only be
 	// used by Calico.
 	ExclusiveRouteProtocols []netlink.RouteProtocol
+
+	// OwnBIRDIPIPRoutes is set when Felix, rather than confd and BIRD, is responsible for
+	// programming the cluster routes for IPIP IP Pools.  It brings BIRD's routes via the IPIP
+	// device inside Felix's ownership boundary, so that reconciliation removes them.
+	//
+	// This is needed because BIRD's kernel protocol is configured with `persist`, so BIRD
+	// deliberately leaves its routes in the kernel when it exits.  A BIRD that comes back
+	// reconciles them away itself, after its graceful-restart recovery period; but where BIRD does
+	// not come back -- BGP disabled as part of the same migration, say -- nothing else would
+	// remove them.
+	//
+	// It only matters for destinations Felix does *not* want a route to: a block released while
+	// the node was down, a node that has left the cluster.  A destination Felix does want is
+	// taken over regardless of this flag, because when Felix wants a route to exist it atomically
+	// replaces any previous route for the same prefix, whether or not that route was within its
+	// logical ownership.
+	//
+	// Deliberately not scoped to Calico IP pool CIDRs.  Felix already owns the IPIP device
+	// outright: it creates it, keeps its MTU in sync, assigns its address, and removes addresses it
+	// did not add.  Owning the routes through it as well is consistent with that, and a
+	// destination test would not reclaim a route whose pool has since been deleted.
+	OwnBIRDIPIPRoutes bool
 
 	// IsWorkloadBGPPeerIface, if non-nil, reports whether the named
 	// interface belongs to a workload that is acting as a local BGP peer.
@@ -169,6 +196,17 @@ func (d *MainTableOwnershipPolicy) RouteIsOurs(ifaceName string, route *netlink.
 		// this is one of our interfaces so the route is very likely to be
 		// ours.
 		return slices.Contains(d.AllRouteProtocols, route.Protocol)
+	}
+
+	// BIRD's routes via the IPIP device are ours to manage when Felix is the component
+	// responsible for programming the IPIP cluster routes.  Only BIRD's protocol is claimed, not
+	// every protocol on the device: Felix's own routes are already covered by the exclusive
+	// protocol check above, so widening this further would only take in routes belonging to
+	// neither component.
+	if d.OwnBIRDIPIPRoutes &&
+		ifaceName == dataplanedefs.IPIPIfaceName &&
+		route.Protocol == unix.RTPROT_BIRD {
+		return true
 	}
 
 	// Check if this route goes to one of our tunnel/special purpose

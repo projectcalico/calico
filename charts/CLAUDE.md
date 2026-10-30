@@ -18,3 +18,7 @@ between charts, adding or removing a manual step, renaming a chart, and changing
 a documented values key or example command.
 
 See [`.github/instructions/helm-charts.instructions.md`](../.github/instructions/helm-charts.instructions.md).
+
+## AI-assisted contribution policy
+
+Contributions written with AI assistance follow [`AI_POLICY.md`](../AI_POLICY.md): disclose the assistance in the PR description, no AI co-author trailers, and leave the change in a state the human author can explain themselves.

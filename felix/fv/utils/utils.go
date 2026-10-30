@@ -34,7 +34,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -243,7 +243,7 @@ func IPSetNameForSelector(ipVersion int, rawSelector string) string {
 
 func NFTSetNameForSelector(ipVersion int, rawSelector string) string {
 	base := IPSetNameForSelector(ipVersion, rawSelector)
-	return nftables.LegalizeSetName(base)
+	return nftrender.LegalizeSetName(base)
 }
 
 func IPSetName(ipSetID string, ipVersion uint8) string {

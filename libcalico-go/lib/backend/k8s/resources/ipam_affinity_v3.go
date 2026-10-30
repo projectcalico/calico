@@ -188,6 +188,12 @@ func (c *blockAffinityClientV3) Update(ctx context.Context, kvp *model.KVPair) (
 	return c.rc.Update(ctx, c.toCRD(kvp))
 }
 
+// SupportsDryRun reports that writes honor api.WithDryRun, since they all go through
+// the CRD client.
+func (c *blockAffinityClientV3) SupportsDryRun() bool {
+	return c.rc.SupportsDryRun()
+}
+
 func (c *blockAffinityClientV3) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	// We need to mark as deleted first, since the Kubernetes API doesn't support
 	// compare-and-delete. This update operation allows us to eliminate races with other clients.

@@ -69,7 +69,7 @@ var _ = Describe("EncapsulationCalculator", func() {
 				Expect(encapsulationCalculator.IPIPEnabled()).To(Equal(expectedIPIP))
 				Expect(encapsulationCalculator.VXLANEnabled()).To(Equal(expectedVXLAN))
 				Expect(encapsulationCalculator.VXLANEnabledV6()).To(Equal(expectedVXLANV6))
-				Expect(encapsulationCalculator.NoEncapEnabled()).To(Equal(expectedNoEncap))
+				Expect(encapsulationCalculator.NoEncapNeeded()).To(Equal(expectedNoEncap))
 			},
 			Entry("uninitialized",
 				nil, nil, nil, nil, nil,
@@ -242,17 +242,25 @@ var _ = Describe("EncapsulationCalculator", func() {
 				false, true, false),
 		)
 	})
-	Describe("NoEncapEnabled gating on ProgramClusterRoutes", func() {
-		It("returns false when ProgramClusterRoutes is disabled, even with a no-encap pool", func() {
-			conf.ProgramClusterRoutes = "Disabled"
-			err := encapsulationCalculator.handlePool(*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeNever))
+	Describe("NoEncapNeeded gating on ProgramClusterRoutes", func() {
+		// NoEncapNeeded means "Felix has unencapsulated cluster routes to program", so it needs
+		// both an unencapsulated pool and a ProgramClusterRoutes value that covers no-encap.
+		DescribeTable("gating by ProgramClusterRoutes value",
+			func(programClusterRoutes string, expectedNoEncapNeeded bool) {
+				conf.ProgramClusterRoutes = programClusterRoutes
+				err := encapsulationCalculator.handlePool(*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeNever))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(encapsulationCalculator.NoEncapNeeded()).To(Equal(expectedNoEncapNeeded))
+			},
+			Entry("Disabled: BIRD programs everything", apiv3.Disabled, false),
+			Entry("EnabledIPIPOnly (the default): BIRD keeps the unencapsulated pools", apiv3.EnabledIPIPOnly, false),
+			Entry("EnabledNoEncapOnly", apiv3.EnabledNoEncapOnly, true),
+			Entry("Enabled", apiv3.Enabled, true),
+		)
+		It("returns false with no unencapsulated pool, even when Felix owns no-encap", func() {
+			err := encapsulationCalculator.handlePool(*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(encapsulationCalculator.NoEncapEnabled()).To(BeFalse())
-		})
-		It("returns true when ProgramClusterRoutes is enabled and a no-encap pool exists", func() {
-			err := encapsulationCalculator.handlePool(*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeNever))
-			Expect(err).NotTo(HaveOccurred())
-			Expect(encapsulationCalculator.NoEncapEnabled()).To(BeTrue())
+			Expect(encapsulationCalculator.NoEncapNeeded()).To(BeFalse())
 		})
 	})
 	Describe("Invalid IPIPMode and/or VXLANMode", func() {
@@ -508,7 +516,7 @@ func (e *encapResolverCallbackRecorder) OnEncapUpdate(encap config.Encapsulation
 			IpipEnabled:    encap.IPIPEnabled,
 			VxlanEnabled:   encap.VXLANEnabled,
 			VxlanEnabledV6: encap.VXLANEnabledV6,
-			NoEncapEnabled: encap.NoEncapEnabled,
+			NoEncapEnabled: encap.NoEncapNeeded,
 		})
 }
 

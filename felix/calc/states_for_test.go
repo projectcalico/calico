@@ -1321,8 +1321,7 @@ var localEpsWithPolicyUpdatedIPs = localEpsWithPolicy.withKVUpdates(
 
 // withProfile adds a profile to the initialised state.
 var withProfile = initialisedStore.withKVUpdates(
-	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRules1},
-	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profileLabels1Tag1},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profile1},
 ).withName("profile")
 
 // localEpsWithProfile contains a pair of overlapping IP endpoints and a profile
@@ -1389,7 +1388,7 @@ var localEpsWithNonMatchingProfile = withProfile.withKVUpdates(
 // localEpsWithUpdatedProfile Follows on from localEpsWithProfile, changing the
 // profile to use a different tag and selector.
 var localEpsWithUpdatedProfile = localEpsWithProfile.withKVUpdates(
-	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRules1TagUpdate},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profile1TagUpdate},
 ).withIPSet(
 	tag1LabelID, nil,
 ).withIPSet(
@@ -1410,14 +1409,13 @@ var localEpsWithUpdatedProfile = localEpsWithProfile.withKVUpdates(
 ).withName("2 local, overlapping IPs & updated profile")
 
 var localEpsWithUpdatedProfileNegatedTags = localEpsWithUpdatedProfile.withKVUpdates(
-	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRules1NegatedTagSelUpdate},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profile1NegatedTagSelUpdate},
 )
 
 // withProfileTagInherit adds a profile that includes rules that match on
 // tags as labels.  I.e. a tag of name foo should be equivalent to label foo=""
 var withProfileTagInherit = initialisedStore.withKVUpdates(
-	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRulesWithTagInherit},
-	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profileLabels1Tag1},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profile1WithTagInherit},
 ).withName("profile")
 
 var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
@@ -1451,8 +1449,7 @@ var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
 ).withName("2 local, overlapping IPs & a tag inherit profile")
 
 var withProfileTagOverridden = initialisedStore.withKVUpdates(
-	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRulesWithTagInherit},
-	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profileLabelsTag1},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profile1WithTagOverridden},
 ).withName("profile")
 
 // localEpsWithTagOverriddenProfile Checks that tags-inherited labels can be
@@ -1544,6 +1541,50 @@ var hostEp1WithPolicyAndANetworkSetMatchingBEqB = hostEp1WithPolicy.withKVUpdate
 	"12.0.0.0/24",
 	"12.1.0.0/24",
 })
+
+// The next three states exercise overlap-suppression dedup on the remove path (CORE-13009). When
+// NFTables mode is not disabled (the FV default is "Auto"), the all() IP set is programmed as an
+// nftables interval set, which rejects overlapping CIDRs, so Felix suppresses nested CIDRs upstream:
+// only the broadest CIDR covering each address is programmed. The interesting transition is removing
+// a CIDR while a broader ancestor still covers it — the removed CIDR was never its own set member, so
+// nothing must be emitted, and descendants the ancestor still covers must stay suppressed.
+
+// hostEp1WithPolicyAndOverlapAncestor adds a NetworkSet contributing a single broad CIDR.
+var hostEp1WithPolicyAndOverlapAncestor = hostEp1WithPolicy.withKVUpdates(
+	KVPair{Key: netSetOverlapKey, Value: &netSetOverlapAncestor},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1/32", // ep1
+	"fc00:fe11::1/128",
+	"10.0.0.2/32", // ep1 and ep2
+	"fc00:fe11::2/128",
+	"10.65.0.0/16", // ancestor CIDR
+}).withName("host ep1, policy, overlap netset ancestor only")
+
+// hostEp1WithPolicyAndOverlapNested adds two further CIDRs nested inside the ancestor; both are
+// suppressed, so the programmed all() set is unchanged from the ancestor-only state.
+var hostEp1WithPolicyAndOverlapNested = hostEp1WithPolicyAndOverlapAncestor.withKVUpdates(
+	KVPair{Key: netSetOverlapKey, Value: &netSetOverlapNested},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1/32",
+	"fc00:fe11::1/128",
+	"10.0.0.2/32",
+	"fc00:fe11::2/128",
+	"10.65.0.0/16", // ancestor; the nested /24 and /32 are suppressed.
+}).withName("host ep1, policy, overlap netset ancestor + nested (suppressed)")
+
+// hostEp1WithPolicyAndOverlapMiddleRemoved drops the middle /24 while the ancestor and leaf remain.
+// The removed /24 was never programmed and the leaf is still covered by the ancestor, so the
+// programmed all() set must be unchanged. The buggy remove path re-exposed the leaf and emitted a
+// spurious removal of the /24, both of which this state catches.
+var hostEp1WithPolicyAndOverlapMiddleRemoved = hostEp1WithPolicyAndOverlapNested.withKVUpdates(
+	KVPair{Key: netSetOverlapKey, Value: &netSetOverlapMiddleRemoved},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1/32",
+	"fc00:fe11::1/128",
+	"10.0.0.2/32",
+	"fc00:fe11::2/128",
+	"10.65.0.0/16", // ancestor still covers the leaf, so nothing changes.
+}).withName("host ep1, policy, overlap netset middle removed under live ancestor")
 
 // RouteUpdate expected for ipPoolWithVXLAN.
 var routeUpdateIPPoolVXLAN = types.RouteUpdate{

@@ -1,0 +1,7 @@
+# Minimum versions this image requires. `go mod tidy` settles everything else,
+# so a module that only moves as a consequence of a pin is not listed here.
+# No file, or no entries, means no pins and the generated patch is removed.
+
+golang.org/x/net v0.56.0      # GO-2026-5942
+golang.org/x/text v0.39.0     # CVE-2026-56852 / GO-2026-5970
+github.com/docker/cli v29.6.0 # floor from an earlier revision; satisfied upstream today

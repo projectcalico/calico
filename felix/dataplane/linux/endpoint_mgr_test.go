@@ -714,15 +714,41 @@ type mockRouteTable struct {
 	index         int
 	kernelRoutes  map[string][]routetable.Target
 	currentRoutes map[string][]routetable.Target
+
+	// currentRoutesByClass indexes the same routes the way the real RouteTable
+	// does, on (route class, interface name).  Managers that share a route table
+	// _and_ an interface - such as the blackhole routes that all hang off
+	// InterfaceNone - are only distinguishable by their class.  Lazily created,
+	// so that the plain currentRoutes-only struct literals still work.
+	currentRoutesByClass map[routetable.RouteClass]map[string][]routetable.Target
 }
 
 func (t *mockRouteTable) SetRoutes(routeClass routetable.RouteClass, ifaceName string, targets []routetable.Target) {
 	log.WithFields(log.Fields{
-		"index":     t.index,
-		"ifaceName": ifaceName,
-		"targets":   targets,
+		"index":      t.index,
+		"routeClass": routeClass,
+		"ifaceName":  ifaceName,
+		"targets":    targets,
 	}).Debug("SetRoutes")
 	t.currentRoutes[ifaceName] = targets
+
+	if t.currentRoutesByClass == nil {
+		t.currentRoutesByClass = map[routetable.RouteClass]map[string][]routetable.Target{}
+	}
+	if t.currentRoutesByClass[routeClass] == nil {
+		t.currentRoutesByClass[routeClass] = map[string][]routetable.Target{}
+	}
+	t.currentRoutesByClass[routeClass][ifaceName] = targets
+}
+
+// cidrsForClass returns the CIDRs of the routes that the given class currently
+// has programmed on the given interface.
+func (t *mockRouteTable) cidrsForClass(routeClass routetable.RouteClass, ifaceName string) []string {
+	var cidrs []string
+	for _, target := range t.currentRoutesByClass[routeClass][ifaceName] {
+		cidrs = append(cidrs, target.CIDR.String())
+	}
+	return cidrs
 }
 
 func (t *mockRouteTable) RouteRemove(routeClass routetable.RouteClass, ifaceName string, routeKey routetable.RouteKey) {
@@ -1940,9 +1966,13 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 					It("should write /proc/sys entries", func() {
 						if ipVersion == 6 {
+							// checkState asserts the state exactly, so the absence of
+							// proxy_ndp here is the guard against it being re-added by
+							// symmetry with proxy_arp: it does nothing for us and is
+							// not the IPv6 equivalent.  See
+							// felix/design/neighbour-discovery.md.
 							mockProcSys.checkState(map[string]string{
 								"/proc/sys/net/ipv6/conf/cali12345-ab/accept_ra":  "0",
-								"/proc/sys/net/ipv6/conf/cali12345-ab/proxy_ndp":  "1",
 								"/proc/sys/net/ipv6/conf/cali12345-ab/forwarding": "1",
 							})
 						} else {
@@ -4076,6 +4106,7 @@ func (f *fakeMapsDataplane) FinishMapUpdates(updates *nftables.MapUpdates)      
 func (f *fakeMapsDataplane) LoadDataplaneState(ctx context.Context, mapNames []string) error {
 	return nil
 }
+func (f *fakeMapsDataplane) InvalidateMapsCache() {}
 
 // fakeFlowtableHandler records the workload interface lists handed to the flowtable.
 type fakeFlowtableHandler struct {

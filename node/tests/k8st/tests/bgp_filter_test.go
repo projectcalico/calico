@@ -197,6 +197,7 @@ func ensureEgressNodeOwnsBlock(t *testing.T, ctx context.Context, g *WithT, cli 
 
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
 	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating anchor namespace")
+	utils.WaitForDefaultServiceAccount(t, nsName)
 	t.Cleanup(func() { _ = cli.Delete(context.Background(), ns) })
 
 	pod := &corev1.Pod{

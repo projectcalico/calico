@@ -5,9 +5,8 @@
 # connectivity smoke test, applies Calico + the flannel-migration job, waits
 # for the migration to complete, then runs the full e2e suite on Calico.
 #
-# Uses the legacy `./bz.sh tests:run` test runner (not the in-repo binary).
-# When the in-repo binary reaches parity, this script can migrate to
-# `make e2e-run` like body_standard.sh's run_tests_local.sh phase.
+# Both test runs go through phases/run_tests.sh, the same `make e2e-run` path
+# body_standard.sh uses.
 set -exo pipefail
 
 PHASES="$(cd "$(dirname "$0")" && pwd)/phases"
@@ -22,7 +21,7 @@ export MIGRATION_MANIFEST=${MIGRATION_MANIFEST:-"manifests/flannel-migration/mig
 
 if [ "${USE_HASH_RELEASE}" == "true" ]; then
   echo "[INFO] Using hash release for flannel migration"
-  LATEST_HASHREL="https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt"
+  LATEST_HASHREL="https://latest-os.hashrelease.tools.tigera.net/${RELEASE_STREAM}.txt"
   echo "Checking ${LATEST_HASHREL} for latest hash release url..."
   DOCS_URL=$(curl --retry 9 --retry-all-errors -fsS ${LATEST_HASHREL})
   echo "Using $DOCS_URL for hash release base url"
@@ -41,8 +40,12 @@ export KUBECONFIG=$BZ_LOCAL/kubeconfig
 export PATH=$PATH:$BZ_LOCAL/bin
 
 # Modern OSes no longer include br_netfilter by default, which breaks flannel.
-echo "[INFO] installing br_netfilter..."
-sudo modprobe br_netfilter
+# Only the kind cell runs flannel on this host, and the runner image has no
+# modprobe, so a failed load warns rather than ending the job.
+if [[ ! -d /sys/module/br_netfilter ]]; then
+  echo "[INFO] installing br_netfilter..."
+  sudo modprobe br_netfilter || echo "[WARN] could not load br_netfilter on the runner; only a kind cluster needs it here"
+fi
 
 mkdir -p "$BZ_LOGS_DIR"
 cd "${BZ_HOME}"
@@ -115,9 +118,14 @@ kubectl apply -f - < ./flannel.yaml
 sleep 30 # wait for flannel to come up
 kubectl get po -A -owide
 
-# Run a basic services test to check that flannel networking is working.
-K8S_E2E_FLAGS='--ginkgo.focus=should.serve.a.basic.endpoint.from.pods' \
-  ./bz.sh tests:run |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/e2e-tests-pre.log")
+# Run a basic services test to check that flannel networking is working. The
+# job's own config selects the post-migration run, so override it here. Calico
+# is not installed yet, so its component-log check has nothing to read.
+# run_tests.sh exits when it finishes, hence a child shell.
+E2E_TEST_CONFIG='e2e/config/pre-migration-smoke.yaml' STERN_CHECK=DISABLED bash "${PHASES}/run_tests.sh"
+
+# A post-migration run that never reaches Ginkgo must not publish these passes.
+rm -f "${REPORT_DIR}/junit.xml" "${CI_HOME}/${CI_GIT_DIR}/report/junit.xml"
 
 kubectl delete -n kube-system ds cni-installer || true  # remove the CNI installer daemonset
 kubectl apply -f "$DOCS_URL/$CALICO_MANIFEST"
@@ -139,4 +147,4 @@ kubectl -n kube-system delete job/flannel-migration || true
 kubectl -n kube-system delete po -l k8s-app=flannel-migration-controller || true
 
 # Run e2e on uplevel calico.
-./bz.sh tests:run |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/e2e-tests.log")
+source "${PHASES}/run_tests.sh"

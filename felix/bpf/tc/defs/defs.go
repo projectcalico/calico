@@ -36,6 +36,8 @@ const (
 	MarkSeenMASQ              = MarkSeenBypass | 0x00600000
 	MarkSeenMASQMask          = MarkSeenBypassMask | 0x00f00000
 	MarkSeenSkipFIB           = MarkSeen | 0x00100000
+	// The 0x00f00000 nibble is a code, independent of the bypass flag; compare it whole.
+	MarkSeenCodeMask = MarkSeenMask | 0x00f00000
 
 	MarkLinuxConntrackEstablished     = 0x08000000
 	MarkLinuxConntrackEstablishedMask = 0x08000000
@@ -145,11 +147,9 @@ type EndpointType string
 const (
 	EpTypeWorkload EndpointType = "workload"
 	EpTypeHost     EndpointType = "host"
-	EpTypeIPIP     EndpointType = "ipip"
 	EpTypeL3Device EndpointType = "l3dev"
 	EpTypeNAT      EndpointType = "nat"
 	EpTypeLO       EndpointType = "lo"
-	EpTypeVXLAN    EndpointType = "vxlan"
 )
 
 func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
@@ -181,16 +181,12 @@ func ProgFilename(ipVer int, epType EndpointType, toOrFrom ToOrFromEp, epToHostD
 		epTypeShort = "wep"
 	case EpTypeHost:
 		epTypeShort = "hep"
-	case EpTypeIPIP:
-		epTypeShort = "ipip"
 	case EpTypeL3Device:
 		epTypeShort = "l3"
 	case EpTypeNAT:
 		epTypeShort = "nat"
 	case EpTypeLO:
 		epTypeShort = "lo"
-	case EpTypeVXLAN:
-		epTypeShort = "vxlan"
 	}
 	var versionPart string
 	if ipVer == 6 {

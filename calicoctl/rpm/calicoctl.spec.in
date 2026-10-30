@@ -3,7 +3,7 @@ Summary:        CLI tool for Project Calico
 Version:        -- filled in by 'make rpm' when building packages --
 Release:        -- filled in by 'make rpm' when building packages --
 License:        ASL 2.0
-URL:            http://projectcalico.org
+URL:            https://www.tigera.io/project-calico/
 Source0:        calicoctl-%{version}.tar.gz
 Group:          Applications/Engineering
 

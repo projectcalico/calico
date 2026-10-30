@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -82,12 +83,71 @@ const birdPeerTemplate = `protocol bgp node_%d from bgp_template {
 
 `
 
+// birdRecursiveStaticTemplate declares the prefix the peer advertises on behalf of a "nested
+// cluster" behind a workload.  Args: prefix, the peer's own next hop for it.
+//
+// The peer never forwards anything to this prefix, so its own next hop only has to be resolvable
+// (otherwise BIRD holds the static route inactive and never exports it); the first cluster node
+// is used because it is directly connected on the BGP subnet.  The NEXT_HOP that actually matters
+// is the one imposed per-peer by birdRecursivePeerTemplate below.
+const birdRecursiveStaticTemplate = `protocol static static_recursive {
+  route %s via %s;
+}
+
+`
+
+// birdRecursivePeerTemplate is the per-peer block used when the peer advertises a recursive
+// route.  Args: index, peer IP, prefix, NEXT_HOP.
+//
+// Assigning bgp_next_hop in the export filter is what makes the node receive the prefix with a
+// third-party NEXT_HOP — the workload's IP rather than the peer's own address — which is the
+// whole point: it forces the receiving node to resolve the next hop recursively against its own
+// RIB.  Verified against calico/bird v0.3.3+birdv1.6.8: the assignment alone is sufficient and
+// "next hop keep" is not required, despite this being an eBGP session.
+const birdRecursivePeerTemplate = `protocol bgp node_%d from bgp_template {
+  neighbor %s as 64512;
+  passive on;
+  export filter {
+    if net = %s then {
+      bgp_next_hop = %s;
+      accept;
+    }
+    reject;
+  };
+}
+
+`
+
 // BIRDRoute represents a single BIRD route entry for a /32 prefix.
 type BIRDRoute struct {
-	NextHop   string `json:"nextHop"`
-	LocalPref int    `json:"localPref"`
-	Community string `json:"community"`
-	Best      bool   `json:"best"`
+	NextHop string `json:"nextHop"`
+	// Iface is the interface of a directly-connected device route ("dev caliX"
+	// lines); empty for via-gateway routes.
+	Iface string `json:"iface"`
+	// Device is true for directly-connected device routes (no "via" gateway),
+	// e.g. a local workload veth route learned by BIRD's kernel protocol.
+	Device bool `json:"device"`
+	// Unreachable is true for a route BIRD accepted into its RIB but could not resolve to a next
+	// hop, and has therefore programmed into the FIB as unreachable.  BIRD prints these with
+	// "unreachable" in place of the "via <ip> on <iface>" clause and an empty metric field:
+	//
+	//	10.99.0.1/32       unreachable [tor 15:24:05 from 10.55.0.2] * (100/-) [AS65001i]
+	//
+	// The case this exists for is a recursive next hop that resolves only through another
+	// recursive (BGP) route: BIRD refuses BGP-through-BGP recursion, so the route lands here
+	// rather than being dropped.  Distinguishing this from "prefix absent" is the whole point of
+	// parsing it — a black-holed prefix and an unadvertised one are otherwise identical.
+	Unreachable bool `json:"unreachable"`
+	// Preference is BIRD's protocol preference for the route, parsed from the
+	// trailing "(pref)" or "(pref/metric)" on the route line. Zero if absent.
+	Preference int `json:"preference"`
+	// BGPNextHop is the BGP.next_hop attribute, when the output included attributes ("... all").
+	// For an Unreachable route this is the only place the intended next hop appears, since the
+	// route line itself carries none.
+	BGPNextHop string `json:"bgpNextHop"`
+	LocalPref  int    `json:"localPref"`
+	Community  string `json:"community"`
+	Best       bool   `json:"best"`
 }
 
 // PrefixState captures whether a prefix is present in BIRD and its routes.
@@ -134,9 +194,16 @@ type BIRDPeer interface {
 	QuerySnapshot(vmIP string) RouteSnapshot
 }
 
+// birdRoutePrefRe matches the trailing preference on a BIRD route line: "(150)" for
+// kernel/device routes, "(100/0)" for BGP routes, "(100/-)" for unreachable ones (the metric
+// field is empty because there is no resolved next hop to take a metric from).
+var birdRoutePrefRe = regexp.MustCompile(`\((\d+)(?:/[^)]*)?\)`)
+
 // ParseBIRDRouteOutput parses the output of "birdcl show route <prefix> all"
-// and returns the list of routes. Returns nil if the output contains
-// "Network not in table" or is empty.
+// and returns the list of routes. Handles via-gateway routes ("via <ip> on
+// <iface>"), directly-connected device routes ("dev <iface>") and unresolved
+// routes ("unreachable"). Returns nil if the output contains "Network not in
+// table" or is empty.
 func ParseBIRDRouteOutput(output string) []BIRDRoute {
 	if strings.Contains(output, "Network not in table") {
 		return nil
@@ -152,13 +219,40 @@ func ParseBIRDRouteOutput(output string) []BIRDRoute {
 			continue
 		}
 
-		// Route line: contains "via" but is not a BGP attribute.
-		if strings.Contains(line, " via ") && !strings.HasPrefix(trimmed, "BGP.") {
+		// Route line: contains "via", "dev" or "unreachable" but is not a BGP
+		// attribute. (Attribute lines like "Type: device unicast univ" contain
+		// neither " via " nor " dev " as standalone tokens with surrounding
+		// spaces, and none of them carry an "unreachable" token.)
+		isVia := strings.Contains(line, " via ")
+		isDev := !isVia && (strings.Contains(line, " dev ") || strings.HasPrefix(trimmed, "dev "))
+		isUnreach := !isVia && !isDev && hasToken(line, "unreachable")
+		if (isVia || isDev || isUnreach) && !strings.HasPrefix(trimmed, "BGP.") {
 			r := BIRDRoute{}
-			if idx := strings.Index(line, " via "); idx >= 0 {
-				fields := strings.Fields(line[idx+5:])
-				if len(fields) > 0 {
-					r.NextHop = fields[0]
+			switch {
+			case isVia:
+				if idx := strings.Index(line, " via "); idx >= 0 {
+					fields := strings.Fields(line[idx+5:])
+					if len(fields) > 0 {
+						r.NextHop = fields[0]
+					}
+				}
+			case isDev:
+				r.Device = true
+				if idx := strings.Index(line, "dev "); idx >= 0 {
+					fields := strings.Fields(line[idx+4:])
+					if len(fields) > 0 {
+						r.Iface = fields[0]
+					}
+				}
+			default:
+				// An unreachable route has no next hop or interface on the route line at all;
+				// BGPNextHop below is the only record of what BIRD failed to resolve.
+				r.Unreachable = true
+			}
+			// Protocol preference: the last "(pref[/metric])" group on the line.
+			if ms := birdRoutePrefRe.FindAllStringSubmatch(line, -1); len(ms) > 0 {
+				if _, err := fmt.Sscanf(ms[len(ms)-1][1], "%d", &r.Preference); err != nil {
+					logrus.Warnf("ParseBIRDRouteOutput: failed to parse preference from %q: %v", line, err)
 				}
 			}
 			// BIRD marks the active/best route with " * " (space-asterisk-space)
@@ -168,13 +262,7 @@ func ParseBIRDRouteOutput(output string) []BIRDRoute {
 			// Match the standalone token rather than substring " * " elsewhere
 			// in the line (e.g. interface names containing "*" or AS-path
 			// expressions) so we never wrongly mark a non-best route as best.
-			r.Best = false
-			for _, tok := range strings.Fields(line) {
-				if tok == "*" {
-					r.Best = true
-					break
-				}
-			}
+			r.Best = hasToken(line, "*")
 			routes = append(routes, r)
 			current = &routes[len(routes)-1]
 			continue
@@ -189,18 +277,68 @@ func ParseBIRDRouteOutput(output string) []BIRDRoute {
 				}
 			} else if strings.HasPrefix(trimmed, "BGP.community:") {
 				current.Community = strings.TrimSpace(strings.TrimPrefix(trimmed, "BGP.community:"))
+			} else if strings.HasPrefix(trimmed, "BGP.next_hop:") {
+				current.BGPNextHop = strings.TrimSpace(strings.TrimPrefix(trimmed, "BGP.next_hop:"))
 			}
 		}
 	}
 	return routes
 }
 
+// hasToken reports whether line contains tok as a whitespace-delimited token.  Used instead of a
+// substring test so that, say, " * " appearing inside an AS-path expression or an interface name
+// cannot be mistaken for BIRD's best-route marker.
+func hasToken(line, tok string) bool {
+	for _, f := range strings.Fields(line) {
+		if f == tok {
+			return true
+		}
+	}
+	return false
+}
+
+// RecursiveRoute describes a prefix the external peer advertises with a third-party NEXT_HOP, to
+// stand in for a nested cluster reached through a workload — e.g. a Service VIP inside a child
+// cluster running in a KubeVirt VM.
+//
+// The receiving node has to resolve NextHop against its own RIB, and BIRD refuses to resolve a
+// recursive next hop through another recursive (BGP) route.  So whether Prefix ends up usable or
+// programmed as unreachable is decided entirely by which route wins for NextHop in that node's
+// RIB — which is exactly what confd's kernel-protocol import filter controls.
+type RecursiveRoute struct {
+	// Prefix is the advertised prefix, e.g. "10.99.0.1/32".  Keep it outside every IPPool CIDR
+	// in the cluster so it can never collide with an IPAM allocation, and outside the peer's own
+	// import filter range so the advertisement cannot loop back.
+	Prefix string
+	// NextHop is the NEXT_HOP to advertise Prefix with: the IP of the workload the nested cluster
+	// is deemed to sit behind.
+	NextHop string
+}
+
 // GenerateBIRDPeersConf renders a BIRD 1.x peers config. podCIDR gates the
 // import filter; pass the cluster's IPv4 IPPool CIDR.
 func GenerateBIRDPeersConf(podCIDR string, nodeIPs []string) string {
+	return generateBIRDPeersConf(podCIDR, nodeIPs, nil)
+}
+
+// GenerateBIRDPeersConfWithRecursiveRoute renders a BIRD 1.x peers config that, in addition to
+// peering with nodeIPs, advertises rr.Prefix to every one of them with rr.NextHop as the
+// NEXT_HOP.  See RecursiveRoute for what that buys.
+func GenerateBIRDPeersConfWithRecursiveRoute(podCIDR string, nodeIPs []string, rr RecursiveRoute) string {
+	return generateBIRDPeersConf(podCIDR, nodeIPs, &rr)
+}
+
+func generateBIRDPeersConf(podCIDR string, nodeIPs []string, rr *RecursiveRoute) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, birdHeaderTemplate, podCIDR)
+	if rr != nil && len(nodeIPs) > 0 {
+		fmt.Fprintf(&sb, birdRecursiveStaticTemplate, rr.Prefix, nodeIPs[0])
+	}
 	for i, nodeIP := range nodeIPs {
+		if rr != nil {
+			sb.WriteString(fmt.Sprintf(birdRecursivePeerTemplate, i, nodeIP, rr.Prefix, rr.NextHop))
+			continue
+		}
 		sb.WriteString(fmt.Sprintf(birdPeerTemplate, i, nodeIP))
 	}
 	return sb.String()
@@ -260,8 +398,12 @@ func (p *ContainerBIRDPeer) CheckBGPSession() (string, error) {
 func (p *ContainerBIRDPeer) ConfigureBIRD(peersConf string) {
 	GinkgoHelper()
 
-	// Enable merge paths in the kernel protocol for ECMP support.
-	out, err := p.exec("sed", "-i", "/protocol kernel {/a merge paths on;", "/etc/bird.conf")
+	// Enable merge paths in the kernel protocol for ECMP support.  The container outlives a
+	// single spec, so guard against inserting the option twice: BIRD rejects the duplicate, and
+	// "birdcl configure" reports a parse error while still exiting 0, which would silently leave
+	// the previous config in place.
+	out, err := p.exec("sh", "-c",
+		"grep -q 'merge paths on;' /etc/bird.conf || sed -i '/protocol kernel {/a merge paths on;' /etc/bird.conf")
 	Expect(err).NotTo(HaveOccurred(),
 		"failed to enable merge paths in BIRD: %s", out)
 

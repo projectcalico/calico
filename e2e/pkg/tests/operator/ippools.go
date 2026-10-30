@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,6 +14,7 @@ package calico
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -21,29 +22,34 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	operatorv1 "github.com/tigera/operator/api/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("IPPool"),
 	describe.WithCategory(describe.Operator),
+	describe.RequiresOperator(),
+
+	// Validation on non-Calico CNI clusters forces IP pools to use the 'all()' node selector.
+	describe.RequiresCalicoCNI(),
+
+	// Mutates the default Installation, which every other spec shares.
 	describe.WithSerial(),
 	"operator IPPool management tests",
 	func() {
 		f := utils.NewDefaultFramework("pool-management")
 
 		var (
-			cli                  ctrlclient.Client
-			ctx                  context.Context
-			installation         *operatorv1.Installation
-			originalInstallation *operatorv1.Installation
+			cli          ctrlclient.Client
+			ctx          context.Context
+			installation *operatorv1.Installation
 		)
 
 		ginkgo.BeforeEach(func() {
@@ -62,30 +68,13 @@ var _ = describe.CalicoDescribe(
 			// Query the installation.
 			installation = &operatorv1.Installation{}
 			err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation)
+			Expect(err).NotTo(HaveOccurred(), "Error querying Installation resource")
 
-			// Don't run this test if there is no Installation as it means this cluster isn't operator managed.
-			// Additionally, skip if this cluster is operator managed but doesn't use the Calico CNI plugin, as validation
-			// for non-Calico CNI clusters requires that IP pools use the 'all()' node selector which is incompatible with this test.
-			if errors.IsNotFound(err) || installation.Spec.CNI == nil || installation.Spec.CNI.Type != operatorv1.PluginCalico {
-				ginkgo.Skip("Skipping IP pool management test.")
-			}
-			Expect(err).NotTo(HaveOccurred())
-
-			// Save the original so we can revert the cluster after the test.
-			originalInstallation = installation.DeepCopy()
-		})
-
-		ginkgo.AfterEach(func() {
-			// Revert the installation to its original state. This might take an attempt or two
-			// if we hit resource version conflicts.
-			Eventually(func() error {
-				err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation)
-				if err != nil {
-					return err
-				}
-				originalInstallation.ResourceVersion = installation.ResourceVersion
-				return cli.Update(ctx, originalInstallation)
-			}, 20*time.Second, 2*time.Second).ShouldNot(HaveOccurred())
+			config := installation.Status.Computed
+			Expect(config).NotTo(BeNil(), "No computed configuration on the Installation")
+			Expect(config.CalicoNetwork).NotTo(BeNil(), "CalicoNetwork is not configured in the Installation")
+			Expect(config.CNI).NotTo(BeNil(), "No CNI configured in the Installation")
+			Expect(config.CNI.Type).To(Equal(operatorv1.PluginCalico), "Cluster is not using the Calico CNI plugin")
 		})
 
 		// This test verifies that the operator properly creates and deletes IP pools when added / removed
@@ -117,14 +106,18 @@ var _ = describe.CalicoDescribe(
 				NodeSelector: "!all()",
 			}
 
-			Eventually(func() error {
-				err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation)
-				if err != nil {
-					return err
+			// The operator's defaulted pools are absent from the spec, so declare them too or the update deletes them.
+			originalPools := slices.Clone(installation.Status.Computed.CalicoNetwork.IPPools)
+			desiredPools := append(slices.Clone(originalPools), newPool)
+
+			restore, err := utils.ConfigureWithCleanup(cli, ctrlclient.ObjectKey{Name: "default"}, &operatorv1.Installation{}, func(i *operatorv1.Installation) {
+				if i.Spec.CalicoNetwork == nil {
+					i.Spec.CalicoNetwork = &operatorv1.CalicoNetworkSpec{}
 				}
-				installation.Spec.CalicoNetwork.IPPools = append(installation.Spec.CalicoNetwork.IPPools, newPool)
-				return cli.Update(ctx, installation)
-			}, 20*time.Second, 2*time.Second).ShouldNot(HaveOccurred())
+				i.Spec.CalicoNetwork.IPPools = desiredPools
+			})
+			Expect(err).NotTo(HaveOccurred())
+			ginkgo.DeferCleanup(restore)
 
 			// Wait for the IP pool to be created.
 			pool := &v3.IPPool{}
@@ -179,14 +172,14 @@ var _ = describe.CalicoDescribe(
 				return nil
 			}).ShouldNot(HaveOccurred())
 
-			// Remove the IP pool from the installation. We need to query the Installation to get its revision.
+			// Remove the IP pool from the installation.
 			Eventually(func() error {
 				err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation)
 				if err != nil {
 					return err
 				}
-				originalInstallation.ResourceVersion = installation.ResourceVersion
-				return cli.Update(ctx, originalInstallation)
+				installation.Spec.CalicoNetwork.IPPools = originalPools
+				return cli.Update(ctx, installation)
 			}, 20*time.Second, 2*time.Second).ShouldNot(HaveOccurred())
 
 			// The IP pool should be deleted.

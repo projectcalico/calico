@@ -48,7 +48,8 @@ gen-files: gen-crds
 
 ## Force a rebuild of custom resource definition yamls
 gen-crds:
-	rm -rf config/crd
+	# Keep embed.go, which lives with the CRDs it embeds.
+	rm -f config/crd/*.yaml
 	# Generate CRDs using the in-repo Calico-patched controller-gen.
 	$(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CALICO_CONTROLLER_GEN) crd:allowDangerousTypes=true,crdVersions=v1 paths=./lib/apis/... output:crd:dir=config/crd/'
@@ -57,9 +58,9 @@ gen-crds:
 	# Remove the first yaml separator line.
 	$(DOCKER_GO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
 	# Add K8S ClusterNetworkPolicy CRD
-	curl -sSfL --retry 3 $(NETPOL_CNP_CRD_URL)/$(NETPOL_CNP_CRD) -o ./config/crd/$(NETPOL_CNP_CRD)
+	$(call fetch_file,$(NETPOL_CNP_CRD_URL)/$(NETPOL_CNP_CRD),./config/crd/$(NETPOL_CNP_CRD))
 	# Run prettier to fix indentation
-	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
+	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml "/work/config/crd/*.yaml"
 
 ./lib/apis/internalapi/zz_generated.deepcopy.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
@@ -135,7 +136,18 @@ GINKGO_SKIP?=
 ut:
 	mkdir -p report
 	$(DOCKER_RUN) --privileged $(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=libcalico_go_ut.xml --output-dir=report/ -skip "\[Datastore\]" -focus="$(GINKGO_FOCUS)" $(WHAT)'
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=libcalico_go_ut.xml --output-dir=report/ --skip "\[Datastore\]" --focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
+
+BENCH?=.
+BENCHTIME?=1s
+BENCHCOUNT?=1
+BENCHARGS?=
+
+.PHONY:benchmark
+## Run Go benchmarks in a container, e.g. make benchmark WHAT=./lib/ipam/accounting/ BENCHCOUNT=10. BENCHARGS passes extra go test flags, such as -memprofile.
+benchmark:
+	$(DOCKER_RUN) $(CALICO_BUILD) \
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && go test -run=^$$ -bench="$(BENCH)" -benchmem -benchtime=$(BENCHTIME) -count=$(BENCHCOUNT) $(BENCHARGS) $(WHAT)'
 
 .PHONY:fv
 ## Run functional tests against a real datastore in a container.

@@ -129,6 +129,61 @@ func TestSkipUnreachable(t *testing.T) {
 	}))
 }
 
+func TestSkipUnreachableReusedLabel(t *testing.T) {
+	RegisterTestingT(t)
+	b := NewBlock(false)
+
+	b.JumpEq64(R1, R2, "exit")
+	b.Jump("end")
+	// Reachable: the JumpEq64 targets it.
+	b.LabelNextInsn("exit")
+	b.Exit()
+	// Reachable: the Jump targets it.
+	b.LabelNextInsn("end")
+	b.Exit()
+	// Unreachable: "exit" was used before but nothing jumps here now.
+	b.LabelNextInsn("exit")
+	b.MovImm64(R0, 2)
+	b.Exit()
+
+	insns, err := b.Assemble()
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(insns).To(Equal(Insns{
+		MakeInsn(JumpEq64, 1, 2, 1, 0),
+		MakeInsn(JumpA, 0, 0, 1, 0),
+		MakeInsn(Exit, 0, 0, 0, 0),
+		MakeInsn(Exit, 0, 0, 0, 0),
+	}))
+}
+
+func TestReusedLabelWithPendingJump(t *testing.T) {
+	RegisterTestingT(t)
+	b := NewBlock(false)
+
+	b.JumpEq64(R1, R2, "target")
+	b.Exit()
+	b.LabelNextInsn("target")
+	b.JumpEq64(R1, R2, "target")
+	b.Exit()
+	// Reachable: the second JumpEq64 targets this placement of the label.
+	Expect(b.HasPendingJumps("target")).To(BeTrue())
+	b.LabelNextInsn("target")
+	Expect(b.HasPendingJumps("target")).To(BeFalse())
+	b.Exit()
+
+	insns, err := b.Assemble()
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(insns).To(Equal(Insns{
+		MakeInsn(JumpEq64, 1, 2, 1, 0),
+		MakeInsn(Exit, 0, 0, 0, 0),
+		MakeInsn(JumpEq64, 1, 2, 1, 0),
+		MakeInsn(Exit, 0, 0, 0, 0),
+		MakeInsn(Exit, 0, 0, 0, 0),
+	}))
+}
+
 func TestLongJump(t *testing.T) {
 	RegisterTestingT(t)
 
@@ -185,6 +240,26 @@ func TestJumpBackwardsTooFar(t *testing.T) {
 	b.MovImm32(R3, 42)
 	_, err = b.Assemble()
 	Expect(err).To(HaveOccurred())
+}
+
+func TestTrampolineKeepsJumpPending(t *testing.T) {
+	RegisterTestingT(t)
+	b := NewBlock(false)
+	b.SetTrampolineStride(10)
+
+	b.JumpEq64(R1, R2, "target")
+	for range 20 {
+		b.Mov64(R1, R2)
+	}
+	// A trampoline placed "target" and jumps on to it from there.
+	Expect(b.labelToInsnIdx).To(HaveKey("target"))
+	Expect(b.HasPendingJumps("target")).To(BeTrue())
+	b.LabelNextInsn("target")
+	b.Exit()
+
+	insns, err := b.Assemble()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(CheckCFG(insns)).To(Succeed())
 }
 
 func TestSingleTrampoline(t *testing.T) {
@@ -496,4 +571,45 @@ func logSummarisingNoOps(t *testing.T, insns Insns) {
 		}
 		t.Log(fmt.Sprintf("%d:", i), insn)
 	}
+}
+
+func TestCheckCFG(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(CheckCFG(Insns{
+		MakeInsn(JumpEq64, 1, 2, 3, 0),
+		MakeInsn(LoadImm64, 1, 0, 0, 0),
+		MakeInsn(LoadImm64Pt2, 0, 0, 0, 0),
+		MakeInsn(Call, 0, 0, 0, 12),
+		MakeInsn(MovImm64, 0, 0, 0, 2),
+		MakeInsn(Exit, 0, 0, 0, 0),
+	})).To(Succeed())
+
+	Expect(CheckCFG(Insns{
+		MakeInsn(JumpEq64, 1, 2, 2, 0),
+		MakeInsn(LoadImm64, 1, 0, 0, 0),
+		MakeInsn(LoadImm64Pt2, 0, 0, 0, 0),
+		MakeInsn(Call, 0, 0, 0, 12),
+		MakeInsn(JumpA, 0, 0, 1, 0),
+		MakeInsn(MovImm64, 0, 0, 0, 2),
+		MakeInsn(Exit, 0, 0, 0, 0),
+		MakeInsn(MovImm64, 0, 0, 0, 2),
+		MakeInsn(Exit, 0, 0, 0, 0),
+	})).To(MatchError("unreachable insns [5 7 8]"))
+
+	Expect(CheckCFG(Insns{
+		MakeInsn(JumpEq64, 1, 2, 5, 0),
+		MakeInsn(Exit, 0, 0, 0, 0),
+	})).To(MatchError("jump out of range from insn 0 to 6"))
+
+	Expect(CheckCFG(Insns{
+		MakeInsn(JumpEq64, 1, 2, 1, 0),
+		MakeInsn(LoadImm64, 1, 0, 0, 0),
+		MakeInsn(LoadImm64Pt2, 0, 0, 0, 0),
+		MakeInsn(Exit, 0, 0, 0, 0),
+	})).To(MatchError("jump from insn 0 into the middle of LoadImm64 insn 1"))
+
+	Expect(CheckCFG(Insns{
+		MakeInsn(MovImm64, 0, 0, 0, 2),
+	})).To(MatchError("jump out of range from insn 0 to 1"))
 }
