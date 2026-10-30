@@ -1687,7 +1687,7 @@ var vxlanWithWEPIPs = empty.withKVUpdates(
 	},
 )
 
-// Adds in an workload on remoteHost2 and expected route.
+// Adds in a workload on remoteHost2 and expected route.
 var vxlanWithWEPIPsAndWEP = vxlanWithWEPIPs.withKVUpdates(
 	KVPair{Key: remoteWlEpKey2, Value: &remoteWlEp1},
 ).withName("VXLAN using WorkloadIPs and a WEP").withRoutes(
