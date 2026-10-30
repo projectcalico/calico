@@ -23,6 +23,14 @@ single container.
 - **CNI plugin installation.** The node container drops the
   CNI plugin binary and configuration into the host's CNI
   directories so kubelet can invoke it for pod-network setup.
+- **Node network status.** The `NetworkUnavailable` condition is
+  not advisory: Kubernetes maps it to a `NoSchedule` taint that
+  only host-networked pods tolerate. One component owns each
+  transition (calico-node at startup and shutdown,
+  kube-controllers at runtime in both directions), and Calico
+  withdraws both the condition and the `network-not-ready` taint
+  from any node it can no longer speak for, so an uninstall or a
+  disabled feature drains rather than strands.
 
 ## Cross-cutting
 

@@ -19,6 +19,18 @@ rules:
       - watch
       - list
       - get
+  # The node controller keeps the NetworkUnavailable condition, and optionally the
+  # network-ready taint, in step with calico-node pod readiness.
+  - apiGroups: [""]
+    resources:
+      - nodes/status
+    verbs:
+      - patch
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs:
+      - update
   # Services are monitored for service LoadBalancer IP allocation
   - apiGroups: [""]
     resources:
@@ -89,6 +101,18 @@ rules:
       - watch
       - list
       - get
+  # The node controller keeps the NetworkUnavailable condition, and optionally the
+  # network-ready taint, in step with calico-node pod readiness.
+  - apiGroups: [""]
+    resources:
+      - nodes/status
+    verbs:
+      - patch
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs:
+      - update
   # Pods are watched to check for existence as part of IPAM controller.
   - apiGroups: [""]
     resources:

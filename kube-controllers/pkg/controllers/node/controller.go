@@ -63,6 +63,7 @@ type NodeController struct {
 	ipamCtrl               *IPAMController
 	hostEndpointController *autoHostEndpointController
 	nodeLabelController    *nodeLabelController
+	nodeConditionCtrl      *nodeConditionController
 }
 
 // NewNodeController Constructor for NodeController
@@ -135,6 +136,10 @@ func NewNodeController(ctx context.Context,
 	// is responsible for cleaning up after itself in case it was previously enabled.
 	nc.hostEndpointController = NewAutoHEPController(cfg, calicoClient)
 	nc.hostEndpointController.RegisterWith(nc.dataFeed)
+
+	// Create the node condition controller that watches calico-node pods and
+	// sets NetworkUnavailable=True on nodes where calico-node is not Ready.
+	nc.nodeConditionCtrl = newNodeConditionController(k8sClientset, nodeInformer, podInformer)
 
 	if cfg.SyncLabels {
 		// Note that the configuration code has already handled disabling this if
@@ -235,6 +240,7 @@ func (c *NodeController) Run(stopCh chan struct{}) {
 	// We're in-sync. Start the sub-controllers.
 	c.ipamCtrl.Start(stopCh)
 	c.hostEndpointController.Start(stopCh)
+	c.nodeConditionCtrl.Start(stopCh)
 
 	if c.cfg.SyncLabels {
 		c.nodeLabelController.Start(stopCh)
