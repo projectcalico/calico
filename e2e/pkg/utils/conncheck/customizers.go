@@ -1,3 +1,17 @@
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package conncheck
 
 import (
@@ -50,25 +64,29 @@ func AvoidEachOther(pod *corev1.Pod) {
 	}
 	pod.Labels["e2e.projectcalico.org/anti-affinity"] = "true"
 
-	// Add the PodAntiAffinity rule to make sure Pods are scheduled on different nodes.
-	pod.Spec.Affinity = &corev1.Affinity{
-		PodAntiAffinity: &corev1.PodAntiAffinity{
-			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
-				{
-					LabelSelector: &metav1.LabelSelector{
-						MatchExpressions: []metav1.LabelSelectorRequirement{
-							{
-								Key:      "e2e.projectcalico.org/anti-affinity",
-								Operator: metav1.LabelSelectorOpIn,
-								Values:   []string{"true"},
-							},
-						},
+	// Add the PodAntiAffinity rule to make sure Pods are scheduled on different nodes, keeping
+	// any affinity another customizer already set.
+	if pod.Spec.Affinity == nil {
+		pod.Spec.Affinity = &corev1.Affinity{}
+	}
+	if pod.Spec.Affinity.PodAntiAffinity == nil {
+		pod.Spec.Affinity.PodAntiAffinity = &corev1.PodAntiAffinity{}
+	}
+	anti := pod.Spec.Affinity.PodAntiAffinity
+	anti.RequiredDuringSchedulingIgnoredDuringExecution = append(anti.RequiredDuringSchedulingIgnoredDuringExecution,
+		corev1.PodAffinityTerm{
+			LabelSelector: &metav1.LabelSelector{
+				MatchExpressions: []metav1.LabelSelectorRequirement{
+					{
+						Key:      "e2e.projectcalico.org/anti-affinity",
+						Operator: metav1.LabelSelectorOpIn,
+						Values:   []string{"true"},
 					},
-					TopologyKey: "kubernetes.io/hostname",
 				},
 			},
+			TopologyKey: "kubernetes.io/hostname",
 		},
-	}
+	)
 }
 
 // WithAvoidControlPlane returns a Pod customizer that keeps the pod off the nodes

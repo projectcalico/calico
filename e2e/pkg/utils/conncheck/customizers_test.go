@@ -187,3 +187,31 @@ func TestWithAvoidControlPlane(t *testing.T) {
 		})
 	}
 }
+
+// AvoidEachOther and the control-plane node affinity are applied to the same pod, so each has
+// to keep what the other set, whichever runs first.
+func TestAvoidEachOtherKeepsNodeAffinity(t *testing.T) {
+	avoidControlPlane := avoidNodes([]string{"cp-1"})
+	orders := map[string][]func(*corev1.Pod){
+		"node affinity first": {avoidControlPlane, AvoidEachOther},
+		"anti-affinity first": {AvoidEachOther, avoidControlPlane},
+	}
+	for name, customizers := range orders {
+		t.Run(name, func(t *testing.T) {
+			pod := &corev1.Pod{}
+			for _, c := range customizers {
+				c(pod)
+			}
+			if pod.Spec.Affinity == nil || pod.Spec.Affinity.NodeAffinity == nil {
+				t.Fatalf("node affinity was dropped: %+v", pod.Spec.Affinity)
+			}
+			if got := excludedNodes(pod); len(got) != 1 || got[0] != "cp-1" {
+				t.Errorf("want the control-plane node excluded, got %v", got)
+			}
+			anti := pod.Spec.Affinity.PodAntiAffinity
+			if anti == nil || len(anti.RequiredDuringSchedulingIgnoredDuringExecution) != 1 {
+				t.Errorf("want one pod anti-affinity term, got %+v", anti)
+			}
+		})
+	}
+}

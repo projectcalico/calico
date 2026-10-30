@@ -27,7 +27,6 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	v1 "k8s.io/api/core/v1"
 	errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -71,41 +70,6 @@ var _ = describe.CalicoDescribe(
 		var defaultAllow *v3.GlobalNetworkPolicy
 		var allowLogCollection *v3.GlobalNetworkPolicy
 
-		// avoidNodeCustomizer is used to ensure our client pod is not on the same node
-		// as the hostEndpoint, and that it isn't on the master node.
-		avoidNodeCustomizer := func(pod *v1.Pod) {
-			pod.Spec.Affinity = &v1.Affinity{
-				NodeAffinity: &v1.NodeAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &v1.NodeSelector{
-						NodeSelectorTerms: []v1.NodeSelectorTerm{
-							{
-								MatchExpressions: []v1.NodeSelectorRequirement{
-									{
-										Key:      "node-role.kubernetes.io/master",
-										Operator: v1.NodeSelectorOpDoesNotExist,
-									},
-									{
-										Key:      "node-role.kubernetes.io/control-plane",
-										Operator: v1.NodeSelectorOpDoesNotExist,
-									},
-								},
-							},
-						},
-					},
-				},
-				PodAntiAffinity: &v1.PodAntiAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: []v1.PodAffinityTerm{
-						{
-							LabelSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{"pod-name": "server"},
-							},
-							TopologyKey: "kubernetes.io/hostname",
-						},
-					},
-				},
-			}
-		}
-
 		var checker conncheck.ConnectionTester
 		var hepServer1 conncheck.Server
 		var client1 conncheck.Client
@@ -116,10 +80,20 @@ var _ = describe.CalicoDescribe(
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			// Launch a hostNetworked server pod.
+			// Launch a hostNetworked server and a client on separate nodes, both off the control
+			// plane. The server's HostEndpoint denies the kube-apiserver port, which on a
+			// control-plane node locks the test out.
+			avoidControlPlane := conncheck.WithAvoidControlPlane(f)
 			checker = conncheck.NewConnectionTester(f)
-			hepServer1 = conncheck.NewServer("server", f.Namespace, conncheck.WithPorts(hepPort1, hepPort2), conncheck.WithHostNetworking())
-			client1 = conncheck.NewClient("client", f.Namespace, conncheck.WithClientCustomizer(avoidNodeCustomizer))
+			hepServer1 = conncheck.NewServer(
+				"server",
+				f.Namespace,
+				conncheck.WithPorts(hepPort1, hepPort2),
+				conncheck.WithHostNetworking(),
+				conncheck.WithServerPodCustomizer(avoidControlPlane),
+				conncheck.WithServerPodCustomizer(conncheck.AvoidEachOther),
+			)
+			client1 = conncheck.NewClient("client", f.Namespace, conncheck.WithClientCustomizer(avoidControlPlane), conncheck.WithClientCustomizer(conncheck.AvoidEachOther))
 			checker.AddServer(hepServer1)
 			checker.AddClient(client1)
 			checker.Deploy()
