@@ -1564,8 +1564,12 @@ var _ = Describe("UT for IP and IP6", func() {
 })
 
 var _ = Describe("waitForReady", func() {
-	// The health check errors immediately when no components are enabled, so the
-	// loop spins without touching the network.
+	// With no components enabled waitForReady returns at once, so enable the Felix check. Nothing
+	// serves Felix health here, so the check fails and the loop spins.
+	BeforeEach(func() {
+		DeferCleanup(temporarilySetEnv("FELIX_HEALTHENABLED", "true"))
+	})
+
 	It("returns as soon as the context is cancelled, not at the timeout", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
