@@ -1260,6 +1260,7 @@ var _ = Describe("UT for node interface autodetection", func() {
 			Expect(node.Spec.Interfaces).To(Equal([]internalapi.NodeInterface{{
 				Name:      "eth1",
 				Addresses: []string{"192.168.1.10", "2001:db8:85a3:8d3:1319:8a2e:370:7348"},
+				CIDRs:     []string{"192.168.1.10/24", "2001:db8:85a3:8d3:1319:8a2e:370:7348/128"},
 			}}))
 
 			_ = os.Unsetenv("IP")
