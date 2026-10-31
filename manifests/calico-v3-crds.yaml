@@ -3201,8 +3201,15 @@ spec:
                     anyOf:
                       - type: integer
                       - type: string
+                    maxLength: 11
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
+                    x-kubernetes-validations:
+                      - message: port ranges must be written low:high
+                        reason: FieldValueInvalid
+                        rule:
+                          type(self) != string || !self.contains(':') || int(self.split(':')[0])
+                          <= int(self.split(':')[1])
                   maxItems: 7
                   type: array
                 liveMigrationRouteConvergenceTime:
@@ -3985,8 +3992,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -4004,12 +4018,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -4294,8 +4316,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -4313,12 +4342,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -4557,8 +4594,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -4576,12 +4620,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -4866,8 +4918,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -4885,12 +4944,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -6826,8 +6893,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -6845,12 +6919,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -7135,8 +7217,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -7154,12 +7243,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -7398,8 +7495,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -7417,12 +7521,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -7707,8 +7819,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -7726,12 +7845,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -8202,8 +8329,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -8221,12 +8355,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -8511,8 +8653,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -8530,12 +8679,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -8774,8 +8931,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -8793,12 +8957,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -9083,8 +9255,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -9102,12 +9281,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -10089,8 +10276,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -10108,12 +10302,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -10398,8 +10600,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -10417,12 +10626,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -10661,8 +10878,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -10680,12 +10904,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -10970,8 +11202,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -10989,12 +11228,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic

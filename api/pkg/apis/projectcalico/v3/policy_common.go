@@ -207,7 +207,11 @@ type EntityRule struct {
 	//
 	// Since only some protocols have ports, if any ports are specified it requires the
 	// Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+	// Named ports are at most 15 characters, like Kubernetes port names.
 	// +kubebuilder:validation:MaxItems=50
+	// +kubebuilder:validation:items:XIntOrString
+	// +kubebuilder:validation:items:MaxLength=15
+	// +kubebuilder:validation:items:XValidation:rule="type(self) != string || !self.contains(':') || int(self.split(':')[0]) <= int(self.split(':')[1])",message="port ranges must be written low:high",reason=FieldValueInvalid
 	// +listType=atomic
 	Ports []numorstring.Port `json:"ports,omitempty" validate:"omitempty,dive"`
 
@@ -225,6 +229,9 @@ type EntityRule struct {
 	// Since only some protocols have ports, if any ports are specified it requires the
 	// Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
 	// +kubebuilder:validation:MaxItems=50
+	// +kubebuilder:validation:items:XIntOrString
+	// +kubebuilder:validation:items:MaxLength=15
+	// +kubebuilder:validation:items:XValidation:rule="type(self) != string || !self.contains(':') || int(self.split(':')[0]) <= int(self.split(':')[1])",message="port ranges must be written low:high",reason=FieldValueInvalid
 	// +listType=atomic
 	NotPorts []numorstring.Port `json:"notPorts,omitempty" validate:"omitempty,dive"`
 
