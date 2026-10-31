@@ -183,6 +183,85 @@ func TestCRDValidation_BGPPeer(t *testing.T) {
 	})
 }
 
+// TestCRDValidation_BGPPeer_PeerIP tests the CEL XValidation rule on the peerIP
+// field, covering valid formats, port boundary values, and edge cases where
+// CEL's int() would accept a leading '+' sign or an unbracketed IPv6 address
+// would be mistaken for IPv4+port.
+func TestCRDValidation_BGPPeer_PeerIP(t *testing.T) {
+	const wantErr = "peerIP must be an IP address"
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "empty peerIP passes",
+			obj:  &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: ""}},
+		},
+		{
+			name: "plain IPv4 passes",
+			obj:  &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "10.0.0.1"}},
+		},
+		{
+			name: "plain IPv6 passes",
+			obj:  &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "fd00::1"}},
+		},
+		{
+			name: "IPv4 with port passes",
+			obj:  &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "10.0.0.1:179"}},
+		},
+		{
+			name: "IPv6 with port passes",
+			obj:  &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "[fd00::1]:179"}},
+		},
+		{
+			name: "IPv4 with max port passes",
+			obj:  &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "10.0.0.1:65535"}},
+		},
+		{
+			name: "IPv4 with min port passes",
+			obj:  &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "10.0.0.1:1"}},
+		},
+		{
+			name:      "invalid IP fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "notanip"}},
+			errSubstr: wantErr,
+		},
+		{
+			name:      "IPv4 with port 0 fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "10.0.0.1:0"}},
+			errSubstr: wantErr,
+		},
+		{
+			name:      "IPv4 with port > 65535 fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "10.0.0.1:65536"}},
+			errSubstr: wantErr,
+		},
+		{
+			name:      "IPv6 with port 0 fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "[fd00::1]:0"}},
+			errSubstr: wantErr,
+		},
+		{
+			name:      "IPv6 with port > 65535 fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "[fd00::1]:65536"}},
+			errSubstr: wantErr,
+		},
+		{
+			name:      "IPv4 with signed port +80 fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "10.0.0.1:+80"}},
+			errSubstr: wantErr,
+		},
+		{
+			name:      "IPv6 with signed port +80 fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "[fd00::1]:+80"}},
+			errSubstr: wantErr,
+		},
+		{
+			name:      "unbracketed IPv6 with port fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "1:2:3:4:5:6:7:8:179"}},
+			errSubstr: wantErr,
+		},
+	})
+}
+
+
 // TestCRDValidation_BGPPeer_ASNumber tests CEL rules involving asNumber, which
 // is a uint32 Go type. Verifies the JSON round-trip in toUnstructured() produces
 // the correct int type for CEL evaluation.
