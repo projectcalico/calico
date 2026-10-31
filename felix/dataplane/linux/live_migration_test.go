@@ -27,8 +27,11 @@ import (
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -38,13 +41,21 @@ import (
 
 var testConvergenceTime = 30 * time.Second
 
-// fakeLiveMigrationListener captures state updates for test assertions.
+// fakeLiveMigrationListener captures state updates for test assertions.  It
+// keeps the route-programmed callback of the latest update apart from the
+// updates themselves, so that tests can compare the updates with Equal.
 type fakeLiveMigrationListener struct {
-	updates []liveMigrationStateUpdate
+	updates           []liveMigrationStateUpdate
+	onRouteProgrammed func(ip.CIDR)
 }
 
-func (f *fakeLiveMigrationListener) OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState) {
+func (f *fakeLiveMigrationListener) OnLiveMigrationStateUpdate(
+	id types.WorkloadEndpointID,
+	state liveMigrationState,
+	onRouteProgrammed func(ip.CIDR),
+) {
 	f.updates = append(f.updates, liveMigrationStateUpdate{ID: id, State: state})
+	f.onRouteProgrammed = onRouteProgrammed
 }
 
 func (f *fakeLiveMigrationListener) drain() []liveMigrationStateUpdate {
@@ -81,12 +92,8 @@ func drainUpdates(m *liveMigrationMonitor) []liveMigrationStateUpdate {
 func testFSM(state liveMigrationState) (*liveMigrationFSM, *liveMigrationMonitor) {
 	m := newTestMonitor(testConvergenceTime)
 	id := types.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "test-pod", EndpointId: "ep"}
-	fsm := &liveMigrationFSM{
-		logCtx:       logrus.WithField("id", id),
-		id:           id,
-		monitor:      m,
-		currentState: state,
-	}
+	fsm := m.newFSM(id, "test-uid")
+	fsm.currentState = state
 	return fsm, m
 }
 
@@ -815,6 +822,164 @@ func TestTimerPopRaceWithTimeWaitExit(t *testing.T) {
 	m.OnUpdate(wepRemove(wepID1))
 }
 
+// --- Section 5a: Completion outcomes and route programming reports ---
+
+func completionCount(outcome string) float64 {
+	return testutil.ToFloat64(countLiveMigrationCompletions.WithLabelValues(outcome))
+}
+
+func routeProgrammingSampleCount(t *testing.T) uint64 {
+	t.Helper()
+	var m dto.Metric
+	if err := histogramLiveMigrationRouteProgramming.Write(&m); err != nil {
+		t.Fatalf("failed to read histogram: %v", err)
+	}
+	return m.GetHistogram().GetSampleCount()
+}
+
+func TestLiveMigrationCompletionOutcomes(t *testing.T) {
+	tests := []struct {
+		name         string
+		garpDetected bool
+		input        liveMigrationInput
+		wantState    liveMigrationState
+		wantOutcome  string
+	}{
+		{"GARP processed", true, liveMigrationInputGARPDetected, liveMigrationStateLive, liveMigrationOutcomeCompletedWithGARP},
+		{"GARP detected but overtaken by completion", true, liveMigrationInputNoRole, liveMigrationStateTimeWait, liveMigrationOutcomeCompletedWithGARP},
+		{"no GARP detected", false, liveMigrationInputNoRole, liveMigrationStateTimeWait, liveMigrationOutcomeCompletedNoGARP},
+		{"re-migrated away", true, liveMigrationInputSource, liveMigrationStateBase, liveMigrationOutcomeAborted},
+		{"workload deleted", false, liveMigrationInputDeleted, liveMigrationStateBase, liveMigrationOutcomeAborted},
+	}
+	allOutcomes := []string{
+		liveMigrationOutcomeCompletedWithGARP,
+		liveMigrationOutcomeCompletedNoGARP,
+		liveMigrationOutcomeAborted,
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			fsm, m := testFSM(liveMigrationStateTarget)
+			if tt.garpDetected {
+				fsm.garpDetectedAt = time.Now().Add(-time.Second)
+			}
+			countsBefore := map[string]float64{}
+			for _, o := range allOutcomes {
+				countsBefore[o] = completionCount(o)
+			}
+
+			fsm.handleInput(tt.input)
+
+			g.Expect(fsm.currentState).To(Equal(tt.wantState))
+			for _, o := range allOutcomes {
+				wantIncrease := 0.0
+				if o == tt.wantOutcome {
+					wantIncrease = 1
+				}
+				g.Expect(completionCount(o)-countsBefore[o]).To(Equal(wantIncrease), "count for outcome %s", o)
+			}
+
+			g.Expect(m.pendingUpdates).To(HaveLen(1))
+			if tt.wantOutcome == liveMigrationOutcomeAborted {
+				g.Expect(fsm.routeReporter).To(BeNil())
+				g.Expect(m.pendingUpdates[0].OnRouteProgrammed).To(BeNil())
+			} else {
+				g.Expect(fsm.routeReporter).NotTo(BeNil())
+				g.Expect(fsm.routeReporter.garpDetectedAt).To(Equal(fsm.garpDetectedAt))
+				g.Expect(m.pendingUpdates[0].OnRouteProgrammed).NotTo(BeNil())
+			}
+		})
+	}
+
+	t.Run("completion is counted once, and reporting continues through TimeWait", func(t *testing.T) {
+		g := NewWithT(t)
+		fsm, m := testFSM(liveMigrationStateTarget)
+		fsm.garpDetectedAt = time.Now()
+		fsm.handleInput(liveMigrationInputGARPDetected)
+		reporter := fsm.routeReporter
+		countAfterLive := completionCount(liveMigrationOutcomeCompletedWithGARP)
+
+		fsm.handleInput(liveMigrationInputNoRole)
+		g.Expect(fsm.currentState).To(Equal(liveMigrationStateTimeWait))
+		g.Expect(completionCount(liveMigrationOutcomeCompletedWithGARP)).To(Equal(countAfterLive))
+		g.Expect(fsm.routeReporter).To(BeIdenticalTo(reporter))
+		g.Expect(m.pendingUpdates[1].OnRouteProgrammed).NotTo(BeNil())
+
+		fsm.handleInput(liveMigrationInputTimerPop)
+		g.Expect(fsm.currentState).To(Equal(liveMigrationStateBase))
+		g.Expect(fsm.routeReporter).To(BeNil())
+		g.Expect(m.pendingUpdates[2].OnRouteProgrammed).To(BeNil())
+	})
+}
+
+// TestGARPDetectionTimeSurvivesAbortedReport covers the case where the main loop never processes
+// the GARP, because the migration's completion overtakes it: the GARP must still count, and be
+// timed from when it was detected.
+func TestGARPDetectionTimeSurvivesAbortedReport(t *testing.T) {
+	g := NewWithT(t)
+	m := newTestMonitor(testConvergenceTime)
+	fakeHandle := newFakeGARPHandle(buildGARPPacketBytes(t))
+	m.newGARPHandle = func(ifaceName string) (garpHandle, error) {
+		return fakeHandle, nil
+	}
+	countBefore := completionCount(liveMigrationOutcomeCompletedWithGARP)
+
+	beforeDetection := time.Now()
+	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
+	expectUpdate(g, m, liveMigrationStateTarget)
+	g.Eventually(garpSenderBlocked, time.Second, time.Millisecond).Should(BeTrue())
+	afterDetection := time.Now()
+
+	// Simulate the main loop being busy for a while before it processes the completion.
+	time.Sleep(50 * time.Millisecond)
+	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
+	expectUpdate(g, m, liveMigrationStateTimeWait)
+
+	g.Expect(completionCount(liveMigrationOutcomeCompletedWithGARP) - countBefore).To(Equal(1.0))
+	fsm := m.fsms[wepID1]
+	g.Expect(fsm.routeReporter).NotTo(BeNil())
+	g.Expect(fsm.routeReporter.garpDetectedAt).To(BeTemporally(">=", beforeDetection))
+	g.Expect(fsm.routeReporter.garpDetectedAt).To(BeTemporally("<=", afterDetection))
+	g.Expect(testListener(m).onRouteProgrammed).NotTo(BeNil())
+}
+
+func TestLiveMigrationRouteReporter(t *testing.T) {
+	cidrV4 := ip.MustParseCIDROrIP("10.0.0.1/32")
+	cidrV6 := ip.MustParseCIDROrIP("2001:db8::1/128")
+
+	t.Run("each route is observed once, from concurrent callers", func(t *testing.T) {
+		g := NewWithT(t)
+		garpTime := time.Now().Add(-2 * time.Second)
+		r := newLiveMigrationRouteReporter(logrus.WithField("test", t.Name()), garpTime)
+		samplesBefore := routeProgrammingSampleCount(t)
+
+		// As from the IPv4 and IPv6 route tables, with the IPv4 route then rewritten by a
+		// resync.
+		var wg sync.WaitGroup
+		for _, cidr := range []ip.CIDR{cidrV4, cidrV6, cidrV4} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				r.onRouteProgrammed(cidr)
+			}()
+		}
+		wg.Wait()
+
+		g.Expect(routeProgrammingSampleCount(t) - samplesBefore).To(Equal(uint64(2)))
+	})
+
+	t.Run("nothing is observed without a GARP time", func(t *testing.T) {
+		g := NewWithT(t)
+		r := newLiveMigrationRouteReporter(logrus.WithField("test", t.Name()), time.Time{})
+		samplesBefore := routeProgrammingSampleCount(t)
+
+		r.onRouteProgrammed(cidrV4)
+
+		g.Expect(routeProgrammingSampleCount(t)).To(Equal(samplesBefore))
+	})
+}
+
 // --- Section 6: GARP/RARP packet matching ---
 
 func TestIsGARPOrRARP(t *testing.T) {
@@ -996,49 +1161,73 @@ func (f *fakeGARPHandle) IsClosed() bool {
 // --- Section 7: Migration UID tracking ---
 
 func TestMigrationUIDTracking(t *testing.T) {
-	t.Run("UID stored from WEP update and set on FSM", func(t *testing.T) {
+	loggedUID := func(fsm *liveMigrationFSM) any {
+		return fsm.logCtx.Data["migrationUID"]
+	}
+
+	t.Run("UID is in the FSM's log context from creation", func(t *testing.T) {
 		g := NewWithT(t)
 		m := newTestMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-abc-123"))
 
-		g.Expect(m.migrationUIDs[wepID1]).To(Equal("uid-abc-123"))
-		g.Expect(m.fsms[wepID1].migrationUID).To(Equal("uid-abc-123"))
+		g.Expect(loggedUID(m.fsms[wepID1])).To(Equal("uid-abc-123"))
 	})
 
-	t.Run("UID cleaned up on WEP remove", func(t *testing.T) {
-		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
-
-		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-abc-123"))
-		g.Expect(m.migrationUIDs).To(HaveKey(wepID1))
-
-		m.OnUpdate(wepRemove(wepID1))
-		g.Expect(m.migrationUIDs).NotTo(HaveKey(wepID1))
-	})
-
-	t.Run("empty UID is not stored", func(t *testing.T) {
-		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
-
-		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		g.Expect(m.migrationUIDs).NotTo(HaveKey(wepID1))
-	})
-
-	t.Run("UID preserved through FSM state transitions", func(t *testing.T) {
+	t.Run("UID is still logged after the LiveMigration is deleted", func(t *testing.T) {
 		g := NewWithT(t)
 		m := newTestMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-xyz-789"))
-		drainUpdates(m)
-
-		// GARP detected → Live
 		m.OnGARPDetected(wepID1)
-		g.Expect(m.fsms[wepID1].migrationUID).To(Equal("uid-xyz-789"))
 
-		// NoRole → TimeWait
-		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_NO_ROLE, "uid-xyz-789"))
-		g.Expect(m.fsms[wepID1].migrationUID).To(Equal("uid-xyz-789"))
+		// Deleting the LiveMigration clears both the role and the UID from the workload.
+		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_NO_ROLE, ""))
+
+		fsm := m.fsms[wepID1]
+		g.Expect(fsm.currentState).To(Equal(liveMigrationStateTimeWait))
+		g.Expect(loggedUID(fsm)).To(Equal("uid-xyz-789"))
+	})
+
+	t.Run("the next migration's FSM has the next migration's UID", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-first"))
+		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_SOURCE, "uid-away"))
+		g.Expect(m.fsms).NotTo(HaveKey(wepID1))
+
+		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-back"))
+		g.Expect(loggedUID(m.fsms[wepID1])).To(Equal("uid-back"))
+	})
+}
+
+func TestFSMCreation(t *testing.T) {
+	t.Run("inputs other than Target do not create an FSM", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
+		m.OnGARPDetected(wepID1)
+		m.OnUpdate(wepRemove(wepID1))
+		m.executeFSM(wepID1, liveMigrationInputTimerPop, "uid-ignored")
+
+		g.Expect(m.fsms).To(BeEmpty())
+		g.Expect(drainUpdates(m)).To(BeEmpty())
+	})
+
+	t.Run("a Target input creates the FSM with the given UID", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.executeFSM(wepID1, liveMigrationInputTarget, "uid-abc-123")
+
+		fsm := m.fsms[wepID1]
+		g.Expect(fsm).NotTo(BeNil())
+		g.Expect(fsm.currentState).To(Equal(liveMigrationStateTarget))
+		g.Expect(fsm.logCtx.Data["migrationUID"]).To(Equal("uid-abc-123"))
+		expectUpdate(g, m, liveMigrationStateTarget)
 	})
 }
 
