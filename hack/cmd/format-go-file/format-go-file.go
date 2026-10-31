@@ -19,8 +19,8 @@
 //
 // Usage:
 //
-//	go run ./hack/cmd/format-go-file <path>...
-//	go run ./hack/cmd/format-go-file --claude-hook < <hook-event-json>
+//	go tool format-go-file <path>...
+//	go tool format-go-file --claude-hook < <hook-event-json>
 //
 // Paths may be absolute, repo-relative, or $PWD-relative. Paths that are
 // not Go files, that live under vendor/ or third_party/, that don't exist,

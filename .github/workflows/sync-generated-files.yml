@@ -102,7 +102,7 @@ jobs:
       # actually regenerates drifted.
       - name: Install tools
         if: steps.drift.outputs.recent == 'true' || steps.drift.outputs.operator == 'true'
-        run: make bin/helm bin/yq
+        run: make bin/helm
 
       # Only release branches have this target, and only some of them fold it
       # into generate, so run it explicitly. It has to come first either way:

@@ -7,4 +7,5 @@ defaults:
 steps:
   - name: check-images
     commands: |
+      . hack/ensure-go.sh
       make check-images-availability

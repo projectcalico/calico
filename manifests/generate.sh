@@ -16,32 +16,25 @@ exec 2> >(grep --line-buffered -v 'walk\.go.*symbolic link' >&2)
 # Helm binary to use. Default to the one installed by the Makefile.
 HELM=${HELM:-../bin/helm}
 
-# yq binary to use. Default to the one installed by the Makefile.
-YQ=${YQ:-../bin/yq}
-
 if [[ ! -f $HELM ]]; then
   echo "[ERROR] Helm binary ${HELM} not found."
   exit 1
 fi
-if [[ ! -f $YQ ]]; then
-  echo "[ERROR] yq binary ${YQ} not found."
-  exit 1
-fi
 
 # Get versions to install.
-defaultCalicoVersion=$($YQ .version <../charts/calico/values.yaml)
+defaultCalicoVersion=$(go tool yq .version <../charts/calico/values.yaml)
 CALICO_VERSION=${PRODUCT_VERSION:-$defaultCalicoVersion}
 
-defaultRegistry=$($YQ .node.registry <../charts/calico/values.yaml)
+defaultRegistry=$(go tool yq .node.registry <../charts/calico/values.yaml)
 REGISTRY=${REGISTRY:-$defaultRegistry}
 
-defaultOperatorVersion=$($YQ .tigeraOperator.version <../charts/tigera-operator/values.yaml)
+defaultOperatorVersion=$(go tool yq .tigeraOperator.version <../charts/tigera-operator/values.yaml)
 OPERATOR_VERSION=${OPERATOR_VERSION:-$defaultOperatorVersion}
 
-defaultOperatorRegistry=$($YQ .tigeraOperator.registry <../charts/tigera-operator/values.yaml)
+defaultOperatorRegistry=$(go tool yq .tigeraOperator.registry <../charts/tigera-operator/values.yaml)
 OPERATOR_REGISTRY=${OPERATOR_REGISTRY_OVERRIDE:-$defaultOperatorRegistry}
 
-defaultOperatorImage=$($YQ .tigeraOperator.image <../charts/tigera-operator/values.yaml)
+defaultOperatorImage=$(go tool yq .tigeraOperator.image <../charts/tigera-operator/values.yaml)
 OPERATOR_IMAGE=${OPERATOR_IMAGE_OVERRIDE:-$defaultOperatorImage}
 
 NON_HELM_MANIFEST_IMAGES="node-windows calico"
