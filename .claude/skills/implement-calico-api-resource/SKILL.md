@@ -262,7 +262,9 @@ func IsNamespaced(kind string) bool {
 
 **File:** `libcalico-go/lib/validator/v3/validator.go`
 
-**Prefer kubebuilder annotations** for validation wherever possible (e.g., `+kubebuilder:validation:Enum`, `+kubebuilder:validation:Pattern`, `+kubebuilder:validation:Required`). Kubebuilder annotations generate CRD schema validation that is enforced by the Kubernetes API server. The Go struct validator in this file is only executed by the `crd.projectcalico.org/v1` code path — it is **not** executed for `projectcalico.org/v3` CRDs, so any validation that only lives here will be silently skipped on newer clusters.
+**Prefer kubebuilder annotations** for validation wherever possible (e.g., `+kubebuilder:validation:Enum`, `+kubebuilder:validation:Pattern`, `+kubebuilder:validation:Required`). Kubebuilder annotations generate CRD schema validation that is enforced by the Kubernetes API server. The Go struct validator in this file is only executed by the Calico API server / `clientv3` code path, and on `projectcalico.org/v3` CRDs only for the policy kinds (via the `calico-webhooks` admission webhook). For any other resource, validation that only lives here will be silently skipped on newer clusters.
+
+Every Calico selector field needs `+kubebuilder:validation:MaxLength=1024` and `validate:"selector"` (`omitempty,selector` if optional). Every field holding a Kubernetes object name needs `validate:"name"` (`omitempty,dive,name` for a list) plus a CRD `MaxLength`/`Pattern` (`items:` variants for a list). See [`.github/instructions/calico-api.instructions.md`](../../../.github/instructions/calico-api.instructions.md).
 
 If your resource needs cross-field or complex validation that cannot be expressed with kubebuilder annotations, register a struct validator:
 

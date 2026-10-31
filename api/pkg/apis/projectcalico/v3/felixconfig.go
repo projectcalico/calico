@@ -220,7 +220,7 @@ type FelixConfigurationSpec struct {
 	// configuration.
 	// +optional
 	// +kubebuilder:validation:MaxLength=1024
-	NodeSelector *string `json:"nodeSelector,omitempty" confignamev1:"-"`
+	NodeSelector *string `json:"nodeSelector,omitempty" validate:"omitempty,selector" confignamev1:"-"`
 
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
 	// will launch an external dataplane driver and communicate with it over protobuf.
