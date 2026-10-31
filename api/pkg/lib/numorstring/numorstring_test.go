@@ -76,7 +76,8 @@ func init() {
 		Entry("should reject 65536 port as int", "65536", portType, nil),
 		Entry("should reject 0:65536 port range as string", "\"0:65536\"", portType, nil),
 		Entry("should reject -1:65535 port range as string", "\"-1:65535\"", portType, nil),
-		Entry("should reject 10:1 port range as string", "\"10:1\"", portType, nil),
+		// A stored descending range must decode so it can't fail a whole list; the validator rejects it.
+		Entry("should decode 10:1 port range as string", "\"10:1\"", portType, numorstring.Port{MinPort: 10, MaxPort: 1}),
 		Entry("should reject 1:2:3 port range as string", "\"1:2:3\"", portType, nil),
 		Entry("should reject bad named port string", "\"*\"", portType, nil),
 		Entry("should reject bad port string", "\"1:2", portType, nil),
@@ -223,6 +224,22 @@ func init() {
 		Entry("named port with space", "http port", numorstring.Port{}, false),
 		Entry("named port with invalid chars", "http%port", numorstring.Port{}, false),
 	)
+
+	It("PortFromString should reject a descending port range", func() {
+		_, err := numorstring.PortFromString("9000:8000")
+		Expect(err).To(MatchError(ContainSubstring("greater than maximum port number")))
+	})
+
+	It("should decode a list in which one item has a descending port range", func() {
+		var items []struct {
+			Ports []numorstring.Port `json:"ports"`
+		}
+		err := json.Unmarshal([]byte(`[{"ports":["8000:9000"]},{"ports":["9000:8000"]}]`), &items)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(items).To(HaveLen(2))
+		Expect(items[0].Ports).To(Equal([]numorstring.Port{portFromRange(8000, 9000)}))
+		Expect(items[1].Ports).To(Equal([]numorstring.Port{{MinPort: 9000, MaxPort: 8000}}))
+	})
 
 	// Perform tests of DSCP FromString method.
 	DescribeTable("NumOrStringDSCP FromString is not case-sensitive",
