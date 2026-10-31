@@ -176,7 +176,7 @@ type ProtoPort struct {
 // If there is a config value already loaded from a higher-priority source, then
 // the new value will be ignored (after validation).
 func (config *Config) UpdateFrom(rawData map[string]string, source Source) (changed bool, err error) {
-	log.Infof("Merging in config from %v: %v", source, rawData)
+	log.Infof("Merging in config from %v", source)
 	// Defensively take a copy of the raw data, in case we've been handed
 	// a mutable map by mistake.
 	rawDataCopy := make(map[string]string)
@@ -225,8 +225,7 @@ func (config *Config) resolve() (changed bool, err error) {
 				continue valueLoop
 			}
 
-			log.Infof("Parsing value for %v: %v (from %v)",
-				name, rawValue, source)
+			log.Infof("Parsing value for %v (from %v)", name, source)
 			var value any
 			if strings.ToLower(rawValue) == "none" {
 				// Special case: we allow a value of "none" to force the value to
@@ -236,8 +235,7 @@ func (config *Config) resolve() (changed bool, err error) {
 				if metadata.NonZero {
 					err = errors.New("non-zero field cannot be set to none")
 					log.Errorf(
-						"Failed to parse value for %v: %v from source %v. %v",
-						name, rawValue, source, err)
+						"Failed to parse value for %v from source %v. %v", name, source, err)
 					return
 				}
 				value = metadata.ZeroValue
@@ -259,8 +257,7 @@ func (config *Config) resolve() (changed bool, err error) {
 				}
 			}
 
-			log.Infof("Parsed value for %v: %v (from %v)",
-				name, value, source)
+			log.Infof("Parsed value for %v (from %v)", name, source)
 			if source < currentSource {
 				log.Infof("Skipping config value for %v from %v; "+
 					"already have a value from %v", name,

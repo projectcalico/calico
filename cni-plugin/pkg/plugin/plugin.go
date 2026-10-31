@@ -262,7 +262,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 	for _, endpoint := range conf.ReadinessGates {
 		if _, err := url.ParseRequestURI(endpoint); err != nil {
-			return fmt.Errorf("invalid URL set for ReadinessGates:%s Error:%v",
+			return fmt.Errorf("invalid URL set for ReadinessGates: %s; error: %v",
 				endpoint, err)
 		}
 		err := pollEndpointReadiness(endpoint, 5*time.Second, 30*time.Second)

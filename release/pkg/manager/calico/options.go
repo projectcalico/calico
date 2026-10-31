@@ -17,6 +17,7 @@ package calico
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
@@ -88,9 +89,9 @@ func WithOperatorImage(registry, image, version string) Option {
 		if registry == "" {
 			return fmt.Errorf("operator registry cannot be blank")
 		}
-		r.operatorImage = image
+		r.operatorImage = strings.ToLower(image)
 		r.operatorVersion = version
-		r.operatorRegistry = registry
+		r.operatorRegistry = strings.ToLower(registry)
 		return nil
 	}
 }
@@ -203,14 +204,14 @@ func WithImages(enabled bool) Option {
 
 func WithImageRegistries(registries []string) Option {
 	return func(r *CalicoManager) error {
-		r.imageRegistries = registries
+		r.imageRegistries = normalizedRepositories(registries)
 		return nil
 	}
 }
 
 func WithHelmRegistries(registries []string) Option {
 	return func(r *CalicoManager) error {
-		r.helmRegistries = registries
+		r.helmRegistries = normalizedRepositories(registries)
 		return nil
 	}
 }
@@ -376,8 +377,16 @@ func WithRetagImages(fromRegistry, fromTag string) Option {
 			return err
 		}
 		r.retagImages = true
-		r.fromRegistry = fromRegistry
+		r.fromRegistry = strings.ToLower(fromRegistry)
 		r.fromTag = fromTag
 		return err
 	}
+}
+
+func normalizedRepositories(repositories []string) []string {
+	normalized := make([]string, len(repositories))
+	for i, repository := range repositories {
+		normalized[i] = strings.ToLower(repository)
+	}
+	return normalized
 }

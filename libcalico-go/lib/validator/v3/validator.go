@@ -754,7 +754,7 @@ func validateHTTPPaths(paths []api.HTTPPath) error {
 		// Checks from https://tools.ietf.org/html/rfc3986#page-22
 		if !strings.HasPrefix(v, "/") ||
 			strings.ContainsAny(v, "? #") {
-			return fmt.Errorf("Invalid path %s. (must start with `/` and not contain `?` or `#`", v)
+			return fmt.Errorf("invalid path %s (must start with `/` and not contain `?` or `#`)", v)
 		}
 	}
 	return nil

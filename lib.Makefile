@@ -87,10 +87,13 @@ ifeq ($(RELEASE),true)
 PUSH_IMAGES+=$(RELEASE_IMAGES)
 endif
 
+# Normalize OCI repository names without changing case-sensitive image tags.
+lower-repository = $(shell printf '%s' '$(1)' | LC_ALL=C tr '[:upper:]' '[:lower:]')
+
 DOCKERHUB_REGISTRY ?=registry.hub.docker.com
 # filter-registry filters out registries we don't want to include when tagging / pushing docker images. For instance,
 # we don't include the registry name when pushing to docker hub because that registry is the default.
-filter-registry ?= $(if $(filter-out $(1),$(DOCKERHUB_REGISTRY)),$(1)/)
+filter-registry ?= $(if $(filter-out $(call lower-repository,$(1)),$(call lower-repository,$(DOCKERHUB_REGISTRY))),$(call lower-repository,$(1))/)
 
 # Convenience function to get the first dev image repo in the list.
 DEV_REGISTRY ?= $(firstword $(DEV_REGISTRIES))
@@ -98,7 +101,7 @@ DEV_REGISTRY ?= $(firstword $(DEV_REGISTRIES))
 # remove from the list to push to manifest any registries that do not support multi-arch
 MANIFEST_REGISTRIES         ?= $(DEV_REGISTRIES)
 
-PUSH_MANIFEST_IMAGES := $(foreach registry,$(MANIFEST_REGISTRIES),$(foreach image,$(BUILD_IMAGES),$(call filter-registry,$(registry))$(image)))
+PUSH_MANIFEST_IMAGES := $(foreach registry,$(MANIFEST_REGISTRIES),$(foreach image,$(BUILD_IMAGES),$(call filter-registry,$(registry))$(call lower-repository,$(image))))
 
 # location of docker credentials to push manifests
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
@@ -1174,9 +1177,9 @@ retag-build-image-with-registry-%: var-require-all-REGISTRY-BUILD_IMAGES
 # retag-build-image-arch-with-registry-% retags the build / arch image specified by $* and BUILD_IMAGE with the
 # registry specified by REGISTRY.
 retag-build-image-arch-with-registry-%: var-require-all-REGISTRY-BUILD_IMAGE-IMAGETAG
-	docker tag $(BUILD_IMAGE):$(LATEST_IMAGE_TAG)-$* $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*
+	docker tag $(call lower-repository,$(BUILD_IMAGE)):$(LATEST_IMAGE_TAG)-$* $(call filter-registry,$(call lower-repository,$(REGISTRY)))$(call lower-repository,$(BUILD_IMAGE)):$(IMAGETAG)-$*
 	$(if $(filter $*,amd64),\
-		docker tag $(BUILD_IMAGE):$(LATEST_IMAGE_TAG)-$(ARCH) $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),\
+		docker tag $(call lower-repository,$(BUILD_IMAGE)):$(LATEST_IMAGE_TAG)-$(ARCH) $(call lower-repository,$(REGISTRY))/$(call lower-repository,$(BUILD_IMAGE)):$(IMAGETAG),\
 		$(NOECHO) $(NOOP)\
 	)
 
@@ -1197,11 +1200,11 @@ push-images-to-registry-%:
 # that is.
 push-image-to-registry-%:
 	$(eval BUILD_IMAGE=$(call unescapefs,$*))
-	$(eval EXPIRY_IMAGES_LIST=$(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG) $(addprefix $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG)-,$(VALIDARCHES)))
+	$(eval EXPIRY_IMAGES_LIST=$(call lower-repository,$(REGISTRY))/$(call lower-repository,$(BUILD_IMAGE)):$(IMAGETAG) $(addprefix $(call lower-repository,$(REGISTRY))/$(call lower-repository,$(BUILD_IMAGE)):$(IMAGETAG)-,$(VALIDARCHES)))
 
-	$(MAKE) -j6 $(addprefix push-image-arch-to-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(BUILD_IMAGE)
+	$(MAKE) -j6 $(addprefix push-image-arch-to-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(call lower-repository,$(BUILD_IMAGE))
 
-ifeq ($(findstring quay.io,$(REGISTRY)),quay.io)
+ifeq ($(findstring quay.io,$(call lower-repository,$(REGISTRY))),quay.io)
 	$(if $(RELEASE), \
 		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) remove $(EXPIRY_IMAGES_LIST), \
 		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $(EXPIRY_IMAGES_LIST) \
@@ -1246,13 +1249,13 @@ endef
 # specified by REGISTRY.
 push-image-arch-to-registry-%:
 # If the registry we want to push to doesn't not support manifests don't push the ARCH image.
-	@$(call log_step,start,push $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*)
-	$(call retry_docker_cmd,docker push with quiet flag,$(DOCKER) push --quiet $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*,$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
-	@$(call log_step,end,push $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*)
+	@$(call log_step,start,push $(call filter-registry,$(call lower-repository,$(REGISTRY)))$(call lower-repository,$(BUILD_IMAGE)):$(IMAGETAG)-$*)
+	$(call retry_docker_cmd,docker push with quiet flag,$(DOCKER) push --quiet $(call filter-registry,$(call lower-repository,$(REGISTRY)))$(call lower-repository,$(BUILD_IMAGE)):$(IMAGETAG)-$*,$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
+	@$(call log_step,end,push $(call filter-registry,$(call lower-repository,$(REGISTRY)))$(call lower-repository,$(BUILD_IMAGE)):$(IMAGETAG)-$*)
 	$(if $(filter $*,amd64),\
-		$(call log_step,start,push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG)); \
-		$(call retry_docker_cmd,docker push,$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY)); \
-		$(call log_step,end,push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG)) \
+		$(call log_step,start,push $(call lower-repository,$(REGISTRY))/$(call lower-repository,$(BUILD_IMAGE)):$(IMAGETAG)); \
+		$(call retry_docker_cmd,docker push,$(DOCKER) push $(call lower-repository,$(REGISTRY))/$(call lower-repository,$(BUILD_IMAGE)):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY)); \
+		$(call log_step,end,push $(call lower-repository,$(REGISTRY))/$(call lower-repository,$(BUILD_IMAGE)):$(IMAGETAG)) \
 	)
 
 # push multi-arch manifest where supported.
@@ -1363,7 +1366,7 @@ var-require-one-of-%:
 # WINDOWS_IMAGE overlap (e.g. a component that only ships a Windows image
 # still needs BUILD_IMAGES set so the retag/push machinery iterates over it).
 build-images: var-require-all-BUILD_IMAGES
-	@echo $(sort $(BUILD_IMAGES) $(WINDOWS_IMAGE))
+	@echo $(sort $(BUILD_IMAGES) $(call lower-repository,$(WINDOWS_IMAGE)))
 
 # image-tag-prefix echoes the prefix this component's published tags carry, which
 # a variant selects through its own environment. Empty for an unprefixed build.
@@ -1511,8 +1514,8 @@ release-retag-dev-images-in-registry-%:
 # DEV_REGISTRY with the release tag specified by RELEASE_TAG. If DEV_REGISTRY is in the list of registries specified by
 # RELEASE_REGISTRIES then the retag is not done
 release-retag-dev-image-in-registry-%: bin/crane
-	$(if $(filter-out $(RELEASE_REGISTRIES),$(DEV_REGISTRY)),\
-		$(CRANE) cp $(DEV_REGISTRY)/$(call unescapefs,$*):$(DEV_TAG) $(DEV_REGISTRY)/$(call unescapefs,$*):$(RELEASE_TAG))
+	$(if $(filter-out $(RELEASE_REGISTRIES),$(call lower-repository,$(DEV_REGISTRY))),\
+		$(CRANE) cp $(call lower-repository,$(DEV_REGISTRY))/$(call unescapefs,$*):$(DEV_TAG) $(call lower-repository,$(DEV_REGISTRY))/$(call unescapefs,$*):$(RELEASE_TAG))
 
 # release-dev-images-to-registry-% copies and retags all the build / arch images specified by BUILD_IMAGES and
 # VALIDARCHES from the registry specified by DEV_REGISTRY to the registry specified by RELEASE_REGISTRY using the tag
@@ -1524,14 +1527,14 @@ release-dev-images-to-registry-%:
 # the dev repo specified by DEV_TAG and RELEASE.
 release-dev-image-to-registry-%: bin/crane
 	$(if $(SKIP_MANIFEST_RELEASE),,\
-		$(CRANE) cp $(DEV_REGISTRY)/$(call unescapefs,$*):$(DEV_TAG) $(RELEASE_REGISTRY)/$(call unescapefs,$*):$(RELEASE_TAG))
+		$(CRANE) cp $(call lower-repository,$(DEV_REGISTRY))/$(call unescapefs,$*):$(DEV_TAG) $(call lower-repository,$(RELEASE_REGISTRY))/$(call unescapefs,$*):$(RELEASE_TAG))
 	$(if $(SKIP_ARCH_RELEASE),,\
 		$(MAKE) $(addprefix release-dev-image-arch-to-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(call unescapefs,$*))
 
 # release-dev-image-to-registry-% copies the build arch image specified by BUILD_IMAGE and ARCH from the dev repo
 # specified by DEV_TAG and RELEASE.
 release-dev-image-arch-to-registry-%: bin/crane
-	$(CRANE) cp $(DEV_REGISTRY)/$(BUILD_IMAGE):$(DEV_TAG)-$* $(RELEASE_REGISTRY)/$(BUILD_IMAGE):$(RELEASE_TAG)-$*
+	$(CRANE) cp $(call lower-repository,$(DEV_REGISTRY))/$(call lower-repository,$(BUILD_IMAGE)):$(DEV_TAG)-$* $(call lower-repository,$(RELEASE_REGISTRY))/$(call lower-repository,$(BUILD_IMAGE)):$(RELEASE_TAG)-$*
 
 # release-prereqs checks that the environment is configured properly to create a release.
 .PHONY: release-prereqs
@@ -2199,7 +2202,7 @@ windows-sub-image-%: var-require-all-GIT_VERSION-WINDOWS_IMAGE-WINDOWS_DIST-WIND
 		--platform windows/amd64 \
 		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$*.tar \
 		$(DOCKER_PULL) \
-		-t $(WINDOWS_IMAGE):latest \
+		-t $(call lower-repository,$(WINDOWS_IMAGE)):latest \
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
 		--build-arg=WINDOWS_VERSION=$* \
 		-f Dockerfile.windows .
@@ -2214,10 +2217,10 @@ release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAG
 	for registry in $(DEV_REGISTRIES); do \
 		echo Pushing Windows images to $${registry}; \
 		all_images=""; \
-		manifest_image="$${registry}/$(WINDOWS_IMAGE):$(IMAGETAG)"; \
+		manifest_image="$$(printf '%s' "$${registry}" | LC_ALL=C tr '[:upper:]' '[:lower:]')/$(call lower-repository,$(WINDOWS_IMAGE)):$(IMAGETAG)"; \
 		for win_ver in $(WINDOWS_VERSIONS); do \
 			image_tar="$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$${win_ver}.tar"; \
-			image="$${registry}/$(WINDOWS_IMAGE):$(IMAGETAG)-windows-$${win_ver}"; \
+			image="$$(printf '%s' "$${registry}" | LC_ALL=C tr '[:upper:]' '[:lower:]')/$(call lower-repository,$(WINDOWS_IMAGE)):$(IMAGETAG)-windows-$${win_ver}"; \
 			echo Pushing image $${image} ...; \
 			$(CRANE) push $${image_tar} $${image} & \
 			all_images="$${all_images} $${image}"; \
@@ -2226,7 +2229,7 @@ release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAG
 		$(DOCKER_MANIFEST) create --amend $${manifest_image} $${all_images}; \
 		for win_ver in $(WINDOWS_VERSIONS); do \
 			version=$$(docker manifest inspect mcr.microsoft.com/windows/nanoserver:$${win_ver} | grep "os.version" | head -n 1 | awk -F\" '{print $$4}'); \
-			image="$${registry}/$(WINDOWS_IMAGE):$(IMAGETAG)-windows-$${win_ver}"; \
+			image="$$(printf '%s' "$${registry}" | LC_ALL=C tr '[:upper:]' '[:lower:]')/$(call lower-repository,$(WINDOWS_IMAGE)):$(IMAGETAG)-windows-$${win_ver}"; \
 			$(DOCKER_MANIFEST) annotate --os windows --arch amd64 --os-version $${version} $${manifest_image} $${image}; \
 		done; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
@@ -2238,7 +2241,7 @@ release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAG
 # buildx, so they have no local per-arch images to retag.
 retag-windows-image-with-registries: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE-DEV_TAG-IMAGETAG bin/crane
 	for registry in $(DEV_REGISTRIES); do \
-		$(CRANE) cp $${registry}/$(WINDOWS_IMAGE):$(DEV_TAG) $${registry}/$(WINDOWS_IMAGE):$(IMAGETAG); \
+		$(CRANE) cp $$(printf '%s' "$${registry}" | LC_ALL=C tr '[:upper:]' '[:lower:]')/$(call lower-repository,$(WINDOWS_IMAGE)):$(DEV_TAG) $$(printf '%s' "$${registry}" | LC_ALL=C tr '[:upper:]' '[:lower:]')/$(call lower-repository,$(WINDOWS_IMAGE)):$(IMAGETAG); \
 	done;
 
 release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME bin/crane
@@ -2246,7 +2249,7 @@ release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIE
 	release_tag=$(if $(VERSION),$(VERSION),$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME)); \
 	$(MAKE) release-windows-with-tag IMAGETAG=$${describe_tag}; \
 	for registry in $(DEV_REGISTRIES); do \
-		$(CRANE) cp $${registry}/$(WINDOWS_IMAGE):$${describe_tag} $${registry}/$(WINDOWS_IMAGE):$${release_tag}; \
+		$(CRANE) cp $$(printf '%s' "$${registry}" | LC_ALL=C tr '[:upper:]' '[:lower:]')/$(call lower-repository,$(WINDOWS_IMAGE)):$${describe_tag} $$(printf '%s' "$${registry}" | LC_ALL=C tr '[:upper:]' '[:lower:]')/$(call lower-repository,$(WINDOWS_IMAGE)):$${release_tag}; \
 	done;
 
 # Name of a test image that is used by both "node" and "calicoctl", so defined here.  This image is

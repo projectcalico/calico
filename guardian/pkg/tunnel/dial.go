@@ -27,6 +27,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/projectcalico/calico/lib/logrusr"
+
 	"github.com/hashicorp/yamux"
 	"github.com/sirupsen/logrus"
 
@@ -126,7 +128,7 @@ func (d *sessionDialer) dialTLS() (net.Conn, error) {
 	if d.httpProxyURL != nil {
 		// mTLS will be negotiated over a TCP connection to the proxy, which performs TCP passthrough to the target.
 		// Do not log the full proxy URL — it may contain credentials in userinfo.
-		logrus.Infof("Dialing to %s via HTTP proxy at %s", d.addr, d.httpProxyURL.Redacted())
+		logrus.Infof("Dialing to %s via HTTP proxy at %s", d.addr, logrusr.RedactURL(d.httpProxyURL.String()))
 		var tlsConfig *tls.Config
 		tlsConfig, err = calicoTLS.NewTLSConfig()
 		if err != nil {
