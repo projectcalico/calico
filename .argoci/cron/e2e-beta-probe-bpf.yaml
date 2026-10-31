@@ -1,0 +1,54 @@
+# One-off probe sliced verbatim from e2e-bpf.yaml: the beta-or-stable cells only,
+# to verify bz v0.9.30 accepts the keyword and that k8s 1.37-beta provisions.
+# Condensed ArgoCI e2e workflow; cc-argoci-handler expands it into a CronWorkflow at runtime.
+# Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
+version: condensed
+generateName: e2e-beta-probe-bpf-
+schedule: 0 0 31 2 *   # never fires; for one-off /argoci cron runs
+globalPrologue: |
+  cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
+  export DATAPLANE="${DATAPLANE:-CalicoBPF}"
+  export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-bpf.yml}"
+  export INSTALLER="${INSTALLER:-operator}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev)}"
+  export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
+  export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
+  source .argoci/scripts/global_prologue.sh
+globalEpilogue: |
+  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+defaults:
+  secretBundles:
+    - banzai-secrets
+steps:
+  - name: bpf-run-matrix-gcp-bpf-dp-dsr
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: BPF_NETWORK_BOOTSTRAP
+        value: Enabled
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_BPF_DSR
+        value: "true"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENABLE_IP_FORWARDING
+        value: "true"
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
+      # The BPF suite's canary on new Kubernetes; the rest of these runs sit on stable-3.
+      - name: K8S_VERSION
+        value: beta-or-stable
+      - name: KUBE_PROXY_MANAGEMENT
+        value: Enabled
+      - name: PROVISIONER
+        value: gcp-kubeadm
+      - name: USE_API_SERVER
+        value: "false"
+    commands: |
+      .argoci/scripts/body_standard.sh
