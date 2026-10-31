@@ -78,6 +78,12 @@ func (a V4Addr) AsCIDR() CIDR {
 	}
 }
 
+// AsV4CIDR returns the typed /32 V4CIDR for this address without
+// boxing into the CIDR interface.
+func (a V4Addr) AsV4CIDR() V4CIDR {
+	return V4CIDR{addr: a, prefix: 32}
+}
+
 func (a V4Addr) AsUint32() uint32 {
 	return binary.BigEndian.Uint32(a[:])
 }
@@ -134,6 +140,12 @@ func (a V6Addr) AsCIDR() CIDR {
 		addr:   a,
 		prefix: 128,
 	}
+}
+
+// AsV6CIDR returns the typed /128 V6CIDR for this address without
+// boxing into the CIDR interface.
+func (a V6Addr) AsV6CIDR() V6CIDR {
+	return V6CIDR{addr: a, prefix: 128}
 }
 
 // AsUint64Pair returns a pair of uint64 representing a V6Addr as there is
@@ -208,6 +220,13 @@ func (c V4CIDR) Addr() Addr {
 	return c.addr
 }
 
+// AddrV4 returns the typed V4Addr without going through the Addr
+// interface. Hot label-index paths use this to avoid boxing the
+// 4-byte address into an interface value.
+func (c V4CIDR) AddrV4() V4Addr {
+	return c.addr
+}
+
 func (c V4CIDR) Prefix() uint8 {
 	return c.prefix
 }
@@ -265,6 +284,12 @@ func (c V6CIDR) Version() uint8 {
 }
 
 func (c V6CIDR) Addr() Addr {
+	return c.addr
+}
+
+// AddrV6 returns the typed V6Addr without going through the Addr
+// interface. Counterpart to V4CIDR.AddrV4 for the IPv6 case.
+func (c V6CIDR) AddrV6() V6Addr {
 	return c.addr
 }
 
