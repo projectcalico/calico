@@ -423,10 +423,10 @@ steps:
     requests: {cpu: 1500m, memory: 548Mi}
     changes:
       in:
-        - ^\.semaphore/end-to-end/scripts/
+        - ^\.argoci/scripts/sandcat/
         - ^Makefile$
     commands: |
       set -e
-      ./.semaphore/end-to-end/scripts/test_scripts/sandcat-inline-env.sh
-      ./.semaphore/end-to-end/scripts/test_scripts/with-inline-diag.sh
-      ./.semaphore/end-to-end/scripts/test_scripts/sandcat-build-failure.sh
+      ./.argoci/scripts/sandcat/test_scripts/sandcat-inline-env.sh
+      ./.argoci/scripts/sandcat/test_scripts/with-inline-diag.sh
+      ./.argoci/scripts/sandcat/test_scripts/sandcat-build-failure.sh

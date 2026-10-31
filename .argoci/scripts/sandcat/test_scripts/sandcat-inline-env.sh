@@ -131,12 +131,15 @@ case "$1" in
     exit "${STUB_MCP_RC:-0}"
     ;;
   fetch-pr)
-    [[ "${STUB_PR:-1}" == "1" ]] || exit 1
-    out=""
+    out="" pr="" repo=""
     while [[ $# -gt 0 ]]; do
       [[ "$1" == "--out" ]] && out="$2"
+      [[ "$1" == "--pr-number" ]] && pr="$2"
+      [[ "$1" == "--repo" ]] && repo="$2"
       shift
     done
+    echo "stub fetch-pr repo=[${repo}] pr-number=[${pr}]"
+    [[ "${STUB_PR:-1}" == "1" ]] || exit 1
     echo '{"body":"stub"}' > "${out}"
     ;;
   *) exit 0 ;;
@@ -150,6 +153,7 @@ STUB
   SANDCAT_PR_CONTEXT_FILE="${HOME}/pr-context.json"
   export SANDCAT_PR_CONTEXT_FILE
   unset SANDCAT_GEMINI_KEY GEMINI_API_KEY SANDCAT_CALICO_MCP STUB_MCP_RC STUB_PR
+  unset SEMAPHORE_GIT_PR_NUMBER CI_GIT_PR_NUMBER CI_GIT_REPO_SLUG
   unset SANDCAT_SIG_DIR SANDCAT_MAX_DIAGNOSES SANDCAT_TOTAL_BUDGET
   # Restored per case: the download-failure case below shadows gcloud, and a
   # leak into a later case would have it silently exercise a real download.
@@ -210,6 +214,18 @@ newhome
 export SANDCAT_GEMINI_KEY=key-a STUB_PR=0
 check "branch run: no PR context, still enabled" 0 \
   "SANDCAT_INLINE_PR_CONTEXT=''" "calico-mcp: on"
+
+newhome
+export SANDCAT_GEMINI_KEY=key-a SEMAPHORE_GIT_PR_NUMBER=7 CI_GIT_PR_NUMBER=42
+check "Semaphore PR number and repo are used" 0 "repo=[tigera/calico-private] pr-number=[7]"
+
+newhome
+export SANDCAT_GEMINI_KEY=key-a CI_GIT_PR_NUMBER=42 CI_GIT_REPO_SLUG=projectcalico/calico
+check "ArgoCI PR number and repo are used off Semaphore" 0 "repo=[projectcalico/calico] pr-number=[42]"
+
+newhome
+export SANDCAT_GEMINI_KEY=key-a CI_GIT_PR_NUMBER=none
+check "ArgoCI's none is not a PR number" 0 "pr-number=[]"
 
 # The budget is a per-job knob, but the coordination dir is not: the banzai
 # lane injects this value into the run container, so a host path taken from the
