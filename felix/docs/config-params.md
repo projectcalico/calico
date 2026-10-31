@@ -40,7 +40,8 @@ will be used by default).
 ### `EtcdAddr` (config file / env var only)
 
 When using the `etcdv3` datastore driver, the etcd server and port to connect to. If EtcdEndpoints
-is also specified, it takes precedence.
+is also specified, it takes precedence. Felix uses EtcdAddr only when it is set explicitly; the default
+address is not used to connect.
 
 | Detail |   |
 | --- | --- |
@@ -99,7 +100,7 @@ etcd. If the key file is specified, the other TLS parameters are mandatory.
 
 ### `EtcdScheme` (config file / env var only)
 
-EtcdAddr: when using the `etcdv3` datastore driver, the URL scheme to use. If EtcdEndpoints
+When using the `etcdv3` datastore driver, the URL scheme to use. If EtcdEndpoints
 is also specified, it takes precedence.
 
 | Detail |   |
@@ -181,7 +182,7 @@ Namespace to look in when looking for Typha's service (see TyphaK8sServiceName).
 
 ### `TyphaK8sServiceName` (config file / env var only)
 
-If set, tells Felix to connect to Typha by looking up the Endpoints of the given Kubernetes
+If set, tells Felix to connect to Typha by looking up the EndpointSlices of the given Kubernetes
 Service in namespace specified by TyphaK8sNamespace.
 
 | Detail |   |
@@ -1394,7 +1395,7 @@ RouteTableRange specifies the indices of the route tables that Calico should use
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_RouteTableRange` |
-| Encoding (env var/config file) | Range of route table indices <code>n-m</code>, where <code>n</code> and <code>m</code> are integers in [0,250]. |
+| Encoding (env var/config file) | Range of route table indices <code>n-m</code>, where <code>n</code> and <code>m</code> are integers in [1,250]. |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `routeTableRange` (YAML) `RouteTableRange` (Go API) |
 | `FelixConfiguration` schema | Route table range: <code>{min:&lt;n&gt;, max&lt;m&gt;}</code>. |
@@ -1410,7 +1411,7 @@ Deprecates`RouteTableRange`, overrides `RouteTableRange`.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_RouteTableRanges` |
-| Encoding (env var/config file) | Comma or space-delimited list of route table ranges of the form <code>n-m</code> where <code>n</code> and <code>m</code> are integers in [0,4294967295]. The sum of the sizes of all ranges may not exceed 65535. |
+| Encoding (env var/config file) | Comma or space-delimited list of route table ranges of the form <code>n-m</code> where <code>n</code> and <code>m</code> are integers in [1,4294967295]. The sum of the sizes of all ranges may not exceed 65535. |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `routeTableRanges` (YAML) `RouteTableRanges` (Go API) |
 | `FelixConfiguration` schema | List of route table ranges: <code>[{min:&lt;n&gt;, max&lt;m&gt;}, ...]</code>. |
