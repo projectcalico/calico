@@ -134,10 +134,12 @@ cmd_fetch_pr() {
   # case writes nothing, so on an agent with a reused home a leftover file would
   # otherwise be handed to a branch run as if it were that run's PR.
   rm -f "${SANDCAT_PR_CONTEXT_FILE}"
+  # ArgoCI names these CI_GIT_*, and says "none" off a PR.
+  local pr="${SEMAPHORE_GIT_PR_NUMBER:-${CI_GIT_PR_NUMBER:-}}"
   # Its stdout goes to stderr so the only thing on ours is the path below.
   "${SANDCAT_BIN}" fetch-pr \
-    --repo tigera/calico-private \
-    --pr-number "${SEMAPHORE_GIT_PR_NUMBER:-}" \
+    --repo "${CI_GIT_REPO_SLUG:-tigera/calico-private}" \
+    --pr-number "${pr/#none/}" \
     --out "${SANDCAT_PR_CONTEXT_FILE}" >&2 || return 1
   [[ -s "${SANDCAT_PR_CONTEXT_FILE}" ]] || return 1
   echo "${SANDCAT_PR_CONTEXT_FILE}"

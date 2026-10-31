@@ -18,7 +18,7 @@ steps:
       # Applied around the ginkgo run, the one point where the cluster exists
       # and the suite has not started.
       - name: E2E_RUN_WRAPPER
-        value: .semaphore/end-to-end/scripts/with-inline-diag.sh
+        value: .argoci/scripts/sandcat/with-inline-diag.sh
     secretBundles:
       - name: sandcat-upload
         keys:
@@ -111,9 +111,9 @@ steps:
       SANDCAT_REPORT=report/report.json
       [ -f "${SANDCAT_REPORT}" ] || SANDCAT_REPORT=$(ls -t report/*.xml 2>/dev/null | head -1)
       if [ -n "${SANDCAT_REPORT}" ]; then
-        .semaphore/end-to-end/scripts/sandcat.sh analyze --report "${SANDCAT_REPORT}" --source-dir "$(pwd)" || true
+        .argoci/scripts/sandcat/sandcat.sh analyze --report "${SANDCAT_REPORT}" --source-dir "$(pwd)" || true
       elif [ "${rc}" != 0 ]; then
-        .semaphore/end-to-end/scripts/sandcat.sh build-failure --logs-dir artifacts --source-dir "$(pwd)" || true
+        .argoci/scripts/sandcat/sandcat.sh build-failure --logs-dir artifacts --source-dir "$(pwd)" || true
       fi
       exit "${rc}"
     epilogue: |

@@ -295,7 +295,7 @@ E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
 # Optional command prefix for the ginkgo invocation in the kind e2e lanes. Empty
 # by default, so a local run is unaffected; CI points it at
-# .semaphore/end-to-end/scripts/with-inline-diag.sh, which sets up sandcat's
+# .argoci/scripts/sandcat/with-inline-diag.sh, which sets up sandcat's
 # inline per-spec failure diagnosis. It is applied around the run rather than the
 # whole target because the setup needs the cluster to already be up.
 E2E_RUN_WRAPPER ?=
