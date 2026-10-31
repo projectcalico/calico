@@ -206,6 +206,11 @@ var canonicalisationTests = []struct {
 	{" (all() )", "all()", "s:5y5I3VdRZfDU01O--xXAPx2yxCQQqMf0M6IWug"},
 	{`! (has( b)||! has(a ))`, "!(has(b) || !has(a))", "s:Iss0uCleLYv1GSv_pNm7hAO58kE9jAx1NKyG3Q"},
 	{`! (a == "b"&&! c != "d")`, `!(a == "b" && !c != "d")`, "s:lh3haoY1ikTRkd4UZu0nWSaIBknYLPJLX16d-w"},
+	// Double negations cancel, with or without parentheses between them.
+	{`!!has(a)`, `has(a)`, ""},
+	{`!(!has(a))`, `has(a)`, ""},
+	{`!(!(!has(a)))`, `!has(a)`, ""},
+	{`!(!(a == "b" || c == "d"))`, `(a == "b" || c == "d")`, ""},
 	{`a == "'"`, `a == "'"`, ""},
 	{`a == '"'`, `a == '"'`, ""},
 	{`a contains '"'`, `a contains '"'`, ""},
@@ -230,7 +235,7 @@ var _ = Describe("Parser", func() {
 			BeforeEach(func() {
 				sel, err = parser.Parse(test.sel)
 				Expect(err).To(BeNil())
-				err = parser.Validate(test.sel)
+				err = parser.Validate(test.sel, parser.MaxAPIDepth)
 				Expect(err).To(BeNil())
 			})
 			It("should match", func() {
@@ -274,14 +279,14 @@ var _ = Describe("Parser", func() {
 			Expect(err).To(HaveOccurred())
 
 			By(fmt.Sprint("Rejecting Validate()", sel))
-			err = parser.Validate(sel)
+			err = parser.Validate(sel, parser.MaxAPIDepth)
 			Expect(err).To(HaveOccurred())
 		}
 	})
 
 	DescribeTable("nesting depth limit",
-		func(sel string, expErr error) {
-			expectErr := func(err error) {
+		func(sel string, expParseErr, expAPIErr error) {
+			expectErr := func(err, expErr error) {
 				if expErr == nil {
 					ExpectWithOffset(1, err).NotTo(HaveOccurred())
 				} else {
@@ -290,15 +295,64 @@ var _ = Describe("Parser", func() {
 			}
 
 			_, err := parser.Parse(sel)
-			expectErr(err)
-			expectErr(parser.Validate(sel))
+			expectErr(err, expParseErr)
+			expectErr(parser.Validate(sel, parser.MaxParseDepth), expParseErr)
+			expectErr(parser.Validate(sel, parser.MaxAPIDepth), expAPIErr)
 		},
-		Entry("parens at the limit", nestedParens(parser.MaxNestingDepth), nil),
-		Entry("parens just over the limit", nestedParens(parser.MaxNestingDepth+1), parser.ErrNestingTooDeep),
-		Entry("parens far over the limit", nestedParens(1_000_000), parser.ErrNestingTooDeep),
-		Entry("ORs at the limit", nestedOrs(parser.MaxNestingDepth), nil),
-		Entry("ORs just over the limit", nestedOrs(parser.MaxNestingDepth+1), parser.ErrNestingTooDeep),
-		Entry("ORs far over the limit", nestedOrs(10_000), parser.ErrNestingTooDeep),
+		Entry("parens at the API limit", nestedParens(parser.MaxAPIDepth), nil, nil),
+		Entry("parens just over the API limit", nestedParens(parser.MaxAPIDepth+1), nil, parser.ErrNestingTooDeep),
+		Entry("parens at the parse limit", nestedParens(parser.MaxParseDepth), nil, parser.ErrNestingTooDeep),
+		Entry("parens just over the parse limit", nestedParens(parser.MaxParseDepth+1), parser.ErrNestingTooDeep, parser.ErrNestingTooDeep),
+		Entry("parens far over the parse limit", nestedParens(1_000_000), parser.ErrNestingTooDeep, parser.ErrNestingTooDeep),
+		Entry("ORs at the API limit", nestedOrs(parser.MaxAPIDepth), nil, nil),
+		Entry("ORs just over the API limit", nestedOrs(parser.MaxAPIDepth+1), nil, parser.ErrNestingTooDeep),
+		Entry("ORs at the parse limit", nestedOrs(parser.MaxParseDepth), nil, parser.ErrNestingTooDeep),
+		Entry("ORs just over the parse limit", nestedOrs(parser.MaxParseDepth+1), parser.ErrNestingTooDeep, parser.ErrNestingTooDeep),
+		Entry("ORs far over the parse limit", nestedOrs(10_000), parser.ErrNestingTooDeep, parser.ErrNestingTooDeep),
+	)
+
+	It("should allow a selector at the API limit to double in depth when re-rendered", func() {
+		// String() parenthesises every && and || node, so alternating them
+		// doubles the depth.
+		sel := "a == 'x'"
+		for range parser.MaxAPIDepth {
+			sel = fmt.Sprintf("a == 'x' || b == 'y' && (%s)", sel)
+		}
+		Expect(parser.Validate(sel, parser.MaxAPIDepth)).To(Succeed())
+		parsed, err := parser.Parse(sel)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = parser.Parse(parsed.String())
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	DescribeTable("And and Inverted should match parsing the equivalent string",
+		func(a, b string) {
+			mustParse := func(s string) *parser.Selector {
+				sel, err := parser.Parse(s)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred())
+				return sel
+			}
+			expectSame := func(actual *parser.Selector, expected string) {
+				ExpectWithOffset(1, actual.String()).To(Equal(mustParse(expected).String()))
+				ExpectWithOffset(1, actual.UniqueID()).To(Equal(mustParse(expected).UniqueID()))
+			}
+			parsedA, parsedB := mustParse(a), mustParse(b)
+
+			expectSame(parsedB.Inverted(), fmt.Sprintf("!(%s)", b))
+			expectSame(parsedB.Inverted().Inverted(), b)
+			expectSame(parsedA.And(parsedB), fmt.Sprintf("(%s) && (%s)", a, b))
+			// Redundant parentheses don't affect the parsed form.
+			expectSame(parsedA.And(parsedB.Inverted()), fmt.Sprintf("(%s) && (!(%s))", a, b))
+			expectSame(parsedA.And(parsedB.Inverted()), fmt.Sprintf("(%s) && !(%s)", a, b))
+		},
+		Entry("simple", "a == 'b'", "has(c)"),
+		Entry("all()", "all()", "all()"),
+		Entry("ANDs", "a == 'b' && c == 'd'", "e == 'f' && g == 'h'"),
+		Entry("ORs", "a == 'b' || c == 'd'", "e == 'f' || g == 'h'"),
+		Entry("negations", "!has(a)", "!has(b)"),
+		Entry("double negations", "!!has(a)", "!!has(b)"),
+		Entry("parenthesised double negations", "!(!has(a))", "!(!has(b))"),
 	)
 
 	for _, test := range canonicalisationTests {
@@ -356,7 +410,7 @@ var _ = Describe("Visitor", func() {
 			By(fmt.Sprintf("parsing the selector %s", inSelector), func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
-			err = parser.Validate(inSelector)
+			err = parser.Validate(inSelector, parser.MaxAPIDepth)
 			By(fmt.Sprintf("validating the selector %s", inSelector), func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
