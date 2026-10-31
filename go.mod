@@ -26,6 +26,7 @@ require (
 	github.com/container-storage-interface/spec v1.12.1-0.20260720052920-cd9e7ad1ae09
 	github.com/containernetworking/cni v1.3.0
 	github.com/containernetworking/plugins v1.9.1
+	github.com/cyphar/filepath-securejoin v0.7.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/elastic/cloud-on-k8s/v2 v2.0.0-20250129010100-648f902d9807
@@ -130,6 +131,8 @@ require (
 	k8s.io/apiserver v0.37.1
 	k8s.io/client-go v0.37.1
 	k8s.io/component-base v0.37.1
+	k8s.io/cri-api v0.37.1
+	k8s.io/cri-client v0.37.1
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/kube-aggregator v0.37.1
 	k8s.io/kube-openapi v0.31.0
@@ -229,7 +232,6 @@ require (
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.7.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
-	github.com/cyphar/filepath-securejoin v0.7.0 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/cli v29.7.2+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.8 // indirect
@@ -423,8 +425,6 @@ require (
 	k8s.io/cloud-provider v0.37.1 // indirect
 	k8s.io/component-helpers v0.37.1 // indirect
 	k8s.io/controller-manager v0.37.1 // indirect
-	k8s.io/cri-api v0.37.1 // indirect
-	k8s.io/cri-client v0.37.1 // indirect
 	k8s.io/cri-streaming v0.37.1 // indirect
 	k8s.io/csi-translation-lib v0.37.1 // indirect
 	k8s.io/dynamic-resource-allocation v0.37.1 // indirect

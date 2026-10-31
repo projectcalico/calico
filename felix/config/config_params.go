@@ -208,6 +208,9 @@ type Config struct {
 	BPFL3IfacePattern                  *regexp.Regexp    `config:"regexp;"`
 	BPFConnectTimeLoadBalancingEnabled bool              `config:"bool;;"`
 	BPFConnectTimeLoadBalancing        string            `config:"oneof(TCP,Enabled,Disabled);TCP;non-zero"`
+	CRISocketPath                      string            `config:"string;;"`
+	ProcRootPath                       string            `config:"string;/proc"`
+	PodNetnsAnnotation                 string            `config:"oneof(Enabled,Disabled);Disabled"`
 	BPFHostNetworkedNATWithoutCTLB     string            `config:"oneof(Enabled,Disabled);Enabled;non-zero"`
 	BPFExternalServiceMode             string            `config:"oneof(tunnel,dsr);tunnel;non-zero"`
 	BPFDSROptoutCIDRs                  []string          `config:"cidr-list;;"`
@@ -600,6 +603,10 @@ func (config *Config) TableRefreshInterval() time.Duration {
 		return config.NftablesRefreshInterval
 	}
 	return config.IptablesRefreshInterval
+}
+
+func (config *Config) PodNetnsAnnotationEnabled() bool {
+	return config.PodNetnsAnnotation == "Enabled"
 }
 
 func (config *Config) FlowLogsLocalReporterEnabled() bool {

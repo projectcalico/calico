@@ -95,6 +95,10 @@ const (
 	PolicySetAWSVPCAnnotations PolicySet = "aws-vpc-annotations"
 )
 
+// ProtectCNIAnnotationsName names the ValidatingAdmissionPolicy, and its binding, that stops
+// anyone but the Calico CNI plugin from writing its pod annotations.
+const ProtectCNIAnnotationsName = "protect-cni-annotations.projectcalico.org"
+
 // policySetDirs maps each PolicySet to the directory of the policy files that hold it.
 var policySetDirs = map[PolicySet]string{
 	PolicySetV3CRDs:            ".",
@@ -534,6 +538,49 @@ func ListManagedValidating(ctx context.Context, c client.Client, apiVersion stri
 		return nil, nil, fmt.Errorf("unsupported ValidatingAdmissionPolicy API version %q", apiVersion)
 	}
 	return policies, bindings, nil
+}
+
+// ValidatingPolicyObjects returns an empty ValidatingAdmissionPolicy and
+// ValidatingAdmissionPolicyBinding with the given name, typed at the given API version. Returns nil
+// if apiVersion is empty or unsupported.
+func ValidatingPolicyObjects(apiVersion, name string) []client.Object {
+	meta := metav1.ObjectMeta{Name: name}
+	switch apiVersion {
+	case VersionV1:
+		return []client.Object{
+			&admissionregistrationv1.ValidatingAdmissionPolicy{ObjectMeta: meta},
+			&admissionregistrationv1.ValidatingAdmissionPolicyBinding{ObjectMeta: meta},
+		}
+	case VersionV1Beta1:
+		return []client.Object{
+			&admissionv1beta1.ValidatingAdmissionPolicy{ObjectMeta: meta},
+			&admissionv1beta1.ValidatingAdmissionPolicyBinding{ObjectMeta: meta},
+		}
+	case VersionV1Alpha1:
+		return []client.Object{
+			&admissionregistrationv1alpha1.ValidatingAdmissionPolicy{ObjectMeta: meta},
+			&admissionregistrationv1alpha1.ValidatingAdmissionPolicyBinding{ObjectMeta: meta},
+		}
+	}
+	return nil
+}
+
+// ValidatingPolicyExists reports whether both the ValidatingAdmissionPolicy and its binding with the
+// given name exist at the given API version, whoever installed them.
+func ValidatingPolicyExists(ctx context.Context, c client.Client, apiVersion, name string) (bool, error) {
+	objs := ValidatingPolicyObjects(apiVersion, name)
+	if objs == nil {
+		return false, nil
+	}
+	for _, obj := range objs {
+		if err := c.Get(ctx, client.ObjectKey{Name: name}, obj); err != nil {
+			if errors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+	}
+	return true, nil
 }
 
 // managedInSet selects the operator-managed policies in the given set.

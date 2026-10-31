@@ -1853,6 +1853,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(numorstring.Port)
 		**out = **in
 	}
+	if in.PodNetnsAnnotation != nil {
+		in, out := &in.PodNetnsAnnotation, &out.PodNetnsAnnotation
+		*out = new(string)
+		**out = **in
+	}
 	if in.BPFMapSizeNATFrontend != nil {
 		in, out := &in.BPFMapSizeNATFrontend, &out.BPFMapSizeNATFrontend
 		*out = new(int)

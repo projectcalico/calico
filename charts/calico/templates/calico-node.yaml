@@ -403,6 +403,14 @@ spec:
               value: "false"
             - name: FELIX_HEALTHENABLED
               value: "true"
+            # Read the host's procfs, mounted below, to resolve pod network namespaces.
+            - name: FELIX_PROCROOTPATH
+              value: "/nodeproc"
+{{- if eq .Values.datastore "kubernetes" }}
+            # The protect-cni-annotations policy guards the podNetns annotation, so Felix can trust it.
+            - name: FELIX_PODNETNSANNOTATION
+              value: "Enabled"
+{{- end }}
 {{- if .Values.node.env }}
 {{ toYaml .Values.node.env | indent 12 }}
 {{- end }}
@@ -491,6 +499,9 @@ spec:
               mountPath: /sys/fs/bpf
             - name: cni-log-dir
               mountPath: /var/log/calico/cni
+              readOnly: true
+            - name: nodeproc
+              mountPath: /nodeproc
               readOnly: true
 {{- if eq .Values.network "flannel" }}
   {{- if eq .Values.datastore "kubernetes" }}
@@ -633,7 +644,8 @@ spec:
           hostPath:
             path: /sys/fs/bpf
             type: Directory
-        # mount /proc at /nodeproc to be used by ebpf-bootstrap initContainer to mount root cgroup2 fs.
+        # mount /proc at /nodeproc to be used by ebpf-bootstrap initContainer to mount root cgroup2 fs,
+        # and by Felix to resolve pod network namespaces.
         - name: nodeproc
           hostPath:
             path: /proc
