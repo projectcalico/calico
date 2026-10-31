@@ -15,6 +15,7 @@
 package linkaddrs
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -284,6 +285,12 @@ func (la *LinkAddrsManager) netlinkFamily() int {
 // If newipCIDR is nil, it deletes all valid addresses.
 func (la *LinkAddrsManager) ensureLinkLocalAddress(nl netlinkshim.Interface, name string, newipCIDR ip.CIDR) error {
 	link, err := nl.LinkByName(name)
+	var lnf netlink.LinkNotFoundError
+	if newipCIDR == nil && errors.As(err, &lnf) {
+		// Nothing to remove: the interface is gone and its addresses went with it.
+		la.logCtx.WithField("iface", name).Debug("Interface already gone, no link local address to remove")
+		return nil
+	}
 	if err != nil {
 		// Presumably the link is not up yet.  We will be called again when it is.
 		la.logCtx.WithError(err).Warning("Failed to look up device link")
