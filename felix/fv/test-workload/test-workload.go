@@ -158,7 +158,11 @@ func main() {
 		hostNlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
 		panicIfError(err)
 
-		defer hostNlHandle.Close()
+		defer func() {
+			if err := hostNlHandle.Close(); err != nil {
+				log.WithError(err).Warn("Failed to close netlink handle")
+			}
+		}()
 
 		if useNetkit {
 			err = doNetkitSetUp(hostNlHandle, namespace, addrs, "eth0", hostVethName, routes, mtu)
