@@ -37,6 +37,8 @@ import (
 
 const ReleaseNotesDir = "release-notes"
 
+const ReleaseNotesStep = "release-notes"
+
 const (
 	releaseNoteRequiredLabel = "release-note-required"
 	closedState              = issueState("closed")

@@ -28,6 +28,8 @@ import (
 )
 
 const (
+	Step        = "release-archives"
+	WindowsStep = "windows-archives"
 	buildStep   = "archives-build"
 	windowsStep = "archives-build-windows"
 )

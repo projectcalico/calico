@@ -20,6 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/plan"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -54,6 +55,23 @@ func Publish(pipeline []Upload, opts ...Option) error {
 	}
 	s.Logger().Info("Finished publishing artifacts")
 	return nil
+}
+
+// Node publishes one upload as a plan step named after it.
+// The plan checks every destination before any upload runs.
+func Node(u Upload, opts ...Option) plan.Node {
+	return plan.Node{
+		Name:     u.label(),
+		When:     func() bool { return !u.Skip },
+		Validate: u.validate,
+		Do: func() error {
+			s, err := newSettings(artifactsStep, opts)
+			if err != nil {
+				return err
+			}
+			return s.publishOne(u)
+		},
+	}
 }
 
 // Ordered, and stops at the first failure as a later upload may depend on an earlier one.

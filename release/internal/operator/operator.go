@@ -29,11 +29,11 @@ import (
 )
 
 const (
-	buildStep  = "operator-build"
-	branchStep = "operator-publish-branch"
-
-	PublishStep = "operator-publish"
-	ResolveStep = "operator-resolve"
+	Step        = "operator"
+	buildStep   = Step + "-build"
+	branchStep  = Step + "-publish-branch"
+	PublishStep = Step + "-publish"
+	ResolveStep = Step + "-resolve"
 )
 
 const (

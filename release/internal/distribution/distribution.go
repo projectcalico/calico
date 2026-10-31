@@ -30,6 +30,11 @@ const (
 	sumsStep      = "distribution-sha256sums"
 	artifactsStep = "distribution-publish-artifacts"
 	sumsFileName  = "SHA256SUMS"
+
+	ChecksumStep           = "checksums"
+	HashreleasePublishStep = "hashrelease"
+	GithubTagStep          = "github-tag"
+	GithubReleaseStep      = "github-release"
 )
 
 type Handler interface {
