@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -319,10 +319,11 @@ func (b BirdRoutes) Populate(status *apiv3.CalicoNodeStatus) error {
 		// If it is a connection error, e.g. BGP is not enabled,
 		// set empty status.
 		if _, ok := err.(ErrorSocketConnection); ok {
+			// Clear only this family, since the other family's populator may already have filled its own routes.
 			if b.ipv == IPFamilyV4 {
-				status.Status.Routes = apiv3.CalicoNodeBGPRouteStatus{}
+				status.Status.Routes.RoutesV4 = nil
 			} else {
-				status.Status.Routes = apiv3.CalicoNodeBGPRouteStatus{}
+				status.Status.Routes.RoutesV6 = nil
 			}
 			return nil
 		}
