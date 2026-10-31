@@ -32,6 +32,13 @@ type Link struct {
 type Program struct {
 }
 
+// IsSupported reports whether this build can make libbpf calls.  The stub is
+// used for builds without cgo (including some non-native architecture builds),
+// where callers must skip optional BPF cleanup rather than invoking a panic.
+func IsSupported() bool {
+	return false
+}
+
 func (m *Map) Name() string {
 	panic("LIBBPF syscall stub")
 }
