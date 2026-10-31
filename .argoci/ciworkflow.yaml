@@ -481,6 +481,7 @@ includes:
       in:
         - ^whisker/
         - ^\.argoci/modules/20-e2e\.yaml$
+        - ^\.argoci/scripts/sandcat/
 
   - path: .argoci/modules/20-manifest-install.yaml
     changes:
