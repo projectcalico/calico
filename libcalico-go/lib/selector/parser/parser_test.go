@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package parser_test
 
 import (
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -278,6 +279,28 @@ var _ = Describe("Parser", func() {
 		}
 	})
 
+	DescribeTable("nesting depth limit",
+		func(sel string, expErr error) {
+			expectErr := func(err error) {
+				if expErr == nil {
+					ExpectWithOffset(1, err).NotTo(HaveOccurred())
+				} else {
+					ExpectWithOffset(1, err).To(MatchError(expErr))
+				}
+			}
+
+			_, err := parser.Parse(sel)
+			expectErr(err)
+			expectErr(parser.Validate(sel))
+		},
+		Entry("parens at the limit", nestedParens(parser.MaxNestingDepth), nil),
+		Entry("parens just over the limit", nestedParens(parser.MaxNestingDepth+1), parser.ErrNestingTooDeep),
+		Entry("parens far over the limit", nestedParens(1_000_000), parser.ErrNestingTooDeep),
+		Entry("ORs at the limit", nestedOrs(parser.MaxNestingDepth), nil),
+		Entry("ORs just over the limit", nestedOrs(parser.MaxNestingDepth+1), parser.ErrNestingTooDeep),
+		Entry("ORs far over the limit", nestedOrs(10_000), parser.ErrNestingTooDeep),
+	)
+
 	for _, test := range canonicalisationTests {
 		It(fmt.Sprintf("should canonicalise %v as %v with UID %v and round-trip",
 			test.input, test.expected, test.expectedUid), func() {
@@ -307,6 +330,21 @@ var _ = Describe("Parser", func() {
 		})
 	}
 })
+
+// nestedParens returns "((...(all())...))" with the given nesting depth.
+func nestedParens(depth int) string {
+	return strings.Repeat("(", depth) + "all()" + strings.Repeat(")", depth)
+}
+
+// nestedOrs returns "(n == '1' || (n == '2' || ... n == '<depth>'))" with the
+// given nesting depth.
+func nestedOrs(depth int) string {
+	sel := fmt.Sprintf("n == '%d'", depth)
+	for i := depth - 1; i >= 0; i-- {
+		sel = fmt.Sprintf("(n == '%d' || %s)", i, sel)
+	}
+	return sel
+}
 
 var _ = Describe("Visitor", func() {
 
