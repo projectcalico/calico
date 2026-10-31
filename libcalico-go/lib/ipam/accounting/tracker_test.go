@@ -198,15 +198,18 @@ func TestBlockAddedAfterReservationsCountsOverlap(t *testing.T) {
 
 const extraReservedClass reservedClass = "extra"
 
+// classesFunc adapts a function to reservedClasses.
+type classesFunc func(*v3.IPPool) reservedClass
+
+func (f classesFunc) classOf(p *v3.IPPool) reservedClass { return f(p) }
+
 func newClassedTracker() *Tracker {
-	tr := NewTracker()
-	tr.classOf = func(p *v3.IPPool) reservedClass {
+	return newTracker(classesFunc(func(p *v3.IPPool) reservedClass {
 		if p.Spec.DisableBGPExport {
 			return extraReservedClass
 		}
 		return defaultReservedClass
-	}
-	return tr
+	}))
 }
 
 func setExtraReserved(tr *Tracker, cidrs ...string) {
@@ -219,8 +222,7 @@ func setExtraReserved(tr *Tracker, cidrs ...string) {
 
 func TestClassWithoutExtraReservedCountsDefaultSet(t *testing.T) {
 	RegisterTestingT(t)
-	tr := NewTracker()
-	tr.classOf = func(*v3.IPPool) reservedClass { return "unlisted" }
+	tr := newTracker(classesFunc(func(*v3.IPPool) reservedClass { return "unlisted" }))
 	setExtraReserved(tr, "10.0.0.1/32")
 	tr.AddPools(pool("p", "10.0.0.0/24", 26))
 	tr.AddReservations(reservation("r", "10.0.0.10"))
