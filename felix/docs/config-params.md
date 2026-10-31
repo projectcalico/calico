@@ -430,7 +430,8 @@ destination swapped; for "-icmp-err" the bracketed inner header carries the orig
 5-tuple unswapped. A logged connection with no follow-up log never received a response.
 Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log
 either, so every follow-up log pairs with an initial one. Enabling this consumes one bit
-from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+from the Iptables/NftablesMarkMask space. Not supported in eBPF mode or for untracked
+(doNotTrack) policies.
 
 | Detail |   |
 | --- | --- |
@@ -462,7 +463,7 @@ substituted and any %-specifiers are rendered literally.
 
 Controls which source code files have their Debug log output included in the logs.
 Only logs from files with names that match the given regular expression are included. The filter only applies
-to Debug level logs.
+to Debug and Trace level logs.
 
 | Detail |   |
 | --- | --- |
@@ -509,7 +510,7 @@ Note that iptables shows up to 29 characters for the log prefix and nftables up 
 
 ### `LogSeverityFile` (config file) / `logSeverityFile` (YAML)
 
-The log severity above which logs are sent to the log file.
+The log severity at or above which logs are sent to the log file.
 
 | Detail |   |
 | --- | --- |
@@ -522,7 +523,7 @@ The log severity above which logs are sent to the log file.
 
 ### `LogSeverityScreen` (config file) / `logSeverityScreen` (YAML)
 
-The log severity above which logs are sent to the stdout.
+The log severity at or above which logs are sent to the stdout.
 
 | Detail |   |
 | --- | --- |
@@ -535,7 +536,8 @@ The log severity above which logs are sent to the stdout.
 
 ### `LogSeveritySys` (config file) / `logSeveritySys` (YAML)
 
-The log severity above which logs are sent to the syslog. Set to None for no logging to syslog.
+The log severity at or above which logs are sent to the syslog. Set to None for no logging to
+syslog (configuration file and environment variable only).
 
 | Detail |   |
 | --- | --- |
@@ -673,8 +675,8 @@ set to false. This reduces the number of metrics reported, reducing Prometheus l
 
 ### `PrometheusWireGuardMetricsEnabled` (config file) / `prometheusWireGuardMetricsEnabled` (YAML)
 
-Disables wireguard metrics collection, which the Prometheus client does by default, when
-set to false. This reduces the number of metrics reported, reducing Prometheus load.
+Disables wireguard metrics collection, which Felix does by default when WireGuard
+is enabled, when set to false. This reduces the number of metrics reported, reducing Prometheus load.
 
 | Detail |   |
 | --- | --- |
@@ -883,11 +885,13 @@ will be allowed. By default, external tunneled traffic is blocked to reduce atta
 
 ### `FailsafeInboundHostPorts` (config file) / `failsafeInboundHostPorts` (YAML)
 
-A list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will
+A list of ProtoPort struct objects including UDP/TCP ports and CIDRs that Felix will
 allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally
-cutting off a host with incorrect configuration. For backwards compatibility, if the protocol is not specified,
-it defaults to "tcp". If a CIDR is not specified, it will allow traffic from all addresses. To disable all inbound host ports,
-use the value "[]". The default value allows ssh access, DHCP, BGP, etcd and the Kubernetes API.
+cutting off a host with incorrect configuration. In the configuration file and environment variable, if the protocol
+is not specified, it defaults to "tcp"; in the FelixConfiguration resource, set the protocol to "TCP" or "UDP". If a
+CIDR is not specified, it will allow traffic from all addresses. To disable all inbound host ports, use the value "[]"
+in the FelixConfiguration resource, or "none" in the configuration file and environment variable. The default value
+allows ssh access, DHCP, BGP, etcd and the Kubernetes API.
 
 | Detail |   |
 | --- | --- |
@@ -1115,8 +1119,9 @@ reverting to normal priority.
 Controls whether Felix automatically responds to
 ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
 selected LoadBalancer VIPs that fall within the same subnet as the host
-interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
-subnet are reachable from the local L2 segment without BGP.
+interface. Felix responds only for addresses in an IP pool with ipipMode and
+vxlanMode both set to Never. When set to PodsAndLoadBalancers, pods and LB VIPs
+on the host subnet are reachable from the local L2 segment without BGP.
 
 | Detail |   |
 | --- | --- |
@@ -1179,8 +1184,8 @@ is leaving the network. By default the address used is an address on the interfa
 
 When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
 Configure which type of destinations is excluded from being masqueraded.
-- IPPoolsOnly: destinations outside of this IP pool will be masqueraded.
-- IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded.
+- IPPoolsOnly: destinations outside of all IP pools, or in a LoadBalancer-only IP pool, will be masqueraded.
+- IPPoolsAndHostIPs: destinations outside of all IP pools and all hosts, or in a LoadBalancer-only IP pool, will be masqueraded.
 
 | Detail |   |
 | --- | --- |
@@ -1617,12 +1622,9 @@ doesn't respect the iptables lock.
 
 ### `IptablesRefreshInterval` (config file) / `iptablesRefreshInterval` (YAML)
 
-The period at which Felix re-checks the IP sets
+The period at which Felix re-checks the iptables rules
 in the dataplane to ensure that no other process has accidentally broken Calico's rules.
-Set to 0 to disable IP sets refresh. Note: the default for this value is lower than the
-other refresh intervals as a workaround for a Linux kernel bug that was fixed in kernel
-version 4.11. If you are using v4.11 or greater you may want to set this to, a higher value
-to reduce Felix CPU usage.
+Set to 0 to disable iptables refresh.
 
 | Detail |   |
 | --- | --- |
@@ -1801,7 +1803,9 @@ balancer. The connect-time load balancer is required for the host to be able to 
 and it improves the performance of pod-to-service connections. The only reason to disable it is for debugging
 purposes.
 
-Deprecated: Use BPFConnectTimeLoadBalancing.
+Deprecated: Use BPFConnectTimeLoadBalancing. Felix does not read this field. When calicoctl or the Calico API
+server writes the resource, they set BPFConnectTimeLoadBalancing to `Enabled` or `Disabled` to match it, and set
+BPFHostNetworkedNATWithoutCTLB to `Disabled`.
 
 | Detail |   |
 | --- | --- |
@@ -1848,9 +1852,9 @@ to clean up expired BPF conntrack entries.
 
 ### `BPFConntrackTimeouts` (config file) / `bpfConntrackTimeouts` (YAML)
 
-BPFConntrackTimers overrides the default values for the specified conntrack timer if
-set. Each value can be either a duration or `Auto` to pick the value from
-a Linux conntrack timeout.
+Overrides the default values for the specified conntrack timer if
+set. Each value can be a duration. TCPSynSent, TCPEstablished, TCPFinsSeen, GenericTimeout
+and ICMPTimeout also accept `Auto` to pick the value from a Linux conntrack timeout.
 
 Configurable timers are: CreationGracePeriod, TCPSynSent,
 TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPTimeout, GenericTimeout,
@@ -1944,7 +1948,7 @@ If enabled Felix will use the BPF dataplane.
 
 ### `BPFEnforceRPF` (config file) / `bpfEnforceRPF` (YAML)
 
-Enforce strict RPF on all host interfaces with BPF programs regardless of
+Enforces RPF on all host interfaces with BPF programs regardless of
 what is the per-interfaces or global setting. Possible values are Disabled, Strict
 or Loose.
 
@@ -2529,7 +2533,7 @@ by the OpenStack integration.
 
 ### `MetadataAddr` (config file) / `metadataAddr` (YAML)
 
-The IP address or domain name of the server that can answer VM queries for
+The IP address of the server that can answer VM queries for
 cloud-init metadata. In OpenStack, this corresponds to the machine running nova-api (or in
 Ubuntu, nova-api-metadata). A value of none (case-insensitive) means that Felix should not
 set up any NAT rule for the metadata path.
@@ -2580,7 +2584,8 @@ openstack_region value configured in neutron.conf on each node.
 ### `ReportingIntervalSecs` (config file) / `reportingInterval` (YAML)
 
 The interval at which Felix reports its status into the datastore or 0 to disable.
-Must be non-zero in OpenStack deployments.
+Must be non-zero in OpenStack deployments. calico-node sets this to `0s` in the `default`
+FelixConfiguration if it is not already set.
 
 | Detail |   |
 | --- | --- |
@@ -2991,7 +2996,7 @@ reporter) includes the source and destination IP addresses of the aggregated con
 
 ### `FlowLogsGoldmaneServer` (config file) / `flowLogsGoldmaneServer` (YAML)
 
-FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
+The flow server endpoint to which flow data should be published.
 
 | Detail |   |
 | --- | --- |
@@ -3195,8 +3200,10 @@ This is useful in tests of the watchdog system only!
 
 ### `UsageReportingEnabled` (config file) / `usageReportingEnabled` (YAML)
 
-Reports anonymous Calico version number and cluster size to projectcalico.org. Logs warnings returned by the usage
-server. For example, if a significant security vulnerability has been discovered in the version of Calico being used.
+Reports anonymous usage data to projectcalico.org: the Calico version and git revision, the
+Kubernetes version, a cluster GUID, the cluster type, whether application layer policy is enabled, and the numbers
+of hosts, workload endpoints, host endpoints, policies, profiles and application layer policies. Logs warnings
+returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of Calico being used.
 
 | Detail |   |
 | --- | --- |

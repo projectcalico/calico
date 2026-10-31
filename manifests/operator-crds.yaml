@@ -27734,7 +27734,9 @@ spec:
                     and it improves the performance of pod-to-service connections.  The only reason to disable it is for debugging
                     purposes.
 
-                    Deprecated: Use BPFConnectTimeLoadBalancing [Default: true]
+                    Deprecated: Use BPFConnectTimeLoadBalancing. Felix does not read this field. When calicoctl or the Calico API
+                    server writes the resource, they set BPFConnectTimeLoadBalancing to `Enabled` or `Disabled` to match it, and set
+                    BPFHostNetworkedNATWithoutCTLB to `Disabled`. [Default: true]
                   type: boolean
                 bpfConntrackLogLevel:
                   description: |-
@@ -27761,9 +27763,9 @@ spec:
                   type: string
                 bpfConntrackTimeouts:
                   description: |-
-                    BPFConntrackTimers overrides the default values for the specified conntrack timer if
-                    set. Each value can be either a duration or `Auto` to pick the value from
-                    a Linux conntrack timeout.
+                    BPFConntrackTimeouts overrides the default values for the specified conntrack timer if
+                    set. Each value can be a duration. TCPSynSent, TCPEstablished, TCPFinsSeen, GenericTimeout
+                    and ICMPTimeout also accept `Auto` to pick the value from a Linux conntrack timeout.
 
                     Configurable timers are: CreationGracePeriod, TCPSynSent,
                     TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPTimeout, GenericTimeout,
@@ -27867,7 +27869,7 @@ spec:
                   type: boolean
                 bpfEnforceRPF:
                   description: |-
-                    BPFEnforceRPF enforce strict RPF on all host interfaces with BPF programs regardless of
+                    BPFEnforceRPF enforces RPF on all host interfaces with BPF programs regardless of
                     what is the per-interfaces or global setting. Possible values are Disabled, Strict
                     or Loose. [Default: Loose]
                   pattern: ^(?i)(Disabled|Strict|Loose)?$
@@ -28254,11 +28256,13 @@ spec:
                   type: array
                 failsafeInboundHostPorts:
                   description: |-
-                    FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will
+                    FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP ports and CIDRs that Felix will
                     allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally
-                    cutting off a host with incorrect configuration. For backwards compatibility, if the protocol is not specified,
-                    it defaults to "tcp". If a CIDR is not specified, it will allow traffic from all addresses. To disable all inbound host ports,
-                    use the value "[]". The default value allows ssh access, DHCP, BGP, etcd and the Kubernetes API.
+                    cutting off a host with incorrect configuration. In the configuration file and environment variable, if the protocol
+                    is not specified, it defaults to "tcp"; in the FelixConfiguration resource, set the protocol to "TCP" or "UDP". If a
+                    CIDR is not specified, it will allow traffic from all addresses. To disable all inbound host ports, use the value "[]"
+                    in the FelixConfiguration resource, or "none" in the configuration file and environment variable. The default value
+                    allows ssh access, DHCP, BGP, etcd and the Kubernetes API.
                     [Default: tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, tcp:5473, tcp:6443, tcp:6666, tcp:6667 ]
                   items:
                     description:
@@ -28346,7 +28350,7 @@ spec:
                   type: string
                 flowLogsGoldmaneServer:
                   description:
-                    FlowLogGoldmaneServer is the flow server endpoint to
+                    FlowLogsGoldmaneServer is the flow server endpoint to
                     which flow data should be published.
                   type: string
                 flowLogsLocalReporter:
@@ -28553,12 +28557,9 @@ spec:
                   type: string
                 iptablesRefreshInterval:
                   description: |-
-                    IptablesRefreshInterval is the period at which Felix re-checks the IP sets
+                    IptablesRefreshInterval is the period at which Felix re-checks the iptables rules
                     in the dataplane to ensure that no other process has accidentally broken Calico's rules.
-                    Set to 0 to disable IP sets refresh. Note: the default for this value is lower than the
-                    other refresh intervals as a workaround for a Linux kernel bug that was fixed in kernel
-                    version 4.11. If you are using v4.11 or greater you may want to set this to, a higher value
-                    to reduce Felix CPU usage. [Default: 10s]
+                    Set to 0 to disable iptables refresh. [Default: 10s]
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
                 ipv4ElevatedRoutePriority:
@@ -28640,8 +28641,10 @@ spec:
                     LocalSubnetL2Reachability controls whether Felix automatically responds to
                     ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
                     selected LoadBalancer VIPs that fall within the same subnet as the host
-                    interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
-                    subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
+                    interface. Felix responds only for addresses in an IP pool with ipipMode and
+                    vxlanMode both set to Never. When set to PodsAndLoadBalancers, pods and LB VIPs
+                    on the host subnet are reachable from the local L2 segment without BGP.
+                    [Default: Disabled]
                   enum:
                     - Disabled
                     - PodsAndLoadBalancers
@@ -28684,7 +28687,8 @@ spec:
                     5-tuple unswapped. A logged connection with no follow-up log never received a response.
                     Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log
                     either, so every follow-up log pairs with an initial one. Enabling this consumes one bit
-                    from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+                    from the Iptables/NftablesMarkMask space. Not supported in eBPF mode or for untracked
+                    (doNotTrack) policies.
                     [Default: Disabled]
                   enum:
                     - Disabled
@@ -28703,7 +28707,7 @@ spec:
                   description: |-
                     LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
                     Only logs from files with names that match the given regular expression are included.  The filter only applies
-                    to Debug level logs.
+                    to Debug and Trace level logs.
                   type: string
                 logFilePath:
                   description:
@@ -28725,19 +28729,20 @@ spec:
                   type: string
                 logSeverityFile:
                   description:
-                    "LogSeverityFile is the log severity above which logs
-                    are sent to the log file. [Default: Info]"
+                    "LogSeverityFile is the log severity at or above which
+                    logs are sent to the log file. [Default: Info]"
                   pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                   type: string
                 logSeverityScreen:
                   description:
-                    "LogSeverityScreen is the log severity above which logs
-                    are sent to the stdout. [Default: Info]"
+                    "LogSeverityScreen is the log severity at or above which
+                    logs are sent to the stdout. [Default: Info]"
                   pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                   type: string
                 logSeveritySys:
                   description: |-
-                    LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog.
+                    LogSeveritySys is the log severity at or above which logs are sent to the syslog. Set to None for no logging to
+                    syslog (configuration file and environment variable only).
                     [Default: Info]
                   pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                   type: string
@@ -28748,7 +28753,7 @@ spec:
                   type: integer
                 metadataAddr:
                   description: |-
-                    MetadataAddr is the IP address or domain name of the server that can answer VM queries for
+                    MetadataAddr is the IP address of the server that can answer VM queries for
                     cloud-init metadata. In OpenStack, this corresponds to the machine running nova-api (or in
                     Ubuntu, nova-api-metadata). A value of none (case-insensitive) means that Felix should not
                     set up any NAT rule for the metadata path. [Default: 127.0.0.1]
@@ -28776,8 +28781,8 @@ spec:
                   description: |-
                     When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
                     Configure which type of destinations is excluded from being masqueraded.
-                    - IPPoolsOnly: destinations outside of this IP pool will be masqueraded.
-                    - IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded.
+                    - IPPoolsOnly: destinations outside of all IP pools, or in a LoadBalancer-only IP pool, will be masqueraded.
+                    - IPPoolsAndHostIPs: destinations outside of all IP pools and all hosts, or in a LoadBalancer-only IP pool, will be masqueraded.
                     [Default: IPPoolsOnly]
                   enum:
                     - IPPoolsOnly
@@ -28973,8 +28978,8 @@ spec:
                   type: boolean
                 prometheusWireGuardMetricsEnabled:
                   description: |-
-                    PrometheusWireGuardMetricsEnabled disables wireguard metrics collection, which the Prometheus client does by default, when
-                    set to false. This reduces the number of metrics reported, reducing Prometheus load. [Default: true]
+                    PrometheusWireGuardMetricsEnabled disables wireguard metrics collection, which Felix does by default when WireGuard
+                    is enabled, when set to false. This reduces the number of metrics reported, reducing Prometheus load. [Default: true]
                   type: boolean
                 removeExternalRoutes:
                   description: |-
@@ -28985,7 +28990,8 @@ spec:
                 reportingInterval:
                   description: |-
                     ReportingInterval is the interval at which Felix reports its status into the datastore or 0 to disable.
-                    Must be non-zero in OpenStack deployments. [Default: 30s]
+                    Must be non-zero in OpenStack deployments. calico-node sets this to `0s` in the `default`
+                    FelixConfiguration if it is not already set. [Default: 30s]
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
                 reportingTTL:
@@ -29074,8 +29080,10 @@ spec:
                   type: boolean
                 usageReportingEnabled:
                   description: |-
-                    UsageReportingEnabled reports anonymous Calico version number and cluster size to projectcalico.org. Logs warnings returned by the usage
-                    server. For example, if a significant security vulnerability has been discovered in the version of Calico being used. [Default: true]
+                    UsageReportingEnabled reports anonymous usage data to projectcalico.org: the Calico version and git revision, the
+                    Kubernetes version, a cluster GUID, the cluster type, whether application layer policy is enabled, and the numbers
+                    of hosts, workload endpoints, host endpoints, policies, profiles and application layer policies. Logs warnings
+                    returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of Calico being used. [Default: true]
                   type: boolean
                 usageReportingInitialDelay:
                   description:
