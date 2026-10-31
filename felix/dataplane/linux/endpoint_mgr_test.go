@@ -922,10 +922,59 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				nil, // arpTable
 				nil, // arpMaps
 			)
+			epMgr.cleanupOrphanedIfbs = func(func(string) bool) error { return nil }
 		})
 
 		It("should be constructable", func() {
 			Expect(epMgr).ToNot(BeNil())
+		})
+
+		Describe("orphaned IFB cleanup", func() {
+			var ifbCleanups int
+			var ifbCleanupErr error
+
+			JustBeforeEach(func() {
+				ifbCleanups = 0
+				ifbCleanupErr = nil
+				epMgr.cleanupOrphanedIfbs = func(isWorkloadIface func(string) bool) error {
+					Expect(isWorkloadIface("cali1234")).To(BeTrue())
+					Expect(isWorkloadIface("eth0")).To(BeFalse())
+					ifbCleanups++
+					return ifbCleanupErr
+				}
+			})
+
+			It("should sweep on the first apply only", func() {
+				applyUpdates(epMgr)
+				applyUpdates(epMgr)
+				Expect(ifbCleanups).To(Equal(1))
+			})
+
+			It("should retry a failed sweep", func() {
+				ifbCleanupErr = errors.New("netlink failure")
+				applyUpdates(epMgr)
+				ifbCleanupErr = nil
+				applyUpdates(epMgr)
+				applyUpdates(epMgr)
+				Expect(ifbCleanups).To(Equal(2))
+			})
+
+			It("should sweep again only when a workload interface disappears", func() {
+				applyUpdates(epMgr)
+				for _, update := range []*ifaceStateUpdate{
+					{Name: "cali1234", State: ifacemonitor.StateUp},
+					{Name: "cali1234", State: ifacemonitor.StateDown},
+					{Name: "eth0", State: ifacemonitor.StateNotPresent},
+				} {
+					epMgr.OnUpdate(update)
+					applyUpdates(epMgr)
+				}
+				Expect(ifbCleanups).To(Equal(1))
+
+				epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali1234", State: ifacemonitor.StateNotPresent})
+				applyUpdates(epMgr)
+				Expect(ifbCleanups).To(Equal(2))
+			})
 		})
 
 		configureHostEp := func(spec *hostEpSpec) func() {
