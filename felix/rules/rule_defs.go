@@ -465,6 +465,7 @@ type Config struct {
 	ServiceLoopPrevention          string
 
 	NFTablesMode    string
+	NFTablesEnabled bool
 	FlowLogsEnabled bool
 
 	IstioAmbientModeEnabled bool
