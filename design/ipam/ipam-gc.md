@@ -33,7 +33,7 @@ Invariants:
 
 ```
 windows-reserved:                skip
-not pod and not tunnel:          mark node "can't delete"
+not pod, tunnel or VM:           mark node "can't delete"
 tunnel address:                  defer until node-deletion decision
 judgeAllocation: in use:         markValid
 !kubernetesNodeExists, owner gone: markConfirmedLeak (immediate)
@@ -50,6 +50,7 @@ After the walk, if every allocation on a node is released and no valid ones rema
 - **Tunnel IPs validate via node existence only.** They never validate via pods. Mixing the paths would release a live tunnel IP whenever the pod-side check failed.
 - **Missing `pod` / `namespace` attributes ⇒ assume valid.** Conservative on purpose. Tightening this without a real reason will release allocations made by paths that don't
   stamp the attrs.
+- **The exception is a stopped VM's address.** CNI DEL clears its owner but keeps it on the VM handle, so the GC holds it only while a VM or standalone VMI rebuilds that handle. No node holds it, so it's filed in an in-memory stopped-VM bucket rather than under any node: deleting a node neither skips its VM grace period nor waits on it.
 - **Multus produces multiple WorkloadEndpoints per pod.** The IP must appear in at least one `wep.Spec.IPNetworks` to be valid. A single-WEP check would falsely release
   secondary-network IPs.
 - **An allocation outlives its sandbox, not its pod.** Allocations of a pod in a terminal phase are leaks, and so are those whose handle names a container ID other than the pod's `cni.projectcalico.org/containerID` annotation while the pod has reported no IP. Once it reports one, the IP decides, because a slow ADD from an abandoned sandbox can overwrite the annotation. This holds only while CNI DEL leaves that annotation in place and the pod cache keeps it.
@@ -65,6 +66,7 @@ later sync re-validates the allocation. The transition is what the [grace period
   https://github.com/projectcalico/calico/issues/12257. Don't expand the comparison without thinking about stale-source-data scenarios.
 - Missing `pod` / `namespace` attributes must remain "assume valid." Tightening this without a real reason will cause spurious releases.
 - Tunnel IPs do not validate via pods. Only the node-existence path releases them.
+- An owner change bumps the address's sequence number and can move it to another node, so a sequence change re-registers the allocation. Updating it in place strands it under the old node.
 - Don't add per-IP API GETs in this loop. The hot path uses informer cache reads after https://github.com/projectcalico/calico/pull/10333.
 - The `ipam.go:1043` TODO on pod-NodeName mismatch is unresolved. Currently releases the old allocation; the comment expresses uncertainty. Don't touch without understanding the
   migration cases.
