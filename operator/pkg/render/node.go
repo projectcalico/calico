@@ -836,8 +836,7 @@ func (c *nodeComponent) createPortmapPlugin() map[string]any {
 		},
 	}
 
-	if c.cfg.Installation.CalicoNetwork.LinuxDataplane != nil &&
-		*c.cfg.Installation.CalicoNetwork.LinuxDataplane == operatorv1.LinuxDataplaneNftables {
+	if c.cfg.Installation.IsNftables() {
 		portmapPlugin["backend"] = "nftables"
 	}
 

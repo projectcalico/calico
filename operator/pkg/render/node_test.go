@@ -2004,9 +2004,8 @@ var _ = Describe("Node rendering tests", func() {
 				}
 			})
 
-			It("should render the nftables backend for portmap with the nftables dataplane", func() {
-				nftables := operatorv1.LinuxDataplaneNftables
-				defaultInstance.CalicoNetwork.LinuxDataplane = &nftables
+			DescribeTable("should render the nftables backend for portmap when the dataplane uses nftables", func(dataplane operatorv1.LinuxDataplaneOption) {
+				defaultInstance.CalicoNetwork.LinuxDataplane = &dataplane
 
 				component := render.Node(&cfg)
 				Expect(component.ResolveImages(nil)).To(BeNil())
@@ -2020,7 +2019,10 @@ var _ = Describe("Node rendering tests", func() {
 				Expect(config.Plugins).To(HaveLen(2))
 				Expect(config.Plugins[1].Type).To(Equal("portmap"))
 				Expect(config.Plugins[1].Backend).To(Equal("nftables"))
-			})
+			},
+				Entry("with the nftables dataplane", operatorv1.LinuxDataplaneNftables),
+				Entry("with the BPF dataplane", operatorv1.LinuxDataplaneBPF),
+			)
 
 			It("should render cni config without portmap when HostPorts disabled", func() {
 				expectedResources := []struct {
