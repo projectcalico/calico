@@ -184,13 +184,35 @@ func (q poolQualification) qualified() []v3.IPPool {
 // releasable returns the pools whose blocks affine to the node IPAM may release: those whose node selector skips the
 // node, other than pools the request named. A block is released only once it is empty.
 func (q poolQualification) releasable() []v3.IPPool {
+	return q.pools(func(c poolCandidate) bool { return !c.keepsBlocks() })
+}
+
+// blocksToRelease returns the affine blocks, out of those the request can't use, that IPAM may release once empty. A
+// block inside any pool that keeps its blocks stays, even when an overlapping pool that skips the node also covers it.
+func (q poolQualification) blocksToRelease(blocks []net.IPNet) ([]net.IPNet, error) {
+	_, unkept, err := filterBlocksByPools(blocks, q.pools(poolCandidate.keepsBlocks))
+	if err != nil {
+		return nil, err
+	}
+	release, _, err := filterBlocksByPools(unkept, q.releasable())
+	return release, err
+}
+
+// pools returns the candidates' pools that satisfy keep, in candidate order.
+func (q poolQualification) pools(keep func(poolCandidate) bool) []v3.IPPool {
 	var pools []v3.IPPool
 	for _, c := range q.candidates {
-		if !c.requested && !c.selectsNode {
+		if keep(c) {
 			pools = append(pools, c.pool)
 		}
 	}
 	return pools
+}
+
+// keepsBlocks reports whether IPAM keeps the node's affine blocks in the candidate's pool: the request named it, or
+// its node selector picks the node.
+func (c poolCandidate) keepsBlocks() bool {
+	return c.requested || c.selectsNode
 }
 
 // filter returns the pools whose rejection reason satisfies keep, in candidate order.

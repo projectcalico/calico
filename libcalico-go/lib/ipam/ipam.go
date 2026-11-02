@@ -299,7 +299,7 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, config *IP
 	}
 
 	// Some callers (e.g., tunnel address assignment) have no namespace, so namespace may be nil.
-	q, err := qualifyPools(poolRequest{
+	qualification, err := qualifyPools(poolRequest{
 		requested:    requestedPools,
 		host:         host,
 		node:         *v3n,
@@ -310,8 +310,7 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, config *IP
 	if err != nil {
 		return nil, nil, err
 	}
-	poolsToRelease := q.releasable()
-	poolsAllowedByUse := q.qualified()
+	poolsAllowedByUse := qualification.qualified()
 	log.Debugf("Pools filtered by allowed use: %v", poolsAllowedByUse)
 
 	logCtx := log.WithFields(log.Fields{"host": host})
@@ -330,8 +329,8 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, config *IP
 		return nil, nil, err
 	}
 
-	// Of the rest, the blocks in pools whose selector skips this node are released below once they're empty.
-	affBlocksToRelease, _, err := filterBlocksByPools(nonAllowedAffBlocks, poolsToRelease)
+	// Of the rest, pool qualification picks the blocks to release below once they're empty.
+	affBlocksToRelease, err := qualification.blocksToRelease(nonAllowedAffBlocks)
 	if err != nil {
 		return nil, nil, err
 	}

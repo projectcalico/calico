@@ -407,3 +407,68 @@ var _ = Describe("pool qualification of undefaulted pools", func() {
 		Expect(qualifyPoolForIP(cnet.MustParseIP("10.0.0.1"), undefaultedPool("10.0.0.0/24"), v3.IPPoolAllowedUseLoadBalancer)).NotTo(Succeed())
 	})
 })
+
+// releaseCase is one row of the blocksToRelease table. Every row adds a pool the request can use, so qualification
+// succeeds, and asks about the node's affine blocks in the other pools.
+type releaseCase struct {
+	pools    []testPool
+	blocks   []string
+	released []string
+}
+
+var _ = DescribeTable("blocksToRelease",
+	func(tc releaseCase) {
+		pools := append([]testPool{{cidr: "20.0.0.0/24"}}, tc.pools...)
+		req := poolRequest{
+			node:         internalapi.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}},
+			use:          v3.IPPoolAllowedUseWorkload,
+			maxPrefixLen: 32,
+		}
+		q, err := qualifyPools(req, buildPools(pools))
+		Expect(err).NotTo(HaveOccurred())
+
+		var blocks []cnet.IPNet
+		for _, b := range tc.blocks {
+			blocks = append(blocks, cnet.MustParseNetwork(b))
+		}
+		released, err := q.blocksToRelease(blocks)
+		Expect(err).NotTo(HaveOccurred())
+
+		got := []string{}
+		for _, b := range released {
+			got = append(got, b.String())
+		}
+		Expect(got).To(ConsistOf(tc.released))
+	},
+	Entry("a block in a pool that skips the node is released", releaseCase{
+		pools:    []testPool{{cidr: "30.0.0.0/24", nodeSelector: `foo != "bar"`}},
+		blocks:   []string{"30.0.0.0/26"},
+		released: []string{"30.0.0.0/26"},
+	}),
+	Entry("a block in a pool that selects the node but disallows the use is kept", releaseCase{
+		pools:  []testPool{{cidr: "10.0.0.0/16", uses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}}},
+		blocks: []string{"10.0.0.0/26"},
+	}),
+	Entry("a block also covered by an overlapping pool that skips the node is kept", releaseCase{
+		pools: []testPool{
+			{cidr: "10.0.0.0/16", uses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
+			{cidr: "10.0.0.0/24", nodeSelector: `foo != "bar"`},
+		},
+		blocks: []string{"10.0.0.0/26"},
+	}),
+	Entry("the overlap keeps the block whichever pool comes first", releaseCase{
+		pools: []testPool{
+			{cidr: "10.0.0.0/24", nodeSelector: `foo != "bar"`},
+			{cidr: "10.0.0.0/16", uses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
+		},
+		blocks: []string{"10.0.0.0/26"},
+	}),
+	Entry("a Manual pool that selects the node keeps its block", releaseCase{
+		pools:  []testPool{{cidr: "30.0.0.0/24", manual: true}},
+		blocks: []string{"30.0.0.0/26"},
+	}),
+	Entry("a pool rejected only by its namespace selector keeps its block", releaseCase{
+		pools:  []testPool{{cidr: "30.0.0.0/24", namespaceSelector: "environment == 'production'"}},
+		blocks: []string{"30.0.0.0/26"},
+	}),
+)
