@@ -1876,6 +1876,8 @@ components:
       - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
   webhooks:
     in:
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/client/applyconfiguration_generated/internal/[^/]*\.go$
       - ^api/pkg/client/applyconfiguration_generated/projectcalico/v3/[^/]*\.go$
@@ -1887,17 +1889,25 @@ components:
       - ^crypto/pkg/tls/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
       - ^lib\.Makefile$
       - ^libcalico-go/lib/apis/internalapi/[^/]*\.go$
       - ^libcalico-go/lib/backend/encap/[^/]*\.go$
+      - ^libcalico-go/lib/backend/k8s/conversion/[^/]*\.go$
       - ^libcalico-go/lib/backend/model/[^/]*\.go$
       - ^libcalico-go/lib/errors/[^/]*\.go$
+      - ^libcalico-go/lib/hash/[^/]*\.go$
       - ^libcalico-go/lib/names/[^/]*\.go$
       - ^libcalico-go/lib/namespace/[^/]*\.go$
       - ^libcalico-go/lib/net/[^/]*\.go$
+      - ^libcalico-go/lib/selector/[^/]*\.go$
+      - ^libcalico-go/lib/selector/parser/[^/]*\.go$
+      - ^libcalico-go/lib/selector/tokenizer/[^/]*\.go$
+      - ^libcalico-go/lib/set/[^/]*\.go$
+      - ^libcalico-go/lib/validator/v3/[^/]*\.go$
       - ^libcalico-go/lib/winutils/[^/]*\.go$
       - ^metadata\.mk$
       - ^pkg/buildinfo/[^/]*\.go$

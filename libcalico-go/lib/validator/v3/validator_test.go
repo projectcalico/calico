@@ -630,6 +630,12 @@ func init() {
 		Entry("should accept valid selector with 'has' and two '/'", api.EntityRule{Selector: "has(calico/k8s_ns/role)"}, true),
 		Entry("should accept valid selector with 'has' and two '/' and '-.'", api.EntityRule{Selector: "has(calico/k8s_NS-.1/role)"}, true),
 		Entry("should reject invalid selector", api.EntityRule{Selector: "thing=hello &"}, false),
+		Entry("should accept valid service account names", api.ServiceAccountMatch{Names: []string{"sa-1", "sa.2"}}, true),
+		Entry("should reject service account name with a quote", api.ServiceAccountMatch{Names: []string{"a'b"}}, false),
+		Entry("should reject service account name with upper case", api.ServiceAccountMatch{Names: []string{"SA"}}, false),
+		Entry("should reject invalid service account selector", api.ServiceAccountMatch{Selector: "thing=hello &"}, false),
+		Entry("should accept valid live migration target selector", internalapi.LiveMigrationTarget{Selector: ptr.To("vmi == 'a'")}, true),
+		Entry("should reject invalid live migration target selector", internalapi.LiveMigrationTarget{Selector: ptr.To("vmi == 'a'b'")}, false),
 
 		// (API) Labels and Annotations.
 		Entry("should accept a valid labelsToApply", api.ProfileSpec{LabelsToApply: map[string]string{"project.calico.org/my-valid-label": value63}}, true),
@@ -845,6 +851,8 @@ func init() {
 			true),
 		Entry("should reject an invalid list of ExternalNodesCIDRList", api.FelixConfigurationSpec{ExternalNodesCIDRList: &[]string{"foobar", "1.1.1.1"}}, false),
 		Entry("should reject IPv6 list of ExternalNodesCIDRList", api.FelixConfigurationSpec{ExternalNodesCIDRList: &[]string{"abcd::1", "abef::2/128"}}, false),
+		Entry("should accept a valid NodeSelector", api.FelixConfigurationSpec{NodeSelector: ptr.To("role == 'worker'")}, true),
+		Entry("should reject an invalid NodeSelector", api.FelixConfigurationSpec{NodeSelector: ptr.To("thing=hello &")}, false),
 
 		Entry("should accept aan empty OpenStackRegion", api.FelixConfigurationSpec{OpenstackRegion: ""}, true),
 		Entry("should accept a valid OpenStackRegion", api.FelixConfigurationSpec{OpenstackRegion: "foo"}, true),
