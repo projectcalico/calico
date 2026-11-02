@@ -4628,6 +4628,7 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
         '/libcalico-go/lib/names/*.go',
         '/libcalico-go/lib/namespace/*.go',
