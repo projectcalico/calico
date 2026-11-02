@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/hash"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
 )
 
 // Labels defines the interface of labels that can be used by selector
@@ -211,6 +212,49 @@ func (sel *Selector) Equal(other *Selector) bool {
 
 func (sel *Selector) Root() Node {
 	return sel.root
+}
+
+// LabelEquals returns a selector equivalent to parsing `label == "value"`,
+// without the quoting problems of formatting value into a string.  It rejects
+// inputs that String() can't render as that selector: an invalid label, or a
+// value containing both ' and ".  Such a String() would not parse back, and
+// could collide with another selector's UniqueID.
+func LabelEquals(label, value string) (*Selector, error) {
+	if !tokenizer.ValidLabel(label) {
+		return nil, fmt.Errorf("invalid label %q", label)
+	}
+	if strings.Contains(value, `'`) && strings.Contains(value, `"`) {
+		return nil, fmt.Errorf("value %q contains both ' and \"", value)
+	}
+	return newSelector(&LabelEqValueNode{uniquestr.Make(label), uniquestr.Make(value)}), nil
+}
+
+// And returns a selector equivalent to parsing "(sel) && (other)".  Building
+// the AST directly avoids re-parsing, which could exceed MaxParseDepth.  The
+// result shares nodes with its inputs.
+func (sel *Selector) And(other *Selector) *Selector {
+	return newSelector(&AndNode{Operands: []Node{sel.root, other.root}})
+}
+
+// Inverted returns a selector equivalent to parsing "!(sel)".  The result
+// shares nodes with sel.
+func (sel *Selector) Inverted() *Selector {
+	return newSelector(negate(sel.root))
+}
+
+// negate returns the negation of n, cancelling a double negation so that
+// equivalent selectors render (and hash) the same.
+func negate(n Node) Node {
+	if not, ok := n.(*NotNode); ok {
+		return not.Operand
+	}
+	return &NotNode{n}
+}
+
+func newSelector(root Node) *Selector {
+	sel := &Selector{root: root}
+	sel.updateFields()
+	return sel
 }
 
 func (sel *Selector) updateFields() {
