@@ -91,6 +91,8 @@ type HostEndpointSpec struct {
 	// profile is applied in the order that they appear in this list.  Profile rules are applied
 	// after the selector-based security policy.
 	// +listType=set
+	// +kubebuilder:validation:items:MaxLength=253
+	// +kubebuilder:validation:items:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
 
 	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
