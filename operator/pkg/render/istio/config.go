@@ -21,12 +21,19 @@ import (
 )
 
 type GlobalConfig struct {
-	IstioNamespace         string           `json:"istioNamespace,omitempty"`
-	OperatorManageWebhooks bool             `json:"operatorManageWebhooks,omitempty"`
-	Proxy                  *ProxyConfig     `json:"proxy,omitempty"`
-	ProxyInit              *ProxyInitConfig `json:"proxy_init,omitempty"`
-	Platform               string           `json:"platform,omitempty"`
-	ImagePullSecrets       []string         `json:"imagePullSecrets,omitempty"`
+	IstioNamespace         string              `json:"istioNamespace,omitempty"`
+	OperatorManageWebhooks bool                `json:"operatorManageWebhooks,omitempty"`
+	Proxy                  *ProxyConfig        `json:"proxy,omitempty"`
+	ProxyInit              *ProxyInitConfig    `json:"proxy_init,omitempty"`
+	Platform               string              `json:"platform,omitempty"`
+	ImagePullSecrets       []string            `json:"imagePullSecrets,omitempty"`
+	MultiCluster           *MultiClusterConfig `json:"multiCluster,omitempty"`
+}
+
+// MultiClusterConfig names this cluster to Istio. The istiod chart reads it from
+// global, the ztunnel chart from its flattened copy of global.
+type MultiClusterConfig struct {
+	ClusterName string `json:"clusterName,omitempty"`
 }
 
 type ProxyConfig struct {
