@@ -56,7 +56,7 @@ func LabelEquals(label, value string) (*Selector, error) {
 }
 
 const (
-	MaxAPIDepth  = parser.MaxAPIDepth
+	MaxAPIDepth   = parser.MaxAPIDepth
 	MaxParseDepth = parser.MaxParseDepth
 )
 
