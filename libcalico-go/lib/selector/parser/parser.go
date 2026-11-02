@@ -33,9 +33,10 @@ const (
 	MaxAPIDepth = 100
 	// MaxParseDepth limits the nesting of parentheses in any selector, bounding
 	// the parser's recursion.  Calico combines API selectors and re-renders them
-	// with String(), which parenthesises every && and || node, so a selector at
-	// MaxAPIDepth can end up roughly twice as deep.  This limit must leave
-	// room for that.  Parse enforces this limit.
+	// with String(), which parenthesises every && and || node.  For example,
+	// "a || b && (c)" has depth 1 but renders as "(a || (b && c))", depth 2, so
+	// a selector at MaxAPIDepth can end up roughly twice as deep.  This limit
+	// must leave room for that.  Parse enforces this limit.
 	MaxParseDepth = 1000
 )
 
