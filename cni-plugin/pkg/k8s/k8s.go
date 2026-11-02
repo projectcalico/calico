@@ -624,7 +624,9 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		}
 	}
 
+	var mismatchedWEP *internalapi.WorkloadEndpoint
 	for attempts := 5; attempts >= 0; attempts-- {
+		mismatchedWEP = nil
 		wep, err := c.WorkloadEndpoints().Get(ctx, epIDs.Namespace, epIDs.WEPName, options.GetOptions{})
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
@@ -643,6 +645,7 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 			// we can receive DEL commands for an old sandbox for a currently running pod. However, we key IPAM allocations based on the
 			// CNI_CONTAINERID, so we should still do that below for this case.
 			logger.WithField("WorkloadEndpoint", wep).Warning("CNI_CONTAINERID does not match WorkloadEndpoint ContainerID, don't delete WEP.")
+			mismatchedWEP = wep
 		} else if _, err = c.WorkloadEndpoints().Delete(
 			ctx,
 			wep.Namespace,
@@ -682,6 +685,20 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 	err = d.CleanUpNamespace(args)
 	if err != nil {
 		return err
+	}
+
+	// A stale sandbox's DEL must not free an address the endpoint still lists, since a later ADD
+	// may have moved it onto this sandbox's handle. Release only the unlisted ones.
+	if mismatchedWEP != nil && keepsListedAddresses(conf, epIDs, "") {
+		handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
+		kept, err := releaseUnlisted(ctx, c.IPAM(), handleID, listedAddresses(mismatchedWEP), logger)
+		if err != nil {
+			return err
+		}
+		if kept {
+			logger.Info("Teardown processing complete.")
+			return nil
+		}
 	}
 
 	// Release the IP address for this container by calling the configured IPAM plugin.
