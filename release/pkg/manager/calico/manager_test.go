@@ -26,6 +26,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -2271,4 +2272,58 @@ func testVersion(t testing.TB, s string) version.Version {
 		t.Fatal(err)
 	}
 	return v
+}
+
+func TestDerivedBranchEdits(t *testing.T) {
+	// A re-run against an already-cut branch must still match, so a resumed or
+	// repeated cut is not left reporting the edit as missing.
+	t.Run("patterns match an already-cut stream", func(t *testing.T) {
+		root := t.TempDir()
+		files := map[string]string{
+			"process/testing/aso/export-env.sh":     "export RELEASE_STREAM=\"${RELEASE_STREAM:=v3.30}\"\n",
+			"process/testing/aso/install-calico.sh": ": ${RELEASE_STREAM:=\"v3.30\"} # Default to v3.30\n",
+		}
+		for name, content := range files {
+			if err := os.MkdirAll(filepath.Join(root, filepath.Dir(name)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		for _, e := range derivedBranchEdits("release-v3.31", "v3.31") {
+			if _, ok := files[e.File]; !ok {
+				continue
+			}
+			re, err := regexp.Compile(`(?m)` + e.Pattern)
+			if err != nil {
+				t.Fatalf("%s: %v", e.File, err)
+			}
+			if !re.MatchString(files[e.File]) {
+				t.Errorf("%s: pattern %q does not match an already-cut file", e.File, e.Pattern)
+			}
+		}
+	})
+
+	t.Run("replacements keep the shell expansion", func(t *testing.T) {
+		want := map[string]string{
+			"process/testing/aso/export-env.sh":     "export RELEASE_STREAM=\"${RELEASE_STREAM:=v3.31}\"",
+			"process/testing/aso/install-calico.sh": ": ${RELEASE_STREAM:=\"v3.31\"} # Default to v3.31",
+		}
+		from := map[string]string{
+			"process/testing/aso/export-env.sh":     "export RELEASE_STREAM=\"${RELEASE_STREAM:=master}\"",
+			"process/testing/aso/install-calico.sh": ": ${RELEASE_STREAM:=\"master\"} # Default to master",
+		}
+		for _, e := range derivedBranchEdits("release-v3.31", "v3.31") {
+			if _, ok := want[e.File]; !ok {
+				continue
+			}
+			re := regexp.MustCompile(`(?m)` + e.Pattern)
+			got := re.ReplaceAllString(from[e.File], e.Replacement)
+			if diff := cmp.Diff(want[e.File], got); diff != "" {
+				t.Errorf("%s (-want +got):\n%s", e.File, diff)
+			}
+		}
+	})
 }
