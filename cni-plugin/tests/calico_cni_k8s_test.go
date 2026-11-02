@@ -69,6 +69,16 @@ func generateName(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, counterByPrefix[prefix])
 }
 
+// renameVeth renames a host interface, which makes a later ADD's networking fail.
+func renameVeth(from, to string) {
+	output, err := exec.Command("ip", "link", "set", from, "down").CombinedOutput()
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", output))
+	output, err = exec.Command("ip", "link", "set", from, "name", to).CombinedOutput()
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", output))
+	output, err = exec.Command("ip", "link", "set", to, "up").CombinedOutput()
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", output))
+}
+
 func ensureNamespace(clientset *kubernetes.Clientset, name string) {
 	ns := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
@@ -2046,6 +2056,63 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(ips[0].String()).To(Equal(podIP))
 		})
 
+		It("keeps a moved ipAddrs address when networking fails after the move", func() {
+			podIP := "10.123.0.60"
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testPodName,
+					Annotations: map[string]string{
+						"cni.projectcalico.org/ipAddrs": fmt.Sprintf("[%q]", podIP),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name:  testPodName,
+						Image: "ignore",
+					}},
+					NodeName: testNodeName,
+				},
+			})
+
+			const sandboxX, sandboxY, sandboxZ = "container-id-ipaddrs-keep-x", "container-id-ipaddrs-keep-y", "container-id-ipaddrs-keep-z"
+			_, _, _, contAddresses, _, contNs, err := testutils.CreateContainerWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", sandboxX)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(contAddresses).To(HaveLen(1))
+			Expect(contAddresses[0].IP.String()).To(Equal(podIP))
+			DeferCleanup(func() {
+				_, err := testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, sandboxZ)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			// Renaming the veth makes sandbox Y's networking fail after its address move.
+			realVeth := k8sconversion.NewConverter().VethNameForWorkload(testutils.K8S_TEST_NS, testPodName)
+			tweakedVeth := strings.Replace(realVeth, "cali", "sali", 1)
+			renameVeth(realVeth, tweakedVeth)
+			restored := false
+			restoreVeth := func() {
+				if !restored {
+					restored = true
+					renameVeth(tweakedVeth, realVeth)
+				}
+			}
+			DeferCleanup(restoreVeth)
+
+			_, _, _, _, err = testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", sandboxY, "eth0", contNs)
+			Expect(err).To(HaveOccurred())
+
+			attrs, err := calicoClient.IPAM().GetAssignmentAttributes(ctx, cnet.IP{IP: net.ParseIP(podIP)})
+			Expect(err).NotTo(HaveOccurred(), "the failed ADD released the pod's address")
+			Expect(attrs.HandleID).NotTo(BeNil())
+			Expect(*attrs.HandleID).To(Equal(ipam.PodHandleID("calico-uts", sandboxY)))
+			Expect(attrs.ActiveOwnerAttrs).To(HaveKeyWithValue(ipam.AttributePod, testPodName))
+
+			restoreVeth()
+			result, _, _, _, err := testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", sandboxZ, "eth0", contNs)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IPs).To(HaveLen(1))
+			Expect(result.IPs[0].Address.IP.String()).To(Equal(podIP))
+		})
+
 		It("reports the cooldown when the requested IP has not finished its cooldown", func() {
 			// GetAssignmentAttributes refuses to name an owner for an address in
 			// cooldown, so the transfer is never reached. The pod still fails, but the
@@ -3217,15 +3284,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		})
 
 		Context("with networking rigged to fail", func() {
-			renameVeth := func(from, to string) {
-				output, err := exec.Command("ip", "link", "set", from, "down").CombinedOutput()
-				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", output))
-				output, err = exec.Command("ip", "link", "set", from, "name", to).CombinedOutput()
-				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", output))
-				output, err = exec.Command("ip", "link", "set", to, "up").CombinedOutput()
-				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", output))
-			}
-
 			var realVethName, tweakedVethName string
 
 			BeforeEach(func() {

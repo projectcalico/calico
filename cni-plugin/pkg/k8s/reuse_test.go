@@ -81,7 +81,7 @@ var _ = Describe("assignPodIPs", func() {
 			}
 			ep.Spec.IPNetworks = append(ep.Spec.IPNetworks, ip+bits)
 		}
-		result, _, err := assignPodIPs(context.Background(), conf, args, utils.WEPIdentifiers{Pod: "web-0"}, ep, logrus.WithField("test", "reuse"))
+		result, err := assignPodIPs(context.Background(), conf, args, utils.WEPIdentifiers{Pod: "web-0"}, ep, logrus.WithField("test", "reuse"))
 		if err != nil {
 			return nil, err
 		}
