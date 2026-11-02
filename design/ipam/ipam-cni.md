@@ -33,7 +33,9 @@ Invariants:
   created later could have claimed it. It fails with `ErrCodeSandboxSuperseded` instead of falling back to a fresh address, because networking the abandoned sandbox would
   replace the live one's host interface. Both times come from the node's wall clock.
 - **Only `ErrCodeAddressNotHeld` earns a fresh address.** `calico-ipam` returns it when IPAM shows the pod no longer holds an address it asked to reuse, including one in cooldown
-  or in a pool that disallows workloads. The plugin then assigns a fresh address for that family alone. Any other reuse error fails the ADD, as does this code for an `ipAddrs` pod.
+  or in a pool that disallows workloads. The plugin then assigns fresh addresses only for lost families the IPAM config assigns (IPv4 unless `assign_ipv4` is "false", IPv6 only
+  if `assign_ipv6` is "true") and drops the others, so a pod that loses its IPv6 address once IPv6 assignment is off comes up IPv4-only. A pod that lost every address gets a
+  normal ADD. Any other reuse error fails the ADD, as does this code for an `ipAddrs` pod.
 
 `cmdAdd` in [`cni-plugin/pkg/ipamplugin/ipam_plugin.go`](../../cni-plugin/pkg/ipamplugin/ipam_plugin.go) is the entry point. The flow is straightforward client construction →
 pool resolution → lock → `AutoAssign` → return. The design-relevant steps are:
@@ -63,14 +65,15 @@ Static / BYO IP and pool / floating-IP annotations are handled inside `cni-plugi
 Invariants:
 
 - **DEL is idempotent.** Any subset of block, handle, or allocation may already be gone. "Not found" is success.
-- **Release by every handle form.** `utils.PodHandleIDs` lists the container-ID forms, of which one at most holds the allocation, and the workload-ID handle (`<namespace>.<pod>`) is
-  released on top of those. Dropping a form leaves its IPs for the kube-controllers GC to reclaim instead of freeing them on DEL.
+- **Release by both handle forms.** DEL releases the sandbox's container-ID handle, then the workload-ID handle (`<namespace>.<pod>`). Dropping either leaves its IPs for the
+  kube-controllers GC to reclaim instead of freeing them on DEL.
 - **A stale sandbox's DEL keeps what the WEP lists.** When the DEL's container ID doesn't match the WEP's, it releases only the unlisted addresses on its own handle, because a later
-  ADD may have moved the listed ones there, and skips the normal release if it kept any. KubeVirt pods and IPAM types other than `calico-ipam` release as usual.
+  ADD may have moved the listed ones there, and never falls through to the normal release: `IPsByHandle` skips a block it can't read, so finding no listed address there proves
+  nothing. The workload-ID handle stays for the matching DEL to release. KubeVirt pods and IPAM types other than `calico-ipam` release as usual.
 - **KubeVirt DEL is not "release immediately."** Clear owner attrs first; release only when the VM/VMI is gone and all attrs are empty.
 
-`cmdDel` in the same file. The standard path tries the forms `utils.PodHandleIDs` returns, stopping at the first that releases something, then releases the workload-ID handle
-(`<namespace>.<pod>`) unconditionally: that one is not derived from the container ID, so it can hold an allocation at the same time as a container-ID handle.
+`cmdDel` in the same file. The standard path releases the container-ID handle (`GetHandleID`), then the workload-ID handle (`<namespace>.<pod>`) unconditionally: that one
+is not derived from the container ID, so it can hold an allocation at the same time as a container-ID handle.
 `ErrorResourceDoesNotExist` at this stage is success, not failure - any subset of block / handle / allocation may already be gone.
 
 KubeVirt with persistence is the exception: the IP must survive pod deletion so it follows the VM through live migration. The plugin fetches the VMI, checks `DeletionTimestamp`,
@@ -79,7 +82,7 @@ enumerates via `IPsByHandle`, and clears owner attrs through `SetOwnerAttributes
 
 **Review notes**
 
-- Always release by every form in `utils.PodHandleIDs` and by the workload-ID handle. Dropping the workload-ID call leaks IPs across CRI container-ID changes and across upgrades
+- Always release by the container-ID handle and by the workload-ID handle. Dropping the workload-ID call leaks IPs across CRI container-ID changes and across upgrades
   from v2.x-era allocations.
 - DEL must be idempotent. A retry that fails because the block is gone is a bug, not a feature.
 - KubeVirt DEL is not "release immediately." The `SetOwnerAttributes` preconditions exist because Felix can race the active/alternate swap; if the precondition fails, the CNI
