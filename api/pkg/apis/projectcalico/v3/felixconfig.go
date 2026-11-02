@@ -625,6 +625,7 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:items:XIntOrString
 	// +kubebuilder:validation:items:MaxLength=11
 	// +kubebuilder:validation:items:XValidation:rule="type(self) != string || !self.contains(':') || int(self.split(':')[0]) <= int(self.split(':')[1])",message="port ranges must be written low:high",reason=FieldValueInvalid
+	// +kubebuilder:validation:XValidation:rule="self.all(p, type(p) == int || p.matches('^[0-9:]+$'))",message="kubeNodePortRanges must not contain named ports",reason=FieldValueInvalid
 	KubeNodePortRanges *[]numorstring.Port `json:"kubeNodePortRanges,omitempty" validate:"omitempty,dive"`
 
 	// PolicySyncPathPrefix is used to by Felix to communicate policy changes to external services,
