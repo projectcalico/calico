@@ -219,6 +219,29 @@ func TestFelixConfiguration_Validation(t *testing.T) {
 			},
 			wantErr: "min must not be greater than max",
 		},
+		{
+			name: "routeTableIDRange max above 32 bits is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{RouteTableRanges: &v3.RouteTableRanges{{Min: 4294967000, Max: 4294967296}}},
+			},
+			wantErr: "max must be <= 4294967295",
+		},
+		{
+			name: "routeTableRanges targeting 65535 tables is accepted",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{RouteTableRanges: &v3.RouteTableRanges{{Min: 1, Max: 252}, {Min: 256, Max: 65538}}},
+			},
+		},
+		{
+			name: "routeTableRanges targeting more than 65535 tables is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{RouteTableRanges: &v3.RouteTableRanges{{Min: 1, Max: 252}, {Min: 256, Max: 65539}}},
+			},
+			wantErr: "routeTableRanges must target at most 65535 tables in total",
+		},
 	}
 
 	for _, tt := range tests {
