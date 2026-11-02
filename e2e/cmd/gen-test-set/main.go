@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // gen-test-set records the specs each CI lane selects, by dry-running the e2e
-// binary once per distinct selection.
+// binary once per distinct selection and writing one set per lane.
 package main
 
 import (
@@ -69,28 +69,13 @@ func run(repoRoot, binary, outDir string) error {
 	}
 	sort.Strings(names)
 
-	var mu sync.Mutex
-	specs := make(map[string][]string, len(sets))
-	g := new(errgroup.Group)
-	g.SetLimit(runtime.NumCPU())
-	for _, name := range names {
-		args, err := sets[name].SelectionArgs(repoRoot)
-		if err != nil {
-			return err
-		}
-		g.Go(func() error {
-			found, err := dryRun(binary, repoRoot, args)
-			if err != nil {
-				return fmt.Errorf("%s: %w", name, err)
-			}
-			mu.Lock()
-			defer mu.Unlock()
-			specs[name] = found
-			return nil
-		})
-	}
-	if err := g.Wait(); err != nil {
+	selections, err := dryRunSelections(binary, repoRoot, sets)
+	if err != nil {
 		return err
+	}
+	specs := make(map[string][]string, len(sets))
+	for _, name := range names {
+		specs[name] = selections[selectionKey(sets[name])]
 	}
 
 	for _, name := range names {
@@ -104,6 +89,58 @@ func run(repoRoot, binary, outDir string) error {
 	}
 
 	return cilanes.Write(filepath.Join(repoRoot, outDir), lanes, specs)
+}
+
+// selectionKey identifies a lane's selection by its parsed config list, so two
+// lanes listing the same configs with different whitespace share a dry run.
+func selectionKey(l cilanes.Lane) string {
+	return strings.Join(l.Configs(), " ")
+}
+
+// selectionSpecs holds the spec names each distinct selection runs, keyed by
+// selectionKey. The concurrent dry runs fill it in through recordSpecs.
+type selectionSpecs struct {
+	mu    sync.Mutex
+	specs map[string][]string
+}
+
+// recordSpecs stores the specs one selection's dry run found.
+func (s *selectionSpecs) recordSpecs(key string, found []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.specs[key] = found
+}
+
+// dryRunSelections runs the binary once per distinct selection among the sets,
+// since many lanes share one config. It returns the specs keyed by
+// selectionKey.
+func dryRunSelections(binary, repoRoot string, sets map[string]cilanes.Lane) (map[string][]string, error) {
+	byConfig := map[string]cilanes.Lane{}
+	for _, l := range sets {
+		byConfig[selectionKey(l)] = l
+	}
+
+	results := &selectionSpecs{specs: make(map[string][]string, len(byConfig))}
+	group := new(errgroup.Group)
+	group.SetLimit(runtime.NumCPU())
+	for config, l := range byConfig {
+		args, err := l.SelectionArgs(repoRoot)
+		if err != nil {
+			return nil, err
+		}
+		group.Go(func() error {
+			found, err := dryRun(binary, repoRoot, args)
+			if err != nil {
+				return fmt.Errorf("%s: %w", config, err)
+			}
+			results.recordSpecs(config, found)
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+	return results.specs, nil
 }
 
 // ginkgoReport is the subset of ginkgo's JSON report that names the specs a run
