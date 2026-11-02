@@ -3427,8 +3427,9 @@ var (
 		Namespace: "default",
 	}
 
-	// A selector that matches localWlEp1's labels (has label "a").
-	liveMigrationTargetSelector = "has(a)"
+	// Selectors that match localWlEp1's labels (which include "a" and "b").
+	liveMigrationTargetSelector      = "has(a)"
+	liveMigrationOtherTargetSelector = "has(b)"
 )
 
 // liveMigrationTargetingLocalEp1 returns a LiveMigration, with the given key and UID, that
@@ -3487,9 +3488,9 @@ var localEp1LMTargetUIDsAAndB = localEp1WithPolicy.withKVUpdates(
 	localWlEp1Id, "uid-b",
 ).withName("ep1 local, policy, LM targets with UIDs a and b")
 
-// liveMigrationTargetingSelector returns a LiveMigration, with the given key and UID, whose
-// target is chosen by liveMigrationTargetSelector, which matches localWlEp1.
-func liveMigrationTargetingSelector(key ResourceKey, uid string) KVPair {
+// liveMigrationTargetingSelector returns a LiveMigration, with the given key and UID, whose target
+// is chosen by the given selector.
+func liveMigrationTargetingSelector(key ResourceKey, uid, selector string) KVPair {
 	return KVPair{Key: key, Value: &internalapi.LiveMigration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      key.Name,
@@ -3506,7 +3507,7 @@ func liveMigrationTargetingSelector(key ResourceKey, uid string) KVPair {
 				},
 			},
 			Target: &internalapi.LiveMigrationTarget{
-				Selector: stringPtr(liveMigrationTargetSelector),
+				Selector: stringPtr(selector),
 			},
 		},
 	}}
@@ -3515,7 +3516,7 @@ func liveMigrationTargetingSelector(key ResourceKey, uid string) KVPair {
 // Two LiveMigrations with the same target selector.  Adding or removing the second one changes
 // the WEP's UID without any change in which selectors match it.
 var localEp1LMSelectorUIDA = localEp1WithPolicy.withKVUpdates(
-	liveMigrationTargetingSelector(liveMigrationKey1, "uid-a"),
+	liveMigrationTargetingSelector(liveMigrationKey1, "uid-a", liveMigrationTargetSelector),
 ).withLiveMigrationRole(
 	localWlEp1Id, proto.LiveMigrationRole_TARGET,
 ).withLiveMigrationUID(
@@ -3523,13 +3524,32 @@ var localEp1LMSelectorUIDA = localEp1WithPolicy.withKVUpdates(
 ).withName("ep1 local, policy, LM target by selector with UID a")
 
 var localEp1LMSelectorUIDsAAndB = localEp1WithPolicy.withKVUpdates(
-	liveMigrationTargetingSelector(liveMigrationKey1, "uid-a"),
-	liveMigrationTargetingSelector(liveMigrationKey2, "uid-b"),
+	liveMigrationTargetingSelector(liveMigrationKey1, "uid-a", liveMigrationTargetSelector),
+	liveMigrationTargetingSelector(liveMigrationKey2, "uid-b", liveMigrationTargetSelector),
 ).withLiveMigrationRole(
 	localWlEp1Id, proto.LiveMigrationRole_TARGET,
 ).withLiveMigrationUID(
 	localWlEp1Id, "uid-b",
 ).withName("ep1 local, policy, LM targets by selector with UIDs a and b")
+
+// Two LiveMigrations with different target selectors that both match the WEP.  Removing either
+// one must leave the WEP a target of the other.
+var localEp1LMDifferentSelectorsUIDsAAndB = localEp1WithPolicy.withKVUpdates(
+	liveMigrationTargetingSelector(liveMigrationKey1, "uid-a", liveMigrationTargetSelector),
+	liveMigrationTargetingSelector(liveMigrationKey2, "uid-b", liveMigrationOtherTargetSelector),
+).withLiveMigrationRole(
+	localWlEp1Id, proto.LiveMigrationRole_TARGET,
+).withLiveMigrationUID(
+	localWlEp1Id, "uid-b",
+).withName("ep1 local, policy, LM targets by different selectors with UIDs a and b")
+
+var localEp1LMOtherSelectorUIDB = localEp1WithPolicy.withKVUpdates(
+	liveMigrationTargetingSelector(liveMigrationKey2, "uid-b", liveMigrationOtherTargetSelector),
+).withLiveMigrationRole(
+	localWlEp1Id, proto.LiveMigrationRole_TARGET,
+).withLiveMigrationUID(
+	localWlEp1Id, "uid-b",
+).withName("ep1 local, policy, LM target by other selector with UID b")
 
 // The same LiveMigration name, recreated with a new UID.
 var localEp1LMTargetRecreatedUIDB = localEp1WithPolicy.withKVUpdates(
