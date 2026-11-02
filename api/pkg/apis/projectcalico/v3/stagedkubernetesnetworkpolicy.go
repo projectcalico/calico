@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ type StagedKubernetesNetworkPolicy struct {
 	Spec              StagedKubernetesNetworkPolicySpec `json:"spec"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!has(self.stagedAction) || self.stagedAction != 'Delete' || ((!has(self.ingress) || size(self.ingress) == 0) && (!has(self.egress) || size(self.egress) == 0) && (!has(self.podSelector) || ((!has(self.podSelector.matchLabels) || size(self.podSelector.matchLabels) == 0) && (!has(self.podSelector.matchExpressions) || size(self.podSelector.matchExpressions) == 0))))",message="spec fields must be empty when stagedAction is Delete",reason=FieldValueForbidden
 type StagedKubernetesNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
 	// +kubebuilder:default=Set
