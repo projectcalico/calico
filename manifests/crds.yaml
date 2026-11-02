@@ -2634,9 +2634,18 @@ spec:
                   description: |-
                     ExternalNodesCIDRList is a list of CIDR's of external, non-Calico nodes from which VXLAN/IPIP overlay traffic
                     will be allowed.  By default, external tunneled traffic is blocked to reduce attack surface.
+                    Entries must be IPv4 CIDRs or IPv4 addresses.
                   items:
+                    maxLength: 49
                     type: string
+                  maxItems: 10000
                   type: array
+                  x-kubernetes-validations:
+                    - message: externalNodesList entries must be IPv4 CIDRs or IPv4 addresses
+                      reason: FieldValueInvalid
+                      rule:
+                        "self.all(c, isCIDR(c) ? cidr(c).ip().family() == 4 : (isIP(c)
+                        && ip(c).family() == 4))"
                 failsafeInboundHostPorts:
                   description: |-
                     FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will

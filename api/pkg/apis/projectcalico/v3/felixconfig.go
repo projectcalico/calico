@@ -714,6 +714,10 @@ type FelixConfigurationSpec struct {
 
 	// ExternalNodesCIDRList is a list of CIDR's of external, non-Calico nodes from which VXLAN/IPIP overlay traffic
 	// will be allowed.  By default, external tunneled traffic is blocked to reduce attack surface.
+	// Entries must be IPv4 CIDRs or IPv4 addresses.
+	// +kubebuilder:validation:MaxItems=10000
+	// +kubebuilder:validation:items:MaxLength=49
+	// +kubebuilder:validation:XValidation:rule="self.all(c, isCIDR(c) ? cidr(c).ip().family() == 4 : (isIP(c) && ip(c).family() == 4))",message="externalNodesList entries must be IPv4 CIDRs or IPv4 addresses",reason=FieldValueInvalid
 	ExternalNodesCIDRList *[]string `json:"externalNodesList,omitempty"`
 
 	// DebugMemoryProfilePath is the path to write the memory profile to when triggered by signal.
