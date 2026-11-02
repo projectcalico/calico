@@ -3918,19 +3918,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -4245,19 +4255,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -4549,19 +4569,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -4876,19 +4906,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -6718,19 +6758,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -7045,19 +7095,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -7349,19 +7409,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -7676,19 +7746,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -8194,19 +8274,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -8521,19 +8611,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -8825,19 +8925,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -9152,19 +9262,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -10174,19 +10294,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -10501,19 +10631,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -10805,19 +10945,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -11132,19 +11282,29 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
