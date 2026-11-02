@@ -477,13 +477,22 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	log.WithField("config", config).Info("Creating internal dataplane driver.")
 
-	// Decide whether to use nftables or iptables based on configuration and kube-proxy mode.
-	detectKubeProxyNftablesMode := nftables.KubeProxyNftablesEnabledFn(config.NewNftablesDataplane)
-	kubeProxyNftablesEnabled, err := detectKubeProxyNftablesMode()
-	if err != nil {
-		log.WithError(err).Panic("Unable to detect kube-proxy nftables mode, shutting down")
+	// Resolved at startup, before the dataplane-specific config values were read, so that
+	// those values match the dataplane we program here.
+	nftablesEnabled := config.RulesConfig.NFTablesEnabled
+
+	// In Auto mode, a later change to kube-proxy's mode means Felix must restart onto the
+	// other dataplane, so record the mode we started with for the monitor to compare against.
+	var detectKubeProxyNftablesMode func() (bool, error)
+	kubeProxyNftablesEnabled := false
+	if config.RulesConfig.NFTablesMode == string(apiv3.NFTablesModeAuto) {
+		detectKubeProxyNftablesMode = nftables.KubeProxyNftablesEnabledFn(config.NewNftablesDataplane)
+		var err error
+		kubeProxyNftablesEnabled, err = detectKubeProxyNftablesMode()
+		if err != nil {
+			log.WithError(err).Panic("Unable to detect kube-proxy nftables mode, shutting down")
+		}
 	}
-	nftablesEnabled := useNftables(config.RulesConfig.NFTablesMode, kubeProxyNftablesEnabled)
 
 	ruleRenderer := config.RuleRendererOverride
 	if ruleRenderer == nil {
@@ -1533,27 +1542,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	return dp
 }
 
-// useNftables determines whether to use nftables based on the FelixConfig setting and
-// kube-proxy mode.
-func useNftables(mode string, proxyEnabled bool) bool {
-	use := false
-
-	switch mode {
-	case "Auto":
-		// Detect based on kube-proxy mode.
-		use = proxyEnabled
-	case "Enabled":
-		use = true
-	}
-
-	log.WithFields(log.Fields{
-		"kubeProxyEnabled": proxyEnabled,
-		"calicoMode":       mode,
-		"useNftables":      use,
-	}).Info("Determined whether or not to use nftables")
-	return use
-}
-
 // findHostMTU auto-detects the smallest host interface MTU.
 func findHostMTU(matchRegex *regexp.Regexp) (int, error) {
 	// Find all the interfaces on the host.
@@ -1916,7 +1904,7 @@ func (d *InternalDataplane) checkIPVSConfigOnStateUpdate(state ifacemonitor.Stat
 // monitorKubeProxyNftablesMode monitors kube-proxy's nftables mode has changed and
 // triggers a Felix restart if it has. This is only active if the nftables mode is set to "Auto".
 func (d *InternalDataplane) monitorKubeProxyNftablesMode() {
-	if d.config.RulesConfig.NFTablesMode != "Auto" {
+	if d.config.RulesConfig.NFTablesMode != string(apiv3.NFTablesModeAuto) {
 		// We can skip this check if nftables is not configured to Auto.
 		log.Debug("Skipping kube-proxy nftables mode monitoring as NFTablesMode is not set to Auto.")
 		return

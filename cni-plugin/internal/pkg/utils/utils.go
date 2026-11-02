@@ -28,10 +28,10 @@ import (
 	"strings"
 
 	"github.com/DeRuina/timberjack"
+	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/azure"
@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -132,9 +133,23 @@ func CreateOrUpdate(ctx context.Context, client client.Interface, wep *internala
 	return client.WorkloadEndpoints().Create(ctx, wep, options.SetOptions{})
 }
 
+// IPAMExec runs the IPAM plugin for ExecIPAMAdd and ExecIPAMDel. Nil execs the plugin binary,
+// which is the CNI library's default.
+var IPAMExec invoke.Exec
+
+// ExecIPAMAdd runs an ADD on the named IPAM plugin with IPAMExec.
+func ExecIPAMAdd(ctx context.Context, plugin string, netconf []byte) (cnitypes.Result, error) {
+	return invoke.DelegateAdd(ctx, plugin, netconf, IPAMExec)
+}
+
+// ExecIPAMDel runs a DEL on the named IPAM plugin with IPAMExec.
+func ExecIPAMDel(ctx context.Context, plugin string, netconf []byte) error {
+	return invoke.DelegateDel(ctx, plugin, netconf, IPAMExec)
+}
+
 // AddIPAM calls through to the configured IPAM plugin.
 // It also contains IPAM plugin specific logic based on the configured plugin.
-func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
+func AddIPAM(ctx context.Context, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
 	// Check if we're configured to use the Azure IPAM plugin.
 	var an *azure.AzureNetwork
 	if conf.IPAM.Type == "azure-vnet-ipam" {
@@ -152,7 +167,7 @@ func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cni
 
 	// Actually call the IPAM plugin.
 	logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
-	ipamResult, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+	ipamResult, err := ExecIPAMAdd(ctx, conf.IPAM.Type, args.StdinData)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +215,7 @@ func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cni
 // DeleteIPAM calls IPAM plugin to release the IP address.
 // It also contains IPAM plugin specific logic based on the configured plugin,
 // and is the logical counterpart to AddIPAM.
-func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) error {
+func DeleteIPAM(ctx context.Context, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) error {
 	logger.Info("Calico CNI releasing IP address")
 	logger.WithFields(logrus.Fields{
 		"paths": os.Getenv("CNI_PATH"),
@@ -261,7 +276,7 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 	}
 
 	// Call the CNI plugin.
-	err := ipam.ExecDel(conf.IPAM.Type, args.StdinData)
+	err := ExecIPAMDel(ctx, conf.IPAM.Type, args.StdinData)
 	if err != nil {
 		logger.Error(err)
 	} else if ae != nil {
@@ -626,7 +641,7 @@ func GetIdentifiers(args *skel.CmdArgs, nodename string) (*WEPIdentifiers, error
 }
 
 func GetHandleID(netName, containerID, workload string) string {
-	handleID := fmt.Sprintf("%s.%s", netName, containerID)
+	handleID := ipam.PodHandleID(netName, containerID)
 
 	logrus.WithFields(logrus.Fields{
 		"HandleID":    handleID,
@@ -635,38 +650,6 @@ func GetHandleID(netName, containerID, workload string) string {
 		"ContainerID": containerID,
 	}).Debug("Generated IPAM handle")
 	return handleID
-}
-
-// ParsedPodHandle is a pod's IPAM handle broken into its components.
-type ParsedPodHandle struct {
-	Network     string
-	ContainerID string
-}
-
-// ParsePodHandleID splits a pod's IPAM handle for the given network. Workload, VM and
-// load balancer handles use their own formats and are rejected; see
-// design/ipam/ipam-cni.md for the pod form.
-func ParsePodHandleID(handleID, netName string) (ParsedPodHandle, bool) {
-	// Handles written during the host-local migration can carry a trailing carriage
-	// return; see https://github.com/projectcalico/cni-plugin/issues/821.
-	handleID = strings.Split(handleID, "\r")[0]
-
-	containerID, ok := strings.CutPrefix(handleID, netName+".")
-	if !ok {
-		return ParsedPodHandle{}, false
-	}
-
-	// A dot left in the container ID means this is not a sandbox handle: pre-v3 handles
-	// name the workload (k8s-pod-network.default.mypod), VM handles name the VMI
-	// (k8s-pod-network.vmi.default.vm1).
-	if containerID == "" || strings.Contains(containerID, ".") {
-		return ParsedPodHandle{}, false
-	}
-
-	return ParsedPodHandle{
-		Network:     netName,
-		ContainerID: containerID,
-	}, true
 }
 
 func CreateClient(conf types.NetConf) (client.Interface, error) {
@@ -767,7 +750,7 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 
 // ReleaseIPAllocation is called to cleanup IPAM allocations if something goes wrong during
 // CNI ADD execution. It forces the CNI_COMMAND to be DEL for the duration of the cleanup.
-func ReleaseIPAllocation(logger *logrus.Entry, conf types.NetConf, args *skel.CmdArgs) {
+func ReleaseIPAllocation(ctx context.Context, logger *logrus.Entry, conf types.NetConf, args *skel.CmdArgs) {
 	logger.Info("Cleaning up IP allocations for failed ADD")
 
 	// The caller may carry on with the ADD after a cleanup it can recover from.
@@ -782,7 +765,8 @@ func ReleaseIPAllocation(logger *logrus.Entry, conf types.NetConf, args *skel.Cm
 		// Failed to set CNI_COMMAND to DEL.
 		logger.Warning("Failed to set CNI_COMMAND=DEL")
 	} else {
-		if err := DeleteIPAM(conf, args, logger); err != nil {
+		// Cleanup runs even when the ADD's context has been canceled.
+		if err := DeleteIPAM(context.WithoutCancel(ctx), conf, args, logger); err != nil {
 			// Failed to cleanup the IP allocation.
 			logger.Warning("Failed to clean up IP allocations for failed ADD")
 		}

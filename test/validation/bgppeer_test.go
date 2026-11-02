@@ -20,6 +20,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -120,4 +121,29 @@ func TestBGPPeer_Validation(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestBGPPeer_ASNumberBounds checks that the 4-byte AS number range applies to
+// BGPPeer too, which shares the ASNumber type with BGPConfiguration.
+func TestBGPPeer_ASNumberBounds(t *testing.T) {
+	newPeer := func(asNumber int64) *unstructured.Unstructured {
+		return &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "projectcalico.org/v3",
+				"kind":       "BGPPeer",
+				"metadata":   map[string]interface{}{"name": uniqueName("bgppeer")},
+				"spec": map[string]interface{}{
+					"peerIP":   "10.0.0.1",
+					"asNumber": asNumber,
+				},
+			},
+		}
+	}
+
+	t.Run("above maximum", func(t *testing.T) {
+		expectCreateFails(t, newPeer(4294967296), "asNumber")
+	})
+	t.Run("4-byte AS number above INT32_MAX", func(t *testing.T) {
+		expectCreateSucceeds(t, newPeer(4200000001))
+	})
 }

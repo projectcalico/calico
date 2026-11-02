@@ -228,6 +228,7 @@ func StartDataplaneDriver(
 			RulesConfig: rules.Config{
 				FlowLogsEnabled:       configParams.FlowLogsEnabled(),
 				NFTablesMode:          configParams.NFTablesMode,
+				NFTablesEnabled:       configParams.NFTablesEnabled,
 				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
 
 				IPSetConfigV4: ipsets.NewIPVersionConfig(
@@ -301,7 +302,7 @@ func StartDataplaneDriver(
 				NATOutgoingAddress:                 configParams.NATOutgoingAddress,
 				NATOutgoingExclusions:              configParams.NATOutgoingExclusions,
 				BPFEnabled:                         configParams.BPFEnabled,
-				BPFForceTrackPacketsFromIfaces:     replaceWildcards(configParams.NFTablesMode == "Enabled", configParams.BPFForceTrackPacketsFromIfaces),
+				BPFForceTrackPacketsFromIfaces:     replaceWildcards(configParams.NFTablesEnabled, configParams.BPFForceTrackPacketsFromIfaces),
 				ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 				IstioAmbientModeEnabled:            configParams.IsIstioAmbientModeEnabled(),
 				IstioDSCPMark:                      configParams.IstioDSCPMark.ToUint8(),
@@ -469,6 +470,18 @@ func StartDataplaneDriver(
 
 		return extdataplane.StartExtDataplaneDriver(configParams.DataplaneDriver)
 	}
+}
+
+// NFTablesEnabled resolves the configured NFTablesMode, including Auto, to the dataplane
+// this host will use. Callers must resolve it before anything reads the dataplane-specific
+// config, since Auto depends on runtime detection.
+func NFTablesEnabled(configParams *config.Config) bool {
+	detectKubeProxyNftables := nftables.KubeProxyNftablesEnabledFn(nil)
+	nftEnabled, err := nftables.Enabled(configParams.NFTablesMode, detectKubeProxyNftables, nil)
+	if err != nil {
+		log.WithError(err).Panic("Unable to determine whether to use the nftables dataplane, shutting down")
+	}
+	return nftEnabled
 }
 
 func SupportsBPF() error {
