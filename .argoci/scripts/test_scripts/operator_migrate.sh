@@ -7,7 +7,7 @@ echo "[INFO] starting operator migration..."
 
 # Get the docs site base url
 if [[ "${USE_HASH_RELEASE}" == "true" ]]; then
-  LATEST_HASHREL="https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt"
+  LATEST_HASHREL="https://latest-os.hashrelease.tools.tigera.net/${RELEASE_STREAM}.txt"
   echo "Checking ${LATEST_HASHREL} for latest hash release url..."
   BASE_URL=$(curl --retry 9 --retry-all-errors -fsS ${LATEST_HASHREL})
   echo "Using $BASE_URL for hash release base url"

@@ -19,8 +19,8 @@ To make changes to the auto-generated manifests:
 One manifest is generated, but not from `charts/`:
 
 - `migration.projectcalico.org_datastoremigrations.yaml` is copied from
-  `kube-controllers/pkg/controllers/migration/crd/`, which is controller-gen output. Edit the Go
-  types in `kube-controllers/pkg/controllers/migration/api.go` and run
+  `kube-controllers/pkg/apis/migration/v1/crd/`, which is controller-gen output. Edit the Go
+  types in `kube-controllers/pkg/apis/migration/v1/types.go` and run
   `make -C kube-controllers gen-files`, then `make gen-manifests`.
 
   It's not in the charts because it isn't part of a Calico install. The DatastoreMigration API
@@ -30,7 +30,7 @@ One manifest is generated, but not from `charts/`:
 Some of these manifests are not automatically generated. To edit these, modify the manifests directly and
 commit your changes. **The following manifests are not auto generated:**
 
-- alp/istio-inject-configmap-X.yaml
+- alp/istio-app-layer-policy-envoy-v3.yaml
 - apiserver.yaml
 - calicoctl-etcd.yaml
 - calicoctl.yaml

@@ -517,9 +517,7 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("Scenario %d (external): dest=%s dataplane=%s expect=%s",
 				s.num, s.dest, dp.Calico, expect)
 
-			extNode := externalnode.NewClient()
-			Expect(extNode).NotTo(BeNil(),
-				"external node scenarios require EXT_IP, EXT_KEY, and EXT_USER to be configured")
+			extNode := externalnode.MustNewClient()
 
 			extIPs := extNode.IPs()
 			Expect(extIPs).NotTo(BeEmpty(), "could not determine external node IP addresses")

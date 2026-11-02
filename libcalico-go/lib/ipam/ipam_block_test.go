@@ -23,6 +23,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -117,7 +118,7 @@ var _ = Describe("Getting summary information about a block", func() {
 
 	It("identifies a block with only IPs reserved for Windows as empty", func() {
 		block := makeTestBlock()
-		block.allocate([]int{255}, WindowsReservedHandle)
+		block.allocate([]int{255}, accounting.WindowsReservedHandle)
 		Expect(block.empty()).To(Equal(true))
 	})
 

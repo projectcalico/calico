@@ -21,7 +21,6 @@ Calico DHCP agent) and Felix's status-reporting code.  However, when
 changing these, we still need to consider upgrading an existing
 Calico/OpenStack deployment.
 """
-from networking_calico.common import intern_string
 
 # Key used for leader election by Neutron mechanism drivers.
 NEUTRON_ELECTION_KEY = "/calico/openstack/v1/neutron_election"
@@ -33,58 +32,3 @@ ENDPOINT_STATUS_ERROR = "error"
 # Subtree used by the Neutron driver to pass subnet information to the
 # DHCP agent.
 SUBNET_DIR = "/calico/dhcp/v1/subnet"
-
-
-class EndpointId(object):
-    __slots__ = ["host", "endpoint"]
-
-    def __init__(self, host, endpoint):
-        # We intern these strings since they can occur in many IDs.  The
-        # host and orchestrator are trivially repeated for all endpoints
-        # on a host.  The others get repeated over time.
-        self.host = intern_string(host)
-        self.endpoint = intern_string(endpoint)
-
-    def __str__(self):
-        return self.__class__.__name__ + ("<%s>" % self.endpoint)
-
-    def __repr__(self):
-        return self.__class__.__name__ + "(%r,%r)" % (self.host, self.endpoint)
-
-    def __ne__(self, other):
-        return not (self == other)
-
-
-class WloadEndpointId(EndpointId):
-    __slots__ = ["orchestrator", "workload"]
-
-    def __init__(self, host, orchestrator, workload, endpoint):
-        # We intern these strings since they can occur in many IDs.  The
-        # host and orchestrator are trivially repeated for all endpoints
-        # on a host.  The others get repeated over time.
-        super(WloadEndpointId, self).__init__(host, endpoint)
-        self.orchestrator = intern_string(orchestrator)
-        self.workload = intern_string(workload)
-
-    def __repr__(self):
-        return self.__class__.__name__ + "(%r,%r,%r,%r)" % (
-            self.host,
-            self.orchestrator,
-            self.workload,
-            self.endpoint,
-        )
-
-    def __eq__(self, other):
-        if other is self:
-            return True
-        if not isinstance(other, WloadEndpointId):
-            return False
-        return (
-            other.endpoint == self.endpoint
-            and other.workload == self.workload
-            and other.host == self.host
-            and other.orchestrator == self.orchestrator
-        )
-
-    def __hash__(self):
-        return hash(self.endpoint) + hash(self.workload)

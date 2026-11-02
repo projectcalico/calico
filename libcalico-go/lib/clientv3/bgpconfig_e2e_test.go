@@ -48,6 +48,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 	clusterCIDR := "10.155.0.0/16"
 	restartTime := metav1.Duration{Duration: 200 * time.Second}
 	enabled := apiv3.ServiceLoadBalancerAggregationEnabled
+	noEncapOnly := apiv3.EnabledNoEncapOnly
 	specDefault1 := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen:      "Info",
 		NodeToNodeMeshEnabled:  &ptrTrue,
@@ -61,6 +62,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			{CIDR: clusterCIDR},
 		},
 		ServiceLoadBalancerAggregation: &enabled,
+		ProgramClusterRoutes:           &noEncapOnly,
 		NodeMeshPassword: &apiv3.BGPPassword{
 			SecretKeyRef: &k8sv1.SecretKeySelector{
 				LocalObjectReference: k8sv1.LocalObjectReference{
@@ -79,6 +81,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			{CIDR: ipCidr1},
 		},
 		ServiceLoadBalancerAggregation: &enabled,
+		ProgramClusterRoutes:           &noEncapOnly,
 	}
 	specDefault3 := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen:     "Info",
@@ -89,6 +92,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			{CIDR: ipCidr2},
 		},
 		ServiceLoadBalancerAggregation: &enabled,
+		ProgramClusterRoutes:           &noEncapOnly,
 		NodeMeshPassword: &apiv3.BGPPassword{
 			SecretKeyRef: &k8sv1.SecretKeySelector{
 				LocalObjectReference: k8sv1.LocalObjectReference{
@@ -107,16 +111,19 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			{CIDR: ipCidr2},
 		},
 		ServiceLoadBalancerAggregation: &enabled,
+		ProgramClusterRoutes:           &noEncapOnly,
 		NodeMeshMaxRestartTime:         &restartTime,
 	}
 
 	specInfo := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen:              "Info",
 		ServiceLoadBalancerAggregation: &enabled,
+		ProgramClusterRoutes:           &noEncapOnly,
 	}
 	specDebug := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen:              "Debug",
 		ServiceLoadBalancerAggregation: &enabled,
+		ProgramClusterRoutes:           &noEncapOnly,
 	}
 
 	DescribeTable("BGPConfiguration e2e CRUD tests",

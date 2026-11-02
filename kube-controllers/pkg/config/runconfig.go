@@ -39,6 +39,7 @@ var title = cases.Title(language.English)
 const (
 	datastoreBackoff                 = time.Second
 	defaultKubeControllersConfigName = "default"
+	defaultDebugProfileHost          = "localhost"
 )
 
 // RunConfig represents the configuration for all controllers and includes
@@ -51,6 +52,7 @@ type RunConfig struct {
 	HealthEnabled          bool
 	PrometheusPort         int
 	DebugProfilePort       int32
+	DebugProfileHost       string
 }
 
 type ControllersConfig struct {
@@ -371,6 +373,11 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 	}
 	if apiCfg.DebugProfilePort != nil {
 		rCfg.DebugProfilePort = *apiCfg.DebugProfilePort
+	}
+
+	rCfg.DebugProfileHost = defaultDebugProfileHost
+	if apiCfg.DebugProfileHost != nil && *apiCfg.DebugProfileHost != "" {
+		rCfg.DebugProfileHost = *apiCfg.DebugProfileHost
 	}
 
 	// Don't bother looking at this unless the node controller is enabled.

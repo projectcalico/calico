@@ -89,19 +89,6 @@ var _ = infrastructure.DatastoreDescribe(
 			ensureBPFProgramsAttached(tc.Felixes[0])
 		})
 
-		AfterEach(func() {
-			// infra.Stop() (with DumpErrorData on failure) is handled by
-			// DatastoreDescribe; only the topology-local resources need
-			// explicit teardown here.
-			if hostW != nil {
-				hostW.Stop()
-			}
-			if externalClient != nil {
-				externalClient.Stop()
-			}
-			tc.Stop()
-		})
-
 		// Fast TCP probe — completes in <100ms when the port is reachable,
 		// or after the outer `timeout 1` when the BPF dataplane silently
 		// drops the SYN (which is how the bug presents). Used by the

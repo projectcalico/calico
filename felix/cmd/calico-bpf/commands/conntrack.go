@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -162,18 +163,38 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 }
 
 func protoStr(proto uint8) string {
-	switch proto {
-	case 6:
-		return "TCP"
-	case 17:
-		return "UDP"
-	case 1:
-		return "ICMP"
-	case 58:
-		return "ICMP6"
+	for name, num := range protoNames {
+		if num == proto {
+			return strings.ToUpper(name)
+		}
 	}
 
 	return fmt.Sprintf("Proto-%d", proto)
+}
+
+// protoNames holds one canonical name per protocol; aliases live in protoFromString.
+var protoNames = map[string]uint8{
+	"icmp":  conntrack.ProtoICMP,
+	"tcp":   conntrack.ProtoTCP,
+	"udp":   conntrack.ProtoUDP,
+	"icmp6": conntrack.ProtoICMP6,
+	"sctp":  conntrack.ProtoSCTP,
+}
+
+// protoFromString resolves a protocol name or number. The dataplane tracks
+// every IP protocol, so any number is accepted.
+func protoFromString(s string) (uint8, error) {
+	s = strings.ToLower(s)
+	if s == "icmpv6" {
+		s = "icmp6"
+	}
+	if proto, ok := protoNames[s]; ok {
+		return proto, nil
+	}
+	if proto, err := strconv.ParseUint(s, 10, 8); err == nil {
+		return uint8(proto), nil
+	}
+	return 0, fmt.Errorf("unknown protocol %s", s)
 }
 
 func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.ValueInterface) {
@@ -221,6 +242,14 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 		}
 	}
 
+	srcToDst, dstToSrc := orientedLegs(v)
+	if h := legFwdHint(srcToDst); h != "" {
+		cmd.Printf(" fwd-hint[src->dst: %s]", h)
+	}
+	if h := legFwdHint(dstToSrc); h != "" {
+		cmd.Printf(" fwd-hint[dst->src: %s]", h)
+	}
+
 	cmd.Printf("\n")
 }
 
@@ -243,19 +272,62 @@ type ctEntryJSON struct {
 	RevPortB uint16 `json:"rev_port_b,omitempty"`
 }
 
+// legFwdHint renders a leg's forwarding-hint state - the tunnel/pinned/checked
+// flags this leg carries as an egress hint for the opposite direction - as a
+// terse string, empty when the leg carries none of them.
+func legFwdHint(leg v4.Leg) string {
+	var f []string
+	if leg.Tunnel {
+		f = append(f, "tunnel")
+	}
+	if leg.Pinned {
+		f = append(f, "pinned")
+	}
+	if leg.Checked {
+		f = append(f, "checked")
+	}
+	if len(f) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s if=%d", strings.Join(f, ","), leg.Ifindex)
+}
+
+// legFwdHintJSON is the structured form of the same, nil when the leg carries
+// no hint flags.
+type legFwdHintJSON struct {
+	Tunnel  bool   `json:"tunnel"`
+	Pinned  bool   `json:"pinned"`
+	Checked bool   `json:"checked"`
+	Ifindex uint32 `json:"ifindex"`
+}
+
+func legFwdHintJSONOf(leg v4.Leg) *legFwdHintJSON {
+	if !leg.Tunnel && !leg.Pinned && !leg.Checked {
+		return nil
+	}
+	return &legFwdHintJSON{
+		Tunnel:  leg.Tunnel,
+		Pinned:  leg.Pinned,
+		Checked: leg.Checked,
+		Ifindex: leg.Ifindex,
+	}
+}
+
 // ctConnectionJSON is a logical connection in pretty JSON mode.
 // For NAT connections, forward and reverse entries are grouped.
 type ctConnectionJSON struct {
-	Type        string   `json:"type"`
-	Proto       string   `json:"proto"`
-	Src         string   `json:"src"`
-	Dst         string   `json:"dst"`
-	OrigDst     string   `json:"orig_dst,omitempty"`
-	TunnelIP    string   `json:"tunnel_ip,omitempty"`
-	OrigSrcPort uint16   `json:"orig_src_port,omitempty"`
-	Flags       []string `json:"flags"`
-	ActiveAgo   string   `json:"active_ago"`
-	TCPState    string   `json:"tcp_state,omitempty"`
+	Type          string          `json:"type"`
+	Proto         string          `json:"proto"`
+	Src           string          `json:"src"`
+	Dst           string          `json:"dst"`
+	OrigDst       string          `json:"orig_dst,omitempty"`
+	TunnelIP      string          `json:"tunnel_ip,omitempty"`
+	OrigSrcPort   uint16          `json:"orig_src_port,omitempty"`
+	Flags         []string        `json:"flags"`
+	FwdHintSrcDst *legFwdHintJSON `json:"fwd_hint_src_dst,omitempty"`
+	FwdHintDstSrc *legFwdHintJSON `json:"fwd_hint_dst_src,omitempty"`
+	ActiveAgo     string          `json:"active_ago"`
+	TCPState      string          `json:"tcp_state,omitempty"`
 }
 
 func ctTypeStr(t uint8) string {
@@ -380,14 +452,17 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 	for _, e := range normals {
 		k, v := e.key, e.val
 		src, dst := orientedAddrs(k, v)
+		srcToDst, dstToSrc := orientedLegs(v)
 		connections = append(connections, ctConnectionJSON{
-			Type:      "normal",
-			Proto:     protoStr(k.Proto()),
-			Src:       src,
-			Dst:       dst,
-			Flags:     v4.FlagNames(v.Flags()),
-			ActiveAgo: time.Duration(now - v.LastSeen()).String(),
-			TCPState:  tcpStateStr(k, v),
+			Type:          "normal",
+			Proto:         protoStr(k.Proto()),
+			Src:           src,
+			Dst:           dst,
+			Flags:         v4.FlagNames(v.Flags()),
+			FwdHintSrcDst: legFwdHintJSONOf(srcToDst),
+			FwdHintDstSrc: legFwdHintJSONOf(dstToSrc),
+			ActiveAgo:     time.Duration(now - v.LastSeen()).String(),
+			TCPState:      tcpStateStr(k, v),
 		})
 	}
 
@@ -396,17 +471,20 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 		k, v := e.key, e.val
 		d := v.Data()
 		src, dst := orientedAddrs(k, v)
+		srcToDst, dstToSrc := orientedLegs(v)
 		origDst := net.JoinHostPort(d.OrigDst.String(), fmt.Sprint(d.OrigPort))
 
 		conn := ctConnectionJSON{
-			Type:      "nat",
-			Proto:     protoStr(k.Proto()),
-			Src:       src,
-			OrigDst:   origDst,
-			Dst:       dst,
-			Flags:     v4.FlagNames(v.Flags()),
-			ActiveAgo: time.Duration(now - v.LastSeen()).String(),
-			TCPState:  tcpStateStr(k, v),
+			Type:          "nat",
+			Proto:         protoStr(k.Proto()),
+			Src:           src,
+			OrigDst:       origDst,
+			Dst:           dst,
+			Flags:         v4.FlagNames(v.Flags()),
+			FwdHintSrcDst: legFwdHintJSONOf(srcToDst),
+			FwdHintDstSrc: legFwdHintJSONOf(dstToSrc),
+			ActiveAgo:     time.Duration(now - v.LastSeen()).String(),
+			TCPState:      tcpStateStr(k, v),
 		}
 
 		if (cmd.ipv6 && !d.TunIP.Equal(voidIP6)) || (!cmd.ipv6 && !d.TunIP.Equal(voidIP4)) {
@@ -422,6 +500,16 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 	enc := json.NewEncoder(cmd.OutOrStdout())
 	enc.SetIndent("", "  ")
 	return enc.Encode(connections)
+}
+
+// orientedLegs returns the legs in the order the addresses are printed, so a
+// hint is labelled by the direction it serves rather than by key order.
+func orientedLegs(v conntrack.ValueInterface) (srcToDst, dstToSrc v4.Leg) {
+	d := v.Data()
+	if v.Flags()&v4.FlagSrcDstBA != 0 {
+		return d.B2A, d.A2B
+	}
+	return d.A2B, d.B2A
 }
 
 // orientedAddrs returns src and dst as "ip:port" strings, respecting
@@ -510,9 +598,10 @@ type conntrackRemoveCmd struct {
 	IP1   string `docopt:"<ip1>"`
 	IP2   string `docopt:"<ip2>"`
 
-	proto uint8
-	ip1   net.IP
-	ip2   net.IP
+	proto    uint8
+	anyProto bool
+	ip1      net.IP
+	ip2      net.IP
 
 	conntrackOpts
 }
@@ -521,7 +610,10 @@ func newConntrackRemoveCmd() *cobra.Command {
 	cmd := &conntrackRemoveCmd{
 		Command: &cobra.Command{
 			Use:   "remove <proto> <ip1> <ip2>",
-			Short: "Removes connection tracking",
+			Short: "Removes connection tracking entries between two addresses",
+			Long: "Removes the connection tracking entries between <ip1> and <ip2> in either direction.\n" +
+				"<proto> is a protocol name (tcp, udp, icmp, icmp6, sctp), a decimal protocol\n" +
+				"number, or \"any\" to remove the entries of every protocol.",
 		},
 	}
 
@@ -543,13 +635,10 @@ func (cmd *conntrackRemoveCmd) Args(c *cobra.Command, args []string) error {
 		return err
 	}
 
-	switch proto := strings.ToLower(args[0]); proto {
-	case "udp":
-		cmd.proto = 17
-	case "tcp":
-		cmd.proto = 6
-	default:
-		return fmt.Errorf("unknown protocol %s", proto)
+	if strings.ToLower(args[0]) == "any" {
+		cmd.anyProto = true
+	} else if cmd.proto, err = protoFromString(args[0]); err != nil {
+		return err
 	}
 
 	cmd.ip1 = net.ParseIP(cmd.IP1)
@@ -579,16 +668,17 @@ func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access ConntrackMap")
 	}
+	keyFromBytes := conntrack.KeyFromBytes
+	if cmd.ipv6 {
+		keyFromBytes = conntrack.KeyV6FromBytes
+	}
+
 	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
-		var ctKey conntrack.Key
-		if len(k) != len(ctKey) {
-			log.Panic("Key has unexpected length")
-		}
-		copy(ctKey[:], k[:])
+		ctKey := keyFromBytes(k)
 
 		log.Infof("Examining conntrack key: %v", ctKey)
 
-		if ctKey.Proto() != cmd.proto {
+		if !cmd.anyProto && ctKey.Proto() != cmd.proto {
 			return maps.IterNone
 		}
 

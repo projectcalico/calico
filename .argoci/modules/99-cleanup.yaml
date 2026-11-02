@@ -1,0 +1,19 @@
+# Sweeps what the Windows and fleet lanes leave in GCP and Azure. An exit
+# handler, because it runs even for a cancelled or timed-out run.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+
+onExit:
+  - name: cleanup-cloud-resources
+    requests: {cpu: 500m, memory: 548Mi}
+    secretBundles:
+      - name: google-service-account-for-gce
+        keys:
+          - name: google-service-account-for-gce-key.json
+            as: GCE_SERVICE_ACCOUNT_KEY
+      - banzai-secrets
+    commands: |
+      source .argoci/scripts/vm-fleet-setup.sh
+      .argoci/scripts/cleanup-cloud-resources.sh

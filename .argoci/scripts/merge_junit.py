@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Merge JUnit/xUnit XML files into a single <testsuites> report.
 
-Usage: merge_junit.py <dir> <output>
+Usage: merge_junit.py [--scope=all|top|subdirs] <dir> <output>
 
 Scans <dir> recursively for *.xml files whose root element is <testsuite> or
 <testsuites>, and writes all of the contained <testsuite> elements under a single
@@ -13,6 +13,9 @@ suites.
 Best-effort by design, since it runs from the CI epilogue: files that fail to parse
 (or whose root is some other XML) are skipped with a warning, and if no suites are
 found at all, no output is written and the exit code is still 0.
+
+--scope limits which files are read: "top" reads only files directly in <dir>,
+"subdirs" only files below it, "all" (the default) both.
 """
 
 import os
@@ -76,11 +79,19 @@ def suite_time(suite):
         return total
 
 
+SCOPES = ("all", "top", "subdirs")
+
+
 def main():
-    if len(sys.argv) != 3:
-        sys.exit(f"usage: {sys.argv[0]} <dir> <output>")
-    src_dir, out_path = sys.argv[1], sys.argv[2]
+    args = sys.argv[1:]
+    scope = "all"
+    if args and args[0].startswith("--scope="):
+        scope = args.pop(0).split("=", 1)[1]
+    if len(args) != 2 or scope not in SCOPES:
+        sys.exit(f"usage: {sys.argv[0]} [--scope=all|top|subdirs] <dir> <output>")
+    src_dir, out_path = args
     out_abs = os.path.abspath(out_path)
+    src_abs = os.path.abspath(src_dir)
 
     # Sort both walk axes so the merged suite order is deterministic (and
     # alphabetical) — the ArgoCI viewer renders suites in file order.
@@ -94,6 +105,11 @@ def main():
         # (libvirt domain definitions, say) is already filtered out by the
         # root-element check in collect_suites.
         dirnames[:] = sorted(d for d in dirnames if d != "diags")
+        at_top = os.path.abspath(dirpath) == src_abs
+        if scope == "top":
+            dirnames[:] = []
+        if scope == "subdirs" and at_top:
+            continue
         for fn in sorted(filenames):
             path = os.path.join(dirpath, fn)
             if not fn.lower().endswith(".xml") or os.path.abspath(path) == out_abs:

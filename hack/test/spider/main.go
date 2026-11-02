@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,6 +34,19 @@ import (
 // packages which need to have their unit tests executed as a result of a given diff.
 
 var shaA, shaB, commitRange, filterDir string
+
+// sentinel marks a completed run, letting callers tell an empty package list
+// apart from a crash.
+const sentinel = "__SPIDER_OK__"
+
+// failClosed reports why the package set is unknown and tells the caller to
+// test everything.
+func failClosed(reason string) {
+	fmt.Fprintf(os.Stderr, "test spider failed, falling back to all tests: %s\n", reason)
+	fmt.Println(".")
+	fmt.Println(sentinel)
+	os.Exit(0)
+}
 
 func init() {
 	flag.StringVar(&shaA, "shaA", "", "First commit in diff calculation")
@@ -67,32 +81,34 @@ func filter(pkg string) string {
 
 func loadPackages() []Package {
 	var out, stderr bytes.Buffer
-	cmd := exec.Command("go", "list", "-json", "all")
+	// -e keeps a package that cannot be loaded from failing the whole listing. The
+	// operator embeds tarballs its Makefile fetches, so a clean checkout has packages
+	// go list cannot load, and their imports are still what this tool needs.
+	cmd := exec.Command("go", "list", "-e", "-json", "all")
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		panic(fmt.Sprintf("%s: %s", err, stderr.String()))
+		failClosed(fmt.Sprintf("go list: %s: %s", err, stderr.String()))
 	}
-	splits := strings.SplitAfter(out.String(), "}\n")
+	// go list emits one JSON object per package, concatenated rather than as an array.
+	decoder := json.NewDecoder(&out)
 
-	// Load each package.
 	packages := []Package{}
-	for _, s := range splits {
-		if len(s) == 0 {
-			// Sometimes we get empty strings here since the output from go list
-			// isn't actually proper json.
-			continue
-		}
-
+	for {
 		pkg := Package{}
-		err := json.Unmarshal([]byte(s), &pkg)
-		if err != nil {
-			panic(err)
+		if err := decoder.Decode(&pkg); err == io.EOF {
+			break
+		} else if err != nil {
+			failClosed(fmt.Sprintf("parsing go list output: %s", err))
 		}
 
 		// Filter out packages that aren't part of this repo.
 		if isLocalDir(pkg.Dir) {
+			if pkg.Error != nil {
+				fmt.Fprintf(os.Stderr, "test spider: %s did not load cleanly, using its imports anyway: %s\n", pkg.Dir, pkg.Error.Err)
+			}
+
 			// Canonicalize the package names, since by default the packages are
 			// absolute paths based on the host filesystem.
 			pkg.Dir = canonical(pkg.Dir)
@@ -119,7 +135,7 @@ func loadPackages() []Package {
 
 func getCommits() (string, string) {
 	if shaA == "" && shaB == "" && commitRange == "" {
-		panic("No commit information provided!")
+		failClosed("no commit information provided")
 	}
 
 	if shaA != "" && shaB != "" {
@@ -157,7 +173,7 @@ func main() {
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		panic(fmt.Sprintf("%s: %s", err, stderr.String()))
+		failClosed(fmt.Sprintf("git diff %s %s: %s: %s", c1, c2, err, stderr.String()))
 	}
 
 	// First, check if go.mod has changed. If it has, we can skip building a graph of changed / impacted
@@ -170,11 +186,12 @@ func main() {
 		cmd.Stderr = &stderr
 		err := cmd.Run()
 		if err != nil {
-			panic(fmt.Sprintf("%s: %s", err, stderr.String()))
+			failClosed(fmt.Sprintf("listing test packages: %s: %s", err, stderr.String()))
 		}
 		for p := range strings.SplitSeq(out.String(), "\n") {
 			fmt.Println(p)
 		}
+		fmt.Println(sentinel)
 		return
 	}
 
@@ -230,11 +247,16 @@ func main() {
 	for _, s := range sorted {
 		fmt.Println(s)
 	}
+	fmt.Println(sentinel)
 }
 
 type Package struct {
 	// The package's name / directory.
 	Dir string `json:"Dir"`
+
+	// Set when go list could not fully load the package. Its imports are still
+	// listed, so this is reported rather than treated as fatal.
+	Error *PackageError `json:"Error"`
 
 	// List of other packages that this package imports - either directly or
 	// indirectly.
@@ -245,4 +267,8 @@ type Package struct {
 
 	// List of imports from _test.go files outside the package.
 	XTestImports []string `json:"XTestImports"`
+}
+
+type PackageError struct {
+	Err string `json:"Err"`
 }

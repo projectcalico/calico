@@ -15,12 +15,34 @@
 package ippool
 
 import (
+	"context"
+	"fmt"
+	"net/netip"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset/fake"
+	"github.com/sirupsen/logrus"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/wait"
+	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
+
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 func TestPoolSortFunc(t *testing.T) {
@@ -166,5 +188,579 @@ func TestPoolSortFunc(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// fakeSharedIndexInformer wraps a cache.Indexer to satisfy cache.SharedIndexInformer for testing.
+// Only GetIndexer and GetStore are implemented.
+type fakeSharedIndexInformer struct {
+	cache.SharedIndexInformer
+	indexer cache.Indexer
+}
+
+func (f *fakeSharedIndexInformer) GetIndexer() cache.Indexer {
+	return f.indexer
+}
+
+func (f *fakeSharedIndexInformer) GetStore() cache.Store {
+	return f.indexer
+}
+
+// AddEventHandler registers nothing, and reports the handler synced straight away.
+func (f *fakeSharedIndexInformer) AddEventHandler(cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
+	return syncedRegistration{}, nil
+}
+
+// syncedRegistration implements only HasSynced, the one method the controller calls.
+type syncedRegistration struct {
+	cache.ResourceEventHandlerRegistration
+}
+
+func (syncedRegistration) HasSynced() bool { return true }
+
+// fakeIPAM stubs out the IPAM calls the finalizer path makes for a deleting pool.
+type fakeIPAM struct {
+	ipam.Interface
+}
+
+func (f *fakeIPAM) ReleasePoolAffinities(ctx context.Context, pool cnet.IPNet) error {
+	return nil
+}
+
+// fakeRateLimitingQueue tracks calls for testing handleErr behavior.
+type fakeRateLimitingQueue struct {
+	workqueue.TypedRateLimitingInterface[string]
+	rateLimitedAdds int
+	forgets         int
+	requeues        int
+}
+
+func (f *fakeRateLimitingQueue) AddRateLimited(item string)  { f.rateLimitedAdds++ }
+func (f *fakeRateLimitingQueue) Forget(item string)          { f.forgets++ }
+func (f *fakeRateLimitingQueue) NumRequeues(item string) int { return f.requeues }
+
+// newTestController builds a synced controller holding the given pools and no blocks. It returns the pool indexer the
+// controller reads, so tests can check whether the controller mutated the objects it was handed.
+func newTestController(cli *fake.Clientset, pools ...*v3.IPPool) (*IPPoolController, cache.Indexer) {
+	poolIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	for _, p := range pools {
+		if err := poolIndexer.Add(p); err != nil {
+			panic(err)
+		}
+	}
+	tracker := accounting.NewTracker()
+	tracker.AddPools(pools...)
+
+	c := &IPPoolController{
+		ctx:          context.Background(),
+		cli:          cli,
+		poolInformer: &fakeSharedIndexInformer{indexer: poolIndexer},
+		tracker:      tracker,
+		ipam:         &fakeIPAM{},
+		queue:        &fakeRateLimitingQueue{},
+	}
+	c.inSync.Store(true)
+	return c, poolIndexer
+}
+
+func testPool(name, cidr string) *v3.IPPool {
+	return &v3.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec:       v3.IPPoolSpec{CIDR: cidr},
+	}
+}
+
+// failOn makes every write matching verb/subresource fail with a conflict, and counts attempts.
+func failOn(cli *fake.Clientset, verb, subresource string, count *int) {
+	cli.PrependReactor(verb, "ippools", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		if a.GetSubresource() != subresource {
+			return false, nil, nil
+		}
+		*count++
+		return true, nil, apierrors.NewConflict(schema.GroupResource{Group: "projectcalico.org", Resource: "ippools"}, "conflict", fmt.Errorf("stale object"))
+	})
+}
+
+// logEntry returns a throwaway log context for functions that require one.
+func logEntry() *logrus.Entry {
+	return logrus.WithField("test", true)
+}
+
+// hasConflict reports whether err, which may be a nested aggregate of wrapped errors, contains a conflict.
+func hasConflict(err error) bool {
+	agg, ok := err.(utilerrors.Aggregate)
+	if !ok {
+		return apierrors.IsConflict(err)
+	}
+	for _, e := range utilerrors.Flatten(agg).Errors() {
+		if apierrors.IsConflict(e) {
+			return true
+		}
+	}
+	return false
+}
+
+func cachedPool(t *testing.T, idx cache.Indexer, name string) *v3.IPPool {
+	t.Helper()
+	obj, exists, err := idx.GetByKey(name)
+	if err != nil || !exists {
+		t.Fatalf("pool %q not in cache (exists=%v, err=%v)", name, exists, err)
+	}
+	return obj.(*v3.IPPool)
+}
+
+// TestReconcileConditions_FailedStatusUpdateDoesNotPoisonCache is the regression test for
+// CORE-13258. A rejected UpdateStatus used to leave the informer-cached pool asserting the
+// condition, after which the idempotency check in setConditionOnPool suppressed every retry.
+func TestReconcileConditions_FailedStatusUpdateDoesNotPoisonCache(t *testing.T) {
+	pool := testPool("pool-1", "192.168.0.0/24")
+	cli := fake.NewClientset(pool)
+	attempts := 0
+	failOn(cli, "update", "status", &attempts)
+
+	c, idx := newTestController(cli, pool)
+
+	if _, err := c.reconcileConditions(c.ctx); err == nil {
+		t.Fatal("expected reconcileConditions to surface the failed status write")
+	}
+	if attempts != 1 {
+		t.Fatalf("expected 1 UpdateStatus attempt, got %d", attempts)
+	}
+
+	// The cached object must not claim a condition the API server rejected.
+	if cp := cachedPool(t, idx, "pool-1"); cp.Status != nil && len(cp.Status.Conditions) > 0 {
+		t.Fatalf("informer cache was mutated by a failed write: %+v", cp.Status.Conditions)
+	}
+
+	// And the next pass must retry rather than short-circuit on the poisoned cache.
+	if _, err := c.reconcileConditions(c.ctx); err == nil {
+		t.Fatal("expected second reconcileConditions to surface the failed status write")
+	}
+	if attempts != 2 {
+		t.Fatalf("expected the second pass to retry the write, got %d total attempts", attempts)
+	}
+}
+
+// TestReconcileConditions_RecoversOnceWriteSucceeds confirms the retry actually lands the
+// condition once the transient failure clears.
+func TestReconcileConditions_RecoversOnceWriteSucceeds(t *testing.T) {
+	pool := testPool("pool-1", "192.168.0.0/24")
+	cli := fake.NewClientset(pool)
+	fail := true
+	attempts := 0
+	cli.PrependReactor("update", "ippools", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		if a.GetSubresource() != "status" {
+			return false, nil, nil
+		}
+		attempts++
+		if fail {
+			return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "ippools"}, "pool-1", nil)
+		}
+		return false, nil, nil
+	})
+
+	c, _ := newTestController(cli, pool)
+
+	if _, err := c.reconcileConditions(c.ctx); err == nil {
+		t.Fatal("expected first pass to fail")
+	}
+
+	fail = false
+	if _, err := c.reconcileConditions(c.ctx); err != nil {
+		t.Fatalf("expected second pass to succeed, got %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts)
+	}
+
+	updated, err := cli.ProjectcalicoV3().IPPools().Get(context.Background(), "pool-1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get pool: %v", err)
+	}
+	if !hasCondition(updated, v3.IPPoolConditionAllocatable, metav1.ConditionTrue) {
+		t.Fatalf("expected Allocatable=True to be persisted, got %+v", updated.Status)
+	}
+}
+
+// TestReconcileFinalizer_FailedUpdateDoesNotPoisonCache covers the same mutate-before-write
+// pattern on the finalizer path.
+func TestReconcileFinalizer_FailedUpdateDoesNotPoisonCache(t *testing.T) {
+	pool := testPool("pool-1", "192.168.0.0/24")
+	cli := fake.NewClientset(pool)
+	attempts := 0
+	failOn(cli, "update", "", &attempts)
+
+	c, idx := newTestController(cli, pool)
+
+	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err == nil {
+		t.Fatal("expected reconcileFinalizer to return the failed write")
+	}
+	if attempts != 1 {
+		t.Fatalf("expected 1 Update attempt, got %d", attempts)
+	}
+	if cp := cachedPool(t, idx, "pool-1"); hasFinalizer(cp) {
+		t.Fatal("informer cache gained a finalizer from a failed write")
+	}
+
+	// A pool that never got its finalizer written must be retried, not skipped.
+	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err == nil {
+		t.Fatal("expected second reconcileFinalizer to return the failed write")
+	}
+	if attempts != 2 {
+		t.Fatalf("expected the second pass to retry, got %d total attempts", attempts)
+	}
+}
+
+// TestReconcileFinalizer_RemovalFailureDoesNotPoisonCache covers the removal branch, which
+// deletes from the finalizer slice rather than appending to it.
+func TestReconcileFinalizer_RemovalFailureDoesNotPoisonCache(t *testing.T) {
+	pool := testPool("pool-1", "192.168.0.0/24")
+	pool.Finalizers = []string{IPPoolFinalizer}
+	pool.Status = &v3.IPPoolStatus{
+		Conditions: []metav1.Condition{{
+			Type:   v3.IPPoolConditionAllocatable,
+			Status: metav1.ConditionFalse,
+			Reason: v3.IPPoolReasonCIDROverlap,
+		}},
+	}
+	cli := fake.NewClientset(pool)
+	attempts := 0
+	failOn(cli, "update", "", &attempts)
+
+	c, idx := newTestController(cli, pool)
+
+	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err == nil {
+		t.Fatal("expected reconcileFinalizer to return the failed write")
+	}
+	if cp := cachedPool(t, idx, "pool-1"); !hasFinalizer(cp) {
+		t.Fatal("informer cache lost its finalizer to a failed write")
+	}
+	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err == nil {
+		t.Fatal("expected second reconcileFinalizer to return the failed write")
+	}
+	if attempts != 2 {
+		t.Fatalf("expected the second pass to retry, got %d total attempts", attempts)
+	}
+}
+
+// TestReconcile_ConflictRequeues checks the whole loop: a conflicting write must come back
+// through the workqueue rather than being logged and dropped.
+func TestReconcile_ConflictRequeues(t *testing.T) {
+	pool := testPool("pool-1", "192.168.0.0/24")
+	cli := fake.NewClientset(pool)
+	attempts := 0
+	failOn(cli, "update", "status", &attempts)
+
+	c, _ := newTestController(cli, pool)
+
+	err := c.reconcile()
+	if err == nil {
+		t.Fatal("expected reconcile to return the conflict")
+	}
+	if !hasConflict(err) {
+		t.Fatalf("expected a conflict error, got %v", err)
+	}
+
+	c.handleErr(err, reconcileKey)
+	fq := c.queue.(*fakeRateLimitingQueue)
+	if fq.rateLimitedAdds != 1 {
+		t.Fatalf("expected 1 rate-limited requeue, got %d", fq.rateLimitedAdds)
+	}
+	if fq.forgets != 0 {
+		t.Fatalf("expected the key to be kept, got %d forgets", fq.forgets)
+	}
+}
+
+func TestHandleErr_ForgetsOnSuccess(t *testing.T) {
+	c, _ := newTestController(fake.NewClientset())
+
+	c.handleErr(nil, reconcileKey)
+
+	fq := c.queue.(*fakeRateLimitingQueue)
+	if fq.forgets != 1 {
+		t.Fatalf("expected 1 forget, got %d", fq.forgets)
+	}
+	if fq.rateLimitedAdds != 0 {
+		t.Fatalf("expected 0 requeues, got %d", fq.rateLimitedAdds)
+	}
+}
+
+func TestHandleErr_DropsAfterMaxRetries(t *testing.T) {
+	c, _ := newTestController(fake.NewClientset())
+	fq := c.queue.(*fakeRateLimitingQueue)
+	fq.requeues = maxRetries
+
+	c.handleErr(fmt.Errorf("persistent error"), reconcileKey)
+
+	if fq.rateLimitedAdds != 0 {
+		t.Fatalf("expected no requeue past maxRetries, got %d", fq.rateLimitedAdds)
+	}
+	if fq.forgets != 1 {
+		t.Fatalf("expected the key to be forgotten, got %d forgets", fq.forgets)
+	}
+}
+
+// TestReconcile_HappyPath is a sanity check that the restructured reconcile still writes both
+// the condition and the finalizer for a single healthy pool.
+func TestReconcile_HappyPath(t *testing.T) {
+	pool := testPool("pool-1", "192.168.0.0/24")
+	cli := fake.NewClientset(pool)
+	c, idx := newTestController(cli, pool)
+
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+
+	updated, err := cli.ProjectcalicoV3().IPPools().Get(context.Background(), "pool-1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get pool: %v", err)
+	}
+	if !hasCondition(updated, v3.IPPoolConditionAllocatable, metav1.ConditionTrue) {
+		t.Fatalf("expected Allocatable=True, got %+v", updated.Status)
+	}
+	if !hasFinalizer(updated) {
+		t.Fatal("expected finalizer to be added")
+	}
+
+	// Even on the happy path the controller must not have written through to the shared cache.
+	if cp := cachedPool(t, idx, "pool-1"); hasFinalizer(cp) || cp.Status != nil {
+		t.Fatalf("controller mutated the informer cache: finalizers=%v status=%+v", cp.Finalizers, cp.Status)
+	}
+}
+
+// TestReconcile_FinalizerWriteUsesStatusResourceVersion checks that the finalizer write uses
+// the resourceVersion the status write returned.
+func TestReconcile_FinalizerWriteUsesStatusResourceVersion(t *testing.T) {
+	pool := testPool("pool-1", "192.168.0.0/24")
+	pool.ResourceVersion = "1"
+	cli := fake.NewClientset(pool)
+
+	var finalizerRV string
+	cli.PrependReactor("update", "ippools", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		obj := a.(k8stesting.UpdateAction).GetObject().(*v3.IPPool)
+		if a.GetSubresource() == "status" {
+			accepted := obj.DeepCopy()
+			accepted.ResourceVersion = "2"
+			return true, accepted, nil
+		}
+		finalizerRV = obj.ResourceVersion
+		return true, obj, nil
+	})
+
+	c, _ := newTestController(cli, pool)
+
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+	if finalizerRV != "2" {
+		t.Fatalf("expected finalizer write to use resourceVersion 2, got %q", finalizerRV)
+	}
+}
+
+func terminatingPool(name, cidr string, created time.Time) *v3.IPPool {
+	pool := testPool(name, cidr)
+	pool.Spec.BlockSize = 26
+	pool.Finalizers = []string{IPPoolFinalizer}
+	pool.CreationTimestamp = metav1.NewTime(created)
+	pool.DeletionTimestamp = &metav1.Time{Time: created.Add(time.Hour)}
+	return pool
+}
+
+func expectFinalizer(t *testing.T, cli *fake.Clientset, name string, want bool) {
+	t.Helper()
+	pool, err := cli.ProjectcalicoV3().IPPools().Get(context.Background(), name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get pool %s: %v", name, err)
+	}
+	if hasFinalizer(pool) != want {
+		t.Fatalf("pool %s: expected finalizer present=%v, got finalizers %v", name, want, pool.Finalizers)
+	}
+}
+
+func TestReconcileFinalizer_WaitsForTheLastBlock(t *testing.T) {
+	pool := terminatingPool("pool-1", "192.168.0.0/24", time.Now())
+	cli := fake.NewClientset(pool)
+	c, _ := newTestController(cli, pool)
+	block := allocatedBlock(t, "192.168.0.0/26", 0)
+	c.tracker.AddBlocks(block)
+
+	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err != nil {
+		t.Fatalf("reconcileFinalizer failed: %v", err)
+	}
+	expectFinalizer(t, cli, "pool-1", true)
+
+	c.tracker.RemoveBlock(block.CIDR)
+	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err != nil {
+		t.Fatalf("reconcileFinalizer failed: %v", err)
+	}
+	expectFinalizer(t, cli, "pool-1", false)
+}
+
+// The narrower pool wins the block's attribution, but the block still holds addresses from the deleting pool's CIDR.
+func TestReconcile_ANarrowerPoolDoesNotFinalizeTheTerminatingPoolAroundIt(t *testing.T) {
+	wide := terminatingPool("wide", "192.168.0.0/16", time.Now())
+	narrow := testPool("narrow", "192.168.1.0/24")
+	narrow.Spec.BlockSize = 26
+	narrow.Spec.Disabled = true
+	cli := fake.NewClientset(wide, narrow)
+	c, _ := newTestController(cli, wide, narrow)
+	c.tracker.AddBlocks(allocatedBlock(t, "192.168.1.0/26", 1))
+
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+	expectFinalizer(t, cli, "wide", true)
+}
+
+func TestReconcile_ReplacementPoolDoesNotFinalizeATerminatingPool(t *testing.T) {
+	created := time.Now().Add(-time.Hour)
+	old := terminatingPool("z-old", "192.168.0.0/24", created)
+	replacement := testPool("a-new", "192.168.0.0/24")
+	replacement.Spec.BlockSize = 26
+	replacement.CreationTimestamp = metav1.NewTime(created.Add(time.Minute))
+	cli := fake.NewClientset(old, replacement)
+	c, _ := newTestController(cli, old, replacement)
+	c.tracker.AddBlocks(allocatedBlock(t, "192.168.0.0/26", 1))
+
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+	expectFinalizer(t, cli, "z-old", true)
+}
+
+// A nearly-full message moves with every percentage point, which must not read as a fresh transition.
+func TestSetConditionOnPool_KeepsTransitionTimeWhileTheStatusHolds(t *testing.T) {
+	pool := testPool("pool-1", "10.0.0.0/24")
+	nearlyFull := metav1.Condition{Type: v3.IPPoolConditionAddressSpaceNearlyFull, Status: metav1.ConditionTrue, Reason: v3.IPPoolReasonThresholdExceeded, Message: "81%"}
+	if !setConditionOnPool(pool, nearlyFull) {
+		t.Fatal("expected the first condition to count as a change")
+	}
+	first := metav1.NewTime(time.Now().Add(-time.Hour))
+	pool.Status.Conditions[0].LastTransitionTime = first
+
+	nearlyFull.Message = "93%"
+	if !setConditionOnPool(pool, nearlyFull) {
+		t.Fatal("expected a new message to count as a change")
+	}
+	if got := pool.Status.Conditions[0]; got.Message != "93%" || !got.LastTransitionTime.Equal(&first) {
+		t.Fatalf("expected message 93%% with the original transition time %v, got %q at %v", first, got.Message, got.LastTransitionTime)
+	}
+
+	setConditionOnPool(pool, metav1.Condition{Type: v3.IPPoolConditionAddressSpaceNearlyFull, Status: metav1.ConditionFalse, Reason: "BelowThreshold"})
+	if got := pool.Status.Conditions[0].LastTransitionTime; got.Equal(&first) {
+		t.Fatalf("expected a status change to move the transition time off %v", first)
+	}
+}
+
+// pool-2 gaining a finalizer shows that a reconcile ran, and none may run before every handler has synced.
+func TestRun_WaitsForTheHandlersBeforeReconciling(t *testing.T) {
+	active := testPool("pool-2", "10.0.0.0/24")
+	cli := fake.NewClientset(active)
+	c, _ := newTestController(cli, active)
+	c.queue = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
+	var handlersSynced atomic.Bool
+	c.handlersSynced = []cache.InformerSynced{handlersSynced.Load}
+
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		c.Run(stop)
+		close(done)
+	}()
+	defer func() {
+		close(stop)
+		<-done
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+	expectFinalizer(t, cli, "pool-2", false)
+
+	handlersSynced.Store(true)
+	err := wait.PollUntilContextTimeout(context.Background(), 50*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (bool, error) {
+		pool, err := cli.ProjectcalicoV3().IPPools().Get(ctx, "pool-2", metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return hasFinalizer(pool), nil
+	})
+	if err != nil {
+		t.Fatalf("no reconcile ran after the handlers synced: %v", err)
+	}
+}
+
+// Before the data feed is in sync the tracker may be missing the pool's blocks, so it cannot vouch that none are left.
+func TestReconcileFinalizer_KeepsTheFinalizerUntilInSync(t *testing.T) {
+	pool := terminatingPool("pool-1", "192.168.0.0/24", time.Now())
+	cli := fake.NewClientset(pool)
+	c, _ := newTestController(cli, pool)
+	c.inSync.Store(false)
+
+	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err != nil {
+		t.Fatalf("reconcileFinalizer failed: %v", err)
+	}
+	expectFinalizer(t, cli, "pool-1", true)
+
+	c.inSync.Store(true)
+	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err != nil {
+		t.Fatalf("reconcileFinalizer failed: %v", err)
+	}
+	expectFinalizer(t, cli, "pool-1", false)
+}
+
+// Built through NewController, so it fails if the controller stops holding Run for the data feed.
+func TestRun_WaitsForTheDataFeedToSync(t *testing.T) {
+	active := testPool("pool-2", "10.0.0.0/24")
+	cli := fake.NewClientset(active)
+	poolIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	if err := poolIndexer.Add(active); err != nil {
+		t.Fatalf("cache pool: %v", err)
+	}
+	dataFeed := utils.NewDataFeed(node.NewFakeCalicoClient(), "kubernetes")
+	ctrl := NewController(context.Background(), cli, &fakeSharedIndexInformer{indexer: poolIndexer}, dataFeed, accounting.NewTracker(), &fakeIPAM{})
+
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		ctrl.Run(stop)
+		close(done)
+	}()
+	defer func() {
+		close(stop)
+		<-done
+	}()
+
+	dataFeed.OnStatusUpdated(bapi.ResyncInProgress)
+	time.Sleep(500 * time.Millisecond)
+	expectFinalizer(t, cli, "pool-2", false)
+
+	dataFeed.OnStatusUpdated(bapi.InSync)
+	err := wait.PollUntilContextTimeout(context.Background(), 50*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (bool, error) {
+		pool, err := cli.ProjectcalicoV3().IPPools().Get(ctx, "pool-2", metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return hasFinalizer(pool), nil
+	})
+	if err != nil {
+		t.Fatalf("no reconcile ran after the data feed synced: %v", err)
+	}
+}
+
+// A block change waits out utilizationDelay, but a block deletion can free a deleting pool and reconciles at once.
+func TestOnBlockUpdate_ReconcilesADeletionAtOnce(t *testing.T) {
+	c, _ := newTestController(fake.NewClientset())
+	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
+	defer queue.ShutDown()
+	c.queue = queue
+	key := model.BlockKey{CIDR: netip.MustParsePrefix("10.0.0.0/26")}
+
+	c.onBlockUpdate(bapi.Update{KVPair: model.KVPair{Key: key, Value: allocatedBlock(t, "10.0.0.0/26", 1)}})
+	if queue.Len() != 0 {
+		t.Fatalf("expected a block change to wait for the utilization delay, got %d queued", queue.Len())
+	}
+
+	c.onBlockUpdate(bapi.Update{KVPair: model.KVPair{Key: key}})
+	if queue.Len() != 1 {
+		t.Fatalf("expected a block deletion to queue a reconcile at once, got %d queued", queue.Len())
 	}
 }

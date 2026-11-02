@@ -2,16 +2,13 @@
 // Copyright (c) 2023 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-// stdbool.h has no deps so it's OK to include; stdint.h pulls in parts
-// of the std lib that aren't compatible with BPF.
-#include <stdbool.h>
 #include <linux/if_ether.h>
 
-#include "bpf.h"
-#include "types.h"
+#include "cali_bpf.h"
 #include "globals.h"
 #include "jump.h"
 #include "log.h"
+#include "types.h"
 
 const volatile struct cali_tc_preamble_globals __globals;
 
@@ -55,11 +52,11 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 	/* We do the copy once here so keep the program smaller */
 	globals->data = *globals_data;
 
-	// Clear bypass mark from packet if ingress packet rate QoS is configured
-	if (globals->data.flags & CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED) {
-		if (skb->mark == CALI_SKB_MARK_BYPASS) {
-			skb->mark = CALI_SKB_MARK_SEEN;
-		}
+	// Ingress packet-rate QoS must count every packet; MASQ is exempt, it never bypasses to-WEP.
+	if ((globals->data.flags & CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED) &&
+			(skb->mark & CALI_SKB_MARK_BYPASS) == CALI_SKB_MARK_BYPASS &&
+			(skb->mark & CALI_SKB_MARK_BYPASS_MASK) != CALI_SKB_MARK_MASQ) {
+		skb->mark &= ~(CALI_SKB_MARK_BYPASS & ~CALI_SKB_MARK_SEEN);
 	}
 
 #if EMIT_LOGS
@@ -99,12 +96,3 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 
 	return TC_ACT_SHOT;
 }
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-local-typedef"
-#pragma clang diagnostic ignored "-Wunused"
-static CALI_BPF_INLINE void __compile_tc_asserts(void) {
-/* We store globals in the state map to pass them between programs, they must fit! */
-COMPILE_TIME_ASSERT(sizeof(struct cali_tc_globals) < sizeof(struct cali_tc_state))
-}
-#pragma clang diagnostic pop

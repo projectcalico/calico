@@ -16,8 +16,10 @@ package migration
 
 import (
 	"testing"
+	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
@@ -99,6 +101,34 @@ func TestConvertIPAMBlock(t *testing.T) {
 	}
 	if block.Spec.Deleted {
 		t.Error("expected Deleted=false")
+	}
+}
+
+// A released address still cooling down must keep its release time, or the migrated block ends the cooldown early.
+func TestConvertIPAMBlock_KeepsReleasedAt(t *testing.T) {
+	handle := "k8s-pod-network.abc123"
+	releasedAt := metav1.NewTime(time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC))
+	kvp := &model.KVPair{
+		Value: &model.AllocationBlock{
+			CIDR:        cnet.MustParseCIDR("10.0.2.0/30"),
+			Allocations: []*int{ptr.To(0), ptr.To(1), nil, nil},
+			Unallocated: []int{2, 3},
+			Attributes: []model.AllocationAttribute{
+				{HandleID: &handle, ActiveOwnerAttrs: map[string]string{"pod": "nginx-abc123"}},
+				{ReleasedAt: &releasedAt},
+			},
+		},
+	}
+
+	block, err := convertIPAMBlock(kvp)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := block.Spec.Attributes[1].ReleasedAt; got == nil || !got.Equal(&releasedAt) {
+		t.Errorf("expected the cooling attribute's ReleasedAt %v, got %v", releasedAt, got)
+	}
+	if got := block.Spec.Attributes[0].ReleasedAt; got != nil {
+		t.Errorf("expected the live attribute to have no ReleasedAt, got %v", got)
 	}
 }
 

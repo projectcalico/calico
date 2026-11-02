@@ -5,9 +5,11 @@
 #ifndef __CALI_FIB_COMMON_H__
 #define __CALI_FIB_COMMON_H__
 
-#include "types.h"
-#include "skb.h"
+#include "cali_bpf.h"
+#include "conntrack_types.h"
 #include "ifstate.h"
+#include "log.h"
+#include "types.h"
 
 #if CALI_FIB_ENABLED
 #define fwd_fib(fwd)			((fwd)->fib)

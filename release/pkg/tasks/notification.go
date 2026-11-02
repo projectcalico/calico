@@ -17,19 +17,17 @@ package tasks
 import (
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/slack"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
-
-var product = utils.ProductName
 
 // AnnounceHashrelease sends a slack notification for a new hashrelease.
 func AnnounceHashrelease(cfg *slack.Config, hashrel *hashreleaseserver.Hashrelease, ciURL string) (*slack.MessageResponse, error) {
 	logrus.WithField("hashrelease", hashrel.Name).Info("Sending hashrelease announcement to Slack")
 	msgData := &slack.HashreleaseMessageData{
 		ReleaseName:        hashrel.Name,
-		Product:            product,
+		Product:            defaults.ProductName,
 		Stream:             hashrel.Stream,
 		ProductVersion:     hashrel.ProductVersion,
 		OperatorVersion:    hashrel.Operator.Version,

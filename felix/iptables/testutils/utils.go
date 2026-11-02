@@ -607,6 +607,13 @@ func LookPathNoLegacy(p string) (string, error) {
 	return p, nil
 }
 
+func LookPathNoNFT(p string) (string, error) {
+	if strings.Contains(p, "nft") {
+		return "", &exec.Error{}
+	}
+	return p, nil
+}
+
 func LookPathAll(p string) (string, error) {
 	return p, nil
 }

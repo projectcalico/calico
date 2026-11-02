@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,15 @@ type Interface interface {
 	// ReleaseIPs releases any of the given IP addresses that are currently assigned,
 	// so that they are available to be used in another assignment.
 	ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]cnet.IP, []ReleaseOptions, error)
+
+	// MoveIPToHandle transfers an already-allocated address to the handle in opts, in a
+	// single block update so the address is never unowned in between. It only proceeds if
+	// the address is still owned by opts.ExpectedOwner.
+	//
+	// This hands an address between two sandboxes of one workload, where the handle
+	// changes with the container ID. To give an address to a different workload, release
+	// it and assign it.
+	MoveIPToHandle(ctx context.Context, ip cnet.IP, opts MoveOptions) error
 
 	// GetAssignmentAttributes returns the AllocationAttribute for the given IP address,
 	// which includes the handle ID, ActiveOwnerAttrs, and AlternateOwnerAttrs.

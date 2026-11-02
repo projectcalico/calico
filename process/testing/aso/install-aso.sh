@@ -69,4 +69,36 @@ ${HELM} upgrade --install aso2 aso2/azure-service-operator \
 # Wait for ASO deployments
 echo "Wait for ASO controller manager to be ready (up to 5m) ..."
 ${KUBECTL} wait --for=condition=available --timeout=5m -n azureserviceoperator-system deployment azureserviceoperator-controller-manager
+
+# The webhook serving cert is issued by cert-manager and its CA is injected into
+# the ASO CRDs' conversion config asynchronously, so the deployment going
+# available does not mean the webhook is usable yet: applying an ASO resource in
+# that window fails with "x509: certificate signed by unknown authority". Probe
+# with a server-side dry-run (which round-trips the conversion webhook without
+# persisting anything) until it succeeds.
+echo "Wait for the ASO conversion webhook to be ready (up to 2m) ..."
+webhook_probe=$(mktemp)
+cat > "${webhook_probe}" <<EOF
+apiVersion: resources.azure.com/v1api20200601
+kind: ResourceGroup
+metadata:
+  name: aso-webhook-probe
+  namespace: default
+spec:
+  location: westus2
+EOF
+webhook_ready=false
+for _ in $(seq 1 24); do
+  if probe_out=$(${KUBECTL} apply --dry-run=server --request-timeout=10s -f "${webhook_probe}" 2>&1); then
+    webhook_ready=true
+    break
+  fi
+  sleep 5
+done
+rm -f "${webhook_probe}"
+if [[ "${webhook_ready}" != true ]]; then
+  echo "ERROR: ASO conversion webhook still not ready after 2m; last error:" >&2
+  echo "${probe_out}" >&2
+  exit 1
+fi
 echo "ASO installed and the controller manager is ready."

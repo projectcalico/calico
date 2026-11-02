@@ -1,0 +1,59 @@
+# Windows CNI FV against a kubeadm cluster of Azure VMs. In a pod, since the
+# cluster is remote.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+  secretBundles:
+    - banzai-secrets
+
+steps:
+  - name: cni-plugin-windows-fv
+    depends: [check-go]
+    requests: {cpu: 3, memory: 6Gi}
+    matrix:
+      - name: overlay
+        env:
+          - name: BACKEND
+            value: overlay
+      - name: l2bridge
+        env:
+          - name: BACKEND
+            value: l2bridge
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+      - name: AZURE_LOCATION
+        value: eastus2
+      - name: KUBE_VERSION
+        value: v1.33.7
+      # Outside the checkout so the epilogue can find it without depending on
+      # where the FV script left off.
+      - name: LOGS_DIR
+        value: /tmp/winfv-logs
+    commands: |
+      export AZURE_SUBSCRIPTION_ID="$AZ_SUBSCRIPTION_ID"
+      export AZURE_TENANT_ID="$AZ_TENANT_ID"
+      export AZURE_CLIENT_ID="$AZ_SP_ID"
+      export AZURE_CLIENT_SECRET="$AZ_SP_PASSWORD"
+      export AZURE_RESOURCE_GROUP="${ARGOCI_RESOURCE_PREFIX}-win-cni-${CI_WORKFLOW_NAME}-${BACKEND}-rg"
+      az login --service-principal -u "$AZ_SP_ID" -p "$AZ_SP_PASSWORD" --tenant "$AZ_TENANT_ID" --output none
+      cd cni-plugin
+      make bin/windows/calico.exe bin/windows/win-fv.exe
+      ../process/testing/winfv-cni-plugin/run-win-fv.sh
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      # Skipped specs are reported as failures otherwise.
+      python3 hack/strip-skipped-tests.py process/testing/winfv-cni-plugin/report/*.xml 2>/dev/null || true
+      artifact push job process/testing/winfv-cni-plugin/report --destination test-results || true
+      artifact push job "${LOGS_DIR}" --destination logs || true
+      # The commands' login and exports don't reach the epilogue.
+      export AZURE_SUBSCRIPTION_ID="$AZ_SUBSCRIPTION_ID"
+      export AZURE_TENANT_ID="$AZ_TENANT_ID"
+      export AZURE_CLIENT_ID="$AZ_SP_ID"
+      export AZURE_CLIENT_SECRET="$AZ_SP_PASSWORD"
+      export AZURE_RESOURCE_GROUP="${ARGOCI_RESOURCE_PREFIX}-win-cni-${CI_WORKFLOW_NAME}-${BACKEND}-rg"
+      az login --service-principal -u "$AZ_SP_ID" -p "$AZ_SP_PASSWORD" --tenant "$AZ_TENANT_ID" --output none || true
+      cd process/testing/aso && make dist-clean || true

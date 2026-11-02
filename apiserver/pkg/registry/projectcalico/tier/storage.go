@@ -26,11 +26,12 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/util"
 )
 
 // REST implements a RESTStorage for API services against etcd
 type REST struct {
-	*registry.Store
+	*util.Store
 }
 
 // EmptyObject returns an empty instance
@@ -150,5 +151,5 @@ func NewREST(scheme *runtime.Scheme, opts server.Options, statusOpts server.Opti
 	statusStore.Storage = statusStorageInterface
 	statusStore.DestroyFunc = statusDFunc
 
-	return &REST{store}, &StatusREST{&statusStore}, nil
+	return &REST{util.NewStore(store)}, &StatusREST{&statusStore}, nil
 }

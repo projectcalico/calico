@@ -30,6 +30,6 @@ func init() {
 func TestNftablesUT(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../report/felix_nftables_suite.xml"
+	testutils.RegisterJUnitReporter("felix_nftables_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/nftables", suiteConfig, reporterConfig)
 }

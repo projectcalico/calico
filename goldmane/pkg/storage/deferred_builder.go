@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,36 +34,28 @@ type FlowBuilder interface {
 }
 
 func NewDeferredFlowBuilder(d *DiachronicFlow, s, e int64) FlowBuilder {
-	return &DeferredFlowBuilder{
-		d: d,
-		w: d.GetWindows(s, e),
-		s: s,
-		e: e,
-	}
+	w, ok := d.bucketWindow(s, e)
+	return &DeferredFlowBuilder{d: d, w: w, ok: ok}
 }
 
 // DeferredFlowBuilder is a FlowBuilder that defers the construction of the Flow object until it's needed.
 type DeferredFlowBuilder struct {
 	d *DiachronicFlow
-	s int64
-	e int64
 
-	// w is the set of windows that this flow is in at the time this builder is instantiated.
-	// We hold references to the underlying Window objects so that we can aggregate across them on another
-	// goroutine without worrying about the original DiachronicFlow windows being modified.
-	//
-	// Note: This is a bit of a hack, but it works for now. We can clean this up a lot by reconciling
-	// the Window and AggregationBucket objects, which fill similar roles.
-	w []*Window
+	// w is a copy of the flow's window for the bucket, taken under the flow's lock, so BuildInto
+	// can run on the gRPC goroutine without touching the live windows.
+	w  Window
+	ok bool
 }
 
 func (f *DeferredFlowBuilder) BuildInto(filter *proto.Filter, res *proto.FlowResult) bool {
-	if f.d.Matches(filter, f.s, f.e) {
-		if tf := f.d.AggregateWindows(f.w); tf != nil {
-			types.FlowIntoProto(tf, res.Flow)
-			res.Id = f.d.ID
-			return true
-		}
+	if !f.ok || (filter != nil && !types.Matches(filter, &f.d.Key)) {
+		return false
 	}
-	return false
+	tf := newAggregateFlow(f.d)
+	f.d.aggregateWindow(tf, &f.w)
+	tf.SourceIps, tf.DestIps = f.d.windowIPs(&f.w)
+	types.FlowIntoProto(tf, res.Flow)
+	res.Id = f.d.ID
+	return true
 }

@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -226,7 +227,7 @@ func (s *IPSets) RemoveIPSet(setID string) {
 // nameForMainIPSet takes the given set ID and returns the name of the IP set as seen in nftables. This
 // helper should be used to sanitize any set IDs, ensuring they are a consistent format.
 func (s *IPSets) nameForMainIPSet(setID string) string {
-	return LegalizeSetName(s.IPVersionConfig.NameForMainIPSet(setID))
+	return nftrender.LegalizeSetName(s.IPVersionConfig.NameForMainIPSet(setID))
 }
 
 // AddMembers adds the given members to the IP set.  Filters out members that are of the incorrect
@@ -560,10 +561,6 @@ func (s *IPSets) tryResync() error {
 	}
 
 	return nil
-}
-
-func LegalizeSetName(setName string) string {
-	return strings.ReplaceAll(setName, ":", "-")
 }
 
 func (s *IPSets) NFTablesSet(name string) *knftables.Set {

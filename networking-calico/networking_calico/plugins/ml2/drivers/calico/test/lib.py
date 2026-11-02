@@ -21,11 +21,38 @@ Common code for Neutron driver UT.
 """
 import contextlib
 import logging
-import sys
 from types import SimpleNamespace
 
 import eventlet
+import fixtures
 import mock
+from neutron.db import models_v2
+from neutron.db.models import l3 as l3_models
+from neutron.db.qos import models as qos_models
+from neutron_lib import context as neutron_context
+from neutron_lib import fixture as neutron_lib_fixture
+from neutron_lib.db import api as db_api
+from neutron_lib.exceptions import PortNotFound
+from neutron_lib.plugins import constants as plugin_constants
+from neutron_lib.plugins import directory as plugin_dir
+from oslo_config import cfg
+from oslo_config import fixture as config_fixture
+from oslotest import base
+
+# Import all modules used by the mechanism driver so we can hook their logging.
+from networking_calico import datamodel_v3
+from networking_calico import etcdutils
+from networking_calico import etcdv3
+from networking_calico.plugins.calico.context import SGUpdateContext
+from networking_calico.plugins.ml2.drivers.calico import election
+from networking_calico.plugins.ml2.drivers.calico import endpoints
+from networking_calico.plugins.ml2.drivers.calico import mech_calico
+from networking_calico.plugins.ml2.drivers.calico import policy
+from networking_calico.plugins.ml2.drivers.calico import qos_driver
+from networking_calico.plugins.ml2.drivers.calico import status
+from networking_calico.plugins.ml2.drivers.calico import subnets
+from networking_calico.plugins.ml2.drivers.calico import syncer
+from networking_calico.resync import scope
 
 # When you're working on a test and need to see logging - both from the test
 # code and the code _under_ test - uncomment the following line.
@@ -34,61 +61,6 @@ import mock
 
 _log = logging.getLogger(__name__)
 
-# Note, we use MagicMock here, instead of Mock, when some of the objects from within the
-# relevant package need to be iterable, or to be context managers, or to have any of the
-# other magic Python methods that MagicMock generates for us.
-sys.modules["neutron"] = m_neutron = mock.MagicMock()
-sys.modules["neutron.agent"] = m_neutron.agent
-sys.modules["neutron.agent.rpc"] = m_neutron.agent.rpc
-sys.modules["neutron.common"] = m_neutron.common
-sys.modules["neutron.common.exceptions"] = m_neutron.common.exceptions
-sys.modules["neutron.conf"] = m_neutron.conf
-sys.modules["neutron.conf.agent"] = m_neutron.conf.agent
-sys.modules["neutron.db"] = m_neutron.db
-sys.modules["neutron.db.models"] = m_neutron.db.models
-sys.modules["neutron.db.models.l3"] = m_neutron.db.models.l3
-sys.modules["neutron.db.qos"] = m_neutron.db.qos
-sys.modules["neutron.objects"] = m_neutron.objects
-sys.modules["neutron.objects.qos"] = m_neutron.objects.qos
-sys.modules["neutron.openstack"] = m_neutron.openstack
-sys.modules["neutron.openstack.common"] = m_neutron.openstack.common
-sys.modules["neutron.openstack.common.db"] = m_neutron.openstack.common.db
-sys.modules["neutron.plugins"] = m_neutron.plugins
-sys.modules["neutron.plugins.ml2"] = m_neutron.plugins.ml2
-sys.modules["neutron.plugins.ml2.drivers"] = m_neutron.plugins.ml2.drivers
-sys.modules["neutron.plugins.ml2.rpc"] = m_neutron.plugins.ml2.rpc
-sys.modules["neutron.wsgi"] = m_neutron.wsgi
-sys.modules["neutron_lib"] = m_neutron_lib = mock.MagicMock()
-sys.modules["neutron_lib.agent"] = m_neutron_lib.agent
-sys.modules["neutron_lib.callbacks"] = m_neutron_lib.callbacks
-sys.modules["neutron_lib.callbacks.events"] = m_neutron_lib.callbacks.events
-sys.modules["neutron_lib.callbacks.registry"] = m_neutron_lib.callbacks.registry
-sys.modules["neutron_lib.callbacks.resources"] = m_neutron_lib.callbacks.resources
-sys.modules["neutron_lib.db"] = m_neutron_lib.db
-sys.modules["neutron_lib.constants"] = m_neutron_lib.constants
-sys.modules["neutron_lib.plugins"] = m_neutron_lib.plugins
-sys.modules["neutron_lib.plugins.ml2"] = m_neutron_lib.plugins.ml2
-sys.modules["neutron_lib.worker"] = m_neutron_lib.worker
-sys.modules["oslo_concurrency"] = m_oslo_concurrency = mock.Mock()
-sys.modules["oslo_config"] = m_oslo_config = mock.MagicMock()
-sys.modules["oslo_context"] = m_oslo_context = mock.Mock()
-sys.modules["oslo_db"] = m_oslo_db = mock.Mock()
-sys.modules["oslo_log"] = m_oslo_log = mock.Mock()
-sys.modules["sqlalchemy"] = m_sqlalchemy = mock.Mock()
-sys.modules["sqlalchemy.orm"] = m_sqlalchemy.orm
-sys.modules["sqlalchemy.orm.exc"] = m_sqlalchemy.orm.exc
-sys.modules["networking_calico.plugins.ml2.drivers.calico.qos_driver"] = (
-    m_qos_driver
-) = mock.Mock()
-
-# Set up some IP protocol mappings to test.  (Unfortunately, importing
-# the real IP_PROTOCOL_MAP from neutron_lib.constants tries to pull in
-# too much other stuff.)
-m_neutron_lib.constants.IP_PROTOCOL_MAP = {
-    "esp": 50,
-    "ah": 51,
-    "rsvp": 46,
-}
 
 port1 = {
     "binding:vif_type": "tap",
@@ -179,44 +151,7 @@ class EtcdKeyNotFound(Exception):
     pass
 
 
-class DBError(Exception):
-    pass
-
-
-m_oslo_db.exception.DBError = DBError
-
-
-class NoResultFound(Exception):
-    pass
-
-
-m_sqlalchemy.orm.exc.NoResultFound = NoResultFound
-
-
-class PortNotFound(Exception):
-
-    def __init__(self, port_id=None):
-        super(PortNotFound, self).__init__()
-        self.port_id = port_id
-
-
-m_neutron_lib.exceptions.PortNotFound = PortNotFound
-
-
-# Define a stub class, that we will use as the base class for CalicoMechanismDriver.
-# The real ``neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase``
-# stashes ``vif_details`` on the instance and exposes a ``get_vif_details`` accessor;
-# mirror both so overrides that call up to ``super().get_vif_details(...)`` behave the
-# same in tests as they do in production.
-class DriverBase(object):
-    def __init__(self, agent_type, vif_type, vif_details):
-        self.vif_details = dict(vif_details)
-
-    def get_vif_details(self, context, agent, segment):
-        return self.vif_details
-
-
-# Define another stub class that mocks out leader election: assume we're always
+# Define a stub class that mocks out leader election: assume we're always
 # the leader. This is a fake elector: it never votes (get it!?).
 class GrandDukeOfSalzburg(object):
     def __init__(self, *args, **kwargs):
@@ -232,29 +167,6 @@ class GrandDukeOfSalzburg(object):
         pass
 
 
-# Replace Neutron's SimpleAgentMechanismDriverBase - which is the base class
-# that CalicoMechanismDriver inherits from - with this stub class.
-m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = DriverBase
-
-# Import all modules used by the mechanism driver so we can hook their logging.
-from networking_calico import datamodel_v3
-from networking_calico import etcdutils
-from networking_calico import etcdv3
-from networking_calico.plugins.calico.context import SGUpdateContext
-from networking_calico.plugins.ml2.drivers.calico import election
-from networking_calico.plugins.ml2.drivers.calico import endpoints
-from networking_calico.plugins.ml2.drivers.calico import mech_calico
-from networking_calico.plugins.ml2.drivers.calico import policy
-from networking_calico.plugins.ml2.drivers.calico import status
-from networking_calico.plugins.ml2.drivers.calico import subnets
-from networking_calico.plugins.ml2.drivers.calico import syncer
-from networking_calico.resync import scope
-
-# Replace the elector.
-mech_calico.Elector = GrandDukeOfSalzburg
-
-
-# Mock the Keystone client.
 def mock_projects_list():
     mock_project = mock.Mock()
     mock_project.id = "jane3"
@@ -262,12 +174,6 @@ def mock_projects_list():
     mock_project.parent_id = "gibson"
     return [mock_project]
 
-
-keystone_client = mock.Mock()
-keystone_client.projects.list.side_effect = mock_projects_list
-endpoints.make_keystone_client = mock.Mock(return_value=keystone_client)
-mech_calico.TrackTask = mock.Mock()
-mech_calico.TrackTask.return_value = None
 
 REAL_EVENTLET_SLEEP_TIME = 0.01
 
@@ -297,7 +203,7 @@ class _AttrDict(dict):
             raise AttributeError(key)
 
 
-class Lib(object):
+class Lib(base.BaseTestCase):
 
     # Ports to return when the driver asks the OpenStack database for all
     # current ports.
@@ -363,12 +269,16 @@ class Lib(object):
     }
 
     def setUp(self):
+        super().setUp()
+
         # Announce the current test case.
         _log.info("TEST CASE: %s", self.id())
 
+        # Each test's config overrides are undone when it ends.
+        self.cfg_fixture = self.useFixture(config_fixture.Config(cfg.CONF))
+
         # Mock calls to sys.exit.
-        self.sys_exit_p = mock.patch("sys.exit")
-        self.sys_exit_p.start()
+        self.useFixture(fixtures.MockPatch("sys.exit"))
 
         # Hook eventlet.
         self.setUp_eventlet()
@@ -379,12 +289,47 @@ class Lib(object):
         # If an arg mismatch occurs, we want to see the complete diff of it.
         self.maxDiff = None
 
+        # Assume that we're always the leader.
+        self.useFixture(
+            fixtures.MockPatchObject(mech_calico, "Elector", GrandDukeOfSalzburg)
+        )
+
+        # Mock the Keystone client.
+        keystone_client = mock.Mock()
+        keystone_client.projects.list.side_effect = mock_projects_list
+        self.useFixture(
+            fixtures.MockPatchObject(
+                endpoints, "make_keystone_client", return_value=keystone_client
+            )
+        )
+
+        # qos_driver registers only the first mechanism driver in the process, so start
+        # each test without one, for its own driver to be the one registered.
+        self.useFixture(fixtures.MonkeyPatch(qos_driver.__name__ + ".DRIVER", None))
+
+        # A fake RPC transport, for the agent state reporting client, and a fresh
+        # callback registry, so that each test's driver subscribes afresh.
+        self.useFixture(neutron_lib_fixture.RPCFixture())
+        self.useFixture(neutron_lib_fixture.CallbackRegistryFixture())
+
         # Create an instance of CalicoMechanismDriver.
         self.driver = mech_calico.CalicoMechanismDriver()
 
-        # Hook the (mock) Neutron database.
-        self.db = mech_calico.plugin_dir.get_plugin()
-        self.db_context = mech_calico.ctx.get_admin_context()
+        # Register a mock core plugin, standing in for the Neutron database.
+        self.useFixture(neutron_lib_fixture.PluginDirectoryFixture())
+        self.db = mock.Mock()
+        plugin_dir.add_plugin(plugin_constants.CORE, self.db)
+
+        # Hand the code under test a single admin context whose session queries
+        # are answered from the osdb_* data below.  The real reader would need a
+        # database engine to scope those queries, so patch that out too.
+        self.db_context = mock.MagicMock()
+        self.useFixture(
+            fixtures.MockPatchObject(
+                neutron_context, "get_admin_context", return_value=self.db_context
+            )
+        )
+        self.useFixture(fixtures.MockPatchObject(db_api, "CONTEXT_READER"))
         self.db_context.to_dict.return_value = {}
         self.db_context.session.query.side_effect = self.db_query
 
@@ -533,14 +478,14 @@ class Lib(object):
 
         # Hook sleeping.
         self.real_eventlet_sleep = eventlet.sleep
-        eventlet.sleep = simulated_sleep
+        self.useFixture(fixtures.MockPatchObject(eventlet, "sleep", simulated_sleep))
 
         # Similarly hook spawning.
         self.real_eventlet_spawn = eventlet.spawn
-        eventlet.spawn = simulated_spawn
-
-        self.real_eventlet_spawn_after = eventlet.spawn_after
-        eventlet.spawn_after = simulated_spawn_after
+        self.useFixture(fixtures.MockPatchObject(eventlet, "spawn", simulated_spawn))
+        self.useFixture(
+            fixtures.MockPatchObject(eventlet, "spawn_after", simulated_spawn_after)
+        )
 
     def setUp_logging(self):
         """Setup to intercept and display logging by the code under test.
@@ -548,8 +493,6 @@ class Lib(object):
         To see this logging, you also need to uncomment the logging.basicConfig
         call near the top of this file.
         """
-        import logging
-
         for module in [
             election,
             endpoints,
@@ -563,7 +506,8 @@ class Lib(object):
             etcdutils,
             etcdv3,
         ]:
-            module.LOG = logging.getLogger("\t%-15s\t" % module.__name__.split(".")[-1])
+            logger = logging.getLogger("\t%-15s\t" % module.__name__.split(".")[-1])
+            self.useFixture(fixtures.MockPatchObject(module, "LOG", logger))
 
     # Tear down after each test case.
     def tearDown(self):
@@ -574,17 +518,7 @@ class Lib(object):
             thread.kill()
         _log.info("All threads killed")
 
-        # Stop hooking eventlet.
-        self.tearDown_eventlet()
-
-        # Stop mocking sys.exit.
-        self.sys_exit_p.stop()
-
-    def tearDown_eventlet(self):
-        # Restore the real eventlet.sleep and eventlet.spawn.
-        eventlet.sleep = self.real_eventlet_sleep
-        eventlet.spawn = self.real_eventlet_spawn
-        eventlet.spawn_after = self.real_eventlet_spawn_after
+        super().tearDown()
 
     def do_post_fork_actions(self, uuid_str=None):
         """Simulate the post-fork actions that Neutron runs in production.
@@ -622,7 +556,7 @@ class Lib(object):
         cm = FixedUUID(uuid_str) if uuid_str else contextlib.nullcontext()
         with cm:
             self.driver._post_fork_init()
-            if mech_calico.cfg.CONF.calico.startup_resync == "always":
+            if cfg.CONF.calico.startup_resync == "always":
                 self.driver._do_startup_resync()
 
     def check_update_port_status_called(self, context):
@@ -728,23 +662,23 @@ class Lib(object):
         # rows across all ports/policies; the caller groups them by the
         # relevant id (port_id, qos_policy_id, ...) and looks up per
         # item.  Returning more rows than strictly needed is harmless.
-        if "IPAllocation" in str(model.name):
+        if model is models_v2.IPAllocation:
             m.filter_by.side_effect = self.db_query_ip_allocation
             m.filter.side_effect = self.db_query_ip_allocation_bulk
             return m
-        if "FloatingIP" in str(model.name):
+        if model is l3_models.FloatingIP:
             m.filter_by.side_effect = self.db_query_floating_ip
             m.filter.side_effect = self.db_query_floating_ip_bulk
             return m
-        if "Network" in str(model.name):
+        if model is models_v2.Network:
             m.filter_by.side_effect = self.db_query_network
             m.filter.side_effect = self.db_query_network_bulk
             return m
-        if "QosBandwidthLimitRule" in str(model.name):
+        if model is qos_models.QosBandwidthLimitRule:
             m.filter_by.side_effect = self.db_query_qos_policy_bw_rule
             m.filter.side_effect = self.db_query_qos_policy_bw_rule_bulk
             return m
-        if "QosPacketRateLimitRule" in str(model.name):
+        if model is qos_models.QosPacketRateLimitRule:
             m.filter_by.side_effect = self.db_query_qos_policy_pr_rule
             m.filter.side_effect = self.db_query_qos_policy_pr_rule_bulk
             return m

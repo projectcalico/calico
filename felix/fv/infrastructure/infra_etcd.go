@@ -41,8 +41,9 @@ type EtcdDatastoreInfra struct {
 	Endpoint    string
 	BadEndpoint string
 
-	cleanups cleanupStack
-	felixes  []*Felix
+	cleanups    cleanupStack
+	felixes     []*Felix
+	diagsDumped bool
 
 	bpfLogByteLimit int
 }
@@ -258,6 +259,11 @@ func (eds *EtcdDatastoreInfra) AddDefaultDeny() error {
 }
 
 func (eds *EtcdDatastoreInfra) DumpErrorData() {
+	// Once per test: DatastoreDescribe dumps before teardown, so later calls would only hit stopped containers.
+	if eds.diagsDumped {
+		return
+	}
+	eds.diagsDumped = true
 	// Per-Felix diagnostics first for context.
 	for _, f := range eds.felixes {
 		if f != nil {

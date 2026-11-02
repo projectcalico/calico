@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Download a file. Use instead of curl in build files.
+#
+#   hack/fetch-file <url> <dest>
+
+set -euo pipefail
+
+if [ $# -ne 2 ]; then
+  echo "usage: $0 <url> <dest>" >&2
+  exit 1
+fi
+
+url=$1
+dest=$2
+
+mkdir -p "$(dirname "$dest")"
+
+# A truncated file from an interrupted transfer would look up to date to make.
+tmp="$dest.tmp.$$"
+trap 'rm -f "$tmp"' EXIT
+
+# GitHub throttles HTTP/2 harder than HTTP/1.1.
+curl --fail --silent --show-error --location \
+  --http1.1 \
+  --retry 5 --retry-all-errors \
+  --connect-timeout 30 \
+  --speed-limit 1024 --speed-time 60 \
+  --output "$tmp" \
+  "$url"
+
+mv -f "$tmp" "$dest"

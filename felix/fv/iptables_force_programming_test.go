@@ -106,10 +106,5 @@ var _ = infrastructure.DatastoreDescribe("iptables force-programming tests", []a
 				}
 			}
 		}
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 })

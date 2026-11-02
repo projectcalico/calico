@@ -159,6 +159,36 @@ var _ = Describe("Test the IPPool update processor", func() {
 			},
 		}))
 
+		By("updating only the first IPPool's nodeSelector - expect an update that carries it")
+		res = apiv3.NewIPPool()
+		res.Name = v3PoolKey1.Name
+		res.Spec.CIDR = cidr2str
+		res.Spec.DisableBGPExport = true
+		res.Spec.NodeSelector = "!all()"
+		kvps, err = up.Process(&model.KVPair{
+			Key:      v3PoolKey1,
+			Value:    res,
+			Revision: "abcdefgh",
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kvps).To(Equal([]*model.KVPair{
+			{
+				Key: v1PoolKeyCidr2,
+				Value: &model.IPPool{
+					CIDR:             model.IPNetFromPrefix(v1PoolKeyCidr2.CIDR),
+					IPIPInterface:    "",
+					IPIPMode:         encap.Never,
+					Masquerade:       false,
+					IPAM:             true,
+					Disabled:         false,
+					DisableBGPExport: true,
+					AssignmentMode:   apiv3.Automatic,
+					NodeSelector:     "!all()",
+				},
+				Revision: "abcdefgh",
+			},
+		}))
+
 		By("deleting the first pool")
 		kvps, err = up.Process(&model.KVPair{
 			Key: v3PoolKey1,

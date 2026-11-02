@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,6 +72,16 @@ func NewJSONListHandler[RequestParams any, ResponseBody any](f func(apicontext.C
 	}
 }
 
+// NewJSONObjectHandler creates a handler that responds with a single json
+// object, for a route addressing one resource rather than a list.
+func NewJSONObjectHandler[RequestParams any, ResponseBody any](f func(apicontext.Context, RequestParams) ObjectResponse[ResponseBody]) handler {
+	return genericHandler[RequestParams, ResponseBody]{
+		f: func(ctx apicontext.Context, params RequestParams) responseType {
+			return f(ctx, params)
+		},
+	}
+}
+
 // NewJSONListOrEventStreamHandler creates a handler that responds with a json list or a server side event stream.
 func NewJSONListOrEventStreamHandler[RequestParams any, ResponseBody any](f func(apicontext.Context, RequestParams) ListOrStreamResponse[ResponseBody]) handler {
 	return genericHandler[RequestParams, ResponseBody]{
@@ -107,14 +117,18 @@ func parseRequestParams[RequestParams any](ctx apicontext.Context, cfg RouterCon
 	return params
 }
 
-func writeJSONResponse(w http.ResponseWriter, src any) {
+// writeJSONResponse writes src as the JSON body of a response with the given
+// status. It owns the status write because the content type has to be set
+// first: once WriteHeader has run, net/http ignores later header changes and
+// labels the response by sniffing the body instead.
+func writeJSONResponse(w http.ResponseWriter, status int, src any) {
 	w.Header().Set(header.ContentType, header.ApplicationJSON)
+	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(src); err != nil {
 		log.Error("Failed to encode response.", "error", err)
 	}
 }
 
 func writeJSONError(w http.ResponseWriter, status int, message string) {
-	w.WriteHeader(status)
-	writeJSONResponse(w, ErrorResponse{Error: message})
+	writeJSONResponse(w, status, ErrorResponse{Error: message})
 }

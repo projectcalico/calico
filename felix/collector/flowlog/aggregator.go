@@ -64,6 +64,7 @@ type Aggregator struct {
 	includeLabels         bool
 	includePolicies       bool
 	includeService        bool
+	includeIPs            bool
 	aggregationStartTime  time.Time
 	handledAction         rules.RuleAction
 	displayDebugTraceLogs bool
@@ -102,6 +103,11 @@ func (a *Aggregator) IncludePolicies(b bool) *Aggregator {
 
 func (a *Aggregator) IncludeService(b bool) *Aggregator {
 	a.includeService = b
+	return a
+}
+
+func (a *Aggregator) IncludeIPs(b bool) *Aggregator {
+	a.includeIPs = b
 	return a
 }
 
@@ -187,7 +193,7 @@ func (a *Aggregator) GetAndCalibrate() []*FlowLog {
 	for flowMeta, flowEntry := range a.flowStore {
 		if flowEntry.shouldExport {
 			log.Debug("Converting to flowlogs")
-			flowLogs := flowEntry.spec.ToFlowLogs(flowMeta, a.aggregationStartTime, aggregationEndTime, a.includeLabels, a.includePolicies)
+			flowLogs := flowEntry.spec.ToFlowLogs(flowMeta, a.aggregationStartTime, aggregationEndTime, a.includeLabels, a.includePolicies, a.includeIPs)
 			resp = append(resp, flowLogs...)
 		}
 		a.calibrateFlowStore(flowMeta, a.current)

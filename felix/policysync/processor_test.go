@@ -1406,8 +1406,6 @@ func (t testCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInf
 func (t testCreds) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{
 		SecurityProtocol: "felixut",
-		SecurityVersion:  "test",
-		ServerName:       "test",
 	}
 }
 

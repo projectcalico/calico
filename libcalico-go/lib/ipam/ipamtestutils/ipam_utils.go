@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -78,25 +79,16 @@ func (i *IPPoolAccessor) getPools(poolNames []string, ipVersion int, caller stri
 	for _, p := range poolNames {
 		c := cnet.MustParseCIDR(p)
 		if (ipVersion == 0) || (c.Version() == ipVersion) {
-			pool := v3.IPPool{Spec: v3.IPPoolSpec{
+			pool := v3.IPPool{ObjectMeta: metav1.ObjectMeta{Name: p}, Spec: v3.IPPoolSpec{
 				CIDR:              p,
 				NodeSelector:      i.Pools[p].NodeSelector,
 				NamespaceSelector: i.Pools[p].NamespaceSelector,
 				AllowedUses:       i.Pools[p].AllowedUses,
 				AssignmentMode:    &automatic,
+				BlockSize:         i.Pools[p].BlockSize,
 			}}
-			if len(pool.Spec.AllowedUses) == 0 {
-				pool.Spec.AllowedUses = []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload, v3.IPPoolAllowedUseTunnel}
-			}
-			if i.Pools[p].BlockSize == 0 {
-				if c.Version() == 4 {
-					pool.Spec.BlockSize = 26
-				} else {
-					pool.Spec.BlockSize = 122
-				}
-			} else {
-				pool.Spec.BlockSize = i.Pools[p].BlockSize
-			}
+			pool.Spec.AllowedUses = accounting.AllowedUses(&pool)
+			pool.Spec.BlockSize = accounting.BlockSize(&pool)
 			pools = append(pools, pool)
 
 			poolsToPrint = append(poolsToPrint, fmt.Sprintf("{%s(%v) %q %v}",
