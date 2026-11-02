@@ -86,10 +86,13 @@ spec:
                             properties:
                               names:
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
                               selector:
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -211,10 +214,13 @@ spec:
                             properties:
                               names:
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
                               selector:
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -292,10 +298,13 @@ spec:
                             properties:
                               names:
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
                               selector:
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -417,10 +426,13 @@ spec:
                             properties:
                               names:
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
                               selector:
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
