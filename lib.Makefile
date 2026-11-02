@@ -2034,9 +2034,9 @@ $(ENVTEST_ASSETS_MARKER):
 		chmod +x $$d/kube-apiserver $$d/kubectl $$d/etcd'
 	touch $@
 
-# Minimum supported Kubernetes version. 1.32 is the first release that estimates
-# the cost of the CEL IP/CIDR library well enough for our CRD rules to install.
-MIN_K8S_VERSION ?= v1.32.0
+# Minimum supported Kubernetes version. 1.34 is the first release whose CEL cost
+# estimate honours maxLength on int-or-string list items, which the port-range rules need.
+MIN_K8S_VERSION ?= v1.34.0
 ifneq ($(OS),Windows_NT)
 ENVTEST_MIN_K8S_VERSION ?= $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
 # Major.minor prefix for globbing the downloaded envtest directory (e.g. "1.29").
