@@ -22,7 +22,8 @@ The CNI plugin ships two binaries: `calico` (main CNI) and `calico-ipam` (used w
 Invariants:
 
 - **No partial state on failure.** Lock acquisition, the allocation call, and dual-stack family pairing each have a failure mode that must roll back, not leave half-applied state
-  for the next CNI invocation to trip on.
+  for the next CNI invocation to trip on. Under `calico-ipam`, addresses the pod's WorkloadEndpoint lists are the exception (KubeVirt and `ipAddrsNoIpam` pods aside): a failed ADD
+  leaves them on whichever of the pod's handles holds them, since the next ADD claims them back, and releases only the unlisted addresses on its own handle.
 - **Lock then clock.** The 90s allocation timeout starts *after* the host-wide IPAM lock is acquired (see [The IPAM lock](#the-ipam-lock)). Otherwise lock contention burns the
   budget before any allocation work runs.
 - **IPAM dies with the plugin.** A runtime that gives up on a sandbox kills `calico`. A separate `calico-ipam` process would outlive it and could later move the pod's address
@@ -31,6 +32,8 @@ Invariants:
 - **A stale ADD never takes a newer sandbox's address.** An ADD refuses to move an address whose allocation was stamped after the ADD started, since only a sandbox kubelet
   created later could have claimed it. It fails with `ErrCodeSandboxSuperseded` instead of falling back to a fresh address, because networking the abandoned sandbox would
   replace the live one's host interface. Both times come from the node's wall clock.
+- **Only `ErrCodeAddressNotHeld` earns a fresh address.** `calico-ipam` returns it when IPAM shows the pod no longer holds an address it asked to reuse, including one in cooldown
+  or in a pool that disallows workloads. The plugin then assigns a fresh address for that family alone. Any other reuse error fails the ADD, as does this code for an `ipAddrs` pod.
 
 `cmdAdd` in [`cni-plugin/pkg/ipamplugin/ipam_plugin.go`](../../cni-plugin/pkg/ipamplugin/ipam_plugin.go) is the entry point. The flow is straightforward client construction →
 pool resolution → lock → `AutoAssign` → return. The design-relevant steps are:
@@ -62,6 +65,8 @@ Invariants:
 - **DEL is idempotent.** Any subset of block, handle, or allocation may already be gone. "Not found" is success.
 - **Release by every handle form.** `utils.PodHandleIDs` lists the container-ID forms, of which one at most holds the allocation, and the workload-ID handle (`<namespace>.<pod>`) is
   released on top of those. Dropping a form leaves its IPs for the kube-controllers GC to reclaim instead of freeing them on DEL.
+- **A stale sandbox's DEL keeps what the WEP lists.** When the DEL's container ID doesn't match the WEP's, it releases only the unlisted addresses on its own handle, because a later
+  ADD may have moved the listed ones there, and skips the normal release if it kept any. KubeVirt pods and IPAM types other than `calico-ipam` release as usual.
 - **KubeVirt DEL is not "release immediately."** Clear owner attrs first; release only when the VM/VMI is gone and all attrs are empty.
 
 `cmdDel` in the same file. The standard path tries the forms `utils.PodHandleIDs` returns, stopping at the first that releases something, then releases the workload-ID handle
