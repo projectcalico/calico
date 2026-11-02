@@ -168,6 +168,7 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 		oldRole := m.roles[id]
 		newRole := msg.Endpoint.LiveMigrationRole
 		m.roles[id] = newRole
+		m.checkForMigrationUIDChange(id, newRole, msg.Endpoint.LiveMigrationUid)
 		if oldRole != newRole {
 			switch newRole {
 			case proto.LiveMigrationRole_NO_ROLE:
@@ -187,6 +188,26 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 	}
 }
 
+// checkForMigrationUIDChange logs if the target-role LiveMigration for a workload with an FSM has a
+// different UID from the last one seen.  We don't expect that, because it means the LiveMigration
+// was replaced mid-migration.  The FSM carries on, and keeps logging the UID that it started with,
+// so that all of its logs can be correlated.
+func (m *liveMigrationMonitor) checkForMigrationUIDChange(
+	id types.WorkloadEndpointID,
+	role proto.LiveMigrationRole,
+	uid string,
+) {
+	fsm := m.fsms[id]
+	if fsm == nil || role != proto.LiveMigrationRole_TARGET ||
+		uid == "" || uid == fsm.latestMigrationUID {
+		// A source-role UID belongs to a different migration, out of this host, and an empty
+		// UID means the LiveMigration has been deleted.
+		return
+	}
+	fsm.logCtx.WithField("newMigrationUID", uid).Info("LiveMigration UID changed")
+	fsm.latestMigrationUID = uid
+}
+
 // newFSM creates the FSM for a workload that is becoming the target of a live migration.  The FSM
 // is discarded when it returns to the Base state, so it normally lives for one migration, and the
 // migration's UID can be fixed in its log context.  That way the UID is still logged after the
@@ -197,9 +218,10 @@ func (m *liveMigrationMonitor) newFSM(id types.WorkloadEndpointID, migrationUID 
 			"id":           id,
 			"migrationUID": migrationUID,
 		}),
-		id:           id,
-		monitor:      m,
-		currentState: liveMigrationStateBase,
+		id:                 id,
+		monitor:            m,
+		currentState:       liveMigrationStateBase,
+		latestMigrationUID: migrationUID,
 	}
 }
 
@@ -302,6 +324,11 @@ type liveMigrationFSM struct {
 	id           types.WorkloadEndpointID
 	monitor      *liveMigrationMonitor
 	currentState liveMigrationState
+
+	// latestMigrationUID starts as the UID in logCtx, and changes only if the LiveMigration is
+	// replaced.
+	latestMigrationUID string
+
 	timerStopC   chan struct{}
 	timerWG      sync.WaitGroup
 	pcapHandle   garpHandle
