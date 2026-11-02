@@ -355,6 +355,27 @@ var _ = Describe("Istio controller tests", func() {
 				return errors.IsNotFound(err)
 			}).Should(BeTrue())
 		})
+		// After an operator restart the first reconcile can already see a deleting
+		// CR, and a dormant status manager would not report how its cleanup goes.
+		It("enables the status while the CR is deleting", func() {
+			r := &ReconcileIstio{
+				Client:   cli,
+				scheme:   scheme,
+				provider: operatorv1.ProviderNone,
+				status:   mockStatus,
+			}
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).NotTo(HaveOccurred())
+			current := &operatorv1.Istio{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, current)).NotTo(HaveOccurred())
+			Expect(cli.Delete(ctx, current)).NotTo(HaveOccurred())
+			mockStatus.Calls = nil
+
+			_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).NotTo(HaveOccurred())
+
+			mockStatus.AssertCalled(GinkgoT(), "OnCRFound")
+		})
 	})
 
 	Context("Default value tests", func() {
