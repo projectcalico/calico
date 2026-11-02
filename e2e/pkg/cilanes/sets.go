@@ -22,12 +22,8 @@ import (
 	"strings"
 )
 
-// setDirs names the sets/ subdirectory each lane source directory writes to.
-var setDirs = map[string]string{
-	argoDir:    "cron",
-	modulesDir: "modules",
-	blocksDir:  "semaphore",
-}
+// nonSlug matches every run of characters a set name leaves out.
+var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 
 // ResolveSets maps every lane that runs the e2e binary to its set name. Two
 // lanes claiming one name would overwrite each other's set, so that is an error.
@@ -53,16 +49,18 @@ func ResolveSets(lanes []Lane) (map[string]Lane, error) {
 	return sets, nil
 }
 
-// nonSlug matches every run of characters a set name leaves out.
-var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
-
-// SetName names the lane's set after the lane itself: the CI system, the file
-// that declares it, and the lane name reduced to lowercase words joined by
-// hyphens. Keying by lane rather than config keeps a set's name stable when the
-// lane's config list changes, so a selection change shows up as a content diff.
+// SetName names the lane's set after the lane itself: the sets/ subdirectory of
+// the lane's source directory, the file that declares it, and the lane name
+// reduced to lowercase words joined by hyphens. It fails for a source outside
+// the known lane directories and for a name with nothing left to slug.
 func SetName(l Lane) (string, error) {
-	dir, ok := setDirs[filepath.Dir(l.Source)]
-	if !ok {
+	dir := ""
+	for _, src := range laneSources {
+		if src.dir == filepath.Dir(l.Source) {
+			dir = src.setDir
+		}
+	}
+	if dir == "" {
 		return "", fmt.Errorf("source %q is not a known lane directory", l.Source)
 	}
 	file := strings.TrimSuffix(filepath.Base(l.Source), filepath.Ext(l.Source))

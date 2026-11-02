@@ -75,7 +75,7 @@ func run(repoRoot, binary, outDir string) error {
 	}
 	specs := make(map[string][]string, len(sets))
 	for _, name := range names {
-		specs[name] = selections[sets[name].Config]
+		specs[name] = selections[selectionKey(sets[name])]
 	}
 
 	for _, name := range names {
@@ -91,26 +91,33 @@ func run(repoRoot, binary, outDir string) error {
 	return cilanes.Write(filepath.Join(repoRoot, outDir), lanes, specs)
 }
 
-// selectionSpecs collects dry-run results keyed by a lane's config value, safe
-// for the concurrent dry runs to fill in.
+// selectionKey identifies a lane's selection by its parsed config list, so two
+// lanes listing the same configs with different whitespace share a dry run.
+func selectionKey(l cilanes.Lane) string {
+	return strings.Join(l.Configs(), " ")
+}
+
+// selectionSpecs holds the spec names each distinct selection runs, keyed by
+// selectionKey. The concurrent dry runs fill it in through recordSpecs.
 type selectionSpecs struct {
 	mu    sync.Mutex
 	specs map[string][]string
 }
 
-func (s *selectionSpecs) set(config string, found []string) {
+// recordSpecs stores the specs one selection's dry run found.
+func (s *selectionSpecs) recordSpecs(key string, found []string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.specs[config] = found
+	s.specs[key] = found
 }
 
 // dryRunSelections runs the binary once per distinct selection among the sets,
-// since many lanes share one config. It returns the specs keyed by the lanes'
-// config value.
+// since many lanes share one config. It returns the specs keyed by
+// selectionKey.
 func dryRunSelections(binary, repoRoot string, sets map[string]cilanes.Lane) (map[string][]string, error) {
 	byConfig := map[string]cilanes.Lane{}
 	for _, l := range sets {
-		byConfig[l.Config] = l
+		byConfig[selectionKey(l)] = l
 	}
 
 	results := &selectionSpecs{specs: make(map[string][]string, len(byConfig))}
@@ -126,7 +133,7 @@ func dryRunSelections(binary, repoRoot string, sets map[string]cilanes.Lane) (ma
 			if err != nil {
 				return fmt.Errorf("%s: %w", config, err)
 			}
-			results.set(config, found)
+			results.recordSpecs(config, found)
 			return nil
 		})
 	}

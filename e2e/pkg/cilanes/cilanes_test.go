@@ -101,10 +101,10 @@ func TestParseArgo(t *testing.T) {
 	Expect(byName["migration"].Config).To(Equal("e2e/config/iptables/xtables.yaml"))
 	Expect(byName["migration [pre-migration]"].Config).To(Equal(flannelMigrationPreConfig))
 
-	// The CNI axis leaves the selection alone, so its entries collapse into the
-	// unsuffixed step.
-	Expect(byName).To(HaveKey("matrix-step"))
-	Expect(byName["matrix-step"].Config).To(Equal("e2e/config/iptables/xtables.yaml"))
+	// Every matrix entry is its own lane, including one that selects like the
+	// step's default, so a lane keeps its name when an entry's config changes.
+	Expect(byName).NotTo(HaveKey("matrix-step"))
+	Expect(byName["matrix-step [calico-cni]"].Config).To(Equal("e2e/config/iptables/xtables.yaml"))
 	Expect(byName["matrix-step [encap]"].Config).To(Equal("e2e/config/iptables/xtables-encap-nobgp.yaml"))
 }
 
@@ -135,16 +135,20 @@ func TestSelectionArgs(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(args).To(Equal([]string{"--calico.test-config=/repo/e2e/config/vpp/eks.yaml"}))
 
-	// A list of configs passes one flag per entry, in the cell's order.
-	args, err = Lane{Config: "e2e/config/ci-base.yaml\n  e2e/config/suite/policy.yaml"}.SelectionArgs("/repo")
-	Expect(err).NotTo(HaveOccurred())
-	Expect(args).To(Equal([]string{
-		"--calico.test-config=/repo/e2e/config/ci-base.yaml",
-		"--calico.test-config=/repo/e2e/config/suite/policy.yaml",
-	}))
+	// The binary keeps one --calico.test-config, so a lane listing several is
+	// refused rather than recorded with a selection CI would not run.
+	_, err = Lane{Name: "list", Config: "e2e/config/ci-base.yaml\n  e2e/config/suite/policy.yaml"}.SelectionArgs("/repo")
+	Expect(err).To(MatchError(ContainSubstring("lists 2 configs")))
+
+	// A config outside e2e/config, or an unexpanded variable, is caught here
+	// rather than surfacing as an opaque binary failure.
+	_, err = Lane{Name: "abs", Config: "/tmp/x.yaml"}.SelectionArgs("/repo")
+	Expect(err).To(MatchError(ContainSubstring("is not under e2e/config/")))
+	_, err = Lane{Name: "var", Config: "${CFG}"}.SelectionArgs("/repo")
+	Expect(err).To(MatchError(ContainSubstring("is not under e2e/config/")))
 
 	_, err = Lane{Name: "empty"}.SelectionArgs("/repo")
-	Expect(err).To(HaveOccurred())
+	Expect(err).To(MatchError(ContainSubstring("selects nothing")))
 
 	// Whitespace alone is no selection, so the lane does not run the binary.
 	Expect(Lane{TestType: "k8s-e2e", Config: "  "}.RunsE2EBinary()).To(BeFalse())
