@@ -5,6 +5,7 @@ package main_test
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"maps"
@@ -20,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	cnitestutils "github.com/containernetworking/plugins/pkg/testutils"
@@ -2096,6 +2098,95 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			_, err = testutils.DeleteContainerWithId(netconf, contNs2.Path(), testPodName, testutils.K8S_TEST_NS, "container-id-ipaddrs-cooldown-2")
 			Expect(err).ShouldNot(HaveOccurred())
 		})
+
+		DescribeTable("reports a CNI error code when the requested address isn't held by the pod",
+			func(requestedIP string, arrange func() (cleanup func()), wantMsg string) {
+				ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: testPodName,
+						Annotations: map[string]string{
+							"cni.projectcalico.org/ipAddrs": fmt.Sprintf("[%q]", requestedIP),
+						},
+					},
+					Spec: v1.PodSpec{
+						Containers: []v1.Container{{
+							Name:  testPodName,
+							Image: "ignore",
+						}},
+						NodeName: testNodeName,
+					},
+				})
+
+				cleanup := arrange()
+				defer cleanup()
+
+				containerID := "container-id-ipaddrs-not-held"
+				_, _, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", containerID)
+				if contNs != nil {
+					defer func() {
+						_, derr := testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, containerID)
+						Expect(derr).ShouldNot(HaveOccurred())
+					}()
+				}
+				Expect(err).To(HaveOccurred())
+
+				var cniErr *cnitypes.Error
+				Expect(stderrors.As(err, &cniErr)).To(BeTrue(), "expected a CNI error, got: %v", err)
+				Expect(cniErr.Code).To(BeEquivalentTo(types.ErrCodeAddressNotHeld))
+				Expect(cniErr.Msg).To(ContainSubstring(wantMsg))
+			},
+			Entry("another pod owns it", "10.123.0.90", func() func() {
+				handle := ipam.PodHandleID("calico-uts", "other-sandbox")
+				Expect(calicoClient.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
+					IP:          cnet.IP{IP: net.ParseIP("10.123.0.90")},
+					HandleID:    &handle,
+					Attrs:       map[string]string{ipam.AttributePod: "other-pod", ipam.AttributeNamespace: "test"},
+					Hostname:    testNodeName,
+					IntendedUse: api.IPPoolAllowedUseWorkload,
+				})).To(Succeed())
+				return func() {
+					Expect(calicoClient.IPAM().ReleaseByHandle(ctx, handle)).To(Succeed())
+				}
+			}, "owned by another pod"),
+			Entry("a non-pod handle holds it", "10.123.0.91", func() func() {
+				handle := "victim-workload"
+				Expect(calicoClient.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
+					IP:          cnet.IP{IP: net.ParseIP("10.123.0.91")},
+					HandleID:    &handle,
+					Hostname:    testNodeName,
+					IntendedUse: api.IPPoolAllowedUseWorkload,
+				})).To(Succeed())
+				return func() {
+					Expect(calicoClient.IPAM().ReleaseByHandle(ctx, handle)).To(Succeed())
+				}
+			}, ""),
+			Entry("it's in no configured pool", "1.1.1.1", func() func() {
+				return func() {}
+			}, ""),
+			Entry("its pool disallows workloads", "10.124.0.5", func() func() {
+				testutils.MustCreateNewIPPoolAllowedUses(calicoClient, "10.124.0.0/16", []api.IPPoolAllowedUse{api.IPPoolAllowedUseTunnel})
+				return func() {
+					testutils.MustDeleteIPPool(calicoClient, "10.124.0.0/16")
+				}
+			}, ""),
+			Entry("it's in cooldown", "10.123.0.92", func() func() {
+				cfg, err := calicoClient.IPAM().GetIPAMConfig(ctx)
+				Expect(err).NotTo(HaveOccurred())
+				cooldownCfg := *cfg
+				cooldownCfg.IPCooldownSeconds = 300
+				Expect(calicoClient.IPAM().SetIPAMConfig(ctx, cooldownCfg)).To(Succeed())
+
+				// Claim the address under a sandbox of the same pod, then DEL it into cooldown.
+				firstID := "container-id-ipaddrs-not-held-first"
+				_, _, _, _, _, firstNs, err := testutils.CreateContainerWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", firstID)
+				Expect(err).NotTo(HaveOccurred())
+				_, err = testutils.DeleteContainerWithId(netconf, firstNs.Path(), testPodName, testutils.K8S_TEST_NS, firstID)
+				Expect(err).NotTo(HaveOccurred())
+				return func() {
+					Expect(calicoClient.IPAM().SetIPAMConfig(ctx, *cfg)).To(Succeed())
+				}
+			}, "cooldown"),
+		)
 	})
 
 	Context("using ipAddrsNoIpam annotation to assign IP address to a pod, bypassing IPAM", func() {
