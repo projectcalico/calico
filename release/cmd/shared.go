@@ -155,7 +155,7 @@ func oncePin(pin pinned) pinned {
 
 var (
 	loadPin pinned = func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
-		pin, err := pinnedversion.Load(localPinLoader(pinConfig(cfg, c)))
+		pin, err := pinnedversion.Load(pinLoader(pinConfig(cfg, c), c))
 		if err != nil {
 			return nil, fmt.Errorf("load pin: %w", err)
 		}
@@ -171,6 +171,14 @@ var (
 	}
 	pinForPublish = builtPin
 )
+
+func pinLoader(pc pinnedversion.Config, c *cli.Command) pinnedversion.Loader {
+	l := localPinLoader(pc)
+	if c.Bool(planFlag.Name) {
+		return pinnedversion.PreviewLoader{LocalLoader: l}
+	}
+	return l
+}
 
 // A generated pin versions the operator like the product; a release takes the
 // operator's own version from the manifests.
