@@ -3254,6 +3254,127 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		})
 	})
 
+	Context("after a dual-stack pod has already been networked once", func() {
+		const ipPool4 = "30.0.0.0/24"
+		const ipPool6 = "fd80:30::/96"
+
+		var netconf string
+		var clientset *kubernetes.Clientset
+
+		BeforeEach(func() {
+			testutils.MustCreateNewIPPool(calicoClient, ipPool4, false, false, true)
+			testutils.MustCreateNewIPPool(calicoClient, ipPool6, false, false, true)
+			DeferCleanup(func() {
+				testutils.MustDeleteIPPool(calicoClient, ipPool4)
+				testutils.MustDeleteIPPool(calicoClient, ipPool6)
+			})
+
+			netconf = fmt.Sprintf(`{
+				"cniVersion": "%s",
+				"name": "calico-uts",
+				"type": "calico",
+				"etcd_endpoints": "http://%s:2379",
+				"datastore_type": "%s",
+				"nodename_file_optional": true,
+				"ipam": {"type": "calico-ipam", "assign_ipv4": "true", "assign_ipv6": "true"},
+				"kubernetes": {"kubeconfig": "/home/user/certs/kubeconfig"},
+				"policy": {"type": "k8s"},
+				"log_level": "debug",
+				"nodename": "%s",
+				"calico_api_group": "%s"
+			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName, k8s.BackendAPIGroup(&config.Spec))
+
+			clientset = getKubernetesClient()
+			ensureNamespace(clientset, testutils.K8S_TEST_NS)
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: testPodName},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{Name: testPodName, Image: "ignore"}},
+					NodeName:   testNodeName,
+				},
+			})
+			DeferCleanup(func() { ensurePodDeleted(clientset, testutils.K8S_TEST_NS, testPodName) })
+		})
+
+		It("keeps the reused IPv4 and assigns a fresh IPv6 when another workload took the IPv6", func() {
+			const newContainerID = "new-container-id"
+
+			containerID, result, _, _, _, contNs, err := testutils.CreateContainer(netconf, testPodName, testutils.K8S_TEST_NS, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IPs).To(HaveLen(2))
+
+			var oldV4, oldV6 cnet.IP
+			for _, ip := range result.IPs {
+				if ip.Address.IP.To4() != nil {
+					oldV4 = cnet.IP{IP: ip.Address.IP}
+				} else {
+					oldV6 = cnet.IP{IP: ip.Address.IP}
+				}
+			}
+			Expect(oldV4.IP).NotTo(BeNil())
+			Expect(oldV6.IP).NotTo(BeNil())
+
+			ids := names.WorkloadEndpointIdentifiers{
+				Node:         testNodeName,
+				Orchestrator: api.OrchestratorKubernetes,
+				Endpoint:     "eth0",
+				Pod:          testPodName,
+				ContainerID:  containerID,
+			}
+			workloadName, err := ids.CalculateWorkloadEndpointName(false)
+			Expect(err).NotTo(HaveOccurred())
+			originalHandle := utils.GetHandleID("calico-uts", containerID, workloadName)
+
+			// Hand the IPv6 address to a different workload behind the plugin's back. The
+			// endpoint still names it.
+			_, _, err = calicoClient.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: oldV6.String(), Handle: originalHandle})
+			Expect(err).NotTo(HaveOccurred())
+			victimHandle := "victim-workload"
+			Expect(calicoClient.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
+				IP:       oldV6,
+				HandleID: &victimHandle,
+				Hostname: testNodeName,
+				Attrs: map[string]string{
+					ipam.AttributePod:       "victim-pod",
+					ipam.AttributeNamespace: testutils.K8S_TEST_NS,
+				},
+			})).To(Succeed())
+
+			resultSecondAdd, _, _, _, err := testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", newContainerID, "eth0", contNs)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resultSecondAdd.IPs).To(HaveLen(2))
+
+			var newV4, newV6 cnet.IP
+			for _, ip := range resultSecondAdd.IPs {
+				if ip.Address.IP.To4() != nil {
+					newV4 = cnet.IP{IP: ip.Address.IP}
+				} else {
+					newV6 = cnet.IP{IP: ip.Address.IP}
+				}
+			}
+			Expect(newV4.String()).To(Equal(oldV4.String()), "the IPv4 address is kept")
+			Expect(newV6.IP).NotTo(BeNil())
+			Expect(newV6.String()).NotTo(Equal(oldV6.String()), "the lost IPv6 address is replaced")
+
+			newHandle := utils.GetHandleID("calico-uts", newContainerID, workloadName)
+			ips, err := calicoClient.IPAM().IPsByHandle(ctx, newHandle)
+			Expect(err).NotTo(HaveOccurred())
+			held := []string{}
+			for _, ip := range ips {
+				held = append(held, ip.String())
+			}
+			Expect(held).To(ConsistOf(newV4.String(), newV6.String()))
+
+			attrs, err := calicoClient.IPAM().GetAssignmentAttributes(ctx, oldV6)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*attrs.HandleID).To(Equal(victimHandle), "the victim keeps its IPv6 address")
+
+			_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, newContainerID)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(calicoClient.IPAM().ReleaseByHandle(ctx, victimHandle)).To(Succeed())
+		})
+	})
+
 	Context("when the pod's IP pool has no spare capacity", func() {
 		var netconf string
 		var clientset *kubernetes.Clientset

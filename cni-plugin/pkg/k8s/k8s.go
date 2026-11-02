@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -708,7 +709,11 @@ func ipAddrsResult(ctx context.Context, ipAddrs string, conf types.NetConf, args
 
 // assignPodIPs allocates this pod's addresses, preferring the ones its existing endpoint
 // already holds. Reuse lets an in-place sandbox rebuild succeed in a pool that has no
-// spare capacity for a second allocation.
+// spare capacity for a second allocation. It reports whether any prior address was kept.
+//
+// IPAM answers that this pod does not hold an address with ErrCodeAddressNotHeld, and
+// only those families get a fresh address. Any other error fails the ADD without releasing
+// anything, since addresses already moved onto this sandbox are still the endpoint's.
 func assignPodIPs(
 	ctx context.Context,
 	conf types.NetConf,
@@ -718,29 +723,78 @@ func assignPodIPs(
 	logger *logrus.Entry,
 ) (*cniv1.Result, bool, error) {
 	priorIPs := priorSandboxIPs(conf, epIDs, endpoint, logger)
-	if len(priorIPs) != 0 {
-		logger.WithField("ips", priorIPs).Info("Reassigning existing IP to new sandbox")
-		result, err := assignRequestedIPs(ctx, priorIPs, conf, args, logger)
-		if err == nil {
-			return result, true, nil
-		}
-
-		// IPAM can return a partial success. Release any IPs that we just assigned to this
-		// sandbox before attempting to allocate a fresh one.
-		utils.ReleaseIPAllocation(ctx, logger, conf, args)
-
-		// A newer sandbox owns the pod's network. Networking this one, even with a fresh
-		// address, would replace the live sandbox's host interface.
-		var cniErr *cnitypes.Error
-		if errors.As(err, &cniErr) && cniErr.Code == types.ErrCodeSandboxSuperseded {
-			return nil, false, err
-		}
-		logger.WithError(err).Warn("Could not reuse the endpoint's addresses, assigning new ones")
+	if len(priorIPs) == 0 {
+		result, err := utils.AddIPAM(ctx, conf, args, logger)
+		return result, false, err
 	}
 
-	// Assign a fresh IP address via the IPAM plugin.
-	result, err := utils.AddIPAM(ctx, conf, args, logger)
-	return result, false, err
+	logger.WithField("ips", priorIPs).Info("Reassigning existing IP to new sandbox")
+	kept := cniv1.Result{CNIVersion: cniv1.ImplementedSpecVersion}
+	var v4Lost, v6Lost bool
+	for _, ip := range priorIPs {
+		r, err := callIPAMWithIP(ctx, ip, conf, args, logger)
+		switch {
+		case err == nil:
+			kept.IPs = append(kept.IPs, r.IPs[0])
+			kept.Routes = append(kept.Routes, r.Routes...)
+		case isAddressNotHeld(err):
+			logger.WithField("ip", ip).Info("Endpoint's address is not held by this pod, assigning a new one")
+			if ip.To4() != nil {
+				v4Lost = true
+			} else {
+				v6Lost = true
+			}
+		default:
+			// Includes ErrCodeSandboxSuperseded: a newer sandbox owns the pod's network, and
+			// networking this one even with a fresh address would replace its host interface.
+			return nil, false, fmt.Errorf("error getting IP from IPAM: %w", err)
+		}
+	}
+
+	if !v4Lost && !v6Lost {
+		return &kept, true, nil
+	}
+	if len(kept.IPs) == 0 {
+		result, err := utils.AddIPAM(ctx, conf, args, logger)
+		return result, false, err
+	}
+
+	freshArgs := *args
+	stdin, err := withAssignFamilies(args.StdinData, v4Lost, v6Lost)
+	if err != nil {
+		return nil, false, err
+	}
+	freshArgs.StdinData = stdin
+	fresh, err := utils.AddIPAM(ctx, conf, &freshArgs, logger)
+	if err != nil {
+		return nil, false, err
+	}
+	kept.IPs = append(kept.IPs, fresh.IPs...)
+	kept.Routes = append(kept.Routes, fresh.Routes...)
+	return &kept, true, nil
+}
+
+// isAddressNotHeld reports whether err is IPAM's answer that a requested address is not held
+// by this pod.
+func isAddressNotHeld(err error) bool {
+	var cniErr *cnitypes.Error
+	return errors.As(err, &cniErr) && cniErr.Code == types.ErrCodeAddressNotHeld
+}
+
+// withAssignFamilies returns stdin with the IPAM assign_ipv4 and assign_ipv6 options set, so
+// that IPAM allocates only the requested families. Other fields pass through unchanged.
+func withAssignFamilies(stdin []byte, v4, v6 bool) ([]byte, error) {
+	var conf map[string]any
+	if err := json.Unmarshal(stdin, &conf); err != nil {
+		return nil, err
+	}
+	ipam, ok := conf["ipam"].(map[string]any)
+	if !ok {
+		return nil, errors.New("data on stdin was of unexpected type")
+	}
+	ipam["assign_ipv4"] = strconv.FormatBool(v4)
+	ipam["assign_ipv6"] = strconv.FormatBool(v6)
+	return json.Marshal(conf)
 }
 
 // priorSandboxIPs returns the addresses recorded on an existing endpoint, which a new
