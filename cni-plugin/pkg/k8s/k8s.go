@@ -437,6 +437,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			kept, err := releaseUnlisted(ctx, calicoClient.IPAM(), handleID, listed, logger)
 			if err != nil {
 				logger.WithError(err).Error("Failed to release IPAM allocation(s) after failure")
+				return
 			}
 			logger.WithField("kept", kept).Info("Released unlisted IPAM allocation(s) after failure")
 			return
