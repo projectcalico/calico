@@ -3039,7 +3039,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"iptablesRefreshInterval": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IptablesRefreshInterval is the period at which Felix re-checks the IP sets in the dataplane to ensure that no other process has accidentally broken Calico's rules. Set to 0 to disable IP sets refresh. Note: the default for this value is lower than the other refresh intervals as a workaround for a Linux kernel bug that was fixed in kernel version 4.11. If you are using v4.11 or greater you may want to set this to, a higher value to reduce Felix CPU usage. [Default: 10s]",
+							Description: "IptablesRefreshInterval is the period at which Felix re-checks the iptables rules in the dataplane to ensure that no other process has accidentally broken Calico's rules. Set to 0 to disable iptables refresh. [Default: 10s]",
 							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
@@ -3103,7 +3103,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"metadataAddr": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MetadataAddr is the IP address or domain name of the server that can answer VM queries for cloud-init metadata. In OpenStack, this corresponds to the machine running nova-api (or in Ubuntu, nova-api-metadata). A value of none (case-insensitive) means that Felix should not set up any NAT rule for the metadata path. [Default: 127.0.0.1]",
+							Description: "MetadataAddr is the IP address of the server that can answer VM queries for cloud-init metadata. In OpenStack, this corresponds to the machine running nova-api (or in Ubuntu, nova-api-metadata). A value of none (case-insensitive) means that Felix should not set up any NAT rule for the metadata path. [Default: 127.0.0.1]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3194,7 +3194,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"logConnectionTransitions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogConnectionTransitions controls whether Felix emits an additional kernel log recording the first observed response for each connection that matched a policy rule with a Log action. When set to FirstResponseAfterLog, each connection whose initial log was emitted gets one follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the transition: \"-est\" when the first reply packet is seen, \"-rst\" when the response is a TCP RST (connection refused), or \"-icmp-err\" when the response is a related ICMP error (e.g. port unreachable). The log body is the standard kernel packet log of the response packet. For \"-est\" and \"-rst\" its 5-tuple is the original policy Log line's with source and destination swapped; for \"-icmp-err\" the bracketed inner header carries the original 5-tuple unswapped. A logged connection with no follow-up log never received a response. Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log either, so every follow-up log pairs with an initial one. Enabling this consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode. [Default: Disabled]",
+							Description: "LogConnectionTransitions controls whether Felix emits an additional kernel log recording the first observed response for each connection that matched a policy rule with a Log action. When set to FirstResponseAfterLog, each connection whose initial log was emitted gets one follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the transition: \"-est\" when the first reply packet is seen, \"-rst\" when the response is a TCP RST (connection refused), or \"-icmp-err\" when the response is a related ICMP error (e.g. port unreachable). The log body is the standard kernel packet log of the response packet. For \"-est\" and \"-rst\" its 5-tuple is the original policy Log line's with source and destination swapped; for \"-icmp-err\" the bracketed inner header carries the original 5-tuple unswapped. A logged connection with no follow-up log never received a response. Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log either, so every follow-up log pairs with an initial one. Enabling this consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode or for untracked (doNotTrack) policies. [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3215,28 +3215,28 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"logSeverityFile": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogSeverityFile is the log severity above which logs are sent to the log file. [Default: Info]",
+							Description: "LogSeverityFile is the log severity at or above which logs are sent to the log file. [Default: Info]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"logSeverityScreen": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]",
+							Description: "LogSeverityScreen is the log severity at or above which logs are sent to the stdout. [Default: Info]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"logSeveritySys": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog. [Default: Info]",
+							Description: "LogSeveritySys is the log severity at or above which logs are sent to the syslog. Set to None for no logging to syslog (configuration file and environment variable only). [Default: Info]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"logDebugFilenameRegex": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs. Only logs from files with names that match the given regular expression are included.  The filter only applies to Debug level logs.",
+							Description: "LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs. Only logs from files with names that match the given regular expression are included.  The filter only applies to Debug and Trace level logs.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3320,7 +3320,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"reportingInterval": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ReportingInterval is the interval at which Felix reports its status into the datastore or 0 to disable. Must be non-zero in OpenStack deployments. [Default: 30s]",
+							Description: "ReportingInterval is the interval at which Felix reports its status into the datastore or 0 to disable. Must be non-zero in OpenStack deployments. calico-node sets this to `0s` in the `default` FelixConfiguration if it is not already set. [Default: 30s]",
 							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
@@ -3440,7 +3440,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"prometheusWireGuardMetricsEnabled": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PrometheusWireGuardMetricsEnabled disables wireguard metrics collection, which the Prometheus client does by default, when set to false. This reduces the number of metrics reported, reducing Prometheus load. [Default: true]",
+							Description: "PrometheusWireGuardMetricsEnabled disables wireguard metrics collection, which Felix does by default when WireGuard is enabled, when set to false. This reduces the number of metrics reported, reducing Prometheus load. [Default: true]",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -3475,7 +3475,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"failsafeInboundHostPorts": {
 						SchemaProps: spec.SchemaProps{
-							Description: "FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration. For backwards compatibility, if the protocol is not specified, it defaults to \"tcp\". If a CIDR is not specified, it will allow traffic from all addresses. To disable all inbound host ports, use the value \"[]\". The default value allows ssh access, DHCP, BGP, etcd and the Kubernetes API. [Default: tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, tcp:5473, tcp:6443, tcp:6666, tcp:6667 ]",
+							Description: "FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP ports and CIDRs that Felix will allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration. In the configuration file and environment variable, if the protocol is not specified, it defaults to \"tcp\"; in the FelixConfiguration resource, set the protocol to \"TCP\" or \"UDP\". If a CIDR is not specified, it will allow traffic from all addresses. To disable all inbound host ports, use the value \"[]\" in the FelixConfiguration resource, or \"none\" in the configuration file and environment variable. The default value allows ssh access, DHCP, BGP, etcd and the Kubernetes API. [Default: tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, tcp:5473, tcp:6443, tcp:6666, tcp:6667 ]",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -3521,7 +3521,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"usageReportingEnabled": {
 						SchemaProps: spec.SchemaProps{
-							Description: "UsageReportingEnabled reports anonymous Calico version number and cluster size to projectcalico.org. Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of Calico being used. [Default: true]",
+							Description: "UsageReportingEnabled reports anonymous usage data to projectcalico.org: the Calico version and git revision, the Kubernetes version, a cluster GUID, the cluster type, whether application layer policy is enabled, and the numbers of hosts, workload endpoints, host endpoints, policies, profiles and application layer policies. Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of Calico being used. [Default: true]",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -3553,7 +3553,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"natOutgoingExclusions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded. Configure which type of destinations is excluded from being masqueraded. - IPPoolsOnly: destinations outside of this IP pool will be masqueraded. - IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded. [Default: IPPoolsOnly]",
+							Description: "When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded. Configure which type of destinations is excluded from being masqueraded. - IPPoolsOnly: destinations outside of all IP pools, or in a LoadBalancer-only IP pool, will be masqueraded. - IPPoolsAndHostIPs: destinations outside of all IP pools and all hosts, or in a LoadBalancer-only IP pool, will be masqueraded. [Default: IPPoolsOnly]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3796,7 +3796,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfConntrackTimeouts": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFConntrackTimers overrides the default values for the specified conntrack timer if set. Each value can be either a duration or `Auto` to pick the value from a Linux conntrack timeout.\n\nConfigurable timers are: CreationGracePeriod, TCPSynSent, TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPTimeout, GenericTimeout, ICMPTimeout.\n\nUnset values are replaced by the default values with a warning log for incorrect values.",
+							Description: "BPFConntrackTimeouts overrides the default values for the specified conntrack timer if set. Each value can be a duration. TCPSynSent, TCPEstablished, TCPFinsSeen, GenericTimeout and ICMPTimeout also accept `Auto` to pick the value from a Linux conntrack timeout.\n\nConfigurable timers are: CreationGracePeriod, TCPSynSent, TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPTimeout, GenericTimeout, ICMPTimeout.\n\nUnset values are replaced by the default values with a warning log for incorrect values.",
 							Ref:         ref(v3.BPFConntrackTimeouts{}.OpenAPIModelName()),
 						},
 					},
@@ -3844,7 +3844,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfConnectTimeLoadBalancingEnabled": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFConnectTimeLoadBalancingEnabled when in BPF mode, controls whether Felix installs the connection-time load balancer.  The connect-time load balancer is required for the host to be able to reach Kubernetes services and it improves the performance of pod-to-service connections.  The only reason to disable it is for debugging purposes.\n\nDeprecated: Use BPFConnectTimeLoadBalancing [Default: true]",
+							Description: "BPFConnectTimeLoadBalancingEnabled when in BPF mode, controls whether Felix installs the connection-time load balancer.  The connect-time load balancer is required for the host to be able to reach Kubernetes services and it improves the performance of pod-to-service connections.  The only reason to disable it is for debugging purposes.\n\nDeprecated: Use BPFConnectTimeLoadBalancing. Felix does not read this field. When calicoctl or the Calico API server writes the resource, they set BPFConnectTimeLoadBalancing to `Enabled` or `Disabled` to match it, and set BPFHostNetworkedNATWithoutCTLB to `Disabled`. [Default: true]",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -4003,7 +4003,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfEnforceRPF": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFEnforceRPF enforce strict RPF on all host interfaces with BPF programs regardless of what is the per-interfaces or global setting. Possible values are Disabled, Strict or Loose. [Default: Loose]",
+							Description: "BPFEnforceRPF enforces RPF on all host interfaces with BPF programs regardless of what is the per-interfaces or global setting. Possible values are Disabled, Strict or Loose. [Default: Loose]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4113,7 +4113,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"flowLogsGoldmaneServer": {
 						SchemaProps: spec.SchemaProps{
-							Description: "FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.",
+							Description: "FlowLogsGoldmaneServer is the flow server endpoint to which flow data should be published.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4326,7 +4326,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"localSubnetL2Reachability": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LocalSubnetL2Reachability controls whether Felix automatically responds to ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and selected LoadBalancer VIPs that fall within the same subnet as the host interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host subnet are reachable from the local L2 segment without BGP. [Default: Disabled]",
+							Description: "LocalSubnetL2Reachability controls whether Felix automatically responds to ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and selected LoadBalancer VIPs that fall within the same subnet as the host interface. Felix responds only for addresses in an IP pool with ipipMode and vxlanMode both set to Never. When set to PodsAndLoadBalancers, pods and LB VIPs on the host subnet are reachable from the local L2 segment without BGP. [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
