@@ -131,6 +131,14 @@ var _ = Describe("assignPodIPs", func() {
 				Expect(json.Unmarshal(fresh[0].Stdin, &conf)).To(Succeed())
 				Expect(conf.IPAM.AssignIPv4).To(Equal("false"))
 				Expect(conf.IPAM.AssignIPv6).To(Equal("true"))
+			case expectFreshAddForIPv4Only:
+				Expect(fresh).To(HaveLen(1))
+				var conf fakeIPAMConf
+				Expect(json.Unmarshal(fresh[0].Stdin, &conf)).To(Succeed())
+				Expect(conf.IPAM.AssignIPv4).To(Equal("true"))
+				Expect(conf.IPAM.AssignIPv6).To(Equal("false"))
+			default:
+				Fail(fmt.Sprintf("unhandled fresh-ADD expectation %d", e.wantFresh))
 			}
 		},
 		Entry("transient error on the second family fails the ADD", reuseCase{
