@@ -3114,6 +3114,10 @@ spec:
                     x-kubernetes-int-or-string: true
                   maxItems: 7
                   type: array
+                  x-kubernetes-validations:
+                    - message: kubeNodePortRanges must not contain named ports
+                      reason: FieldValueInvalid
+                      rule: self.all(p, type(p) == int || p.matches('^[0-9:]+$'))
                 liveMigrationRouteConvergenceTime:
                   description: |-
                     LiveMigrationRouteConvergenceTime is the time to keep elevated route priority after a
