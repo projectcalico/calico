@@ -687,18 +687,15 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		return err
 	}
 
-	// A stale sandbox's DEL must not free an address the endpoint still lists, since a later ADD
-	// may have moved it onto this sandbox's handle. Release only the unlisted ones.
+	// A stale DEL must not free addresses the endpoint lists, even when IPsByHandle returns none:
+	// it skips unreadable blocks, so an empty result proves nothing.
 	if mismatchedWEP != nil && keepsListedAddresses(conf, epIDs, "") {
 		handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
-		kept, err := releaseUnlisted(ctx, c.IPAM(), handleID, listedAddresses(mismatchedWEP), logger)
-		if err != nil {
+		if _, err := releaseUnlisted(ctx, c.IPAM(), handleID, listedAddresses(mismatchedWEP), logger); err != nil {
 			return err
 		}
-		if kept {
-			logger.Info("Teardown processing complete.")
-			return nil
-		}
+		logger.Info("Teardown processing complete.")
+		return nil
 	}
 
 	// Release the IP address for this container by calling the configured IPAM plugin.

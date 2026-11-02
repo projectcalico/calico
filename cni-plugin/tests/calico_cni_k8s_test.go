@@ -2255,6 +2255,50 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(ips[0].String()).To(Equal(victimIP))
 		})
 
+		It("leaves the pod-scoped workload handle alone when a stale DEL keeps nothing", func() {
+			const sandboxX, sandboxY = "container-id-stale-nothing-x", "container-id-stale-nothing-y"
+			const workloadHandleIP = "10.123.0.200"
+
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: testPodName},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{Name: testPodName, Image: "ignore"}},
+					NodeName:   testNodeName,
+				},
+			})
+			_, _, _, contAddresses, _, contNs, err := testutils.CreateContainerWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", sandboxX)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(contAddresses).To(HaveLen(1))
+			DeferCleanup(func() {
+				_, err := testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, sandboxX)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			// The <namespace>.<pod> handle is what IPAM's DEL also releases for upgraded pods.
+			workloadHandle := testutils.K8S_TEST_NS + "." + testPodName
+			Expect(calicoClient.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
+				IP:          cnet.IP{IP: net.ParseIP(workloadHandleIP)},
+				HandleID:    &workloadHandle,
+				Hostname:    testNodeName,
+				IntendedUse: api.IPPoolAllowedUseWorkload,
+			})).To(Succeed())
+			DeferCleanup(func() {
+				Expect(calicoClient.IPAM().ReleaseByHandle(ctx, workloadHandle)).To(Or(Succeed(), BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{})))
+			})
+
+			// Sandbox Y never allocated anything, so releasing its unlisted addresses keeps nothing.
+			exitCode, err := testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, sandboxY)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exitCode).To(Equal(0))
+
+			ips, err := calicoClient.IPAM().IPsByHandle(ctx, workloadHandle)
+			Expect(err).NotTo(HaveOccurred(), "the stale DEL released the workload handle")
+			Expect(ips).To(HaveLen(1))
+			Expect(ips[0].String()).To(Equal(workloadHandleIP))
+			_, err = calicoClient.IPAM().GetAssignmentAttributes(ctx, cnet.IP{IP: contAddresses[0].IP})
+			Expect(err).NotTo(HaveOccurred(), "the stale DEL released the live sandbox's address")
+		})
+
 		It("reports the cooldown when the requested IP has not finished its cooldown", func() {
 			// GetAssignmentAttributes refuses to name an owner for an address in
 			// cooldown, so the transfer is never reached. The pod still fails, but the
