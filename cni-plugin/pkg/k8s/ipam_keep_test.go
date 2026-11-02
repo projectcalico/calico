@@ -15,13 +15,104 @@
 package k8s
 
 import (
+	"context"
+	"errors"
+	"net"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
+
+// stubHandleIPAM is an ipam.Interface that serves a fixed IPsByHandle answer and records
+// what ReleaseIPs is asked to release. Other methods panic through the nil embedded interface.
+type stubHandleIPAM struct {
+	ipam.Interface
+	ips        []cnet.IP
+	ipsErr     error
+	releaseErr error
+	released   []ipam.ReleaseOptions
+}
+
+func (s *stubHandleIPAM) IPsByHandle(_ context.Context, _ string) ([]cnet.IP, error) {
+	return s.ips, s.ipsErr
+}
+
+func (s *stubHandleIPAM) ReleaseIPs(_ context.Context, opts ...ipam.ReleaseOptions) ([]cnet.IP, []ipam.ReleaseOptions, error) {
+	s.released = append(s.released, opts...)
+	return nil, nil, s.releaseErr
+}
+
+func stubIPs(addrs ...string) []cnet.IP {
+	var ips []cnet.IP
+	for _, a := range addrs {
+		ips = append(ips, cnet.IP{IP: net.ParseIP(a)})
+	}
+	return ips
+}
+
+var _ = Describe("releaseUnlisted", func() {
+	const handle = "k8s-pod-network.sandbox-y"
+	logger := logrus.WithField("test", "releaseUnlisted")
+
+	It("releases only the unlisted address and reports it kept one", func() {
+		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.5", "10.0.0.6")}
+		kept, err := releaseUnlisted(context.Background(), stub, handle, set.From("10.0.0.5"), logger)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kept).To(BeTrue())
+		Expect(stub.released).To(Equal([]ipam.ReleaseOptions{{Address: "10.0.0.6", Handle: handle}}))
+	})
+
+	It("releases every address when none is listed and reports none kept", func() {
+		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.6", "fd00::6")}
+		kept, err := releaseUnlisted(context.Background(), stub, handle, set.New[string](), logger)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kept).To(BeFalse())
+		Expect(stub.released).To(ConsistOf(
+			ipam.ReleaseOptions{Address: "10.0.0.6", Handle: handle},
+			ipam.ReleaseOptions{Address: "fd00::6", Handle: handle},
+		))
+	})
+
+	It("releases nothing when every address on the handle is listed", func() {
+		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.5")}
+		kept, err := releaseUnlisted(context.Background(), stub, handle, set.From("10.0.0.5"), logger)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kept).To(BeTrue())
+		Expect(stub.released).To(BeEmpty())
+	})
+
+	It("treats a missing handle as nothing to release", func() {
+		stub := &stubHandleIPAM{ipsErr: cerrors.ErrorResourceDoesNotExist{}}
+		kept, err := releaseUnlisted(context.Background(), stub, handle, set.From("10.0.0.5"), logger)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kept).To(BeFalse())
+		Expect(stub.released).To(BeEmpty())
+	})
+
+	It("returns any other IPsByHandle error without releasing", func() {
+		boom := errors.New("datastore down")
+		stub := &stubHandleIPAM{ipsErr: boom}
+		_, err := releaseUnlisted(context.Background(), stub, handle, set.New[string](), logger)
+		Expect(err).To(MatchError(boom))
+		Expect(stub.released).To(BeEmpty())
+	})
+
+	It("returns a ReleaseIPs error", func() {
+		boom := errors.New("release failed")
+		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.6"), releaseErr: boom}
+		_, err := releaseUnlisted(context.Background(), stub, handle, set.New[string](), logger)
+		Expect(err).To(MatchError(boom))
+	})
+})
 
 var _ = DescribeTable("listedAddresses",
 	func(wep *internalapi.WorkloadEndpoint, want []string) {
