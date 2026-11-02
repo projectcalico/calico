@@ -49,9 +49,22 @@ func Parse(selector string) (sel *Selector, err error) {
 	return parser.Parse(selector)
 }
 
-// Validate checks the syntax of the given selector.
-func Validate(selector string) (err error) {
-	return parser.Validate(selector)
+// LabelEquals returns a selector equivalent to parsing `label == "value"`.  It
+// returns an error if the label is invalid or the value contains both ' and ".
+func LabelEquals(label, value string) (*Selector, error) {
+	return parser.LabelEquals(label, value)
+}
+
+const (
+	MaxAPIDepth   = parser.MaxAPIDepth
+	MaxParseDepth = parser.MaxParseDepth
+)
+
+// Validate checks the syntax of the given selector and that its parentheses
+// are nested at most maxDepth deep.  Use MaxAPIDepth for selectors from
+// the API and MaxParseDepth for selectors that Calico derived from them.
+func Validate(selector string, maxDepth int) (err error) {
+	return parser.Validate(selector, maxDepth)
 }
 
 // Normalise converts the given selector to the form returned by
