@@ -367,3 +367,36 @@ func TestFelixConfiguration_NumericBounds(t *testing.T) {
 		})
 	}
 }
+
+// Felix compiles these with regexp.Compile. The schema rule evaluates each value
+// as a regexp, so the rejection carries the parse error rather than a rule message.
+func TestFelixConfiguration_RegexpFields(t *testing.T) {
+	fields := []string{
+		"logDebugFilenameRegex",
+		"nftablesFlowTableDataIfacePattern",
+		"bpfDataIfacePattern",
+		"bpfL3IfacePattern",
+		"bpfDisableGROForIfaces",
+		"mtuIfacePattern",
+	}
+
+	newConfig := func(field, value string) *unstructured.Unstructured {
+		return &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "projectcalico.org/v3",
+				"kind":       "FelixConfiguration",
+				"metadata":   map[string]interface{}{"name": uniqueName("felixconfig")},
+				"spec":       map[string]interface{}{field: value},
+			},
+		}
+	}
+
+	for _, field := range fields {
+		t.Run(field+" valid regexp", func(t *testing.T) {
+			expectCreateSucceeds(t, newConfig(field, "^(en.*|eth[0-9]+)$"))
+		})
+		t.Run(field+" invalid regexp", func(t *testing.T) {
+			expectCreateFails(t, newConfig(field, "eth["), "error parsing regexp")
+		})
+	}
+}
