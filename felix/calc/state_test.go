@@ -54,6 +54,7 @@ type State struct {
 	ExpectedHostMetadata                 map[string]*proto.HostMetadataUpdate
 	ExpectedEndpointComputedData         map[string]map[calc.EndpointComputedDataKind]calc.EndpointComputedData
 	ExpectedLiveMigrationRoles           map[string]proto.LiveMigrationRole
+	ExpectedLiveMigrationUIDs            map[string]string
 	ExpectedNumberOfALPPolicies          int
 	ExpectedNumberOfTiers                int
 	ExpectedNumberOfPolicies             int
@@ -85,6 +86,7 @@ func NewState() State {
 		ExpectedHostMetadata:                 make(map[string]*proto.HostMetadataUpdate),
 		ExpectedEndpointComputedData:         make(map[string]map[calc.EndpointComputedDataKind]calc.EndpointComputedData),
 		ExpectedLiveMigrationRoles:           make(map[string]proto.LiveMigrationRole),
+		ExpectedLiveMigrationUIDs:            make(map[string]string),
 		ExpectedNumberOfPolicies:             -1,
 		ExpectedNumberOfTiers:                -1,
 		ExpectedEncapsulation:                &proto.Encapsulation{},
@@ -104,6 +106,7 @@ func (s State) Copy() State {
 	maps.Copy(cpy.ExpectedHostMetadata, s.ExpectedHostMetadata)
 	maps.Copy(cpy.ExpectedEndpointComputedData, s.ExpectedEndpointComputedData)
 	maps.Copy(cpy.ExpectedLiveMigrationRoles, s.ExpectedLiveMigrationRoles)
+	maps.Copy(cpy.ExpectedLiveMigrationUIDs, s.ExpectedLiveMigrationUIDs)
 
 	cpy.ExpectedPolicyIDs = s.ExpectedPolicyIDs.Copy()
 	cpy.ExpectedUntrackedPolicyIDs = s.ExpectedUntrackedPolicyIDs.Copy()
@@ -292,6 +295,16 @@ func (s State) withLiveMigrationRole(endpointID string, role proto.LiveMigration
 		delete(newState.ExpectedLiveMigrationRoles, endpointID)
 	} else {
 		newState.ExpectedLiveMigrationRoles[endpointID] = role
+	}
+	return newState
+}
+
+func (s State) withLiveMigrationUID(endpointID string, uid string) (newState State) {
+	newState = s.Copy()
+	if uid == "" {
+		delete(newState.ExpectedLiveMigrationUIDs, endpointID)
+	} else {
+		newState.ExpectedLiveMigrationUIDs[endpointID] = uid
 	}
 	return newState
 }
