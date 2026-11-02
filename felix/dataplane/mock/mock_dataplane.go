@@ -53,6 +53,7 @@ type MockDataplane struct {
 	endpointToAllPolicyIDs         map[string][]types.PolicyID
 	endpointToProfiles             map[string][]string
 	endpointToLiveMigrationRole    map[string]proto.LiveMigrationRole
+	endpointToLiveMigrationUID     map[string]string
 	serviceAccounts                map[types.ServiceAccountID]*proto.ServiceAccountUpdate
 	namespaces                     map[types.NamespaceID]*proto.NamespaceUpdate
 	config                         map[string]string
@@ -198,6 +199,13 @@ func (d *MockDataplane) EndpointToLiveMigrationRole() map[string]proto.LiveMigra
 	return maps.Clone(d.endpointToLiveMigrationRole)
 }
 
+func (d *MockDataplane) EndpointToLiveMigrationUID() map[string]string {
+	d.Lock()
+	defer d.Unlock()
+
+	return maps.Clone(d.endpointToLiveMigrationUID)
+}
+
 func (d *MockDataplane) EndpointToPolicyOrder() map[string][]TierInfo {
 	d.Lock()
 	defer d.Unlock()
@@ -293,6 +301,7 @@ func NewMockDataplane() *MockDataplane {
 		endpointToPreDNATPolicyOrder:   make(map[string][]TierInfo),
 		endpointToProfiles:             make(map[string][]string),
 		endpointToLiveMigrationRole:    make(map[string]proto.LiveMigrationRole),
+		endpointToLiveMigrationUID:     make(map[string]string),
 		endpointToAllPolicyIDs:         make(map[string][]types.PolicyID),
 		serviceAccounts:                make(map[types.ServiceAccountID]*proto.ServiceAccountUpdate),
 		namespaces:                     make(map[types.NamespaceID]*proto.NamespaceUpdate),
@@ -432,6 +441,11 @@ func (d *MockDataplane) OnEvent(event any) {
 		} else {
 			delete(d.endpointToLiveMigrationRole, id.String())
 		}
+		if event.Endpoint.LiveMigrationUid != "" {
+			d.endpointToLiveMigrationUID[id.String()] = event.Endpoint.LiveMigrationUid
+		} else {
+			delete(d.endpointToLiveMigrationUID, id.String())
+		}
 	case *proto.WorkloadEndpointRemove:
 		id := workloadId(types.ProtoToWorkloadEndpointID(event.GetId()))
 		delete(d.endpointToPolicyOrder, id.String())
@@ -439,6 +453,7 @@ func (d *MockDataplane) OnEvent(event any) {
 		delete(d.endpointToPreDNATPolicyOrder, id.String())
 		delete(d.endpointToProfiles, id.String())
 		delete(d.endpointToLiveMigrationRole, id.String())
+		delete(d.endpointToLiveMigrationUID, id.String())
 		delete(d.endpointToAllPolicyIDs, id.String())
 	case *proto.HostEndpointUpdate:
 		tiers := event.Endpoint.Tiers
