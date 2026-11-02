@@ -248,11 +248,14 @@ type ServiceAccountMatch struct {
 	// Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
 	// at) a pod running as a service account whose name is in the list.
 	// +listType=set
-	Names []string `json:"names,omitempty" validate:"omitempty"`
+	// +kubebuilder:validation:items:MaxLength=253
+	// +kubebuilder:validation:items:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	Names []string `json:"names,omitempty" validate:"omitempty,dive,name"`
 
 	// Selector is an optional field that restricts the rule to only apply to traffic that originates from
 	// (or terminates at) a pod running as a service account that matches the given label selector.
 	// If both Names and Selector are specified then they are AND'ed.
+	// +kubebuilder:validation:MaxLength=1024
 	Selector string `json:"selector,omitempty" validate:"omitempty,selector"`
 }
 

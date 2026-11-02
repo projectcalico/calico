@@ -293,6 +293,10 @@ The eBPF dataplane design is split across the `bpf-*.md` files under [`felix/des
 
 Path-specific reviewer rules live in [`.github/instructions/bpf.instructions.md`](instructions/bpf.instructions.md) — a single thin pointer that scopes to all BPF paths and directs the agent to load the matching sub-design(s) from [`felix/DESIGN.md`](../felix/DESIGN.md)'s topic table, with `bpf-overview.md` as the always-read companion. The doc-update rule above applies; for BPF, "changes how it works" specifically means a new sub-program, CT flag, mark bit, map or map field, or any change to the packet path or forwarding decision.
 
+## Calico API Review
+
+On clusters using the `projectcalico.org/v3` CRDs directly, the Go validator in `libcalico-go/lib/validator/v3` only runs for the policy kinds (via the `calico-webhooks` admission webhook); every other kind gets only the CRD schema. [`.github/instructions/calico-api.instructions.md`](instructions/calico-api.instructions.md) scopes to the API types, validator and webhook, and lists the validation every selector and name field needs.
+
 ## Helm Chart Review
 
 The user-facing install and upgrade instructions are hand-written READMEs ([`charts/tigera-operator/README.md`](../charts/tigera-operator/README.md) and [`charts/crd.projectcalico.org.v1/README.md`](../charts/crd.projectcalico.org.v1/README.md)), not generated, so they drift silently when a chart change alters the steps a user has to run. [`.github/instructions/helm-charts.instructions.md`](instructions/helm-charts.instructions.md) scopes to `charts/**` and directs the reviewer to cross-check those READMEs against the change. The doc-update rule above applies; for charts, "changes how it works" means anything that alters how a user installs or upgrades Calico via Helm — moving resources between charts (CRDs especially), adding or removing a manual step, renaming a chart, or changing a documented values key or example command.
