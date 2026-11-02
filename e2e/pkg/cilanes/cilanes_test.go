@@ -37,6 +37,14 @@ steps:
         value: e2e/config/vpp/eks.yaml
     commands: |
       .argoci/scripts/body_standard.sh
+  - name: config-list
+    env:
+      - name: E2E_TEST_CONFIG
+        value: >-
+          e2e/config/ci-base.yaml
+          e2e/config/suite/policy.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
   - name: openstack
     env:
       - name: PROVISIONER
@@ -81,6 +89,10 @@ func TestParseArgo(t *testing.T) {
 	// resolve to a value the parser can use.
 	Expect(byName["overrides-config"].Config).To(Equal("e2e/config/vpp/eks.yaml"))
 
+	// A cell can list several configs, folded onto one line by the YAML.
+	Expect(byName["config-list"].Configs()).To(Equal([]string{"e2e/config/ci-base.yaml", "e2e/config/suite/policy.yaml"}))
+	Expect(byName["overrides-config"].Configs()).To(Equal([]string{"e2e/config/vpp/eks.yaml"}))
+
 	openstack := byName["openstack"]
 	Expect(openstack.TestType).To(Equal("openstack-e2e"))
 	Expect(openstack.RunsE2EBinary()).To(BeFalse())
@@ -123,8 +135,20 @@ func TestSelectionArgs(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(args).To(Equal([]string{"--calico.test-config=/repo/e2e/config/vpp/eks.yaml"}))
 
+	// A list of configs passes one flag per entry, in the cell's order.
+	args, err = Lane{Config: "e2e/config/ci-base.yaml\n  e2e/config/suite/policy.yaml"}.SelectionArgs("/repo")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(args).To(Equal([]string{
+		"--calico.test-config=/repo/e2e/config/ci-base.yaml",
+		"--calico.test-config=/repo/e2e/config/suite/policy.yaml",
+	}))
+
 	_, err = Lane{Name: "empty"}.SelectionArgs("/repo")
 	Expect(err).To(HaveOccurred())
+
+	// Whitespace alone is no selection, so the lane does not run the binary.
+	Expect(Lane{TestType: "k8s-e2e", Config: "  "}.RunsE2EBinary()).To(BeFalse())
+	Expect(Lane{TestType: "k8s-e2e", Config: "e2e/config/a.yaml"}.RunsE2EBinary()).To(BeTrue())
 }
 
 const blocksFixture = `
