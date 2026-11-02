@@ -2004,6 +2004,24 @@ var _ = Describe("Node rendering tests", func() {
 				}
 			})
 
+			It("should render the nftables backend for portmap with the nftables dataplane", func() {
+				nftables := operatorv1.LinuxDataplaneNftables
+				defaultInstance.CalicoNetwork.LinuxDataplane = &nftables
+
+				component := render.Node(&cfg)
+				Expect(component.ResolveImages(nil)).To(BeNil())
+				resources, _ := component.Objects()
+				cniCmResource := rtest.GetResource(resources, "cni-config", "calico-system", "", "v1", "ConfigMap")
+				Expect(cniCmResource).ToNot(BeNil())
+
+				var config cniNetworkConfig
+				cniCm := cniCmResource.(*corev1.ConfigMap)
+				Expect(json.Unmarshal([]byte(cniCm.Data["config"]), &config)).NotTo(HaveOccurred())
+				Expect(config.Plugins).To(HaveLen(2))
+				Expect(config.Plugins[1].Type).To(Equal("portmap"))
+				Expect(config.Plugins[1].Backend).To(Equal("nftables"))
+			})
+
 			It("should render cni config without portmap when HostPorts disabled", func() {
 				expectedResources := []struct {
 					name    string
@@ -3471,5 +3489,7 @@ type cniNetworkConfig struct {
 }
 
 type cniPluginConfig struct {
-	IPAM map[string]any `json:"ipam"`
+	Type    string         `json:"type"`
+	Backend string         `json:"backend"`
+	IPAM    map[string]any `json:"ipam"`
 }
