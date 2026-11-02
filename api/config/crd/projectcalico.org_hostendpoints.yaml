@@ -128,6 +128,8 @@ spec:
                     profile is applied in the order that they appear in this list.  Profile rules are applied
                     after the selector-based security policy.
                   items:
+                    maxLength: 253
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                     type: string
                   type: array
                   x-kubernetes-list-type: set
