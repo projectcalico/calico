@@ -1268,9 +1268,8 @@ func (c *IPAMController) judgeAllocation(a *allocation, preferCache bool) alloca
 // pod's current one. The CNI plugin records the current sandbox's container ID on the pod at
 // every ADD and leaves it in place on DEL, so an allocation whose handle names a different
 // container ID belongs to a sandbox kubelet has replaced. Without both IDs it reports false.
-// An address the pod's IP annotation still lists is not treated as replaced: the CNI plugin
-// keeps it for the pod, trusting the annotation errs toward keeping, and the pod's deletion
-// bounds any leak.
+// An address the pod's IP annotation lists is never replaced: trusting the annotation errs
+// toward keeping, and the pod's deletion bounds any leak.
 func fromReplacedSandbox(a *allocation, p *v1.Pod) bool {
 	current := p.Annotations[conversion.AnnotationContainerID]
 	if current == "" {

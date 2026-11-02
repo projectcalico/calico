@@ -981,6 +981,14 @@ var _ = Describe("IPAM controller UTs", func() {
 			Expect(c.judgeAllocation(podAllocation("k8s-pod-network."+replacedSandbox), false)).To(Equal(allocationInUse))
 		})
 
+		It("should keep a replaced sandbox's IPv6 address the annotation lists", func() {
+			c.Start(stopChan)
+			createSandboxPod(v1.PodPending, currentSandbox, "10.0.0.1/32,fd00::1/128", "")
+			a := podAllocation("k8s-pod-network." + replacedSandbox)
+			a.ip = "fd00::1"
+			Expect(c.judgeAllocation(a, false)).To(Equal(allocationInUse))
+		})
+
 		It("should judge an allocation whose pod doesn't exist as owner gone", func() {
 			c.Start(stopChan)
 			Expect(c.judgeAllocation(podAllocation("k8s-pod-network."+currentSandbox), false)).To(Equal(allocationOwnerGone))
