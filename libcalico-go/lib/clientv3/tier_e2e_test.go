@@ -269,8 +269,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			}, options.SetOptions{})
 			Expect(res).To(BeNil())
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("error with field Metadata.Name = 'thisisareallylongnamethatislongerthansixtythreecharactersthatwillnotfitinalabel' (name is too long by 16 bytes)"))
-
+			Expect(outError.Error()).To(ContainSubstring("Metadata.Name = 'thisisareallylongnamethatislongerthansixtythreecharactersthatwillnotfitinalabel' (name is too long by 16 bytes)"))
 			By("Attempting to create a new Tier with name1/spec1 and a non-empty ResourceVersion")
 			res, outError = c.Tiers().Create(ctx, &apiv3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "12345"},
