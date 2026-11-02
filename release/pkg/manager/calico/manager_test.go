@@ -735,10 +735,12 @@ func TestPrepPrereqs(t *testing.T) {
 		remote         string
 		validateBranch bool
 		wantErr        bool
+		wantWarn       bool
 	}{
 		{name: "main repo", remote: "git@github.com:projectcalico/calico.git", validateBranch: true},
 		{name: "fork", remote: "git@github.com:someone/calico.git", validateBranch: true, wantErr: true},
-		{name: "fork with the branch check off", remote: "git@github.com:someone/calico.git"},
+		{name: "fork with the branch check off warns", remote: "git@github.com:someone/calico.git", wantWarn: true},
+		{name: "main repo with the branch check off", remote: "git@github.com:projectcalico/calico.git"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFakeRunner()
@@ -750,9 +752,18 @@ func TestPrepPrereqs(t *testing.T) {
 				releaseBranchPrefix: "release", validate: true, validateBranch: tc.validateBranch,
 				gitRef: true, dryRun: true,
 			}
+			hook := logtest.NewGlobal()
+			t.Cleanup(hook.Reset)
 			err := r.prepPrereqs()
 			if got := err != nil && strings.Contains(err.Error(), "expected to be from"); got != tc.wantErr {
 				t.Errorf("prepPrereqs() = %v, want fork error %v", err, tc.wantErr)
+			}
+			var warned bool
+			for _, e := range hook.AllEntries() {
+				warned = warned || e.Message == "Using the wrong branch"
+			}
+			if warned != tc.wantWarn {
+				t.Errorf("warned = %v, want %v", warned, tc.wantWarn)
 			}
 		})
 	}

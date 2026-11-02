@@ -406,7 +406,12 @@ var validateHashreleasePublishFlags = func(c *cli.Command) error {
 			}
 			// If building locally, do not allow setting the hashrelease as latest.
 			if !c.Bool(ciFlag.Name) {
-				return fmt.Errorf("cannot set hashrelease as latest when building locally, use --%s=false instead", latestFlag.Name)
+				err := fmt.Errorf("cannot set hashrelease as latest when building locally, use --%s=false instead", latestFlag.Name)
+				// Neither marks a hashrelease latest, so there is nothing to block.
+				if !c.Bool(localFlag.Name) && !c.Bool(planFlag.Name) {
+					return err
+				}
+				logrus.WithError(err).Warn("A real local publish would fail")
 			}
 		}
 	}

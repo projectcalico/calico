@@ -104,18 +104,24 @@ func Remove(nodes []Node, name string) ([]Node, error) {
 // Run reports every Validate failure together, so one run names all of them.
 func (p *Plan) Run() (err error) {
 	var errs []error
+	failed := map[string][]error{}
 	before := map[string]bool{}
 	for _, n := range p.nodes {
 		for _, req := range n.Requires {
 			_, exists := p.on[req]
+			var reqErr error
 			switch {
 			case !p.on[n.Name]:
 			case !exists:
-				errs = append(errs, fmt.Errorf("node %q requires %q, which does not exist", n.Name, req))
+				reqErr = fmt.Errorf("node %q requires %q, which does not exist", n.Name, req)
 			case !p.on[req]:
-				errs = append(errs, fmt.Errorf("node %q requires %q, which is off in this run", n.Name, req))
+				reqErr = fmt.Errorf("node %q requires %q, which is off in this run", n.Name, req)
 			case !before[req]:
-				errs = append(errs, fmt.Errorf("node %q requires %q, which runs after it", n.Name, req))
+				reqErr = fmt.Errorf("node %q requires %q, which runs after it", n.Name, req)
+			}
+			if reqErr != nil {
+				failed[n.Name] = append(failed[n.Name], reqErr)
+				errs = append(errs, reqErr)
 			}
 		}
 		before[n.Name] = true
@@ -125,20 +131,27 @@ func (p *Plan) Run() (err error) {
 			continue
 		}
 		if err := n.Validate(); err != nil {
+			failed[n.Name] = append(failed[n.Name], err)
 			errs = append(errs, fmt.Errorf("%s: %w", n.Name, err))
 		}
 	}
 	err = errors.Join(errs...)
 	if p.opts.Preview {
-		if err != nil {
-			logrus.WithError(err).Warn("A real run would fail validation")
-		}
+		var failing []string
 		for _, n := range p.nodes {
-			if p.on[n.Name] {
-				logrus.WithField("step", n.Name).Info("Will run")
-			} else {
-				logrus.WithField("step", n.Name).Info("Will skip")
+			log := logrus.WithField("step", n.Name)
+			if !p.on[n.Name] {
+				log.Info("Will skip")
+				continue
 			}
+			log.Info("Will run")
+			if err := errors.Join(failed[n.Name]...); err != nil {
+				log.WithError(err).Warn("Will fail")
+				failing = append(failing, n.Name)
+			}
+		}
+		if len(failing) > 0 {
+			logrus.WithField("steps", failing).Warn("A real run would fail these steps")
 		}
 		return nil
 	}
