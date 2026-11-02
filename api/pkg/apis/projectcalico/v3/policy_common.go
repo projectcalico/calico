@@ -156,6 +156,8 @@ type EntityRule struct {
 	// originates from (or terminates at) IP addresses in any of the given subnets.
 	// +listType=set
 	// +kubebuilder:validation:MaxItems=256
+	// +kubebuilder:validation:items:MaxLength=49
+	// +kubebuilder:validation:XValidation:rule="self.all(n, isCIDR(n))",message="nets entries must be CIDRs",reason=FieldValueInvalid
 	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,net"`
 
 	// Selector is an optional field that contains a selector expression (see Policy for
@@ -216,6 +218,8 @@ type EntityRule struct {
 	// NotNets is the negated version of the Nets field.
 	// +listType=set
 	// +kubebuilder:validation:MaxItems=256
+	// +kubebuilder:validation:items:MaxLength=49
+	// +kubebuilder:validation:XValidation:rule="self.all(n, isCIDR(n))",message="notNets entries must be CIDRs",reason=FieldValueInvalid
 	NotNets []string `json:"notNets,omitempty" validate:"omitempty,dive,net"`
 
 	// NotSelector is the negated version of the Selector field.  See Selector field for
