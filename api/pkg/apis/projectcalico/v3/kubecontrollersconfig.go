@@ -185,6 +185,7 @@ type Template struct {
 	Labels map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
 
 	// NodeSelector allows the AutoHostEndpoint to be created only for specific nodes
+	// +kubebuilder:validation:MaxLength=1024
 	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`
 }
 
