@@ -27,6 +27,8 @@ import (
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
+	logrustest "github.com/sirupsen/logrus/hooks/test"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
@@ -990,6 +992,24 @@ func (f *fakeGARPHandle) IsClosed() bool {
 
 // --- Section 7: Migration UID tracking ---
 
+// countUIDChangeLogs returns how many "LiveMigration UID changed" logs f emits.
+func countUIDChangeLogs(t *testing.T, f func()) (count int) {
+	t.Helper()
+	logger := logrus.StandardLogger()
+	oldHooks := logger.ReplaceHooks(make(logrus.LevelHooks))
+	defer logger.ReplaceHooks(oldHooks)
+	hook := logrustest.NewLocal(logger)
+
+	f()
+
+	for _, entry := range hook.AllEntries() {
+		if entry.Message == "LiveMigration UID changed" {
+			count++
+		}
+	}
+	return
+}
+
 func TestMigrationUIDTracking(t *testing.T) {
 	loggedUID := func(fsm *liveMigrationFSM) any {
 		return fsm.logCtx.Data["migrationUID"]
@@ -1017,6 +1037,38 @@ func TestMigrationUIDTracking(t *testing.T) {
 		fsm := m.fsms[wepID1]
 		g.Expect(fsm.currentState).To(Equal(liveMigrationStateTimeWait))
 		g.Expect(loggedUID(fsm)).To(Equal("uid-xyz-789"))
+	})
+
+	t.Run("a replaced LiveMigration is logged once, without changing the FSM's UID", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-first"))
+		fsm := m.fsms[wepID1]
+
+		changes := countUIDChangeLogs(t, func() {
+			m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-second"))
+			m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-second"))
+		})
+
+		g.Expect(changes).To(Equal(1))
+		g.Expect(m.fsms[wepID1]).To(BeIdenticalTo(fsm))
+		g.Expect(loggedUID(fsm)).To(Equal("uid-first"))
+	})
+
+	t.Run("source-role and empty UIDs are not treated as a change", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-first"))
+		m.OnGARPDetected(wepID1)
+
+		changes := countUIDChangeLogs(t, func() {
+			// The LiveMigration is deleted at the end of the migration...
+			m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_NO_ROLE, ""))
+			// ...and then the VM is migrated away again.
+			m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_SOURCE, "uid-away"))
+		})
+
+		g.Expect(changes).To(Equal(0))
 	})
 
 	t.Run("the next migration's FSM has the next migration's UID", func(t *testing.T) {
