@@ -44,6 +44,7 @@ type StagedNetworkPolicy struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))",message="services are not allowed in an egress rule source",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.ingress) || self.ingress.all(r, !has(r.destination) || !has(r.destination.services))",message="services are not allowed in an ingress rule destination",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.egress) || self.egress.all(r, !has(r.http))",message="HTTP match is not allowed in egress rules",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.stagedAction) || self.stagedAction != 'Delete' || (!has(self.order) && (!has(self.ingress) || size(self.ingress) == 0) && (!has(self.egress) || size(self.egress) == 0) && (!has(self.selector) || size(self.selector) == 0) && (!has(self.serviceAccountSelector) || size(self.serviceAccountSelector) == 0) && (!has(self.performanceHints) || size(self.performanceHints) == 0))",message="spec fields other than tier must be empty when stagedAction is Delete",reason=FieldValueForbidden
 type StagedNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
 	// +kubebuilder:default=Set
