@@ -517,13 +517,56 @@ assign_pr() {
   return 0
 }
 
+# ---------------------------------------------------------------------------
+# Job A: generate (read-only token). After the pick is finalized, regenerate the
+# api codegen and deps files so those are never hand-merged by the agent. Other
+# generated files (protobuf, manifests, the other components' gen-files) are not
+# covered and still go through the pick/agent path. Runs inside the pinned build
+# image, amends the single pick commit, and widens the pick-path allowlist so
+# export accepts the regenerated files.
+#
+# The generators run against the target (Enterprise) checkout, whose Makefile
+# recipes inline $(GIT_CONFIG_SSH). Exporting it as a token https-rewrite (in
+# place of the Makefile's default SSH rewrite) lets the deps regen read private
+# modules with no SSH key on the runner. api codegen needs no private access.
+# ---------------------------------------------------------------------------
+do_generate() {
+  cd "$WORKDIR"
+  : "${GENERATE_TOKEN:?}"
+  mask "$GENERATE_TOKEN"
+  export GIT_CONFIG_SSH="git config --global url.\"https://x-access-token:${GENERATE_TOKEN}@github.com/\".insteadOf \"https://github.com/\";"
+
+  # deps before api codegen, matching the repo's own 'generate' target. The deps
+  # regen resolves the private Enterprise module graph, so it needs the token.
+  make gen-deps-files
+  make -C api gen-files
+
+  if git diff --quiet HEAD && [ -z "$(git ls-files --others --exclude-standard)" ]; then
+    echo "generate: regeneration produced no change"; emit "generate=noop"; return 0
+  fi
+  # Exactly what the generators changed vs the finalized pick: modified/deleted
+  # tracked files plus new untracked ones (.gitignore keeps build artifacts out).
+  local gen_paths=() f
+  while IFS= read -r f; do [ -n "$f" ] && gen_paths+=("$f"); done < <(
+    { git diff --name-only HEAD; git ls-files --others --exclude-standard; } | sort -u)
+  git add -- "${gen_paths[@]}"
+  git commit -q --amend --no-edit
+  # export rejects any committed path not in PICK_PATHS_FILE. Extend the allowlist
+  # with just the generated paths, unioned with the pick's own, so the guard still
+  # fires on a path neither the pick nor the generators produced.
+  { printf '%s\n' "${gen_paths[@]}"; cat "$PICK_PATHS_FILE"; } | sort -u -o "$PICK_PATHS_FILE"
+  echo "generate: amended the pick with regenerated files"
+  emit "generate=done"
+}
+
 # Sourced by the tests for its functions only.
 [ "${BASH_SOURCE[0]}" = "$0" ] || return 0
 
 case "${1:-}" in
   pick)     do_pick ;;
   finalize) do_finalize ;;
+  generate) do_generate ;;
   export)   do_export ;;
   apply)    do_apply ;;
-  *) echo "usage: $0 {pick|finalize|export|apply}" >&2; exit 2 ;;
+  *) echo "usage: $0 {pick|finalize|generate|export|apply}" >&2; exit 2 ;;
 esac
