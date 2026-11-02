@@ -3526,7 +3526,8 @@ spec:
                   description: |-
                     Calico programs additional Linux route tables for various purposes.
                     RouteTableRanges specifies a set of table index ranges that Calico should use.
-                    Deprecates`RouteTableRange`, overrides `RouteTableRange`.
+                    Deprecates`RouteTableRange`, overrides `RouteTableRange`. The ranges may target at most 65535
+                    tables in total.
                   items:
                     properties:
                       max:
@@ -3544,7 +3545,15 @@ spec:
                       - message: min must not be greater than max
                         reason: FieldValueInvalid
                         rule: self.min <= self.max
+                      - message: max must be <= 4294967295
+                        reason: FieldValueInvalid
+                        rule: self.max <= 4294967295
+                  maxItems: 100
                   type: array
+                  x-kubernetes-validations:
+                    - message: routeTableRanges must target at most 65535 tables in total
+                      reason: FieldValueInvalid
+                      rule: self.map(r, r.max - r.min + 1).sum() <= 65535
                 serviceLoopPrevention:
                   description: |-
                     When service IP advertisement is enabled, prevent routing loops to service IPs that are
