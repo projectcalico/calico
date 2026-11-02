@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
 )
 
 type selectorTest struct {
@@ -359,7 +360,8 @@ var _ = Describe("Parser", func() {
 		func(label, value, equivalent string) {
 			expected, err := parser.Parse(equivalent)
 			Expect(err).NotTo(HaveOccurred())
-			sel := parser.LabelEquals(label, value)
+			sel, err := parser.LabelEquals(label, value)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(sel.String()).To(Equal(expected.String()))
 			Expect(sel.UniqueID()).To(Equal(expected.UniqueID()))
 			Expect(sel.Evaluate(map[string]string{label: value})).To(BeTrue())
@@ -369,11 +371,27 @@ var _ = Describe("Parser", func() {
 		Entry("label with prefix", "projectcalico.org/namespace", "ns", `projectcalico.org/namespace == 'ns'`),
 		Entry("value with a single quote", "a", "b'c", `a == "b'c"`),
 		Entry("value with a double quote", "a", `b"c`, `a == 'b"c'`),
+		Entry("empty value", "a", "", `a == ""`),
+		Entry("value with a backslash", "a", `b\c`, `a == "b\c"`),
+	)
+
+	DescribeTable("LabelEquals should reject inputs that String() can't render",
+		func(label, value string) {
+			_, err := parser.LabelEquals(label, value)
+			Expect(err).To(HaveOccurred())
+		},
+		Entry("empty label", "", "x"),
+		Entry("label with a space", "a b", "x"),
+		Entry("label with selector syntax", "has(a)", "x"),
+		Entry("label too long", strings.Repeat("a", tokenizer.MaxLabelLength+1), "x"),
+		// Would render as `a == 'x' || b == 'y"'`, a different, valid selector.
+		Entry("value with both quotes", "a", `x' || b == 'y"`),
 	)
 
 	It("should treat a value as a literal, not as selector syntax", func() {
 		// Formatting this value into "a == '%s'" would match every endpoint.
-		sel := parser.LabelEquals("a", "x' || all() || a == 'y")
+		sel, err := parser.LabelEquals("a", "x' || all() || a == 'y")
+		Expect(err).NotTo(HaveOccurred())
 		Expect(sel.Evaluate(map[string]string{"a": "z"})).To(BeFalse())
 		Expect(sel.Evaluate(map[string]string{"a": "x' || all() || a == 'y"})).To(BeTrue())
 	})

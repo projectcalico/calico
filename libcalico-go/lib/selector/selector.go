@@ -49,8 +49,9 @@ func Parse(selector string) (sel *Selector, err error) {
 	return parser.Parse(selector)
 }
 
-// LabelEquals returns a selector equivalent to parsing `label == "value"`.
-func LabelEquals(label, value string) *Selector {
+// LabelEquals returns a selector equivalent to parsing `label == "value"`.  It
+// returns an error if the label is invalid or the value contains both ' and ".
+func LabelEquals(label, value string) (*Selector, error) {
 	return parser.LabelEquals(label, value)
 }
 

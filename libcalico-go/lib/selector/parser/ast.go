@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/hash"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
 )
 
 // Labels defines the interface of labels that can be used by selector
@@ -214,10 +215,18 @@ func (sel *Selector) Root() Node {
 }
 
 // LabelEquals returns a selector equivalent to parsing `label == "value"`,
-// without the quoting problems of formatting value into a string.  A value
-// containing both ' and " evaluates correctly, but its String() doesn't parse.
-func LabelEquals(label, value string) *Selector {
-	return newSelector(&LabelEqValueNode{uniquestr.Make(label), uniquestr.Make(value)})
+// without the quoting problems of formatting value into a string.  It rejects
+// inputs that String() can't render as that selector: an invalid label, or a
+// value containing both ' and ".  Such a String() would not parse back, and
+// could collide with another selector's UniqueID.
+func LabelEquals(label, value string) (*Selector, error) {
+	if !tokenizer.ValidLabel(label) {
+		return nil, fmt.Errorf("invalid label %q", label)
+	}
+	if strings.Contains(value, `'`) && strings.Contains(value, `"`) {
+		return nil, fmt.Errorf("value %q contains both ' and \"", value)
+	}
+	return newSelector(&LabelEqValueNode{uniquestr.Make(label), uniquestr.Make(value)}), nil
 }
 
 // And returns a selector equivalent to parsing "(sel) && (other)".  Building
