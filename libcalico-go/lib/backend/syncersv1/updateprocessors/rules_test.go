@@ -586,6 +586,8 @@ var _ = Describe("Rule selector nesting depth", func() {
 			sel = fmt.Sprintf("a == 'x' || b == 'y' && (%s)", sel)
 		}
 		Expect(selector.Validate(sel, selector.MaxAPIDepth)).To(Succeed())
+		oneLevelDeeper := fmt.Sprintf("a == 'x' || b == 'y' && (%s)", sel)
+		Expect(selector.Validate(oneLevelDeeper, selector.MaxAPIDepth)).To(MatchError(parser.ErrNestingTooDeep))
 
 		er := apiv3.EntityRule{
 			Selector:          sel,
