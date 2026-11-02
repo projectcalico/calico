@@ -49,8 +49,13 @@ func Parse(selector string) (sel *Selector, err error) {
 	return parser.Parse(selector)
 }
 
+// LabelEquals returns a selector equivalent to parsing `label == "value"`.
+func LabelEquals(label, value string) *Selector {
+	return parser.LabelEquals(label, value)
+}
+
 const (
-	MaxAPIDepth   = parser.MaxAPIDepth
+	MaxAPIDepth  = parser.MaxAPIDepth
 	MaxParseDepth = parser.MaxParseDepth
 )
 

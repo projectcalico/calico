@@ -213,6 +213,13 @@ func (sel *Selector) Root() Node {
 	return sel.root
 }
 
+// LabelEquals returns a selector equivalent to parsing `label == "value"`,
+// without the quoting problems of formatting value into a string.  A value
+// containing both ' and " evaluates correctly, but its String() doesn't parse.
+func LabelEquals(label, value string) *Selector {
+	return newSelector(&LabelEqValueNode{uniquestr.Make(label), uniquestr.Make(value)})
+}
+
 // And returns a selector equivalent to parsing "(sel) && (other)".  Building
 // the AST directly avoids re-parsing, which could exceed MaxParseDepth.  The
 // result shares nodes with its inputs.

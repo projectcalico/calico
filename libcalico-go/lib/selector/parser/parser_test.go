@@ -355,6 +355,29 @@ var _ = Describe("Parser", func() {
 		Entry("parenthesised double negations", "!(!has(a))", "!(!has(b))"),
 	)
 
+	DescribeTable("LabelEquals should match parsing the equivalent string",
+		func(label, value, equivalent string) {
+			expected, err := parser.Parse(equivalent)
+			Expect(err).NotTo(HaveOccurred())
+			sel := parser.LabelEquals(label, value)
+			Expect(sel.String()).To(Equal(expected.String()))
+			Expect(sel.UniqueID()).To(Equal(expected.UniqueID()))
+			Expect(sel.Evaluate(map[string]string{label: value})).To(BeTrue())
+			Expect(sel.Evaluate(map[string]string{label: value + "x"})).To(BeFalse())
+		},
+		Entry("plain", "a", "b", `a == "b"`),
+		Entry("label with prefix", "projectcalico.org/namespace", "ns", `projectcalico.org/namespace == 'ns'`),
+		Entry("value with a single quote", "a", "b'c", `a == "b'c"`),
+		Entry("value with a double quote", "a", `b"c`, `a == 'b"c'`),
+	)
+
+	It("should treat a value as a literal, not as selector syntax", func() {
+		// Formatting this value into "a == '%s'" would match every endpoint.
+		sel := parser.LabelEquals("a", "x' || all() || a == 'y")
+		Expect(sel.Evaluate(map[string]string{"a": "z"})).To(BeFalse())
+		Expect(sel.Evaluate(map[string]string{"a": "x' || all() || a == 'y"})).To(BeTrue())
+	})
+
 	for _, test := range canonicalisationTests {
 		It(fmt.Sprintf("should canonicalise %v as %v with UID %v and round-trip",
 			test.input, test.expected, test.expectedUid), func() {
