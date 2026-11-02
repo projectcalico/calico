@@ -79,7 +79,8 @@ type Lane struct {
 	// only when it changes the selection.
 	Name string
 
-	// Config is the repo-relative E2E_TEST_CONFIG path.
+	// Config is the E2E_TEST_CONFIG value: one or more repo-relative paths,
+	// separated by whitespace.
 	Config string
 
 	// Area is the FUNCTIONAL_AREA both CI systems declare, naming the pipeline
@@ -91,23 +92,35 @@ type Lane struct {
 	TestType string
 }
 
+// Configs returns the config paths the lane selects with, in the order the
+// cell lists them. A lane composes its selection from every entry.
+func (l Lane) Configs() []string {
+	return strings.Fields(l.Config)
+}
+
 // RunsE2EBinary reports whether the lane runs the e2e test binary, and so has a
 // spec list worth generating.
 func (l Lane) RunsE2EBinary() bool {
-	return l.TestType == "k8s-e2e" && l.Config != ""
+	return l.TestType == "k8s-e2e" && len(l.Configs()) > 0
 }
 
 // SelectionArgs returns the spec-selecting arguments run_tests.sh would pass
-// to the binary. repoRoot absolutizes the config path, as the binary requires.
+// to the binary, one --calico.test-config per config. repoRoot absolutizes each
+// path, as the binary requires.
 func (l Lane) SelectionArgs(repoRoot string) ([]string, error) {
-	if l.Config == "" {
+	configs := l.Configs()
+	if len(configs) == 0 {
 		return nil, fmt.Errorf("lane %q selects nothing", l.Name)
 	}
-	abs, err := filepath.Abs(filepath.Join(repoRoot, l.Config))
-	if err != nil {
-		return nil, err
+	args := make([]string, 0, len(configs))
+	for _, c := range configs {
+		abs, err := filepath.Abs(filepath.Join(repoRoot, c))
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, "--calico.test-config="+abs)
 	}
-	return []string{"--calico.test-config=" + abs}, nil
+	return args, nil
 }
 
 // Load resolves every lane declared under .argoci/cron, .argoci/modules and

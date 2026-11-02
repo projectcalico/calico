@@ -18,13 +18,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
-const configPrefix = "e2e/config/"
+// setDirs names the sets/ subdirectory each lane source directory writes to.
+var setDirs = map[string]string{
+	argoDir:    "cron",
+	modulesDir: "modules",
+	blocksDir:  "semaphore",
+}
 
-// ResolveSets maps each distinct selection to a stable name. Two lanes claiming
-// one name with different selections is CI drift.
+// ResolveSets maps every lane that runs the e2e binary to its set name. Two
+// lanes claiming one name would overwrite each other's set, so that is an error.
 func ResolveSets(lanes []Lane) (map[string]Lane, error) {
 	sets := map[string]Lane{}
 	for _, l := range lanes {
@@ -39,20 +45,32 @@ func ResolveSets(lanes []Lane) (map[string]Lane, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s (%s): %w", l.Name, l.Source, err)
 		}
-		if _, ok := sets[name]; !ok {
-			sets[name] = l
+		if other, ok := sets[name]; ok {
+			return nil, fmt.Errorf("%s (%s) and %s (%s) both resolve to set %s", other.Name, other.Source, l.Name, l.Source, name)
 		}
+		sets[name] = l
 	}
 	return sets, nil
 }
 
-// SetName is the lane's config path, relative to e2e/config and without the
-// extension.
+// nonSlug matches every run of characters a set name leaves out.
+var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
+
+// SetName names the lane's set after the lane itself: the CI system, the file
+// that declares it, and the lane name reduced to lowercase words joined by
+// hyphens. Keying by lane rather than config keeps a set's name stable when the
+// lane's config list changes, so a selection change shows up as a content diff.
 func SetName(l Lane) (string, error) {
-	if !strings.HasPrefix(l.Config, configPrefix) {
-		return "", fmt.Errorf("config %q is not under %s", l.Config, configPrefix)
+	dir, ok := setDirs[filepath.Dir(l.Source)]
+	if !ok {
+		return "", fmt.Errorf("source %q is not a known lane directory", l.Source)
 	}
-	return strings.TrimSuffix(strings.TrimPrefix(l.Config, configPrefix), ".yaml"), nil
+	file := strings.TrimSuffix(filepath.Base(l.Source), filepath.Ext(l.Source))
+	lane := strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(l.Name), "-"), "-")
+	if lane == "" {
+		return "", fmt.Errorf("lane name %q leaves nothing to name a set by", l.Name)
+	}
+	return dir + "/" + file + "/" + lane, nil
 }
 
 // Write records the index and one file per set under dir.
