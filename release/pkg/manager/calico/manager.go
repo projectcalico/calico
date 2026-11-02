@@ -200,7 +200,7 @@ type CalicoManager struct {
 	// validate is a flag to indicate that we should skip pre-release validation.
 	validate bool
 
-	// validateBranch is a flag to indicate that we should skip release branch validation.
+	// validateBranch is a flag to indicate if branch validation should fail the run.
 	validateBranch bool
 
 	// calicoVersion is the version of calico to release.
@@ -603,16 +603,18 @@ var (
 
 func (r *CalicoManager) PreHashreleaseValidate() error {
 	var errStack error
-	if r.validateBranch {
+	if err := r.checkBranch(func() error {
 		branch, err := utils.GitBranch(r.repoRoot)
 		if err != nil {
 			return fmt.Errorf("failed to determine branch: %s", err)
 		}
 		match := fmt.Sprintf(`^(%s|%s-%s)$`, defaults.Branch, r.releaseBranchPrefix, releaseBranchTail)
-		re := regexp.MustCompile(match)
-		if !re.MatchString(branch) {
-			errStack = errors.Join(errStack, fmt.Errorf("calico checkout is not on a release branch"))
+		if !regexp.MustCompile(match).MatchString(branch) {
+			return fmt.Errorf("calico checkout is not on a release branch")
 		}
+		return nil
+	}); err != nil {
+		errStack = errors.Join(errStack, err)
 	}
 	dirty, err := utils.GitIsDirty(r.repoRoot)
 	if err != nil {
@@ -649,19 +651,30 @@ func (r *CalicoManager) checkCodeGeneration() error {
 	return nil
 }
 
+func (r *CalicoManager) checkBranch(check func() error) error {
+	err := check()
+	if err == nil || r.validateBranch {
+		return err
+	}
+	logrus.WithError(err).Warn("Using the wrong branch")
+	return nil
+}
+
 func (r *CalicoManager) PreReleaseValidate() error {
 	// Check that we are on a release branch
-	if r.validateBranch {
+	if err := r.checkBranch(func() error {
 		branch, err := utils.GitBranch(r.repoRoot)
 		if err != nil {
 			return fmt.Errorf("failed to determine branch: %s", err)
 		}
 		// releases can only be cut from a release branch (i.e release-vX.Y) or build version branch (i.e. build-vX.Y.Z)
 		match := fmt.Sprintf(`^(%s-%s|build-v\d+\.\d+\.\d+)$`, r.releaseBranchPrefix, releaseBranchTail)
-		re := regexp.MustCompile(match)
-		if !re.MatchString(branch) {
+		if !regexp.MustCompile(match).MatchString(branch) {
 			return fmt.Errorf("current branch (%s) is not a release branch", branch)
 		}
+		return nil
+	}); err != nil {
+		return err
 	}
 	// Check that we're not already on a git tag.
 	out, err := r.git("describe", "--exact-match", "--tags", "HEAD")
@@ -1998,8 +2011,8 @@ func (r *CalicoManager) prepPrereqs() error {
 		return fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before preparing the release")
 	}
 
-	// Check that we're not on the default branch (master). We never prep releases from the default branch.
-	if r.validateBranch {
+	if err := r.checkBranch(func() error {
+		// Check that we're not on the default branch (master). We never prep releases from the default branch.
 		if branch, err := r.determineBranch(); err != nil {
 			return fmt.Errorf("failed to determine current git branch: %w", err)
 		} else if branch == defaultBranch {
@@ -2007,10 +2020,10 @@ func (r *CalicoManager) prepPrereqs() error {
 		} else if r.gitRef && !strings.HasPrefix(branch, r.releaseBranchPrefix) {
 			return fmt.Errorf("current branch is %s, expected to be a release branch with prefix %s. Please switch to the appropriate release branch to cut the release", branch, r.releaseBranchPrefix)
 		}
-	}
-
-	// If publishing, check that we are not on a fork branch. We want to ensure releases are always cut from the main repo
-	if r.gitRef && r.validateBranch {
+		if !r.gitRef {
+			return nil
+		}
+		// If publishing, check that we are not on a fork branch. We want to ensure releases are always cut from the main repo
 		owner, err := r.remoteOwner()
 		if err != nil {
 			return err
@@ -2018,6 +2031,9 @@ func (r *CalicoManager) prepPrereqs() error {
 		if owner != r.githubOrg {
 			return fmt.Errorf("current git remote is %s, expected to be from %s. Please switch to a branch from the main repo to cut the release", owner, r.githubOrg)
 		}
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	// The GitHub release links to the notes, so a release without one needs none.

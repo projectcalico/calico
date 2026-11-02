@@ -181,3 +181,40 @@ func TestPublishingHashrelease(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateHashreleasePublishFlags(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		args    []string
+		wantErr bool
+	}{
+		{name: "latest from CI", args: []string{"--ci"}},
+		{name: "latest locally", wantErr: true},
+		{name: "latest locally in a local run", args: []string{"--local"}},
+		{name: "latest locally in a plan", args: []string{"--plan"}},
+		{name: "not latest locally", args: []string{"--latest=false"}},
+		{name: "latest with a custom registry in a local run", args: []string{"--local", "--registry", "example.com/calico"}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := &cli.Command{
+				Flags: []cli.Flag{
+					&cli.BoolWithInverseFlag{Name: publishHashreleaseFlag.Name, Value: true},
+					&cli.StringSliceFlag{Name: skipFlagName},
+					&cli.StringFlag{Name: hashreleaseServerBucketFlag.Name, Value: "bucket"},
+					&cli.BoolFlag{Name: latestFlag.Name, Value: true},
+					&cli.StringSliceFlag{Name: registryFlag.Name},
+					&cli.BoolFlag{Name: ciFlag.Name},
+					&cli.BoolFlag{Name: localFlag.Name},
+					&cli.BoolFlag{Name: planFlag.Name},
+				},
+				Action: func(_ context.Context, c *cli.Command) error {
+					return validateHashreleasePublishFlags(c)
+				},
+			}
+			err := cmd.Run(context.Background(), append([]string{"publish"}, tc.args...))
+			if (err != nil) != tc.wantErr {
+				t.Errorf("validateHashreleasePublishFlags() = %v, want error %v", err, tc.wantErr)
+			}
+		})
+	}
+}

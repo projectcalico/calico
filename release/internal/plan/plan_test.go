@@ -16,10 +16,12 @@ package plan
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func noop() error { return nil }
@@ -243,6 +245,46 @@ func TestRun(t *testing.T) {
 		}
 		if diff := cmp.Diff([]string{"validate a", "do a", "verify a"}, calls); diff != "" {
 			t.Errorf("calls (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a plan-only run logs each step's result in plan order", func(t *testing.T) {
+		hook := logtest.NewGlobal()
+		t.Cleanup(hook.Reset)
+		var calls []string
+		off := node(&calls, "off", "")
+		off.When = func() bool { return false }
+		needs := node(&calls, "c", "")
+		needs.Requires = []string{"missing"}
+		p, err := New(Options{Preview: true}, node(&calls, "a", "validate"), node(&calls, "b", ""), off, needs)
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if err := p.Run(); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		var got []string
+		for _, e := range hook.AllEntries() {
+			line := e.Level.String() + " " + e.Message
+			if step, ok := e.Data["step"]; ok {
+				line += fmt.Sprintf(" %v", step)
+			}
+			if steps, ok := e.Data["steps"]; ok {
+				line += fmt.Sprintf(" %v", steps)
+			}
+			got = append(got, line)
+		}
+		want := []string{
+			"info Will run a",
+			"warning Will fail a",
+			"info Will run b",
+			"info Will skip off",
+			"info Will run c",
+			"warning Will fail c",
+			"warning A real run would fail these steps [a c]",
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("log (-want +got):\n%s", diff)
 		}
 	})
 
