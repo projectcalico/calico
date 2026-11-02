@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/netip"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -3680,6 +3682,75 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(seenP1).To(BeTrue(), "Pool 1's block was cleaned up.")
 				Expect(seenP2).To(BeTrue(), "Pool 2's block was cleaned up.")
 			}
+		})
+
+		// emptyAffineBlock assigns with args, then releases what it got, leaving the host one empty affine block.
+		emptyAffineBlock := func(host string, args AutoAssignArgs) {
+			v4ia, _, err := ic.AutoAssign(context.Background(), args)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v4ia.IPs).To(HaveLen(args.Num4))
+			var ips []cnet.IP
+			for _, a := range v4ia.IPs {
+				ips = append(ips, cnet.IP{IP: a.IP})
+			}
+			_, _, err = ic.ReleaseIPs(context.Background(), buildReleaseOptions(ips...)...)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(getAffineBlocks(bc, host)).To(HaveLen(1))
+		}
+
+		// assignFrom assigns with args and checks every address came from pool.
+		assignFrom := func(pool cnet.IPNet, args AutoAssignArgs) {
+			v4ia, _, err := ic.AutoAssign(context.Background(), args)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v4ia.IPs).To(HaveLen(args.Num4))
+			for _, a := range v4ia.IPs {
+				Expect(pool.IPNet.Contains(a.IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", a.IP, pool))
+			}
+		}
+
+		affineBlockIn := func(host string, pool cnet.IPNet) bool {
+			return slices.ContainsFunc(getAffineBlocks(bc, host), func(b cnet.IPNet) bool { return pool.IPNet.Contains(b.IP) })
+		}
+
+		It("should not release an empty affine block in a Manual pool that still selects the node", func() {
+			host := "host"
+			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
+			pool2 := cnet.MustParseNetwork("20.0.0.0/24")
+
+			Expect(bc.Clean()).To(Succeed())
+			deleteAllPools()
+			applyNode(bc, kc, host, map[string]string{"foo": "bar"})
+			applyPool(pool1.String(), true, `foo == "bar"`)
+
+			emptyAffineBlock(host, AutoAssignArgs{IntendedUse: v3.IPPoolAllowedUseWorkload, Num4: 1, Hostname: host})
+
+			ipPools.Pools[pool1.String()] = ipamtestutils.Pool{Enabled: true, NodeSelector: `foo == "bar"`, AssignmentMode: v3.Manual}
+			applyPool(pool2.String(), true, `foo == "bar"`)
+			assignFrom(pool2, AutoAssignArgs{IntendedUse: v3.IPPoolAllowedUseWorkload, Num4: 1, Hostname: host})
+
+			Expect(affineBlockIn(host, pool1)).To(BeTrue(), "the Manual pool's block affinity was released")
+		})
+
+		It("should not release an empty affine block in a pool rejected only by its namespace selector", func() {
+			host := "host"
+			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
+			pool2 := cnet.MustParseNetwork("20.0.0.0/24")
+			production := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "prod", Labels: map[string]string{"environment": "production"}}}
+			development := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "dev", Labels: map[string]string{"environment": "development"}}}
+
+			Expect(bc.Clean()).To(Succeed())
+			deleteAllPools()
+			applyNode(bc, kc, host, map[string]string{"foo": "bar"})
+			ipPools.Pools[pool1.String()] = ipamtestutils.Pool{
+				Enabled: true, NodeSelector: `foo == "bar"`, NamespaceSelector: "environment == 'production'", AssignmentMode: v3.Automatic,
+			}
+
+			emptyAffineBlock(host, AutoAssignArgs{IntendedUse: v3.IPPoolAllowedUseWorkload, Num4: 1, Hostname: host, Namespace: production})
+
+			applyPool(pool2.String(), true, `foo == "bar"`)
+			assignFrom(pool2, AutoAssignArgs{IntendedUse: v3.IPPoolAllowedUseWorkload, Num4: 1, Hostname: host, Namespace: development})
+
+			Expect(affineBlockIn(host, pool1)).To(BeTrue(), "the namespace-scoped pool's block affinity was released")
 		})
 
 		// Create one ip pool, call AutoAssign, call ReleaseIPs,
