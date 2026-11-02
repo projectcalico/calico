@@ -909,15 +909,23 @@ var _ = Describe("IPAM controller UTs", func() {
 		replacedSandbox := strings.Repeat("a", 64)
 
 		// createSandboxPod creates a pod on node kname that has not reported an IP. A non-empty
-		// containerID is recorded the way the CNI plugin records the pod's current sandbox.
-		createSandboxPod := func(phase v1.PodPhase, containerID string) {
+		// containerID is recorded the way the CNI plugin records the pod's current sandbox. A
+		// non-empty podIPs or podIP is recorded as the CNI plugin's plural or singular IP annotation.
+		createSandboxPod := func(phase v1.PodPhase, containerID, podIPs, podIP string) {
 			pod := v1.Pod{}
 			pod.Name = "test-pod"
 			pod.Namespace = "test-namespace"
 			pod.Spec.NodeName = "kname"
 			pod.Status.Phase = phase
+			pod.Annotations = map[string]string{}
 			if containerID != "" {
-				pod.Annotations = map[string]string{conversion.AnnotationContainerID: containerID}
+				pod.Annotations[conversion.AnnotationContainerID] = containerID
+			}
+			if podIPs != "" {
+				pod.Annotations[conversion.AnnotationPodIPs] = podIPs
+			}
+			if podIP != "" {
+				pod.Annotations[conversion.AnnotationPodIP] = podIP
 			}
 			_, err := createPod(context.TODO(), cs, &pod)
 			Expect(err).NotTo(HaveOccurred())
@@ -937,21 +945,41 @@ var _ = Describe("IPAM controller UTs", func() {
 		}
 
 		DescribeTable("should judge an allocation by its pod's current sandbox and phase",
-			func(phase v1.PodPhase, podContainerID, handle string, want allocationVerdict) {
+			func(phase v1.PodPhase, podContainerID, podIPs, handle string, want allocationVerdict) {
 				c.Start(stopChan)
-				createSandboxPod(phase, podContainerID)
+				createSandboxPod(phase, podContainerID, podIPs, "")
 				Expect(c.judgeAllocation(podAllocation(handle), false)).To(Equal(want))
 			},
-			Entry("in use on the current sandbox", v1.PodPending, currentSandbox, "k8s-pod-network."+currentSandbox, allocationInUse),
-			Entry("unused from a replaced sandbox", v1.PodPending, currentSandbox, "k8s-pod-network."+replacedSandbox, allocationUnused),
-			Entry("unused from a replaced sandbox on a dotted network name", v1.PodPending, currentSandbox, "secondary.network."+replacedSandbox, allocationUnused),
-			Entry("in use when a hashed VM handle ends in a runtime-shaped ID", v1.PodPending, currentSandbox, "k8s-pod-network.vmi."+replacedSandbox, allocationInUse),
-			Entry("in use when the pod records no sandbox", v1.PodPending, "", "k8s-pod-network."+replacedSandbox, allocationInUse),
-			Entry("in use when the handle names no sandbox", v1.PodPending, currentSandbox, "k8s-pod-network.test-namespace.test-pod", allocationInUse),
-			Entry("in use while running without a reported IP", v1.PodRunning, currentSandbox, "k8s-pod-network."+currentSandbox, allocationInUse),
-			Entry("unused once the pod has succeeded", v1.PodSucceeded, currentSandbox, "k8s-pod-network."+currentSandbox, allocationUnused),
-			Entry("unused once the pod has failed", v1.PodFailed, "", "k8s-pod-network."+currentSandbox, allocationUnused),
+			Entry("in use on the current sandbox", v1.PodPending, currentSandbox, "", "k8s-pod-network."+currentSandbox, allocationInUse),
+			Entry("unused from a replaced sandbox", v1.PodPending, currentSandbox, "", "k8s-pod-network."+replacedSandbox, allocationUnused),
+			Entry("unused from a replaced sandbox on a dotted network name", v1.PodPending, currentSandbox, "", "secondary.network."+replacedSandbox, allocationUnused),
+			Entry("in use when a hashed VM handle ends in a runtime-shaped ID", v1.PodPending, currentSandbox, "", "k8s-pod-network.vmi."+replacedSandbox, allocationInUse),
+			Entry("in use when the pod records no sandbox", v1.PodPending, "", "", "k8s-pod-network."+replacedSandbox, allocationInUse),
+			Entry("in use when the handle names no sandbox", v1.PodPending, currentSandbox, "", "k8s-pod-network.test-namespace.test-pod", allocationInUse),
+			Entry("in use while running without a reported IP", v1.PodRunning, currentSandbox, "", "k8s-pod-network."+currentSandbox, allocationInUse),
+			Entry("unused once the pod has succeeded", v1.PodSucceeded, currentSandbox, "", "k8s-pod-network."+currentSandbox, allocationUnused),
+			Entry("in use from a replaced sandbox while the annotation lists its IP",
+				v1.PodPending,
+				currentSandbox,
+				"10.0.0.1/32,fd00::1/128",
+				"k8s-pod-network."+replacedSandbox,
+				allocationInUse,
+			),
+			Entry("unused from a replaced sandbox when the annotation lists another IP",
+				v1.PodPending,
+				currentSandbox,
+				"10.0.0.9/32",
+				"k8s-pod-network."+replacedSandbox,
+				allocationUnused,
+			),
+			Entry("unused once the pod has failed", v1.PodFailed, "", "", "k8s-pod-network."+currentSandbox, allocationUnused),
 		)
+
+		It("should keep a replaced sandbox's address the singular podIP annotation lists", func() {
+			c.Start(stopChan)
+			createSandboxPod(v1.PodPending, currentSandbox, "", "10.0.0.1/32")
+			Expect(c.judgeAllocation(podAllocation("k8s-pod-network."+replacedSandbox), false)).To(Equal(allocationInUse))
+		})
 
 		It("should judge an allocation whose pod doesn't exist as owner gone", func() {
 			c.Start(stopChan)
