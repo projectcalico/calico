@@ -303,8 +303,7 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 
 			if err := calicoClient.IPAM().AssignIP(ctx, assignArgs); err != nil {
 				if errors.Is(err, ipam.ErrNotInPool) || errors.Is(err, ipam.ErrUseNotAllowed) {
-					msg := fmt.Sprintf("address %s cannot be assigned to a workload: %s", ipamArgs.IP, strings.TrimSpace(err.Error()))
-					return cnitypes.NewError(types.ErrCodeAddressNotHeld, msg, "")
+					return addressNotHeldError("address %s cannot be assigned to a workload: %s", ipamArgs.IP, strings.TrimSpace(err.Error()))
 				}
 
 				var exists cerrors.ErrorResourceAlreadyExists
@@ -538,6 +537,12 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 	return r.GetAsVersion(conf.CNIVersion)
 }
 
+// addressNotHeldError builds the CNI error that tells the plugin the requested address is not
+// one this pod holds, so the caller may fall back to a fresh address.
+func addressNotHeldError(format string, args ...any) error {
+	return cnitypes.NewError(types.ErrCodeAddressNotHeld, fmt.Sprintf(format, args...), "")
+}
+
 // transferFromPriorSandbox hands an address the pod already holds to this sandbox's handle.
 // It performs the necessary precondition checks and errors if the allocation cannot be transferred.
 // It refuses an address claimed after started: only a newer sandbox could have claimed it, and
@@ -557,30 +562,26 @@ func transferFromPriorSandbox(
 	var inCooldown cerrors.ErrorIPInCooldown
 	if errors.As(err, &inCooldown) {
 		// A released address has no owner to check, so it must finish its cooldown first.
-		msg := fmt.Sprintf("address %s is still in its IP cooldown period and cannot be reused yet: %s", ip, err)
-		return cnitypes.NewError(types.ErrCodeAddressNotHeld, msg, "")
+		return addressNotHeldError("address %s is still in its IP cooldown period and cannot be reused yet: %s", ip, err)
 	}
 	if err != nil {
 		return fmt.Errorf("could not determine the current owner of address %s: %w", ip, err)
 	}
 	if attr == nil || attr.HandleID == nil {
-		msg := fmt.Sprintf("address %s is allocated to no handle and cannot be transferred", ip)
-		return cnitypes.NewError(types.ErrCodeAddressNotHeld, msg, "")
+		return addressNotHeldError("address %s is allocated to no handle and cannot be transferred", ip)
 	}
 
 	currentHandle := *attr.HandleID
 	parsed, ok := ipam.ParsePodHandleID(currentHandle, netName)
 	if !ok {
 		logger.WithField("fromHandle", currentHandle).Info("Requested address is not held by a pod sandbox")
-		msg := fmt.Sprintf("address %s is not held by a pod sandbox and cannot be transferred", ip)
-		return cnitypes.NewError(types.ErrCodeAddressNotHeld, msg, "")
+		return addressNotHeldError("address %s is not held by a pod sandbox and cannot be transferred", ip)
 	}
 
 	owner := &ipam.AttributeOwner{Namespace: epIDs.Namespace, Name: epIDs.Pod}
 	if !owner.Matches(attr.ActiveOwnerAttrs) {
 		logger.WithField("fromHandle", currentHandle).Info("Requested address is owned by another pod")
-		msg := fmt.Sprintf("address %s is owned by another pod and cannot be transferred", ip)
-		return cnitypes.NewError(types.ErrCodeAddressNotHeld, msg, "")
+		return addressNotHeldError("address %s is owned by another pod and cannot be transferred", ip)
 	}
 
 	if claimedAfter(attr.ActiveOwnerAttrs, started) {

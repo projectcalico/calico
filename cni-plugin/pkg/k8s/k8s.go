@@ -745,10 +745,10 @@ func assignPodIPs(
 ) (*cniv1.Result, error) {
 	priorIPs := priorSandboxIPs(conf, epIDs, endpoint, logger)
 	if len(priorIPs) == 0 {
-		result, err := utils.AddIPAM(ctx, conf, args, logger)
-		return result, err
+		return utils.AddIPAM(ctx, conf, args, logger)
 	}
 
+	// Ask IPAM to move each listed address onto this sandbox, noting which families it refuses.
 	logger.WithField("ips", priorIPs).Info("Reassigning existing IP to new sandbox")
 	kept := cniv1.Result{CNIVersion: cniv1.ImplementedSpecVersion}
 	var v4Lost, v6Lost bool
@@ -775,9 +775,10 @@ func assignPodIPs(
 	if !v4Lost && !v6Lost {
 		return &kept, nil
 	}
+
+	// Nothing carried over, so this is an ordinary fresh ADD.
 	if len(kept.IPs) == 0 {
-		result, err := utils.AddIPAM(ctx, conf, args, logger)
-		return result, err
+		return utils.AddIPAM(ctx, conf, args, logger)
 	}
 
 	// Only request a lost family the config assigns, so a pod whose pool for that family is
@@ -791,6 +792,7 @@ func assignPodIPs(
 		return &kept, nil
 	}
 
+	// Allocate only the lost families, then merge them into the carried-over result.
 	freshArgs := *args
 	stdin, err := withAssignFamilies(args.StdinData, wantV4, wantV6)
 	if err != nil {
@@ -844,12 +846,12 @@ func withAssignFamilies(stdin []byte, v4, v6 bool) ([]byte, error) {
 	if err := json.Unmarshal(stdin, &conf); err != nil {
 		return nil, err
 	}
-	ipam, ok := conf["ipam"].(map[string]any)
+	ipamConf, ok := conf["ipam"].(map[string]any)
 	if !ok {
 		return nil, errors.New("data on stdin was of unexpected type")
 	}
-	ipam["assign_ipv4"] = strconv.FormatBool(v4)
-	ipam["assign_ipv6"] = strconv.FormatBool(v6)
+	ipamConf["assign_ipv4"] = strconv.FormatBool(v4)
+	ipamConf["assign_ipv6"] = strconv.FormatBool(v6)
 	return json.Marshal(conf)
 }
 

@@ -76,10 +76,7 @@ var _ = Describe("releaseUnlisted", func() {
 		kept, err := releaseUnlisted(context.Background(), stub, handle, set.New[string](), logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kept).To(BeFalse())
-		Expect(stub.released).To(ConsistOf(
-			ipam.ReleaseOptions{Address: "10.0.0.6", Handle: handle},
-			ipam.ReleaseOptions{Address: "fd00::6", Handle: handle},
-		))
+		Expect(stub.released).To(ConsistOf(ipam.ReleaseOptions{Address: "10.0.0.6", Handle: handle}, ipam.ReleaseOptions{Address: "fd00::6", Handle: handle}))
 	})
 
 	It("releases nothing when every address on the handle is listed", func() {

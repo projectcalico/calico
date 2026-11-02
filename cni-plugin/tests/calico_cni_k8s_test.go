@@ -2437,9 +2437,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Entry("another pod owns it", "10.123.0.90", func() func() {
 				handle := ipam.PodHandleID("calico-uts", "other-sandbox")
 				Expect(calicoClient.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
-					IP:          cnet.IP{IP: net.ParseIP("10.123.0.90")},
-					HandleID:    &handle,
-					Attrs:       map[string]string{ipam.AttributePod: "other-pod", ipam.AttributeNamespace: "test"},
+					IP:       cnet.IP{IP: net.ParseIP("10.123.0.90")},
+					HandleID: &handle,
+					Attrs: map[string]string{
+						ipam.AttributePod:       "other-pod",
+						ipam.AttributeNamespace: "test",
+					},
 					Hostname:    testNodeName,
 					IntendedUse: api.IPPoolAllowedUseWorkload,
 				})).To(Succeed())
