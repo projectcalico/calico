@@ -16,6 +16,8 @@ package istio
 
 import (
 	"context"
+	"crypto/x509"
+	"fmt"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1209,6 +1211,57 @@ var _ = Describe("Istio controller tests", func() {
 			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceReadError, "cannot read", nil, mock.Anything)
 		})
 
+		bundle := func() string {
+			cacerts := &corev1.Secret{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.CACertsSecretName, Namespace: istio.IstioNamespace}, cacerts)).To(Succeed())
+			return string(cacerts.Data[istio.RootCertKey])
+		}
+		published := func() string {
+			cm := &corev1.ConfigMap{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.TrustAnchorsConfigMapName, Namespace: istio.IstioNamespace}, cm)).To(Succeed())
+			return cm.Data[istio.RootCertKey]
+		}
+
+		It("trusts the extension's roots without publishing them", func() {
+			peer := newTestCert("peer-root", nil, true)
+			ext.trustRoots = []*x509.Certificate{peer.cert}
+
+			_, err := r.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(ext.trustInputs.Status).To(BeIdenticalTo(mockStatus))
+			Expect(istio.TrustDomain(ext.trustInstance)).To(Equal(istio.DefaultTrustDomain))
+			Expect(bundle()).To(ContainSubstring(string(peer.certPEM)))
+			Expect(published()).NotTo(BeEmpty())
+			Expect(published()).NotTo(ContainSubstring(string(peer.certPEM)))
+			mockStatus.AssertCalled(GinkgoT(), "ClearDegraded")
+		})
+
+		It("trusts the roots of a partial TrustRoots and reports it beside a partial ExtendInputs", func() {
+			peer := newTestCert("peer-root", nil, true)
+			ext.trustRoots = []*x509.Certificate{peer.cert}
+			ext.trustErr = extensions.Partialf(operatorv1.ResourceReadError, "peer roots left out")
+			ext.extendErr = extensions.Partialf(operatorv1.ResourceValidationError, "peer left out")
+
+			_, err := r.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(bundle()).To(ContainSubstring(string(peer.certPEM)))
+			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceReadError, "peer roots left out; peer left out", nil, mock.Anything)
+			mockStatus.AssertNotCalled(GinkgoT(), "ClearDegraded")
+		})
+
+		It("renders nothing after a fatal TrustRoots", func() {
+			ext.trustErr = fmt.Errorf("cannot read")
+
+			_, err := r.Reconcile(ctx, req)
+			Expect(err).To(MatchError("cannot read"))
+
+			err = cli.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, &appsv1.Deployment{})
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceReadError, "Error reading the Istio extension's trust roots", "cannot read", mock.Anything)
+		})
+
 		It("holds the finalizer and the FelixConfiguration while Finalize is not done", func() {
 			deleteIstio()
 			ext.finalizeDone = false
@@ -1290,10 +1343,14 @@ const extensionConfigMapName = "istio-extension-payload"
 
 // fakeIstioExtension records what the controller hands each hook.
 type fakeIstioExtension struct {
+	trustRoots   []*x509.Certificate
+	trustErr     error
 	extendErr    error
 	finalizeDone bool
 	finalizeErr  error
 
+	trustInputs    controller.Inputs
+	trustInstance  *operatorv1.Istio
 	extendInputs   controller.Inputs
 	finalizeInputs controller.Inputs
 	finalizeCalls  int
@@ -1305,6 +1362,12 @@ func (*fakeIstioExtension) PolicySyncRequired(context.Context, client.Client) (b
 
 func (*fakeIstioExtension) Watches(ctrlruntime.Controller) error {
 	return nil
+}
+
+func (f *fakeIstioExtension) TrustRoots(_ context.Context, ci controller.Inputs, instance *operatorv1.Istio) ([]*x509.Certificate, error) {
+	f.trustInputs = ci
+	f.trustInstance = instance
+	return f.trustRoots, f.trustErr
 }
 
 func (f *fakeIstioExtension) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, error) {

@@ -108,6 +108,14 @@ var _ = Describe("the zero value Extensions", func() {
 		Expect(done).To(BeTrue())
 	})
 
+	It("adds no Istio trust roots", func() {
+		var e extensions.Extensions
+
+		roots, err := e.Istio().TrustRoots(context.Background(), controller.Inputs{}, &operatorv1.Istio{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(roots).To(BeEmpty())
+	})
+
 	It("passes the operator's startup checks", func() {
 		var e extensions.Extensions
 

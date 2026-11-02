@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -299,6 +300,21 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		r.status.ClearWarning(caWarningKey)
 	}
 
+	ci := controller.Inputs{
+		RenderInputs: render.Inputs{Installation: installationSpec},
+		Client:       r.Client,
+		Status:       r.status,
+	}
+	var partials []error
+	extensionRoots, err := r.ext.Istio().TrustRoots(ctx, ci, instance)
+	if extensions.IsPartial(err) {
+		partials, err = append(partials, err), nil
+	}
+	if err != nil {
+		r.degradeForExtension(err, operatorv1.ResourceReadError, "Error reading the Istio extension's trust roots", reqLogger)
+		return reconcile.Result{}, err
+	}
+
 	// Render resources for Istio support
 	istioCfg := &istio.Configuration{
 		Installation:    installationSpec,
@@ -311,7 +327,7 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		LocalCA:         trust.localCA,
 		CASource:        trust.source,
 		Transition:      trust.transition,
-		AdditionalRoots: trust.additional,
+		AdditionalRoots: append(slices.Clip(trust.additional), extensionRoots...),
 		OwnRoots:        trust.ownRoots,
 		CurrentCACerts:  trust.current,
 	}
@@ -321,22 +337,12 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
-	ci := controller.Inputs{
-		RenderInputs: render.Inputs{Installation: installationSpec},
-		Client:       r.Client,
-		Status:       r.status,
-	}
 	ci, err = r.ext.Istio().ExtendInputs(ctx, ci)
-	var partialErr error
 	if extensions.IsPartial(err) {
-		partialErr, err = err, nil
+		partials, err = append(partials, err), nil
 	}
 	if err != nil {
-		if reason, ok := extensions.DegradedReason(err); ok {
-			r.status.SetDegraded(reason, err.Error(), nil, reqLogger)
-			return reconcile.Result{}, err
-		}
-		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error preparing Istio extension", err, reqLogger)
+		r.degradeForExtension(err, operatorv1.ResourceCreateError, "Error preparing Istio extension", reqLogger)
 		return reconcile.Result{}, err
 	}
 
@@ -392,16 +398,16 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 	// excluded, not fatal: the rest rendered, and the watches reconcile again
 	// once the input is fixed. They share one Degraded condition, so both are
 	// reported together rather than one hiding the other.
-	if len(trust.problems) > 0 || partialErr != nil {
+	if len(trust.problems) > 0 || len(partials) > 0 {
 		reason := operatorv1.ResourceValidationError
 		var messages []string
 		if len(trust.problems) > 0 {
 			messages = append(messages, "Istio certificate authority or trust anchors need attention: "+strings.Join(trust.problems, "; "))
 		} else {
-			reason, _ = extensions.DegradedReason(partialErr)
+			reason, _ = extensions.DegradedReason(partials[0])
 		}
-		if partialErr != nil {
-			messages = append(messages, partialErr.Error())
+		for _, p := range partials {
+			messages = append(messages, p.Error())
 		}
 		r.status.SetDegraded(reason, strings.Join(messages, "; "), nil, reqLogger)
 		return result, nil
@@ -411,6 +417,14 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 	r.status.ClearDegraded()
 
 	return result, nil
+}
+
+func (r *ReconcileIstio) degradeForExtension(err error, reason operatorv1.TigeraStatusReason, msg string, reqLogger logr.Logger) {
+	if typed, ok := extensions.DegradedReason(err); ok {
+		r.status.SetDegraded(typed, err.Error(), nil, reqLogger)
+		return
+	}
+	r.status.SetDegraded(reason, msg, err, reqLogger)
 }
 
 // istiodRolloutPredicate passes status updates too, because an istiod rollout

@@ -59,7 +59,8 @@ type Configuration struct {
 	// join root-cert.pem and the published roots, and its phase is recorded on
 	// cacerts so the controller resumes it after a restart.
 	Transition *SignerTransition
-	// AdditionalRoots are validated static trust anchors appended to root-cert.pem.
+	// AdditionalRoots are trust anchors beyond the signers' own, from the Istio
+	// CR and the variant, appended to root-cert.pem and never published.
 	AdditionalRoots []*x509.Certificate
 	// OwnRoots are the roots published for peers when LocalCA is nil; with a
 	// LocalCA its own roots are published.

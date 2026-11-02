@@ -16,6 +16,7 @@ package extensions
 
 import (
 	"context"
+	"crypto/x509"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -34,6 +35,13 @@ type IstioExtension interface {
 	// Watches registers the watches the extension needs, so a change to an input
 	// only the extension reads reconciles the Istio CR.
 	Watches(c ctrlruntime.Controller) error
+
+	// TrustRoots are roots the variant adds to the mesh trust bundle. Istio
+	// accepts any workload identity they sign, so they join root-cert.pem but
+	// are never published as this cluster's own. An error from Partialf leaves
+	// the returned roots usable: the controller renders with them, then degrades.
+	// instance has its defaults applied.
+	TrustRoots(ctx context.Context, ci controller.Inputs, instance *operatorv1.Istio) ([]*x509.Certificate, error)
 
 	// ExtendInputs resolves what the modifier needs but cannot read for itself.
 	// ci.Status is set, for warnings. An error from Partialf leaves the returned
@@ -59,6 +67,10 @@ func (noopIstio) PolicySyncRequired(context.Context, client.Client) (bool, error
 
 func (noopIstio) Watches(ctrlruntime.Controller) error {
 	return nil
+}
+
+func (noopIstio) TrustRoots(context.Context, controller.Inputs, *operatorv1.Istio) ([]*x509.Certificate, error) {
+	return nil, nil
 }
 
 func (noopIstio) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, error) {
