@@ -43,6 +43,7 @@ const (
 	expectNoFreshAdd freshAddExpectation = iota
 	expectFreshAddWithOriginalStdin
 	expectFreshAddForIPv6Only
+	expectFreshAddForIPv4Only
 )
 
 // reuseCase is one row of the reuse policy table.
@@ -51,6 +52,7 @@ type reuseCase struct {
 	dualStack   bool
 	addErrs     map[string]error
 	wantErr     bool
+	wantErrCode uint
 	wantIPs     []string
 	wantFresh   freshAddExpectation
 }
@@ -104,6 +106,12 @@ var _ = Describe("assignPodIPs", func() {
 
 			if e.wantErr {
 				Expect(err).To(HaveOccurred())
+				Expect(isAddressNotHeld(err)).To(BeFalse(), "only a lost address may be reported as not held")
+				if e.wantErrCode != 0 {
+					var cniErr *cnitypes.Error
+					Expect(errors.As(err, &cniErr)).To(BeTrue(), "expected a CNI error, got: %v", err)
+					Expect(cniErr.Code).To(Equal(e.wantErrCode))
+				}
 			} else {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(ips).To(Equal(e.wantIPs))
@@ -143,6 +151,19 @@ var _ = Describe("assignPodIPs", func() {
 			wantIPs:     []string{"10.0.0.5", "fd00::99"},
 			wantFresh:   expectFreshAddForIPv6Only,
 		}),
+		Entry("lost IPv4 keeps IPv6, assigns IPv4 only and lists IPv4 first", reuseCase{
+			endpointIPs: []string{"10.0.0.5", "fd00::5"},
+			dualStack:   true,
+			addErrs:     map[string]error{"10.0.0.5": cnitypes.NewError(types.ErrCodeAddressNotHeld, "not held", "")},
+			wantIPs:     []string{"10.0.0.99", "fd00::5"},
+			wantFresh:   expectFreshAddForIPv4Only,
+		}),
+		Entry("lost IPv6 under a single-stack config is not requested", reuseCase{
+			endpointIPs: []string{"10.0.0.5", "fd00::5"},
+			addErrs:     map[string]error{"fd00::5": cnitypes.NewError(types.ErrCodeAddressNotHeld, "not held", "")},
+			wantIPs:     []string{"10.0.0.5"},
+			wantFresh:   expectNoFreshAdd,
+		}),
 		Entry("every family lost runs a normal fresh ADD", reuseCase{
 			endpointIPs: []string{"10.0.0.5", "fd00::5"},
 			dualStack:   true,
@@ -157,6 +178,7 @@ var _ = Describe("assignPodIPs", func() {
 			endpointIPs: []string{"10.0.0.5"},
 			addErrs:     map[string]error{"10.0.0.5": cnitypes.NewError(types.ErrCodeSandboxSuperseded, "superseded", "")},
 			wantErr:     true,
+			wantErrCode: types.ErrCodeSandboxSuperseded,
 		}),
 		Entry("an IPv4-only endpoint under a dual-stack config keeps IPv4 only", reuseCase{
 			endpointIPs: []string{"10.0.0.5"},

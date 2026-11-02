@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -729,9 +730,10 @@ func ipAddrsResult(ctx context.Context, ipAddrs string, conf types.NetConf, args
 // already holds. Reuse lets an in-place sandbox rebuild succeed in a pool that has no
 // spare capacity for a second allocation.
 //
-// When IPAM rejects a prior address with ErrCodeAddressNotHeld, only that family gets a
-// fresh address. Any other error fails the ADD without releasing anything, since addresses
-// already moved onto this sandbox are still the endpoint's.
+// IPAM answers ErrCodeAddressNotHeld when the pod does not hold a requested address. Then
+// only that family gets a fresh address, and only if the IPAM config assigns it. Any other
+// error fails the ADD without releasing anything, since addresses already moved onto this
+// sandbox are still the endpoint's.
 func assignPodIPs(
 	ctx context.Context,
 	conf types.NetConf,
@@ -777,8 +779,19 @@ func assignPodIPs(
 		return result, err
 	}
 
+	// Only request a lost family the config assigns, so a pod whose pool for that family is
+	// gone comes up in the families it still has.
+	assignsV4, assignsV6, err := configAssignsFamilies(args.StdinData)
+	if err != nil {
+		return nil, err
+	}
+	wantV4, wantV6 := v4Lost && assignsV4, v6Lost && assignsV6
+	if !wantV4 && !wantV6 {
+		return &kept, nil
+	}
+
 	freshArgs := *args
-	stdin, err := withAssignFamilies(args.StdinData, v4Lost, v6Lost)
+	stdin, err := withAssignFamilies(args.StdinData, wantV4, wantV6)
 	if err != nil {
 		return nil, err
 	}
@@ -789,7 +802,31 @@ func assignPodIPs(
 	}
 	kept.IPs = append(kept.IPs, fresh.IPs...)
 	kept.Routes = append(kept.Routes, fresh.Routes...)
+
+	// The first address becomes the pod's primary IP, so IPv4 stays first.
+	slices.SortStableFunc(kept.IPs, func(a, b *cniv1.IPConfig) int {
+		v6a, v6b := a.Address.IP.To4() == nil, b.Address.IP.To4() == nil
+		switch {
+		case v6a == v6b:
+			return 0
+		case v6a:
+			return 1
+		}
+		return -1
+	})
 	return &kept, nil
+}
+
+// configAssignsFamilies reports which IP families calico-ipam allocates for the given stdin:
+// IPv4 unless assign_ipv4 is "false", IPv6 only if assign_ipv6 is "true".
+func configAssignsFamilies(stdin []byte) (bool, bool, error) {
+	var conf types.NetConf
+	if err := json.Unmarshal(stdin, &conf); err != nil {
+		return false, false, err
+	}
+	v4 := conf.IPAM.AssignIpv4 == nil || *conf.IPAM.AssignIpv4 != "false"
+	v6 := conf.IPAM.AssignIpv6 != nil && *conf.IPAM.AssignIpv6 == "true"
+	return v4, v6, nil
 }
 
 // isAddressNotHeld reports whether err is IPAM's answer that a requested address is not held
