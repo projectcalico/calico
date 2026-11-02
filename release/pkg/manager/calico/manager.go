@@ -700,7 +700,6 @@ func (r *CalicoManager) hashreleaseUpload() distribution.Upload {
 			Config:      &r.hashreleaseConfig,
 			ProductCode: r.productCode,
 			DryRun:      r.dryRun,
-			Runner:      r.runner,
 		},
 	}
 }
@@ -1471,7 +1470,6 @@ func (r *CalicoManager) helmIndexUpload() distribution.Upload {
 			Profile:     r.awsProfile,
 			CachePolicy: distribution.MutableCachePolicy,
 			DryRun:      r.dryRun,
-			Runner:      r.runner,
 		},
 	}
 }

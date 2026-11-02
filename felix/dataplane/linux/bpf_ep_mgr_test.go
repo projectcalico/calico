@@ -1879,6 +1879,14 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 	})
 
+	It("should ignore the netkit probe device", func() {
+		bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: tc.NetkitProbeIface, State: ifacemonitor.StateUp, Index: 20})
+		Expect(bpfEpMgr.CompleteDeferredWork()).NotTo(HaveOccurred())
+		Expect(dp.rpFilterLevel(tc.NetkitProbeIface)).To(Equal(-1))
+		Expect(dp.programAttached(tc.NetkitProbeIface + ":ingress")).To(BeFalse())
+		Expect(ifStateMap.ContainsKey(ifstate.NewKey(20).AsBytes())).To(BeFalse())
+	})
+
 	Context("Ifacetype detection", func() {
 		JustBeforeEach(func() {
 			err := dp.createIface("vxlan0", 10, "vxlan")

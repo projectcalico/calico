@@ -137,9 +137,11 @@ bin/pilot-agent-$(ARCH): $(ISTIO_DOWNLOADED)
 bin/pilot-discovery-$(ARCH): $(ISTIO_DOWNLOADED)
 	$(call build_binary_dir,istio,./pilot/cmd/pilot-discovery,../$@)
 
+# cargo-auditable embeds the resolved crate list in the binary; without it,
+# image scanners (Trivy, Grype) cannot see ztunnel's Rust dependencies.
 bin/ztunnel-$(ARCH): $(ZTUNNEL_DOWNLOADED)
 	$(DOCKER_RUST_BUILD) \
-		sh -c 'cd ztunnel && cargo build --release $(if $(GOMAXPROCS),--jobs $(GOMAXPROCS))'
+		sh -c 'cd ztunnel && cargo auditable build --release --locked $(if $(GOMAXPROCS),--jobs $(GOMAXPROCS))'
 	cp ztunnel/out/rust/$(RUST_TARGET)/release/ztunnel bin/ztunnel-$(ARCH)
 
 ###############################################################################

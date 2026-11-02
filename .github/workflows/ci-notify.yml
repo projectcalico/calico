@@ -1,6 +1,5 @@
-# DMs a PR author on Slack when their PR's ArgoCI run finishes. The DM is
-# event-driven off `status`. Semaphore's status is ignored: it runs no tests
-# and always passes.
+# DMs a PR's author on Slack when its CI finishes, from ArgoCI's or Semaphore's
+# `status`. Bot PRs with an owned label go to their assignees.
 #
 # An approval DM exists too, but only on the manual `workflow_dispatch` path.
 # It cannot be driven by `pull_request_review`: that event is
@@ -21,12 +20,12 @@
 #
 # Delivery uses the gh-pr-monitor Slack bot. Its token is a repo secret
 # GH_PR_MONITOR_BOT_TOKEN; the bot needs chat:write + im:write scopes — it
-# opens a DM to the author's member ID with conversations.open, then posts
-# to that channel. (im:write is required; without it conversations.open
+# opens a DM to each recipient's member ID with conversations.open, then
+# posts to that channel. (im:write is required; without it conversations.open
 # returns missing_scope and no DM is sent.)
 #
 # The workflow is a no-op (never fails noisily) if the variable/secret
-# are unset, the author hasn't opted in, or Slack is unreachable.
+# are unset, no recipient has opted in, or Slack is unreachable.
 
 name: PR Slack notify
 
@@ -50,36 +49,25 @@ on:
         type: choice
         options: [success, failure, error, approved]
 
-# Each posted status gets one DM, even when a retry reuses the run name and
-# state; only a redelivery of the same status is a duplicate. Dedup claims a
-# git ref named refs/ci-notify/<yyyymmdd>-<run>-<state>-<status-id>
-# atomically — see "Claim dedup marker" below — so concurrent duplicate
-# events race to create the same ref and exactly one wins. No concurrency
-# group is needed: the claim is atomic on GitHub's side, so runs don't need
-# to be serialized to avoid a double-send race. Markers only matter for the
-# duplicate-event burst (minutes), so each run opportunistically prunes
-# markers whose date prefix is more than 2 days old — see "Prune stale dedup
-# markers" — keeping refs/ci-notify/* bounded.
+# Semaphore posts each pipeline's result several times; ArgoCI posts each once.
+# Only Semaphore statuses are deduped, by an atomic git ref per (pipeline, state).
 
 permissions:
   pull-requests: read
-  # git ref create/delete (the dedup marker) lives under contents. This
-  # replaced an actions/cache-based marker: GitHub's Jun 2026 change to
-  # issue read-only cache tokens for "untrusted trigger" events (a `status`
-  # event qualifies) made actions/cache/save silently no-op forever here, so
-  # the old marker never persisted and every duplicate status event kept
-  # sending its own DM.
+  # The dedup marker is a git ref. actions/cache can't be saved from a
+  # `status` event.
   contents: write
 
 jobs:
   notify:
-    # Fire once when the aggregate ArgoCI status reaches a terminal
-    # state. Skip 'pending' — that's CI starting/running, not finishing.
+    # Fire once when the aggregate ArgoCI or Semaphore status reaches a
+    # terminal state. Skip 'pending' — that's CI starting/running, not finishing.
     # Approvals arrive only as a manual workflow_dispatch (state comes from
     # the input either way).
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event.context == 'continuous-integration/calico' &&
+      ((github.event.context == 'continuous-integration/calico' ||
+        github.event.context == 'ci/semaphoreci/pr: Calico') &&
        (github.event.state == 'success' ||
         github.event.state == 'failure' ||
         github.event.state == 'error'))
@@ -89,17 +77,22 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
       CI_NOTIFY_MAP: ${{ vars.CI_NOTIFY_MAP }}
+      # A PR one of these bots opened with one of these labels is owned by
+      # its assignees. Both comma-separated.
+      BOT_AUTHORS: marvin-tigera
+      ASSIGNEE_OWNED_LABELS: release-backport
       SLACK_BOT_TOKEN: ${{ secrets.GH_PR_MONITOR_BOT_TOKEN }}
       # STATE drives everything downstream: 'success'/'failure'/'error' mean
       # the CI path, 'approved' the review path. A missing property evaluates
       # to empty, so this picks the status event's state or the input.
       STATE: ${{ github.event.state || inputs.state }}
-      # Status events only — the commit to resolve a PR from, and the run URL
-      # and status id the dedup marker is named after. Empty on a dispatch,
-      # which takes the PR number from its input and claims no marker.
+      # Status events only — the commit to resolve a PR from. Empty on a
+      # dispatch, which takes the PR number from its input.
       SHA: ${{ github.event.sha }}
+      # Carries Semaphore's pipeline_id, which names the dedup marker.
       TARGET_URL: ${{ github.event.target_url }}
-      STATUS_ID: ${{ github.event.id }}
+      # Empty on a dispatch.
+      CONTEXT: ${{ github.event.context }}
     steps:
       - name: Skip if not configured
         id: gate
@@ -111,7 +104,7 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Resolve PR + author
+      - name: Resolve PR
         id: resolve
         if: steps.gate.outputs.skip != 'true'
         env:
@@ -160,31 +153,48 @@ jobs:
           # GITHUB_OUTPUT or workflow expressions — those would be a script-injection
           # vector for an attacker-chosen PR title.
           gh api "repos/$REPO/pulls/$PR" \
-            --jq '{login: .user.login, title: .title, url: .html_url}' > pr.json
+            --jq '{login: .user.login, title: .title, url: .html_url,
+                   labels: [.labels[].name], assignees: [.assignees[].login],
+                   base: .base.ref}' > pr.json
+          # Semaphore is a no-op on master and may finish before ArgoCI posts.
+          if [[ "$CONTEXT" == "ci/semaphoreci/pr: Calico" ]]; then
+            ARGO=$(gh api "repos/$REPO/commits/$SHA/statuses?per_page=100" \
+              --jq 'any(.[]; .context == "continuous-integration/calico")' || echo false)
+            if [[ "$(jq -r .base pr.json)" == master || "$ARGO" == true ]]; then
+              echo "::notice::ArgoCI reports this commit — skipping Semaphore's status"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
           echo "pr=$PR" >> "$GITHUB_OUTPUT"
 
-      - name: Look up author's Slack ID
+      # A failed checkout surfaces as a lookup warning, not a red job.
+      - name: Check out recipient script
+        if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true'
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/workflows/scripts
+          path: src
+
+      - name: Look up recipients' Slack IDs
         id: lookup
         if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true'
         run: |
-          # Read the login from pr.json (not a step output) — keep all
-          # PR-derived text off the workflow-expression interpolation path.
-          LOGIN=$(jq -r .login pr.json)
-          # CI_NOTIFY_MAP is "login:slackid, login:slackid, ...".
-          # Logins are [A-Za-z0-9-] and Slack IDs are [A-Z0-9], so ':'
-          # is an unambiguous delimiter. Split entries on ',' (one per line),
-          # then strip whitespace *inside awk per record* — a global
-          # `tr -d '[:space:]'` would also delete the newlines and re-join
-          # every entry into one line, concatenating an ID with the next
-          # entry's login (e.g. "Uxxxxnextlogin").
-          SLACK_ID=$(printf '%s' "$CI_NOTIFY_MAP" \
-            | tr ',' '\n' \
-            | awk -F: -v u="$LOGIN" '{gsub(/[[:space:]]/, "")} $1==u {print $2; exit}')
-          if [[ -z "$SLACK_ID" ]]; then
-            echo "::notice::author '$LOGIN' not in CI_NOTIFY_MAP — skipping"
+          # Logins stay in pr.json, never in a workflow expression.
+          if ! IDS=$(bash src/.github/workflows/scripts/ci-notify-recipients.sh pr.json); then
+            echo "::warning::recipient lookup failed — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          SLACK_IDS=$(paste -sd' ' <<<"$IDS")
+          if [[ -z "$SLACK_IDS" ]]; then
+            echo "::notice::no recipient of PR is in CI_NOTIFY_MAP — skipping"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
-            echo "slack_id=$SLACK_ID" >> "$GITHUB_OUTPUT"
+            # Slack IDs are [A-Z0-9], so a space-separated list is safe here.
+            echo "slack_ids=$SLACK_IDS" >> "$GITHUB_OUTPUT"
           fi
 
       # Naming only — whether this approval deserves a DM was settled by
@@ -212,29 +222,33 @@ jobs:
           # A GitHub login is [A-Za-z0-9-], so it is safe via GITHUB_OUTPUT.
           echo "login=$LOGIN" >> "$GITHUB_OUTPUT"
 
-      # Dedup: claim a git ref named after the status before sending.
+      # Dedup: claim a git ref named after (pipeline, state) before sending.
       # Ref creation is atomic on GitHub's side, so concurrent duplicate
       # status events race to create the same ref and exactly one wins —
       # no concurrency group or serialization required. A non-"already
       # exists" failure fails OPEN (proceeds to send) rather than silently
-      # swallowing a real notification on an API hiccup. Status events only:
-      # a manual dispatch is meant to send unconditionally.
+      # swallowing a real notification on an API hiccup. Semaphore statuses
+      # only: a manual dispatch is meant to send unconditionally.
       - name: Claim dedup marker (atomic)
         id: claim
-        if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true' && steps.lookup.outputs.skip != 'true' && github.event_name == 'status'
+        if: >-
+          steps.gate.outputs.skip != 'true' &&
+          steps.resolve.outputs.skip != 'true' &&
+          steps.lookup.outputs.skip != 'true' &&
+          env.CONTEXT == 'ci/semaphoreci/pr: Calico'
         run: |
           # The marker name carries everything dedup and pruning need: the
-          # claim date, then the status this DM is for. Duplicates
+          # claim date, then the (pipeline, state) this DM is for. Duplicates
           # that straddle midnight UTC compute different names and so both
           # send — one extra DM at most, once a day, in exchange for keeping
           # age in the name.
-          # The ArgoCI run name only makes the ref readable; an unparsable URL
+          # A rerun is a new pipeline, so it gets its own DM. An unparsable URL
           # falls back to the commit.
-          RUN=${TARGET_URL##*/}
-          if [[ ! "$RUN" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
-            RUN=$SHA
+          PIPELINE=$SHA
+          if [[ "$TARGET_URL" =~ pipeline_id=([0-9a-f-]{36}) ]]; then
+            PIPELINE=${BASH_REMATCH[1]}
           fi
-          REF="refs/ci-notify/$(date -u +%Y%m%d)-${RUN}-${STATE}-${STATUS_ID}"
+          REF="refs/ci-notify/$(date -u +%Y%m%d)-${PIPELINE}-${STATE}"
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
           # The ref *target* is GITHUB_SHA — the default-branch tip this run
           # was resolved from — deliberately not the status sha. A status sha
@@ -252,7 +266,7 @@ jobs:
           if [[ $RC -eq 0 ]]; then
             echo "claimed=true" >> "$GITHUB_OUTPUT"
           elif [[ "$ERR" == *"Reference already exists"* ]]; then
-            echo "::notice::already notified for $RUN ($STATE, status $STATUS_ID) — skipping duplicate status event"
+            echo "::notice::already notified for $PIPELINE ($STATE) — skipping duplicate status event"
             echo "claimed=false" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::dedup ref-claim failed unexpectedly ($ERR) — proceeding without dedup for this run"
@@ -264,16 +278,16 @@ jobs:
       # its LLM backend responds, so the comment usually isn't there yet.
       # Poll briefly for it so the DM can deep-link to the analysis. A pass
       # and an approval never get a triage comment, so the poll is skipped
-      # on every state but failure/error.
-      # Disabled: sem-ai triage cannot read ArgoCI runs yet, so the comment never appears.
+      # on every state but failure/error. sem-ai-triage comments on Semaphore
+      # failures only.
       - name: Wait for sem-ai-triage comment
         id: triage
         if: >-
-          false &&
           steps.gate.outputs.skip != 'true' &&
           steps.resolve.outputs.skip != 'true' &&
           steps.lookup.outputs.skip != 'true' &&
           steps.claim.outputs.claimed != 'false' &&
+          env.CONTEXT == 'ci/semaphoreci/pr: Calico' &&
           (env.STATE == 'failure' || env.STATE == 'error')
         env:
           PR: ${{ steps.resolve.outputs.pr }}
@@ -329,7 +343,7 @@ jobs:
           steps.lookup.outputs.skip != 'true' &&
           steps.claim.outputs.claimed != 'false'
         env:
-          SLACK_ID: ${{ steps.lookup.outputs.slack_id }}
+          SLACK_IDS: ${{ steps.lookup.outputs.slack_ids }}
           PR: ${{ steps.resolve.outputs.pr }}
           TRIAGE_COMMENT_URL: ${{ steps.triage.outputs.comment_url }}
           # A GitHub login, passed via env rather than interpolated into the
@@ -384,28 +398,34 @@ jobs:
           ok()  { printf '%s' "$1" | jq -r '.ok // false'   2>/dev/null; }
           err() { printf '%s' "$1" | jq -r '.error // "unknown"' 2>/dev/null; }
 
-          OPEN=$(slack conversations.open "$(jq -n --arg u "$SLACK_ID" '{users: $u}')")
-          if [[ "$(ok "$OPEN")" != "true" ]]; then
-            # missing_scope -> bot lacks im:write; user_not_found -> wrong
-            # member ID or wrong workspace for this token. Both surface here
-            # instead of as an opaque channel_not_found from postMessage.
-            echo "::warning::Slack conversations.open failed for $SLACK_ID: $(err "$OPEN")"
-            exit 0
-          fi
-          CHANNEL=$(printf '%s' "$OPEN" | jq -r '.channel.id')
+          # One delivered DM keeps the claim; a retry would re-send to the others.
+          for SLACK_ID in $SLACK_IDS; do
+            OPEN=$(slack conversations.open "$(jq -n --arg u "$SLACK_ID" '{users: $u}')")
+            if [[ "$(ok "$OPEN")" != "true" ]]; then
+              # missing_scope -> bot lacks im:write; user_not_found -> wrong
+              # member ID or wrong workspace for this token. Both surface here
+              # instead of as an opaque channel_not_found from postMessage.
+              echo "::warning::Slack conversations.open failed for $SLACK_ID: $(err "$OPEN")"
+              continue
+            fi
+            CHANNEL=$(printf '%s' "$OPEN" | jq -r '.channel.id')
 
-          RESP=$(slack chat.postMessage \
-            "$(jq -n --arg c "$CHANNEL" --arg t "$TEXT" '{channel: $c, text: $t, unfurl_links: false}')")
-          if [[ "$(ok "$RESP")" != "true" ]]; then
-            echo "::warning::Slack DM failed: $(err "$RESP")"
-          else
-            echo "DM sent to $SLACK_ID for PR #$PR ($STATE)"
+            RESP=$(slack chat.postMessage \
+              "$(jq -n --arg c "$CHANNEL" --arg t "$TEXT" '{channel: $c, text: $t, unfurl_links: false}')")
+            if [[ "$(ok "$RESP")" != "true" ]]; then
+              echo "::warning::Slack DM to $SLACK_ID failed: $(err "$RESP")"
+            else
+              echo "DM sent to $SLACK_ID for PR #$PR ($STATE)"
+              SENT=true
+            fi
+          done
+          if [[ "${SENT:-}" == "true" ]]; then
             echo "sent=true" >> "$GITHUB_OUTPUT"
           fi
 
       # A failed send must release the claim, or a transient Slack outage on
       # the run that won the race would permanently suppress the
-      # notification for this (sha, state) — no other duplicate event would
+      # notification for this (pipeline, state) — no other duplicate event would
       # retry, since the ref would already exist. Best-effort: a delete
       # hiccup must never fail the notifier — the DM attempt is already done.
       - name: Release dedup marker if send failed

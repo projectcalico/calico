@@ -431,6 +431,8 @@ steps:
     env:
       - name: E2E_TEST_CONFIG
         value: e2e/config/iptables/xtables-wireguard.yaml
+      - name: ENABLE_CALICOCTL_APISERVER
+        value: "true"
       - name: ENABLE_EXTERNAL_NODE
         value: "true"
       - name: ENABLE_WIREGUARD
@@ -459,6 +461,8 @@ steps:
     env:
       - name: E2E_TEST_CONFIG
         value: e2e/config/iptables/xtables-wireguard.yaml
+      - name: ENABLE_CALICOCTL_APISERVER
+        value: "true"
       - name: ENABLE_EXTERNAL_NODE
         value: "true"
       - name: ENABLE_WIREGUARD
@@ -552,6 +556,8 @@ steps:
       - http-cache-proxy
     env:
       - name: DISABLE_IPIP
+        value: "true"
+      - name: ENABLE_CALICOCTL_APISERVER
         value: "true"
       - name: ENABLE_WIREGUARD
         value: "true"
@@ -817,6 +823,8 @@ steps:
             value: calico-typha.yaml
       - name: stable-1-canal-yaml
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/iptables/xtables-manifest-canal.yaml
           - name: K8S_VERSION
             value: stable-1
           - name: MANIFEST_FILE
@@ -849,6 +857,8 @@ steps:
             value: calico-typha.yaml
       - name: beta-or-stable-canal-yaml
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/iptables/xtables-manifest-canal.yaml
           - name: K8S_VERSION
             value: beta-or-stable
           - name: MANIFEST_FILE

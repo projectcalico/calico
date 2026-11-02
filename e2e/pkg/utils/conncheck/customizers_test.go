@@ -15,6 +15,7 @@
 package conncheck
 
 import (
+	"slices"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -23,19 +24,29 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
-func TestAvoidNodes(t *testing.T) {
-	excluded := corev1.NodeSelectorRequirement{
-		Key:      "metadata.name",
-		Operator: corev1.NodeSelectorOpNotIn,
-		Values:   []string{"cp-1", "cp-2"},
+// excludesNodes reports whether reqs hold one single-value metadata.name NotIn per
+// node, the only form the API server accepts for a field selector.
+func excludesNodes(reqs []corev1.NodeSelectorRequirement, nodes ...string) bool {
+	var got []string
+	for _, r := range reqs {
+		if r.Key != "metadata.name" {
+			continue
+		}
+		if r.Operator != corev1.NodeSelectorOpNotIn || len(r.Values) != 1 {
+			return false
+		}
+		got = append(got, r.Values[0])
 	}
+	return slices.Equal(got, nodes)
+}
+
+func TestAvoidNodes(t *testing.T) {
 
 	t.Run("no affinity", func(t *testing.T) {
 		pod := &corev1.Pod{}
 		avoidNodes([]string{"cp-1", "cp-2"})(pod)
 		terms := pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
-		if len(terms) != 1 || len(terms[0].MatchFields) != 1 || terms[0].MatchFields[0].Operator != excluded.Operator ||
-			terms[0].MatchFields[0].Key != excluded.Key || len(terms[0].MatchFields[0].Values) != 2 {
+		if len(terms) != 1 || !excludesNodes(terms[0].MatchFields, "cp-1", "cp-2") {
 			t.Fatalf("want one term excluding the nodes, got %+v", terms)
 		}
 	})
@@ -55,7 +66,7 @@ func TestAvoidNodes(t *testing.T) {
 			t.Fatalf("want the two existing terms, got %d", len(terms))
 		}
 		for i, term := range terms {
-			if len(term.MatchExpressions) != 1 || len(term.MatchFields) != 1 || term.MatchFields[0].Key != excluded.Key {
+			if len(term.MatchExpressions) != 1 || !excludesNodes(term.MatchFields, "cp-1", "cp-2") {
 				t.Fatalf("term %d: want its expression kept and the nodes excluded, got %+v", i, term)
 			}
 		}
@@ -74,7 +85,7 @@ func TestAvoidNodes(t *testing.T) {
 		if len(terms) != 2 {
 			t.Fatalf("want the two existing terms, got %d", len(terms))
 		}
-		if len(terms[0].MatchFields) != 1 || terms[0].MatchFields[0].Key != excluded.Key {
+		if !excludesNodes(terms[0].MatchFields, "cp-1", "cp-2") {
 			t.Fatalf("want the zone term to exclude the nodes, got %+v", terms[0])
 		}
 		if len(terms[1].MatchExpressions) != 0 || len(terms[1].MatchFields) != 0 {
@@ -124,7 +135,11 @@ func excludedNodes(pod *corev1.Pod) []string {
 	if pod.Spec.Affinity == nil {
 		return nil
 	}
-	return pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchFields[0].Values
+	var names []string
+	for _, r := range pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchFields {
+		names = append(names, r.Values...)
+	}
+	return names
 }
 
 func TestWithAvoidControlPlane(t *testing.T) {

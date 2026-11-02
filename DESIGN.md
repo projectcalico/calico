@@ -67,6 +67,7 @@ Components with their own design doc:
 | Typha | [`typha/DESIGN.md`](typha/DESIGN.md) |
 | Node container | [`node/DESIGN.md`](node/DESIGN.md) |
 | Operator | [`operator/DESIGN.md`](operator/DESIGN.md) |
+| Release tooling | [`release/DESIGN.md`](release/DESIGN.md) |
 
 Components without a `DESIGN.md` inherit constraints from the
 code and from this top-level overview. Adding a `DESIGN.md` when

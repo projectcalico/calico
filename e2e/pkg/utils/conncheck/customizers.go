@@ -17,6 +17,7 @@ package conncheck
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -127,10 +128,14 @@ func avoidNodes(names []string) func(*corev1.Pod) {
 	if len(names) == 0 {
 		return func(*corev1.Pod) {}
 	}
-	notIn := corev1.NodeSelectorRequirement{
-		Key:      "metadata.name",
-		Operator: corev1.NodeSelectorOpNotIn,
-		Values:   names,
+	// A metadata.name field selector takes only one value, so one NotIn per node.
+	var notIn []corev1.NodeSelectorRequirement
+	for _, name := range names {
+		notIn = append(notIn, corev1.NodeSelectorRequirement{
+			Key:      "metadata.name",
+			Operator: corev1.NodeSelectorOpNotIn,
+			Values:   []string{name},
+		})
 	}
 	return func(pod *corev1.Pod) {
 		if pod.Spec.Affinity == nil {
@@ -146,7 +151,7 @@ func avoidNodes(names []string) func(*corev1.Pod) {
 		terms := na.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
 		if len(terms) == 0 {
 			na.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = []corev1.NodeSelectorTerm{
-				{MatchFields: []corev1.NodeSelectorRequirement{notIn}},
+				{MatchFields: slices.Clone(notIn)},
 			}
 			return
 		}
@@ -156,7 +161,7 @@ func avoidNodes(names []string) func(*corev1.Pod) {
 			if len(terms[i].MatchExpressions) == 0 && len(terms[i].MatchFields) == 0 {
 				continue
 			}
-			terms[i].MatchFields = append(terms[i].MatchFields, notIn)
+			terms[i].MatchFields = append(terms[i].MatchFields, notIn...)
 		}
 	}
 }
