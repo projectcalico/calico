@@ -25,6 +25,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -302,7 +303,7 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 
 			if err := calicoClient.IPAM().AssignIP(ctx, assignArgs); err != nil {
 				if errors.Is(err, ipam.ErrNotInPool) || errors.Is(err, ipam.ErrUseNotAllowed) {
-					msg := fmt.Sprintf("address %s cannot be assigned to a workload: %s", ipamArgs.IP, err)
+					msg := fmt.Sprintf("address %s cannot be assigned to a workload: %s", ipamArgs.IP, strings.TrimSpace(err.Error()))
 					return cnitypes.NewError(types.ErrCodeAddressNotHeld, msg, "")
 				}
 
