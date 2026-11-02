@@ -46,7 +46,15 @@ type hepListener interface {
 }
 
 type liveMigrationListener interface {
-	OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState)
+	OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState, onRouteProgrammed func(ip.CIDR))
+}
+
+type liveMigrationStatus struct {
+	state liveMigrationState
+
+	// onRouteProgrammed, when non-nil, is to be called after writing each of the workload's
+	// elevated-priority routes into the kernel.
+	onRouteProgrammed func(ip.CIDR)
 }
 
 type endpointManagerCallbacks struct {
@@ -166,7 +174,7 @@ type endpointManager struct {
 	// fields.
 	pendingWlEpUpdates         map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 	pendingIfaceUpdates        map[string]ifacemonitor.State
-	pendingLiveMigrationStates map[types.WorkloadEndpointID]liveMigrationState
+	pendingLiveMigrationStates map[types.WorkloadEndpointID]liveMigrationStatus
 	dirtyPolicyIDs             set.Set[types.PolicyID]
 
 	// Active state, updated in CompleteDeferredWork.
@@ -347,7 +355,7 @@ func newEndpointManagerWithShims(
 		// in CompleteDeferredWork and transfer the important data to the activeXYX fields.
 		pendingWlEpUpdates:         map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		pendingIfaceUpdates:        map[string]ifacemonitor.State{},
-		pendingLiveMigrationStates: map[types.WorkloadEndpointID]liveMigrationState{},
+		pendingLiveMigrationStates: map[types.WorkloadEndpointID]liveMigrationStatus{},
 		dirtyPolicyIDs:             set.New[types.PolicyID](),
 
 		activeUpIfaces: set.New[string](),
@@ -470,7 +478,11 @@ func (m *endpointManager) OnUpdate(protoBufMsg any) {
 	}
 }
 
-func (m *endpointManager) OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState) {
+func (m *endpointManager) OnLiveMigrationStateUpdate(
+	id types.WorkloadEndpointID,
+	state liveMigrationState,
+	onRouteProgrammed func(ip.CIDR),
+) {
 	log.WithFields(log.Fields{
 		"id":    id,
 		"state": state,
@@ -478,7 +490,10 @@ func (m *endpointManager) OnLiveMigrationStateUpdate(id types.WorkloadEndpointID
 	if state == liveMigrationStateBase {
 		delete(m.pendingLiveMigrationStates, id)
 	} else {
-		m.pendingLiveMigrationStates[id] = state
+		m.pendingLiveMigrationStates[id] = liveMigrationStatus{
+			state:             state,
+			onRouteProgrammed: onRouteProgrammed,
+		}
 	}
 	// Mark the endpoint dirty so CompleteDeferredWork re-evaluates its routes.
 	// Only if there isn't already a pending WEP update, to avoid clobbering a
@@ -982,8 +997,8 @@ func (m *endpointManager) calculateRoutes(
 ) (
 	routeTargets []routetable.Target,
 ) {
-	lmState, hasLMState := m.pendingLiveMigrationStates[id]
-	if hasLMState && lmState == liveMigrationStateTarget {
+	lmStatus, hasLMState := m.pendingLiveMigrationStates[id]
+	if hasLMState && lmStatus.state == liveMigrationStateTarget {
 		logCxt.Debug("Live migration target, suppressing routes")
 		return
 	}
@@ -1035,13 +1050,19 @@ func (m *endpointManager) calculateRoutes(
 	}
 
 	for _, s := range ipStrings {
-		routeTargets = append(routeTargets, routetable.Target{
+		cidr := ip.MustParseCIDROrIP(s)
+		target := routetable.Target{
 			RouteKey: routetable.RouteKey{
-				CIDR:     ip.MustParseCIDROrIP(s),
+				CIDR:     cidr,
 				Priority: routePriority,
 			},
 			DestMAC: mac,
-		})
+		}
+		if lmStatus.onRouteProgrammed != nil {
+			onRouteProgrammed := lmStatus.onRouteProgrammed
+			target.OnProgrammed = func() { onRouteProgrammed(cidr) }
+		}
+		routeTargets = append(routeTargets, target)
 	}
 
 	return
