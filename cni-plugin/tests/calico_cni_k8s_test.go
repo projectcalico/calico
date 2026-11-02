@@ -2299,6 +2299,52 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).NotTo(HaveOccurred(), "the stale DEL released the live sandbox's address")
 		})
 
+		It("assigns a fresh address to a default pod whose endpoint address is in cooldown", func() {
+			const sandboxX, sandboxY = "container-id-default-cooldown-x", "container-id-default-cooldown-y"
+
+			cfg, err := calicoClient.IPAM().GetIPAMConfig(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				Expect(calicoClient.IPAM().SetIPAMConfig(ctx, *cfg)).To(Succeed())
+			})
+			cooldownCfg := *cfg
+			cooldownCfg.IPCooldownSeconds = 300
+			Expect(calicoClient.IPAM().SetIPAMConfig(ctx, cooldownCfg)).To(Succeed())
+
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: testPodName},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{Name: testPodName, Image: "ignore"}},
+					NodeName:   testNodeName,
+				},
+			})
+			_, _, _, contAddresses, _, contNs, err := testutils.CreateContainerWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", sandboxX)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(contAddresses).To(HaveLen(1))
+			podIP := contAddresses[0].IP.String()
+			DeferCleanup(func() {
+				_, err := testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, sandboxY)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			// Releasing sandbox X's handle puts the address into cooldown while the endpoint still lists it.
+			Expect(calicoClient.IPAM().ReleaseByHandle(ctx, ipam.PodHandleID("calico-uts", sandboxX))).To(Succeed())
+			_, err = calicoClient.IPAM().GetAssignmentAttributes(ctx, cnet.IP{IP: net.ParseIP(podIP)})
+			Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorIPInCooldown{}))
+			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{Namespace: testutils.K8S_TEST_NS})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(endpoints.Items).To(HaveLen(1))
+			Expect(endpoints.Items[0].Spec.IPNetworks).To(ContainElement(podIP + "/32"))
+
+			result, _, _, _, err := testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", sandboxY, "eth0", contNs)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IPs).To(HaveLen(1))
+			Expect(result.IPs[0].Address.IP.String()).NotTo(Equal(podIP), "the ADD reclaimed an address in cooldown")
+
+			_, err = calicoClient.IPAM().GetAssignmentAttributes(ctx, cnet.IP{IP: net.ParseIP(podIP)})
+			Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorIPInCooldown{}))
+		})
+
 		It("reports the cooldown when the requested IP has not finished its cooldown", func() {
 			// GetAssignmentAttributes refuses to name an owner for an address in
 			// cooldown, so the transfer is never reached. The pod still fails, but the
@@ -2412,19 +2458,22 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				return func() {
 					Expect(calicoClient.IPAM().ReleaseByHandle(ctx, handle)).To(Succeed())
 				}
-			}, ""),
+			}, "not held by a pod sandbox"),
 			Entry("it's in no configured pool", "1.1.1.1", func() func() {
 				return func() {}
-			}, ""),
+			}, "cannot be assigned to a workload"),
 			Entry("its pool disallows workloads", "10.124.0.5", func() func() {
 				testutils.MustCreateNewIPPoolAllowedUses(calicoClient, "10.124.0.0/16", []api.IPPoolAllowedUse{api.IPPoolAllowedUseTunnel})
 				return func() {
 					testutils.MustDeleteIPPool(calicoClient, "10.124.0.0/16")
 				}
-			}, ""),
+			}, "cannot be assigned to a workload"),
 			Entry("it's in cooldown", "10.123.0.92", func() func() {
 				cfg, err := calicoClient.IPAM().GetIPAMConfig(ctx)
 				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(func() {
+					Expect(calicoClient.IPAM().SetIPAMConfig(ctx, *cfg)).To(Succeed())
+				})
 				cooldownCfg := *cfg
 				cooldownCfg.IPCooldownSeconds = 300
 				Expect(calicoClient.IPAM().SetIPAMConfig(ctx, cooldownCfg)).To(Succeed())
@@ -2435,9 +2484,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 				_, err = testutils.DeleteContainerWithId(netconf, firstNs.Path(), testPodName, testutils.K8S_TEST_NS, firstID)
 				Expect(err).NotTo(HaveOccurred())
-				return func() {
-					Expect(calicoClient.IPAM().SetIPAMConfig(ctx, *cfg)).To(Succeed())
-				}
+				return func() {}
 			}, "cooldown"),
 		)
 	})
