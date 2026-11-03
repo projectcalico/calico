@@ -35,7 +35,8 @@ type DiachronicFlow struct {
 	ID  int64
 	Key types.FlowKey
 
-	// visited holds the BucketRing walk that last yielded this flow. Only the main loop touches it.
+	// visited holds the number of the last walk that yielded this flow, so a walk can skip flows
+	// it has already yielded. Only the main loop touches it.
 	visited uint64
 
 	// mu guards windows and the IP sets, which streams read off the aggregator goroutine.

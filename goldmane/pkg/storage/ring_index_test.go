@@ -16,7 +16,9 @@ package storage_test
 
 import (
 	"fmt"
+	"iter"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"unique"
@@ -180,6 +182,38 @@ func TestRingListPagesMatchFullSort(t *testing.T) {
 			require.Equal(t, keyNames(want[page*pageSize:end]), keyNames(got), "page size %d, page %d", pageSize, page)
 		}
 	}
+}
+
+// TestFlowCandidatesWalks checks that nesting two walks of the ring's buckets panics, since the
+// inner walk would make the outer one yield flows twice, and that leaving a walk early ends it.
+func TestFlowCandidatesWalks(t *testing.T) {
+	ring := newPagingRing()
+	start := ring.EndOfHistory() - 2*pagingInterval
+	for i := range 10 {
+		ring.AddFlow(storage.FlowFromNode{Flow: pagingFlow(fmt.Sprintf("flow-%d", i), start)})
+	}
+
+	// Flows outside the walked bucket keep the ring from scanning every flow instead.
+	for i := range 20 {
+		ring.AddFlow(storage.FlowFromNode{Flow: pagingFlow(fmt.Sprintf("other-%d", i), start-10*pagingInterval)})
+	}
+	walk := func() iter.Seq[*storage.DiachronicFlow] {
+		flows, _ := ring.FlowCandidates(start, start+1)
+		return flows
+	}
+
+	for range walk() {
+		break
+	}
+	require.Len(t, slices.Collect(walk()), 10, "a walk left early must not block the next one")
+
+	require.Panics(t, func() {
+		for range walk() {
+			for range walk() {
+			}
+		}
+	})
+	require.Len(t, slices.Collect(walk()), 10, "a panicking walk must not block the next one")
 }
 
 type candidateRangeCase struct {

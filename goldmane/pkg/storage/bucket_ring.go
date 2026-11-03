@@ -89,6 +89,10 @@ type BucketRing struct {
 
 	// visitEpoch numbers each uniqueFlows walk, so flows can be marked visited without a set.
 	visitEpoch uint64
+
+	// walking is set while a walk of the buckets is in progress. A nested walk would bump the
+	// epoch under the outer one, making it yield flows twice.
+	walking bool
 }
 
 func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *BucketRing {
@@ -460,7 +464,8 @@ func dedupWindowBuckets(interval, numBuckets int) int {
 }
 
 // FlowCandidates yields each flow in the range's buckets once, plus a size hint. If those buckets
-// hold twice as many entries as there are flows, it yields every flow, unfiltered by time.
+// hold twice as many entries as there are flows, it yields every flow, unfiltered by time. Don't
+// range over one of its sequences inside another, since the bucket walk panics if that happens.
 func (r *BucketRing) FlowCandidates(startGt, startLt int64) (iter.Seq[*DiachronicFlow], int) {
 	var inRange []*AggregationBucket
 	numEntries, largestBucketLen := 0, 0
@@ -481,9 +486,16 @@ func (r *BucketRing) FlowCandidates(startGt, startLt int64) (iter.Seq[*Diachroni
 	return r.uniqueFlows(inRange), largestBucketLen
 }
 
-// uniqueFlows yields each flow in the buckets once. Only the main loop may call it.
+// uniqueFlows yields each flow in the buckets once. Only the main loop may call it, and walks
+// can't nest, because each one marks flows visited in the same field.
 func (r *BucketRing) uniqueFlows(buckets []*AggregationBucket) iter.Seq[*DiachronicFlow] {
 	return func(yield func(*DiachronicFlow) bool) {
+		if r.walking {
+			panic("BucketRing: a flow walk started while another was in progress")
+		}
+		r.walking = true
+		defer func() { r.walking = false }()
+
 		r.visitEpoch++
 		epoch := r.visitEpoch
 		for _, b := range buckets {
