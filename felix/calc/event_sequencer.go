@@ -466,6 +466,8 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, computedData []End
 	wep := &proto.WorkloadEndpoint{
 		State:                      ep.State,
 		Name:                       ep.Name,
+		Uid:                        ep.UID,
+		NetnsPath:                  ep.NetnsPath,
 		Mac:                        mac,
 		ProfileIds:                 ep.ProfileIDs,
 		Ipv4Nets:                   netsToStrings(ep.IPv4Nets),

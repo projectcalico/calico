@@ -1152,7 +1152,8 @@ func (c *nodeComponent) nodeVolumes() []corev1.Volume {
 		{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 		// Volume for the bpffs itself, used by the main node container.
 		{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-		// Volume used by mount-cgroupv2 init container to access root cgroup name space of node.
+		// Volume used by mount-cgroupv2 init container to access root cgroup name space of node, and by
+		// Felix to resolve pod network namespaces.
 		{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 	}
 
@@ -1459,6 +1460,7 @@ func (c *nodeComponent) nodeVolumeMounts() []corev1.VolumeMount {
 		corev1.VolumeMount{MountPath: "/var/run/calico", Name: "var-run-calico"},
 		corev1.VolumeMount{MountPath: "/var/lib/calico", Name: "var-lib-calico"},
 		corev1.VolumeMount{MountPath: "/sys/fs/bpf", Name: BPFVolumeName},
+		corev1.VolumeMount{MountPath: "/nodeproc", Name: "nodeproc", ReadOnly: true},
 		c.cfg.TLS.NodeSecret.VolumeMount(c.SupportedOSType()),
 	)
 
@@ -1540,6 +1542,7 @@ func (c *nodeComponent) nodeEnvVars() []corev1.EnvVar {
 		{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
 		{Name: "FELIX_HEALTHENABLED", Value: "true"},
 		{Name: "FELIX_HEALTHPORT", Value: fmt.Sprintf("%d", felixHealthPort(c.cfg.FelixConfiguration))},
+		{Name: "FELIX_PROCROOTPATH", Value: "/nodeproc"},
 		{
 			Name: "NODENAME",
 			ValueFrom: &corev1.EnvVarSource{

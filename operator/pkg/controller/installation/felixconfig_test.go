@@ -20,13 +20,20 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/admission"
 	"github.com/projectcalico/calico/operator/pkg/apis"
+	"github.com/projectcalico/calico/operator/pkg/common/discovery"
 	"github.com/projectcalico/calico/operator/pkg/controller/managedfields"
+	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 )
 
@@ -170,5 +177,82 @@ var _ = Describe("FelixConfiguration declarations", func() {
 		Expect(d.Policies).To(HaveLen(1))
 		Expect(d.Policies["spec.bpfEnabled"]).To(Equal(managedfields.ConflictError))
 		Expect(d.Owned.Spec.BPFEnabled).To(Equal(ptr.To(false)))
+	})
+})
+
+var _ = Describe("podNetnsAnnotation declaration", func() {
+	var scheme *runtime.Scheme
+
+	BeforeEach(func() {
+		scheme = runtime.NewScheme()
+		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
+		Expect(operatorv1.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		Expect(admissionregistrationv1.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		Expect(admissionv1beta1.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+	})
+
+	reconcilerFor := func(manageCRDs bool, vapVersion string, initial ...client.Object) ReconcileInstallation {
+		m := map[schema.GroupKind]string{}
+		if vapVersion != "" {
+			m[admission.ValidatingPolicyGroupKind] = vapVersion
+		}
+		return ReconcileInstallation{
+			opts: options.ControllerOptions{
+				ManageCRDs:   manageCRDs,
+				APIDiscovery: discovery.NewStaticAPIDiscovery(m),
+			},
+			client: ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(initial...).Build(),
+		}
+	}
+
+	installWith := func(plugin operatorv1.CNIPluginType) *operatorv1.Installation {
+		return &operatorv1.Installation{Spec: operatorv1.InstallationSpec{CNI: &operatorv1.CNISpec{Type: plugin}}}
+	}
+
+	declared := func(r ReconcileInstallation, i *operatorv1.Installation) *string {
+		d, err := r.declarePodNetnsAnnotation(context.Background(), i)(&v3.FelixConfiguration{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(d.Manager).To(Equal(podNetnsFieldManager))
+		Expect(d.Policies).To(HaveKeyWithValue("spec.podNetnsAnnotation", managedfields.ConflictOverride))
+		return d.Owned.Spec.PodNetnsAnnotation
+	}
+
+	policy := admission.ValidatingPolicyObjects(admission.VersionV1, admission.ProtectCNIAnnotationsName)
+
+	It("enables it once the policy and its binding exist, whether or not the operator manages CRDs", func() {
+		for _, manageCRDs := range []bool{true, false} {
+			r := reconcilerFor(manageCRDs, admission.VersionV1, policy...)
+			Expect(declared(r, installWith(operatorv1.PluginCalico))).To(Equal(ptr.To("Enabled")), "manageCRDs=%v", manageCRDs)
+		}
+	})
+
+	It("checks the policy at the served version", func() {
+		r := reconcilerFor(true, admission.VersionV1Beta1, admission.ValidatingPolicyObjects(admission.VersionV1Beta1, admission.ProtectCNIAnnotationsName)...)
+		Expect(declared(r, installWith(operatorv1.PluginCalico))).To(Equal(ptr.To("Enabled")))
+	})
+
+	It("clears it while the binding is missing", func() {
+		r := reconcilerFor(true, admission.VersionV1, policy[0])
+		Expect(declared(r, installWith(operatorv1.PluginCalico))).To(BeNil())
+	})
+
+	It("clears it once the policy is deleted", func() {
+		r := reconcilerFor(true, admission.VersionV1, policy...)
+		Expect(declared(r, installWith(operatorv1.PluginCalico))).To(Equal(ptr.To("Enabled")))
+
+		Expect(r.client.Delete(context.Background(), policy[0])).NotTo(HaveOccurred())
+		Expect(declared(r, installWith(operatorv1.PluginCalico))).To(BeNil())
+	})
+
+	It("clears it when the cluster doesn't serve ValidatingAdmissionPolicy", func() {
+		r := reconcilerFor(true, "")
+		Expect(declared(r, installWith(operatorv1.PluginCalico))).To(BeNil())
+	})
+
+	It("clears it when Calico isn't the CNI plugin", func() {
+		for _, plugin := range []operatorv1.CNIPluginType{operatorv1.PluginAmazonVPC, operatorv1.PluginAzureVNET, operatorv1.PluginGKE} {
+			r := reconcilerFor(true, admission.VersionV1, policy...)
+			Expect(declared(r, installWith(plugin))).To(BeNil(), string(plugin))
+		}
 	})
 })

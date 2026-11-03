@@ -24,6 +24,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/admission"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/managedfields"
 	"github.com/projectcalico/calico/operator/pkg/render"
@@ -37,6 +38,9 @@ const (
 
 	// bpfFieldManager owns spec.bpfEnabled, which both installation write sites declare.
 	bpfFieldManager = "installation-bpf"
+
+	// podNetnsFieldManager owns spec.podNetnsAnnotation, which follows the CNI annotation policy.
+	podNetnsFieldManager = "installation-podnetns"
 
 	// openShiftFelixHealthPort avoids the port OpenShift's SDN already holds.
 	openShiftFelixHealthPort = 9199
@@ -185,6 +189,31 @@ func (r *ReconcileInstallation) declareBPFEnabled(ctx context.Context, install *
 			Policies: map[string]managedfields.ConflictPolicy{
 				// A user who changed this by hand gets a degraded status, not an override.
 				"spec.bpfEnabled": managedfields.ConflictError,
+			},
+		}, nil
+	}
+}
+
+// declarePodNetnsAnnotation declares spec.podNetnsAnnotation Enabled when Calico is the CNI and the
+// policy protecting its pod annotations is in place, and clears it otherwise.
+func (r *ReconcileInstallation) declarePodNetnsAnnotation(ctx context.Context, install *operatorv1.Installation) managedfields.DeclareFn[*v3.FelixConfiguration] {
+	return func(current *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
+		felixConfig := &v3.FelixConfiguration{}
+		if install.Spec.CNI.Type == operatorv1.PluginCalico {
+			vapAPIVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindValidatingPolicy)
+			protected, err := admission.ValidatingPolicyExists(ctx, r.client, vapAPIVersion, admission.ProtectCNIAnnotationsName)
+			if err != nil {
+				return nil, err
+			}
+			if protected {
+				felixConfig.Spec.PodNetnsAnnotation = ptr.To("Enabled")
+			}
+		}
+		return &managedfields.Declaration[*v3.FelixConfiguration]{
+			Manager: podNetnsFieldManager,
+			Owned:   felixConfig,
+			Policies: map[string]managedfields.ConflictPolicy{
+				"spec.podNetnsAnnotation": managedfields.ConflictOverride,
 			},
 		}, nil
 	}
