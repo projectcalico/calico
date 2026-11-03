@@ -18,4 +18,9 @@
 ---
 {{ $.Files.Get $path | replace "admissionregistration.k8s.io/v1beta1" $apiVersion }}
 {{- end }}
+{{- /* Calico reads the AWS VPC CNI's pod IP annotation whatever the CNI. calico-aws-vpc-annotations-rbac.yaml lets aws-node through. */}}
+{{ range $path, $_ := .Files.Glob "admission/aws-vpc-annotations/*.yaml" }}
+---
+{{ $.Files.Get $path | replace "admissionregistration.k8s.io/v1beta1" $apiVersion }}
+{{- end }}
 {{- end }}

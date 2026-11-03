@@ -97,6 +97,15 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error reading egress qdisc from workload %s: %w", newName, err))
 		}
+		if currentEgress != nil && desiredEgress != nil {
+			redirected, err := qos.HasEgressRedirect(newName)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("error reading egress redirect on workload %s: %w", newName, err))
+			} else if !redirected {
+				// Take the add path, which reuses the existing IFB and installs the redirect.
+				currentEgress = nil
+			}
+		}
 
 		if currentIngress == nil && desiredIngress != nil {
 			// Add.

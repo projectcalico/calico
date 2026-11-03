@@ -1,6 +1,6 @@
-# ValidatingAdmissionPolicy that allows only Calico to set, change or remove the
-# pod annotations the Calico CNI plugin writes. Felix programs the dataplane
-# from these, so they must not be writable by whoever can update the pod.
+# ValidatingAdmissionPolicy that protects CNI-written Pod annotations. Since
+# Felix uses these annotations when programming the dataplane, they should not be
+# editable by anyone but the CNI by default.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:

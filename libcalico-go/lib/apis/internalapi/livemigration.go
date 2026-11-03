@@ -68,7 +68,7 @@ type LiveMigrationTarget struct {
 	// orchestrator uses a single LiveMigration object to describe all of that pod/VM's
 	// interfaces.  This is what happens with KubeVirt.
 	// +optional
-	Selector *string `json:"selector,omitempty"`
+	Selector *string `json:"selector,omitempty" validate:"omitempty,selector"`
 
 	// WorkloadEndpoint identifies the live migration target WorkloadEndpoint in clusters where
 	// the orchestrator uses different LiveMigration objects to describe each of a migrating

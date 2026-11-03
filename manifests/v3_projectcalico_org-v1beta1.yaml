@@ -28131,7 +28131,7 @@ spec:
                       description: |-
                         CreationGracePeriod gives a generic grace period to new connections
                         before they are considered for cleanup [Default: 10s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     genericTimeout:
                       description: |-
@@ -28139,7 +28139,7 @@ spec:
                         entry for cleanup after the connection became idle. If set to 'Auto', the
                         value from nf_conntrack_generic_timeout is used. If nil, Calico uses its
                         own default value. [Default: 10m].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     icmpTimeout:
                       description: |-
@@ -28147,7 +28147,7 @@ spec:
                         entry for cleanup after the connection became idle. If set to 'Auto', the
                         value from nf_conntrack_icmp_timeout is used. If nil, Calico uses its
                         own default value. [Default: 5s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpEstablished:
                       description: |-
@@ -28155,7 +28155,7 @@ spec:
                         cleanup after the connection became idle. If set to 'Auto', the
                         value from nf_conntrack_tcp_timeout_established is used. If nil, Calico uses
                         its own default value. [Default: 1h].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpFinsSeen:
                       description: |-
@@ -28163,14 +28163,14 @@ spec:
                         cleanup after the connection was closed gracefully. If set to 'Auto', the
                         value from nf_conntrack_tcp_timeout_time_wait is used. If nil, Calico uses
                         its own default value. [Default: Auto].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpResetSeen:
                       description: |-
                         TCPResetSeen controls how long it takes before considering this entry for
                         cleanup after the connection was aborted. If nil, Calico uses its own
                         default value. [Default: 40s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpSynSent:
                       description: |-
@@ -28178,14 +28178,14 @@ spec:
                         cleanup after the last SYN without a response. If set to 'Auto', the
                         value from nf_conntrack_tcp_timeout_syn_sent is used. If nil, Calico uses
                         its own default value. [Default: 20s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     udpTimeout:
                       description: |-
                         UDPTimeout controls how long it takes before considering this entry for
                         cleanup after the connection became idle. If nil, Calico uses its own
                         default value. [Default: 60s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                   type: object
                 bpfDSROptoutCIDRs:
@@ -28389,8 +28389,8 @@ spec:
                 bpfMapSizeConntrackScaling:
                   description: |-
                     BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending
-                    on its usage. 'Disabled' make the size stay at the default or whatever is set by
-                    BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even
+                    on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size.
+                    'DoubleIfFull' doubles the size of an IP family's map when it is more than 80% full
                     after cleanups. [Default: DoubleIfFull]
                   pattern: ^(?i)(Disabled|DoubleIfFull)?$
                   type: string
@@ -28979,8 +28979,15 @@ spec:
                     anyOf:
                       - type: integer
                       - type: string
+                    maxLength: 11
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
+                    x-kubernetes-validations:
+                      - message: port ranges must be written low:high
+                        reason: FieldValueInvalid
+                        rule:
+                          type(self) != string || !self.contains(':') || int(self.split(':')[0])
+                          <= int(self.split(':')[1])
                   maxItems: 7
                   type: array
                 liveMigrationRouteConvergenceTime:
@@ -29469,6 +29476,23 @@ spec:
                     "VXLANPort is the UDP port number to use for VXLAN traffic.
                     [Default: 4789]"
                   type: integer
+                vxlanSrcPortMax:
+                  description: |-
+                    VXLANSrcPortMax is the upper bound (inclusive) of the UDP source port range used by Felix for outgoing
+                    VXLAN-encapsulated traffic. See VXLANSrcPortMin. [Default: 0 (unset)]
+                  maximum: 65535
+                  minimum: 0
+                  type: integer
+                vxlanSrcPortMin:
+                  description: |-
+                    VXLANSrcPortMin is the lower bound (inclusive) of the UDP source port range used by Felix for outgoing
+                    VXLAN-encapsulated traffic. If both VXLANSrcPortMin and VXLANSrcPortMax are set, the kernel VXLAN tunnel
+                    device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANSrcPortMin, VXLANSrcPortMax].
+                    VXLANSrcPortMin must be strictly less than VXLANSrcPortMax.
+                    If unset (or zero), the kernel/dataplane default is used. [Default: 0 (unset)]
+                  maximum: 65535
+                  minimum: 0
+                  type: integer
                 vxlanVNI:
                   description: |-
                     VXLANVNI is the VXLAN VNI to use for VXLAN traffic.  You may need to change this if the default value is
@@ -29746,8 +29770,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -29765,12 +29796,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -29804,6 +29843,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -29812,6 +29853,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -30055,8 +30097,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -30074,12 +30123,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -30113,6 +30170,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -30121,6 +30180,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -30318,8 +30378,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -30337,12 +30404,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -30376,6 +30451,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -30384,6 +30461,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -30627,8 +30705,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -30646,12 +30731,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -30685,6 +30778,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -30693,6 +30788,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -32090,6 +32186,7 @@ spec:
                                     description:
                                       NodeSelector allows the AutoHostEndpoint
                                       to be created only for specific nodes
+                                    maxLength: 1024
                                     type: string
                                 type: object
                               type: array
@@ -32185,9 +32282,9 @@ spec:
                 logSeverityScreen:
                   description: |-
                     LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-                    Valid values are: "None", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
+                    Valid values are: "Trace", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
                   enum:
-                    - None
+                    - Trace
                     - Debug
                     - Info
                     - Warning
@@ -32338,6 +32435,7 @@ spec:
                                         description:
                                           NodeSelector allows the AutoHostEndpoint
                                           to be created only for specific nodes
+                                        maxLength: 1024
                                         type: string
                                     type: object
                                   type: array
@@ -32437,9 +32535,9 @@ spec:
                     logSeverityScreen:
                       description: |-
                         LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-                        Valid values are: "None", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
+                        Valid values are: "Trace", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
                       enum:
-                        - None
+                        - Trace
                         - Debug
                         - Info
                         - Warning
@@ -32587,8 +32685,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -32606,12 +32711,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -32645,6 +32758,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -32653,6 +32768,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -32896,8 +33012,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -32915,12 +33038,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -32954,6 +33085,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -32962,6 +33095,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -33159,8 +33293,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -33178,12 +33319,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -33217,6 +33366,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -33225,6 +33376,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -33468,8 +33620,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -33487,12 +33646,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -33526,6 +33693,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -33534,6 +33703,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -33963,8 +34133,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -33982,12 +34159,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34021,6 +34206,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -34029,6 +34216,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -34272,8 +34460,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34291,12 +34486,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34330,6 +34533,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -34338,6 +34543,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -34535,8 +34741,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34554,12 +34767,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34593,6 +34814,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -34601,6 +34824,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -34844,8 +35068,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34863,12 +35094,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34902,6 +35141,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -34910,6 +35151,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -35850,8 +36092,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -35869,12 +36118,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -35908,6 +36165,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -35916,6 +36175,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -36159,8 +36419,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -36178,12 +36445,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -36217,6 +36492,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -36225,6 +36502,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -36422,8 +36700,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -36441,12 +36726,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -36480,6 +36773,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -36488,6 +36783,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -36731,8 +37027,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -36750,12 +37053,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -36789,6 +37100,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -36797,6 +37110,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:

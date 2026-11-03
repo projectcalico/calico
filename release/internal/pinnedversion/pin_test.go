@@ -261,7 +261,10 @@ func TestComponentVersion(t *testing.T) {
 }
 
 func TestHashreleaseCarriesComponents(t *testing.T) {
-	h := testPin().Hashrelease("/base", true)
+	h, err := testPin().Hashrelease("/base", true)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if h.Source != filepath.Join("/base", "v3.31.0") {
 		t.Errorf("unexpected source: %q", h.Source)
 	}
@@ -332,7 +335,7 @@ func TestReusedPinKeepsStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if got, want := reused.Hashrelease("", false).Stream, fresh.Hashrelease("", false).Stream; got != want {
+	if got, want := publishStream(t, reused), publishStream(t, fresh); got != want {
 		t.Errorf("reused pin stream %q, want %q", got, want)
 	}
 }
@@ -687,7 +690,7 @@ func TestFileLoaderKeepsRecordedBranch(t *testing.T) {
 	if got.branch != "master" {
 		t.Errorf("recorded branch replaced by the checkout: got %q", got.branch)
 	}
-	if stream := got.Hashrelease("", false).Stream; stream != "master" {
+	if stream := publishStream(t, got); stream != "master" {
 		t.Errorf("stream %q, want master", stream)
 	}
 }
@@ -788,7 +791,7 @@ func TestLocalLoaderSourceErrorWritesNothing(t *testing.T) {
 		t.Fatalf("git root: %v", err)
 	}
 	original := productComponents
-	productComponents = func(Config, string) (map[string]registry.Component, error) {
+	productComponents = func(Config, string, string) (map[string]registry.Component, error) {
 		return nil, os.ErrInvalid
 	}
 	defer func() { productComponents = original }()
@@ -833,4 +836,13 @@ func TestImagesOperatorOptional(t *testing.T) {
 	if _, ok := p.Images()[registry.OperatorImage]; !ok {
 		t.Error("the operator is missing from the image map")
 	}
+}
+
+func publishStream(t *testing.T, p *Pin) string {
+	t.Helper()
+	h, err := p.Hashrelease("", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h.Stream
 }

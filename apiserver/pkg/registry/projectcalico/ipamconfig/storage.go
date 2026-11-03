@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Tigera, Inc. All rights reserved.
 
 package ipamconfig
 
@@ -10,10 +10,11 @@ import (
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/util"
 )
 
 type REST struct {
-	*registry.Store
+	*util.Store
 	shortNames []string
 }
 
@@ -86,5 +87,5 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 		DestroyFunc: dFunc,
 	}
 
-	return &REST{store, opts.ShortNames}, nil
+	return &REST{util.NewStore(store), opts.ShortNames}, nil
 }

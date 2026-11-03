@@ -126,4 +126,5 @@ port:
   - kubebuilder annotations for default values (where appropriate) and validation of enums and integer ranges.
   - json field tags as needed
   - for complex validation of custom types (avoid if possible) validation tags on the fields (these are interpreted by our custom validator in libcalico-go/lib/validator.
+  - Calico selector fields and Kubernetes name fields always need both a CRD bound and a validator tag; see [`.github/instructions/calico-api.instructions.md`](../../../.github/instructions/calico-api.instructions.md).
 - Review the go structs field by field, explaining the proposed kube-builder annotations and validation.

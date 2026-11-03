@@ -20,14 +20,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 )
 
-const (
-	// DefaultBranch is the default branch of the repository.
-	DefaultBranch = "master"
-
-	// DefaultRemote is the default remote for the repository.
-	DefaultRemote = "origin"
-)
-
 // GitBranch returns the current git branch of the repository.
 func GitBranch(dir string) (string, error) {
 	return command.GitInDir(dir, "rev-parse", "--abbrev-ref", "HEAD")

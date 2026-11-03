@@ -54,3 +54,18 @@ class TestDatamodelV3(unittest.TestCase):
 
         s = datamodel_v3.sanitize_label_name_value("_-+.934abc%_-", 10)
         self.assertEqual(s, "934abc")
+
+    def test_split_endpoint_name(self):
+        self.assertEqual(
+            datamodel_v3.split_endpoint_name(
+                "felix--host--1-openstack-vm--id-port--id"
+            ),
+            ("felix-host-1", "openstack", "vm-id", "port-id"),
+        )
+        self.assertEqual(
+            datamodel_v3.split_endpoint_name("openstack-openstack-vm-port"),
+            ("openstack", "openstack", "vm", "port"),
+        )
+        self.assertEqual(
+            datamodel_v3.split_endpoint_name("stale--name"), ("stale-name",)
+        )
