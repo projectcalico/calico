@@ -278,8 +278,8 @@ jobs:
       # its LLM backend responds, so the comment usually isn't there yet.
       # Poll briefly for it so the DM can deep-link to the analysis. A pass
       # and an approval never get a triage comment, so the poll is skipped
-      # on every state but failure/error. sem-ai-triage comments on Semaphore
-      # failures only.
+      # on every state but failure/error. sem-ai-triage comments on ArgoCI and
+      # Semaphore failures alike.
       - name: Wait for sem-ai-triage comment
         id: triage
         if: >-
@@ -287,7 +287,8 @@ jobs:
           steps.resolve.outputs.skip != 'true' &&
           steps.lookup.outputs.skip != 'true' &&
           steps.claim.outputs.claimed != 'false' &&
-          env.CONTEXT == 'ci/semaphoreci/pr: Calico' &&
+          (env.CONTEXT == 'ci/semaphoreci/pr: Calico' ||
+           env.CONTEXT == 'continuous-integration/calico') &&
           (env.STATE == 'failure' || env.STATE == 'error')
         env:
           PR: ${{ steps.resolve.outputs.pr }}
