@@ -77,10 +77,10 @@
 .argoci/cron/e2e-iptables.yaml | k8s-beta-runs [beta-or-stable-calico-yaml-iptables] | cron/e2e-iptables/k8s-beta-runs-beta-or-stable-calico-yaml-iptables | 212
 .argoci/cron/e2e-iptables.yaml | k8s-distros [gcp-rancher] | cron/e2e-iptables/k8s-distros-gcp-rancher | 227
 .argoci/cron/e2e-iptables.yaml | kubevirt-e2e-tests | cron/e2e-iptables/kubevirt-e2e-tests | 9
-.argoci/cron/e2e-iptables.yaml | migration [https-raw-githubusercontent-com-coreos-flannel-master-documentation-kube-flannel-yml] | cron/e2e-iptables/migration-https-raw-githubusercontent-com-coreos-flannel-master-documentation-kube-flannel-yml | 212
-.argoci/cron/e2e-iptables.yaml | migration [https-raw-githubusercontent-com-coreos-flannel-master-documentation-kube-flannel-yml] [pre-migration] | cron/e2e-iptables/migration-https-raw-githubusercontent-com-coreos-flannel-master-documentation-kube-flannel-yml-pre-migration | 1
-.argoci/cron/e2e-iptables.yaml | migration [https-raw-githubusercontent-com-projectcalico-calico-v3-28-2-manifests-canal-yaml] | cron/e2e-iptables/migration-https-raw-githubusercontent-com-projectcalico-calico-v3-28-2-manifests-canal-yaml | 212
-.argoci/cron/e2e-iptables.yaml | migration [https-raw-githubusercontent-com-projectcalico-calico-v3-28-2-manifests-canal-yaml] [pre-migration] | cron/e2e-iptables/migration-https-raw-githubusercontent-com-projectcalico-calico-v3-28-2-manifests-canal-yaml-pre-migration | 1
+.argoci/cron/e2e-iptables.yaml | migration [canal-v3-28-2] | cron/e2e-iptables/migration-canal-v3-28-2 | 212
+.argoci/cron/e2e-iptables.yaml | migration [canal-v3-28-2] [pre-migration] | cron/e2e-iptables/migration-canal-v3-28-2-pre-migration | 1
+.argoci/cron/e2e-iptables.yaml | migration [flannel-master] | cron/e2e-iptables/migration-flannel-master | 212
+.argoci/cron/e2e-iptables.yaml | migration [flannel-master] [pre-migration] | cron/e2e-iptables/migration-flannel-master-pre-migration | 1
 .argoci/cron/e2e-iptables.yaml | native-v3-crds-aks | cron/e2e-iptables/native-v3-crds-aks | 202
 .argoci/cron/e2e-iptables.yaml | native-v3-crds-eks | cron/e2e-iptables/native-v3-crds-eks | 195
 .argoci/cron/e2e-iptables.yaml | openshift-ocp [4-21-30] | cron/e2e-iptables/openshift-ocp-4-21-30 | 226
