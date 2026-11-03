@@ -305,6 +305,9 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 				if errors.Is(err, ipam.ErrNotInPool) || errors.Is(err, ipam.ErrUseNotAllowed) {
 					return addressNotHeldError("address %s cannot be assigned to a workload: %s", ipamArgs.IP, strings.TrimSpace(err.Error()))
 				}
+				if errors.Is(err, ipam.ErrAffinityMismatch) {
+					return addressNotHeldError("address %s cannot be assigned on this node: %s", ipamArgs.IP, err)
+				}
 
 				var exists cerrors.ErrorResourceAlreadyExists
 				if !errors.As(err, &exists) {

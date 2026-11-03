@@ -684,6 +684,11 @@ var ErrNotInPool = errors.New("The provided IP address is not in a configured po
 // does not allow the requested use.
 var ErrUseNotAllowed = errors.New("IP pool does not allow the requested use")
 
+// ErrAffinityMismatch is wrapped by the error AssignIP returns when strict affinity forbids
+// this host from assigning in the address's block, because another host owns the block or
+// nothing does.
+var ErrAffinityMismatch = errors.New("block affinity does not allow assignment on this host")
+
 // ErrInsufficientIPsByHandle is returned when a handle has some IPs allocated but not enough yet.
 // This indicates a concurrent operation is in progress and the caller should retry.
 type ErrInsufficientIPsByHandle struct {
