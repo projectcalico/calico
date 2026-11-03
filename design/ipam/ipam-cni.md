@@ -67,7 +67,9 @@ Invariants:
   kube-controllers GC to reclaim instead of freeing them on DEL.
 - **A stale sandbox's DEL keeps what the WEP lists.** When the DEL's container ID doesn't match the WEP's, it releases only the unlisted addresses on its own handle, because a later
   ADD may have moved the listed ones there, and never falls through to the normal release: `IPsByHandle` skips a block it can't read, so finding no listed address there proves
-  nothing. The workload-ID handle stays for the matching DEL to release. KubeVirt pods and IPAM types other than `calico-ipam` release as usual.
+  nothing. The workload-ID handle stays for the matching DEL to release. That DEL also releases each listed address held on another of the pod's container-ID handles for
+  the same network, so one a failed sandbox kept doesn't outlive the pod. It checks the owner, passes the handle as a precondition, and skips an allocation stamped after the DEL
+  started, so a newer sandbox's address is never freed. KubeVirt pods and IPAM types other than `calico-ipam` release as usual.
 - **KubeVirt DEL is not "release immediately."** Clear owner attrs first; release only when the VM/VMI is gone and all attrs are empty.
 
 `cmdDel` in the same file. The standard path releases the container-ID handle (`GetHandleID`), then the workload-ID handle (`<namespace>.<pod>`) unconditionally: that one
@@ -115,8 +117,8 @@ skips IPAM, the IP is whatever the user wrote, and nothing else in Calico knows 
 
 `ipam_plugin.go` is shared; the platform splits are file-level GOOS shims and a small set of args set differently on Windows.
 
-- Lock file: Linux defaults to `/var/run/calico/ipam.lock` ([`ipam_lock_linux.go`](../../cni-plugin/pkg/ipamplugin/ipam_lock_linux.go)); Windows to `c:\CalicoWindows\ipam.lock`
-  ([`ipam_lock_windows.go`](../../cni-plugin/pkg/ipamplugin/ipam_lock_windows.go)).
+- Lock file: Linux defaults to `/var/run/calico/ipam.lock` ([`ipam_lock_linux.go`](../../cni-plugin/internal/pkg/utils/ipam_lock_linux.go)); Windows to
+  `c:\CalicoWindows\ipam.lock` ([`ipam_lock_windows.go`](../../cni-plugin/internal/pkg/utils/ipam_lock_windows.go)).
 - Binary: Windows enters through `node/cmd/calico-ipam`.
 - Windows forces `StrictAffinity=true` (HNS can't route remote affinity blocks). `WindowsUseSingleNetwork` collapses to `MaxBlocksPerHost = 1`. `HostReservedAttrIPv4s` reserves the
   first three and last IP of each block under the literal handle `windows-reserved-ipam-handle`. The reserved-handle name is parsed elsewhere - don't rename it.
@@ -135,8 +137,9 @@ worse than failing the ADD: the user asked for dual-stack and didn't get it.
 
 ## The IPAM lock
 
-`acquireIPAMLockBestEffort` in [`cni-plugin/pkg/ipamplugin/ipam_plugin.go`](../../cni-plugin/pkg/ipamplugin/ipam_plugin.go) takes a `flock` on the path from `conf.IPAMLockFile`,
-falling back to the platform default. The lock is per-host and held for the duration of the ADD (or DEL) call.
+`AcquireIPAMLockBestEffort` in [`cni-plugin/internal/pkg/utils/ipam_lock.go`](../../cni-plugin/internal/pkg/utils/ipam_lock.go) takes a `flock` on the path from
+`conf.IPAMLockFile`, falling back to the platform default. The lock is per-host and held for the duration of a `calico-ipam` ADD or DEL call, and while the `calico` plugin
+releases addresses itself to keep the ones a WEP lists. It isn't reentrant, so `calico` must release it before running `calico-ipam` in-process.
 
 What it protects against: two `calico-ipam` invocations on the same node racing each other. CAS on `IPAMBlock` would technically serialize the persisted state, but pre-allocation
 work (resolving pools, choosing a block, claiming a fresh affinity) is multi-step and the second invocation would otherwise waste a full retry budget bouncing off the first.
@@ -147,11 +150,11 @@ entire budget on lock contention and then fail the ADD with no allocation attemp
 
 **Review notes**
 
-- Lock first, then start the timeout. The clock starts after `acquireIPAMLockBestEffort` returns, not before.
+- Lock first, then start the timeout. The clock starts after `AcquireIPAMLockBestEffort` returns, not before.
 - The lock is best-effort: if acquisition fails (permissions, missing dir) the function logs and returns a no-op unlock so allocation proceeds. Don't promote this to a hard failure
   - the CAS layer is still correct, the lock is a contention optimization.
 - The lock is host-local. It doesn't protect against another node racing for the same block; the BlockAffinity two-phase claim does that.
-- Don't take the lock around the libcalico client construction or other slow setup. Hold it only across the allocation call.
+- Don't take the lock around the libcalico client construction or other slow setup. Hold it only across the allocation or release calls.
 
 ## Pod handle form
 
