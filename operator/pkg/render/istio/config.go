@@ -61,6 +61,7 @@ type IstiodOpts struct {
 	Gateways                *GatewaysConfig `json:"gateways,omitempty"`
 	Profile                 string          `json:"profile,omitempty"`
 	TrustedZtunnelNamespace string          `json:"trustedZtunnelNamespace,omitempty"`
+	ExtraContainerArgs      []string        `json:"extraContainerArgs,omitempty"`
 }
 
 type CNIConfig struct {

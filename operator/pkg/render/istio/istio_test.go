@@ -174,6 +174,17 @@ var _ = Describe("Istio Component Rendering", func() {
 			}))
 		})
 
+		It("should alias the chart default cluster ID to the cluster ID on istiod", func() {
+			_, component, err := istio.Istio(cfg)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			objsToCreate, _ := component.Objects()
+
+			deployment, err := rtest.GetResourceOfType[*appsv1.Deployment](objsToCreate, istio.IstioIstiodDeploymentName, istio.IstioNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(deployment.Spec.Template.Spec.Containers[0].Args).To(ContainElement("--clusterAliases=Kubernetes=" + testClusterID))
+		})
+
 		It("should set ISTIO_META_CLUSTER_ID on ztunnel from the cluster ID", func() {
 			_, component, err := istio.Istio(cfg)
 			Expect(err).ShouldNot(HaveOccurred())

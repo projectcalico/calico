@@ -99,6 +99,9 @@ type ConfiguredComponent interface {
 	GetConfig() *Configuration
 }
 
+// legacyClusterID is the cluster ID the Istio charts default to.
+const legacyClusterID = "Kubernetes"
+
 func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 	if cfg.ClusterID == "" {
 		return nil, nil, fmt.Errorf("istio cluster ID must not be empty")
@@ -139,6 +142,10 @@ func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 			},
 			Profile:                 "ambient",
 			TrustedZtunnelNamespace: IstioNamespace,
+			// Pods injected under the chart default cluster ID keep it until they
+			// restart. Without the alias istiod rejects their certificate requests
+			// and finds no services for them.
+			ExtraContainerArgs: []string{fmt.Sprintf("--clusterAliases=%s=%s", legacyClusterID, cfg.ClusterID)},
 		},
 		IstioCNIOpts: IstioCNIOpts{
 			Global: &GlobalConfig{
