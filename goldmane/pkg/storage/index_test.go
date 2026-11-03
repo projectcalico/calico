@@ -15,6 +15,7 @@
 package storage
 
 import (
+	"fmt"
 	"iter"
 	"slices"
 	"testing"
@@ -787,4 +788,42 @@ func TestIndexListReturnsRequestedPage(t *testing.T) {
 	Expect(flows).To(HaveLen(2))
 	Expect(flows[0].Key.DestName()).To(Equal("bb"))
 	Expect(flows[1].Key.DestName()).To(Equal("c"))
+}
+
+func TestRingIndexPolicyHintsSkipOnlyMatchedTraces(t *testing.T) {
+	defer setupTest(t)()
+
+	newFlow := func(id int64, namespace, policy string) *DiachronicFlow {
+		k := types.NewFlowKey(
+			&types.FlowKeySource{},
+			&types.FlowKeyDestination{DestName: fmt.Sprint(id), DestNamespace: namespace},
+			&types.FlowKeyMeta{},
+			&proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{{
+				Kind:      proto.PolicyKind_CalicoNetworkPolicy,
+				Namespace: "policy-ns",
+				Name:      policy,
+				Tier:      "default",
+				Action:    proto.Action_Allow,
+			}}},
+		)
+		d := NewDiachronicFlow(k, id)
+		d.AddFlow(&types.Flow{Key: k, PacketsIn: 1}, 0, 15)
+		return d
+	}
+
+	// The stub yields in slice order, so the filtered-out flow sharing the matching flow's trace always
+	// comes first. Marking a trace seen before the filter check would then drop "shared".
+	idx := NewRingIndex(&simpleLogAggregatorStub{diachronics: []*DiachronicFlow{
+		newFlow(0, "ns-other", "shared"),
+		newFlow(1, "ns-match", "shared"),
+	}})
+	values, meta := idx.FilterValueSet(
+		extractPolicyFields(func(p *proto.PolicyHit) string { return p.Name }),
+		IndexFindOpts{
+			startTimeLt: 15,
+			filter:      &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns-match", Type: proto.MatchType_Exact}}},
+		},
+	)
+	Expect(values).To(Equal([]string{"shared"}))
+	Expect(meta.TotalResults).To(Equal(1))
 }
