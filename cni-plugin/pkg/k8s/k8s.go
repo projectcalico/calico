@@ -22,6 +22,8 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -326,14 +328,10 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	ipAddrsNoIpam := annot["cni.projectcalico.org/ipAddrsNoIpam"]
 	ipAddrs := annot["cni.projectcalico.org/ipAddrs"]
 
-	// Whether result holds addresses carried over from an earlier sandbox of this pod
-	// rather than newly assigned ones. See releaseIPAM below.
-	var reusedIPs bool
-
 	// Switch based on which annotations are passed or not passed.
 	switch {
 	case ipAddrs == "" && ipAddrsNoIpam == "":
-		result, reusedIPs, err = assignPodIPs(ctx, conf, args, epIDs, endpoint, logger)
+		result, err = assignPodIPs(ctx, conf, args, epIDs, endpoint, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -392,6 +390,9 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		logger.Debugf("IPAM result set to: %+v", result)
 	}
 
+	// The addresses the endpoint listed before this ADD, which a failure must not release.
+	listed := listedAddresses(endpoint)
+
 	// Configure the endpoint (creating if required).
 	if endpoint == nil {
 		logger.Debug("Initializing new WorkloadEndpoint resource")
@@ -429,10 +430,16 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 	// releaseIPAM cleans up any IPAM allocations on failure.
 	releaseIPAM := func() {
-		if reusedIPs {
-			// The pod's endpoint still records these addresses, so the next ADD claims
-			// them again; releasing them would cost a running pod its IP.
-			logger.WithField("endpointIPs", endpoint.Spec.IPNetworks).Info("Leaving reused IPAM allocation(s) in place after failure")
+		if keepsListedAddresses(conf, epIDs, ipAddrsNoIpam) && listed.Len() > 0 {
+			// The pod's endpoint still lists those addresses, so the next ADD claims them
+			// again; releasing them would cost a running pod its IP.
+			handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
+			kept, err := releaseUnlisted(ctx, calicoClient.IPAM(), handleID, listed, logger)
+			if err != nil {
+				logger.WithError(err).Error("Failed to release IPAM allocation(s) after failure")
+				return
+			}
+			logger.WithField("kept", kept).Info("Released unlisted IPAM allocation(s) after failure")
 			return
 		}
 
@@ -619,7 +626,9 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		}
 	}
 
+	var mismatchedWEP *internalapi.WorkloadEndpoint
 	for attempts := 5; attempts >= 0; attempts-- {
+		mismatchedWEP = nil
 		wep, err := c.WorkloadEndpoints().Get(ctx, epIDs.Namespace, epIDs.WEPName, options.GetOptions{})
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
@@ -638,6 +647,7 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 			// we can receive DEL commands for an old sandbox for a currently running pod. However, we key IPAM allocations based on the
 			// CNI_CONTAINERID, so we should still do that below for this case.
 			logger.WithField("WorkloadEndpoint", wep).Warning("CNI_CONTAINERID does not match WorkloadEndpoint ContainerID, don't delete WEP.")
+			mismatchedWEP = wep
 		} else if _, err = c.WorkloadEndpoints().Delete(
 			ctx,
 			wep.Namespace,
@@ -679,6 +689,17 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		return err
 	}
 
+	// A stale DEL must not free addresses the endpoint lists, even when IPsByHandle returns none:
+	// it skips unreadable blocks, so an empty result proves nothing.
+	if mismatchedWEP != nil && keepsListedAddresses(conf, epIDs, "") {
+		handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
+		if _, err := releaseUnlisted(ctx, c.IPAM(), handleID, listedAddresses(mismatchedWEP), logger); err != nil {
+			return err
+		}
+		logger.Info("Teardown processing complete.")
+		return nil
+	}
+
 	// Release the IP address for this container by calling the configured IPAM plugin.
 	logger.Info("Releasing IP address(es)")
 	err = utils.DeleteIPAM(ctx, conf, args, logger)
@@ -709,6 +730,11 @@ func ipAddrsResult(ctx context.Context, ipAddrs string, conf types.NetConf, args
 // assignPodIPs allocates this pod's addresses, preferring the ones its existing endpoint
 // already holds. Reuse lets an in-place sandbox rebuild succeed in a pool that has no
 // spare capacity for a second allocation.
+//
+// IPAM answers ErrCodeAddressNotHeld when the pod does not hold a requested address. Then
+// only that family gets a fresh address, and only if the IPAM config assigns it. Any other
+// error fails the ADD without releasing anything, since addresses already moved onto this
+// sandbox are still the endpoint's.
 func assignPodIPs(
 	ctx context.Context,
 	conf types.NetConf,
@@ -716,31 +742,117 @@ func assignPodIPs(
 	epIDs utils.WEPIdentifiers,
 	endpoint *internalapi.WorkloadEndpoint,
 	logger *logrus.Entry,
-) (*cniv1.Result, bool, error) {
+) (*cniv1.Result, error) {
 	priorIPs := priorSandboxIPs(conf, epIDs, endpoint, logger)
-	if len(priorIPs) != 0 {
-		logger.WithField("ips", priorIPs).Info("Reassigning existing IP to new sandbox")
-		result, err := assignRequestedIPs(ctx, priorIPs, conf, args, logger)
-		if err == nil {
-			return result, true, nil
-		}
-
-		// IPAM can return a partial success. Release any IPs that we just assigned to this
-		// sandbox before attempting to allocate a fresh one.
-		utils.ReleaseIPAllocation(ctx, logger, conf, args)
-
-		// A newer sandbox owns the pod's network. Networking this one, even with a fresh
-		// address, would replace the live sandbox's host interface.
-		var cniErr *cnitypes.Error
-		if errors.As(err, &cniErr) && cniErr.Code == types.ErrCodeSandboxSuperseded {
-			return nil, false, err
-		}
-		logger.WithError(err).Warn("Could not reuse the endpoint's addresses, assigning new ones")
+	if len(priorIPs) == 0 {
+		return utils.AddIPAM(ctx, conf, args, logger)
 	}
 
-	// Assign a fresh IP address via the IPAM plugin.
-	result, err := utils.AddIPAM(ctx, conf, args, logger)
-	return result, false, err
+	// Ask IPAM to move each listed address onto this sandbox, noting which families it refuses.
+	logger.WithField("ips", priorIPs).Info("Reassigning existing IP to new sandbox")
+	kept := cniv1.Result{CNIVersion: cniv1.ImplementedSpecVersion}
+	var v4Lost, v6Lost bool
+	for _, ip := range priorIPs {
+		r, err := callIPAMWithIP(ctx, ip, conf, args, logger)
+		switch {
+		case err == nil:
+			kept.IPs = append(kept.IPs, r.IPs[0])
+			kept.Routes = append(kept.Routes, r.Routes...)
+		case isAddressNotHeld(err):
+			logger.WithField("ip", ip).Info("Endpoint's address is not held by this pod, assigning a new one")
+			if ip.To4() != nil {
+				v4Lost = true
+			} else {
+				v6Lost = true
+			}
+		default:
+			// Includes ErrCodeSandboxSuperseded: a newer sandbox owns the pod's network, and
+			// networking this one even with a fresh address would replace its host interface.
+			return nil, fmt.Errorf("error getting IP from IPAM: %w", err)
+		}
+	}
+
+	if !v4Lost && !v6Lost {
+		return &kept, nil
+	}
+
+	// Nothing carried over, so this is an ordinary fresh ADD.
+	if len(kept.IPs) == 0 {
+		return utils.AddIPAM(ctx, conf, args, logger)
+	}
+
+	// Only request a lost family the config assigns, so a pod whose pool for that family is
+	// gone comes up in the families it still has.
+	assignsV4, assignsV6, err := configAssignsFamilies(args.StdinData)
+	if err != nil {
+		return nil, err
+	}
+	wantV4, wantV6 := v4Lost && assignsV4, v6Lost && assignsV6
+	if !wantV4 && !wantV6 {
+		return &kept, nil
+	}
+
+	// Allocate only the lost families, then merge them into the carried-over result.
+	freshArgs := *args
+	stdin, err := withAssignFamilies(args.StdinData, wantV4, wantV6)
+	if err != nil {
+		return nil, err
+	}
+	freshArgs.StdinData = stdin
+	fresh, err := utils.AddIPAM(ctx, conf, &freshArgs, logger)
+	if err != nil {
+		return nil, err
+	}
+	kept.IPs = append(kept.IPs, fresh.IPs...)
+	kept.Routes = append(kept.Routes, fresh.Routes...)
+
+	// The first address becomes the pod's primary IP, so IPv4 stays first.
+	slices.SortStableFunc(kept.IPs, func(a, b *cniv1.IPConfig) int {
+		v6a, v6b := a.Address.IP.To4() == nil, b.Address.IP.To4() == nil
+		switch {
+		case v6a == v6b:
+			return 0
+		case v6a:
+			return 1
+		}
+		return -1
+	})
+	return &kept, nil
+}
+
+// configAssignsFamilies reports which IP families calico-ipam allocates for the given stdin:
+// IPv4 unless assign_ipv4 is "false", IPv6 only if assign_ipv6 is "true".
+func configAssignsFamilies(stdin []byte) (bool, bool, error) {
+	var conf types.NetConf
+	if err := json.Unmarshal(stdin, &conf); err != nil {
+		return false, false, err
+	}
+	v4 := conf.IPAM.AssignIpv4 == nil || *conf.IPAM.AssignIpv4 != "false"
+	v6 := conf.IPAM.AssignIpv6 != nil && *conf.IPAM.AssignIpv6 == "true"
+	return v4, v6, nil
+}
+
+// isAddressNotHeld reports whether err is IPAM's answer that a requested address is not held
+// by this pod.
+func isAddressNotHeld(err error) bool {
+	var cniErr *cnitypes.Error
+	return errors.As(err, &cniErr) && cniErr.Code == types.ErrCodeAddressNotHeld
+}
+
+// withAssignFamilies returns stdin with the IPAM assign_ipv4 and assign_ipv6 options set, so
+// that IPAM allocates only the requested families. Other fields pass through unchanged.
+func withAssignFamilies(stdin []byte, v4, v6 bool) ([]byte, error) {
+	var conf map[string]any
+	if err := json.Unmarshal(stdin, &conf); err != nil {
+		return nil, err
+	}
+	ipamConf, ok := conf["ipam"].(map[string]any)
+	if !ok {
+		return nil, errors.New("data on stdin was of unexpected type")
+	}
+	ipamConf["assign_ipv4"] = strconv.FormatBool(v4)
+	ipamConf["assign_ipv6"] = strconv.FormatBool(v6)
+	return json.Marshal(conf)
 }
 
 // priorSandboxIPs returns the addresses recorded on an existing endpoint, which a new

@@ -677,6 +677,13 @@ func (i *IPAMAssignments) PartialFulfillmentError() error {
 
 var ErrUseRequired = errors.New("must specify the intended use when assigning an IP")
 
+// ErrNotInPool is returned by AssignIP when the requested IP is not in any configured pool.
+var ErrNotInPool = errors.New("The provided IP address is not in a configured pool\n")
+
+// ErrUseNotAllowed is wrapped by the error AssignIP returns when the IP's pool
+// does not allow the requested use.
+var ErrUseNotAllowed = errors.New("IP pool does not allow the requested use")
+
 // ErrInsufficientIPsByHandle is returned when a handle has some IPs allocated but not enough yet.
 // This indicates a concurrent operation is in progress and the caller should retry.
 type ErrInsufficientIPsByHandle struct {
@@ -980,7 +987,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 		return err
 	}
 	if pool == nil {
-		return errors.New("The provided IP address is not in a configured pool\n")
+		return ErrNotInPool
 	}
 
 	// Enforce the pool's AllowedUses against the caller's intended use, mirroring
@@ -990,8 +997,14 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 	// pool not sanctioned for that use.  Only enforce when the caller declares a
 	// use; callers that leave IntendedUse empty are unaffected.
 	if args.IntendedUse != "" && !slices.Contains(pool.Spec.AllowedUses, args.IntendedUse) {
-		return fmt.Errorf("IP address %s is in IP pool %q, which is not allowed for use %q (allowedUses: %v)",
-			args.IP, pool.Name, args.IntendedUse, pool.Spec.AllowedUses)
+		return fmt.Errorf(
+			"IP address %s is in IP pool %q, which is not allowed for use %q (allowedUses: %v): %w",
+			args.IP,
+			pool.Name,
+			args.IntendedUse,
+			pool.Spec.AllowedUses,
+			ErrUseNotAllowed,
+		)
 	}
 
 	cfg, err := c.GetIPAMConfig(ctx)
