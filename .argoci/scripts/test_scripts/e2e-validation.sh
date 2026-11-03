@@ -5,13 +5,12 @@ pipelines_dir="${1:-.argoci/cron}"
 scripts_dir="${2:-.argoci/scripts}"
 
 fetch_file="$(git rev-parse --show-toplevel)/hack/fetch-file"
-"$fetch_file" https://github.com/mikefarah/yq/releases/download/v4.11.0/yq_linux_amd64 yq && chmod +x yq
 echo [INFO] Checking pipeline file syntax
 FAILED="false"
 for file in "$pipelines_dir"/*
 do
     echo [INFO] Checking "$file"
-    if bash -c "cat $file | ./yq eval > /dev/null"; then
+    if go tool yq eval < "$file" > /dev/null; then
         echo "OK"
     else
         echo "$file FAILED validation"

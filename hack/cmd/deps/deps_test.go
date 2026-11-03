@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -602,5 +603,21 @@ func TestStaticGlobsAreRepoRooted(t *testing.T) {
 	check("defaultExclusions", defaultExclusions)
 	for pkg, globs := range nonGoDeps {
 		check(fmt.Sprintf("nonGoDeps[%q]", pkg), globs)
+	}
+}
+
+// The tool runs on developers' hosts, so their build context must not leak
+// into the import graph.
+func TestGoCommandPinsBuildContext(t *testing.T) {
+	t.Setenv("GOOS", "darwin")
+	t.Setenv("GOARCH", "arm64")
+	t.Setenv("CGO_ENABLED", "0")
+
+	out, err := goCommand("env", "GOOS", "GOARCH", "CGO_ENABLED").Output()
+	if err != nil {
+		t.Fatalf("go env: %v", err)
+	}
+	if got, want := strings.Fields(string(out)), []string{"linux", "amd64", "1"}; !slices.Equal(got, want) {
+		t.Errorf("go env GOOS GOARCH CGO_ENABLED = %v, want %v", got, want)
 	}
 }

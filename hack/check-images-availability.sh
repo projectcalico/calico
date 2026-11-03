@@ -22,7 +22,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Use provided CRANE or fallback to ../bin/crane (relative to hack/)
 CRANE="${CRANE:-../bin/crane}"
-YQ="${YQ:-${SCRIPT_DIR}/../bin/yq}"
 
 if [ ! -x "$CRANE" ]; then
   echo "Error: crane not found or not executable at: $CRANE" >&2
@@ -33,10 +32,10 @@ fi
 #########################################
 # Get registry and version info
 #########################################
-defaultRegistry="$($YQ .node.registry < "$SCRIPT_DIR/../charts/calico/values.yaml" | cut -d'/' -f1)"
+defaultRegistry="$(go -C "$SCRIPT_DIR/.." tool yq .node.registry <"$SCRIPT_DIR/../charts/calico/values.yaml" | cut -d'/' -f1)"
 REGISTRY="${REGISTRY:-$defaultRegistry}"
 
-defaultCalicoVersion="$($YQ .version < "$SCRIPT_DIR/../charts/calico/values.yaml")"
+defaultCalicoVersion="$(go -C "$SCRIPT_DIR/.." tool yq .version <"$SCRIPT_DIR/../charts/calico/values.yaml")"
 CALICO_VERSION="${PRODUCT_VERSION:-$defaultCalicoVersion}"
 
 echo "Using REGISTRY: $REGISTRY"

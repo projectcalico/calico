@@ -68,6 +68,8 @@ steps:
         docker login -u _json_key --password-stdin "https://${host}" < "${GOOGLE_APPLICATION_CREDENTIALS}"
       done
 
+      # The release regenerates manifests, which reads the chart with yq.
+      . hack/ensure-go.sh
       make GIT_BRANCH="${CI_GIT_BRANCH}" release
       make GIT_BRANCH="${CI_GIT_BRANCH}" release-publish
 
@@ -106,6 +108,7 @@ steps:
       gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
       # Versioned from the chart rather than the ref, so these are the
       # release's packages.
+      . hack/ensure-go.sh
       make publish-openstack
     epilogue: |
       cd "${CI_HOME}/${CI_GIT_DIR}"

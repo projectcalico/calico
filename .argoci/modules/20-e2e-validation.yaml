@@ -9,4 +9,5 @@ steps:
     jobSize: small
     requests: {cpu: 1750m, memory: 548Mi}
     commands: |
+      . hack/ensure-go.sh
       ./.argoci/scripts/test_scripts/e2e-validation.sh

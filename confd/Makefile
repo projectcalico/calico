@@ -44,7 +44,7 @@ st:
 ## Run the fast set of unit tests in a container.
 ut:
 	mkdir -p report
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -race --junit-report=confd_ut.xml --output-dir=report/ --skip-package=tests .'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && $(GINKGO) -r -race --junit-report=confd_ut.xml --output-dir=report/ --skip-package=tests .'
 
 UPDATE_EXPECTED_DATA?=false
 
