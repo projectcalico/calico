@@ -16,6 +16,7 @@ package storage_test
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"unique"
@@ -97,6 +98,54 @@ func TestRingListPartialBucket(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"partial", "complete"}, keyNames(flows))
 	require.Equal(t, int64(1), flows[0].PacketsIn)
+}
+
+type outOfRangePageCase struct {
+	name string
+	page int64
+}
+
+// TestPagesOutOfRange checks that every list and hint path answers a page holding no results
+// with an empty page and the real totals, rather than panicking or wrapping around.
+func TestPagesOutOfRange(t *testing.T) {
+	ring := newPagingRing()
+	start := ring.EndOfHistory() - 2*pagingInterval
+	for i := range 50 {
+		ring.AddFlow(storage.FlowFromNode{Flow: policyFlow(fmt.Sprintf("dest-%d", i), "ns", fmt.Sprintf("policy-%d", i), start)})
+	}
+	rangeEnd := start + pagingInterval
+
+	for _, tc := range []outOfRangePageCase{
+		{name: "negative page", page: -1},
+		{name: "page past the end", page: 3},
+		{name: "page offset overflows", page: math.MaxInt64 / 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, sortBy := range []proto.SortBy{proto.SortBy_Time, proto.SortBy_DestName} {
+				flows, meta, err := ring.List(&proto.FlowListRequest{
+					StartTimeGte: start, StartTimeLt: rangeEnd, PageSize: 20, Page: tc.page,
+					SortBy: []*proto.SortOption{{SortBy: sortBy}},
+				})
+				require.NoError(t, err)
+				require.Empty(t, flows, "sorted by %s", sortBy)
+				require.Equal(t, types.ListMeta{TotalResults: 50, TotalPages: 3}, *meta, "sorted by %s", sortBy)
+			}
+			for _, hintType := range []proto.FilterType{proto.FilterType_FilterTypePolicyName, proto.FilterType_FilterTypeDestName} {
+				values, meta, err := ring.FilterHints(&proto.FilterHintsRequest{
+					Type: hintType, StartTimeGte: start, StartTimeLt: rangeEnd, PageSize: 20, Page: tc.page,
+				})
+				require.NoError(t, err)
+				require.Empty(t, values, "hints for %s", hintType)
+				require.Equal(t, types.ListMeta{TotalResults: 50, TotalPages: 3}, *meta, "hints for %s", hintType)
+			}
+		})
+	}
+
+	// The last page holds the remainder.
+	flows, meta, err := ring.List(&proto.FlowListRequest{StartTimeGte: start, StartTimeLt: rangeEnd, PageSize: 20, Page: 2})
+	require.NoError(t, err)
+	require.Len(t, flows, 10)
+	require.Equal(t, types.ListMeta{TotalResults: 50, TotalPages: 3}, *meta)
 }
 
 type candidateRangeCase struct {
