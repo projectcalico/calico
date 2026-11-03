@@ -16,9 +16,11 @@ package nfnetlink
 
 import (
 	"net"
+	"runtime"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 )
 
 // nflogAttrData is raw NFLOG netfilter attribute data (IPv6 TCP packet with
@@ -52,6 +54,28 @@ var _ = Describe("ParseNflog", func() {
 			Expect(tuple.L4Src.Port).To(Equal(38525))
 			Expect(tuple.L4Dst.Port).To(Equal(8000))
 		})
+	})
+})
+
+var _ = Describe("NflogSubscribe", func() {
+	It("should shut down cleanly when done is closed", func() {
+		// Catch a log.Fatal from the reader goroutine instead of letting it exit the suite.
+		fatalC := make(chan int, 1)
+		logger := log.StandardLogger()
+		origExit := logger.ExitFunc
+		logger.ExitFunc = func(code int) {
+			fatalC <- code
+			runtime.Goexit()
+		}
+		DeferCleanup(func() { logger.ExitFunc = origExit })
+
+		ch := make(chan map[NflogPacketTuple]*NflogPacketAggregate, 10)
+		done := make(chan struct{})
+		Expect(NflogSubscribe(0, 0, ch, done, false)).To(Succeed())
+
+		close(done)
+		Eventually(ch, "2s").Should(BeClosed())
+		Expect(fatalC).NotTo(Receive(), "reader goroutine called log.Fatal on shutdown")
 	})
 })
 

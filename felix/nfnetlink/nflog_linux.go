@@ -233,6 +233,12 @@ func openAndReadNFNLSocket(
 			var res [][]byte
 			msgs, _, err := sock.Receive()
 			if err != nil {
+				select {
+				case <-done:
+					// Closing done closes the socket, which is what failed the Receive.
+					return
+				default:
+				}
 				switch err := err.(type) {
 				case syscall.Errno:
 					if err == syscall.ENOBUFS {
