@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -255,31 +255,33 @@ func ProtoToFlowLogPolicy(p *proto.PolicyTrace) unique.Handle[string] {
 
 // FlowIntoProto unpacks the memory optimized types.Flow object into the given proto.Flow object
 // for use on the wire. Callers can re-use the same memory for the proto.Flow object across
-// messages to reduce allocations.
+// messages to reduce allocations. pf.Key.Policies is shared with other callers, so it must
+// not be modified.
 func FlowIntoProto(f *Flow, pf *proto.Flow) {
+	flowIntoProto(f, pf, CachedPolicyTrace)
+}
+
+// FlowIntoProtoUncached is FlowIntoProto without the process-wide trace cache: it decodes the
+// policy trace afresh on every call. Processes other than Goldmane, such as Felix sending flows
+// to it, use this so they don't hold a cluster-sized cache.
+func FlowIntoProtoUncached(f *Flow, pf *proto.Flow) {
+	flowIntoProto(f, pf, FlowLogPolicyToProto)
+}
+
+func flowIntoProto(f *Flow, pf *proto.Flow, decode func(unique.Handle[string]) *proto.PolicyTrace) {
 	if pf == nil {
 		logrus.Panic("FlowIntoProto called with nil proto")
 	}
-
-	// Reset the destination proto.
-	goproto.Reset(pf)
-
-	// Re-initialize any nil pointers after the reset call.
 	if pf.Key == nil {
 		pf.Key = &proto.FlowKey{}
 	}
-	if pf.Key.Policies == nil {
-		pf.Key.Policies = &proto.PolicyTrace{}
-	}
 
-	// Copy key fields.
-	flowKeyIntoProto(f.Key, pf.Key)
-
-	// Copy flow fields.
+	// Every field is assigned rather than reset, so the key and label slices are reused.
+	flowKeyIntoProto(f.Key, pf.Key, decode)
 	pf.StartTime = f.StartTime
 	pf.EndTime = f.EndTime
-	pf.SourceLabels = fromHandles(f.SourceLabels)
-	pf.DestLabels = fromHandles(f.DestLabels)
+	pf.SourceLabels = splitHandleInto(pf.SourceLabels[:0], f.SourceLabels)
+	pf.DestLabels = splitHandleInto(pf.DestLabels[:0], f.DestLabels)
 	pf.SourceIps = f.SourceIps
 	pf.DestIps = f.DestIps
 	pf.PacketsIn = f.PacketsIn
@@ -291,7 +293,7 @@ func FlowIntoProto(f *Flow, pf *proto.Flow) {
 	pf.NumConnectionsLive = f.NumConnectionsLive
 }
 
-func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey) {
+func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey, decode func(unique.Handle[string]) *proto.PolicyTrace) {
 	if pfk == nil {
 		logrus.Panic("flowKeyIntoProto called with nil proto")
 	}
@@ -313,14 +315,23 @@ func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey) {
 	pfk.Proto = meta.Proto
 	pfk.Reporter = meta.Reporter
 	pfk.Action = meta.Action
+	pfk.Policies = decode(k.Policies())
+}
 
-	policies := k.Policies().Value()
-	if err := goproto.Unmarshal([]byte(policies), pfk.Policies); err != nil {
-		logrus.WithError(err).Error("Failed to unmarshal policy trace")
+// splitHandleInto appends the comma-separated elements of h to dst, or returns nil when h is
+// empty, matching fromHandles.
+func splitHandleInto(dst []string, h unique.Handle[string]) []string {
+	v := h.Value()
+	if v == "" {
+		return nil
 	}
-	if pfk.Policies != nil {
-		sortPolicyHits(pfk.Policies.EnforcedPolicies)
-		sortPolicyHits(pfk.Policies.PendingPolicies)
+	for {
+		i := strings.IndexByte(v, ',')
+		if i < 0 {
+			return append(dst, v)
+		}
+		dst = append(dst, v[:i])
+		v = v[i+1:]
 	}
 }
 
