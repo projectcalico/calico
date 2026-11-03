@@ -22,37 +22,44 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
-// maxCachedPolicyTraces bounds the decoded trace cache. Full, it retains 60-65 MB at two hits per
-// policy list and 200-240 MB at eight. Large clusters with per-namespace policies reach tens of
-// thousands of distinct traces.
-const maxCachedPolicyTraces = 65536
+// policyTraceGenerationSize bounds each of the trace cache's two generations, so it holds up to
+// 32768 entries: about 30 MB at two hits per policy list, 54 MB at four and 101 MB at eight.
+const policyTraceGenerationSize = 16384
 
-var defaultPolicyTraceCache = newPolicyTraceCache(maxCachedPolicyTraces)
+var defaultPolicyTraceCache = newPolicyTraceCache(policyTraceGenerationSize)
 
-// policyTraceCache maps an interned policy trace string to its decoded, sorted trace. Lookups
-// of a cached trace take no lock. Inserts serialize on mu, so the count matches the cached
-// traces exactly, the cache never holds more than limit, and each fill is counted as one reset.
+// policyTraceCache maps an interned policy trace string to its decoded, sorted trace, in two
+// generations. A full current generation becomes the previous one and the old previous one is
+// dropped, so a trace unused for a whole generation leaves within two rotations. A hit in the
+// previous generation copies the trace into the current one. Hits in the current generation take
+// no lock; inserts and rotations serialize on mu.
 type policyTraceCache struct {
-	limit  int64
-	traces sync.Map
-	mu     sync.Mutex
-	count  atomic.Int64
-	resets atomic.Uint64
+	generationSize int64
+	current        atomic.Pointer[sync.Map]
+	previous       atomic.Pointer[sync.Map]
+	mu             sync.Mutex
+	currentCount   atomic.Int64
+	previousCount  atomic.Int64
+	rotations      atomic.Uint64
 }
 
-func newPolicyTraceCache(limit int64) *policyTraceCache {
-	return &policyTraceCache{limit: limit}
+func newPolicyTraceCache(generationSize int64) *policyTraceCache {
+	c := &policyTraceCache{generationSize: generationSize}
+	c.current.Store(&sync.Map{})
+	c.previous.Store(&sync.Map{})
+	return c
 }
 
-// PolicyTraceCacheSize returns the number of decoded traces currently cached, for metrics.
+// PolicyTraceCacheSize returns the number of entries across both cache generations, for metrics.
+// A trace copied forward from the previous generation counts once in each.
 func PolicyTraceCacheSize() int64 {
-	return defaultPolicyTraceCache.count.Load()
+	return defaultPolicyTraceCache.size()
 }
 
-// PolicyTraceCacheResets returns how many times the cache has filled and been cleared, for
+// PolicyTraceCacheRotations returns how many times the cache has started a new generation, for
 // metrics.
-func PolicyTraceCacheResets() uint64 {
-	return defaultPolicyTraceCache.resets.Load()
+func PolicyTraceCacheRotations() uint64 {
+	return defaultPolicyTraceCache.rotations.Load()
 }
 
 // CachedPolicyTrace returns the decoded, sorted policy trace for h, decoding it at most once
@@ -66,32 +73,48 @@ func CachedPolicyTrace(h unique.Handle[string]) *proto.PolicyTrace {
 // on the same handle at once may each decode it, but only the first insert is kept and returned
 // to all of them.
 func (c *policyTraceCache) trace(h unique.Handle[string]) *proto.PolicyTrace {
-	if cached, ok := c.load(h); ok {
+	if cached, ok := loadTrace(c.current.Load(), h); ok {
 		return cached
 	}
-
-	decoded := FlowLogPolicyToProto(h)
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if cached, ok := c.load(h); ok {
-		return cached
+	if cached, ok := loadTrace(c.previous.Load(), h); ok {
+		return c.insert(h, cached)
 	}
-
-	// Churn past the bound clears the whole cache rather than tracking recency. Refilling
-	// costs one decode per trace, and the cache never grows past the bound.
-	if c.count.Load() >= c.limit {
-		c.traces.Clear()
-		c.count.Store(0)
-		c.resets.Add(1)
-	}
-	c.traces.Store(h, decoded)
-	c.count.Add(1)
-	return decoded
+	return c.insert(h, FlowLogPolicyToProto(h))
 }
 
-func (c *policyTraceCache) load(h unique.Handle[string]) (*proto.PolicyTrace, bool) {
-	v, ok := c.traces.Load(h)
+// insert adds t to the current generation for h and returns the trace the cache keeps for h,
+// which is an already cached one if another goroutine got there first. It rotates the generations
+// first if the current one is full.
+func (c *policyTraceCache) insert(h unique.Handle[string], t *proto.PolicyTrace) *proto.PolicyTrace {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	current := c.current.Load()
+	if cached, ok := loadTrace(current, h); ok {
+		return cached
+	}
+	if cached, ok := loadTrace(c.previous.Load(), h); ok {
+		t = cached
+	}
+
+	if c.currentCount.Load() >= c.generationSize {
+		c.previous.Store(current)
+		c.previousCount.Store(c.currentCount.Load())
+		current = &sync.Map{}
+		c.current.Store(current)
+		c.currentCount.Store(0)
+		c.rotations.Add(1)
+	}
+	current.Store(h, t)
+	c.currentCount.Add(1)
+	return t
+}
+
+func (c *policyTraceCache) size() int64 {
+	return c.currentCount.Load() + c.previousCount.Load()
+}
+
+func loadTrace(m *sync.Map, h unique.Handle[string]) (*proto.PolicyTrace, bool) {
+	v, ok := m.Load(h)
 	if !ok {
 		return nil, false
 	}

@@ -111,13 +111,13 @@ var (
 	// registered here rather than there.
 	policyTraceCacheSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "goldmane_policy_trace_cache_size",
-		Help: "Number of decoded policy traces in the cache.",
+		Help: "Number of decoded policy trace entries across both cache generations.",
 	}, func() float64 { return float64(types.PolicyTraceCacheSize()) })
 
-	policyTraceCacheResets = prometheus.NewCounterFunc(prometheus.CounterOpts{
-		Name: "goldmane_policy_trace_cache_resets_total",
-		Help: "Total number of times the policy trace cache filled and was cleared.",
-	}, func() float64 { return float64(types.PolicyTraceCacheResets()) })
+	policyTraceCacheRotations = prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "goldmane_policy_trace_cache_rotations_total",
+		Help: "Total number of times the policy trace cache started a new generation.",
+	}, func() float64 { return float64(types.PolicyTraceCacheRotations()) })
 )
 
 func init() {
@@ -132,7 +132,7 @@ func init() {
 	prometheus.MustRegister(numDroppedFlows)
 	prometheus.MustRegister(numDuplicateFlows)
 	prometheus.MustRegister(policyTraceCacheSize)
-	prometheus.MustRegister(policyTraceCacheResets)
+	prometheus.MustRegister(policyTraceCacheRotations)
 }
 
 // sinkRequest is an internal helper used to set the sink for the aggregator, which can by modified at runtime.

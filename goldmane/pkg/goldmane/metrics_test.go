@@ -121,11 +121,11 @@ func TestPolicyTraceCacheMetrics(t *testing.T) {
 		t.Errorf("cache size gauge reads %v, cache holds %d", got, types.PolicyTraceCacheSize())
 	}
 
-	resets := gatherMetric(t, "goldmane_policy_trace_cache_resets_total")
-	if resets == nil {
-		t.Fatal("goldmane_policy_trace_cache_resets_total not registered")
+	rotations := gatherMetric(t, "goldmane_policy_trace_cache_rotations_total")
+	if rotations == nil {
+		t.Fatal("goldmane_policy_trace_cache_rotations_total not registered")
 	}
-	if got := resets.GetMetric()[0].GetCounter().GetValue(); got != float64(types.PolicyTraceCacheResets()) {
-		t.Errorf("cache resets counter reads %v, cache counted %d", got, types.PolicyTraceCacheResets())
+	if got := rotations.GetMetric()[0].GetCounter().GetValue(); got != float64(types.PolicyTraceCacheRotations()) {
+		t.Errorf("cache rotations counter reads %v, cache counted %d", got, types.PolicyTraceCacheRotations())
 	}
 }

@@ -90,7 +90,7 @@ func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 	b.Flows.Add(d)
 
 	// Track policy stats.
-	b.stats.AddFlow(flow, d.policyRules)
+	b.stats.AddFlow(flow)
 }
 
 func NewAggregationBucket(start, end time.Time) *AggregationBucket {

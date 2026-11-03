@@ -184,11 +184,11 @@ is a contract change for dashboards and alerting; record it here.
   subscriptions.
 
 **Policy trace cache:**
-- `goldmane_policy_trace_cache_size` — decoded policy traces
-  currently cached.
-- `goldmane_policy_trace_cache_resets_total` — times the cache
-  filled and was cleared; a steady rise means the working set of
-  traces exceeds the cap.
+- `goldmane_policy_trace_cache_size` — decoded policy trace
+  entries across the cache's current and previous generations.
+- `goldmane_policy_trace_cache_rotations_total` — times the cache
+  started a new generation, dropping traces unused for a whole
+  generation; a fast rise means the working set exceeds one.
 
 ### Review notes
 
