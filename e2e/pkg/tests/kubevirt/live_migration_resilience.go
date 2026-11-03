@@ -463,6 +463,8 @@ var _ = describe.CalicoDescribe(
 				return nil
 			}, 1*time.Minute, 2*time.Second).Should(gomega.Succeed())
 
+			// Known red (CORE-13929): Felix reads the target losing its role on
+			// abort as a missed GARP and promotes the target to owner.
 			ginkgo.By("Verifying the source pod is still the sole IPAM owner")
 			handleID := vmipam.CreateVMHandleID("k8s-pod-network", ns, vmName)
 			gomega.Eventually(func() error {
