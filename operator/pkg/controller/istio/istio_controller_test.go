@@ -16,6 +16,7 @@ package istio
 
 import (
 	"context"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -46,6 +47,8 @@ import (
 	"github.com/projectcalico/calico/operator/test"
 )
 
+const testClusterGUID = "0123456789abcdef0123456789abcdef"
+
 var _ = Describe("Istio controller tests", func() {
 	var (
 		cli                 client.Client
@@ -54,6 +57,7 @@ var _ = Describe("Istio controller tests", func() {
 		mockStatus          *status.MockStatus
 		installation        *operatorv1.Installation
 		istioCR             *operatorv1.Istio
+		clusterInfo         *v3.ClusterInformation
 		objTrackerWithCalls test.ObjectTrackerWithCalls
 		replicas            int32
 	)
@@ -116,6 +120,15 @@ var _ = Describe("Istio controller tests", func() {
 			},
 		}
 
+		clusterInfo = &v3.ClusterInformation{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "default",
+			},
+			Spec: v3.ClusterInformationSpec{
+				ClusterGUID: testClusterGUID,
+			},
+		}
+
 		replicas = 2
 	})
 
@@ -123,6 +136,7 @@ var _ = Describe("Istio controller tests", func() {
 		// Clear any existing resourceVersion to avoid creation conflicts
 		Expect(cli.Create(ctx, installation)).NotTo(HaveOccurred())
 		Expect(cli.Create(ctx, istioCR)).NotTo(HaveOccurred())
+		Expect(cli.Create(ctx, clusterInfo)).NotTo(HaveOccurred())
 	}
 
 	Context("Reconcile tests", func() {
@@ -367,6 +381,7 @@ var _ = Describe("Istio controller tests", func() {
 			}
 			Expect(cli.Create(ctx, installation)).NotTo(HaveOccurred())
 			Expect(cli.Create(ctx, istioNoDSCP)).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, clusterInfo)).NotTo(HaveOccurred())
 
 			r := &ReconcileIstio{
 				Client:   cli,
@@ -405,6 +420,7 @@ var _ = Describe("Istio controller tests", func() {
 			}
 			Expect(cli.Create(ctx, installation)).NotTo(HaveOccurred())
 			Expect(cli.Create(ctx, istioCustomDSCP)).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, clusterInfo)).NotTo(HaveOccurred())
 
 			r := &ReconcileIstio{
 				Client:   cli,
@@ -696,6 +712,7 @@ var _ = Describe("Istio controller tests", func() {
 			}
 			Expect(cli.Create(ctx, installation)).NotTo(HaveOccurred())
 			Expect(cli.Create(ctx, istioCR)).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, clusterInfo)).NotTo(HaveOccurred())
 
 			r := &ReconcileIstio{
 				Client:   cli,
@@ -806,4 +823,98 @@ var _ = Describe("Istio controller tests", func() {
 		})
 
 	})
+
+	Context("Cluster ID tests", func() {
+		var r *ReconcileIstio
+
+		BeforeEach(func() {
+			Expect(cli.Create(ctx, installation)).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, istioCR)).NotTo(HaveOccurred())
+			r = &ReconcileIstio{
+				Client:   cli,
+				scheme:   scheme,
+				provider: operatorv1.ProviderNone,
+				status:   mockStatus,
+			}
+		})
+
+		It("should render the clusterGUID as the istiod cluster ID", func() {
+			Expect(cli.Create(ctx, clusterInfo)).NotTo(HaveOccurred())
+
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			istiodDeploy := &appsv1.Deployment{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, istiodDeploy)).NotTo(HaveOccurred())
+			Expect(istiodDeploy.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "CLUSTER_ID",
+				Value: testClusterGUID,
+			}))
+			mockStatus.AssertCalled(GinkgoT(), "ClearDegraded")
+		})
+
+		It("should degrade and requeue when ClusterInformation is missing", func() {
+			result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(result.RequeueAfter).NotTo(BeZero())
+
+			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceNotFound,
+				mock.MatchedBy(func(msg string) bool { return strings.Contains(msg, "ClusterInformation") }),
+				mock.Anything, mock.Anything)
+			mockStatus.AssertNotCalled(GinkgoT(), "ClearDegraded")
+
+			istiodDeploy := &appsv1.Deployment{}
+			Expect(errors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, istiodDeploy))).To(BeTrue())
+		})
+
+		DescribeTable("should degrade without rendering when the clusterGUID is invalid",
+			func(guid string, problem string) {
+				clusterInfo.Spec.ClusterGUID = guid
+				Expect(cli.Create(ctx, clusterInfo)).NotTo(HaveOccurred())
+
+				_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+				Expect(err).ShouldNot(HaveOccurred())
+
+				mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceValidationError,
+					mock.MatchedBy(func(msg string) bool { return strings.Contains(msg, problem) }),
+					mock.Anything, mock.Anything)
+				mockStatus.AssertNotCalled(GinkgoT(), "ClearDegraded")
+
+				istiodDeploy := &appsv1.Deployment{}
+				Expect(errors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, istiodDeploy))).To(BeTrue())
+			},
+			Entry("empty", "", "clusterGUID is empty"),
+			Entry("too long", strings.Repeat("a", 234), "234 characters long, the maximum is 233"),
+			Entry("uppercase", "Kubernetes", "must match"),
+			Entry("leading hyphen", "-abc", "must match"),
+			Entry("trailing dot", "abc.", "must match"),
+			Entry("underscore", "a_b", "must match"),
+		)
+	})
 })
+
+var _ = DescribeTable("validateClusterGUID",
+	func(guid string, valid bool) {
+		err := validateClusterGUID(guid)
+		if valid {
+			Expect(err).NotTo(HaveOccurred())
+		} else {
+			Expect(err).To(HaveOccurred())
+		}
+	},
+	Entry("libcalico-go hex GUID", testClusterGUID, true),
+	Entry("single character", "a", true),
+	Entry("digits only", "42", true),
+	Entry("hyphens and dots inside", "us-west.cluster-1", true),
+	Entry("maximum length", strings.Repeat("a", 233), true),
+	Entry("empty", "", false),
+	Entry("one over the maximum length", strings.Repeat("a", 234), false),
+	Entry("uppercase", "Kubernetes", false),
+	Entry("leading hyphen", "-a", false),
+	Entry("trailing hyphen", "a-", false),
+	Entry("leading dot", ".a", false),
+	Entry("trailing dot", "a.", false),
+	Entry("underscore", "a_b", false),
+	Entry("space", "a b", false),
+	Entry("slash", "a/b", false),
+)
