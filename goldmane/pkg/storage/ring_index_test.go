@@ -148,6 +148,40 @@ func TestPagesOutOfRange(t *testing.T) {
 	require.Equal(t, types.ListMeta{TotalResults: 50, TotalPages: 3}, *meta)
 }
 
+// TestRingListPagesMatchFullSort checks that each page, which only ranks flows up to the end of
+// the page, holds exactly that slice of the fully sorted list.
+func TestRingListPagesMatchFullSort(t *testing.T) {
+	ring := newPagingRing()
+	newest := ring.EndOfHistory() - 2*pagingInterval
+
+	// Flows share start times within a bucket, and some flows span several buckets.
+	for i := range 600 {
+		b := int64(i % 7)
+		ring.AddFlow(storage.FlowFromNode{Flow: pagingFlow(fmt.Sprintf("flow-%d", i), newest-b*pagingInterval)})
+		if i%5 == 0 {
+			ring.AddFlow(storage.FlowFromNode{Flow: pagingFlow(fmt.Sprintf("flow-%d", i), newest-(b+3)*pagingInterval)})
+		}
+	}
+	req := &proto.FlowListRequest{StartTimeGte: newest - 12*pagingInterval, StartTimeLt: newest + pagingInterval}
+
+	want, meta, err := ring.List(req)
+	require.NoError(t, err)
+	require.Len(t, want, 600)
+	require.Equal(t, 1, meta.TotalPages)
+
+	for _, pageSize := range []int64{1, 7, 20, 64, 599, 600, 1000} {
+		req.PageSize = pageSize
+		for page := int64(0); page*pageSize < int64(len(want)); page++ {
+			req.Page = page
+			got, meta, err := ring.List(req)
+			require.NoError(t, err)
+			require.Equal(t, 600, meta.TotalResults)
+			end := min((page+1)*pageSize, int64(len(want)))
+			require.Equal(t, keyNames(want[page*pageSize:end]), keyNames(got), "page size %d, page %d", pageSize, page)
+		}
+	}
+}
+
 type candidateRangeCase struct {
 	name       string
 	gte        int64
