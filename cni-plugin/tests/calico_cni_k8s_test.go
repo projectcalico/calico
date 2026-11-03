@@ -3616,11 +3616,17 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				for ip, assign := range map[string]ipam.AssignIPArgs{
 					otherPodIP: {
 						HandleID: &otherPodHandle,
-						Attrs:    map[string]string{ipam.AttributePod: "other-pod", ipam.AttributeNamespace: testutils.K8S_TEST_NS},
+						Attrs: map[string]string{
+							ipam.AttributePod:       "other-pod",
+							ipam.AttributeNamespace: testutils.K8S_TEST_NS,
+						},
 					},
 					nonSandboxIP: {
 						HandleID: &nonSandboxHandle,
-						Attrs:    map[string]string{ipam.AttributePod: testPodName, ipam.AttributeNamespace: testutils.K8S_TEST_NS},
+						Attrs: map[string]string{
+							ipam.AttributePod:       testPodName,
+							ipam.AttributeNamespace: testutils.K8S_TEST_NS,
+						},
 					},
 				} {
 					assign.IP = cnet.IP{IP: net.ParseIP(ip)}
@@ -3643,7 +3649,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 				_, err = calicoClient.IPAM().IPsByHandle(ctx, failedHandle)
 				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}), "the pod's DEL left its address on the failed sandbox's handle")
-				for ip, handle := range map[string]string{otherPodIP: otherPodHandle, nonSandboxIP: nonSandboxHandle} {
+				for ip, handle := range map[string]string{
+					otherPodIP:   otherPodHandle,
+					nonSandboxIP: nonSandboxHandle,
+				} {
 					ips, err := calicoClient.IPAM().IPsByHandle(ctx, handle)
 					Expect(err).NotTo(HaveOccurred(), "the pod's DEL released %s", ip)
 					Expect(ips).To(HaveLen(1))

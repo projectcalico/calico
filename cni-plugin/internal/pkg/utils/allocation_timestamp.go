@@ -26,8 +26,8 @@ import (
 const AllocationTimestampLayout = "2006-01-02 15:04:05.999999999 -0700 MST"
 
 // ClaimedAfter reports whether an allocation was stamped later than t. Every claim, including a
-// transfer, restamps the address. A missing or unparsable stamp counts as earlier, so the check
-// never blocks an operation it can't judge.
+// transfer, restamps the address. A missing or unparsable stamp counts as earlier, so the
+// check never protects an allocation it can't date: callers go ahead and transfer or release it.
 func ClaimedAfter(attrs map[string]string, t time.Time) bool {
 	claimed, err := time.Parse(AllocationTimestampLayout, attrs[ipam.AttributeTimestamp])
 	return err == nil && claimed.After(t)
