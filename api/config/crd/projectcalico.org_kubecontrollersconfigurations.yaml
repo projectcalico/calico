@@ -129,7 +129,7 @@ spec:
                   type: string
                 logSeverityScreen:
                   enum:
-                    - None
+                    - Trace
                     - Debug
                     - Info
                     - Warning
@@ -252,7 +252,7 @@ spec:
                       type: string
                     logSeverityScreen:
                       enum:
-                        - None
+                        - Trace
                         - Debug
                         - Info
                         - Warning
