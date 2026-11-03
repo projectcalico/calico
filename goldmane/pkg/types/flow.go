@@ -258,6 +258,17 @@ func ProtoToFlowLogPolicy(p *proto.PolicyTrace) unique.Handle[string] {
 // messages to reduce allocations. pf.Key.Policies is shared with other callers, so it must
 // not be modified.
 func FlowIntoProto(f *Flow, pf *proto.Flow) {
+	flowIntoProto(f, pf, CachedPolicyTrace)
+}
+
+// FlowIntoProtoUncached is FlowIntoProto without the process-wide trace cache: it decodes the
+// policy trace afresh on every call. Processes other than Goldmane, such as Felix sending flows
+// to it, use this so they don't hold a cluster-sized cache.
+func FlowIntoProtoUncached(f *Flow, pf *proto.Flow) {
+	flowIntoProto(f, pf, FlowLogPolicyToProto)
+}
+
+func flowIntoProto(f *Flow, pf *proto.Flow, decode func(unique.Handle[string]) *proto.PolicyTrace) {
 	if pf == nil {
 		logrus.Panic("FlowIntoProto called with nil proto")
 	}
@@ -266,7 +277,7 @@ func FlowIntoProto(f *Flow, pf *proto.Flow) {
 	}
 
 	// Every field is assigned rather than reset, so the key and label slices are reused.
-	flowKeyIntoProto(f.Key, pf.Key)
+	flowKeyIntoProto(f.Key, pf.Key, decode)
 	pf.StartTime = f.StartTime
 	pf.EndTime = f.EndTime
 	pf.SourceLabels = splitHandleInto(pf.SourceLabels[:0], f.SourceLabels)
@@ -282,7 +293,7 @@ func FlowIntoProto(f *Flow, pf *proto.Flow) {
 	pf.NumConnectionsLive = f.NumConnectionsLive
 }
 
-func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey) {
+func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey, decode func(unique.Handle[string]) *proto.PolicyTrace) {
 	if pfk == nil {
 		logrus.Panic("flowKeyIntoProto called with nil proto")
 	}
@@ -304,7 +315,7 @@ func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey) {
 	pfk.Proto = meta.Proto
 	pfk.Reporter = meta.Reporter
 	pfk.Action = meta.Action
-	pfk.Policies = CachedPolicyTrace(k.Policies())
+	pfk.Policies = decode(k.Policies())
 }
 
 // splitHandleInto appends the comma-separated elements of h to dst, or returns nil when h is

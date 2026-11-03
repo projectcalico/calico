@@ -334,6 +334,24 @@ func TestReadPathsLeaveCachedTraceIntact(t *testing.T) {
 	require.True(t, googleproto.Equal(types.FlowLogPolicyToProto(h), types.CachedPolicyTrace(h)), "a read path modified the shared trace")
 }
 
+// TestFlowIntoProtoUncachedSkipsCache checks that the conversion Felix uses decodes the trace
+// without filling the process-wide cache, while FlowIntoProto still fills it.
+func TestFlowIntoProtoUncachedSkipsCache(t *testing.T) {
+	trace := cacheTestTrace("uncached")
+	flow := types.ProtoToFlow(&proto.Flow{
+		Key: &proto.FlowKey{SourceName: "client", DestName: "server", Policies: trace},
+	})
+	h := flow.Key.Policies()
+
+	pf := &proto.Flow{}
+	types.FlowIntoProtoUncached(flow, pf)
+	require.True(t, googleproto.Equal(types.FlowLogPolicyToProto(h), pf.Key.Policies))
+	require.False(t, types.DefaultPolicyTraceCacheHolds(h), "FlowIntoProtoUncached filled the trace cache")
+
+	types.FlowIntoProto(flow, pf)
+	require.True(t, types.DefaultPolicyTraceCacheHolds(h), "FlowIntoProto did not fill the trace cache")
+}
+
 // TestFlowIntoProtoOverwritesEveryField converts into a message with every field already set,
 // as a reused message is. Any field FlowIntoProto forgets to assign keeps its stale value and
 // fails the comparison with a fresh conversion.

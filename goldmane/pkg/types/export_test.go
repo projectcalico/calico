@@ -58,6 +58,11 @@ func (c *policyTraceCache) Holds(h unique.Handle[string]) bool {
 	return inCurrent || inPrevious
 }
 
+// DefaultPolicyTraceCacheHolds reports whether the package-wide cache holds a trace for h.
+func DefaultPolicyTraceCacheHolds(h unique.Handle[string]) bool {
+	return defaultPolicyTraceCache.Holds(h)
+}
+
 // Lens counts the entries actually in the current and previous generations' maps, in that order,
 // independent of the cache's own counts.
 func (c *policyTraceCache) Lens() (int64, int64) {
