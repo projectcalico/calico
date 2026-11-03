@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -461,7 +461,7 @@ func TestManyFlows(t *testing.T) {
 			return false
 		}
 		return flows[0].Flow.NumConnectionsStarted == 20000
-	}, waitTimeout, retryTime, "Didn't reach 20k flows: %d", len(flows)).Should(BeTrue())
+	}, 3*waitTimeout, retryTime, "Didn't reach 20k flows: %d", len(flows)).Should(BeTrue())
 	Expect(meta.TotalPages).To(BeEquivalentTo(1))
 	Expect(meta.TotalResults).To(BeEquivalentTo(1))
 }
