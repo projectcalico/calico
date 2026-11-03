@@ -254,6 +254,36 @@ var _ = Describe("Istio controller tests", func() {
 		})
 	})
 
+	Context("Istio CRD tests", func() {
+		It("updates an Istio CRD left by an earlier release to the bundled version", func() {
+			createResources()
+			Expect(cli.Create(ctx, &apiextensionsv1.CustomResourceDefinition{
+				ObjectMeta: metav1.ObjectMeta{Name: "sidecars.networking.istio.io"},
+				Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+					Group: "networking.istio.io",
+					Names: apiextensionsv1.CustomResourceDefinitionNames{Plural: "sidecars", Kind: "Sidecar"},
+					Scope: apiextensionsv1.NamespaceScoped,
+					Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+						{Name: "v1alpha3", Served: true, Storage: true},
+					},
+				},
+			})).NotTo(HaveOccurred())
+
+			r := &ReconcileIstio{Client: cli, scheme: scheme, provider: operatorv1.ProviderNone, status: mockStatus}
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			crd := &apiextensionsv1.CustomResourceDefinition{}
+			Expect(cli.Get(ctx, client.ObjectKey{Name: "sidecars.networking.istio.io"}, crd)).NotTo(HaveOccurred())
+			var versions []string
+			for _, v := range crd.Spec.Versions {
+				versions = append(versions, v.Name)
+				Expect(v.Schema).NotTo(BeNil(), "version %s has no schema", v.Name)
+			}
+			Expect(versions).To(ConsistOf("v1", "v1alpha3", "v1beta1"))
+		})
+	})
+
 	Context("Gateway API CRD version tests", func() {
 		var r *ReconcileIstio
 
