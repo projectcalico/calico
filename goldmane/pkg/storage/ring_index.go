@@ -113,6 +113,8 @@ func (a *RingIndex) SortValueSet(opts IndexFindOpts) ([]int64, types.ListMeta) {
 	panic("SortValueSet is not supported by the ring index")
 }
 
+// FilterValueSet returns the distinct policy values (names, namespaces or tiers, per valueFunc)
+// of flows in the time range that match the filter. It serves FilterHints for the policy fields.
 func (a *RingIndex) FilterValueSet(valueFunc policyValueFunc, opts IndexFindOpts) ([]string, types.ListMeta) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
