@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
+	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 // TiersExtension is the variant's hook into the tiers controller.
@@ -33,6 +34,9 @@ type TiersExtension interface {
 
 	// Reconcile does the extension's own work on the tiers, before the core render.
 	Reconcile(ctx context.Context, cli client.Client) error
+
+	// Modify layers the variant onto the tiers component the controller rendered.
+	Modify(c render.Component, ri render.Inputs) render.Component
 }
 
 // noopTiers runs the core operator's behavior unchanged.
@@ -48,4 +52,8 @@ func (noopTiers) DNSClientNamespaces(context.Context, client.Client) ([]string, 
 
 func (noopTiers) Reconcile(context.Context, client.Client) error {
 	return nil
+}
+
+func (noopTiers) Modify(c render.Component, _ render.Inputs) render.Component {
+	return c
 }

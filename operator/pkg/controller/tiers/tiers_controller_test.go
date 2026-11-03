@@ -38,6 +38,8 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/render/tiers"
 )
 
 var _ = Describe("tier controller tests", func() {
@@ -172,6 +174,19 @@ var _ = Describe("tier controller tests", func() {
 		mockStatus.AssertExpectations(GinkgoT())
 	})
 
+	It("layers the variant's extension onto the rendered tiers", func() {
+		r.opts.Extensions = extensions.New(extensions.Set{Tiers: labellingTiers{}})
+		mockStatus.On("ReadyToMonitor")
+		mockStatus.On("ClearDegraded")
+
+		_, err := r.Reconcile(ctx, reconcile.Request{})
+		Expect(err).ShouldNot(HaveOccurred())
+
+		policy := v3.NetworkPolicy{}
+		Expect(c.Get(ctx, client.ObjectKey{Name: tiers.ClusterDNSPolicyName, Namespace: "kube-system"}, &policy)).NotTo(HaveOccurred())
+		Expect(policy.Labels).To(HaveKeyWithValue("modified-by", "extension"))
+	})
+
 	It("allows DNS access to the core namespace alone when the variant contributes none", func() {
 		cfg, res := r.prepareTiersConfig(ctx, logr.Discard())
 		Expect(res).To(BeNil())
@@ -190,6 +205,8 @@ func (n dnsClientNamespaces) DNSClientNamespaces(context.Context, client.Client)
 
 func (dnsClientNamespaces) Reconcile(context.Context, client.Client) error { return nil }
 
+func (dnsClientNamespaces) Modify(c render.Component, _ render.Inputs) render.Component { return c }
+
 // recordingTiers is a variant that only reports whether its tier work ran.
 type recordingTiers struct {
 	called bool
@@ -202,7 +219,32 @@ func (recordingTiers) DNSClientNamespaces(context.Context, client.Client) ([]str
 	return nil, nil
 }
 
+func (recordingTiers) Modify(c render.Component, _ render.Inputs) render.Component { return c }
+
 func (t *recordingTiers) Reconcile(context.Context, client.Client) error {
 	t.called = true
 	return t.err
+}
+
+// labellingTiers is a variant whose extension labels the cluster DNS policy, so a test can
+// see that the modifier ran over what the controller rendered.
+type labellingTiers struct{}
+
+func (labellingTiers) Watches(ctrlruntime.Controller) error { return nil }
+
+func (labellingTiers) DNSClientNamespaces(context.Context, client.Client) ([]string, error) {
+	return nil, nil
+}
+
+func (labellingTiers) Reconcile(context.Context, client.Client) error { return nil }
+
+func (labellingTiers) Modify(c render.Component, ri render.Inputs) render.Component {
+	return extensions.Decorate(c, ri, operatorv1.CalicoEnterprise, func(create, del []client.Object) ([]client.Object, []client.Object) {
+		policy := extensions.MustFindObject[*v3.NetworkPolicy](create, tiers.ClusterDNSPolicyName)
+		if policy.Labels == nil {
+			policy.Labels = map[string]string{}
+		}
+		policy.Labels["modified-by"] = "extension"
+		return create, del
+	})
 }

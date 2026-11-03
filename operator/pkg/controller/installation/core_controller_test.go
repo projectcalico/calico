@@ -3323,6 +3323,119 @@ var _ = Describe("CNI annotation admission policies", func() {
 	})
 })
 
+// The AWS VPC CNI's annotation is protected by its own policy, left out on AWS VPC CNI installs
+// while aws-node is missing or runs as an account the calico-aws-vpc-annotations binding doesn't name.
+var _ = Describe("AWS VPC CNI annotation admission policy", func() {
+	const vapName = "protect-aws-vpc-annotations.projectcalico.org"
+
+	var (
+		ctx              context.Context
+		scheme           *runtime.Scheme
+		componentHandler *fakeComponentHandler
+		installation     *operator.Installation
+	)
+
+	awsNode := func(sa, deprecatedSA string) *appsv1.DaemonSet {
+		return &appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{Name: "aws-node", Namespace: metav1.NamespaceSystem},
+			Spec: appsv1.DaemonSetSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+				ServiceAccountName:       sa,
+				DeprecatedServiceAccount: deprecatedSA,
+			}}},
+		}
+	}
+
+	reconcilerWith := func(initial ...client.Object) ReconcileInstallation {
+		mockStatus := &status.MockStatus{}
+		mockStatus.On("SetDegraded", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
+		return ReconcileInstallation{
+			ext: coreExtensions.Installation(),
+			opts: options.ControllerOptions{
+				APIDiscovery: discovery.NewStaticAPIDiscovery(map[schema.GroupKind]string{admission.ValidatingPolicyGroupKind: admission.VersionV1}),
+			},
+			client: ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(initial...).Build(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
+				return componentHandler
+			},
+		}
+	}
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		scheme = runtime.NewScheme()
+		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
+		Expect(operator.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		Expect(admissionregistrationv1.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		Expect(appsv1.AddToScheme(scheme)).NotTo(HaveOccurred())
+		componentHandler = newFakeComponentHandler()
+		installation = &operator.Installation{
+			ObjectMeta: metav1.ObjectMeta{Name: "default"},
+			Spec:       operator.InstallationSpec{Variant: operator.Calico},
+		}
+	})
+
+	// Only an AWS VPC CNI install needs aws-node let through. There, a missing aws-node DaemonSet
+	// may be one renamed along with its account, so it leaves the annotation unprotected too.
+	DescribeTable("should leave the annotation unprotected only when the AWS VPC CNI can't be let through",
+		func(cni *operator.CNISpec, ds *appsv1.DaemonSet, wantUnprotected string) {
+			var initial []client.Object
+			if ds != nil {
+				initial = append(initial, ds)
+			}
+			r := reconcilerWith(initial...)
+			got, err := awsVPCAnnotationsUnprotected(ctx, r.client, cni)
+			Expect(err).NotTo(HaveOccurred())
+			if wantUnprotected == "" {
+				Expect(got).To(BeEmpty())
+			} else {
+				Expect(got).To(ContainSubstring(wantUnprotected))
+			}
+		},
+		Entry("Calico CNI, no aws-node DaemonSet", &operator.CNISpec{Type: operator.PluginCalico}, nil, ""),
+		Entry("Calico CNI, aws-node as another account", &operator.CNISpec{Type: operator.PluginCalico}, awsNode("custom-cni", ""), ""),
+		Entry("no CNI set", nil, nil, ""),
+		Entry("AWS VPC CNI, aws-node", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode("aws-node", ""), ""),
+		Entry("AWS VPC CNI, aws-node in the deprecated field", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode("", "aws-node"), ""),
+		Entry("AWS VPC CNI, no aws-node DaemonSet (renamed)", &operator.CNISpec{Type: operator.PluginAmazonVPC}, nil, "no kube-system/aws-node DaemonSet"),
+		Entry("AWS VPC CNI, another account", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode("custom-cni", ""), `service account "custom-cni"`),
+		Entry("AWS VPC CNI, no account named, so default", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode("", ""), `service account "default"`),
+	)
+
+	It("should install the policy in its own set", func() {
+		r := reconcilerWith()
+		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, logr.Discard(), admission.PolicySetAWSVPCAnnotations)).NotTo(HaveOccurred())
+
+		var created []string
+		for _, obj := range componentHandler.objectsToCreate {
+			created = append(created, obj.GetName())
+			Expect(obj.GetLabels()).To(HaveKeyWithValue(admission.PolicySetLabel, string(admission.PolicySetAWSVPCAnnotations)))
+		}
+		Expect(created).To(ConsistOf(vapName, vapName))
+		Expect(componentHandler.objectsToDelete).To(BeEmpty())
+	})
+
+	It("should remove the policy and leave the Calico CNI's alone", func() {
+		labels := func(set admission.PolicySet) map[string]string {
+			return map[string]string{admission.ManagedVAPLabel: admission.ManagedVAPLabelValue, admission.PolicySetLabel: string(set)}
+		}
+		r := reconcilerWith(
+			&admissionregistrationv1.ValidatingAdmissionPolicy{ObjectMeta: metav1.ObjectMeta{Name: vapName, Labels: labels(admission.PolicySetAWSVPCAnnotations)}},
+			&admissionregistrationv1.ValidatingAdmissionPolicyBinding{ObjectMeta: metav1.ObjectMeta{Name: vapName, Labels: labels(admission.PolicySetAWSVPCAnnotations)}},
+			&admissionregistrationv1.ValidatingAdmissionPolicy{ObjectMeta: metav1.ObjectMeta{Name: "protect-cni-annotations.projectcalico.org", Labels: labels(admission.PolicySetCNIAnnotations)}},
+		)
+		Expect(r.removeValidatingAdmissionPolicies(ctx, installation, logr.Discard(), admission.PolicySetAWSVPCAnnotations)).NotTo(HaveOccurred())
+
+		var deleted []string
+		for _, obj := range componentHandler.objectsToDelete {
+			deleted = append(deleted, obj.GetName())
+		}
+		Expect(deleted).To(ConsistOf(vapName, vapName))
+		Expect(componentHandler.objectsToCreate).To(BeEmpty())
+	})
+})
+
 // rejectingInstallation rejects the configuration, so the controller's degrade path
 // runs without a variant extension in the tree.
 type rejectingInstallation struct {

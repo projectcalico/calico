@@ -163,6 +163,10 @@ nodeSelector:
 # Affinity for the tigera/operator pod.
 affinity: {}
 
+# Deployment strategy for the tigera/operator Deployment. When unset, the Kubernetes default
+# (RollingUpdate with 25% maxSurge and 25% maxUnavailable) is used.
+strategy: {}
+
 # PriorityClassName for the tigera/operator pod.
 priorityClassName: ""
 

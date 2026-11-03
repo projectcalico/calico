@@ -92,13 +92,39 @@ var _ = DescribeTable("vxlanLinksIncompat",
 	}, &netlink.Vxlan{
 		VxlanId: 4096, Port: 4789, L2miss: false,
 	}, "l2miss: true vs false"),
+	Entry("identical source-port range", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, ""),
+	Entry("source-port range mismatch (low)", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 32768, PortHigh: 65535,
+	}, "source port range: [49152,65535] vs [32768,65535]"),
+	Entry("source-port range mismatch (high)", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 60000,
+	}, "source port range: [49152,65535] vs [49152,60000]"),
+	Entry("configured source-port range replaces kernel defaults", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789,
+	}, "source port range: [49152,65535] vs [0,0]"),
+	Entry("unset desired source-port range leaves the existing range unchanged", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, ""),
 )
 
 var _ = Describe("VXLANManager", func() {
 	var (
-		vxlanMgr, vxlanMgrV6 *vxlanManager
-		rt                   *mockRouteTable
-		fdb                  *mockVXLANFDB
+		vxlanMgr, vxlanMgrV6   *vxlanManager
+		rt                     *mockRouteTable
+		fdb                    *mockVXLANFDB
+		dataplane, dataplaneV6 *mocknetlink.MockNetlinkDataplane
 	)
 
 	BeforeEach(func() {
@@ -110,7 +136,7 @@ var _ = Describe("VXLANManager", func() {
 
 		opRecorder := logrusr.NewSummarizer("test")
 
-		dataplane := mocknetlink.New()
+		dataplane = mocknetlink.New()
 		_, err := dataplane.NewMockNetlink()
 		Expect(err).NotTo(HaveOccurred())
 		dataplane.ImmediateLinkUp = true
@@ -118,7 +144,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
 		dataplane.ResetDeltas()
 
-		dataplaneV6 := mocknetlink.New()
+		dataplaneV6 = mocknetlink.New()
 		_, err = dataplaneV6.NewMockNetlink()
 		Expect(err).NotTo(HaveOccurred())
 		dataplaneV6.ImmediateLinkUp = true
@@ -747,5 +773,121 @@ var _ = Describe("VXLANManager", func() {
 
 		// Expect no routes.
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(0))
+	})
+
+	DescribeTable("reconciles the VXLAN source-port range on an existing device",
+		func(ipVersion uint8) {
+			mgr, dp := vxlanMgr, dataplane
+			if ipVersion == 6 {
+				mgr, dp = vxlanMgrV6, dataplaneV6
+			}
+			mgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+				Node:             "node1",
+				Mac:              "00:0a:74:9d:68:16",
+				MacV6:            "00:0a:74:9d:68:17",
+				Ipv4Addr:         "10.0.0.0",
+				Ipv6Addr:         "fd00:10:244::",
+				ParentDeviceIp:   "172.0.0.2",
+				ParentDeviceIpv6: "fc00:10:96::2",
+			})
+			mgr.routeMgr.OnParentDeviceUpdate("eth0")
+			parent, err := mgr.routeMgr.detectParentIface()
+			Expect(err).NotTo(HaveOccurred())
+
+			link, addr, err := mgr.device(parent)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(mgr.routeMgr.configureTunnelDevice(link, addr, 1450, false)).To(Succeed())
+			actual, err := dp.LinkByName(mgr.vxlanDevice)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual.(*netlink.Vxlan).PortLow).To(BeZero())
+			Expect(actual.(*netlink.Vxlan).PortHigh).To(BeZero())
+			dp.ResetDeltas()
+
+			mgr.vxlanSrcPortMin = 50000
+			mgr.vxlanSrcPortMax = 50001
+			link, addr, err = mgr.device(parent)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(mgr.routeMgr.configureTunnelDevice(link, addr, 1450, false)).To(Succeed())
+			Expect(dp.NumLinkAddCalls).To(Equal(1))
+			Expect(dp.NumLinkDeleteCalls).To(Equal(1))
+			actual, err = dp.LinkByName(mgr.vxlanDevice)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual.(*netlink.Vxlan).PortLow).To(Equal(50000))
+			Expect(actual.(*netlink.Vxlan).PortHigh).To(Equal(50001))
+			dp.ResetDeltas()
+
+			Expect(mgr.routeMgr.configureTunnelDevice(link, addr, 1450, false)).To(Succeed())
+			Expect(dp.NumLinkAddCalls).To(BeZero())
+			Expect(dp.NumLinkDeleteCalls).To(BeZero())
+
+			mgr.vxlanSrcPortMin = 0
+			mgr.vxlanSrcPortMax = 0
+			link, addr, err = mgr.device(parent)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(mgr.routeMgr.configureTunnelDevice(link, addr, 1450, false)).To(Succeed())
+			Expect(dp.NumLinkAddCalls).To(BeZero())
+			Expect(dp.NumLinkDeleteCalls).To(BeZero())
+			actual, err = dp.LinkByName(mgr.vxlanDevice)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actual.(*netlink.Vxlan).PortLow).To(Equal(50000))
+			Expect(actual.(*netlink.Vxlan).PortHigh).To(Equal(50001))
+		},
+		Entry("IPv4", uint8(4)),
+		Entry("IPv6", uint8(6)),
+	)
+
+	It("plumbs the VXLAN source-port range into the netlink device", func() {
+		// Re-create the manager with a configured port range. Avoid using
+		// the BeforeEach-provided manager since we want different config.
+		dataplane := mocknetlink.New()
+		_, err := dataplane.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		dataplane.ImmediateLinkUp = true
+		eth0 := dataplane.AddIface(2, "eth0", true, true)
+		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
+		dataplane.ResetDeltas()
+
+		dpConfig := Config{
+			MaxIPSetSize:       5,
+			Hostname:           "node1",
+			ExternalNodesCidrs: []string{"10.0.0.0/24"},
+			VXLANSrcPortMin:    49152,
+			VXLANSrcPortMax:    65535,
+			RulesConfig: rules.Config{
+				VXLANVNI:  1,
+				VXLANPort: 20,
+			},
+		}
+		mgr := newVXLANManagerWithShims(
+			dpsets.NewMockIPSets(),
+			rt,
+			fdb,
+			dataplanedefs.VXLANIfaceNameV4,
+			4,
+			4444,
+			dpConfig,
+			logrusr.NewSummarizer("test"),
+			dataplane,
+		)
+
+		mgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+			Node:           "node1",
+			Mac:            "00:0a:74:9d:68:16",
+			Ipv4Addr:       "10.0.0.0",
+			ParentDeviceIp: "172.0.0.2",
+		})
+		mgr.routeMgr.OnParentDeviceUpdate("eth0")
+
+		parent, err := mgr.routeMgr.detectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(parent).NotTo(BeNil())
+
+		link, _, err := mgr.device(parent)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		vxlan, ok := link.(*netlink.Vxlan)
+		Expect(ok).To(BeTrue())
+		Expect(vxlan.PortLow).To(Equal(49152))
+		Expect(vxlan.PortHigh).To(Equal(65535))
 	})
 })

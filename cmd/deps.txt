@@ -490,6 +490,7 @@ local:lib/httpmachinery/pkg/server/adaptors/gorilla
 local:lib/logrusr
 local:lib/std/chanutil
 local:lib/std/cryptoutils
+local:lib/std/intervals
 local:lib/std/log
 local:lib/std/time
 local:lib/std/uniquelabels

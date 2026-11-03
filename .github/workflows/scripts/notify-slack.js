@@ -9,7 +9,7 @@
 //                    merge-queue-bot (no conversations.open / im:write needed).
 //   PICK_NOTIFY_MAP  "login:slack-id,login:slack-id,..." opt-in map.
 //   AUTHOR_LOGIN     GitHub login to DM (the PR author, or its merger).
-//   NOTIFY_AS        'author' (default) | 'merger' (escalated mode wording).
+//   NOTIFY_AS        'author' (default) | 'merger' (picked/escalated wording).
 //   SOURCE_REPO, SRC_PR   The source repo and PR number. SRC_URL is derived
 //                    from them, and SRC_TITLE is fetched via `gh` (best-effort),
 //                    unless either is passed in explicitly.
@@ -130,7 +130,7 @@ async function main() {
     const review = env.EE_PR_URL ? `<${env.EE_PR_URL}|Please review>` : 'Please review';
     const lines = [
       `#${env.SRC_PR} ${osTag}${prTag}${titlePart}`,
-      `:cherries:  Your OSS PR has been auto-cherry-picked to ${targetPlain}.`,
+      `:cherries:  ${env.NOTIFY_AS === 'merger' ? 'The OSS PR you merged' : 'Your OSS PR'} has been auto-cherry-picked to ${targetPlain}.`,
     ];
     if (env.OUTCOME === 'conflict') {
       const sev = (env.CONFLICT_SEVERITY || '').toLowerCase();

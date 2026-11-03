@@ -22,48 +22,79 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
-// maxCachedPolicyTraces bounds the decoded trace cache at a few tens of MB. A cluster has one
-// trace per distinct path through its policies, and large clusters with per-namespace policies
-// reach tens of thousands.
+// maxCachedPolicyTraces bounds the decoded trace cache. Full, it retains 60-65 MB at two hits per
+// policy list and 200-240 MB at eight. Large clusters with per-namespace policies reach tens of
+// thousands of distinct traces.
 const maxCachedPolicyTraces = 65536
 
-var (
-	policyTraceCache       sync.Map
-	policyTraceCacheSize   atomic.Int64
-	policyTraceCacheResets atomic.Uint64
-)
+var defaultPolicyTraceCache = newPolicyTraceCache(maxCachedPolicyTraces)
+
+// policyTraceCache maps an interned policy trace string to its decoded, sorted trace. Lookups
+// of a cached trace take no lock. Inserts serialize on mu, so the count matches the cached
+// traces exactly, the cache never holds more than limit, and each fill is counted as one reset.
+type policyTraceCache struct {
+	limit  int64
+	traces sync.Map
+	mu     sync.Mutex
+	count  atomic.Int64
+	resets atomic.Uint64
+}
+
+func newPolicyTraceCache(limit int64) *policyTraceCache {
+	return &policyTraceCache{limit: limit}
+}
 
 // PolicyTraceCacheSize returns the number of decoded traces currently cached, for metrics.
-// Concurrent misses can briefly overcount it by the number of racing goroutines.
 func PolicyTraceCacheSize() int64 {
-	return policyTraceCacheSize.Load()
+	return defaultPolicyTraceCache.count.Load()
 }
 
 // PolicyTraceCacheResets returns how many times the cache has filled and been cleared, for
 // metrics.
 func PolicyTraceCacheResets() uint64 {
-	return policyTraceCacheResets.Load()
+	return defaultPolicyTraceCache.resets.Load()
 }
 
 // CachedPolicyTrace returns the decoded, sorted policy trace for h, decoding it at most once
 // while it stays cached. The result is shared between callers and goroutines, so callers must
 // not modify it.
 func CachedPolicyTrace(h unique.Handle[string]) *proto.PolicyTrace {
-	if v, ok := policyTraceCache.Load(h); ok {
-		if p, ok := v.(*proto.PolicyTrace); ok {
-			return p
-		}
+	return defaultPolicyTraceCache.trace(h)
+}
+
+// trace returns the cached trace for h, decoding and caching it on a miss. Goroutines that miss
+// on the same handle at once may each decode it, but only the first insert is kept and returned
+// to all of them.
+func (c *policyTraceCache) trace(h unique.Handle[string]) *proto.PolicyTrace {
+	if cached, ok := c.load(h); ok {
+		return cached
 	}
 
-	p := FlowLogPolicyToProto(h)
+	decoded := FlowLogPolicyToProto(h)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if cached, ok := c.load(h); ok {
+		return cached
+	}
 
 	// Churn past the bound clears the whole cache rather than tracking recency. Refilling
 	// costs one decode per trace, and the cache never grows past the bound.
-	if policyTraceCacheSize.Add(1) > maxCachedPolicyTraces {
-		policyTraceCache.Clear()
-		policyTraceCacheSize.Store(1)
-		policyTraceCacheResets.Add(1)
+	if c.count.Load() >= c.limit {
+		c.traces.Clear()
+		c.count.Store(0)
+		c.resets.Add(1)
 	}
-	policyTraceCache.Store(h, p)
-	return p
+	c.traces.Store(h, decoded)
+	c.count.Add(1)
+	return decoded
+}
+
+func (c *policyTraceCache) load(h unique.Handle[string]) (*proto.PolicyTrace, bool) {
+	v, ok := c.traces.Load(h)
+	if !ok {
+		return nil, false
+	}
+	p, ok := v.(*proto.PolicyTrace)
+	return p, ok
 }

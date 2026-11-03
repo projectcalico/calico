@@ -9,6 +9,12 @@ vendor/
 build/_output
 build/_test
 hack/bin
+# OCP bundle output from 'make bundle'. operator-sdk writes bundle.Dockerfile
+# here before gen-bundle moves it under bundle/. bundle/README.md documents the
+# process and is committed.
+/bundle/*
+!/bundle/README.md
+/bundle.Dockerfile
 hack/release/_output/
 operator-sdk*
 *-release-notes.md
