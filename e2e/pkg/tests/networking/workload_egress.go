@@ -223,7 +223,6 @@ var _ = describe.CalicoDescribe(
 				serverPort = 10000 + rand.Intn(22768)
 			}
 			serverOpts := []conncheck.ServerOption{
-				conncheck.WithEchoServer(),
 				conncheck.WithNodePortService(),
 				conncheck.WithPorts(serverPort),
 				conncheck.WithServerPodCustomizer(conncheck.WithNodeName(dstNode)),
