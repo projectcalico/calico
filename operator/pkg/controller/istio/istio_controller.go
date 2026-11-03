@@ -285,6 +285,17 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
+	outdated, err := outdatedGatewayAPICRDs(ctx, r.Client)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading Gateway API CRDs", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+	if len(outdated) > 0 {
+		r.status.SetWarning(gatewayAPIWarningKey, gatewayAPIWarning(outdated))
+	} else {
+		r.status.ClearWarning(gatewayAPIWarningKey)
+	}
+
 	// Clear the degraded bit if we've reached this far.
 	r.status.ClearDegraded()
 
