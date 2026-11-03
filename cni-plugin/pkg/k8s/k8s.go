@@ -610,6 +610,9 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 // it means the DEL is for an old sandbox and the pod is still running. We should still clean up IPAM allocations, since they are identified by the
 // container ID rather than the pod name and namespace. If they do match, then we can delete the workload endpoint.
 func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIdentifiers, args *skel.CmdArgs, conf types.NetConf, logger *logrus.Entry) error {
+	// Any claim stamped after this came from a sandbox the runtime created after this one.
+	started := time.Now()
+
 	d, err := dataplane.GetDataplane(conf, logger)
 	if err != nil {
 		return err
@@ -717,7 +720,7 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 	// The endpoint is gone, so addresses that failed sandboxes kept for it go too.
 	if keepsListed {
 		owner := ipam.AttributeOwner{Namespace: epIDs.Namespace, Name: epIDs.Pod}
-		if err := releaseListedElsewhere(ctx, c.IPAM(), conf.Name, conf.IPAMLockFile, owner, listedAddresses(wep, logger), logger); err != nil {
+		if err := releaseListedElsewhere(ctx, c.IPAM(), conf.Name, conf.IPAMLockFile, owner, started, listedAddresses(wep, logger), logger); err != nil {
 			return err
 		}
 	}

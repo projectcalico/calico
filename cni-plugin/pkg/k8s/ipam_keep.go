@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"net"
 	"time"
 
@@ -99,36 +100,22 @@ func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID, l
 }
 
 // releaseListedElsewhere releases each listed address that the owner pod holds on a sandbox
-// handle on network. The pod's own DEL uses it once the endpoint is gone, so an address a
-// failed sandbox kept for the endpoint doesn't outlive the pod. Releasing by handle leaves an
-// address that moved meanwhile alone.
+// handle on network, unless a sandbox claimed it after started. The pod's own DEL uses it once
+// the endpoint is gone, so an address a failed sandbox kept doesn't outlive the pod.
 func releaseListedElsewhere(
 	ctx context.Context,
 	ipamClient ipam.Interface,
 	network, lockPath string,
 	owner ipam.AttributeOwner,
+	started time.Time,
 	listed set.Set[string],
 	logger *logrus.Entry,
 ) error {
+	held := heldOnSandboxHandles{ipamClient: ipamClient, network: network, owner: owner, started: started, logger: logger}
 	return underIPAMLock(ctx, lockPath, func(ctx context.Context) error {
-		var errs []error
-		for addr := range listed.All() {
-			attr, err := ipamClient.GetAssignmentAttributes(ctx, cnet.IP{IP: net.ParseIP(addr)})
-			if errors.As(err, &cerrors.ErrorResourceDoesNotExist{}) || errors.As(err, &cerrors.ErrorIPInCooldown{}) {
-				continue
-			}
-			if err != nil {
-				errs = append(errs, fmt.Errorf("reading the allocation of %s: %w", addr, err))
-				continue
-			}
-			if attr == nil || attr.HandleID == nil {
-				continue
-			}
-			handleID := *attr.HandleID
-			if _, ok := ipam.ParsePodHandleID(handleID, network); !ok || !owner.Matches(attr.ActiveOwnerAttrs) {
-				continue
-			}
-
+		current, err := held.find(ctx, listed.All())
+		errs := []error{err}
+		for addr, handleID := range current {
 			logger.WithFields(logrus.Fields{"ip": addr, "handle": handleID}).Info("Releasing address the deleted endpoint listed")
 			if _, _, err := ipamClient.ReleaseIPs(ctx, ipam.ReleaseOptions{Address: addr, Handle: handleID}); err != nil {
 				errs = append(errs, fmt.Errorf("releasing %s: %w", addr, err))
@@ -136,6 +123,47 @@ func releaseListedElsewhere(
 		}
 		return errors.Join(errs...)
 	})
+}
+
+// heldOnSandboxHandles finds which addresses a pod holds on its sandbox handles on one
+// network, from claims made before a cutoff.
+type heldOnSandboxHandles struct {
+	ipamClient ipam.Interface
+	network    string
+	owner      ipam.AttributeOwner
+	started    time.Time
+	logger     *logrus.Entry
+}
+
+// find returns the handle of each address in addrs that the owner pod holds on one of its
+// sandbox handles from a claim made before started. An address that is free or cooling down
+// is skipped; any other read error is returned after every address is tried.
+func (h heldOnSandboxHandles) find(ctx context.Context, addrs iter.Seq[string]) (map[string]string, error) {
+	found := map[string]string{}
+	var errs []error
+	for addr := range addrs {
+		attr, err := h.ipamClient.GetAssignmentAttributes(ctx, cnet.IP{IP: net.ParseIP(addr)})
+		if errors.As(err, &cerrors.ErrorResourceDoesNotExist{}) || errors.As(err, &cerrors.ErrorIPInCooldown{}) {
+			continue
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf("reading the allocation of %s: %w", addr, err))
+			continue
+		}
+		if attr == nil || attr.HandleID == nil {
+			continue
+		}
+		handleID := *attr.HandleID
+		if _, ok := ipam.ParsePodHandleID(handleID, h.network); !ok || !h.owner.Matches(attr.ActiveOwnerAttrs) {
+			continue
+		}
+		if utils.ClaimedAfter(attr.ActiveOwnerAttrs, h.started) {
+			h.logger.WithFields(logrus.Fields{"ip": addr, "handle": handleID}).Info("A newer sandbox claimed the address after this DEL started, leaving it")
+			continue
+		}
+		found[addr] = handleID
+	}
+	return found, errors.Join(errs...)
 }
 
 // underIPAMLock runs fn holding the host IPAM lock at lockPath, as calico-ipam's DEL does.

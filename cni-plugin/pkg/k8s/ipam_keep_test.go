@@ -19,6 +19,7 @@ import (
 	"errors"
 	"net"
 	"path/filepath"
+	"time"
 
 	"github.com/gofrs/flock"
 	. "github.com/onsi/ginkgo/v2"
@@ -182,17 +183,37 @@ var _ = Describe("releaseListedElsewhere", func() {
 	owner := ipam.AttributeOwner{Namespace: "ns", Name: "web-0"}
 	logger := logrus.WithField("test", "releaseListedElsewhere")
 	sandboxHandle := ipam.PodHandleID(network, "sandbox-x")
+	started := time.Now()
 
-	allocation := func(handle, pod string) *model.AllocationAttribute {
+	stampedAllocation := func(handle, pod string, stamp time.Time) *model.AllocationAttribute {
 		return &model.AllocationAttribute{
-			HandleID:         &handle,
-			ActiveOwnerAttrs: map[string]string{ipam.AttributeNamespace: "ns", ipam.AttributePod: pod},
+			HandleID: &handle,
+			ActiveOwnerAttrs: map[string]string{
+				ipam.AttributeNamespace: "ns",
+				ipam.AttributePod:       pod,
+				ipam.AttributeTimestamp: stamp.UTC().Format(utils.AllocationTimestampLayout),
+			},
 		}
+	}
+	allocation := func(handle, pod string) *model.AllocationAttribute {
+		return stampedAllocation(handle, pod, started.Add(-time.Minute))
 	}
 
 	var lockPath string
 	BeforeEach(func() {
 		lockPath = filepath.Join(GinkgoT().TempDir(), "ipam.lock")
+	})
+
+	It("leaves an address a newer sandbox claimed after the DEL started", func() {
+		stub := &stubHandleIPAM{attrs: map[string]*model.AllocationAttribute{
+			"10.0.0.5": allocation(sandboxHandle, "web-0"),
+			"10.0.0.6": stampedAllocation(ipam.PodHandleID(network, "sandbox-c"), "web-0", started.Add(time.Second)),
+		}}
+
+		err := releaseListedElsewhere(context.Background(), stub, network, lockPath, owner, started, set.From("10.0.0.5", "10.0.0.6"), logger)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(stub.released).To(Equal([]ipam.ReleaseOptions{{Address: "10.0.0.5", Handle: sandboxHandle}}))
 	})
 
 	It("releases only the pod's addresses on a sandbox handle of this network, by that handle", func() {
@@ -204,7 +225,7 @@ var _ = Describe("releaseListedElsewhere", func() {
 			"10.0.0.9": {},
 		}}
 
-		err := releaseListedElsewhere(context.Background(), stub, network, lockPath, owner, set.From("10.0.0.5", "10.0.0.6", "10.0.0.7", "10.0.0.8", "10.0.0.9"), logger)
+		err := releaseListedElsewhere(context.Background(), stub, network, lockPath, owner, started, set.From("10.0.0.5", "10.0.0.6", "10.0.0.7", "10.0.0.8", "10.0.0.9"), logger)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(stub.released).To(Equal([]ipam.ReleaseOptions{{Address: "10.0.0.5", Handle: sandboxHandle}}))
@@ -216,7 +237,7 @@ var _ = Describe("releaseListedElsewhere", func() {
 			"10.0.0.6": cerrors.ErrorIPInCooldown{},
 		}}
 
-		err := releaseListedElsewhere(context.Background(), stub, network, lockPath, owner, set.From("10.0.0.5", "10.0.0.6"), logger)
+		err := releaseListedElsewhere(context.Background(), stub, network, lockPath, owner, started, set.From("10.0.0.5", "10.0.0.6"), logger)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(stub.released).To(BeEmpty())
@@ -230,7 +251,7 @@ var _ = Describe("releaseListedElsewhere", func() {
 			releaseErr: releaseErr,
 		}
 
-		err := releaseListedElsewhere(context.Background(), stub, network, lockPath, owner, set.From("10.0.0.5", "10.0.0.6"), logger)
+		err := releaseListedElsewhere(context.Background(), stub, network, lockPath, owner, started, set.From("10.0.0.5", "10.0.0.6"), logger)
 
 		Expect(err).To(MatchError(readErr))
 		Expect(err).To(MatchError(releaseErr))
@@ -242,7 +263,7 @@ var _ = Describe("releaseListedElsewhere", func() {
 		cancel()
 		stub := &stubHandleIPAM{attrs: map[string]*model.AllocationAttribute{"10.0.0.5": allocation(sandboxHandle, "web-0")}, lockPath: lockPath}
 
-		err := releaseListedElsewhere(ctx, stub, network, lockPath, owner, set.From("10.0.0.5"), logger)
+		err := releaseListedElsewhere(ctx, stub, network, lockPath, owner, started, set.From("10.0.0.5"), logger)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(stub.released).To(HaveLen(1))

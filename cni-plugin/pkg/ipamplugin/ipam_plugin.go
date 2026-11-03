@@ -232,7 +232,7 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 	// We attach important attributes to the allocation.
 	attrs := map[string]string{
 		ipam.AttributeNode:      nodename,
-		ipam.AttributeTimestamp: time.Now().UTC().Format(allocationTimestampLayout),
+		ipam.AttributeTimestamp: time.Now().UTC().Format(utils.AllocationTimestampLayout),
 	}
 	if epIDs.Pod != "" {
 		attrs[ipam.AttributePod] = epIDs.Pod
@@ -581,7 +581,7 @@ func transferFromPriorSandbox(
 		return addressNotHeldError("address %s is owned by another pod and cannot be transferred", ip)
 	}
 
-	if claimedAfter(attr.ActiveOwnerAttrs, started) {
+	if utils.ClaimedAfter(attr.ActiveOwnerAttrs, started) {
 		logger.WithField("fromHandle", currentHandle).Warn("A newer sandbox of this pod claimed the address while this ADD waited, refusing to take it")
 		msg := fmt.Sprintf("address %s was claimed by a newer sandbox of this pod after this ADD started", ip)
 		return cnitypes.NewError(types.ErrCodeSandboxSuperseded, msg, "")
@@ -605,19 +605,6 @@ func transferFromPriorSandbox(
 		return fmt.Errorf("address %s is already allocated and cannot be transferred to this pod", ip)
 	}
 	return nil
-}
-
-// allocationTimestampLayout is the layout of an allocation's timestamp attribute. It matches
-// time.Time's String output for a UTC time, which older releases and other IPAM clients write, so
-// their stamps parse too.
-const allocationTimestampLayout = "2006-01-02 15:04:05.999999999 -0700 MST"
-
-// claimedAfter reports whether an allocation was stamped later than t. Every claim, including a
-// transfer, restamps the address. A missing or unparsable stamp counts as earlier, so the check
-// never blocks a transfer it can't judge.
-func claimedAfter(attrs map[string]string, t time.Time) bool {
-	claimed, err := time.Parse(allocationTimestampLayout, attrs[ipam.AttributeTimestamp])
-	return err == nil && claimed.After(t)
 }
 
 const ipamUpgradedFilePath = "/var/run/calico/cni/ipam_upgraded"
