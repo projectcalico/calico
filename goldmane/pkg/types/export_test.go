@@ -15,21 +15,24 @@
 package types
 
 import (
+	"sync"
 	"unique"
 
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
-// MaxCachedPolicyTraces exposes the trace cache bound to the external test package.
-const MaxCachedPolicyTraces = maxCachedPolicyTraces
+// PolicyTraceGenerationSize exposes the trace cache's generation size to the external test
+// package.
+const PolicyTraceGenerationSize = policyTraceGenerationSize
 
 // PolicyTraceCache is a trace cache separate from the package-wide one, so a test can give it a
-// small bound and cross it cheaply.
+// small generation size and rotate it cheaply.
 type PolicyTraceCache = policyTraceCache
 
-// NewPolicyTraceCache returns an empty trace cache that clears once it holds limit traces.
-func NewPolicyTraceCache(limit int64) *PolicyTraceCache {
-	return newPolicyTraceCache(limit)
+// NewPolicyTraceCache returns an empty trace cache that rotates once its current generation
+// holds generationSize traces.
+func NewPolicyTraceCache(generationSize int64) *PolicyTraceCache {
+	return newPolicyTraceCache(generationSize)
 }
 
 // Trace looks up h as CachedPolicyTrace does for the package-wide cache.
@@ -37,20 +40,33 @@ func (c *policyTraceCache) Trace(h unique.Handle[string]) *proto.PolicyTrace {
 	return c.trace(h)
 }
 
-// Size returns the cache's own count of cached traces, which backs the size gauge.
+// Size returns the cache's own count of entries across both generations, which backs the size
+// gauge.
 func (c *policyTraceCache) Size() int64 {
-	return c.count.Load()
+	return c.size()
 }
 
-// Resets returns how many times the cache has filled and been cleared.
-func (c *policyTraceCache) Resets() uint64 {
-	return c.resets.Load()
+// Rotations returns how many times the cache has started a new generation.
+func (c *policyTraceCache) Rotations() uint64 {
+	return c.rotations.Load()
 }
 
-// Len counts the traces actually in the map, independent of the cache's own count.
-func (c *policyTraceCache) Len() int64 {
+// Holds reports whether either generation holds a trace for h, without promoting it.
+func (c *policyTraceCache) Holds(h unique.Handle[string]) bool {
+	_, inCurrent := loadTrace(c.current.Load(), h)
+	_, inPrevious := loadTrace(c.previous.Load(), h)
+	return inCurrent || inPrevious
+}
+
+// Lens counts the entries actually in the current and previous generations' maps, in that order,
+// independent of the cache's own counts.
+func (c *policyTraceCache) Lens() (int64, int64) {
+	return mapLen(c.current.Load()), mapLen(c.previous.Load())
+}
+
+func mapLen(m *sync.Map) int64 {
 	var n int64
-	c.traces.Range(func(any, any) bool {
+	m.Range(func(any, any) bool {
 		n++
 		return true
 	})
