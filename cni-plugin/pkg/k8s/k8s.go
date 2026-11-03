@@ -47,6 +47,7 @@ import (
 	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -626,10 +627,13 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		}
 	}
 
-	var mismatchedWEP *internalapi.WorkloadEndpoint
+	// The endpoint as this DEL found it, and whether it names another sandbox.
+	var wep *internalapi.WorkloadEndpoint
+	var stale bool
 	for attempts := 5; attempts >= 0; attempts-- {
-		mismatchedWEP = nil
-		wep, err := c.WorkloadEndpoints().Get(ctx, epIDs.Namespace, epIDs.WEPName, options.GetOptions{})
+		var err error
+		stale = false
+		wep, err = c.WorkloadEndpoints().Get(ctx, epIDs.Namespace, epIDs.WEPName, options.GetOptions{})
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 				// Could not connect to datastore (connection refused, unauthorized, etc.)
@@ -641,13 +645,14 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 			// The WorkloadEndpoint doesn't exist for some reason. We should still try to clean up any IPAM allocations
 			// if they exist, so continue DEL processing.
 			logger.WithField("WorkloadEndpoint", epIDs.WEPName).Warning("WorkloadEndpoint does not exist in the datastore, moving forward with the clean up")
+			wep = nil
 		} else if wep.Spec.ContainerID != "" && args.ContainerID != wep.Spec.ContainerID {
 			// If the ContainerID is populated and doesn't match the CNI_CONTAINERID provided for this execution, then
 			// we shouldn't delete the workload endpoint. We identify workload endpoints based on pod name and namespace, which means
 			// we can receive DEL commands for an old sandbox for a currently running pod. However, we key IPAM allocations based on the
 			// CNI_CONTAINERID, so we should still do that below for this case.
 			logger.WithField("WorkloadEndpoint", wep).Warning("CNI_CONTAINERID does not match WorkloadEndpoint ContainerID, don't delete WEP.")
-			mismatchedWEP = wep
+			stale = true
 		} else if _, err = c.WorkloadEndpoints().Delete(
 			ctx,
 			wep.Namespace,
@@ -689,11 +694,13 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		return err
 	}
 
+	keepsListed := wep != nil && keepsListedAddresses(conf, epIDs, "")
+
 	// A stale DEL must not free addresses the endpoint lists, even when IPsByHandle returns none:
 	// it skips unreadable blocks, so an empty result proves nothing.
-	if mismatchedWEP != nil && keepsListedAddresses(conf, epIDs, "") {
+	if keepsListed && stale {
 		handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
-		if _, err := releaseUnlisted(ctx, c.IPAM(), handleID, conf.IPAMLockFile, listedAddresses(mismatchedWEP), logger); err != nil {
+		if _, err := releaseUnlisted(ctx, c.IPAM(), handleID, conf.IPAMLockFile, listedAddresses(wep), logger); err != nil {
 			return err
 		}
 		logger.Info("Teardown processing complete.")
@@ -705,6 +712,14 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 	err = utils.DeleteIPAM(ctx, conf, args, logger)
 	if err != nil {
 		return err
+	}
+
+	// The endpoint is gone, so addresses that failed sandboxes kept for it go too.
+	if keepsListed {
+		owner := ipam.AttributeOwner{Namespace: epIDs.Namespace, Name: epIDs.Pod}
+		if err := releaseListedElsewhere(ctx, c.IPAM(), conf.Name, conf.IPAMLockFile, owner, listedAddresses(wep), logger); err != nil {
+			return err
+		}
 	}
 
 	logger.Info("Teardown processing complete.")

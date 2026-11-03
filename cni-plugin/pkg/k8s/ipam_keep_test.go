@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -44,6 +45,8 @@ type stubHandleIPAM struct {
 	ipsErr     error
 	releaseErr error
 	released   []ipam.ReleaseOptions
+	attrs      map[string]*model.AllocationAttribute
+	attrErrs   map[string]error
 	lockPath   string
 	ctxErrs    []error
 	lockFree   []bool
@@ -52,6 +55,14 @@ type stubHandleIPAM struct {
 func (s *stubHandleIPAM) IPsByHandle(ctx context.Context, _ string) ([]cnet.IP, error) {
 	s.observe(ctx)
 	return s.ips, s.ipsErr
+}
+
+func (s *stubHandleIPAM) GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (*model.AllocationAttribute, error) {
+	s.observe(ctx)
+	if err, ok := s.attrErrs[addr.String()]; ok {
+		return nil, err
+	}
+	return s.attrs[addr.String()], nil
 }
 
 func (s *stubHandleIPAM) ReleaseIPs(ctx context.Context, opts ...ipam.ReleaseOptions) ([]cnet.IP, []ipam.ReleaseOptions, error) {
@@ -163,6 +174,80 @@ var _ = Describe("releaseUnlisted", func() {
 		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.6"), releaseErr: boom}
 		_, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.New[string](), logger)
 		Expect(err).To(MatchError(boom))
+	})
+})
+
+var _ = Describe("releaseListedElsewhere", func() {
+	const network = "k8s-pod-network"
+	owner := ipam.AttributeOwner{Namespace: "ns", Name: "web-0"}
+	logger := logrus.WithField("test", "releaseListedElsewhere")
+	sandboxHandle := ipam.PodHandleID(network, "sandbox-x")
+
+	allocation := func(handle, pod string) *model.AllocationAttribute {
+		return &model.AllocationAttribute{
+			HandleID:         &handle,
+			ActiveOwnerAttrs: map[string]string{ipam.AttributeNamespace: "ns", ipam.AttributePod: pod},
+		}
+	}
+
+	var lockPath string
+	BeforeEach(func() {
+		lockPath = filepath.Join(GinkgoT().TempDir(), "ipam.lock")
+	})
+
+	It("releases only the pod's addresses on a sandbox handle of this network, by that handle", func() {
+		stub := &stubHandleIPAM{attrs: map[string]*model.AllocationAttribute{
+			"10.0.0.5": allocation(sandboxHandle, "web-0"),
+			"10.0.0.6": allocation(sandboxHandle, "other"),
+			"10.0.0.7": allocation("victim-workload", "web-0"),
+			"10.0.0.8": allocation(ipam.PodHandleID("other-network", "sandbox-x"), "web-0"),
+			"10.0.0.9": {},
+		}}
+
+		err := releaseListedElsewhere(context.Background(), stub, network, lockPath, owner, set.From("10.0.0.5", "10.0.0.6", "10.0.0.7", "10.0.0.8", "10.0.0.9"), logger)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(stub.released).To(Equal([]ipam.ReleaseOptions{{Address: "10.0.0.5", Handle: sandboxHandle}}))
+	})
+
+	It("treats an address that is already free or cooling down as released", func() {
+		stub := &stubHandleIPAM{attrErrs: map[string]error{
+			"10.0.0.5": cerrors.ErrorResourceDoesNotExist{},
+			"10.0.0.6": cerrors.ErrorIPInCooldown{},
+		}}
+
+		err := releaseListedElsewhere(context.Background(), stub, network, lockPath, owner, set.From("10.0.0.5", "10.0.0.6"), logger)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(stub.released).To(BeEmpty())
+	})
+
+	It("returns read and release errors after trying every address", func() {
+		readErr, releaseErr := errors.New("datastore down"), errors.New("release failed")
+		stub := &stubHandleIPAM{
+			attrs:      map[string]*model.AllocationAttribute{"10.0.0.6": allocation(sandboxHandle, "web-0")},
+			attrErrs:   map[string]error{"10.0.0.5": readErr},
+			releaseErr: releaseErr,
+		}
+
+		err := releaseListedElsewhere(context.Background(), stub, network, lockPath, owner, set.From("10.0.0.5", "10.0.0.6"), logger)
+
+		Expect(err).To(MatchError(readErr))
+		Expect(err).To(MatchError(releaseErr))
+		Expect(stub.released).To(HaveLen(1))
+	})
+
+	It("works under the host IPAM lock after the caller's context is canceled", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		stub := &stubHandleIPAM{attrs: map[string]*model.AllocationAttribute{"10.0.0.5": allocation(sandboxHandle, "web-0")}, lockPath: lockPath}
+
+		err := releaseListedElsewhere(ctx, stub, network, lockPath, owner, set.From("10.0.0.5"), logger)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(stub.released).To(HaveLen(1))
+		Expect(stub.ctxErrs).To(HaveEach(BeNil()))
+		Expect(stub.lockFree).To(Equal([]bool{false, false}))
 	})
 })
 
