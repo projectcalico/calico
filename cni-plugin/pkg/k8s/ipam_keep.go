@@ -37,21 +37,32 @@ import (
 const ipamReleaseTimeout = 90 * time.Second
 
 // listedAddresses returns the bare IP addresses a workload endpoint records in its
-// IPNetworks. A nil endpoint lists none, and entries that do not parse are skipped.
-func listedAddresses(wep *internalapi.WorkloadEndpoint) set.Set[string] {
+// IPNetworks, as parsed by endpointIPs.
+func listedAddresses(wep *internalapi.WorkloadEndpoint, logger *logrus.Entry) set.Set[string] {
 	listed := set.New[string]()
-	if wep == nil {
-		return listed
-	}
-	for _, ipNetwork := range wep.Spec.IPNetworks {
-		ip, _, err := net.ParseCIDR(ipNetwork)
-		if err != nil {
-			logrus.WithError(err).WithField("ipNetwork", ipNetwork).Warn("Endpoint records an address we cannot parse, ignoring it")
-			continue
-		}
+	for _, ip := range endpointIPs(wep, logger) {
 		listed.Add(ip.String())
 	}
 	return listed
+}
+
+// endpointIPs returns the addresses a workload endpoint records in its IPNetworks, in order.
+// A nil endpoint records none. An entry that doesn't parse is logged and skipped, so one
+// corrupt entry can't stop the others from being reused or kept.
+func endpointIPs(wep *internalapi.WorkloadEndpoint, logger *logrus.Entry) []net.IP {
+	if wep == nil {
+		return nil
+	}
+	var ips []net.IP
+	for _, ipNetwork := range wep.Spec.IPNetworks {
+		ip, _, err := net.ParseCIDR(ipNetwork)
+		if err != nil {
+			logger.WithError(err).WithField("ipNetwork", ipNetwork).Warn("Endpoint records an address we cannot parse, ignoring it")
+			continue
+		}
+		ips = append(ips, ip)
+	}
+	return ips
 }
 
 // releaseUnlisted releases the addresses on handleID that listed does not contain, and

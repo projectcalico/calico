@@ -251,18 +251,31 @@ var _ = Describe("releaseListedElsewhere", func() {
 	})
 })
 
+var _ = DescribeTable("endpointIPs",
+	func(wep *internalapi.WorkloadEndpoint, want []string) {
+		var got []string
+		for _, ip := range endpointIPs(wep, logrus.WithField("test", "endpointIPs")) {
+			got = append(got, ip.String())
+		}
+		Expect(got).To(Equal(want))
+	},
+	Entry("a nil endpoint records nothing", nil, nil),
+	Entry("an endpoint with no networks records nothing", &internalapi.WorkloadEndpoint{}, nil),
+	Entry("dual-stack networks give both bare IPs in order", wepWithNetworks("fd00::5/128", "10.0.0.5/32"), []string{"fd00::5", "10.0.0.5"}),
+	Entry("an unparsable entry is skipped and the rest kept", wepWithNetworks("garbage", "10.0.0.5/32", "10.0.0.6"), []string{"10.0.0.5"}),
+)
+
 var _ = DescribeTable("listedAddresses",
 	func(wep *internalapi.WorkloadEndpoint, want []string) {
-		got := listedAddresses(wep)
+		got := listedAddresses(wep, logrus.WithField("test", "listedAddresses"))
 		Expect(got.Len()).To(Equal(len(want)))
 		for _, ip := range want {
 			Expect(got.Contains(ip)).To(BeTrue(), "missing %s", ip)
 		}
 	},
 	Entry("a nil endpoint lists nothing", nil, nil),
-	Entry("an endpoint with no networks lists nothing", &internalapi.WorkloadEndpoint{}, nil),
 	Entry("dual-stack networks give both bare IPs", wepWithNetworks("10.0.0.5/32", "fd00::5/128"), []string{"10.0.0.5", "fd00::5"}),
-	Entry("an unparseable entry is skipped", wepWithNetworks("10.0.0.5/32", "garbage"), []string{"10.0.0.5"}),
+	Entry("an unparsable entry is skipped", wepWithNetworks("10.0.0.5/32", "garbage"), []string{"10.0.0.5"}),
 )
 
 var _ = DescribeTable("keepsListedAddresses",

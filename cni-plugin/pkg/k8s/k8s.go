@@ -392,7 +392,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	}
 
 	// The addresses the endpoint listed before this ADD, which a failure must not release.
-	listed := listedAddresses(endpoint)
+	listed := listedAddresses(endpoint, logger)
 
 	// Configure the endpoint (creating if required).
 	if endpoint == nil {
@@ -700,7 +700,7 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 	// it skips unreadable blocks, so an empty result proves nothing.
 	if keepsListed && stale {
 		handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
-		if _, err := releaseUnlisted(ctx, c.IPAM(), handleID, conf.IPAMLockFile, listedAddresses(wep), logger); err != nil {
+		if _, err := releaseUnlisted(ctx, c.IPAM(), handleID, conf.IPAMLockFile, listedAddresses(wep, logger), logger); err != nil {
 			return err
 		}
 		logger.Info("Teardown processing complete.")
@@ -717,7 +717,7 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 	// The endpoint is gone, so addresses that failed sandboxes kept for it go too.
 	if keepsListed {
 		owner := ipam.AttributeOwner{Namespace: epIDs.Namespace, Name: epIDs.Pod}
-		if err := releaseListedElsewhere(ctx, c.IPAM(), conf.Name, conf.IPAMLockFile, owner, listedAddresses(wep), logger); err != nil {
+		if err := releaseListedElsewhere(ctx, c.IPAM(), conf.Name, conf.IPAMLockFile, owner, listedAddresses(wep, logger), logger); err != nil {
 			return err
 		}
 	}
@@ -873,7 +873,7 @@ func withAssignFamilies(stdin []byte, v4, v6 bool) ([]byte, error) {
 // priorSandboxIPs returns the addresses recorded on an existing endpoint, which a new
 // sandbox for the same pod should request by address rather than auto-assign.
 func priorSandboxIPs(conf types.NetConf, epIDs utils.WEPIdentifiers, endpoint *internalapi.WorkloadEndpoint, logger *logrus.Entry) []net.IP {
-	if endpoint == nil || conf.IPAM.Type != "calico-ipam" {
+	if conf.IPAM.Type != "calico-ipam" {
 		return nil
 	}
 
@@ -882,17 +882,7 @@ func priorSandboxIPs(conf types.NetConf, epIDs utils.WEPIdentifiers, endpoint *i
 	if kubevirt.MaybeVirtLauncherPod(epIDs.Pod) {
 		return nil
 	}
-
-	var ips []net.IP
-	for _, ipNetwork := range endpoint.Spec.IPNetworks {
-		ip, _, err := net.ParseCIDR(ipNetwork)
-		if err != nil {
-			logger.WithError(err).WithField("ipNetwork", ipNetwork).Warn("Endpoint records an address we cannot parse, not reusing any of them")
-			return nil
-		}
-		ips = append(ips, ip)
-	}
-	return ips
+	return endpointIPs(endpoint, logger)
 }
 
 // assignRequestedIPs calls the configured IPAM plugin once per address, asking for that

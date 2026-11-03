@@ -200,6 +200,10 @@ var _ = Describe("assignPodIPs", func() {
 			wantIPs:     []string{"10.0.0.99", "fd00::99"},
 			wantFresh:   expectFreshAddWithOriginalStdin,
 		}),
+		Entry("an unparsable entry doesn't stop the endpoint's other address being reused", reuseCase{
+			endpointIPs: []string{"garbage", "10.0.0.5"},
+			wantIPs:     []string{"10.0.0.5"},
+		}),
 	)
 
 	It("returns both reused addresses when a failed ADD is retried after the error clears", func() {
