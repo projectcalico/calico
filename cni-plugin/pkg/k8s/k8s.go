@@ -797,12 +797,13 @@ func assignPodIPs(
 	}
 
 	// Only request a lost family the config assigns, so a pod whose pool for that family is
-	// gone comes up in the families it still has.
-	assignsV4, assignsV6, err := configAssignsFamilies(args.StdinData)
-	if err != nil {
+	// gone comes up in the families it still has. Stdin, unlike conf, has the pool
+	// annotations' families.
+	var stdinConf types.NetConf
+	if err := json.Unmarshal(args.StdinData, &stdinConf); err != nil {
 		return nil, err
 	}
-	wantV4, wantV6 := v4Lost && assignsV4, v6Lost && assignsV6
+	wantV4, wantV6 := v4Lost && stdinConf.IPAM.AssignsIPv4(), v6Lost && stdinConf.IPAM.AssignsIPv6()
 	if !wantV4 && !wantV6 {
 		return &kept, nil
 	}
@@ -833,18 +834,6 @@ func assignPodIPs(
 		return -1
 	})
 	return &kept, nil
-}
-
-// configAssignsFamilies reports which IP families calico-ipam allocates for the given stdin:
-// IPv4 unless assign_ipv4 is "false", IPv6 only if assign_ipv6 is "true".
-func configAssignsFamilies(stdin []byte) (bool, bool, error) {
-	var conf types.NetConf
-	if err := json.Unmarshal(stdin, &conf); err != nil {
-		return false, false, err
-	}
-	v4 := conf.IPAM.AssignIpv4 == nil || *conf.IPAM.AssignIpv4 != "false"
-	v6 := conf.IPAM.AssignIpv6 != nil && *conf.IPAM.AssignIpv6 == "true"
-	return v4, v6, nil
 }
 
 // isAddressNotHeld reports whether err is IPAM's answer that a requested address is not held

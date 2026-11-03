@@ -349,15 +349,11 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 			logger.WithField("result.IPs", ipamArgs.IP).Info("Appending an IPv4 address to the result")
 		}
 	} else {
-		// Default to assigning an IPv4 address
-		num4 := 1
-		if conf.IPAM.AssignIpv4 != nil && *conf.IPAM.AssignIpv4 == "false" {
-			num4 = 0
+		var num4, num6 int
+		if conf.IPAM.AssignsIPv4() {
+			num4 = 1
 		}
-
-		// Default to NOT assigning an IPv6 address
-		num6 := 0
-		if conf.IPAM.AssignIpv6 != nil && *conf.IPAM.AssignIpv6 == "true" {
+		if conf.IPAM.AssignsIPv6() {
 			num6 = 1
 		}
 
