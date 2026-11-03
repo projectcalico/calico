@@ -102,7 +102,7 @@ var _ = describe.CalicoDescribe(
 		// N1: once the VM has left, the source node must neither route to it
 		// locally nor advertise it, or traffic from elsewhere can be drawn back
 		// to a node that no longer hosts it.
-		ginkgo.It("should leave no route, BGP export or proxy neighbour for the VM on the source node", func() {
+		ginkgo.It("should leave no route or BGP export for the VM on the source node", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), resilienceMigrationTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
@@ -463,8 +463,23 @@ var _ = describe.CalicoDescribe(
 				return nil
 			}, 1*time.Minute, 2*time.Second).Should(gomega.Succeed())
 
+			ginkgo.By("Verifying the TCP stream kept flowing without gaps")
+			base := stream.NumLines()
+			gomega.Eventually(stream.NumLines, 30*time.Second, 1*time.Second).Should(gomega.BeNumerically(">=", base+5),
+				"TCP stream to the VM stopped delivering after the abort")
+			_ = stream.Stop()
+			gomega.Expect(stream.Err()).NotTo(gomega.HaveOccurred(), "TCP stream errored across the abort")
+			gaps, lastSeq := countSequenceGaps(stream.Lines())
+			logrus.Infof("TCP stream: %d gaps, last seq=%d", gaps, lastSeq)
+			gomega.Expect(gaps).To(gomega.BeZero(), "an aborted migration must not drop TCP segments")
+
+			ginkgo.By("Verifying a fresh TCP connection to the VM succeeds")
+			clientTester.ExpectSuccess(clientConn, vmTarget)
+			clientTester.Execute()
+
 			// Known red (CORE-13929): Felix reads the target losing its role on
-			// abort as a missed GARP and promotes the target to owner.
+			// abort as a missed GARP and promotes the target to owner. Last, so the
+			// connectivity checks above still run while it is red.
 			ginkgo.By("Verifying the source pod is still the sole IPAM owner")
 			handleID := vmipam.CreateVMHandleID("k8s-pod-network", ns, vmName)
 			gomega.Eventually(func() error {
@@ -484,20 +499,6 @@ var _ = describe.CalicoDescribe(
 				}
 				return nil
 			}, 1*time.Minute, 2*time.Second).Should(gomega.Succeed())
-
-			ginkgo.By("Verifying the TCP stream kept flowing without gaps")
-			base := stream.NumLines()
-			gomega.Eventually(stream.NumLines, 30*time.Second, 1*time.Second).Should(gomega.BeNumerically(">=", base+5),
-				"TCP stream to the VM stopped delivering after the abort")
-			_ = stream.Stop()
-			gomega.Expect(stream.Err()).NotTo(gomega.HaveOccurred(), "TCP stream errored across the abort")
-			gaps, lastSeq := countSequenceGaps(stream.Lines())
-			logrus.Infof("TCP stream: %d gaps, last seq=%d", gaps, lastSeq)
-			gomega.Expect(gaps).To(gomega.BeZero(), "an aborted migration must not drop TCP segments")
-
-			ginkgo.By("Verifying a fresh TCP connection to the VM succeeds")
-			clientTester.ExpectSuccess(clientConn, vmTarget)
-			clientTester.Execute()
 		})
 	},
 )
