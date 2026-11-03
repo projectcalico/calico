@@ -18,7 +18,6 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
-	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -58,10 +57,8 @@ type AggregationBucket struct {
 	// replayed cache is not counted twice. Nil once no client can replay this far back.
 	emissions map[emissionKey]struct{}
 
-	// ready is set when this bucket is sent to any stream, and cleared when this bucket is reset.
-	// It can thus be used to determine when a bucket is rolled over between Goldmane deciding to stream it,
-	// and the bucket actually being emited. In this case, we should skip streaming the bucket as its contents
-	// are no longer valid.
+	// ready is set when the bucket is sent to a stream and cleared on reset. Iter checks it only
+	// while copying the flow list, so a reset after the copy does not stop that send.
 	ready bool
 }
 
@@ -170,19 +167,24 @@ func (b *AggregationBucket) markReady() {
 }
 
 // Iter calls fn with a builder for each flow in the bucket that matches filter, stopping when
-// fn returns true. fn runs without the bucket lock, so a slow consumer does not block AddFlow.
+// fn returns true. A nil filter matches every flow. Matching and fn both run without the bucket
+// lock, so neither a slow consumer nor the match pass blocks AddFlow.
 func (b *AggregationBucket) Iter(filter *proto.Filter, fn func(FlowBuilder) bool) {
-	flows, start, end := b.matchingFlows(filter)
+	flows, start, end := b.snapshot()
 	for _, d := range flows {
+		// The key is immutable, so matching it needs no lock.
+		if !types.Matches(filter, &d.Key) {
+			continue
+		}
 		if fn(NewDeferredFlowBuilder(d, start, end)) {
 			return
 		}
 	}
 }
 
-// matchingFlows returns the flows in the bucket that match filter, along with the bucket's
-// time range, or nothing if the bucket has been reset since it was marked ready.
-func (b *AggregationBucket) matchingFlows(filter *proto.Filter) ([]*DiachronicFlow, int64, int64) {
+// snapshot copies the bucket's flows and time range under the read lock, or returns nothing if
+// the bucket has been reset since it was marked ready.
+func (b *AggregationBucket) snapshot() ([]*DiachronicFlow, int64, int64) {
 	b.RLock()
 	defer b.RUnlock()
 
@@ -191,19 +193,9 @@ func (b *AggregationBucket) matchingFlows(filter *proto.Filter) ([]*DiachronicFl
 		return nil, 0, 0
 	}
 
-	// An empty filter matches everything, so skip the per-flow match for it.
-	if googleproto.Size(filter) == 0 {
-		filter = nil
-	}
-
-	var flows []*DiachronicFlow
-	if filter == nil {
-		flows = make([]*DiachronicFlow, 0, b.Flows.Len())
-	}
+	flows := make([]*DiachronicFlow, 0, b.Flows.Len())
 	for d := range b.Flows.All() {
-		if types.Matches(filter, &d.Key) {
-			flows = append(flows, d)
-		}
+		flows = append(flows, d)
 	}
 	return flows, b.StartTime, b.EndTime
 }

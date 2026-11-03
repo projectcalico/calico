@@ -32,6 +32,10 @@ import (
 
 const benchNow = 1000
 
+// streamBufferSize matches the output buffer Goldmane.Stream gives each stream: two slots per
+// bucket with the default 242 buckets.
+const streamBufferSize = 2 * 242
+
 func benchLabels(prefix string, i int) []string {
 	out := make([]string, 0, 10)
 	for j := range 10 {
@@ -109,7 +113,6 @@ type benchFilter struct {
 
 type benchConsumer struct {
 	stream stream.Stream
-	filter *proto.Filter
 	done   chan struct{}
 }
 
@@ -127,7 +130,7 @@ func (c *benchConsumer) run(ctx context.Context) {
 				c.done <- struct{}{}
 				continue
 			}
-			if f.BuildInto(c.filter, res) {
+			if f.BuildInto(nil, res) {
 				if _, err := googleproto.Marshal(res); err != nil {
 					panic(err)
 				}
@@ -166,9 +169,9 @@ func BenchmarkStreamEndToEnd(b *testing.B) {
 
 				var consumers []*benchConsumer
 				for range numStreams {
-					s := <-streams.Register(&proto.FlowStreamRequest{Filter: f.filter}, 484)
+					s := <-streams.Register(&proto.FlowStreamRequest{Filter: f.filter}, streamBufferSize)
 					<-streams.Backfills()
-					c := &benchConsumer{stream: s, filter: f.filter, done: make(chan struct{}, 1)}
+					c := &benchConsumer{stream: s, done: make(chan struct{}, 1)}
 					consumers = append(consumers, c)
 					go c.run(ctx)
 				}
@@ -179,7 +182,6 @@ func BenchmarkStreamEndToEnd(b *testing.B) {
 				}()
 
 				b.ReportAllocs()
-				b.ResetTimer()
 				for b.Loop() {
 					var wg sync.WaitGroup
 					for _, c := range consumers {

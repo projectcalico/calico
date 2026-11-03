@@ -133,12 +133,11 @@ func WriteNonBlocking[E any](ch chan<- E, v E) bool {
 // which can be tedious when managing multiple channels in this manner.
 func WriteWithDeadline[E any](ctx context.Context, ch chan E, v E, duration time.Duration) error {
 	// Try without a timer first, since time.After allocates one even when the channel has room.
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case ch <- v:
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if WriteNonBlocking(ch, v) {
 		return nil
-	default:
 	}
 
 	select {
