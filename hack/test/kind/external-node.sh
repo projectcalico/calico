@@ -104,6 +104,37 @@ up() {
 	return 1
 }
 
+# Images the e2e specs start on the external node with `docker run`. RapidClient
+# is absent because it is built from PR source and loaded separately.
+SEED_IMAGES=(
+	"docker.io/alpine:3"
+	"calico/bird:v0.3.3-211-g9111ec3c"
+	"registry.k8s.io/e2e-test-images/agnhost:2.47"
+)
+
+# The dind daemon pulls anonymously and the framework gives each `docker run` a
+# short ssh timeout, so a slow registry fails the spec. The runner is logged in
+# to the registries, so pull there once and `docker load` into the node.
+# Failures only warn, because the specs can still pull for themselves.
+seed() {
+	local img attempt
+	for img in "${SEED_IMAGES[@]}"; do
+		for attempt in 1 2 3; do
+			docker pull --quiet "$img" >/dev/null && break
+			if [[ $attempt == 3 ]]; then
+				log "WARN: could not pull $img on the runner, skipping seed"
+				return 0
+			fi
+			sleep 5
+		done
+	done
+	if docker save "${SEED_IMAGES[@]}" | docker exec -i "$NAME" docker load; then
+		log "seed: loaded ${#SEED_IMAGES[@]} images into $NAME"
+	else
+		log "WARN: docker load into $NAME failed, specs will pull for themselves"
+	fi
+}
+
 down() {
 	docker rm -f "$NAME" >/dev/null 2>&1 || true
 	# Remove the generated IP file and keypair (regenerated on the next `up`) so
@@ -114,9 +145,10 @@ down() {
 
 case "${1:-up}" in
 up) up ;;
+seed) seed ;;
 down) down ;;
 *)
-	echo "usage: $(basename "$0") up|down" >&2
+	echo "usage: $(basename "$0") up|seed|down" >&2
 	exit 1
 	;;
 esac

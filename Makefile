@@ -365,6 +365,7 @@ e2e-test-bpf:
 	$(MAKE) kind-up KIND_NAME=kind KIND_CONFIG=$(KIND_DIR)/kind-bpf.config EXTRA_VALUES_FILES=$(KIND_INFRA_DIR)/values-bpf.yaml
 	$(MAKE) kind-load-rapidclient KIND_NAME=kind
 	$(KIND_DIR)/external-node.sh up
+	$(KIND_DIR)/external-node.sh seed
 	$(MAKE) external-node-load-rapidclient
 	# EXT_* / SSH_AUTH_SOCK are passed as environment (the e2e binary reads them
 	# via os.Getenv); KIND_NAME/KUBECONFIG/E2E_TEST_CONFIG are make variables.
