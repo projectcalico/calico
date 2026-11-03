@@ -48,6 +48,8 @@ here. A few methods carry design-relevant constraints worth calling out:
 - There is one implementation of the reserved-set arithmetic, in [`accounting/reserved.go`](../../libcalico-go/lib/ipam/accounting/reserved.go), beside the shared pool counts,
   block attribution and leak predicate. `GetUtilization` and `NumReservedIPsInCIDR` are both thin callers of it. Don't grow a second copy in a consumer - a reporting
   surface that disagrees with `calicoctl ipam show` is worse than no surface.
+  Addresses that allocation skips for only some pools are counted through the tracker's reserved classes (`setExtraReserved`), so a block's counts follow its pool's class
+  wherever it moves. The classes only count: the allocation path must skip those addresses itself, and `NumReservedIPsInCIDR`, which takes a CIDR rather than a pool, sees none of them.
 
 ## AutoAssign and host affinity
 
@@ -149,7 +151,7 @@ Conventions in use:
 
 | Caller | Handle ID format |
 |---|---|
-| CNI workload (default) | `<network-name>.<container-id>` via `cni-plugin/internal/pkg/utils.GetHandleID`. For the default network, `<network-name>` is `k8s-pod-network`. |
+| CNI workload (default) | `<network-name>.<container-id>` via `ipam.PodHandleID`. For the default network, `<network-name>` is `k8s-pod-network`. |
 | CNI workload (KubeVirt persistent) | `<network-name>.vmi.<namespace>.<vm-name>` via `vmipam.CreateVMHandleID`, so live-migrated VMs keep the same handle. Hashed if it would exceed 128 characters. |
 | IPIP tunnel | `ipip-tunnel-addr-<node>` |
 | VXLAN tunnel | `vxlan-tunnel-addr-<node>`; IPv6 variant is `vxlan-v6-tunnel-addr-<node>` (note the `-v6-` infix, not a suffix) |

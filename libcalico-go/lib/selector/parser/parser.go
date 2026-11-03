@@ -1,4 +1,4 @@
-// Copyright (c) 2016, 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,19 @@ import (
 
 const parserDebug = false
 
+const (
+	// MaxAPIDepth limits the nesting of parentheses in a selector supplied
+	// via the API.
+	MaxAPIDepth = 100
+	// MaxParseDepth limits the nesting of parentheses in any selector, bounding
+	// the parser's recursion.  Calico combines API selectors and re-renders them
+	// with String(), which parenthesises every && and || node.  For example,
+	// "a || b && (c)" has depth 1 but renders as "(a || (b && c))", depth 2, so
+	// a selector at MaxAPIDepth can end up roughly twice as deep.  This limit
+	// must leave room for that.  Parse enforces this limit.
+	MaxParseDepth = 1000
+)
+
 var (
 	sharedParserLock sync.Mutex
 	sharedParser     = NewParser()
@@ -45,11 +58,14 @@ var (
 	sharedValidator     = NewParser()
 )
 
-func Validate(selector string) (err error) {
+// Validate checks the syntax of the given selector and that its parentheses
+// are nested at most maxDepth deep.  Use MaxAPIDepth for selectors from
+// the API and MaxParseDepth for selectors that Calico derived from them.
+func Validate(selector string, maxDepth int) (err error) {
 	sharedValidatorLock.Lock()
 	defer sharedValidatorLock.Unlock()
 
-	return sharedValidator.Validate(selector)
+	return sharedValidator.Validate(selector, maxDepth)
 }
 
 func NewParser() *Parser {
@@ -59,25 +75,27 @@ func NewParser() *Parser {
 }
 
 type Parser struct {
-	tokBuf []tokenizer.Token
+	tokBuf   []tokenizer.Token
+	maxDepth int
 }
 
 func (p *Parser) Parse(selector string) (sel *Selector, err error) {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.Debugf("Parsing %q", selector)
 	}
-	return p.parseRoot(selector, false)
+	return p.parseRoot(selector, false, MaxParseDepth)
 }
 
-func (p *Parser) Validate(selector string) (err error) {
+func (p *Parser) Validate(selector string, maxDepth int) (err error) {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.Debugf("Validating %q", selector)
 	}
-	_, err = p.parseRoot(selector, true)
+	_, err = p.parseRoot(selector, true, maxDepth)
 	return
 }
 
-func (p *Parser) parseRoot(selector string, validateOnly bool) (sel *Selector, err error) {
+func (p *Parser) parseRoot(selector string, validateOnly bool, maxDepth int) (sel *Selector, err error) {
+	p.maxDepth = maxDepth
 	// Tokenize the input.  We re-use the same shared buffer to avoid
 	// allocations.
 	tokens, err := tokenizer.AppendTokens(p.tokBuf[:0], selector)
@@ -102,7 +120,7 @@ func (p *Parser) parseRoot(selector string, validateOnly bool) (sel *Selector, e
 
 		// The "||" operator has the lowest precedence so we start with that.
 		var remTokens []tokenizer.Token
-		node, remTokens, err = p.parseOrExpression(tokens, validateOnly)
+		node, remTokens, err = p.parseOrExpression(tokens, 0, validateOnly)
 		if err != nil {
 			return
 		}
@@ -124,13 +142,13 @@ func (p *Parser) parseRoot(selector string, validateOnly bool) (sel *Selector, e
 }
 
 // parseOrExpression parses a one or more "&&" terms, separated by "||" operators.
-func (p *Parser) parseOrExpression(tokens []tokenizer.Token, validateOnly bool) (sel Node, remTokens []tokenizer.Token, err error) {
+func (p *Parser) parseOrExpression(tokens []tokenizer.Token, depth int, validateOnly bool) (sel Node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing ||s from %v", tokens)
 	}
 	// Look for the first expression.
 	var andNodes []Node
-	sel, remTokens, err = p.parseAndExpression(tokens, validateOnly)
+	sel, remTokens, err = p.parseAndExpression(tokens, depth, validateOnly)
 	if err != nil {
 		return
 	}
@@ -143,7 +161,7 @@ func (p *Parser) parseOrExpression(tokens []tokenizer.Token, validateOnly bool) 
 		switch remTokens[0].Kind {
 		case tokenizer.TokOr:
 			remTokens = remTokens[1:]
-			sel, remTokens, err = p.parseAndExpression(remTokens, validateOnly)
+			sel, remTokens, err = p.parseAndExpression(remTokens, depth, validateOnly)
 			if err != nil {
 				return
 			}
@@ -168,6 +186,7 @@ func (p *Parser) parseOrExpression(tokens []tokenizer.Token, validateOnly bool) 
 // parseAndExpression parses a one or more operations, separated by "&&" operators.
 func (p *Parser) parseAndExpression(
 	tokens []tokenizer.Token,
+	depth int,
 	validateOnly bool,
 ) (sel Node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
@@ -175,7 +194,7 @@ func (p *Parser) parseAndExpression(
 	}
 	// Look for the first operation.
 	var opNodes []Node
-	sel, remTokens, err = p.parseOperation(tokens, validateOnly)
+	sel, remTokens, err = p.parseOperation(tokens, depth, validateOnly)
 	if err != nil {
 		return
 	}
@@ -188,7 +207,7 @@ func (p *Parser) parseAndExpression(
 		switch remTokens[0].Kind {
 		case tokenizer.TokAnd:
 			remTokens = remTokens[1:]
-			sel, remTokens, err = p.parseOperation(remTokens, validateOnly)
+			sel, remTokens, err = p.parseOperation(remTokens, depth, validateOnly)
 			if err != nil {
 				return
 			}
@@ -216,11 +235,12 @@ var (
 	ErrExpectedRBrace = errors.New("expected }")
 	ErrExpectedString = errors.New("expected string")
 	ErrExpectedSetLit = errors.New("expected set literal")
+	ErrNestingTooDeep = errors.New("parentheses nested too deep")
 )
 
 // parseOperations parses a single, possibly negated operation (i.e. ==, !=, has()).
 // It also handles calling parseOrExpression recursively for parenthesized expressions.
-func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (sel Node, remTokens []tokenizer.Token, err error) {
+func (p *Parser) parseOperation(tokens []tokenizer.Token, depth int, validateOnly bool) (sel Node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing op from %v", tokens)
 	}
@@ -354,7 +374,11 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		}
 	case tokenizer.TokLParen:
 		// We hit a paren, skip past it, then recurse.
-		sel, remTokens, err = p.parseOrExpression(tokens[1:], validateOnly)
+		if depth >= p.maxDepth {
+			err = fmt.Errorf("%w (limit %d)", ErrNestingTooDeep, p.maxDepth)
+			return
+		}
+		sel, remTokens, err = p.parseOrExpression(tokens[1:], depth+1, validateOnly)
 		if err != nil {
 			return
 		}
@@ -371,7 +395,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 	}
 	if negated && err == nil {
 		if !validateOnly {
-			sel = &NotNode{sel}
+			sel = negate(sel)
 		}
 	}
 	return

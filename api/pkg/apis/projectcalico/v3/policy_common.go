@@ -207,7 +207,11 @@ type EntityRule struct {
 	//
 	// Since only some protocols have ports, if any ports are specified it requires the
 	// Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+	// Named ports are at most 15 characters, like Kubernetes port names.
 	// +kubebuilder:validation:MaxItems=50
+	// +kubebuilder:validation:items:XIntOrString
+	// +kubebuilder:validation:items:MaxLength=15
+	// +kubebuilder:validation:items:XValidation:rule="type(self) != string || !self.contains(':') || int(self.split(':')[0]) <= int(self.split(':')[1])",message="port ranges must be written low:high",reason=FieldValueInvalid
 	// +listType=atomic
 	Ports []numorstring.Port `json:"ports,omitempty" validate:"omitempty,dive"`
 
@@ -225,6 +229,9 @@ type EntityRule struct {
 	// Since only some protocols have ports, if any ports are specified it requires the
 	// Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
 	// +kubebuilder:validation:MaxItems=50
+	// +kubebuilder:validation:items:XIntOrString
+	// +kubebuilder:validation:items:MaxLength=15
+	// +kubebuilder:validation:items:XValidation:rule="type(self) != string || !self.contains(':') || int(self.split(':')[0]) <= int(self.split(':')[1])",message="port ranges must be written low:high",reason=FieldValueInvalid
 	// +listType=atomic
 	NotPorts []numorstring.Port `json:"notPorts,omitempty" validate:"omitempty,dive"`
 
@@ -248,11 +255,14 @@ type ServiceAccountMatch struct {
 	// Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
 	// at) a pod running as a service account whose name is in the list.
 	// +listType=set
-	Names []string `json:"names,omitempty" validate:"omitempty"`
+	// +kubebuilder:validation:items:MaxLength=253
+	// +kubebuilder:validation:items:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	Names []string `json:"names,omitempty" validate:"omitempty,dive,name"`
 
 	// Selector is an optional field that restricts the rule to only apply to traffic that originates from
 	// (or terminates at) a pod running as a service account that matches the given label selector.
 	// If both Names and Selector are specified then they are AND'ed.
+	// +kubebuilder:validation:MaxLength=1024
 	Selector string `json:"selector,omitempty" validate:"omitempty,selector"`
 }
 

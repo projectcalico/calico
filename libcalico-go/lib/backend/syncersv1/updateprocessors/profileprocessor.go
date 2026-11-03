@@ -33,99 +33,59 @@ func NewProfileUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 	}
 }
 
-// Need to create custom logic for Profile since it breaks the values into 3 separate KV Pairs:
-// Tags, Labels, and Rules.
+// Profile needs custom logic because it emits two KV pairs: the v1 rules and the whole v3 resource.
 type profileUpdateProcessor struct {
 	v3Kind string
 }
 
 func (pup *profileUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, error) {
 	// Check the v3 resource is the correct type.
-	rk, ok := kvp.Key.(model.ResourceKey)
-	if !ok || rk.Kind != pup.v3Kind {
-		return nil, fmt.Errorf("Incorrect key type - expecting resource of kind %s", pup.v3Kind)
-	}
-
-	// Convert the v3 resource to the equivalent v1 resource type.
 	v3key, ok := kvp.Key.(model.ResourceKey)
-	if !ok {
-		return nil, errors.New("Key is not a valid V2 resource key")
+	if !ok || v3key.Kind != pup.v3Kind {
+		return nil, fmt.Errorf("Incorrect key type - expecting resource of kind %s", pup.v3Kind)
 	}
 
 	if v3key.Name == "" {
 		return nil, errors.New("Missing Name field to create a v1 Profile Key")
 	}
 
-	pk := model.ProfileKey{
-		Name: v3key.Name,
+	v3kvp := *kvp
+	ruleskvp := &model.KVPair{
+		Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: v3key.Name}},
 	}
 
-	v1labelsKey := model.ProfileLabelsKey{ProfileKey: pk}
-	v1rulesKey := model.ProfileRulesKey{ProfileKey: pk}
-	v3kvp := *kvp
-
-	var v1profile *model.Profile
-	var err error
 	// Deletion events will have a value of nil. Do not convert anything for a deletion event.
 	if kvp.Value != nil {
-		v1profile, err = convertProfileV2ToV1Value(kvp.Value)
-		if err != nil {
-			// Currently treat any errors as a deletion event.
+		if profile, ok := kvp.Value.(*apiv3.Profile); ok {
+			ruleskvp.Value = ProfileRulesAPIV3ToBackend(profile)
+			ruleskvp.Revision = kvp.Revision
+		} else {
+			// Treat a value of the wrong type as a deletion.
 			log.WithField("Resource", kvp.Key).Warn("Unable to process resource data - treating as deleted")
 			v3kvp.Value = nil
 		}
 	}
 
-	labelskvp := &model.KVPair{
-		Key: v1labelsKey,
-	}
-	ruleskvp := &model.KVPair{
-		Key: v1rulesKey,
-	}
-
-	if v1profile != nil {
-		if len(v1profile.Labels) > 0 {
-			labelskvp.Value = v1profile.Labels
-			labelskvp.Revision = kvp.Revision
-		}
-		ruleskvp.Value = &v1profile.Rules
-		ruleskvp.Revision = kvp.Revision
-	}
-
-	// Stream the whole v3 Profile resource, as well as the v1 pieces that legacy Felix code
-	// expects.
-	return []*model.KVPair{labelskvp, ruleskvp, &v3kvp}, nil
+	return []*model.KVPair{ruleskvp, &v3kvp}, nil
 }
 
 func (pup *profileUpdateProcessor) OnSyncerStarting() {
 	// Do nothing
 }
 
-func convertProfileV2ToV1Value(val any) (*model.Profile, error) {
-	v3res, ok := val.(*apiv3.Profile)
-	if !ok {
-		return nil, errors.New("Value is not a valid Profile resource value")
-	}
-
+func ProfileRulesAPIV3ToBackend(profile *apiv3.Profile) *model.ProfileRules {
 	var irules []model.Rule
-	for _, irule := range v3res.Spec.Ingress {
+	for _, irule := range profile.Spec.Ingress {
 		irules = append(irules, RuleAPIV3ToBackend(irule, ""))
 	}
 
 	var erules []model.Rule
-	for _, erule := range v3res.Spec.Egress {
+	for _, erule := range profile.Spec.Egress {
 		erules = append(erules, RuleAPIV3ToBackend(erule, ""))
 	}
 
-	rules := model.ProfileRules{
+	return &model.ProfileRules{
 		InboundRules:  irules,
 		OutboundRules: erules,
 	}
-
-	v1value := &model.Profile{
-		Rules:  rules,
-		Labels: v3res.Spec.LabelsToApply,
-	}
-
-	return v1value, nil
 }

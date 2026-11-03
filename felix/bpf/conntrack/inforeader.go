@@ -28,10 +28,10 @@ import (
 )
 
 var (
-	conntrackInfoReaderBlocks = prometheus.NewCounter(prometheus.CounterOpts{
+	conntrackInfoReaderBlocks = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "felix_bpf_conntrack_inforeader_blocks",
 		Help: "Conntrack InfoReader blocks",
-	})
+	}, []string{"ip_version"})
 )
 
 func init() {
@@ -50,7 +50,8 @@ type InfoReader struct {
 	// cachedKTime is the most recent kernel time.
 	cachedKTime int64
 
-	outC chan []collector.ConntrackInfo
+	outC   chan []collector.ConntrackInfo
+	blocks prometheus.Counter
 
 	bufferedConntrackInfo []collector.ConntrackInfo
 }
@@ -58,13 +59,15 @@ type InfoReader struct {
 // NewInfoReader returns a new instance of InfoReader that can be used as a
 // EntryScannerSynced with Scanner and as ConntrackInfoReader with
 // collector.Collector.
-func NewInfoReader(timeouts timeouts.Timeouts, dsr bool, time timeshim.Interface, collectorCtInfoReader *CollectorCtInfoReader) *InfoReader {
+func NewInfoReader(timeouts timeouts.Timeouts, dsr bool, ipFamily int, time timeshim.Interface,
+	collectorCtInfoReader *CollectorCtInfoReader) *InfoReader {
 	r := &InfoReader{
 		timeouts: timeouts,
 		dsr:      dsr,
 		time:     time,
 
-		outC: collectorCtInfoReader.outC,
+		outC:   collectorCtInfoReader.outC,
+		blocks: conntrackInfoReaderBlocks.WithLabelValues(ipFamilyLabel(ipFamily)),
 	}
 
 	if r.time == nil {
@@ -150,7 +153,7 @@ func (r *InfoReader) pushOut(i collector.ConntrackInfo) {
 		case r.outC <- r.bufferedConntrackInfo:
 			r.bufferedConntrackInfo = make([]collector.ConntrackInfo, 0, collector.ConntrackInfoBatchSize)
 		default:
-			conntrackInfoReaderBlocks.Inc()
+			r.blocks.Inc()
 			// keep buffering
 		}
 	}

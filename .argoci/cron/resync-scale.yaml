@@ -23,6 +23,15 @@ generateName: resync-scale-
 # an hour, so the two do not meet.
 schedule: 0 14 * * 0
 
+# Not `when: changed`, as the per-PR workflow has: on a cron the handler resolves
+# "changed" once, when it deploys the CronWorkflow, not per run.  A weekly run that
+# fails is worth a message every time anyway.
+notifications:
+  slack:
+    channel: ci-notifications-os
+    when: failure
+    includeFailedSteps: true
+
 steps:
   - name: resync-scale
     runOn: vm

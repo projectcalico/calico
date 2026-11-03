@@ -28,6 +28,9 @@ include:
 
 exclude:
   labels:
+    - label: RequiresV3CRDs
+      reason: "aggregated API server lane with no encap; the BGP mesh specs would cut kube-apiserver off from calico-apiserver, and with CLUSTER_ROUTING_MODE=Felix BGP isn't the sole routing mechanism they need anyway"
+
     - label: Feature:KubeVirt
       reason: "no KubeVirt on this cluster; these run on the dedicated KubeVirt job (e2e/config/gcp-kubevirt.yaml)"
 

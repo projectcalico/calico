@@ -298,7 +298,11 @@ skip_redir_ifindex:
 			if ((rc = try_redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
 				goto skip_fib;
 			}
-		} else if (cali_rt_needs_tunnel_egress(dest_rt)) {
+		} else if (cali_rt_needs_tunnel_egress(dest_rt) ||
+				(state->ct_result.flags & CALI_CT_FLAG_OVERLAY_REPLY)) {
+			/* A remote tunneled workload, or the reply of a host-originated overlay
+			 * flow (BPFOverlayHostSourceIP=HostAddress) - tagged at ingress because
+			 * its destination node carries the node IP as its route next_hop. */
 			struct bpf_tunnel_key key = {
 				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};

@@ -7,6 +7,10 @@ metadata:
     {{- include "tigera-operator.labels" (dict "context" .) | nindent 4 }}
 spec:
   replicas: 1
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       name: tigera-operator

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package defaults exposes flag-default values sourced from the repo's
-// build metadata. Values resolve once per process via sync.OnceValue.
+// Package defaults holds the per-repo values the release tool defaults to,
+// read from the repo's build metadata. Values resolve once per process.
 //
 // Constant names match metadata.mk variable names verbatim. Unknown keys
 // resolve to empty, so additional keys are added by adding a constant and
@@ -125,8 +125,15 @@ func parseDriverOutput(out string) (map[string]string, error) {
 
 func get(key string) string { return load()[key] }
 
-func Organization() string        { return get(KeyOrganization) }
-func Repo() string                { return get(KeyGitRepo) }
-func Remote() string              { return get(KeyGitRemote) }
-func ReleaseBranchPrefix() string { return get(KeyReleaseBranchPrefix) }
-func DevTagSuffix() string        { return get(KeyDevTagSuffix) }
+func getOr(key, fallback string) string {
+	if v := get(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func Organization() string        { return getOr(KeyOrganization, organization) }
+func Repo() string                { return getOr(KeyGitRepo, repo) }
+func Remote() string              { return getOr(KeyGitRemote, remote) }
+func ReleaseBranchPrefix() string { return getOr(KeyReleaseBranchPrefix, releaseBranchPrefix) }
+func DevTagSuffix() string        { return getOr(KeyDevTagSuffix, devTagSuffix) }
