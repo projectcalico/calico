@@ -260,9 +260,11 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
-	// Deploy Istio CRDs
-	err = handler.CreateOrUpdateOrDelete(ctx, istioComponentCRDs, nil)
-	if err != nil && !errors.IsAlreadyExists(err) {
+	// Unlike the Gateway API CRDs, which other implementations may share, the
+	// Istio CRDs belong to the Istio the operator runs. Istio requires them to be
+	// upgraded before istiod, so they are updated, not only created.
+	err = utils.NewComponentHandler(log, r, r.scheme, nil).CreateOrUpdateOrDelete(ctx, istioComponentCRDs, nil)
+	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error rendering Calico Istio CRDs", err, log)
 		return reconcile.Result{}, err
 	}
@@ -283,6 +285,17 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error patching felix configuration with Istio settings", err, log)
 		return reconcile.Result{}, err
+	}
+
+	outdated, err := outdatedGatewayAPICRDs(ctx, r.Client)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading Gateway API CRDs", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+	if len(outdated) > 0 {
+		r.status.SetWarning(gatewayAPIWarningKey, gatewayAPIWarning(outdated))
+	} else {
+		r.status.ClearWarning(gatewayAPIWarningKey)
 	}
 
 	// Clear the degraded bit if we've reached this far.
