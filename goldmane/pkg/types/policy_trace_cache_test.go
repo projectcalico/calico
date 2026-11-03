@@ -16,6 +16,8 @@ package types_test
 
 import (
 	"fmt"
+	"runtime"
+	"sync"
 	"testing"
 	"unique"
 
@@ -89,6 +91,134 @@ func TestCachedPolicyTraceHitsDoNotReset(t *testing.T) {
 	}
 	require.Equal(t, size, types.PolicyTraceCacheSize())
 	require.Equal(t, resets, types.PolicyTraceCacheResets())
+}
+
+// TestPolicyTraceCacheConcurrentMisses has many goroutines miss on overlapping traces while a
+// small bound forces repeated clears. The cache's count must match the map, the map must stay
+// within the bound, and each fill must count as exactly one reset.
+func TestPolicyTraceCacheConcurrentMisses(t *testing.T) {
+	const (
+		limit      = 8
+		numTraces  = 3 * limit
+		goroutines = 32
+		lookups    = 2000
+	)
+	handles := make([]unique.Handle[string], numTraces)
+	wantNames := make([]string, numTraces)
+	for i := range handles {
+		handles[i] = types.ProtoToFlowLogPolicy(cacheTestTrace(fmt.Sprintf("concurrent-%d", i)))
+		wantNames[i] = fmt.Sprintf("concurrent-%d-first", i)
+	}
+	cache := types.NewPolicyTraceCache(limit)
+
+	// Every trace a lookup returns was inserted once, so the distinct results count the inserts.
+	returned := make([]map[*proto.PolicyTrace]struct{}, goroutines)
+	start := make(chan struct{})
+	var workers sync.WaitGroup
+	for g := range goroutines {
+		returned[g] = map[*proto.PolicyTrace]struct{}{}
+		workers.Go(func() {
+			<-start
+			for i := range lookups {
+				idx := (g + i) % numTraces
+				got := cache.Trace(handles[idx])
+				if got.EnforcedPolicies[0].Name != wantNames[idx] {
+					t.Errorf("lookup of trace %d returned %q", idx, got.EnforcedPolicies[0].Name)
+					return
+				}
+				returned[g][got] = struct{}{}
+			}
+		})
+	}
+
+	done := make(chan struct{})
+	var sampler sync.WaitGroup
+	sampler.Go(func() {
+		for {
+			select {
+			case <-done:
+				return
+			default:
+			}
+			if size := cache.Size(); size > limit {
+				t.Errorf("cache counts %d traces, above the bound of %d", size, limit)
+				return
+			}
+			if n := cache.Len(); n > limit+goroutines {
+				t.Errorf("map holds %d traces, above the bound of %d plus %d in flight", n, limit, goroutines)
+				return
+			}
+		}
+	})
+
+	close(start)
+	workers.Wait()
+	close(done)
+	sampler.Wait()
+
+	inserts := map[*proto.PolicyTrace]struct{}{}
+	for _, r := range returned {
+		for p := range r {
+			inserts[p] = struct{}{}
+		}
+	}
+	size, resets := cache.Size(), cache.Resets()
+	require.Equal(t, cache.Len(), size, "cache count differs from the traces in the map")
+	require.LessOrEqual(t, size, int64(limit))
+	require.Positive(t, resets, "the bound was never crossed")
+	require.Equal(t, int64(len(inserts)), int64(resets)*limit+size, "resets do not match one per fill")
+}
+
+// BenchmarkPolicyTraceCacheRetainedHeap reports the heap a full trace cache retains, for traces
+// with the given number of hits in each of the enforced and pending lists.
+func BenchmarkPolicyTraceCacheRetainedHeap(b *testing.B) {
+	for _, hits := range []int{2, 4, 8} {
+		b.Run(fmt.Sprintf("hits=%d", hits), func(b *testing.B) {
+			handles := make([]unique.Handle[string], types.MaxCachedPolicyTraces)
+			for i := range handles {
+				handles[i] = types.ProtoToFlowLogPolicy(heapTestTrace(i, hits))
+			}
+			var retained int64
+			for b.Loop() {
+				retained = retainedHeap(handles)
+			}
+			b.ReportMetric(float64(retained)/1e6, "MB-retained")
+		})
+	}
+}
+
+// retainedHeap fills a cache sized to hold every handle and returns the live heap it adds.
+func retainedHeap(handles []unique.Handle[string]) int64 {
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	c := types.NewPolicyTraceCache(int64(len(handles)))
+	for _, h := range handles {
+		c.Trace(h)
+	}
+	runtime.GC()
+	runtime.ReadMemStats(&after)
+	runtime.KeepAlive(c)
+	return int64(after.HeapAlloc) - int64(before.HeapAlloc)
+}
+
+func heapTestTrace(i, hits int) *proto.PolicyTrace {
+	list := func(prefix string) []*proto.PolicyHit {
+		out := make([]*proto.PolicyHit, hits)
+		for j := range out {
+			out[j] = &proto.PolicyHit{
+				Kind:        proto.PolicyKind_CalicoNetworkPolicy,
+				Namespace:   fmt.Sprintf("namespace-%d", i),
+				Name:        fmt.Sprintf("%s-policy-%d", prefix, j),
+				Tier:        "default",
+				Action:      proto.Action_Allow,
+				PolicyIndex: int64(j),
+				RuleIndex:   int64(j),
+			}
+		}
+		return out
+	}
+	return &proto.PolicyTrace{EnforcedPolicies: list("enforced"), PendingPolicies: list("pending")}
 }
 
 // TestReadPathsLeaveCachedTraceIntact runs every consumer of the shared trace and checks the
