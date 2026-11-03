@@ -183,6 +183,13 @@ is a contract change for dashboards and alerting; record it here.
 - `goldmane_num_streams` — number of active gRPC stream
   subscriptions.
 
+**Policy trace cache:**
+- `goldmane_policy_trace_cache_size` — decoded policy traces
+  currently cached.
+- `goldmane_policy_trace_cache_resets_total` — times the cache
+  filled and was cleared; a steady rise means the working set of
+  traces exceeds the cap.
+
 ### Review notes
 
 - A new metric needs a name in the documented namespace
