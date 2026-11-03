@@ -32,10 +32,8 @@ Invariants:
 - **A stale ADD never takes a newer sandbox's address.** An ADD refuses to move an address whose allocation was stamped after the ADD started, since only a sandbox kubelet
   created later could have claimed it. It fails with `ErrCodeSandboxSuperseded` instead of falling back to a fresh address, because networking the abandoned sandbox would
   replace the live one's host interface. Both times come from the node's wall clock.
-- **Only `ErrCodeAddressNotHeld` earns a fresh address.** `calico-ipam` returns it when IPAM shows the pod no longer holds an address it asked to reuse, including one in cooldown
-  or in a pool that disallows workloads. The plugin then assigns fresh addresses only for lost families the IPAM config assigns (IPv4 unless `assign_ipv4` is "false", IPv6 only
-  if `assign_ipv6` is "true") and drops the others, so a pod that loses its IPv6 address once IPv6 assignment is off comes up IPv4-only. A pod that lost every address gets a
-  normal ADD. Any other reuse error fails the ADD, as does this code for an `ipAddrs` pod.
+- **Only `ErrCodeAddressNotHeld` earns a fresh address.** `calico-ipam` returns it when the pod no longer holds an address it asked to reuse. The plugin then assigns fresh
+  addresses only for the lost families the IPAM config assigns. Any other reuse error fails the ADD, as does this code for an `ipAddrs` pod.
 
 `cmdAdd` in [`cni-plugin/pkg/ipamplugin/ipam_plugin.go`](../../cni-plugin/pkg/ipamplugin/ipam_plugin.go) is the entry point. The flow is straightforward client construction →
 pool resolution → lock → `AutoAssign` → return. The design-relevant steps are:

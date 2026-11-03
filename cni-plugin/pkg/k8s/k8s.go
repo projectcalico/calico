@@ -696,8 +696,8 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 
 	keepsListed := wep != nil && keepsListedAddresses(conf, epIDs, "")
 
-	// A stale DEL must not free addresses the endpoint lists, even when IPsByHandle returns none:
-	// it skips unreadable blocks, so an empty result proves nothing.
+	// A stale DEL must not free addresses the endpoint lists. An empty handle lookup proves
+	// nothing, since it skips unreadable blocks.
 	if keepsListed && stale {
 		handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
 		if _, err := releaseUnlisted(ctx, c.IPAM(), handleID, conf.IPAMLockFile, listedAddresses(wep, logger), logger); err != nil {
