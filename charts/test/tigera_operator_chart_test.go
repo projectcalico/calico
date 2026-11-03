@@ -11,8 +11,10 @@ import (
 	"github.com/gruntwork-io/terratest/modules/helm"
 	"github.com/gruntwork-io/terratest/modules/k8s"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func TestOperatorImagePullSecrets(t *testing.T) {
@@ -184,6 +186,41 @@ func TestOperatorServiceAccountNaming(t *testing.T) {
 
 		})
 	}
+}
+
+func TestOperatorDeploymentStrategy(t *testing.T) {
+	t.Run("leaves strategy unset by default", func(t *testing.T) {
+		g := NewWithT(t)
+
+		deploys, err := renderObjects(t, &helm.Options{}, isDeployment)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(deploys).To(HaveLen(1))
+		g.Expect(deploys[0].Spec.Strategy).To(Equal(appsv1.DeploymentStrategy{}))
+	})
+
+	t.Run("renders a configured strategy", func(t *testing.T) {
+		g := NewWithT(t)
+		opts := &helm.Options{
+			SetValues: map[string]string{
+				"strategy.type":                         "RollingUpdate",
+				"strategy.rollingUpdate.maxSurge":       "0",
+				"strategy.rollingUpdate.maxUnavailable": "1",
+			},
+		}
+
+		deploys, err := renderObjects(t, opts, isDeployment)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(deploys).To(HaveLen(1))
+		maxSurge := intstr.FromInt32(0)
+		maxUnavailable := intstr.FromInt32(1)
+		g.Expect(deploys[0].Spec.Strategy).To(Equal(appsv1.DeploymentStrategy{
+			Type: appsv1.RollingUpdateDeploymentStrategyType,
+			RollingUpdate: &appsv1.RollingUpdateDeployment{
+				MaxSurge:       &maxSurge,
+				MaxUnavailable: &maxUnavailable,
+			},
+		}))
+	})
 }
 
 func finalizerResourceNames(cr rbacv1.ClusterRole) []string {

@@ -25,6 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -92,7 +93,7 @@ func main() {
 
 	app := &cli.Command{
 		Name:                  "release",
-		Usage:                 fmt.Sprintf("release tool for %s", utils.ProductName),
+		Usage:                 fmt.Sprintf("release tool for %s", defaults.ProductName),
 		Flags:                 globalFlags,
 		Commands:              Commands(cfg),
 		EnableShellCompletion: true,

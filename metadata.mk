@@ -13,7 +13,7 @@ LLVM_VERSION=21.1.8
 # those three versions moves.
 GO_BUILD_VER_SUFFIX=
 GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)$(GO_BUILD_VER_SUFFIX)
-RUST_BUILD_VER=1.96.0
+RUST_BUILD_VER=1.99.1
 
 CALICO_BASE_VER=ubi9-1790725174
 
@@ -70,11 +70,10 @@ WINDOWS_VERSIONS ?= ltsc2019 ltsc2022 ltsc2025
 
 # The CNI plugin and flannel code that will be cloned and rebuilt with this repo's go-build image.
 # Pinned so the content-addressed third-party-cni-plugins image hash changes when these move.
-# CNI_VERSION is a commit SHA because the fork has no release tag at the toolchain we build with;
-# bump it to pick up upstream changes.
-CNI_VERSION=9ffe547cb3b66f80dd32a00fc69a6d0082b55321
+# CNI_VERSION is a commit SHA on upstream main; bump it to pick up upstream changes.
+CNI_VERSION=268232e54c89bae2bf2b1548e03ff183a7a6f9e9
 FLANNEL_VERSION=v1.2.0-flannel2-go1.22.7
-CONTAINERNETWORKING_PLUGINS_REPO=https://github.com/projectcalico/containernetworking-plugins.git
+CONTAINERNETWORKING_PLUGINS_REPO=https://github.com/containernetworking/plugins.git
 FLANNEL_CNI_PLUGIN_REPO=https://github.com/projectcalico/flannel-cni-plugin.git
 
 # The libbpf version to use

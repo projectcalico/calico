@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,8 +65,6 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, cfg apiconfig.C
 	expected = append(expected, existingTierEntries(cfg)...)
 
 	// Add 2 for the default-allow profile that is always there.
-	// However, no profile labels are in the list because the
-	// default-allow profile doesn't specify labels.
 	expectedProfile := resources.DefaultAllowProfile()
 	expected = append(expected, *expectedProfile)
 	expected = append(expected, model.KVPair{
@@ -129,17 +127,6 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, cfg apiconfig.C
 				},
 			})
 
-			// Expect profile labels for each namespace as well. The labels should include the name
-			// of the namespace. As of Kubernetes v1.21, k8s also includes a label for the namespace name
-			// that will be inherited by the profile.
-			expected = append(expected, model.KVPair{
-				Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
-				Value: map[string]string{
-					"pcns.projectcalico.org/name":      ns.Name,
-					"pcns.kubernetes.io/metadata.name": ns.Name,
-				},
-			})
-
 			uid, err := conversion.ConvertUID(ns.UID)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -172,15 +159,6 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, cfg apiconfig.C
 					Value: &model.ProfileRules{
 						InboundRules:  nil,
 						OutboundRules: nil,
-					},
-				})
-
-				// Expect profile labels for each default serviceaccount as well. The labels should include the name
-				// of the service account.
-				expected = append(expected, model.KVPair{
-					Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
-					Value: map[string]string{
-						"pcsa.projectcalico.org/name": sa.Name,
 					},
 				})
 
@@ -497,6 +475,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Disabled:       false,
 					AssignmentMode: apiv3.Automatic,
 					AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+					NodeSelector:   "all()",
 				},
 				Revision: pool.ResourceVersion,
 			})

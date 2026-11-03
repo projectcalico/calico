@@ -11,7 +11,7 @@ and security in an OpenStack/Neutron cloud.  It provides the extra pieces that
 are needed to integrate Calico into OpenStack, namely a Neutron server driver
 or plugin, and a modified DHCP agent.
 
-Calico (http://www.projectcalico.org/) uses IP routing to provide
+Calico (https://www.tigera.io/project-calico/) uses IP routing to provide
 connectivity - in the form of a flat IP network - between the workloads in a
 data center that provide or use IP-based services - whether VMs, containers or
 bare metal appliances; and iptables, to impose any desired fine-grained
@@ -40,7 +40,7 @@ Specifically:
   router to an external network.
 
 Documentation for installing and using networking-calico can be found at
-http://docs.projectcalico.org/master.  Here we maintain docs that may be of
+https://docs.tigera.io/calico/latest/getting-started/openstack/.  Here we maintain docs that may be of
 interest about networking-calico's design and implementation.
 
 .. toctree::

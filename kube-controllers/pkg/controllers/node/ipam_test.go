@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"maps"
 	"math/big"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -39,10 +40,12 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -101,6 +104,10 @@ func assertConsistentState(c *IPAMController) {
 	for node, allocations := range c.allocationState.allocationsByNode {
 		for id, a := range allocations {
 			ExpectWithOffset(1, c.allocationsByBlock[a.block][id]).To(Equal(a), fmt.Sprintf("Allocation %s not present in allocationsByBlock", id))
+		}
+		if node == stoppedVMNode {
+			// No block is ever affine to it.
+			continue
 		}
 		ExpectWithOffset(1, c.blocksByNode).To(HaveKey(node), fmt.Sprintf("Node %s not present in blocksByNode", node))
 	}
@@ -549,16 +556,84 @@ var _ = Describe("IPAM controller UTs", func() {
 			allocation := makeVMIAllocation("default", "some-vm")
 			Expect(c.isVMAllocationValid(allocation)).To(BeTrue())
 		})
+
+		Describe("with no owner, as a stopped VM's address has", func() {
+			makeOwnerless := func(handle string) *allocation {
+				return &allocation{ip: "10.0.0.1", handle: handle}
+			}
+			makeVM := func(ns, name string) *kubevirtv1.VirtualMachine {
+				return &kubevirtv1.VirtualMachine{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name}}
+			}
+			longName := strings.Repeat("v", 120)
+
+			It("should be a VM allocation filed under the stopped-VM bucket", func() {
+				c.Start(stopChan)
+				a := makeOwnerless(vmipam.CreateVMHandleID("", "default", "test-vm"))
+				Expect(a.isVMAllocation()).To(BeTrue())
+				Expect(a.node()).To(Equal(stoppedVMNode))
+			})
+
+			It("should not be a VM allocation on a pod handle", func() {
+				c.Start(stopChan)
+				a := makeOwnerless("k8s-pod-network.0123456789abcdef")
+				Expect(a.isVMAllocation()).To(BeFalse())
+				Expect(a.node()).To(BeEmpty())
+			})
+
+			It("should be valid while the VM its handle names exists", func() {
+				c.Start(stopChan)
+				Expect(vmIndexer.Add(makeVM("default", "test-vm"))).NotTo(HaveOccurred())
+				Expect(c.isVMAllocationValid(makeOwnerless(vmipam.CreateVMHandleID("", "default", "test-vm")))).To(BeTrue())
+			})
+
+			It("should be invalid when only a different VM exists", func() {
+				c.Start(stopChan)
+				Expect(vmIndexer.Add(makeVM("default", "other-vm"))).NotTo(HaveOccurred())
+				Expect(c.isVMAllocationValid(makeOwnerless(vmipam.CreateVMHandleID("", "default", "test-vm")))).To(BeFalse())
+			})
+
+			It("should be valid while a standalone VMI its handle names exists", func() {
+				c.Start(stopChan)
+				vmi := &kubevirtv1.VirtualMachineInstance{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "test-vm"}}
+				Expect(vmiIndexer.Add(vmi)).NotTo(HaveOccurred())
+				Expect(c.isVMAllocationValid(makeOwnerless(vmipam.CreateVMHandleID("", "default", "test-vm")))).To(BeTrue())
+			})
+
+			It("should match a VM whose long name was hashed into the handle", func() {
+				c.Start(stopChan)
+				handle := vmipam.CreateVMHandleID("", "default", longName)
+				Expect(handle).NotTo(ContainSubstring(longName))
+
+				Expect(vmIndexer.Add(makeVM("default", longName+"x"))).NotTo(HaveOccurred())
+				Expect(c.isVMAllocationValid(makeOwnerless(handle))).To(BeFalse())
+
+				Expect(vmIndexer.Add(makeVM("default", longName))).NotTo(HaveOccurred())
+				Expect(c.isVMAllocationValid(makeOwnerless(handle))).To(BeTrue())
+			})
+
+			It("should match a VM on a network whose name contains the handle infix", func() {
+				c.Start(stopChan)
+				handle := vmipam.CreateVMHandleID("a.vmi.b", "default", "test-vm")
+				Expect(c.isVMAllocationValid(makeOwnerless(handle))).To(BeFalse())
+
+				Expect(vmIndexer.Add(makeVM("default", "test-vm"))).NotTo(HaveOccurred())
+				Expect(c.isVMAllocationValid(makeOwnerless(handle))).To(BeTrue())
+			})
+
+			It("should be valid when KubeVirt is not installed", func() {
+				c.deferredInformers = &kubevirt.DeferredInformers{}
+				c.Start(stopChan)
+				Expect(c.isVMAllocationValid(makeOwnerless(vmipam.CreateVMHandleID("", "default", "test-vm")))).To(BeTrue())
+			})
+		})
 	})
 
 	Describe("VM allocation GC through checkAllocations", func() {
 		var handle string
 		var blockCIDR string
 
-		// setupVMAllocation creates a Calico node, Kubernetes node, and a VM-type
-		// IPAM allocation block. The allocation has both Pod and VMIName attributes
-		// to match real KubeVirt allocations.
-		setupVMAllocation := func() {
+		// setupVMNodes creates the Calico node "cnode" and its Kubernetes node "kname".
+		setupVMNodes := func() {
 			n := internalapi.Node{}
 			n.Name = "cnode"
 			n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
@@ -571,6 +646,13 @@ var _ = Describe("IPAM controller UTs", func() {
 			Expect(err).NotTo(HaveOccurred())
 			var node *v1.Node
 			Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+		}
+
+		// setupVMAllocation creates a Calico node, Kubernetes node, and a VM-type
+		// IPAM allocation block. The allocation has both Pod and VMIName attributes
+		// to match real KubeVirt allocations.
+		setupVMAllocation := func() {
+			setupVMNodes()
 
 			handle = "vmi-handle"
 			idx := 0
@@ -708,6 +790,196 @@ var _ = Describe("IPAM controller UTs", func() {
 				a := c.allocationState.allocationsByNode["cnode"][allocID]
 				return a != nil && a.leakedAt == nil && !a.confirmedLeak
 			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "allocation should be marked valid after VM reappears")
+		})
+
+		Describe("for a stopped VM's address", func() {
+			var vmHandle string
+			var blockAffinity *string
+
+			// deliverStoppedVMBlock sends a block holding one address on the VM's handle, owned as given. CNI DEL
+			// clears the owner when the VM stops, which bumps the address's sequence number.
+			deliverStoppedVMBlock := func(owner map[string]string, seq uint64) {
+				idx := 0
+				cidr := net.MustParseCIDR("10.0.0.0/30")
+				b := model.AllocationBlock{
+					CIDR:           cidr,
+					Affinity:       blockAffinity,
+					Allocations:    []*int{&idx, nil, nil, nil},
+					Unallocated:    []int{1, 2, 3},
+					SequenceNumber: seq,
+					Attributes:     []model.AllocationAttribute{{HandleID: &vmHandle, ActiveOwnerAttrs: owner}},
+				}
+				b.SetSequenceNumberForOrdinal(0)
+				kvp := model.KVPair{Key: model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}, Value: &b}
+				blockCIDR = cidr.String()
+				deliver(bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVUpdated})
+			}
+
+			// filedUnder returns the node the GC files the VM's address under, or "" when it isn't filed.
+			filedUnder := func() string {
+				done := c.pause()
+				defer done()
+				for node, allocs := range c.allocationState.allocationsByNode {
+					if _, ok := allocs[fmt.Sprintf("%s/%s", vmHandle, "10.0.0.0")]; ok {
+						return node
+					}
+				}
+				return ""
+			}
+
+			// released reports whether the GC has released the VM's handle.
+			released := func() bool {
+				fakeClient, ok := cli.IPAM().(*fakeIPAMClient)
+				Expect(ok).To(BeTrue())
+				return fakeClient.handlesReleased[vmHandle]
+			}
+
+			BeforeEach(func() {
+				vmHandle = vmipam.CreateVMHandleID("", "default", "test-vm")
+				aff := "host:cnode"
+				blockAffinity = &aff
+			})
+
+			It("should hold the address while the VM exists and release it once the VM is deleted", func() {
+				c.vmRecreationGracePeriod = gracePeriod
+				vm := &kubevirtv1.VirtualMachine{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "test-vm"}}
+				Expect(vmIndexer.Add(vm)).NotTo(HaveOccurred())
+
+				c.Start(stopChan)
+				setupVMNodes()
+				deliverStoppedVMBlock(nil, 1)
+				Eventually(filedUnder, time.Second, 100*time.Millisecond).Should(Equal(stoppedVMNode))
+				c.onStatusUpdate(bapi.InSync)
+
+				Consistently(released, assertionTimeout, 100*time.Millisecond).Should(BeFalse(), "address released while its VM exists")
+
+				Expect(vmIndexer.Delete(vm)).NotTo(HaveOccurred())
+				Eventually(released, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "address not released after its VM was deleted")
+			})
+
+			It("should release the address of a deleted VM in a block with no affinity", func() {
+				c.vmRecreationGracePeriod = gracePeriod
+				blockAffinity = nil
+
+				c.Start(stopChan)
+				deliverStoppedVMBlock(nil, 1)
+				Eventually(filedUnder, time.Second, 100*time.Millisecond).Should(Equal(stoppedVMNode))
+				c.onStatusUpdate(bapi.InSync)
+
+				Eventually(released, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "address not released after its VM was deleted")
+			})
+
+			It("should keep the VM grace period when the block's node is deleted", func() {
+				c.vmRecreationGracePeriod = 1 * time.Hour
+
+				// The block stays affine to cnode, but no Calico or Kubernetes node exists for it.
+				c.Start(stopChan)
+				deliverStoppedVMBlock(nil, 1)
+				Eventually(filedUnder, time.Second, 100*time.Millisecond).Should(Equal(stoppedVMNode))
+				c.onStatusUpdate(bapi.InSync)
+
+				allocID := fmt.Sprintf("%s/%s", vmHandle, "10.0.0.0")
+				Eventually(func() bool {
+					done := c.pause()
+					defer done()
+					a := c.allocationState.allocationsByNode[stoppedVMNode][allocID]
+					return a != nil && a.isCandidateLeak()
+				}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "allocation should be a candidate leak")
+				Consistently(released, assertionTimeout, 100*time.Millisecond).Should(BeFalse(), "address released inside the VM grace period")
+			})
+
+			It("should move an address from its pod's node to the stopped-VM bucket when CNI DEL clears its owner", func() {
+				c.Start(stopChan)
+				deliverStoppedVMBlock(map[string]string{
+					ipam.AttributeNode:      "other-node",
+					ipam.AttributePod:       "virt-launcher-test-vm-xxxxx",
+					ipam.AttributeNamespace: "default",
+					ipam.AttributeVMIName:   "test-vm",
+				}, 1)
+				Eventually(filedUnder, time.Second, 100*time.Millisecond).Should(Equal("other-node"))
+
+				deliverStoppedVMBlock(nil, 2)
+				Eventually(filedUnder, time.Second, 100*time.Millisecond).Should(Equal(stoppedVMNode))
+			})
+		})
+	})
+
+	Describe("pod allocation validation", func() {
+		currentSandbox := strings.Repeat("b", 64)
+		replacedSandbox := strings.Repeat("a", 64)
+
+		// createSandboxPod creates a pod on node kname that has not reported an IP. A non-empty
+		// containerID is recorded the way the CNI plugin records the pod's current sandbox.
+		createSandboxPod := func(phase v1.PodPhase, containerID string) {
+			pod := v1.Pod{}
+			pod.Name = "test-pod"
+			pod.Namespace = "test-namespace"
+			pod.Spec.NodeName = "kname"
+			pod.Status.Phase = phase
+			if containerID != "" {
+				pod.Annotations = map[string]string{conversion.AnnotationContainerID: containerID}
+			}
+			_, err := createPod(context.TODO(), cs, &pod)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		podAllocation := func(handle string) *allocation {
+			return &allocation{
+				ip:     "10.0.0.1",
+				handle: handle,
+				knode:  "kname",
+				attrs: map[string]string{
+					ipam.AttributeNode:      "cnode",
+					ipam.AttributePod:       "test-pod",
+					ipam.AttributeNamespace: "test-namespace",
+				},
+			}
+		}
+
+		DescribeTable("should judge an allocation by its pod's current sandbox and phase",
+			func(phase v1.PodPhase, podContainerID, handle string, want allocationVerdict) {
+				c.Start(stopChan)
+				createSandboxPod(phase, podContainerID)
+				Expect(c.judgeAllocation(podAllocation(handle), false)).To(Equal(want))
+			},
+			Entry("in use on the current sandbox", v1.PodPending, currentSandbox, "k8s-pod-network."+currentSandbox, allocationInUse),
+			Entry("unused from a replaced sandbox", v1.PodPending, currentSandbox, "k8s-pod-network."+replacedSandbox, allocationUnused),
+			Entry("unused from a replaced sandbox on a dotted network name", v1.PodPending, currentSandbox, "secondary.network."+replacedSandbox, allocationUnused),
+			Entry("in use when a hashed VM handle ends in a runtime-shaped ID", v1.PodPending, currentSandbox, "k8s-pod-network.vmi."+replacedSandbox, allocationInUse),
+			Entry("in use when the pod records no sandbox", v1.PodPending, "", "k8s-pod-network."+replacedSandbox, allocationInUse),
+			Entry("in use when the handle names no sandbox", v1.PodPending, currentSandbox, "k8s-pod-network.test-namespace.test-pod", allocationInUse),
+			Entry("in use while running without a reported IP", v1.PodRunning, currentSandbox, "k8s-pod-network."+currentSandbox, allocationInUse),
+			Entry("unused once the pod has succeeded", v1.PodSucceeded, currentSandbox, "k8s-pod-network."+currentSandbox, allocationUnused),
+			Entry("unused once the pod has failed", v1.PodFailed, "", "k8s-pod-network."+currentSandbox, allocationUnused),
+		)
+
+		It("should judge an allocation whose pod doesn't exist as owner gone", func() {
+			c.Start(stopChan)
+			Expect(c.judgeAllocation(podAllocation("k8s-pod-network."+currentSandbox), false)).To(Equal(allocationOwnerGone))
+		})
+
+		It("should trust a reported pod IP over a container ID annotation from an abandoned sandbox", func() {
+			c.Start(stopChan)
+
+			// An abandoned sandbox's ADD finished after the live sandbox's ADD, so the
+			// annotation names the abandoned sandbox while the pod reports the live one's IP.
+			pod := v1.Pod{}
+			pod.Name = "test-pod"
+			pod.Namespace = "test-namespace"
+			pod.Spec.NodeName = "kname"
+			pod.Status.Phase = v1.PodRunning
+			pod.Status.PodIP = "10.0.0.1"
+			pod.Status.PodIPs = []v1.PodIP{{IP: "10.0.0.1"}}
+			pod.Annotations = map[string]string{conversion.AnnotationContainerID: replacedSandbox}
+			_, err := createPod(context.TODO(), cs, &pod)
+			Expect(err).NotTo(HaveOccurred())
+
+			live := podAllocation("k8s-pod-network." + currentSandbox)
+			Expect(c.allocationIsValid(live, false)).To(BeTrue())
+
+			abandoned := podAllocation("k8s-pod-network." + replacedSandbox)
+			abandoned.ip = "10.0.0.2"
+			Expect(c.allocationIsValid(abandoned, false)).To(BeFalse())
 		})
 	})
 
@@ -1700,6 +1972,168 @@ var _ = Describe("IPAM controller UTs", func() {
 				// Verify that the handle has been removed from the handle tracker.
 				_, ok := c.handleTracker.allocationsByHandle[handle]
 				return !ok
+			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
+		})
+	})
+
+	It("should clean up a replaced sandbox's IP while the pod has no IP", func() {
+		n := internalapi.Node{}
+		n.Name = "cnode"
+		n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		kn := v1.Node{}
+		kn.Name = "kname"
+		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		var node *v1.Node
+		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+
+		// The pod's sandbox was rebuilt without ever reporting an IP. Each sandbox got an
+		// allocation of its own, and the CNI plugin recorded the newer one on the pod.
+		currentSandbox := strings.Repeat("b", 64)
+		replacedSandbox := strings.Repeat("a", 64)
+		currentHandle := "k8s-pod-network." + currentSandbox
+		replacedHandle := "k8s-pod-network." + replacedSandbox
+
+		pod := v1.Pod{}
+		pod.Name = "test-pod"
+		pod.Namespace = "test-namespace"
+		pod.Spec.NodeName = "kname"
+		pod.Status.Phase = v1.PodPending
+		pod.Annotations = map[string]string{conversion.AnnotationContainerID: currentSandbox}
+		_, err = createPod(context.TODO(), cs, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		var gotPod *v1.Pod
+		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+
+		c.Start(stopChan)
+
+		replacedIdx := 0
+		currentIdx := 1
+		cidr := net.MustParseCIDR("10.0.0.0/30")
+		aff := "host:cnode"
+		podAttrs := map[string]string{
+			ipam.AttributeNode:      "cnode",
+			ipam.AttributePod:       pod.Name,
+			ipam.AttributeNamespace: pod.Namespace,
+		}
+		b := model.AllocationBlock{
+			CIDR:        cidr,
+			Affinity:    &aff,
+			Allocations: []*int{&replacedIdx, &currentIdx, nil, nil},
+			Unallocated: []int{2, 3},
+			Attributes: []model.AllocationAttribute{
+				{HandleID: &replacedHandle, ActiveOwnerAttrs: podAttrs},
+				{HandleID: &currentHandle, ActiveOwnerAttrs: maps.Clone(podAttrs)},
+			},
+		}
+		kvp := model.KVPair{
+			Key:   model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)},
+			Value: &b,
+		}
+		deliver(bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew})
+
+		Eventually(func() int {
+			done := c.pause()
+			defer done()
+			return len(c.allocationState.allocationsByNode["cnode"])
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(2))
+
+		c.onStatusUpdate(bapi.InSync)
+
+		fakeClient, ok := cli.IPAM().(*fakeIPAMClient)
+		Expect(ok).To(BeTrue())
+		Eventually(func() bool {
+			return fakeClient.handlesReleased[replacedHandle]
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
+		Consistently(func() bool {
+			return fakeClient.handlesReleased[currentHandle]
+		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
+	})
+
+	It("should wait out the grace period for a live pod's IP when its node can't be found", func() {
+		c.config.LeakGracePeriod = &metav1.Duration{Duration: time.Hour}
+
+		// No Calico or Kubernetes node exists, as when a node lookup misses a live node. The
+		// pod is mid-ADD: its new sandbox has an allocation, but the annotation still names
+		// the sandbox before it.
+		currentSandbox := strings.Repeat("b", 64)
+		replacedSandbox := strings.Repeat("a", 64)
+		handle := "k8s-pod-network." + currentSandbox
+
+		pod := v1.Pod{}
+		pod.Name = "test-pod"
+		pod.Namespace = "test-namespace"
+		pod.Spec.NodeName = "node1"
+		pod.Status.Phase = v1.PodPending
+		pod.Annotations = map[string]string{conversion.AnnotationContainerID: replacedSandbox}
+		_, err := createPod(context.TODO(), cs, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		var gotPod *v1.Pod
+		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+
+		c.Start(stopChan)
+
+		idx := 0
+		cidr := net.MustParseCIDR("10.0.0.0/30")
+		aff := "host:node1"
+		block := model.AllocationBlock{
+			CIDR:        cidr,
+			Affinity:    &aff,
+			Allocations: []*int{&idx, nil, nil, nil},
+			Unallocated: []int{1, 2, 3},
+			Attributes: []model.AllocationAttribute{
+				{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
+						ipam.AttributeNode:      "node1",
+						ipam.AttributePod:       pod.Name,
+						ipam.AttributeNamespace: pod.Namespace,
+					},
+				},
+			},
+		}
+		kvp := model.KVPair{
+			Key:   model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)},
+			Value: &block,
+		}
+		deliver(bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew})
+
+		Eventually(func() int {
+			done := c.pause()
+			defer done()
+			return len(c.allocationState.allocationsByNode["node1"])
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(1))
+
+		c.onStatusUpdate(bapi.InSync)
+
+		allocID := handle + "/10.0.0.0"
+		fakeClient, ok := cli.IPAM().(*fakeIPAMClient)
+		Expect(ok).To(BeTrue())
+		By("holding the live pod's IP as a candidate leak", func() {
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				a := c.allocationState.allocationsByNode["node1"][allocID]
+				return a != nil && a.isCandidateLeak()
+			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
+			Consistently(func() bool {
+				return fakeClient.handlesReleased[handle]
+			}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
+			Expect(fakeClient.affinityReleased("node1")).To(BeFalse())
+		})
+
+		By("releasing it at once when the pod is deleted", func() {
+			err := cs.CoreV1().Pods(pod.Namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			var deleted *v1.Pod
+			Eventually(pods).WithTimeout(time.Second).Should(Receive(&deleted))
+			c.OnKubernetesPodDeleted(deleted)
+
+			Eventually(func() bool {
+				return fakeClient.handlesReleased[handle]
 			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 		})
 	})

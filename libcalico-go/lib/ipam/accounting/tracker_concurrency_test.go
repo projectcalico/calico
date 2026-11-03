@@ -38,6 +38,7 @@ func TestConcurrentReadsAndWrites(t *testing.T) {
 		reservations: map[string]*v3.IPReservation{},
 		nodes:        map[string]bool{},
 		refs:         map[string]AddressRef{},
+		newTracker:   NewTracker,
 	}
 
 	var done atomic.Bool

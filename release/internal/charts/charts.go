@@ -24,12 +24,12 @@ import (
 	"slices"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/docs"
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
@@ -76,7 +76,7 @@ func RepoURLAt(base string) (string, error) {
 }
 
 var ChartsURL = func(c Chart) (string, error) {
-	url, err := github.DownloadURL(utils.Organization(), utils.Repo(), c.ProductVersion)
+	url, err := github.DownloadURL(defaults.Organization(), defaults.Repo(), c.ProductVersion)
 	if err != nil {
 		return "", fmt.Errorf("charts download URL: %w", err)
 	}

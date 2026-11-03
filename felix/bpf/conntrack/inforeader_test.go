@@ -55,7 +55,7 @@ var _ = Describe("BPF Conntrack InfoReader", func() {
 		mockTime = mocktime.New()
 		Expect(mockTime.KTimeNanos()).To(BeNumerically("==", now))
 		collectorCtInfoReader = conntrack.NewCollectorCtInfoReader()
-		reader = conntrack.NewInfoReader(timeouts.DefaultTimeouts(), false, mockTime, collectorCtInfoReader)
+		reader = conntrack.NewInfoReader(timeouts.DefaultTimeouts(), false, 4, mockTime, collectorCtInfoReader)
 	})
 
 	DescribeTable("forward entries",

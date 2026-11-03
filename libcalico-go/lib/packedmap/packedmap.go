@@ -26,12 +26,12 @@ import (
 // the packing/unpacking is done by an Encoder.  It's often more convenient to
 // use the Map and Deduped wrapper types, which hide the VPacked internal type.
 // See also MakeCompressedJSON and MakeDedupedCompressedJSON.
-type RawPackedMap[K comparable, VIn, VPacked any] struct {
+type RawPackedMap[K comparable, VIn any, VPacked comparable] struct {
 	encoder Encoder[VIn, VPacked]
 	m       map[K]VPacked
 }
 
-func Make[K comparable, VIn, VPacked any](encoder Encoder[VIn, VPacked]) RawPackedMap[K, VIn, VPacked] {
+func Make[K comparable, VIn any, VPacked comparable](encoder Encoder[VIn, VPacked]) RawPackedMap[K, VIn, VPacked] {
 	return RawPackedMap[K, VIn, VPacked]{
 		encoder: encoder,
 		m:       make(map[K]VPacked),
@@ -75,8 +75,14 @@ type Deduped[K comparable, V any] struct {
 	RawPackedMap[K, V, unique.Handle[string]]
 }
 
-func (pm RawPackedMap[K, VIn, VPacked]) Set(key K, val VIn) {
-	pm.m[key] = pm.encoder.Pack(val)
+// Set stores val and reports whether that changed the stored value.  The comparison is on the
+// packed form, so values that pack identically count as unchanged even when reflect.DeepEqual
+// would say they differ; for example, an empty but non-nil slice in an omitempty field.
+func (pm RawPackedMap[K, VIn, VPacked]) Set(key K, val VIn) (changed bool) {
+	packed := pm.encoder.Pack(val)
+	old, ok := pm.m[key]
+	pm.m[key] = packed
+	return !ok || old != packed
 }
 
 func (pm RawPackedMap[K, VIn, VPacked]) Get(key K) (val VIn, ok bool) {

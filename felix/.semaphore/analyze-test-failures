@@ -298,11 +298,12 @@ fi
 echo "analyze-test-failures: Found $batch_count failed batch(es), running fv-tests-guru-sem-integration..."
 
 if [ -n "${CI_WORKFLOW_NAME:-}" ]; then
-    # ArgoCI links runs, not steps.
-    job_url="https://argoci-viewer.dev.calicocloud.io/public/wf/${CI_WORKFLOW_NAME}"
+    # The viewer selects a step by node id, which shares its pod's numeric suffix.
+    job_url="${CI_WORKFLOW_URL:+${CI_WORKFLOW_URL}?step=${CI_WORKFLOW_NAME}-${CI_STEP_ID##*-}}"
     workflow_id="${CI_WORKFLOW_NAME}"
     git_branch="${CI_GIT_PR_BRANCH:-$CI_GIT_BRANCH}"
-    git_url="${CI_GIT_URL}"
+    # A fork PR is cloned from the fork, but its PR number belongs to the base repo.
+    git_url="git@github.com:${CI_GIT_REPO_SLUG}.git"
     pr_title="${CI_GIT_PR_TITLE/#none/}"
 else
     job_url="${SEMAPHORE_ORGANIZATION_URL}/jobs/${SEMAPHORE_JOB_ID}"
@@ -311,6 +312,8 @@ else
     git_url="${SEMAPHORE_GIT_URL}"
     pr_title="${SEMAPHORE_GIT_PR_NAME:-}"
 fi
+
+export GH_TOKEN="${GH_TOKEN:-${FV_TESTS_GURU_GITHUB_TOKEN:-}}"
 
 printf '{
   "calico_repo": %s,

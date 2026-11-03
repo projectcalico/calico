@@ -230,16 +230,18 @@ ls -la ${CALICO_REPO_DIR}
 if getent group semaphore >/dev/null 2>&1; then
     sudo adduser stack semaphore
 else
-    # Same problem, no shared group to solve it with: `useradd -m` gives a home directory mode
-    # 0750 on Ubuntu, so the stack user cannot even traverse into the checkout.  Opening up
-    # traversal is enough -- the files themselves are world-readable from the default umask.
+    # Same problem, no shared group to solve it with: `useradd -m` gives a
+    # home directory mode 0750 on Ubuntu, so the stack user cannot even
+    # traverse into the checkout.  Reading the files is handled below.
     sudo chmod o+x "$(dirname ${CALICO_REPO_DIR})"
 fi
 
-# Guarantee that the stack user will be able to make a Git clone of the checkout.  Since we started
-# using partial cloning, *.promisor files under .git/objects/pack naturally have permissions
-# -rw-------, which means that stack won't be able to read them.
-sudo chmod -R g+r ${CALICO_REPO_DIR}
+# Guarantee that the stack user will be able to make a Git clone of the
+# checkout.  Since we started using partial cloning, *.promisor files under
+# .git/objects/pack naturally have permissions -rw-------, which means that
+# stack won't be able to read them.  World-readable, not just group-readable:
+# stack only shares the checkout's group on a Semaphore agent.
+sudo chmod -R a+r ${CALICO_REPO_DIR}
 
 # Stack!
 sudo -u stack -H -E bash -x <<'EOF'

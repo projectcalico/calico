@@ -975,7 +975,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		Expect(lastStats.NumPolicies).To(Equal(state.NumPolicies()),
 			"number of policies stat incorrect after moving to state: %v\n%+v",
 			state.Name, spew.Sdump(state.DatastoreState))
-		Expect(lastStats.NumProfiles).To(Equal(state.NumProfileRules()),
+		Expect(lastStats.NumProfiles).To(Equal(state.NumProfiles()),
 			"number of profiles stat incorrect after moving to state: %v\n%+v",
 			state.Name, spew.Sdump(state.DatastoreState))
 		Expect(lastStats.NumALPPolicies).To(Equal(state.NumALPPolicies()),

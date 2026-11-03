@@ -6,4 +6,4 @@ This package contains:
 - Startup scripts and installers, used to install Calico as a set of Windows 
   services.
 
-For installation instructions, please refer to docs.projectcalico.org 
+For installation instructions, please refer to docs.tigera.io 
