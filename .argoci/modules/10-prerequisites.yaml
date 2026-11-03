@@ -416,3 +416,17 @@ steps:
         - ^\.argoci/scripts/test_scripts/check-cron-coverage\.sh$
     commands: |
       ./.argoci/scripts/test_scripts/check-cron-coverage.sh
+
+  # sandcat and calico-mcp are stubbed, so these need no network or cluster.
+  - name: check-sandcat-scripts
+    jobSize: small
+    requests: {cpu: 1500m, memory: 548Mi}
+    changes:
+      in:
+        - ^\.argoci/scripts/sandcat/
+        - ^Makefile$
+    commands: |
+      set -e
+      ./.argoci/scripts/sandcat/test_scripts/sandcat-inline-env.sh
+      ./.argoci/scripts/sandcat/test_scripts/with-inline-diag.sh
+      ./.argoci/scripts/sandcat/test_scripts/sandcat-build-failure.sh
