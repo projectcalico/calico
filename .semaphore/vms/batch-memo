@@ -57,18 +57,20 @@ batch_memo_init() {
 }
 
 # batch_memo_restore_lane <artifacts dir> puts back every batch's reports from
-# the run that passed the whole lane.  Fails if none come back, for example
-# because the entry expired after the plan saw it.
+# the run that passed the whole lane.  Fails if the restore fails or brings back
+# no reports, for example because the entry expired after the plan saw it: a
+# partial restore would publish an incomplete set of results.
 #
 # Reads: BATCH_MEMO_PREFIX, plus those batch_memo_log_lane reads.
 batch_memo_restore_lane() {
-  local artifacts_dir="$1" restored
+  local artifacts_dir="$1" restored=0
   mkdir -p "$artifacts_dir"
   echo "Every batch of this lane passed on an earlier run of this PR with the same inputs; restoring its reports instead of running it."
-  ( cd "$artifacts_dir" && artifact cache restore "$BATCH_MEMO_PREFIX/lane" ) >/dev/null || true
-  restored="$(batch_memo_dirs_with_reports "$artifacts_dir" | wc -l)"
+  if ( cd "$artifacts_dir" && artifact cache restore "$BATCH_MEMO_PREFIX/lane" ) >/dev/null; then
+    restored="$(batch_memo_dirs_with_reports "$artifacts_dir" | wc -l)"
+  fi
   if [ "$restored" -eq 0 ]; then
-    echo "Batch memo: the cached lane has no reports.  felix-build may have been skipped, so this lane can't run; push again or resubmit the workflow." >&2
+    echo "Batch memo: could not restore the cached lane.  felix-build may have been skipped, so this lane can't run; push again or resubmit the workflow." >&2
     batch_memo_log_lane lane 0 0 fail reason=restore-failed
     return 1
   fi
@@ -87,8 +89,10 @@ batch_memo_skip_cached() {
   # One lookup per batch, in parallel: a lane has up to 61.
   for batch in "${batches[@]}"; do
     (
-      if artifact cache has_key "$BATCH_MEMO_PREFIX/batch-$batch" >/dev/null; then
-        ( cd "$artifacts_dir" && artifact cache restore "$BATCH_MEMO_PREFIX/batch-$batch" ) >/dev/null
+      if artifact cache has_key "$BATCH_MEMO_PREFIX/batch-$batch" >/dev/null &&
+        ! ( cd "$artifacts_dir" && artifact cache restore "$BATCH_MEMO_PREFIX/batch-$batch" ) >/dev/null; then
+        # A partial restore may hold some of the batch's reports but not all.
+        rm -rf "${artifacts_dir:?}/$batch"
       fi
     ) &
   done

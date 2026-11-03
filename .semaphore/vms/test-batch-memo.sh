@@ -36,7 +36,9 @@ case "$1 $2" in
     mkdir -p "$(dirname "$STUB_CACHE/$key")"
     tar -cf "$STUB_CACHE/$key" -- "$@" ;;
   "cache restore")
-    [ -f "$STUB_CACHE/$3" ] && tar -xf "$STUB_CACHE/$3" || echo "MISS $3" ;;
+    [ -f "$STUB_CACHE/$3" ] && tar -xf "$STUB_CACHE/$3" || echo "MISS $3"
+    # <key>.fail marks an entry whose restore extracts it, then fails.
+    [ ! -e "$STUB_CACHE/$3.fail" ] ;;
   "cache has_key")
     [ -f "$STUB_CACHE/$3" ] ;;
   "pull workflow")
@@ -129,6 +131,19 @@ check "lane hit: reported" grep -qE '^FV-MEMO-LANE .* outcome=lane batches=4 cac
 for b in ut 1 2 3; do
   check "a lane hit restores batch $b" [ -f "$run3/$b/report/felix_fv_$b.xml" ]
 done
+
+touch "$STUB_CACHE/$BATCH_MEMO_PREFIX/lane.fail"
+run5="$work/run5/artifacts"
+check "a lane restore that fails part way fails" fails batch_memo_restore_lane "$run5"
+rm "$STUB_CACHE/$BATCH_MEMO_PREFIX/lane.fail"
+
+touch "$STUB_CACHE/$BATCH_MEMO_PREFIX/batch-2.fail"
+run6="$work/run6/artifacts"
+batches=(2)
+batch_memo_skip_cached "$run6" >/dev/null
+check "a batch restore that fails part way runs the batch" [ "${batches[*]}" = "2" ]
+check "a batch restore that fails part way is cleared" [ ! -e "$run6/2" ]
+rm "$STUB_CACHE/$BATCH_MEMO_PREFIX/batch-2.fail"
 
 rm "$STUB_CACHE/$BATCH_MEMO_PREFIX/lane"
 run4="$work/run4/artifacts"

@@ -145,6 +145,26 @@ func TestKeyFiles(t *testing.T) {
 	}
 }
 
+func TestManifestKeysExecutableBit(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "script"), "#!/bin/sh\n")
+	files := map[string]bool{"script": true}
+	before, err := buildManifest(dir, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(dir, "script"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	after, err := buildManifest(dir, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) == string(after) {
+		t.Errorf("manifest %q does not change when the file becomes executable", before)
+	}
+}
+
 // TestManifestInputs pins which repo files each class of lane is keyed on.
 func TestManifestInputs(t *testing.T) {
 	if testing.Short() {
@@ -167,6 +187,9 @@ func TestManifestInputs(t *testing.T) {
 		{classBPF, `^felix/bpf-gpl/[^/]*\.c$`, true},
 		{classNonBPF, `^felix/bpf-gpl/globals\.h$`, true},
 		{classNonBPF, `^felix/bpf-gpl/bpf_inline\.h$`, true},
+		// It builds the libbpf that Felix's cgo code links.
+		{classNonBPF, `^felix/bpf-gpl/Makefile$`, true},
+		{classNonBPF, `^felix/bpf-gpl/include/`, false},
 		{classNonBPF, `^felix/bpf-apache/[^/]*\.c$`, true},
 		// The BPF lanes' "ut" batch runs both of these.
 		{classBPF, `^felix/bpf/ut/`, true},

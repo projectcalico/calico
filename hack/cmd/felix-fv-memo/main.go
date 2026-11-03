@@ -67,8 +67,14 @@ const (
 // execute.  Nothing checks these, unlike the Go files, so keep them coarse.
 // A file the FV build compiles, such as a cgo header, stays regardless.
 var memoExclusions = map[class][]string{
-	classNonBPF: slices.Concat(commonExclusions, []string{`^felix/bpf-gpl/`}),
-	classBPF:    commonExclusions,
+	classNonBPF: slices.Concat(commonExclusions, []string{
+		// The BPF programs and their tooling, but not the Makefile, which
+		// builds the libbpf that Felix's cgo code links.
+		`^felix/bpf-gpl/(include|ut)/`,
+		`^felix/bpf-gpl/[^/]*\.[ch]$`,
+		`^felix/bpf-gpl/(calculate-flags|check-headers|list-objs|list-ut-objs)$`,
+	}),
+	classBPF: commonExclusions,
 }
 
 var commonExclusions = []string{
@@ -454,15 +460,25 @@ func keyFiles(g gate, tracked, compiled map[string]bool, exclusions []string) (m
 	return files, nil
 }
 
-// buildManifest returns one sorted "<path> <sha256>" line per file.
+// buildManifest returns one sorted "<path> <mode> <sha256>" line per file.
+// The mode is in it because a script that loses its executable bit fails.
 func buildManifest(repoRoot string, files map[string]bool) ([]byte, error) {
 	var lines []string
 	for f := range files {
-		sum, err := fileSHA256(filepath.Join(repoRoot, f))
+		path := filepath.Join(repoRoot, f)
+		info, err := os.Stat(path)
 		if err != nil {
 			return nil, err
 		}
-		lines = append(lines, f+" "+sum)
+		mode := "644"
+		if info.Mode()&0o111 != 0 {
+			mode = "755"
+		}
+		sum, err := fileSHA256(path)
+		if err != nil {
+			return nil, err
+		}
+		lines = append(lines, f+" "+mode+" "+sum)
 	}
 	slices.Sort(lines)
 	return []byte(strings.Join(lines, "\n") + "\n"), nil
