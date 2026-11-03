@@ -137,6 +137,26 @@ func TestCalicoNodeDiagsCmds_Bridge(t *testing.T) {
 	}
 }
 
+// Events give a failure its timeline, which nothing else in the bundle does.
+func TestKubernetesResourceCmds_Events(t *testing.T) {
+	RegisterTestingT(t)
+	Expect(cmdStrs(kubernetesResourceCmds("/k8s"))).To(ContainElement(
+		"kubectl get events --all-namespaces --sort-by=.lastTimestamp -o wide"))
+}
+
+func TestThirdPartyResourceCmds_KubeVirt(t *testing.T) {
+	RegisterTestingT(t)
+	strs := cmdStrs(thirdPartyResourceCmds("/third-party"))
+	for _, r := range []string{
+		"virtualmachines.kubevirt.io",
+		"virtualmachineinstances.kubevirt.io",
+		"virtualmachineinstancemigrations.kubevirt.io",
+		"datavolumes.cdi.kubevirt.io",
+	} {
+		Expect(strs).To(ContainElement("kubectl get "+r+" --all-namespaces -o yaml"), "missing %s", r)
+	}
+}
+
 func filterStrs(strs []string, substr string) []string {
 	var out []string
 	for _, s := range strs {

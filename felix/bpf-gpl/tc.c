@@ -44,6 +44,7 @@
 #include "nat.h"
 #include "nat_lookup.h"
 #include "nat_types.h"
+#include "nodeport_tun.h"
 #include "parsing.h"
 #include "parsing_types.h"
 #include "policy.h"
@@ -607,6 +608,7 @@ syn_force_policy:
 		) {
 		/* Do RPF check since it's our responsibility to police that. */
 		if (wep_rpf_check(ctx, src_rt) == RPF_RES_FAIL) {
+			deny_reason(ctx, CALI_REASON_RPF_FAIL);
 			goto deny;
 		}
 
@@ -936,8 +938,11 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 					}
 
 					ct_ctx_nat->allow_return = true;
-					ct_ctx_nat->tun_ip = rt->next_hop;
-					STATE->ip_dst = rt->next_hop;
+					if (!np_tun_dst(ctx, &rt->next_hop, &ct_ctx_nat->tun_ip)) {
+						deny_reason(ctx, CALI_REASON_ENCAP_FAIL);
+						goto deny;
+					}
+					STATE->ip_dst = ct_ctx_nat->tun_ip;
 				} else if (cali_rt_is_workload(rt) &&
 						!ip_equal(STATE->ip_dst, STATE->post_nat_ip_dst) &&
 						!CALI_F_NAT_IF) {
@@ -982,8 +987,9 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 			}
 		}
 		if (encap_needed) {
-			if (ip_void(HOST_IP)) {
-				CALI_DEBUG("VXLAN encap needed but host IP unknown; dropping");
+			ipv46_addr_t tun_src;
+
+			if (!np_tun_src(ctx, &tun_src)) {
 				deny_reason(ctx, CALI_REASON_NO_HOST_IP);
 				goto deny;
 			}
@@ -992,7 +998,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 					   ctx->skb->gso_segs, ctx->skb->gso_size);
 				goto icmp_too_big;
 			}
-			STATE->ip_src = HOST_IP;
+			STATE->ip_src = tun_src;
 			*seen_mark = CALI_SKB_MARK_BYPASS_FWD; /* Do FIB if possible */
 			CALI_DEBUG("marking CALI_SKB_MARK_BYPASS_FWD");
 
@@ -1104,12 +1110,10 @@ skip_l4_dnat:
 				CALI_DEBUG("Returning related ICMP from host to tunnel");
 			}
 
-			if (ip_void(HOST_IP)) {
-				CALI_DEBUG("VXLAN encap needed but host IP unknown; dropping");
+			if (!np_tun_src(ctx, &STATE->ip_src)) {
 				deny_reason(ctx, CALI_REASON_NO_HOST_IP);
 				goto deny;
 			}
-			STATE->ip_src = HOST_IP;
 			STATE->ip_dst = STATE->ct_result.tun_ip;
 			goto nat_encap;
 		}
@@ -1222,12 +1226,10 @@ skip_l4_snat:
 		 */
 		if ((dnat_return_should_encap() || (CALI_F_TO_HEP && !CALI_F_DSR)) &&
 									!ip_void(STATE->ct_result.tun_ip)) {
-			if (ip_void(HOST_IP)) {
-				CALI_DEBUG("VXLAN encap needed but host IP unknown; dropping");
+			if (!np_tun_src(ctx, &STATE->ip_src)) {
 				deny_reason(ctx, CALI_REASON_NO_HOST_IP);
 				goto deny;
 			}
-			STATE->ip_src = HOST_IP;
 			STATE->ip_dst = STATE->ct_result.tun_ip;
 			goto nat_encap;
 		}
@@ -1298,14 +1300,7 @@ nat_encap:
 		}
 	}
 
-	/* Trivial hash to use multiple vxlan flows. Note that any value will do
-	 * as long as it is a constant for this direction of the flow. Does not
-	 * even need to be the same for both directions.
-	 *
-	 * ICMP does not have ports, but there is little to no worries about a
-	 * possible out-of-order processing in relation to the related flow.
-	 */
-	__u16 vxlan_src_port = STATE->sport ^ STATE->dport;
+	__u16 vxlan_src_port = vxlan_select_src_port(ctx);
 
 	if (vxlan_encap(ctx, &STATE->ip_src, &STATE->ip_dst, vxlan_src_port)) {
 		deny_reason(ctx, CALI_REASON_ENCAP_FAIL);
@@ -1702,6 +1697,21 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 			ct_ctx_nat->flags |= CALI_CT_FLAG_NP_NO_DSR;
 			CALI_DEBUG("CALI_CT_FLAG_NP_NO_DSR");
 		}
+	}
+
+	/* In HostAddress mode (no tunnel-device IP) a host-networked client's request to a
+	 * local workload arrives over the overlay with the client node IP as inner source;
+	 * the reply targets a bare node IP (CALI_RT_HOST, not tunneled) and would leave
+	 * un-encapsulated with a pod source, which source-checking fabrics (e.g. GCP) drop.
+	 * Mark the flow so fib_co_re.h re-encapsulates the reply to that node.  Scoped to
+	 * ingress on a Calico-owned encapsulating device (IFACE_ENCAPS) with a remote-host
+	 * source, which excludes tunnel=none.  ip_void(HOST_TUNNEL_IP) selects HostAddress
+	 * mode: it is void only for IPIP/VXLAN without a device IP, and set for
+	 * TunnelAddress and for WireGuard, so both are excluded. */
+	if (ip_void(HOST_TUNNEL_IP) && IFACE_ENCAPS && CALI_F_FROM_HEP &&
+			rt_addr_is_remote_host(&state->ip_src)) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_OVERLAY_REPLY;
+		CALI_DEBUG("CALI_CT_FLAG_OVERLAY_REPLY");
 	}
 
 	if (state->ip_proto == IPPROTO_TCP && !(state->flags & CALI_ST_NO_L4_HDR)) {

@@ -21,19 +21,33 @@ import (
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/render"
+	rcomp "github.com/projectcalico/calico/operator/pkg/render/common/components"
 )
 
 // Modifier post-processes the objects a render component produced. Appending to
 // delete cleans up what a prior variant left behind.
 type Modifier func(create, delete []client.Object) (newCreate, newDelete []client.Object)
 
+// DecorateOption configures a decorated component.
+type DecorateOption func(*decoratedComponent)
+
+// WithDerive runs derive after the user overrides are applied, to build objects
+// from the overridden ones, such as a copy of a workload that keeps its overrides.
+func WithDerive(derive Modifier) DecorateOption {
+	return func(d *decoratedComponent) { d.derive = derive }
+}
+
 // Decorate wraps base so modify runs over its rendered objects. An Installation
 // asking for a different variant gets base untouched.
-func Decorate(base render.Component, ri render.Inputs, variant operatorv1.ProductVariant, modify Modifier) render.Component {
+func Decorate(base render.Component, ri render.Inputs, variant operatorv1.ProductVariant, modify Modifier, opts ...DecorateOption) render.Component {
 	if ri.Installation == nil || !sameProduct(ri.Installation.Variant, variant) {
 		return base
 	}
-	return &decoratedComponent{Component: base, modify: modify}
+	d := &decoratedComponent{Component: base, modify: modify}
+	for _, o := range opts {
+		o(d)
+	}
+	return d
 }
 
 // sameProduct reports whether two variant values name the same product. Enterprise has
@@ -43,15 +57,27 @@ func sameProduct(a, b operatorv1.ProductVariant) bool {
 	return a == b || (a.IsEnterprise() && b.IsEnterprise())
 }
 
-// decoratedComponent renders its base component and runs the modifier over the result.
+// decoratedComponent renders its base component and runs the modifier over the
+// result. An Overridable base gets its user overrides after the modifier.
 type decoratedComponent struct {
 	render.Component
 
 	modify Modifier
+	derive Modifier
 }
 
 func (d *decoratedComponent) Objects() ([]client.Object, []client.Object) {
-	return d.modify(d.Component.Objects())
+	var create, del []client.Object
+	if o, ok := d.Component.(render.Overridable); ok {
+		create, del = d.modify(o.ObjectsBeforeOverrides())
+		rcomp.ApplyOverrides(create, o.OverrideTargets())
+	} else {
+		create, del = d.modify(d.Component.Objects())
+	}
+	if d.derive != nil {
+		create, del = d.derive(create, del)
+	}
+	return create, del
 }
 
 // FindObject returns the first object of type T with the given name.

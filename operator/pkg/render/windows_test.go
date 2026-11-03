@@ -420,6 +420,7 @@ var _ = Describe("Windows rendering tests", func() {
 					{Name: "KUBE_NETWORK", Value: "Calico.*"},
 					{Name: "KUBERNETES_SERVICE_HOST", Value: "1.2.3.4"},
 					{Name: "KUBERNETES_SERVICE_PORT", Value: "6443"},
+					{Name: "CALICO_IPAM_TYPE", Value: "Calico"},
 				}
 
 				// Set CALICO_NETWORKING_BACKEND
@@ -799,6 +800,7 @@ var _ = Describe("Windows rendering tests", func() {
 			{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 			{Name: "CALICO_MANAGE_CNI", Value: "true"},
 			{Name: "CALICO_NETWORKING_BACKEND", Value: "vxlan"},
+			{Name: "CALICO_IPAM_TYPE", Value: "AmazonVPC"},
 			{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 			{Name: "CLUSTER_TYPE", Value: "k8s,operator,ecs,windows"},
 			{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
@@ -1248,6 +1250,7 @@ var _ = Describe("Windows rendering tests", func() {
 			{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 			{Name: "CALICO_MANAGE_CNI", Value: "true"},
 			{Name: "CALICO_NETWORKING_BACKEND", Value: "windows-bgp"},
+			{Name: "CALICO_IPAM_TYPE", Value: "Calico"},
 			{Name: "CLUSTER_TYPE", Value: "k8s,operator,openshift,bgp,windows"},
 			{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 			{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
@@ -1706,6 +1709,7 @@ var _ = Describe("Windows rendering tests", func() {
 			{Name: "DATASTORE_TYPE", Value: "kubernetes"},
 			{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 			{Name: "CALICO_NETWORKING_BACKEND", Value: "none"},
+			{Name: "CALICO_IPAM_TYPE", Value: "HostLocal"},
 			{Name: "CALICO_MANAGE_CNI", Value: "true"},
 			{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 			{Name: "CLUSTER_TYPE", Value: "k8s,operator,windows"},

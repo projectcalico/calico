@@ -226,6 +226,10 @@ func Resolve(repoRoot, version string, variants []Variant, resolve registry.Dige
 		errs = append(errs, s.Errorf("%w", &MissingError{Images: missing}))
 	}
 	if err := errors.Join(errs...); err != nil {
+		// A dry run's own images are never published, yet it still reports its scan.
+		if s.scan != nil && s.scan.DryRun {
+			sendImagesToISS(s, unscanned)
+		}
 		return err
 	}
 	s.Logger().Info("Finished resolving container images")
@@ -259,7 +263,7 @@ func sendImagesToISS(s settings, unscanned []string) {
 			"images":  s.scan.Images,
 			"stream":  s.scan.Stream,
 			"release": s.scan.Release,
-		}).Info("Dry run: would send images to ISS")
+		}).Info("Dry run, not sending images to ISS")
 		return
 	}
 	s.Logger().Info("Sending images to ISS")

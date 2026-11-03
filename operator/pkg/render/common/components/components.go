@@ -292,6 +292,21 @@ func GetNodeSelector(overrides any) map[string]string {
 	return value.Interface().(map[string]string)
 }
 
+// GetResources returns the pod-level Spec.Template.Spec.Resources override, or nil
+// if unset. The shared override path doesn't apply it, because only the
+// component knows which container should receive it.
+func GetResources(overrides any) *corev1.ResourceRequirements {
+	value := getField(overrides, "Spec", "Template", "Spec", "Resources")
+	if !value.IsValid() || value.IsNil() {
+		return nil
+	}
+	r, ok := value.Interface().(*corev1.ResourceRequirements)
+	if !ok {
+		return nil
+	}
+	return r
+}
+
 func GetTopologySpreadConstraints(overrides any) []corev1.TopologySpreadConstraint {
 	value := getField(overrides, "Spec", "Template", "Spec", "TopologySpreadConstraints")
 	if !value.IsValid() || value.IsNil() {
@@ -869,6 +884,50 @@ func ApplyEnvoyProxyOverrides(ep *envoyapi.EnvoyProxy, overrides any) {
 		}
 		if !reflect.DeepEqual(r.podTemplateSpec.Spec.Containers[0].Resources, corev1.ResourceRequirements{}) {
 			ep.Spec.Provider.Kubernetes.EnvoyDeployment.Container.Resources = &r.podTemplateSpec.Spec.Containers[0].Resources
+		}
+	}
+}
+
+// ApplyEnvoyProxyServiceOverrides applies the Service overrides to the given EnvoyProxy.
+func ApplyEnvoyProxyServiceOverrides(ep *envoyapi.EnvoyProxy, overrides *operator.GatewayService) {
+	if overrides == nil {
+		return
+	}
+	if ep.Spec.Provider == nil {
+		ep.Spec.Provider = &envoyapi.EnvoyProxyProvider{Type: envoyapi.EnvoyProxyProviderTypeKubernetes}
+	}
+	if ep.Spec.Provider.Kubernetes == nil {
+		ep.Spec.Provider.Kubernetes = &envoyapi.EnvoyProxyKubernetesProvider{}
+	}
+	if ep.Spec.Provider.Kubernetes.EnvoyService == nil {
+		ep.Spec.Provider.Kubernetes.EnvoyService = &envoyapi.KubernetesServiceSpec{}
+	}
+	svc := ep.Spec.Provider.Kubernetes.EnvoyService
+	if overrides.Metadata != nil {
+		if len(overrides.Metadata.Labels) > 0 {
+			svc.Labels = common.MapExistsOrInitialize(svc.Labels)
+			common.MergeMaps(overrides.Metadata.Labels, svc.Labels)
+		}
+		if len(overrides.Metadata.Annotations) > 0 {
+			svc.Annotations = common.MapExistsOrInitialize(svc.Annotations)
+			common.MergeMaps(overrides.Metadata.Annotations, svc.Annotations)
+		}
+	}
+	if overrides.Spec != nil {
+		if overrides.Spec.LoadBalancerClass != nil {
+			svc.LoadBalancerClass = overrides.Spec.LoadBalancerClass
+		}
+		if overrides.Spec.AllocateLoadBalancerNodePorts != nil {
+			svc.AllocateLoadBalancerNodePorts = overrides.Spec.AllocateLoadBalancerNodePorts
+		}
+		if overrides.Spec.LoadBalancerSourceRanges != nil {
+			svc.LoadBalancerSourceRanges = overrides.Spec.LoadBalancerSourceRanges
+		}
+		if overrides.Spec.LoadBalancerIP != nil {
+			svc.LoadBalancerIP = overrides.Spec.LoadBalancerIP
+		}
+		if overrides.Spec.Patch != nil {
+			svc.Patch = overrides.Spec.Patch
 		}
 	}
 }

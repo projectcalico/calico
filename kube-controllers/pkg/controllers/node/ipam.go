@@ -17,6 +17,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"iter"
 	"math/big"
 	"net"
 	"strings"
@@ -46,6 +47,7 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -76,6 +78,10 @@ const (
 
 	// Labels a block that no IP pool owns.
 	unknownPoolLabel = "no_ippool"
+
+	// stoppedVMNode files stopped VMs' addresses, which no node holds. The spaces keep it from colliding with a real
+	// node name, and it is never written to the datastore.
+	stoppedVMNode = "stopped VMs (virtual node)"
 
 	// key for ratelimited sync retries.
 	retryKey = "ipamSyncRetry"
@@ -616,14 +622,13 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 
 		// Check if we already know about this allocation.
 		if existing, ok := c.allocationsByBlock[blockCIDR][alloc.id()]; ok {
-			// If the sequence number has changed for an existing allocation, it means
-			// it has been reallocated. Update the allocation in place and mark it as valid.
-			if existing.sequenceNumber != alloc.sequenceNumber {
-				existing.sequenceNumber = alloc.sequenceNumber
-				existing.attrs = alloc.attrs
-				existing.markValid()
+			if existing.sequenceNumber == alloc.sequenceNumber {
+				continue
 			}
-			continue
+
+			// The address was reallocated or changed owner. A new owner can be on another node, so re-register the
+			// allocation rather than updating it in place; it starts out valid.
+			c.releaseAllocation(existing)
 		}
 
 		// This is a new allocation.
@@ -950,6 +955,12 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 	nodesToRelease := []string{}
 
 	for cnode, allocations := range nodesToCheck {
+		if cnode == stoppedVMNode {
+			c.checkStoppedVMAllocations(allocations)
+			c.allocationState.markClean(cnode, "stopped VM addresses checked")
+			continue
+		}
+
 		// Lookup the corresponding Kubernetes node for each Calico node we found in IPAM.
 		// In KDD mode, these are identical. However, in etcd mode its possible that the Calico node has a
 		// different name from the Kubernetes node.
@@ -1001,8 +1012,8 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 				continue
 			}
 
-			if !a.isPodIP() && !a.isTunnelAddress() {
-				// Skip any allocations which are not either a Kubernetes pod, or a node's
+			if !a.isPodIP() && !a.isTunnelAddress() && !a.isVMAllocation() {
+				// Skip any allocations which are not a Kubernetes pod, a KubeVirt VM, or a node's
 				// IPIP, VXLAN or Wireguard address. In practice, we don't expect these, but they might exist.
 				// When they do, they will need to be released outside of this controller in order for
 				// the block to be cleaned up.
@@ -1017,14 +1028,15 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 				continue
 			}
 
-			if c.allocationIsValid(a, true) {
+			verdict := c.judgeAllocation(a, true)
+			if verdict == allocationInUse {
 				// Allocation is still valid. We can't cleanup the node yet, even
 				// if it appears to be deleted, because the allocation's validity breaks
 				// our confidence.
 				canDelete = false
 				a.markValid()
 				continue
-			} else if !kubernetesNodeExists {
+			} else if !kubernetesNodeExists && verdict == allocationOwnerGone {
 				// The allocation is NOT valid, we can skip the candidacy stage.
 				// We know this with confidence because:
 				// - The node the allocation belongs to no longer exists.
@@ -1032,14 +1044,7 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 				a.markConfirmedLeak()
 			} else if a.isVMAllocation() {
 				// VM/VMI allocation with no backing VM or standalone VMI.
-				// Use a dedicated grace period to tolerate transient gaps
-				// during VM restarts and migrations. If the operator configured
-				// a longer LeakGracePeriod, respect that as well.
-				gracePeriod := c.vmRecreationGracePeriod
-				if c.config.LeakGracePeriod != nil && c.config.LeakGracePeriod.Duration > gracePeriod {
-					gracePeriod = c.config.LeakGracePeriod.Duration
-				}
-				a.markLeak(gracePeriod)
+				a.markLeak(c.vmGracePeriod())
 			} else if c.config.LeakGracePeriod != nil {
 				// The allocation is NOT valid, but the Kubernetes node still exists, so our confidence is lower.
 				// Mark as a candidate leak. If this state remains, it will switch
@@ -1047,14 +1052,12 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 				a.markLeak(c.config.LeakGracePeriod.Duration)
 			}
 
-			if a.isConfirmedLeak() {
-				// If the address is determined to be a confirmed leak, add it to the index.
-				c.confirmedLeaks[a.id()] = a
-			} else if _, ok := c.confirmedLeaks[a.id()]; ok {
-				// Address used to be a leak, but is no longer.
-				logc.Info("Leaked IP has been resurrected")
-				delete(c.confirmedLeaks, a.id())
+			if !kubernetesNodeExists && !a.isConfirmedLeak() {
+				// The owner still exists, so this leak waits out the grace period in case the
+				// node lookup missed a live node. The node's affinities wait with it.
+				canDelete = false
 			}
+			c.indexConfirmedLeak(a)
 		}
 
 		if !kubernetesNodeExists {
@@ -1084,21 +1087,81 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 	return nodesToRelease, nil
 }
 
+// checkStoppedVMAllocations checks the addresses of stopped VMs, which no node holds. Each is kept while its VM or a
+// standalone VMI exists, and released after the VM grace period once neither does. With no node behind them, a node
+// deletion neither skips that grace period nor waits on them.
+func (c *IPAMController) checkStoppedVMAllocations(allocations map[string]*allocation) {
+	for _, a := range allocations {
+		if c.allocationIsValid(a, true) {
+			a.markValid()
+		} else {
+			a.markLeak(c.vmGracePeriod())
+		}
+		c.indexConfirmedLeak(a)
+	}
+}
+
+// vmGracePeriod is how long a VM allocation with no backing VM or standalone VMI waits before it's a confirmed leak.
+// It tolerates the gap while a VM restarts, migrates or is recreated, and a longer LeakGracePeriod still wins.
+func (c *IPAMController) vmGracePeriod() time.Duration {
+	if c.config.LeakGracePeriod != nil && c.config.LeakGracePeriod.Duration > c.vmRecreationGracePeriod {
+		return c.config.LeakGracePeriod.Duration
+	}
+	return c.vmRecreationGracePeriod
+}
+
+// indexConfirmedLeak keeps confirmedLeaks in step with the allocation's state after a check.
+func (c *IPAMController) indexConfirmedLeak(a *allocation) {
+	if a.isConfirmedLeak() {
+		c.confirmedLeaks[a.id()] = a
+	} else if _, ok := c.confirmedLeaks[a.id()]; ok {
+		log.WithFields(a.fields()).Info("Leaked IP has been resurrected")
+		delete(c.confirmedLeaks, a.id())
+	}
+}
+
+// allocationVerdict is the IPAM GC's judgment of whether an allocation is still in use.
+type allocationVerdict int
+
+const (
+	// allocationInUse means the allocation's owner still uses it, or that can't be ruled out.
+	allocationInUse allocationVerdict = iota
+
+	// allocationOwnerGone means the pod or VM the allocation was made for doesn't exist.
+	allocationOwnerGone
+
+	// allocationUnused means the owner exists but doesn't use the allocation.
+	allocationUnused
+)
+
 // allocationIsValid returns true if the allocation is still in use, and false if the allocation
 // appears to be leaked.
 func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool {
+	return c.judgeAllocation(a, preferCache) == allocationInUse
+}
+
+// judgeAllocation decides whether the allocation is still in use and, if it isn't, whether its
+// owner is gone. The distinction matters on a node that can't be found: only an allocation whose
+// owner is gone can skip the leak grace period there, since a node lookup can miss a live node.
+func (c *IPAMController) judgeAllocation(a *allocation, preferCache bool) allocationVerdict {
 	ns := a.attrs[ipam.AttributeNamespace]
 	pod := a.attrs[ipam.AttributePod]
 	logc := log.WithFields(a.fields())
 
 	if a.isTunnelAddress() {
 		// Tunnel addresses are only valid if the hosting node still exists.
-		return a.knode != ""
+		if a.knode != "" {
+			return allocationInUse
+		}
+		return allocationOwnerGone
 	}
 
 	// Handle VMI-based allocations
 	if a.isVMAllocation() {
-		return c.isVMAllocationValid(a)
+		if c.isVMAllocationValid(a) {
+			return allocationInUse
+		}
+		return allocationOwnerGone
 	}
 
 	if ns == "" || pod == "" {
@@ -1106,7 +1169,7 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 		// attributes. Assume it's a valid allocation since we can't perform our
 		// confidence checks below.
 		logc.Debug("IP allocation is missing metadata, cannot confirm or deny validity. Assume valid.")
-		return true
+		return allocationInUse
 	}
 
 	// Query the pod referenced by this allocation. If preferCache is true, then check the cache first.
@@ -1122,11 +1185,11 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			log.WithError(err).Warn("Failed to query pod, assume it exists and allocation is valid")
-			return true
+			return allocationInUse
 		}
 		// Pod not found. Assume this is a leak.
 		logc.Debug("Pod not found, assume it's a leak")
-		return false
+		return allocationOwnerGone
 	}
 
 	// The pod exists - check if it is still on the original node.
@@ -1136,21 +1199,28 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 		// gone and clean it up.
 		fields := log.Fields{"old": a.knode, "new": p.Spec.NodeName}
 		logc.WithFields(fields).Info("Pod rescheduled on new node. Allocation no longer valid")
-		return false
+		return allocationUnused
+	}
+
+	// Kubelet tears down every sandbox of a pod in a terminal phase, so none of its
+	// allocations can still be in use.
+	if p.Status.Phase == v1.PodSucceeded || p.Status.Phase == v1.PodFailed {
+		logc.WithField("phase", p.Status.Phase).Debug("Pod has terminated. Allocation no longer valid")
+		return allocationUnused
 	}
 
 	// Check to see if the pod actually has the IP in question. Gate based on the presence of the
 	// status field, which is populated by kubelet.
 	if p.Status.PodIP == "" || len(p.Status.PodIPs) == 0 {
-		// The pod hasn't received an IP yet.
+		// A pod whose sandboxes keep failing never reports an IP but collects an allocation per
+		// attempt. The annotation is trusted only here, since a slow ADD from an abandoned
+		// sandbox can overwrite it.
+		if fromReplacedSandbox(a, p) {
+			logc.Debug("Allocation belongs to a replaced sandbox. Allocation no longer valid")
+			return allocationUnused
+		}
 		log.Debugf("Pod IP has not yet been reported, consider allocation valid")
-		return true
-	}
-
-	// Pod evicted by agent like kubelet, failed forever, safe to release IP resource
-	if p.Status.Phase == v1.PodFailed && p.Status.Reason == "Evicted" {
-		logc.Debugf("Pod has failed with Evicted. Allocation no longer valid")
-		return false
+		return allocationInUse
 	}
 
 	// Convert the pod to a workload endpoint. This takes advantage of the IP
@@ -1160,7 +1230,7 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 	kvps, err := conv.PodToWorkloadEndpoints(p)
 	if err != nil {
 		log.WithError(err).Warn("Failed to parse pod into WEP, consider allocation valid.")
-		return true
+		return allocationInUse
 	}
 
 	for _, kvp := range kvps {
@@ -1174,46 +1244,111 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 			ip, _, err := net.ParseCIDR(nw)
 			if err != nil {
 				logc.WithError(err).Error("Failed to parse WEP IP, assume allocation is valid")
-				return true
+				return allocationInUse
 			}
 			allocIP := net.ParseIP(a.ip)
 			if allocIP == nil {
 				logc.WithField("ip", a.ip).Error("Failed to parse IP, assume allocation is valid")
-				return true
+				return allocationInUse
 			}
 
 			if allocIP.Equal(ip) {
 				// Found a match.
 				logc.Debugf("Pod has matching IP, allocation is valid")
-				return true
+				return allocationInUse
 			}
 		}
 	}
 
 	logc.Debugf("Allocated IP no longer in-use by pod")
-	return false
+	return allocationUnused
+}
+
+// fromReplacedSandbox reports whether the allocation was made for a sandbox other than the
+// pod's current one. The CNI plugin records the current sandbox's container ID on the pod at
+// every ADD and leaves it in place on DEL, so an allocation whose handle names a different
+// container ID belongs to a sandbox kubelet has replaced. Without both IDs it reports false.
+func fromReplacedSandbox(a *allocation, p *v1.Pod) bool {
+	current := p.Annotations[conversion.AnnotationContainerID]
+	if current == "" {
+		return false
+	}
+	sandbox, ok := ipam.ParsePodHandleIDAnyNetwork(a.handle)
+	return ok && sandbox.ContainerID != current
 }
 
 // isVMAllocationValid checks whether the backing VM or standalone VMI for
 // a VMI-type IP allocation still exists. Returns true on any error or missing
 // data to avoid incorrectly releasing in-use IPs.
 func (c *IPAMController) isVMAllocationValid(a *allocation) bool {
-	ns := a.attrs[ipam.AttributeNamespace]
-	vmiName := a.attrs[ipam.AttributeVMIName]
 	logc := log.WithFields(a.fields())
 
 	vmIndexer := c.deferredInformers.VMIndexer()
 	vmiIndexer := c.deferredInformers.VMInstanceIndexer()
-
-	// If we can't reason about it, don't GC it.
-	// (We can tighten this later once attrs are guaranteed.)
-	if ns == "" || vmiName == "" || vmIndexer == nil || vmiIndexer == nil {
-		logc.Debug("Insufficient data to validate VMI allocation, assuming valid")
+	if vmIndexer == nil || vmiIndexer == nil {
+		logc.Debug("KubeVirt informers not available, assuming VM allocation is valid")
 		return true
 	}
 
-	// Build the cache key using the same format as cache.MetaNamespaceKeyFunc.
-	key := cache.NewObjectName(ns, vmiName).String()
+	if !a.hasOwner() {
+		// A stopped VM's address has no owner, so its handle is all that names the VM.
+		for key := range vmKeysForHandle(a.handle, vmIndexer, vmiIndexer) {
+			if vmBacksKey(logc, key, vmIndexer, vmiIndexer) {
+				return true
+			}
+		}
+		logc.Debug("No VM or standalone VMI matches the allocation's handle")
+		return false
+	}
+
+	// If we can't reason about it, don't GC it.
+	// (We can tighten this later once attrs are guaranteed.)
+	ns := a.attrs[ipam.AttributeNamespace]
+	vmiName := a.attrs[ipam.AttributeVMIName]
+	if ns == "" || vmiName == "" {
+		logc.Debug("Insufficient data to validate VMI allocation, assuming valid")
+		return true
+	}
+	return vmBacksKey(logc, cache.NewObjectName(ns, vmiName).String(), vmIndexer, vmiIndexer)
+}
+
+// vmKeysForHandle yields the cache key of each VM or VMI that CNI could have given the handle. Usually the
+// namespace and name can be read back out of it. A long pair is hashed into the handle instead, so that form is
+// matched by rebuilding the handle of every VM and VMI in the caches.
+func vmKeysForHandle(handle string, indexers ...cache.Indexer) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		for network := range vmipam.VMHandleNetworks(handle) {
+			suffix := handle[len(network)+len(vmipam.VMHandleInfix):]
+
+			// A namespace has no dots, so the first one ends it.
+			if ns, name, ok := strings.Cut(suffix, "."); ok {
+				if vmipam.CreateVMHandleID(network, ns, name) == handle && !yield(cache.NewObjectName(ns, name).String()) {
+					return
+				}
+				continue
+			}
+
+			for _, indexer := range indexers {
+				for _, key := range indexer.ListKeys() {
+					ns, name, err := cache.SplitMetaNamespaceKey(key)
+					if err != nil {
+						log.WithError(err).WithField("key", key).Warn("Unable to parse KubeVirt cache key")
+						continue
+					}
+					if vmipam.CreateVMHandleID(network, ns, name) == handle && !yield(key) {
+						return
+					}
+				}
+			}
+		}
+	}
+}
+
+// vmBacksKey is whether a VirtualMachine, or a VMI no VirtualMachine owns, exists in the caches under the key.
+// A VMI whose VirtualMachine is gone is only awaiting deletion, so it doesn't count. A failed lookup counts as
+// existing, so an in-use address is never released on a cache error.
+func vmBacksKey(logc *log.Entry, key string, vmIndexer, vmiIndexer cache.Indexer) bool {
+	logc = logc.WithField("vm", key)
 
 	// Check if the VM exists in the informer cache.
 	_, vmExists, err := vmIndexer.GetByKey(key)

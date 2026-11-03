@@ -68,6 +68,16 @@ func Include(_, _, relPath string) bool {
 	return true
 }
 
+// S3Excludes are S3 filters for what Include leaves out. In S3 filters
+// * also matches /, so */name excludes name at any depth.
+func S3Excludes() []string {
+	var patterns []string
+	for _, name := range excluded {
+		patterns = append(patterns, name, "*/"+name)
+	}
+	return patterns
+}
+
 func Dir(outputDir string) string {
 	return filepath.Join(outputDir, DirName)
 }
