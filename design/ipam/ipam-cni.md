@@ -22,7 +22,8 @@ The CNI plugin ships two binaries: `calico` (main CNI) and `calico-ipam` (used w
 Invariants:
 
 - **No partial state on failure.** Lock acquisition, the allocation call, and dual-stack family pairing each have a failure mode that must roll back, not leave half-applied state
-  for the next CNI invocation to trip on.
+  for the next CNI invocation to trip on. Under `calico-ipam`, addresses the pod's WorkloadEndpoint lists are the exception (KubeVirt and `ipAddrsNoIpam` pods aside): a failed ADD
+  leaves them on whichever of the pod's handles holds them, since the next ADD claims them back, and releases only the unlisted addresses on its own handle.
 - **Lock then clock.** The 90s allocation timeout starts *after* the host-wide IPAM lock is acquired (see [The IPAM lock](#the-ipam-lock)). Otherwise lock contention burns the
   budget before any allocation work runs.
 - **IPAM dies with the plugin.** A runtime that gives up on a sandbox kills `calico`. A separate `calico-ipam` process would outlive it and could later move the pod's address
@@ -31,6 +32,8 @@ Invariants:
 - **A stale ADD never takes a newer sandbox's address.** An ADD refuses to move an address whose allocation was stamped after the ADD started, since only a sandbox kubelet
   created later could have claimed it. It fails with `ErrCodeSandboxSuperseded` instead of falling back to a fresh address, because networking the abandoned sandbox would
   replace the live one's host interface. Both times come from the node's wall clock.
+- **Only `ErrCodeAddressNotHeld` earns a fresh address.** `calico-ipam` returns it when the pod no longer holds an address it asked to reuse. The plugin then assigns fresh
+  addresses only for the lost families the IPAM config assigns. Any other reuse error fails the ADD, as does this code for an `ipAddrs` pod.
 
 `cmdAdd` in [`cni-plugin/pkg/ipamplugin/ipam_plugin.go`](../../cni-plugin/pkg/ipamplugin/ipam_plugin.go) is the entry point. The flow is straightforward client construction →
 pool resolution → lock → `AutoAssign` → return. The design-relevant steps are:
@@ -60,12 +63,17 @@ Static / BYO IP and pool / floating-IP annotations are handled inside `cni-plugi
 Invariants:
 
 - **DEL is idempotent.** Any subset of block, handle, or allocation may already be gone. "Not found" is success.
-- **Release by every handle form.** `utils.PodHandleIDs` lists the container-ID forms, of which one at most holds the allocation, and the workload-ID handle (`<namespace>.<pod>`) is
-  released on top of those. Dropping a form leaves its IPs for the kube-controllers GC to reclaim instead of freeing them on DEL.
+- **Release by both handle forms.** DEL releases the sandbox's container-ID handle, then the workload-ID handle (`<namespace>.<pod>`). Dropping either leaves its IPs for the
+  kube-controllers GC to reclaim instead of freeing them on DEL.
+- **A stale sandbox's DEL keeps what the WEP lists.** When the DEL's container ID doesn't match the WEP's, it releases only the unlisted addresses on its own handle, because a later
+  ADD may have moved the listed ones there, and never falls through to the normal release: `IPsByHandle` skips a block it can't read, so finding no listed address there proves
+  nothing. The workload-ID handle stays for the matching DEL to release. That DEL also releases each listed address held on another of the pod's container-ID handles for
+  the same network, so one a failed sandbox kept doesn't outlive the pod. It checks the owner, passes the handle as a precondition, and skips an allocation stamped after the DEL
+  started, so a newer sandbox's address is never freed. KubeVirt pods and IPAM types other than `calico-ipam` release as usual.
 - **KubeVirt DEL is not "release immediately."** Clear owner attrs first; release only when the VM/VMI is gone and all attrs are empty.
 
-`cmdDel` in the same file. The standard path tries the forms `utils.PodHandleIDs` returns, stopping at the first that releases something, then releases the workload-ID handle
-(`<namespace>.<pod>`) unconditionally: that one is not derived from the container ID, so it can hold an allocation at the same time as a container-ID handle.
+`cmdDel` in the same file. The standard path releases the container-ID handle (`GetHandleID`), then the workload-ID handle (`<namespace>.<pod>`) unconditionally: that one
+is not derived from the container ID, so it can hold an allocation at the same time as a container-ID handle.
 `ErrorResourceDoesNotExist` at this stage is success, not failure - any subset of block / handle / allocation may already be gone.
 
 KubeVirt with persistence is the exception: the IP must survive pod deletion so it follows the VM through live migration. The plugin fetches the VMI, checks `DeletionTimestamp`,
@@ -74,7 +82,7 @@ enumerates via `IPsByHandle`, and clears owner attrs through `SetOwnerAttributes
 
 **Review notes**
 
-- Always release by every form in `utils.PodHandleIDs` and by the workload-ID handle. Dropping the workload-ID call leaks IPs across CRI container-ID changes and across upgrades
+- Always release by the container-ID handle and by the workload-ID handle. Dropping the workload-ID call leaks IPs across CRI container-ID changes and across upgrades
   from v2.x-era allocations.
 - DEL must be idempotent. A retry that fails because the block is gone is a bug, not a feature.
 - KubeVirt DEL is not "release immediately." The `SetOwnerAttributes` preconditions exist because Felix can race the active/alternate swap; if the precondition fails, the CNI
@@ -109,8 +117,8 @@ skips IPAM, the IP is whatever the user wrote, and nothing else in Calico knows 
 
 `ipam_plugin.go` is shared; the platform splits are file-level GOOS shims and a small set of args set differently on Windows.
 
-- Lock file: Linux defaults to `/var/run/calico/ipam.lock` ([`ipam_lock_linux.go`](../../cni-plugin/pkg/ipamplugin/ipam_lock_linux.go)); Windows to `c:\CalicoWindows\ipam.lock`
-  ([`ipam_lock_windows.go`](../../cni-plugin/pkg/ipamplugin/ipam_lock_windows.go)).
+- Lock file: Linux defaults to `/var/run/calico/ipam.lock` ([`ipam_lock_linux.go`](../../cni-plugin/internal/pkg/utils/ipam_lock_linux.go)); Windows to
+  `c:\CalicoWindows\ipam.lock` ([`ipam_lock_windows.go`](../../cni-plugin/internal/pkg/utils/ipam_lock_windows.go)).
 - Binary: Windows enters through `node/cmd/calico-ipam`.
 - Windows forces `StrictAffinity=true` (HNS can't route remote affinity blocks). `WindowsUseSingleNetwork` collapses to `MaxBlocksPerHost = 1`. `HostReservedAttrIPv4s` reserves the
   first three and last IP of each block under the literal handle `windows-reserved-ipam-handle`. The reserved-handle name is parsed elsewhere - don't rename it.
@@ -129,8 +137,9 @@ worse than failing the ADD: the user asked for dual-stack and didn't get it.
 
 ## The IPAM lock
 
-`acquireIPAMLockBestEffort` in [`cni-plugin/pkg/ipamplugin/ipam_plugin.go`](../../cni-plugin/pkg/ipamplugin/ipam_plugin.go) takes a `flock` on the path from `conf.IPAMLockFile`,
-falling back to the platform default. The lock is per-host and held for the duration of the ADD (or DEL) call.
+`AcquireIPAMLockBestEffort` in [`cni-plugin/internal/pkg/utils/ipam_lock.go`](../../cni-plugin/internal/pkg/utils/ipam_lock.go) takes a `flock` on the path from
+`conf.IPAMLockFile`, falling back to the platform default. The lock is per-host and held for the duration of a `calico-ipam` ADD or DEL call, and while the `calico` plugin
+releases addresses itself to keep the ones a WEP lists. It isn't reentrant, so `calico` must release it before running `calico-ipam` in-process.
 
 What it protects against: two `calico-ipam` invocations on the same node racing each other. CAS on `IPAMBlock` would technically serialize the persisted state, but pre-allocation
 work (resolving pools, choosing a block, claiming a fresh affinity) is multi-step and the second invocation would otherwise waste a full retry budget bouncing off the first.
@@ -141,11 +150,11 @@ entire budget on lock contention and then fail the ADD with no allocation attemp
 
 **Review notes**
 
-- Lock first, then start the timeout. The clock starts after `acquireIPAMLockBestEffort` returns, not before.
+- Lock first, then start the timeout. The clock starts after `AcquireIPAMLockBestEffort` returns, not before.
 - The lock is best-effort: if acquisition fails (permissions, missing dir) the function logs and returns a no-op unlock so allocation proceeds. Don't promote this to a hard failure
   - the CAS layer is still correct, the lock is a contention optimization.
 - The lock is host-local. It doesn't protect against another node racing for the same block; the BlockAffinity two-phase claim does that.
-- Don't take the lock around the libcalico client construction or other slow setup. Hold it only across the allocation call.
+- Don't take the lock around the libcalico client construction or other slow setup. Hold it only across the allocation or release calls.
 
 ## Pod handle form
 

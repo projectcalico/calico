@@ -1,0 +1,58 @@
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package utils
+
+import (
+	"os"
+	"path/filepath"
+
+	"github.com/gofrs/flock"
+	"github.com/sirupsen/logrus"
+)
+
+// UnlockFn releases a lock taken by AcquireIPAMLockBestEffort.
+type UnlockFn func()
+
+// AcquireIPAMLockBestEffort attempts to acquire the IPAM file lock, blocking if needed.  If an error occurs
+// (for example permissions or missing directory) then it returns immediately.  Returns a function that unlocks the
+// lock again (or a no-op function if acquiring the lock failed). The lock is not reentrant, so the holder must not
+// run calico-ipam in-process until it unlocks.
+func AcquireIPAMLockBestEffort(path string) UnlockFn {
+	logrus.Info("About to acquire host-wide IPAM lock.")
+	if path == "" {
+		path = ipamLockPath
+	}
+	err := os.MkdirAll(filepath.Dir(path), 0o777)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to make directory for IPAM lock")
+
+		// Fall through, still a slight chance the file is there for us to access.
+	}
+	ipamLock := flock.New(path)
+	err = ipamLock.Lock()
+	if err != nil {
+		logrus.WithError(err).Error("Failed to grab IPAM lock, may contend for datastore updates")
+		return func() {}
+	}
+	logrus.Info("Acquired host-wide IPAM lock.")
+	return func() {
+		err := ipamLock.Unlock()
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to release IPAM lock; ignoring because process is about to exit.")
+		} else {
+			logrus.Info("Released host-wide IPAM lock.")
+		}
+	}
+}
