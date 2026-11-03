@@ -38,6 +38,9 @@ const (
 	// selection from the environment.
 	provisionedSuiteScript = "body_"
 
+	// Every config a lane selects with lives under here, repo-relative.
+	configPrefix = "e2e/config/"
+
 	// The flannel migration script runs the suite once before migrating with a
 	// hardcoded config, then again with the job's own.
 	flannelMigrationScript    = "body_flannel-migration.sh"
@@ -79,7 +82,8 @@ type Lane struct {
 	// only when it changes the selection.
 	Name string
 
-	// Config is the repo-relative E2E_TEST_CONFIG path.
+	// Config is the E2E_TEST_CONFIG value: one or more repo-relative paths,
+	// separated by whitespace.
 	Config string
 
 	// Area is the FUNCTIONAL_AREA both CI systems declare, naming the pipeline
@@ -91,34 +95,65 @@ type Lane struct {
 	TestType string
 }
 
+// Configs returns the config paths the lane selects with, in the order the
+// cell lists them. A lane composes its selection from every entry.
+func (l Lane) Configs() []string {
+	return strings.Fields(l.Config)
+}
+
 // RunsE2EBinary reports whether the lane runs the e2e test binary, and so has a
 // spec list worth generating.
 func (l Lane) RunsE2EBinary() bool {
-	return l.TestType == "k8s-e2e" && l.Config != ""
+	return l.TestType == "k8s-e2e" && len(l.Configs()) > 0
 }
 
 // SelectionArgs returns the spec-selecting arguments run_tests.sh would pass
-// to the binary. repoRoot absolutizes the config path, as the binary requires.
+// to the binary, one --calico.test-config per config. repoRoot absolutizes each
+// path, as the binary requires. Until the binary and the Makefile accept the
+// flag more than once, a lane listing several configs is refused rather than
+// recorded with a selection CI would not run.
 func (l Lane) SelectionArgs(repoRoot string) ([]string, error) {
-	if l.Config == "" {
+	configs := l.Configs()
+	if len(configs) == 0 {
 		return nil, fmt.Errorf("lane %q selects nothing", l.Name)
 	}
-	abs, err := filepath.Abs(filepath.Join(repoRoot, l.Config))
-	if err != nil {
-		return nil, err
+	if len(configs) > 1 {
+		return nil, fmt.Errorf("lane %q lists %d configs, but the e2e binary takes a single --calico.test-config", l.Name, len(configs))
 	}
-	return []string{"--calico.test-config=" + abs}, nil
+	args := make([]string, 0, len(configs))
+	for _, c := range configs {
+		if !strings.HasPrefix(c, configPrefix) {
+			return nil, fmt.Errorf("lane %q: config %q is not under %s", l.Name, c, configPrefix)
+		}
+		abs, err := filepath.Abs(filepath.Join(repoRoot, c))
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, "--calico.test-config="+abs)
+	}
+	return args, nil
+}
+
+// laneSource is one directory CI declares lanes in: how to parse its files, and
+// the sets/ subdirectory its lanes' test sets go to.
+type laneSource struct {
+	dir    string
+	setDir string
+	parse  func(string, []byte) ([]Lane, error)
+}
+
+var laneSources = []laneSource{
+	{dir: argoDir, setDir: "cron", parse: parseArgo},
+	{dir: modulesDir, setDir: "modules", parse: parseArgoModule},
+	{dir: blocksDir, setDir: "semaphore", parse: parseSemaphoreBlocks},
 }
 
 // Load resolves every lane declared under .argoci/cron, .argoci/modules and
 // .semaphore/semaphore.yml.d/blocks, sorted by source then name.
 func Load(repoRoot string) ([]Lane, error) {
 	var lanes []Lane
-	for dir, parse := range map[string]func(string, []byte) ([]Lane, error){
-		argoDir:    parseArgo,
-		modulesDir: parseArgoModule,
-		blocksDir:  parseSemaphoreBlocks,
-	} {
+	for _, src := range laneSources {
+		dir, parse := src.dir, src.parse
 		entries, err := os.ReadDir(filepath.Join(repoRoot, dir))
 		if err != nil {
 			return nil, err
@@ -245,7 +280,6 @@ func parseArgoModule(source string, data []byte) ([]Lane, error) {
 		if len(entries) == 0 {
 			entries = []argoMatrix{{}}
 		}
-		baseConfig, _ := moduleStepConfig(base, step.Commands)
 		for _, m := range entries {
 			e := base.apply(m.Env)
 			config, ok := moduleStepConfig(e, step.Commands)
@@ -253,11 +287,7 @@ func parseArgoModule(source string, data []byte) ([]Lane, error) {
 				continue
 			}
 			e[envConfig] = config
-			name := step.Name
-			if m.Name != "" && config != baseConfig {
-				name += " [" + m.Name + "]"
-			}
-			lanes = append(lanes, e.lanes(source, name, step.Commands)...)
+			lanes = append(lanes, e.lanes(source, matrixName(step.Name, m.Name), step.Commands)...)
 		}
 	}
 	return dedupe(lanes), nil
@@ -293,16 +323,17 @@ func parseArgo(source string, data []byte) ([]Lane, error) {
 		}
 		for _, m := range step.Matrix {
 			e := base.apply(m.Env)
-			lanes = append(lanes, e.lanes(source, matrixName(step.Name, m.Name, base, e), step.Commands)...)
+			lanes = append(lanes, e.lanes(source, matrixName(step.Name, m.Name), step.Commands)...)
 		}
 	}
 	return dedupe(lanes), nil
 }
 
-// matrixName suffixes the step name only when the entry changes the selection.
-// CNI and manifest axes share one spec list.
-func matrixName(step, entry string, base, resolved env) string {
-	if base[envConfig] == resolved[envConfig] {
+// matrixName names a matrix entry's lane after its step and the entry. Every
+// entry is suffixed, even one that selects like its siblings, so a lane keeps
+// its name, and its test set, when an entry's config changes.
+func matrixName(step, entry string) string {
+	if entry == "" {
 		return step
 	}
 	return step + " [" + entry + "]"
