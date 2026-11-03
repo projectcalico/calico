@@ -84,15 +84,12 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 		return cmp.Compare(y.flow.ID, x.flow.ID)
 	})
 
-	// Assign the total before the result is trimmed to match the page size and start page.
-	totalFlows := len(ranked)
-	if opts.pageSize > 0 {
-		startIdx := opts.page * opts.pageSize
-		if startIdx >= int64(len(ranked)) {
-			return nil, types.ListMeta{}
-		}
-		ranked = ranked[startIdx:min(startIdx+opts.pageSize, int64(len(ranked)))]
+	meta := calculateListMeta(len(ranked), int(opts.pageSize))
+	start, end, ok := pageWindow(opts.page, opts.pageSize)
+	if !ok || start >= int64(len(ranked)) {
+		return nil, meta
 	}
+	ranked = ranked[start:min(end, int64(len(ranked)))]
 
 	flows := make([]*types.Flow, 0, len(ranked))
 	for _, r := range ranked {
@@ -100,7 +97,7 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 			flows = append(flows, f)
 		}
 	}
-	return flows, calculateListMeta(totalFlows, int(opts.pageSize))
+	return flows, meta
 }
 
 func (r *RingIndex) Add(d *DiachronicFlow) {
@@ -114,7 +111,7 @@ func (a *RingIndex) SortValueSet(opts IndexFindOpts) ([]int64, types.ListMeta) {
 }
 
 // FilterValueSet returns the distinct policy values (names, namespaces or tiers, per valueFunc)
-// of flows in the time range that match the filter. It serves FilterHints for the policy fields.
+// of flows in the time range that match the filter.
 func (a *RingIndex) FilterValueSet(valueFunc policyValueFunc, opts IndexFindOpts) ([]string, types.ListMeta) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
@@ -144,31 +141,10 @@ func (a *RingIndex) FilterValueSet(valueFunc policyValueFunc, opts IndexFindOpts
 	// Sort the values alphanumerically.
 	sort.Strings(values)
 
-	// Assign the total before the result is trimmed to match the page size and start page.
-	totalFlows := len(values)
-
-	// If pagination was requested, apply it now after sorting.
-	// This is a bit inneficient - we collect more data than we need to return -
-	// but it's a simple way to implement basic pagination.
-	if opts.pageSize > 0 {
-		startIdx := (opts.page) * opts.pageSize
-		endIdx := startIdx + opts.pageSize
-		if startIdx >= int64(len(values)) {
-			return nil, types.ListMeta{}
-		}
-		if endIdx > int64(len(values)) {
-			endIdx = int64(len(values))
-		}
-		logrus.WithFields(logrus.Fields{
-			"pageSize":   opts.pageSize,
-			"pageNumber": opts.page,
-			"startIdx":   startIdx,
-			"endIdx":     endIdx,
-			"total":      len(values),
-		}).Debug("Returning paginated flows")
-
-		values = values[startIdx:endIdx]
+	meta := calculateListMeta(len(values), int(opts.pageSize))
+	start, end, ok := pageWindow(opts.page, opts.pageSize)
+	if !ok || start >= int64(len(values)) {
+		return nil, meta
 	}
-
-	return values, calculateListMeta(totalFlows, int(opts.pageSize))
+	return values[start:min(end, int64(len(values)))], meta
 }
