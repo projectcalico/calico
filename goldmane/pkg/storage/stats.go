@@ -121,6 +121,10 @@ func (s *statistics) add(flow *types.Flow, action proto.Action) {
 type statisticsIndex struct {
 	statistics
 	policies map[StatisticsKey]*policyStatistics
+
+	// rules is AddFlow's scratch buffer, reused so each flow's rules cost no allocation. The
+	// owning bucket holds its lock across AddFlow, so calls never overlap.
+	rules []policyRule
 }
 
 func newStatisticsIndex() *statisticsIndex {
@@ -222,25 +226,25 @@ func direction(key *types.FlowKey) string {
 	return "ingress"
 }
 
-// policyRule is one (policy, rule, action) contribution a flow makes to the statistics.
+// policyRule is one rule a flow's statistics are added to. The rule's policy is key.policyID()
+// and its action is key.Action.
 type policyRule struct {
-	policyKey StatisticsKey
-	ruleKey   StatisticsKey
-	action    proto.Action
+	key StatisticsKey
 
 	// countPolicy is set on the first rule for each policy and action, so the policy's totals
 	// count the flow once per action however many of its rules the flow hits.
 	countPolicy bool
 }
 
-// toPolicyRules decodes the key's enforced and pending policy hits into the deduplicated rules
-// they contribute to.
-func toPolicyRules(k *types.FlowKey) []policyRule {
+// policyRulesInto derives the deduplicated rules that the key's enforced and pending policy hits
+// contribute to, from the cached decoded trace. It reuses buf's storage, so a caller that keeps
+// the result between calls allocates only when a trace has more rules than any before it.
+func policyRulesInto(buf []policyRule, k *types.FlowKey) []policyRule {
 	trace := types.CachedPolicyTrace(k.Policies())
 	dir := direction(k)
 
 	// Pending hits may duplicate the enforced ones, which the rule check below drops.
-	rules := make([]policyRule, 0, len(trace.EnforcedPolicies)+len(trace.PendingPolicies))
+	rules := buf[:0]
 	for _, hits := range [2][]*proto.PolicyHit{trace.EnforcedPolicies, trace.PendingPolicies} {
 		for _, hit := range hits {
 			meta := hit
@@ -259,43 +263,45 @@ func toPolicyRules(k *types.FlowKey) []policyRule {
 				RuleIndex: meta.PolicyIndex,
 				Direction: dir,
 			}
-			if slices.ContainsFunc(rules, func(r policyRule) bool { return r.ruleKey == ruleKey }) {
+			if slices.ContainsFunc(rules, func(r policyRule) bool { return r.key == ruleKey }) {
 				continue
 			}
 			pk := ruleKey.policyID()
 			counted := slices.ContainsFunc(rules, func(r policyRule) bool {
-				return r.policyKey == pk && r.action == hit.Action
+				return r.key.Action == hit.Action && r.key.policyID() == pk
 			})
-			rules = append(rules, policyRule{policyKey: pk, ruleKey: ruleKey, action: hit.Action, countPolicy: !counted})
+			rules = append(rules, policyRule{key: ruleKey, countPolicy: !counted})
 		}
 	}
 	return rules
 }
 
-// AddFlow adds the flow's statistics to the index, and to each of the given rules and their
-// policies.
-func (s *statisticsIndex) AddFlow(flow *types.Flow, rules []policyRule) {
+// AddFlow adds the flow's statistics to the index, and to each rule its policy trace hits and
+// that rule's policy.
+func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 	// Add the stats from this Flow, aggregated across all the policies it matches.
 	s.add(flow, flow.Key.Action())
 
-	for i := range rules {
-		rule := &rules[i]
-		ps, ok := s.policies[rule.policyKey]
+	s.rules = policyRulesInto(s.rules, flow.Key)
+	for i := range s.rules {
+		rule := &s.rules[i]
+		pk := rule.key.policyID()
+		ps, ok := s.policies[pk]
 		if !ok {
 			ps = &policyStatistics{rules: make(map[StatisticsKey]*statistics)}
-			s.policies[rule.policyKey] = ps
+			s.policies[pk] = ps
 		}
 
 		if rule.countPolicy {
-			ps.add(flow, rule.action)
+			ps.add(flow, rule.key.Action)
 		}
 
 		// Add the Flow's stats to the rule within the policy.
-		rs, ok := ps.rules[rule.ruleKey]
+		rs, ok := ps.rules[rule.key]
 		if !ok {
 			rs = &statistics{}
-			ps.rules[rule.ruleKey] = rs
+			ps.rules[rule.key] = rs
 		}
-		rs.add(flow, rule.action)
+		rs.add(flow, rule.key.Action)
 	}
 }

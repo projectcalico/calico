@@ -61,47 +61,98 @@ func TestCachedPolicyTrace(t *testing.T) {
 	require.Empty(t, empty.PendingPolicies)
 }
 
-// TestCachedPolicyTraceChurn pushes past the cache bound and checks every lookup still returns
-// its own trace, before and after the cache clears, and that the clears are counted.
+// TestCachedPolicyTraceChurn pushes past both generations and checks every lookup still returns
+// its own trace, before and after the cache rotates, and that the rotations are counted.
 func TestCachedPolicyTraceChurn(t *testing.T) {
-	const n = types.MaxCachedPolicyTraces + 1000
+	const n = 2*types.PolicyTraceGenerationSize + 1000
 	handles := make([]unique.Handle[string], n)
 	for i := range n {
 		handles[i] = types.ProtoToFlowLogPolicy(cacheTestTrace(fmt.Sprintf("churn-%d", i)))
 	}
-	resetsBefore := types.PolicyTraceCacheResets()
+	rotationsBefore := types.PolicyTraceCacheRotations()
 	for pass := range 2 {
 		for i, h := range handles {
 			got := types.CachedPolicyTrace(h)
 			require.Equal(t, fmt.Sprintf("churn-%d-first", i), got.EnforcedPolicies[0].Name, "pass %d", pass)
 		}
 	}
-	require.Greater(t, types.PolicyTraceCacheResets(), resetsBefore, "churn past the bound was not counted")
-	require.LessOrEqual(t, types.PolicyTraceCacheSize(), int64(types.MaxCachedPolicyTraces))
+	require.Greater(t, types.PolicyTraceCacheRotations(), rotationsBefore, "churn past a generation was not counted")
+	require.LessOrEqual(t, types.PolicyTraceCacheSize(), int64(2*types.PolicyTraceGenerationSize))
 }
 
-// TestCachedPolicyTraceHitsDoNotReset checks that lookups of a cached trace neither grow the
-// cache nor count as a reset.
-func TestCachedPolicyTraceHitsDoNotReset(t *testing.T) {
+// TestCachedPolicyTraceHitsDoNotRotate checks that lookups of a cached trace neither grow the
+// cache nor count as a rotation.
+func TestCachedPolicyTraceHitsDoNotRotate(t *testing.T) {
 	h := types.ProtoToFlowLogPolicy(cacheTestTrace("hits"))
 	types.CachedPolicyTrace(h)
-	size, resets := types.PolicyTraceCacheSize(), types.PolicyTraceCacheResets()
+	size, rotations := types.PolicyTraceCacheSize(), types.PolicyTraceCacheRotations()
 	for range 100000 {
 		types.CachedPolicyTrace(h)
 	}
 	require.Equal(t, size, types.PolicyTraceCacheSize())
-	require.Equal(t, resets, types.PolicyTraceCacheResets())
+	require.Equal(t, rotations, types.PolicyTraceCacheRotations())
 }
 
-// TestPolicyTraceCacheConcurrentMisses has many goroutines miss on overlapping traces while a
-// small bound forces repeated clears. The cache's count must match the map, the map must stay
-// within the bound, and each fill must count as exactly one reset.
+// TestPolicyTraceCacheDropsUnusedTraces checks that each full generation rotates exactly once,
+// and that a trace looked up once outlives the first rotation, in the previous generation, and is
+// gone after the second.
+func TestPolicyTraceCacheDropsUnusedTraces(t *testing.T) {
+	const generationSize = 4
+	cache := types.NewPolicyTraceCache(generationSize)
+	unused := types.ProtoToFlowLogPolicy(cacheTestTrace("unused"))
+	cache.Trace(unused)
+
+	lookUpFresh(cache, generationSize-1, "drop-first")
+	require.Zero(t, cache.Rotations(), "rotated before the first generation was full")
+	lookUpFresh(cache, generationSize, "drop-second")
+	require.Equal(t, uint64(1), cache.Rotations())
+	require.Equal(t, int64(2*generationSize), cache.Size())
+	require.True(t, cache.Holds(unused), "trace dropped after one rotation")
+
+	lookUpFresh(cache, 1, "drop-third")
+	require.Equal(t, uint64(2), cache.Rotations())
+	require.False(t, cache.Holds(unused), "trace unused for a whole generation still cached after two rotations")
+}
+
+// lookUpFresh looks up n traces, named after prefix, that cache has not seen.
+func lookUpFresh(cache *types.PolicyTraceCache, n int, prefix string) {
+	for i := range n {
+		cache.Trace(types.ProtoToFlowLogPolicy(cacheTestTrace(fmt.Sprintf("%s-%d", prefix, i))))
+	}
+}
+
+// TestPolicyTraceCacheKeepsLiveTraces checks that a trace looked up in every generation survives
+// many rotations and is never decoded again.
+func TestPolicyTraceCacheKeepsLiveTraces(t *testing.T) {
+	cache := types.NewPolicyTraceCache(4)
+	live := types.ProtoToFlowLogPolicy(cacheTestTrace("live"))
+	want := cache.Trace(live)
+
+	for r := uint64(1); r <= 10; r++ {
+		rotateTo(cache, r, "keep")
+		require.Same(t, want, cache.Trace(live), "live trace decoded again after rotation %d", r)
+	}
+	require.True(t, cache.Holds(live))
+}
+
+// rotateTo looks up fresh traces, named after prefix, until cache has rotated n times.
+func rotateTo(cache *types.PolicyTraceCache, n uint64, prefix string) {
+	for i := 0; cache.Rotations() < n; i++ {
+		lookUpFresh(cache, 1, fmt.Sprintf("%s-%d-%d", prefix, n, i))
+	}
+}
+
+// TestPolicyTraceCacheConcurrentMisses has many goroutines look up overlapping traces while a
+// small generation size forces repeated rotations. Each generation must stay within its size, each
+// rotation must retire a full one, the cache's count must match its maps, and a trace must not be
+// decoded twice within a generation.
 func TestPolicyTraceCacheConcurrentMisses(t *testing.T) {
 	const (
-		limit      = 8
-		numTraces  = 3 * limit
-		goroutines = 32
-		lookups    = 2000
+		generationSize = 8
+		hotTraces      = 4
+		numTraces      = 4 * generationSize
+		goroutines     = 32
+		lookups        = 2000
 	)
 	handles := make([]unique.Handle[string], numTraces)
 	wantNames := make([]string, numTraces)
@@ -109,24 +160,27 @@ func TestPolicyTraceCacheConcurrentMisses(t *testing.T) {
 		handles[i] = types.ProtoToFlowLogPolicy(cacheTestTrace(fmt.Sprintf("concurrent-%d", i)))
 		wantNames[i] = fmt.Sprintf("concurrent-%d-first", i)
 	}
-	cache := types.NewPolicyTraceCache(limit)
+	cache := types.NewPolicyTraceCache(generationSize)
 
-	// Every trace a lookup returns was inserted once, so the distinct results count the inserts.
-	returned := make([]map[*proto.PolicyTrace]struct{}, goroutines)
+	// Every other lookup goes to a small hot set, so some traces are promoted rather than decoded.
+	results := make([][]traceLookup, goroutines)
 	start := make(chan struct{})
 	var workers sync.WaitGroup
 	for g := range goroutines {
-		returned[g] = map[*proto.PolicyTrace]struct{}{}
 		workers.Go(func() {
 			<-start
 			for i := range lookups {
-				idx := (g + i) % numTraces
+				idx := hotTraces + (g+i)%(numTraces-hotTraces)
+				if i%2 == 0 {
+					idx = (g + i) % hotTraces
+				}
+				before := cache.Rotations()
 				got := cache.Trace(handles[idx])
+				results[g] = append(results[g], traceLookup{handle: idx, before: before, after: cache.Rotations(), trace: got})
 				if got.EnforcedPolicies[0].Name != wantNames[idx] {
 					t.Errorf("lookup of trace %d returned %q", idx, got.EnforcedPolicies[0].Name)
 					return
 				}
-				returned[g][got] = struct{}{}
 			}
 		})
 	}
@@ -140,12 +194,13 @@ func TestPolicyTraceCacheConcurrentMisses(t *testing.T) {
 				return
 			default:
 			}
-			if size := cache.Size(); size > limit {
-				t.Errorf("cache counts %d traces, above the bound of %d", size, limit)
+			if size := cache.Size(); size > 2*generationSize {
+				t.Errorf("cache counts %d entries, above two generations of %d", size, generationSize)
 				return
 			}
-			if n := cache.Len(); n > limit+goroutines {
-				t.Errorf("map holds %d traces, above the bound of %d plus %d in flight", n, limit, goroutines)
+			current, previous := cache.Lens()
+			if current > generationSize || (previous != 0 && previous != generationSize) {
+				t.Errorf("generations hold %d and %d traces, want at most %d and exactly %d", current, previous, generationSize, generationSize)
 				return
 			}
 		}
@@ -156,25 +211,52 @@ func TestPolicyTraceCacheConcurrentMisses(t *testing.T) {
 	close(done)
 	sampler.Wait()
 
-	inserts := map[*proto.PolicyTrace]struct{}{}
-	for _, r := range returned {
-		for p := range r {
-			inserts[p] = struct{}{}
+	current, previous := cache.Lens()
+	rotations := cache.Rotations()
+	require.Equal(t, current+previous, cache.Size(), "cache count differs from the traces in its maps")
+	require.Positive(t, rotations, "the cache never rotated")
+
+	// A lookup that saw no rotation ran within one generation, which holds one trace per handle,
+	// so each such handle and generation pair was an insert.
+	within := map[traceGeneration]*proto.PolicyTrace{}
+	for _, r := range results {
+		for _, l := range r {
+			if l.before != l.after {
+				continue
+			}
+			key := traceGeneration{handle: l.handle, generation: l.before}
+			if prev, ok := within[key]; ok {
+				require.Same(t, prev, l.trace, "trace %d decoded twice in generation %d", l.handle, l.before)
+			}
+			within[key] = l.trace
 		}
 	}
-	size, resets := cache.Size(), cache.Resets()
-	require.Equal(t, cache.Len(), size, "cache count differs from the traces in the map")
-	require.LessOrEqual(t, size, int64(limit))
-	require.Positive(t, resets, "the bound was never crossed")
-	require.Equal(t, int64(len(inserts)), int64(resets)*limit+size, "resets do not match one per fill")
+	require.Equal(t, int64(generationSize), previous, "a rotation retired a generation that was not full")
+	require.GreaterOrEqual(t, int64(rotations)*generationSize+current, int64(len(within)), "fewer rotations counted than generations filled")
 }
 
-// BenchmarkPolicyTraceCacheRetainedHeap reports the heap a full trace cache retains, for traces
-// with the given number of hits in each of the enforced and pending lists.
+// traceLookup is one lookup in TestPolicyTraceCacheConcurrentMisses, with the rotation count
+// read before and after it.
+type traceLookup struct {
+	handle int
+	before uint64
+	after  uint64
+	trace  *proto.PolicyTrace
+}
+
+// traceGeneration names one handle's entry in one generation of the cache.
+type traceGeneration struct {
+	handle     int
+	generation uint64
+}
+
+// BenchmarkPolicyTraceCacheRetainedHeap reports the heap the trace cache retains with both
+// generations full, for traces with the given number of hits in each of the enforced and pending
+// lists.
 func BenchmarkPolicyTraceCacheRetainedHeap(b *testing.B) {
 	for _, hits := range []int{2, 4, 8} {
 		b.Run(fmt.Sprintf("hits=%d", hits), func(b *testing.B) {
-			handles := make([]unique.Handle[string], types.MaxCachedPolicyTraces)
+			handles := make([]unique.Handle[string], 2*types.PolicyTraceGenerationSize)
 			for i := range handles {
 				handles[i] = types.ProtoToFlowLogPolicy(heapTestTrace(i, hits))
 			}
@@ -187,12 +269,13 @@ func BenchmarkPolicyTraceCacheRetainedHeap(b *testing.B) {
 	}
 }
 
-// retainedHeap fills a cache sized to hold every handle and returns the live heap it adds.
+// retainedHeap fills both generations of a production-sized cache with handles and returns the
+// live heap it adds.
 func retainedHeap(handles []unique.Handle[string]) int64 {
 	var before, after runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&before)
-	c := types.NewPolicyTraceCache(int64(len(handles)))
+	c := types.NewPolicyTraceCache(types.PolicyTraceGenerationSize)
 	for _, h := range handles {
 		c.Trace(h)
 	}
@@ -249,6 +332,24 @@ func TestReadPathsLeaveCachedTraceIntact(t *testing.T) {
 	types.FlowIntoProto(flow, pf)
 
 	require.True(t, googleproto.Equal(types.FlowLogPolicyToProto(h), types.CachedPolicyTrace(h)), "a read path modified the shared trace")
+}
+
+// TestFlowIntoProtoUncachedSkipsCache checks that the conversion Felix uses decodes the trace
+// without filling the process-wide cache, while FlowIntoProto still fills it.
+func TestFlowIntoProtoUncachedSkipsCache(t *testing.T) {
+	trace := cacheTestTrace("uncached")
+	flow := types.ProtoToFlow(&proto.Flow{
+		Key: &proto.FlowKey{SourceName: "client", DestName: "server", Policies: trace},
+	})
+	h := flow.Key.Policies()
+
+	pf := &proto.Flow{}
+	types.FlowIntoProtoUncached(flow, pf)
+	require.True(t, googleproto.Equal(types.FlowLogPolicyToProto(h), pf.Key.Policies))
+	require.False(t, types.DefaultPolicyTraceCacheHolds(h), "FlowIntoProtoUncached filled the trace cache")
+
+	types.FlowIntoProto(flow, pf)
+	require.True(t, types.DefaultPolicyTraceCacheHolds(h), "FlowIntoProto did not fill the trace cache")
 }
 
 // TestFlowIntoProtoOverwritesEveryField converts into a message with every field already set,
