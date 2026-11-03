@@ -355,10 +355,9 @@ func (d *DiachronicFlow) bucketWindow(startGte, startLt int64) (Window, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	for i := range d.windows {
-		if d.windows[i].inRange(startGte, startLt) {
-			return d.windows[i], true
-		}
+	// Ends rise with starts, so if the first window starting in the range ends past it, every one does.
+	if ws := d.windowsStarting(startGte, startLt); len(ws) > 0 && ws[0].inRange(startGte, startLt) {
+		return ws[0], true
 	}
 	return Window{}, false
 }
