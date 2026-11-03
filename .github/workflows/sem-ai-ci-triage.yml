@@ -6,9 +6,7 @@
 # service is unreachable / errors out — it never fails noisily on a
 # transient backend issue.
 #
-# Triages failed runs from both CIs: Semaphore ("ci/semaphoreci/pr: Calico")
-# and ArgoCI ("continuous-integration/calico"). The agent is told which CI ran,
-# and each CI's comment is tagged so a pass on one CI only cleans up its own.
+# Triages failed ArgoCI and Semaphore runs; Semaphore statuses are ignored where ArgoCI runs, as it is a no-op there.
 
 name: sem-ai CI triage
 
@@ -33,9 +31,9 @@ on:
 # separate group, so the old SHA's run is not cancelled. Acceptable here —
 # each CI typically fires one status per (SHA, context), so the race is
 # rare and a stale comment would be overwritten on the next failure anyway.
-# The context is in the key so one CI's status never cancels the other's run.
+# The CI is in the key, so Semaphore's no-op status cannot cancel an ArgoCI triage.
 concurrency:
-  group: sem-ai-ci-triage-${{ github.event.context }}-${{ inputs.pr_number || github.event.sha || github.run_id }}
+  group: sem-ai-ci-triage-${{ github.event.context || (inputs.argo_workflow != '' && 'argo') || 'semaphore' }}-${{ inputs.pr_number || github.event.sha || github.run_id }}
   cancel-in-progress: true
 
 permissions:
@@ -80,11 +78,22 @@ jobs:
           SHA: ${{ github.event.sha }}
           CONTEXT: ${{ github.event.context }}
         run: |
-          # The run id reaches the agent prompt and GITHUB_OUTPUT, so it is
-          # checked against a strict pattern: a UUID or an Argo workflow name.
+          # ArgoCI runs PRs into master, and branches cut from it, where it posts its own status.
+          argo_runs() {
+            local base argo
+            base=$(gh api "repos/$REPO/pulls/$1" --jq .base.ref)
+            argo=$(gh api "repos/$REPO/commits/$SHA/statuses?per_page=100" \
+              --jq 'any(.[]; .context == "continuous-integration/calico")')
+            [[ "$base" == master || "$argo" == true ]]
+          }
+          # The run id reaches the agent prompt, so it must match a strict pattern.
           UUID='^[0-9a-fA-F-]{36}$'
           ARGO_NAME='^[a-z0-9][a-z0-9.-]{0,252}$'
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ -n "$INPUT_ARGO" && -n "$INPUT_WID" ]] || [[ -z "$INPUT_ARGO" && -z "$INPUT_WID" ]]; then
+              echo "::error::set exactly one of workflow_id (Semaphore) or argo_workflow (ArgoCI)"
+              exit 1
+            fi
             if [[ -n "$INPUT_ARGO" ]]; then
               CI=argo RUN="$INPUT_ARGO"
             else
@@ -109,12 +118,17 @@ jobs:
               echo "skip=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
+            if [[ "$CI" == semaphore ]] && argo_runs "$PR"; then
+              echo "::notice::ArgoCI runs this PR; Semaphore's status is a no-op — skipping"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
             SOURCE="status:$CONTEXT:${{ github.event.state }}"
           fi
           PATTERN=$UUID
           [[ "$CI" == argo ]] && PATTERN=$ARGO_NAME
           if [[ ! "$RUN" =~ $PATTERN ]]; then
-            echo "::warning::no valid $CI run in input/target_url='$TARGET' — skipping"
+            echo "::warning::no valid $CI run in the dispatch input or target_url='$TARGET' — skipping"
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -209,8 +223,6 @@ jobs:
           steps.gate.outputs.skip != 'true' &&
           steps.resolve.outputs.skip != 'true' &&
           steps.triage.outputs.skip != 'true'
-        env:
-          CI: ${{ steps.resolve.outputs.ci }}
         run: |
           BODY=$(cat triage.md)
           if [[ "$BODY" == "PASS — no comment needed" ]]; then
@@ -218,10 +230,8 @@ jobs:
             exit 0
           fi
 
-          # One comment per PR whichever CI failed; the second line names
-          # the CI so the cleanup job deletes it only on that CI's pass.
           MARKER="<!-- sem-ai-ci-triage -->"
-          FULL_BODY="$MARKER"$'\n'"<!-- ci: $CI -->"$'\n'"$BODY"
+          FULL_BODY="$MARKER"$'\n'"$BODY"
           PR=${{ steps.resolve.outputs.pr }}
 
           EXISTING=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
@@ -242,8 +252,7 @@ jobs:
   # without this a now-passing PR keeps showing an obsolete failure report.
   # Mutually exclusive with `triage`: that job requires failure/error, this
   # one requires success, so exactly one runs per status event.
-  # Each CI clears only its own comment: Semaphore still reports a no-op pass
-  # on master PRs, which must not delete ArgoCI's failure analysis.
+  # Semaphore's no-op pass where ArgoCI runs must not delete ArgoCI's analysis.
   cleanup:
     if: >-
       github.event_name == 'status' &&
@@ -269,6 +278,16 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          if [[ "$CONTEXT" == "ci/semaphoreci/pr: Calico" ]]; then
+            BASE=$(gh api "repos/$REPO/pulls/$PR" --jq .base.ref)
+            ARGO=$(gh api "repos/$REPO/commits/$SHA/statuses?per_page=100" \
+              --jq 'any(.[]; .context == "continuous-integration/calico")')
+            if [[ "$BASE" == master || "$ARGO" == true ]]; then
+              echo "::notice::ArgoCI runs this PR; Semaphore's pass is a no-op — skipping"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
           echo "pr=$PR" >> "$GITHUB_OUTPUT"
 
       - name: Delete stale sem-ai-triage comment
@@ -277,14 +296,8 @@ jobs:
           PR: ${{ steps.resolve.outputs.pr }}
         run: |
           MARKER="<!-- sem-ai-ci-triage -->"
-          # Comments from before the CI tag are Semaphore's.
-          if [[ "$CONTEXT" == "continuous-integration/calico" ]]; then
-            OWN='(.body | contains("<!-- ci: argo -->"))'
-          else
-            OWN='(.body | contains("<!-- ci: argo -->") | not)'
-          fi
           IDS=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")) and $OWN)][].id")
+            --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")))][].id")
           if [[ -z "$IDS" ]]; then
             echo "no sem-ai-triage comment on PR #$PR — nothing to delete"
             exit 0
