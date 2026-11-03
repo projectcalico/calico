@@ -1,0 +1,22 @@
+# guardian `make ci`.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+
+steps:
+  - name: guardian-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    depends: [check-go]
+    requests: {cpu: 3000m, memory: 2Gi}
+    commands: |
+      cd guardian
+      make ci
+    epilogue: |
+      # Epilogues don't inherit the commands' `cd` or exports.
+      cd "${CI_HOME}/${CI_GIT_DIR}/guardian"
+      artifact push job report --destination test-results || true

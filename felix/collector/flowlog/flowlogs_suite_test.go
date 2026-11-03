@@ -21,19 +21,19 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 func init() {
 	testutils.HookLogrusForGinkgo()
-	logutils.ConfigureFormatter("test")
+	logrusr.ConfigureFormatter("test")
 	logrus.SetLevel(logrus.DebugLevel)
 }
 
 func TestFlowlogs(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../report/felix_collector_flowlog_suite.xml"
+	testutils.RegisterJUnitReporter("felix_collector_flowlog_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/collector/flowlog", suiteConfig, reporterConfig)
 }

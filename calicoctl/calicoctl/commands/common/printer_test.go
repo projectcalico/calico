@@ -102,7 +102,7 @@ var _ = Describe("Testing printer config()", func() {
 })
 
 var _ = Describe("ResourcePrinterYAML tests", func() {
-	It("should omit zero fields with the omitzero tag", func() {
+	It("should print empty source/destination", func() {
 		rp := ResourcePrinterYAML{}
 		var buf bytes.Buffer
 		gnp := apiv3.NewGlobalNetworkPolicy()
@@ -115,7 +115,9 @@ var _ = Describe("ResourcePrinterYAML tests", func() {
 		err := rp.FPrint(&buf, nil, []runtime.Object{gnp})
 		Expect(err).NotTo(HaveOccurred())
 
-		// The source/destination fields of apiv3.Rule use omitzero.
+		// GitOps tools such as ArgoCD flag fields that are in the manifest but
+		// missing from the live resource, so an empty source/destination must
+		// survive the round trip.
 		Expect(buf.String()).To(MatchYAML(
 			`apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
@@ -124,13 +126,15 @@ metadata:
 spec:
   ingress:
   - action: Allow
+    destination: {}
+    source: {}
 `,
 		))
 	})
 })
 
 var _ = Describe("ResourcePrinterJSON tests", func() {
-	It("should omit zero fields with the omitzero tag", func() {
+	It("should print empty source/destination", func() {
 		rp := ResourcePrinterJSON{}
 		var buf bytes.Buffer
 		gnp := apiv3.NewGlobalNetworkPolicy()
@@ -143,7 +147,6 @@ var _ = Describe("ResourcePrinterJSON tests", func() {
 		err := rp.FPrint(&buf, nil, []runtime.Object{gnp})
 		Expect(err).NotTo(HaveOccurred())
 
-		// The source/destination fields of apiv3.Rule use omitzero.
 		Expect(buf.String()).To(MatchJSON(
 			`{
   "apiVersion": "projectcalico.org/v3",
@@ -153,7 +156,7 @@ var _ = Describe("ResourcePrinterJSON tests", func() {
   },
   "spec": {
     "ingress":[
-      {"action": "Allow"}
+      {"action": "Allow", "source": {}, "destination": {}}
     ]
   }
 }

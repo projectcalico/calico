@@ -17,51 +17,20 @@ package migrate
 import (
 	"context"
 	"fmt"
-	"strings"
-
-	"github.com/docopt/docopt-go"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-func Unlock(args []string) error {
-	doc := `Usage:
-  <BINARY_NAME> datastore migrate unlock [--config=<CONFIG>] [--allow-version-mismatch]
-
-Options:
-  -h --help                    Show this screen.
-  -c --config=<CONFIG>         Path to the file containing connection
-                               configuration in YAML or JSON format.
-                               [default: ` + constants.DefaultConfigPath + `]
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-
-Description:
-  Unlock the datastore to complete migration. This once again allows
-  Calico resources to take effect in the cluster.
-`
-	// Replace all instances of BINARY_NAME with the name of the binary.
-	name, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
-
-	parsedArgs, err := docopt.ParseArgs(doc, args, "")
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(parsedArgs) == 0 {
-		return nil
-	}
-
-	err = common.CheckVersionMismatch(parsedArgs["--config"], parsedArgs["--allow-version-mismatch"])
-	if err != nil {
+// Unlock unlocks the datastore to complete migration. This once again allows
+// Calico resources to take effect in the cluster.
+func Unlock(config string, allowVersionMismatch bool) error {
+	if err := common.CheckVersionMismatch(config, allowVersionMismatch); err != nil {
 		return err
 	}
 
-	cf := parsedArgs["--config"].(string)
-	client, err := clientmgr.NewClient(cf)
+	client, err := clientmgr.NewClient(config)
 	if err != nil {
 		return err
 	}

@@ -10,7 +10,7 @@ import (
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 // logrusLevel sets LOG_LEVEL and if not defined will set it based on klog verbosity
@@ -21,7 +21,7 @@ import (
 // v=7-9 --> TRACE
 func logrusLevel() logrus.Level {
 	if env := os.Getenv("LOG_LEVEL"); env != "" {
-		return logutils.SafeParseLogLevel(env)
+		return logrusr.SafeParseLogLevel(env)
 	}
 	if klog.V(0).Enabled() && !klog.V(1).Enabled() {
 		return logrus.ErrorLevel

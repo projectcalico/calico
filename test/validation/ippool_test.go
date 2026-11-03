@@ -17,6 +17,7 @@ package validation_test
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -230,6 +231,201 @@ func TestIPPool_Validation(t *testing.T) {
 			},
 			wantErr: "global() selector is not valid for IPPool namespaceSelector",
 		},
+		{
+			name: "CIDR that is not strictly masked is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "192.168.0.1/24",
+				},
+			},
+			wantErr: "IPPool CIDR must be strictly masked",
+		},
+		{
+			name: "IPv6 CIDR that is not strictly masked is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "fd00::1/112",
+				},
+			},
+			wantErr: "IPPool CIDR must be strictly masked",
+		},
+		{
+			name: "IPv6 CIDR in upper case is accepted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "FD00:1234::/112",
+				},
+			},
+		},
+		{
+			name: "CIDR equal to the IPv4 link local range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "169.254.0.0/16",
+				},
+			},
+			wantErr: "IPPool CIDR overlaps with IPv4 link local range 169.254.0.0/16",
+		},
+		{
+			name: "CIDR inside the IPv4 link local range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "169.254.10.0/24",
+				},
+			},
+			wantErr: "IPPool CIDR overlaps with IPv4 link local range 169.254.0.0/16",
+		},
+		{
+			name: "CIDR containing the IPv4 link local range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "169.254.0.0/15",
+				},
+			},
+			wantErr: "IPPool CIDR overlaps with IPv4 link local range 169.254.0.0/16",
+		},
+		{
+			name: "CIDR inside the IPv6 link local range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "fe80::/112",
+				},
+			},
+			wantErr: "IPPool CIDR overlaps with IPv6 link local range fe80::/10",
+		},
+		{
+			name: "CIDR containing the IPv6 link local range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "fe00::/8",
+				},
+			},
+			wantErr: "IPPool CIDR overlaps with IPv6 link local range fe80::/10",
+		},
+		{
+			name: "IPv4 blockSize below the supported range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      "10.100.0.0/16",
+					BlockSize: 19,
+				},
+			},
+			wantErr: "blockSize must be between 20 and 32 for IPv4 pools",
+		},
+		{
+			name: "IPv4 blockSize above the supported range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      "10.101.0.0/16",
+					BlockSize: 33,
+				},
+			},
+			wantErr: "blockSize must be between 20 and 32 for IPv4 pools",
+		},
+		{
+			name: "IPv6 blockSize below the supported range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      "fd10::/48",
+					BlockSize: 64,
+				},
+			},
+			wantErr: "between 116 and 128 for IPv6 pools",
+		},
+		{
+			name: "IPv4 blockSize within the supported range is accepted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      nextPoolCIDR(),
+					BlockSize: 26,
+				},
+			},
+		},
+		{
+			name: "IPv6 blockSize within the supported range is accepted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      nextPoolCIDRv6(),
+					BlockSize: 122,
+				},
+			},
+		},
+		{
+			name: "blockSize larger than the pool CIDR is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      "10.102.0.0/28",
+					BlockSize: 26,
+				},
+			},
+			wantErr: "IP pool size is too small for use with Calico IPAM",
+		},
+		{
+			name: "blockSize larger than the pool CIDR is accepted on a disabled pool",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      "10.103.0.0/28",
+					BlockSize: 26,
+					Disabled:  true,
+				},
+			},
+		},
+		{
+			name: "pool smaller than the default IPv4 blockSize is rejected when blockSize is omitted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "10.105.0.0/28",
+				},
+			},
+			wantErr: "IP pool size is too small for use with Calico IPAM",
+		},
+		{
+			name: "pool smaller than the default IPv6 blockSize is rejected when blockSize is omitted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "fd20::/124",
+				},
+			},
+			wantErr: "IP pool size is too small for use with Calico IPAM",
+		},
+		{
+			name: "blockSize equal to the pool CIDR is accepted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      "10.104.0.0/26",
+					BlockSize: 26,
+				},
+			},
+		},
+		{
+			// The longest form a valid CIDR can take, at 49 characters.
+			name: "CIDR with embedded IPv4 is accepted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      "ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255/128",
+					BlockSize: 128,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -244,8 +440,6 @@ func TestIPPool_Validation(t *testing.T) {
 }
 
 func TestIPPool_CIDRImmutability(t *testing.T) {
-	// CIDR is normalized to canonical form on create, so the stored value is always
-	// canonical. This test verifies that updating the CIDR after creation is rejected.
 	pool := &v3.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
 		Spec: v3.IPPoolSpec{
@@ -260,6 +454,24 @@ func TestIPPool_CIDRImmutability(t *testing.T) {
 	}
 	got.Spec.CIDR = nextPoolCIDR()
 	expectUpdateFails(t, got, "CIDR cannot be changed")
+}
+
+func TestIPPool_BlockSizeImmutability(t *testing.T) {
+	pool := &v3.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+		Spec: v3.IPPoolSpec{
+			CIDR:      nextPoolCIDR(),
+			BlockSize: 26,
+		},
+	}
+	mustCreate(t, pool)
+
+	got := &v3.IPPool{}
+	if err := testClient.Get(context.Background(), client.ObjectKeyFromObject(pool), got); err != nil {
+		t.Fatalf("failed to get ippool: %v", err)
+	}
+	got.Spec.BlockSize = 24
+	expectUpdateFails(t, got, "Block size cannot be changed")
 }
 
 func TestIPPool_Defaults(t *testing.T) {
@@ -280,5 +492,38 @@ func TestIPPool_Defaults(t *testing.T) {
 	}
 	if *got.Spec.AssignmentMode != v3.Automatic {
 		t.Fatalf("expected assignmentMode=Automatic, got %q", *got.Spec.AssignmentMode)
+	}
+	if got.Spec.IPIPMode != v3.IPIPModeNever {
+		t.Errorf("expected ipipMode=%q, got %q", v3.IPIPModeNever, got.Spec.IPIPMode)
+	}
+	if got.Spec.VXLANMode != v3.VXLANModeNever {
+		t.Errorf("expected vxlanMode=%q, got %q", v3.VXLANModeNever, got.Spec.VXLANMode)
+	}
+}
+
+// An explicit value has to survive defaulting, or a CrossSubnet pool silently
+// becomes a Never pool.
+func TestIPPool_DefaultsPreserveExplicitValues(t *testing.T) {
+	name := uniqueName("ippool-explicit")
+	mustCreate(t, &v3.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: v3.IPPoolSpec{
+			CIDR:        nextPoolCIDR(),
+			VXLANMode:   v3.VXLANModeCrossSubnet,
+			AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload},
+		},
+	})
+
+	got := &v3.IPPool{}
+	if err := testClient.Get(context.Background(), client.ObjectKey{Name: name}, got); err != nil {
+		t.Fatalf("failed to get pool: %v", err)
+	}
+
+	if got.Spec.VXLANMode != v3.VXLANModeCrossSubnet {
+		t.Errorf("expected spec.vxlanMode=%q, got %q", v3.VXLANModeCrossSubnet, got.Spec.VXLANMode)
+	}
+	wantUses := []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload}
+	if !slices.Equal(got.Spec.AllowedUses, wantUses) {
+		t.Errorf("expected spec.allowedUses=%v, got %v", wantUses, got.Spec.AllowedUses)
 	}
 }

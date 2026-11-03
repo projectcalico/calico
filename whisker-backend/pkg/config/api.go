@@ -22,7 +22,7 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 type Config struct {
@@ -31,10 +31,19 @@ type Config struct {
 	Port         string `default:"8080"`
 	LogLevel     string `default:"info" envconfig:"LOG_LEVEL"`
 
-	// TLS certificate and key for both server TLS and Goldmane client mTLS.
+	// Plain-HTTP /liveness and /readiness endpoints, served on their own port.
+	HealthEnabled bool   `default:"true" envconfig:"HEALTH_ENABLED"`
+	HealthHost    string `default:"" envconfig:"HEALTH_HOST"`
+	HealthPort    int    `default:"8082" envconfig:"HEALTH_PORT"`
+
+	// TLS certificate and key for Goldmane client mTLS.
 	TLSCertPath string `default:"" envconfig:"TLS_CERT_PATH"`
 	TLSKeyPath  string `default:"" envconfig:"TLS_KEY_PATH"`
 	CACertPath  string `default:"/etc/pki/tls/certs/ca.crt" envconfig:"CA_CERT_PATH"`
+
+	// TLS certificate and key for serving HTTPS. Required; the server only serves HTTPS.
+	ServerTLSCertPath string `envconfig:"SERVER_TLS_CERT_PATH" required:"true"`
+	ServerTLSKeyPath  string `envconfig:"SERVER_TLS_KEY_PATH" required:"true"`
 }
 
 func NewConfig() (*Config, error) {
@@ -61,7 +70,7 @@ func (cfg *Config) HostAddr() string {
 
 func (cfg *Config) ConfigureLogging() {
 	// Install a hook that adds file/line number information.
-	logutils.ConfigureFormatter("whisker-backend")
+	logrusr.ConfigureFormatter("whisker-backend")
 	logrus.SetOutput(os.Stdout)
 
 	// Override with desired log level

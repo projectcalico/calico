@@ -15,24 +15,21 @@ include ../../lib.Makefile
 ##############################################################################
 # Upstream sources
 ##############################################################################
-# The four plugins we copy from projectcalico/containernetworking-plugins.
+# The four plugins we copy from containernetworking/plugins.
 # bandwidth is intentionally excluded — Calico has its own QoS support.
 CN_FILES := host-local portmap loopback tuning
 
 CONTAINERNETWORKING_PLUGINS_CLONED = .containernetworking-plugins-$(CNI_VERSION).cloned
 FLANNEL_CNI_PLUGIN_CLONED          = .flannel-cni-plugin-$(FLANNEL_VERSION).cloned
 
-# CNI_VERSION is a commit SHA (the fork has no release tag at the toolchain we
-# build with), so clone then check it out rather than passing it to --branch.
 $(CONTAINERNETWORKING_PLUGINS_CLONED):
 	rm -rf containernetworking-plugins .containernetworking-plugins-*.cloned
-	git clone https://github.com/projectcalico/containernetworking-plugins.git
-	git -C containernetworking-plugins checkout $(CNI_VERSION)
+	$(call fetch_repo,$(CONTAINERNETWORKING_PLUGINS_REPO),$(CNI_VERSION),containernetworking-plugins)
 	touch $@
 
 $(FLANNEL_CNI_PLUGIN_CLONED):
 	rm -rf flannel-cni-plugin .flannel-cni-plugin-*.cloned
-	git clone --single-branch --branch $(FLANNEL_VERSION) https://github.com/projectcalico/flannel-cni-plugin.git
+	$(call fetch_repo,$(FLANNEL_CNI_PLUGIN_REPO),$(FLANNEL_VERSION),flannel-cni-plugin)
 	touch $@
 
 ##############################################################################
@@ -42,25 +39,28 @@ BIN = bin/$(ARCH)
 
 CN_FLAGS = -ldflags "-X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=$(GIT_VERSION)"
 
+# run_in runs the command that follows it in a repo fetch_repo checked out ($(1)), mounted at
+# $(2) in a go-build container, or in place under NATIVE_GO_BUILD.
+ifeq ($(NATIVE_GO_BUILD),true)
+run_in = cd $(CURDIR)/$(1) &&
+else
+run_in = docker run $(EXTRA_DOCKER_ARGS) -v $(CURDIR)/$(1):$(2):z \
+	-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w $(2) --rm $(CALICO_BUILD)
+endif
+
 # Pre-create the host-side module cache before docker mounts it. Without this,
 # Docker creates the path as root if it doesn't exist, leaving user 1001 inside
 # the container unable to write to /go/pkg/mod (e.g. fresh CI workers).
 $(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning &: $(CONTAINERNETWORKING_PLUGINS_CLONED)
 	mkdir -p $(GOMOD_CACHE)
-	docker run \
-		$(EXTRA_DOCKER_ARGS) \
-		-v $(CURDIR)/containernetworking-plugins:/go/src/github.com/containernetworking/plugins:z \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/containernetworking/plugins --rm $(CALICO_BUILD) \
+	$(call run_in,containernetworking-plugins,/go/src/github.com/containernetworking/plugins) \
 		/bin/sh -xe -c 'GOFLAGS="-buildvcs=false" CGO_ENABLED=0 GOARCH=$(ARCH) ./build_linux.sh $(CN_FLAGS)'
 	mkdir -p $(BIN)
 	@$(foreach file,$(CN_FILES),cp containernetworking-plugins/bin/$(file) $(BIN)/$(file);)
 
 $(BIN)/flannel: $(FLANNEL_CNI_PLUGIN_CLONED)
 	mkdir -p $(GOMOD_CACHE)
-	docker run \
-		$(EXTRA_DOCKER_ARGS) \
-		-v $(CURDIR)/flannel-cni-plugin:/go/src/github.com/flannel-io/cni-plugin:z \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/flannel-io/cni-plugin --rm $(CALICO_BUILD) \
+	$(call run_in,flannel-cni-plugin,/go/src/github.com/flannel-io/cni-plugin) \
 		/bin/sh -xe -c 'ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) make build_linux'
 	mkdir -p $(BIN)
 	cp flannel-cni-plugin/dist/flannel-$(ARCH) $(BIN)/flannel
@@ -171,16 +171,18 @@ ci: ut image-content-addressed
 .PHONY: cd
 cd: image-all cd-common
 
-.PHONY: release-build
+.PHONY: release-build release-publish
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
 	# Generate the `latest` images.
 	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
 	touch $@
 
-release-publish: release-prereqs .release-$(VERSION).published
-.release-$(VERSION).published:
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	touch $@
+release-publish: release-prereqs bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
+		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
+	else \
+		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \
+	fi

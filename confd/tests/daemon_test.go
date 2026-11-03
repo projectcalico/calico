@@ -17,6 +17,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -432,76 +433,137 @@ func TestBGPFilterDeletion(t *testing.T) {
 // the old shell suite's execute_tests_daemon function. KDD mode runs through
 // Typha to match the old test topology.
 func TestDaemonModeRendering(t *testing.T) {
-	meshScenarios := []string{
-		"mesh/bgp-export",
-		"mesh/ipip-always",
-		"mesh/communities",
-		"mesh/restart-time",
-	}
-	explicitScenarios := []string{
-		"explicit_peering/global",
-		"explicit_peering/selectors",
-		"explicit_peering/route_reflector",
-	}
-	filterScenarios := []string{
-		"bgpfilter/single_filter/global_peer",
+	scenarios := []daemonScenario{
+		{goldenDir: "mesh/bgp-export"},
+		{goldenDir: "mesh/ipip-always"},
+		{goldenDir: "mesh/communities", steps: []string{"step2"}},
+		{goldenDir: "mesh/restart-time"},
+		{goldenDir: "mesh/static-routes", steps: []string{"step2"}, kddOnly: true},
+		{goldenDir: "mesh/static-routes-exclude-node", steps: []string{"step2"}, kddOnly: true},
+		{goldenDir: "explicit_peering/global"},
+		{goldenDir: "explicit_peering/selectors", steps: []string{"step2"}},
+		{goldenDir: "explicit_peering/route_reflector"},
+		{goldenDir: "bgpfilter/single_filter/global_peer"},
 	}
 
 	for _, be := range activeBackends {
 		t.Run(be.name, func(t *testing.T) {
 			d := startConfdDaemon(t, be)
 
-			for _, sc := range meshScenarios {
-				runDaemonScenario(t, d, be, sc)
-			}
-			for _, sc := range explicitScenarios {
-				runDaemonScenario(t, d, be, sc)
-			}
-			for _, sc := range filterScenarios {
+			for _, sc := range scenarios {
+				if sc.kddOnly && be.ctrlClient == nil {
+					continue
+				}
 				runDaemonScenario(t, d, be, sc)
 			}
 		})
 	}
 }
 
-// runDaemonScenario applies resources for a single scenario, verifies that
-// confd renders the expected output, then cleans up all resources so the next
-// scenario starts from a clean state.
-func runDaemonScenario(t *testing.T, d *confdDaemon, be *datastoreBackend, goldenDir string) {
-	t.Helper()
+// daemonScenario is one scenario for the daemon-mode test: a base config, and optionally follow-up
+// steps applied on top of it.
+type daemonScenario struct {
+	// goldenDir is both the mock_data sub-directory to read resources from and the
+	// compiled_templates sub-directory to compare the rendered output against.
+	goldenDir string
 
-	inputPath := filepath.Join("mock_data", "calicoctl", goldenDir, "input.yaml")
-	cleanup := applyResources(t, be, inputPath)
-	d.expectOutput(goldenDir)
-	cleanup()
+	// steps name sub-directories of goldenDir, applied in order after the base config. They are
+	// deltas -- a step's input.yaml is applied on top of what is already there, not instead of
+	// it -- so they exercise confd re-rendering in response to a change, which is the thing
+	// daemon mode is for and oneshot mode cannot show.
+	steps []string
+
+	// kddOnly marks a scenario that needs Kubernetes resources and so cannot run against etcd.
+	kddOnly bool
 }
 
+// runDaemonScenario applies resources for a single scenario, verifies that confd renders the
+// expected output, then does the same for each follow-up step, before cleaning up all resources so
+// the next scenario starts from a clean state.
+func runDaemonScenario(t *testing.T, d *confdDaemon, be *datastoreBackend, sc daemonScenario) {
+	t.Helper()
+
+	// Clean up in reverse, so the base config outlives the steps layered on top of it.
+	var cleanups []func()
+	defer func() {
+		for i := len(cleanups) - 1; i >= 0; i-- {
+			cleanups[i]()
+		}
+	}()
+
+	apply := func(dir string, isStep bool) {
+		inputPath := filepath.Join("mock_data", "calicoctl", dir, "input.yaml")
+		if isStep {
+			// A step's resources are a delta on the base: some of them modify what the base
+			// already created, so they have to be applied as an upsert.
+			cleanups = append(cleanups, upsertResources(t, be, inputPath))
+		} else {
+			cleanups = append(cleanups, applyResources(t, be, inputPath))
+		}
+
+		// Some scenarios need Kubernetes resources alongside the Calico ones. Absent is fine;
+		// any other stat error means we cannot tell whether they exist, so say so rather than
+		// carrying on and failing later on a confusing golden mismatch.
+		kubectlPath := filepath.Join(filepath.Dir(inputPath), "kubectl-input.yaml")
+		if _, err := os.Stat(kubectlPath); err == nil {
+			cleanups = append(cleanups, applyResources(t, be, kubectlPath))
+		} else {
+			require.True(t, os.IsNotExist(err), "checking for %s: %v", kubectlPath, err)
+		}
+
+		d.expectOutput(dir)
+	}
+
+	apply(sc.goldenDir, false)
+	for _, step := range sc.steps {
+		apply(filepath.Join(sc.goldenDir, step), true)
+	}
+}
+
+// TestProgramClusterRoutes checks that the running daemon re-renders BIRD's config as
+// BGPConfiguration.programClusterRoutes is moved around its enum.  Each value renders differently,
+// along two independent axes:
+//
+//   - whether BIRD programs the routes for the unencapsulated pools in the mesh/restart-time input,
+//     which decides whether the kernel filter accepts or rejects them; and
+//   - whether BIRD programs the IPIP routes, which decides whether the export filter's
+//     tunnel-route reject includes tunl0.  This axis shows up even though the input has no IPIP
+//     pool, because the reject is built from the BGPConfiguration alone.
+//
+// So all four values, plus the unset default, need their own golden.  Only the second axis is about
+// IPIP, and the pools side of it is covered by the oneshot cluster_routes scenarios.
 func TestProgramClusterRoutes(t *testing.T) {
+	steps := []struct {
+		value  *string
+		golden string
+	}{
+		// Unset is the default, EnabledNoEncapOnly: BIRD keeps programming the routes for these
+		// unencapsulated pools, and Felix has the IPIP ones, so tunl0 is rejected on export.
+		{value: nil, golden: "mesh/restart-time"},
+		{value: ptr.To(apiv3.EnabledNoEncapOnly), golden: "mesh/restart-time"},
+		{value: ptr.To(apiv3.Disabled), golden: "mesh/restart-time/pcr-disabled"},
+		{value: ptr.To(apiv3.Enabled), golden: "mesh/restart-time/pcr-enabled"},
+		{value: ptr.To(apiv3.EnabledIPIPOnly), golden: "mesh/restart-time/pcr-ipip-only"},
+	}
+
 	for _, be := range activeBackends {
 		t.Run(be.name, func(t *testing.T) {
 			d := startConfdDaemon(t, be)
 			ctx := context.Background()
 
-			// Step 1: as for mesh/restart-time test oneshot test.
 			cleanup := applyResources(t, be, "mock_data/calicoctl/mesh/restart-time/input.yaml")
 			t.Cleanup(cleanup)
-			d.expectOutput("mesh/restart-time")
 
-			// Step 2: update BGPConfiguration to disable cluster route programming.
-			cfg, err := be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
-			require.NoError(t, err)
-			cfg.Spec.ProgramClusterRoutes = ptr.To("Disabled")
-			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
-			require.NoError(t, err)
-			d.expectOutput("mesh/restart-time/pcr-disabled")
-
-			// Step 3: update BGPConfiguration to enable cluster route programming.
-			cfg, err = be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
-			require.NoError(t, err)
-			cfg.Spec.ProgramClusterRoutes = ptr.To("Enabled")
-			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
-			require.NoError(t, err)
-			d.expectOutput("mesh/restart-time")
+			for _, step := range steps {
+				if step.value != nil {
+					cfg, err := be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
+					require.NoError(t, err)
+					cfg.Spec.ProgramClusterRoutes = step.value
+					_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
+					require.NoError(t, err)
+				}
+				d.expectOutput(step.golden)
+			}
 		})
 	}
 }

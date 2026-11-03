@@ -18,6 +18,7 @@ package kubevirt
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -129,6 +130,16 @@ func FindVMIOwnerRef(pod *corev1.Pod) *metav1.OwnerReference {
 		}
 	}
 	return nil
+}
+
+// virtLauncherPodPrefix is the pod GenerateName prefix KubeVirt hardcodes for
+// virt-launcher pods.
+const virtLauncherPodPrefix = "virt-launcher-"
+
+// MaybeVirtLauncherPod reports whether a pod name could belong to a virt-launcher pod. It
+// is a name-only pre-filter, so callers on the CNI hot path can skip an API server query.
+func MaybeVirtLauncherPod(podName string) bool {
+	return strings.HasPrefix(podName, virtLauncherPodPrefix)
 }
 
 // GetPodVMIInfo determines if a pod is a KubeVirt virt-launcher pod by checking its

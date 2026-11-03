@@ -1,12 +1,13 @@
+{{- $config := getBGPConfig 4 . -}}
 
-{{- $node_ip_key := printf "/host/%s/ip_addr_v4" (getenv "NODENAME")}}
+{{- $node_ip_key := printf "/host/%s/ip_addr_v4" $config.NodeName}}
 {{- $node_ip := getv $node_ip_key}}
 $local_ip = "{{$node_ip}}"
 
-{{- $bgp_id := getenv "CALICO_ROUTER_ID" ""}}
+{{- $bgp_id := $config.RouterID}}
 $bgp_id = "{{if ne "" ($bgp_id)}}{{$bgp_id}}{{else}}{{$node_ip}}{{end}}"
 
-{{- $node_as_key := printf "/host/%s/as_num" (getenv "NODENAME")}}
+{{- $node_as_key := printf "/host/%s/as_num" $config.NodeName}}
 $local_asn = {{if exists $node_as_key}}{{getv $node_as_key}}{{else}}{{getv "/global/as_num"}}{{end}}
 
 $peerings =
@@ -53,7 +54,7 @@ $peerings =
     {{- end}}
 
     # ------------- Node-specific peers -------------
-    {{- $node_peers_key := printf "/host/%s/peer_v4" (getenv "NODENAME")}}
+    {{- $node_peers_key := printf "/host/%s/peer_v4" $config.NodeName}}
     {{- if ls $node_peers_key}}
         {{- range gets (printf "%s/*" $node_peers_key)}}
             {{- $data := json .Value}}

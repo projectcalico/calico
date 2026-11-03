@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -132,6 +133,27 @@ func clearDir(dirPath string) {
 	}
 
 	log.Infof("Directory %s cleared successfully!", dirPath)
+}
+
+// countInotifyFDs returns the number of inotify instances held open by this
+// process. Every fsnotify.Watcher owns exactly one.
+func countInotifyFDs() int {
+	entries, err := os.ReadDir("/proc/self/fd")
+	Expect(err).ShouldNot(HaveOccurred(), "cannot count inotify instances without procfs")
+
+	count := 0
+	for _, entry := range entries {
+		target, err := os.Readlink(filepath.Join("/proc/self/fd", entry.Name()))
+		if err != nil {
+			// The descriptor was closed while we were scanning.
+			continue
+		}
+		if strings.Contains(target, "inotify") {
+			count++
+		}
+	}
+
+	return count
 }
 
 var _ = Describe("Workload endpoint status file watcher test", func() {
@@ -311,5 +333,27 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 		Eventually(haveEvents, "15s", "1s").WithArguments(filePath, []string{"create", "update", "update"}).Should(BeTrue())
 		Eventually(lastInSync).Should(BeTrue())
+	})
+
+	It("should not leak inotify instances while the directory cannot be watched", func() {
+		// A missing directory makes fsnotify's Add fail, which sends the watcher
+		// goroutine round its retry loop once per poll interval.
+		missingDir := filepath.Join(tmpPath, "no-such-dir")
+		w = NewFileWatcherWithShim(missingDir, 100*time.Millisecond, fsnotifyErr.newFsnotifyWatcherShim, fsnotifyActivity)
+		w.SetCallbacks(Callbacks{
+			OnFileCreation: r.OnFileCreate,
+			OnFileUpdate:   r.OnFileUpdate,
+			OnFileDeletion: r.OnFileDeletion,
+			OnInSync:       r.OnInSync,
+		})
+
+		baseline := countInotifyFDs()
+
+		w.Start()
+		defer w.Stop()
+
+		// The retried watcher is closed within the same iteration, so at most one
+		// can be open when we sample.
+		Consistently(countInotifyFDs, "2s", "100ms").Should(BeNumerically("<=", baseline+1))
 	})
 })

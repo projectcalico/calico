@@ -19,7 +19,8 @@ best=""
 #   But not: git@github.com:userbootigera/somerepository.git
 echo "[debug] Trying to detect base branch by looking for most similar branch" >&2
 
-remote=$(git remote -v | grep "[:/]${git_repo_slug}.*fetch" | cut -f1 )
+# Anchor the slug at a URL boundary so "org/calico" does not match "org/calico...".
+remote=$(git remote -v | command grep -E "[:/]${git_repo_slug}(.git)?[[:space:]].*fetch" | cut -f1)
 
 if [[ -z "${remote}" ]]; then
   echo "[error] Could not detect a git remote for ${git_repo_slug}; stop" >&2

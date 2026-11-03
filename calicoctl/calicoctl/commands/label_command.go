@@ -30,7 +30,18 @@ func newLabelCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "label KIND NAME [key=value | key]",
 		Short: "Add or update labels of resources",
-		Args:  cobra.MinimumNArgs(3),
+		Long: `Add, update, or remove labels on an existing Calico resource. Set a label with
+key=value (add --overwrite to replace an existing value), or remove one by
+passing the key with --remove.`,
+		Example: `  # Add a label to a node.
+  calicoctl label nodes node1 cluster=frontend
+
+  # Overwrite an existing label value.
+  calicoctl label nodes node1 cluster=backend --overwrite
+
+  # Remove a label.
+  calicoctl label nodes node1 cluster --remove`,
+		Args: cobra.MinimumNArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			overwrite, _ := cmd.Flags().GetBool("overwrite")
 			remove, _ := cmd.Flags().GetBool("remove")

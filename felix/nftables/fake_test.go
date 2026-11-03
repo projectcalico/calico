@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package nftables_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -57,6 +58,12 @@ type fakeNFT struct {
 
 	// Allow overriding the next ListElements response for one or more sets to be an error.
 	ListElementsErrors map[string]error
+
+	// Allow overriding the next ListAll response to be an error.
+	ListAllError error
+
+	// Number of subsequent Run calls to fail without touching the underlying fake.
+	RunErrors int
 
 	// Track the number of List calls (simulates nft process spawns).
 	ListCallCount int
@@ -105,7 +112,30 @@ func (f *fakeNFT) NewTransaction() *knftables.Transaction {
 // IsAlreadyExists methods can be used to test the result.
 func (f *fakeNFT) Run(ctx context.Context, tx *knftables.Transaction) error {
 	f.preRun(tx)
+	if err := f.takeRunError(); err != nil {
+		logrus.WithError(err).Info("Returning test error from Run")
+		return err
+	}
 	return f.fake.Run(ctx, tx)
+}
+
+func (f *fakeNFT) takeRunError() error {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	if f.RunErrors == 0 {
+		return nil
+	}
+	f.RunErrors--
+	return errors.New("injected nft failure")
+}
+
+// Transactions returns a copy of the transactions Run has seen, for test assertions.
+func (f *fakeNFT) Transactions() []knftables.Transaction {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	return append([]knftables.Transaction(nil), f.transactions...)
 }
 
 func (f *fakeNFT) preRun(tx *knftables.Transaction) {
@@ -131,7 +161,20 @@ func (f *fakeNFT) Check(ctx context.Context, tx *knftables.Transaction) error {
 // grouped by object type.
 func (f *fakeNFT) ListAll(ctx context.Context) (map[string][]string, error) {
 	f.preList()
+	if err := f.takeListAllError(); err != nil {
+		logrus.WithError(err).Info("Returning test error from ListAll")
+		return nil, err
+	}
 	return f.fake.ListAll(ctx)
+}
+
+func (f *fakeNFT) takeListAllError() error {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	err := f.ListAllError
+	f.ListAllError = nil
+	return err
 }
 
 // List returns a list of the names of the objects of objectType ("chain", "set",

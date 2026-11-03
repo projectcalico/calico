@@ -2,9 +2,11 @@ package fv
 
 import (
 	"bufio"
+	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -41,6 +43,19 @@ func createKeyCertPair(dir string) (*os.File, *os.File) {
 	Expect(err).ShouldNot(HaveOccurred())
 
 	return certFile, keyFile
+}
+
+// newHTTPSClient returns a client that trusts the certificate at the given path.
+func newHTTPSClient(certPath string) *http.Client {
+	certPEM, err := os.ReadFile(certPath)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	rootCAs := x509.NewCertPool()
+	Expect(rootCAs.AppendCertsFromPEM(certPEM)).Should(BeTrue())
+
+	return &http.Client{
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootCAs}},
+	}
 }
 
 // newSSEScanner creates a new scanner for reading "Server Side Events".

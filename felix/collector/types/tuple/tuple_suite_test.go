@@ -20,18 +20,18 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 func init() {
 	testutils.HookLogrusForGinkgo()
-	logutils.ConfigureFormatter("test")
+	logrusr.ConfigureFormatter("test")
 }
 
 func TestTuple(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../../report/felix_collector_tuple_suite.xml"
+	testutils.RegisterJUnitReporter("felix_collector_tuple_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/collector/tuple", suiteConfig, reporterConfig)
 }

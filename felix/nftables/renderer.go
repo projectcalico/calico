@@ -23,6 +23,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 )
 
 var shellUnsafe = regexp.MustCompile(`[^\w @%+=:,./-]`)
@@ -63,7 +64,7 @@ func (r *nftRenderer) renderRule(rule *generictables.Rule, features *environment
 	fragments := []string{}
 
 	if rule.Match != nil {
-		matchFragment := rule.Match.(NFTMatchCriteria).IPVersion(r.ipv).Render()
+		matchFragment := rule.Match.(nftrender.NFTMatchCriteria).IPVersion(r.ipv).Render()
 		if matchFragment != "" {
 			fragments = append(fragments, matchFragment)
 		}
@@ -76,7 +77,7 @@ func (r *nftRenderer) renderRule(rule *generictables.Rule, features *environment
 		// Render other actions.
 		actionFragment := rule.Action.ToFragment(features)
 		if actionFragment != "" {
-			fragments = append(fragments, insertIPVersion(actionFragment, r.ipv))
+			fragments = append(fragments, nftrender.InsertIPVersion(actionFragment, r.ipv))
 		}
 	}
 

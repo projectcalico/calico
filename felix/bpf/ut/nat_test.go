@@ -18,11 +18,13 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
@@ -2035,6 +2037,7 @@ func TestNATAffinity(t *testing.T) {
 		Expect(aff).To(HaveKey(affKey))
 		affEntry = aff[affKey]
 		Expect(affEntry.Backend()).To(Equal(nat.NewNATBackendValue(natIP, natPort)))
+		expectRecentKTime(affEntry.Timestamp())
 	})
 	expectMark(tcdefs.MarkSeen)
 	resetCTMap(ctMap)
@@ -2115,6 +2118,80 @@ func TestNATAffinity(t *testing.T) {
 	})
 	expectMark(tcdefs.MarkSeen)
 	resetCTMap(ctMap)
+}
+
+// expectRecentKTime checks that a timestamp written by the BPF dataplane with
+// bpf_ktime_get_ns parses as a monotonic time in the recent past. It guards
+// against the Go parsing disagreeing with the C struct layout.
+func expectRecentKTime(ts time.Duration) {
+	now := time.Duration(bpf.KTimeNanos())
+	ExpectWithOffset(1, ts).To(BeNumerically(">", 0))
+	ExpectWithOffset(1, ts).To(BeNumerically("<=", now))
+	ExpectWithOffset(1, now-ts).To(BeNumerically("<", time.Minute))
+}
+
+func TestNATAffinityV6(t *testing.T) {
+	RegisterTestingT(t)
+
+	cleanUpMaps()
+	defer cleanUpMaps()
+
+	bpfIfaceName = "AFF6"
+	defer func() { bpfIfaceName = "" }()
+
+	_, ipv6, l4, _, pktBytes, err := testPacketUDPDefaultNPV6(node1ipV6)
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+
+	hostIP = node1ipV6
+
+	// The test packet carries a hop-by-hop extension header, so
+	// ipv6.NextHeader is not the L4 protocol.
+	natKey := nat.NewNATKeyV6(ipv6.DstIP, uint16(udp.DstPort), uint8(layers.IPProtocolUDP))
+	err = natMapV6.Update(
+		natKey.AsBytes(),
+		nat.NewNATValueV6(0, 1, 0, 60 /* seconds */).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	natIP := net.ParseIP("abcd::ffff:0808:0808")
+	natPort := uint16(666)
+
+	err = natBEMapV6.Update(
+		nat.NewNATBackendKeyV6(0, 0).AsBytes(),
+		nat.NewNATBackendValueV6(natIP, natPort).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Insert a reverse route for the source workload.
+	rtKey := routes.NewKeyV6(srcV6CIDR).AsBytes()
+	rtVal := routes.NewValueV6WithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	err = rtMapV6.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+
+	resetCTMapV6(ctMapV6)
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+
+		aff, err := nat.LoadAffinityMapV6(affinityMapV6)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(aff).To(HaveLen(1))
+
+		affKey := nat.NewAffinityKeyV6(ipv6.SrcIP, natKey)
+		Expect(aff).To(HaveKey(affKey))
+
+		affEntry := aff[affKey]
+		Expect(affEntry.Backend()).To(Equal(nat.NewNATBackendValueV6(natIP, natPort)))
+		// The entry was written by the BPF program; this verifies that the
+		// Go representation matches the C struct layout, including the
+		// padding that aligns the 64-bit timestamp.
+		expectRecentKTime(affEntry.Timestamp())
+	}, withIPv6())
+	expectMark(tcdefs.MarkSeen)
 }
 
 func TestNATNodePortIngressDSR(t *testing.T) {
@@ -2771,6 +2848,103 @@ func TestNATSourceCollision(t *testing.T) {
 
 		return nil
 	}, "120s").Should(Succeed())
+}
+
+// TestNATSourceCollisionRecyclesClosedRetryPort checks that a closed reverse entry on a PSNAT retry port is recycled, not counted as a collision.
+func TestNATSourceCollisionRecyclesClosedRetryPort(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "SPRc"
+	defer func() { bpfIfaceName = "" }()
+	defer func() { skbMark = 0 }()
+	defer resetCTMap(ctMap)
+	defer resetCTMap(countersMap)
+	defer resetRTMap(rtMap)
+	defer resetMap(natMap)
+	defer resetMap(natBEMap)
+	resetCTMap(ctMap)
+	resetCTMap(countersMap)
+
+	hostIP = node2ip
+	skbMark = 0
+
+	podIP := net.IPv4(5, 0, 0, 1)
+	podPort := uint16(1234)
+	clientIP := net.IPv4(3, 2, 1, 0)
+	clientPort := uint16(50555)
+	tcpProto := uint8(6)
+	nodeportPort := uint16(1122)
+	psnatPort := uint16(22222)
+
+	podCIDR := net.IPNet{IP: podIP, Mask: net.IPv4Mask(255, 255, 255, 0)}
+	Expect(rtMap.Update(
+		routes.NewKey(ip.CIDRFromIPNet(&podCIDR).(ip.V4CIDR)).AsBytes(),
+		routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes(),
+	)).NotTo(HaveOccurred())
+	Expect(rtMap.Update(
+		routes.NewKey(ip.CIDRFromIPNet(&node2CIDR).(ip.V4CIDR)).AsBytes(),
+		routes.NewValue(routes.FlagsLocalHost).AsBytes(),
+	)).NotTo(HaveOccurred())
+
+	Expect(natMap.Update(
+		nat.NewNATKey(node2ip, nodeportPort, tcpProto).AsBytes(),
+		nat.NewNATValue(0, 1, 1, 0).AsBytes(),
+	)).NotTo(HaveOccurred())
+	Expect(natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(podIP, podPort).AsBytes(),
+	)).NotTo(HaveOccurred())
+
+	// A live connection on the post-NAT tuple forces PSNAT.
+	liveRevKey := conntrack.NewKey(tcpProto, clientIP, clientPort, podIP, podPort)
+	liveRev := conntrack.NewValueNATReverse(0, 0,
+		conntrack.Leg{Seqno: 12345, SynSeen: true, AckSeen: true, Opener: true, Approved: true},
+		conntrack.Leg{Seqno: 7890, SynSeen: true, AckSeen: true, Approved: true},
+		node1ip, node1ip, nodeportPort)
+	Expect(ctMap.Update(liveRevKey.AsBytes(), liveRev.AsBytes())).NotTo(HaveOccurred())
+
+	// The only PSNAT port holds a closed reverse entry.
+	retryRevKey := conntrack.NewKey(tcpProto, clientIP, psnatPort, podIP, podPort)
+	closedRetryRev := conntrack.NewValueNATReverse(0, 0,
+		conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true, Opener: true, Approved: true},
+		conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true, Approved: true},
+		node1ip, node1ip, nodeportPort)
+	Expect(ctMap.Update(retryRevKey.AsBytes(), closedRetryRev.AsBytes())).NotTo(HaveOccurred())
+
+	pktIPHdr := &layers.IPv4{
+		Version:  4,
+		IHL:      5,
+		TTL:      64,
+		Flags:    layers.IPv4DontFragment,
+		SrcIP:    clientIP,
+		DstIP:    node2ip,
+		Protocol: layers.IPProtocolTCP,
+	}
+	pktTCPHdr := &layers.TCP{
+		SrcPort:    layers.TCPPort(clientPort),
+		DstPort:    layers.TCPPort(nodeportPort),
+		SYN:        true,
+		DataOffset: 5,
+	}
+	_, _, _, _, pktBytes, err := testPacketV4(nil, pktIPHdr, pktTCPHdr, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+
+		bpfCounters, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(int(bpfCounters[counters.SourceCollisionResolutionFailed])).To(Equal(0),
+			"a closed PSNAT retry-port entry should be recycled, not counted as an unresolved collision")
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+	}, withPSNATPorts(psnatPort, psnatPort))
+
+	ct, err := conntrack.LoadMapMem(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(ct).To(HaveKey(retryRevKey))
+	Expect(ct[retryRevKey].Data().FINsSeen()).To(BeFalse())
+	Expect(ct[retryRevKey].OrigSPort()).To(Equal(clientPort))
 }
 
 func TestNATHostRemoteNPLocalPod(t *testing.T) {

@@ -32,15 +32,15 @@ func NewNodeCounter(sink api.SyncerCallbacks) *NodeCounter {
 
 type NodeCounter struct {
 	sync.Mutex
-	sink    api.SyncerCallbacks
-	inSync  bool
-	nodeMap map[string]bool
+	sink                 api.SyncerCallbacks
+	initialSyncCompleted bool
+	nodeMap              map[string]bool
 }
 
 func (c *NodeCounter) OnStatusUpdated(status api.SyncStatus) {
 	if status == api.InSync {
 		c.Lock()
-		c.inSync = true
+		c.initialSyncCompleted = true
 		c.Unlock()
 	}
 	c.sink.OnStatusUpdated(status)
@@ -67,7 +67,7 @@ func (c *NodeCounter) OnUpdates(updates []api.Update) {
 func (c *NodeCounter) GetNumNodes() (int, error) {
 	c.Lock()
 	defer c.Unlock()
-	if !c.inSync {
+	if !c.initialSyncCompleted {
 		return 0, fmt.Errorf("node counter not yet in sync")
 	}
 	return len(c.nodeMap), nil

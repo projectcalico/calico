@@ -5,6 +5,11 @@
 #ifndef __CALI_METADATA_H__
 #define __CALI_METADATA_H__
 
+#include "cali_bpf.h"
+#include "log.h"
+#include "skb.h"
+#include "types.h"
+
 /* A struct to share information between TC and XDP programs.
  * The struct must be 4 byte aligned, based on
  * samples/bpf/xdp2skb_meta_kern.c code in the Kernel source. */

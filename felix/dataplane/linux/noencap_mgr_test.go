@@ -23,10 +23,10 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var _ = Describe("NoEncap Manager", func() {
@@ -44,7 +44,7 @@ var _ = Describe("NoEncap Manager", func() {
 			currentRoutes: map[string][]routetable.Target{},
 		}
 
-		opRecorder := logutils.NewSummarizer("test")
+		opRecorder := logrusr.NewSummarizer("test")
 
 		dataplane := mocknetlink.New()
 		_, err := dataplane.NewMockNetlink()
@@ -64,9 +64,9 @@ var _ = Describe("NoEncap Manager", func() {
 			rt,
 			4,
 			Config{
-				Hostname:             "node1",
-				ProgramClusterRoutes: true,
-				DeviceRouteProtocol:  dataplanedefs.DefaultRouteProto,
+				Hostname:                    "node1",
+				ProgramNoEncapClusterRoutes: true,
+				DeviceRouteProtocol:         dataplanedefs.DefaultRouteProto,
 			},
 			opRecorder,
 			dataplane,
@@ -75,9 +75,9 @@ var _ = Describe("NoEncap Manager", func() {
 			rt,
 			6,
 			Config{
-				Hostname:             "node1",
-				ProgramClusterRoutes: true,
-				DeviceRouteProtocol:  dataplanedefs.DefaultRouteProto,
+				Hostname:                    "node1",
+				ProgramNoEncapClusterRoutes: true,
+				DeviceRouteProtocol:         dataplanedefs.DefaultRouteProto,
 			},
 			opRecorder,
 			dataplaneV6,
@@ -255,5 +255,53 @@ var _ = Describe("NoEncap Manager", func() {
 				GW:       ip.FromString("fc00:10:10::1"),
 				Protocol: 80,
 			}))
+	})
+
+	It("clears the parent address when the local host loses its IPv4 address", func() {
+		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		Expect(noencapMgr.routeMgr.parentIfaceAddr()).To(Equal("172.0.0.2"))
+
+		// The Node is still there, but it no longer has an IPv4 address (say
+		// its BGP IPv4Address was removed and it has no v4 InternalIP), so the
+		// calc graph sends an update with an empty address rather than a
+		// remove.  Keeping the old address would leave the device-sync
+		// goroutine hunting for one that is no longer on any link.
+		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+		})
+		Expect(noencapMgr.routeMgr.parentIfaceAddr()).To(BeEmpty())
+		_, err := noencapMgr.routeMgr.detectParentIface()
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("clears the parent address when the local host loses its IPv6 address", func() {
+		noencapMgrV6.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv6Addr: "fc00:10:96::2",
+		})
+		Expect(noencapMgrV6.routeMgr.parentIfaceAddr()).To(Equal("fc00:10:96::2"))
+
+		// A single HostMetadataUpdate carries both families, so a node that
+		// drops to IPv4-only shows up at the IPv6 manager as an update with an
+		// empty Ipv6Addr.
+		noencapMgrV6.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		Expect(noencapMgrV6.routeMgr.parentIfaceAddr()).To(BeEmpty())
+	})
+
+	It("ignores host metadata for other hosts", func() {
+		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+		})
+		Expect(noencapMgr.routeMgr.parentIfaceAddr()).To(Equal("172.0.0.2"))
 	})
 })

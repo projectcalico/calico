@@ -260,6 +260,67 @@ var _ = Describe("RouteGenerator", func() {
 		})
 	})
 
+	Describe("multiple EndpointSlices for one service", func() {
+		// A large Service spreads its endpoints across several EndpointSlices. The
+		// advertisement decision must consider all of them, not just the slice that
+		// most recently changed, otherwise a readiness change in one slice could
+		// wrongly withdraw a route that another slice still justifies.
+		var svc *v1.Service
+		var sliceA, sliceB *discoveryv1.EndpointSlice
+
+		sliceMeta := func(name string) metav1.ObjectMeta {
+			return metav1.ObjectMeta{
+				Namespace: "foo",
+				Name:      name,
+				Labels:    map[string]string{"kubernetes.io/service-name": "bar"},
+			}
+		}
+		localEndpoint := func(addr string, ready bool) discoveryv1.Endpoint {
+			return discoveryv1.Endpoint{
+				Addresses:  []string{addr},
+				NodeName:   &rg.nodeName,
+				Conditions: discoveryv1.EndpointConditions{Ready: &ready},
+			}
+		}
+
+		BeforeEach(func() {
+			svc, _ = buildSimpleService() // foo/bar, ClusterIP, externalTrafficPolicy=Local
+			sliceA = &discoveryv1.EndpointSlice{
+				ObjectMeta:  sliceMeta("bar-a"),
+				AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+				Endpoints:   []discoveryv1.Endpoint{localEndpoint("1.1.1.1", true)},
+			}
+			sliceB = &discoveryv1.EndpointSlice{
+				ObjectMeta:  sliceMeta("bar-b"),
+				AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+				Endpoints:   []discoveryv1.Endpoint{localEndpoint("1.1.1.2", true)},
+			}
+			Expect(rg.svcIndexer.Add(svc)).NotTo(HaveOccurred())
+			Expect(rg.epIndexer.Add(sliceA)).NotTo(HaveOccurred())
+			Expect(rg.epIndexer.Add(sliceB)).NotTo(HaveOccurred())
+			rg.onSvcAdd(svc)
+			Expect(rg.svcRouteMap["foo/bar"]).To(Equal(expectedSvcRouteMap))
+		})
+
+		It("keeps advertising while any slice still has a ready local endpoint", func() {
+			// Slice B's local endpoint goes not-ready, but slice A still has a ready
+			// local endpoint, so the route must remain advertised.
+			sliceB.Endpoints[0].Conditions.Ready = new(false)
+			Expect(rg.epIndexer.Add(sliceB)).NotTo(HaveOccurred())
+			rg.onEPUpdate(nil, sliceB)
+			Expect(rg.svcRouteMap["foo/bar"]).To(Equal(expectedSvcRouteMap))
+		})
+
+		It("withdraws once no slice has a ready local endpoint", func() {
+			sliceA.Endpoints[0].Conditions.Ready = new(false)
+			sliceB.Endpoints[0].Conditions.Ready = new(false)
+			Expect(rg.epIndexer.Add(sliceA)).NotTo(HaveOccurred())
+			Expect(rg.epIndexer.Add(sliceB)).NotTo(HaveOccurred())
+			rg.onEPUpdate(nil, sliceB)
+			Expect(rg.svcRouteMap["foo/bar"]).To(BeEmpty())
+		})
+	})
+
 	Describe("resourceInformerHandlers", func() {
 		var (
 			svc, svc2, svc3, svc4 *v1.Service
@@ -360,6 +421,37 @@ var _ = Describe("RouteGenerator", func() {
 			Expect(rg.client.cache["/calico/staticroutes/127.0.0.1-32"]).To(Equal("127.0.0.1/32"))
 			Expect(rg.client.cache["/calico/staticroutesv6/::1-128"]).To(Equal("::1/128"))
 			Expect(rg.client.cache["/calico/staticroutes/172.217.3.5-32"]).To(Equal("172.217.3.5/32"))
+		})
+
+		It("should withdraw and re-advertise routes as the local endpoint's readiness changes", func() {
+			// The service starts with a ready local endpoint (nil Ready condition
+			// added by addEndpointSubset counts as ready), so its routes are advertised.
+			rg.onSvcAdd(svc)
+			Expect(rg.svcRouteMap["foo/bar"]).To(Equal(expectedSvcRouteMap))
+			Expect(rg.routeAdvertisementRefCount["127.0.0.1/32"]).To(Equal(1))
+			Expect(rg.client.cache["/calico/staticroutes/127.0.0.1-32"]).To(Equal("127.0.0.1/32"))
+
+			// Mark the only local endpoint not-ready, simulating a newly-scheduled
+			// pod that is Running but 0/1. The dataplane will not program it as a
+			// backend, so the route must be withdrawn rather than black-holing traffic.
+			notReady := false
+			ep.Endpoints[0].Conditions.Ready = &notReady
+			err := rg.epIndexer.Add(ep)
+			Expect(err).NotTo(HaveOccurred())
+			rg.onEPUpdate(nil, ep)
+			Expect(rg.svcRouteMap["foo/bar"]).To(BeEmpty())
+			Expect(rg.routeAdvertisementRefCount["127.0.0.1/32"]).To(Equal(0))
+			Expect(rg.client.cache["/calico/staticroutes/127.0.0.1-32"]).To(Equal(""))
+
+			// Once the endpoint becomes ready, the route is advertised again.
+			ready := true
+			ep.Endpoints[0].Conditions.Ready = &ready
+			err = rg.epIndexer.Add(ep)
+			Expect(err).NotTo(HaveOccurred())
+			rg.onEPUpdate(nil, ep)
+			Expect(rg.svcRouteMap["foo/bar"]).To(Equal(expectedSvcRouteMap))
+			Expect(rg.routeAdvertisementRefCount["127.0.0.1/32"]).To(Equal(1))
+			Expect(rg.client.cache["/calico/staticroutes/127.0.0.1-32"]).To(Equal("127.0.0.1/32"))
 		})
 
 		Context("onSvc[Add|Delete]", func() {
@@ -1141,6 +1233,122 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
 				Expect(result).To(BeTrue())
 			})
+		})
+	})
+})
+
+var _ = Describe("Endpoint readiness gating for BGP advertisement", func() {
+	var rg *routeGenerator
+	var mockClient *client
+
+	// lbService builds a LoadBalancer Service with the given external traffic policy.
+	lbService := func(etp v1.ServiceExternalTrafficPolicy) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+			Spec: v1.ServiceSpec{
+				Type:                  v1.ServiceTypeLoadBalancer,
+				ClusterIP:             "10.0.0.1",
+				ClusterIPs:            []string{"10.0.0.1"},
+				ExternalTrafficPolicy: etp,
+				IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
+			},
+		}
+	}
+
+	// epSlice wraps the given endpoints in an IPv4 EndpointSlice for test-svc.
+	epSlice := func(endpoints ...discoveryv1.Endpoint) *discoveryv1.EndpointSlice {
+		return &discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-svc-abc",
+				Namespace: "default",
+				Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
+			},
+			AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+			Endpoints:   endpoints,
+		}
+	}
+
+	BeforeEach(func() {
+		mockClient = &client{
+			cache:                    make(map[string]string),
+			syncedOnce:               true,
+			clusterCIDRs:             []string{"10.0.0.0/16"},
+			programmedRouteRefCount:  make(map[string]int),
+			ExternalIPRouteIndex:     NewRouteIndex(),
+			ClusterIPRouteIndex:      NewRouteIndex(),
+			LoadBalancerIPRouteIndex: NewRouteIndex(),
+			nodeLabelManager:         newNodeLabelManager(),
+			// Disable aggregation so Cluster services reach the per-endpoint logic.
+			serviceLoadBalancerAggregation: apiv3.ServiceLoadBalancerAggregationDisabled,
+		}
+		rg = &routeGenerator{client: mockClient, nodeName: "test-node"}
+	})
+
+	Context("externalTrafficPolicy=Local", func() {
+		svcLocal := func() *v1.Service { return lbService(v1.ServiceExternalTrafficPolicyTypeLocal) }
+
+		It("does not advertise when the only local endpoint is not ready", func() {
+			ep := epSlice(discoveryv1.Endpoint{
+				Addresses:  []string{"10.0.0.2"},
+				NodeName:   &rg.nodeName,
+				Conditions: discoveryv1.EndpointConditions{Ready: new(false)},
+			})
+			Expect(rg.advertiseThisService(svcLocal(), []*discoveryv1.EndpointSlice{ep})).To(BeFalse())
+		})
+
+		It("advertises when the local endpoint is ready", func() {
+			ep := epSlice(discoveryv1.Endpoint{
+				Addresses:  []string{"10.0.0.2"},
+				NodeName:   &rg.nodeName,
+				Conditions: discoveryv1.EndpointConditions{Ready: new(true)},
+			})
+			Expect(rg.advertiseThisService(svcLocal(), []*discoveryv1.EndpointSlice{ep})).To(BeTrue())
+		})
+
+		It("advertises when the local endpoint has a nil Ready condition (treated as ready)", func() {
+			ep := epSlice(discoveryv1.Endpoint{
+				Addresses: []string{"10.0.0.2"},
+				NodeName:  &rg.nodeName,
+				// Conditions left zero-valued: Ready is nil, which the API treats as ready.
+			})
+			Expect(rg.advertiseThisService(svcLocal(), []*discoveryv1.EndpointSlice{ep})).To(BeTrue())
+		})
+
+		It("does not advertise when the local endpoint is not ready even though a remote endpoint is ready", func() {
+			otherNode := "other-node"
+			ep := epSlice(
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.3"}, NodeName: &otherNode, Conditions: discoveryv1.EndpointConditions{Ready: new(true)}},
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.2"}, NodeName: &rg.nodeName, Conditions: discoveryv1.EndpointConditions{Ready: new(false)}},
+			)
+			Expect(rg.advertiseThisService(svcLocal(), []*discoveryv1.EndpointSlice{ep})).To(BeFalse())
+		})
+
+		It("advertises when the node has a ready local endpoint alongside a not-ready one", func() {
+			ep := epSlice(
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.2"}, NodeName: &rg.nodeName, Conditions: discoveryv1.EndpointConditions{Ready: new(false)}},
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.4"}, NodeName: &rg.nodeName, Conditions: discoveryv1.EndpointConditions{Ready: new(true)}},
+			)
+			Expect(rg.advertiseThisService(svcLocal(), []*discoveryv1.EndpointSlice{ep})).To(BeTrue())
+		})
+	})
+
+	Context("externalTrafficPolicy=Cluster", func() {
+		svcCluster := func() *v1.Service { return lbService(v1.ServiceExternalTrafficPolicyTypeCluster) }
+
+		It("does not advertise when all endpoints are not ready", func() {
+			ep := epSlice(
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.2"}, NodeName: &rg.nodeName, Conditions: discoveryv1.EndpointConditions{Ready: new(false)}},
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.3"}, Conditions: discoveryv1.EndpointConditions{Ready: new(false)}},
+			)
+			Expect(rg.advertiseThisService(svcCluster(), []*discoveryv1.EndpointSlice{ep})).To(BeFalse())
+		})
+
+		It("advertises when at least one endpoint is ready", func() {
+			ep := epSlice(
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.2"}, Conditions: discoveryv1.EndpointConditions{Ready: new(false)}},
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.3"}, Conditions: discoveryv1.EndpointConditions{Ready: new(true)}},
+			)
+			Expect(rg.advertiseThisService(svcCluster(), []*discoveryv1.EndpointSlice{ep})).To(BeTrue())
 		})
 	})
 })

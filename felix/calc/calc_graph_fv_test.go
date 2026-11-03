@@ -173,6 +173,15 @@ var baseTests = []StateList{
 		hostEp1WithPolicyAndTwoNetworkSets,
 	},
 
+	// Overlap-suppression dedup remove path (CORE-13009): add a broad CIDR, nest CIDRs under it
+	// (suppressed), then remove a middle CIDR while the ancestor still covers the leaf. The removed
+	// CIDR was never programmed, so nothing must be emitted and the leaf must stay suppressed.
+	{
+		hostEp1WithPolicyAndOverlapAncestor,
+		hostEp1WithPolicyAndOverlapNested,
+		hostEp1WithPolicyAndOverlapMiddleRemoved,
+	},
+
 	// Untracked policy on its own.
 	{hostEp1WithUntrackedPolicy},
 	// Mixed policy.
@@ -966,7 +975,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		Expect(lastStats.NumPolicies).To(Equal(state.NumPolicies()),
 			"number of policies stat incorrect after moving to state: %v\n%+v",
 			state.Name, spew.Sdump(state.DatastoreState))
-		Expect(lastStats.NumProfiles).To(Equal(state.NumProfileRules()),
+		Expect(lastStats.NumProfiles).To(Equal(state.NumProfiles()),
 			"number of profiles stat incorrect after moving to state: %v\n%+v",
 			state.Name, spew.Sdump(state.DatastoreState))
 		Expect(lastStats.NumALPPolicies).To(Equal(state.NumALPPolicies()),

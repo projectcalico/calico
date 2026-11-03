@@ -5,12 +5,30 @@
 #ifndef __CALI_FIB_CO_RE_H__
 #define __CALI_FIB_CO_RE_H__
 
+#include <linux/if_ether.h>
+#include <linux/if_packet.h>
+#include <linux/in.h>
+
+#include "arp.h"
+#include "cali_bpf.h"
+#include "conntrack.h"
+#include "conntrack_types.h"
+#include "counters.h"
+#include "fib_common.h"
+#include "globals.h"
+#include "ip_addr.h"
+#include "log.h"
 #include "profiling.h"
+#include "reasons.h"
+#include "routes.h"
+#include "skb.h"
+#include "types.h"
 #ifndef IPVER6
 #include "ip_v4_fragment.h"
 #endif
-#include <linux/if_packet.h>
 
+/* Inserts an Ethernet header ahead of an L3 program's IP header.  Call once a
+ * redirect is armed; it takes effect only after the program returns. */
 static CALI_BPF_INLINE int make_room_for_l2_header(struct cali_tc_ctx *ctx)
 {
 	int rc = bpf_skb_change_head(ctx->skb, ETH_HLEN, 0);
@@ -18,10 +36,17 @@ static CALI_BPF_INLINE int make_room_for_l2_header(struct cali_tc_ctx *ctx)
 		CALI_DEBUG("bpf_skb_change_head failed %d.", rc);
 		return rc;
 	}
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+
+	skb_refresh_start_end(ctx);
+	if (ctx->data_start + ETH_SIZE + IP_SIZE > ctx->data_end) {
 		CALI_DEBUG("Too short");
 		return -1;
 	}
+
+	/* skb_iphdr_offset() assumes the L3 packet layout, and it does not know
+	  * about the header just inserted. Calculate header offset by hand. */
+	ctx->ip_header = ctx->data_start + ETH_SIZE;
+
 #ifdef IPVER6
 	eth_hdr(ctx)->h_proto = bpf_htons(ETH_P_IPV6);
 #else
@@ -35,17 +60,17 @@ static CALI_BPF_INLINE int try_redirect_to_peer(struct cali_tc_ctx *ctx)
 	struct cali_tc_state *state = ctx->state;
 	int rc = 0;
 	bool redirect_peer = GLOBAL_FLAGS & CALI_GLOBALS_REDIRECT_PEER;
+	/* Redirecting a SYN skips the destination's program, and with it the
+	 * policy that tc.c deliberately forces on every SYN. */
 	if (redirect_peer && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
 			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX  &&
-			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER)) {
-		if (CALI_F_L3_DEV) {
-			rc = make_room_for_l2_header(ctx);
-			if (rc < 0) {
-				return TC_ACT_UNSPEC;
-			}
-		}
+			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER) &&
+			!is_tcp_syn(ctx)) {
 		rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
 		if (rc == TC_ACT_REDIRECT) {
+			if (CALI_F_L3 && make_room_for_l2_header(ctx) < 0) {
+				return TC_ACT_UNSPEC;
+			}
 			counter_inc(ctx, CALI_REDIRECT_PEER);
 			CALI_DEBUG("Redirect to peer interface (%d) succeeded.", state->ct_result.ifindex_fwd);
 			return rc;
@@ -70,6 +95,10 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 	int rc = ctx->state->fwd.res;
 	struct cali_tc_state *state = ctx->state;
 	__u32 fib_flags = 0;
+#if CALI_FIB_ENABLED
+	/* Set by whichever redirect needs an Ethernet header; see no_fib_redirect. */
+	bool add_l2 = false;
+#endif
 
 	if (rc == TC_ACT_SHOT) {
 		goto deny;
@@ -91,7 +120,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 	}
 
 #ifndef IPVER6
-        if (ctx->state->ip_proto != IPPROTO_ICMP_46 && ctx->state->flags & CALI_ST_FIRST_FRAG) {
+	if (ctx->state->flags & CALI_ST_FIRST_FRAG) {
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
@@ -111,12 +140,17 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 	if (rc == CALI_RES_REDIR_BACK) {
 		int redir_flags = 0;
-		if  (CALI_F_FROM_HOST) {
+		/* On netkit a to-workload program runs with skb->dev already swapped
+		 * to the pod-side peer, so skb->ifindex is the peer's and
+		 * BPF_F_INGRESS would deliver into the pod; transmitting out of it is
+		 * what sends the packet back towards the host. On veth skb->ifindex
+		 * is the host-side device and BPF_F_INGRESS is the way back. */
+		if (CALI_F_FROM_HOST && !ctx->globals->data.host_ifindex) {
 			redir_flags = BPF_F_INGRESS;
 		}
 
 		/* Revalidate the access to the packet */
-		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		if (skb_refresh_validate_ptrs_l4(ctx)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short");
 			goto deny;
@@ -194,6 +228,23 @@ skip_redir_ifindex:
 			goto skip_fib;
 		}
 
+		if (state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX &&
+				!(state->ct_result.fwd_flags & CT_FWD_FLAG_TUNNEL) &&
+				cali_rt_needs_tunnel_egress(dest_rt)) {
+			/* The hint is the opposite direction's ingress device - a
+			 * valid egress for an encap destination only if it is the
+			 * tunnel itself; redirecting to a physical device would emit
+			 * the raw inner frame there. Conntrack normally replaces such
+			 * a hint on the flow's first reply; reaching here means it
+			 * could not (no route yet, failed lookup, entry predating the
+			 * tunnel bit). Resolve the slow way for this packet.
+			 */
+			CALI_DEBUG("Tunneled dest " IP_FMT " but fwd hint dev %d is not a tunnel,"
+					" resolving by FIB",
+					debug_ip(state->ip_dst), state->ct_result.ifindex_fwd);
+			state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
+		}
+
 		if (state->ct_result.ifindex_fwd == CT_INVALID_IFINDEX) {
 			CALI_DEBUG("ifindex_fwd is CT_INVALID_IFINDEX, doing FIB lookup");
 			__u32 __fib_ifindex = ctx->skb->ifindex;
@@ -211,8 +262,17 @@ skip_redir_ifindex:
 				.l4_protocol = state->ip_proto,
 			};
 
+			/* Only reply traffic of an external client hitting a local
+			 * service must carry EXT_TO_SVC_MARK into the FIB lookup so
+			 * the RPDB routes it back the way the request arrived. For
+			 * ordinary pod-originated egress the mark must stay 0 so a
+			 * host source-based routing rule (e.g. AWS VPC CNI's per-pod
+			 * rule) selects the pod's own interface. */
 			if (bpf_core_field_exists(((struct bpf_fib_lookup *)0)->mark)) {
-				fib_params(ctx)->mark = EXT_TO_SVC_MARK;
+				if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK &&
+						(state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL)) {
+					fib_params(ctx)->mark = EXT_TO_SVC_MARK;
+				}
 			}
 
 #ifdef IPVER6
@@ -238,12 +298,22 @@ skip_redir_ifindex:
 			if ((rc = try_redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
 				goto skip_fib;
 			}
-		} else if ((cali_rt_is_tunneled(dest_rt) && !cali_rt_is_same_subnet(dest_rt))) {
+		} else if (cali_rt_needs_tunnel_egress(dest_rt) ||
+				(state->ct_result.flags & CALI_CT_FLAG_OVERLAY_REPLY)) {
+			/* A remote tunneled workload, or the reply of a host-originated overlay
+			 * flow (BPFOverlayHostSourceIP=HostAddress) - tagged at ingress because
+			 * its destination node carries the node IP as its route next_hop. */
 			struct bpf_tunnel_key key = {
 				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
 			__u64 flags = 0;
 			__u32 size = 0;
+			/* Leave the tunnel key's local (outer/underlay source) address unset by
+			 * truncating the key before the local address.  bpf_skb_set_tunnel_key then
+			 * omits it and the kernel selects the source by routing to the remote VTEP,
+			 * i.e. the node's real underlay IP.  The overlay tunnel-device IP is not
+			 * underlay-routable and must never be the outer source: some fabrics (e.g.
+			 * GCP anti-spoof) drop packets sourced from it. */
 #ifdef IPVER6
 			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
 			flags |= BPF_F_TUNINFO_IPV6;
@@ -266,7 +336,7 @@ skip_redir_ifindex:
 				goto skip_fib;
 			}
 		}
-	} else if (CALI_F_TUNNEL && CALI_F_TO_HEP) {
+	} else if (IFACE_ENCAPS && CALI_F_TO_HEP) {
 		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN) ||
 			!skb_mark_equals(ctx->skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET)) {
 			/* packet to vxlan from the host, needs to set tunnel key. Either
@@ -291,6 +361,12 @@ skip_redir_ifindex:
 
 			__u64 flags = 0;
 			__u32 size = 0;
+			/* Leave the tunnel key's local (outer/underlay source) address unset by
+			 * truncating the key before the local address.  bpf_skb_set_tunnel_key then
+			 * omits it and the kernel selects the source by routing to the remote VTEP,
+			 * i.e. the node's real underlay IP.  The overlay tunnel-device IP is not
+			 * underlay-routable and must never be the outer source: some fabrics (e.g.
+			 * GCP anti-spoof) drop packets sourced from it. */
 #ifdef IPVER6
 			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
 			flags |= BPF_F_TUNINFO_IPV6;
@@ -317,7 +393,7 @@ try_fib_external:
 	// Try a short-circuit FIB lookup.
 	if (fwd_fib(&ctx->state->fwd)) {
 		/* Revalidate the access to the packet */
-		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		if (skb_refresh_validate_ptrs_l4(ctx)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short");
 			goto deny;
@@ -346,14 +422,9 @@ try_fib_external:
 				nh_params.nh_family = 2 /* AF_INET */;
 				nh_params.ipv4_nh = state->ip_dst;
 #endif
-				if (CALI_F_L3_DEV) {
-					rc = make_room_for_l2_header(ctx);
-					if (rc < 0) {
-						goto cancel_fib;
-					}
-				}
 				rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, &nh_params, sizeof(nh_params), 0);
 				if (rc == TC_ACT_REDIRECT) {
+					add_l2 = CALI_F_L3;
 					counter_inc(ctx, CALI_REDIRECT_NEIGH);
 					CALI_DEBUG("Redirect to workload dev %d without fib lookup",
 							state->ct_result.ifindex_fwd);
@@ -373,9 +444,15 @@ try_fib_external:
 			.l4_protocol = state->ip_proto,
 		};
 
+		/* See the note above the matching guard in the local-dest path:
+		 * only external-client-to-local-service reply traffic gets the
+		 * mark; ordinary pod egress leaves it 0 for host source routing. */
 		if (bpf_core_field_exists(((struct bpf_fib_lookup *)0)->mark)) {
-			fib_params(ctx)->mark = EXT_TO_SVC_MARK;
-			CALI_DEBUG("FIB mark=0x%d", fib_params(ctx)->mark);
+			if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK &&
+					(state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL)) {
+				fib_params(ctx)->mark = EXT_TO_SVC_MARK;
+				CALI_DEBUG("FIB mark=0x%x", fib_params(ctx)->mark);
+			}
 		}
 
 		if (state->ip_proto != IPPROTO_ICMP_46) {
@@ -457,13 +534,10 @@ try_fib_external:
 
 			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
 
-			if (CALI_F_L3_DEV) {
-				rc = make_room_for_l2_header(ctx);
-				if (rc < 0) {
-					goto cancel_fib;
-				}
-			}
 			rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
+			if (rc == TC_ACT_REDIRECT) {
+				add_l2 = CALI_F_L3;
+			}
 			break;
 		default:
 			fib_error_log(ctx, rc);
@@ -471,8 +545,9 @@ try_fib_external:
 		}
 
 no_fib_redirect:
-		/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
+		/* The switch above falls through to here when it did not redirect. */
 		if (rc == TC_ACT_REDIRECT) {
+			/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
 #ifndef UNITTEST
 #ifdef IPVER6
 			ip_hdr(ctx)->hop_limit--;
@@ -480,6 +555,11 @@ no_fib_redirect:
 			ip_dec_ttl(ip_hdr(ctx));
 #endif
 #endif /* UNITTEST - makes comparing equivalency on packets difficult as TTL and csum change */
+			/* Last, it moves the IP header out from under ip_hdr(ctx). */
+			if (add_l2 && make_room_for_l2_header(ctx) < 0) {
+				rc = TC_ACT_UNSPEC;
+				goto cancel_fib;
+			}
 		}
 	}
 
@@ -581,7 +661,14 @@ deny:
 	rc = TC_ACT_SHOT;
 
 allow:
-	if (CALI_LOG_LEVEL_INFO >= CALI_LOG_LEVEL_INFO || PROFILING) {
+	/* In-kernel decap can deliver an inner frame addressed to the sender's
+	 * choice of MAC, which local delivery would drop. */
+	if (IFACE_ENCAPS && CALI_F_TO_HOST && rc != TC_ACT_SHOT &&
+			ctx->skb->pkt_type == PACKET_OTHERHOST) {
+		bpf_skb_change_type(ctx->skb, PACKET_HOST);
+	}
+
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO || PROFILING) {
 		__u64 prog_end_time = bpf_ktime_get_ns();
 
 		if (PROFILING) {
@@ -595,9 +682,6 @@ allow:
 			CALI_INFO("Final result=DENY (%d). Program execution time: %lluns",
 					ctx->state->fwd.reason, prog_end_time-state->prog_start_time);
 		} else {
-			if (CALI_F_VXLAN && CALI_F_TO_HOST) {
-				bpf_skb_change_type(ctx->skb, PACKET_HOST);
-			}
 			CALI_INFO("Final result=ALLOW rc %d. Program execution time: %lluns",
 					rc, prog_end_time-state->prog_start_time);
 		}

@@ -18,7 +18,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 // ConfigureLogging configures the logging framework. The logging level that will
@@ -26,7 +26,7 @@ import (
 // The output will be set to STDOUT and the format is TextFormat
 func ConfigureLogging(logLevel string) {
 	// Install a hook that adds file/line number information.
-	logutils.ConfigureFormatter("goldmane")
+	logrusr.ConfigureFormatter("goldmane")
 	logrus.SetOutput(os.Stdout)
 
 	// Override with desired log level

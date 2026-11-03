@@ -1,0 +1,27 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+.SILENT:
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+	# Don't clean, because that would delete bin/calicoctl.
+
+override_dh_auto_build:
+	# No building required.
+
+override_dh_auto_test:
+	# No testing required.
+
+override_dh_install:
+	install -d debian/tmp/usr/bin
+	install -m 755 bin/calicoctl debian/tmp/usr/bin/
+	dh_install
+
+override_dh_dwz:
+	# dwz only slightly compresses the debug sections and is not fully compatible with DWARF5,
+	# used by Golang 1.25+, so skip this.

@@ -5,6 +5,8 @@
 #ifndef __CALI_EVENTS_TYPE_H__
 #define __CALI_EVENTS_TYPE_H__
 
+#include <linux/types.h>
+
 #define EVENT_LOST_EVENTS          0
 
 #define EVENT_PROTO_STATS       1

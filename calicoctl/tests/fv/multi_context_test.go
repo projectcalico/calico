@@ -21,12 +21,12 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 func init() {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("test")
+	logrusr.ConfigureFormatter("test")
 }
 
 func TestMultiCluster(t *testing.T) {

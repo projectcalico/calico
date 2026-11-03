@@ -15,8 +15,14 @@
 package flowlog
 
 import (
+	"bytes"
+	"cmp"
 	"fmt"
+	"hash/fnv"
+	"net"
 	"reflect"
+	"slices"
+	"sort"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -26,14 +32,17 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
-	logutil "github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 const (
 	unsetIntField = -1
+
+	// MaxIPsPerFlowLog caps the source / destination IP sets of a flow log; an aggregated flow can span
+	// many connections. Past the cap, a stable hash-ranked subset is kept (see boundedIPs).
+	MaxIPsPerFlowLog = 100
 )
 
 type empty struct{}
@@ -44,7 +53,7 @@ var (
 	EmptyService = FlowService{"-", "-", "-", 0}
 	EmptyIP      = [16]byte{}
 
-	rlog1 = logutils.NewRateLimitedLogger()
+	rlog1 = logrusr.NewRateLimitedLogger()
 )
 
 type (
@@ -148,8 +157,14 @@ func (f *FlowSpec) ContainsActiveRefs(mu *metric.Update) bool {
 	return f.containsActiveRefs(mu)
 }
 
-func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, includeLabels bool, includePolicies bool) []*FlowLog {
+func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, includeLabels, includePolicies, includeIPs bool) []*FlowLog {
 	stats := f.toFlowProcessReportedStats()
+
+	// Collect the IP sets once; see collectIPs.
+	var srcIPs, dstIPs []string
+	if includeIPs {
+		srcIPs, dstIPs = f.collectIPs()
+	}
 
 	flogs := make([]*FlowLog, 0, len(stats))
 	for _, stat := range stats {
@@ -158,6 +173,8 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 			StartTime:                startTime,
 			EndTime:                  endTime,
 			FlowProcessReportedStats: stat,
+			SourceIPs:                srcIPs,
+			DestIPs:                  dstIPs,
 		}
 
 		if includeLabels {
@@ -492,12 +509,18 @@ func NewFlowStatsByProcess(
 
 func (f *FlowStatsByProcess) aggregateFlowStatsByProcess(mu *metric.Update) {
 	if stats, ok := f.statsByProcessName[FieldNotIncluded]; ok {
-		logutil.Tracef(f.displayDebugTraceLogs, "Process stats found %+v for metric update %+v", stats, mu)
+		if f.displayDebugTraceLogs {
+			log.Tracef("Process stats found %+v for metric update %+v", stats, mu)
+		}
 		stats.aggregateFlowStats(*mu, f.displayDebugTraceLogs)
-		logutil.Tracef(f.displayDebugTraceLogs, "Aggregated stats %+v after processing metric update %+v", stats, mu)
+		if f.displayDebugTraceLogs {
+			log.Tracef("Aggregated stats %+v after processing metric update %+v", stats, mu)
+		}
 		f.statsByProcessName[FieldNotIncluded] = stats
 	} else {
-		logutil.Tracef(f.displayDebugTraceLogs, "Process stats not found for metric update %+v", mu)
+		if f.displayDebugTraceLogs {
+			log.Tracef("Process stats not found for metric update %+v", mu)
+		}
 		stats := NewFlowStats(*mu)
 		f.statsByProcessName[FieldNotIncluded] = &stats
 	}
@@ -560,6 +583,64 @@ func (f *FlowStatsByProcess) toFlowProcessReportedStats() []FlowProcessReportedS
 	return reportedStats
 }
 
+// collectIPs returns the distinct source and destination IP addresses observed
+// across all connections tracked for this flow. The connection tuples retain their real IPs even
+// when the FlowMeta tuple has been zeroed for aggregation, so we read them from flowsRefs here.
+func (f *FlowStatsByProcess) collectIPs() (srcIPs, dstIPs []string) {
+	stats, ok := f.statsByProcessName[FieldNotIncluded]
+	if !ok {
+		return nil, nil
+	}
+
+	srcSeen := make(map[[16]byte]struct{})
+	dstSeen := make(map[[16]byte]struct{})
+	for t := range stats.flowsRefs {
+		if t.Src != EmptyIP {
+			srcSeen[t.Src] = struct{}{}
+		}
+		if t.Dst != EmptyIP {
+			dstSeen[t.Dst] = struct{}{}
+		}
+	}
+	return boundedIPs(srcSeen), boundedIPs(dstSeen)
+}
+
+// boundedIPs renders the given IPs as sorted strings. Past MaxIPsPerFlowLog it keeps the IPs with
+// the lowest FNV hash, so every flush (and every node) picks the same subset of a large set, rather
+// than whichever IPs map iteration happens to visit first. Ranking by hash rather than by address
+// avoids always keeping the lowest addresses.
+func boundedIPs(seen map[[16]byte]struct{}) []string {
+	if len(seen) == 0 {
+		return nil
+	}
+	type rankedIP struct {
+		hash uint64
+		ip   [16]byte
+	}
+	ranked := make([]rankedIP, 0, len(seen))
+	for ip := range seen {
+		h := fnv.New64a()
+		_, _ = h.Write(ip[:])
+		ranked = append(ranked, rankedIP{hash: h.Sum64(), ip: ip})
+	}
+	if len(ranked) > MaxIPsPerFlowLog {
+		slices.SortFunc(ranked, func(a, b rankedIP) int {
+			if c := cmp.Compare(a.hash, b.hash); c != 0 {
+				return c
+			}
+			return bytes.Compare(a.ip[:], b.ip[:])
+		})
+		ranked = ranked[:MaxIPsPerFlowLog]
+	}
+
+	ips := make([]string, len(ranked))
+	for i, r := range ranked {
+		ips[i] = net.IP(r.ip[:]).String()
+	}
+	sort.Strings(ips)
+	return ips
+}
+
 // FlowProcessReportedStats contains FlowReportedStats along with process information.
 type FlowProcessReportedStats struct {
 	FlowReportedStats
@@ -574,4 +655,8 @@ type FlowLog struct {
 	FlowProcessReportedStats
 
 	FlowEnforcedPolicySet, FlowPendingPolicySet FlowPolicySet
+
+	// SourceIPs and DestIPs survive aggregation levels that zero the Tuple.
+	SourceIPs []string
+	DestIPs   []string
 }

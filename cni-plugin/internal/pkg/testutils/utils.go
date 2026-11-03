@@ -100,6 +100,26 @@ func MustCreateNewIPPoolBlockSize(c client.Interface, cidr string, ipip, natOutg
 	return pool.Name
 }
 
+// MustCreateNewIPPoolAllowedUses creates an enabled Calico IP pool with the given
+// AllowedUses, so tests can exercise IPAM's use-based pool filtering.
+func MustCreateNewIPPoolAllowedUses(c client.Interface, cidr string, allowedUses []api.IPPoolAllowedUse) string {
+	name := strings.ReplaceAll(cidr, ".", "-")
+	name = strings.ReplaceAll(name, ":", "-")
+	name = strings.ReplaceAll(name, "/", "-")
+
+	pool := api.NewIPPool()
+	pool.Name = name
+	pool.Spec.CIDR = cidr
+	pool.Spec.IPIPMode = api.IPIPModeNever
+	pool.Spec.AllowedUses = allowedUses
+
+	_, err := c.IPPools().Create(context.Background(), pool, options.SetOptions{})
+	if err != nil {
+		panic(err)
+	}
+	return pool.Name
+}
+
 func MustDeleteIPPool(c client.Interface, cidr string) {
 	name := strings.ReplaceAll(cidr, ".", "-")
 	name = strings.ReplaceAll(name, ":", "-")

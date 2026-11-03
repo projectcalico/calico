@@ -1,0 +1,19 @@
+# Fails when the suites and the e2e config disagree on which test sets exist.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+
+steps:
+  # Compiles the same e2e.test as build-e2e-binaries, so it reads that step's
+  # cache; Go, not the restored files, decides what is stale.
+  - name: e2e-test-set-drift
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: e2e
+    depends: [check-go]
+    requests: {cpu: 5500m, memory: 5.5Gi}
+    commands: |
+      make -C e2e check-test-set

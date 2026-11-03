@@ -16,7 +16,7 @@ import (
 // BGPFilterApplyConfiguration represents a declarative configuration of the BGPFilter type for use
 // with apply.
 type BGPFilterApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *BGPFilterSpecApplyConfiguration `json:"spec,omitempty"`
 }

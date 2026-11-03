@@ -40,13 +40,13 @@ type SelectorConfigEntry struct {
 }
 
 type ConfigBatcher struct {
-	hostname        string
-	datastoreInSync bool
-	configDirty     bool
-	globalConfig    map[string]string
-	hostConfig      map[string]string
-	datastoreReady  bool
-	callbacks       configCallbacks
+	hostname             string
+	initialSyncCompleted bool
+	configDirty          bool
+	globalConfig         map[string]string
+	hostConfig           map[string]string
+	datastoreReady       bool
+	callbacks            configCallbacks
 
 	// nodeLabels holds the labels of the local node, used for evaluating
 	// selector-scoped FelixConfiguration resources.
@@ -231,15 +231,15 @@ func (cb *ConfigBatcher) onNodeUpdate(name string, update api.Update) {
 }
 
 func (cb *ConfigBatcher) OnDatamodelStatus(status api.SyncStatus) {
-	if !cb.datastoreInSync && status == api.InSync {
+	if !cb.initialSyncCompleted && status == api.InSync {
 		log.Infof("Datamodel in sync, flushing config update")
-		cb.datastoreInSync = true
+		cb.initialSyncCompleted = true
 		cb.maybeSendCachedConfig()
 	}
 }
 
 func (cb *ConfigBatcher) maybeSendCachedConfig() {
-	if !cb.configDirty || !cb.datastoreInSync {
+	if !cb.configDirty || !cb.initialSyncCompleted {
 		return
 	}
 	log.Infof("Sending config update global: %v, host: %v.",

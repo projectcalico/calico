@@ -18,83 +18,44 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
-	"github.com/docopt/docopt-go"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
-var VERSION_SUMMARY string
-
-func init() {
-	name, _ := util.NameAndDescription()
-	VERSION_SUMMARY = strings.ReplaceAll(`Run '<BINARY_NAME> version' to see version information.`, "<BINARY_NAME>", name)
-}
-
-func Version(args []string) error {
-	doc := `Usage:
-  <BINARY_NAME> version [--config=<CONFIG>] [--poll=<POLL>] [--allow-version-mismatch] [--client]
-
-Options:
-  -h --help                    Show this screen.
-  -c --config=<CONFIG>         Path to the file containing connection configuration in
-                               YAML or JSON format.
-                               [default: ` + constants.DefaultConfigPath + `]
-     --poll=<POLL>             Poll for changes to the cluster information at a frequency specified using POLL duration
-                               (e.g. 1s, 10m, 2h etc.). A value of 0 (the default) disables polling.
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-     --client                  Display the client version only.
- }
-
-Description:
-  Display the version of <BINARY_NAME>.
-`
-	// Replace all instances of BINARY_NAME with the name of the binary.
-	name, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
-
-	parsedArgs, err := docopt.ParseArgs(doc, args, "")
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(parsedArgs) == 0 {
-		return nil
-	}
-
-	// Note: Intentionally not check version mismatch for this command
-
-	// Parse the poll duration.
+// runVersion prints the client version and, unless clientOnly is set, the
+// cluster version. A non-empty poll duration re-displays the cluster version
+// on that interval. Version mismatch is intentionally never enforced here.
+func runVersion(configPath, poll string, clientOnly bool) error {
 	var pollDuration time.Duration
-	var ci *v3.ClusterInformation
-	if poll := argutils.ArgStringOrBlank(parsedArgs, "--poll"); poll != "" {
+	if poll != "" {
+		var err error
 		if pollDuration, err = time.ParseDuration(poll); err != nil {
-			return fmt.Errorf("invalid poll duration specified: %s", pollDuration)
+			return fmt.Errorf("invalid poll duration specified: %s", poll)
 		}
 	}
 
 	fmt.Println("Client Version:   ", buildinfo.Version)
 	fmt.Println("Git commit:       ", buildinfo.GitRevision)
 
-	if clientOnly := argutils.ArgBoolOrFalse(parsedArgs, "--client"); clientOnly {
+	if clientOnly {
 		return nil
 	}
 
-	// Load the client config and connect.
-	cf := parsedArgs["--config"].(string)
-	client, err := clientmgr.NewClient(cf)
+	if configPath == "" {
+		configPath = constants.DefaultConfigPath
+	}
+	client, err := clientmgr.NewClient(configPath)
 	if err != nil {
 		if derr, ok := err.(errors.ErrorDatastoreError); ok {
-			log.Debugf("Client config error: %s", derr.Error())
+			logrus.Debugf("Client config error: %s", derr.Error())
 			fmt.Println("Unable to detect installed Calico version")
 			return nil
 		}
@@ -102,6 +63,7 @@ Description:
 	}
 	ctx := context.Background()
 	var pv, pt string
+	var ci *v3.ClusterInformation
 
 	for {
 		if ci, err = client.ClusterInformation().Get(ctx, "default", options.GetOptions{}); err == nil {

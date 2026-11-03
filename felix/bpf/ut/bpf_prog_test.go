@@ -63,15 +63,21 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var canTestMarks bool
 
 func init() {
-	logutils.ConfigureEarlyLogging()
+	logrusr.ConfigureEarlyLoggingFromEnv("felix")
 	log.SetLevel(log.DebugLevel)
+
+	// These tests use port 666 as an arbitrary NAT backend port and expect
+	// gopacket to leave the UDP payload opaque. gopacket v1.6.1 started
+	// dissecting port 666 as AGUE, which leaves the packet with no
+	// application layer.
+	layers.RegisterUDPPortLayerType(666, gopacket.LayerTypePayload)
 
 	fd := environment.NewFeatureDetector(make(map[string]string))
 	if ok, err := fd.KernelIsAtLeast("5.9.0"); err == nil && ok {
@@ -83,6 +89,7 @@ func init() {
 const (
 	natTunnelMTU      = uint16(700)
 	testVxlanPort     = uint16(5665)
+	testWGPort        = uint16(5666)
 	testMaglevLUTSize = uint32(31)
 )
 
@@ -96,14 +103,12 @@ var (
 			}},
 		}},
 	}
-	node1ip    = net.IPv4(10, 10, 0, 1).To4()
-	node1ip2   = net.IPv4(10, 10, 2, 1).To4()
-	node1tunIP = net.IPv4(11, 11, 0, 1).To4()
-	node2ip    = net.IPv4(10, 10, 0, 2).To4()
-	node3ip    = net.IPv4(10, 10, 0, 3).To4()
-	node3tunIP = net.IPv4(11, 11, 0, 3).To4()
-	intfIP     = net.IPv4(10, 10, 0, 3).To4()
-	node1CIDR  = net.IPNet{
+	node1ip   = net.IPv4(10, 10, 0, 1).To4()
+	node1ip2  = net.IPv4(10, 10, 2, 1).To4()
+	node2ip   = net.IPv4(10, 10, 0, 2).To4()
+	node3ip   = net.IPv4(10, 10, 0, 3).To4()
+	intfIP    = net.IPv4(10, 10, 0, 3).To4()
+	node1CIDR = net.IPNet{
 		IP:   node1ip,
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
@@ -116,14 +121,12 @@ var (
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
 
-	node1ipV6    = net.ParseIP("abcd::ffff:0a0a:0001").To16()
-	node1ip2V6   = net.ParseIP("abcd::ffff:0a0a:0201").To16()
-	node1tunIPV6 = net.ParseIP("abcd::ffff:0b0b:0001").To16()
-	node2ipV6    = net.ParseIP("abcd::ffff:0a0a:0002").To16()
-	node3ipV6    = net.ParseIP("abcd::ffff:0a0a:0004").To16()
-	node3tunIPV6 = net.ParseIP("abcd::ffff:0b0b:0004").To16()
-	intfIPV6     = net.ParseIP("abcd::ffff:0a0a:0003").To16()
-	node1CIDRV6  = net.IPNet{
+	node1ipV6   = net.ParseIP("abcd::ffff:0a0a:0001").To16()
+	node1ip2V6  = net.ParseIP("abcd::ffff:0a0a:0201").To16()
+	node2ipV6   = net.ParseIP("abcd::ffff:0a0a:0002").To16()
+	node3ipV6   = net.ParseIP("abcd::ffff:0a0a:0004").To16()
+	intfIPV6    = net.ParseIP("abcd::ffff:0a0a:0003").To16()
+	node1CIDRV6 = net.IPNet{
 		IP:   node1ipV6,
 		Mask: net.CIDRMask(128, 128),
 	}
@@ -368,10 +371,6 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	Expect(err).NotTo(HaveOccurred())
 	defer os.RemoveAll(bpfFsDir)
 
-	err = os.Mkdir(bpfFsDir+"_v6", os.ModePerm)
-	Expect(err).NotTo(HaveOccurred())
-	defer os.RemoveAll(bpfFsDir + "v6")
-
 	obj := "../../bpf-gpl/bin/test_xdp_debug"
 	if !topts.xdp {
 		obj = "../../bpf-gpl/bin/test_"
@@ -542,15 +541,20 @@ func runBpfTest(t *testing.T, section string, rules *polprog.Rules, testFn func(
 
 	ctxIn := make([]byte, 18*4)
 	binary.LittleEndian.PutUint32(ctxIn[2*4:3*4], skbMark)
-	if xdp {
-		// XDP tests cannot take context and would fail.
-		ctxIn = nil
-	}
 
 	topts := testOpts{}
 
 	for _, o := range opts {
 		o(&topts)
+	}
+
+	if topts.ingressIfindex != 0 {
+		// __sk_buff.ingress_ifindex; BPF_PROG_RUN copies it to skb->skb_iif.
+		binary.LittleEndian.PutUint32(ctxIn[9*4:10*4], topts.ingressIfindex)
+	}
+	if xdp {
+		// XDP tests cannot take context and would fail.
+		ctxIn = nil
 	}
 
 	cllr := caller(2)
@@ -890,21 +894,27 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 			} else {
 				ifaceLog := topts.progLog + "-" + bpfIfaceName
 				globals := libbpf.TcGlobalData{
-					Tmtu:          natTunnelMTU,
-					VxlanPort:     testVxlanPort,
-					PSNatStart:    uint16(topts.psnaStart),
-					PSNatLen:      uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:         libbpf.GlobalsNoDSRCidrs,
-					LogFilterJmp:  0xffffffff,
-					IfaceName:     setLogPrefix(ifaceLog),
-					MaglevLUTSize: testMaglevLUTSize,
-					IPFragTimeout: topts.ipfragTimeout,
+					Tmtu:            natTunnelMTU,
+					VxlanPort:       testVxlanPort,
+					VxlanSrcPortMin: topts.vxlanSrcPortMin,
+					VxlanSrcPortMax: topts.vxlanSrcPortMax,
+					PSNatStart:      uint16(topts.psnaStart),
+					PSNatLen:        uint16(topts.psnatEnd-topts.psnaStart) + 1,
+					Flags:           libbpf.GlobalsNoDSRCidrs,
+					LogFilterJmp:    0xffffffff,
+					IfaceName:       setLogPrefix(ifaceLog),
+					MaglevLUTSize:   testMaglevLUTSize,
+					IPFragTimeout:   topts.ipfragTimeout,
+					WgPort:          topts.wgPort,
 				}
 				if topts.flowLogsEnabled {
 					globals.Flags |= libbpf.GlobalsFlowLogsEnabled
 				}
 				if topts.natOutExcludeHosts {
 					globals.Flags |= libbpf.GlobalsNATOutgoingExcludeHosts
+				}
+				if topts.ifaceEncaps {
+					globals.Flags |= libbpf.GlobalsIfaceEncaps
 				}
 
 				if topts.ingressQoSPacketRate {
@@ -927,6 +937,18 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.Flags |= libbpf.GlobalsWorkloadSrcSpoofingConfigured
 				}
 
+				if topts.redirectPeer {
+					globals.Flags |= libbpf.GlobalsRedirectPeer
+				}
+
+				if topts.rpfEnabled {
+					globals.Flags |= libbpf.GlobalsRPFOptionEnabled
+				}
+				if topts.rpfStrict {
+					globals.Flags |= libbpf.GlobalsRPFOptionEnabled |
+						libbpf.GlobalsRPFOptionStrict
+				}
+
 				globals.DSCP = -1
 				if topts.dscp >= 0 {
 					globals.DSCP = topts.dscp
@@ -935,7 +957,6 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				globals.IstioDSCP = topts.istioDSCP
 
 				if topts.ipv6 {
-					copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
 					copy(globals.HostIPv6[:], hostIP.To16())
 					copy(globals.IntfIPv6[:], intfIPV6.To16())
 
@@ -947,7 +968,6 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				} else {
 					copy(globals.HostIPv4[0:4], hostIP)
 					copy(globals.IntfIPv4[0:4], intfIP)
-					copy(globals.HostTunnelIPv4[0:4], node1tunIP.To4())
 
 					for i := range tcdefs.ProgIndexEnd {
 						globals.Jumps[i] = uint32(i)
@@ -1060,20 +1080,20 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 				continue
 			}
 			globals := libbpf.TcGlobalData{
-				Tmtu:          natTunnelMTU,
-				VxlanPort:     testVxlanPort,
-				PSNatStart:    uint16(topts.psnaStart),
-				PSNatLen:      uint16(topts.psnatEnd-topts.psnaStart) + 1,
-				Flags:         libbpf.GlobalsNoDSRCidrs,
-				IfaceName:     setLogPrefix(topts.progLog + "-" + bpfIfaceName),
-				MaglevLUTSize: testMaglevLUTSize,
+				Tmtu:            natTunnelMTU,
+				VxlanPort:       testVxlanPort,
+				VxlanSrcPortMin: topts.vxlanSrcPortMin,
+				VxlanSrcPortMax: topts.vxlanSrcPortMax,
+				PSNatStart:      uint16(topts.psnaStart),
+				PSNatLen:        uint16(topts.psnatEnd-topts.psnaStart) + 1,
+				Flags:           libbpf.GlobalsNoDSRCidrs,
+				IfaceName:       setLogPrefix(topts.progLog + "-" + bpfIfaceName),
+				MaglevLUTSize:   testMaglevLUTSize,
 			}
 			if topts.ipv6 {
-				copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
 				copy(globals.HostIPv6[:], hostIP.To16())
 				copy(globals.IntfIPv6[:], intfIPV6.To16())
 			} else {
-				copy(globals.HostTunnelIPv4[0:4], node1tunIP.To4())
 				copy(globals.HostIPv4[0:4], hostIP.To4())
 				copy(globals.IntfIPv4[0:4], intfIP.To4())
 			}
@@ -1306,6 +1326,7 @@ type testOpts struct {
 	objname                       string
 	flowLogsEnabled               bool
 	natOutExcludeHosts            bool
+	ifaceEncaps                   bool
 	ingressQoSPacketRate          bool
 	egressQoSPacketRate           bool
 	ingressQoSConnLimit           bool
@@ -1314,9 +1335,36 @@ type testOpts struct {
 	istioDSCP                     int8
 	workloadSrcSpoofingConfigured bool
 	ipfragTimeout                 uint32
+	wgPort                        uint16
+	redirectPeer                  bool
+	rpfEnabled                    bool
+	rpfStrict                     bool
+	ingressIfindex                uint32
+	vxlanSrcPortMin               uint16
+	vxlanSrcPortMax               uint16
 }
 
 type testOption func(opts *testOpts)
+
+func withRPFEnabled() testOption {
+	return func(o *testOpts) {
+		o.rpfEnabled = true
+	}
+}
+
+func withRPFStrict() testOption {
+	return func(o *testOpts) {
+		o.rpfStrict = true
+	}
+}
+
+// withIngressIfindex sets __sk_buff.ingress_ifindex for the test run, which is
+// what hep_rpf_check compares the reverse route's device against.
+func withIngressIfindex(ifindex uint32) testOption {
+	return func(o *testOpts) {
+		o.ingressIfindex = ifindex
+	}
+}
 
 func withSubtests(v bool) testOption {
 	return func(o *testOpts) {
@@ -1375,6 +1423,12 @@ func withNATOutExcludeHosts() testOption {
 	}
 }
 
+func withIfaceEncaps() testOption {
+	return func(o *testOpts) {
+		o.ifaceEncaps = true
+	}
+}
+
 func withIngressQoSPacketRate() testOption {
 	return func(o *testOpts) {
 		o.ingressQoSPacketRate = true
@@ -1423,6 +1477,13 @@ func withWorkloadSrcSpoofingConfigured() testOption {
 	}
 }
 
+func withVXLANSrcPortRange(min, max uint16) testOption {
+	return func(o *testOpts) {
+		o.vxlanSrcPortMin = min
+		o.vxlanSrcPortMax = max
+	}
+}
+
 func withIstioDSCP(value uint8) testOption {
 	return func(o *testOpts) {
 		o.istioDSCP = int8(value)
@@ -1432,6 +1493,18 @@ func withIstioDSCP(value uint8) testOption {
 func withIPFragTimeout(timeout uint32) testOption {
 	return func(o *testOpts) {
 		o.ipfragTimeout = timeout
+	}
+}
+
+func withWgPort(port uint16) testOption {
+	return func(o *testOpts) {
+		o.wgPort = port
+	}
+}
+
+func withRedirectPeer() testOption {
+	return func(o *testOpts) {
+		o.redirectPeer = true
 	}
 }
 
@@ -2015,8 +2088,9 @@ func (pkt *Packet) handleL3() error {
 		} else {
 			pkt.ipv6.NextHeader = pkt.l4Protocol
 		}
-		pkt.length += 40
+		// payload_len excludes the 40-byte base header, unlike IPv4 tot_len.
 		pkt.ipv6.Length = uint16(pkt.length)
+		pkt.length += 40
 		pkt.layers = append(pkt.layers, pkt.ipv6)
 	default:
 		return fmt.Errorf("unrecognized l3 layer type %t", pkt.l3)

@@ -69,7 +69,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ openstack status-reporting"
 			By(fmt.Sprintf("listing workload endpoint statuses {%+v}", wlListOpts))
 
 			c := infra.GetCalicoClient()
-			backendClient := c.(interface{ Backend() bapi.Client }).Backend()
+			backendClient := c.(bapi.BackendAccessor).Backend()
 			statuses, err := backendClient.List(context.Background(), wlListOpts, "")
 			Expect(err).NotTo(HaveOccurred(), "Couldn't list workload endpoint statuses")
 

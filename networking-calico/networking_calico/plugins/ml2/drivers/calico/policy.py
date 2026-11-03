@@ -20,6 +20,7 @@ from oslo_log import log
 from networking_calico import datamodel_v3
 from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
+from networking_calico.plugins.ml2.drivers.calico.syncer import MAX_CAS_ATTEMPTS
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
 
 LOG = log.getLogger(__name__)
@@ -58,9 +59,8 @@ class PolicySyncer(ResourceSyncer):
         # resync returns.  But the test framework reuses the driver's syncer across
         # multiple _trigger_resync() calls, and without the reset the second call's
         # compare loop would read stale rules from the first call's snapshot.  The
-        # postcommit-hook path doesn't read self._rules_by_sg at all --
-        # write_sgs_to_etcd always does a fresh DB query -- so the reset has no effect
-        # there.
+        # postcommit-hook path doesn't read self._rules_by_sg at all -- sync_sgs_to_etcd
+        # always does a fresh DB query -- so the reset has no effect there.
         try:
             return super(PolicySyncer, self).resync(context, scope)
         finally:
@@ -140,8 +140,8 @@ class PolicySyncer(ResourceSyncer):
             pass
 
         # Use the bulk-prefetched rule cache when running inside resync; fall back to a
-        # per-SG query otherwise (e.g. when called from write_sgs_to_etcd on a
-        # postcommit hook).
+        # per-SG query otherwise (e.g. when called from sync_sgs_to_etcd on a postcommit
+        # hook).
         if self._rules_by_sg is not None:
             rules = self._rules_by_sg.get(sg["id"], [])
         else:
@@ -150,12 +150,91 @@ class PolicySyncer(ResourceSyncer):
             )
         return policy_spec(sg["id"], rules)
 
-    def write_sgs_to_etcd(self, sgids, context):
-        rules = self.db.get_security_group_rules(
-            context, filters={"security_group_id": sgids}
-        )
+    def sync_sgs_to_etcd(self, sgids, context):
+        """Sync NetworkPolicy for each of ``sgids`` to etcd.
+
+        Each per-SG write is CAS-protected against the existing mod_revision in etcd, so
+        a stale write from this worker cannot revert a fresher write from another
+        concurrent worker.  On CAS conflict we re-read the SG's rules from the Neutron
+        DB on the next attempt -- a CAS failure means another writer raced us with
+        (likely) newer DB state, so we should incorporate that newer state into our
+        retry.
+
+        Note: we deliberately do NOT bulk-fetch rules for all sgids up front any more.
+        The previous bulk fetch is incompatible with re-reading on CAS retry: a retry
+        needs fresh rules for the specific SG it is retrying, not stale rules from a
+        pre-loop fetch.  Per-SG fetches add O(N) DB round-trips compared to the bulk
+        path, but on the postcommit hook path this is bounded by the number of SGs on a
+        single port -- in the high single digits in normal deployments.  The resync path
+        uses ``_rules_by_sg`` (set up by ``get_from_neutron``'s bulk prefetch) and does
+        NOT go through this method.
+        """
         for sgid in sgids:
-            self.update_in_etcd(SG_NAME_PREFIX + sgid, policy_spec(sgid, rules))
+            self._cas_sync_sg(sgid, context)
+
+    def _cas_sync_sg(self, sgid, context):
+        """CAS-protected sync for one SG's NetworkPolicy.  See ``sync_sgs_to_etcd`` for
+        the rationale and ``sync_wep`` in endpoints.py for the same retry pattern in
+        long form.
+        """
+        name = SG_NAME_PREFIX + sgid
+        for attempt in range(MAX_CAS_ATTEMPTS):
+            try:
+                _, mod_revision = datamodel_v3.get_namespaced(
+                    self.resource_kind, self.namespace, name
+                )
+            except etcdv3.KeyNotFound:
+                mod_revision = 0
+            sgs = self.db.get_security_groups(context, filters={"id": [sgid]})
+
+            if not sgs:
+                # This SG no longer exists, so the corresponding policy should not be in
+                # the Calico datastore.  Either drop the etcd entry via CAS at the
+                # mod_revision we just read, or -- if no entry was there -- we are done.
+                # CAS on the delete is essential: an unconditional delete would clobber
+                # a re-create that landed between our etcd read and our delete.  On CAS
+                # failure, fall through to the next loop iteration and re-evaluate from
+                # scratch.
+                LOG.info("SG %s should not exist in Calico datastore", sgid)
+                if mod_revision == 0:
+                    return
+                if datamodel_v3.delete(
+                    self.resource_kind, self.namespace, name, mod_revision=mod_revision
+                ):
+                    return
+                LOG.debug(
+                    "SG delete CAS retry %d/%d for %s",
+                    attempt + 1,
+                    MAX_CAS_ATTEMPTS,
+                    sgid,
+                )
+                continue
+
+            rules = self.db.get_security_group_rules(
+                context, filters={"security_group_id": [sgid]}
+            )
+            if datamodel_v3.put(
+                self.resource_kind,
+                self.namespace,
+                name,
+                policy_spec(sgid, rules),
+                mod_revision=mod_revision,
+            ):
+                return
+            LOG.debug(
+                "NetworkPolicy CAS retry %d/%d for %s",
+                attempt + 1,
+                MAX_CAS_ATTEMPTS,
+                name,
+            )
+
+        LOG.warning(
+            "NetworkPolicy CAS exhausted %d retries for %s; relying on"
+            " resync to repair any drift",
+            MAX_CAS_ATTEMPTS,
+            name,
+        )
+        return
 
 
 def policy_spec(sgid, rules):

@@ -1,6 +1,7 @@
+{{- $config := getBGPConfig 4 . -}}
 
 $blocks =
-{{- $node_block_key := printf "/host/%s/ipv4/block" (getenv "NODENAME")}}
+{{- $node_block_key := printf "/host/%s/ipv4/block" $config.NodeName}}
 {{- range ls $node_block_key}}
     {{- $parts := split . "-"}}
     {{- $cidr := join $parts "/"}}

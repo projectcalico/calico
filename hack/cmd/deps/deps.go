@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -18,8 +19,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	"gopkg.in/yaml.v3"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -45,6 +47,8 @@ Usage:
 
   deps [options] generate-semaphore-yamls          # Generate Semaphore pipeline YAMLs
 
+  deps [options] gen-argoci-deps <package>... # Print the ArgoCI component path table
+
 Options:
 
   --pretty            # Pretty-print the output (only applies to sem-change-in).
@@ -61,7 +65,13 @@ that node depends on felix/bpf-*.
 	os.Exit(1)
 }
 
-const mainBranchName = "master"
+const (
+	mainBranchName = "master"
+
+	// apiModulePath is the api directory's own module path; go.mod replaces it
+	// with ./api, so its packages are in-repo dependencies like any other.
+	apiModulePath = "github.com/projectcalico/api"
+)
 
 var (
 	pretty   = flag.Bool("pretty", false, "Pretty-print the output (only applies to sem-change-in).")
@@ -80,7 +90,7 @@ func main() {
 	}
 	logrus.SetLevel(level)
 
-	logutils.ConfigureFormatter("deps")
+	logrusr.ConfigureFormatter("deps")
 
 	args := flag.Args()
 	if len(args) == 0 {
@@ -90,7 +100,10 @@ func main() {
 
 	cmd := args[0]
 	var pkg string
-	if cmd != "generate-semaphore-yamls" {
+	switch cmd {
+	case "generate-semaphore-yamls", "gen-argoci-deps":
+		// Variadic: no package at all, or every component in one pass.
+	default:
 		if len(args) != 2 {
 			logrus.Warnf("Incorrect number of arguments for %s: %v", cmd, args)
 			printUsageAndExit()
@@ -113,6 +126,8 @@ func main() {
 		printSemChangeIn(pkg, *pretty)
 	case "generate-semaphore-yamls":
 		generateSemaphoreYamls()
+	case "gen-argoci-deps":
+		generateArgoCIDeps(args[1:])
 	default:
 		printUsageAndExit()
 	}
@@ -150,6 +165,20 @@ var nonGoDeps = map[string][]string{
 	"whisker": {
 		"/whisker",
 	},
+
+	// The generated CRD YAML has no .go files, so it's invisible to the
+	// dir-scan that builds secondary-package inclusions, but validation_fv_test.go
+	// reads it directly.
+	"kube-controllers": {
+		"/kube-controllers/pkg/apis/migration/v1/crd",
+	},
+
+	// The manifests the operator installs at deploy time are read from disk
+	// rather than embedded, so nothing in the import graph points at them.
+	"operator": {
+		"/operator/config",
+		"/operator/deploy/crds",
+	},
 }
 
 var defaultExclusions = []string{
@@ -171,8 +200,19 @@ var extraPrereqRegexps = map[string]*regexp.Regexp{
 	// Every project that imports the libcalico-go client would depend on the
 	// IPAM package due to transitive import.  Only list the IPAM package as a
 	// dependency if it's actually used.
-	"/libcalico-go/lib/ipam": regexp.MustCompile(`\.IPAM\(\)`),
+	"/libcalico-go/lib/ipam":            regexp.MustCompile(`\.IPAM\(\)`),
+	"/libcalico-go/lib/ipam/accounting": regexp.MustCompile(`\.IPAM\(\)|lib/ipam/accounting"`),
 }
+
+// changeInRe matches the ${CHANGE_IN(<spec>)} macro.  changeInWithDependentsRe
+// matches the ${CHANGE_IN_WITH_DEPENDENTS(<own spec>)} macro.  The two are
+// disjoint: CHANGE_IN requires "(" immediately after "CHANGE_IN", which the
+// _WITH_DEPENDENTS form does not satisfy, so the CHANGE_IN regex never matches
+// (a substring of) the longer macro.
+var (
+	changeInRe               = regexp.MustCompile(`\$\{CHANGE_IN\(([^)]+)\)}`)
+	changeInWithDependentsRe = regexp.MustCompile(`\$\{CHANGE_IN_WITH_DEPENDENTS\(([^)]*)\)}`)
+)
 
 // calculateDeps calculates the file-level dependencies of the input package
 // specs.  Each package spec is a comma-delimited list of directories relative
@@ -188,7 +228,8 @@ func calculateDeps(packages set.Set[string]) map[string]*Deps {
 
 	var lock sync.Mutex
 	var eg errgroup.Group
-	eg.SetLimit(runtime.NumCPU())
+	// NumCPU ignores GOMAXPROCS, which is how CI says what it was given.
+	eg.SetLimit(runtime.GOMAXPROCS(0))
 	for pkg := range deps {
 		eg.Go(func() error {
 			repl, err := calculateSemDeps(pkg)
@@ -224,7 +265,7 @@ func calculateChangeIn(pkg string, pretty bool) (string, error) {
 }
 
 func formatChangeIn(inclusions set.Set[string], exclusions set.Set[string], pretty bool, defaultBranchStanza string) string {
-	incl := formatSemList(inclusions)
+	incl := formatSemList(dropSubsumedInclusions(inclusions))
 	excl := formatSemList(exclusions)
 	if pretty {
 		incl = "\n" + strings.ReplaceAll(incl, ",", ",\n  ") + "\n"
@@ -232,6 +273,49 @@ func formatChangeIn(inclusions set.Set[string], exclusions set.Set[string], pret
 	}
 	out := fmt.Sprintf("change_in(%s, {pipeline_file: 'ignore', exclude: %s%s})", incl, excl, defaultBranchStanza)
 	return out
+}
+
+// dropSubsumedInclusions removes inclusion globs already covered by a broader
+// whole-directory glob ("<dir>/**") in the same set.  Merging several
+// dependents' triggers (see mergeDepsSuperset) tends to union a whole-tree glob
+// like "/felix/**" with narrower per-subdir globs like "/felix/fv/*.go"
+// contributed by a dependent that only reaches part of that tree; the narrower
+// entries are redundant and just add noise to the generated change_in() list.
+func dropSubsumedInclusions(inclusions set.Set[string]) set.Set[string] {
+	// A "<dir>/**" glob (with a wildcard-free prefix) subsumes anything under
+	// "<dir>/".
+	var prefixes []string
+	for incl := range inclusions.All() {
+		if dir, ok := strings.CutSuffix(incl, "/**"); ok && !strings.Contains(dir, "*") {
+			prefixes = append(prefixes, dir+"/")
+		}
+	}
+	if len(prefixes) == 0 {
+		return inclusions // Nothing can subsume anything.
+	}
+
+	out := set.New[string]()
+	for incl := range inclusions.All() {
+		if !isSubsumed(incl, prefixes) {
+			out.Add(incl)
+		}
+	}
+	return out
+}
+
+// isSubsumed reports whether incl falls under a broader glob prefix other than
+// its own.  Skipping incl's own prefix ("<dir>/**") keeps the broad glob itself,
+// while a nested "<dir>/sub/**" is still dropped by the outer "<dir>/" prefix.
+func isSubsumed(incl string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if incl == prefix+"**" {
+			continue // The subsuming glob itself.
+		}
+		if strings.HasPrefix(incl, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 type Deps struct {
@@ -249,7 +333,7 @@ func calculateSemDeps(pkgList string) (deps *Deps, err error) {
 		logrus.Infof("Calculating deps for %s package; including secondary deps: %v", primaryPkg, otherPkgs)
 	}
 
-	localDirs, err := loadLocalDirs(primaryPkg, false)
+	local, err := loadLocalDirs(primaryPkg, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load local dirs: %w", err)
 	}
@@ -258,45 +342,311 @@ func calculateSemDeps(pkgList string) (deps *Deps, err error) {
 	inclusions.Add("/" + primaryPkg + "/**")
 	inclusions.AddAll(defaultInclusions)
 	inclusions.AddAll(nonGoDeps[primaryPkg])
-	for _, dir := range localDirs {
-		if strings.HasPrefix(dir+"/", "/"+primaryPkg) {
-			continue // covered by the whole-package inclusion.
-		}
+	inclusions.AddAll(local.embedGlobs)
+	// dirs under the primary package are covered by the "/<pkg>/**" glob above;
+	// formatChangeIn's dropSubsumedInclusions drops the redundant per-dir globs.
+	for _, dir := range local.dirs {
 		inclusions.Add(dir + "/*.go")
 	}
 
-	exclusions := set.From(calculateTestExclusionGlobs(primaryPkg, localDirs)...)
+	exclusions := set.From(calculateTestExclusionGlobs(primaryPkg, local.dirs)...)
 	exclusions.AddAll(defaultExclusions)
 
 	// Some jobs depend on secondary packages.  For example, the node tests
 	// also run typha, api server, etc.  Add inclusions for those.
 	for _, otherPkg := range otherPkgs {
-		const nonGoPrefix = "non-go:"
-		if after, ok := strings.CutPrefix(otherPkg, nonGoPrefix); ok {
-			inclusions.Add(after)
-			continue
-		}
-
-		// For secondary dependencies, we only list dependencies of "main"
-		// packages.  This prevents us from picking up test-only dependencies.
-		// For example, kube-controllers FV has utility packages that depend on
-		// felix's FV infra packages.  If we didn't filter down to "main", we'd
-		// pick those up unintentionally.
-		otherPkgDirs, err := loadLocalDirs(otherPkg, true)
+		otherPkgDirs, err := addSecondaryPkgInclusions(inclusions, otherPkg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load local dirs for secondary package %s: %w", otherPkg, err)
+			return nil, err
 		}
-		for _, dir := range otherPkgDirs {
-			inclusions.Add(dir + "/*.go")
-		}
-		inclusions.Add(otherPkg + "/Makefile")
-		inclusions.Add(otherPkg + "/deps.txt")
-		inclusions.Add(otherPkg + "/**/*Dockerfile*")
-		inclusions.AddAll(nonGoDeps[otherPkg])
 		exclusions.AddAll(calculateTestExclusionGlobs(primaryPkg, otherPkgDirs))
 	}
 
 	return &Deps{inclusions, exclusions}, nil
+}
+
+// addSecondaryPkgInclusions adds the build-input inclusions for one secondary
+// package spec: either a "non-go:<path>" literal, or a Go package whose main
+// package's dirs, Makefile, deps.txt, Dockerfiles and nonGoDeps are inputs.  It
+// returns the package's local dirs (nil for a non-go: spec) so the caller can
+// derive test-exclusion globs.
+//
+// We only list dependencies of "main" packages (loadLocalDirs mainDepsOnly).
+// This prevents us from picking up test-only dependencies: for example,
+// kube-controllers FV has utility packages that depend on felix's FV infra
+// packages; without the filter we'd pick those up unintentionally.
+func addSecondaryPkgInclusions(inclusions set.Set[string], pkg string) ([]string, error) {
+	if after, ok := strings.CutPrefix(pkg, "non-go:"); ok {
+		if !strings.HasPrefix(after, "/") {
+			return nil, fmt.Errorf("non-go dependency %q must start with '/'; the path is relative to the root of the repo", after)
+		}
+		inclusions.Add(after)
+		return nil, nil
+	}
+	local, err := loadLocalDirs(pkg, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load local dirs for secondary package %s: %w", pkg, err)
+	}
+	for _, dir := range local.dirs {
+		inclusions.Add(dir + "/*.go")
+	}
+	inclusions.AddAll(secondaryPkgBuildInputGlobs(pkg))
+	inclusions.AddAll(nonGoDeps[pkg])
+	inclusions.AddAll(local.embedGlobs)
+	return local.dirs, nil
+}
+
+// secondaryPkgBuildInputGlobs returns the non-Go build inputs of a secondary
+// package.  Semaphore resolves an unrooted change_in pattern against the
+// pipeline file's directory, so every glob is rooted at the repo root.
+func secondaryPkgBuildInputGlobs(pkg string) []string {
+	return []string{
+		"/" + pkg + "/Makefile",
+		"/" + pkg + "/deps.txt",
+		"/" + pkg + "/**/*Dockerfile*",
+	}
+}
+
+// blockInfo is the slice of a Semaphore block that we need to resolve
+// CHANGE_IN_WITH_DEPENDENTS macros: its name, the file it lives in, its raw
+// run.when, its dependencies, and (if it uses the macro) the macro's own-spec.
+type blockInfo struct {
+	name         string
+	file         string // originating template path, e.g. .semaphore/semaphore.yml.d/blocks/20-node.yml
+	when         string
+	dependencies []string
+	isMacro      bool
+	macroArg     string // own-spec inside CHANGE_IN_WITH_DEPENDENTS(...) (may be empty)
+}
+
+// blockGraph models the block dependency graph parsed from the template files.
+type blockGraph struct {
+	blocks     []*blockInfo            // in document order
+	byName     map[string]*blockInfo   // name -> block
+	dependents map[string][]*blockInfo // producer name -> blocks that depend on it
+}
+
+// parseBlockGraph YAML-parses the (un-indented) block templates into a
+// dependency graph.  Block names are globally unique in Semaphore, so the
+// reverse (producer -> dependents) map is unambiguous.
+func parseBlockGraph(blocks []templateData) (*blockGraph, error) {
+	g := &blockGraph{
+		byName:     map[string]*blockInfo{},
+		dependents: map[string][]*blockInfo{},
+	}
+	for _, t := range blocks {
+		var parsed []struct {
+			Name string `yaml:"name"`
+			Run  struct {
+				When string `yaml:"when"`
+			} `yaml:"run"`
+			Dependencies []string `yaml:"dependencies"`
+		}
+		if err := yaml.Unmarshal([]byte(t.content), &parsed); err != nil {
+			return nil, fmt.Errorf("failed to parse blocks from %s: %w", t.originalPath, err)
+		}
+		for _, p := range parsed {
+			b := &blockInfo{
+				name:         p.Name,
+				file:         t.originalPath,
+				when:         p.Run.When,
+				dependencies: p.Dependencies,
+			}
+			if m := changeInWithDependentsRe.FindStringSubmatch(p.Run.When); m != nil {
+				b.isMacro = true
+				b.macroArg = strings.TrimSpace(m[1])
+			}
+			if prev, dup := g.byName[b.name]; dup {
+				return nil, fmt.Errorf("duplicate block name %q (in %s and %s)", b.name, prev.file, b.file)
+			}
+			g.byName[b.name] = b
+			g.blocks = append(g.blocks, b)
+		}
+	}
+	// Build the reverse map and validate that every dependency names a real
+	// block (catches typos and renames now that we have a block model).
+	for _, b := range g.blocks {
+		for _, dep := range b.dependencies {
+			if _, ok := g.byName[dep]; !ok {
+				return nil, fmt.Errorf("block %q (%s) depends on unknown block %q", b.name, b.file, dep)
+			}
+			g.dependents[dep] = append(g.dependents[dep], b)
+		}
+	}
+	return g, nil
+}
+
+// macroBlocksInFile returns the CHANGE_IN_WITH_DEPENDENTS blocks originating in
+// the given file, in document order.  buildSemaphoreYAML uses this to map the
+// Nth macro occurrence in a file's content to the Nth such block.
+func (g *blockGraph) macroBlocksInFile(file string) []*blockInfo {
+	var out []*blockInfo
+	for _, b := range g.blocks {
+		if b.isMacro && b.file == file {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+// calculateDependentMacroDeps resolves every ${CHANGE_IN_WITH_DEPENDENTS(...)}
+// macro to a single merged Deps that is a superset of the producer's own spec
+// and of every block that depends on the producer.  The result is keyed by
+// block name; buildSemaphoreYAML maps each macro occurrence to its block by
+// document order, so two blocks may share an identical own-spec arg.
+//
+// Producers can chain: a dependent may itself be a CHANGE_IN_WITH_DEPENDENTS
+// producer (e.g. "Build: node image" both consumes "Build: nftables RPMs" and
+// produces for others).  We resolve recursively so that a chained dependent
+// contributes its *final* effective trigger (its own merge, transitively), which
+// keeps the superset invariant intact up the chain.  The block dependency graph
+// is a DAG (Semaphore forbids cycles), but we still guard against cycles.
+func calculateDependentMacroDeps(g *blockGraph, deps map[string]*Deps) (map[string]*Deps, error) {
+	resolved := map[string]*Deps{} // block name -> final effective trigger
+	inProgress := set.New[string]()
+
+	var resolve func(b *blockInfo) (*Deps, error)
+	resolve = func(b *blockInfo) (*Deps, error) {
+		if d, ok := resolved[b.name]; ok {
+			return d, nil
+		}
+		if inProgress.Contains(b.name) {
+			return nil, fmt.Errorf("dependency cycle detected involving block %q", b.name)
+		}
+		inProgress.Add(b.name)
+		defer inProgress.Discard(b.name)
+
+		// Start from the producer's own intrinsic trigger.
+		own, err := calculateMacroOwnDeps(b.macroArg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve own-spec for block %q: %w", b.name, err)
+		}
+		parts := []*Deps{own}
+
+		dependents := g.dependents[b.name]
+		if len(dependents) == 0 {
+			logrus.Warnf("Block %q uses CHANGE_IN_WITH_DEPENDENTS but no block depends on it; its trigger reflects only its own spec.", b.name)
+		}
+		for _, dep := range dependents {
+			var depDeps *Deps
+			if dep.isMacro {
+				// Chained producer: use its full (recursively-resolved) trigger.
+				depDeps, err = resolve(dep)
+			} else {
+				depDeps, err = dependentChangeInDeps(dep, deps)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("block %q: dependent %q: %w", b.name, dep.name, err)
+			}
+			parts = append(parts, depDeps)
+		}
+
+		merged := mergeDepsSuperset(parts)
+		// A dependent also runs when its own block file changes (its clause gets
+		// that path added at format time), so the producer must too.
+		for _, dep := range dependents {
+			merged.Inclusions.Add("/" + dep.file)
+		}
+		resolved[b.name] = merged
+		return merged, nil
+	}
+
+	out := map[string]*Deps{}
+	for _, b := range g.blocks {
+		if !b.isMacro {
+			continue
+		}
+		merged, err := resolve(b)
+		if err != nil {
+			return nil, err
+		}
+		out[b.name] = merged
+	}
+	return out, nil
+}
+
+// dependentChangeInDeps returns the resolved Deps of a non-macro block that
+// depends on a CHANGE_IN_WITH_DEPENDENTS producer.  The dependent's run.when
+// must reduce to a single ${CHANGE_IN(...)} clause, optionally prefixed/suffixed
+// by a *constant* boolean combinator (`${FORCE_RUN} or ...`, `false or ...`).
+// A non-constant condition (branch matching, `and`, parentheses) could let the
+// dependent run when its CHANGE_IN is false — which a single merged change_in
+// clause cannot represent — so we fail loudly rather than emit an unsound
+// superset.  The constant `or`-prefix is safe: in PR builds it is false (so the
+// dependent reduces to CHANGE_IN), and in scheduled builds the producer's own
+// macro resolves to `true` anyway.
+func dependentChangeInDeps(dep *blockInfo, deps map[string]*Deps) (*Deps, error) {
+	when := strings.TrimSpace(dep.when)
+	matches := changeInRe.FindAllStringSubmatch(when, -1)
+	if len(matches) != 1 {
+		return nil, fmt.Errorf("its run.when must contain exactly one ${CHANGE_IN(...)} to be a CHANGE_IN_WITH_DEPENDENTS dependent, got %q", when)
+	}
+	full, arg := matches[0][0], matches[0][1]
+	residual := strings.Replace(when, full, "", 1)
+	for _, tok := range strings.Fields(residual) {
+		switch tok {
+		case "or", "false", "true", "${FORCE_RUN}":
+		default:
+			return nil, fmt.Errorf("its run.when has an unsupported form (only a single ${CHANGE_IN(...)} optionally combined with a constant `or` is allowed): %q", when)
+		}
+	}
+	d := deps[arg]
+	if d == nil {
+		return nil, fmt.Errorf("no resolved deps for CHANGE_IN(%s)", arg)
+	}
+	return d, nil
+}
+
+// calculateMacroOwnDeps resolves a CHANGE_IN_WITH_DEPENDENTS own-spec.  Unlike a
+// CHANGE_IN spec it has no "primary" whole-package element: every comma-separated
+// entry is treated like a CHANGE_IN secondary (a non-go: path, or a Go package
+// whose main-package deps are included), plus the default inclusions/exclusions.
+func calculateMacroOwnDeps(spec string) (*Deps, error) {
+	inclusions := set.New[string]()
+	inclusions.AddAll(defaultInclusions)
+	exclusions := set.From(defaultExclusions...)
+	if strings.TrimSpace(spec) == "" {
+		return &Deps{inclusions, exclusions}, nil
+	}
+	for _, part := range strings.Split(spec, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if _, err := addSecondaryPkgInclusions(inclusions, part); err != nil {
+			return nil, err
+		}
+	}
+	return &Deps{inclusions, exclusions}, nil
+}
+
+// mergeDepsSuperset merges Deps into a single change_in clause that fires
+// whenever any input clause would fire.  Inclusions are unioned; exclusions are
+// INTERSECTED.  Intersecting is the sound direction: a pattern survives only if
+// every input excludes it, so no input's exclusion can suppress another input's
+// inclusion (which would cause an under-fire).  The result is a superset and may
+// slightly over-fire (e.g. on a test file one input excludes but another's
+// inclusion still matches) — harmless for a cache-cheap producer.
+func mergeDepsSuperset(parts []*Deps) *Deps {
+	inclusions := set.New[string]()
+	for _, p := range parts {
+		inclusions.AddSet(p.Inclusions)
+	}
+	exclusions := parts[0].Exclusions.Copy()
+	for _, p := range parts[1:] {
+		exclusions = intersectSets(exclusions, p.Exclusions)
+	}
+	return &Deps{Inclusions: inclusions, Exclusions: exclusions}
+}
+
+func intersectSets(a, b set.Set[string]) set.Set[string] {
+	out := set.New[string]()
+	for x := range a.All() {
+		if b.Contains(x) {
+			out.Add(x)
+		}
+	}
+	return out
 }
 
 func filterInclusions(primaryPkg string, inclusions set.Set[string]) set.Typed[string] {
@@ -359,28 +709,176 @@ func formatSemList(s set.Set[string]) string {
 	return "[" + strings.Join(quoted, ",") + "]"
 }
 
+// So a consumer meeting a format it does not know can say so, rather than
+// silently gating on nothing.
+const argoCIDepsVersion = "argoci-dependencies"
+
+const argoCIDepsHeader = `# !!! GENERATED FILE, DO NOT EDIT !!!
+# Run 'make gen-deps-files' to regenerate.
+#
+# Each Go component's import closure as anchored path regexes, for ArgoCI's
+# changes.dependsOn.
+#
+`
+
+type argoCIDepsFile struct {
+	Version    string                     `yaml:"version"`
+	Components map[string]argoCIComponent `yaml:"components"`
+}
+
+// The shape of a workflow's `changes:` block.
+type argoCIComponent struct {
+	In      []string `yaml:"in"`
+	Exclude []string `yaml:"exclude,omitempty"`
+}
+
+// generateArgoCIDeps renders each component alone, so a workflow can union
+// entries freely: that may over-fire slightly but never under-fires.
+func generateArgoCIDeps(pkgs []string) {
+	if len(pkgs) == 0 {
+		logrus.Warn("gen-argoci-deps needs at least one package")
+		printUsageAndExit()
+	}
+
+	out := argoCIDepsFile{
+		Version:    argoCIDepsVersion,
+		Components: map[string]argoCIComponent{},
+	}
+	for pkg, deps := range calculateDeps(set.From(pkgs...)) {
+		inclusions, err := globsToRegexps(dropSubsumedInclusions(deps.Inclusions))
+		if err != nil {
+			logrus.Fatalf("Failed to convert inclusions for package %s: %v", pkg, err)
+		}
+		exclusions, err := globsToRegexps(deps.Exclusions)
+		if err != nil {
+			logrus.Fatalf("Failed to convert exclusions for package %s: %v", pkg, err)
+		}
+		out.Components[pkg] = argoCIComponent{In: inclusions, Exclude: exclusions}
+	}
+
+	_, _ = fmt.Print(argoCIDepsHeader)
+	encoder := yaml.NewEncoder(os.Stdout)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(out); err != nil {
+		logrus.Fatalln("Failed to marshal ArgoCI dependencies:", err)
+	}
+	if err := encoder.Close(); err != nil {
+		logrus.Fatalln("Failed to write ArgoCI dependencies:", err)
+	}
+}
+
+// globsToRegexps sorts, since the generated file is diffed against the
+// committed copy.
+func globsToRegexps(globs set.Set[string]) ([]string, error) {
+	items := globs.Slice()
+	sort.Strings(items)
+
+	// Two globs can collapse to one regex — a directory and that directory with a
+	// trailing slash both become the same prefix match.
+	seen := set.New[string]()
+	out := make([]string, 0, len(items))
+	for _, glob := range items {
+		re, err := globToRegexp(glob)
+		if err != nil {
+			return nil, err
+		}
+		if seen.Contains(re) {
+			continue
+		}
+		seen.Add(re)
+		out = append(out, re)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// Rejected rather than escaped: a class turned literal would match nothing.
+const globMetachars = "?[]{}"
+
+// globToRegexp asks the working tree whether a bare path is a file or a
+// directory.
+func globToRegexp(glob string) (string, error) {
+	rest, ok := strings.CutPrefix(glob, "/")
+	if !ok || rest == "" {
+		return "", fmt.Errorf("glob %q must be an absolute repo path", glob)
+	}
+	if i := strings.IndexAny(rest, globMetachars); i >= 0 {
+		return "", fmt.Errorf("glob %q contains unsupported %q", glob, rest[i])
+	}
+
+	// A trailing "/**" and a trailing "/" both mean everything below the
+	// directory, which is a prefix match rather than a whole-path one.
+	prefix := false
+	if cut, ok := strings.CutSuffix(rest, "/**"); ok {
+		rest, prefix = cut, true
+	} else if cut, ok := strings.CutSuffix(rest, "/"); ok {
+		rest, prefix = cut, true
+	} else if !strings.ContainsRune(rest, '*') {
+		info, err := os.Stat(rest)
+		switch {
+		case err != nil:
+			logrus.Warnf("Dependency %q is not in the working tree; it matches nothing", glob)
+			// Both readings, so a path that comes back later still triggers.
+			return "^" + regexp.QuoteMeta(rest) + "(?:/|$)", nil
+		case info.IsDir():
+			prefix = true
+		}
+	}
+
+	var segments []string
+	for _, segment := range strings.Split(rest, "/") {
+		if segment == "**" {
+			// Any depth, including none, so "/**/x" also matches "x" at the root.
+			segments = append(segments, "(?:[^/]+/)*")
+			continue
+		}
+		if strings.Contains(segment, "**") {
+			return "", fmt.Errorf("glob %q has ** inside a path segment", glob)
+		}
+		segments = append(segments, regexpQuoteGlobSegment(segment)+"/")
+	}
+
+	// A prefix match keeps its trailing separator: that is what stops it reaching
+	// a sibling whose name merely starts the same way.
+	body := strings.Join(segments, "")
+	if prefix {
+		return "^" + body, nil
+	}
+	return "^" + strings.TrimSuffix(body, "/") + "$", nil
+}
+
+// A glob's single star must not widen into a regex's greedy one: it stops at a
+// separator.
+func regexpQuoteGlobSegment(segment string) string {
+	parts := strings.Split(segment, "*")
+	for i, part := range parts {
+		parts[i] = regexp.QuoteMeta(part)
+	}
+	return strings.Join(parts, "[^/]*")
+}
+
 func printLocalDirs(pkg string, mainsOnly bool) {
-	localDirs, err := loadLocalDirs(pkg, mainsOnly)
+	local, err := loadLocalDirs(pkg, mainsOnly)
 	if err != nil {
 		logrus.Fatalln("Failed to load local dirs:", err)
 		os.Exit(1)
 	}
-	logrus.Infof("Loaded %d local dirs.", len(localDirs))
-	for _, dir := range localDirs {
+	logrus.Infof("Loaded %d local dirs.", len(local.dirs))
+	for _, dir := range local.dirs {
 		_, _ = fmt.Println(dir)
 	}
 }
 
 func printCombined(pkg string) {
 	printModules(pkg)
-	localDirs, err := loadLocalDirs(pkg, true)
+	local, err := loadLocalDirs(pkg, true)
 	if err != nil {
 		logrus.Fatalln("Failed to load local dirs:", err)
 		os.Exit(1)
 	}
-	if len(localDirs) > 0 {
+	if len(local.dirs) > 0 {
 		fmt.Println()
-		for _, dir := range localDirs {
+		for _, dir := range local.dirs {
 			// Strip leading "/" and prefix with "local:" so the Makefile
 			// can grep these out easily.
 			_, _ = fmt.Println("local:" + strings.TrimPrefix(dir, "/"))
@@ -389,12 +887,12 @@ func printCombined(pkg string) {
 }
 
 func printTestExclusions(pkg string) {
-	localDirs, err := loadLocalDirs(pkg, false)
+	local, err := loadLocalDirs(pkg, false)
 	if err != nil {
 		logrus.Fatalln("Failed to load local dirs:", err)
 		os.Exit(1)
 	}
-	for _, dir := range calculateTestExclusionGlobs(pkg, localDirs) {
+	for _, dir := range calculateTestExclusionGlobs(pkg, local.dirs) {
 		_, _ = fmt.Println(dir)
 	}
 }
@@ -419,23 +917,91 @@ func calculateTestExclusionGlobs(pkg string, localDirs []string) []string {
 	return s
 }
 
-func loadLocalDirs(pkg string, mainDepsOnly bool) (out []string, err error) {
+// localDeps are a package's in-repo inputs: the dirs of the Go packages it
+// depends on, plus globs for the non-Go files those packages go:embed, which no
+// "<dir>/*.go" glob reaches.
+type localDeps struct {
+	dirs       []string
+	embedGlobs []string
+}
+
+func loadLocalDirs(pkg string, mainDepsOnly bool) (localDeps, error) {
 	packageDeps, err := loadPackageDeps(pkg, mainDepsOnly)
 	if err != nil {
 		logrus.Fatalln("Failed to load package deps:", err)
 		os.Exit(1)
 	}
-	for _, pkg := range packageDeps {
-		const ourPackage = "github.com/projectcalico/calico"
-		if strings.HasPrefix(pkg, ourPackage+"/") {
-			pkg = strings.TrimPrefix(pkg, ourPackage)
-			out = append(out, pkg)
+
+	const ourPackage = "github.com/projectcalico/calico"
+	var dirs []string
+	embedPatterns := map[string][]string{}
+	for _, dep := range packageDeps {
+		if !strings.HasPrefix(dep.ImportPath, ourPackage+"/") {
+			continue
+		}
+		dir := strings.TrimPrefix(dep.ImportPath, ourPackage)
+		dirs = append(dirs, dir)
+		embedPatterns[dir] = append(embedPatterns[dir], dep.EmbedPatterns...)
+	}
+
+	out := localDeps{dirs: filterInclusions(pkg, set.FromArray(dirs)).Slice()}
+	sort.Strings(out.dirs)
+
+	globs := set.New[string]()
+	for _, dir := range out.dirs {
+		for _, pattern := range embedPatterns[dir] {
+			for _, glob := range embedGlobsForPattern(dir, pattern) {
+				// A package that embeds its own source is already covered by
+				// the "<dir>/*.go" glob its callers add for every dep dir.
+				if path.Dir(glob) == dir && strings.HasSuffix(glob, ".go") {
+					continue
+				}
+				globs.Add(glob)
+			}
+		}
+	}
+	out.embedGlobs = globs.Slice()
+	sort.Strings(out.embedGlobs)
+	return out, nil
+}
+
+// embedGlobsForPattern converts one go:embed pattern in the package at
+// repo-relative dir into change_in() globs.  A pattern that names or matches a
+// directory embeds that subtree, so it becomes "<dir>/**".
+func embedGlobsForPattern(dir, pattern string) []string {
+	pattern = strings.TrimPrefix(pattern, "all:")
+	glob := path.Join(dir, pattern)
+
+	// The tool runs from the root of the repo, so stripping the leading slash
+	// off a repo-relative path gives the path on disk.
+	matches, err := filepath.Glob(strings.TrimPrefix(glob, "/"))
+	if err != nil {
+		logrus.WithError(err).Warnf("Failed to expand go:embed pattern %q in %s", pattern, dir)
+		return []string{glob}
+	}
+
+	var globs []string
+	matchedFile := false
+	for _, match := range matches {
+		info, err := os.Stat(match)
+		if err != nil {
+			logrus.WithError(err).Warnf("Failed to stat go:embed match %s", match)
+			matchedFile = true
+			continue
+		}
+		if info.IsDir() {
+			globs = append(globs, "/"+match+"/**")
+		} else {
+			matchedFile = true
 		}
 	}
 
-	out = filterInclusions(pkg, set.FromArray(out)).Slice()
-	sort.Strings(out)
-	return out, nil
+	// Patterns for generated files match nothing on a clean checkout; emit the
+	// pattern itself so the output does not depend on what has been built.
+	if matchedFile || len(globs) == 0 {
+		globs = append(globs, glob)
+	}
+	return globs
 }
 
 func printModules(pkg string) {
@@ -455,11 +1021,19 @@ func printModules(pkg string) {
 	// For ease, do the full cross product. Only takes ~100ms.
 	var mods []string
 	for _, mod := range modules {
+		// Imports still use the original module path, so match on that, but report the
+		// replacement, since that's the code we actually build against.
+		importPath := mod.Path
 		if mod.Replace != nil {
+			if mod.Replace.Version == "" {
+				// Replaced by a local directory; its files are already inputs in their own right.
+				continue
+			}
 			mod = *mod.Replace
 		}
-		for _, pkg := range packageDeps {
-			if strings.HasPrefix(pkg, mod.Path) {
+
+		for _, dep := range packageDeps {
+			if strings.HasPrefix(dep.ImportPath, importPath) {
 				if mod.Version != "" {
 					mods = append(mods, mod.Path+" "+mod.Version)
 				} else {
@@ -476,7 +1050,14 @@ func printModules(pkg string) {
 	logrus.Info("Done.")
 }
 
-func loadPackageDeps(pkg string, mainDepsOnly bool) ([]string, error) {
+// goPackage is the slice of "go list" output that we need: where the package
+// lives in the import graph, and the patterns whose non-Go data it go:embeds.
+type goPackage struct {
+	ImportPath    string
+	EmbedPatterns []string
+}
+
+func loadPackageDeps(pkg string, mainDepsOnly bool) ([]goPackage, error) {
 	pkgs := []string{"./..."}
 
 	if mainDepsOnly {
@@ -491,22 +1072,17 @@ func loadPackageDeps(pkg string, mainDepsOnly bool) ([]string, error) {
 		}
 	}
 
-	args := append([]string{"list", "-deps"}, pkgs...)
-	command := exec.Command("go", args...)
-	command.Dir = pkg
-	raw, err := command.Output()
+	args := append([]string{"list", "-deps", "-json=ImportPath,EmbedPatterns"}, pkgs...)
+	out, err := loadGoToolJSON[goPackage](pkg, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load package deps for %v: %w", pkgs, err)
 	}
-	var out []string
-	for line := range bytes.Lines(raw) {
-		dep := string(bytes.TrimSpace(line))
-		if strings.HasPrefix(dep, "github.com/projectcalico/api/") {
-			// HACK, handle the API go mod replace.
-			dep = strings.Replace(dep, "github.com/projectcalico/api/", "github.com/projectcalico/calico/api/", 1)
+	for i, dep := range out {
+		// HACK, handle the API go mod replace.  The module's root package
+		// (github.com/projectcalico/api itself) counts: it embeds the v3 CRDs.
+		if rest, ok := strings.CutPrefix(dep.ImportPath, apiModulePath); ok && (rest == "" || strings.HasPrefix(rest, "/")) {
+			out[i].ImportPath = "github.com/projectcalico/calico/api" + rest
 		}
-		out = append(out, dep)
-		logrus.Debugf("Loaded package: %s", strings.TrimRight(string(line), "\n"))
 	}
 	return out, nil
 }
@@ -538,11 +1114,12 @@ type module struct {
 }
 
 func loadGoMods() ([]module, error) {
-	return loadGoToolJSON[module]("list", "-m", "-json", "all")
+	return loadGoToolJSON[module](".", "list", "-m", "-json", "all")
 }
 
-func loadGoToolJSON[Item any](args ...string) ([]Item, error) {
+func loadGoToolJSON[Item any](dir string, args ...string) ([]Item, error) {
 	cmd := exec.Command("go", args...)
+	cmd.Dir = dir
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -598,6 +1175,15 @@ func generateSemaphoreYamls() {
 	if err != nil {
 		logrus.Fatalf("Failed to read templates: %v", err)
 	}
+
+	// Parse the (still un-indented) blocks into a dependency graph so we can
+	// resolve ${CHANGE_IN_WITH_DEPENDENTS(...)} macros: a "producer" block that
+	// must run whenever any block that depends on it runs.
+	graph, err := parseBlockGraph(blocks)
+	if err != nil {
+		logrus.Fatalf("Failed to parse block dependency graph: %v", err)
+	}
+
 	// For convenience when writing blocks we add an indent here.
 	blocks = indentBlocks(blocks)
 
@@ -608,23 +1194,13 @@ func generateSemaphoreYamls() {
 		return strings.Compare(templates[i].filename, templates[j].filename) < 0
 	})
 
-	// Next, collect all the CHANGE_IN placeholders and do the heavy-lift
-	// calculation to figure out the dependencies.
-	placeholders := extractChangeInPlaceholders(templates)
-	deps := calculateDeps(placeholders)
-
-	// Build the main file, which is triggered by PRs and uses the calculated
-	// dependencies.
-	mainFile := filepath.Join(semaphoreDir, "semaphore.yml")
-	err = buildSemaphoreYAML(mainFile, templates, globalExtraDeps, deps, false, defaultBranchStanza)
-	if err != nil {
-		logrus.Fatalf("Failed to build semaphore YAML: %v", err)
-	}
+	// The main (push/PR) pipeline, semaphore.yml, is no longer generated: CI
+	// has moved to ArgoCI and it is now a hand-written no-op.
 
 	// Build the scheduled file, which builds all our code, but not slow
 	// third-party builds.
 	scheduledFile := filepath.Join(semaphoreDir, "semaphore-scheduled-builds.yml")
-	err = buildSemaphoreYAML(scheduledFile, templates, globalExtraDeps, nil, false, defaultBranchStanza)
+	err = buildSemaphoreYAML(scheduledFile, templates, globalExtraDeps, nil, nil, graph, false, defaultBranchStanza)
 	if err != nil {
 		logrus.Fatalf("Failed to build semaphore YAML: %v", err)
 	}
@@ -649,7 +1225,7 @@ func generateSemaphoreYamls() {
 	}
 	if foundWeekly {
 		logrus.Infof("Found templates that run weekly, generating %s.", thirdPartyFile)
-		err = buildSemaphoreYAML(thirdPartyFile, weeklyTemplates, globalExtraDeps, nil, true, defaultBranchStanza)
+		err = buildSemaphoreYAML(thirdPartyFile, weeklyTemplates, globalExtraDeps, nil, nil, graph, true, defaultBranchStanza)
 		if err != nil {
 			logrus.Fatalf("Failed to build semaphore YAML: %v", err)
 		}
@@ -658,7 +1234,7 @@ func generateSemaphoreYamls() {
 	logrus.Info("Semaphore YAML generation complete")
 }
 
-func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps []string, deps map[string]*Deps, weekly bool, defaultBranchStanza string) error {
+func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps []string, deps map[string]*Deps, macroDeps map[string]*Deps, graph *blockGraph, weekly bool, defaultBranchStanza string) error {
 	var data bytes.Buffer
 
 	data.WriteString(
@@ -681,9 +1257,8 @@ func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps [
 	}
 	for _, t := range templates {
 		extraDeps := append(globalExtraDeps, "/"+t.originalPath)
-		changeInPattern := regexp.MustCompile(`\$\{CHANGE_IN\(([^)]+)\)}`)
-		content := changeInPattern.ReplaceAllStringFunc(t.content, func(match string) string {
-			pkg := changeInPattern.FindStringSubmatch(match)[1]
+		content := changeInRe.ReplaceAllStringFunc(t.content, func(match string) string {
+			pkg := changeInRe.FindStringSubmatch(match)[1]
 			if deps == nil {
 				// Generating a daily/weekly file.
 				return "true"
@@ -695,13 +1270,44 @@ func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps [
 			}
 			return formatChangeIn(inclusions, dep.Exclusions, false, defaultBranchStanza)
 		})
+		// CHANGE_IN_WITH_DEPENDENTS expands, like CHANGE_IN, to a single
+		// change_in(...) clause (so the folded-scalar post-processing applies
+		// unchanged) — but its dependency set was pre-merged from the producer's
+		// dependents in calculateDependentMacroDeps. The replacement is
+		// block-specific (two blocks may share an arg), so we map each macro
+		// occurrence to its block by document order within this file.
+		fileMacroBlocks := graph.macroBlocksInFile(t.originalPath)
+		macroIdx := 0
+		content = changeInWithDependentsRe.ReplaceAllStringFunc(content, func(match string) string {
+			if deps == nil {
+				// Generating a daily/weekly file.
+				return "true"
+			}
+			if macroIdx >= len(fileMacroBlocks) {
+				// The regex found more macro occurrences than parseBlockGraph
+				// mapped to blocks in this file (e.g. a macro outside a block's
+				// run.when).  Fail clearly rather than index out of range.
+				logrus.Fatalf("CHANGE_IN_WITH_DEPENDENTS in %s does not correspond to a parsed block; the macro is only supported in a block's run.when", t.originalPath)
+			}
+			b := fileMacroBlocks[macroIdx]
+			macroIdx++
+			md := macroDeps[b.name]
+			if md == nil {
+				logrus.Fatalf("No resolved CHANGE_IN_WITH_DEPENDENTS dependencies for block %q", b.name)
+			}
+			inclusions := md.Inclusions.Copy()
+			for _, d := range extraDeps {
+				inclusions.Add(d)
+			}
+			return formatChangeIn(inclusions, md.Exclusions, false, defaultBranchStanza)
+		})
 		content = strings.ReplaceAll(content, "${FORCE_RUN}", forceRun)
 		content = strings.ReplaceAll(content, "${WEEKLY_RUN}", weeklyRun)
 		content = strings.ReplaceAll(content, "${DEFAULT_BRANCH}", defaultBranchStanza)
 		_, _ = data.WriteString(content)
 	}
 
-	return os.WriteFile(file, []byte(convertToFoldedScalars(data.String())), 0644)
+	return os.WriteFile(file, []byte(convertToFoldedScalars(data.String())), 0o644)
 }
 
 func indentBlocks(blocks []templateData) []templateData {
@@ -758,18 +1364,6 @@ func mustReadFile(path string) []byte {
 		logrus.Fatalf("Failed to read %s: %v", path, err)
 	}
 	return b
-}
-
-func extractChangeInPlaceholders(templates []templateData) set.Set[string] {
-	pattern := regexp.MustCompile(`\$\{CHANGE_IN\(([^)]+)\)}`)
-	out := set.New[string]()
-	for _, t := range templates {
-		matches := pattern.FindAllStringSubmatch(t.content, -1)
-		for _, m := range matches {
-			out.Add(m[1])
-		}
-	}
-	return out
 }
 
 func validateChangeInClauses(semaphoreDir string) error {

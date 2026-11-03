@@ -324,6 +324,15 @@ func TestFeatureDetectionOverride(t *testing.T) {
 func TestIptablesBackendDetection(t *testing.T) {
 	RegisterTestingT(t)
 
+	// Pin the module check so detection doesn't depend on what the test host has loaded.
+	realModulesLoaded := LegacyIPTablesModulesLoaded
+	LegacyIPTablesModulesLoaded = func(ipVersion uint8) bool {
+		return true
+	}
+	defer func() {
+		LegacyIPTablesModulesLoaded = realModulesLoaded
+	}()
+
 	type test struct {
 		name            string
 		spec            string
@@ -470,6 +479,30 @@ func TestIptablesBackendDetection(t *testing.T) {
 			Expect(DetectBackend(testutils.LookPathAll, tst.cmdF.NewCmd, strings.ToUpper(tst.spec))).To(Equal(tst.expectedBackend), "Capitalization affected output")
 		})
 	}
+}
+
+func TestIptablesBackendDetectionSkipsUnloadedLegacy(t *testing.T) {
+	RegisterTestingT(t)
+
+	realModulesLoaded := LegacyIPTablesModulesLoaded
+	LegacyIPTablesModulesLoaded = func(ipVersion uint8) bool {
+		return false
+	}
+	defer func() {
+		LegacyIPTablesModulesLoaded = realModulesLoaded
+	}()
+
+	cmdF := ipOutputFactory{Ip6legacy: 20, Ip4legacy: 20, Ip6Nft: 10, Ip4Nft: 10}
+	var invoked []string
+	newCmd := func(name string, arg ...string) cmdshim.CmdIface {
+		invoked = append(invoked, name)
+		return cmdF.NewCmd(name, arg...)
+	}
+
+	// The legacy backend outweighs nft, but the modules aren't loaded, so those rules can't be
+	// there and probing for them would autoload the modules.
+	Expect(DetectBackend(testutils.LookPathAll, newCmd, "auto")).To(Equal(IPTablesBackendNFT))
+	Expect(invoked).NotTo(ContainElement(ContainSubstring("legacy")))
 }
 
 type ipOutputFactory struct {

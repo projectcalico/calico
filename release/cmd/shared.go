@@ -20,15 +20,21 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/snowzach/rotatefilehook"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/outputs"
+	"github.com/projectcalico/calico/release/internal/pinnedversion"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/version"
 )
 
 var (
@@ -38,6 +44,9 @@ var (
 	// releaseOutputPath is the directory where all outputs are stored
 	// relative to the repo root
 	releaseOutputPath = []string{utils.ReleaseFolderName, "_output"}
+
+	commandRunner          command.CommandRunner = &command.RealCommandRunner{}
+	registryDigestResolver                       = registry.ResolveDigest
 )
 
 func logPrettifier(f *runtime.Frame) (string, string) {
@@ -127,4 +136,118 @@ func slackConfig(c *cli.Command) *slack.Config {
 		Token:   c.String(slackTokenFlag.Name),
 		Channel: c.String(slackChannelFlag.Name),
 	}
+}
+
+type pinned func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error)
+
+// oncePin memoizes a pin source so several callers in one command share it.
+func oncePin(pin pinned) pinned {
+	var (
+		once sync.Once
+		p    *pinnedversion.Pin
+		err  error
+	)
+	return func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
+		once.Do(func() { p, err = pin(cfg, c) })
+		return p, err
+	}
+}
+
+var (
+	loadPin pinned = func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
+		pin, err := pinnedversion.Load(localPinLoader(pinConfig(cfg, c)))
+		if err != nil {
+			return nil, fmt.Errorf("load pin: %w", err)
+		}
+		return pin, nil
+	}
+	pinForBuild        = loadPin
+	builtPin    pinned = func(cfg *Config, _ *cli.Command) (*pinnedversion.Pin, error) {
+		pin, err := pinnedversion.Load(pinnedversion.FileLoader{Dir: cfg.TmpDir, RootDir: cfg.RepoRootDir})
+		if err != nil {
+			return nil, fmt.Errorf("load built pin: %w", err)
+		}
+		return pin, nil
+	}
+	pinForPublish = builtPin
+)
+
+// A generated pin versions the operator like the product; a release takes the
+// operator's own version from the manifests.
+func pinForRelease(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
+	pin, err := loadPin(cfg, c)
+	if err != nil {
+		return nil, err
+	}
+	_, operatorVer, err := manifests.Versions(cfg.RepoRootDir)
+	if err != nil {
+		return nil, fmt.Errorf("operator version from manifests: %w", err)
+	}
+	pin.Operator.Version = operatorVer.String()
+	return pin, nil
+}
+
+// releaseVersion is the version being released. A hashrelease is versioned from git.
+var releaseVersion = func(cfg *Config, c *cli.Command) (*version.Version, error) {
+	if c.Bool(hashreleaseFlag.Name) {
+		v, err := command.GitVersion(cfg.RepoRootDir, true)
+		if err != nil {
+			return nil, fmt.Errorf("git version: %w", err)
+		}
+		ver, err := version.New(v)
+		if err != nil {
+			return nil, err
+		}
+		return &ver, nil
+	}
+	ver, _, err := manifests.Versions(cfg.RepoRootDir)
+	if err != nil {
+		return nil, fmt.Errorf("version from manifest: %w", err)
+	}
+	return &ver, nil
+}
+
+// outputDir is where a release's artifacts are gathered.
+var outputDir = func(cfg *Config, c *cli.Command, version string) (string, error) {
+	if c.Bool(hashreleaseFlag.Name) {
+		pin := oncePin(pinForBuild)
+		p, err := pin(cfg, c)
+		if err != nil {
+			return "", err
+		}
+		h, err := p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false)
+		if err != nil {
+			return "", err
+		}
+		return h.Source, nil
+	}
+	return releaseOutputDir(cfg.RepoRootDir, version), nil
+}
+
+// recordsDir is keyed like outputDir, so a step run on its own records into the
+// same release as the manager.
+func recordsDir(cfg *Config, c *cli.Command, pin pinned, version string) (string, error) {
+	if !c.Bool(hashreleaseFlag.Name) {
+		return outputs.RecordsDir(cfg.OutputDir, version), nil
+	}
+	p, err := pin(cfg, c)
+	if err != nil {
+		return "", err
+	}
+	return outputs.RecordsDir(cfg.OutputDir, p.Hash), nil
+}
+
+func publishRecord(recordsDir, step string, confirm bool) ([]string, *outputs.RefsWriter, error) {
+	published, err := outputs.ReadRefs(recordsDir, step)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !confirm {
+		return published, nil, nil
+	}
+	w, err := outputs.NewRefsWriter(recordsDir, step)
+	if err != nil {
+		return nil, nil, err
+	}
+	return published, w, nil
 }

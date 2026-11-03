@@ -1,0 +1,28 @@
+# api `make ci`, and the offline validation tests under test/.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+
+steps:
+  - name: api-ci
+    depends: [check-manifests]
+    requests: {cpu: 2750m, memory: 2.25Gi}
+    commands: |
+      cd api
+      make ci
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}/api"
+      artifact push job report --destination test-results || true
+
+  - name: api-validation
+    depends: [check-manifests]
+    requests: {cpu: 3000m, memory: 2.25Gi}
+    commands: |
+      cd test
+      make ci
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}/test"
+      artifact push job report --destination test-results || true

@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,29 +15,18 @@
 package utils
 
 import (
-	"context"
-
 	"github.com/onsi/gomega"
-	v1 "github.com/tigera/operator/api/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
+	v1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 func IsOpenShift(f *framework.Framework) bool {
-	// Create a client to the API server.
 	cli, err := client.New(f.ClientConfig())
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-	// Query Installation object to check if we are running on OpenShift.
-	installs := &v1.InstallationList{}
-	err = cli.List(context.TODO(), installs)
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-
-	for _, inst := range installs.Items {
-		if inst.Spec.KubernetesProvider == v1.ProviderOpenShift {
-			return true
-		}
-	}
-	return false
+	// The operator autodetects the provider, so it only ever appears on the effective config.
+	config := InstallationConfig(cli)
+	return config != nil && config.KubernetesProvider == v1.ProviderOpenShift
 }

@@ -115,6 +115,13 @@ spec:
                                 AutoHostEndpoints
                               items:
                                 properties:
+                                  annotations:
+                                    additionalProperties:
+                                      type: string
+                                    description:
+                                      Annotations adds the specified annotations
+                                      to the generated AutoHostEndpoint.
+                                    type: object
                                   generateName:
                                     description:
                                       GenerateName is appended to the end
@@ -148,6 +155,7 @@ spec:
                                     description:
                                       NodeSelector allows the AutoHostEndpoint
                                       to be created only for specific nodes
+                                    maxLength: 1024
                                     type: string
                                 type: object
                               type: array
@@ -206,6 +214,17 @@ spec:
                           type: string
                       type: object
                   type: object
+                debugProfileHost:
+                  description: |-
+                    DebugProfileHost is the host IP or hostname to bind the profiling port to. Set to "0.0.0.0"
+                    for all interfaces to make profiles reachable from off-host. The profiling endpoints are
+                    unauthenticated and expose heap dumps, goroutine stacks and CPU profiles, so prefer the
+                    default and use kubectl port-forward for remote access. Only used if DebugProfilePort is set.
+                    [Default: localhost]
+                  maxLength: 64
+                  minLength: 1
+                  pattern: ^[a-zA-Z0-9:._+-]+$
+                  type: string
                 debugProfilePort:
                   description: |-
                     DebugProfilePort configures the port to serve memory and cpu profiles on. If not specified, profiling
@@ -232,9 +251,9 @@ spec:
                 logSeverityScreen:
                   description: |-
                     LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-                    Valid values are: "None", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
+                    Valid values are: "Trace", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
                   enum:
-                    - None
+                    - Trace
                     - Debug
                     - Info
                     - Warning
@@ -243,6 +262,7 @@ spec:
                     - Panic
                   type: string
                 prometheusMetricsPort:
+                  default: 9094
                   description: |-
                     PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]
                     Valid values are: 0-65535.
@@ -344,6 +364,13 @@ spec:
                                     AutoHostEndpoints
                                   items:
                                     properties:
+                                      annotations:
+                                        additionalProperties:
+                                          type: string
+                                        description:
+                                          Annotations adds the specified
+                                          annotations to the generated AutoHostEndpoint.
+                                        type: object
                                       generateName:
                                         description:
                                           GenerateName is appended to the
@@ -377,6 +404,7 @@ spec:
                                         description:
                                           NodeSelector allows the AutoHostEndpoint
                                           to be created only for specific nodes
+                                        maxLength: 1024
                                         type: string
                                     type: object
                                   type: array
@@ -439,6 +467,17 @@ spec:
                               type: string
                           type: object
                       type: object
+                    debugProfileHost:
+                      description: |-
+                        DebugProfileHost is the host IP or hostname to bind the profiling port to. Set to "0.0.0.0"
+                        for all interfaces to make profiles reachable from off-host. The profiling endpoints are
+                        unauthenticated and expose heap dumps, goroutine stacks and CPU profiles, so prefer the
+                        default and use kubectl port-forward for remote access. Only used if DebugProfilePort is set.
+                        [Default: localhost]
+                      maxLength: 64
+                      minLength: 1
+                      pattern: ^[a-zA-Z0-9:._+-]+$
+                      type: string
                     debugProfilePort:
                       description: |-
                         DebugProfilePort configures the port to serve memory and cpu profiles on. If not specified, profiling
@@ -465,9 +504,9 @@ spec:
                     logSeverityScreen:
                       description: |-
                         LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-                        Valid values are: "None", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
+                        Valid values are: "Trace", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
                       enum:
-                        - None
+                        - Trace
                         - Debug
                         - Info
                         - Warning
@@ -476,6 +515,7 @@ spec:
                         - Panic
                       type: string
                     prometheusMetricsPort:
+                      default: 9094
                       description: |-
                         PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]
                         Valid values are: 0-65535.

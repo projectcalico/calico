@@ -22,14 +22,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/lib/std/time"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 func TestFileWatcher(t *testing.T) {
 	RegisterTestingT(t)
 	utils.ConfigureLogging("DEBUG")
-	defer logutils.RedirectLogrusToTestingT(t)()
+	defer logrusr.RedirectLogrusToTestingT(t)()
 
 	// Create a tmp file to watch.
 	dir := os.TempDir()

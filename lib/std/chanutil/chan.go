@@ -42,6 +42,18 @@ func Read[E any](ctx context.Context, ch <-chan E) (E, error) {
 	}
 }
 
+// ReadError is Read specialised to error channels. It returns the error read off the channel, or the context error if
+// the context is done. Unlike Read, a closed channel is not an error: a nil error and a close both mean success, so
+// senders may signal success either way.
+func ReadError(ctx context.Context, errCh <-chan error) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-errCh:
+		return err
+	}
+}
+
 // ReadNonBlocking reads from the given channel in a non-blocking manner. It returns the value read off the channel and
 // true if the read was successful, and an empty value and false otherwise.
 func ReadNonBlocking[E any](ch <-chan E) (E, bool) {

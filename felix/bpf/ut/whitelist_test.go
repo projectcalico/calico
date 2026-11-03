@@ -171,6 +171,37 @@ func TestSkipIngressRedirect(t *testing.T) {
 		Expect(ctr.Data().B2A.Approved).NotTo(BeTrue())
 		Expect(ctr.Flags() & v4.FlagNoRedirPeer).To(Equal(v4.FlagNoRedirPeer))
 	})
+
+	// A local workload sending to a local workload that opts out of ingress
+	// redirect: the opt-out belongs to the destination, so only the
+	// destination's route carries the flag.
+	resetRTMap(rtMap)
+	rtKey = routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagSkipIngressRedir|routes.FlagInIPAMPool, 2).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+
+	resetCTMap(ctMap)
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+
+		ct, err := conntrack.LoadMapMem(ctMap)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ct).Should(HaveKey(ctKey))
+
+		// Without the flag on the conntrack entry, every packet after the
+		// first would be peer-redirected to the destination with its L2
+		// header unmodified.
+		Expect(ct[ctKey].Flags() & v4.FlagNoRedirPeer).To(Equal(v4.FlagNoRedirPeer))
+	})
 }
 
 func TestAllowEnterHostToWorkload(t *testing.T) {

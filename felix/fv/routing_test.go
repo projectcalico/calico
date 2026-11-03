@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -191,6 +191,54 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 							out, _ := felix.ExecOutput("ip", "-d", "link", "show", dataplanedefs.IPIPIfaceName)
 							return out
 						}, "60s", "500ms").Should(ContainSubstring("mtu 1300"))
+					}
+				})
+
+				It("should clean up the IPIP tunnel address when IPIP is disabled", func() {
+					if BPFMode() {
+						Skip("BPF mode with BPFOverlayHostSourceIP=HostAddress does not put an IP on tunl0")
+					}
+
+					// With IPIP enabled, Felix programs the node's tunnel address onto the
+					// tunl0 device.  Wait for that to happen on every node before we disable
+					// IPIP.
+					for _, felix := range felixes {
+						Expect(felix.ExpectedIPIPTunnelAddr).NotTo(BeEmpty(),
+							"test precondition: every node should have an IPIP tunnel address")
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "addr", "show", dataplanedefs.IPIPIfaceName)
+							return out
+						}, "60s", "500ms").Should(ContainSubstring(felix.ExpectedIPIPTunnelAddr),
+							"IPIP tunnel address should be programmed onto tunl0 while IPIP is enabled")
+					}
+
+					// Disable IPIP by switching the IP pool to IPIPMode Never.  We
+					// deliberately leave FelixConfiguration.IPIPEnabled unset so that IPIP is
+					// only *implicitly* disabled (no IPIP pools, no explicit override): that
+					// is the condition under which Felix strips its addresses off tunl0 (see
+					// cleanUpIPIPAddrs in int_dataplane.go).  Changing the pool's encap mode
+					// makes Felix restart, and the cleanup runs on the next start.
+					pool, err := client.IPPools().Get(context.Background(), infrastructure.DefaultIPPoolName, options.GetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					pool.Spec.IPIPMode = api.IPIPModeNever
+					_, err = client.IPPools().Update(context.Background(), pool, options.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					for _, felix := range felixes {
+						// Felix should strip the tunnel address off tunl0...
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "addr", "show", dataplanedefs.IPIPIfaceName)
+							return out
+						}, "60s", "500ms").ShouldNot(ContainSubstring(felix.ExpectedIPIPTunnelAddr),
+							"IPIP tunnel address should be removed from tunl0 once IPIP is disabled")
+
+						// ...but, unlike VXLAN (which deletes vxlan.calico entirely), it should
+						// leave the kernel-owned tunl0 device in place.
+						Consistently(func() error {
+							_, err := felix.ExecOutput("ip", "link", "show", dataplanedefs.IPIPIfaceName)
+							return err
+						}, "5s", "500ms").ShouldNot(HaveOccurred(),
+							"tunl0 device should not be deleted when IPIP is disabled, only its address removed")
 					}
 				})
 
@@ -697,16 +745,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					ipsetLen := allHostsIPSetSize(felixes, ipipMode)
 					for _, f := range felixes {
 						if BPFMode() {
-							// one host and one host tunnel routes per node
-							expectedNumRoutes := len(felixes) * 2
+							// Each remote node contributes 2 "host" routes when tunneling is
+							// enabled (remote host + remote host tunneled), or 1 route when not.
+							// The local node always contributes 1 "host" route (its node IP;
+							// no tunnel device IP in BPF mode).
+							expectedNumRoutes := 1 + (len(felixes)-1)*2
 							if ipipMode == api.IPIPModeNever {
-								// one host routes per node
+								// one host route per node (no tunneled routes)
 								expectedNumRoutes = len(felixes)
 							}
 							Eventually(func() int {
 								return strings.Count(f.BPFRoutes(), "host")
 							}).Should(Equal(expectedNumRoutes),
-								fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, f.BPFRoutes()))
+								fmt.Sprintf("Expected %v host route(s), not: %v", expectedNumRoutes, f.BPFRoutes()))
 						} else if NFTMode() {
 							Eventually(f.NFTSetSizeFn(utils.IPSetName(rules.IPSetIDAllHostNets, 4)), "15s", "200ms").Should(Equal(ipsetLen))
 						} else {
@@ -733,16 +784,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
 					ipsetLen := allHostsIPSetSize(felixes, ipipMode)
 					if BPFMode() {
-						// one host and one host tunnel routes per node
-						expectedNumRoutes := (len(felixes) - 1) * 2
+						// After removing the third node: 1 local host route + 2 routes per remaining remote node.
+						expectedNumRoutes := 1 + (len(felixes)-2)*2
 						if ipipMode == api.IPIPModeNever {
-							// one host routes per node
+							// one host route per remaining node (no tunneled routes)
 							expectedNumRoutes = (len(felixes) - 1)
 						}
 						Eventually(func() int {
 							return strings.Count(felixes[0].BPFRoutes(), "host")
 						}).Should(Equal(expectedNumRoutes),
-							fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, felixes[0].BPFRoutes()))
+							fmt.Sprintf("Expected %v host route(s), not: %v", expectedNumRoutes, felixes[0].BPFRoutes()))
 					} else if NFTMode() {
 						Eventually(felixes[0].NFTSetSizeFn(utils.IPSetName(rules.IPSetIDAllHostNets, 4)), "15s", "200ms").Should(Equal(ipsetLen))
 					} else {
@@ -963,8 +1014,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				client          client.Interface
 				w               [3]*workload.Workload
 				w6              [3]*workload.Workload
-				hostW           [3]*workload.Workload
-				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 				timeout         = time.Second * 30
@@ -1016,7 +1065,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
+				w, w6, _, _ = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
@@ -1041,25 +1090,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						felix.Exec("calico-bpf", "routes", "dump")
 					}
 				}
-
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
 			})
 
 			It("should have correct connectivity", func() {
@@ -1148,6 +1178,9 @@ func createIPIPBaseTopologyOptions(
 	// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
 	// tested but we can verify the state with ethtool.
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
+	// Exercise the no-tunnel-IP path in BPF mode; the route-count assertions in this
+	// file are written for that mode.  Has no effect outside BPF mode.
+	topologyOptions.ExtraEnvVars["FELIX_BPFOverlayHostSourceIP"] = "HostAddress"
 	topologyOptions.FelixDebugFilenameRegex = "ipip|route_mgr|route_table|l3_route_resolver|int_dataplane"
 	return topologyOptions
 }

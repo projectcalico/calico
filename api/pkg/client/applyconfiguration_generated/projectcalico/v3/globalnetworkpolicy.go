@@ -16,7 +16,7 @@ import (
 // GlobalNetworkPolicyApplyConfiguration represents a declarative configuration of the GlobalNetworkPolicy type for use
 // with apply.
 type GlobalNetworkPolicyApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *GlobalNetworkPolicySpecApplyConfiguration `json:"spec,omitempty"`
 }

@@ -53,6 +53,9 @@ bin_allow_list_patterns=(
   '/arp$'       # Used to add arp entries
   '/conntrack$' # Used to remove conntrack entries.
   '/ip$' # iproute2; used to add/manipulate routes etc.
+  # Not used by Felix; `calicoctl cluster diags` execs it to dump bridge
+  # state (VLAN membership, port flags, FDB), which `ip` does not expose.
+  '/bridge$'
   bpftool
 
   # iptables/ip sets

@@ -15,11 +15,15 @@
 
 import time
 
-from neutron_lib.db import api as db_api
-
 from oslo_log import log
 
 LOG = log.getLogger(__name__)
+
+# Retry budget for attempts to sync dynamic Neutron resource updates with etcd; for
+# example see the get-then-CAS-put loop in ``sync_subnet``.  Sized to tolerate moderate
+# per-key contention while bounding the worst case.  Drift beyond this is left for the
+# next resync (whether startup or on-demand) to repair.
+MAX_CAS_ATTEMPTS = 5
 
 
 class ResourceGone(Exception):
@@ -158,8 +162,14 @@ class ResourceSyncer(object):
             etcd_map = self.get_from_etcd(scope)
             t_etcd_read = time.monotonic()
 
-            with db_api.CONTEXT_WRITER.using(context):
-                neutron_map = self.get_from_neutron(context, scope)
+            # ``get_from_neutron`` calls ``self.db.get_*`` methods (or, in the endpoint
+            # syncer's case, an internal helper that wraps its own raw queries in a
+            # CONTEXT_READER), all of which are ``@retry_if_session_inactive``-decorated
+            # and manage their own transactions.  We deliberately do NOT wrap them in an
+            # outer writer/reader: the Neutron devref calls that pattern an anti-pattern
+            # because the inner retry "would be always called from inside an active
+            # transaction making it useless".
+            neutron_map = self.get_from_neutron(context, scope)
             t_neutron_read = time.monotonic()
 
             # Resource-specific post-processing of etcd_map now that we have neutron_map
@@ -182,19 +192,16 @@ class ResourceSyncer(object):
         n_deleted = 0
         n_created = 0
 
-        # Process "lm <name>" entries before everything else so that, when a
-        # mid-migration port is being created from scratch in etcd, Felix sees the
-        # LiveMigration resource before the destination WorkloadEndpoint -- matching the
-        # ordering the dynamic postcommit path uses on migration start.  The key is a
-        # no-op for resource kinds that don't have "lm " prefixed names; the secondary
-        # sort by name keeps the order deterministic across runs.
+        # The final sort by name keeps the order deterministic across runs.
+        order_key = self.compare_order_key_fn(neutron_map)
+
         def _iter_order(n):
-            return (0 if n.startswith("lm ") else 1, n)
+            return (order_key(n), n)
 
         # Compare-loop marker.  The resync-concurrency test (CORE-12037) waits
         # for this line in the resync log before firing its in-resync burst, so
         # the burst lands inside the test-injected per-item delay window rather
-        # than during the etcd read or the CONTEXT_WRITER-held neutron read.
+        # than during the etcd read or the neutron read.
         LOG.info("Resync for %s: starting compare loop", self.resource_kind)
 
         for name in sorted(set(etcd_map) | set(neutron_map), key=_iter_order):
@@ -207,10 +214,9 @@ class ResourceSyncer(object):
                 # is at least as fresh as our etcd read; the CAS on mod_revision
                 # protects against any etcd change since.
                 data, mod_revision = etcd_map[name]
-                with db_api.CONTEXT_WRITER.using(context):
-                    write_data = self.neutron_to_etcd_write_data(
-                        name, neutron_map[name], context, reread=False
-                    )
+                write_data = self.neutron_to_etcd_write_data(
+                    name, neutron_map[name], context, reread=False
+                )
                 if self.etcd_write_data_matches_existing(write_data, data):
                     # CORE-12922: items already correct are not enumerated
                     # at INFO -- only ones that need fixing (the create /
@@ -244,32 +250,31 @@ class ResourceSyncer(object):
             elif in_neutron:
                 # In Neutron but not in etcd: create.  reread=True so we don't race with
                 # a concurrent dynamic delete.
-                with db_api.CONTEXT_WRITER.using(context):
-                    try:
-                        write_data = self.neutron_to_etcd_write_data(
-                            name, neutron_map[name], context, reread=True
-                        )
-                        LOG.info(
-                            "Resync creating %s %s in etcd",
-                            self.resource_kind,
-                            name,
-                        )
-                        if self.create_in_etcd(name, write_data):
-                            n_created += 1
-                        else:
-                            LOG.warning(
-                                "failed etcd write for %s %s; presume"
-                                " data created by another writer",
-                                self.resource_kind,
-                                name,
-                            )
-                    except ResourceGone:
+                try:
+                    write_data = self.neutron_to_etcd_write_data(
+                        name, neutron_map[name], context, reread=True
+                    )
+                    LOG.info(
+                        "Resync creating %s %s in etcd",
+                        self.resource_kind,
+                        name,
+                    )
+                    if self.create_in_etcd(name, write_data):
+                        n_created += 1
+                    else:
                         LOG.warning(
-                            "Neutron resource gone for %s %s; presume"
-                            " deleted by another writer",
+                            "failed etcd write for %s %s; presume"
+                            " data created by another writer",
                             self.resource_kind,
                             name,
                         )
+                except ResourceGone:
+                    LOG.warning(
+                        "Neutron resource gone for %s %s; presume"
+                        " deleted by another writer",
+                        self.resource_kind,
+                        name,
+                    )
             elif in_etcd:
                 # In etcd but not in Neutron: delete.
                 _, mod_revision = etcd_map[name]
@@ -337,6 +342,14 @@ class ResourceSyncer(object):
         source-side WEPs.
         """
         return etcd_map
+
+    def compare_order_key_fn(self, neutron_map):
+        """Optional hook for subclasses to order the compare loop.
+
+        Returns a function from a name to a sort key; names are processed in key order,
+        then by name.  The default processes everything by name.
+        """
+        return lambda name: ()
 
     def delete_legacy_etcd_data(self):
         # By default this is a no-op, but subclasses may override.

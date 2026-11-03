@@ -1,0 +1,46 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# iptables: xtables dataplane, Calico CNI, encapsulated, no external node, AWS,
+# on EKS, WireGuard on.
+#
+# Selection scope comes from eks-xtables-encap-aws.yaml; the exclusions below
+# are what a manual run of this lane could not pass.
+
+extends: eks-xtables-encap-aws.yaml
+
+enable:
+  - label: Feature:Wireguard
+    reason: "ENABLE_WIREGUARD is set on this lane"
+
+exclude:
+  labels:
+    - label: RequiresBGP
+      reason: "helmerator installs this cluster with VXLAN pools and no BGP, so BIRD is not running"
+
+  namePatterns:
+    - pattern: 'should encrypt traffic with ambient mode and enforce Calico NetworkPolicy'
+      reason: "ambient mode does not enforce the deny here; the sibling UDP spec passes, so the label stays in"
+
+    - group: "needs the multi-mode rapidclient server image, which is only side-loaded into kind and gcp-kubeadm clusters"
+      patterns:
+        - 'Packet.Size.Verification'
+
+    - group: "a host-network client cannot reach a ClusterIP or NodePort here; the other nine scenarios pass"
+      patterns:
+        - 'scenario-4:'
+        - 'scenario-10:'
+        - 'scenario-12:'
+
+    - group: "host endpoint egress policy does not drop the connection on this cluster, so these specs see traffic they expect to be blocked"
+      patterns:
+        - 'egress-0-2 ApplyOnForward='
+        - 'egress-0C2 ApplyOnForward='
+        - 'egress-0N2 ApplyOnForward='
+        - 'egress-1-2 ApplyOnForward=true'
+        - 'egress-1C2 ApplyOnForward=true'
+        - 'egress-1N2 ApplyOnForward=true'
+        - 'egress-2N2 ApplyOnForward=true'
+        - 'ingress-2-1 ApplyOnForward=true'
+
+    - pattern: 'should limit concurrent connections with QoS annotations'
+      reason: "the connection limit is not enforced on this cluster"

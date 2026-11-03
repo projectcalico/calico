@@ -1,4 +1,4 @@
-// Copimright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -46,7 +46,7 @@ func setupTest(t *testing.T) func() {
 
 	// Hook logrus into testing.T
 	utils.ConfigureLogging("DEBUG")
-	logCancel := logutils.RedirectLogrusToTestingT(t)
+	logCancel := logrusr.RedirectLogrusToTestingT(t)
 	return func() {
 		logCancel()
 	}
@@ -569,7 +569,7 @@ func TestRingIndexPagination_General(t *testing.T) {
 				&types.FlowKeyMeta{},
 				&proto.PolicyTrace{},
 			),
-			Windows: []Window{},
+			windows: []Window{},
 		},
 		{
 			ID: 1,
@@ -750,4 +750,39 @@ func TestRingIndexPagination_General(t *testing.T) {
 			Expect(len(flows)).To(Equal(tc.expectedNumFlows))
 		})
 	}
+}
+
+func TestIndexListReturnsRequestedPage(t *testing.T) {
+	defer setupTest(t)()
+
+	idx := NewIndex(func(k *types.FlowKey) string {
+		return k.DestName()
+	})
+	newDiachronic := func(id int64, name string, start int64) *DiachronicFlow {
+		k := types.NewFlowKey(&types.FlowKeySource{}, &types.FlowKeyDestination{DestName: name}, &types.FlowKeyMeta{}, &proto.PolicyTrace{})
+		d := NewDiachronicFlow(k, id)
+		d.AddFlow(&types.Flow{Key: k, PacketsIn: 1}, start, start+15)
+		return d
+	}
+
+	// "bb" only has data outside the first query's range, so there it must neither count nor shift the page.
+	for i, name := range []string{"e", "a", "bb", "d", "b", "c"} {
+		start := int64(0)
+		if name == "bb" {
+			start = 15
+		}
+		idx.Add(newDiachronic(int64(i), name, start))
+	}
+
+	flows, meta := idx.List(IndexFindOpts{startTimeLt: 15, page: 1, pageSize: 2})
+	Expect(meta).To(Equal(types.ListMeta{TotalPages: 3, TotalResults: 5}))
+	Expect(flows).To(HaveLen(2))
+	Expect(flows[0].Key.DestName()).To(Equal("c"))
+	Expect(flows[1].Key.DestName()).To(Equal("d"))
+
+	flows, meta = idx.List(IndexFindOpts{startTimeLt: 30, page: 1, pageSize: 2})
+	Expect(meta).To(Equal(types.ListMeta{TotalPages: 3, TotalResults: 6}))
+	Expect(flows).To(HaveLen(2))
+	Expect(flows[0].Key.DestName()).To(Equal("bb"))
+	Expect(flows[1].Key.DestName()).To(Equal("c"))
 }

@@ -264,7 +264,7 @@ type Flows_StreamClient_RecvMsg_Call struct {
 
 // RecvMsg is a helper method to define mock.On call
 //   - m any
-func (_e *Flows_StreamClient_Expecter) RecvMsg(m interface{}) *Flows_StreamClient_RecvMsg_Call {
+func (_e *Flows_StreamClient_Expecter) RecvMsg(m any) *Flows_StreamClient_RecvMsg_Call {
 	return &Flows_StreamClient_RecvMsg_Call{Call: _e.mock.On("RecvMsg", m)}
 }
 
@@ -315,7 +315,7 @@ type Flows_StreamClient_SendMsg_Call struct {
 
 // SendMsg is a helper method to define mock.On call
 //   - m any
-func (_e *Flows_StreamClient_Expecter) SendMsg(m interface{}) *Flows_StreamClient_SendMsg_Call {
+func (_e *Flows_StreamClient_Expecter) SendMsg(m any) *Flows_StreamClient_SendMsg_Call {
 	return &Flows_StreamClient_SendMsg_Call{Call: _e.mock.On("SendMsg", m)}
 }
 

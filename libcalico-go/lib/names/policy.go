@@ -30,9 +30,7 @@ const (
 
 // ProtectedTierNames are the built-in tiers that always exist and cannot be
 // deleted: a ValidatingAdmissionPolicy blocks their deletion and
-// EnsureInitialized recreates them. This is narrower than TierIsStatic, which
-// also covers the adminnetworkpolicy/baselineadminnetworkpolicy tiers - those
-// are static but deletable, so cleanup paths must not skip them.
+// EnsureInitialized recreates them.
 var ProtectedTierNames = []string{
 	DefaultTierName,
 	KubeAdminTierName,
@@ -73,8 +71,4 @@ func TierFromPolicy(obj any) (string, bool) {
 		return "", false
 	}
 	return TierOrDefault(tier.String()), true
-}
-
-func TierIsStatic(name string) bool {
-	return name == DefaultTierName || name == KubeAdminTierName || name == KubeBaselineTierName
 }

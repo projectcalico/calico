@@ -33,18 +33,18 @@ import (
 // non-encapsulated (noencap) IP pool exists. The new Encapsulation is sent to the dataplane,
 // which restarts Felix if it changed.
 type EncapsulationResolver struct {
-	config    *config.Config
-	callbacks encapCallbacks
-	encapCalc *EncapsulationCalculator
-	inSync    bool
+	config               *config.Config
+	callbacks            encapCallbacks
+	encapCalc            *EncapsulationCalculator
+	initialSyncCompleted bool
 }
 
 func NewEncapsulationResolver(config *config.Config, callbacks encapCallbacks) *EncapsulationResolver {
 	return &EncapsulationResolver{
-		config:    config,
-		callbacks: callbacks,
-		encapCalc: NewEncapsulationCalculator(config, nil),
-		inSync:    false,
+		config:               config,
+		callbacks:            callbacks,
+		encapCalc:            NewEncapsulationCalculator(config, nil),
+		initialSyncCompleted: false,
 	}
 }
 
@@ -70,16 +70,16 @@ func (r *EncapsulationResolver) OnPoolUpdate(update api.Update) (filterOut bool)
 func (r *EncapsulationResolver) OnStatusUpdate(status api.SyncStatus) {
 	logrus.WithField("status", status).Debug("EncapsulationResolver: SyncStatus update")
 
-	if !r.inSync && status == api.InSync {
-		r.inSync = true
+	if !r.initialSyncCompleted && status == api.InSync {
+		r.initialSyncCompleted = true
 		r.triggerCalculation()
 	}
 }
 
 func (r *EncapsulationResolver) triggerCalculation() {
-	if !r.inSync {
-		// Do nothing if EncapsulationResolver hasn't sync'ed all updates yet
-		logrus.Debug("EncapsulationResolver: skip calculation because inSync is false")
+	if !r.initialSyncCompleted {
+		// Do nothing if EncapsulationResolver hasn't completed its initial sync yet
+		logrus.Debug("EncapsulationResolver: skip calculation because initial sync not yet complete")
 		return
 	}
 
@@ -87,13 +87,13 @@ func (r *EncapsulationResolver) triggerCalculation() {
 		IPIPEnabled:    r.encapCalc.IPIPEnabled(),
 		VXLANEnabled:   r.encapCalc.VXLANEnabled(),
 		VXLANEnabledV6: r.encapCalc.VXLANEnabledV6(),
-		NoEncapEnabled: r.encapCalc.NoEncapEnabled(),
+		NoEncapNeeded:  r.encapCalc.NoEncapNeeded(),
 	}
 
 	if r.config.Encapsulation.IPIPEnabled != newEncap.IPIPEnabled ||
 		r.config.Encapsulation.VXLANEnabled != newEncap.VXLANEnabled ||
 		r.config.Encapsulation.VXLANEnabledV6 != newEncap.VXLANEnabledV6 ||
-		r.config.Encapsulation.NoEncapEnabled != newEncap.NoEncapEnabled {
+		r.config.Encapsulation.NoEncapNeeded != newEncap.NoEncapNeeded {
 		logrus.WithFields(logrus.Fields{
 			"oldIPIPEnabled":    r.config.Encapsulation.IPIPEnabled,
 			"newIPIPEnabled":    newEncap.IPIPEnabled,
@@ -101,8 +101,8 @@ func (r *EncapsulationResolver) triggerCalculation() {
 			"newVXLANEnabled":   newEncap.VXLANEnabled,
 			"oldVXLANEnabledV6": r.config.Encapsulation.VXLANEnabledV6,
 			"newVXLANEnabledV6": newEncap.VXLANEnabledV6,
-			"oldNoEncapEnabled": r.config.Encapsulation.NoEncapEnabled,
-			"newNoEncapEnabled": newEncap.NoEncapEnabled,
+			"oldNoEncapNeeded":  r.config.Encapsulation.NoEncapNeeded,
+			"newNoEncapNeeded":  newEncap.NoEncapNeeded,
 		}).Info("EncapsulationResolver: Encapsulation changed.")
 	}
 
@@ -286,8 +286,11 @@ func (c *EncapsulationCalculator) VXLANEnabledV6() bool {
 	return len(c.vxlanPoolsv6) > 0
 }
 
-func (c *EncapsulationCalculator) NoEncapEnabled() bool {
-	if c.config == nil || !c.config.ProgramClusterRoutesEnabled() {
+// NoEncapNeeded reports whether Felix has unencapsulated cluster routes to program, i.e. whether
+// there is at least one unencapsulated IP Pool *and* Felix, rather than confd and BIRD, is the
+// component responsible for its cluster routes.
+func (c *EncapsulationCalculator) NoEncapNeeded() bool {
+	if c.config == nil || !c.config.ProgramNoEncapClusterRoutes() {
 		return false
 	}
 	return len(c.noEncapPools) > 0

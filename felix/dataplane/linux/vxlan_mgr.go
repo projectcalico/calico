@@ -28,12 +28,12 @@ import (
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 type vxlanManager struct {
@@ -53,11 +53,13 @@ type vxlanManager struct {
 	myVTEP     *proto.VXLANTunnelEndpointUpdate
 
 	// VXLAN configuration.
-	vxlanDevice string
-	vxlanID     int
-	vxlanPort   int
-	ipVersion   uint8
-	mtu         int
+	vxlanDevice     string
+	vxlanID         int
+	vxlanPort       int
+	vxlanSrcPortMin int
+	vxlanSrcPortMax int
+	ipVersion       uint8
+	mtu             int
 
 	// Indicates if configuration has changed since the last apply.
 	vtepsDirty        bool
@@ -66,7 +68,7 @@ type vxlanManager struct {
 
 	// Log context
 	logCtx     *logrus.Entry
-	opRecorder logutils.OpRecorder
+	opRecorder logrusr.OpRecorder
 }
 
 type vxlanMgrOption func(m *vxlanManager)
@@ -89,7 +91,7 @@ func newVXLANManager(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 	opts ...vxlanMgrOption,
 ) *vxlanManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
@@ -115,7 +117,7 @@ func newVXLANManagerWithShims(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 	opts ...vxlanMgrOption,
 ) *vxlanManager {
@@ -132,6 +134,8 @@ func newVXLANManagerWithShims(
 		vxlanDevice:       deviceName,
 		vxlanID:           dpConfig.RulesConfig.VXLANVNI,
 		vxlanPort:         dpConfig.RulesConfig.VXLANPort,
+		vxlanSrcPortMin:   dpConfig.VXLANSrcPortMin,
+		vxlanSrcPortMax:   dpConfig.VXLANSrcPortMax,
 		ipVersion:         ipVersion,
 		mtu:               mtu,
 		externalNodeCIDRs: dpConfig.ExternalNodesCidrs,
@@ -329,10 +333,17 @@ func (m *vxlanManager) device(parent netlink.Link) (netlink.Link, string, error)
 	vxlan := &netlink.Vxlan{
 		LinkAttrs: la,
 		Port:      m.vxlanPort,
+		PortLow:   m.vxlanSrcPortMin,
+		PortHigh:  m.vxlanSrcPortMax,
 	}
 
 	if m.dpConfig.BPFEnabled {
 		vxlan.FlowBased = true
+		if !m.dpConfig.BPFOverlayIPOnDevice {
+			// BPF dataplane handles encap/decap and source IP selection itself,
+			// so it doesn't need an IP assigned to the overlay device.
+			addr = ""
+		}
 	} else {
 		vxlan.VxlanId = m.vxlanID
 		vxlan.VtepDevIndex = parent.Attrs().Index
@@ -383,6 +394,14 @@ func vxlanLinksIncompat(l1, l2 netlink.Link) string {
 		return fmt.Sprintf("port: %v vs %v", v1.Port, v2.Port)
 	}
 
+	// Only the desired range is don't-care when unset; an existing 0/0 range is the kernel default.
+	if v1.PortLow != 0 || v1.PortHigh != 0 {
+		if v1.PortLow != v2.PortLow || v1.PortHigh != v2.PortHigh {
+			return fmt.Sprintf("source port range: [%d,%d] vs [%d,%d]",
+				v1.PortLow, v1.PortHigh, v2.PortLow, v2.PortHigh)
+		}
+	}
+
 	if v1.GBP != v2.GBP {
 		return fmt.Sprintf("gbp: %v vs %v", v1.GBP, v2.GBP)
 	}
@@ -402,5 +421,42 @@ func parseMacForIPVersion(vtep *proto.VXLANTunnelEndpointUpdate, ipVersion uint8
 		return net.ParseMAC(vtep.MacV6)
 	default:
 		return nil, fmt.Errorf("invalid IP version")
+	}
+}
+
+func cleanUpVXLANDevice(deviceName string) {
+	// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
+	logrus.Debug("Checking if we need to clean up the VXLAN device")
+
+	var errFound bool
+	for i := 0; i <= maxCleanupRetries; i++ {
+		errFound = false
+		if i > 0 {
+			logrus.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
+		}
+		link, err := netlink.LinkByName(deviceName)
+		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); ok {
+				logrus.Debug("VXLAN disabled and no VXLAN device found")
+				return
+			}
+			logrus.WithError(err).Warn("VXLAN disabled and failed to query VXLAN device.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if err = netlink.LinkDel(link); err != nil {
+			logrus.WithError(err).Error("VXLAN disabled and failed to delete unwanted VXLAN device.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
+	}
+	if errFound {
+		logrus.Warnf("Giving up trying to clean up VXLAN device after retrying %v times", maxCleanupRetries)
 	}
 }

@@ -1,8 +1,13 @@
 package time
 
 import (
+	"errors"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {
@@ -164,6 +169,78 @@ func Unix(sec int64, nsec int64) Time {
 
 func Parse(layout, value string) (Time, error) {
 	return time.Parse(layout, value)
+}
+
+// Resolve parses a user-supplied time string in either RFC3339
+// absolute form or the "now - <duration>" relative form Calico uses
+// across its query APIs. Supported relative units: s (seconds),
+// m (minutes), h (hours), d (24-hour days; no DST adjustment). "now"
+// alone returns now; "now - 0" likewise. The now argument anchors
+// relative inputs — pass time.Now() in production, a fixed instant
+// in tests.
+//
+// Different from Parse, which is the stdlib time.Parse re-export
+// and only handles an explicit layout string. Resolve is for
+// query/filter values where the caller hasn't pre-detected which
+// form the user supplied.
+//
+// Returns (nil, nil, nil) when tstr is nil or empty. On success,
+// returns the resolved time and an "echo" value: the original
+// string for relative inputs, or Unix seconds for absolute inputs
+// (handy for round-tripping back through caches/UIs that want to
+// preserve the user's original phrasing).
+func Resolve(now Time, tstr *string) (*Time, any, error) {
+	if tstr == nil || *tstr == "" {
+		return nil, nil, nil
+	}
+	// "now - X" relative form: try this first; fall through to
+	// RFC3339 if the head isn't "now".
+	parts := strings.SplitN(*tstr, "-", 2)
+	if strings.TrimSpace(parts[0]) == "now" {
+		log.Debug("resolving relative time", "input", *tstr)
+		now = now.UTC()
+		if len(parts) == 1 {
+			return &now, *tstr, nil
+		}
+		dur := strings.TrimSpace(parts[1])
+		if dur == "0" {
+			return &now, *tstr, nil
+		}
+		if len(dur) < 2 {
+			log.Debug("relative duration too short", "duration", dur)
+			return nil, nil, errors.New("error parsing time in query - not a supported format")
+		}
+		var mul time.Duration
+		switch dur[len(dur)-1] {
+		case 's':
+			mul = time.Second
+		case 'm':
+			mul = time.Minute
+		case 'h':
+			mul = time.Hour
+		case 'd':
+			mul = 24 * time.Hour
+		default:
+			log.Debug("unsupported relative duration unit", "duration", dur)
+			return nil, nil, errors.New("error parsing time in query - not a supported format")
+		}
+		val, err := strconv.ParseUint(strings.TrimSpace(dur[:len(dur)-1]), 10, 64)
+		if err != nil {
+			log.Debug("failed to parse relative duration value", "duration", dur, "err", err)
+			return nil, nil, err
+		}
+		t := now.Add(-(time.Duration(val) * mul))
+		return &t, *tstr, nil
+	}
+
+	// Absolute form: RFC3339.
+	t, err := time.Parse(time.RFC3339, *tstr)
+	if err != nil {
+		log.Debug("failed to parse as RFC3339", "input", *tstr, "err", err)
+		return nil, nil, err
+	}
+	t = t.UTC()
+	return &t, t.Unix(), nil
 }
 
 func Date(year int, month Month, day, hour, min, sec, nsec int, loc *Location) Time {

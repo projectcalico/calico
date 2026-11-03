@@ -13,7 +13,7 @@ You may obtain a copy of the License at
 The IPAM GC lives in [`kube-controllers/pkg/controllers/node/`](../../kube-controllers/pkg/controllers/node/), **not** `pkg/controllers/ipam/`. There is no `ipam` controller; if
 you came looking for the GC and didn't find it, look in `node`.
 
-Main file: `ipam.go` (~1600 lines). Supporting types in `ipam_allocation.go`. Pool / block mapping in `pool_manager.go`. Cross-component picture is in the [index](./DESIGN.md); the
+Main file: `ipam.go` (~1600 lines). Supporting types in `ipam_allocation.go`. Block-to-pool attribution and the per-pool counts come from the shared IPAM accounting tracker (`libcalico-go/lib/ipam/accounting`), which `utils.IPAMFeed` keeps current from the data feed. Cross-component picture is in the [index](./DESIGN.md); the
 block and handle state machines are defined in [`./ipam-datastore.md`](./ipam-datastore.md) and [`./ipam-core-library.md`](./ipam-core-library.md) - this file references them
 rather than restating.
 
@@ -33,23 +33,27 @@ Invariants:
 
 ```
 windows-reserved:                skip
-not pod and not tunnel:          mark node "can't delete"
+not pod, tunnel or VM:           mark node "can't delete"
 tunnel address:                  defer until node-deletion decision
-allocationIsValid(preferCache):  markValid
-!kubernetesNodeExists:           markConfirmedLeak (immediate)
+judgeAllocation: in use:         markValid
+!kubernetesNodeExists, owner gone: markConfirmedLeak (immediate)
 isVMAllocation:                  markLeak(max(5min, leakGracePeriod))
 leakGracePeriod set:             markLeak(leakGracePeriod)
 ```
 
+Only an owner that is gone skips the grace period on a missing node: a node lookup can miss a live node, and an owner that still exists may be mid-ADD. Until such a leak is confirmed, the node's affinities stay.
+
 After the walk, if every allocation on a node is released and no valid ones remain, the node's tunnel IPs are confirmed-leaked and the node is added to `nodesToRelease`.
 
-`allocationIsValid` (`ipam.go:999`) is the truth check. The design-relevant rules:
+`judgeAllocation` is the truth check, and `allocationIsValid` wraps it. The design-relevant rules:
 
 - **Tunnel IPs validate via node existence only.** They never validate via pods. Mixing the paths would release a live tunnel IP whenever the pod-side check failed.
 - **Missing `pod` / `namespace` attributes ⇒ assume valid.** Conservative on purpose. Tightening this without a real reason will release allocations made by paths that don't
   stamp the attrs.
+- **The exception is a stopped VM's address.** CNI DEL clears its owner but keeps it on the VM handle, so the GC holds it only while a VM or standalone VMI rebuilds that handle. No node holds it, so it's filed in an in-memory stopped-VM bucket rather than under any node: deleting a node neither skips its VM grace period nor waits on it.
 - **Multus produces multiple WorkloadEndpoints per pod.** The IP must appear in at least one `wep.Spec.IPNetworks` to be valid. A single-WEP check would falsely release
   secondary-network IPs.
+- **An allocation outlives its sandbox, not its pod.** Allocations of a pod in a terminal phase are leaks, and so are those whose handle names a container ID other than the pod's `cni.projectcalico.org/containerID` annotation while the pod has reported no IP. Once it reports one, the IP decides, because a slow ADD from an abandoned sandbox can overwrite the annotation. This holds only while CNI DEL leaves that annotation in place and the pod cache keeps it.
 - **Pod lookup mode is preferCache vs live.** Cache for the node-deleted path (where the source data is presumed stale), live for sync. A live read can win against the cache in the
   rare case the cache is behind.
 
@@ -62,6 +66,7 @@ later sync re-validates the allocation. The transition is what the [grace period
   https://github.com/projectcalico/calico/issues/12257. Don't expand the comparison without thinking about stale-source-data scenarios.
 - Missing `pod` / `namespace` attributes must remain "assume valid." Tightening this without a real reason will cause spurious releases.
 - Tunnel IPs do not validate via pods. Only the node-existence path releases them.
+- An owner change bumps the address's sequence number and can move it to another node, so a sequence change re-registers the allocation. Updating it in place strands it under the old node.
 - Don't add per-IP API GETs in this loop. The hot path uses informer cache reads after https://github.com/projectcalico/calico/pull/10333.
 - The `ipam.go:1043` TODO on pod-NodeName mismatch is unresolved. Currently releases the old allocation; the comment expresses uncertainty. Don't touch without understanding the
   migration cases.
@@ -116,8 +121,8 @@ if !c.handleTracker.isConfirmedLeak(a.handle) {
 If even one IP on a handle is still valid, the entire handle is skipped this sync. Otherwise the per-block `IPAMHandle` counters (`Block[blockCIDR]int`) would desync from the
 actual block bitmap and the controller would lose track of the live IPs.
 
-Periodic sweep: every full sync rebuilds `confirmedLeaks` via `checkAllocations`, calls `garbageCollectKnownLeaks`, then `releaseUnusedBlocks` and `releaseNodes` (`syncIPAM`,
-`ipam.go:1174`). Unreleased items roll over to the next sync.
+Periodic sweep: every full sync rebuilds `confirmedLeaks` via `checkAllocations`, calls `garbageCollectKnownLeaks`, then [cold-IP GC](#cold-ip-garbage-collection),
+`releaseUnusedBlocks`, and `releaseNodes` (`syncIPAM`). Unreleased items roll over to the next sync.
 
 The GC calls `ReleaseIPs` rather than [`ReleaseByHandle`](./ipam-core-library.md) because it operates at the per-allocation level (`ReleaseOptions`), preserving sequence-number
 protection for each ordinal.
@@ -131,6 +136,30 @@ protection for each ordinal.
   https://github.com/projectcalico/calico/pull/12713 must hold this line.
 - `ReleaseIPs` plumbs sequence numbers through `ReleaseOptions`. Any new release path here must do the same.
 - The crash at `ipam.go:1281` (`log.Fatalf("BUG: unable to find allocation for release options")`) is reachable if released options can't be mapped back to tracked allocations.
+
+## Cold IP garbage collection
+
+A released IP sits in cooldown - its attribute stamped with `ReleasedAt`, its ordinal still in `Allocations` - until it is deallocated. Deallocation happens in `garbageCollect`,
+which the core library runs on every block read but only persists on write paths (see [IP release and cooldown](./ipam-core-library.md#ip-release-and-cooldown)). A block that sees
+no further allocation or release activity is never rewritten, so its cooled-down IPs would never be deallocated. `garbageCollectColdIPs` is the backstop that deallocates them.
+
+Invariants:
+
+- **The backstop is required, not just an optimization.** Without it, the last cooled-down IPs in an otherwise-idle block keep the block non-empty forever. That blocks empty-block
+  release and node cleanup indefinitely, not just for the cooldown window. Read-time GC alone does not cover the idle-block case.
+- **It must stay cheap.** It runs on every sync trigger - each batched pod/node delete, syncer update, and the periodic tick - and shares the sync loop with leak GC, which is
+  latency-sensitive in some clusters. The cost scales with the number of blocks actually in cooldown, not the total number of blocks.
+
+The controller keeps a `coldBlocks` map - block CIDR to the earliest `ReleasedAt` among that block's cooldown IPs - built up incrementally from streamed block updates in
+`onBlockUpdated`. The backstop visits only those blocks, and only once that earliest timestamp plus `IPCooldownSeconds` has passed. When nothing is in cooldown it does no work. The
+global IPAM config (for `IPCooldownSeconds`) is cached and refreshed on the periodic sync rather than read from the datastore on every trigger.
+
+**Review notes**
+
+- Don't reintroduce a walk over all blocks here. Visiting every block on every trigger is the regression this is built to avoid; the loop is shared with leak GC.
+- `coldBlocks` is in-memory state derived from the block stream, like every other map in this controller. It must satisfy `assertConsistentState` (every CIDR present in `allBlocks`)
+  and be cleaned up on block deletion. A new mutation needs the consistency check, or it joins the memory-leak class of bug.
+- The backstop is a failsafe, not the primary path. The common case is read-time GC folding deallocation into a write; don't move primary reclamation here.
 
 ## Empty block release
 
@@ -187,14 +216,22 @@ Per-pool, per-node gauges, registered lazily as pools appear. The two metrics th
 `ipam_allocations_in_use`, `ipam_allocations_borrowed`, and `ipam_blocks` are trend metrics; their absolute values vary with pool size and pod count. Legacy single-dimension
 variants exist for backward compatibility.
 
-`updateMetrics` recomputes from scratch every sync - one walk over all blocks, no incremental state. The full-recompute *is* the consistency check; switching to incremental updates
-without a separate consistency check loses the protection.
+`updateMetrics` reads each pool's counts from the shared tracker rather than walking every block. The tracker is updated incrementally by `utils.IPAMFeed`, one instance shared across kube-controllers, and only read once the syncer is InSync. Its consistency check is `TestIncrementalMatchesRebuild` in [`tracker_property_test.go`](../../libcalico-go/lib/ipam/accounting/tracker_property_test.go), which compares the incremental tracker against one rebuilt from scratch after every random add and remove.
+
+`ipam_ippool_reserved` comes from the same tracker. Reservations make addresses unassignable without allocating them, and can cover pool space no block has been carved from, so the tracker takes `IPReservation`s from the feed alongside pools and blocks and counts the covered addresses per pool, overlap counted once. The input is the syncer's, so the sync loop makes no datastore request for it. Being per-pool rather than per-node, the gauge is labelled `ippool` only, like `ipam_ippool_size`. It may overlap `ipam_allocations_in_use`, so usable capacity is `ipam_ippool_size - ipam_allocations_in_use - ipam_ippool_reserved` only when no reserved address is also allocated.
+
+The tracker is fed on the syncer goroutine, not the controller's, so a block can leave it between two reads in one GC pass. Releasing the last address in a block deletes the block, so `garbageCollectKnownLeaks` takes each leak's pool label before `ReleaseIPs` rather than after.
+
+Watching `IPReservation` needs `watch` in the kube-controllers ClusterRole, in the chart **and** in tigera/operator. With only `list` granted the List still succeeds and the syncer
+still reaches in-sync, so the symptom is a hot re-list of `IPReservation`s rather than a stalled controller - easy to miss in review, noisy in production.
 
 **Review notes**
 
 - `ipam_allocations_gc_candidates > 0` for extended periods is the canonical "GC is stuck" signal. Alert on it.
 - `ipam_allocations_gc_reclamations` rate is the canonical "we have a real leak somewhere" signal. Alert on it.
-- Don't switch `updateMetrics` to incremental updates without a separate consistency check. The current full-recompute is the consistency check.
+- Any change to the tracker's incremental indexes needs `TestIncrementalMatchesRebuild` in [`tracker_property_test.go`](../../libcalico-go/lib/ipam/accounting/tracker_property_test.go) to keep passing. It is the only check that the incremental counts match the block state.
+- A metric is not a licence to add a datastore request to the sync loop. The loop shares a goroutine with leak GC, and past overload has clogged it; new inputs belong on the syncer.
+  `ipam_ippool_reserved` was caught doing a LIST of every block per sync in review (https://github.com/projectcalico/calico/pull/13331).
 - The in-memory state maps must agree at all times. `assertConsistentState` in `ipam_test.go` is the canonical invariant check; any new map mutation needs a test that exercises it.
   The v3.32 memory-leak family (https://github.com/projectcalico/calico/pull/12277, /12286, /12287, /12288) all came from "added to one path, forgot another."
 

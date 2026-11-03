@@ -97,6 +97,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		podInformer := factory.Core().V1().Pods().Informer()
 
 		dataFeed := utils.NewDataFeed(c, utils.Etcdv3)
+		ipamFeed := utils.NewIPAMFeed(dataFeed)
 
 		cfg := config.NodeControllerConfig{
 			DeleteNodes:            true,
@@ -111,6 +112,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 			cfg,
 			nodeInformer, podInformer,
 			dataFeed,
+			ipamFeed.Tracker(),
 			nil,
 		)
 

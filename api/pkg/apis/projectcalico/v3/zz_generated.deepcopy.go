@@ -1462,6 +1462,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.LogConnectionTransitions != nil {
+		in, out := &in.LogConnectionTransitions, &out.LogConnectionTransitions
+		*out = new(LogConnectionTransitionsMode)
+		**out = **in
+	}
 	if in.IPIPEnabled != nil {
 		in, out := &in.IPIPEnabled, &out.IPIPEnabled
 		*out = new(bool)
@@ -1489,6 +1494,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	}
 	if in.VXLANPort != nil {
 		in, out := &in.VXLANPort, &out.VXLANPort
+		*out = new(int)
+		**out = **in
+	}
+	if in.VXLANSrcPortMin != nil {
+		in, out := &in.VXLANSrcPortMin, &out.VXLANSrcPortMin
+		*out = new(int)
+		**out = **in
+	}
+	if in.VXLANSrcPortMax != nil {
+		in, out := &in.VXLANSrcPortMax, &out.VXLANSrcPortMax
 		*out = new(int)
 		**out = **in
 	}
@@ -1728,6 +1743,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(NFTablesMode)
 		**out = **in
 	}
+	if in.NFTablesFlowTableOffload != nil {
+		in, out := &in.NFTablesFlowTableOffload, &out.NFTablesFlowTableOffload
+		*out = new(NFTablesFlowTableOffload)
+		**out = **in
+	}
 	if in.NftablesRefreshInterval != nil {
 		in, out := &in.NftablesRefreshInterval, &out.NftablesRefreshInterval
 		*out = new(v1.Duration)
@@ -1741,6 +1761,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	if in.BPFEnabled != nil {
 		in, out := &in.BPFEnabled, &out.BPFEnabled
 		*out = new(bool)
+		**out = **in
+	}
+	if in.BPFOverlayHostSourceIP != nil {
+		in, out := &in.BPFOverlayHostSourceIP, &out.BPFOverlayHostSourceIP
+		*out = new(BPFOverlayHostSourceIPType)
 		**out = **in
 	}
 	if in.BPFDisableUnprivileged != nil {
@@ -1943,6 +1968,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	}
 	if in.FlowLogsGoldmaneServer != nil {
 		in, out := &in.FlowLogsGoldmaneServer, &out.FlowLogsGoldmaneServer
+		*out = new(string)
+		**out = **in
+	}
+	if in.FlowLogsGoldmaneIncludeIPs != nil {
+		in, out := &in.FlowLogsGoldmaneIncludeIPs, &out.FlowLogsGoldmaneIncludeIPs
 		*out = new(string)
 		**out = **in
 	}
@@ -3045,6 +3075,11 @@ func (in *KubeControllersConfigurationSpec) DeepCopyInto(out *KubeControllersCon
 		*out = new(int32)
 		**out = **in
 	}
+	if in.DebugProfileHost != nil {
+		in, out := &in.DebugProfileHost, &out.DebugProfileHost
+		*out = new(string)
+		**out = **in
+	}
 	return
 }
 
@@ -4061,6 +4096,13 @@ func (in *Template) DeepCopyInto(out *Template) {
 	}
 	if in.Labels != nil {
 		in, out := &in.Labels, &out.Labels
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+	if in.Annotations != nil {
+		in, out := &in.Annotations, &out.Annotations
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val

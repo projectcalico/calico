@@ -23,10 +23,15 @@ migrate` parses the tunnel prefixes, and the CNI DEL path releases by both the h
 IPAM-meaningful subcommands; `configure` and `split` are admin-CRUD on `IPAMConfig` / `IPPool`. The `check` algorithm reuses the validity heuristics the GC applies, but exposed for
 manual review without a running controller.
 
+`show` prints IPS TOTAL / IN USE / RESERVED / FREE per pool and per block, taking all four straight from `GetUtilization` rather than deriving any of them: IN USE and RESERVED can
+cover the same address, so the columns need not sum to the total, and FREE is the only column that means "still assignable". See
+[ipam-core-library](./ipam-core-library.md#public-api-surface).
+
 **Review notes**
 
 - New tunnel handle prefixes need to be added to `calicoctl datastore migrate`, which rewrites tunnel handle IDs during node renames.
 - `check` and the GC share validity logic. If you change one, check the other doesn't drift.
+- The `show` columns are a reporting surface, not a derivation. If a new mechanism withholds addresses, it has to reach `GetUtilization` or `show` silently over-counts FREE.
 
 ## Node tunnel-address allocator
 
@@ -50,6 +55,8 @@ tunnel is disabled), uses `IntendedUse = Tunnel` so pool selection respects `all
 - The GC recognizes tunnel allocations by `AttributeType`, and `calicoctl ipam check` reads tunnel IPs off the `Node` spec - neither parses the handle prefix. The prefix is parsed
   by `calicoctl datastore migrate`, whose list is v4-only today (`ipip-tunnel-addr-`, `vxlan-tunnel-addr-`, `wireguard-tunnel-addr-`) and so already misses the `*-v6-tunnel-addr-`
   handles. A new tunnel type needs an `AttributeType` and a migrate-prefix entry; if you touch the migrate list, add the v6 prefixes too.
+- The allocator only reconciles when its cached v1 `model.IPPool` or node data changes, so any pool field it reads, including deletion state, has to be carried into
+  `model.IPPool` by `IPPoolV3ToV1`.
 
 ## Felix
 

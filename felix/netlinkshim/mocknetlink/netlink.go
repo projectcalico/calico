@@ -123,7 +123,9 @@ type FailFlags uint64
 const (
 	FailNextLinkList FailFlags = 1 << iota
 	FailNextLinkListWrappedEINTR
+	FailNextLinkByIndex
 	FailNextLinkByName
+	FailNextLinkByIndexNotFound
 	FailNextLinkByNameNotFound
 	FailNextRouteList
 	FailNextRouteListEINTR
@@ -350,6 +352,12 @@ func (d *MockNetlinkDataplane) GetFeatures() *environment.Features {
 }
 
 func (d *MockNetlinkDataplane) ResetDeltas() {
+	// The route table's conntrack cleanup runs on a background goroutine that
+	// touches deletedConntrackEntries under the mutex (see RemoveConntrackFlows),
+	// so take the lock here too rather than racing the reset against it.
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
 	d.AddedLinks = set.New[string]()
 	d.DeletedLinks = set.New[string]()
 	d.AddedAddrs = set.New[string]()
@@ -504,6 +512,27 @@ func (d *MockNetlinkDataplane) LinkList() ([]netlink.Link, error) {
 	return links, nil
 }
 
+func (d *MockNetlinkDataplane) LinkByIndex(index int) (netlink.Link, error) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	defer ginkgo.GinkgoRecover()
+
+	Expect(d.NetlinkOpen).To(BeTrue())
+	if d.shouldFail(FailNextLinkByIndexNotFound) {
+		return nil, ErrLinkNotFound
+	}
+	if d.shouldFail(FailNextLinkByIndex) {
+		return nil, ErrSimulated
+	}
+	log.Debugf("Looking for interface with index: %d", index)
+	for _, link := range d.NameToLink {
+		if link.Attrs().Index == index {
+			return link.copy(), nil
+		}
+	}
+	return nil, ErrLinkNotFound
+}
+
 func (d *MockNetlinkDataplane) LinkByName(name string) (netlink.Link, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
@@ -628,7 +657,9 @@ func (d *MockNetlinkDataplane) AddrList(link netlink.Link, family int) ([]netlin
 		return nil, ErrSimulated
 	}
 	if link, ok := d.NameToLink[link.Attrs().Name]; ok {
-		return link.Addrs, nil
+		// Return a copy, matching the real netlink which allocates a fresh slice per call. This
+		// keeps a caller ranging over the result unaffected by concurrent AddrDel/AddrAdd calls.
+		return append([]netlink.Addr(nil), link.Addrs...), nil
 	}
 	return nil, ErrNotFound
 }
@@ -1165,6 +1196,34 @@ func (d *MockNetlinkDataplane) IfIndex(name string) int {
 	defer d.mutex.Unlock()
 
 	return d.NameToLink[name].LinkAttrs.Index
+}
+
+func (d *MockNetlinkDataplane) LinkSetMaster(link netlink.Link, master netlink.Link) error {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	defer ginkgo.GinkgoRecover()
+
+	Expect(d.NetlinkOpen).To(BeTrue())
+	if l, ok := d.NameToLink[link.Attrs().Name]; ok {
+		l.LinkAttrs.MasterIndex = master.Attrs().Index
+		d.NameToLink[link.Attrs().Name] = l
+		return nil
+	}
+	return ErrLinkNotFound
+}
+
+func (d *MockNetlinkDataplane) LinkSetNoMaster(link netlink.Link) error {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	defer ginkgo.GinkgoRecover()
+
+	Expect(d.NetlinkOpen).To(BeTrue())
+	if l, ok := d.NameToLink[link.Attrs().Name]; ok {
+		l.LinkAttrs.MasterIndex = 0
+		d.NameToLink[link.Attrs().Name] = l
+		return nil
+	}
+	return ErrLinkNotFound
 }
 
 func KeyForRoute(route *netlink.Route) string {

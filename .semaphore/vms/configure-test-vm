@@ -23,7 +23,10 @@ zone=${ZONE:-europe-west3-c}
 project=${GCP_PROJECT:-unique-caldron-775}
 
 vm_pub_key=""
-for attempt in $(seq 1 20); do
+# The guest agent publishes the host key to guest attributes only once it is up,
+# which can take well over 20s on newer Ubuntu images (e.g. 26.04), so poll
+# generously before giving up.
+for attempt in $(seq 1 60); do
   echo "Getting VM ssh key (attempt $attempt)..."
   vm_pub_key=$(gcloud compute instances get-guest-attributes "${vm_name}" --zone="${zone}" --query-path="hostkeys/ssh-ed25519" --format='value(value)') || {
     echo "Failed to get VM ssh key, retrying..."
@@ -80,6 +83,8 @@ echo "$DOCKERHUB_PASSWORD" | ssh "ubuntu@${vm_ip}" -- docker login --username "$
 scp -r -C "$HOME/secrets" "ubuntu@${vm_ip}:/home/ubuntu/secrets"
 set -x
 
+# The fv-artifacts live in GCS (GCS_WORKFLOW_DIR); the GCP test VM pulls them
+# in-cloud using its own attached service account via `gcloud storage`.
 "${ssh_cmd[@]}" "gcloud config set project unique-caldron-775 && \
   gcloud storage cp '${GCS_WORKFLOW_DIR}/${COMPONENT}/fv-artifacts/*' /tmp && \
   tar -xzf /tmp/working-copy.tgz && \

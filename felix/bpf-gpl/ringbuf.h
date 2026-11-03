@@ -5,7 +5,7 @@
 #ifndef __CALI_RINGBUF_H__
 #define __CALI_RINGBUF_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "events_type.h"
 
 // Ring buffer map macro — ring buffers have no key/value types and no

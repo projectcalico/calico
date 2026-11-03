@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,12 +27,14 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/linkaddrs"
 	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -159,6 +161,8 @@ type endpointManager struct {
 	arpTable Table
 	arpMaps  nftables.MapsDataplane
 
+	flowtableHandler nftables.FlowTableHandler
+
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
 	pendingWlEpUpdates         map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -187,6 +191,10 @@ type endpointManager struct {
 	// wlIfaceNamesToReconfigure contains names of workload interfaces that need to have
 	// their configuration (sysctls etc.) refreshed.
 	wlIfaceNamesToReconfigure set.Set[string]
+
+	// ifbCleanupPending starts true so that IFBs orphaned while Felix was down are swept at startup.
+	ifbCleanupPending   bool
+	cleanupOrphanedIfbs func(isWorkloadIface func(string) bool) error
 
 	// epIDsToUpdateStatus contains IDs of endpoints that we need to report status for.
 	// Mix of host and workload endpoint IDs.
@@ -256,6 +264,7 @@ func newEndpointManager(
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
+	flowtableHandler nftables.FlowTableHandler,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr linkaddrs.Interface,
@@ -276,6 +285,7 @@ func newEndpointManager(
 		os.Stat,
 		defaultRPFilter,
 		filterMaps,
+		flowtableHandler,
 		bpfEndpointManager,
 		callbacks,
 		linkAddrsMgr,
@@ -298,6 +308,7 @@ func newEndpointManagerWithShims(
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
+	flowtableHandler nftables.FlowTableHandler,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr linkaddrs.Interface,
@@ -310,8 +321,8 @@ func newEndpointManagerWithShims(
 	newMatchFn := iptables.Match
 	actions := iptables.Actions()
 	if cfg.nft {
-		newMatchFn = nftables.Match
-		actions = nftables.Actions()
+		newMatchFn = nftrender.Match
+		actions = nftrender.Actions()
 	}
 
 	epManager := &endpointManager{
@@ -319,6 +330,7 @@ func newEndpointManagerWithShims(
 		ipVersion:          ipVersion,
 		wlIfacesRegexp:     wlIfacesRegexp,
 		filterMaps:         filterMaps,
+		flowtableHandler:   flowtableHandler,
 		bpfEndpointManager: bpfEndpointManager,
 
 		arpTable: arpTable,
@@ -356,6 +368,9 @@ func newEndpointManagerWithShims(
 		shadowedWlEndpoints: map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 
 		wlIfaceNamesToReconfigure: set.New[string](),
+
+		ifbCleanupPending:   true,
+		cleanupOrphanedIfbs: qos.CleanupOrphanedIfbDevices,
 
 		epIDsToUpdateStatus: set.New[any](),
 
@@ -496,6 +511,17 @@ func (m *endpointManager) ResolveUpdateBatch() error {
 			}
 		} else {
 			m.activeUpIfaces.Discard(ifaceName)
+			// If the WorkloadEndpoint is already gone from the datastore, no removal event will clean up this IFB.
+			if state == ifacemonitor.StateNotPresent && m.wlIfacesRegexp.MatchString(ifaceName) {
+				m.ifbCleanupPending = true
+			}
+		}
+		// A workload interface appearing or disappearing changes the flowtable device
+		// list even when no endpoint update accompanies it (e.g. a veth removed on pod
+		// teardown, before the WorkloadEndpoint-removed event arrives). Force the
+		// dispatch/flowtable recompute so the dead device drops out promptly.
+		if m.flowtableHandler != nil && m.wlIfacesRegexp.MatchString(ifaceName) {
+			m.needToCheckDispatchChains = true
 		}
 		// If this interface is linked to any already-existing endpoints, mark the endpoint
 		// status for recalculation.  If the matching endpoint changes when we do
@@ -517,6 +543,14 @@ func (m *endpointManager) ResolveUpdateBatch() error {
 func (m *endpointManager) CompleteDeferredWork() error {
 	m.markEPsWithDirtyPolicies()
 	m.resolveWorkloadEndpoints()
+
+	if m.ifbCleanupPending {
+		if err := m.cleanupOrphanedIfbs(m.wlIfacesRegexp.MatchString); err != nil {
+			log.WithError(err).Warn("Failed to clean up orphaned QoS IFB devices, will retry")
+		} else {
+			m.ifbCleanupPending = false
+		}
+	}
 
 	if m.hostEndpointsDirty {
 		log.Debug("Host endpoints updated, resolving them.")
@@ -880,7 +914,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			if len(wl.Ipv4Nets) == 0 {
 				continue
 			}
-			chainName := rules.EndpointChainName(rules.WorkloadARPPfx, wl.Name, nftables.MaxChainNameLength)
+			chainName := rules.EndpointChainName(rules.WorkloadARPPfx, wl.Name, nftrender.MaxChainNameLength)
 			arpMappings[wl.Name] = []string{fmt.Sprintf("goto %s", chainName)}
 		}
 		m.arpMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesARPDispatchMap, Type: nftables.MapTypeInterfaceMatch}, arpMappings)
@@ -890,7 +924,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			Name: rules.ChainARPDispatch,
 			Rules: []generictables.Rule{
 				{
-					Match: nftables.Match().OutInterfaceVMAP(rules.NftablesARPDispatchMap),
+					Match: nftrender.Match().OutInterfaceVMAP(rules.NftablesARPDispatchMap),
 				},
 			},
 		}
@@ -909,6 +943,19 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
 			m.filterMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
 			m.filterMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
+
+			if m.flowtableHandler != nil {
+				// Only hand the flowtable interfaces that are currently up. A veth that
+				// has been deleted (pod teardown) must not end up in the flowtable, or the
+				// nft transaction is rejected and takes down the whole table.
+				wlIfces := make([]string, 0, len(fromMappings))
+				for i := range fromMappings {
+					if m.activeUpIfaces.Contains(i) {
+						wlIfces = append(wlIfces, i)
+					}
+				}
+				m.flowtableHandler.SetWorkloadInterfaces(wlIfces)
+			}
 		}
 
 		// Rewrite the dispatch chains if they've changed.
@@ -1043,6 +1090,17 @@ func (m *endpointManager) updateWorkloadEndpointChains(
 // updateWorkloadARPChains programs ARP proxy suppression chains for a workload.
 // These drop ARP replies from the host that contain the workload's own IP as the
 // ARP source, preventing the host's proxy ARP from confusing the workload.
+//
+// This matters during VM live migration: the same workload IP then exists on two
+// nodes, and a node that isn't running the VM holds a route for that IP pointing
+// off-box.  Kernel proxy ARP is route-based, so it would answer the VM's own
+// request for its own address with the host's MAC, poisoning the guest's
+// neighbour table.
+//
+// There is deliberately no IPv6 counterpart: proxy_ndp answers only for explicit
+// NUD_PROXY neighbour entries, which Calico never programs, so there is nothing
+// to suppress (the nil arpTable on the IPv6 endpoint manager is intentional).
+// See felix/design/neighbour-discovery.md.
 func (m *endpointManager) updateWorkloadARPChains(
 	id types.WorkloadEndpointID,
 	workload *proto.WorkloadEndpoint,
@@ -1051,7 +1109,7 @@ func (m *endpointManager) updateWorkloadARPChains(
 		return
 	}
 
-	maxLen := nftables.MaxChainNameLength
+	maxLen := nftrender.MaxChainNameLength
 	chainName := rules.EndpointChainName(rules.WorkloadARPPfx, workload.Name, maxLen)
 
 	var arpRules []generictables.Rule
@@ -1062,8 +1120,8 @@ func (m *endpointManager) updateWorkloadARPChains(
 			continue
 		}
 		arpRules = append(arpRules, generictables.Rule{
-			Match:  nftables.Match().OutInterface(workload.Name).ARPOperation("reply").ARPSrcIP(ipAddr),
-			Action: nftables.DropAction{},
+			Match:  nftrender.Match().OutInterface(workload.Name).ARPOperation("reply").ARPSrcIP(ipAddr),
+			Action: nftrender.DropAction{},
 		})
 	}
 
@@ -1614,10 +1672,9 @@ func configureProcSysForInterface(name string, ipVersion int, rpFilter string, w
 		//   it is on or off subnet.
 		//
 		// - For containers, we install explicit routes into the containers network
-		//   namespace and we use a link-local address for the gateway.  Turing on proxy ARP
-		//   means that we don't need to assign the link local address explicitly to each
-		//   host side of the veth, which is one fewer thing to maintain and one fewer
-		//   thing we may clash over.
+		//   namespace and we use a link-local address for the gateway.  ARP and proxy ARP
+		//   are needed for that link-local address in the same way as for the gateway and
+		//   subnet IPs in the OpenStack case.
 		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
 		if err != nil {
 			return err
@@ -1636,15 +1693,21 @@ func configureProcSysForInterface(name string, ipVersion int, rpFilter string, w
 			return err
 		}
 	} else {
-		// Enable proxy NDP, similarly to proxy ARP, described above.
-		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
-		if err != nil {
-			return err
-		}
+		// Note: deliberately no proxy_ndp counterpart to the proxy_arp above.
+		// Despite the name, proxy_ndp is not the IPv6 equivalent: it does no
+		// route-based proxying, and the kernel answers a Neighbor Solicitation
+		// only for addresses with an explicit NUD_PROXY neighbour entry, which
+		// Calico does not program.  IPv6 needs no proxying anyway, because Linux
+		// auto-provisions a link-local address on this (host) side of every
+		// workload interface, so the workload routes via a real address of ours
+		// and we answer NDP for it as our own.  IPv4 has no such automatic
+		// provisioning, hence the dummy 169.254.1.1 gateway and proxy ARP above.
+		// See felix/design/neighbour-discovery.md.
+
 		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
 		// be forwarded in both directions we need this flag to be set on the fabric-facing
 		// interface too (or for the global default to be set).
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", name), "1")
+		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", name), "1")
 		if err != nil {
 			return err
 		}
