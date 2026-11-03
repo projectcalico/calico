@@ -17,6 +17,7 @@ package storage
 import (
 	"cmp"
 	"iter"
+	"math"
 	"slices"
 	"sort"
 	"unique"
@@ -53,6 +54,15 @@ type rankedFlow struct {
 	flow  *DiachronicFlow
 }
 
+// compareRanked orders newer flows first. Start times are bucket-aligned, so ties are common, and
+// breaking them on ID keeps the order, and so the pages, stable across requests.
+func compareRanked(x, y rankedFlow) int {
+	if c := cmp.Compare(y.start, x.start); c != 0 {
+		return c
+	}
+	return cmp.Compare(y.flow.ID, x.flow.ID)
+}
+
 // policyValueFunc returns the filter hint values for a flow key's policy trace. Taking only the
 // trace lets FilterValueSet compute the values once per distinct trace.
 type policyValueFunc func(policies unique.Handle[string]) []string
@@ -63,33 +73,31 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	}).Debug("Listing flows from time sorted index")
 
 	candidates, sizeHint := a.agg.FlowCandidates(opts.startTimeGt, opts.startTimeLt)
+	if opts.filter != nil {
+		// The hint counts flows before filtering, which a selective filter makes far too large.
+		sizeHint = 0
+	}
 
-	// Rank every matching flow, but aggregate only the ones on the requested page.
-	ranked := make([]rankedFlow, 0, sizeHint)
+	// Rank every matching flow, but keep and aggregate only those up to the end of the page.
+	pageStart, pageEnd, pageOK := pageWindow(opts.page, opts.pageSize)
+	top := newTopRanked(pageEnd, pageOK, sizeHint)
+	totalFlows := 0
 	for d := range candidates {
 		if opts.filter != nil && !types.Matches(opts.filter, &d.Key) {
 			continue
 		}
 		if start, ok := d.SortStartTime(opts.startTimeGt, opts.startTimeLt); ok {
-			ranked = append(ranked, rankedFlow{start: start, flow: d})
+			totalFlows++
+			top.offer(rankedFlow{start: start, flow: d})
 		}
 	}
 
-	// Sort newer flows first. Start times are bucket-aligned, so ties are common, and breaking
-	// them on ID keeps the order, and so the pages, stable across requests.
-	slices.SortFunc(ranked, func(x, y rankedFlow) int {
-		if c := cmp.Compare(y.start, x.start); c != 0 {
-			return c
-		}
-		return cmp.Compare(y.flow.ID, x.flow.ID)
-	})
-
-	meta := calculateListMeta(len(ranked), int(opts.pageSize))
-	start, end, ok := pageWindow(opts.page, opts.pageSize)
-	if !ok || start >= int64(len(ranked)) {
+	ranked := top.sorted()
+	meta := calculateListMeta(totalFlows, int(opts.pageSize))
+	if pageStart >= int64(len(ranked)) {
 		return nil, meta
 	}
-	ranked = ranked[start:min(end, int64(len(ranked)))]
+	ranked = ranked[pageStart:]
 
 	flows := make([]*types.Flow, 0, len(ranked))
 	for _, r := range ranked {
@@ -147,4 +155,62 @@ func (a *RingIndex) FilterValueSet(valueFunc policyValueFunc, opts IndexFindOpts
 		return nil, meta
 	}
 	return values[start:min(end, int64(len(values)))], meta
+}
+
+// topRanked keeps the first limit flows offered, in compareRanked order. Until it is full it only
+// appends; after that it is a heap whose root is the last flow kept, so each later offer costs
+// O(log limit) and the flows past the requested page are never sorted.
+type topRanked struct {
+	limit int
+	flows []rankedFlow
+}
+
+// newTopRanked returns a topRanked that keeps flows up to the end offset of a page, or none if
+// the page is invalid.
+func newTopRanked(end int64, ok bool, sizeHint int) *topRanked {
+	limit := 0
+	if ok {
+		limit = int(min(end, int64(math.MaxInt)))
+	}
+	return &topRanked{limit: limit, flows: make([]rankedFlow, 0, min(limit, sizeHint))}
+}
+
+// offer keeps r if it is among the first limit flows offered so far.
+func (t *topRanked) offer(r rankedFlow) {
+	switch {
+	case len(t.flows) < t.limit:
+		t.flows = append(t.flows, r)
+		if len(t.flows) == t.limit {
+			for i := len(t.flows)/2 - 1; i >= 0; i-- {
+				t.siftDown(i)
+			}
+		}
+	case t.limit > 0 && compareRanked(r, t.flows[0]) < 0:
+		t.flows[0] = r
+		t.siftDown(0)
+	}
+}
+
+// siftDown restores the heap order below index i, where each flow sorts after its children.
+func (t *topRanked) siftDown(i int) {
+	n := len(t.flows)
+	for {
+		latest := i
+		for _, child := range [2]int{2*i + 1, 2*i + 2} {
+			if child < n && compareRanked(t.flows[child], t.flows[latest]) > 0 {
+				latest = child
+			}
+		}
+		if latest == i {
+			return
+		}
+		t.flows[i], t.flows[latest] = t.flows[latest], t.flows[i]
+		i = latest
+	}
+}
+
+// sorted returns the kept flows in compareRanked order.
+func (t *topRanked) sorted() []rankedFlow {
+	slices.SortFunc(t.flows, compareRanked)
+	return t.flows
 }
