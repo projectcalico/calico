@@ -31,16 +31,18 @@ type policyStatsCounts struct {
 	denied  int64
 }
 
+type policyStatsCase struct {
+	name          string
+	pendingAction proto.Action
+	wantPolicy    policyStatsCounts
+	wantRules     policyStatsCounts
+}
+
 // TestPolicyStatisticsCountFlowOncePerAction covers a flow that hits one policy as two rules,
 // as when a staged policy shifts the pending trace. The policy counts the flow once per action,
 // and each rule still counts it.
 func TestPolicyStatisticsCountFlowOncePerAction(t *testing.T) {
-	for _, tc := range []struct {
-		name          string
-		pendingAction proto.Action
-		wantPolicy    policyStatsCounts
-		wantRules     policyStatsCounts
-	}{
+	for _, tc := range []policyStatsCase{
 		{
 			name:          "both rules allow",
 			pendingAction: proto.Action_Allow,

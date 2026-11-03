@@ -250,7 +250,7 @@ func toPolicyRules(k *types.FlowKey) []policyRule {
 				meta = hit.Trigger
 			}
 
-			sk := StatisticsKey{
+			ruleKey := StatisticsKey{
 				Namespace: meta.Namespace,
 				Name:      meta.Name,
 				Kind:      meta.Kind,
@@ -259,14 +259,14 @@ func toPolicyRules(k *types.FlowKey) []policyRule {
 				RuleIndex: meta.PolicyIndex,
 				Direction: dir,
 			}
-			if slices.ContainsFunc(rules, func(r policyRule) bool { return r.ruleKey == sk }) {
+			if slices.ContainsFunc(rules, func(r policyRule) bool { return r.ruleKey == ruleKey }) {
 				continue
 			}
-			pk := sk.policyID()
+			pk := ruleKey.policyID()
 			counted := slices.ContainsFunc(rules, func(r policyRule) bool {
 				return r.policyKey == pk && r.action == hit.Action
 			})
-			rules = append(rules, policyRule{policyKey: pk, ruleKey: sk, action: hit.Action, countPolicy: !counted})
+			rules = append(rules, policyRule{policyKey: pk, ruleKey: ruleKey, action: hit.Action, countPolicy: !counted})
 		}
 	}
 	return rules
