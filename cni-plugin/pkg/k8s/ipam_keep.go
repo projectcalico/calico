@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"maps"
 	"net"
 	"time"
 
@@ -101,7 +102,8 @@ func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID, l
 
 // releaseListedElsewhere releases each listed address that the owner pod holds on a sandbox
 // handle on network, unless a sandbox claimed it after started. The pod's own DEL uses it once
-// the endpoint is gone, so an address a failed sandbox kept doesn't outlive the pod.
+// the endpoint is gone, so an address a failed sandbox kept doesn't outlive the pod. It reads
+// without the host lock and takes it only to re-read and release the candidates.
 func releaseListedElsewhere(
 	ctx context.Context,
 	ipamClient ipam.Interface,
@@ -111,9 +113,21 @@ func releaseListedElsewhere(
 	listed set.Set[string],
 	logger *logrus.Entry,
 ) error {
+	if listed.Len() == 0 {
+		return nil
+	}
 	held := heldOnSandboxHandles{ipamClient: ipamClient, network: network, owner: owner, started: started, logger: logger}
-	return underIPAMLock(ctx, lockPath, func(ctx context.Context) error {
-		current, err := held.find(ctx, listed.All())
+
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ipamReleaseTimeout)
+	candidates, readErr := held.find(readCtx, listed.All())
+	cancel()
+	if len(candidates) == 0 {
+		return readErr
+	}
+
+	lockedErr := underIPAMLock(ctx, lockPath, func(ctx context.Context) error {
+		// Another sandbox may have claimed a candidate while this DEL waited on the lock.
+		current, err := held.find(ctx, maps.Keys(candidates))
 		errs := []error{err}
 		for addr, handleID := range current {
 			logger.WithFields(logrus.Fields{"ip": addr, "handle": handleID}).Info("Releasing address the deleted endpoint listed")
@@ -123,6 +137,7 @@ func releaseListedElsewhere(
 		}
 		return errors.Join(errs...)
 	})
+	return errors.Join(readErr, lockedErr)
 }
 
 // heldOnSandboxHandles finds which addresses a pod holds on its sandbox handles on one
