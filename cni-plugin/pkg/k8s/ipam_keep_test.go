@@ -18,7 +18,9 @@ import (
 	"context"
 	"errors"
 	"net"
+	"path/filepath"
 
+	"github.com/gofrs/flock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
@@ -34,21 +36,46 @@ import (
 
 // stubHandleIPAM is an ipam.Interface that serves a fixed IPsByHandle answer and records
 // what ReleaseIPs is asked to release. Other methods panic through the nil embedded interface.
+// Each call also records its context's error and, when lockPath is set, whether that lock
+// was free.
 type stubHandleIPAM struct {
 	ipam.Interface
 	ips        []cnet.IP
 	ipsErr     error
 	releaseErr error
 	released   []ipam.ReleaseOptions
+	lockPath   string
+	ctxErrs    []error
+	lockFree   []bool
 }
 
-func (s *stubHandleIPAM) IPsByHandle(_ context.Context, _ string) ([]cnet.IP, error) {
+func (s *stubHandleIPAM) IPsByHandle(ctx context.Context, _ string) ([]cnet.IP, error) {
+	s.observe(ctx)
 	return s.ips, s.ipsErr
 }
 
-func (s *stubHandleIPAM) ReleaseIPs(_ context.Context, opts ...ipam.ReleaseOptions) ([]cnet.IP, []ipam.ReleaseOptions, error) {
+func (s *stubHandleIPAM) ReleaseIPs(ctx context.Context, opts ...ipam.ReleaseOptions) ([]cnet.IP, []ipam.ReleaseOptions, error) {
+	s.observe(ctx)
 	s.released = append(s.released, opts...)
 	return nil, nil, s.releaseErr
+}
+
+func (s *stubHandleIPAM) observe(ctx context.Context) {
+	s.ctxErrs = append(s.ctxErrs, ctx.Err())
+	if s.lockPath != "" {
+		s.lockFree = append(s.lockFree, lockIsFree(s.lockPath))
+	}
+}
+
+// lockIsFree reports whether another holder could take the flock at path.
+func lockIsFree(path string) bool {
+	lock := flock.New(path)
+	locked, err := lock.TryLock()
+	Expect(err).NotTo(HaveOccurred())
+	if locked {
+		Expect(lock.Unlock()).To(Succeed())
+	}
+	return locked
 }
 
 func stubIPs(addrs ...string) []cnet.IP {
@@ -63,9 +90,37 @@ var _ = Describe("releaseUnlisted", func() {
 	const handle = "k8s-pod-network.sandbox-y"
 	logger := logrus.WithField("test", "releaseUnlisted")
 
+	var lockPath string
+	BeforeEach(func() {
+		lockPath = filepath.Join(GinkgoT().TempDir(), "ipam.lock")
+	})
+
+	It("still looks up and releases after the caller's context is canceled", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.6")}
+
+		_, err := releaseUnlisted(ctx, stub, handle, lockPath, set.New[string](), logger)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(stub.released).To(Equal([]ipam.ReleaseOptions{{Address: "10.0.0.6", Handle: handle}}))
+		Expect(stub.ctxErrs).To(HaveLen(2))
+		Expect(stub.ctxErrs).To(HaveEach(BeNil()))
+	})
+
+	It("holds the host IPAM lock while it looks up and releases, and frees it after", func() {
+		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.6"), lockPath: lockPath}
+
+		_, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.New[string](), logger)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(stub.lockFree).To(Equal([]bool{false, false}))
+		Expect(lockIsFree(lockPath)).To(BeTrue())
+	})
+
 	It("releases only the unlisted address and reports it kept one", func() {
 		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.5", "10.0.0.6")}
-		kept, err := releaseUnlisted(context.Background(), stub, handle, set.From("10.0.0.5"), logger)
+		kept, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.From("10.0.0.5"), logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kept).To(BeTrue())
 		Expect(stub.released).To(Equal([]ipam.ReleaseOptions{{Address: "10.0.0.6", Handle: handle}}))
@@ -73,7 +128,7 @@ var _ = Describe("releaseUnlisted", func() {
 
 	It("releases every address when none is listed and reports none kept", func() {
 		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.6", "fd00::6")}
-		kept, err := releaseUnlisted(context.Background(), stub, handle, set.New[string](), logger)
+		kept, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.New[string](), logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kept).To(BeFalse())
 		Expect(stub.released).To(ConsistOf(ipam.ReleaseOptions{Address: "10.0.0.6", Handle: handle}, ipam.ReleaseOptions{Address: "fd00::6", Handle: handle}))
@@ -81,7 +136,7 @@ var _ = Describe("releaseUnlisted", func() {
 
 	It("releases nothing when every address on the handle is listed", func() {
 		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.5")}
-		kept, err := releaseUnlisted(context.Background(), stub, handle, set.From("10.0.0.5"), logger)
+		kept, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.From("10.0.0.5"), logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kept).To(BeTrue())
 		Expect(stub.released).To(BeEmpty())
@@ -89,7 +144,7 @@ var _ = Describe("releaseUnlisted", func() {
 
 	It("treats a missing handle as nothing to release", func() {
 		stub := &stubHandleIPAM{ipsErr: cerrors.ErrorResourceDoesNotExist{}}
-		kept, err := releaseUnlisted(context.Background(), stub, handle, set.From("10.0.0.5"), logger)
+		kept, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.From("10.0.0.5"), logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kept).To(BeFalse())
 		Expect(stub.released).To(BeEmpty())
@@ -98,7 +153,7 @@ var _ = Describe("releaseUnlisted", func() {
 	It("returns any other IPsByHandle error without releasing", func() {
 		boom := errors.New("datastore down")
 		stub := &stubHandleIPAM{ipsErr: boom}
-		_, err := releaseUnlisted(context.Background(), stub, handle, set.New[string](), logger)
+		_, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.New[string](), logger)
 		Expect(err).To(MatchError(boom))
 		Expect(stub.released).To(BeEmpty())
 	})
@@ -106,7 +161,7 @@ var _ = Describe("releaseUnlisted", func() {
 	It("returns a ReleaseIPs error", func() {
 		boom := errors.New("release failed")
 		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.6"), releaseErr: boom}
-		_, err := releaseUnlisted(context.Background(), stub, handle, set.New[string](), logger)
+		_, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.New[string](), logger)
 		Expect(err).To(MatchError(boom))
 	})
 })

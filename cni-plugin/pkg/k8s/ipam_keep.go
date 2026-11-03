@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -30,6 +31,9 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
+
+// ipamReleaseTimeout bounds the IPAM calls made under the host IPAM lock, matching calico-ipam.
+const ipamReleaseTimeout = 90 * time.Second
 
 // listedAddresses returns the bare IP addresses a workload endpoint records in its
 // IPNetworks. A nil endpoint lists none, and entries that do not parse are skipped.
@@ -52,7 +56,16 @@ func listedAddresses(wep *internalapi.WorkloadEndpoint) set.Set[string] {
 // releaseUnlisted releases the addresses on handleID that listed does not contain, and
 // reports whether it kept any. A failed ADD uses it to free only the addresses that this
 // sandbox allocated, since the endpoint still lists the rest and the next ADD claims them.
-func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID string, listed set.Set[string], logger *logrus.Entry) (bool, error) {
+// It holds the host IPAM lock at lockPath throughout, like calico-ipam's DEL, and finishes
+// even if ctx is canceled.
+func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID, lockPath string, listed set.Set[string], logger *logrus.Entry) (bool, error) {
+	unlock := utils.AcquireIPAMLockBestEffort(lockPath)
+	defer unlock()
+
+	// The timeout starts once the lock is held, as in calico-ipam.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ipamReleaseTimeout)
+	defer cancel()
+
 	ips, err := ipamClient.IPsByHandle(ctx, handleID)
 	if err != nil {
 		if errors.As(err, &cerrors.ErrorResourceDoesNotExist{}) {

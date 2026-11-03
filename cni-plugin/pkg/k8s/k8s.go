@@ -434,7 +434,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			// The pod's endpoint still lists those addresses, so the next ADD claims them
 			// again; releasing them would cost a running pod its IP.
 			handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
-			kept, err := releaseUnlisted(ctx, calicoClient.IPAM(), handleID, listed, logger)
+			kept, err := releaseUnlisted(ctx, calicoClient.IPAM(), handleID, conf.IPAMLockFile, listed, logger)
 			if err != nil {
 				logger.WithError(err).Error("Failed to release IPAM allocation(s) after failure")
 				return
@@ -693,7 +693,7 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 	// it skips unreadable blocks, so an empty result proves nothing.
 	if mismatchedWEP != nil && keepsListedAddresses(conf, epIDs, "") {
 		handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
-		if _, err := releaseUnlisted(ctx, c.IPAM(), handleID, listedAddresses(mismatchedWEP), logger); err != nil {
+		if _, err := releaseUnlisted(ctx, c.IPAM(), handleID, conf.IPAMLockFile, listedAddresses(mismatchedWEP), logger); err != nil {
 			return err
 		}
 		logger.Info("Teardown processing complete.")
