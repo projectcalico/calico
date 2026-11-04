@@ -17,34 +17,11 @@ package steps
 
 import (
 	"errors"
-	"strings"
 	"sync"
 )
 
 type RefRecorder interface {
 	Add(refs ...string) error
-}
-
-// DigestResolver reports the manifest digest of a tag. exists is false with a
-// nil error when the tag is absent; auth and network failures return an error.
-type DigestResolver func(ref string) (digest string, exists bool, err error)
-
-// A repo publishes several tags at different digests, so it maps to a set.
-type RecordedDigests map[string]map[string]struct{}
-
-func DigestsByRepo(refs []string) RecordedDigests {
-	out := make(RecordedDigests, len(refs))
-	for _, ref := range refs {
-		repo, digest, ok := strings.Cut(ref, "@")
-		if !ok {
-			continue
-		}
-		if out[repo] == nil {
-			out[repo] = map[string]struct{}{}
-		}
-		out[repo][digest] = struct{}{}
-	}
-	return out
 }
 
 // Go runs fn over every item at once and waits for all of them, so fn must be

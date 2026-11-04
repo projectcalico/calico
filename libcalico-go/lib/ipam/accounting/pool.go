@@ -100,9 +100,9 @@ func ranksBefore(a, b *trackedPool) bool {
 	return a.ipPool.Name < b.ipPool.Name
 }
 
-// lostOverlap is whether the pool controller ruled the pool out for overlapping another. A Terminating pool is also not
+// LostOverlap is whether the pool controller ruled the pool out for overlapping another. A Terminating pool is also not
 // allocatable, but it keeps the blocks it still holds.
-func lostOverlap(pool *v3.IPPool) bool {
+func LostOverlap(pool *v3.IPPool) bool {
 	if pool.Status == nil {
 		return false
 	}

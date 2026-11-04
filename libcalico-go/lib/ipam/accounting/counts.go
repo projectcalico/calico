@@ -19,6 +19,8 @@ import (
 	"math/big"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 // Counts is what a pool's blocks add up to. Address counts cover every block the pool owns; Total and Reserved cover
@@ -60,6 +62,13 @@ type Counts struct {
 	// BlocksByNode counts the pool's blocks per affine node.
 	BlocksByNode map[string]int
 
+	// AssignedByNode splits Assigned by the node holding each address, as Allocation.Node names it. An address no
+	// node holds counts under "".
+	AssignedByNode map[string]int
+
+	// BorrowedByNode splits Borrowed by the node that borrowed each address.
+	BorrowedByNode map[string]int
+
 	// AddressesByKind counts assigned addresses, cooling excluded, per allowed use.
 	AddressesByKind map[v3.IPPoolAllowedUse]int
 }
@@ -79,12 +88,43 @@ func (c *Counts) Free() *big.Int {
 	return free
 }
 
+func newCounts() *Counts {
+	return &Counts{
+		Total:           big.NewInt(0),
+		Reserved:        big.NewInt(0),
+		TotalBlocks:     big.NewInt(0),
+		BlocksByNode:    make(map[string]int),
+		AssignedByNode:  make(map[string]int),
+		BorrowedByNode:  make(map[string]int),
+		AddressesByKind: make(map[v3.IPPoolAllowedUse]int),
+	}
+}
+
 func (c *Counts) clone() *Counts {
 	out := *c
 	out.Total = new(big.Int).Set(c.Total)
 	out.Reserved = new(big.Int).Set(c.Reserved)
 	out.TotalBlocks = new(big.Int).Set(c.TotalBlocks)
 	out.BlocksByNode = maps.Clone(c.BlocksByNode)
+	out.AssignedByNode = maps.Clone(c.AssignedByNode)
+	out.BorrowedByNode = maps.Clone(c.BorrowedByNode)
 	out.AddressesByKind = maps.Clone(c.AddressesByKind)
 	return &out
+}
+
+// BlockCounts is what one block's allocations add up to, using the same terms as Counts.
+type BlockCounts struct {
+	Block *model.AllocationBlock
+
+	Total         int
+	InUse         int
+	Cooling       int
+	Reserved      int
+	InUseReserved int
+	Borrowed      int
+}
+
+// Free is every address in the block that is neither in use nor reserved.
+func (c *BlockCounts) Free() int {
+	return max(c.Total-c.InUse-c.Reserved+c.InUseReserved, 0)
 }

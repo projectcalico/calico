@@ -86,6 +86,10 @@ type BucketRing struct {
 }
 
 func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *BucketRing {
+	if n >= windowSlots {
+		// Each live window needs its own bit in the per-IP window bitmap.
+		panic(fmt.Sprintf("NewBucketRing: %d buckets exceeds the IP window bitmap (max %d)", n, windowSlots-1))
+	}
 	ring := &BucketRing{
 		buckets:     make([]*AggregationBucket, n),
 		headIndex:   0,
@@ -129,7 +133,7 @@ func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *Bucket
 	oldestBucketEnd := time.Unix(oldestBucketStart.Unix()+int64(interval), 0)
 	ring.buckets[0] = NewAggregationBucket(oldestBucketStart, oldestBucketEnd)
 	for range n {
-		ring.Rollover(nil)
+		ring.rollover(nil, false)
 	}
 
 	// Tell each bucket its absolute index and initialize the lookup function.
@@ -290,6 +294,12 @@ func (r *BucketRing) FilterHints(req *proto.FilterHintsRequest) ([]string, *type
 // It also clears data from the bucket that is now the head. The start time of the newest bucket
 // is returned, as well as a set of DiachronicFlow objects that were in the now obsolete bucket.
 func (r *BucketRing) Rollover(sink Sink) int64 {
+	return r.rollover(sink, true)
+}
+
+// rollover is Rollover with control over streaming. Seeding rolls over without streaming, since the
+// seed buckets are empty.
+func (r *BucketRing) rollover(sink Sink, stream bool) int64 {
 	start := r.nowFunc()
 	defer func() {
 		if r.nowFunc().Sub(start) > 1*time.Second {
@@ -302,7 +312,9 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 	endTime := startTime + int64(r.interval)
 
 	// Send flows to the stream manager.
-	r.flushToStreams()
+	if stream {
+		r.flushToStreams()
+	}
 
 	// Move the head index to the next bucket.
 	r.headIndex = r.nextBucketIndex(r.headIndex)
@@ -327,9 +339,7 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 	// Find the oldest bucket's start time and remove any data from the DiachronicFlows that is older than that.
 	for d := range flows.All() {
 		// Rollover the DiachronicFlow. This will remove any expired data from it.
-		d.Rollover(r.BeginningOfHistory())
-
-		if d.Empty() {
+		if d.Rollover(r.BeginningOfHistory()) {
 			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
 			// flow updates in a long time.
 			if logrus.IsLevelEnabled(logrus.DebugLevel) {
@@ -771,8 +781,7 @@ func (r *BucketRing) flushToStreams() {
 }
 
 func (r *BucketRing) streamBucket(b *AggregationBucket, s Receiver) {
-	b.markReady()
-	s.Receive(b, "")
+	s.Receive(newBucketInterval(b), "")
 }
 
 // streamingBucket returns the bucket currently slated to be sent to the stream manager.
@@ -836,12 +845,22 @@ func (r *BucketRing) NumFlows(start, end int64) int {
 	return count
 }
 
+// Backfill sends recv the buckets from start up to BackfillEndTime, tagged with the stream ID.
+// A start at or after BackfillEndTime has nothing to backfill, because the following rollovers
+// stream those buckets as they complete.
 func (r *BucketRing) Backfill(recv Receiver, id string, start int64) {
-	// Backfill the stream with any buckets that match its time range.
-	_ = r.iterBucketsTime(start, r.BackfillEndTime(), func(b *AggregationBucket) error {
-		recv.Receive(b, id)
+	end := r.BackfillEndTime()
+	if start >= end {
+		// Otherwise iterBuckets would wrap the whole ring from start round to end.
+		return
+	}
+	err := r.iterBucketsTime(start, end, func(b *AggregationBucket) error {
+		recv.Receive(newBucketInterval(b), id)
 		return nil
 	})
+	if err != nil {
+		logrus.WithError(err).WithField("id", id).Warn("Failed to backfill stream")
+	}
 }
 
 // IterFlows iterates through all of the Flows in the given time range.

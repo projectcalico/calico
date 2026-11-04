@@ -52,8 +52,12 @@ sub-image-%:
 install:
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn install -g
 
+# jest sizes its pool from the host's cores, not the container's. Cap it where
+# they differ, or a starved worker trips the 5s per-test timeout.
+JEST_MAX_WORKERS ?=
+
 yarn-test: install
-	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn test:cov --silent
+	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn test:cov --silent $(if $(JEST_MAX_WORKERS),--maxWorkers=$(JEST_MAX_WORKERS))
 
 format: install
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn format

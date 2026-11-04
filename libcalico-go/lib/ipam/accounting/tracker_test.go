@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -44,6 +45,15 @@ func TestSummarizeCounts(t *testing.T) {
 	allocateTunnel(a, 2, "node-a")
 	allocateCooling(a, 3)
 
+	// A tunnel address from before handles and attributes still counts. It and a pod with no node attribute count
+	// against the block's affine node.
+	a.Attributes = append(a.Attributes, model.AllocationAttribute{})
+	a.Allocations[4] = ptr.To(len(a.Attributes) - 1)
+	allocate(a, 5, "k8s-pod-network.y", map[string]string{
+		model.IPAMBlockAttributePod:       "pod",
+		model.IPAMBlockAttributeNamespace: "default",
+	})
+
 	unaffined := testBlock("10.0.0.64/26", "")
 	allocatePod(unaffined, 0, "node-c")
 
@@ -61,10 +71,10 @@ func TestSummarizeCounts(t *testing.T) {
 	Expect(counts.BlocksInUse).To(Equal(3))
 
 	// Cooling is inside InUse, not beside it.
-	Expect(counts.InUse).To(Equal(6))
+	Expect(counts.InUse).To(Equal(8))
 	Expect(counts.Cooling).To(Equal(1))
-	Expect(counts.Assigned()).To(Equal(5))
-	Expect(counts.Free().String()).To(Equal("250"))
+	Expect(counts.Assigned()).To(Equal(7))
+	Expect(counts.Free().String()).To(Equal("248"))
 
 	// node-b borrows from node-a's block, and node-c holds an address in a block affine to no node.
 	Expect(counts.Borrowed).To(Equal(2))
@@ -74,10 +84,47 @@ func TestSummarizeCounts(t *testing.T) {
 	Expect(counts.VirtualAffinity).To(Equal(1))
 	Expect(counts.BlocksByNode).To(Equal(map[string]int{"node-a": 1}))
 	Expect(counts.AddressesByKind).To(Equal(map[v3.IPPoolAllowedUse]int{
-		v3.IPPoolAllowedUseWorkload:     3,
-		v3.IPPoolAllowedUseTunnel:       1,
+		v3.IPPoolAllowedUseWorkload:     4,
+		v3.IPPoolAllowedUseTunnel:       2,
 		v3.IPPoolAllowedUseLoadBalancer: 1,
 	}))
+
+	// The cooling address is not split by node, and the LoadBalancer address has no node to hold it.
+	Expect(counts.AssignedByNode).To(Equal(map[string]int{
+		"node-a": 4,
+		"node-b": 1,
+		"node-c": 1,
+		"":       1,
+	}))
+	Expect(counts.BorrowedByNode).To(Equal(map[string]int{
+		"node-b": 1,
+		"node-c": 1,
+	}))
+}
+
+func TestSummarizeNoPool(t *testing.T) {
+	RegisterTestingT(t)
+	orphan := testBlock("10.1.0.0/26", "host:node-a")
+	allocatePod(orphan, 0, "node-a")
+	allocatePod(orphan, 1, "node-b")
+	owned := testBlock("10.0.0.0/26", "host:node-a")
+	allocatePod(owned, 0, "node-a")
+
+	tracker := NewTracker()
+	tracker.AddPools(pool("p", "10.0.0.0/24", 26))
+	tracker.AddBlocks(orphan, owned)
+	counts := tracker.SummarizeNoPool()
+	Expect(counts.Total.Sign()).To(BeZero())
+	Expect(counts.BlocksInUse).To(Equal(1))
+	Expect(counts.BlocksByNode).To(Equal(map[string]int{"node-a": 1}))
+	Expect(counts.AssignedByNode).To(Equal(map[string]int{
+		"node-a": 1,
+		"node-b": 1,
+	}))
+	Expect(counts.BorrowedByNode).To(Equal(map[string]int{"node-b": 1}))
+
+	tracker.AddPools(pool("q", "10.1.0.0/24", 26))
+	Expect(tracker.SummarizeNoPool().BlocksInUse).To(BeZero(), "a pool that claims the block takes it out of the no-pool counts")
 }
 
 func TestSummarizeUnknownPool(t *testing.T) {
@@ -147,6 +194,133 @@ func TestBlockAddedAfterReservationsCountsOverlap(t *testing.T) {
 	allocatePod(b, 9, "node-a")
 	tr.AddBlocks(b)
 	Expect(mustSummarize(tr, "p").InUseReserved).To(Equal(1))
+}
+
+const extraReservedClass reservedClass = "extra"
+
+// classesFunc adapts a function to reservedClasses.
+type classesFunc func(*v3.IPPool) reservedClass
+
+func (f classesFunc) classOf(p *v3.IPPool) reservedClass { return f(p) }
+
+func newClassedTracker() *Tracker {
+	return newTracker(classesFunc(func(p *v3.IPPool) reservedClass {
+		if p.Spec.DisableBGPExport {
+			return extraReservedClass
+		}
+		return defaultReservedClass
+	}))
+}
+
+func setExtraReserved(tr *Tracker, cidrs ...string) {
+	var nets []cnet.IPNet
+	for _, s := range cidrs {
+		nets = append(nets, cnet.MustParseNetwork(s))
+	}
+	tr.setExtraReserved(extraReservedClass, nets)
+}
+
+func TestClassWithoutExtraReservedCountsDefaultSet(t *testing.T) {
+	RegisterTestingT(t)
+	tr := newTracker(classesFunc(func(*v3.IPPool) reservedClass { return "unlisted" }))
+	setExtraReserved(tr, "10.0.0.1/32")
+	tr.AddPools(pool("p", "10.0.0.0/24", 26))
+	tr.AddReservations(reservation("r", "10.0.0.10"))
+	Expect(mustSummarize(tr, "p").Reserved.String()).To(Equal("1"))
+}
+
+func TestReservedClassFollowsPoolSpec(t *testing.T) {
+	RegisterTestingT(t)
+	plain := pool("p", "192.0.2.0/24", 26)
+	classed := plain.DeepCopy()
+	classed.Spec.DisableBGPExport = true
+
+	b := testBlock("192.0.2.0/26", "host:node-a")
+	allocatePod(b, 0, "node-a")
+
+	tr := newClassedTracker()
+	setExtraReserved(tr, "192.0.2.0/32", "192.0.2.1/32", "192.0.2.255/32")
+	tr.AddPools(plain)
+	tr.AddBlocks(b)
+	tr.AddReservations(reservation("r", "192.0.2.10"))
+
+	c := mustSummarize(tr, "p")
+	Expect(c.Reserved.String()).To(Equal("1"))
+	Expect(c.InUseReserved).To(Equal(0))
+	bc, _ := tr.BlockCounts(b.CIDR)
+	Expect(bc.Reserved).To(Equal(1))
+
+	tr.AddPools(classed)
+	c = mustSummarize(tr, "p")
+	Expect(c.Reserved.String()).To(Equal("4"))
+	Expect(c.InUseReserved).To(Equal(1))
+	bc, _ = tr.BlockCounts(b.CIDR)
+	Expect(bc.Reserved).To(Equal(3))
+
+	tr.AddPools(plain)
+	fresh := newClassedTracker()
+	setExtraReserved(fresh, "192.0.2.0/32", "192.0.2.1/32", "192.0.2.255/32")
+	fresh.AddPools(plain)
+	fresh.AddBlocks(b)
+	fresh.AddReservations(reservation("r", "192.0.2.10"))
+	Expect(mustSummarize(tr, "p")).To(Equal(mustSummarize(fresh, "p")))
+	Expect(tr.PoolBlockCounts("p")).To(Equal(fresh.PoolBlockCounts("p")))
+
+	tr.AddPools(classed)
+	tr.RemovePool("p")
+	bc, _ = tr.BlockCounts(b.CIDR)
+	Expect(bc.Reserved).To(Equal(1))
+	Expect(bc.InUseReserved).To(Equal(0))
+}
+
+func TestExtraReservedChangeReachesOnlyItsClass(t *testing.T) {
+	RegisterTestingT(t)
+	classed := pool("a", "192.0.2.0/24", 26)
+	classed.Spec.DisableBGPExport = true
+
+	blockA := testBlock("192.0.2.0/26", "host:node-a")
+	allocatePod(blockA, 0, "node-a")
+	blockB := testBlock("198.51.100.0/26", "host:node-a")
+	allocatePod(blockB, 0, "node-a")
+
+	tr := newClassedTracker()
+	tr.AddPools(classed, pool("b", "198.51.100.0/24", 26))
+	tr.AddBlocks(blockA, blockB)
+	b := mustSummarize(tr, "b")
+
+	setExtraReserved(tr, "192.0.2.0/32", "198.51.100.0/32")
+	a := mustSummarize(tr, "a")
+	Expect(a.Reserved.String()).To(Equal("1"))
+	Expect(a.InUseReserved).To(Equal(1))
+	Expect(mustSummarize(tr, "b")).To(Equal(b))
+
+	setExtraReserved(tr)
+	a = mustSummarize(tr, "a")
+	Expect(a.Reserved.String()).To(Equal("0"))
+	Expect(a.InUseReserved).To(Equal(0))
+	Expect(mustSummarize(tr, "b")).To(Equal(b))
+}
+
+func TestBlockLeavingPoolThatChangesClassDropsExtraReserved(t *testing.T) {
+	RegisterTestingT(t)
+	classed := pool("a", "192.0.2.0/24", 26)
+	classed.Spec.DisableBGPExport = true
+
+	b := testBlock("192.0.2.128/26", "host:node-a")
+	allocatePod(b, 0, "node-a")
+
+	tr := newClassedTracker()
+	setExtraReserved(tr, "192.0.2.128/32", "192.0.2.129/32")
+	tr.AddPools(classed)
+	tr.AddBlocks(b)
+	bc, _ := tr.BlockCounts(b.CIDR)
+	Expect(bc.Reserved).To(Equal(2))
+	Expect(bc.InUseReserved).To(Equal(1))
+
+	tr.AddPools(pool("a", "192.0.2.0/25", 26))
+	bc, _ = tr.BlockCounts(b.CIDR)
+	Expect(bc.Reserved).To(Equal(0))
+	Expect(bc.InUseReserved).To(Equal(0))
 }
 
 func TestIPv6CountsExceedInt(t *testing.T) {
@@ -238,6 +412,50 @@ func TestNoPoolBlocksInAddressOrder(t *testing.T) {
 	low := testBlock("10.9.0.64/26", "")
 	tr.AddBlocks(high, testBlock("10.0.0.0/26", ""), low)
 	Expect(tr.NoPoolBlocks()).To(Equal([]*model.AllocationBlock{low, high}))
+}
+
+func TestPoolBlocksAndBlockPool(t *testing.T) {
+	RegisterTestingT(t)
+	tracker := NewTracker()
+	tracker.AddPools(pool("outer", "10.0.0.0/16", 26), pool("inner", "10.0.0.0/24", 26))
+	inner := testBlock("10.0.0.64/26", "")
+	outerHigh := testBlock("10.0.9.0/26", "")
+	outerLow := testBlock("10.0.5.0/26", "")
+	stray := testBlock("10.9.0.0/26", "")
+	tracker.AddBlocks(outerHigh, inner, stray, outerLow)
+
+	Expect(tracker.PoolBlocks("outer")).To(Equal([]*model.AllocationBlock{outerLow, outerHigh}))
+	Expect(tracker.PoolBlocks("inner")).To(Equal([]*model.AllocationBlock{inner}))
+	Expect(tracker.PoolBlocks("missing")).To(BeNil())
+
+	owner, ok := tracker.BlockPool(inner.CIDR)
+	Expect(ok).To(BeTrue())
+	Expect(owner).To(Equal("inner"))
+	_, ok = tracker.BlockPool(stray.CIDR)
+	Expect(ok).To(BeFalse(), "no pool claims the stray block")
+	_, ok = tracker.BlockPool(cnet.MustParseCIDR("10.0.7.0/26"))
+	Expect(ok).To(BeFalse(), "the tracker has no such block")
+
+	// The narrower pool's removal hands its block to the wider one.
+	tracker.RemovePool("inner")
+	owner, _ = tracker.BlockPool(inner.CIDR)
+	Expect(owner).To(Equal("outer"))
+	Expect(tracker.PoolBlocks("outer")).To(Equal([]*model.AllocationBlock{inner, outerLow, outerHigh}))
+}
+
+func TestHasBlocksWithin(t *testing.T) {
+	RegisterTestingT(t)
+	tracker := NewTracker()
+	tracker.AddPools(pool("outer", "10.0.0.0/16", 26), pool("inner", "10.0.0.0/24", 26))
+	inner := testBlock("10.0.0.64/26", "")
+	tracker.AddBlocks(inner, testBlock("10.9.0.0/26", ""))
+
+	Expect(tracker.HasBlocksWithin(cnet.MustParseCIDR("10.0.0.0/16"))).To(BeTrue(), "the inner pool's block still lies in the outer CIDR")
+	Expect(tracker.HasBlocksWithin(cnet.MustParseCIDR("10.1.0.0/16"))).To(BeFalse())
+	Expect(tracker.HasBlocksWithin(cnet.MustParseCIDR("10.0.0.64/27"))).To(BeFalse(), "a CIDR narrower than the block does not hold it")
+
+	tracker.RemoveBlock(inner.CIDR)
+	Expect(tracker.HasBlocksWithin(cnet.MustParseCIDR("10.0.0.0/16"))).To(BeFalse())
 }
 
 // TestIncrementalMatchesFresh reads between every change, then compares against a tracker given the end state at once.
@@ -551,4 +769,53 @@ func TestAllRefsInOrder(t *testing.T) {
 	Expect(got).To(Equal([]string{"10.0.0.9 node/a", "10.0.0.10 a", "10.0.0.10 b"}))
 	Expect(tr.Refs(net.ParseIP("10.0.0.11"))).To(BeEmpty())
 	Expect(tr.Refs(net.ParseIP("10.0.0.10"))).To(HaveLen(2))
+}
+
+func TestPoolLostOverlap(t *testing.T) {
+	RegisterTestingT(t)
+	tracker := NewTracker()
+	p := pool("p", "10.0.0.0/24", 26)
+	tracker.AddPools(p)
+
+	lost, ok := tracker.PoolLostOverlap("p")
+	Expect(ok).To(BeTrue())
+	Expect(lost).To(BeFalse())
+
+	p = p.DeepCopy()
+	p.Status = &v3.IPPoolStatus{Conditions: []metav1.Condition{{
+		Type: v3.IPPoolConditionAllocatable, Status: metav1.ConditionFalse, Reason: v3.IPPoolReasonCIDROverlap,
+	}}}
+	tracker.AddPools(p)
+	lost, _ = tracker.PoolLostOverlap("p")
+	Expect(lost).To(BeTrue())
+
+	_, ok = tracker.PoolLostOverlap("missing")
+	Expect(ok).To(BeFalse())
+}
+
+func TestBlockCountsBorrowed(t *testing.T) {
+	RegisterTestingT(t)
+	affine := testBlock("10.0.0.0/26", "host:node-a")
+	allocatePod(affine, 0, "node-a")
+	allocatePod(affine, 1, "node-b")
+	allocatePod(affine, 2, "node-c")
+	allocateCooling(affine, 3)
+	unaffined := testBlock("10.0.0.64/26", "")
+	allocatePod(unaffined, 0, "node-b")
+
+	tracker := NewTracker()
+	tracker.AddPools(pool("p", "10.0.0.0/24", 26))
+	tracker.AddBlocks(affine, unaffined)
+
+	counts, ok := tracker.BlockCounts(affine.CIDR)
+	Expect(ok).To(BeTrue())
+	Expect(counts.Borrowed).To(Equal(2), "node-a's own address and the cooling one are not lent")
+	counts, _ = tracker.BlockCounts(unaffined.CIDR)
+	Expect(counts.Borrowed).To(Equal(1))
+
+	var sum int
+	for _, c := range tracker.PoolBlockCounts("p") {
+		sum += c.Borrowed
+	}
+	Expect(sum).To(Equal(mustSummarize(tracker, "p").Borrowed), "the blocks add up to the pool")
 }

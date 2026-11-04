@@ -17,9 +17,6 @@ package distribution
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 
@@ -29,31 +26,7 @@ import (
 
 const filePerms = 0o644
 
-func BuildMetadata(a Attester, dir string, opts ...MetadataOption) error {
-	s, err := newSettings(metadataStep, opts)
-	if err != nil {
-		return err
-	}
-	if a == nil {
-		return s.Errorf("no release to describe")
-	}
-	if dir == "" {
-		return s.Errorf("no directory to write metadata to")
-	}
-
-	bs, err := a.Attest()
-	if err != nil {
-		return s.Errorf("%w", err)
-	}
-	path := filepath.Join(dir, metadataFileName)
-	if err := os.WriteFile(path, bs, filePerms); err != nil {
-		return s.Errorf("writing %s: %w", path, err)
-	}
-	s.Logger().WithField("path", path).Info("Wrote release metadata")
-	return nil
-}
-
-func Publish(pipeline []Upload, opts ...PublishOption) error {
+func Publish(pipeline []Upload, opts ...Option) error {
 	s, err := newSettings(artifactsStep, opts)
 	if err != nil {
 		return err
@@ -131,24 +104,13 @@ func (s settings) publishOne(u Upload) error {
 	}
 }
 
-func newSettings[O any](step string, opts []O) (settings, error) {
+func newSettings(step string, opts []Option) (settings, error) {
 	var s settings
 	s.Apply([]steps.Option{steps.WithName(step)})
 	for _, opt := range opts {
-		if err := applyTo(opt, &s); err != nil {
+		if err := opt(&s); err != nil {
 			return s, s.Errorf("%w", err)
 		}
 	}
 	return s, nil
-}
-
-func applyTo(opt any, s *settings) error {
-	switch o := opt.(type) {
-	case PublishOption:
-		return o.applyPublish(s)
-	case MetadataOption:
-		return o.applyMetadata(s)
-	default:
-		return fmt.Errorf("unknown option type %T", opt)
-	}
 }

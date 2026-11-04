@@ -36,7 +36,6 @@ func TestDefaultPolicy(t *testing.T) {
 		{"host ep egress", AttachType{Type: tcdefs.EpTypeHost, Hook: Egress}, false, DefPolicyNone},
 		{"host ep egress that encapsulates", AttachType{Type: tcdefs.EpTypeHost, Hook: Egress}, true, DefPolicyAllow},
 		{"workload", AttachType{Type: tcdefs.EpTypeWorkload, Hook: Ingress}, false, DefPolicyDeny},
-		{"ipip", AttachType{Type: tcdefs.EpTypeIPIP, Hook: Ingress}, true, DefPolicyAllow},
 		{"l3 device", AttachType{Type: tcdefs.EpTypeL3Device, Hook: Ingress}, true, DefPolicyAllow},
 		{"plain l3 NIC", AttachType{Type: tcdefs.EpTypeL3Device, Hook: Ingress}, false, DefPolicyAllow},
 		{"nat", AttachType{Type: tcdefs.EpTypeNAT, Hook: Ingress}, false, DefPolicyNone},

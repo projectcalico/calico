@@ -49,9 +49,12 @@ if [[ "${RELEASE_STREAM:-}" == "local-build" ]]; then
 
     # Build the operator image (renders component images at DEV_IMAGE_TAG) and
     # package the chart that install-calico installs.
-    pushd "${REPO_DIR}/hack/test/kind/infra"
-    ./build-operator.sh
-    popd
+    # CI can supply the image from an earlier build.
+    if [[ -z "${OPERATOR_PREBUILT:-}" ]]; then
+        pushd "${REPO_DIR}/hack/test/kind/infra"
+        ./build-operator.sh
+        popd
+    fi
     make -C "${REPO_DIR}" chart
 
     "${SCRIPT_DIR}/import-images.sh"

@@ -157,7 +157,7 @@ var _ = describe.CalicoDescribe(
 				// A flow query crosses the one hop the UI shell does not: nginx proxying
 				// over TLS to whisker-backend.
 				Eventually(func() error {
-					body, code, err := gw.Get(baseURL + "/whisker-backend/flows")
+					body, code, err := gw.Get(baseURL + "/whisker-backend/flows?pageSize=1")
 					if err != nil {
 						return err
 					}
@@ -166,7 +166,7 @@ var _ = describe.CalicoDescribe(
 					}
 					var flows map[string]json.RawMessage
 					if err := json.Unmarshal([]byte(body), &flows); err != nil {
-						return fmt.Errorf("response is not JSON; reached nginx but not whisker-backend: %.200s", body)
+						return fmt.Errorf("response is not a JSON flows list: %.200s", body)
 					}
 					if _, ok := flows["items"]; !ok {
 						return fmt.Errorf("JSON response has no items key; not a flows list: %.200s", body)

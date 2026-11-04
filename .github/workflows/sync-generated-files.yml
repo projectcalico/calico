@@ -1,11 +1,9 @@
-# Keep generated and pinned-upstream content in sync. Regenerates all generated
-# files (make generate) and bumps the bundled CNI plugin pin to the latest
-# upstream commit. Opens or updates a single PR per branch carrying whatever
-# drifted.
+# Keep generated files in sync. Regenerates them (make generate) and opens or
+# updates a single PR per branch carrying whatever drifted.
 #
 # Runs hourly, but a cheap drift check up front skips the heavy regen unless
-# something actually changed: a recent merge, an operator CRD update on a
-# release branch, or the CNI pin falling behind upstream.
+# something actually changed: a recent merge or, on a release branch, an
+# operator CRD update.
 ---
 name: Sync upstream
 on:  # yamllint disable-line rule:truthy
@@ -64,11 +62,9 @@ jobs:
 
       - name: Check for drift
         id: drift
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          recent=false; operator=false; cni=false; cni_sha=
+          recent=false; operator=false
 
           force=false
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -96,41 +92,17 @@ jobs:
             git checkout -- .
           fi
 
-          # cni: pin behind upstream. Capture the target SHA here so the bump
-          # step doesn't have to query again (and can't race a moving upstream).
-          repo=projectcalico/containernetworking-plugins
-          db=$(gh api "repos/$repo" -q .default_branch)
-          cni_sha=$(gh api "repos/$repo/commits/$db" -q .sha)
-          cur=$(grep '^CNI_VERSION=' metadata.mk | cut -d= -f2)
-          if [ "$force" = true ] || [ "$cni_sha" != "$cur" ]; then
-            cni=true
-          fi
-
-          echo "drift: recent=$recent operator=$operator cni=$cni"
+          echo "drift: recent=$recent operator=$operator"
           {
             echo "recent=$recent"
             echo "operator=$operator"
-            echo "cni=$cni"
-            echo "cni_sha=$cni_sha"
           } >> "$GITHUB_OUTPUT"
 
       # make generate is the heavy step, so it only runs when something it
-      # actually regenerates drifted. A CNI-only bump skips it entirely.
+      # actually regenerates drifted.
       - name: Install tools
         if: steps.drift.outputs.recent == 'true' || steps.drift.outputs.operator == 'true'
         run: make bin/helm bin/yq
-
-      - name: Bump CNI plugin pin
-        # Only CNI_VERSION; FLANNEL_VERSION is a release tag with the Go toolchain
-        # baked into the name, so we don't auto-bump it. CNI_VERSION is a build-time
-        # clone ref, not baked into any generated file, so this needs no regen. A
-        # bump that doesn't build is caught by the PR's normal CI, so it can't merge.
-        if: steps.drift.outputs.cni == 'true'
-        env:
-          CNI_SHA: ${{ steps.drift.outputs.cni_sha }}
-        run: |
-          echo "Bumping CNI_VERSION to $CNI_SHA"
-          sed -i "s/^CNI_VERSION=.*/CNI_VERSION=$CNI_SHA/" metadata.mk
 
       # Only release branches have this target, and only some of them fold it
       # into generate, so run it explicitly. It has to come first either way:
@@ -144,11 +116,11 @@ jobs:
         run: make generate
 
       - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
-        if: steps.drift.outputs.recent == 'true' || steps.drift.outputs.operator == 'true' || steps.drift.outputs.cni == 'true'
+        if: steps.drift.outputs.recent == 'true' || steps.drift.outputs.operator == 'true'
         id: cpr
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "Sync upstream: generated files, CNI pin"
+          commit-message: "Sync upstream: generated files"
           branch: auto-sync-upstream-${{ matrix.branch }}
           base: ${{ matrix.branch }}
           title: "Auto: sync upstream into [${{ matrix.branch }}]"
@@ -157,7 +129,6 @@ jobs:
 
             - Operator CRDs pulled from `tigera/operator` (release branches only)
             - Regenerated files (`make generate`)
-            - CNI plugin pin (`CNI_VERSION`) bumped to the latest upstream commit
 
             Only the bits that actually drifted show up in the diff. Triggered by
             scheduled workflow.

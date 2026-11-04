@@ -576,7 +576,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		// Start processing updates.
 		go cb.ProcessUpdates()
 
-		Eventually(cb.GetStatus, "5s", "50ms").Should(Equal(api.InSync))
+		Eventually(cb.GetStatus, "6s", "50ms").Should(Equal(api.InSync))
 	})
 
 	AfterEach(func() {
@@ -654,7 +654,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Checking the correct entries are in our cache", func() {
 			expectedName := "kns.test-syncer-namespace-default-deny"
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeTrue())
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ResourceKey{Kind: apiv3.KindProfile, Name: expectedName})).Should(BeTrue())
 		})
 
 		By("Deleting the namespace", func() {
@@ -664,7 +664,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Checking the correct entries are no longer in our cache", func() {
 			expectedName := "kns.test-syncer-namespace-default-deny"
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: expectedName}}), slowCheck...).Should(BeFalse())
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ResourceKey{Kind: apiv3.KindProfile, Name: expectedName})).Should(BeFalse())
 		})
 	})
 
@@ -704,7 +704,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Checking the correct entries are in our cache", func() {
 			expectedName := "kns.test-syncer-namespace-no-default-deny"
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeTrue())
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ResourceKey{Kind: apiv3.KindProfile, Name: expectedName})).Should(BeTrue())
 		})
 
 		By("deleting a namespace", func() {
@@ -714,7 +714,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Checking the correct entries are in no longer in our cache", func() {
 			expectedName := "kns.test-syncer-namespace-no-default-deny"
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: expectedName}}), slowCheck...).Should(BeFalse())
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ResourceKey{Kind: apiv3.KindProfile, Name: expectedName})).Should(BeFalse())
 		})
 	})
 

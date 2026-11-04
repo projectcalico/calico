@@ -37,6 +37,14 @@ steps:
         value: e2e/config/vpp/eks.yaml
     commands: |
       .argoci/scripts/body_standard.sh
+  - name: config-list
+    env:
+      - name: E2E_TEST_CONFIG
+        value: >-
+          e2e/config/ci-base.yaml
+          e2e/config/suite/policy.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
   - name: openstack
     env:
       - name: PROVISIONER
@@ -81,6 +89,10 @@ func TestParseArgo(t *testing.T) {
 	// resolve to a value the parser can use.
 	Expect(byName["overrides-config"].Config).To(Equal("e2e/config/vpp/eks.yaml"))
 
+	// A cell can list several configs, folded onto one line by the YAML.
+	Expect(byName["config-list"].Configs()).To(Equal([]string{"e2e/config/ci-base.yaml", "e2e/config/suite/policy.yaml"}))
+	Expect(byName["overrides-config"].Configs()).To(Equal([]string{"e2e/config/vpp/eks.yaml"}))
+
 	openstack := byName["openstack"]
 	Expect(openstack.TestType).To(Equal("openstack-e2e"))
 	Expect(openstack.RunsE2EBinary()).To(BeFalse())
@@ -89,10 +101,10 @@ func TestParseArgo(t *testing.T) {
 	Expect(byName["migration"].Config).To(Equal("e2e/config/iptables/xtables.yaml"))
 	Expect(byName["migration [pre-migration]"].Config).To(Equal(flannelMigrationPreConfig))
 
-	// The CNI axis leaves the selection alone, so its entries collapse into the
-	// unsuffixed step.
-	Expect(byName).To(HaveKey("matrix-step"))
-	Expect(byName["matrix-step"].Config).To(Equal("e2e/config/iptables/xtables.yaml"))
+	// Every matrix entry is its own lane, including one that selects like the
+	// step's default, so a lane keeps its name when an entry's config changes.
+	Expect(byName).NotTo(HaveKey("matrix-step"))
+	Expect(byName["matrix-step [calico-cni]"].Config).To(Equal("e2e/config/iptables/xtables.yaml"))
 	Expect(byName["matrix-step [encap]"].Config).To(Equal("e2e/config/iptables/xtables-encap-nobgp.yaml"))
 }
 
@@ -123,8 +135,24 @@ func TestSelectionArgs(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(args).To(Equal([]string{"--calico.test-config=/repo/e2e/config/vpp/eks.yaml"}))
 
+	// The binary keeps one --calico.test-config, so a lane listing several is
+	// refused rather than recorded with a selection CI would not run.
+	_, err = Lane{Name: "list", Config: "e2e/config/ci-base.yaml\n  e2e/config/suite/policy.yaml"}.SelectionArgs("/repo")
+	Expect(err).To(MatchError(ContainSubstring("lists 2 configs")))
+
+	// A config outside e2e/config, or an unexpanded variable, is caught here
+	// rather than surfacing as an opaque binary failure.
+	_, err = Lane{Name: "abs", Config: "/tmp/x.yaml"}.SelectionArgs("/repo")
+	Expect(err).To(MatchError(ContainSubstring("is not under e2e/config/")))
+	_, err = Lane{Name: "var", Config: "${CFG}"}.SelectionArgs("/repo")
+	Expect(err).To(MatchError(ContainSubstring("is not under e2e/config/")))
+
 	_, err = Lane{Name: "empty"}.SelectionArgs("/repo")
-	Expect(err).To(HaveOccurred())
+	Expect(err).To(MatchError(ContainSubstring("selects nothing")))
+
+	// Whitespace alone is no selection, so the lane does not run the binary.
+	Expect(Lane{TestType: "k8s-e2e", Config: "  "}.RunsE2EBinary()).To(BeFalse())
+	Expect(Lane{TestType: "k8s-e2e", Config: "e2e/config/a.yaml"}.RunsE2EBinary()).To(BeTrue())
 }
 
 const blocksFixture = `
@@ -245,4 +273,82 @@ func TestKindTargetsMatchTheMakefile(t *testing.T) {
 				"the Makefile default is no longer %s", want.fallback)
 		}
 	}
+}
+
+const moduleFixture = `
+version: condensed-module
+steps:
+  - name: lints-things
+    commands: |
+      make static-checks
+  - name: runs-the-suite
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/gcp/bpf.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
+`
+
+// Only a module's spec-selecting steps are lanes.
+func TestParseArgoModuleKeepsOnlyLanesThatSelectSpecs(t *testing.T) {
+	RegisterTestingT(t)
+
+	lanes, err := parseArgoModule("20-e2e-gcp.yaml", []byte(moduleFixture))
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(lanes).To(HaveLen(1))
+	Expect(lanes[0].Name).To(Equal("runs-the-suite"))
+	Expect(lanes[0].Config).To(Equal("e2e/config/gcp/bpf.yaml"))
+}
+
+const kindModuleFixture = `
+version: condensed-module
+steps:
+  - name: e2e-kind
+    matrix:
+      - name: defaulted
+        env:
+          - name: E2E_TARGET
+            value: e2e-test
+      - name: from-env
+        env:
+          - name: E2E_TARGET
+            value: e2e-test
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/felix-routing.yaml
+      - name: other-binary
+        env:
+          - name: E2E_TARGET
+            value: e2e-test-clusternetworkpolicy
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/felix-routing.yaml
+      - name: hardcoded
+        env:
+          - name: E2E_TARGET
+            value: e2e-test-bpf
+    commands: |
+      make ${E2E_TARGET}
+  - name: manifest-install
+    commands: |
+      make kind-manifest-install-test
+`
+
+// A kind step's make target picks its config, even when a matrix entry names
+// the target, and a step running some other binary is no lane.
+func TestParseArgoModuleResolvesKindTargets(t *testing.T) {
+	RegisterTestingT(t)
+
+	lanes, err := parseArgoModule("20-e2e.yaml", []byte(kindModuleFixture))
+	Expect(err).NotTo(HaveOccurred())
+
+	configs := map[string]string{}
+	for _, l := range lanes {
+		configs[l.Name] = l.Config
+	}
+	Expect(configs).To(Equal(map[string]string{
+		"e2e-kind [defaulted]": "e2e/config/kind/conformance.yaml",
+		"e2e-kind [from-env]":  "e2e/config/kind/felix-routing.yaml",
+		"e2e-kind [hardcoded]": "e2e/config/kind/bpf.yaml",
+		"manifest-install":     "e2e/config/kind/manifest-install.yaml",
+	}))
 }

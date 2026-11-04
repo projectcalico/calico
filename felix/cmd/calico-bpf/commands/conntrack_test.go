@@ -16,9 +16,31 @@ package commands
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
+
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 )
+
+// The dump prints the addresses opener-first, so a hint must be labelled by the
+// direction it serves, not by the key's A/B order.
+func TestOrientedLegs(t *testing.T) {
+	RegisterTestingT(t)
+
+	a2b := v4.Leg{Ifindex: 11}
+	b2a := v4.Leg{Ifindex: 22}
+
+	v := v4.NewValueNormal(time.Second, 0, a2b, b2a)
+	srcToDst, dstToSrc := orientedLegs(v)
+	Expect(srcToDst.Ifindex).To(Equal(uint32(11)))
+	Expect(dstToSrc.Ifindex).To(Equal(uint32(22)))
+
+	v = v4.NewValueNormal(time.Second, v4.FlagSrcDstBA, a2b, b2a)
+	srcToDst, dstToSrc = orientedLegs(v)
+	Expect(srcToDst.Ifindex).To(Equal(uint32(22)), "src is B, so src->dst is the B2A leg")
+	Expect(dstToSrc.Ifindex).To(Equal(uint32(11)))
+}
 
 func TestProtoFromString(t *testing.T) {
 	RegisterTestingT(t)

@@ -73,6 +73,11 @@ spec:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
               value: policy,namespace,serviceaccount,workloadendpoint,node,loadbalancer
+{{- if ne (include "nodeName" .) "calico-node" }}
+            # Name of the DaemonSet whose rollout the policy name migrator waits for.
+            - name: CALICO_NODE_DAEMONSET_NAME
+              value: {{include "nodeName" .}}
+{{- end }}
 {{- if and .Values.kubeControllers .Values.kubeControllers.env }}
 {{ toYaml .Values.kubeControllers.env | indent 12 }}
 {{- end }}
@@ -120,6 +125,11 @@ spec:
               value: node,loadbalancer
             - name: DATASTORE_TYPE
               value: kubernetes
+{{- if ne (include "nodeName" .) "calico-node" }}
+            # Name of the DaemonSet whose rollout the policy name migrator waits for.
+            - name: CALICO_NODE_DAEMONSET_NAME
+              value: {{include "nodeName" .}}
+{{- end }}
           livenessProbe:
             exec:
               command:

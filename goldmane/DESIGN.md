@@ -92,6 +92,10 @@ Felix (per-node) --gRPC--> FlowCollector --> Goldmane main loop --> BucketRing
 - **Emitter** — batches aggregated flows and pushes them to an
   upstream endpoint over HTTPS with mTLS. Tracks progress in a
   `ConfigMap` (`flow-emitter-state` in `calico-system`).
+- **IP sets** — distinct source / destination IPs ride on `Flow`, never on
+  `FlowKey` (that would explode key cardinality), as a best-effort set per
+  `DiachronicFlow` capped at `MaxIPsPerFlow`. Each IP's window bitmap has
+  `windowSlots` bits, so history (`numBuckets`) must stay below that.
 
 ### Review notes
 
@@ -104,6 +108,9 @@ Felix (per-node) --gRPC--> FlowCollector --> Goldmane main loop --> BucketRing
 - The main loop serialises all operations. Adding a new operation
   that must not block the loop (e.g. a long-running query) needs
   an explicit design — do not just `go` it.
+- The main loop owns stream registration, so backfill and the first live
+  bucket are queued in one step. It never blocks on a stream: one that
+  falls too far behind is closed and the client reconnects.
 - A change to `BucketRing`'s sizing or `AggregationWindow`
   default affects memory footprint; benchmark before changing.
 
@@ -155,8 +162,11 @@ is a contract change for dashboards and alerting; record it here.
   buffer depth.
 - `goldmane_aggr_flow_index_batch_size` — number of flows
   processed per batch.
-- `goldmane_aggr_flow_index_latency_ms` — time to index a single
-  flow.
+- `goldmane_aggr_flow_index_latency_seconds` — histogram of the
+  time to index a single flow. Replaced the
+  `goldmane_aggr_flow_index_latency_ms` summary, whose quantile
+  upkeep was a large share of aggregator CPU at one sample per
+  flow and whose millisecond samples were almost all 0.
 - `goldmane_aggr_rollover_duration_ms` — time spent performing
   bucket rollover.
 - `goldmane_aggr_rollover_latency_ms` — time between rollovers

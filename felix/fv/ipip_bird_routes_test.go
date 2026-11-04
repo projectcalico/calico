@@ -112,14 +112,6 @@ var _ = infrastructure.DatastoreDescribe(
 					felix.Exec("ip", "link")
 				}
 			}
-			for _, wl := range w {
-				wl.Stop()
-			}
-			tc.Stop()
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-			infra.Stop()
 		})
 
 		// Note: this one passes with or without the ownership rule -- Felix ignores routes it does
@@ -198,11 +190,6 @@ var _ = infrastructure.DatastoreDescribe(
 					felix.Exec("ip", "route")
 				}
 			}
-			tc.Stop()
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-			infra.Stop()
 		})
 
 		It("should leave BIRD's routes alone", func() {

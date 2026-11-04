@@ -30,6 +30,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/qos"
+	linuxqos "github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -401,6 +402,10 @@ var _ = infrastructure.DatastoreDescribe(
 						return out
 					}
 
+					// The 300Mbit burst takes 3s+ to drain at peakrate; it must
+					// stay outside the measured window.
+					const iperfOmitArg = "-O10"
+
 					It("should limit bandwidth correctly", func() {
 						By("Starting iperf3 server on workload 0")
 						serverCmd := w[0].ExecCommand("iperf3", "-s")
@@ -408,7 +413,7 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(err).NotTo(HaveOccurred())
 
 						By("Running iperf3 client on workload 1")
-						baselineRate, baselinePeakrate, err := retryIperf3Client(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J")
+						baselineRate, baselinePeakrate, err := retryIperf3Client(w[1], 5, 5*time.Second, "-c", w[0].IP, iperfOmitArg, "-J")
 						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("iperf client rate with no bandwidth limit (bps): %v", baselineRate)
 						// Expect the baseline rate and peakrate to be much greater (>=10x) than the rate and peakrate limits
@@ -430,7 +435,7 @@ var _ = infrastructure.DatastoreDescribe(
 						// egress config should not be present
 						Consistently(getQdisc, "5s", "1s").ShouldNot(MatchRegexp(`qdisc tbf \d+: dev bwcali.* root refcnt \d+ rate ` + regexp.QuoteMeta("10Mbit")))
 
-						ingressLimitedRate, ingressLimitedPeakrate, err := retryIperf3Client(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J", "-R")
+						ingressLimitedRate, ingressLimitedPeakrate, err := retryIperf3Client(w[1], 5, 5*time.Second, "-c", w[0].IP, iperfOmitArg, "-J", "-R")
 						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("iperf client rate with ingress bandwidth limit (bps): %v", ingressLimitedRate)
 						// Expect the limited rate and peakrate to be within 20% of the desired rate and peakrate
@@ -453,7 +458,7 @@ var _ = infrastructure.DatastoreDescribe(
 						// egress config should be present
 						Eventually(getQdisc, "10s", "1s").Should(And(MatchRegexp(`qdisc ingress ffff: dev `+regexp.QuoteMeta(w[1].InterfaceName)+` parent ffff:fff1`), MatchRegexp(`qdisc tbf \d+: dev bwcali.* root refcnt \d+ rate `+regexp.QuoteMeta("10Mbit")+`.* peakrate `+regexp.QuoteMeta("100Mbit"))))
 
-						egressLimitedRate, egressLimitedPeakrate, err := retryIperf3Client(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J")
+						egressLimitedRate, egressLimitedPeakrate, err := retryIperf3Client(w[1], 5, 5*time.Second, "-c", w[0].IP, iperfOmitArg, "-J")
 						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("iperf client rate with egress bandwidth limit (bps): %v", egressLimitedRate)
 						// Expect the limited rate and peakrate to be within 20% of the desired rate and peakrate
@@ -499,6 +504,64 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Waiting for the config to appear in 'tc qdisc'")
 						// ingress config should be present
 						Eventually(getQdisc, "10s", "1s").Should(MatchRegexp(`qdisc tbf \d+: dev ` + regexp.QuoteMeta(w[1].InterfaceName) + ` root refcnt \d+ rate ` + regexp.QuoteMeta("10Mbit") + `.* peakrate ` + regexp.QuoteMeta("100Mbit")))
+					})
+
+					Describe("with an egress limit on workload 1", func() {
+						var ifbName string
+
+						getIfbs := func() string {
+							out, err := tc.Felixes[1].ExecOutput("ip", "-o", "link", "show", "type", "ifb")
+							Expect(err).NotTo(HaveOccurred())
+							return out
+						}
+						getEgressRedirect := func() string {
+							out, _ := tc.Felixes[1].ExecOutput("tc", "filter", "show", "dev", w[1].InterfaceName, "parent", "ffff:")
+							return out
+						}
+						whileFelixIsDown := func(action func()) {
+							startFelix := tc.Felixes[1].RestartWithDelayedStartup()
+							Eventually(func() []int { return tc.Felixes[1].GetPIDs("calico-felix") }, "10s", "100ms").Should(BeEmpty())
+							action()
+							startFelix()
+							tc.Felixes[1].WaitForReady()
+						}
+
+						JustBeforeEach(func() {
+							ifbName = linuxqos.GetIfbDeviceName(w[1].InterfaceName)
+							w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+								EgressBandwidth: 10000000,
+								EgressBurst:     300000000,
+							}
+							w[1].UpdateInInfra(infra)
+							Eventually(getEgressRedirect, "10s", "1s").Should(ContainSubstring(ifbName))
+						})
+
+						It("should remove the IFB device of a workload deleted while Felix is down", func() {
+							whileFelixIsDown(func() {
+								w[1].RemoveFromInfra(infra)
+								w[1].Stop()
+							})
+
+							Eventually(getIfbs, "10s", "1s").ShouldNot(ContainSubstring(ifbName))
+						})
+
+						It("should remove the IFB device when the veth disappears after the WorkloadEndpoint", func() {
+							whileFelixIsDown(func() { w[1].RemoveFromInfra(infra) })
+							Expect(getIfbs()).To(ContainSubstring(ifbName), "veth still exists, so its IFB should be kept")
+
+							w[1].Stop()
+
+							Eventually(getIfbs, "10s", "1s").ShouldNot(ContainSubstring(ifbName))
+						})
+
+						It("should restore the egress redirect when the IFB exists without one", func() {
+							tc.Felixes[1].Exec("tc", "filter", "del", "dev", w[1].InterfaceName, "parent", "ffff:")
+							Expect(getEgressRedirect()).NotTo(ContainSubstring(ifbName))
+
+							tc.Felixes[1].Restart()
+
+							Eventually(getEgressRedirect, "10s", "1s").Should(ContainSubstring(ifbName))
+						})
 					})
 				})
 
@@ -1117,10 +1180,6 @@ var _ = infrastructure.DatastoreDescribe(
 							// the reap to entryDone's two-minute window.
 							By("Freezing the clients so the connections idle")
 							Expect(w[1].C.ExecMayFail("pkill", "-STOP", "-f", "test-connection")).NotTo(HaveOccurred())
-							pongsBefore := make([]int, len(pcs))
-							for i, pc := range pcs {
-								pongsBefore[i] = pc.PongCount()
-							}
 
 							By("Forging an out-of-window RST for each live connection")
 							for _, sp := range srcPorts {
@@ -1156,15 +1215,24 @@ var _ = infrastructure.DatastoreDescribe(
 
 							By("Resuming the clients")
 							Expect(w[1].C.ExecMayFail("pkill", "-CONT", "-f", "test-connection")).NotTo(HaveOccurred())
-							// Dying is a legitimate outcome here, so poll rather than assert.
-							time.Sleep(10 * time.Second)
-							survived := 0
-							for i, pc := range pcs {
-								if pc.PongCount() > pongsBefore[i] {
-									survived++
+							// A reply that landed as a client froze is read on resume; only later pongs count.
+							staleCutoff := time.Now().Add(time.Second)
+							survivors := func() int {
+								n := 0
+								for _, pc := range pcs {
+									if pc.LastPongTime().After(staleCutoff) {
+										n++
+									}
 								}
+								return n
 							}
-							logrus.Infof("CORE-13478: %d of %d connections survived the reap", survived, numConnections)
+							if viaNetfilter {
+								Eventually(survivors, "10s", "200ms").Should(Equal(numConnections),
+									"the connections did not survive the forged RSTs")
+							} else {
+								Consistently(survivors, "10s", "500ms").Should(BeZero(),
+									"a reaped connection survived with no conntrack state")
+							}
 
 							By("Measuring how many extra connections the reap bought")
 							extra := 0
@@ -1185,10 +1253,8 @@ var _ = infrastructure.DatastoreDescribe(
 								extra, numConnections, getBPFCurrentCount(1, 1, "egress")())
 
 							if viaNetfilter {
-								Expect(survived).To(Equal(numConnections), "the connections did not survive the forged RSTs")
 								Expect(extra).To(BeZero(), "a forged RST freed a slot its live connection still holds")
 							} else {
-								Expect(survived).To(BeZero(), "a reaped connection survived with no conntrack state")
 								Expect(extra).To(Equal(numConnections), "the reap did not free the dead connections' slots")
 							}
 						}

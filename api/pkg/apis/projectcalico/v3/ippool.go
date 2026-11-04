@@ -60,6 +60,10 @@ type IPPool struct {
 const (
 	// IPPoolConditionReady indicates whether the pool is ready to be used for IP address assignment.
 	IPPoolConditionAllocatable = "Allocatable"
+
+	// IPPoolConditionAddressSpaceNearlyFull is present while at least 80% of a pool's addresses are in use or reserved.
+	// Pools of 32 addresses or fewer never carry it.
+	IPPoolConditionAddressSpaceNearlyFull = "AddressSpaceNearlyFull"
 )
 
 const (
@@ -74,6 +78,9 @@ const (
 
 	// IPPoolReasonOK indicates that the pool is ready to be used for IP address assignment.
 	IPPoolReasonOK = "OK"
+
+	// IPPoolReasonThresholdExceeded indicates that the pool has crossed the AddressSpaceNearlyFull threshold.
+	IPPoolReasonThresholdExceeded = "ThresholdExceeded"
 )
 
 type IPPoolStatus struct {

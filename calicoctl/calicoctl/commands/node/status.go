@@ -42,7 +42,9 @@ func Status() error {
 	}
 
 	// For older versions of calico/node, the process was called `calico-felix`. Newer ones use `calico-node -felix`.
-	if !psContains([]string{"calico-felix"}, processes) && !psContains([]string{"calico-node", "-felix"}, processes) {
+	if !psContains([]string{"calico-felix"}, processes) &&
+		!psContains([]string{"calico-node", "-felix"}, processes) &&
+		!psContains([]string{"calico", "component", "felix"}, processes) {
 		// Return and print message if calico-node is not running
 		//nolint:staticcheck // Ignore ST1005: error strings should not be capitalized
 		return fmt.Errorf("Calico process is not running.")

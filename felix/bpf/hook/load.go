@@ -120,7 +120,7 @@ func (at AttachType) DefaultPolicy(ifaceEncaps bool) DefPolicy {
 		return DefPolicyNone
 	}
 
-	if ifaceEncaps || at.Type == tcdefs.EpTypeIPIP || at.Type == tcdefs.EpTypeL3Device {
+	if ifaceEncaps || at.Type == tcdefs.EpTypeL3Device {
 		return DefPolicyAllow
 	}
 
@@ -157,7 +157,6 @@ func initObjectFiles() {
 				epTypes := []tcdefs.EndpointType{
 					tcdefs.EpTypeWorkload,
 					tcdefs.EpTypeHost,
-					tcdefs.EpTypeIPIP,
 					tcdefs.EpTypeL3Device,
 					tcdefs.EpTypeNAT,
 					tcdefs.EpTypeLO,

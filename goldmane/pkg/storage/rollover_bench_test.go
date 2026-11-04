@@ -51,13 +51,13 @@ func BenchmarkRollover(b *testing.B) {
 	for _, numWindows := range []int{50, 242} {
 		limiter := int64(15)
 		template := buildDiachronicFlow(numWindows)
-		origWindows := template.Windows
+		origWindows := template.windows
 
 		b.Run(fmt.Sprintf("%d_windows", numWindows), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				// Rollover only reslices, so restoring the slice header is sufficient.
-				template.Windows = origWindows
+				template.windows = origWindows
 				template.Rollover(limiter)
 			}
 		})

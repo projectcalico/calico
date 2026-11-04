@@ -256,6 +256,16 @@ func ProgQueryTcx(ifindex int, ingress bool) ([64]uint32, [64]uint32, uint32, er
 	return progQuery(ifindex, attachType)
 }
 
+// ProgQueryNetkit lists the programs attached to a netkit device's peer or
+// primary side.
+func ProgQueryNetkit(ifindex int, peer bool) ([64]uint32, [64]uint32, uint32, error) {
+	attachType := C.BPF_NETKIT_PRIMARY
+	if peer {
+		attachType = C.BPF_NETKIT_PEER
+	}
+	return progQuery(ifindex, attachType)
+}
+
 func progQuery(ifindex, attachType int) ([64]uint32, [64]uint32, uint32, error) {
 	var progIds, attachFlags [64]uint32
 	progCnt := uint32(64)
@@ -602,6 +612,8 @@ func (t *TcGlobalData) Set(m *Map) error {
 		C.uint(t.ExtToSvcMark),
 		C.ushort(t.Tmtu),
 		C.ushort(t.VxlanPort),
+		C.ushort(t.VxlanSrcPortMin),
+		C.ushort(t.VxlanSrcPortMax),
 		C.ushort(t.PSNatStart),
 		C.ushort(t.PSNatLen),
 		C.uint(t.Flags),

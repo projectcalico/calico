@@ -81,6 +81,12 @@ import (
 
 const (
 	techPreviewFeatureSeccompApparmor = "tech-preview.operator.tigera.io/node-apparmor-profile"
+
+	// awsNodeName names the AWS VPC CNI's DaemonSet in kube-system, and the service account AWS runs it as.
+	awsNodeName = "aws-node"
+	// awsVPCAnnotationsWarning keys the warning shown while the AWS VPC CNI's annotation is left
+	// unprotected.
+	awsVPCAnnotationsWarning = "aws-vpc-annotations-unprotected"
 )
 
 const InstallationName string = "calico"
@@ -115,7 +121,12 @@ var (
 	log                    = logf.Log.WithName("controller_installation")
 	openshiftNetworkConfig = "cluster"
 
-	warnOnce = utils.OnceFlag{}
+	bpfBootstrapWarnOnce = utils.OnceFlag{}
+
+	// The served admission policy versions are discovered once at start-up, so an unserved kind is
+	// only warned about once.
+	mapNotServedWarnOnce = utils.OnceFlag{}
+	vapNotServedWarnOnce = utils.OnceFlag{}
 )
 
 // Add creates a new Installation Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -195,6 +206,12 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		if err = utils.AddNamespacedWatch(c, obj, &handler.EnqueueRequestForObject{}); err != nil {
 			return fmt.Errorf("tigera-installation-controller failed to watch %s: %w", obj, err)
 		}
+	}
+
+	// On AWS VPC CNI installs, aws-node's service account decides whether its annotation is protected.
+	awsNode := &appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: awsNodeName, Namespace: metav1.NamespaceSystem}}
+	if err = utils.AddNamespacedWatch(c, awsNode, &handler.EnqueueRequestForObject{}); err != nil {
+		return fmt.Errorf("tigera-installation-controller failed to watch the aws-node DaemonSet: %w", err)
 	}
 
 	// Watch for changes to KubeControllersConfiguration.
@@ -399,7 +416,7 @@ func updateInstallationWithDefaults(ctx context.Context, client client.Client, i
 	}
 
 	awsNode := &appsv1.DaemonSet{}
-	key := types.NamespacedName{Name: "aws-node", Namespace: metav1.NamespaceSystem}
+	key := types.NamespacedName{Name: awsNodeName, Namespace: metav1.NamespaceSystem}
 	err = client.Get(ctx, key, awsNode)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -950,12 +967,14 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
-	if err = r.updateMutatingAdmissionPolicies(ctx, defaulted, reqLogger); err != nil {
-		return reconcile.Result{}, err
-	}
+	if r.managesV3AdmissionPolicies() {
+		if err = r.updateMutatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetV3CRDs); err != nil {
+			return reconcile.Result{}, err
+		}
 
-	if err = r.updateValidatingAdmissionPolicies(ctx, defaulted, reqLogger); err != nil {
-		return reconcile.Result{}, err
+		if err = r.updateValidatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetV3CRDs); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
 	// Now that migrated config is stored in the installation resource, we no longer need
@@ -1090,6 +1109,17 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error checking if namespace migration is needed", err, reqLogger)
 		return reconcile.Result{}, err
+	}
+
+	// The kube-system webhook server rejects the operator's tiered policy writes
+	// after the migration, so it has to go before the render below can succeed.
+	var kubeSystemWebhooksPending bool
+	if !needsNamespaceMigration {
+		kubeSystemWebhooksPending, err = r.namespaceMigration.RemoveKubeSystemWebhooks(ctx, reqLogger)
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceMigrationError, "error removing the kube-system webhook server", err, reqLogger)
+			return reconcile.Result{}, err
+		}
 	}
 
 	// Set any non-default FelixConfiguration values that we need. A field another writer owns
@@ -1354,6 +1384,21 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		}
 	}
 
+	// AWS's manifests, add-on and docs run the AWS VPC CNI as kube-system:aws-node, which is who
+	// calico-aws-vpc-annotations is bound to. Under any other account, including a renamed DaemonSet's,
+	// its annotation writes would be refused, failing every CNI ADD, so its annotation is left
+	// unprotected instead.
+	awsVPCUnprotected, err := awsVPCAnnotationsUnprotected(ctx, r.client, defaulted.Spec.CNI)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Unable to read the aws-node DaemonSet", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+	if awsVPCUnprotected != "" {
+		r.status.SetWarning(awsVPCAnnotationsWarning, awsVPCUnprotected+", so the vpc.amazonaws.com/pod-ips pod annotation is not protected")
+	} else {
+		r.status.ClearWarning(awsVPCAnnotationsWarning)
+	}
+
 	// Build a configuration for rendering calico/node.
 	nodeCfg := render.NodeConfiguration{
 		GoldmaneRunning:       goldmaneRunning,
@@ -1372,6 +1417,8 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		CanRemoveCNIFinalizer: canRemoveCNI,
 		FelixConfiguration:    felixConfiguration,
 		V3CRDs:                r.opts.UseV3CRDs,
+
+		OmitAWSVPCAnnotationsGrant: awsVPCUnprotected != "",
 	}
 
 	if bgpConfiguration.Spec.BindMode != nil {
@@ -1394,7 +1441,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		if !defaulted.Spec.KubernetesProvider.IsNone() {
 			// Warn once about potential issues with API server connectivity.
 			// This lock is necessary to prevent multiple warnings, since this Reconcile is called by multiple workers.
-			if warnOnce.TrySet() {
+			if bpfBootstrapWarnOnce.TrySet() {
 				reqLogger.Info(fmt.Sprintf("[WARNING] Auto bootstrapping BPF network may result in unexpected behavior in %s. ", defaulted.Spec.KubernetesProvider) +
 					"If you experience API server communication issues, disable 'bpfBootstrapNetworking' in the Installation CR " +
 					"and follow the eBPF installation guide at https://docs.tigera.io.")
@@ -1403,7 +1450,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	if !defaulted.Spec.BPFNetworkBootstrapEnabled() {
-		warnOnce.Reset()
+		bpfBootstrapWarnOnce.Reset()
 	}
 
 	components = append(components, render.Node(&nodeCfg))
@@ -1470,11 +1517,36 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
+	// The AWS VPC CNI's policy comes out before its grant, which the components below remove.
+	if awsVPCUnprotected != "" {
+		if err = r.removeValidatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetAWSVPCAnnotations); err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
 	for _, component := range components {
 		if err := handler.CreateOrUpdateOrDelete(ctx, component, nil); err != nil {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error creating / updating resource", err, reqLogger)
 			return reconcile.Result{}, err
 		}
+	}
+
+	// The CNI plugin's ClusterRole, and the AWS VPC CNI's calico-aws-vpc-annotations ClusterRole,
+	// both rendered above, carry the permissions these policies check, so they go in only after
+	// them. The CRD-only manifests don't carry them, so they're installed whether or not the
+	// operator manages CRDs.
+	if err = r.updateValidatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetCNIAnnotations); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if awsVPCUnprotected == "" {
+		if err = r.updateValidatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetAWSVPCAnnotations); err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
+	if err = r.updateMutatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetCNIAnnotations); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// TODO: We handle too many components in this controller at the moment. Once we are done consolidating,
@@ -1601,6 +1673,11 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	reqLogger.V(1).Info("Finished reconciling Installation")
+	if kubeSystemWebhooksPending {
+		// The operator's webhook server becoming available is a status change, which
+		// the Deployment watch filters out.
+		return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
+	}
 	return reconcile.Result{}, nil
 }
 
@@ -1799,21 +1876,30 @@ func (r *ReconcileInstallation) updateCRDs(ctx context.Context, variant operator
 	return nil
 }
 
-func (r *ReconcileInstallation) updateMutatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger) error {
-	if !r.opts.ManageCRDs || !r.opts.UseV3CRDs {
-		return nil
-	}
+// managesV3AdmissionPolicies reports whether the operator installs the admission policies for v3
+// CRDs: only when the cluster uses them and the operator manages CRDs.
+func (r *ReconcileInstallation) managesV3AdmissionPolicies() bool {
+	return r.opts.ManageCRDs && r.opts.UseV3CRDs
+}
 
+// updateMutatingAdmissionPolicies reconciles the operator's MutatingAdmissionPolicies in the given set.
+func (r *ReconcileInstallation) updateMutatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger, set admission.PolicySet) error {
 	// MutatingAdmissionPolicy served version was discovered once at startup (v1 was promoted to GA
 	// in k8s 1.36 and v1beta1 (introduced in 1.32) is scheduled for removal in 1.37).
 	mapAPIVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindPolicy)
 	if mapAPIVersion == "" {
-		r.status.SetDegraded(operatorv1.ResourceNotReady, "Kubernetes cluster does not serve MutatingAdmissionPolicy (requires v1.32+); policy defaulting will not be available", nil, log)
+		// v3 resources rely on their policies for defaulting. The CNI annotations are still
+		// protected by the validating policy without theirs.
+		if set == admission.PolicySetV3CRDs {
+			r.status.SetDegraded(operatorv1.ResourceNotReady, "Kubernetes cluster does not serve MutatingAdmissionPolicy (requires v1.32+); policy defaulting will not be available", nil, log)
+		} else if mapNotServedWarnOnce.TrySet() {
+			log.Info("[WARNING] Kubernetes cluster does not serve MutatingAdmissionPolicy, skipping")
+		}
 		return nil
 	}
 
-	desired := admission.GetMutatingAdmissionPolicies(install.Spec.Variant, r.opts.UseV3CRDs, mapAPIVersion)
-	existingMAPs, existingMAPBs, err := admission.ListManaged(ctx, r.client, mapAPIVersion)
+	desired := admission.GetMutatingAdmissionPolicies(install.Spec.Variant, set, mapAPIVersion)
+	existingMAPs, existingMAPBs, err := admission.ListManaged(ctx, r.client, mapAPIVersion, set)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed MutatingAdmissionPolicy resources", err, log)
 		return err
@@ -1822,28 +1908,44 @@ func (r *ReconcileInstallation) updateMutatingAdmissionPolicies(ctx context.Cont
 	return r.syncManagedAdmissionPolicies(ctx, install, log, desired, existingMAPs, existingMAPBs, admission.IsPolicyKind, admission.IsBindingKind, "Error syncing MutatingAdmissionPolicy resources")
 }
 
-func (r *ReconcileInstallation) updateValidatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger) error {
-	if !r.opts.ManageCRDs || !r.opts.UseV3CRDs {
-		return nil
-	}
-
+// updateValidatingAdmissionPolicies reconciles the operator's ValidatingAdmissionPolicies in the given
+// set.
+func (r *ReconcileInstallation) updateValidatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger, set admission.PolicySet) error {
 	// ValidatingAdmissionPolicy reached GA (v1) well before MutatingAdmissionPolicy, so it has its own
 	// served version and is reconciled independently of whether the cluster serves MAPs. If the cluster
 	// doesn't serve it at all there's nothing to do, so skip rather than degrade.
 	vapAPIVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindValidatingPolicy)
 	if vapAPIVersion == "" {
-		log.Info("Kubernetes cluster does not serve ValidatingAdmissionPolicy, skipping")
+		if vapNotServedWarnOnce.TrySet() {
+			log.Info("[WARNING] Kubernetes cluster does not serve ValidatingAdmissionPolicy, skipping")
+		}
 		return nil
 	}
 
-	desired := admission.GetValidatingAdmissionPolicies(install.Spec.Variant, r.opts.UseV3CRDs, vapAPIVersion)
-	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion)
+	desired := admission.GetValidatingAdmissionPolicies(install.Spec.Variant, set, vapAPIVersion)
+	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion, set)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed ValidatingAdmissionPolicy resources", err, log)
 		return err
 	}
 
 	return r.syncManagedAdmissionPolicies(ctx, install, log, desired, existingVAPs, existingVAPBs, admission.IsValidatingPolicyKind, admission.IsValidatingBindingKind, "Error syncing ValidatingAdmissionPolicy resources")
+}
+
+// removeValidatingAdmissionPolicies deletes the operator's ValidatingAdmissionPolicies in the given set.
+func (r *ReconcileInstallation) removeValidatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger, set admission.PolicySet) error {
+	vapAPIVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindValidatingPolicy)
+	if vapAPIVersion == "" {
+		return nil
+	}
+
+	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion, set)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed ValidatingAdmissionPolicy resources", err, log)
+		return err
+	}
+
+	return r.syncManagedAdmissionPolicies(ctx, install, log, nil, existingVAPs, existingVAPBs, admission.IsValidatingPolicyKind, admission.IsValidatingBindingKind, "Error removing ValidatingAdmissionPolicy resources")
 }
 
 // syncManagedAdmissionPolicies creates or updates the desired admission policies and bindings and
@@ -1923,6 +2025,36 @@ func isHostedOpenShift(ctx context.Context, client client.Client) (bool, error) 
 		return false, fmt.Errorf("unable to read OpenShift infrastructure configuration: %w", err)
 	}
 	return (infra.Status.ControlPlaneTopology == "External"), nil
+}
+
+// awsVPCAnnotationsUnprotected says why the AWS VPC CNI's annotation must be left unprotected, or
+// returns "" when it can be protected. Only an AWS VPC CNI install needs aws-node to be let through,
+// and there it must run as kube-system:aws-node. A renamed DaemonSet is treated as missing, since
+// its account is unknown.
+func awsVPCAnnotationsUnprotected(ctx context.Context, c client.Client, cni *operatorv1.CNISpec) (string, error) {
+	if cni == nil || cni.Type != operatorv1.PluginAmazonVPC {
+		return "", nil
+	}
+
+	ds := &appsv1.DaemonSet{}
+	err := c.Get(ctx, types.NamespacedName{Name: awsNodeName, Namespace: metav1.NamespaceSystem}, ds)
+	if apierrors.IsNotFound(err) {
+		return fmt.Sprintf("The AWS VPC CNI is in use but there is no %s/%s DaemonSet", metav1.NamespaceSystem, awsNodeName), nil
+	} else if err != nil {
+		return "", err
+	}
+
+	sa := ds.Spec.Template.Spec.ServiceAccountName
+	if sa == "" {
+		sa = ds.Spec.Template.Spec.DeprecatedServiceAccount
+	}
+	if sa == "" {
+		sa = "default"
+	}
+	if sa == awsNodeName {
+		return "", nil
+	}
+	return fmt.Sprintf("The %s DaemonSet runs as service account %q, not %q", awsNodeName, sa, awsNodeName), nil
 }
 
 func updateInstallationForAWSNode(i *operatorv1.Installation, ds *appsv1.DaemonSet) error {

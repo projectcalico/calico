@@ -1,7 +1,5 @@
 #!/bin/bash
-# Copyright 2015 Metaswitch Networks
-# All Rights Reserved.
-# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2025 Tigera, Inc. All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -230,16 +228,18 @@ ls -la ${CALICO_REPO_DIR}
 if getent group semaphore >/dev/null 2>&1; then
     sudo adduser stack semaphore
 else
-    # Same problem, no shared group to solve it with: `useradd -m` gives a home directory mode
-    # 0750 on Ubuntu, so the stack user cannot even traverse into the checkout.  Opening up
-    # traversal is enough -- the files themselves are world-readable from the default umask.
+    # Same problem, no shared group to solve it with: `useradd -m` gives a
+    # home directory mode 0750 on Ubuntu, so the stack user cannot even
+    # traverse into the checkout.  Reading the files is handled below.
     sudo chmod o+x "$(dirname ${CALICO_REPO_DIR})"
 fi
 
-# Guarantee that the stack user will be able to make a Git clone of the checkout.  Since we started
-# using partial cloning, *.promisor files under .git/objects/pack naturally have permissions
-# -rw-------, which means that stack won't be able to read them.
-sudo chmod -R g+r ${CALICO_REPO_DIR}
+# Guarantee that the stack user will be able to make a Git clone of the
+# checkout.  Since we started using partial cloning, *.promisor files under
+# .git/objects/pack naturally have permissions -rw-------, which means that
+# stack won't be able to read them.  World-readable, not just group-readable:
+# stack only shares the checkout's group on a Semaphore agent.
+sudo chmod -R a+r ${CALICO_REPO_DIR}
 
 # Stack!
 sudo -u stack -H -E bash -x <<'EOF'
@@ -337,7 +337,7 @@ if ${SCALE_ONLY:-false}; then
     # that nobody notices until the dashboard is next read.
     (
       cd ${CALICO_REPO_DIR} && \
-      go run ./hack/perf/cmd/send-perf-results \
+      make bin/send-perf-results && bin/send-perf-results \
          --dir artifacts/perf \
          --templates hack/perf/index-templates \
          --require-publication
@@ -347,7 +347,7 @@ else
     # run must not fail because the trend store was briefly unreachable.
     (
       cd ${CALICO_REPO_DIR} && \
-      go run ./hack/perf/cmd/send-perf-results \
+      make bin/send-perf-results && bin/send-perf-results \
          --dir artifacts/perf \
          --templates hack/perf/index-templates
     ) || true
@@ -368,6 +368,10 @@ if ! ${TEMPEST:-false}; then
 else
     source ../calico/devstack/devstackgaterc
     cd /opt/stack/tempest
+    # Tempest imports pkg_resources, which setuptools dropped in 81, and the
+    # recreate that pinning Tempest forces seeds the venv with something newer.
+    tox -eall --notest
+    .tox/tempest/bin/pip install 'setuptools<81'
     tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
 fi
 EOF

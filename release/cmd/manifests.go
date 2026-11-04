@@ -22,7 +22,6 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/version"
 )
 
 func manifestsCommand(cfg *Config) *cli.Command {
@@ -81,27 +80,31 @@ var pinnedManifests = func(cfg *Config, c *cli.Command, pin pinned) (*manifests.
 		if err != nil {
 			return nil, err
 		}
+		h, err := p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false)
+		if err != nil {
+			return nil, err
+		}
 		return &manifests.Manifests{
 			RepoRoot:  cfg.RepoRootDir,
 			Version:   p.ProductVersion,
 			Operator:  p.Operator,
 			Registry:  p.ProductRegistry,
-			OutputDir: p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false).Source,
+			OutputDir: h.Source,
 		}, nil
 	}
-	ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
+	ver, operatorVer, err := manifests.Versions(cfg.RepoRootDir)
 	if err != nil {
 		return nil, err
 	}
 	return &manifests.Manifests{
 		RepoRoot: cfg.RepoRootDir,
-		Version:  ver.FormattedString(),
+		Version:  ver.String(),
 		Operator: registry.Component{
-			Version:  operatorVer.FormattedString(),
+			Version:  operatorVer.String(),
 			Image:    registry.OperatorImage,
 			Registry: operatorRegistries(c)[0],
 		},
 		Registry:  firstRegistry(c),
-		OutputDir: filepath.Join(cfg.OutputDir, ver.FormattedString()),
+		OutputDir: filepath.Join(cfg.OutputDir, ver.String()),
 	}, nil
 }

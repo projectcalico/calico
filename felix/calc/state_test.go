@@ -19,6 +19,7 @@ import (
 	"maps"
 	"reflect"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 
@@ -369,8 +370,14 @@ func (s State) NumPolicies() int {
 	}
 }
 
-func (s State) NumProfileRules() int {
-	return s.ActiveKeys(model.ProfileRulesKey{}).Len()
+func (s State) NumProfiles() int {
+	n := 0
+	for k := range s.ActiveKeys(model.ResourceKey{}).All() {
+		if k.(model.ResourceKey).Kind == v3.KindProfile {
+			n++
+		}
+	}
+	return n
 }
 
 func (s State) NumALPPolicies() int {

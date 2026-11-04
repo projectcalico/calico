@@ -38,6 +38,7 @@ func TestConcurrentReadsAndWrites(t *testing.T) {
 		reservations: map[string]*v3.IPReservation{},
 		nodes:        map[string]bool{},
 		refs:         map[string]AddressRef{},
+		newTracker:   NewTracker,
 	}
 
 	var done atomic.Bool
@@ -51,8 +52,12 @@ func TestConcurrentReadsAndWrites(t *testing.T) {
 					tracker.Summarize(name)
 					tracker.Allocations(name)
 					tracker.Unreferenced(name)
+					for _, b := range tracker.PoolBlockCounts(name) {
+						tracker.BlockCounts(b.Block.CIDR)
+					}
 				}
 				tracker.NoPoolBlocks()
+				tracker.NoPoolBlockCounts()
 				tracker.NoPoolUnreferenced()
 				tracker.AllRefs()
 				tracker.Refs(net.ParseIP("10.0.0.1"))

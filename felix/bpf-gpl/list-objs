@@ -29,7 +29,7 @@ for log_level in debug no_log; do
       ep_types="wep"
       directions="from"
     else
-      ep_types="wep hep ipip l3 nat lo"
+      ep_types="wep hep l3 nat lo"
       directions="from to"
     fi
     for ep_type in $ep_types; do

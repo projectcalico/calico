@@ -82,7 +82,7 @@ func (i *IPPoolAccessor) getPools(poolNames []string, ipVersion int, caller stri
 			if mode == "" {
 				mode = v3.Automatic
 			}
-			pool := v3.IPPool{Spec: v3.IPPoolSpec{
+			pool := v3.IPPool{ObjectMeta: metav1.ObjectMeta{Name: p}, Spec: v3.IPPoolSpec{
 				CIDR:              p,
 				NodeSelector:      i.Pools[p].NodeSelector,
 				NamespaceSelector: i.Pools[p].NamespaceSelector,

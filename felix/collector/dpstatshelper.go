@@ -94,35 +94,38 @@ func New(
 
 // configureFlowAggregation adds appropriate aggregators to the FlowLogReporter, depending on configuration.
 func configureFlowAggregation(configParams *config.Config, fr *flowlog.FlowLogReporter) {
+	includeIPs := configParams.FlowLogsGoldmaneIncludeIPsEnabled()
+
 	// Set up aggregator for goldmane reporter.
 	if configParams.FlowLogsGoldmaneServer != "" {
 		log.Info("Creating goldmane Aggregator for allowed")
-		gaa := defaultFlowAggregator(rules.RuleActionAllow, configParams)
+		gaa := defaultFlowAggregator(rules.RuleActionAllow, configParams, includeIPs)
 		log.Info("Adding Flow Logs Aggregator (allowed) for goldmane")
 		fr.AddAggregator(gaa, []string{FlowLogsGoldmaneReporterName})
 		log.Info("Creating goldmane Aggregator for denied")
-		gad := defaultFlowAggregator(rules.RuleActionDeny, configParams)
+		gad := defaultFlowAggregator(rules.RuleActionDeny, configParams, includeIPs)
 		log.Info("Adding Flow Logs Aggregator (denied) for goldmane")
 		fr.AddAggregator(gad, []string{FlowLogsGoldmaneReporterName})
 	}
 	// Set up aggregator for local socket reporter.
 	if configParams.FlowLogsLocalReporterEnabled() {
 		log.Info("Creating local socket Aggregator for allowed")
-		gaa := defaultFlowAggregator(rules.RuleActionAllow, configParams)
+		gaa := defaultFlowAggregator(rules.RuleActionAllow, configParams, includeIPs)
 		log.Info("Adding Flow Logs Aggregator (allowed) for local socket")
 		fr.AddAggregator(gaa, []string{FlowLogsLocalReporterName})
 		log.Info("Creating local socket Aggregator for denied")
-		gad := defaultFlowAggregator(rules.RuleActionDeny, configParams)
+		gad := defaultFlowAggregator(rules.RuleActionDeny, configParams, includeIPs)
 		log.Info("Adding Flow Logs Aggregator (denied) for local socket")
 		fr.AddAggregator(gad, []string{FlowLogsLocalReporterName})
 	}
 }
 
-func defaultFlowAggregator(forAction rules.RuleAction, configParams *config.Config) *flowlog.Aggregator {
+func defaultFlowAggregator(forAction rules.RuleAction, configParams *config.Config, includeIPs bool) *flowlog.Aggregator {
 	return flowlog.NewAggregator().
 		DisplayDebugTraceLogs(configParams.FlowLogsCollectorDebugTrace).
 		IncludeLabels(true).
 		IncludePolicies(true).
 		IncludeService(true).
+		IncludeIPs(includeIPs).
 		ForAction(forAction)
 }

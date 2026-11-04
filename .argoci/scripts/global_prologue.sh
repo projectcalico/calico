@@ -152,6 +152,15 @@ export CALICOCTL_INSTALL_TYPE=${CALICOCTL_INSTALL_TYPE:-"binary"}
 export CLUSTER_NAME=${CLUSTER_NAME:-bz-${PRODUCT}-${RANDOM_TOKEN1}}
 export DIAGS_ARCHIVE_FILENAME=${DIAGS_ARCHIVE_FILENAME:-${PROVISIONER}-${CLUSTER_NAME}-diags.tgz}
 
+# Recorded before anything exists, so the exit handler can still find a cluster
+# whose step never reached its teardown. bz labels nothing it creates, but every
+# name starts with CLUSTER_NAME — which only holds for the gcp-* provisioners.
+if [[ "${PROVISIONER}" == gcp-* && -n "${CI_ARTIFACT_STORAGE:-}" ]]; then
+  printf 'CLUSTER_NAME=%s\nGOOGLE_PROJECT=%s\n' "${CLUSTER_NAME}" "${GOOGLE_PROJECT}" > "/tmp/${CLUSTER_NAME}.info"
+  artifact push workflow "/tmp/${CLUSTER_NAME}.info" --destination "bz-clusters/${CLUSTER_NAME}.info" ||
+    echo "[WARN] could not record ${CLUSTER_NAME} for the exit-handler sweep"
+fi
+
 # bz working directories and artifact bucket.
 # 'bz init profile -n NAME' creates the profile at <cwd>/NAME, and bz provision/
 # install/destroy must run from that dir. Init from $HOME (in a subshell so the
@@ -183,12 +192,26 @@ if ! command -v bz >/dev/null 2>&1; then
   # the job died pre-provision. Retry with backoff + per-pod jitter, fail curl
   # on HTTP errors, validate the asset id is numeric and the binary is sane.
   bz_ok=""
+  bz_body=$(mktemp) bz_headers=$(mktemp) bz_err=$(mktemp)
   for attempt in $(seq 1 8); do
-    api=$(curl -fsS --retry 3 --retry-all-errors \
+    bz_code=$(curl -sS --retry 3 --retry-all-errors -D "${bz_headers}" -o "${bz_body}" -w '%{http_code}' \
             -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${BZ_REPO}/releases/${BZ_RELEASE}" 2>/dev/null || true)
+            "https://api.github.com/repos/${BZ_REPO}/releases/${BZ_RELEASE}" 2>"${bz_err}" || true)
+    api=""
+    [[ "${bz_code}" == 200 ]] && api=$(cat "${bz_body}")
     BZ_ASSET_ID=$(printf '%s' "${api}" | jq -r 'if (type=="object" and (.assets|type)=="array") then (.assets[]|select(.name|test("^bz.*linux-amd64"))|.id) else empty end' 2>/dev/null | head -1)
+    if [[ ! "${BZ_ASSET_ID}" =~ ^[0-9]+$ ]]; then
+      echo "[WARN] release lookup failed: HTTP ${bz_code:-none} $(jq -r '.message // empty' "${bz_body}" 2>/dev/null) $(head -c 200 "${bz_err}")"
+      # The token's hourly limit is shared by every lane and outlasts all of the
+      # retries below, so waiting here only delays the failure.
+      bz_remaining=$(tr -d '\r' < "${bz_headers}" | awk -F': ' 'tolower($1)=="x-ratelimit-remaining" {print $2}')
+      if [[ "${bz_remaining}" == 0 ]]; then
+        bz_reset=$(tr -d '\r' < "${bz_headers}" | awk -F': ' 'tolower($1)=="x-ratelimit-reset" {print $2}')
+        echo "[ERROR] GitHub rate limit for this token is exhausted until $(date -u -d "@${bz_reset:-0}" +%H:%M:%SZ)"
+        break
+      fi
+    fi
     if [[ "${BZ_ASSET_ID}" =~ ^[0-9]+$ ]] \
        && wget -q --tries=3 --waitretry=5 --auth-no-challenge --header='Accept:application/octet-stream' \
             "https://${GITHUB_ACCESS_TOKEN}:@api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID}" -O "${BZ_GLOBAL_BIN}/bz" \
@@ -205,7 +228,8 @@ if ! command -v bz >/dev/null 2>&1; then
       echo "[WARN] bz install attempt ${attempt}/8 failed (asset_id='${BZ_ASSET_ID:-}')"
     fi
   done
-  [[ -n "${bz_ok}" ]] || { echo "[ERROR] failed to install bz from ${BZ_REPO} after 8 attempts (GitHub rate limit?)"; exit 1; }
+  rm -f "${bz_body}" "${bz_headers}" "${bz_err}"
+  [[ -n "${bz_ok}" ]] || { echo "[ERROR] failed to install bz from ${BZ_REPO}"; exit 1; }
 fi
 echo "[INFO] bz resolved at $(command -v bz || echo '<none>')"
 

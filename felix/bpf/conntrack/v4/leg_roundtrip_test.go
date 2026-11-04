@@ -39,6 +39,9 @@ var legBits = []struct {
 	{"approved", 4, LegFlagApproved, func(l *Leg) { l.Approved = true }, func(l Leg) bool { return l.Approved }},
 	{"opener", 5, LegFlagOpener, func(l *Leg) { l.Opener = true }, func(l Leg) bool { return l.Opener }},
 	{"workload", 6, LegFlagWorkload, func(l *Leg) { l.Workload = true }, func(l Leg) bool { return l.Workload }},
+	{"tunnel", 7, LegFlagTunnel, func(l *Leg) { l.Tunnel = true }, func(l Leg) bool { return l.Tunnel }},
+	{"pinned", 8, LegFlagPinned, func(l *Leg) { l.Pinned = true }, func(l Leg) bool { return l.Pinned }},
+	{"checked", 9, LegFlagChecked, func(l *Leg) { l.Checked = true }, func(l Leg) bool { return l.Checked }},
 }
 
 // TestLegFlagBitPositions pins each flag's bit across LegFlag*, Flags, AsBytes
@@ -91,6 +94,9 @@ func TestLegRoundTrip(t *testing.T) {
 		Approved: true,
 		Opener:   false,
 		Workload: true,
+		Tunnel:   true,
+		Pinned:   false,
+		Checked:  true,
 		Ifindex:  0x0badf00d,
 	}
 

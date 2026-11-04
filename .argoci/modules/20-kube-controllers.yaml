@@ -1,0 +1,35 @@
+# kube-controllers CI, per API group.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: kube-controllers-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    requests: {cpu: 5750m, memory: 5.5Gi}
+    depends: [build-calico-image, check-go]
+    matrix:
+      - name: crd-v1
+        env:
+          - name: KC_TARGET
+            value: ci-no-prereqs
+      # The v3 API group is covered by the unit tests alone: the FVs underneath
+      # `ci` exercise the backend, which the group does not reach.
+      - name: v3
+        env:
+          - name: KC_TARGET
+            value: ut-no-prereqs
+          - name: CALICO_API_GROUP
+            value: projectcalico.org/v3
+    commands: |
+      .argoci/scripts/load-cached-images calico
+      cd kube-controllers
+      make ${KC_TARGET}
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}/kube-controllers"
+      artifact push job report --destination test-results || true

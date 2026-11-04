@@ -1,0 +1,54 @@
+# node checks and UTs, plus its non-amd64 and Windows builds.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+
+steps:
+  - name: node-static-checks
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    depends: [check-go]
+    requests: {cpu: 6000m, memory: 3.75Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    commands: |
+      make -C node static-checks DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
+
+  - name: node-ut
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    depends: [check-go]
+    requests: {cpu: 4250m, memory: 3Gi}
+    services:
+      - docker
+    commands: |
+      cd node
+      make ut
+    epilogue: |
+      # Epilogues don't inherit the commands' `cd` or exports.
+      cd "${CI_HOME}/${CI_GIT_DIR}/node"
+      artifact push job report --destination test-results || true
+
+  # Emulated, so each of these is closer to twenty minutes than two.
+  - name: node-build
+    depends: [build-nft-rpms, check-go]
+    requests: {cpu: 2000m, memory: 4Gi}
+    services:
+      - docker
+    matrix:
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    commands: |
+      # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
+      # does not go back to the registry for it.
+      .argoci/scripts/load-nft-rpms.sh "${ARCH}"
+      cd node
+      make image ARCH=$ARCH

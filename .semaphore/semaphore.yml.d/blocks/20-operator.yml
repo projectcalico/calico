@@ -9,7 +9,7 @@
         value: "calico"
     prologue:
       commands:
-        - .semaphore/load-cached-images
+        - .argoci/scripts/load-cached-images
         - cd operator
     jobs:
       - name: "Operator: static checks and unit tests"
@@ -58,7 +58,7 @@
         value: "calico"
     prologue:
       commands:
-        - .semaphore/load-cached-images
+        - .argoci/scripts/load-cached-images
         - cd operator
     jobs:
       - name: "Operator: FV on kind"

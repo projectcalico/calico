@@ -139,7 +139,7 @@ log / observability pipeline (Goldmane and friends).
 
 They are distinct from:
 
-- **Debug log filters (Debug log filters)**, which emit per-packet textual
+- **[Debug log filters](#debug-log-filters)**, which emit per-packet textual
   traces for diagnosis. Log filters are off by default; flow
   logs are a feature.
 - **BPF counters**, which produce aggregate counts, not
@@ -363,7 +363,8 @@ annotation on a HEP or WEP. The value is carried in BPF globals as
 
 The ECN bits are preserved in both address families. Istio's DSCP
 hook (for L7 mesh identification at connection setup) uses a second
-global, `ISTIO_DSCP`; see Istio ambient mode integration below.
+global, `ISTIO_DSCP`; see
+[Istio ambient mode](#istio-ambient-mode-integration).
 
 ### Review notes for this section
 
@@ -441,7 +442,7 @@ the main program in `tc.c` does:
    a mesh member.
 4. On match, `qos_dscp_set(ctx, ISTIO_DSCP)` rewrites the DSCP
    bits in the IPv4 TOS / IPv6 traffic-class byte — same
-   mechanics as QoS DSCP.
+   mechanics as [QoS DSCP](#dscp).
 
 The `ALL_ISTIO_WEPS_ID` IP set is populated by Felix with every
 mesh WEP in the cluster (local and remote); it lives in the
@@ -474,7 +475,8 @@ a convention shared with Istio ztunnel).
 ### Review notes
 
 - The SYN-only path is load-bearing. A change that moves Istio
-  DSCP marking onto every packet breaks [bpf-overview.md → Fast-path performance discipline](./bpf-overview.md) fast-path discipline.
+  DSCP marking onto every packet breaks the
+  [fast-path discipline](./bpf-overview.md).
   If a future feature genuinely needs per-packet Istio DSCP,
   reuse `CALI_CT_FLAG_SET_DSCP` / `CALI_ST_SET_DSCP` from QoS
   rather than introducing a second per-packet rewrite.

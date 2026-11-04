@@ -266,7 +266,7 @@ func (s settings) pending() ([]unit, error) {
 		return units, nil
 	}
 
-	recorded := steps.DigestsByRepo(s.resume.published)
+	recorded := registry.DigestsByRepo(s.resume.published)
 
 	done, err := steps.Go(units, func(u unit) (bool, error) {
 		return s.published(u, recorded)
@@ -286,12 +286,12 @@ func (s settings) pending() ([]unit, error) {
 	return out, nil
 }
 
-func (s settings) published(u unit, recorded steps.RecordedDigests) (bool, error) {
-	digests, ok := recorded[u.repo()]
-	if !ok {
+func (s settings) published(u unit, recorded registry.RecordedDigests) (bool, error) {
+	digests := recorded.Digests(u.repo())
+	if len(digests) == 0 {
 		return false, nil
 	}
-	ref := u.ref(s.Version())
+	ref := s.Ref(u.registry, u.chart)
 	got, exists, err := s.resolve(ref)
 	if err != nil {
 		return false, s.Errorf("resolving %s: %w", ref, err)
@@ -347,7 +347,7 @@ func (s settings) record(units []unit) error {
 		return nil
 	}
 	refs, lookupErr := steps.Go(units, func(u unit) (string, error) {
-		ref := u.ref(s.Version())
+		ref := s.Ref(u.registry, u.chart)
 		digest, exists, err := s.resolve(ref)
 		if err != nil {
 			return "", s.Errorf("recording published chart %s: %w", u.chart, err)
@@ -356,7 +356,7 @@ func (s settings) record(units []unit) error {
 			s.Logger().WithField("chart", ref).Debug("Published chart absent, not recording")
 			return "", nil
 		}
-		return fmt.Sprintf("%s@%s", u.repo(), digest), nil
+		return registry.PublishedRef(ref, digest), nil
 	})
 
 	errs := []error{lookupErr}
@@ -397,11 +397,6 @@ func (s settings) units() []unit {
 
 func (u unit) repo() string {
 	return u.registry + "/" + u.chart
-}
-
-// ref names the chart at one version, the form a digest is resolved from.
-func (u unit) ref(version string) string {
-	return u.repo() + ":" + version
 }
 
 // A chart goes to several registries, so the registry is in the name.

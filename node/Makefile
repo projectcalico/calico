@@ -12,8 +12,8 @@ WINDOWS_IMAGE         ?=$(NODE_IMAGE)-windows
 BUILD_IMAGES ?=$(NODE_IMAGE)
 
 # Paths within the build container for BPF source.
-LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/libbpf/src/
-BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/
+LIBBPF_CONTAINER_PATH=$(BUILD_REPO_ROOT)/felix/bpf-gpl/libbpf/src/
+BPFGPL_CONTAINER_PATH=$(BUILD_REPO_ROOT)/felix/bpf-gpl/
 LIBBPF_FILE_CREATED=../felix/bpf-gpl/.libbpf-$(LIBBPF_VERSION)
 
 LOCAL_CHECKS = LIBBPF_FILE_CREATED

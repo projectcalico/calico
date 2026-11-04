@@ -101,9 +101,8 @@ func TestParseIperf3JSON(t *testing.T) {
 	}
 }
 
-// TestLossyRunClearsBaselineGate is the regression this change exists for: the
-// run above must satisfy the packet rate test's baseline gate, which requires
-// 10x headroom over the 100 pps limit under test.
+// The packet rate test's baseline gate wants 10x headroom over the 100 pps limit
+// under test, and a lossy run must still clear it.
 func TestLossyRunClearsBaselineGate(t *testing.T) {
 	const packetRateLimit, baselineHeadroom = 100, 10
 

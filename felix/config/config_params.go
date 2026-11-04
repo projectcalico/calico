@@ -363,6 +363,8 @@ type Config struct {
 	// Optional: VXLAN encap is now determined by the existing IP pools (Encapsulation struct)
 	VXLANEnabled         *bool  `config:"*bool;"`
 	VXLANPort            int    `config:"int;4789"`
+	VXLANSrcPortMin      int    `config:"int(0:65535);0"`
+	VXLANSrcPortMax      int    `config:"int(0:65535);0"`
 	VXLANVNI             int    `config:"int;4096"`
 	VXLANMTU             int    `config:"int;0"`
 	VXLANMTUV6           int    `config:"int;0"`
@@ -448,6 +450,7 @@ type Config struct {
 	FlowLogsFlushInterval        time.Duration `config:"seconds;300"`
 	FlowLogsCollectorDebugTrace  bool          `config:"bool;false"`
 	FlowLogsGoldmaneServer       string        `config:"string;"`
+	FlowLogsGoldmaneIncludeIPs   string        `config:"oneof(Enabled,Disabled);Enabled"`
 	FlowLogsLocalReporter        string        `config:"oneof(Enabled,Disabled);Disabled"`
 	FlowLogsPolicyEvaluationMode string        `config:"oneof(None,Continuous);Continuous"`
 
@@ -601,6 +604,10 @@ func (config *Config) TableRefreshInterval() time.Duration {
 
 func (config *Config) FlowLogsLocalReporterEnabled() bool {
 	return config.FlowLogsLocalReporter == "Enabled"
+}
+
+func (config *Config) FlowLogsGoldmaneIncludeIPsEnabled() bool {
+	return config.FlowLogsGoldmaneIncludeIPs == "Enabled"
 }
 
 func (config *Config) FlowLogsEnabled() bool {
@@ -1044,6 +1051,17 @@ func (config *Config) Validate() (err error) {
 				" they _all_ must be" +
 				" - except that either TyphaCN or TyphaURISAN may be left unset")
 		}
+	}
+
+	// VXLAN source-port range: either both ends are unset (use kernel/dataplane
+	// default) or both ends are set with min strictly less than max -- a
+	// single-port "range" is degenerate and is not honoured uniformly across
+	// dataplanes.
+	if (config.VXLANSrcPortMin == 0) != (config.VXLANSrcPortMax == 0) {
+		err = errors.New("VXLANSrcPortMin and VXLANSrcPortMax must both be set or both be unset")
+	} else if config.VXLANSrcPortMin != 0 && config.VXLANSrcPortMin >= config.VXLANSrcPortMax {
+		err = fmt.Errorf("VXLANSrcPortMin (%d) must be strictly less than VXLANSrcPortMax (%d)",
+			config.VXLANSrcPortMin, config.VXLANSrcPortMax)
 	}
 
 	if err != nil {

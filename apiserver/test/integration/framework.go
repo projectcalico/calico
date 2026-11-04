@@ -18,7 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"testing"
@@ -58,7 +58,14 @@ func withConfigGetFreshAPIServerServerAndClient(
 	*restclient.Config,
 	func(),
 ) {
-	securePort := rand.Intn(31743) + 1024
+	// A port the kernel picks cannot be one something else already holds, such as
+	// the etcd the tests run against, and handing over the open listener leaves
+	// no gap for anything to take it.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Error opening a listener for the server: %v", err)
+	}
+	securePort := listener.Addr().(*net.TCPAddr).Port
 	secureAddr := fmt.Sprintf("https://localhost:%d", securePort)
 	stopCh := make(chan struct{})
 	serverFailed := make(chan struct{})
@@ -76,12 +83,12 @@ func withConfigGetFreshAPIServerServerAndClient(
 		DisableAuth:        true,
 		StopCh:             stopCh,
 	}
-	options.RecommendedOptions.SecureServing.BindPort = securePort
+	options.RecommendedOptions.SecureServing.Listener = listener
 	options.RecommendedOptions.CoreAPI.CoreAPIKubeconfigPath = os.Getenv("KUBECONFIG")
 
-	var err error
 	pcs, err := server.PrepareServer(options)
 	if err != nil {
+		_ = listener.Close()
 		close(serverFailed)
 		t.Fatalf("Error preparing the server: %v", err)
 	}
