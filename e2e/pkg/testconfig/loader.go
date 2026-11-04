@@ -32,6 +32,31 @@ func Load(path string) (*Config, error) {
 	return load(path, nil)
 }
 
+// LoadAll loads each config and merges them left to right, the same way an
+// extends list folds its parents, so naming several configs selects what one
+// config extending all of them would. The merged result is validated again,
+// because a rule such as "include sets both labels and name patterns" can be
+// broken by two files that each pass alone.
+func LoadAll(paths []string) (*Config, error) {
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no config paths given")
+	}
+
+	merged := &Config{}
+	for _, p := range paths {
+		cfg, err := Load(p)
+		if err != nil {
+			return nil, err
+		}
+		merged = merge(merged, cfg)
+	}
+
+	if err := validateResolved(merged, strings.Join(paths, " ")); err != nil {
+		return nil, err
+	}
+	return merged, nil
+}
+
 func load(path string, seen []string) (*Config, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
