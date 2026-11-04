@@ -73,6 +73,7 @@ batch_memo_restore_lane() {
   fi
   if [ "$restored" -eq 0 ]; then
     echo "Batch memo: could not restore the cached lane.  felix-build may have been skipped, so this lane can't run here." >&2
+    # Succeeds if the entry is already gone, as when it expired.
     if artifact cache delete "$BATCH_MEMO_PREFIX/lane" >/dev/null; then
       echo "Batch memo: deleted the cached lane; resubmit the workflow, or push, to run the lane." >&2
     else
