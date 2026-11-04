@@ -29,7 +29,7 @@
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv4 [calicoiptables-ipv4] | bpf/kops-xtables-encap-nobgp-extnode-aws | 218
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 [calicobpf-ipv6] | bpf/kops-bpf-encap-nobgp-extnode-aws | 214
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 [calicoiptables-ipv6] | bpf/kops-xtables-encap-nobgp-extnode-aws | 218
-.argoci/cron/e2e-bpf.yaml | kubevirt-e2e-tests | gcp/kubevirt | 9
+.argoci/cron/e2e-bpf.yaml | kubevirt-e2e-tests | gcp/kubevirt | 12
 .argoci/cron/e2e-bpf.yaml | usage-reporting-with-bpf | (usage-reporting) | -
 .argoci/cron/e2e-bpf.yaml | wireguard | bpf/aks-bpf-encap-nobgp | 216
 .argoci/cron/e2e-certification.yaml | hcp-hosted-setup-and-tests | (ocp-cert) | -
@@ -58,7 +58,7 @@
 .argoci/cron/e2e-iptables.yaml | ipvs | iptables/xtables-v3crd | 226
 .argoci/cron/e2e-iptables.yaml | k8s-beta-runs | iptables/xtables-manifest | 212
 .argoci/cron/e2e-iptables.yaml | k8s-distros | iptables/xtables | 227
-.argoci/cron/e2e-iptables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 9
+.argoci/cron/e2e-iptables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 12
 .argoci/cron/e2e-iptables.yaml | migration | iptables/xtables-manifest | 212
 .argoci/cron/e2e-iptables.yaml | migration [pre-migration] | pre-migration-smoke | 1
 .argoci/cron/e2e-iptables.yaml | native-v3-crds-aks | iptables/aks-xtables-nobgp-v3crd | 202
@@ -72,7 +72,7 @@
 .argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-new | iptables/xtables-aws | 213
 .argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-old | iptables/xtables-v3crd-aws | 209
 .argoci/cron/e2e-iptables.yaml | wireguard-vxlan-k8s-e2e | iptables/xtables-wireguard | 213
-.argoci/cron/e2e-nftables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 9
+.argoci/cron/e2e-nftables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 12
 .argoci/cron/e2e-nftables.yaml | nftables-mode-arm64-wg | nftables/xtables-autohep | 230
 .argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-aws-cni | nftables/eks-xtables-nobgp-aws-autohep | 216
 .argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-calico-cni | nftables/eks-xtables-aws-autohep | 220
@@ -84,7 +84,7 @@
 .argoci/cron/e2e-openstack.yaml | full-fv | (openstack-e2e) | -
 .argoci/cron/e2e-openstack.yaml | multi-region | (openstack-e2e) | -
 .argoci/cron/e2e-patch-verification.yaml | kind-tests | patch-verification/xtables | 91
-.argoci/cron/e2e-patch-verification.yaml | kubevirt-e2e-tests | gcp/kubevirt | 9
+.argoci/cron/e2e-patch-verification.yaml | kubevirt-e2e-tests | gcp/kubevirt | 12
 .argoci/cron/e2e-patch-verification.yaml | manifests-calico-etcd | patch-verification/xtables-encap-manifest | 87
 .argoci/cron/e2e-patch-verification.yaml | manifests-canal | patch-verification/xtables-manifest | 87
 .argoci/cron/e2e-patch-verification.yaml | manifests-canal-migration | patch-verification/xtables-manifest | 87
