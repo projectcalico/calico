@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"maps"
 	"math/big"
 	"strings"
 	"time"
@@ -39,6 +40,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -63,6 +65,11 @@ type testCert struct {
 // newTestCert signs a certificate for cn with parent, or self-signs it when
 // parent is nil.
 func newTestCert(cn string, parent *testCert, isCA bool) *testCert {
+	return newTestCertWith(cn, parent, isCA, nil)
+}
+
+// newTestCertWith is newTestCert with edit applied to the template first.
+func newTestCertWith(cn string, parent *testCert, isCA bool, edit func(*x509.Certificate)) *testCert {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	Expect(err).NotTo(HaveOccurred())
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 64))
@@ -75,6 +82,9 @@ func newTestCert(cn string, parent *testCert, isCA bool) *testCert {
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
 		IsCA:                  isCA,
 		BasicConstraintsValid: true,
+	}
+	if edit != nil {
+		edit(template)
 	}
 	signer, signerKey := template, key
 	if parent != nil {
@@ -194,6 +204,19 @@ var _ = Describe("Istio controller certificate authority", func() {
 		return d
 	}
 
+	createOperatorSecret := func(name string, data map[string][]byte) {
+		Expect(cli.Create(ctx, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: operatorNS},
+			Data:       data,
+		})).NotTo(HaveOccurred())
+	}
+	createCASecret := func(name string, data map[string][]byte) {
+		Expect(cli.Create(ctx, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: operatorNS, Labels: map[string]string{istio.CASecretLabel: "true"}},
+			Data:       data,
+		})).NotTo(HaveOccurred())
+	}
+
 	expectDegradedMentioning := func(parts ...string) {
 		mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceValidationError, mock.MatchedBy(func(msg string) bool {
 			for _, p := range parts {
@@ -261,6 +284,14 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectDegradedMentioning("certificateManagement")
 		})
 
+		It("treats an explicit operatorManaged the same as unset", func() {
+			istioCR.Spec.CertificateAuthority = &operatorv1.IstioCertificateAuthority{OperatorManaged: &operatorv1.IstioOperatorManagedCA{}}
+			Expect(cli.Update(ctx, istioCR)).NotTo(HaveOccurred())
+			reconcileIstio()
+			Expect(getSecret(cacertsKey).Data).To(Equal(getSecret(operatorCAKey).Data))
+			expectNotDegraded()
+		})
+
 		It("keeps the CA Secret when the Istio CR is deleted", func() {
 			reconcileIstio()
 
@@ -295,6 +326,203 @@ var _ = Describe("Istio controller certificate authority", func() {
 
 			Expect(getSecret(operatorCAKey).Data).To(BeEmpty())
 			expectDegradedMentioning(operatorNS+"/"+istio.OperatorCASecretName, "expected keys")
+		})
+	})
+
+	Context("customer CA", func() {
+		var root, intermediate *testCert
+
+		BeforeEach(func() {
+			root = newTestCert("root", nil, true)
+			intermediate = newTestCert("intermediate", root, true)
+			istioCR.Spec.CertificateAuthority = &operatorv1.IstioCertificateAuthority{Secret: &operatorv1.IstioCASecret{Name: "istio-mesh-ca"}}
+			createResources()
+		})
+
+		expectIntermediateCA := func() {
+			cacerts := getSecret(cacertsKey)
+			Expect(cacerts.Labels).To(HaveKeyWithValue(istio.CACertsLabel, "secret"))
+			Expect(cacerts.Data[istio.CACertKey]).To(Equal(intermediate.certPEM))
+			Expect(cacerts.Data[istio.CAKeyKey]).To(Equal(intermediate.keyPEM))
+			Expect(cacerts.Data[istio.CertChainKey]).To(Equal(concatPEM(intermediate.certPEM, root.certPEM)))
+			Expect(cacerts.Data[istio.RootCertKey]).To(Equal(root.certPEM))
+			Expect(getConfigMap(anchorsKey).Data[istio.RootCertKey]).To(Equal(string(root.certPEM)))
+			secretAbsent(operatorCAKey)
+			expectNotDegraded()
+		}
+
+		It("renders cacerts from a Secret in Istio's plug-in layout", func() {
+			createCASecret("istio-mesh-ca", map[string][]byte{
+				istio.CACertKey:    intermediate.certPEM,
+				istio.CAKeyKey:     intermediate.keyPEM,
+				istio.CertChainKey: concatPEM(intermediate.certPEM, root.certPEM),
+				istio.RootCertKey:  root.certPEM,
+			})
+			reconcileIstio()
+			expectIntermediateCA()
+		})
+
+		It("renders cacerts from a Secret in the kubernetes.io/tls layout", func() {
+			createCASecret("istio-mesh-ca", map[string][]byte{
+				corev1.TLSCertKey:       intermediate.certPEM,
+				corev1.TLSPrivateKeyKey: intermediate.keyPEM,
+				"ca.crt":                root.certPEM,
+			})
+			reconcileIstio()
+			expectIntermediateCA()
+		})
+
+		It("goes Degraded and renders no cacerts when the Secret does not exist", func() {
+			reconcileIstio()
+			secretAbsent(cacertsKey)
+			secretAbsent(operatorCAKey)
+			expectDegradedMentioning(operatorNS+"/istio-mesh-ca", "does not exist")
+			Expect(getIstiod().Spec.Template.Annotations).NotTo(HaveKey(istio.CACertsHashAnnotation))
+		})
+
+		It("copies nothing from a Secret without the opt-in label, and uses it once the label is set", func() {
+			createOperatorSecret("istio-mesh-ca", map[string][]byte{
+				corev1.TLSCertKey:       intermediate.certPEM,
+				corev1.TLSPrivateKeyKey: intermediate.keyPEM,
+				"ca.crt":                root.certPEM,
+			})
+			reconcileIstio()
+			secretAbsent(cacertsKey)
+			secretAbsent(operatorCAKey)
+			expectDegradedMentioning(operatorNS+"/istio-mesh-ca", istio.CASecretLabel+"=true")
+
+			byo := getSecret(types.NamespacedName{Name: "istio-mesh-ca", Namespace: operatorNS})
+			byo.Labels = map[string]string{istio.CASecretLabel: "true"}
+			Expect(cli.Update(ctx, byo)).NotTo(HaveOccurred())
+			mockStatus.Calls = nil
+			reconcileIstio()
+			expectIntermediateCA()
+		})
+
+		It("copies nothing from a CA whose name constraints rule out the trust domain, and uses it once the trust domain fits", func() {
+			constrained := newTestCertWith("corp-root", nil, true, func(c *x509.Certificate) {
+				c.PermittedURIDomains = []string{"corp.example"}
+			})
+			createCASecret("istio-mesh-ca", map[string][]byte{
+				istio.CACertKey:   constrained.certPEM,
+				istio.CAKeyKey:    constrained.keyPEM,
+				istio.RootCertKey: constrained.certPEM,
+			})
+			reconcileIstio()
+			secretAbsent(cacertsKey)
+			secretAbsent(operatorCAKey)
+			expectDegradedMentioning(operatorNS+"/istio-mesh-ca", "spiffe://cluster.local/")
+
+			Expect(cli.Get(ctx, client.ObjectKeyFromObject(istioCR), istioCR)).NotTo(HaveOccurred())
+			istioCR.Spec.TrustDomain = ptr.To("corp.example")
+			Expect(cli.Update(ctx, istioCR)).NotTo(HaveOccurred())
+			mockStatus.Calls = nil
+			reconcileIstio()
+			Expect(getSecret(cacertsKey).Data[istio.CACertKey]).To(Equal(constrained.certPEM))
+			expectNotDegraded()
+		})
+
+		It("keeps the last cacerts and goes Degraded when the Secret turns invalid", func() {
+			createCASecret("istio-mesh-ca", map[string][]byte{
+				istio.CACertKey:   root.certPEM,
+				istio.CAKeyKey:    root.keyPEM,
+				istio.RootCertKey: root.certPEM,
+			})
+			reconcileIstio()
+			cacerts := getSecret(cacertsKey)
+			hash := getIstiod().Spec.Template.Annotations[istio.CACertsHashAnnotation]
+
+			byo := getSecret(types.NamespacedName{Name: "istio-mesh-ca", Namespace: operatorNS})
+			byo.Data[istio.CAKeyKey] = intermediate.keyPEM
+			Expect(cli.Update(ctx, byo)).NotTo(HaveOccurred())
+			reconcileIstio()
+
+			Expect(getSecret(cacertsKey).Data).To(Equal(cacerts.Data))
+			Expect(getIstiod().Spec.Template.Annotations[istio.CACertsHashAnnotation]).To(Equal(hash))
+			Expect(getConfigMap(anchorsKey).Data[istio.RootCertKey]).To(Equal(string(root.certPEM)))
+			expectDegradedMentioning(operatorNS+"/istio-mesh-ca", "ca-key.pem does not match")
+		})
+
+		It("reconciles when the named Secret changes and not for other Secrets", func() {
+			istioCR.Spec.TrustAnchors = &operatorv1.IstioTrustAnchors{Additional: []operatorv1.IstioTrustAnchor{{Secret: &operatorv1.IstioCASecret{Name: "partner-root"}}}}
+			Expect(cli.Update(ctx, istioCR)).NotTo(HaveOccurred())
+
+			requests := func(name, namespace string) []reconcile.Request {
+				return r.enqueueForReferencedSecret(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}})
+			}
+			Expect(requests("istio-mesh-ca", operatorNS)).To(HaveLen(1))
+			Expect(requests("partner-root", operatorNS)).To(HaveLen(1))
+			Expect(requests(istio.OperatorCASecretName, operatorNS)).To(HaveLen(1))
+			Expect(requests("tigera-pull-secret", operatorNS)).To(BeEmpty())
+			Expect(requests("istio-mesh-ca", istio.IstioNamespace)).To(BeEmpty())
+		})
+	})
+
+	Context("additional trust anchors", func() {
+		It("merges valid anchors deduplicated and sorted, and names the invalid ones", func() {
+			a, b := newTestCert("a", nil, true), newTestCert("b", nil, true)
+			leaf := newTestCert("leaf", a, false)
+			istioCR.Spec.TrustAnchors = &operatorv1.IstioTrustAnchors{Additional: []operatorv1.IstioTrustAnchor{
+				{Secret: &operatorv1.IstioCASecret{Name: "partner-root"}},
+				{PEM: string(b.certPEM)},
+				{PEM: string(a.certPEM)},
+				{PEM: string(leaf.certPEM)},
+				{Secret: &operatorv1.IstioCASecret{Name: "missing-root"}},
+				{Secret: &operatorv1.IstioCASecret{Name: "wrong-key"}},
+			}}
+			createResources()
+			createOperatorSecret("partner-root", map[string][]byte{istio.RootCertKey: a.certPEM})
+			createOperatorSecret("wrong-key", map[string][]byte{"tls.crt": a.certPEM})
+			reconcileIstio()
+
+			own, err := istio.LoadCA(getSecret(operatorCAKey).Data)
+			Expect(err).NotTo(HaveOccurred())
+			bundle := getSecret(cacertsKey).Data[istio.RootCertKey]
+			Expect(bundle).To(Equal(istio.ComposeRootBundle(own.Roots, []*x509.Certificate{a.cert, b.cert})))
+
+			cm := getConfigMap(anchorsKey)
+			Expect(cm.Data[istio.RootCertKey]).To(Equal(string(own.CertPEM)))
+
+			expectDegradedMentioning(
+				"spec.trustAnchors.additional[3]: certificate 1 is not a CA",
+				"spec.trustAnchors.additional[4]: Secret "+operatorNS+"/missing-root does not exist",
+				"spec.trustAnchors.additional[5] (Secret "+operatorNS+"/wrong-key): key root-cert.pem is missing",
+			)
+		})
+
+		It("changes the istiod hash when an anchor is added", func() {
+			createResources()
+			reconcileIstio()
+			hash := getIstiod().Spec.Template.Annotations[istio.CACertsHashAnnotation]
+
+			current := &operatorv1.Istio{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, current)).NotTo(HaveOccurred())
+			current.Spec.TrustAnchors = &operatorv1.IstioTrustAnchors{Additional: []operatorv1.IstioTrustAnchor{{PEM: string(newTestCert("a", nil, true).certPEM)}}}
+			Expect(cli.Update(ctx, current)).NotTo(HaveOccurred())
+			reconcileIstio()
+
+			Expect(getIstiod().Spec.Template.Annotations[istio.CACertsHashAnnotation]).NotTo(Equal(hash))
+			expectNotDegraded()
+		})
+	})
+
+	Context("trust domain", func() {
+		It("renders the trust domain to istiod, ztunnel and the published ConfigMap", func() {
+			istioCR.Spec.TrustDomain = ptr.To("mesh.example")
+			createResources()
+			reconcileIstio()
+
+			meshCM := getConfigMap(types.NamespacedName{Name: "istio", Namespace: istio.IstioNamespace})
+			Expect(meshCM.Data["mesh"]).To(ContainSubstring("trustDomain: mesh.example"))
+
+			ztunnel := &appsv1.DaemonSet{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioZTunnelDaemonSetName, Namespace: istio.IstioNamespace}, ztunnel)).NotTo(HaveOccurred())
+			Expect(ztunnel.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{Name: "TRUST_DOMAIN", Value: "mesh.example"}))
+
+			Expect(getConfigMap(anchorsKey).Data[istio.TrustDomainKey]).To(Equal("mesh.example"))
+			ca, err := istio.LoadCA(getSecret(operatorCAKey).Data)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ca.Roots[0].Subject.Organization).To(Equal([]string{"mesh.example"}))
 		})
 	})
 
@@ -336,6 +564,13 @@ var _ = Describe("Istio controller certificate authority", func() {
 		}
 
 		transitionOf := func() istio.TransitionState { return istio.ReadTransition(getSecret(cacertsKey)) }
+		// withoutSignerRoots leaves out the annotation every rendered cacerts
+		// carries, so what is left is what a transition records.
+		withoutSignerRoots := func(s *corev1.Secret) map[string]string {
+			a := maps.Clone(s.Annotations)
+			delete(a, istio.SignerRootsAnnotation)
+			return a
+		}
 		istiodHash := func() string { return getIstiod().Spec.Template.Annotations[istio.CACertsHashAnnotation] }
 		operatorCA := func() *istio.CA {
 			ca, err := istio.LoadCA(getSecret(operatorCAKey).Data)
@@ -353,6 +588,23 @@ var _ = Describe("Istio controller certificate authority", func() {
 				istio.RootCertKey:  root.certPEM,
 			}
 			Expect(cli.Update(ctx, caSecret)).NotTo(HaveOccurred())
+		}
+		useCustomerCA := func(name string) {
+			current := &operatorv1.Istio{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, current)).NotTo(HaveOccurred())
+			current.Spec.CertificateAuthority = nil
+			if name != "" {
+				current.Spec.CertificateAuthority = &operatorv1.IstioCertificateAuthority{Secret: &operatorv1.IstioCASecret{Name: name}}
+			}
+			Expect(cli.Update(ctx, current)).NotTo(HaveOccurred())
+		}
+		createCustomerCA := func(name string, root, intermediate *testCert) {
+			createCASecret(name, map[string][]byte{
+				istio.CACertKey:    intermediate.certPEM,
+				istio.CAKeyKey:     intermediate.keyPEM,
+				istio.CertChainKey: concatPEM(intermediate.certPEM, root.certPEM),
+				istio.RootCertKey:  root.certPEM,
+			})
 		}
 
 		expectSigner := func(c *testCert) {
@@ -420,7 +672,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectSigner(selfSigned)
 			Expect(cacerts.Data[istio.CertChainKey]).To(Equal(selfSigned.certPEM))
 			expectBundle(selfSigned.cert, opRoot)
-			Expect(cacerts.Annotations).To(Equal(map[string]string{
+			Expect(withoutSignerRoots(cacerts)).To(Equal(map[string]string{
 				istio.TransitionPhaseAnnotation: "1",
 				istio.TransitionFromAnnotation:  istio.Fingerprint(selfSigned.cert),
 				istio.TransitionToAnnotation:    istio.Fingerprint(opRoot),
@@ -462,7 +714,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			Expect(cacerts.Data[istio.CACertKey]).To(Equal(op.CertPEM))
 			Expect(cacerts.Data[istio.CAKeyKey]).To(Equal(op.KeyPEM))
 			expectBundle(selfSigned.cert, opRoot)
-			Expect(cacerts.Annotations).To(Equal(map[string]string{
+			Expect(withoutSignerRoots(cacerts)).To(Equal(map[string]string{
 				istio.TransitionPhaseAnnotation: "3",
 				istio.TransitionFromAnnotation:  istio.Fingerprint(selfSigned.cert),
 				istio.TransitionToAnnotation:    istio.Fingerprint(opRoot),
@@ -492,7 +744,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			result = reconcileResult()
 			Expect(result.RequeueAfter).To(BeZero())
 			cacerts = getSecret(cacertsKey)
-			Expect(cacerts.Annotations).To(BeEmpty())
+			Expect(withoutSignerRoots(cacerts)).To(BeEmpty())
 			Expect(cacerts.Data).To(Equal(getSecret(operatorCAKey).Data))
 			expectPublished(opRoot)
 			Expect(istiodHash()).NotTo(Equal(hash))
@@ -537,7 +789,9 @@ var _ = Describe("Istio controller certificate authority", func() {
 			reconcileIstio()
 			advanceTo(istio.TransitionAwaitDistribution)
 			root := newTestCert("root", nil, true)
-			replaceOperatorCA(root)
+			intermediate := newTestCert("intermediate", root, true)
+			createCustomerCA("istio-mesh-ca", root, intermediate)
+			useCustomerCA("istio-mesh-ca")
 
 			reconcileIstio()
 
@@ -549,7 +803,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectSigner(selfSigned)
 			expectBundle(selfSigned.cert, root.cert)
 			expectPublished(selfSigned.cert, root.cert)
-			expectWarningMentioning("phase 1/4", "self-signed CA")
+			expectWarningMentioning("phase 1/4", operatorNS+"/istio-mesh-ca")
 			expectNotDegraded()
 		})
 
@@ -560,7 +814,9 @@ var _ = Describe("Istio controller certificate authority", func() {
 			op := operatorCA()
 			deadline := transitionOf().Deadline
 			root := newTestCert("root", nil, true)
-			replaceOperatorCA(root)
+			intermediate := newTestCert("intermediate", root, true)
+			createCustomerCA("istio-mesh-ca", root, intermediate)
+			useCustomerCA("istio-mesh-ca")
 
 			now = now.Add(time.Hour)
 			Expect(reconcileResult().RequeueAfter).To(Equal(wait - time.Hour))
@@ -646,7 +902,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 		It("rotates the operator-managed root through the same phases when its Secret is deleted", func() {
 			reconcileIstio()
 			old := operatorCA()
-			Expect(getSecret(cacertsKey).Annotations).To(BeEmpty())
+			Expect(withoutSignerRoots(getSecret(cacertsKey))).To(BeEmpty())
 			Expect(cli.Delete(ctx, getSecret(operatorCAKey))).NotTo(HaveOccurred())
 
 			reconcileIstio()
@@ -672,9 +928,221 @@ var _ = Describe("Istio controller certificate authority", func() {
 			now = now.Add(wait)
 			reconcileIstio()
 			cacerts = getSecret(cacertsKey)
-			Expect(cacerts.Annotations).To(BeEmpty())
+			Expect(withoutSignerRoots(cacerts)).To(BeEmpty())
 			Expect(cacerts.Data[istio.RootCertKey]).To(Equal(op.CertPEM))
 			expectPublished(op.Roots[0])
+			expectNotDegraded()
+		})
+
+		It("moves an operator-managed install to a customer CA through the same phases", func() {
+			reconcileIstio()
+			op := operatorCA()
+			Expect(withoutSignerRoots(getSecret(cacertsKey))).To(BeEmpty())
+			root := newTestCert("root", nil, true)
+			intermediate := newTestCert("intermediate", root, true)
+			createCustomerCA("istio-mesh-ca", root, intermediate)
+			useCustomerCA("istio-mesh-ca")
+
+			reconcileIstio()
+			expectPhase(istio.TransitionDistributeRoot, time.Time{})
+			Expect(getSecret(cacertsKey).Labels).To(HaveKeyWithValue(istio.CACertsLabel, "operatorManaged"))
+			Expect(getSecret(cacertsKey).Data[istio.CACertKey]).To(Equal(op.CertPEM))
+			expectBundle(op.Roots[0], root.cert)
+			expectPublished(op.Roots[0], root.cert)
+			expectWarningMentioning("phase 1/4", "operator-managed CA", operatorNS+"/istio-mesh-ca")
+
+			advanceTo(istio.TransitionSwitchSigner)
+			cacerts := getSecret(cacertsKey)
+			Expect(cacerts.Labels).To(HaveKeyWithValue(istio.CACertsLabel, "secret"))
+			expectSigner(intermediate)
+			Expect(cacerts.Data[istio.CertChainKey]).To(Equal(concatPEM(intermediate.certPEM, root.certPEM)))
+			expectBundle(op.Roots[0], root.cert)
+			expectPublished(op.Roots[0], root.cert)
+
+			markIstiodRolled()
+			reconcileIstio()
+			expectPhase(istio.TransitionAwaitExpiry, now.Add(wait))
+
+			now = now.Add(wait)
+			reconcileIstio()
+			cacerts = getSecret(cacertsKey)
+			Expect(withoutSignerRoots(cacerts)).To(BeEmpty())
+			Expect(cacerts.Data[istio.RootCertKey]).To(Equal(root.certPEM))
+			expectPublished(root.cert)
+			expectNotDegraded()
+		})
+
+		It("ends a transition whose destination turns back into the CA already signing", func() {
+			reconcileIstio()
+			op := operatorCA()
+			root := newTestCert("root", nil, true)
+			createCustomerCA("istio-mesh-ca", root, newTestCert("intermediate", root, true))
+			useCustomerCA("istio-mesh-ca")
+			reconcileIstio()
+			expectPhase(istio.TransitionDistributeRoot, time.Time{})
+
+			useCustomerCA("")
+			reconcileIstio()
+
+			Expect(withoutSignerRoots(getSecret(cacertsKey))).To(BeEmpty())
+			expectBundle(op.Roots[0])
+			expectPublished(op.Roots[0])
+		})
+
+		It("needs no transition for a new intermediate under the root istiod already signs with", func() {
+			root := newTestCert("root", nil, true)
+			first := newTestCert("first", root, true)
+			createCustomerCA("istio-mesh-ca", root, first)
+			useCustomerCA("istio-mesh-ca")
+			reconcileIstio()
+			expectSigner(first)
+
+			second := newTestCert("second", root, true)
+			byo := getSecret(types.NamespacedName{Name: "istio-mesh-ca", Namespace: operatorNS})
+			byo.Data[istio.CACertKey], byo.Data[istio.CAKeyKey] = second.certPEM, second.keyPEM
+			byo.Data[istio.CertChainKey] = concatPEM(second.certPEM, root.certPEM)
+			Expect(cli.Update(ctx, byo)).NotTo(HaveOccurred())
+			reconcileIstio()
+
+			expectSigner(second)
+			Expect(withoutSignerRoots(getSecret(cacertsKey))).To(BeEmpty())
+			expectBundle(root.cert)
+		})
+
+		It("keeps a customer Secret's extra roots in the bundle, and out of the published roots, while it moves to another customer CA", func() {
+			extra := newTestCert("extra", nil, true)
+			createCustomerCAWithExtra := func(name string, root, intermediate *testCert) {
+				createCASecret(name, map[string][]byte{
+					istio.CACertKey:    intermediate.certPEM,
+					istio.CAKeyKey:     intermediate.keyPEM,
+					istio.CertChainKey: concatPEM(intermediate.certPEM, root.certPEM),
+					istio.RootCertKey:  concatPEM(root.certPEM, extra.certPEM),
+				})
+			}
+			rootA := newTestCert("root-a", nil, true)
+			createCustomerCAWithExtra("ca-a", rootA, newTestCert("intermediate-a", rootA, true))
+			useCustomerCA("ca-a")
+			reconcileIstio()
+			expectBundle(rootA.cert, extra.cert)
+			expectPublished(rootA.cert)
+
+			rootB := newTestCert("root-b", nil, true)
+			createCustomerCAWithExtra("ca-b", rootB, newTestCert("intermediate-b", rootB, true))
+			useCustomerCA("ca-b")
+			reconcileIstio()
+			expectPhase(istio.TransitionDistributeRoot, time.Time{})
+			expectBundle(rootA.cert, rootB.cert, extra.cert)
+			expectPublished(rootA.cert, rootB.cert)
+			for _, phase := range []istio.TransitionPhase{istio.TransitionAwaitDistribution, istio.TransitionSwitchSigner, istio.TransitionAwaitExpiry} {
+				advanceTo(phase)
+				expectBundle(rootA.cert, rootB.cert, extra.cert)
+				expectPublished(rootA.cert, rootB.cert)
+			}
+
+			now = now.Add(wait)
+			reconcileIstio()
+			Expect(withoutSignerRoots(getSecret(cacertsKey))).To(BeEmpty())
+			expectBundle(rootB.cert, extra.cert)
+			expectPublished(rootB.cert)
+			expectNotDegraded()
+		})
+
+		It("starts no transition and publishes nothing for a trust anchor with the same subject and key as the signer's root", func() {
+			root := newTestCert("root", nil, true)
+			intermediate := newTestCert("intermediate", root, true)
+			createCASecret("istio-mesh-ca", map[string][]byte{
+				istio.CACertKey:    intermediate.certPEM,
+				istio.CAKeyKey:     intermediate.keyPEM,
+				istio.CertChainKey: concatPEM(intermediate.certPEM, root.certPEM),
+				istio.RootCertKey:  root.certPEM,
+			})
+			template := *root.cert
+			template.SerialNumber = big.NewInt(2)
+			der, err := x509.CreateCertificate(rand.Reader, &template, &template, &root.key.PublicKey, root.key)
+			Expect(err).NotTo(HaveOccurred())
+			twin, err := x509.ParseCertificate(der)
+			Expect(err).NotTo(HaveOccurred())
+			current := &operatorv1.Istio{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, current)).NotTo(HaveOccurred())
+			current.Spec.CertificateAuthority = &operatorv1.IstioCertificateAuthority{Secret: &operatorv1.IstioCASecret{Name: "istio-mesh-ca"}}
+			current.Spec.TrustAnchors = &operatorv1.IstioTrustAnchors{Additional: []operatorv1.IstioTrustAnchor{{PEM: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))}}}
+			Expect(cli.Update(ctx, current)).NotTo(HaveOccurred())
+
+			for range 3 {
+				reconcileIstio()
+				markIstiodRolled()
+				Expect(withoutSignerRoots(getSecret(cacertsKey))).To(BeEmpty())
+				Expect(getSecret(cacertsKey).Annotations).To(HaveKeyWithValue(istio.SignerRootsAnnotation, istio.Fingerprint(root.cert)))
+				expectSigner(intermediate)
+				expectBundle(root.cert, twin)
+				expectPublished(root.cert)
+			}
+			expectNotDegraded()
+		})
+
+		It("retires the old root of a customer CA renewed with the same subject and key, and stops there", func() {
+			old := newTestCert("root", nil, true)
+			intermediate := newTestCert("intermediate", old, true)
+			createCustomerCA("istio-mesh-ca", old, intermediate)
+			useCustomerCA("istio-mesh-ca")
+			reconcileIstio()
+			expectBundle(old.cert)
+
+			// The intermediate verifies under either root, so both are on its chain
+			// once the bundle holds both.
+			template := *old.cert
+			template.SerialNumber = big.NewInt(2)
+			template.NotAfter = old.cert.NotAfter.Add(time.Hour)
+			der, err := x509.CreateCertificate(rand.Reader, &template, &template, &old.key.PublicKey, old.key)
+			Expect(err).NotTo(HaveOccurred())
+			renewedCert, err := x509.ParseCertificate(der)
+			Expect(err).NotTo(HaveOccurred())
+			renewed := &testCert{cert: renewedCert, key: old.key, certPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), keyPEM: old.keyPEM}
+			byo := getSecret(types.NamespacedName{Name: "istio-mesh-ca", Namespace: operatorNS})
+			byo.Data[istio.CertChainKey] = concatPEM(intermediate.certPEM, renewed.certPEM)
+			byo.Data[istio.RootCertKey] = renewed.certPEM
+			Expect(cli.Update(ctx, byo)).NotTo(HaveOccurred())
+			reconcileIstio()
+			expectPhase(istio.TransitionDistributeRoot, time.Time{})
+			expectBundle(old.cert, renewed.cert)
+
+			advanceTo(istio.TransitionAwaitExpiry)
+			Expect(transitionOf().Retiring).To(ConsistOf(old.cert))
+			now = now.Add(wait)
+			reconcileIstio()
+			Expect(withoutSignerRoots(getSecret(cacertsKey))).To(BeEmpty())
+			expectBundle(renewed.cert)
+			expectPublished(renewed.cert)
+
+			reconcileIstio()
+			Expect(withoutSignerRoots(getSecret(cacertsKey))).To(BeEmpty())
+			expectNotDegraded()
+		})
+
+		It("keeps additional roots in the bundle, and out of the published roots, through every phase", func() {
+			extra := newTestCert("extra", nil, true)
+			current := &operatorv1.Istio{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, current)).NotTo(HaveOccurred())
+			current.Spec.TrustAnchors = &operatorv1.IstioTrustAnchors{Additional: []operatorv1.IstioTrustAnchor{{PEM: string(extra.certPEM)}}}
+			Expect(cli.Update(ctx, current)).NotTo(HaveOccurred())
+			createIstioCASecret()
+			reconcileIstio()
+			op := operatorCA()
+			others := []*x509.Certificate{extra.cert}
+
+			expectEveryRoot := func(own ...*x509.Certificate) {
+				Expect(getSecret(cacertsKey).Data[istio.RootCertKey]).To(Equal(istio.ComposeRootBundle(own, others)))
+				expectPublished(own...)
+			}
+			expectEveryRoot(selfSigned.cert, op.Roots[0])
+			for _, phase := range []istio.TransitionPhase{istio.TransitionAwaitDistribution, istio.TransitionSwitchSigner, istio.TransitionAwaitExpiry} {
+				advanceTo(phase)
+				expectEveryRoot(selfSigned.cert, op.Roots[0])
+			}
+			now = now.Add(wait)
+			reconcileIstio()
+			Expect(withoutSignerRoots(getSecret(cacertsKey))).To(BeEmpty())
+			expectEveryRoot(op.Roots[0])
 			expectNotDegraded()
 		})
 
@@ -728,6 +1196,40 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectNotDegraded()
 		})
 
+		It("leaves a cacerts the operator did not create alone, and warns, when the CR asks for a customer CA and extra anchors", func() {
+			root := newTestCert("hand-made-root", nil, true)
+			handMade := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: istio.CACertsSecretName, Namespace: istio.IstioNamespace},
+				Data: map[string][]byte{
+					istio.CACertKey:    root.certPEM,
+					istio.CAKeyKey:     root.keyPEM,
+					istio.CertChainKey: root.certPEM,
+					istio.RootCertKey:  root.certPEM,
+				},
+			}
+			Expect(cli.Create(ctx, handMade)).NotTo(HaveOccurred())
+			customerRoot := newTestCert("root", nil, true)
+			customerIntermediate := newTestCert("intermediate", customerRoot, true)
+			createCustomerCA("istio-mesh-ca", customerRoot, customerIntermediate)
+			useCustomerCA("istio-mesh-ca")
+			extra := newTestCert("extra", nil, true)
+			current := &operatorv1.Istio{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, current)).NotTo(HaveOccurred())
+			current.Spec.TrustAnchors = &operatorv1.IstioTrustAnchors{Additional: []operatorv1.IstioTrustAnchor{{PEM: string(extra.certPEM)}}}
+			Expect(cli.Update(ctx, current)).NotTo(HaveOccurred())
+			reconcileIstio()
+			reconcileIstio()
+
+			cacerts := getSecret(cacertsKey)
+			Expect(cacerts.Data).To(Equal(handMade.Data))
+			Expect(cacerts.Labels).NotTo(HaveKey(istio.CACertsLabel))
+			Expect(cacerts.OwnerReferences).To(BeEmpty())
+			secretAbsent(operatorCAKey)
+			expectPublished(root.cert)
+			expectWarningMentioning(istio.IstioNamespace+"/"+istio.CACertsSecretName, "spec.certificateAuthority", "spec.trustAnchors")
+			expectNotDegraded()
+		})
+
 		It("goes Degraded and keeps a cacerts the operator did not create when it is not a usable CA", func() {
 			root := newTestCert("hand-made-root", nil, true)
 			handMade := &corev1.Secret{
@@ -770,7 +1272,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			reconcileIstio()
 
 			cacerts := getSecret(cacertsKey)
-			Expect(cacerts.Annotations).To(BeEmpty())
+			Expect(withoutSignerRoots(cacerts)).To(BeEmpty())
 			Expect(cacerts.Data).To(Equal(getSecret(operatorCAKey).Data))
 			expectPublished(operatorCA().Roots[0])
 			expectNotDegraded()
@@ -793,7 +1295,10 @@ var _ = Describe("Istio controller certificate authority", func() {
 			reconcileIstio()
 			oldRoot := operatorCA().Roots[0]
 			markIstiodRolled()
-			replaceOperatorCA(newTestCert("new-root", nil, true))
+			newRoot := newTestCert("new-root", nil, true)
+			intermediate := newTestCert("intermediate", newRoot, true)
+			createCustomerCA("istio-mesh-ca", newRoot, intermediate)
+			useCustomerCA("istio-mesh-ca")
 			reconcileIstio()
 			expectPhase(istio.TransitionDistributeRoot, time.Time{})
 			hash := istiodHash()
@@ -810,8 +1315,8 @@ var _ = Describe("Istio controller certificate authority", func() {
 			mockStatus.Calls = nil
 			reconcileIstio()
 
-			Expect(getSecret(cacertsKey).Data).To(Equal(getSecret(operatorCAKey).Data))
-			expectPublished(operatorCA().Roots[0])
+			expectSigner(intermediate)
+			expectPublished(newRoot.cert)
 			expectNotDegraded()
 		})
 
@@ -863,7 +1368,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			reconcileIstio()
 
 			Expect(getSecret(cacertsKey).Data).To(Equal(cacerts.Data))
-			Expect(getSecret(cacertsKey).Annotations).To(BeEmpty())
+			Expect(withoutSignerRoots(getSecret(cacertsKey))).To(BeEmpty())
 			Expect(getConfigMap(anchorsKey).Data[istio.RootCertKey]).To(Equal(string(cacerts.Data[istio.CACertKey])))
 			mockStatus.AssertNotCalled(GinkgoT(), "SetWarning", mock.Anything, mock.Anything)
 			expectNotDegraded()
