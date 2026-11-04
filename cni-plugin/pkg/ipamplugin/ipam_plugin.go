@@ -23,15 +23,14 @@ import (
 	"net"
 	"os"
 	"path"
-	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
-	"github.com/gofrs/flock"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -288,7 +287,7 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 
 		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
 		assignIPWithLock := func() error {
-			unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
+			unlock := utils.AcquireIPAMLockBestEffort(conf.IPAMLockFile)
 			defer unlock()
 
 			// Only start the timeout after we get the lock. When there's a
@@ -301,6 +300,13 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 			}
 
 			if err := calicoClient.IPAM().AssignIP(ctx, assignArgs); err != nil {
+				if errors.Is(err, ipam.ErrNotInPool) || errors.Is(err, ipam.ErrUseNotAllowed) {
+					return addressNotHeldError("address %s cannot be assigned to a workload: %s", ipamArgs.IP, strings.TrimSpace(err.Error()))
+				}
+				if errors.Is(err, ipam.ErrAffinityMismatch) {
+					return addressNotHeldError("address %s cannot be assigned on this node: %s", ipamArgs.IP, err)
+				}
+
 				var exists cerrors.ErrorResourceAlreadyExists
 				if !errors.As(err, &exists) {
 					return err
@@ -343,15 +349,11 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 			logger.WithField("result.IPs", ipamArgs.IP).Info("Appending an IPv4 address to the result")
 		}
 	} else {
-		// Default to assigning an IPv4 address
-		num4 := 1
-		if conf.IPAM.AssignIpv4 != nil && *conf.IPAM.AssignIpv4 == "false" {
-			num4 = 0
+		var num4, num6 int
+		if conf.IPAM.AssignsIPv4() {
+			num4 = 1
 		}
-
-		// Default to NOT assigning an IPv6 address
-		num6 := 0
-		if conf.IPAM.AssignIpv6 != nil && *conf.IPAM.AssignIpv6 == "true" {
+		if conf.IPAM.AssignsIPv6() {
 			num6 = 1
 		}
 
@@ -433,7 +435,7 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 			// concurrently. AutoAssign is concurrency safe already but serialising the CNI plugins means that
 			// we only attempt one IPAM claim at a time on the host's active IPAM block.  This reduces the load
 			// on the API server by a factor of the number of concurrent requests.
-			unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
+			unlock := utils.AcquireIPAMLockBestEffort(conf.IPAMLockFile)
 			defer unlock()
 
 			// Only start the timeout after we get the lock. When there's a
@@ -532,6 +534,12 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 	return r.GetAsVersion(conf.CNIVersion)
 }
 
+// addressNotHeldError builds the CNI error that tells the plugin the requested address is not
+// one this pod holds, so the caller may fall back to a fresh address.
+func addressNotHeldError(format string, args ...any) error {
+	return cnitypes.NewError(types.ErrCodeAddressNotHeld, fmt.Sprintf(format, args...), "")
+}
+
 // transferFromPriorSandbox hands an address the pod already holds to this sandbox's handle.
 // It performs the necessary precondition checks and errors if the allocation cannot be transferred.
 // It refuses an address claimed after started: only a newer sandbox could have claimed it, and
@@ -551,20 +559,26 @@ func transferFromPriorSandbox(
 	var inCooldown cerrors.ErrorIPInCooldown
 	if errors.As(err, &inCooldown) {
 		// A released address has no owner to check, so it must finish its cooldown first.
-		return fmt.Errorf("address %s is still in its IP cooldown period and cannot be reused yet: %w", ip, err)
+		return addressNotHeldError("address %s is still in its IP cooldown period and cannot be reused yet: %s", ip, err)
 	}
 	if err != nil {
 		return fmt.Errorf("could not determine the current owner of address %s: %w", ip, err)
 	}
 	if attr == nil || attr.HandleID == nil {
-		return fmt.Errorf("address %s is allocated to no handle and cannot be transferred", ip)
+		return addressNotHeldError("address %s is allocated to no handle and cannot be transferred", ip)
 	}
 
 	currentHandle := *attr.HandleID
 	parsed, ok := ipam.ParsePodHandleID(currentHandle, netName)
 	if !ok {
 		logger.WithField("fromHandle", currentHandle).Info("Requested address is not held by a pod sandbox")
-		return fmt.Errorf("address %s is not held by a pod sandbox and cannot be transferred", ip)
+		return addressNotHeldError("address %s is not held by a pod sandbox and cannot be transferred", ip)
+	}
+
+	owner := &ipam.AttributeOwner{Namespace: epIDs.Namespace, Name: epIDs.Pod}
+	if !owner.Matches(attr.ActiveOwnerAttrs) {
+		logger.WithField("fromHandle", currentHandle).Info("Requested address is owned by another pod")
+		return addressNotHeldError("address %s is owned by another pod and cannot be transferred", ip)
 	}
 
 	if claimedAfter(attr.ActiveOwnerAttrs, started) {
@@ -639,38 +653,6 @@ func touchFile(filePath string) error {
 		return fmt.Errorf("failure when closing file %s: %w", filePath, err)
 	}
 	return nil
-}
-
-type unlockFn func()
-
-// acquireIPAMLockBestEffort attempts to acquire the IPAM file lock, blocking if needed.  If an error occurs
-// (for example permissions or missing directory) then it returns immediately.  Returns a function that unlocks the
-// lock again (or a no-op function if acquiring the lock failed).
-func acquireIPAMLockBestEffort(path string) unlockFn {
-	logrus.Info("About to acquire host-wide IPAM lock.")
-	if path == "" {
-		path = ipamLockPath
-	}
-	err := os.MkdirAll(filepath.Dir(path), 0o777)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to make directory for IPAM lock")
-		// Fall through, still a slight chance the file is there for us to access.
-	}
-	ipamLock := flock.New(path)
-	err = ipamLock.Lock()
-	if err != nil {
-		logrus.WithError(err).Error("Failed to grab IPAM lock, may contend for datastore updates")
-		return func() {}
-	}
-	logrus.Info("Acquired host-wide IPAM lock.")
-	return func() {
-		err := ipamLock.Unlock()
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to release IPAM lock; ignoring because process is about to exit.")
-		} else {
-			logrus.Info("Released host-wide IPAM lock.")
-		}
-	}
 }
 
 // calicoClientFor returns the Calico client the calling plugin put in ctx, or builds one from the netconf.
@@ -837,7 +819,7 @@ func del(ctx context.Context, args *skel.CmdArgs) error {
 	// concurrently. ReleaseXXX is concurrency safe already but serialising the CNI plugins means that
 	// we only attempt one IPAM update at a time.  This reduces the load on the API server by a factor of the
 	// number of concurrent requests with essentially no downside.
-	unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
+	unlock := utils.AcquireIPAMLockBestEffort(conf.IPAMLockFile)
 	defer unlock()
 
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
