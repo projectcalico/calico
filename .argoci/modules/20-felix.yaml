@@ -77,8 +77,9 @@ steps:
       make static-checks
 
   # Non-root because two suites branch on geteuid() and take the wrong branch as
-  # root. The volume and HOME match the image's non-root user, since OpenSSH
-  # reads the home from passwd rather than the environment.
+  # root. The build image has no passwd entry for that user, so HOME has to be
+  # set and writable. build-calico-image is a dependency for the cgo and race
+  # binaries it uploads, not for the image.
   - name: felix-ut
     depends: [build-calico-image, check-go]
     timeout: 45m
@@ -89,16 +90,18 @@ steps:
         value: calico
       - name: HOME
         value: /home/ci
+      - name: NATIVE_GO_BUILD
+        value: "true"
     jobSize: large
-    requests: {cpu: 7000m, memory: 10Gi}
-    services:
-      - docker
+    requests: {cpu: 7000m, memory: 7Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     secretBundles:
       - fv-tests-guru-github-token
       - gemini-api-key
       - fv-guru-db
     commands: |
-      .argoci/scripts/load-cached-images calico
       .semaphore/scripts/load-felix-prereqs.sh
       cd felix
       # The failure analysis reads the log from here.
