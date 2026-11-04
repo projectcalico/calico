@@ -33354,7 +33354,9 @@ spec:
             spec:
               properties:
                 asNumber:
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 bindMode:
                   enum:
@@ -33532,7 +33534,9 @@ spec:
                         type: string
                       asPathPrefix:
                         items:
-                          format: int32
+                          format: int64
+                          maximum: 4294967295
+                          minimum: 0
                           type: integer
                         type: array
                       cidr:
@@ -33581,7 +33585,9 @@ spec:
                               properties:
                                 prefix:
                                   items:
-                                    format: int32
+                                    format: int64
+                                    maximum: 4294967295
+                                    minimum: 0
                                     type: integer
                                   maxItems: 10
                                   minItems: 1
@@ -33662,7 +33668,9 @@ spec:
                         type: string
                       asPathPrefix:
                         items:
-                          format: int32
+                          format: int64
+                          maximum: 4294967295
+                          minimum: 0
                           type: integer
                         type: array
                       cidr:
@@ -33711,7 +33719,9 @@ spec:
                               properties:
                                 prefix:
                                   items:
-                                    format: int32
+                                    format: int64
+                                    maximum: 4294967295
+                                    minimum: 0
                                     type: integer
                                   maxItems: 10
                                   minItems: 1
@@ -33792,7 +33802,9 @@ spec:
                         type: string
                       asPathPrefix:
                         items:
-                          format: int32
+                          format: int64
+                          maximum: 4294967295
+                          minimum: 0
                           type: integer
                         type: array
                       cidr:
@@ -33841,7 +33853,9 @@ spec:
                               properties:
                                 prefix:
                                   items:
-                                    format: int32
+                                    format: int64
+                                    maximum: 4294967295
+                                    minimum: 0
                                     type: integer
                                   maxItems: 10
                                   minItems: 1
@@ -33922,7 +33936,9 @@ spec:
                         type: string
                       asPathPrefix:
                         items:
-                          format: int32
+                          format: int64
+                          maximum: 4294967295
+                          minimum: 0
                           type: integer
                         type: array
                       cidr:
@@ -33971,7 +33987,9 @@ spec:
                               properties:
                                 prefix:
                                   items:
-                                    format: int32
+                                    format: int64
+                                    maximum: 4294967295
+                                    minimum: 0
                                     type: integer
                                   maxItems: 10
                                   minItems: 1
@@ -34077,7 +34095,9 @@ spec:
             spec:
               properties:
                 asNumber:
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 filters:
                   items:
@@ -34088,7 +34108,9 @@ spec:
                 keepaliveTime:
                   type: string
                 localASNumber:
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 localWorkloadSelector:
                   maxLength: 4096

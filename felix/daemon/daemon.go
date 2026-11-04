@@ -410,6 +410,9 @@ configRetry:
 		}
 	}
 
+	// Resolve NFTablesMode=Auto now, before anything reads the dataplane-specific config.
+	configParams.NFTablesEnabled = dp.NFTablesEnabled(configParams)
+
 	// Set any watchdog timeout overrides before we initialise components.
 	health.SetGlobalTimeoutOverrides(configParams.HealthTimeoutOverrides)
 
@@ -691,7 +694,7 @@ configRetry:
 		}()
 
 		usageRep := usagerep.New(
-			usagerep.StaticItems{KubernetesVersion: kubernetesVersion},
+			usagerep.StaticItems{KubernetesVersion: kubernetesVersion, NFTablesEnabled: configParams.NFTablesEnabled},
 			configParams.UsageReportingInitialDelaySecs,
 			configParams.UsageReportingIntervalSecs,
 			statsChanOut,
