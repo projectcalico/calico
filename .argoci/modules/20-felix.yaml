@@ -62,7 +62,7 @@ steps:
       fi
 
   - name: felix-static-checks
-    depends: [build-calico-image, check-go, go-cache-seed]
+    depends: [build-calico-image, check-go]
     cache:
       - {name: go, mode: read}
     timeout: 30m
