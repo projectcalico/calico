@@ -291,6 +291,10 @@ E2E_TIMEOUT ?= 90m
 # reach it: run_tests.sh always passes E2E_TEST_CONFIG on make's command line,
 # and a command-line assignment overrides ?= even when its value is empty.
 E2E_TEST_CONFIG ?= e2e/config/kind/conformance.yaml
+# E2E_TEST_CONFIG is a list, one --calico.test-config per entry. An entry is
+# relative to e2e/config, unless it is absolute or already starts with e2e/config/.
+e2e_config_path = $(abspath $(if $(filter /% e2e/config/%,$(1)),$(1),e2e/config/$(1)))
+E2E_TEST_CONFIG_FLAGS = $(foreach c,$(E2E_TEST_CONFIG),--calico.test-config=$(call e2e_config_path,$(c)))
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
@@ -420,7 +424,7 @@ endif
 e2e-run: bin/ginkgo
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
-	KUBECONFIG=$(KUBECONFIG) ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --non-blocking-taints=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
+	KUBECONFIG=$(KUBECONFIG) ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --non-blocking-taints=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(E2E_TEST_CONFIG_FLAGS)
 
 # Version from go.mod. Built with whichever of Go and docker the host has: the
 # kind lanes have only docker, the remote-cluster lanes only Go.

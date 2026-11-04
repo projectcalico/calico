@@ -82,8 +82,8 @@ type Lane struct {
 	// with its entry name, whatever it selects.
 	Name string
 
-	// Config is the E2E_TEST_CONFIG value: one or more repo-relative paths,
-	// separated by whitespace.
+	// Config is the E2E_TEST_CONFIG value: one or more paths separated by
+	// whitespace, each relative to e2e/config or starting with e2e/config/.
 	Config string
 
 	// Area is the FUNCTIONAL_AREA both CI systems declare, naming the pipeline
@@ -107,31 +107,44 @@ func (l Lane) RunsE2EBinary() bool {
 	return l.TestType == "k8s-e2e" && len(l.Configs()) > 0
 }
 
-// SelectionArgs returns the spec-selecting arguments run_tests.sh would pass
-// to the binary, one --calico.test-config per config. repoRoot absolutizes each
-// path, as the binary requires. Until the binary and the Makefile accept the
-// flag more than once, a lane listing several configs is refused rather than
-// recorded with a selection CI would not run.
+// SelectionArgs returns the spec-selecting arguments make e2e-run would pass
+// to the binary, one --calico.test-config per config in the cell's order.
+// Each path resolves the way e2e-run resolves it, and repoRoot absolutizes it,
+// as the binary requires.
 func (l Lane) SelectionArgs(repoRoot string) ([]string, error) {
 	configs := l.Configs()
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("lane %q selects nothing", l.Name)
 	}
-	if len(configs) > 1 {
-		return nil, fmt.Errorf("lane %q lists %d configs, but the e2e binary takes a single --calico.test-config", l.Name, len(configs))
-	}
 	args := make([]string, 0, len(configs))
 	for _, c := range configs {
-		if !strings.HasPrefix(c, configPrefix) {
-			return nil, fmt.Errorf("lane %q: config %q is not under %s", l.Name, c, configPrefix)
+		rel, err := configPath(c)
+		if err != nil {
+			return nil, fmt.Errorf("lane %q: %w", l.Name, err)
 		}
-		abs, err := filepath.Abs(filepath.Join(repoRoot, c))
+		abs, err := filepath.Abs(filepath.Join(repoRoot, rel))
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, "--calico.test-config="+abs)
 	}
 	return args, nil
+}
+
+// configPath resolves one E2E_TEST_CONFIG entry to a repo-relative path, as
+// e2e-run does: relative to e2e/config, unless it already starts with
+// e2e/config/. Anything that can't name a file in that tree, like an absolute
+// path or an unexpanded ${VAR}, is an error rather than a selection CI never runs.
+func configPath(entry string) (string, error) {
+	p := entry
+	if !strings.HasPrefix(p, configPrefix) {
+		p = configPrefix + p
+	}
+	p = filepath.Clean(p)
+	if filepath.IsAbs(entry) || strings.Contains(entry, "$") || !strings.HasPrefix(p, configPrefix) {
+		return "", fmt.Errorf("config %q is not under %s", entry, configPrefix)
+	}
+	return p, nil
 }
 
 // laneSource is one directory CI declares lanes in: how to parse its files, and
