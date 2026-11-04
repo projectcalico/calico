@@ -15,15 +15,34 @@
 package utils
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/gofrs/flock"
 	"github.com/sirupsen/logrus"
 )
 
+// ipamLockTimeout bounds the IPAM work done while holding the host-wide IPAM lock.
+const ipamLockTimeout = 90 * time.Second
+
 // UnlockFn releases a lock taken by AcquireIPAMLockBestEffort.
 type UnlockFn func()
+
+// WithIPAMLock runs fn holding the host-wide IPAM lock at lockPath, best effort as
+// AcquireIPAMLockBestEffort describes. fn's context gets a 90 second timeout that starts only
+// once the lock is held, since a thundering herd of ADDs can hold the lock for a long time.
+// fn's context is still canceled when ctx is; a caller whose work must finish regardless
+// passes context.WithoutCancel(ctx).
+func WithIPAMLock(ctx context.Context, lockPath string, fn func(context.Context) error) error {
+	unlock := AcquireIPAMLockBestEffort(lockPath)
+	defer unlock()
+
+	ctx, cancel := context.WithTimeout(ctx, ipamLockTimeout)
+	defer cancel()
+	return fn(ctx)
+}
 
 // AcquireIPAMLockBestEffort attempts to acquire the IPAM file lock, blocking if needed.  If an error occurs
 // (for example permissions or missing directory) then it returns immediately.  Returns a function that unlocks the

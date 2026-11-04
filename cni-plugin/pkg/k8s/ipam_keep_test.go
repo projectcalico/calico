@@ -38,17 +38,18 @@ import (
 
 // stubHandleIPAM is an ipam.Interface that serves a fixed IPsByHandle answer and records
 // what ReleaseIPs is asked to release. Other methods panic through the nil embedded interface.
-// Each call also records its context's error and, when lockPath is set, whether that lock
-// was free.
+// Each call also records its context's error, whether that context has a deadline and, when
+// lockPath is set, whether that lock was free.
 type stubHandleIPAM struct {
 	ipam.Interface
-	ips        []cnet.IP
-	ipsErr     error
-	releaseErr error
-	released   []ipam.ReleaseOptions
-	lockPath   string
-	ctxErrs    []error
-	lockFree   []bool
+	ips         []cnet.IP
+	ipsErr      error
+	releaseErr  error
+	released    []ipam.ReleaseOptions
+	lockPath    string
+	ctxErrs     []error
+	hasDeadline []bool
+	lockFree    []bool
 }
 
 func (s *stubHandleIPAM) IPsByHandle(ctx context.Context, _ string) ([]cnet.IP, error) {
@@ -64,6 +65,8 @@ func (s *stubHandleIPAM) ReleaseIPs(ctx context.Context, opts ...ipam.ReleaseOpt
 
 func (s *stubHandleIPAM) observe(ctx context.Context) {
 	s.ctxErrs = append(s.ctxErrs, ctx.Err())
+	_, ok := ctx.Deadline()
+	s.hasDeadline = append(s.hasDeadline, ok)
 	if s.lockPath != "" {
 		s.lockFree = append(s.lockFree, lockIsFree(s.lockPath))
 	}
@@ -202,7 +205,7 @@ var _ = Describe("releaseSandboxAddresses", func() {
 		}),
 	)
 
-	It("still looks up and releases after the caller's context is canceled", func() {
+	It("still looks up and releases after the caller's context is canceled, within a timeout", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.5", "10.0.0.6")}
@@ -212,6 +215,7 @@ var _ = Describe("releaseSandboxAddresses", func() {
 		Expect(stub.released).To(Equal([]ipam.ReleaseOptions{{Address: "10.0.0.6", Handle: handle}}))
 		Expect(stub.ctxErrs).To(HaveLen(2))
 		Expect(stub.ctxErrs).To(HaveEach(BeNil()))
+		Expect(stub.hasDeadline).To(Equal([]bool{true, true}))
 	})
 
 	It("holds the host IPAM lock while it looks up and releases, and frees it after", func() {

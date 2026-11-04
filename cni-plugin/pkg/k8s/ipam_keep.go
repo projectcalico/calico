@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"slices"
-	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/sirupsen/logrus"
@@ -32,9 +31,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 )
-
-// ipamReleaseTimeout bounds the IPAM calls made under the host IPAM lock, matching calico-ipam.
-const ipamReleaseTimeout = 90 * time.Second
 
 // addressesFromEndpoint returns the bare IP addresses in a workload endpoint's IPNetworks, in
 // the order the endpoint lists them. These are the addresses the pod is currently using, so
@@ -83,7 +79,7 @@ func releaseSandboxAddresses(
 // IPAM lock at lockPath, like calico-ipam does, and finishes even if ctx is canceled, so a
 // release that has started is not abandoned. A handle that doesn't exist has nothing to release.
 func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID, lockPath string, keepAddresses []net.IP, logger *logrus.Entry) error {
-	return underIPAMLock(ctx, lockPath, func(ctx context.Context) error {
+	return utils.WithIPAMLock(context.WithoutCancel(ctx), lockPath, func(ctx context.Context) error {
 		ips, err := ipamClient.IPsByHandle(ctx, handleID)
 		if err != nil {
 			if errors.As(err, &cerrors.ErrorResourceDoesNotExist{}) {
@@ -105,16 +101,4 @@ func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID, l
 		}
 		return errors.Join(errs...)
 	})
-}
-
-// underIPAMLock runs fn holding the host IPAM lock at lockPath, as calico-ipam's DEL does.
-// fn's context ignores cancellation of ctx, so a release that has started finishes, and its
-// timeout starts only once the lock is held.
-func underIPAMLock(ctx context.Context, lockPath string, fn func(context.Context) error) error {
-	unlock := utils.AcquireIPAMLockBestEffort(lockPath)
-	defer unlock()
-
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ipamReleaseTimeout)
-	defer cancel()
-	return fn(ctx)
 }

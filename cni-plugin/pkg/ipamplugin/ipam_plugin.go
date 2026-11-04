@@ -286,15 +286,7 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 		}
 
 		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
-		assignIPWithLock := func() error {
-			unlock := utils.AcquireIPAMLockBestEffort(conf.IPAMLockFile)
-			defer unlock()
-
-			// Only start the timeout after we get the lock. When there's a
-			// thundering herd of new pods, acquiring the lock can take a while.
-			ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-			defer cancel()
-
+		err := utils.WithIPAMLock(ctx, conf.IPAMLockFile, func(ctx context.Context) error {
 			if err := maybeUpgradeIPAM(ctx, calicoClient.IPAM(), nodename); err != nil {
 				return fmt.Errorf("failed to upgrade IPAM database: %w", err)
 			}
@@ -323,8 +315,7 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 				}
 			}
 			return nil
-		}
-		err := assignIPWithLock()
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -430,22 +421,15 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 			assignArgs.HostReservedAttrIPv4s = rsvdAttrWindows
 		}
 		logger.WithField("assignArgs", assignArgs).Info("Auto assigning IP")
-		autoAssignWithLock := func(calicoClient client.Interface, assignArgs ipam.AutoAssignArgs) (*ipam.IPAMAssignments, *ipam.IPAMAssignments, error) {
-			// Acquire a best-effort host-wide lock to prevent multiple copies of the CNI plugin trying to assign
-			// concurrently. AutoAssign is concurrency safe already but serialising the CNI plugins means that
-			// we only attempt one IPAM claim at a time on the host's active IPAM block.  This reduces the load
-			// on the API server by a factor of the number of concurrent requests.
-			unlock := utils.AcquireIPAMLockBestEffort(conf.IPAMLockFile)
-			defer unlock()
 
-			// Only start the timeout after we get the lock. When there's a
-			// thundering herd of new pods, acquiring the lock can take a while.
-			ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-			defer cancel()
-
-			return calicoClient.IPAM().AutoAssign(ctx, assignArgs)
-		}
-		v4Assignments, v6Assignments, err := autoAssignWithLock(calicoClient, assignArgs)
+		// AutoAssign is concurrency safe, but serializing the host's CNI plugins on this lock means one IPAM
+		// claim at a time on the active block, cutting API server load by the number of concurrent requests.
+		var v4Assignments, v6Assignments *ipam.IPAMAssignments
+		err := utils.WithIPAMLock(ctx, conf.IPAMLockFile, func(ctx context.Context) error {
+			var err error
+			v4Assignments, v6Assignments, err = calicoClient.IPAM().AutoAssign(ctx, assignArgs)
+			return err
+		})
 		var v4ips, v6ips []cnet.IPNet
 		if v4Assignments != nil {
 			v4ips = v4Assignments.IPs
@@ -819,12 +803,24 @@ func del(ctx context.Context, args *skel.CmdArgs) error {
 	// concurrently. ReleaseXXX is concurrency safe already but serialising the CNI plugins means that
 	// we only attempt one IPAM update at a time.  This reduces the load on the API server by a factor of the
 	// number of concurrent requests with essentially no downside.
-	unlock := utils.AcquireIPAMLockBestEffort(conf.IPAMLockFile)
-	defer unlock()
+	return utils.WithIPAMLock(ctx, conf.IPAMLockFile, func(ctx context.Context) error {
+		return releaseHandle(ctx, calicoClient, handleID, epIDs, vmiInfo, ipPersistenceEnabledForVM, logger)
+	})
+}
 
-	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	defer cancel()
-
+// releaseHandle frees the addresses a sandbox holds on handleID, plus any held under the
+// workload ID handle that Calico v2.x used. For a KubeVirt pod with address persistence it
+// instead clears the pod's owner attributes, and releases the handle only once the VM or VMI
+// is being deleted and no owner remains. The caller must hold the host-wide IPAM lock.
+func releaseHandle(
+	ctx context.Context,
+	calicoClient client.Interface,
+	handleID string,
+	epIDs *utils.WEPIdentifiers,
+	vmiInfo *kubevirt.PodVMIInfo,
+	ipPersistenceEnabledForVM bool,
+	logger *logrus.Entry,
+) error {
 	// For VMI pods with persistence enabled, handle deletion based on VM/VMI deletion status.
 	// IP persistence is only maintained while the VM (or standalone VMI) is alive.
 	// - If VMI is owned by a VM: release when VM has DeletionTimestamp
