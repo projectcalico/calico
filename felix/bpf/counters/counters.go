@@ -83,11 +83,14 @@ const (
 	DroppedFragReorder
 	DroppedFragUnsupported
 	DroppedQoS
-	Reserved1
+	Reserved1 // Calico Enterprise: AcceptedByEgressGW
 	DroppedMaglevNoBackend
 	DroppedNoHostIP
-	Reserved2
+	Reserved2 // Calico Enterprise: DroppedL2UnsupportedVLAN
 	DroppedRPF
+	// Add counters above this
+	AcceptedByXDP
+	WEPNotReady
 )
 
 type Description struct {

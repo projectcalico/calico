@@ -225,6 +225,15 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 
 			return ScanVerdictOK, lastSeen
 		}
+		if revEntry.Type() != TypeNATReverse || !fwdMatchesRev(ctKey, revEntry) {
+			// Another flow now owns the reverse key. Returning our own lastSeen
+			// deletes only this entry, not that flow's.
+			l.reasonCounterInc("no reverse for forward")
+			if debug {
+				log.WithField("k", ctKey).Debug("Deleting forward NAT conntrack entry whose reverse key belongs to another flow.")
+			}
+			return ScanVerdictDelete, lastSeen
+		}
 		if reason, expired := l.expired(now, ctVal.ReverseNATKey(), revEntry); expired {
 			if debug {
 				log.WithFields(log.Fields{
@@ -267,6 +276,22 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 		}).Warn("Unknown conntrack entry type!")
 	}
 	return ScanVerdictOK, lastSeen
+}
+
+// fwdMatchesRev reports whether fwdKey is rev's original client and service. Keep in sync with ct_fwd_matches_rev.
+func fwdMatchesRev(fwdKey KeyInterface, rev ValueInterface) bool {
+	origIP, origPort := rev.OrigIP(), rev.OrigPort()
+	clientMatches := func(ip net.IP, port uint16) bool {
+		return (rev.OrigSrcIP().IsUnspecified() || ip.Equal(rev.OrigSrcIP())) &&
+			(rev.OrigSPort() == 0 || port == 0 || port == rev.OrigSPort())
+	}
+	if fwdKey.AddrA().Equal(origIP) && fwdKey.PortA() == origPort {
+		return clientMatches(fwdKey.AddrB(), fwdKey.PortB())
+	}
+	if fwdKey.AddrB().Equal(origIP) && fwdKey.PortB() == origPort {
+		return clientMatches(fwdKey.AddrA(), fwdKey.PortA())
+	}
+	return false
 }
 
 // expired is EntryExpired, except that an RST reap of a connlimit entry waits

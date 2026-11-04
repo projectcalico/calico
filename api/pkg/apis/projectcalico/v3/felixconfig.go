@@ -220,7 +220,7 @@ type FelixConfigurationSpec struct {
 	// configuration.
 	// +optional
 	// +kubebuilder:validation:MaxLength=1024
-	NodeSelector *string `json:"nodeSelector,omitempty" confignamev1:"-"`
+	NodeSelector *string `json:"nodeSelector,omitempty" validate:"omitempty,selector" confignamev1:"-"`
 
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
 	// will launch an external dataplane driver and communicate with it over protobuf.
@@ -622,6 +622,9 @@ type FelixConfigurationSpec struct {
 	// KubeNodePortRanges holds list of port ranges used for service node ports. Only used if felix detects kube-proxy running in ipvs mode.
 	// Felix uses these ranges to separate host and workload traffic. [Default: 30000:32767].
 	// +kubebuilder:validation:MaxItems=7
+	// +kubebuilder:validation:items:XIntOrString
+	// +kubebuilder:validation:items:MaxLength=11
+	// +kubebuilder:validation:items:XValidation:rule="type(self) != string || !self.contains(':') || int(self.split(':')[0]) <= int(self.split(':')[1])",message="port ranges must be written low:high",reason=FieldValueInvalid
 	KubeNodePortRanges *[]numorstring.Port `json:"kubeNodePortRanges,omitempty" validate:"omitempty,dive"`
 
 	// PolicySyncPathPrefix is used to by Felix to communicate policy changes to external services,

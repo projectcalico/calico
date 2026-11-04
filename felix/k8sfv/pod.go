@@ -68,7 +68,11 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 	// that load causes the issue and we put less load on the kernel.
 	handle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
 	panicIfError(err)
-	defer handle.Close()
+	defer func() {
+		if err := handle.Close(); err != nil {
+			log.WithError(err).Warn("Failed to close netlink handle")
+		}
+	}()
 
 	name := spec.name
 	if name == "" {

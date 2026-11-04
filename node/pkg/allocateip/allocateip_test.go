@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -1050,6 +1051,25 @@ var _ = Describe("Reconciliation triggers", func() {
 		}
 	}
 
+	// poolUpdate goes through the same v3 to v1 conversion as the tunnel IP
+	// syncer, so a field the conversion drops can't trigger a reconcile here either.
+	poolUpdate := func(nodeSelector string, mutators ...func(*api.IPPool)) bapi.Update {
+		pool := api.NewIPPool()
+		pool.Name = "ipip-pool"
+		pool.Spec.CIDR = "10.200.0.0/24"
+		pool.Spec.IPIPMode = api.IPIPModeAlways
+		pool.Spec.NodeSelector = nodeSelector
+		for _, m := range mutators {
+			m(pool)
+		}
+		kvp, err := resources.IPPoolV3ToV1(&model.KVPair{
+			Key:   model.ResourceKey{Kind: api.KindIPPool, Name: pool.Name},
+			Value: pool,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		return bapi.Update{KVPair: *kvp, UpdateType: bapi.UpdateTypeKVUpdated}
+	}
+
 	BeforeEach(func() {
 		r = &reconciler{
 			nodename: nodename,
@@ -1058,7 +1078,10 @@ var _ = Describe("Reconciliation triggers", func() {
 			data:                 make(map[string]any),
 			initialSyncCompleted: true,
 		}
-		r.OnUpdates([]bapi.Update{nodeUpdate(map[string]string{"rack": "one"})})
+		r.OnUpdates([]bapi.Update{
+			nodeUpdate(map[string]string{"rack": "one"}),
+			poolUpdate("!all()"),
+		})
 		Expect(r.ch).To(Receive(), "expected the first update to trigger")
 	})
 
@@ -1070,6 +1093,25 @@ var _ = Describe("Reconciliation triggers", func() {
 	It("should not trigger a reconcile when the node is unchanged", func() {
 		r.OnUpdates([]bapi.Update{nodeUpdate(map[string]string{"rack": "one"})})
 		Expect(r.ch).ToNot(Receive())
+	})
+
+	It("should trigger a reconcile when only an IP pool's node selector changes", func() {
+		r.OnUpdates([]bapi.Update{poolUpdate("all()")})
+		Expect(r.ch).To(Receive())
+	})
+
+	It("should not trigger a reconcile when an IP pool is unchanged", func() {
+		r.OnUpdates([]bapi.Update{poolUpdate("!all()")})
+		Expect(r.ch).ToNot(Receive())
+	})
+
+	It("should trigger a reconcile when an IP pool starts deleting", func() {
+		r.OnUpdates([]bapi.Update{poolUpdate("!all()", func(p *api.IPPool) {
+			now := metav1.Now()
+			p.DeletionTimestamp = &now
+			p.Finalizers = []string{"projectcalico.org/ippool-finalizer"}
+		})})
+		Expect(r.ch).To(Receive())
 	})
 })
 

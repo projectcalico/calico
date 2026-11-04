@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,7 +60,8 @@ func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_St
 	for {
 		select {
 		case flow := <-stream.Flows():
-			if flow.BuildInto(req.Filter, result) {
+			// The stream applied req.Filter before sending, so don't match each flow a second time.
+			if flow.BuildInto(nil, result) {
 				if err := server.Send(result); err != nil {
 					return err
 				}

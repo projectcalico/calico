@@ -251,7 +251,7 @@ Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-no
 - The PR description discloses the assistance - the PR template has an **AI assistance** line for it.
 - Never add an AI co-author or `Assisted-By:` trailer to a commit.
 - The human author has to be able to explain the change without you, so leave the code and the PR description in a state they can defend.
-- Don't reply to review comments on their behalf.
+- On review threads, the only reply you may post for them is one that points at the fix commit ("Done in abc1234"). Explanations, pushback, and questions about review feedback come from the human.
 
 ## Documentation map
 
@@ -320,6 +320,10 @@ Per-area sub-designs carry the area-specific test conventions on top of this gen
 The eBPF dataplane design is split across the `bpf-*.md` files under [`felix/design/`](../felix/design/), with [`bpf-overview.md`](../felix/design/bpf-overview.md) as the always-pulled umbrella (packet-path mental model, fast-path cost rule, cross-cutting review rules) and topic-specific sub-designs covering each area of the dataplane. See [`felix/DESIGN.md`](../felix/DESIGN.md) for the authoritative table mapping code paths to sub-design files.
 
 Path-specific reviewer rules live in [`.github/instructions/bpf.instructions.md`](instructions/bpf.instructions.md) — a single thin pointer that scopes to all BPF paths and directs the agent to load the matching sub-design(s) from [`felix/DESIGN.md`](../felix/DESIGN.md)'s topic table, with `bpf-overview.md` as the always-read companion. The doc-update rule above applies. For BPF, the changes that usually earn a doc edit are a new sub-program, CT flag, mark bit, map or map field, or a change to the packet path or forwarding decision — candidates for the test above, not triggers on their own.
+
+## Calico API Review
+
+On clusters using the `projectcalico.org/v3` CRDs directly, the Go validator in `libcalico-go/lib/validator/v3` only runs for the policy kinds (via the `calico-webhooks` admission webhook); every other kind gets only the CRD schema. [`.github/instructions/calico-api.instructions.md`](instructions/calico-api.instructions.md) scopes to the API types, validator and webhook, and lists the validation every selector and name field needs.
 
 ## Helm Chart Review
 

@@ -18,7 +18,7 @@ Don't credit AI tools as commit co-authors (`Co-Authored-By:`, `Assisted-By:`, a
 
 Reviewers are here to talk to you, not to your agent. You need to be able to explain what your change does and why, in your own words. If you can't, expect the reviewer to close the PR.
 
-Using an agent to help draft a reply is fine. Handing over the review thread to one is not.
+Using an agent to help draft a reply is fine. So is letting it post a short reply that points at the fix, like "Done in abc1234", which tells the reviewer it's addressed and leaves a record for whoever picks the PR up later. Handing over the discussion is not: explanations, pushback, and questions come from you.
 
 ## Understand it before you push
 
