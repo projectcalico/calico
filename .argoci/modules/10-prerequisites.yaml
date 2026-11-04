@@ -11,20 +11,33 @@ steps:
   # felix-static-checks and node-static-checks over the volume cache, to compare
   # against each step restoring its own from GCS.
   - name: go-cache-seed
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     jobSize: large
     requests: {cpu: 14000m, memory: 4Gi}
+    # The build image has pigz; zstd is installed for the reader on ci-base.
+    useGoBuild: true
+    workspaceVolumes: none
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
     cache:
       - {name: go, mode: write}
     commands: |
+      dnf install -y -q zstd
       du -sh .go-pkg-cache "$GO_MOD_ROOT/pkg/mod"
+      s=$(date +%s)
+      tar -cf - .go-pkg-cache | pigz -1 > /cache/go-build.tar.gz &
+      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | pigz -1 > /cache/go-mod.tar.gz &
+      wait
+      echo "CACHE-TEST go-cache-seed compress-pigz $(( $(date +%s) - s ))s"
       s=$(date +%s)
       tar -cf - .go-pkg-cache | zstd -T0 -1 -q -c > /cache/go-build.tar.zst &
       tar -C "$GO_MOD_ROOT" -cf - pkg/mod | zstd -T0 -1 -q -c > /cache/go-mod.tar.zst &
       wait
-      echo "CACHE-TEST go-cache-seed compress $(( $(date +%s) - s ))s"
+      echo "CACHE-TEST go-cache-seed compress-zstd $(( $(date +%s) - s ))s"
       ls -l /cache
 
   - name: check-yaml
