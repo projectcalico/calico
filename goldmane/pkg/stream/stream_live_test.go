@@ -121,7 +121,7 @@ func TestFullQueueClosesStream(t *testing.T) {
 // twoFlows yields two builders, so a reader that never drains blocks on the second one.
 type twoFlows struct{}
 
-func (twoFlows) Iter(f func(storage.FlowBuilder) bool) {
+func (twoFlows) Iter(_ *proto.Filter, f func(storage.FlowBuilder) bool) {
 	for range 2 {
 		if f(nopBuilder{}) {
 			return

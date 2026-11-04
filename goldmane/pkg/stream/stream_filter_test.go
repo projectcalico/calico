@@ -15,7 +15,6 @@
 package stream_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
@@ -36,11 +35,7 @@ type filterCase struct {
 // The stream applies its filter, and the consumer builds without one as FlowsServer.Stream does,
 // so a filtered stream must receive only matching flows from both backfilled and live buckets.
 func TestStreamFiltersBackfillAndLiveBuckets(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	streams := stream.NewStreamManager()
-	go streams.Run(ctx)
 
 	clk := func() time.Time { return time.Unix(benchNow, 0) }
 	ring := storage.NewBucketRing(20, 1, benchNow, storage.WithStreamReceiver(streams), storage.WithNowFunc(clk))
@@ -62,9 +57,8 @@ func TestStreamFiltersBackfillAndLiveBuckets(t *testing.T) {
 
 	var registered []stream.Stream
 	for _, c := range cases {
-		s := <-streams.Register(&proto.FlowStreamRequest{StartTimeGte: benchNow - 5, Filter: c.filter}, streamBufferSize)
+		s := streams.Register(&proto.FlowStreamRequest{StartTimeGte: benchNow - 5, Filter: c.filter}, streamBufferSize)
 		defer s.Close()
-		<-streams.Backfills()
 		ring.Backfill(streams, s.ID(), s.StartTimeGte())
 		registered = append(registered, s)
 	}

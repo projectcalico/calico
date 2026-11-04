@@ -34,7 +34,7 @@ func addFlowAt(ring *storage.BucketRing, start int64) {
 // countBuilders returns how many flows p yields.
 func countBuilders(p storage.FlowProvider) int {
 	var n int
-	p.Iter(func(storage.FlowBuilder) bool {
+	p.Iter(nil, func(storage.FlowBuilder) bool {
 		n++
 		return false
 	})
