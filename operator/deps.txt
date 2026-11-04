@@ -83,6 +83,7 @@ github.com/jmoiron/sqlx v1.4.0
 github.com/joeshaw/multierror v0.0.0-20140124173710-69b34d4ec901
 github.com/json-iterator/go v1.1.12
 github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
+github.com/kylelemons/godebug v1.1.0
 github.com/lann/builder v0.0.0-20180802200727-47ae307949d0
 github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0
 github.com/lib/pq v1.12.3
@@ -115,6 +116,7 @@ github.com/prometheus/client_golang v1.24.1
 github.com/prometheus/client_model v0.6.2
 github.com/prometheus/common v0.70.1
 github.com/prometheus/procfs v0.21.1
+github.com/r3labs/diff/v2 v2.15.1
 github.com/rubenv/sql-migrate v1.8.1
 github.com/russross/blackfriday v1.6.0
 github.com/russross/blackfriday/v2 v2.1.0
@@ -128,6 +130,7 @@ github.com/stretchr/objx v0.5.3
 github.com/stretchr/testify v1.12.1
 github.com/urfave/cli v1.22.16
 github.com/urfave/cli/v3 v3.10.0
+github.com/vmihailenco/msgpack v4.0.4+incompatible
 github.com/x448/float16 v0.8.4
 github.com/xlab/treeprint v1.2.0
 go.elastic.co/apm/module/apmzap/v2 v2.6.2
