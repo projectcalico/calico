@@ -66,9 +66,10 @@ func endpointIPs(wep *internalapi.WorkloadEndpoint, logger *logrus.Entry) []net.
 }
 
 // releaseSandboxAddresses releases this sandbox's IPAM allocations except keepAddresses, the
-// addresses the pod's endpoint still lists. With nothing to keep, another IPAM type or a KubeVirt
-// pod, it runs the IPAM plugin's DEL. Otherwise it releases only the other addresses on the
-// sandbox's handle and never the whole handle, since an empty handle lookup skips unreadable blocks.
+// addresses the pod's endpoint still lists. It runs the IPAM plugin's DEL when there is nothing to
+// keep, the IPAM type is not calico-ipam, or the pod is a KubeVirt pod. Otherwise it releases only
+// the other addresses on the sandbox's handle, never the whole handle, since an empty handle
+// lookup skips unreadable blocks.
 func releaseSandboxAddresses(
 	ctx context.Context,
 	ipamClient ipam.Interface,
