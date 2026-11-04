@@ -22,7 +22,7 @@ The CNI plugin ships two binaries: `calico` (main CNI) and `calico-ipam` (used w
 Invariants:
 
 - **No partial state on failure.** Lock acquisition, the allocation call, and dual-stack family pairing each have a failure mode that must roll back, not leave half-applied state
-  for the next CNI invocation to trip on. Under `calico-ipam`, addresses the pod's WorkloadEndpoint lists are the exception (KubeVirt and `ipAddrsNoIpam` pods aside): a failed ADD
+  for the next CNI invocation to trip on. Under `calico-ipam`, addresses the pod's WorkloadEndpoint lists are the exception (KubeVirt pods aside): a failed ADD
   leaves them on whichever of the pod's handles holds them, since the next ADD claims them back, and releases only the unlisted addresses on its own handle.
 - **Lock then clock.** The 90s allocation timeout starts *after* the host-wide IPAM lock is acquired (see [The IPAM lock](#the-ipam-lock)). Otherwise lock contention burns the
   budget before any allocation work runs.
@@ -67,9 +67,9 @@ Invariants:
   kube-controllers GC to reclaim instead of freeing them on DEL.
 - **A stale sandbox's DEL keeps what the WEP lists.** When the DEL's container ID doesn't match the WEP's, it releases only the unlisted addresses on its own handle, because a later
   ADD may have moved the listed ones there, and never falls through to the normal release: `IPsByHandle` skips a block it can't read, so finding no listed address there proves
-  nothing. The workload-ID handle stays for the matching DEL to release. That DEL also releases each listed address held on another of the pod's container-ID handles for
-  the same network, so one a failed sandbox kept doesn't outlive the pod. It checks the owner, passes the handle as a precondition, and skips an allocation stamped after the DEL
-  started, so a newer sandbox's address is never freed. KubeVirt pods and IPAM types other than `calico-ipam` release as usual.
+  nothing. A failed ADD's cleanup of its own handle follows the same rule. The workload-ID handle stays for the matching DEL to release. The matching DEL releases only its
+  own handles, so a listed address left on a failed sandbox's handle waits for a later ADD to move it, or for the [kube-controllers GC](./ipam-gc.md) to free it once the pod
+  is gone. KubeVirt pods and IPAM types other than `calico-ipam` release as usual.
 - **KubeVirt DEL is not "release immediately."** Clear owner attrs first; release only when the VM/VMI is gone and all attrs are empty.
 
 `cmdDel` in the same file. The standard path releases the container-ID handle (`GetHandleID`), then the workload-ID handle (`<namespace>.<pod>`) unconditionally: that one
