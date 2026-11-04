@@ -1405,7 +1405,8 @@ RouteTableRange specifies the indices of the route tables that Calico should use
 
 Calico programs additional Linux route tables for various purposes.
 RouteTableRanges specifies a set of table index ranges that Calico should use.
-Deprecates`RouteTableRange`, overrides `RouteTableRange`.
+Deprecates`RouteTableRange`, overrides `RouteTableRange`. The ranges may target at most 65535
+tables in total.
 
 | Detail |   |
 | --- | --- |
