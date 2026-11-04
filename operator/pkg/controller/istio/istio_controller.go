@@ -24,6 +24,7 @@ import (
 	"github.com/go-logr/logr"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -95,6 +96,11 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	err = c.WatchObject(&v3.ClusterInformation{}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return fmt.Errorf("istio-controller failed to watch ClusterInformation resource: %w", err)
+	}
+
+	// The data plane rolls only after istiod finishes its rollout.
+	if err = utils.AddDeploymentWatch(c, istio.IstioIstiodDeploymentName, istio.IstioNamespace); err != nil {
+		return fmt.Errorf("istio-controller failed to watch Deployment %s/%s: %w", istio.IstioNamespace, istio.IstioIstiodDeploymentName, err)
 	}
 
 	if err = utils.AddPeriodicReconcile(c, utils.PeriodicReconcileTime, &handler.EnqueueRequestForObject{}); err != nil {
@@ -253,6 +259,12 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		reqLogger.Info("Could not render all optional gateway API CRDs", "err", err)
 	}
 
+	live, err := r.liveWorkloads(ctx)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading the Istio workloads", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+
 	// Render resources for Istio support
 	istioCfg := &istio.Configuration{
 		Installation:   installationSpec,
@@ -261,6 +273,7 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		IstioNamespace: istio.IstioNamespace,
 		Scheme:         r.scheme,
 		ClusterID:      clusterID,
+		Live:           live,
 	}
 	istioComponentCRDs, istioComponent, err := istio.Istio(istioCfg)
 	if err != nil {
@@ -330,6 +343,42 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 	r.status.ClearDegraded()
 
 	return reconcile.Result{}, nil
+}
+
+// liveWorkloads returns nil when there is no istiod to wait for. An istiod the
+// user told the operator to ignore never gets the new image, so waiting on it
+// would hold the data plane forever.
+func (r *ReconcileIstio) liveWorkloads(ctx context.Context) (*istio.LiveWorkloads, error) {
+	istiod := &appsv1.Deployment{}
+	if err := r.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, istiod); err != nil {
+		if errors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if utils.IgnoreObject(istiod) {
+		return nil, nil
+	}
+	live := &istio.LiveWorkloads{Istiod: istiod}
+	var err error
+	if live.CNI, err = r.getDaemonSet(ctx, istio.IstioCNIDaemonSetName); err != nil {
+		return nil, err
+	}
+	if live.ZTunnel, err = r.getDaemonSet(ctx, istio.IstioZTunnelDaemonSetName); err != nil {
+		return nil, err
+	}
+	return live, nil
+}
+
+func (r *ReconcileIstio) getDaemonSet(ctx context.Context, name string) (*appsv1.DaemonSet, error) {
+	ds := &appsv1.DaemonSet{}
+	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: istio.IstioNamespace}, ds); err != nil {
+		if errors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return ds, nil
 }
 
 func updateDefaults(istio *operatorv1.Istio) {
