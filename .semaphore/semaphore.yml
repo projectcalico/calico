@@ -6044,6 +6044,7 @@ blocks:
         '/lib/logrusr/*.go',
         '/lib/std/log/*.go',
         '/metadata.mk',
+        '/pkg/buildinfo/*.go',
         '/pod2daemon/**'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
@@ -6053,7 +6054,8 @@ blocks:
         '/**/LICENSE*',
         '/**/README*',
         '/**/SECURITY.md',
-        '/lib/**/*_test.go'], default_branch: 'release-v3.33'})
+        '/lib/**/*_test.go',
+        '/pkg/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
     task:
