@@ -1267,14 +1267,39 @@ func (c *IPAMController) judgeAllocation(a *allocation, preferCache bool) alloca
 // fromReplacedSandbox reports whether the allocation was made for a sandbox other than the
 // pod's current one. The CNI plugin records the current sandbox's container ID on the pod at
 // every ADD and leaves it in place on DEL, so an allocation whose handle names a different
-// container ID belongs to a sandbox kubelet has replaced. Without both IDs it reports false.
+// container ID belongs to a sandbox kubelet has replaced. An address the pod's IP annotation
+// lists is never replaced: trusting the annotation errs toward keeping, and the pod's deletion
+// bounds any leak.
 func fromReplacedSandbox(a *allocation, p *v1.Pod) bool {
 	current := p.Annotations[conversion.AnnotationContainerID]
 	if current == "" {
 		return false
 	}
 	sandbox, ok := ipam.ParsePodHandleIDAnyNetwork(a.handle)
-	return ok && sandbox.ContainerID != current
+	if !ok || sandbox.ContainerID == current {
+		return false
+	}
+	return !annotatedPodIPsInclude(p, a.ip)
+}
+
+// annotatedPodIPsInclude reports whether the pod's Calico IP annotation lists ip. It reads
+// the plural annotation, falling back to the singular one, whose entries are CIDRs.
+func annotatedPodIPsInclude(p *v1.Pod, ip string) bool {
+	want := net.ParseIP(ip)
+	if want == nil {
+		return false
+	}
+	annotated, ok := p.Annotations[conversion.AnnotationPodIPs]
+	if !ok || annotated == "" {
+		annotated = p.Annotations[conversion.AnnotationPodIP]
+	}
+	for _, entry := range strings.Split(annotated, ",") {
+		parsed, _, err := cnet.ParseCIDROrIP(strings.TrimSpace(entry))
+		if err == nil && parsed.IP.Equal(want) {
+			return true
+		}
+	}
+	return false
 }
 
 // isVMAllocationValid checks whether the backing VM or standalone VMI for
