@@ -106,6 +106,8 @@ steps:
       - gemini-api-key
       - fv-guru-db
     commands: |
+      # The prereqs ship zstd-compressed and the build image lacks the CLI.
+      dnf install -y -q zstd
       .semaphore/scripts/load-felix-prereqs.sh
       # The failure analysis reads the log from here.
       mkdir -p artifacts
