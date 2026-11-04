@@ -62,15 +62,21 @@ steps:
       fi
 
   - name: felix-static-checks
-    env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-    depends: [build-calico-image, check-go]
+    depends: [build-calico-image, check-go, go-cache-seed]
+    cache:
+      - {name: go, mode: read}
     timeout: 30m
     requests: {cpu: 4000m, memory: 6Gi}
     services:
       - docker
     commands: |
+      # TEMPORARY: unpacks the Go caches from the volume cache rather than GCS.
+      s=$(date +%s)
+      mkdir -p "$GO_MOD_ROOT"
+      zstd -dc /cache/go-build.tar.zst | tar -xf - &
+      zstd -dc /cache/go-mod.tar.zst | tar -C "$GO_MOD_ROOT" -xf - &
+      wait
+      echo "CACHE-TEST felix-static-checks unpack $(( $(date +%s) - s ))s"
       .argoci/scripts/load-cached-images calico
       .semaphore/scripts/load-felix-prereqs.sh
       cd felix
