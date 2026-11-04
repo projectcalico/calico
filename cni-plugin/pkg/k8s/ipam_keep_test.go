@@ -17,9 +17,12 @@ package k8s
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 
+	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/gofrs/flock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -86,23 +89,119 @@ func stubIPs(addrs ...string) []cnet.IP {
 	return ips
 }
 
-var _ = Describe("releaseUnlisted", func() {
-	const handle = "k8s-pod-network.sandbox-y"
-	logger := logrus.WithField("test", "releaseUnlisted")
+var (
+	errStubLookup  = errors.New("datastore down")
+	errStubRelease = errors.New("release failed")
+	errStubIPAMDel = errors.New("IPAM DEL failed")
+)
 
+// releaseCase is one releaseSandboxAddresses scenario: the sandbox's IPAM type and pod, the
+// addresses to keep, how the handle lookup, ReleaseIPs and the IPAM plugin answer, and the
+// expected IPAM DEL, direct releases and error.
+type releaseCase struct {
+	ipamType     string
+	pod          string
+	keep         []string
+	handleIPs    []string
+	ipsErr       error
+	releaseErr   error
+	delErr       error
+	wantIPAMDel  bool
+	wantReleased []string
+	wantErr      error
+}
+
+var _ = Describe("releaseSandboxAddresses", func() {
+	const network, sandbox = "k8s-pod-network", "sandbox-y"
+	handle := ipam.PodHandleID(network, sandbox)
+	logger := logrus.WithField("test", "releaseSandboxAddresses")
+
+	var fake *fakeIPAMExec
 	var lockPath string
 	BeforeEach(func() {
+		fake = &fakeIPAMExec{}
+		utils.IPAMExec = fake
+		DeferCleanup(func() { utils.IPAMExec = nil })
+		GinkgoT().Setenv("CNI_COMMAND", "ADD")
 		lockPath = filepath.Join(GinkgoT().TempDir(), "ipam.lock")
 	})
+
+	release := func(ctx context.Context, stub ipam.Interface, ipamType, pod string, keep ...string) error {
+		conf := types.NetConf{Name: network, IPAMLockFile: lockPath}
+		conf.IPAM.Type = ipamType
+		args := &skel.CmdArgs{ContainerID: sandbox, StdinData: fmt.Appendf(nil, `{"ipam":{"type":%q}}`, ipamType)}
+		return releaseSandboxAddresses(ctx, stub, conf, args, utils.WEPIdentifiers{Pod: pod}, set.From(keep...), logger)
+	}
+
+	DescribeTable("chooses between the IPAM DEL and releasing only unkept addresses",
+		func(c releaseCase) {
+			fake.delErr = c.delErr
+			stub := &stubHandleIPAM{ips: stubIPs(c.handleIPs...), ipsErr: c.ipsErr, releaseErr: c.releaseErr}
+
+			err := release(context.Background(), stub, c.ipamType, c.pod, c.keep...)
+
+			if c.wantErr != nil {
+				Expect(err).To(MatchError(c.wantErr))
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+			}
+			if c.wantIPAMDel {
+				Expect(fake.callsFor("DEL")).To(HaveLen(1))
+				Expect(stub.ctxErrs).To(BeEmpty(), "the handle was read directly as well")
+			} else {
+				Expect(fake.calls).To(BeEmpty())
+			}
+			var released []string
+			for _, opt := range stub.released {
+				Expect(opt.Handle).To(Equal(handle))
+				released = append(released, opt.Address)
+			}
+			Expect(released).To(ConsistOf(c.wantReleased))
+			Expect(os.Getenv("CNI_COMMAND")).To(Equal("ADD"))
+		},
+		Entry("nothing to keep runs the IPAM DEL", releaseCase{
+			ipamType: "calico-ipam", pod: "web-0", handleIPs: []string{"10.0.0.6"},
+			wantIPAMDel: true,
+		}),
+		Entry("another IPAM type runs the IPAM DEL despite addresses to keep", releaseCase{
+			ipamType: "host-local", pod: "web-0", keep: []string{"10.0.0.5"}, handleIPs: []string{"10.0.0.5"},
+			wantIPAMDel: true,
+		}),
+		Entry("a virt-launcher pod runs the IPAM DEL despite addresses to keep", releaseCase{
+			ipamType: "calico-ipam", pod: "virt-launcher-vm1-abcde", keep: []string{"10.0.0.5"}, handleIPs: []string{"10.0.0.5"},
+			wantIPAMDel: true,
+		}),
+		Entry("addresses to keep release only the others, without the IPAM DEL", releaseCase{
+			ipamType: "calico-ipam", pod: "web-0", keep: []string{"10.0.0.5"}, handleIPs: []string{"10.0.0.5", "10.0.0.6", "fd00::6"},
+			wantReleased: []string{"10.0.0.6", "fd00::6"},
+		}),
+		Entry("a handle holding only kept addresses releases nothing", releaseCase{
+			ipamType: "calico-ipam", pod: "web-0", keep: []string{"10.0.0.5"}, handleIPs: []string{"10.0.0.5"},
+		}),
+		Entry("a missing handle is nothing to release, without the IPAM DEL", releaseCase{
+			ipamType: "calico-ipam", pod: "web-0", keep: []string{"10.0.0.5"}, ipsErr: cerrors.ErrorResourceDoesNotExist{},
+		}),
+		Entry("another handle lookup error is returned, without the IPAM DEL", releaseCase{
+			ipamType: "calico-ipam", pod: "web-0", keep: []string{"10.0.0.5"}, ipsErr: errStubLookup,
+			wantErr: errStubLookup,
+		}),
+		Entry("a ReleaseIPs error is returned", releaseCase{
+			ipamType: "calico-ipam", pod: "web-0", keep: []string{"10.0.0.5"}, handleIPs: []string{"10.0.0.6"}, releaseErr: errStubRelease,
+			wantReleased: []string{"10.0.0.6"}, wantErr: errStubRelease,
+		}),
+		Entry("an IPAM DEL error is returned", releaseCase{
+			ipamType: "calico-ipam", pod: "web-0", delErr: errStubIPAMDel,
+			wantIPAMDel: true, wantErr: errStubIPAMDel,
+		}),
+	)
 
 	It("still looks up and releases after the caller's context is canceled", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.6")}
+		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.5", "10.0.0.6")}
 
-		_, err := releaseUnlisted(ctx, stub, handle, lockPath, set.New[string](), logger)
+		Expect(release(ctx, stub, "calico-ipam", "web-0", "10.0.0.5")).To(Succeed())
 
-		Expect(err).NotTo(HaveOccurred())
 		Expect(stub.released).To(Equal([]ipam.ReleaseOptions{{Address: "10.0.0.6", Handle: handle}}))
 		Expect(stub.ctxErrs).To(HaveLen(2))
 		Expect(stub.ctxErrs).To(HaveEach(BeNil()))
@@ -111,58 +210,10 @@ var _ = Describe("releaseUnlisted", func() {
 	It("holds the host IPAM lock while it looks up and releases, and frees it after", func() {
 		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.6"), lockPath: lockPath}
 
-		_, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.New[string](), logger)
+		Expect(release(context.Background(), stub, "calico-ipam", "web-0", "10.0.0.5")).To(Succeed())
 
-		Expect(err).NotTo(HaveOccurred())
 		Expect(stub.lockFree).To(Equal([]bool{false, false}))
 		Expect(lockIsFree(lockPath)).To(BeTrue())
-	})
-
-	It("releases only the unlisted address and reports it kept one", func() {
-		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.5", "10.0.0.6")}
-		kept, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.From("10.0.0.5"), logger)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(kept).To(BeTrue())
-		Expect(stub.released).To(Equal([]ipam.ReleaseOptions{{Address: "10.0.0.6", Handle: handle}}))
-	})
-
-	It("releases every address when none is listed and reports none kept", func() {
-		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.6", "fd00::6")}
-		kept, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.New[string](), logger)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(kept).To(BeFalse())
-		Expect(stub.released).To(ConsistOf(ipam.ReleaseOptions{Address: "10.0.0.6", Handle: handle}, ipam.ReleaseOptions{Address: "fd00::6", Handle: handle}))
-	})
-
-	It("releases nothing when every address on the handle is listed", func() {
-		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.5")}
-		kept, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.From("10.0.0.5"), logger)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(kept).To(BeTrue())
-		Expect(stub.released).To(BeEmpty())
-	})
-
-	It("treats a missing handle as nothing to release", func() {
-		stub := &stubHandleIPAM{ipsErr: cerrors.ErrorResourceDoesNotExist{}}
-		kept, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.From("10.0.0.5"), logger)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(kept).To(BeFalse())
-		Expect(stub.released).To(BeEmpty())
-	})
-
-	It("returns any other IPsByHandle error without releasing", func() {
-		boom := errors.New("datastore down")
-		stub := &stubHandleIPAM{ipsErr: boom}
-		_, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.New[string](), logger)
-		Expect(err).To(MatchError(boom))
-		Expect(stub.released).To(BeEmpty())
-	})
-
-	It("returns a ReleaseIPs error", func() {
-		boom := errors.New("release failed")
-		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.6"), releaseErr: boom}
-		_, err := releaseUnlisted(context.Background(), stub, handle, lockPath, set.New[string](), logger)
-		Expect(err).To(MatchError(boom))
 	})
 })
 
@@ -191,18 +242,6 @@ var _ = DescribeTable("listedAddresses",
 	Entry("a nil endpoint lists nothing", nil, nil),
 	Entry("dual-stack networks give both bare IPs", wepWithNetworks("10.0.0.5/32", "fd00::5/128"), []string{"10.0.0.5", "fd00::5"}),
 	Entry("an unparsable entry is skipped", wepWithNetworks("10.0.0.5/32", "garbage"), []string{"10.0.0.5"}),
-)
-
-var _ = DescribeTable("keepsListedAddresses",
-	func(ipamType, pod, ipAddrsNoIpam string, want bool) {
-		conf := types.NetConf{}
-		conf.IPAM.Type = ipamType
-		Expect(keepsListedAddresses(conf, utils.WEPIdentifiers{Pod: pod}, ipAddrsNoIpam)).To(Equal(want))
-	},
-	Entry("calico-ipam, ordinary pod", "calico-ipam", "web-0", "", true),
-	Entry("another IPAM type", "host-local", "web-0", "", false),
-	Entry("a virt-launcher pod", "calico-ipam", "virt-launcher-vm1-abcde", "", false),
-	Entry("ipAddrsNoIpam is set", "calico-ipam", "web-0", `["10.0.0.1"]`, false),
 )
 
 func wepWithNetworks(nets ...string) *internalapi.WorkloadEndpoint {

@@ -50,6 +50,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
@@ -391,7 +392,15 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	}
 
 	// The addresses the endpoint listed before this ADD, which a failure must not release.
-	listed := listedAddresses(endpoint, logger)
+	keepAddresses := listedAddresses(endpoint, logger)
+
+	// releaseIPAM cleans up any IPAM allocations on failure.
+	releaseIPAM := func() {
+		logger.Info("Releasing IPAM allocation(s) after failure")
+		if err := releaseSandboxAddresses(ctx, calicoClient.IPAM(), conf, args, epIDs, keepAddresses, logger); err != nil {
+			logger.WithError(err).Error("Failed to release IPAM allocation(s) after failure")
+		}
+	}
 
 	// Configure the endpoint (creating if required).
 	if endpoint == nil {
@@ -421,31 +430,11 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 	// Populate the endpoint with the output from the IPAM plugin.
 	if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
-		// Cleanup IP allocation and return the error.
-		utils.ReleaseIPAllocation(ctx, logger, conf, args)
+		releaseIPAM()
 		return nil, err
 	}
 	logger.WithField("endpoint", endpoint).Info("Populated endpoint")
 	logger.Infof("Calico CNI using IPs: %s", endpoint.Spec.IPNetworks)
-
-	// releaseIPAM cleans up any IPAM allocations on failure.
-	releaseIPAM := func() {
-		if keepsListedAddresses(conf, epIDs, ipAddrsNoIpam) && listed.Len() > 0 {
-			// The pod's endpoint still lists those addresses, so the next ADD claims them
-			// again; releasing them would cost a running pod its IP.
-			handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
-			kept, err := releaseUnlisted(ctx, calicoClient.IPAM(), handleID, conf.IPAMLockFile, listed, logger)
-			if err != nil {
-				logger.WithError(err).Error("Failed to release IPAM allocation(s) after failure")
-				return
-			}
-			logger.WithField("kept", kept).Info("Released unlisted IPAM allocation(s) after failure")
-			return
-		}
-
-		logger.WithField("endpointIPs", endpoint.Spec.IPNetworks).Info("Releasing IPAM allocation(s) after failure")
-		utils.ReleaseIPAllocation(ctx, logger, conf, args)
-	}
 
 	// Check if IPAM returned empty routes (migration target pod case)
 	// calico-ipam returns empty routes for migration target pods to skip host-side route programming
@@ -626,12 +615,10 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		}
 	}
 
-	// The endpoint as this DEL found it, and whether it names another sandbox.
+	// The endpoint as this DEL found it, or nil if there is none.
 	var wep *internalapi.WorkloadEndpoint
-	var stale bool
 	for attempts := 5; attempts >= 0; attempts-- {
 		var err error
-		stale = false
 		wep, err = c.WorkloadEndpoints().Get(ctx, epIDs.Namespace, epIDs.WEPName, options.GetOptions{})
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
@@ -645,13 +632,12 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 			// if they exist, so continue DEL processing.
 			logger.WithField("WorkloadEndpoint", epIDs.WEPName).Warning("WorkloadEndpoint does not exist in the datastore, moving forward with the clean up")
 			wep = nil
-		} else if wep.Spec.ContainerID != "" && args.ContainerID != wep.Spec.ContainerID {
+		} else if !wepMatchesSandbox(wep, args.ContainerID) {
 			// If the ContainerID is populated and doesn't match the CNI_CONTAINERID provided for this execution, then
 			// we shouldn't delete the workload endpoint. We identify workload endpoints based on pod name and namespace, which means
 			// we can receive DEL commands for an old sandbox for a currently running pod. However, we key IPAM allocations based on the
 			// CNI_CONTAINERID, so we should still do that below for this case.
 			logger.WithField("WorkloadEndpoint", wep).Warning("CNI_CONTAINERID does not match WorkloadEndpoint ContainerID, don't delete WEP.")
-			stale = true
 		} else if _, err = c.WorkloadEndpoints().Delete(
 			ctx,
 			wep.Namespace,
@@ -693,28 +679,25 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		return err
 	}
 
-	keepsListed := wep != nil && keepsListedAddresses(conf, epIDs, "")
-
-	// A stale DEL must not free addresses the endpoint lists. An empty handle lookup proves
-	// nothing, since it skips unreadable blocks.
-	if keepsListed && stale {
-		handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
-		if _, err := releaseUnlisted(ctx, c.IPAM(), handleID, conf.IPAMLockFile, listedAddresses(wep, logger), logger); err != nil {
-			return err
-		}
-		logger.Info("Teardown processing complete.")
-		return nil
+	// The pod is still running on another sandbox, so this DEL must not free its addresses.
+	var keepAddresses set.Set[string] = set.New[string]()
+	if !wepMatchesSandbox(wep, args.ContainerID) {
+		keepAddresses = listedAddresses(wep, logger)
 	}
 
-	// Release the IP address for this container by calling the configured IPAM plugin.
 	logger.Info("Releasing IP address(es)")
-	err = utils.DeleteIPAM(ctx, conf, args, logger)
-	if err != nil {
+	if err := releaseSandboxAddresses(ctx, c.IPAM(), conf, args, epIDs, keepAddresses, logger); err != nil {
 		return err
 	}
 
 	logger.Info("Teardown processing complete.")
 	return nil
+}
+
+// wepMatchesSandbox reports whether a DEL for containerID is for the sandbox the endpoint
+// names. An endpoint that is gone or names no sandbox matches, so its DEL tears everything down.
+func wepMatchesSandbox(wep *internalapi.WorkloadEndpoint, containerID string) bool {
+	return wep == nil || wep.Spec.ContainerID == "" || wep.Spec.ContainerID == containerID
 }
 
 // ipAddrsResult parses the ipAddrs annotation and calls the configured IPAM plugin for
@@ -939,7 +922,9 @@ func callIPAMWithIP(ctx context.Context, ip net.IP, conf types.NetConf, args *sk
 	// so the subsequent calls don't get polluted by the old IP value.
 	if err := os.Setenv("CNI_ARGS", originalArgs); err != nil {
 		// Need to clean up IP allocation if this step doesn't succeed.
-		utils.ReleaseIPAllocation(ctx, logger, conf, args)
+		if err := utils.ReleaseIPAllocation(ctx, logger, conf, args); err != nil {
+			logger.WithError(err).Warning("Failed to clean up IP allocations for failed ADD")
+		}
 		logger.Errorf("Error setting CNI_ARGS environment variable: %v", err)
 		return nil, err
 	}

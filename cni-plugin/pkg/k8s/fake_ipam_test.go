@@ -54,9 +54,11 @@ type fakeIPAMIPCfg struct {
 
 // fakeIPAMExec is an invoke.Exec that stands in for the calico-ipam binary. ADDs with an IP=
 // argument return that address unless addErrs has an error for it. ADDs without one return
-// the fresh addresses, filtered by the assign_ipv4 and assign_ipv6 values on stdin.
+// the fresh addresses, filtered by the assign_ipv4 and assign_ipv6 values on stdin. Other
+// commands return delErr.
 type fakeIPAMExec struct {
 	addErrs map[string]error
+	delErr  error
 	fresh   []string
 	calls   []fakeIPAMCall
 }
@@ -86,7 +88,7 @@ func (f *fakeIPAMExec) ExecPlugin(_ context.Context, _ string, stdin []byte, env
 	f.calls = append(f.calls, call)
 
 	if call.Command != "ADD" {
-		return nil, nil
+		return nil, f.delErr
 	}
 	if err, ok := f.addErrs[call.IP]; ok && call.IP != "" {
 		return nil, err

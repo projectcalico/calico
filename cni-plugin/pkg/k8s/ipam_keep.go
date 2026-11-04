@@ -21,6 +21,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
@@ -64,14 +65,31 @@ func endpointIPs(wep *internalapi.WorkloadEndpoint, logger *logrus.Entry) []net.
 	return ips
 }
 
-// releaseUnlisted releases the addresses on handleID that listed does not contain, and
-// reports whether it kept any. A failed ADD uses it to free only the addresses that this
-// sandbox allocated, since the endpoint still lists the rest and the next ADD claims them.
-// It holds the host IPAM lock at lockPath throughout, like calico-ipam's DEL, and finishes
-// even if ctx is canceled.
-func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID, lockPath string, listed set.Set[string], logger *logrus.Entry) (bool, error) {
-	var kept bool
-	err := underIPAMLock(ctx, lockPath, func(ctx context.Context) error {
+// releaseSandboxAddresses releases this sandbox's IPAM allocations except keepAddresses, the
+// addresses the pod's endpoint still lists. With nothing to keep, another IPAM type or a KubeVirt
+// pod, it runs the IPAM plugin's DEL. Otherwise it releases only the other addresses on the
+// sandbox's handle and never the whole handle, since an empty handle lookup skips unreadable blocks.
+func releaseSandboxAddresses(
+	ctx context.Context,
+	ipamClient ipam.Interface,
+	conf types.NetConf,
+	args *skel.CmdArgs,
+	epIDs utils.WEPIdentifiers,
+	keepAddresses set.Set[string],
+	logger *logrus.Entry,
+) error {
+	if keepAddresses.Len() == 0 || conf.IPAM.Type != "calico-ipam" || kubevirt.MaybeVirtLauncherPod(epIDs.Pod) {
+		return utils.ReleaseIPAllocation(ctx, logger, conf, args)
+	}
+	handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
+	return releaseUnlisted(ctx, ipamClient, handleID, conf.IPAMLockFile, keepAddresses, logger)
+}
+
+// releaseUnlisted releases the addresses on handleID that keepAddresses does not contain. It
+// holds the host IPAM lock at lockPath throughout, like calico-ipam's DEL, and finishes even if
+// ctx is canceled.
+func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID, lockPath string, keepAddresses set.Set[string], logger *logrus.Entry) error {
+	return underIPAMLock(ctx, lockPath, func(ctx context.Context) error {
 		ips, err := ipamClient.IPsByHandle(ctx, handleID)
 		if err != nil {
 			if errors.As(err, &cerrors.ErrorResourceDoesNotExist{}) {
@@ -82,9 +100,8 @@ func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID, l
 
 		var errs []error
 		for _, ip := range ips {
-			if listed.Contains(ip.String()) {
+			if keepAddresses.Contains(ip.String()) {
 				logger.WithField("ip", ip).Info("Keeping address the endpoint lists")
-				kept = true
 				continue
 			}
 			logger.WithField("ip", ip).Info("Releasing address the endpoint does not list")
@@ -94,7 +111,6 @@ func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID, l
 		}
 		return errors.Join(errs...)
 	})
-	return kept, err
 }
 
 // underIPAMLock runs fn holding the host IPAM lock at lockPath, as calico-ipam's DEL does.
@@ -107,13 +123,4 @@ func underIPAMLock(ctx context.Context, lockPath string, fn func(context.Context
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ipamReleaseTimeout)
 	defer cancel()
 	return fn(ctx)
-}
-
-// keepsListedAddresses reports whether a failed ADD should leave the addresses its endpoint
-// lists in place. It holds only for calico-ipam with ordinary pods, the same cases in which
-// ADD reuses or moves addresses onto the new sandbox's handle.
-func keepsListedAddresses(conf types.NetConf, epIDs utils.WEPIdentifiers, ipAddrsNoIPAM string) bool {
-	return conf.IPAM.Type == "calico-ipam" &&
-		!kubevirt.MaybeVirtLauncherPod(epIDs.Pod) &&
-		ipAddrsNoIPAM == ""
 }

@@ -79,6 +79,15 @@ func renameVeth(from, to string) {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", output))
 }
 
+// occupyPodInterface puts a dummy eth0 in netNS, which makes a later ADD's networking fail
+// until a DEL removes it.
+func occupyPodInterface(netNS ns.NetNS) {
+	err := netNS.Do(func(ns.NetNS) error {
+		return netlink.LinkAdd(&netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}})
+	})
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+}
+
 func ensureNamespace(clientset *kubernetes.Clientset, name string) {
 	ns := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
@@ -3588,6 +3597,53 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				resultThird, _, _, _, err := testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", "third-container-id", "eth0", contNs)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(resultThird.IPs).To(Equal(result.IPs))
+			})
+
+			It("keeps the pod on one address through repeated failed rebuilds", func() {
+				handles := []string{utils.GetHandleID("calico-uts", containerID, workloadName)}
+
+				// expectOnlyPodAddress checks that the pod's sandbox handles hold its address and nothing else.
+				expectOnlyPodAddress := func() {
+					var held []string
+					for _, handle := range handles {
+						ips, err := calicoClient.IPAM().IPsByHandle(ctx, handle)
+						if stderrors.As(err, &cerrors.ErrorResourceDoesNotExist{}) {
+							continue
+						}
+						ExpectWithOffset(1, err).NotTo(HaveOccurred())
+						for _, ip := range ips {
+							held = append(held, ip.String()+"/32")
+						}
+					}
+					ExpectWithOffset(1, held).To(Equal(endpointSpec.IPNetworks))
+				}
+
+				for i := range 3 {
+					failedID := fmt.Sprintf("failed-container-id-%d", i)
+					handles = append(handles, utils.GetHandleID("calico-uts", failedID, workloadName))
+					if i > 0 {
+						occupyPodInterface(contNs)
+					}
+
+					_, _, _, _, err := testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", failedID, "eth0", contNs)
+					Expect(err).To(HaveOccurred())
+					expectOnlyPodAddress()
+
+					_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, failedID)
+					Expect(err).NotTo(HaveOccurred())
+					vethRenamed = false
+					expectOnlyPodAddress()
+				}
+
+				const rebuiltID = "rebuilt-container-id"
+				handles = append(handles, utils.GetHandleID("calico-uts", rebuiltID, workloadName))
+				rebuilt, _, _, _, err := testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", rebuiltID, "eth0", contNs)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(rebuilt.IPs).To(Equal(result.IPs))
+				expectOnlyPodAddress()
+
+				_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, rebuiltID)
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			AfterEach(func() {
