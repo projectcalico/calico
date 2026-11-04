@@ -79,31 +79,22 @@ func fillDefaults(ctx context.Context, client client.Client, spec *operator.Inst
 	// Only add default CIDRs if there are no existing pools in the cluster. On a cluster that already has
 	// pools, the caller has decided which ones to manage.
 	if currentPools == nil || len(currentPools.Items) == 0 {
-		if spec.KubernetesProvider.IsOpenShift() {
-			// If configured to run in openshift, then also fetch the openshift configuration API.
-			log.V(1).Info("Fetching OpenShift network configuration")
-			openshiftConfig := &configv1.Network{}
-			openshiftNetworkConfig := "cluster"
-			if err := client.Get(ctx, types.NamespacedName{Name: openshiftNetworkConfig}, openshiftConfig); err != nil {
-				return fmt.Errorf("unable to read openshift network configuration: %s", err.Error())
+		if spec.CNI.Type == operator.PluginCalico {
+			platformCIDRs, err := platformPodCIDRs(ctx, client, spec)
+			if err != nil {
+				return err
 			}
-
-			// Merge in OpenShift configuration.
-			if err := updateInstallationForOpenshiftNetwork(spec, openshiftConfig); err != nil {
-				return fmt.Errorf("could not resolve CalicoNetwork IPPool and OpenShift network: %s", err.Error())
+			if spec.CalicoNetwork == nil {
+				spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
 			}
-		} else {
-			// Check if we're running on kubeadm by getting the config map.
-			log.V(1).Info("Fetching kubeadm config map")
-			kubeadmConfig := &corev1.ConfigMap{}
-			key := types.NamespacedName{Name: kubeadmConfigMap, Namespace: metav1.NamespaceSystem}
-			if err := client.Get(ctx, key, kubeadmConfig); err == nil {
-				// We found the configmap - merge in kubeadm configuration.
-				if err := updateInstallationForKubeadm(spec, kubeadmConfig); err != nil {
-					return fmt.Errorf("could not resolve CalicoNetwork IPPool and kubeadm configuration: %s", err.Error())
+			// Without a platform config there's nothing to default from or check against.
+			if platformCIDRs != nil {
+				if err := mergePlatformPodCIDRs(spec, platformCIDRs); err != nil {
+					if spec.KubernetesProvider.IsOpenShift() {
+						return fmt.Errorf("could not resolve CalicoNetwork IPPool and OpenShift network: %w", err)
+					}
+					return fmt.Errorf("could not resolve CalicoNetwork IPPool and kubeadm configuration: %w", err)
 				}
-			} else if !apierrors.IsNotFound(err) {
-				return fmt.Errorf("unable to read kubeadm config map: %s", err.Error())
 			}
 		}
 
@@ -255,36 +246,34 @@ func isDualStack(spec *operator.InstallationSpec) bool {
 	return hasV4 && hasV6
 }
 
-func updateInstallationForOpenshiftNetwork(spec *operator.InstallationSpec, o *configv1.Network) error {
-	// If CNI plugin is specified and not Calico then skip any CalicoNetwork initialization
-	if spec.CNI != nil && spec.CNI.Type != operator.PluginCalico {
-		return nil
-	}
-	if spec.CalicoNetwork == nil {
-		spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
-	}
-
-	platformCIDRs := []string{}
-	for _, c := range o.Spec.ClusterNetwork {
-		platformCIDRs = append(platformCIDRs, c.CIDR)
-	}
-	return mergePlatformPodCIDRs(spec, platformCIDRs)
-}
-
-func updateInstallationForKubeadm(spec *operator.InstallationSpec, c *corev1.ConfigMap) error {
-	// If CNI plugin is specified and not Calico then skip any CalicoNetwork initialization
-	if spec.CNI != nil && spec.CNI.Type != operator.PluginCalico {
-		return nil
-	}
-	if spec.CalicoNetwork == nil {
-		spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
+// platformPodCIDRs returns the pod network CIDRs configured in the underlying Kubernetes platform.
+// A cluster without a kubeadm config map has none.
+func platformPodCIDRs(ctx context.Context, c client.Client, spec *operator.InstallationSpec) ([]string, error) {
+	if spec.KubernetesProvider.IsOpenShift() {
+		openshiftConfig := &configv1.Network{}
+		if err := c.Get(ctx, types.NamespacedName{Name: "cluster"}, openshiftConfig); err != nil {
+			return nil, fmt.Errorf("unable to read openshift network configuration: %w", err)
+		}
+		cidrs := []string{}
+		for _, n := range openshiftConfig.Spec.ClusterNetwork {
+			cidrs = append(cidrs, n.CIDR)
+		}
+		return cidrs, nil
 	}
 
-	platformCIDRs, err := extractKubeadmCIDRs(c)
+	kubeadmConfig := &corev1.ConfigMap{}
+	key := types.NamespacedName{Name: kubeadmConfigMap, Namespace: metav1.NamespaceSystem}
+	if err := c.Get(ctx, key, kubeadmConfig); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("unable to read kubeadm config map: %w", err)
+	}
+	cidrs, err := extractKubeadmCIDRs(kubeadmConfig)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("unable to parse kubeadm config map: %w", err)
 	}
-	return mergePlatformPodCIDRs(spec, platformCIDRs)
+	return cidrs, nil
 }
 
 func mergePlatformPodCIDRs(spec *operator.InstallationSpec, platformCIDRs []string) error {
