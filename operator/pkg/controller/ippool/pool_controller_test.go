@@ -16,6 +16,7 @@ package ippool
 
 import (
 	"context"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -67,6 +68,7 @@ var _ = Describe("IP Pool controller tests", func() {
 
 		// Create an object we can use throughout the test to do the compliance reconcile loops.
 		mockStatus = &status.MockStatus{}
+		mockStatus.On("ClearWarning", mock.Anything).Return().Maybe()
 
 		r = Reconciler{
 			config:               nil, // there is no fake for config
@@ -619,7 +621,211 @@ var _ = Describe("IP Pool controller tests", func() {
 		Expect(ipPools.Items).To(HaveLen(1))
 		Expect(ipPools.Items[0].Spec.CIDR).To(Equal(canonicalCIDR))
 	})
+
+	Context("with IP pools checked against the kubeadm podSubnet", func() {
+		const outsideCIDR = "172.25.64.0/20"
+
+		newInstallation := func(pools ...operator.IPPool) *operator.Installation {
+			return &operator.Installation{
+				ObjectMeta: metav1.ObjectMeta{Name: "default", Finalizers: []string{"tigera.io/operator-cleanup"}},
+				Spec: operator.InstallationSpec{
+					Variant: operator.Calico,
+					CNI: &operator.CNISpec{
+						Type: operator.PluginCalico,
+						IPAM: &operator.IPAMSpec{Type: operator.IPAMPluginCalico},
+					},
+					CalicoNetwork: &operator.CalicoNetworkSpec{IPPools: pools},
+				},
+			}
+		}
+		createKubeadmConfig := func(clusterConfiguration string) {
+			Expect(c.Create(ctx, &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: kubeadmConfigMap, Namespace: metav1.NamespaceSystem},
+				Data:       map[string]string{"ClusterConfiguration": clusterConfiguration},
+			})).ShouldNot(HaveOccurred())
+		}
+		expectSuccessfulReconcile := func() {
+			mockStatus.On("OnCRFound")
+			mockStatus.On("SetMetaData", mock.Anything)
+			mockStatus.On("IsAvailable").Return(true)
+			mockStatus.On("ReadyToMonitor")
+			mockStatus.On("ClearDegraded")
+		}
+		warningAbout := func(cidr string) any {
+			return mock.MatchedBy(func(msg string) bool { return strings.Contains(msg, cidr) })
+		}
+
+		It("should warn about, but still create, a pool outside the podSubnet", func() {
+			createKubeadmConfig("networking:\n  podSubnet: 10.172.0.0/16\n")
+			createInstallation(ctx, c, newInstallation(operator.IPPool{CIDR: outsideCIDR, Encapsulation: operator.EncapsulationVXLAN}))
+			expectSuccessfulReconcile()
+			mockStatus.On("SetWarning", poolsOutsidePlatformCIDRsWarning, warningAbout(outsideCIDR)).Return()
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+			mockStatus.AssertExpectations(GinkgoT())
+
+			ipPools := v3.IPPoolList{}
+			Expect(c.List(ctx, &ipPools)).ShouldNot(HaveOccurred())
+			Expect(ipPools.Items).To(HaveLen(1))
+			Expect(ipPools.Items[0].Spec.CIDR).To(Equal(outsideCIDR))
+		})
+
+		It("should clear the warning when pools are inside the podSubnet", func() {
+			createKubeadmConfig("networking:\n  podSubnet: 10.172.0.0/16\n")
+			createInstallation(ctx, c, newInstallation(operator.IPPool{CIDR: "10.172.0.0/18", Encapsulation: operator.EncapsulationVXLAN}))
+			expectSuccessfulReconcile()
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+			mockStatus.AssertExpectations(GinkgoT())
+			mockStatus.AssertCalled(GinkgoT(), "ClearWarning", poolsOutsidePlatformCIDRsWarning)
+			mockStatus.AssertNotCalled(GinkgoT(), "SetWarning", mock.Anything, mock.Anything)
+		})
+
+		It("should warn about an existing pool outside the podSubnet", func() {
+			createKubeadmConfig("networking:\n  podSubnet: 10.172.0.0/16\n")
+			Expect(c.Create(ctx, &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "existing-pool", Labels: map[string]string{managedByLabel: managedByValue}},
+				Spec:       v3.IPPoolSpec{CIDR: outsideCIDR},
+			})).ShouldNot(HaveOccurred())
+			createInstallation(ctx, c, newInstallation(operator.IPPool{CIDR: outsideCIDR, Encapsulation: operator.EncapsulationVXLAN}))
+			r.clientv3 = c
+			r.opts.UseV3CRDs = true
+			expectSuccessfulReconcile()
+			mockStatus.On("SetWarning", poolsOutsidePlatformCIDRsWarning, warningAbout(outsideCIDR)).Return()
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+			mockStatus.AssertExpectations(GinkgoT())
+		})
+
+		It("should not block existing pools when the kubeadm config has no podSubnet", func() {
+			createKubeadmConfig("networking:\n  serviceSubnet: 10.96.0.0/16\n")
+			Expect(c.Create(ctx, &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "existing-pool", Labels: map[string]string{managedByLabel: managedByValue}},
+				Spec:       v3.IPPoolSpec{CIDR: "192.168.0.0/16"},
+			})).ShouldNot(HaveOccurred())
+			createInstallation(ctx, c, newInstallation(operator.IPPool{CIDR: "192.168.0.0/16", Encapsulation: operator.EncapsulationVXLAN}))
+			r.clientv3 = c
+			r.opts.UseV3CRDs = true
+			expectSuccessfulReconcile()
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+			mockStatus.AssertExpectations(GinkgoT())
+			mockStatus.AssertCalled(GinkgoT(), "ClearWarning", poolsOutsidePlatformCIDRsWarning)
+			mockStatus.AssertNotCalled(GinkgoT(), "SetWarning", mock.Anything, mock.Anything)
+		})
+
+		It("should not warn about a load balancer pool outside the podSubnet", func() {
+			createKubeadmConfig("networking:\n  podSubnet: 10.172.0.0/16\n")
+			createInstallation(ctx, c, newInstallation(
+				operator.IPPool{CIDR: "10.172.0.0/18", Encapsulation: operator.EncapsulationVXLAN},
+				operator.IPPool{
+					Name:          "load-balancer",
+					CIDR:          "172.30.0.0/24",
+					Encapsulation: operator.EncapsulationNone,
+					AllowedUses:   []operator.IPPoolAllowedUse{operator.IPPoolAllowedUseLoadBalancer},
+					// The CRD defaults this on a real cluster, but the fake client doesn't apply CRD defaults.
+					DisableBGPExport: ptr.To(false),
+				},
+			))
+			expectSuccessfulReconcile()
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+			mockStatus.AssertExpectations(GinkgoT())
+			mockStatus.AssertCalled(GinkgoT(), "ClearWarning", poolsOutsidePlatformCIDRsWarning)
+			mockStatus.AssertNotCalled(GinkgoT(), "SetWarning", mock.Anything, mock.Anything)
+		})
+
+		It("should clear the warning once the podSubnet covers the pool", func() {
+			createKubeadmConfig("networking:\n  podSubnet: 10.172.0.0/16\n")
+			createInstallation(ctx, c, newInstallation(operator.IPPool{CIDR: outsideCIDR, Encapsulation: operator.EncapsulationVXLAN}))
+			r.clientv3 = c
+			r.opts.UseV3CRDs = true
+			expectSuccessfulReconcile()
+			mockStatus.On("SetWarning", poolsOutsidePlatformCIDRsWarning, warningAbout(outsideCIDR)).Return()
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+			mockStatus.AssertNotCalled(GinkgoT(), "ClearWarning", poolsOutsidePlatformCIDRsWarning)
+
+			cm := &v1.ConfigMap{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: kubeadmConfigMap, Namespace: metav1.NamespaceSystem}, cm)).ShouldNot(HaveOccurred())
+			cm.Data["ClusterConfiguration"] = "networking:\n  podSubnet: 10.172.0.0/16,172.25.0.0/16\n"
+			Expect(c.Update(ctx, cm)).ShouldNot(HaveOccurred())
+
+			_, err = r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+			mockStatus.AssertExpectations(GinkgoT())
+			mockStatus.AssertCalled(GinkgoT(), "ClearWarning", poolsOutsidePlatformCIDRsWarning)
+		})
+
+		It("should clear the warning for a non-Calico CNI", func() {
+			createKubeadmConfig("networking:\n  podSubnet: 10.172.0.0/16\n")
+			spec := &operator.InstallationSpec{
+				CNI:           &operator.CNISpec{Type: operator.PluginAmazonVPC},
+				CalicoNetwork: &operator.CalicoNetworkSpec{IPPools: []operator.IPPool{{CIDR: outsideCIDR}}},
+			}
+
+			r.warnOnPoolsOutsidePlatformCIDRs(ctx, spec)
+			mockStatus.AssertCalled(GinkgoT(), "ClearWarning", poolsOutsidePlatformCIDRsWarning)
+			mockStatus.AssertNotCalled(GinkgoT(), "SetWarning", mock.Anything, mock.Anything)
+		})
+	})
 })
+
+var _ = DescribeTable("poolsOutsidePlatformCIDRs by allowed use",
+	func(uses []operator.IPPoolAllowedUse, checked bool) {
+		pools := []operator.IPPool{{CIDR: "172.25.64.0/20", AllowedUses: uses}}
+		outside := poolsOutsidePlatformCIDRs(pools, []string{"10.172.0.0/16"})
+		if checked {
+			Expect(outside).To(Equal([]string{"172.25.64.0/20"}))
+		} else {
+			Expect(outside).To(BeEmpty())
+		}
+	},
+	Entry("unset allowed uses are checked", nil, true),
+	Entry("workload and tunnel pools are checked",
+		[]operator.IPPoolAllowedUse{operator.IPPoolAllowedUseWorkload, operator.IPPoolAllowedUseTunnel}, true),
+	Entry("tunnel-only pools are skipped", []operator.IPPoolAllowedUse{operator.IPPoolAllowedUseTunnel}, false),
+	Entry("load balancer pools are skipped", []operator.IPPoolAllowedUse{operator.IPPoolAllowedUseLoadBalancer}, false),
+)
+
+var _ = DescribeTable("poolsOutsidePlatformCIDRsMessage",
+	func(provider operator.Provider, outside []string, expected string) {
+		spec := &operator.InstallationSpec{KubernetesProvider: provider}
+		Expect(poolsOutsidePlatformCIDRsMessage(spec, outside, []string{"10.172.0.0/16"})).To(Equal(expected))
+	},
+	Entry("one pool on kubeadm", operator.ProviderNone, []string{"172.25.64.0/20"},
+		"IP pool 172.25.64.0/20 is outside the kubeadm podSubnet (10.172.0.0/16), so traffic from its pods may be NATed "+
+			"and then denied by network policy. Move it inside the kubeadm podSubnet, or widen the kubeadm podSubnet to cover it"),
+	Entry("several pools on OpenShift", operator.ProviderOpenShift, []string{"172.25.64.0/20", "172.26.0.0/16"},
+		"IP pools 172.25.64.0/20, 172.26.0.0/16 are outside the OpenShift cluster network (10.172.0.0/16), so traffic from "+
+			"their pods may be NATed and then denied by network policy. Move them inside the OpenShift cluster network, "+
+			"or widen the OpenShift cluster network to cover them"),
+)
+
+var _ = DescribeTable("poolsOutsidePlatformCIDRs",
+	func(pools []string, platformCIDRs []string, expected []string) {
+		ipPools := []operator.IPPool{}
+		for _, p := range pools {
+			ipPools = append(ipPools, operator.IPPool{CIDR: p})
+		}
+		Expect(poolsOutsidePlatformCIDRs(ipPools, platformCIDRs)).To(Equal(expected))
+	},
+	Entry("no platform CIDRs means nothing to check", []string{"172.25.64.0/20"}, nil, nil),
+	Entry("pool inside the platform CIDR", []string{"10.172.0.0/18"}, []string{"10.172.0.0/16"}, nil),
+	Entry("pool outside the platform CIDR", []string{"172.25.64.0/20"}, []string{"10.172.0.0/16"}, []string{"172.25.64.0/20"}),
+	Entry("pool larger than the platform CIDR", []string{"10.0.0.0/16"}, []string{"10.0.0.0/24"}, []string{"10.0.0.0/16"}),
+	Entry("only the outside pools are returned",
+		[]string{"10.172.0.0/18", "172.25.64.0/20", "fd00:10::/64"},
+		[]string{"10.172.0.0/16", "fd00:10::/48"},
+		[]string{"172.25.64.0/20"}),
+	Entry("IPv6 pool with only an IPv4 platform CIDR", []string{"fd00:10::/64"}, []string{"10.172.0.0/16"}, []string{"fd00:10::/64"}),
+)
 
 var _ = DescribeTable("cidrWithinCidr",
 	func(CIDR, pool string, expectedResult bool) {
@@ -786,7 +992,7 @@ var _ = DescribeTable("Test OpenShift IP pool defaulting",
 			},
 		}),
 
-	Entry("Failure when IPPool is smaller than OpenShift Network",
+	Entry("IPPool larger than the OpenShift Network is kept as specified",
 		&operator.Installation{
 			Spec: operator.InstallationSpec{
 				CalicoNetwork: &operator.CalicoNetworkSpec{
@@ -807,8 +1013,22 @@ var _ = DescribeTable("Test OpenShift IP pool defaulting",
 				},
 			},
 		},
-		false,
-		nil,
+		true,
+		&operator.CalicoNetworkSpec{
+			IPPools: []operator.IPPool{
+				{
+					Name:                  "default-ipv4-ippool",
+					CIDR:                  "10.0.0.0/16",
+					Encapsulation:         "VXLAN",
+					NATOutgoing:           "Disabled",
+					NodeSelector:          "all()",
+					BlockSize:             &twentySix,
+					AllowedUses:           []operator.IPPoolAllowedUse{operator.IPPoolAllowedUseWorkload, operator.IPPoolAllowedUseTunnel},
+					DisableNewAllocations: &false_,
+					AssignmentMode:        "Automatic",
+				},
+			},
+		},
 	),
 
 	Entry("Empty IPPool list results in no IPPool with OpenShift",
@@ -887,6 +1107,24 @@ var _ = Describe("fillDefaults()", func() {
 		err := ValidatePools(&instance.Spec)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("is invalid for ipPool.encapsulation, should be one of"))
+	})
+
+	It("should keep an IP pool outside the kubeadm podSubnet as specified", func() {
+		Expect(cli.Create(ctx, &v1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: kubeadmConfigMap, Namespace: metav1.NamespaceSystem},
+			Data:       map[string]string{"ClusterConfiguration": "podSubnet: 10.172.0.0/16"},
+		})).ToNot(HaveOccurred())
+		instance := &operator.Installation{
+			Spec: operator.InstallationSpec{
+				CalicoNetwork: &operator.CalicoNetworkSpec{IPPools: []operator.IPPool{{CIDR: "172.25.64.0/20"}}},
+			},
+		}
+		fillPrerequisiteDefaults(instance)
+
+		Expect(fillDefaults(ctx, cli, &instance.Spec, currentPools)).ToNot(HaveOccurred())
+		Expect(instance.Spec.CalicoNetwork.IPPools).To(HaveLen(1))
+		Expect(instance.Spec.CalicoNetwork.IPPools[0].CIDR).To(Equal("172.25.64.0/20"))
+		Expect(ValidatePools(&instance.Spec)).ToNot(HaveOccurred())
 	})
 
 	// This table verifies that kubernetes provider configuration is accounted for in defaulting. Specifically, it

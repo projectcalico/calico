@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -136,6 +137,10 @@ const (
 	// poolFieldManager owns the IP pool list this controller applies, leaving every other manager of the
 	// Installation the pools it declared.
 	poolFieldManager = "tigera-operator-ippools"
+
+	// poolsOutsidePlatformCIDRsWarning keys the warning shown while an IP pool sits outside the platform's pod
+	// network CIDRs.
+	poolsOutsidePlatformCIDRsWarning = "ippools-outside-platform-cidrs"
 )
 
 // hasOwnerLabel returns true if the given IP pool is owned by the tigera/operator, and false otheriwse.
@@ -329,6 +334,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		r.status.SetDegraded(operatorv1.InvalidConfigurationError, "error validating IP pool configuration", err, reqLogger)
 		return reconcile.Result{}, err
 	}
+	r.warnOnPoolsOutsidePlatformCIDRs(ctx, computed)
 
 	if !poolsDeclared && computed.CalicoNetwork.IPPools != nil {
 		// The spec didn't declare any pools, so the chosen list goes back on the spec, where whoever edits it next can see it.
@@ -540,6 +546,46 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	return reconcile.Result{}, nil
+}
+
+// warnOnPoolsOutsidePlatformCIDRs flags pools outside the platform's pod network CIDRs without blocking them:
+// they work, but their pods' traffic can be NATed where it shouldn't be and then denied by network policy.
+// Warnings live only in memory, so this runs on every reconcile.
+func (r *Reconciler) warnOnPoolsOutsidePlatformCIDRs(ctx context.Context, spec *operatorv1.InstallationSpec) {
+	if spec.CNI.Type != operatorv1.PluginCalico {
+		r.status.ClearWarning(poolsOutsidePlatformCIDRsWarning)
+		return
+	}
+	platformCIDRs, err := platformPodCIDRs(ctx, r.client, spec)
+	if err != nil {
+		// Once pools exist the platform config is optional, so a missing or malformed one mustn't block reconciling.
+		log.V(1).Info("Unable to check IP pools against the platform's pod network CIDRs", "error", err)
+		r.status.ClearWarning(poolsOutsidePlatformCIDRsWarning)
+		return
+	}
+	outside := poolsOutsidePlatformCIDRs(spec.CalicoNetwork.IPPools, platformCIDRs)
+	if len(outside) == 0 {
+		r.status.ClearWarning(poolsOutsidePlatformCIDRsWarning)
+		return
+	}
+	r.status.SetWarning(poolsOutsidePlatformCIDRsWarning, poolsOutsidePlatformCIDRsMessage(spec, outside, platformCIDRs))
+}
+
+func poolsOutsidePlatformCIDRsMessage(spec *operatorv1.InstallationSpec, outside, platformCIDRs []string) string {
+	platformNetwork := "kubeadm podSubnet"
+	if spec.KubernetesProvider.IsOpenShift() {
+		platformNetwork = "OpenShift cluster network"
+	}
+	noun, verb, their, them := "IP pool", "is", "its", "it"
+	if len(outside) > 1 {
+		noun, verb, their, them = "IP pools", "are", "their", "them"
+	}
+	return fmt.Sprintf(
+		"%s %s %s outside the %s (%s), so traffic from %s pods may be NATed and then denied by network policy. "+
+			"Move %s inside the %s, or widen the %s to cover %s",
+		noun, strings.Join(outside, ", "), verb, platformNetwork, strings.Join(platformCIDRs, ", "), their,
+		them, platformNetwork, platformNetwork, them,
+	)
 }
 
 // ToProjectCalico converts an operator IPPool to a projectcalico.org/v3 IPPool resource.
