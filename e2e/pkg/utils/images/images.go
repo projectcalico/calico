@@ -72,6 +72,16 @@ const (
 	RapidClient = "quay.io/tigeradev/rapidclient:latest"
 )
 
+// ExternalNodeImages are the images specs start on the external node with
+// `docker run`, which the kind lane seeds there because the node's own pulls
+// are anonymous and time out. RapidClient is absent: it is side-loaded from
+// source.
+var ExternalNodeImages = []string{
+	Alpine,
+	Agnhost,
+	CalicoBIRD,
+}
+
 // Get client image and powershell command based on windows OS version
 func WindowsClientImage() string {
 	opsys := os.Getenv("WINDOWS_OS")
