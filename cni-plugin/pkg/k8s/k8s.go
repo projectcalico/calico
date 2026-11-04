@@ -712,6 +712,7 @@ func assignPodIPs(
 ) (*cniv1.Result, error) {
 	priorIPs := priorSandboxIPs(conf, epIDs, endpoint, logger)
 	if len(priorIPs) == 0 {
+		// No pre-existing IP addresses. Simply call the CNI plugin to assign fresh addresses.
 		return utils.AddIPAM(ctx, conf, args, logger)
 	}
 
@@ -740,6 +741,7 @@ func assignPodIPs(
 	}
 
 	if !v4Lost && !v6Lost {
+		// All previously allocated addresses were migrated to the new sandbox.
 		return &kept, nil
 	}
 
@@ -748,9 +750,9 @@ func assignPodIPs(
 		return utils.AddIPAM(ctx, conf, args, logger)
 	}
 
-	// Only request a lost family the config assigns, so a pod whose pool for that family is
-	// gone comes up in the families it still has. Stdin, unlike conf, has the pool
-	// annotations' families.
+	// Replace a lost family only if this pod's IPAM config assigns it. Read that from stdin,
+	// not conf: the ipFamilies annotation rewrote stdin's assign_ipv4 and assign_ipv6 after
+	// conf was parsed.
 	var stdinConf types.NetConf
 	if err := json.Unmarshal(args.StdinData, &stdinConf); err != nil {
 		return nil, err
