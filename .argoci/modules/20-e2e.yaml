@@ -14,9 +14,6 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-      # Diagnoses each failing spec while its namespace and pods are still up.
-      # Applied around the ginkgo run, the one point where the cluster exists
-      # and the suite has not started.
       - name: E2E_RUN_WRAPPER
         value: .argoci/scripts/sandcat/with-inline-diag.sh
     secretBundles:

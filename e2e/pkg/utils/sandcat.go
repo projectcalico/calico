@@ -32,44 +32,23 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
-// sandcatExitMCPUnavailable is sandcat's exit code for "this run cannot reach
-// the cluster through calico-mcp" -- the server would not start, would not wire
-// to the kubeconfig, or registered no tools. It is distinct from a generic
-// failure because it describes the job rather than the spec: every later spec
-// would fail the same way.
+// sandcatExitMCPUnavailable is sandcat's exit code when calico-mcp cannot reach
+// the cluster, which every later spec would hit too.
 const sandcatExitMCPUnavailable = 3
 
-// sandcatDisabled turns the inline hook off for the rest of this process once
-// calico-mcp is known to be unusable.
-//
-// Process-scoped, because ginkgo offers nothing wider: its only cross-process
-// channel is SynchronizedBeforeSuite, and the upstream k8s e2e framework already
-// declares the one instance a suite may have. The job-wide cases are caught
-// before the suite starts instead, by the host-side `sandcat check-mcp` probe in
-// run_tests.sh; this flag only has to catch a cluster that degrades mid-run, and
-// there each process learning from its own first failure is enough.
+// sandcatDisabled stops inline diagnosis for the rest of this process once
+// calico-mcp is unusable.
 var sandcatDisabled atomic.Bool
 
-// registerInlineDiagnosis attaches a per-spec failure hook that, when enabled,
-// diagnoses a failing spec with sandcat while the cluster is still fresh — the
-// failing namespace and its pods/policies still exist when sandcat inspects them.
-//
-// It runs in a JustAfterEach, which Ginkgo executes before every AfterEach node
-// and before every DeferCleanup. That ordering matters: a test typically tears
-// down its own resources with a DeferCleanup (e.g. conncheck's DeferCleanup(ct.Stop)),
-// and the framework deletes the test namespace in its AfterEach. Both of those
-// run after this JustAfterEach, so the failing state is still live at diagnosis
-// time. The whole thing is gated on SANDCAT_INLINE_DIAG so normal and local runs
-// are unaffected, and it is strictly best-effort: any error is logged, never
-// propagated (the spec has already failed).
+// registerInlineDiagnosis diagnoses a failing spec with sandcat while its
+// namespace still exists: JustAfterEach runs before the spec's DeferCleanups and
+// the framework's namespace deletion. Off unless SANDCAT_INLINE_DIAG is set.
 func registerInlineDiagnosis(f *framework.Framework) {
 	ginkgo.JustAfterEach(func(ctx ginkgo.SpecContext) {
 		if os.Getenv("SANDCAT_INLINE_DIAG") == "" {
 			return
 		}
 		report := ginkgo.CurrentSpecReport()
-		// Only genuine test-node failures are sandcat's lane. A suite abort
-		// or interrupt (whole-run cancellation) is not a spec defect.
 		switch report.State {
 		case types.SpecStateFailed, types.SpecStatePanicked, types.SpecStateTimedout:
 		default:
@@ -88,10 +67,8 @@ func registerInlineDiagnosis(f *framework.Framework) {
 	})
 }
 
-// runInlineDiagnosis shells out to the sandcat binary to diagnose one failing
-// spec. sandcat reads its coordination knobs (sig-dir, budget, concurrency cap,
-// Gemini key, branch/PR priors) from the environment, so this only passes the
-// spec-specific inputs.
+// runInlineDiagnosis passes only the spec's inputs; sandcat reads the rest from
+// the environment.
 func runInlineDiagnosis(ctx context.Context, report ginkgo.SpecReport, namespace string) {
 	if sandcatDisabled.Load() {
 		return
@@ -145,10 +122,6 @@ func runInlineDiagnosis(ctx context.Context, report ginkgo.SpecReport, namespace
 	cmd.Stderr = ginkgo.GinkgoWriter
 	if err := cmd.Run(); err != nil {
 		framework.Logf("[sandcat] diagnosis command failed (ignored): %v", err)
-		// The probe passed at suite start, so this is a cluster that degraded
-		// since -- often the very reason these specs are failing. Every later
-		// spec in this process would fail the same way, so stop here instead of
-		// spawning one doomed subprocess per remaining failure.
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && exitErr.ExitCode() == sandcatExitMCPUnavailable {
 			sandcatDisabled.Store(true)
@@ -157,9 +130,7 @@ func runInlineDiagnosis(ctx context.Context, report ginkgo.SpecReport, namespace
 	}
 }
 
-// specResultJSON mirrors the subset of sandcat's e2erunner.Result JSON shape
-// that a single-spec failure needs. Field tags match e2erunner so sandcat
-// unmarshals it directly.
+// The JSON types below match sandcat's e2erunner.Result field tags.
 type codeLocationJSON struct {
 	File string `json:"file"`
 	Line int    `json:"line"`
@@ -181,10 +152,7 @@ type resultJSON struct {
 }
 
 func writeSpecResult(path, specName string, report ginkgo.SpecReport) error {
-	// Carry the It-node definition and the failure site so sandcat can preload
-	// the failing test's source without grepping for it. The node location comes
-	// first: it names the test, whereas the failure site may be in a shared
-	// helper (e.g. snat.go's checkConnection).
+	// The It node first: the failure site may be in a shared helper.
 	var locs []codeLocationJSON
 	add := func(fn string, ln int) {
 		if fn == "" || ln <= 0 {
@@ -221,9 +189,7 @@ func writeSpecResult(path, specName string, report ginkgo.SpecReport) error {
 
 var sandcatSlugUnsafe = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
-// sandcatSlug produces a filesystem-safe artifact directory name for a spec.
-// It matches sandcat's internal signature.Slug so the directory name equals the
-// slug sandcat records in the artifact (and references from a dedup skip).
+// sandcatSlug must match sandcat's signature.Slug, which names the same directory.
 func sandcatSlug(specName string) string {
 	base := sandcatSlugUnsafe.ReplaceAllString(strings.TrimSpace(specName), "-")
 	base = strings.Trim(base, "-")

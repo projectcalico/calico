@@ -297,11 +297,7 @@ e2e_config_path = $(abspath $(if $(filter /% e2e/config/%,$(1)),$(1),e2e/config/
 E2E_TEST_CONFIG_FLAGS = $(foreach c,$(E2E_TEST_CONFIG),--calico.test-config=$(call e2e_config_path,$(c)))
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
-# Optional command prefix for the ginkgo invocation in the kind e2e lanes. Empty
-# by default, so a local run is unaffected; CI points it at
-# .argoci/scripts/sandcat/with-inline-diag.sh, which sets up sandcat's
-# inline per-spec failure diagnosis. It is applied around the run rather than the
-# whole target because the setup needs the cluster to already be up.
+# Prefix for the ginkgo run; it needs the cluster up, so it wraps the run rather than the target.
 E2E_RUN_WRAPPER ?=
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""

@@ -1,16 +1,6 @@
 #!/usr/bin/env bash
-# Behaviour test for with-inline-diag.sh: the wrapper must never be the reason a
-# job fails.
-#
-# It sits between the cluster coming up and the conformance suite starting, so
-# anything it lets escape costs the whole run -- the tests never execute, and
-# the failure looks nothing like "sandcat could not diagnose". That has already
-# happened once: an unredirected stdout write from `check-mcp` reached the
-# KEY=VALUE payload, was eval'd as a command, and under `set -e` took the phase
-# down after the cluster had been provisioned. So the property under test is not
-# "the exports are right" but "the wrapped command runs, whatever happened".
-#
-# Exercised under `set -eo pipefail`, the way the e2e phase scripts run.
+# Behaviour test for with-inline-diag.sh: whatever sandcat does, the wrapped
+# command must still run, under `set -eo pipefail` as the e2e phases use.
 
 set -uo pipefail
 
@@ -20,8 +10,6 @@ REPO_ROOT=$(cd "${DIR}/../../.." && pwd)
 pass=0
 fail=0
 
-# run <name> <want_marker_present> -- runs the wrapper around a marker command in
-# a clean environment, and reports whether the marker made it out with rc=0.
 run() {
   local name="$1"
   shift
@@ -54,8 +42,6 @@ newhome() {
   chmod +x "${CALICO_MCP_LOCAL_BIN}"
 }
 
-# The success path still has to pass the command through -- a wrapper that
-# swallowed it would look identical to one that failed to set anything up.
 newhome
 cat > "${HOME}/.local/bin/sandcat" <<'STUB'
 #!/usr/bin/env bash
@@ -80,7 +66,6 @@ run "everything set up" SANDCAT_GEMINI_KEY=key-a
 newhome
 run "no Gemini key"
 
-# A refusal: the hook is off, the suite still runs.
 newhome
 cat > "${HOME}/.local/bin/sandcat" <<'STUB'
 #!/usr/bin/env bash
@@ -90,12 +75,10 @@ STUB
 chmod +x "${HOME}/.local/bin/sandcat"
 run "calico-mcp refused" SANDCAT_GEMINI_KEY=key-a
 
-# No binary to download and no credentials to fetch one with.
 newhome
 run "sandcat binary unavailable" SANDCAT_GEMINI_KEY=key-a
 
-# The regression that motivated this file: a stray line on the payload stream.
-# It must degrade to "no diagnosis", never to a dead job.
+# A stray line on the payload stream must degrade to "no diagnosis".
 newhome
 cat > "${HOME}/.local/bin/sandcat" <<'STUB'
 #!/usr/bin/env bash
@@ -105,8 +88,6 @@ STUB
 chmod +x "${HOME}/.local/bin/sandcat"
 run "sandcat writes junk to stdout" SANDCAT_GEMINI_KEY=key-a
 
-# `exec` with no arguments succeeds and runs nothing, so a wrapper that lost its
-# command would report a green job that executed no tests. It has to be loud.
 newhome
 if env -i PATH="/usr/bin:/bin" HOME="${HOME}" KUBECONFIG=/tmp/kubeconfig \
     bash -eo pipefail -c "'${WRAPPER}'" >/dev/null 2>&1; then
@@ -117,9 +98,7 @@ else
   pass=$((pass + 1))
 fi
 
-# A wrapper only helps where it is applied. e2e-test-bpf shipped without the
-# prefix and lost every inline diagnosis in that lane, with nothing failing to
-# say so, so assert each kind e2e target still carries it.
+# Each kind e2e target must still carry the wrapper, or its lane loses inline diagnosis.
 recipe_of() {
   awk -v target="$1" '
     $0 ~ "^"target":" { in_recipe = 1; next }
