@@ -15,8 +15,26 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"maps"
+	"net/http"
+	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/registry"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/google/go-containerregistry/pkg/v1/random"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 )
 
 // Preflight writes results to <artifacts>/<platform>/, so --artifacts must be
@@ -49,6 +67,94 @@ func TestPreflightCommandArtifactsPaths(t *testing.T) {
 				t.Errorf("--logfile = %q, want %q", got, tc.logfile)
 			}
 		})
+	}
+}
+
+func TestMissingImages(t *testing.T) {
+	published := map[string]map[string]bool{
+		"quay.io/calico/calico:v1": {"amd64": true, "arm64": true},
+	}
+	var lookups int
+	lookup := func(_ context.Context, ref string) (map[string]bool, error) {
+		lookups++
+		if p, ok := published[ref]; ok {
+			return p, nil
+		}
+		return nil, &transport.Error{StatusCode: http.StatusNotFound}
+	}
+	jobs := buildJobs("", "v1", "v1")
+	jobs = filterJobs(jobs, []string{"calico", "node"}, []string{"amd64", "s390x"})
+
+	got := missingImages(context.Background(), jobs, lookup)
+	want := []string{
+		"quay.io/calico/calico:v1: no linux/s390x image",
+		"quay.io/calico/node:v1: not found",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("missingImages = %q, want %q", got, want)
+	}
+	if lookups != 2 {
+		t.Errorf("lookups = %d, want one per image ref (2)", lookups)
+	}
+}
+
+func TestPublishedPlatforms(t *testing.T) {
+	srv := httptest.NewServer(registry.New(registry.Logger(log.New(io.Discard, "", 0))))
+	defer srv.Close()
+	host := strings.TrimPrefix(srv.URL, "http://")
+
+	var idx v1.ImageIndex = empty.Index
+	for _, p := range []v1.Platform{
+		{OS: "linux", Architecture: "amd64"},
+		{OS: "linux", Architecture: "arm64"},
+		{OS: "windows", Architecture: "s390x"},
+	} {
+		img, err := random.Image(64, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		idx = mutate.AppendManifests(idx, mutate.IndexAddendum{Add: img, Descriptor: v1.Descriptor{Platform: &p}})
+	}
+	ref, err := name.ParseReference(host + "/calico/calico:v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := remote.WriteIndex(ref, idx); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := publishedPlatforms(context.Background(), ref.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]bool{"amd64": true, "arm64": true}; !maps.Equal(got, want) {
+		t.Errorf("publishedPlatforms = %v, want %v", got, want)
+	}
+
+	_, err = publishedPlatforms(context.Background(), host+"/calico/node:v1")
+	if got := lookupFailureReason(err); got != "not found" {
+		t.Errorf("missing image reason = %q (err %v), want %q", got, err, "not found")
+	}
+}
+
+func TestLookupFailureReason(t *testing.T) {
+	_, badName := name.ParseReference("Not A Ref")
+	for _, tc := range []struct {
+		err  error
+		want string
+	}{
+		{&transport.Error{StatusCode: http.StatusNotFound}, "not found"},
+		{&transport.Error{StatusCode: http.StatusUnauthorized}, "access denied (check registry credentials)"},
+		{&transport.Error{StatusCode: http.StatusForbidden}, "access denied (check registry credentials)"},
+		{&transport.Error{StatusCode: http.StatusTooManyRequests}, "rate limited by registry"},
+		{&transport.Error{StatusCode: http.StatusBadGateway}, "registry error (HTTP 502)"},
+		{fmt.Errorf("wrapped: %w", &transport.Error{StatusCode: http.StatusNotFound}), "not found"},
+		{badName, "invalid image reference"},
+		{errors.New("dial tcp: connection refused"), "could not reach registry"},
+	} {
+		if got := lookupFailureReason(tc.err); got != tc.want {
+			t.Errorf("lookupFailureReason(%v) = %q, want %q", tc.err, got, tc.want)
+		}
 	}
 }
 

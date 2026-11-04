@@ -45,6 +45,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -134,6 +138,10 @@ type scanJob struct {
 	workdir string
 }
 
+func (j scanJob) imageRef() string {
+	return fmt.Sprintf("%s/%s:%s", j.org, j.image, j.version)
+}
+
 type scanResult struct {
 	job       scanJob
 	output    []byte
@@ -160,6 +168,7 @@ type runOpts struct {
 	imageFilter    []string
 	platformFilter []string
 	dryRun         bool
+	skipImageCheck bool
 }
 
 // exitErr lets RunE / PersistentPreRunE signal a specific exit code through
@@ -355,7 +364,8 @@ func newRunCmd(opts *rootOpts) *cobra.Command {
 	cmd.Flags().StringVar(&ro.outputDir, "output-dir", "", `directory for per-scan artifacts (default "output-<calico-version>")`)
 	cmd.Flags().StringSliceVar(&ro.imageFilter, "image", nil, "scan only these images (repeatable / comma-separated; default all)")
 	cmd.Flags().StringSliceVar(&ro.platformFilter, "platform", nil, "scan only these architectures (repeatable / comma-separated; default all)")
-	cmd.Flags().BoolVar(&ro.dryRun, "dry-run", false, "list the scans that would run and exit")
+	cmd.Flags().BoolVar(&ro.dryRun, "dry-run", false, "verify the images exist, list the scans that would run, and exit")
+	cmd.Flags().BoolVar(&ro.skipImageCheck, "skip-image-check", false, "don't verify that each image and platform is published before scanning")
 	return cmd
 }
 
@@ -383,6 +393,16 @@ func runScans(ctx context.Context, opts *rootOpts, ro runOpts) error {
 	jobs = filterJobs(jobs, ro.imageFilter, ro.platformFilter)
 	if len(jobs) == 0 {
 		return usageErrorf("no scans match the --image / --platform filters")
+	}
+
+	if !ro.skipImageCheck {
+		log.Infof("Verifying %d image/platform combinations are published", len(jobs))
+		if missing := missingImages(ctx, jobs, publishedPlatforms); len(missing) > 0 {
+			for _, m := range missing {
+				log.Error(m)
+			}
+			return &exitErr{code: 1, err: fmt.Errorf("%d image/platform combinations are not published; pass --skip-image-check to scan anyway", len(missing))}
+		}
 	}
 
 	if ro.dryRun {
@@ -429,6 +449,112 @@ func runScans(ctx context.Context, opts *rootOpts, ro runOpts) error {
 		return &exitErr{code: 1, err: errors.New("one or more scans had issues; see report above")}
 	}
 	return nil
+}
+
+// missingImages returns a message for each job whose image isn't published
+// for its platform, checking each image reference once regardless of how
+// many platforms it is scanned for.
+func missingImages(ctx context.Context, jobs []scanJob, lookup func(context.Context, string) (map[string]bool, error)) []string {
+	var refs []string
+	for _, j := range jobs {
+		if !slices.Contains(refs, j.imageRef()) {
+			refs = append(refs, j.imageRef())
+		}
+	}
+	type lookupResult struct {
+		platforms map[string]bool
+		err       error
+	}
+	results := parallel(refs, httpConcurrency, func(ref string) lookupResult {
+		p, err := lookup(ctx, ref)
+		return lookupResult{p, err}
+	})
+	byRef := make(map[string]lookupResult, len(refs))
+	for i, ref := range refs {
+		byRef[ref] = results[i]
+	}
+
+	var missing []string
+	reported := map[string]bool{}
+	for _, j := range jobs {
+		r := byRef[j.imageRef()]
+		switch {
+		case r.err != nil:
+			if !reported[j.imageRef()] {
+				missing = append(missing, fmt.Sprintf("%s: %s", j.imageRef(), lookupFailureReason(r.err)))
+				reported[j.imageRef()] = true
+			}
+		case !r.platforms[j.platform]:
+			missing = append(missing, fmt.Sprintf("%s: no linux/%s image", j.imageRef(), j.platform))
+		}
+	}
+	return missing
+}
+
+// lookupFailureReason turns a registry lookup error into a short reason; the
+// raw errors carry full request URLs and response bodies that bury the cause.
+func lookupFailureReason(err error) string {
+	if _, ok := errors.AsType[*name.ErrBadName](err); ok {
+		return "invalid image reference"
+	}
+	te, ok := errors.AsType[*transport.Error](err)
+	if !ok {
+		return "could not reach registry"
+	}
+	switch te.StatusCode {
+	case http.StatusNotFound:
+		return "not found"
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return "access denied (check registry credentials)"
+	case http.StatusTooManyRequests:
+		return "rate limited by registry"
+	default:
+		return fmt.Sprintf("registry error (HTTP %d)", te.StatusCode)
+	}
+}
+
+// publishedPlatforms returns the linux architectures ref is published for.
+// A ref that is a single image rather than a manifest list is treated as
+// published for its own architecture only.
+func publishedPlatforms(ctx context.Context, ref string) (map[string]bool, error) {
+	r, err := name.ParseReference(ref)
+	if err != nil {
+		return nil, err
+	}
+	opts := []remote.Option{remote.WithContext(ctx), remote.WithAuthFromKeychain(authn.DefaultKeychain)}
+	desc, err := remote.Get(r, opts...)
+	if err != nil {
+		return nil, err
+	}
+	platforms := map[string]bool{}
+	if desc.MediaType.IsIndex() {
+		idx, err := desc.ImageIndex()
+		if err != nil {
+			return nil, err
+		}
+		im, err := idx.IndexManifest()
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range im.Manifests {
+			if m.Platform != nil && m.Platform.OS == "linux" {
+				platforms[m.Platform.Architecture] = true
+			}
+		}
+		return platforms, nil
+	}
+	img, err := desc.Image()
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := img.ConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	if cfg.OS == "linux" {
+		platforms[cfg.Architecture] = true
+	}
+	return platforms, nil
 }
 
 // filterJobs returns the subset of jobs whose image and platform are in the
@@ -712,8 +838,7 @@ func runScan(ctx context.Context, job scanJob, ro runOpts, preflightImage, apiKe
 		return res
 	}
 
-	imageRef := fmt.Sprintf("%s/%s:%s", job.org, job.image, job.version)
-	name, args := preflightCommand(ro, abs, imageRef, job, preflightImage, apiKey != "")
+	name, args := preflightCommand(ro, abs, job.imageRef(), job, preflightImage, apiKey != "")
 
 	var buf bytes.Buffer
 	cmd := exec.CommandContext(ctx, name, args...)
