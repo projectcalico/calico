@@ -15,7 +15,6 @@
 package stream_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
@@ -27,11 +26,7 @@ import (
 // A stream whose consumer never reads must not block the aggregator from adding flows to the
 // bucket that stream is part-way through sending.
 func TestStalledStreamDoesNotBlockAddFlow(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	streams := stream.NewStreamManager()
-	go streams.Run(ctx)
 
 	clk := func() time.Time { return time.Unix(benchNow, 0) }
 	ring := storage.NewBucketRing(20, 1, benchNow, storage.WithStreamReceiver(streams), storage.WithNowFunc(clk))
@@ -40,9 +35,8 @@ func TestStalledStreamDoesNotBlockAddFlow(t *testing.T) {
 		ring.AddFlow(storage.FlowFromNode{Flow: benchFlow(i, bucketStart)})
 	}
 
-	stalled := <-streams.Register(&proto.FlowStreamRequest{}, 1)
+	stalled := streams.Register(&proto.FlowStreamRequest{}, 1)
 	defer stalled.Close()
-	<-streams.Backfills()
 	ring.Backfill(streams, stalled.ID(), bucketStart)
 
 	// Once the one-slot output channel is full, the stream goroutine is parked mid-bucket.
