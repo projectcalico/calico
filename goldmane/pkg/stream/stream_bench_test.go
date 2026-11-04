@@ -159,7 +159,6 @@ func BenchmarkStreamEndToEnd(b *testing.B) {
 				defer cancel()
 
 				streams := stream.NewStreamManager()
-				go streams.Run(ctx)
 
 				clk := func() time.Time { return time.Unix(benchNow, 0) }
 				ring := storage.NewBucketRing(20, 1, benchNow, storage.WithStreamReceiver(streams), storage.WithNowFunc(clk))
@@ -169,8 +168,7 @@ func BenchmarkStreamEndToEnd(b *testing.B) {
 
 				var consumers []*benchConsumer
 				for range numStreams {
-					s := <-streams.Register(&proto.FlowStreamRequest{Filter: f.filter}, streamBufferSize)
-					<-streams.Backfills()
+					s := streams.Register(&proto.FlowStreamRequest{Filter: f.filter}, streamBufferSize)
 					c := &benchConsumer{stream: s, done: make(chan struct{}, 1)}
 					consumers = append(consumers, c)
 					go c.run(ctx)
