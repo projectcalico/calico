@@ -390,16 +390,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		logger.Debugf("IPAM result set to: %+v", result)
 	}
 
-	// keepAddresses holds the addresses already present on the WEP, which must not be released on failure in order to keep IPAM in sync with the workload endpoint.
-	keepAddresses := addressesFromEndpoint(endpoint, logger)
-
-	// releaseIPAM cleans up any IPAM allocations on failure.
-	releaseIPAM := func() {
-		logger.Info("Releasing IPAM allocation(s) after failure")
-		if err := releaseSandboxAddresses(ctx, calicoClient.IPAM(), conf, args, epIDs, keepAddresses, logger); err != nil {
-			logger.WithError(err).Error("Failed to release IPAM allocation(s) after failure")
-		}
-	}
+	releaseIPAM := failedAddCleanup(ctx, calicoClient.IPAM(), conf, args, epIDs, endpoint, logger)
 
 	// Configure the endpoint (creating if required).
 	if endpoint == nil {
@@ -631,7 +622,7 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 			// if they exist, so continue DEL processing.
 			logger.WithField("WorkloadEndpoint", epIDs.WEPName).Warning("WorkloadEndpoint does not exist in the datastore, moving forward with the clean up")
 			wep = nil
-		} else if !wepMatchesSandbox(wep, args.ContainerID) {
+		} else if wep.Spec.ContainerID != "" && args.ContainerID != wep.Spec.ContainerID {
 			// If the ContainerID is populated and doesn't match the CNI_CONTAINERID provided for this execution, then
 			// we shouldn't delete the workload endpoint. We identify workload endpoints based on pod name and namespace, which means
 			// we can receive DEL commands for an old sandbox for a currently running pod. However, we key IPAM allocations based on the
@@ -678,25 +669,13 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		return err
 	}
 
-	// The pod is still running on another sandbox, so this DEL must not free its addresses.
-	var keepAddresses []net.IP
-	if !wepMatchesSandbox(wep, args.ContainerID) {
-		keepAddresses = addressesFromEndpoint(wep, logger)
-	}
-
 	logger.Info("Releasing IP address(es)")
-	if err := releaseSandboxAddresses(ctx, c.IPAM(), conf, args, epIDs, keepAddresses, logger); err != nil {
+	if err := releaseUnusedAddresses(ctx, c.IPAM(), conf, args, epIDs, wep, logger); err != nil {
 		return err
 	}
 
 	logger.Info("Teardown processing complete.")
 	return nil
-}
-
-// wepMatchesSandbox reports whether a DEL for containerID is for the sandbox the endpoint
-// names. An endpoint that is gone or names no sandbox matches, so its DEL tears everything down.
-func wepMatchesSandbox(wep *internalapi.WorkloadEndpoint, containerID string) bool {
-	return wep == nil || wep.Spec.ContainerID == "" || wep.Spec.ContainerID == containerID
 }
 
 // ipAddrsResult parses the ipAddrs annotation and calls the configured IPAM plugin for

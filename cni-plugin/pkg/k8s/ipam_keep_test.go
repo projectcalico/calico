@@ -97,13 +97,13 @@ var (
 	errStubIPAMDel = errors.New("IPAM DEL failed")
 )
 
-// releaseCase is one releaseSandboxAddresses scenario: the sandbox's IPAM type and pod, the
-// addresses to keep, how the handle lookup, ReleaseIPs and the IPAM plugin answer, and the
+// releaseCase is one releaseUnusedAddresses scenario: the sandbox's IPAM type and pod, the
+// pod's endpoint, how the handle lookup, ReleaseIPs and the IPAM plugin answer, and the
 // expected IPAM DEL, direct releases and error.
 type releaseCase struct {
 	ipamType     string
 	pod          string
-	keep         []string
+	wep          *internalapi.WorkloadEndpoint
 	handleIPs    []string
 	ipsErr       error
 	releaseErr   error
@@ -113,10 +113,10 @@ type releaseCase struct {
 	wantErr      error
 }
 
-var _ = Describe("releaseSandboxAddresses", func() {
-	const network, sandbox = "k8s-pod-network", "sandbox-y"
+var _ = Describe("releaseUnusedAddresses", func() {
+	const network, sandbox, otherSandbox = "k8s-pod-network", "sandbox-y", "sandbox-x"
 	handle := ipam.PodHandleID(network, sandbox)
-	logger := logrus.WithField("test", "releaseSandboxAddresses")
+	logger := logrus.WithField("test", "releaseUnusedAddresses")
 
 	var fake *fakeIPAMExec
 	var lockPath string
@@ -128,23 +128,24 @@ var _ = Describe("releaseSandboxAddresses", func() {
 		lockPath = filepath.Join(GinkgoT().TempDir(), "ipam.lock")
 	})
 
-	release := func(ctx context.Context, stub ipam.Interface, ipamType, pod string, keep ...string) error {
+	sandboxConf := func(ipamType string) (types.NetConf, *skel.CmdArgs) {
 		conf := types.NetConf{Name: network, IPAMLockFile: lockPath}
 		conf.IPAM.Type = ipamType
 		args := &skel.CmdArgs{ContainerID: sandbox, StdinData: fmt.Appendf(nil, `{"ipam":{"type":%q}}`, ipamType)}
-		var keepAddresses []net.IP
-		for _, k := range keep {
-			keepAddresses = append(keepAddresses, net.ParseIP(k))
-		}
-		return releaseSandboxAddresses(ctx, stub, conf, args, utils.WEPIdentifiers{Pod: pod}, keepAddresses, logger)
+		return conf, args
 	}
 
-	DescribeTable("chooses between the IPAM DEL and releasing only unkept addresses",
+	release := func(ctx context.Context, stub ipam.Interface, ipamType, pod string, wep *internalapi.WorkloadEndpoint) error {
+		conf, args := sandboxConf(ipamType)
+		return releaseUnusedAddresses(ctx, stub, conf, args, utils.WEPIdentifiers{Pod: pod}, wep, logger)
+	}
+
+	DescribeTable("chooses between the IPAM DEL and releasing only unlisted addresses",
 		func(c releaseCase) {
 			fake.delErr = c.delErr
 			stub := &stubHandleIPAM{ips: stubIPs(c.handleIPs...), ipsErr: c.ipsErr, releaseErr: c.releaseErr}
 
-			err := release(context.Background(), stub, c.ipamType, c.pod, c.keep...)
+			err := release(context.Background(), stub, c.ipamType, c.pod, c.wep)
 
 			if c.wantErr != nil {
 				Expect(err).To(MatchError(c.wantErr))
@@ -165,38 +166,50 @@ var _ = Describe("releaseSandboxAddresses", func() {
 			Expect(released).To(ConsistOf(c.wantReleased))
 			Expect(os.Getenv("CNI_COMMAND")).To(Equal("ADD"))
 		},
-		Entry("nothing to keep runs the IPAM DEL", releaseCase{
+		Entry("no endpoint runs the IPAM DEL", releaseCase{
 			ipamType: "calico-ipam", pod: "web-0", handleIPs: []string{"10.0.0.6"},
 			wantIPAMDel: true,
 		}),
-		Entry("another IPAM type runs the IPAM DEL despite addresses to keep", releaseCase{
-			ipamType: "host-local", pod: "web-0", keep: []string{"10.0.0.5"}, handleIPs: []string{"10.0.0.5"},
+		Entry("an endpoint naming this sandbox runs the IPAM DEL despite listing an address", releaseCase{
+			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(sandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.5"},
 			wantIPAMDel: true,
 		}),
-		Entry("a virt-launcher pod runs the IPAM DEL despite addresses to keep", releaseCase{
-			ipamType: "calico-ipam", pod: "virt-launcher-vm1-abcde", keep: []string{"10.0.0.5"}, handleIPs: []string{"10.0.0.5"},
+		Entry("an endpoint naming another sandbox but listing nothing runs the IPAM DEL", releaseCase{
+			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox), handleIPs: []string{"10.0.0.6"},
 			wantIPAMDel: true,
 		}),
-		Entry("addresses to keep release only the others, without the IPAM DEL", releaseCase{
-			ipamType: "calico-ipam", pod: "web-0", keep: []string{"10.0.0.5"}, handleIPs: []string{"10.0.0.5", "10.0.0.6", "fd00::6"},
+		Entry("another IPAM type runs the IPAM DEL despite an address to keep", releaseCase{
+			ipamType: "host-local", pod: "web-0", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.5"},
+			wantIPAMDel: true,
+		}),
+		Entry("a virt-launcher pod runs the IPAM DEL despite an address to keep", releaseCase{
+			ipamType: "calico-ipam", pod: "virt-launcher-vm1-abcde", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.5"},
+			wantIPAMDel: true,
+		}),
+		Entry("an endpoint naming another sandbox releases only unlisted addresses, without the IPAM DEL", releaseCase{
+			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.5", "10.0.0.6", "fd00::6"},
 			wantReleased: []string{"10.0.0.6", "fd00::6"},
 		}),
+		Entry("an endpoint naming no sandbox keeps its addresses like one naming another sandbox", releaseCase{
+			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox("", "10.0.0.5/32"), handleIPs: []string{"10.0.0.5", "10.0.0.6"},
+			wantReleased: []string{"10.0.0.6"},
+		}),
 		Entry("a kept IPv6 address stays and the other is released", releaseCase{
-			ipamType: "calico-ipam", pod: "web-0", keep: []string{"fd00::5"}, handleIPs: []string{"fd00::5", "fd00::6"},
+			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox, "fd00::5/128"), handleIPs: []string{"fd00::5", "fd00::6"},
 			wantReleased: []string{"fd00::6"},
 		}),
 		Entry("a handle holding only kept addresses releases nothing", releaseCase{
-			ipamType: "calico-ipam", pod: "web-0", keep: []string{"10.0.0.5"}, handleIPs: []string{"10.0.0.5"},
+			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.5"},
 		}),
 		Entry("a missing handle is nothing to release, without the IPAM DEL", releaseCase{
-			ipamType: "calico-ipam", pod: "web-0", keep: []string{"10.0.0.5"}, ipsErr: cerrors.ErrorResourceDoesNotExist{},
+			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), ipsErr: cerrors.ErrorResourceDoesNotExist{},
 		}),
 		Entry("another handle lookup error is returned, without the IPAM DEL", releaseCase{
-			ipamType: "calico-ipam", pod: "web-0", keep: []string{"10.0.0.5"}, ipsErr: errStubLookup,
+			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), ipsErr: errStubLookup,
 			wantErr: errStubLookup,
 		}),
 		Entry("a ReleaseIPs error is returned", releaseCase{
-			ipamType: "calico-ipam", pod: "web-0", keep: []string{"10.0.0.5"}, handleIPs: []string{"10.0.0.6"}, releaseErr: errStubRelease,
+			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.6"}, releaseErr: errStubRelease,
 			wantReleased: []string{"10.0.0.6"}, wantErr: errStubRelease,
 		}),
 		Entry("an IPAM DEL error is returned", releaseCase{
@@ -210,7 +223,7 @@ var _ = Describe("releaseSandboxAddresses", func() {
 		cancel()
 		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.5", "10.0.0.6")}
 
-		Expect(release(ctx, stub, "calico-ipam", "web-0", "10.0.0.5")).To(Succeed())
+		Expect(release(ctx, stub, "calico-ipam", "web-0", wepOnSandbox(otherSandbox, "10.0.0.5/32"))).To(Succeed())
 
 		Expect(stub.released).To(Equal([]ipam.ReleaseOptions{{Address: "10.0.0.6", Handle: handle}}))
 		Expect(stub.ctxErrs).To(HaveLen(2))
@@ -221,10 +234,25 @@ var _ = Describe("releaseSandboxAddresses", func() {
 	It("holds the host IPAM lock while it looks up and releases, and frees it after", func() {
 		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.6"), lockPath: lockPath}
 
-		Expect(release(context.Background(), stub, "calico-ipam", "web-0", "10.0.0.5")).To(Succeed())
+		Expect(release(context.Background(), stub, "calico-ipam", "web-0", wepOnSandbox(otherSandbox, "10.0.0.5/32"))).To(Succeed())
 
 		Expect(stub.lockFree).To(Equal([]bool{false, false}))
 		Expect(lockIsFree(lockPath)).To(BeTrue())
+	})
+
+	It("judges a failed ADD by the endpoint as the ADD found it, not as the ADD rewrote it", func() {
+		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.5", "10.0.0.6")}
+		conf, args := sandboxConf("calico-ipam")
+		endpoint := wepOnSandbox(otherSandbox, "10.0.0.5/32")
+		cleanup := failedAddCleanup(context.Background(), stub, conf, args, utils.WEPIdentifiers{Pod: "web-0"}, endpoint, logger)
+
+		// The ADD rewrites the endpoint like this before a later step can fail.
+		endpoint.Spec.ContainerID = sandbox
+		endpoint.Spec.IPNetworks = []string{"10.0.0.6/32"}
+		cleanup()
+
+		Expect(fake.calls).To(BeEmpty(), "the IPAM DEL would release the pod's address")
+		Expect(stub.released).To(Equal([]ipam.ReleaseOptions{{Address: "10.0.0.6", Handle: handle}}))
 	})
 })
 
@@ -246,5 +274,12 @@ var _ = DescribeTable("addressesFromEndpoint",
 func wepWithNetworks(nets ...string) *internalapi.WorkloadEndpoint {
 	wep := internalapi.NewWorkloadEndpoint()
 	wep.Spec.IPNetworks = nets
+	return wep
+}
+
+// wepOnSandbox returns an endpoint that names containerID as its sandbox and lists nets.
+func wepOnSandbox(containerID string, nets ...string) *internalapi.WorkloadEndpoint {
+	wep := wepWithNetworks(nets...)
+	wep.Spec.ContainerID = containerID
 	return wep
 }
