@@ -79,7 +79,7 @@ type Lane struct {
 	Source string
 
 	// Name identifies the lane within its file. A matrix entry is suffixed
-	// only when it changes the selection.
+	// with its entry name, whatever it selects.
 	Name string
 
 	// Config is the E2E_TEST_CONFIG value: one or more repo-relative paths,
