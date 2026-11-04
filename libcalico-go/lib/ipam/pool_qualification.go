@@ -194,30 +194,60 @@ func (q poolQualification) qualified() []v3.IPPool {
 // releasable returns the pools whose blocks affine to the node IPAM may release: those whose node selector skips the
 // node, other than pools the request named. A block is released only once it is empty.
 func (q poolQualification) releasable() []v3.IPPool {
-	return q.pools(func(c poolCandidate) bool { return !c.keepsBlocks() })
-}
-
-// blocksToRelease returns the affine blocks, out of those the request can't use, that IPAM may release once empty: a
-// block in some enabled pool but in none that keeps its blocks. An overlapping pool that skips the node doesn't
-// override one that keeps them.
-func (q poolQualification) blocksToRelease(blocks []net.IPNet) ([]net.IPNet, error) {
-	_, unkept, err := filterBlocksByPools(blocks, q.pools(poolCandidate.keepsBlocks))
-	if err != nil {
-		return nil, err
-	}
-	release, _, err := filterBlocksByPools(unkept, q.pools(func(poolCandidate) bool { return true }))
-	return release, err
-}
-
-// pools returns the candidates' pools that satisfy keep, in candidate order.
-func (q poolQualification) pools(keep func(poolCandidate) bool) []v3.IPPool {
 	var pools []v3.IPPool
 	for _, c := range q.candidates {
-		if keep(c) {
+		if !c.keepsBlocks() {
 			pools = append(pools, c.pool)
 		}
 	}
 	return pools
+}
+
+// blocksToRelease returns the affine blocks, out of those the request can't use, that IPAM may release once empty.
+func (q poolQualification) blocksToRelease(blocks []net.IPNet) ([]net.IPNet, error) {
+	var release []net.IPNet
+	for _, block := range blocks {
+		kept, err := q.keepsBlock(block)
+		if err != nil {
+			return nil, err
+		}
+		if !kept {
+			release = append(release, block)
+		}
+	}
+	return release, nil
+}
+
+// keepsBlock reports whether IPAM keeps the node's affinity to a block once it is empty. It does when any candidate
+// pool covering the block keeps its blocks, even if an overlapping pool skips the node, and when no candidate covers
+// it. Assignment and IP release both decide with this rule.
+func (q poolQualification) keepsBlock(block net.IPNet) (bool, error) {
+	covered := false
+	for _, c := range q.candidates {
+		_, cidr, err := net.ParseCIDR(c.pool.Spec.CIDR)
+		if err != nil {
+			return false, err
+		}
+		if !cidr.Contains(block.IP) {
+			continue
+		}
+		if c.keepsBlocks() {
+			return true, nil
+		}
+		covered = true
+	}
+	return !covered, nil
+}
+
+// nodePools records every enabled pool as a candidate for the node, with no request behind it. IP release uses it to
+// ask keepsBlock whether the node should keep a block it just emptied.
+func nodePools(node internalapi.Node, enabledPools []v3.IPPool) poolQualification {
+	req := poolRequest{node: node}
+	var q poolQualification
+	for _, pool := range enabledPools {
+		q.candidates = append(q.candidates, req.candidate(pool, "", false))
+	}
+	return q
 }
 
 // keepsBlocks reports whether IPAM keeps the node's affine blocks in the candidate's pool: the request named it, or
