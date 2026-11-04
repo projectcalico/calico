@@ -43,9 +43,11 @@ VALIDARCHES = amd64 arm64
 .PHONY: build
 build: bin/ztunnel-$(ARCH)
 
+# cargo-auditable embeds the resolved crate list in the binary; without it,
+# image scanners (Trivy, Grype) cannot see ztunnel's Rust dependencies.
 bin/ztunnel-$(ARCH): $(ZTUNNEL_DOWNLOADED)
 	$(DOCKER_RUST_BUILD) \
-		sh -c 'cd ztunnel && cargo build --release'
+		sh -c 'cd ztunnel && cargo auditable build --release --locked'
 	cp ztunnel/out/rust/release/ztunnel bin/ztunnel-$(ARCH)
 
 ###############################################################################
