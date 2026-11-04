@@ -134,12 +134,8 @@ cmd_fetch_pr() {
   # case writes nothing, so on an agent with a reused home a leftover file would
   # otherwise be handed to a branch run as if it were that run's PR.
   rm -f "${SANDCAT_PR_CONTEXT_FILE}"
-  # ArgoCI names these CI_GIT_*, and says "none" off a PR.
-  local pr="${SEMAPHORE_GIT_PR_NUMBER:-${CI_GIT_PR_NUMBER:-}}"
   # Its stdout goes to stderr so the only thing on ours is the path below.
   "${SANDCAT_BIN}" fetch-pr \
-    --repo "${CI_GIT_REPO_SLUG:-tigera/calico-private}" \
-    --pr-number "${pr/#none/}" \
     --out "${SANDCAT_PR_CONTEXT_FILE}" >&2 || return 1
   [[ -s "${SANDCAT_PR_CONTEXT_FILE}" ]] || return 1
   echo "${SANDCAT_PR_CONTEXT_FILE}"
@@ -520,10 +516,7 @@ cmd_analyze() {
   "${SANDCAT_BIN}" analyze \
     --ginkgo-report "${report}" \
     --sha "${SANDCAT_SHA}" \
-    --repo tigera/calico-private \
     --source-dir "${source_dir}" \
-    --ci-job-url "${SANDCAT_JOB_URL}" \
-    --ci-job-name "${SEMAPHORE_JOB_NAME:-}" \
     --agent \
     --upload "${SANDCAT_UPLOAD_URL}" \
     --timeout 10m \
@@ -718,10 +711,7 @@ cmd_build_failure() {
     if "${SANDCAT_BIN}" analyze \
       --log-file "${plain_log}" \
       --sha "${SANDCAT_SHA}" \
-      --repo tigera/calico-private \
       --source-dir "${source_dir}" \
-      --ci-job-url "${SANDCAT_JOB_URL}" \
-      --ci-job-name "${SEMAPHORE_JOB_NAME:-}" \
       --agent \
       --upload "${SANDCAT_UPLOAD_URL}" \
       --timeout 10m; then
