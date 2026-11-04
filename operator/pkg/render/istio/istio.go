@@ -44,6 +44,10 @@ type Configuration struct {
 	IstioNamespace string
 	Scheme         *runtime.Scheme
 	ClusterID      string
+
+	// Live is nil when nothing should wait for istiod, for example on a new
+	// install.
+	Live *LiveWorkloads
 }
 
 var _ render.Component = &IstioComponent{}
@@ -340,8 +344,7 @@ func (c *IstioComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Obj
 	// This mimics the order from the documentation
 	objs = append(objs, res.Base...)
 	objs = append(objs, res.Istiod...)
-	objs = append(objs, res.CNI...)
-	objs = append(objs, res.ZTunnel...)
+	objs = append(objs, c.dataPlaneObjects()...)
 
 	return objs, toDelete
 }
