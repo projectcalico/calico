@@ -50,7 +50,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
@@ -391,8 +390,8 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		logger.Debugf("IPAM result set to: %+v", result)
 	}
 
-	// The addresses the endpoint listed before this ADD, which a failure must not release.
-	keepAddresses := listedAddresses(endpoint, logger)
+	// keepAddresses holds the addresses already present on the WEP, which must not be released on failure in order to keep IPAM in sync with the workload endpoint.
+	keepAddresses := addressesFromEndpoint(endpoint, logger)
 
 	// releaseIPAM cleans up any IPAM allocations on failure.
 	releaseIPAM := func() {
@@ -680,9 +679,9 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 	}
 
 	// The pod is still running on another sandbox, so this DEL must not free its addresses.
-	var keepAddresses set.Set[string] = set.New[string]()
+	var keepAddresses []net.IP
 	if !wepMatchesSandbox(wep, args.ContainerID) {
-		keepAddresses = listedAddresses(wep, logger)
+		keepAddresses = addressesFromEndpoint(wep, logger)
 	}
 
 	logger.Info("Releasing IP address(es)")
@@ -845,7 +844,7 @@ func priorSandboxIPs(conf types.NetConf, epIDs utils.WEPIdentifiers, endpoint *i
 	if kubevirt.MaybeVirtLauncherPod(epIDs.Pod) {
 		return nil
 	}
-	return endpointIPs(endpoint, logger)
+	return addressesFromEndpoint(endpoint, logger)
 }
 
 // assignRequestedIPs calls the configured IPAM plugin once per address, asking for that

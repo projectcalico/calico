@@ -34,7 +34,6 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // stubHandleIPAM is an ipam.Interface that serves a fixed IPsByHandle answer and records
@@ -130,7 +129,11 @@ var _ = Describe("releaseSandboxAddresses", func() {
 		conf := types.NetConf{Name: network, IPAMLockFile: lockPath}
 		conf.IPAM.Type = ipamType
 		args := &skel.CmdArgs{ContainerID: sandbox, StdinData: fmt.Appendf(nil, `{"ipam":{"type":%q}}`, ipamType)}
-		return releaseSandboxAddresses(ctx, stub, conf, args, utils.WEPIdentifiers{Pod: pod}, set.From(keep...), logger)
+		var keepAddresses []net.IP
+		for _, k := range keep {
+			keepAddresses = append(keepAddresses, net.ParseIP(k))
+		}
+		return releaseSandboxAddresses(ctx, stub, conf, args, utils.WEPIdentifiers{Pod: pod}, keepAddresses, logger)
 	}
 
 	DescribeTable("chooses between the IPAM DEL and releasing only unkept addresses",
@@ -175,6 +178,10 @@ var _ = Describe("releaseSandboxAddresses", func() {
 			ipamType: "calico-ipam", pod: "web-0", keep: []string{"10.0.0.5"}, handleIPs: []string{"10.0.0.5", "10.0.0.6", "fd00::6"},
 			wantReleased: []string{"10.0.0.6", "fd00::6"},
 		}),
+		Entry("an IPv6 address kept in a longer textual form still matches the handle's", releaseCase{
+			ipamType: "calico-ipam", pod: "web-0", keep: []string{"fd00:0:0:0:0:0:0:5"}, handleIPs: []string{"fd00::5", "fd00::6"},
+			wantReleased: []string{"fd00::6"},
+		}),
 		Entry("a handle holding only kept addresses releases nothing", releaseCase{
 			ipamType: "calico-ipam", pod: "web-0", keep: []string{"10.0.0.5"}, handleIPs: []string{"10.0.0.5"},
 		}),
@@ -217,31 +224,19 @@ var _ = Describe("releaseSandboxAddresses", func() {
 	})
 })
 
-var _ = DescribeTable("endpointIPs",
+var _ = DescribeTable("addressesFromEndpoint",
 	func(wep *internalapi.WorkloadEndpoint, want []string) {
 		var got []string
-		for _, ip := range endpointIPs(wep, logrus.WithField("test", "endpointIPs")) {
+		for _, ip := range addressesFromEndpoint(wep, logrus.WithField("test", "addressesFromEndpoint")) {
 			got = append(got, ip.String())
 		}
 		Expect(got).To(Equal(want))
 	},
-	Entry("a nil endpoint records nothing", nil, nil),
-	Entry("an endpoint with no networks records nothing", &internalapi.WorkloadEndpoint{}, nil),
-	Entry("dual-stack networks give both bare IPs in order", wepWithNetworks("fd00::5/128", "10.0.0.5/32"), []string{"fd00::5", "10.0.0.5"}),
+	Entry("a nil endpoint has none", nil, nil),
+	Entry("an endpoint with no networks has none", &internalapi.WorkloadEndpoint{}, nil),
+	Entry("IPv6 then IPv4 give both bare IPs in that order", wepWithNetworks("fd00::5/128", "10.0.0.5/32"), []string{"fd00::5", "10.0.0.5"}),
+	Entry("IPv4 then IPv6 give both bare IPs in that order", wepWithNetworks("10.0.0.5/32", "fd00::5/128"), []string{"10.0.0.5", "fd00::5"}),
 	Entry("an unparsable entry is skipped and the rest kept", wepWithNetworks("garbage", "10.0.0.5/32", "10.0.0.6"), []string{"10.0.0.5"}),
-)
-
-var _ = DescribeTable("listedAddresses",
-	func(wep *internalapi.WorkloadEndpoint, want []string) {
-		got := listedAddresses(wep, logrus.WithField("test", "listedAddresses"))
-		Expect(got.Len()).To(Equal(len(want)))
-		for _, ip := range want {
-			Expect(got.Contains(ip)).To(BeTrue(), "missing %s", ip)
-		}
-	},
-	Entry("a nil endpoint lists nothing", nil, nil),
-	Entry("dual-stack networks give both bare IPs", wepWithNetworks("10.0.0.5/32", "fd00::5/128"), []string{"10.0.0.5", "fd00::5"}),
-	Entry("an unparsable entry is skipped", wepWithNetworks("10.0.0.5/32", "garbage"), []string{"10.0.0.5"}),
 )
 
 func wepWithNetworks(nets ...string) *internalapi.WorkloadEndpoint {

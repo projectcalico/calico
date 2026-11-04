@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -30,26 +31,17 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // ipamReleaseTimeout bounds the IPAM calls made under the host IPAM lock, matching calico-ipam.
 const ipamReleaseTimeout = 90 * time.Second
 
-// listedAddresses returns the bare IP addresses a workload endpoint records in its
-// IPNetworks, as parsed by endpointIPs.
-func listedAddresses(wep *internalapi.WorkloadEndpoint, logger *logrus.Entry) set.Set[string] {
-	listed := set.New[string]()
-	for _, ip := range endpointIPs(wep, logger) {
-		listed.Add(ip.String())
-	}
-	return listed
-}
-
-// endpointIPs returns the addresses a workload endpoint records in its IPNetworks, in order.
-// A nil endpoint records none. An entry that doesn't parse is logged and skipped, so one
-// corrupt entry can't stop the others from being reused or kept.
-func endpointIPs(wep *internalapi.WorkloadEndpoint, logger *logrus.Entry) []net.IP {
+// addressesFromEndpoint returns the bare IP addresses in a workload endpoint's IPNetworks, in
+// the order the endpoint lists them. These are the addresses the pod is currently using, so
+// they are the ones to reuse for a new sandbox and to protect from release. A nil endpoint
+// has none. An entry that doesn't parse is logged and skipped, so one corrupt entry can't
+// stop the others from being used.
+func addressesFromEndpoint(wep *internalapi.WorkloadEndpoint, logger *logrus.Entry) []net.IP {
 	if wep == nil {
 		return nil
 	}
@@ -65,31 +57,32 @@ func endpointIPs(wep *internalapi.WorkloadEndpoint, logger *logrus.Entry) []net.
 	return ips
 }
 
-// releaseSandboxAddresses releases this sandbox's IPAM allocations except keepAddresses, the
-// addresses the pod's endpoint still lists. It runs the IPAM plugin's DEL when there is nothing to
-// keep, the IPAM type is not calico-ipam, or the pod is a KubeVirt pod. Otherwise it releases only
-// the other addresses on the sandbox's handle, never the whole handle, since an empty handle
-// lookup skips unreadable blocks.
+// releaseSandboxAddresses frees the IPAM allocations held for one sandbox, except keepAddresses,
+// which the pod's endpoint still uses and so must stay allocated. With nothing to keep, an IPAM
+// type other than calico-ipam, or a KubeVirt pod, it runs the configured IPAM plugin's DEL.
+// Otherwise it releases the sandbox's other addresses one at a time, because the kept ones
+// share its handle and releasing the handle would free them too.
 func releaseSandboxAddresses(
 	ctx context.Context,
 	ipamClient ipam.Interface,
 	conf types.NetConf,
 	args *skel.CmdArgs,
 	epIDs utils.WEPIdentifiers,
-	keepAddresses set.Set[string],
+	keepAddresses []net.IP,
 	logger *logrus.Entry,
 ) error {
-	if keepAddresses.Len() == 0 || conf.IPAM.Type != "calico-ipam" || kubevirt.MaybeVirtLauncherPod(epIDs.Pod) {
+	if len(keepAddresses) == 0 || conf.IPAM.Type != "calico-ipam" || kubevirt.MaybeVirtLauncherPod(epIDs.Pod) {
 		return utils.ReleaseIPAllocation(ctx, logger, conf, args)
 	}
 	handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
 	return releaseUnlisted(ctx, ipamClient, handleID, conf.IPAMLockFile, keepAddresses, logger)
 }
 
-// releaseUnlisted releases the addresses on handleID that keepAddresses does not contain. It
-// holds the host IPAM lock at lockPath throughout, like calico-ipam's DEL, and finishes even if
-// ctx is canceled.
-func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID, lockPath string, keepAddresses set.Set[string], logger *logrus.Entry) error {
+// releaseUnlisted releases each address on handleID that is not in keepAddresses, comparing
+// by IP value so different textual forms of an IPv6 address still match. It holds the host
+// IPAM lock at lockPath, like calico-ipam does, and finishes even if ctx is canceled, so a
+// release that has started is not abandoned. A handle that doesn't exist has nothing to release.
+func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID, lockPath string, keepAddresses []net.IP, logger *logrus.Entry) error {
 	return underIPAMLock(ctx, lockPath, func(ctx context.Context) error {
 		ips, err := ipamClient.IPsByHandle(ctx, handleID)
 		if err != nil {
@@ -101,7 +94,7 @@ func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID, l
 
 		var errs []error
 		for _, ip := range ips {
-			if keepAddresses.Contains(ip.String()) {
+			if slices.ContainsFunc(keepAddresses, ip.Equal) {
 				logger.WithField("ip", ip).Info("Keeping address the endpoint lists")
 				continue
 			}
