@@ -20,6 +20,7 @@ import (
 	"maps"
 	"net"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -156,6 +157,7 @@ const (
 	FailNextWireguardDeviceByName
 	FailNextWireguardConfigureDevice
 	FailNextSetStrict
+	FailNextBridgeVni
 	FailNone FailFlags = 0
 )
 
@@ -277,6 +279,9 @@ func (f FailFlags) String() string {
 	if f&FailNextSetStrict != 0 {
 		parts = append(parts, "FailNextSetStrict")
 	}
+	if f&FailNextBridgeVni != 0 {
+		parts = append(parts, "FailNextBridgeVni")
+	}
 	if f == 0 {
 		parts = append(parts, "FailNone")
 	}
@@ -315,6 +320,8 @@ type MockNetlinkDataplane struct {
 	NumRuleListCalls            int
 	NumRuleAddCalls             int
 	NumRuleDelCalls             int
+	NumBridgeVniListCalls       int
+	NumBridgeVniDelCalls        int
 	WireguardConfigUpdated      bool
 	HitRouteListFilteredNoDev   bool
 	HitRouteListFilteredNoTable bool
@@ -326,6 +333,8 @@ type MockNetlinkDataplane struct {
 	FailuresToSimulate             FailFlags
 	SetStrictCheckErr              error
 	DeleteInterfaceAfterLinkByName bool
+	// KernelLacksVniFilter mimics a pre-vnifilter kernel, which silently ignores the attribute.
+	KernelLacksVniFilter bool
 
 	mutex                   *sync.Mutex
 	deletedConntrackEntries set.Set[ip.Addr]
@@ -374,6 +383,8 @@ func (d *MockNetlinkDataplane) ResetDeltas() {
 	d.NumRuleListCalls = 0
 	d.NumRuleAddCalls = 0
 	d.NumRuleDelCalls = 0
+	d.NumBridgeVniListCalls = 0
+	d.NumBridgeVniDelCalls = 0
 	d.AddedRules = nil
 	d.DeletedRules = nil
 	d.WireguardConfigUpdated = false
@@ -576,6 +587,11 @@ func (d *MockNetlinkDataplane) LinkAdd(link netlink.Link) error {
 	if attrs.Index == 0 {
 		attrs.Index = 100 + d.NumLinkAddCalls
 	}
+	if vx, ok := link.(*netlink.Vxlan); ok && vx.VniFilter && d.KernelLacksVniFilter {
+		vxCopy := *vx
+		vxCopy.VniFilter = false
+		link = &vxCopy
+	}
 	d.NameToLink[link.Attrs().Name] = &MockLink{
 		LinkAttrs:    attrs,
 		LinkType:     link.Type(),
@@ -604,6 +620,109 @@ func (d *MockNetlinkDataplane) LinkDel(link netlink.Link) error {
 	delete(d.NameToLink, link.Attrs().Name)
 	d.DeletedLinks.Add(link.Attrs().Name)
 	return nil
+}
+
+func (d *MockNetlinkDataplane) BridgeVniAdd(link netlink.Link, vni uint32) error {
+	return d.bridgeVniModify(link, vni, vni, true)
+}
+
+// BridgeVniAddRange is a test helper; Felix itself never adds VNI ranges.
+func (d *MockNetlinkDataplane) BridgeVniAddRange(link netlink.Link, vniStart, vniEnd uint32) error {
+	return d.bridgeVniModify(link, vniStart, vniEnd, true)
+}
+
+func (d *MockNetlinkDataplane) BridgeVniDel(link netlink.Link, vni uint32) error {
+	return d.bridgeVniModify(link, vni, vni, false)
+}
+
+func (d *MockNetlinkDataplane) BridgeVniDelRange(link netlink.Link, vniStart, vniEnd uint32) error {
+	return d.bridgeVniModify(link, vniStart, vniEnd, false)
+}
+
+func (d *MockNetlinkDataplane) bridgeVniModify(link netlink.Link, vniStart, vniEnd uint32, add bool) error {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	defer ginkgo.GinkgoRecover()
+
+	Expect(d.NetlinkOpen).To(BeTrue())
+	if d.shouldFail(FailNextBridgeVni) {
+		return ErrSimulated
+	}
+	if !add {
+		d.NumBridgeVniDelCalls++
+	}
+	ml, ok := d.NameToLink[link.Attrs().Name]
+	if !ok {
+		return ErrLinkNotFound
+	}
+	if vx, ok := ml.ConcreteLink.(*netlink.Vxlan); !ok || !vx.VniFilter {
+		return unix.EOPNOTSUPP
+	}
+	if ml.VNIs == nil {
+		ml.VNIs = set.New[uint32]()
+	}
+	if add && d.vniInUseLockHeld(ml, vniStart, vniEnd) {
+		return unix.EEXIST
+	}
+	for vni := vniStart; vni <= vniEnd; vni++ {
+		if add {
+			ml.VNIs.Add(vni)
+		} else {
+			ml.VNIs.Discard(vni)
+		}
+	}
+	return nil
+}
+
+// vniInUseLockHeld mimics the kernel: VNI-filtering devices on one port need disjoint VNIs.
+func (d *MockNetlinkDataplane) vniInUseLockHeld(ml *MockLink, vniStart, vniEnd uint32) bool {
+	port := ml.ConcreteLink.(*netlink.Vxlan).Port
+	for _, other := range d.NameToLink {
+		ovx, ok := other.ConcreteLink.(*netlink.Vxlan)
+		if other == ml || !ok || !ovx.VniFilter || ovx.Port != port || other.VNIs == nil {
+			continue
+		}
+		for vni := vniStart; vni <= vniEnd; vni++ {
+			if other.VNIs.Contains(vni) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (d *MockNetlinkDataplane) BridgeVniList() (map[int32][]*nl.BridgeVniInfo, error) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	defer ginkgo.GinkgoRecover()
+
+	d.NumBridgeVniListCalls++
+	Expect(d.NetlinkOpen).To(BeTrue())
+	if d.shouldFail(FailNextBridgeVni) {
+		return nil, ErrSimulated
+	}
+	out := map[int32][]*nl.BridgeVniInfo{}
+	for _, ml := range d.NameToLink {
+		if ml.VNIs == nil {
+			continue
+		}
+		idx := int32(ml.LinkAttrs.Index)
+		vnis := ml.VNIs.Slice()
+		slices.Sort(vnis)
+		for i := 0; i < len(vnis); {
+			j := i
+			for j+1 < len(vnis) && vnis[j+1] == vnis[j]+1 {
+				j++
+			}
+			info := &nl.BridgeVniInfo{Vni: vnis[i]}
+			if j > i {
+				info.VniEnd = vnis[j]
+			}
+			out[idx] = append(out[idx], info)
+			i = j + 1
+		}
+	}
+	return out, nil
 }
 
 func (d *MockNetlinkDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
@@ -1247,6 +1366,9 @@ type MockLink struct {
 	// the result (as they would with the real netlink library) keep working.
 	ConcreteLink netlink.Link
 
+	// VNIs is the device's VXLAN VNI filter, as managed by BridgeVniAdd/BridgeVniDel.
+	VNIs set.Set[uint32]
+
 	WireguardPrivateKey   wgtypes.Key
 	WireguardPublicKey    wgtypes.Key
 	WireguardListenPort   int
@@ -1274,12 +1396,17 @@ func (l *MockLink) copy() *MockLink {
 		wgPeersCopy = map[wgtypes.Key]wgtypes.Peer{}
 		maps.Copy(wgPeersCopy, l.WireguardPeers)
 	}
+	var vnisCopy set.Set[uint32]
+	if l.VNIs != nil {
+		vnisCopy = l.VNIs.Copy()
+	}
 
 	return &MockLink{
 		LinkAttrs:    l.LinkAttrs, // Shallow copy, but we don't use the nested pointers AFAICT.
 		Addrs:        addrsCopy,
 		LinkType:     l.LinkType,
 		ConcreteLink: l.ConcreteLink,
+		VNIs:         vnisCopy,
 
 		WireguardPrivateKey:   l.WireguardPrivateKey,
 		WireguardPublicKey:    l.WireguardPublicKey,

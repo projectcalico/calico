@@ -15,7 +15,6 @@
 package stream_test
 
 import (
-	"context"
 	"testing"
 
 	googleproto "google.golang.org/protobuf/proto"
@@ -33,11 +32,7 @@ import (
 func TestStreamReadRacesAddFlow(t *testing.T) {
 	const now = 1000
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	streams := stream.NewStreamManager()
-	go streams.Run(ctx)
 
 	clk := func() time.Time { return time.Unix(now, 0) }
 	ring := storage.NewBucketRing(20, 1, now, storage.WithStreamReceiver(streams), storage.WithNowFunc(clk))
@@ -56,14 +51,13 @@ func TestStreamReadRacesAddFlow(t *testing.T) {
 		addFlow(now - i)
 	}
 
-	flowStream := <-streams.Register(&proto.FlowStreamRequest{StartTimeGte: now - 5}, 100)
+	flowStream := streams.Register(&proto.FlowStreamRequest{StartTimeGte: now - 5}, 100)
 	if flowStream == nil {
 		t.Fatal("nil stream")
 	}
 	defer flowStream.Close()
 
-	bf := <-streams.Backfills()
-	ring.Backfill(streams, bf.ID(), bf.StartTimeGte())
+	ring.Backfill(streams, flowStream.ID(), flowStream.StartTimeGte())
 
 	for range 50 {
 		addFlow(now)
