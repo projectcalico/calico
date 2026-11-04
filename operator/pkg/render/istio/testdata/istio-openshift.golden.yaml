@@ -3899,7 +3899,8 @@ data:
               ]
             }
           }
-        ]
+        ],
+        "trustDomain": "cluster.local"
       },
       "nodeSelector": {},
       "ownerName": "",
@@ -4000,6 +4001,9 @@ data:
         "proxy_init": {
           "image": "fake.io/fakeimg/proxyv2:faketag"
         }
+      },
+      "meshConfig": {
+        "trustDomain": "cluster.local"
       },
       "pilot": {
         "env": {
