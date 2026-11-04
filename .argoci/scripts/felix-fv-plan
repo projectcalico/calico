@@ -6,6 +6,10 @@
 
 set -euo pipefail
 
+# The lanes trust the memo to skip only what already passed, and a bug there
+# would show up as nothing but green lanes.
+.semaphore/vms/test-batch-memo.sh
+
 plan=felix-fv-plan
 mkdir -p "$plan"
 : > "$plan/lanes"

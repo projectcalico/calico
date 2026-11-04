@@ -59,7 +59,9 @@ batch_memo_init() {
 # batch_memo_restore_lane <artifacts dir> puts back every batch's reports from
 # the run that passed the whole lane.  Fails if the restore fails or brings back
 # no reports, for example because the entry expired after the plan saw it: a
-# partial restore would publish an incomplete set of results.
+# partial restore would publish an incomplete set of results.  It then deletes
+# the entry, which every later run would otherwise hit and fail on in the same
+# way.
 #
 # Reads: BATCH_MEMO_PREFIX, plus those batch_memo_log_lane reads.
 batch_memo_restore_lane() {
@@ -70,7 +72,12 @@ batch_memo_restore_lane() {
     restored="$(batch_memo_dirs_with_reports "$artifacts_dir" | wc -l)"
   fi
   if [ "$restored" -eq 0 ]; then
-    echo "Batch memo: could not restore the cached lane.  felix-build may have been skipped, so this lane can't run; push again or resubmit the workflow." >&2
+    echo "Batch memo: could not restore the cached lane.  felix-build may have been skipped, so this lane can't run here." >&2
+    if artifact cache delete "$BATCH_MEMO_PREFIX/lane" >/dev/null; then
+      echo "Batch memo: deleted the cached lane; resubmit the workflow, or push, to run the lane." >&2
+    else
+      echo "Batch memo: could not delete the cached lane either; set FELIX_FV_MEMO=off on the felix-fv-plan step to run without the memo." >&2
+    fi
     batch_memo_log_lane lane 0 0 fail reason=restore-failed
     return 1
   fi

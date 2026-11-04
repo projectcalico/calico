@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Smoke tests for .semaphore/vms/batch-memo.
-# Not run in CI; run manually:
+# Smoke tests for .semaphore/vms/batch-memo.  CI runs them before planning;
+# to run them by hand:
 #   .semaphore/vms/test-batch-memo.sh
 #
 # `artifact` is stubbed on PATH: its cache lives in a local directory and
@@ -41,6 +41,8 @@ case "$1 $2" in
     [ ! -e "$STUB_CACHE/$3.fail" ] ;;
   "cache has_key")
     [ -f "$STUB_CACHE/$3" ] ;;
+  "cache delete")
+    rm -f "$STUB_CACHE/$3" ;;
   "pull workflow")
     [ -e "$STUB_WORKFLOW/$3" ] && cp -r "$STUB_WORKFLOW/$3" . ;;
   *) echo "unexpected: artifact $*" >&2; exit 1 ;;
@@ -135,7 +137,9 @@ done
 touch "$STUB_CACHE/$BATCH_MEMO_PREFIX/lane.fail"
 run5="$work/run5/artifacts"
 check "a lane restore that fails part way fails" fails batch_memo_restore_lane "$run5"
+check "a lane that fails to restore is deleted" [ ! -e "$STUB_CACHE/$BATCH_MEMO_PREFIX/lane" ]
 rm "$STUB_CACHE/$BATCH_MEMO_PREFIX/lane.fail"
+batch_memo_record_lane "$run2" ut 1 2 3 >/dev/null
 
 touch "$STUB_CACHE/$BATCH_MEMO_PREFIX/batch-2.fail"
 run6="$work/run6/artifacts"
