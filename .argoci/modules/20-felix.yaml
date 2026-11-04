@@ -76,7 +76,7 @@ steps:
       zstd -dc /cache/go-build.tar.zst | tar -xf - &
       zstd -dc /cache/go-mod.tar.zst | tar -C "$GO_MOD_ROOT" -xf - &
       wait
-      echo "CACHE-TEST felix-static-checks unpack $(( $(date +%s) - s ))s"
+      echo "CACHE-TEST felix-static-checks unpack-zstd $(( $(date +%s) - s ))s"
       .argoci/scripts/load-cached-images calico
       .semaphore/scripts/load-felix-prereqs.sh
       cd felix
