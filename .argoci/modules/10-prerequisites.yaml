@@ -7,6 +7,26 @@ defaults:
   timeout: 1h
 
 steps:
+  # TEMPORARY: restores the calico Go caches from GCS once and hands them to
+  # felix-static-checks and node-static-checks over the volume cache, to compare
+  # against each step restoring its own from GCS.
+  - name: go-cache-seed
+    jobSize: large
+    requests: {cpu: 14000m, memory: 4Gi}
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    cache:
+      - {name: go, mode: write}
+    commands: |
+      du -sh .go-pkg-cache "$GO_MOD_ROOT/pkg/mod"
+      s=$(date +%s)
+      tar -cf - .go-pkg-cache | zstd -T0 -1 -q -c > /cache/go-build.tar.zst &
+      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | zstd -T0 -1 -q -c > /cache/go-mod.tar.zst &
+      wait
+      echo "CACHE-TEST go-cache-seed compress $(( $(date +%s) - s ))s"
+      ls -l /cache
+
   - name: check-yaml
     jobSize: medium
     requests: {cpu: 3500m, memory: 1Gi}
@@ -22,15 +42,26 @@ steps:
       make yaml-lint
 
   # go vet fans out across every package, so it scales with the cores it gets.
+  # Every module waits on this step, so it runs in the build image directly
+  # rather than paying dind's start-up and image pull.
   - name: check-go
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     env:
       - name: BUILD_CACHE_GROUP
         value: preflight-go-checks
       - name: STORE_BUILD_CACHE
         value: "true"
+      # Runs the Makefiles' go-build recipes here rather than in a nested container.
+      - name: NATIVE_GO_BUILD
+        value: "true"
     jobSize: large
-    requests: {cpu: 14000m, memory: 16Gi}
-    services: [docker]
+    requests: {cpu: 7000m, memory: 4Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     changes:
       in:
         - ^go\.mod$
@@ -78,6 +109,10 @@ steps:
 
   # Grep-speed checks, so one step rather than three.
   - name: check-language-dockerfiles
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     jobSize: small
     requests: {cpu: 2250m, memory: 548Mi}
     useGoBuild: true
@@ -149,9 +184,17 @@ steps:
   # A chart can change what it renders without any committed manifest changing,
   # which a diff of the tree cannot see.
   - name: check-helm-charts
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     jobSize: small
     requests: {cpu: 2000m, memory: 1Gi}
-    services: [docker]
+    useGoBuild: true
+    workspaceVolumes: none
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     changes:
       in:
         - ^charts/
@@ -165,8 +208,16 @@ steps:
   # Regenerating the patches must be a no-op. metadata.mk is in the trigger
   # because `go mod tidy`'s output depends on the toolchain.
   - name: check-thirdparty-dep-patches
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     requests: {cpu: 2000m, memory: 2Gi}
-    services: [docker]
+    useGoBuild: true
+    workspaceVolumes: none
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     changes:
       in:
         - ^hack/thirdparty/
