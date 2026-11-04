@@ -59,6 +59,8 @@ type Configuration struct {
 	// join root-cert.pem and the published roots, and its phase is recorded on
 	// cacerts so the controller resumes it after a restart.
 	Transition *SignerTransition
+	// AdditionalRoots are validated static trust anchors appended to root-cert.pem.
+	AdditionalRoots []*x509.Certificate
 	// OwnRoots are the roots published for peers when LocalCA is nil; with a
 	// LocalCA its own roots are published.
 	OwnRoots []*x509.Certificate
@@ -161,9 +163,10 @@ func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 					Type: corev1.SeccompProfileTypeRuntimeDefault,
 				},
 			},
-			// root-cert.pem carries two roots during a signer transition; istiod
-			// only accepts such a bundle as a multi-root mesh.
+			// root-cert.pem carries more than one root once peers or additional
+			// anchors are trusted; istiod only accepts such a bundle as a multi-root mesh.
 			Pilot:                   &PilotConfig{Env: map[string]string{"ISTIO_MULTIROOT_MESH": "true"}},
+			MeshConfig:              &MeshConfig{TrustDomain: TrustDomain(cfg.Istio)},
 			Profile:                 "ambient",
 			TrustedZtunnelNamespace: IstioNamespace,
 			// Pods injected under the chart default cluster ID keep it until they
@@ -323,7 +326,7 @@ func (c *IstioComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Obj
 	for i := range res.ZTunnelDaemonSet.Spec.Template.Spec.Containers {
 		cont := &res.ZTunnelDaemonSet.Spec.Template.Spec.Containers[i]
 		if cont.Name == ztunnelContainerName {
-			cont.Env = append(cont.Env, ztunnelEnv()...)
+			cont.Env = append(cont.Env, ztunnelEnv(c.cfg.Istio)...)
 			break
 		}
 	}
@@ -399,9 +402,12 @@ func (c *IstioComponent) cacertsHash() string {
 }
 
 // ztunnelEnv is the environment the operator sets on ztunnel beyond the chart's.
-func ztunnelEnv() []corev1.EnvVar {
+func ztunnelEnv(istio *operatorv1.Istio) []corev1.EnvVar {
 	return []corev1.EnvVar{
 		{Name: "TRANSPARENT_NETWORK_POLICIES", Value: "true"},
+		// The chart leaves ztunnel on its built-in default, which would diverge
+		// from istiod's meshConfig.trustDomain.
+		{Name: "TRUST_DOMAIN", Value: TrustDomain(istio)},
 	}
 }
 
@@ -416,20 +422,25 @@ func (c *IstioComponent) cacertsSecret() *corev1.Secret {
 	if source == "" {
 		source = CASourceOperatorManaged
 	}
+	annotations := c.cfg.Transition.annotations()
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	annotations[SignerRootsAnnotation] = Fingerprints(ca.Roots)
 	return &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        CACertsSecretName,
 			Namespace:   c.cfg.IstioNamespace,
 			Labels:      map[string]string{CACertsLabel: string(source)},
-			Annotations: c.cfg.Transition.annotations(),
+			Annotations: annotations,
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
 			CACertKey:    ca.CertPEM,
 			CAKeyKey:     ca.KeyPEM,
 			CertChainKey: EncodeCertificates(ca.Chain...),
-			RootCertKey:  ComposeRootBundle(ca.Roots, c.cfg.Transition.bundleRoots()),
+			RootCertKey:  ComposeRootBundle(ca.Roots, ca.ExtraRoots, c.cfg.Transition.bundleRoots(), c.cfg.AdditionalRoots),
 		},
 	}
 }
@@ -462,7 +473,8 @@ func IstiodRolledOut(d *appsv1.Deployment, cacerts *corev1.Secret) bool {
 
 // ownRoots are the roots this cluster publishes: those its signing CA chains
 // to and, during a transition, the other signer's, so other clusters accept
-// certificates from both.
+// certificates from both. Never additional anchors, which would make trust
+// transitive.
 func (c *IstioComponent) ownRoots() []*x509.Certificate {
 	if c.cfg.LocalCA != nil {
 		return append(append([]*x509.Certificate{}, c.cfg.LocalCA.Roots...), c.cfg.Transition.roots()...)
@@ -479,7 +491,7 @@ func (c *IstioComponent) trustAnchorsConfigMap(roots []*x509.Certificate) *corev
 		},
 		Data: map[string]string{
 			RootCertKey:    string(ComposeRootBundle(roots)),
-			TrustDomainKey: DefaultTrustDomain,
+			TrustDomainKey: TrustDomain(c.cfg.Istio),
 		},
 	}
 }
