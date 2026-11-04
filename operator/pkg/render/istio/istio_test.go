@@ -403,7 +403,7 @@ var _ = Describe("Istio Component Rendering", func() {
 		})
 	})
 
-	Describe("Certificate authority", func() {
+	Describe("Certificate authority and trust anchors", func() {
 		var ca *istio.CA
 
 		BeforeEach(func() {
@@ -436,6 +436,19 @@ var _ = Describe("Istio Component Rendering", func() {
 			Expect(cacerts.Data[istio.CAKeyKey]).To(Equal(ca.KeyPEM))
 			Expect(cacerts.Data[istio.CertChainKey]).To(Equal(istio.EncodeCertificates(ca.Chain...)))
 			Expect(cacerts.Data[istio.RootCertKey]).To(Equal(istio.ComposeRootBundle(ca.Roots)))
+
+			cfg.CASource = istio.CASourceSecret
+			Expect(cacertsOf(renderObjects()).Labels).To(HaveKeyWithValue(istio.CACertsLabel, "secret"))
+		})
+
+		It("appends additional roots and extra roots to root-cert.pem, deduplicated and sorted", func() {
+			a, b := newTestCert("a", nil, true), newTestCert("b", nil, true)
+			ca.ExtraRoots = []*x509.Certificate{b.cert}
+			cfg.AdditionalRoots = []*x509.Certificate{b.cert, a.cert, ca.Roots[0]}
+
+			bundle := cacertsOf(renderObjects()).Data[istio.RootCertKey]
+			Expect(pemBlockCount(bundle)).To(Equal(3))
+			Expect(bundle).To(Equal(istio.ComposeRootBundle(ca.Roots, []*x509.Certificate{a.cert, b.cert})))
 		})
 
 		It("labels cacerts with the signing certificate's issuer and expiry, alongside the transition record", func() {
@@ -458,6 +471,9 @@ var _ = Describe("Istio Component Rendering", func() {
 		}
 
 		It("publishes only its own root and the trust domain", func() {
+			a := newTestCert("a", nil, true)
+			ca.ExtraRoots = []*x509.Certificate{a.cert}
+			cfg.AdditionalRoots = []*x509.Certificate{newTestCert("b", nil, true).cert}
 			cfg.OwnRoots = []*x509.Certificate{newTestCert("ignored", nil, true).cert}
 
 			cm, err := rtest.GetResourceOfType[*corev1.ConfigMap](renderObjects(), istio.TrustExportConfigMapName, istio.IstioNamespace)
@@ -465,6 +481,33 @@ var _ = Describe("Istio Component Rendering", func() {
 			Expect(cm.Data).To(HaveLen(2))
 			Expect(cm.Data[istio.RootCertKey]).To(Equal(string(ca.CertPEM)))
 			Expect(cm.Data[istio.TrustDomainKey]).To(Equal("cluster.local"))
+		})
+
+		It("renders the trust domain to istiod, ztunnel and the published ConfigMap", func() {
+			cfg.Istio.Spec.TrustDomain = ptr.To("mesh.example")
+			objs := renderObjects()
+
+			meshCM, err := rtest.GetResourceOfType[*corev1.ConfigMap](objs, "istio", istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(meshCM.Data["mesh"]).To(ContainSubstring("trustDomain: mesh.example"))
+
+			ztunnel, err := rtest.GetResourceOfType[*appsv1.DaemonSet](objs, istio.IstioZTunnelDaemonSetName, istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			rtest.ExpectEnv(ztunnel.Spec.Template.Spec.Containers[0].Env, "TRUST_DOMAIN", "mesh.example")
+
+			cm, err := rtest.GetResourceOfType[*corev1.ConfigMap](objs, istio.TrustExportConfigMapName, istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cm.Data[istio.TrustDomainKey]).To(Equal("mesh.example"))
+		})
+
+		It("defaults the trust domain to cluster.local", func() {
+			objs := renderObjects()
+			meshCM, err := rtest.GetResourceOfType[*corev1.ConfigMap](objs, "istio", istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(meshCM.Data["mesh"]).To(ContainSubstring("trustDomain: cluster.local"))
+			ztunnel, err := rtest.GetResourceOfType[*appsv1.DaemonSet](objs, istio.IstioZTunnelDaemonSetName, istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			rtest.ExpectEnv(ztunnel.Spec.Template.Spec.Containers[0].Env, "TRUST_DOMAIN", "cluster.local")
 		})
 
 		It("runs istiod as a multi-root mesh", func() {
@@ -479,9 +522,7 @@ var _ = Describe("Istio Component Rendering", func() {
 			Expect(hash).To(Equal(rmeta.SecretsAnnotationHash(cacertsOf(objs))))
 			Expect(istiodHashOf(renderObjects())).To(Equal(hash))
 
-			other, err := istio.GenerateCA("cluster.local")
-			Expect(err).NotTo(HaveOccurred())
-			cfg.LocalCA = other
+			cfg.AdditionalRoots = []*x509.Certificate{newTestCert("a", nil, true).cert}
 			Expect(istiodHashOf(renderObjects())).NotTo(Equal(hash))
 		})
 
@@ -556,10 +597,12 @@ var _ = Describe("Istio Component Rendering", func() {
 		})
 
 		Context("during a signer transition", func() {
-			var retiring, incoming *testCert
+			var retiring, incoming, extra *testCert
 
 			BeforeEach(func() {
 				retiring, incoming = newTestCert("retiring", nil, true), newTestCert("incoming", nil, true)
+				extra = newTestCert("extra", nil, true)
+				cfg.AdditionalRoots = []*x509.Certificate{extra.cert}
 				cfg.Transition = &istio.SignerTransition{
 					Phase:    istio.TransitionAwaitDistribution,
 					Deadline: time.Date(2026, 10, 31, 12, 0, 0, 500, time.FixedZone("PCT", -7*60*60)),
@@ -576,6 +619,7 @@ var _ = Describe("Istio Component Rendering", func() {
 					istio.TransitionFromAnnotation:     istio.Fingerprint(retiring.cert),
 					istio.TransitionToAnnotation:       istio.Fingerprint(incoming.cert),
 				}))
+				Expect(cacerts.Annotations).To(HaveKeyWithValue(istio.SignerRootsAnnotation, istio.Fingerprints(cfg.LocalCA.Roots)))
 
 				state := istio.ReadTransition(cacerts)
 				Expect(state.Phase).To(Equal(istio.TransitionAwaitDistribution))
@@ -586,11 +630,11 @@ var _ = Describe("Istio Component Rendering", func() {
 				Expect(state.Incoming[0].Raw).To(Equal(incoming.cert.Raw))
 			})
 
-			It("keeps both signers' roots in root-cert.pem and publishes both", func() {
+			It("keeps both signers' roots in root-cert.pem beside the anchors, and publishes both and only both", func() {
 				objs := renderObjects()
 				bundle := cacertsOf(objs).Data[istio.RootCertKey]
-				Expect(pemBlockCount(bundle)).To(Equal(3))
-				Expect(bundle).To(Equal(istio.ComposeRootBundle(ca.Roots, []*x509.Certificate{retiring.cert, incoming.cert})))
+				Expect(pemBlockCount(bundle)).To(Equal(4))
+				Expect(bundle).To(Equal(istio.ComposeRootBundle(ca.Roots, []*x509.Certificate{retiring.cert, incoming.cert, extra.cert})))
 
 				cm, err := rtest.GetResourceOfType[*corev1.ConfigMap](objs, istio.TrustExportConfigMapName, istio.IstioNamespace)
 				Expect(err).NotTo(HaveOccurred())
@@ -609,6 +653,7 @@ var _ = Describe("Istio Component Rendering", func() {
 				cfg.Transition = nil
 				Expect(istiodHashOf(renderObjects())).NotTo(Equal(hash))
 				Expect(transitionRecord(cacertsOf(renderObjects()))).To(BeEmpty())
+				Expect(cacertsOf(renderObjects()).Annotations).To(HaveKeyWithValue(istio.SignerRootsAnnotation, istio.Fingerprints(cfg.LocalCA.Roots)))
 			})
 		})
 	})

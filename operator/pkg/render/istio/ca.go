@@ -17,6 +17,8 @@ package istio
 import (
 	"bytes"
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -25,10 +27,13 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/url"
 	"sort"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 const (
@@ -58,6 +63,10 @@ const (
 	// CACertsLabel marks a cacerts Secret the operator rendered, so it can be told
 	// from one a user made. Its value is the CASource the bundle was built from.
 	CACertsLabel = "operator.tigera.io/istio-cacerts"
+	// CASecretLabel, set to "true", lets the Istio CR name a Secret as its CA.
+	// The operator copies that CA's private key into the Istio namespace, so a
+	// Secret holding some other CA's key must not become usable by name alone.
+	CASecretLabel = "operator.tigera.io/istio-ca"
 	// CACertsHashAnnotation on the istiod pod template rolls istiod when cacerts changes.
 	CACertsHashAnnotation = "hash.operator.tigera.io/cacerts"
 
@@ -75,11 +84,13 @@ const (
 	pemTypeCertificate = "CERTIFICATE"
 )
 
-// CASource names where the local CA came from.
+// CASource names where the local CA came from, mirroring the members of
+// Istio.spec.certificateAuthority.
 type CASource string
 
 const (
 	CASourceOperatorManaged CASource = "operatorManaged"
+	CASourceSecret          CASource = "secret"
 	// CASourceSelfSigned is the CA istiod generated for itself, read from
 	// istio-ca-secret; it signs only until a transition away from it switches.
 	CASourceSelfSigned CASource = "selfSigned"
@@ -97,6 +108,17 @@ type CA struct {
 	// Roots are the roots the signing certificate chains to. They are what this
 	// cluster publishes for its peers.
 	Roots []*x509.Certificate
+	// ExtraRoots were supplied beside the CA without being on its chain. They stay
+	// trusted locally and are never published.
+	ExtraRoots []*x509.Certificate
+}
+
+// TrustDomain returns the trust domain the Istio CR resolves to.
+func TrustDomain(i *operatorv1.Istio) string {
+	if i != nil && i.Spec.TrustDomain != nil && *i.Spec.TrustDomain != "" {
+		return *i.Spec.TrustDomain
+	}
+	return DefaultTrustDomain
 }
 
 // GenerateCA makes a self-signed root CA for the trust domain.
@@ -219,6 +241,10 @@ func LoadCA(data map[string][]byte) (*CA, error) {
 	if len(chains) == 0 {
 		return nil, fmt.Errorf("%s: the extended key usage of the chain does not allow TLS client and server authentication", certKey)
 	}
+	chains = pathLengthChains(chains)
+	if len(chains) == 0 {
+		return nil, fmt.Errorf("%s: the path length constraint of an issuer does not allow the CA to issue certificates", certKey)
+	}
 
 	ca := &CA{CertPEM: EncodeCertificates(cert), KeyPEM: keyPEM, Chain: chains[0]}
 	own := map[string]bool{}
@@ -229,7 +255,74 @@ func LoadCA(data map[string][]byte) (*CA, error) {
 			ca.Roots = append(ca.Roots, root)
 		}
 	}
+	for _, r := range roots {
+		if !own[string(r.Raw)] {
+			ca.ExtraRoots = append(ca.ExtraRoots, r)
+		}
+	}
 	return ca, nil
+}
+
+// CheckTrustDomain issues a throwaway workload certificate for trustDomain and
+// verifies it, because a name constraint anywhere on the chain can rule out
+// the SPIFFE identities of every workload in the mesh.
+func (ca *CA) CheckTrustDomain(trustDomain string) error {
+	signer, err := parsePrivateKey(ca.KeyPEM)
+	if err != nil {
+		return err
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return err
+	}
+	identity := &url.URL{Scheme: "spiffe", Host: trustDomain, Path: "/ns/" + IstioNamespace + "/sa/default"}
+	now := time.Now()
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		NotBefore:    now.Add(-time.Minute),
+		NotAfter:     now.Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		URIs:         []*url.URL{identity},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, ca.Chain[0], &key.PublicKey, signer)
+	if err != nil {
+		return err
+	}
+	leaf, err := x509.ParseCertificate(der)
+	if err != nil {
+		return err
+	}
+	intermediates, roots := x509.NewCertPool(), x509.NewCertPool()
+	for _, c := range ca.Chain[:len(ca.Chain)-1] {
+		intermediates.AddCert(c)
+	}
+	for _, r := range ca.Roots {
+		roots.AddCert(r)
+	}
+	if _, err := leaf.Verify(x509.VerifyOptions{Roots: roots, Intermediates: intermediates, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}}); err != nil {
+		return fmt.Errorf("a workload certificate for %s does not verify: %w", identity, err)
+	}
+	return nil
+}
+
+// pathLengthChains keeps the chains on which a certificate the CA issues
+// verifies. Verifying the CA as the leaf does not count the CA itself against
+// its issuers' path length constraints, but a workload's chain does.
+func pathLengthChains(chains [][]*x509.Certificate) [][]*x509.Certificate {
+	var out [][]*x509.Certificate
+	for _, chain := range chains {
+		ok := true
+		for below, c := range chain {
+			if c.BasicConstraintsValid && c.MaxPathLen >= 0 && below > c.MaxPathLen {
+				ok = false
+			}
+		}
+		if ok {
+			out = append(out, chain)
+		}
+	}
+	return out
 }
 
 // mutualTLSChains keeps the chains on which a workload certificate, a TLS

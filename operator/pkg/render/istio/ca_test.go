@@ -92,6 +92,34 @@ func reissue(tc *testCert, parent *testCert) *testCert {
 	return &testCert{cert: cert, key: tc.key, certPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), keyPEM: tc.keyPEM}
 }
 
+// withMaxPathLen signs another certificate for tc's subject and key with a
+// path length constraint, under parent or self-signed when parent is nil.
+func withMaxPathLen(tc *testCert, parent *testCert, maxPathLen int) *testCert {
+	return reissueWith(tc, parent, func(c *x509.Certificate) {
+		c.MaxPathLen = maxPathLen
+		c.MaxPathLenZero = maxPathLen == 0
+	})
+}
+
+// reissueWith signs another certificate for tc's subject and key with edit
+// applied, under parent or self-signed when parent is nil.
+func reissueWith(tc *testCert, parent *testCert, edit func(*x509.Certificate)) *testCert {
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 64))
+	Expect(err).NotTo(HaveOccurred())
+	template := *tc.cert
+	template.SerialNumber = serial
+	edit(&template)
+	signer, signerKey := &template, tc.key
+	if parent != nil {
+		signer, signerKey = parent.cert, parent.key
+	}
+	der, err := x509.CreateCertificate(rand.Reader, &template, signer, &tc.key.PublicKey, signerKey)
+	Expect(err).NotTo(HaveOccurred())
+	cert, err := x509.ParseCertificate(der)
+	Expect(err).NotTo(HaveOccurred())
+	return &testCert{cert: cert, key: tc.key, certPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), keyPEM: tc.keyPEM}
+}
+
 func concatPEM(parts ...[]byte) []byte {
 	var out []byte
 	for _, p := range parts {
@@ -130,6 +158,7 @@ var _ = Describe("Istio CA", func() {
 
 			Expect(ca.Chain).To(Equal([]*x509.Certificate{cert}))
 			Expect(ca.Roots).To(Equal([]*x509.Certificate{cert}))
+			Expect(ca.ExtraRoots).To(BeEmpty())
 
 			// A root CA is its own chain and its own trust anchor.
 			data := ca.SecretData()
@@ -149,6 +178,7 @@ var _ = Describe("Istio CA", func() {
 			Expect(loaded.KeyPEM).To(Equal(ca.KeyPEM))
 			Expect(loaded.Roots).To(HaveLen(1))
 			Expect(loaded.Roots[0].Raw).To(Equal(ca.Roots[0].Raw))
+			Expect(loaded.ExtraRoots).To(BeEmpty())
 		})
 	})
 
@@ -176,6 +206,7 @@ var _ = Describe("Istio CA", func() {
 			Expect(ca.Chain[1].Raw).To(Equal(root.cert.Raw))
 			Expect(ca.Roots).To(HaveLen(1))
 			Expect(ca.Roots[0].Raw).To(Equal(root.cert.Raw))
+			Expect(ca.ExtraRoots).To(BeEmpty())
 		})
 
 		It("accepts the kubernetes.io/tls layout, with intermediates in tls.crt", func() {
@@ -213,7 +244,7 @@ var _ = Describe("Istio CA", func() {
 			Expect(err).To(MatchError(ContainSubstring("tls.crt, tls.key and ca.crt")))
 		})
 
-		It("takes as its roots only those the CA chains to", func() {
+		It("keeps roots the CA does not chain to as extra roots", func() {
 			ca, err := istio.LoadCA(map[string][]byte{
 				istio.CACertKey:   root.certPEM,
 				istio.CAKeyKey:    root.keyPEM,
@@ -222,6 +253,8 @@ var _ = Describe("Istio CA", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ca.Roots).To(HaveLen(1))
 			Expect(ca.Roots[0].Raw).To(Equal(root.cert.Raw))
+			Expect(ca.ExtraRoots).To(HaveLen(1))
+			Expect(ca.ExtraRoots[0].Raw).To(Equal(other.cert.Raw))
 		})
 
 		It("accepts a PKCS#8 private key", func() {
@@ -309,6 +342,40 @@ var _ = Describe("Istio CA", func() {
 			Expect(err).To(MatchError(ContainSubstring("the extended key usage of the chain does not allow")))
 		})
 
+		It("rejects a CA whose issuer's path length constraint leaves no room for the certificates it issues", func() {
+			constrainedRoot := withMaxPathLen(root, nil, 0)
+			_, err := istio.LoadCA(map[string][]byte{
+				istio.CACertKey:   intermediate.certPEM,
+				istio.CAKeyKey:    intermediate.keyPEM,
+				istio.RootCertKey: constrainedRoot.certPEM,
+			})
+			Expect(err).To(MatchError(ContainSubstring("ca-cert.pem: the path length constraint of an issuer does not allow the CA to issue certificates")))
+
+			mid := withMaxPathLen(newTestCert("mid", nil, true), root, 1)
+			under := newTestCert("under-mid", mid, true)
+			signer := newTestCert("signer", under, true)
+			_, err = istio.LoadCA(map[string][]byte{
+				istio.CACertKey:    signer.certPEM,
+				istio.CAKeyKey:     signer.keyPEM,
+				istio.CertChainKey: concatPEM(under.certPEM, mid.certPEM),
+				istio.RootCertKey:  root.certPEM,
+			})
+			Expect(err).To(MatchError(ContainSubstring("the path length constraint of an issuer does not allow")))
+		})
+
+		It("accepts a CA whose issuers' path length constraints leave room for the certificates it issues", func() {
+			roomyRoot := withMaxPathLen(root, nil, 1)
+			signer := withMaxPathLen(intermediate, roomyRoot, 0)
+			ca, err := istio.LoadCA(map[string][]byte{
+				istio.CACertKey:   signer.certPEM,
+				istio.CAKeyKey:    signer.keyPEM,
+				istio.RootCertKey: roomyRoot.certPEM,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ca.Roots).To(HaveLen(1))
+			Expect(ca.Roots[0].Raw).To(Equal(roomyRoot.cert.Raw))
+		})
+
 		It("rejects a certificate that does not chain to a root in root-cert.pem", func() {
 			_, err := istio.LoadCA(map[string][]byte{
 				istio.CACertKey:   intermediate.certPEM,
@@ -333,6 +400,43 @@ var _ = Describe("Istio CA", func() {
 			Expect(err).To(MatchError(ContainSubstring("expected keys ca-cert.pem, ca-key.pem and root-cert.pem")))
 			_, err = istio.LoadCA(map[string][]byte{istio.CACertKey: root.certPEM, istio.CAKeyKey: root.keyPEM})
 			Expect(err).To(MatchError(ContainSubstring("expected keys")))
+		})
+	})
+
+	Describe("CheckTrustDomain", func() {
+		var root, intermediate *testCert
+
+		BeforeEach(func() {
+			root = newTestCert("root", nil, true)
+			intermediate = newTestCert("intermediate", root, true)
+		})
+
+		load := func(signer, root *testCert) *istio.CA {
+			ca, err := istio.LoadCA(map[string][]byte{
+				istio.CACertKey:   signer.certPEM,
+				istio.CAKeyKey:    signer.keyPEM,
+				istio.RootCertKey: root.certPEM,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			return ca
+		}
+
+		It("accepts any trust domain for a chain without name constraints", func() {
+			Expect(load(intermediate, root).CheckTrustDomain("cluster.local")).To(Succeed())
+		})
+
+		It("rejects a trust domain that a URI name constraint on the root rules out, and accepts one it permits", func() {
+			constrained := reissueWith(root, nil, func(c *x509.Certificate) { c.PermittedURIDomains = []string{"corp.example"} })
+			ca := load(intermediate, constrained)
+			Expect(ca.CheckTrustDomain("cluster.local")).To(MatchError(ContainSubstring("a workload certificate for spiffe://cluster.local/ns/" + istio.IstioNamespace + "/sa/default does not verify")))
+			Expect(ca.CheckTrustDomain("corp.example")).To(Succeed())
+		})
+
+		It("rejects a trust domain that a URI name constraint on the signing CA excludes", func() {
+			signer := reissueWith(intermediate, root, func(c *x509.Certificate) { c.ExcludedURIDomains = []string{"cluster.local"} })
+			ca := load(signer, root)
+			Expect(ca.CheckTrustDomain("cluster.local")).To(MatchError(ContainSubstring("does not verify")))
+			Expect(ca.CheckTrustDomain("corp.example")).To(Succeed())
 		})
 	})
 
