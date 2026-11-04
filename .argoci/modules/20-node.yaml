@@ -10,15 +10,23 @@ steps:
     override:
       nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
       tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
-    env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-    depends: [check-go]
+    depends: [check-go, go-cache-seed]
+    cache:
+      - {name: go, mode: read}
     requests: {cpu: 6000m, memory: 3.75Gi}
     useGoBuild: true
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
     commands: |
+      # TEMPORARY: the build image lacks the zstd CLI. Timed apart from the unpack.
+      s=$(date +%s); dnf install -y -q zstd; echo "CACHE-TEST node-static-checks dnf $(( $(date +%s) - s ))s"
+      # TEMPORARY: unpacks the Go caches from the volume cache rather than GCS.
+      s=$(date +%s)
+      mkdir -p "$GO_MOD_ROOT"
+      zstd -dc /cache/go-build.tar.zst | tar -xf - &
+      zstd -dc /cache/go-mod.tar.zst | tar -C "$GO_MOD_ROOT" -xf - &
+      wait
+      echo "CACHE-TEST node-static-checks unpack $(( $(date +%s) - s ))s"
       make -C node static-checks DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
 
   - name: node-ut
