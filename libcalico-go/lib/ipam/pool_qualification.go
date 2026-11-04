@@ -197,14 +197,15 @@ func (q poolQualification) releasable() []v3.IPPool {
 	return q.pools(func(c poolCandidate) bool { return !c.keepsBlocks() })
 }
 
-// blocksToRelease returns the affine blocks, out of those the request can't use, that IPAM may release once empty. A
-// block inside any pool that keeps its blocks stays, even when an overlapping pool that skips the node also covers it.
+// blocksToRelease returns the affine blocks, out of those the request can't use, that IPAM may release once empty: a
+// block in some enabled pool but in none that keeps its blocks. An overlapping pool that skips the node doesn't
+// override one that keeps them.
 func (q poolQualification) blocksToRelease(blocks []net.IPNet) ([]net.IPNet, error) {
 	_, unkept, err := filterBlocksByPools(blocks, q.pools(poolCandidate.keepsBlocks))
 	if err != nil {
 		return nil, err
 	}
-	release, _, err := filterBlocksByPools(unkept, q.releasable())
+	release, _, err := filterBlocksByPools(unkept, q.pools(func(poolCandidate) bool { return true }))
 	return release, err
 }
 
