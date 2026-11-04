@@ -698,7 +698,7 @@ func ipAddrsResult(ctx context.Context, ipAddrs string, conf types.NetConf, args
 // already holds. Reuse lets an in-place sandbox rebuild succeed in a pool that has no
 // spare capacity for a second allocation.
 //
-// IPAM answers ErrCodeAddressNotHeld when the pod does not hold a requested address. Then
+// IPAM answers ErrCodeAddressNotOurs when a requested address isn't the pod's to take. Then
 // only that family gets a fresh address, and only if the IPAM config assigns it. Any other
 // error fails the ADD without releasing anything, since addresses already moved onto this
 // sandbox are still the endpoint's.
@@ -725,8 +725,8 @@ func assignPodIPs(
 		case err == nil:
 			kept.IPs = append(kept.IPs, r.IPs[0])
 			kept.Routes = append(kept.Routes, r.Routes...)
-		case isAddressNotHeld(err):
-			logger.WithField("ip", ip).Info("Endpoint's address is not held by this pod, assigning a new one")
+		case isAddressNotOurs(err):
+			logger.WithField("ip", ip).Info("Endpoint's address is not this pod's to reuse, assigning a new one")
 			if ip.To4() != nil {
 				v4Lost = true
 			} else {
@@ -788,11 +788,11 @@ func assignPodIPs(
 	return &kept, nil
 }
 
-// isAddressNotHeld reports whether err is IPAM's answer that a requested address is not held
-// by this pod.
-func isAddressNotHeld(err error) bool {
+// isAddressNotOurs reports whether err is IPAM's answer that a requested address is not this
+// pod's to take.
+func isAddressNotOurs(err error) bool {
 	var cniErr *cnitypes.Error
-	return errors.As(err, &cniErr) && cniErr.Code == types.ErrCodeAddressNotHeld
+	return errors.As(err, &cniErr) && cniErr.Code == types.ErrCodeAddressNotOurs
 }
 
 // withAssignFamilies returns stdin with the IPAM assign_ipv4 and assign_ipv6 options set, so

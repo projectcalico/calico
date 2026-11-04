@@ -27,9 +27,10 @@ import (
 // a fresh address.
 const ErrCodeSandboxSuperseded = 101
 
-// ErrCodeAddressNotHeld is the CNI error code calico-ipam returns when the requested address
-// isn't held by the pod. Callers fall back to a fresh address only on this code.
-const ErrCodeAddressNotHeld = 102
+// ErrCodeAddressNotOurs means calico-ipam refused a requested address: the pod asked to migrate
+// an IP that isn't its own, or its pool or strict affinity rules the address out. Only this code
+// earns a fresh address.
+const ErrCodeAddressNotOurs = 102
 
 // Valid values for NetConf.DeviceType.
 const (

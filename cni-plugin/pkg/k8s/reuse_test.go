@@ -106,7 +106,7 @@ var _ = Describe("assignPodIPs", func() {
 
 			if e.wantErr {
 				Expect(err).To(HaveOccurred())
-				Expect(isAddressNotHeld(err)).To(BeFalse(), "only a lost address may be reported as not held")
+				Expect(isAddressNotOurs(err)).To(BeFalse(), "only a lost address may be reported as not ours")
 				if e.wantErrCode != 0 {
 					var cniErr *cnitypes.Error
 					Expect(errors.As(err, &cniErr)).To(BeTrue(), "expected a CNI error, got: %v", err)
@@ -155,20 +155,20 @@ var _ = Describe("assignPodIPs", func() {
 		Entry("lost IPv6 keeps IPv4 and assigns IPv6 only", reuseCase{
 			endpointIPs: []string{"10.0.0.5", "fd00::5"},
 			dualStack:   true,
-			addErrs:     map[string]error{"fd00::5": cnitypes.NewError(types.ErrCodeAddressNotHeld, "not held", "")},
+			addErrs:     map[string]error{"fd00::5": cnitypes.NewError(types.ErrCodeAddressNotOurs, "not ours", "")},
 			wantIPs:     []string{"10.0.0.5", "fd00::99"},
 			wantFresh:   expectFreshAddForIPv6Only,
 		}),
 		Entry("lost IPv4 keeps IPv6, assigns IPv4 only and lists IPv4 first", reuseCase{
 			endpointIPs: []string{"10.0.0.5", "fd00::5"},
 			dualStack:   true,
-			addErrs:     map[string]error{"10.0.0.5": cnitypes.NewError(types.ErrCodeAddressNotHeld, "not held", "")},
+			addErrs:     map[string]error{"10.0.0.5": cnitypes.NewError(types.ErrCodeAddressNotOurs, "not ours", "")},
 			wantIPs:     []string{"10.0.0.99", "fd00::5"},
 			wantFresh:   expectFreshAddForIPv4Only,
 		}),
 		Entry("lost IPv6 under a single-stack config is not requested", reuseCase{
 			endpointIPs: []string{"10.0.0.5", "fd00::5"},
-			addErrs:     map[string]error{"fd00::5": cnitypes.NewError(types.ErrCodeAddressNotHeld, "not held", "")},
+			addErrs:     map[string]error{"fd00::5": cnitypes.NewError(types.ErrCodeAddressNotOurs, "not ours", "")},
 			wantIPs:     []string{"10.0.0.5"},
 			wantFresh:   expectNoFreshAdd,
 		}),
@@ -176,8 +176,8 @@ var _ = Describe("assignPodIPs", func() {
 			endpointIPs: []string{"10.0.0.5", "fd00::5"},
 			dualStack:   true,
 			addErrs: map[string]error{
-				"10.0.0.5": cnitypes.NewError(types.ErrCodeAddressNotHeld, "not held", ""),
-				"fd00::5":  cnitypes.NewError(types.ErrCodeAddressNotHeld, "not held", ""),
+				"10.0.0.5": cnitypes.NewError(types.ErrCodeAddressNotOurs, "not ours", ""),
+				"fd00::5":  cnitypes.NewError(types.ErrCodeAddressNotOurs, "not ours", ""),
 			},
 			wantIPs:   []string{"10.0.0.99", "fd00::99"},
 			wantFresh: expectFreshAddWithOriginalStdin,
@@ -196,7 +196,7 @@ var _ = Describe("assignPodIPs", func() {
 		Entry("a lost IPv4-only endpoint under a dual-stack config uses the full config", reuseCase{
 			endpointIPs: []string{"10.0.0.5"},
 			dualStack:   true,
-			addErrs:     map[string]error{"10.0.0.5": cnitypes.NewError(types.ErrCodeAddressNotHeld, "not held", "")},
+			addErrs:     map[string]error{"10.0.0.5": cnitypes.NewError(types.ErrCodeAddressNotOurs, "not ours", "")},
 			wantIPs:     []string{"10.0.0.99", "fd00::99"},
 			wantFresh:   expectFreshAddWithOriginalStdin,
 		}),
@@ -220,13 +220,13 @@ var _ = Describe("assignPodIPs", func() {
 	})
 })
 
-var _ = Describe("isAddressNotHeld", func() {
+var _ = Describe("isAddressNotOurs", func() {
 	DescribeTable("classifies errors",
 		func(err error, want bool) {
-			Expect(isAddressNotHeld(err)).To(Equal(want))
+			Expect(isAddressNotOurs(err)).To(Equal(want))
 		},
-		Entry("the not-held code", cnitypes.NewError(types.ErrCodeAddressNotHeld, "x", ""), true),
-		Entry("the not-held code wrapped", fmt.Errorf("wrapped: %w", cnitypes.NewError(types.ErrCodeAddressNotHeld, "x", "")), true),
+		Entry("the not-ours code", cnitypes.NewError(types.ErrCodeAddressNotOurs, "x", ""), true),
+		Entry("the not-ours code wrapped", fmt.Errorf("wrapped: %w", cnitypes.NewError(types.ErrCodeAddressNotOurs, "x", "")), true),
 		Entry("the superseded code", cnitypes.NewError(types.ErrCodeSandboxSuperseded, "x", ""), false),
 		Entry("a plain error", errors.New("boom"), false),
 		Entry("nil", nil, false),

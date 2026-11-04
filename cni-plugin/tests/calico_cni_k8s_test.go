@@ -2174,7 +2174,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).To(HaveOccurred())
 			var cniErr *cnitypes.Error
 			Expect(stderrors.As(err, &cniErr)).To(BeTrue(), "expected a CNI error, got: %v", err)
-			Expect(cniErr.Code).To(BeEquivalentTo(types.ErrCodeAddressNotHeld))
+			Expect(cniErr.Code).To(BeEquivalentTo(types.ErrCodeAddressNotOurs))
 
 			// The runtime deletes the failed sandbox.
 			exitCode, err := testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, sandboxY)
@@ -2407,7 +2407,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 		})
 
-		DescribeTable("reports a CNI error code when the requested address isn't held by the pod",
+		DescribeTable("reports a CNI error code when the requested address can't be the pod's",
 			func(requestedIP string, arrange func() (cleanup func()), wantMsg string) {
 				ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
@@ -2428,7 +2428,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				cleanup := arrange()
 				defer cleanup()
 
-				containerID := "container-id-ipaddrs-not-held"
+				containerID := "container-id-ipaddrs-not-ours"
 				_, _, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", containerID)
 				if contNs != nil {
 					defer func() {
@@ -2440,7 +2440,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 				var cniErr *cnitypes.Error
 				Expect(stderrors.As(err, &cniErr)).To(BeTrue(), "expected a CNI error, got: %v", err)
-				Expect(cniErr.Code).To(BeEquivalentTo(types.ErrCodeAddressNotHeld))
+				Expect(cniErr.Code).To(BeEquivalentTo(types.ErrCodeAddressNotOurs))
 				Expect(cniErr.Msg).To(ContainSubstring(wantMsg))
 			},
 			Entry("another pod owns it", "10.123.0.90", func() func() {
@@ -2470,7 +2470,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				return func() {
 					Expect(calicoClient.IPAM().ReleaseByHandle(ctx, handle)).To(Succeed())
 				}
-			}, "not held by a pod sandbox"),
+			}, "not on a pod sandbox's handle"),
 			Entry("it's in no configured pool", "1.1.1.1", func() func() {
 				return func() {}
 			}, "cannot be assigned to a workload"),
@@ -2514,7 +2514,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(calicoClient.IPAM().SetIPAMConfig(ctx, cooldownCfg)).To(Succeed())
 
 				// Claim the address under a sandbox of the same pod, then DEL it into cooldown.
-				firstID := "container-id-ipaddrs-not-held-first"
+				firstID := "container-id-ipaddrs-not-ours-first"
 				_, _, _, _, _, firstNs, err := testutils.CreateContainerWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", firstID)
 				Expect(err).NotTo(HaveOccurred())
 				_, err = testutils.DeleteContainerWithId(netconf, firstNs.Path(), testPodName, testutils.K8S_TEST_NS, firstID)

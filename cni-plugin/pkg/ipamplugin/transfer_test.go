@@ -64,7 +64,7 @@ func transferOnce(ipamClient ipam.Interface) error {
 	return transferFromPriorSandbox(context.Background(), ipamClient, net.ParseIP("10.0.0.5"), "calico-uts.sandbox-y", nil, "calico-uts", epIDs, time.Now(), logger)
 }
 
-func TestTransferFromPriorSandboxMoveFailureIsNotAddressNotHeld(t *testing.T) {
+func TestTransferFromPriorSandboxMoveFailureIsNotAddressNotOurs(t *testing.T) {
 	RegisterTestingT(t)
 
 	handle := ipam.PodHandleID("calico-uts", "sandbox-x")
@@ -84,7 +84,7 @@ func TestTransferFromPriorSandboxMoveFailureIsNotAddressNotHeld(t *testing.T) {
 	Expect(errors.As(err, &cniErr)).To(BeFalse(), "a failed move is transient, got CNI error: %v", err)
 }
 
-func TestTransferFromPriorSandboxAddressNotHeld(t *testing.T) {
+func TestTransferFromPriorSandboxAddressNotOurs(t *testing.T) {
 	handle := ipam.PodHandleID("calico-uts", "sandbox-x")
 	for name, attr := range map[string]*model.AllocationAttribute{
 		"no attributes": nil,
@@ -105,7 +105,7 @@ func TestTransferFromPriorSandboxAddressNotHeld(t *testing.T) {
 
 			var cniErr *cnitypes.Error
 			Expect(errors.As(err, &cniErr)).To(BeTrue(), "expected a CNI error, got: %v", err)
-			Expect(cniErr.Code).To(BeEquivalentTo(types.ErrCodeAddressNotHeld))
+			Expect(cniErr.Code).To(BeEquivalentTo(types.ErrCodeAddressNotOurs))
 			Expect(stub.moves).To(BeZero())
 		})
 	}
