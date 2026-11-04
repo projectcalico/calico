@@ -22,15 +22,22 @@ steps:
       make yaml-lint
 
   # go vet fans out across every package, so it scales with the cores it gets.
+  # Every module waits on this step, so it runs in the build image directly
+  # rather than paying dind's start-up and image pull.
   - name: check-go
     env:
       - name: BUILD_CACHE_GROUP
         value: preflight-go-checks
       - name: STORE_BUILD_CACHE
         value: "true"
+      # Runs the Makefiles' go-build recipes here rather than in a nested container.
+      - name: NATIVE_GO_BUILD
+        value: "true"
     jobSize: large
-    requests: {cpu: 14000m, memory: 16Gi}
-    services: [docker]
+    requests: {cpu: 7000m, memory: 4Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     changes:
       in:
         - ^go\.mod$
@@ -155,7 +162,11 @@ steps:
   - name: check-helm-charts
     jobSize: small
     requests: {cpu: 2000m, memory: 1Gi}
-    services: [docker]
+    useGoBuild: true
+    workspaceVolumes: none
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     changes:
       in:
         - ^charts/
@@ -170,7 +181,11 @@ steps:
   # because `go mod tidy`'s output depends on the toolchain.
   - name: check-thirdparty-dep-patches
     requests: {cpu: 2000m, memory: 2Gi}
-    services: [docker]
+    useGoBuild: true
+    workspaceVolumes: none
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     changes:
       in:
         - ^hack/thirdparty/
