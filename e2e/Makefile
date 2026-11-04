@@ -39,16 +39,25 @@ SRC_FILES=$(shell find pkg cmd -name '*.go')
 
 build: bin/k8s/e2e.test bin/clusternetworkpolicy/e2e.test bin/gateway/e2e.test $(SRC_FILES)
 
+# cmd/go does not retry module zip downloads, and proxy.golang.org resets
+# HTTP/2 streams mid-download on a cold module cache (golang/go#51323).
+# Load the test package's dependencies in a retry loop so that the compile
+# step that follows finds every module already in the cache.
+E2E_MOD_FETCH_RETRIES ?= 5
+define fetch-test-deps
+n=0; until go list -deps -test $(1) >/dev/null; do n=$$((n+1)); if [ $$n -ge $(E2E_MOD_FETCH_RETRIES) ]; then echo "module fetch for $(1) failed after $$n attempts" >&2; exit 1; fi; echo "module fetch for $(1) failed, retry $$n/$(E2E_MOD_FETCH_RETRIES)" >&2; sleep $$((n*5)); done;
+endef
+
 bin/k8s/e2e.test: bin/k8s/e2e-linux-$(ARCH).test
 	mv $< $@
 
 bin/clusternetworkpolicy/e2e.test: $(LIBBPF_A) $(SRC_FILES)
 	mkdir -p bin
-	$(DOCKER_RUN_CGO) $(CALICO_BUILD) go test ./cmd/clusternetworkpolicy -c -o $@
+	$(DOCKER_RUN_CGO) $(CALICO_BUILD) sh -c '$(call fetch-test-deps,./cmd/clusternetworkpolicy) go test ./cmd/clusternetworkpolicy -c -o $@'
 
 bin/gateway/e2e.test: $(SRC_FILES)
 	mkdir -p bin/gateway
-	$(DOCKER_RUN) $(CALICO_BUILD) go test ./cmd/gateway -c -o $@
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(call fetch-test-deps,./cmd/gateway) go test ./cmd/gateway -c -o $@'
 
 # Per-arch e2e binary, cross-compiled inside the calico/go-build container. CGO
 # stays on for every arch: the tests pull in felix/bpf, which falls back to stubs
@@ -56,7 +65,7 @@ bin/gateway/e2e.test: $(SRC_FILES)
 # libbpf-backed code and behaves the same.
 bin/k8s/e2e-linux-$(ARCH).test: $(LIBBPF_A) $(SRC_FILES)
 	mkdir -p bin/k8s
-	$(DOCKER_RUN_CGO) $(CALICO_BUILD) go test ./cmd/k8s -c -o $@
+	$(DOCKER_RUN_CGO) $(CALICO_BUILD) sh -c '$(call fetch-test-deps,./cmd/k8s) go test ./cmd/k8s -c -o $@'
 
 .PHONY: build-all
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
