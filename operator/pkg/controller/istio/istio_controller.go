@@ -27,6 +27,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,7 +40,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
-	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
@@ -104,8 +104,9 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		return fmt.Errorf("istio-controller failed to watch ClusterInformation resource: %w", err)
 	}
 
-	if err = utils.AddSecretsWatch(c, istio.OperatorCASecretName, common.OperatorNamespace()); err != nil {
-		return fmt.Errorf("istio-controller failed to watch Secret %s/%s: %w", common.OperatorNamespace(), istio.OperatorCASecretName, err)
+	// The CA and trust anchor Secrets the Istio CR names, and the operator-managed CA.
+	if err = c.WatchObject(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.enqueueForReferencedSecret)); err != nil {
+		return fmt.Errorf("istio-controller failed to watch Secrets in the operator namespace: %w", err)
 	}
 	for _, name := range []string{istio.CACertsSecretName, istio.IstioSelfSignedCASecretName} {
 		if err = utils.AddSecretsWatch(c, name, istio.IstioNamespace); err != nil {
@@ -285,9 +286,9 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
-	trust, err := r.resolveTrust(ctx, installationSpec)
+	trust, err := r.resolveTrust(ctx, installationSpec, instance)
 	if err != nil {
-		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading the Istio certificate authority", err, reqLogger)
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading the Istio certificate authority and trust anchors", err, reqLogger)
 		return reconcile.Result{}, err
 	}
 	if trust.notice != "" {
@@ -298,18 +299,19 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 
 	// Render resources for Istio support
 	istioCfg := &istio.Configuration{
-		Installation:   installationSpec,
-		PullSecrets:    pullSecrets,
-		Istio:          instance,
-		IstioNamespace: istio.IstioNamespace,
-		Scheme:         r.scheme,
-		ClusterID:      clusterID,
-		Live:           live,
-		LocalCA:        trust.localCA,
-		CASource:       trust.source,
-		Transition:     trust.transition,
-		OwnRoots:       trust.ownRoots,
-		CurrentCACerts: trust.current,
+		Installation:    installationSpec,
+		PullSecrets:     pullSecrets,
+		Istio:           instance,
+		IstioNamespace:  istio.IstioNamespace,
+		Scheme:          r.scheme,
+		ClusterID:       clusterID,
+		Live:            live,
+		LocalCA:         trust.localCA,
+		CASource:        trust.source,
+		Transition:      trust.transition,
+		AdditionalRoots: trust.additional,
+		OwnRoots:        trust.ownRoots,
+		CurrentCACerts:  trust.current,
 	}
 	istioComponentCRDs, istioComponent, err := istio.Istio(istioCfg)
 	if err != nil {
@@ -388,11 +390,11 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 	// to see istiod roll, or for a phase deadline.
 	result := reconcile.Result{RequeueAfter: trust.requeueAfter}
 
-	// An unusable CA is not fatal: the rest rendered, and the watches reconcile
-	// again once the Secret is fixed.
+	// Invalid CA or trust anchor input is excluded, not fatal: the rest rendered,
+	// and the watches reconcile again once the named Secret or field is fixed.
 	if len(trust.problems) > 0 {
 		r.status.SetDegraded(operatorv1.ResourceValidationError,
-			"Istio certificate authority needs attention: "+strings.Join(trust.problems, "; "), nil, reqLogger)
+			"Istio certificate authority or trust anchors need attention: "+strings.Join(trust.problems, "; "), nil, reqLogger)
 		return result, nil
 	}
 
