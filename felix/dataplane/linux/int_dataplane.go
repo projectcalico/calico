@@ -22,7 +22,6 @@ import (
 	"os"
 	"reflect"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -165,6 +164,8 @@ type Config struct {
 	VXLANMTU             int
 	VXLANMTUV6           int
 	VXLANPort            int
+	VXLANSrcPortMin      int
+	VXLANSrcPortMax      int
 
 	MaxIPSetSize int
 
@@ -613,10 +614,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.WithError(err).Error("Failed to write MTU file, pod MTU may not be properly set")
 	}
 
-	featureDetector := environment.NewFeatureDetector(
-		config.FeatureDetectOverrides,
-		environment.WithFeatureGates(config.FeatureGates),
-	)
+	featureDetectorOpts := []environment.Option{environment.WithFeatureGates(config.FeatureGates)}
+	if config.BPFEnabled && (config.RulesConfig.VXLANEnabled || config.RulesConfig.VXLANEnabledV6) {
+		featureDetectorOpts = append(featureDetectorOpts, environment.WithVXLANVNIFilterProbe())
+	}
+	featureDetector := environment.NewFeatureDetector(config.FeatureDetectOverrides, featureDetectorOpts...)
 
 	// Determine the action set and new match function based on the underlying generictables implementation.
 	actionSet := iptables.Actions()
@@ -894,6 +896,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	dataplaneFeatures := featureDetector.GetFeatures()
 
+	var bpfVXLANOpts []vxlanMgrOption
+	if config.BPFEnabled && dataplaneFeatures.VXLANVNIFilter {
+		bpfVXLANOpts = append(bpfVXLANOpts, vxlanMgrWithVNIFilter(bpfOverlayTunnelID(&config.RulesConfig)))
+	}
+
 	if config.RulesConfig.VXLANEnabled {
 		var fdbOpts []vxlanfdb.Option
 		if config.BPFEnabled {
@@ -911,6 +918,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.VXLANMTU,
 			config,
 			dp.loopSummarizer,
+			bpfVXLANOpts...,
 		)
 		dp.vxlanParentIfaceC = make(chan string, 1)
 		vxlanMTU := config.VXLANMTU
@@ -1049,17 +1057,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfMapSizeConntrack = config.BPFMapSizePerCPUConntrack * bpfmaps.NumPossibleCPUs()
 	}
 
-	bpfMapSizeConntrackResizeSize, _ := conntrackMapSizeFromFile()
-	if bpfMapSizeConntrackResizeSize > bpfMapSizeConntrack {
-		log.Infof("Overriding bpfMapSizeConntrack (%d) with map size growth (%d)",
-			bpfMapSizeConntrack, bpfMapSizeConntrackResizeSize)
-		bpfMapSizeConntrack = bpfMapSizeConntrackResizeSize
-	}
-
 	bpfipsets.SetMapSize(config.BPFMapSizeIPSets)
 	bpfnat.SetMapSizes(config.BPFMapSizeNATFrontend, config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity, config.BPFMapSizeMaglev)
 	bpfroutes.SetMapSize(config.BPFMapSizeRoute)
-	bpfconntrack.SetMapSize(bpfMapSizeConntrack)
+	ctMapSizeV4, ctMapSizeV6 := bpfMapSizeConntrack, bpfMapSizeConntrack
+	if config.BPFEnabled {
+		ctMapSizeV4, ctMapSizeV6 = conntrackMapSizes(bpfMapSizeConntrack)
+	}
+	bpfconntrack.SetMapSize(ctMapSizeV4)
+	bpfconntrack.SetMapSizeV6(ctMapSizeV6)
 	bpfconntrack.SetCleanupMapSize(config.BPFMapSizeConntrackCleanupQueue)
 	bpfifstate.SetMapSize(config.BPFMapSizeIfState)
 	ringBufSize := calcRingBufSize(config.BPFExportBufferSizeMB)
@@ -1235,6 +1241,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				conntrackInfoReaderV4 := bpfconntrack.NewInfoReader(
 					config.BPFConntrackTimeouts,
 					config.BPFNodePortDSREnabled,
+					4,
 					nil,
 					collectorCtInfoReader,
 				)
@@ -1244,6 +1251,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				conntrackInfoReaderV6 := bpfconntrack.NewInfoReader(
 					config.BPFConntrackTimeouts,
 					config.BPFNodePortDSREnabled,
+					6,
 					nil,
 					collectorCtInfoReader,
 				)
@@ -1507,6 +1515,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			if config.BPFEnabled {
 				// BPF mode uses the same device for both V4 and V6
 				vxlanName = dataplanedefs.VXLANIfaceNameV4
+				vxlanMgrOps = append(vxlanMgrOps, bpfVXLANOpts...)
 				if dp.vxlanManager != nil {
 					vxlanMgrOps = append(vxlanMgrOps, vxlanMgrWithDualStack())
 				}
@@ -3218,7 +3227,7 @@ func startBPFDataplaneComponents(
 	bpfRTMgr := newBPFRouteManager(config, maps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
-	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled,
+	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled, int(ipFamily),
 		bpfconntrack.WithLinuxConntrack(bpfconntrack.LinuxHoldsTCPFlow))
 	ctLogLevel := bpfconntrack.BPFLogLevelNone
 	// The debug cleanup program references bpf_trace_printk; skip it under
@@ -3265,26 +3274,46 @@ func startBPFDataplaneComponents(
 
 		bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
 		bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
-		conntrackScanner.AddUnlocked(bpfconntrack.NewStaleNATScanner(kp))
+		conntrackScanner.AddUnlocked(bpfconntrack.NewStaleNATScanner(kp, int(ipFamily)))
 	} else {
 		log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 	}
 	return conntrackScanner, workloadRemoveChan
 }
 
-func conntrackMapSizeFromFile() (int, error) {
-	filename := "/var/lib/calico/bpf_ct_map_size"
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// File doesn't exist, return zero.
-			log.Infof("File %s does not exist", filename)
-			return 0, nil
+// conntrackMapSizes returns the IPv4 and IPv6 conntrack map sizes: the
+// configured size, or the size the map grew to if larger.
+func conntrackMapSizes(configured int) (int, int) {
+	grownV4, grownV6 := bpfconntrack.GrownMapSizes(pinnedConntrackMapSize)
+	pick := func(grown, ipVersion int) int {
+		if grown > configured {
+			log.Infof("Using IPv%d conntrack map size %d recorded by BPFMapSizeConntrackScaling instead of the configured %d",
+				ipVersion, grown, configured)
+			return grown
 		}
-		log.WithError(err).Errorf("Failed to read %s", filename)
-		return 0, err
+		return configured
 	}
-	return strconv.Atoi(strings.TrimSpace(string(data)))
+	return pick(grownV4, 4), pick(grownV6, 6)
+}
+
+// pinnedConntrackMapSize returns the size of the conntrack map left pinned by
+// the previous Felix, 0 if there is none.
+func pinnedConntrackMapSize(ipVersion int) int {
+	params := bpfconntrack.MapParams
+	if ipVersion == 6 {
+		params = bpfconntrack.MapParamsV6
+	}
+	fd, err := bpfmaps.GetMapFDByPin(params.VersionedFilename())
+	if err != nil {
+		return 0
+	}
+	defer fd.Close()
+	info, err := bpfmaps.GetMapInfo(fd)
+	if err != nil {
+		log.WithError(err).Warn("Failed to read the size of the existing conntrack map.")
+		return 0
+	}
+	return info.MaxEntries
 }
 
 // calcRingBufSize computes the ring buffer size in bytes. It scales

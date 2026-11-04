@@ -166,23 +166,40 @@ func newBucketInterval(b *AggregationBucket) bucketInterval {
 	return bucketInterval{bucket: b, start: b.StartTime}
 }
 
-// Iter yields the bucket's flows if it still covers the queued interval, and nothing once the
-// ring has reset it for a later one. Reset always moves StartTime forward, so a matching start
-// means the contents are the ones that were queued.
-func (i bucketInterval) Iter(fn func(FlowBuilder) bool) {
+// Iter calls fn with a builder for each flow in the queued interval that matches filter, stopping
+// when fn returns true. A nil filter matches every flow. Matching and fn both run without the
+// bucket lock, so neither a slow consumer nor the match pass blocks AddFlow.
+func (i bucketInterval) Iter(filter *proto.Filter, fn func(FlowBuilder) bool) {
+	flows, start, end := i.snapshot()
+	for _, d := range flows {
+		// The key is immutable, so matching it needs no lock.
+		if !types.Matches(filter, &d.Key) {
+			continue
+		}
+		if fn(NewDeferredFlowBuilder(d, start, end)) {
+			return
+		}
+	}
+}
+
+// snapshot copies the bucket's flows and time range under the read lock, or returns nothing once
+// the ring has reset the bucket for a later interval. Reset always moves StartTime forward, so a
+// matching start means the contents are the ones that were queued.
+func (i bucketInterval) snapshot() ([]*DiachronicFlow, int64, int64) {
 	b := i.bucket
 	b.RLock()
 	defer b.RUnlock()
 
 	if b.StartTime != i.start {
 		logrus.WithFields(b.Fields()).WithField("queued_start", i.start).Info("Skipping bucket that has since been reused")
-		return
+		return nil, 0, 0
 	}
+
+	flows := make([]*DiachronicFlow, 0, b.Flows.Len())
 	for d := range b.Flows.All() {
-		if fn(NewDeferredFlowBuilder(d, b.StartTime, b.EndTime)) {
-			break
-		}
+		flows = append(flows, d)
 	}
+	return flows, b.StartTime, b.EndTime
 }
 
 func (b *AggregationBucket) QueryStatistics(q *proto.StatisticsRequest) map[StatisticsKey]*counts {

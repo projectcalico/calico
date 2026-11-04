@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -71,13 +72,19 @@ func (s *stream) run() {
 	// write to a closed channel.
 	defer close(s.out)
 
+	// An empty filter matches every flow, so drop it once here to skip per-flow matching.
+	filter := s.Req.GetFilter()
+	if googleproto.Size(filter) == 0 {
+		filter = nil
+	}
+
 	for {
 		select {
 		case <-s.ctx.Done():
 			logrus.WithField("id", s.id).Debug("Stream context done")
 			return
 		case b := <-s.in:
-			b.Iter(func(f storage.FlowBuilder) bool {
+			b.Iter(filter, func(f storage.FlowBuilder) bool {
 				if err := chanutil.WriteWithDeadline(s.ctx, s.out, f, 60*time.Second); err != nil {
 					// If we hit an error, indicate that we should stop iteration.
 					s.rl.WithFields(logrus.Fields{"id": s.id}).WithError(err).Debug("Error writing flow to stream output")

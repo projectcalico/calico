@@ -97,6 +97,11 @@ var _ = DescribeTable("GetInterfaces",
 			return []net.Interface{{Index: 0, Name: "br-1234deadbeaf"}}, nil
 		},
 	}),
+	Entry("should skip vx-submariner", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "vx-submariner"}, {Index: 1, Name: "vx-submariner-6"}}, nil
+		},
+	}),
 )
 
 var _ = Describe("getAllInterfaceAddrs", func() {

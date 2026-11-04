@@ -45,7 +45,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 		Expect(mockTime.KTimeNanos()).To(BeNumerically("==", cttestdata.Now))
 		ctMap = mock.NewMockMap(conntrack.MapParams)
 		ctCleanupMap = mock.NewMockMap(conntrack.MapParamsCleanup)
-		lc = conntrack.NewLivenessScanner(timeouts.DefaultTimeouts(), false, conntrack.WithTimeShim(mockTime))
+		lc = conntrack.NewLivenessScanner(timeouts.DefaultTimeouts(), false, 4, conntrack.WithTimeShim(mockTime))
 		scanner = conntrack.NewScanner(ctMap, conntrack.KeyFromBytes, conntrack.ValueFromBytes, nil, "Disabled",
 			ctCleanupMap, 4, mock.NewMockBPFCleaner(ctMap, ctCleanupMap), lc)
 	})
@@ -208,8 +208,7 @@ var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 					Expect(bPort).To(Equal(backendPort))
 					return false
 				},
-			},
-			)
+			}, 4)
 
 			var get conntrack.EntryGet
 			if len(getFn) == 1 {

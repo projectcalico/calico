@@ -52,7 +52,7 @@ globalEpilogue: |
   fi
 
 defaults:
-  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.3
+  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
   jobSize: medium
   requests: {cpu: 1500m, memory: 2Gi}
   timeout: 1h
@@ -104,7 +104,6 @@ includes:
   - path: .argoci/modules/20-gateway-conformance.yaml
   - path: .argoci/modules/20-felix.yaml
   - path: .argoci/modules/40-openstack.yaml
-  - path: .argoci/modules/20-e2e-gcp.yaml
   - path: .argoci/modules/20-kube-controllers.yaml
   - path: .argoci/modules/20-typha.yaml
   - path: .argoci/modules/20-cni-plugin.yaml

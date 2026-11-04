@@ -72,7 +72,7 @@ var _ = Describe("Node rendering tests", func() {
 			var typhaNodeTLS *render.TyphaNodeTLS
 			var k8sServiceEp k8sapi.ServiceEndpoint
 			one := intstr.FromInt(1)
-			defaultNumExpectedResources := 8
+			defaultNumExpectedResources := 10
 			const defaultClusterDomain = "svc.cluster.local"
 			var defaultMode int32 = 420
 			var cfg render.NodeConfiguration
@@ -172,6 +172,18 @@ var _ = Describe("Node rendering tests", func() {
 				}))
 			})
 
+			It("should remove the AWS VPC CNI's annotation grant when told to", func() {
+				cfg.OmitAWSVPCAnnotationsGrant = true
+				component := render.Node(&cfg)
+				Expect(component.ResolveImages(nil)).To(BeNil())
+				resources, toDelete := component.Objects()
+
+				for _, kind := range []string{"ClusterRole", "ClusterRoleBinding"} {
+					Expect(rtest.GetResource(resources, "calico-aws-vpc-annotations", "", "rbac.authorization.k8s.io", "v1", kind)).To(BeNil(), kind)
+					Expect(rtest.GetResource(toDelete, "calico-aws-vpc-annotations", "", "rbac.authorization.k8s.io", "v1", kind)).NotTo(BeNil(), kind)
+				}
+			})
+
 			It("should render all resources for a default configuration", func() {
 				expectedResources := []struct {
 					name    string
@@ -186,6 +198,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -218,6 +232,19 @@ var _ = Describe("Node rendering tests", func() {
 					Resources: []string{"cniannotations"},
 					Verbs:     []string{"write"},
 				}))
+
+				// The permission protect-cni-annotations.projectcalico.org checks for on the AWS VPC CNI's
+				// pod IP annotation, granted to the account AWS runs the CNI under.
+				awsRole := rtest.GetResource(resources, "calico-aws-vpc-annotations", "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
+				Expect(awsRole.Rules).To(ConsistOf(rbacv1.PolicyRule{
+					APIGroups: []string{"projectcalico.org"},
+					Resources: []string{"awsvpcannotations"},
+					Verbs:     []string{"write"},
+				}))
+				awsBinding := rtest.GetResource(resources, "calico-aws-vpc-annotations", "", "rbac.authorization.k8s.io", "v1", "ClusterRoleBinding").(*rbacv1.ClusterRoleBinding)
+				Expect(awsBinding.RoleRef.Name).To(Equal("calico-aws-vpc-annotations"))
+				Expect(awsBinding.Subjects).To(ConsistOf(rbacv1.Subject{Kind: "ServiceAccount", Name: "aws-node", Namespace: "kube-system"}))
+
 				// calico-node never writes these annotations, so its role must not carry it.
 				nodeRole := rtest.GetResource(resources, "calico-node", "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
 				for _, rule := range nodeRole.Rules {
@@ -304,6 +331,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "DATASTORE_TYPE", Value: "kubernetes"},
 					{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 					{Name: "CALICO_MANAGE_CNI", Value: "true"},
+					{Name: "CALICO_IPAM_TYPE", Value: "Calico"},
 					{Name: "CALICO_NETWORKING_BACKEND", Value: "bird"},
 					{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 					{Name: "CLUSTER_TYPE", Value: "k8s,operator,bgp"},
@@ -411,6 +439,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -498,6 +528,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 					{Name: "CALICO_NETWORKING_BACKEND", Value: "bird"},
 					{Name: "CALICO_MANAGE_CNI", Value: "true"},
+					{Name: "CALICO_IPAM_TYPE", Value: "Calico"},
 					{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 					{Name: "CLUSTER_TYPE", Value: "k8s,operator,bgp"},
 					{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
@@ -708,6 +739,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -789,6 +822,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "DATASTORE_TYPE", Value: "kubernetes"},
 					{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 					{Name: "CALICO_MANAGE_CNI", Value: "true"},
+					{Name: "CALICO_IPAM_TYPE", Value: "Calico"},
 					{Name: "CALICO_NETWORKING_BACKEND", Value: "vxlan"},
 					{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 					{Name: "CLUSTER_TYPE", Value: "k8s,operator,ecs"},
@@ -1080,6 +1114,7 @@ var _ = Describe("Node rendering tests", func() {
 						corev1.EnvVar{Name: "CALICO_NETWORKING_BACKEND", Value: "none"},
 						corev1.EnvVar{Name: "NO_DEFAULT_POOLS", Value: "true"},
 						corev1.EnvVar{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
+						corev1.EnvVar{Name: "CALICO_IPAM_TYPE", Value: string(ipam)},
 					)
 					for _, expected := range expectedEnvs {
 						Expect(ds.Spec.Template.Spec.Containers[0].Env).To(ContainElement(expected))
@@ -1115,6 +1150,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -1197,6 +1234,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "DATASTORE_TYPE", Value: "kubernetes"},
 					{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 					{Name: "CALICO_MANAGE_CNI", Value: "true"},
+					{Name: "CALICO_IPAM_TYPE", Value: "Calico"},
 					{Name: "CALICO_NETWORKING_BACKEND", Value: "vxlan"},
 					{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 					{Name: "CLUSTER_TYPE", Value: "k8s,operator,ecs"},
@@ -1438,6 +1476,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -1522,6 +1562,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "DATASTORE_TYPE", Value: "kubernetes"},
 					{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 					{Name: "CALICO_MANAGE_CNI", Value: "true"},
+					{Name: "CALICO_IPAM_TYPE", Value: "Calico"},
 					{Name: "CALICO_NETWORKING_BACKEND", Value: "bird"},
 					{Name: "CLUSTER_TYPE", Value: "k8s,operator,openshift,bgp"},
 					{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
@@ -1569,6 +1610,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: render.BirdTemplatesConfigMapName, ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
@@ -1975,6 +2018,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -2584,6 +2629,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}
@@ -2670,6 +2717,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "WAIT_FOR_DATASTORE", Value: "true"},
 					{Name: "CALICO_NETWORKING_BACKEND", Value: "none"},
 					{Name: "CALICO_MANAGE_CNI", Value: "true"},
+					{Name: "CALICO_IPAM_TYPE", Value: "HostLocal"},
 					{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 					{Name: "CLUSTER_TYPE", Value: "k8s,operator"},
 					{Name: "USE_POD_CIDR", Value: "true"},
@@ -2819,6 +2867,8 @@ var _ = Describe("Node rendering tests", func() {
 					{name: "calico-cni-plugin", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
 					{name: "calico-cni-plugin", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
+					{name: "calico-aws-vpc-annotations", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 					{name: "cni-config", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
 					{name: common.NodeDaemonSetName, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "DaemonSet"},
 				}

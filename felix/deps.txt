@@ -123,7 +123,7 @@ github.com/spf13/pflag v1.0.10
 github.com/spf13/viper v1.21.0
 github.com/subosito/gotenv v1.6.0
 github.com/tchap/go-patricia/v2 v2.3.3
-github.com/vishvananda/netlink v1.3.1
+github.com/vishvananda/netlink v1.3.2-0.20260206161744-ab2b1904dc37
 github.com/vishvananda/netns v0.0.5
 github.com/x448/float16 v0.8.4
 github.com/zeebo/xxh3 v1.1.0
@@ -238,6 +238,7 @@ local:felix/bpf/xdp
 local:felix/cachingmap
 local:felix/calc
 local:felix/cmd/calico-bpf
+local:felix/cmd/calico-bpf-policy-check
 local:felix/cmd/calico-bpf/commands
 local:felix/cmd/calico-felix
 local:felix/cmd/calico-felix-docgen
@@ -325,6 +326,7 @@ local:goldmane/proto
 local:lib/datastructures/hashring
 local:lib/logrusr
 local:lib/std/chanutil
+local:lib/std/intervals
 local:lib/std/log
 local:lib/std/time
 local:lib/std/uniquelabels

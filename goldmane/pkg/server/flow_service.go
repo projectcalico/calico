@@ -65,7 +65,8 @@ func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_St
 			if !ok {
 				return status.Error(codes.Aborted, "stream closed after falling too far behind")
 			}
-			if flow.BuildInto(req.Filter, result) {
+			// The stream applied req.Filter before sending, so don't match each flow a second time.
+			if flow.BuildInto(nil, result) {
 				if err := server.Send(result); err != nil {
 					return err
 				}

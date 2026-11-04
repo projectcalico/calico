@@ -31,22 +31,22 @@ import (
 )
 
 var (
-	conntrackGaugeExpired = prometheus.NewGauge(prometheus.GaugeOpts{
+	conntrackGaugeExpired = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_expired",
 		Help: "Number of entries cleaned during a conntrack table sweep due to expiration",
-	})
+	}, []string{"ip_version"})
 	conntrackCountersExpired = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "felix_bpf_conntrack_expired_total",
 		Help: "Total number of entries cleaned during conntrack table sweep due to expiration - by reason",
-	}, []string{"reason"})
-	conntrackGaugeStaleNAT = prometheus.NewGauge(prometheus.GaugeOpts{
+	}, []string{"reason", "ip_version"})
+	conntrackGaugeStaleNAT = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_stale_nat",
 		Help: "Number of entries cleaned during a conntrack table sweep due to stale NAT",
-	})
-	conntrackCounterStaleNAT = prometheus.NewCounter(prometheus.CounterOpts{
+	}, []string{"ip_version"})
+	conntrackCounterStaleNAT = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "felix_bpf_conntrack_stale_nat_total",
 		Help: "Total number of entries cleaned during conntrack table sweeps due to stale NAT",
-	})
+	}, []string{"ip_version"})
 )
 
 func init() {
@@ -139,6 +139,8 @@ type LivenessScanner struct {
 	cachedKTime int64
 	cleaned     int
 
+	ipFamily       string
+	expiredGauge   prometheus.Gauge
 	reasonCounters map[string]prometheus.Counter
 
 	// linuxHolds, when set, keeps an RST'd connlimit entry whose flow Linux
@@ -147,11 +149,14 @@ type LivenessScanner struct {
 	linuxErrLogged bool
 }
 
-func NewLivenessScanner(timeouts timeouts.Timeouts, dsr bool, opts ...LivenessScannerOpt) *LivenessScanner {
+func NewLivenessScanner(timeouts timeouts.Timeouts, dsr bool, ipFamily int, opts ...LivenessScannerOpt) *LivenessScanner {
+	family := ipFamilyLabel(ipFamily)
 	ls := &LivenessScanner{
 		timeouts:       timeouts,
 		dsr:            dsr,
 		time:           timeshim.RealTime(),
+		ipFamily:       family,
+		expiredGauge:   conntrackGaugeExpired.WithLabelValues(family),
 		reasonCounters: make(map[string]prometheus.Counter),
 	}
 	for _, opt := range opts {
@@ -180,7 +185,7 @@ func (l *LivenessScanner) reasonCounterInc(reason string) {
 	c, ok := l.reasonCounters[reason]
 	if !ok {
 		var err error
-		c, err = conntrackCountersExpired.GetMetricWithLabelValues(reason)
+		c, err = conntrackCountersExpired.GetMetricWithLabelValues(reason, l.ipFamily)
 		if err != nil {
 			log.WithError(err).Panicf("Failed to get conntrackCountersExpired counter for reason%q", reason)
 		}
@@ -219,6 +224,15 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 			}).WithError(err).Warn("Failed to look up reverse conntrack entry.")
 
 			return ScanVerdictOK, lastSeen
+		}
+		if revEntry.Type() != TypeNATReverse || !fwdMatchesRev(ctKey, revEntry) {
+			// Another flow now owns the reverse key. Returning our own lastSeen
+			// deletes only this entry, not that flow's.
+			l.reasonCounterInc("no reverse for forward")
+			if debug {
+				log.WithField("k", ctKey).Debug("Deleting forward NAT conntrack entry whose reverse key belongs to another flow.")
+			}
+			return ScanVerdictDelete, lastSeen
 		}
 		if reason, expired := l.expired(now, ctVal.ReverseNATKey(), revEntry); expired {
 			if debug {
@@ -264,6 +278,22 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 	return ScanVerdictOK, lastSeen
 }
 
+// fwdMatchesRev reports whether fwdKey is rev's original client and service. Keep in sync with ct_fwd_matches_rev.
+func fwdMatchesRev(fwdKey KeyInterface, rev ValueInterface) bool {
+	origIP, origPort := rev.OrigIP(), rev.OrigPort()
+	clientMatches := func(ip net.IP, port uint16) bool {
+		return (rev.OrigSrcIP().IsUnspecified() || ip.Equal(rev.OrigSrcIP())) &&
+			(rev.OrigSPort() == 0 || port == 0 || port == rev.OrigSPort())
+	}
+	if fwdKey.AddrA().Equal(origIP) && fwdKey.PortA() == origPort {
+		return clientMatches(fwdKey.AddrB(), fwdKey.PortB())
+	}
+	if fwdKey.AddrB().Equal(origIP) && fwdKey.PortB() == origPort {
+		return clientMatches(fwdKey.AddrA(), fwdKey.PortA())
+	}
+	return false
+}
+
 // expired is EntryExpired, except that an RST reap of a connlimit entry waits
 // while Linux conntrack carries its flow.
 func (l *LivenessScanner) expired(now int64, k KeyInterface, v ValueInterface) (string, bool) {
@@ -297,7 +327,7 @@ func (l *LivenessScanner) IterationStart() {
 
 // IterationEnd satisfies EntryScannerSynced
 func (l *LivenessScanner) IterationEnd() {
-	conntrackGaugeExpired.Set(float64(l.cleaned))
+	l.expiredGauge.Set(float64(l.cleaned))
 	l.cleaned = 0
 }
 
@@ -313,14 +343,20 @@ type NATChecker interface {
 type StaleNATScanner struct {
 	natChecker NATChecker
 	cleaned    int
+
+	staleNATGauge   prometheus.Gauge
+	staleNATCounter prometheus.Counter
 }
 
 // NewStaleNATScanner returns an EntryScanner that checks if entries have
 // existing NAT entries using the provided NATChecker and if not, it deletes
 // them.
-func NewStaleNATScanner(frontendHasBackend NATChecker) *StaleNATScanner {
+func NewStaleNATScanner(frontendHasBackend NATChecker, ipFamily int) *StaleNATScanner {
+	family := ipFamilyLabel(ipFamily)
 	return &StaleNATScanner{
-		natChecker: frontendHasBackend,
+		natChecker:      frontendHasBackend,
+		staleNATGauge:   conntrackGaugeStaleNAT.WithLabelValues(family),
+		staleNATCounter: conntrackCounterStaleNAT.WithLabelValues(family),
 	}
 }
 
@@ -389,7 +425,7 @@ again:
 				log.WithField("key", k).Debugf("TypeNATReverse is stale")
 			}
 			sns.cleaned++
-			conntrackCounterStaleNAT.Inc()
+			sns.staleNATCounter.Inc()
 			return ScanVerdictDeleteImmediate, lastSeen
 		}
 		if debug {
@@ -524,7 +560,7 @@ again:
 				log.WithField("key", k).Debugf("TypeNATForward is stale")
 			}
 			sns.cleaned++
-			conntrackCounterStaleNAT.Inc()
+			sns.staleNATCounter.Inc()
 			return ScanVerdictDeleteImmediate, lastSeen
 		}
 		if debug {
@@ -559,7 +595,7 @@ func (sns *StaleNATScanner) IterationStart() {
 // IterationEnd satisfies EntryScannerSynced
 func (sns *StaleNATScanner) IterationEnd() {
 	sns.natChecker.ConntrackScanEnd()
-	conntrackGaugeStaleNAT.Set(float64(sns.cleaned))
+	sns.staleNATGauge.Set(float64(sns.cleaned))
 	sns.cleaned = 0
 }
 

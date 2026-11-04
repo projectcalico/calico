@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/gpg"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -47,13 +48,15 @@ type Repo struct {
 	Config RepoConfig
 	// PublishingURL is the full URL to the root of the published repository, e.g. https://host.com/ubuntu
 	PublishingURL string
+
+	runner command.CommandRunner
 }
 
 //go:embed templates/reprepro-conf.gotmpl
 var repoDistributionsTemplate string
 
 // NewRepo creates a new Repo instance with the appropriate fields populated
-func NewRepo(tempDir, outputDir string, repoConfig RepoConfig, url string) (*Repo, error) {
+func NewRepo(tempDir, outputDir string, repoConfig RepoConfig, url string, runner command.CommandRunner) (*Repo, error) {
 	if outputDir == "" {
 		outputDir = filepath.Join(tempDir, "_apt_output_dir")
 	}
@@ -63,6 +66,7 @@ func NewRepo(tempDir, outputDir string, repoConfig RepoConfig, url string) (*Rep
 		OutputDirectory: outputDir,
 		Config:          repoConfig,
 		PublishingURL:   url,
+		runner:          runner,
 	}
 	return &repo, nil
 }
@@ -101,7 +105,7 @@ func (repo *Repo) execWithOutput(args ...string) (string, error) {
 	}
 	cmdArgs = append(cmdArgs, args...)
 	logrus.Debugf("running reprepro command %s", strings.Join(cmdArgs, " "))
-	out, err := command.Run("reprepro", cmdArgs)
+	out, err := repo.runner.Run("reprepro", cmdArgs, nil)
 	if err != nil {
 		logrus.Error(out)
 		return "", fmt.Errorf("running 'reprepro %s': %w", strings.Join(args, " "), err)
@@ -201,7 +205,7 @@ func (repo *Repo) IncludeDeb(component, debFile string) error {
 // RecursiveAddDebsFromDirectories takes a list of paths to search and finds all debian packages
 // under those paths, gets their suite/component name, and adds them to the repo
 func (repo *Repo) RecursiveAddDebsFromDirectories(searchPaths []string) error {
-	debsBySuite, err := getRecursiveDebsBySuite(searchPaths)
+	debsBySuite, err := getRecursiveDebsBySuite(repo.runner, searchPaths)
 	if err != nil {
 		return fmt.Errorf("could not scan for debian packages: %w", err)
 	}
@@ -226,7 +230,7 @@ func (repo *Repo) WriteSourcesFile(codename string) error {
 	if !slices.Contains(repo.Config.Components, codename) {
 		return fmt.Errorf("specified codename %s does not exist in defined codenames (%s)", codename, strings.Join(repo.Config.Components, ", "))
 	}
-	gpgPubKey, err := utils.GetGPGPubKey(repo.Config.GPGKeyID)
+	gpgPubKey, err := gpg.PubKey(repo.runner, repo.Config.GPGKeyID)
 	if err != nil {
 		return fmt.Errorf("could not fetch GPG key %s: %w", repo.Config.GPGKeyID, err)
 	}
