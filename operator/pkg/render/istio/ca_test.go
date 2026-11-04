@@ -16,6 +16,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/operator/pkg/render/istio"
 )
@@ -118,6 +119,7 @@ var _ = Describe("Istio CA", func() {
 
 			Expect(ca.Chain).To(Equal([]*x509.Certificate{cert}))
 			Expect(ca.Roots).To(Equal([]*x509.Certificate{cert}))
+			Expect(ca.ExtraRoots).To(BeEmpty())
 
 			// A root CA is its own chain and its own trust anchor.
 			data := ca.SecretData()
@@ -137,6 +139,7 @@ var _ = Describe("Istio CA", func() {
 			Expect(loaded.KeyPEM).To(Equal(ca.KeyPEM))
 			Expect(loaded.Roots).To(HaveLen(1))
 			Expect(loaded.Roots[0].Raw).To(Equal(ca.Roots[0].Raw))
+			Expect(loaded.ExtraRoots).To(BeEmpty())
 		})
 	})
 
@@ -164,9 +167,23 @@ var _ = Describe("Istio CA", func() {
 			Expect(ca.Chain[1].Raw).To(Equal(root.cert.Raw))
 			Expect(ca.Roots).To(HaveLen(1))
 			Expect(ca.Roots[0].Raw).To(Equal(root.cert.Raw))
+			Expect(ca.ExtraRoots).To(BeEmpty())
 		})
 
-		It("takes as its roots only those the CA chains to", func() {
+		It("accepts the kubernetes.io/tls layout and derives the chain", func() {
+			ca, err := istio.LoadCA(map[string][]byte{
+				corev1.TLSCertKey:       intermediate.certPEM,
+				corev1.TLSPrivateKeyKey: intermediate.keyPEM,
+				"ca.crt":                root.certPEM,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ca.CertPEM).To(Equal(intermediate.certPEM))
+			Expect(istio.EncodeCertificates(ca.Chain...)).To(Equal(append(append([]byte{}, intermediate.certPEM...), root.certPEM...)))
+			Expect(ca.Roots).To(HaveLen(1))
+			Expect(ca.Roots[0].Raw).To(Equal(root.cert.Raw))
+		})
+
+		It("keeps roots the CA does not chain to as extra roots", func() {
 			ca, err := istio.LoadCA(map[string][]byte{
 				istio.CACertKey:   root.certPEM,
 				istio.CAKeyKey:    root.keyPEM,
@@ -175,6 +192,8 @@ var _ = Describe("Istio CA", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ca.Roots).To(HaveLen(1))
 			Expect(ca.Roots[0].Raw).To(Equal(root.cert.Raw))
+			Expect(ca.ExtraRoots).To(HaveLen(1))
+			Expect(ca.ExtraRoots[0].Raw).To(Equal(other.cert.Raw))
 		})
 
 		It("accepts a PKCS#8 private key", func() {
