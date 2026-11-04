@@ -113,7 +113,7 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 				c.cache.Add(flog, "")
 
 				// Unpack the minified flow into a full flow and send it.
-				types.FlowIntoProto(flog, upd.Flow)
+				types.FlowIntoProtoUncached(flog, upd.Flow)
 
 				// Send the flow.
 				if err := rc.Send(&upd); err != nil {
@@ -186,7 +186,7 @@ func (c *FlowClient) connect(ctx context.Context) (grpc.BidiStreamingClient[prot
 		upd := proto.FlowUpdate{Flow: proto.NewFlow()}
 		err = c.cache.Iter(func(f *types.Flow) error {
 			// Unpack the minified flow into a full flow and send it.
-			types.FlowIntoProto(f, upd.Flow)
+			types.FlowIntoProtoUncached(f, upd.Flow)
 			if err := rc.Send(&upd); err != nil {
 				logrus.WithError(err).Warn("Failed to send flow")
 				return err
