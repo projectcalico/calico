@@ -87,12 +87,8 @@ type BucketRing struct {
 	// dedupBuckets is how many buckets back from the head keep their dedup state.
 	dedupBuckets int
 
-	// visitEpoch numbers each uniqueFlows walk, so flows can be marked visited without a set.
-	visitEpoch uint64
-
-	// walking is set while a walk of the buckets is in progress. A nested walk would bump the
-	// epoch under the outer one, making it yield flows twice.
-	walking bool
+	// visits reads flows out of several buckets without yielding a flow twice.
+	visits flowVisits
 }
 
 func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *BucketRing {
@@ -465,10 +461,12 @@ func dedupWindowBuckets(interval, numBuckets int) int {
 	return numBuckets - 1
 }
 
-// FlowCandidates yields each flow in the range's buckets once, plus a size hint. If those buckets
-// hold twice as many entries as there are flows, it yields every flow, unfiltered by time. Don't
-// range over one of its sequences inside another, since the bucket walk panics if that happens.
-func (r *BucketRing) FlowCandidates(startGt, startLt int64) (iter.Seq[*DiachronicFlow], int) {
+// Flows yields every flow with data in [startGt, startLt) exactly once, plus a size hint. It may
+// also yield flows with none, so callers check each one. A flow sits in every bucket it has a
+// window in, so reading the range's buckets costs a step per flow per bucket, while reading the
+// ring's flow map costs a step per flow, including flows outside the range. Flows reads the map
+// once the buckets hold twice its entries.
+func (r *BucketRing) Flows(startGt, startLt int64) (iter.Seq[*DiachronicFlow], int) {
 	var inRange []*AggregationBucket
 	numEntries, largestBucketLen := 0, 0
 	for _, b := range r.buckets {
@@ -485,33 +483,7 @@ func (r *BucketRing) FlowCandidates(startGt, startLt int64) (iter.Seq[*Diachroni
 
 	// The largest bucket is a lower bound on the flows yielded, unlike the entry total, which counts
 	// a flow once per bucket.
-	return r.uniqueFlows(inRange), largestBucketLen
-}
-
-// uniqueFlows yields each flow in the buckets once. Only the main loop may call it, and walks
-// can't nest, because each one marks flows visited in the same field.
-func (r *BucketRing) uniqueFlows(buckets []*AggregationBucket) iter.Seq[*DiachronicFlow] {
-	return func(yield func(*DiachronicFlow) bool) {
-		if r.walking {
-			panic("BucketRing: a flow walk started while another was in progress")
-		}
-		r.walking = true
-		defer func() { r.walking = false }()
-
-		r.visitEpoch++
-		epoch := r.visitEpoch
-		for _, b := range buckets {
-			for d := range b.Flows.All() {
-				if d.visited == epoch {
-					continue
-				}
-				d.visited = epoch
-				if !yield(d) {
-					return
-				}
-			}
-		}
-	}
+	return r.visits.read(inRange), largestBucketLen
 }
 
 // BeginningOfHistory returns the start time of the oldest bucket in the ring.
