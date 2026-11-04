@@ -558,7 +558,7 @@ func (r *Reconciler) warnOnPoolsOutsidePlatformCIDRs(ctx context.Context, spec *
 	}
 	platformCIDRs, err := platformPodCIDRs(ctx, r.client, spec)
 	if err != nil {
-		// Once pools exist the platform config is optional, so a missing or malformed one mustn't block reconciling.
+		// The platform config is only needed to default pools, so a missing or malformed one mustn't block reconciling.
 		log.V(1).Info("Unable to check IP pools against the platform's pod network CIDRs", "error", err)
 		r.status.ClearWarning(poolsOutsidePlatformCIDRsWarning)
 		return

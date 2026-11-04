@@ -1109,6 +1109,34 @@ var _ = Describe("fillDefaults()", func() {
 		Expect(err.Error()).To(ContainSubstring("is invalid for ipPool.encapsulation, should be one of"))
 	})
 
+	It("should accept declared IP pools when the kubeadm config has no podSubnet", func() {
+		Expect(cli.Create(ctx, &v1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: kubeadmConfigMap, Namespace: metav1.NamespaceSystem},
+			Data:       map[string]string{"ClusterConfiguration": "serviceSubnet: 10.96.0.0/16"},
+		})).ToNot(HaveOccurred())
+		instance := &operator.Installation{
+			Spec: operator.InstallationSpec{
+				CalicoNetwork: &operator.CalicoNetworkSpec{IPPools: []operator.IPPool{{CIDR: "192.168.0.0/16"}}},
+			},
+		}
+		fillPrerequisiteDefaults(instance)
+
+		Expect(fillDefaults(ctx, cli, &instance.Spec, currentPools)).ToNot(HaveOccurred())
+		Expect(instance.Spec.CalicoNetwork.IPPools).To(HaveLen(1))
+		Expect(instance.Spec.CalicoNetwork.IPPools[0].CIDR).To(Equal("192.168.0.0/16"))
+	})
+
+	It("should still require a podSubnet to default IP pools from the kubeadm config", func() {
+		Expect(cli.Create(ctx, &v1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: kubeadmConfigMap, Namespace: metav1.NamespaceSystem},
+			Data:       map[string]string{"ClusterConfiguration": "serviceSubnet: 10.96.0.0/16"},
+		})).ToNot(HaveOccurred())
+		instance := &operator.Installation{}
+		fillPrerequisiteDefaults(instance)
+
+		Expect(fillDefaults(ctx, cli, &instance.Spec, currentPools)).To(MatchError(ContainSubstring("missing required podSubnet")))
+	})
+
 	It("should keep an IP pool outside the kubeadm podSubnet as specified", func() {
 		Expect(cli.Create(ctx, &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{Name: kubeadmConfigMap, Namespace: metav1.NamespaceSystem},

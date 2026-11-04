@@ -81,14 +81,17 @@ func fillDefaults(ctx context.Context, client client.Client, spec *operator.Inst
 	// pools, the caller has decided which ones to manage.
 	if currentPools == nil || len(currentPools.Items) == 0 {
 		if spec.CNI.Type == operator.PluginCalico {
-			platformCIDRs, err := platformPodCIDRs(ctx, client, spec)
-			if err != nil {
-				return err
-			}
 			if spec.CalicoNetwork == nil {
 				spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
 			}
-			mergePlatformPodCIDRs(spec, platformCIDRs)
+			// The platform's CIDRs only seed pools the Installation leaves unset, so declared pools don't need them.
+			if spec.CalicoNetwork.IPPools == nil {
+				platformCIDRs, err := platformPodCIDRs(ctx, client, spec)
+				if err != nil {
+					return err
+				}
+				mergePlatformPodCIDRs(spec, platformCIDRs)
+			}
 		}
 
 		// Only default the IP pools if Calico IPAM is being used, and there are no IP pools specified.
@@ -269,11 +272,8 @@ func platformPodCIDRs(ctx context.Context, c client.Client, spec *operator.Insta
 	return cidrs, nil
 }
 
-// mergePlatformPodCIDRs adds an IP pool for each platform CIDR when the Installation leaves its pools unset.
+// mergePlatformPodCIDRs adds an IP pool for each platform CIDR.
 func mergePlatformPodCIDRs(spec *operator.InstallationSpec, platformCIDRs []string) {
-	if spec.CalicoNetwork.IPPools != nil {
-		return
-	}
 	v4found := false
 	v6found := false
 	for _, c := range platformCIDRs {
