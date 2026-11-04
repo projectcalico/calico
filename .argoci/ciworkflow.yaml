@@ -9,6 +9,12 @@ generateName: calico-
 # Catches a hang outside any step's own timeout.
 timeout: 4h
 
+# TEMPORARY: sizes the volume-cache test's disks. Persistent disk throughput
+# scales with size, so this buys bandwidth rather than space.
+cache:
+  size: 200Gi
+  storageClass: premium-rwo
+
 notifications:
   slack:
     channel: ci-notifications-os
