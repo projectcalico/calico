@@ -7,39 +7,6 @@ defaults:
   timeout: 1h
 
 steps:
-  # TEMPORARY: restores the calico Go caches from GCS once and hands them to
-  # felix-static-checks and node-static-checks over the volume cache, to compare
-  # against each step restoring its own from GCS.
-  - name: go-cache-seed
-    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
-    override:
-      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
-      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
-    jobSize: large
-    requests: {cpu: 14000m, memory: 4Gi}
-    # The build image has pigz; zstd is installed for the reader on ci-base.
-    useGoBuild: true
-    workspaceVolumes: none
-    env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-    cache:
-      - {name: go, mode: write}
-    commands: |
-      dnf install -y -q zstd
-      du -sh .go-pkg-cache "$GO_MOD_ROOT/pkg/mod"
-      s=$(date +%s)
-      tar -cf - .go-pkg-cache | pigz -1 > /cache/go-build.tar.gz &
-      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | pigz -1 > /cache/go-mod.tar.gz &
-      wait
-      echo "CACHE-TEST go-cache-seed compress-pigz $(( $(date +%s) - s ))s"
-      s=$(date +%s)
-      tar -cf - .go-pkg-cache | zstd -T0 -1 -q -c > /cache/go-build.tar.zst &
-      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | zstd -T0 -1 -q -c > /cache/go-mod.tar.zst &
-      wait
-      echo "CACHE-TEST go-cache-seed compress-zstd $(( $(date +%s) - s ))s"
-      ls -l /cache
-
   - name: check-yaml
     jobSize: medium
     requests: {cpu: 3500m, memory: 1Gi}
@@ -62,11 +29,12 @@ steps:
     override:
       nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
       tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    # TEMPORARY: builds the Go caches from cold instead of restoring them from GCS,
+    # and hands them to felix-static-checks and node-static-checks over the volume
+    # cache.
+    cache:
+      - {name: go, mode: write}
     env:
-      - name: BUILD_CACHE_GROUP
-        value: preflight-go-checks
-      - name: STORE_BUILD_CACHE
-        value: "true"
       # Runs the Makefiles' go-build recipes here rather than in a nested container.
       - name: NATIVE_GO_BUILD
         value: "true"
@@ -104,6 +72,20 @@ steps:
       # A cron or tag has no range to diff against, so it reformats everything.
       if [ "${CI_GIT_REF_TYPE}" = PR ] || [ "${CI_GIT_REF_TYPE}" = MERGE ]; then make fix-changed; else make fix-all; fi
       make check-dirty
+      # TEMPORARY: writes this commit's Go caches for the volume-cache readers.
+      dnf install -y -q zstd
+      du -sh .go-pkg-cache "$GO_MOD_ROOT/pkg/mod"
+      s=$(date +%s)
+      tar -cf - .go-pkg-cache | pigz -1 > /cache/go-build.tar.gz &
+      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | pigz -1 > /cache/go-mod.tar.gz &
+      wait
+      echo "CACHE-TEST check-go compress-pigz $(( $(date +%s) - s ))s"
+      s=$(date +%s)
+      tar -cf - .go-pkg-cache | zstd -T0 -1 -q -c > /cache/go-build.tar.zst &
+      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | zstd -T0 -1 -q -c > /cache/go-mod.tar.zst &
+      wait
+      echo "CACHE-TEST check-go compress-zstd $(( $(date +%s) - s ))s"
+      ls -l /cache
 
   - name: check-python
     jobSize: small
