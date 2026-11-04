@@ -491,3 +491,48 @@ var _ = Describe("qualifyPools with unnamed pools", func() {
 		Expect(collectCIDRs(q.releasable())).To(Equal([]string{v4Pool1}))
 	})
 })
+
+// keepCase is one row of the release-time keepsBlock table, for a node labeled foo=bar and an empty block.
+type keepCase struct {
+	pools []testPool
+	block string
+	kept  bool
+}
+
+var _ = DescribeTable("nodePools keepsBlock",
+	func(tc keepCase) {
+		node := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
+		kept, err := nodePools(node, buildPools(tc.pools)).keepsBlock(cnet.MustParseNetwork(tc.block))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kept).To(Equal(tc.kept))
+	},
+	Entry("releases a block whose only covering pool skips the node", keepCase{
+		pools: []testPool{{cidr: "10.0.0.0/24", nodeSelector: `foo != "bar"`}},
+		block: "10.0.0.0/26",
+	}),
+	Entry("keeps a block whose covering pool selects the node", keepCase{
+		pools: []testPool{{cidr: "10.0.0.0/24"}},
+		block: "10.0.0.0/26",
+		kept:  true,
+	}),
+	Entry("keeps a block an overlapping pool selects, when the pool that skips the node comes first", keepCase{
+		pools: []testPool{{cidr: "10.0.0.0/24", nodeSelector: `foo != "bar"`}, {cidr: "10.0.0.0/16"}},
+		block: "10.0.0.0/26",
+		kept:  true,
+	}),
+	Entry("keeps a block an overlapping pool selects, when the selecting pool comes first", keepCase{
+		pools: []testPool{{cidr: "10.0.0.0/16"}, {cidr: "10.0.0.0/24", nodeSelector: `foo != "bar"`}},
+		block: "10.0.0.0/26",
+		kept:  true,
+	}),
+	Entry("keeps a block no enabled pool covers", keepCase{
+		pools: []testPool{{cidr: "20.0.0.0/24", nodeSelector: `foo != "bar"`}},
+		block: "10.0.0.0/26",
+		kept:  true,
+	}),
+	Entry("keeps a block whose covering pool has a node selector that doesn't parse", keepCase{
+		pools: []testPool{{cidr: "10.0.0.0/24", nodeSelector: "invalid selector syntax ["}},
+		block: "10.0.0.0/26",
+		kept:  true,
+	}),
+)
