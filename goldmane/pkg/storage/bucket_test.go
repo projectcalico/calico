@@ -35,7 +35,6 @@ func addFlows(b *AggregationBucket, cache *diachronicCache, n int) {
 		cache.add(tf)
 		b.AddFlow(tf)
 	}
-	b.markReady()
 }
 
 type diachronicCache struct {
@@ -92,7 +91,7 @@ func TestConcurrentAccess(t *testing.T) {
 				// Iterate the bucket, sending an indicator when we have started the first iteration.
 				// We'll then just wait for the context to expire and exit. If concurrent access does not function,
 				// we will block other readers.
-				b.Iter(nil, func(b FlowBuilder) bool {
+				newBucketInterval(b).Iter(nil, func(b FlowBuilder) bool {
 					iterStarted <- true
 					<-ctx.Done()
 					return true // Indicates stop iteration.
@@ -137,7 +136,7 @@ func TestConcurrentAccess(t *testing.T) {
 				t.Errorf("Test timed out")
 				return
 			default:
-				b.Iter(nil, func(FlowBuilder) bool {
+				newBucketInterval(b).Iter(nil, func(FlowBuilder) bool {
 					return false
 				})
 			}
@@ -148,17 +147,31 @@ func TestConcurrentAccess(t *testing.T) {
 	})
 }
 
-func TestReady(t *testing.T) {
-	// Bucket should not iterate if it is not marked ready.
+// A provider queued before the bucket was reset yields nothing, while one taken after the reset
+// yields the bucket's new flows.
+func TestQueuedIntervalSkipsResetBucket(t *testing.T) {
 	_, cache, b, cancel := setup(t)
 	defer cancel()
 
-	addFlows(b, cache, 100)
-	b.ready = false
-	b.Iter(nil, func(_ FlowBuilder) bool {
-		t.Errorf("Should not iterate!")
+	addFlows(b, cache, 10)
+	queued := newBucketInterval(b)
+
+	b.Reset(b.EndTime, b.EndTime+15)
+	addFlows(b, cache, 10)
+
+	queued.Iter(nil, func(FlowBuilder) bool {
+		t.Fatal("queued provider iterated a reset bucket")
 		return true
 	})
+
+	var n int
+	newBucketInterval(b).Iter(nil, func(FlowBuilder) bool {
+		n++
+		return false
+	})
+	if want := b.Flows.Len(); n == 0 || n != want {
+		t.Fatalf("current provider yields %d flows, want %d", n, want)
+	}
 }
 
 // addNamespacedFlows adds n distinct flows from namespace ns to the bucket.
@@ -171,7 +184,6 @@ func addNamespacedFlows(b *AggregationBucket, cache *diachronicCache, ns string,
 		cache.add(tf)
 		b.AddFlow(tf)
 	}
-	b.markReady()
 }
 
 func TestIterFilter(t *testing.T) {
@@ -183,7 +195,7 @@ func TestIterFilter(t *testing.T) {
 
 	count := func(filter *proto.Filter) int {
 		var n int
-		bucket.Iter(filter, func(FlowBuilder) bool {
+		newBucketInterval(bucket).Iter(filter, func(FlowBuilder) bool {
 			n++
 			return false
 		})
@@ -212,7 +224,7 @@ func TestIterDoesNotBlockAddFlow(t *testing.T) {
 	release := make(chan struct{})
 	defer close(release)
 	inIter := make(chan struct{})
-	go bucket.Iter(nil, func(FlowBuilder) bool {
+	go newBucketInterval(bucket).Iter(nil, func(FlowBuilder) bool {
 		close(inIter)
 		<-release
 		return true
