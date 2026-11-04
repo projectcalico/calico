@@ -22,8 +22,8 @@ import (
 //
 // The transition is recorded on the cacerts Secret so a restarted operator
 // resumes in the same phase, and it is the same machine for every signer
-// change: Istio's self-signed CA, or a cacerts the operator did not create, to
-// the operator-managed one on upgrade, and a new operator-managed root.
+// change: Istio's self-signed CA to the operator-managed one on upgrade, the
+// operator-managed CA to a customer CA, and a customer CA root rotation.
 const (
 	// TransitionPhaseAnnotation holds the phase number, 1 to 4.
 	TransitionPhaseAnnotation = "operator.tigera.io/istio-ca-transition-phase"
@@ -40,6 +40,11 @@ const (
 	// operator did not create may trust roots that still back certificates in
 	// use, so they stay in the bundle until the transition ends.
 	TransitionKeepAnnotation = "operator.tigera.io/istio-ca-transition-keep"
+	// SignerRootsAnnotation names, in the same form, the roots the signer in
+	// cacerts chains to. A trust anchor or a transition root that shares a
+	// subject and key with one of them verifies the signer as well, so the
+	// signer's own roots cannot be told apart from root-cert.pem alone.
+	SignerRootsAnnotation = "operator.tigera.io/istio-ca-signer-roots"
 
 	// ztunnelSecretTTLEnv is ztunnel's name for its workload certificate TTL and
 	// ztunnelDefaultSecretTTL its built-in default (ztunnel src/config.rs).
@@ -173,6 +178,17 @@ func ReadTransition(cacerts *corev1.Secret) TransitionState {
 	return s
 }
 
+// SignerRoots are the roots of root-cert.pem that cacerts records as its
+// signer's own. A cacerts that records none, or none still in the bundle,
+// gives nil.
+func SignerRoots(cacerts *corev1.Secret) []*x509.Certificate {
+	if cacerts == nil {
+		return nil
+	}
+	roots, _ := ParseCertificates(cacerts.Data[RootCertKey])
+	return selectByFingerprint(roots, cacerts.Annotations[SignerRootsAnnotation])
+}
+
 // Roots are the roots a recorded transition publishes beside the signer's.
 func (s TransitionState) Roots() []*x509.Certificate {
 	return append(append([]*x509.Certificate{}, s.Retiring...), s.Incoming...)
@@ -217,7 +233,7 @@ func selectByFingerprint(certs []*x509.Certificate, fingerprints string) []*x509
 // SECRET_TTL the operator renders on ztunnel, so lowering that is the whole
 // change; without one it is ztunnel's default.
 func SignerTransitionWait() time.Duration {
-	for _, env := range ztunnelEnv() {
+	for _, env := range ztunnelEnv(nil) {
 		if env.Name == ztunnelSecretTTLEnv {
 			if d, err := time.ParseDuration(env.Value); err == nil && d > 0 {
 				return d
@@ -235,7 +251,7 @@ type TransitionInput struct {
 	CurrentSource CASource
 	// CurrentTrust is every root in the root-cert.pem istiod serves now.
 	CurrentTrust []*x509.Certificate
-	// Desired is the CA istiod is to sign with, validated, and DesiredSource
+	// Desired is the CA the Istio CR resolves to, validated, and DesiredSource
 	// where it came from.
 	Desired       *CA
 	DesiredSource CASource
@@ -262,7 +278,7 @@ type TransitionStep struct {
 }
 
 // StepSignerTransition decides what to render from the signer istiod runs with,
-// the one it is to sign with and the phase cacerts records.
+// the one the CR asks for and the phase cacerts records.
 //
 // A transition starts when the two signers' roots differ, and ends in the steady
 // state as soon as they agree: a new intermediate under the same root needs no

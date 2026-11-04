@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/x509"
 	"fmt"
+	"maps"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -13,7 +14,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/render/istio"
@@ -23,12 +27,13 @@ import (
 // progress.
 const caWarningKey = "istio-ca"
 
-// trustInputs is what the operator-managed CA and the cluster's current CA
-// resolve to for the renderer.
+// trustInputs is what the Istio CR, the Secrets it names and the cluster's
+// current CA resolve to for the renderer.
 type trustInputs struct {
 	localCA    *istio.CA
 	source     istio.CASource
 	transition *istio.SignerTransition
+	additional []*x509.Certificate
 	ownRoots   []*x509.Certificate
 	current    *corev1.Secret
 	// requeueAfter is when a transition in progress next has to be looked at.
@@ -40,10 +45,10 @@ type trustInputs struct {
 	notice string
 }
 
-// resolveTrust reads the CA Secrets and validates them. It returns an error
-// only for API failures; invalid input is recorded in problems so the rest
-// still renders.
-func (r *ReconcileIstio) resolveTrust(ctx context.Context) (*trustInputs, error) {
+// resolveTrust reads the CA and trust anchor Secrets and validates them. It
+// returns an error only for API failures; invalid input is excluded per source
+// and recorded in problems so the rest still renders.
+func (r *ReconcileIstio) resolveTrust(ctx context.Context, instance *operatorv1.Istio) (*trustInputs, error) {
 	in := &trustInputs{}
 
 	current, err := r.getSecret(ctx, istio.CACertsSecretName, istio.IstioNamespace)
@@ -56,20 +61,24 @@ func (r *ReconcileIstio) resolveTrust(ctx context.Context) (*trustInputs, error)
 		return nil, err
 	}
 
-	if err := r.resolveSigner(ctx, in, selfSigned); err != nil {
+	if err := r.resolveSigner(ctx, instance, in, selfSigned); err != nil {
+		return nil, err
+	}
+
+	if err := r.resolveAdditionalAnchors(ctx, instance, in); err != nil {
 		return nil, err
 	}
 	return in, nil
 }
 
 // resolveSigner picks the CA to render from the one istiod signs with and the
-// operator-managed CA, moving between them through the signer transition when
+// one the CR asks for, moving between them through the signer transition when
 // their roots differ. Replacing the root in one step would cut off every
 // ztunnel that has not refreshed its certificate yet.
-func (r *ReconcileIstio) resolveSigner(ctx context.Context, in *trustInputs, selfSigned *corev1.Secret) error {
+func (r *ReconcileIstio) resolveSigner(ctx context.Context, instance *operatorv1.Istio, in *trustInputs, selfSigned *corev1.Secret) error {
 	recorded := istio.ReadTransition(in.current)
 	current := currentSigner(in.current, selfSigned)
-	desired, desiredSource, problem, err := r.resolveDesiredCA(ctx)
+	desired, desiredSource, problem, err := r.resolveDesiredCA(ctx, instance)
 	if err != nil {
 		return err
 	}
@@ -112,13 +121,20 @@ func (r *ReconcileIstio) resolveSigner(ctx context.Context, in *trustInputs, sel
 		Wait:          istio.SignerTransitionWait(),
 	})
 	in.localCA, in.source, in.transition = step.Signer, step.Source, step.Transition
+	// Extra roots are configuration, not part of a signer, so they stay trusted
+	// whichever CA signs in this phase.
+	if step.Signer != desired {
+		signs := *step.Signer
+		signs.ExtraRoots = desired.ExtraRoots
+		in.localCA = &signs
+	}
 	if step.AwaitingRoll {
 		in.requeueAfter = utils.StandardRetry
 	} else {
 		in.requeueAfter = step.RequeueAfter
 	}
 	if step.Transition != nil {
-		in.notice = transitionNotice(step, current.source, desiredSource)
+		in.notice = transitionNotice(step, current.source, desiredSource, instance)
 		return nil
 	}
 	if in.current != nil && current.source != istio.CASourceSelfSigned {
@@ -237,20 +253,52 @@ func currentSigner(cacerts, selfSigned *corev1.Secret) signer {
 		}
 		return s
 	}
+	// Any root with the same subject and key as the signer's own, a renewed
+	// root or a trust anchor, verifies the signer too, so only the roots cacerts
+	// records as the signer's count as its own.
+	if own := istio.SignerRoots(cacerts); len(own) > 0 {
+		if signs, err := istio.LoadCA(withRoots(secret.Data, own)); err == nil {
+			ca = signs
+		}
+	}
+	// Roots beside the signer in a bundle the operator composed belong to
+	// anchors and transitions, each carried by its own source; only a customer
+	// Secret's extra roots travel with its CA.
+	ca.ExtraRoots = nil
 	s.ca, s.roots = ca, ca.Roots
 	// LoadCA has parsed this bundle already.
 	s.trust, _ = istio.ParseCACertificates(secret.Data[istio.RootCertKey])
 	return s
 }
 
-// resolveDesiredCA is the operator-managed CA, generated the first time.
-// Content that does not validate is a problem for a human, not an error.
-func (r *ReconcileIstio) resolveDesiredCA(ctx context.Context) (ca *istio.CA, source istio.CASource, problem string, err error) {
-	source = istio.CASourceOperatorManaged
-	ca, err = r.ensureOperatorCA(ctx, istio.DefaultTrustDomain)
-	if _, invalid := err.(invalidCAError); invalid {
-		problem = fmt.Sprintf("Secret %s/%s is not a usable CA: %v", common.OperatorNamespace(), istio.OperatorCASecretName, err)
+func withRoots(data map[string][]byte, roots []*x509.Certificate) map[string][]byte {
+	out := maps.Clone(data)
+	out[istio.RootCertKey] = istio.EncodeCertificates(roots...)
+	return out
+}
+
+// resolveDesiredCA is the CA the Istio CR asks for: a customer Secret, or the
+// operator-managed CA, generated the first time. Content that does not
+// validate is a problem for a human, not an error.
+func (r *ReconcileIstio) resolveDesiredCA(ctx context.Context, instance *operatorv1.Istio) (ca *istio.CA, source istio.CASource, problem string, err error) {
+	var name string
+	if spec := instance.Spec.CertificateAuthority; spec != nil && spec.Secret != nil {
+		source, name = istio.CASourceSecret, spec.Secret.Name
+		ca, err = r.loadCASecret(ctx, name)
+	} else {
+		source, name = istio.CASourceOperatorManaged, istio.OperatorCASecretName
+		ca, err = r.ensureOperatorCA(ctx, istio.TrustDomain(instance))
+	}
+	switch {
+	case err == nil:
+	case errors.IsNotFound(err):
+		problem = fmt.Sprintf("Secret %s/%s named by spec.certificateAuthority.secret does not exist", common.OperatorNamespace(), name)
 		err = nil
+	default:
+		if _, invalid := err.(invalidCAError); invalid {
+			problem = fmt.Sprintf("Secret %s/%s is not a usable CA: %v", common.OperatorNamespace(), name, err)
+			err = nil
+		}
 	}
 	return ca, source, problem, err
 }
@@ -280,22 +328,32 @@ func (r *ReconcileIstio) clock() time.Time {
 
 // transitionNotice is the status warning while a transition runs. Until the
 // signer switches, it names the CA the mesh moves away from, if the operator
-// did not create it.
-func transitionNotice(step istio.TransitionStep, currentSource, desiredSource istio.CASource) string {
+// did not create it. It names a target CA the user brings.
+func transitionNotice(step istio.TransitionStep, currentSource, desiredSource istio.CASource, instance *operatorv1.Istio) string {
 	t := step.Transition
 	from := ""
 	if t.Phase < istio.TransitionSwitchSigner && currentSource != desiredSource {
-		from = " from " + describeCASource(currentSource)
+		// The retiring user CA may live in a Secret the CR no longer names.
+		from = " from " + describeCASource(currentSource, "")
 	}
-	return fmt.Sprintf("Istio CA rotation%s, %s", from, t.Phase.Describe(t.Deadline))
+	to := ""
+	if ca := instance.Spec.CertificateAuthority; desiredSource == istio.CASourceSecret && ca != nil && ca.Secret != nil {
+		to = " to " + describeCASource(desiredSource, ca.Secret.Name)
+	}
+	return fmt.Sprintf("Istio CA rotation%s%s, %s", from, to, t.Phase.Describe(t.Deadline))
 }
 
-func describeCASource(source istio.CASource) string {
+func describeCASource(source istio.CASource, secretName string) string {
 	switch source {
 	case istio.CASourceSelfSigned:
 		return fmt.Sprintf("Istio's self-signed CA (%s/%s)", istio.IstioNamespace, istio.IstioSelfSignedCASecretName)
 	case istio.CASourceUnmanaged:
 		return fmt.Sprintf("a user-provided CA (%s/%s)", istio.IstioNamespace, istio.CACertsSecretName)
+	case istio.CASourceSecret:
+		if secretName == "" {
+			return "a user-provided CA"
+		}
+		return fmt.Sprintf("the CA in %s/%s", common.OperatorNamespace(), secretName)
 	}
 	return "the operator-managed CA"
 }
@@ -305,6 +363,21 @@ func describeCASource(source istio.CASource) string {
 type invalidCAError struct{ error }
 
 func (e invalidCAError) Unwrap() error { return e.error }
+
+func (r *ReconcileIstio) loadCASecret(ctx context.Context, name string) (*istio.CA, error) {
+	secret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: common.OperatorNamespace()}, secret); err != nil {
+		return nil, err
+	}
+	if secret.Labels[istio.CASecretLabel] != "true" {
+		return nil, invalidCAError{fmt.Errorf("it does not have the label %s=true, which a Secret needs before the Istio CR can use it as its CA", istio.CASecretLabel)}
+	}
+	ca, err := istio.LoadCA(secret.Data)
+	if err != nil {
+		return nil, invalidCAError{err}
+	}
+	return ca, nil
+}
 
 // ensureOperatorCA returns the operator-managed CA, generating and persisting it
 // the first time. A persisted CA that no longer validates is reported, not
@@ -345,6 +418,46 @@ func (r *ReconcileIstio) ensureOperatorCA(ctx context.Context, trustDomain strin
 	return ca, nil
 }
 
+func (r *ReconcileIstio) resolveAdditionalAnchors(ctx context.Context, instance *operatorv1.Istio, in *trustInputs) error {
+	if instance.Spec.TrustAnchors == nil {
+		return nil
+	}
+	for i, anchor := range instance.Spec.TrustAnchors.Additional {
+		source := fmt.Sprintf("spec.trustAnchors.additional[%d]", i)
+		var pemData []byte
+		switch {
+		case anchor.Secret != nil:
+			name := anchor.Secret.Name
+			secret := &corev1.Secret{}
+			if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: common.OperatorNamespace()}, secret); err != nil {
+				if !errors.IsNotFound(err) {
+					return err
+				}
+				in.problems = append(in.problems, fmt.Sprintf("%s: Secret %s/%s does not exist", source, common.OperatorNamespace(), name))
+				continue
+			}
+			source = fmt.Sprintf("%s (Secret %s/%s)", source, common.OperatorNamespace(), name)
+			pemData = secret.Data[istio.RootCertKey]
+			if len(pemData) == 0 {
+				in.problems = append(in.problems, fmt.Sprintf("%s: key %s is missing", source, istio.RootCertKey))
+				continue
+			}
+		case anchor.PEM != "":
+			pemData = []byte(anchor.PEM)
+		default:
+			in.problems = append(in.problems, fmt.Sprintf("%s: set secret or pem", source))
+			continue
+		}
+		roots, err := istio.ParseCACertificates(pemData)
+		if err != nil {
+			in.problems = append(in.problems, fmt.Sprintf("%s: %v", source, err))
+			continue
+		}
+		in.additional = append(in.additional, roots...)
+	}
+	return nil
+}
+
 func (r *ReconcileIstio) getSecret(ctx context.Context, name, namespace string) (*corev1.Secret, error) {
 	secret := &corev1.Secret{}
 	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, secret); err != nil {
@@ -354,4 +467,36 @@ func (r *ReconcileIstio) getSecret(ctx context.Context, name, namespace string) 
 		return nil, err
 	}
 	return secret, nil
+}
+
+// enqueueForReferencedSecret maps a Secret event in the operator namespace to a
+// reconcile when the Istio CR names the Secret, or it is the operator-managed
+// CA. The names come from the CR, so a fixed-name watch cannot cover them.
+func (r *ReconcileIstio) enqueueForReferencedSecret(ctx context.Context, obj client.Object) []reconcile.Request {
+	if obj.GetNamespace() != common.OperatorNamespace() {
+		return nil
+	}
+	instance := &operatorv1.Istio{}
+	if err := r.Get(ctx, utils.DefaultInstanceKey, instance); err != nil {
+		return nil
+	}
+	if referencedSecretNames(instance)[obj.GetName()] {
+		return []reconcile.Request{{NamespacedName: utils.DefaultInstanceKey}}
+	}
+	return nil
+}
+
+func referencedSecretNames(instance *operatorv1.Istio) map[string]bool {
+	names := map[string]bool{istio.OperatorCASecretName: true}
+	if ca := instance.Spec.CertificateAuthority; ca != nil && ca.Secret != nil {
+		names[ca.Secret.Name] = true
+	}
+	if ta := instance.Spec.TrustAnchors; ta != nil {
+		for _, anchor := range ta.Additional {
+			if anchor.Secret != nil {
+				names[anchor.Secret.Name] = true
+			}
+		}
+	}
+	return names
 }

@@ -60,6 +60,7 @@ type IstiodOpts struct {
 	Global                  *GlobalConfig   `json:"global,omitempty"`
 	Gateways                *GatewaysConfig `json:"gateways,omitempty"`
 	Pilot                   *PilotConfig    `json:"pilot,omitempty"`
+	MeshConfig              *MeshConfig     `json:"meshConfig,omitempty"`
 	Profile                 string          `json:"profile,omitempty"`
 	TrustedZtunnelNamespace string          `json:"trustedZtunnelNamespace,omitempty"`
 	ExtraContainerArgs      []string        `json:"extraContainerArgs,omitempty"`
@@ -69,6 +70,11 @@ type IstiodOpts struct {
 // top level of its values.
 type PilotConfig struct {
 	Env map[string]string `json:"env,omitempty"`
+}
+
+// MeshConfig is merged over the chart's default mesh config.
+type MeshConfig struct {
+	TrustDomain string `json:"trustDomain,omitempty"`
 }
 
 type CNIConfig struct {
