@@ -7,6 +7,26 @@ defaults:
   timeout: 1h
 
 steps:
+  # TEMPORARY: restores the calico Go caches from GCS once and hands them to
+  # felix-static-checks and node-static-checks over the volume cache, to compare
+  # against each step restoring its own from GCS.
+  - name: go-cache-seed
+    jobSize: large
+    requests: {cpu: 14000m, memory: 4Gi}
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    cache:
+      - {name: go, mode: write}
+    commands: |
+      du -sh .go-pkg-cache "$GO_MOD_ROOT/pkg/mod"
+      s=$(date +%s)
+      tar -cf - .go-pkg-cache | zstd -T0 -1 -q -c > /cache/go-build.tar.zst &
+      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | zstd -T0 -1 -q -c > /cache/go-mod.tar.zst &
+      wait
+      echo "CACHE-TEST go-cache-seed compress $(( $(date +%s) - s ))s"
+      ls -l /cache
+
   - name: check-yaml
     jobSize: medium
     requests: {cpu: 3500m, memory: 1Gi}
