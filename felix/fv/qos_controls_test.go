@@ -402,6 +402,10 @@ var _ = infrastructure.DatastoreDescribe(
 						return out
 					}
 
+					// The 300Mbit burst takes 3s+ to drain at peakrate; it must
+					// stay outside the measured window.
+					const iperfOmitArg = "-O10"
+
 					It("should limit bandwidth correctly", func() {
 						By("Starting iperf3 server on workload 0")
 						serverCmd := w[0].ExecCommand("iperf3", "-s")
@@ -409,7 +413,7 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(err).NotTo(HaveOccurred())
 
 						By("Running iperf3 client on workload 1")
-						baselineRate, baselinePeakrate, err := retryIperf3Client(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J")
+						baselineRate, baselinePeakrate, err := retryIperf3Client(w[1], 5, 5*time.Second, "-c", w[0].IP, iperfOmitArg, "-J")
 						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("iperf client rate with no bandwidth limit (bps): %v", baselineRate)
 						// Expect the baseline rate and peakrate to be much greater (>=10x) than the rate and peakrate limits
@@ -431,7 +435,7 @@ var _ = infrastructure.DatastoreDescribe(
 						// egress config should not be present
 						Consistently(getQdisc, "5s", "1s").ShouldNot(MatchRegexp(`qdisc tbf \d+: dev bwcali.* root refcnt \d+ rate ` + regexp.QuoteMeta("10Mbit")))
 
-						ingressLimitedRate, ingressLimitedPeakrate, err := retryIperf3Client(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J", "-R")
+						ingressLimitedRate, ingressLimitedPeakrate, err := retryIperf3Client(w[1], 5, 5*time.Second, "-c", w[0].IP, iperfOmitArg, "-J", "-R")
 						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("iperf client rate with ingress bandwidth limit (bps): %v", ingressLimitedRate)
 						// Expect the limited rate and peakrate to be within 20% of the desired rate and peakrate
@@ -454,7 +458,7 @@ var _ = infrastructure.DatastoreDescribe(
 						// egress config should be present
 						Eventually(getQdisc, "10s", "1s").Should(And(MatchRegexp(`qdisc ingress ffff: dev `+regexp.QuoteMeta(w[1].InterfaceName)+` parent ffff:fff1`), MatchRegexp(`qdisc tbf \d+: dev bwcali.* root refcnt \d+ rate `+regexp.QuoteMeta("10Mbit")+`.* peakrate `+regexp.QuoteMeta("100Mbit"))))
 
-						egressLimitedRate, egressLimitedPeakrate, err := retryIperf3Client(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J")
+						egressLimitedRate, egressLimitedPeakrate, err := retryIperf3Client(w[1], 5, 5*time.Second, "-c", w[0].IP, iperfOmitArg, "-J")
 						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("iperf client rate with egress bandwidth limit (bps): %v", egressLimitedRate)
 						// Expect the limited rate and peakrate to be within 20% of the desired rate and peakrate
