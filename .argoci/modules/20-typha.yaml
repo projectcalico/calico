@@ -10,6 +10,7 @@ defaults:
 
 steps:
   - name: typha-ci
+    tiers: [basic]
     env:
       - name: BUILD_CACHE_GROUP
         value: calico

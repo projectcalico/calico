@@ -58,6 +58,7 @@ steps:
       fi
 
   - name: felix-static-checks
+    tiers: [basic]
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
@@ -76,6 +77,7 @@ steps:
   # root. The volume and HOME match the image's non-root user, since OpenSSH
   # reads the home from passwd rather than the environment.
   - name: felix-ut
+    tiers: [basic]
     depends: [build-calico-image, check-go]
     timeout: 45m
     runAsNonRoot: true
@@ -233,6 +235,7 @@ steps:
       source felix/.semaphore/fv-epilogue
 
   - name: felix-build-windows
+    tiers: [basic]
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
