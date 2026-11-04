@@ -22,8 +22,8 @@ import (
 //
 // The transition is recorded on the cacerts Secret so a restarted operator
 // resumes in the same phase, and it is the same machine for every signer
-// change: Istio's self-signed CA, or a cacerts the operator did not create, to
-// the operator-managed one on upgrade, and a new operator-managed root.
+// change: Istio's self-signed CA to the operator-managed one on upgrade, the
+// operator-managed CA to a customer CA, and a customer CA root rotation.
 const (
 	// TransitionPhaseAnnotation holds the phase number, 1 to 4.
 	TransitionPhaseAnnotation = "operator.tigera.io/istio-ca-transition-phase"
@@ -217,7 +217,7 @@ func selectByFingerprint(certs []*x509.Certificate, fingerprints string) []*x509
 // SECRET_TTL the operator renders on ztunnel, so lowering that is the whole
 // change; without one it is ztunnel's default.
 func SignerTransitionWait() time.Duration {
-	for _, env := range ztunnelEnv() {
+	for _, env := range ztunnelEnv(nil) {
 		if env.Name == ztunnelSecretTTLEnv {
 			if d, err := time.ParseDuration(env.Value); err == nil && d > 0 {
 				return d
@@ -235,7 +235,7 @@ type TransitionInput struct {
 	CurrentSource CASource
 	// CurrentTrust is every root in the root-cert.pem istiod serves now.
 	CurrentTrust []*x509.Certificate
-	// Desired is the CA istiod is to sign with, validated, and DesiredSource
+	// Desired is the CA the Istio CR resolves to, validated, and DesiredSource
 	// where it came from.
 	Desired       *CA
 	DesiredSource CASource
@@ -262,7 +262,7 @@ type TransitionStep struct {
 }
 
 // StepSignerTransition decides what to render from the signer istiod runs with,
-// the one it is to sign with and the phase cacerts records.
+// the one the CR asks for and the phase cacerts records.
 //
 // A transition starts when the two signers' roots differ, and ends in the steady
 // state as soon as they agree: a new intermediate under the same root needs no

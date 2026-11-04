@@ -97,7 +97,7 @@ var _ = Describe("Istio CA signer transition", func() {
 			intermediate := newTestCert("intermediate", oldRoot, true)
 			desired, err := istio.LoadCA(map[string][]byte{istio.CACertKey: intermediate.certPEM, istio.CAKeyKey: intermediate.keyPEM, istio.RootCertKey: oldRoot.certPEM})
 			Expect(err).NotTo(HaveOccurred())
-			s := istio.StepSignerTransition(istio.TransitionInput{Current: current, Desired: desired, DesiredSource: istio.CASourceOperatorManaged, Now: now, Wait: wait})
+			s := istio.StepSignerTransition(istio.TransitionInput{Current: current, Desired: desired, DesiredSource: istio.CASourceSecret, Now: now, Wait: wait})
 			Expect(s.Signer).To(BeIdenticalTo(desired))
 			Expect(s.Transition).To(BeNil())
 		})
@@ -277,7 +277,7 @@ var _ = Describe("Istio CA signer transition", func() {
 					deadline := now.Add(time.Hour)
 					s := istio.StepSignerTransition(istio.TransitionInput{
 						Current: current, CurrentSource: istio.CASourceOperatorManaged,
-						Desired: third, DesiredSource: istio.CASourceOperatorManaged,
+						Desired: third, DesiredSource: istio.CASourceSecret,
 						Recorded: istio.TransitionState{Phase: istio.TransitionAwaitExpiry, Deadline: deadline, Retiring: retiring, Incoming: current.Roots},
 						Rolled:   true, Now: now, Wait: wait,
 					})
@@ -292,7 +292,7 @@ var _ = Describe("Istio CA signer transition", func() {
 				It("starts the next transition at phase 1 as soon as the old root is dropped", func() {
 					s := istio.StepSignerTransition(istio.TransitionInput{
 						Current: current, CurrentSource: istio.CASourceOperatorManaged,
-						Desired: third, DesiredSource: istio.CASourceOperatorManaged,
+						Desired: third, DesiredSource: istio.CASourceSecret,
 						Recorded: istio.TransitionState{Phase: istio.TransitionAwaitExpiry, Deadline: now, Retiring: retiring, Incoming: current.Roots},
 						Rolled:   true, Now: now, Wait: wait,
 					})
