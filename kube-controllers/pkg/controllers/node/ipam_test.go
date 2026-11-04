@@ -972,6 +972,13 @@ var _ = Describe("IPAM controller UTs", func() {
 				"k8s-pod-network."+replacedSandbox,
 				allocationUnused,
 			),
+			Entry("in use from a replaced sandbox when the annotation can't be parsed",
+				v1.PodPending,
+				currentSandbox,
+				"not-an-ip",
+				"k8s-pod-network."+replacedSandbox,
+				allocationInUse,
+			),
 			Entry("unused once the pod has failed", v1.PodFailed, "", "", "k8s-pod-network."+currentSandbox, allocationUnused),
 		)
 
