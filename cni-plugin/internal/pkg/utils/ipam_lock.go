@@ -33,8 +33,8 @@ type UnlockFn func()
 // WithIPAMLock runs fn holding the host-wide IPAM lock at lockPath, best effort as
 // AcquireIPAMLockBestEffort describes. fn's context gets a 90 second timeout that starts only
 // once the lock is held, since a thundering herd of ADDs can hold the lock for a long time.
-// fn's context is still canceled when ctx is; a caller whose work must finish regardless
-// passes context.WithoutCancel(ctx).
+// fn's context is still canceled when ctx is. The lock isn't reentrant, so fn must not take it
+// again or run calico-ipam in-process.
 func WithIPAMLock(ctx context.Context, lockPath string, fn func(context.Context) error) error {
 	unlock := AcquireIPAMLockBestEffort(lockPath)
 	defer unlock()

@@ -53,11 +53,11 @@ func addressesFromEndpoint(wep *internalapi.WorkloadEndpoint, logger *logrus.Ent
 	return ips
 }
 
-// releaseSandboxAddresses frees the IPAM allocations held for one sandbox, except keepAddresses,
-// which the pod's endpoint still uses and so must stay allocated. With nothing to keep, an IPAM
-// type other than calico-ipam, or a KubeVirt pod, it runs the configured IPAM plugin's DEL.
-// Otherwise it releases the sandbox's other addresses one at a time, because the kept ones
-// share its handle and releasing the handle would free them too.
+// releaseSandboxAddresses frees one sandbox's IPAM allocations except keepAddresses, the
+// addresses the pod's endpoint still uses. With nothing to keep, an IPAM type other than
+// calico-ipam, or a KubeVirt pod, it runs the configured IPAM plugin's DEL, which keeps nothing.
+// Otherwise it releases the handle's other addresses one at a time and never the whole handle,
+// since a lookup that finds no kept address may only have skipped a block it couldn't read.
 func releaseSandboxAddresses(
 	ctx context.Context,
 	ipamClient ipam.Interface,
@@ -74,10 +74,9 @@ func releaseSandboxAddresses(
 	return releaseUnlisted(ctx, ipamClient, handleID, conf.IPAMLockFile, keepAddresses, logger)
 }
 
-// releaseUnlisted releases each address on handleID that is not in keepAddresses, comparing
-// by IP value so different textual forms of an IPv6 address still match. It holds the host
-// IPAM lock at lockPath, like calico-ipam does, and finishes even if ctx is canceled, so a
-// release that has started is not abandoned. A handle that doesn't exist has nothing to release.
+// releaseUnlisted releases each address on handleID that is not in keepAddresses. It holds the
+// host IPAM lock at lockPath and finishes even if ctx is canceled, so a release that has
+// started is not abandoned. A handle that doesn't exist has nothing to release.
 func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID, lockPath string, keepAddresses []net.IP, logger *logrus.Entry) error {
 	return utils.WithIPAMLock(context.WithoutCancel(ctx), lockPath, func(ctx context.Context) error {
 		ips, err := ipamClient.IPsByHandle(ctx, handleID)

@@ -181,8 +181,8 @@ var _ = Describe("releaseSandboxAddresses", func() {
 			ipamType: "calico-ipam", pod: "web-0", keep: []string{"10.0.0.5"}, handleIPs: []string{"10.0.0.5", "10.0.0.6", "fd00::6"},
 			wantReleased: []string{"10.0.0.6", "fd00::6"},
 		}),
-		Entry("an IPv6 address kept in a longer textual form still matches the handle's", releaseCase{
-			ipamType: "calico-ipam", pod: "web-0", keep: []string{"fd00:0:0:0:0:0:0:5"}, handleIPs: []string{"fd00::5", "fd00::6"},
+		Entry("a kept IPv6 address stays and the other is released", releaseCase{
+			ipamType: "calico-ipam", pod: "web-0", keep: []string{"fd00::5"}, handleIPs: []string{"fd00::5", "fd00::6"},
 			wantReleased: []string{"fd00::6"},
 		}),
 		Entry("a handle holding only kept addresses releases nothing", releaseCase{

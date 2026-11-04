@@ -811,7 +811,7 @@ func del(ctx context.Context, args *skel.CmdArgs) error {
 // releaseHandle frees the addresses a sandbox holds on handleID, plus any held under the
 // workload ID handle that Calico v2.x used. For a KubeVirt pod with address persistence it
 // instead clears the pod's owner attributes, and releases the handle only once the VM or VMI
-// is being deleted and no owner remains. The caller must hold the host-wide IPAM lock.
+// is being deleted and no owner remains. Its caller runs it under the host-wide IPAM lock.
 func releaseHandle(
 	ctx context.Context,
 	calicoClient client.Interface,
