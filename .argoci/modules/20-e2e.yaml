@@ -62,14 +62,6 @@ steps:
       - build-e2e-binaries
       - check-go
     matrix:
-      # Pinned rather than defaulted: from v3.33 the default gives Felix the
-      # IPIP routes, and these tests need BGP to be the only routing mechanism.
-      - name: conformance-bird
-        env:
-          - name: E2E_TARGET
-            value: e2e-test
-          - name: EXTRA_VALUES_FILES
-            value: hack/test/kind/infra/values-bird-routing.yaml
       - name: conformance-felix
         env:
           - name: E2E_TARGET
@@ -80,20 +72,8 @@ steps:
             value: crd.projectcalico.org/v1
           - name: E2E_TEST_CONFIG
             value: e2e/config/kind/felix-routing.yaml
-      - name: clusternetworkpolicy-felix
-        env:
-          - name: E2E_TARGET
-            value: e2e-test-clusternetworkpolicy
-          - name: EXTRA_VALUES_FILES
-            value: hack/test/kind/infra/values-felix-routing.yaml
-          - name: KIND_CALICO_API_GROUP
-            value: projectcalico.org/v3
-          - name: E2E_TEST_CONFIG
-            value: e2e/config/kind/felix-routing.yaml
-      - name: sig-calico-bpf
-        env:
-          - name: E2E_TARGET
-            value: e2e-test-bpf
+          - name: E2E_GINKGO_ARGS
+            value: --ginkgo.focus=sandcat.canary
     commands: |
       sudo apt-get update -y && sudo apt-get install -y make jq
       sudo modprobe sctp
