@@ -135,17 +135,21 @@ func TestSelectionArgs(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(args).To(Equal([]string{"--calico.test-config=/repo/e2e/config/vpp/eks.yaml"}))
 
-	// The binary keeps one --calico.test-config, so a lane listing several is
-	// refused rather than recorded with a selection CI would not run.
-	_, err = Lane{Name: "list", Config: "e2e/config/ci-base.yaml\n  e2e/config/suite/policy.yaml"}.SelectionArgs("/repo")
-	Expect(err).To(MatchError(ContainSubstring("lists 2 configs")))
+	// A lane listing several configs passes each, in order. An entry is relative
+	// to e2e/config unless it already starts with e2e/config/, as in e2e-run.
+	args, err = Lane{Name: "list", Config: "ci-base.yaml\n  e2e/config/suite/policy.yaml"}.SelectionArgs("/repo")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(args).To(Equal([]string{
+		"--calico.test-config=/repo/e2e/config/ci-base.yaml",
+		"--calico.test-config=/repo/e2e/config/suite/policy.yaml",
+	}))
 
-	// A config outside e2e/config, or an unexpanded variable, is caught here
-	// rather than surfacing as an opaque binary failure.
-	_, err = Lane{Name: "abs", Config: "/tmp/x.yaml"}.SelectionArgs("/repo")
-	Expect(err).To(MatchError(ContainSubstring("is not under e2e/config/")))
-	_, err = Lane{Name: "var", Config: "${CFG}"}.SelectionArgs("/repo")
-	Expect(err).To(MatchError(ContainSubstring("is not under e2e/config/")))
+	// An entry that can't name a file under e2e/config is caught here rather
+	// than surfacing as an opaque binary failure.
+	for _, bad := range []string{"/tmp/x.yaml", "${CFG}", "../x.yaml", "e2e/config/../../x.yaml"} {
+		_, err = Lane{Name: "bad", Config: bad}.SelectionArgs("/repo")
+		Expect(err).To(MatchError(ContainSubstring("is not under e2e/config/")), bad)
+	}
 
 	_, err = Lane{Name: "empty"}.SelectionArgs("/repo")
 	Expect(err).To(MatchError(ContainSubstring("selects nothing")))
