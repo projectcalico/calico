@@ -472,3 +472,22 @@ var _ = DescribeTable("blocksToRelease",
 		blocks: []string{"30.0.0.0/26"},
 	}),
 )
+
+var _ = Describe("qualifyPools with unnamed pools", func() {
+	It("matches named pools by CIDR, so an unrequested pool that skips the node stays releasable", func() {
+		pools := buildPools([]testPool{{cidr: v4Pool1, nodeSelector: `foo != "bar"`}, {cidr: v4Pool2}})
+		for i := range pools {
+			pools[i].Name = ""
+		}
+		req := poolRequest{
+			requested:    parseRequestedPools(v4Pool2),
+			node:         internalapi.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}},
+			use:          v3.IPPoolAllowedUseWorkload,
+			maxPrefixLen: 32,
+		}
+		q, err := qualifyPools(req, pools)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(collectCIDRs(q.qualified())).To(Equal([]string{v4Pool2}))
+		Expect(collectCIDRs(q.releasable())).To(Equal([]string{v4Pool1}))
+	})
+})

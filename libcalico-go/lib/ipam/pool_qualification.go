@@ -129,14 +129,24 @@ func qualifyRequested(req poolRequest, enabledPools []v3.IPPool, fitting map[str
 			return poolQualification{}, fmt.Errorf("the given pool (%s) does not exist, or is not enabled", cidr.String())
 		}
 		q.add(req.candidate(pool, checkUse(pool, req.use), true))
-		named[pool.Name] = true
+		named[cidr.String()] = true
 	}
 	for _, pool := range enabledPools {
-		if !named[pool.Name] {
+		if !named[normalizedCIDR(pool)] {
 			q.add(req.candidate(pool, rejectNotRequested, false))
 		}
 	}
 	return q, nil
+}
+
+// normalizedCIDR is the pool's CIDR in the form fitting is keyed by, or empty when it doesn't parse. Pools are
+// matched by CIDR, not name, the way requests name them.
+func normalizedCIDR(pool v3.IPPool) string {
+	_, cidr, err := net.ParseCIDR(pool.Spec.CIDR)
+	if err != nil {
+		return ""
+	}
+	return cidr.String()
 }
 
 // qualifyBySelection checks every enabled pool against the assignment mode, the node and namespace selectors, and

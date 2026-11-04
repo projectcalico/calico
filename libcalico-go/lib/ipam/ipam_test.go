@@ -3827,6 +3827,25 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(out.KVPairs)).To(Equal(2))
 		})
+
+		It("should release an empty affine block in a deselected pool while a different pool is explicitly requested", func() {
+			host := "host"
+			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
+			pool2 := cnet.MustParseNetwork("20.0.0.0/24")
+
+			Expect(bc.Clean()).To(Succeed())
+			deleteAllPools()
+			applyNode(bc, kc, host, map[string]string{"foo": "bar"})
+			applyPool(pool1.String(), true, `foo == "bar"`)
+
+			emptyAffineBlock(host, AutoAssignArgs{IntendedUse: v3.IPPoolAllowedUseWorkload, Num4: 1, Hostname: host})
+
+			applyPool(pool1.String(), true, `foo != "bar"`)
+			applyPool(pool2.String(), true, "all()")
+			assignFrom(pool2, AutoAssignArgs{IntendedUse: v3.IPPoolAllowedUseWorkload, Num4: 1, Hostname: host, IPv4Pools: []cnet.IPNet{pool2}})
+
+			Expect(affineBlockIn(host, pool1)).To(BeFalse(), "the deselected pool's empty block affinity was kept")
+		})
 	})
 
 	Describe("IPAM AutoAssign from different pools - multi", func() {
