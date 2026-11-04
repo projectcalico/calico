@@ -37,7 +37,44 @@ func (r *DefaultRuleRenderer) StaticFilterTableChains(ipVersion uint8) (chains [
 	if r.nft && r.NFTablesFlowTableOffload {
 		chains = append(chains, r.FlowOffloadChain(ipVersion))
 	}
+	chains = append(chains, r.RejectChain(true))
 	return
+}
+
+// RejectChain returns the chain that policy rules with the Reject action jump to.
+//
+// REJECT is only valid in the filter table (the input, forward and output hooks in
+// nftables), but policy chains are also programmed into the raw and mangle tables for
+// untracked, pre-DNAT and host endpoint egress policy.  In the filter table the chain
+// rejects the packet, with a TCP reset for TCP so that the client sees "connection
+// refused" straight away, and with the default ICMP port unreachable for everything else.
+// In the raw and mangle tables it drops the packet instead.
+func (r *DefaultRuleRenderer) RejectChain(filterTable bool) *generictables.Chain {
+	if !filterTable {
+		return &generictables.Chain{
+			Name: ChainReject,
+			Rules: []generictables.Rule{{
+				Match:   r.NewMatch(),
+				Action:  r.Drop(),
+				Comment: []string{"Reject is not supported in this table, drop instead"},
+			}},
+		}
+	}
+	return &generictables.Chain{
+		Name: ChainReject,
+		Rules: []generictables.Rule{
+			{
+				Match:   r.NewMatch().Protocol("tcp"),
+				Action:  r.Reject(generictables.RejectWithTCPReset),
+				Comment: []string{"Reject TCP with a reset"},
+			},
+			{
+				Match:   r.NewMatch(),
+				Action:  r.Reject(""),
+				Comment: []string{"Reject with ICMP unreachable"},
+			},
+		},
+	}
 }
 
 const (
@@ -1175,6 +1212,9 @@ func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) []*generi
 		chains = append(chains, r.connStateLogChain(ipVersion))
 	}
 
+	// Policy chains in this table may jump to the reject chain.
+	chains = append(chains, r.RejectChain(false))
+
 	return chains
 }
 
@@ -1356,6 +1396,7 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*genericta
 		r.StaticRawPreroutingChain(ipVersion),
 		r.WireguardIncomingMarkChain(),
 		r.StaticRawOutputChain(0, ipVersion),
+		r.RejectChain(false),
 	}
 }
 
@@ -1501,7 +1542,10 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 	}
 
 	chains = append(chains,
-		r.StaticRawOutputChain(tcdefs.MarkSeenBypass, ipVersion))
+		r.StaticRawOutputChain(tcdefs.MarkSeenBypass, ipVersion),
+		// Untracked policy chains in this table may jump to the reject chain.
+		r.RejectChain(false),
+	)
 
 	return chains
 }

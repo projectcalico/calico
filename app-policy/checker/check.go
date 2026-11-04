@@ -345,6 +345,7 @@ func actionFromString(s string) Action {
 	m := map[string]Action{
 		"allow":     ALLOW,
 		"deny":      DENY,
+		"reject":    DENY,
 		"pass":      PASS,
 		"next-tier": PASS,
 		"log":       LOG,
