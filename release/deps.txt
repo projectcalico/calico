@@ -16,6 +16,7 @@ github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.55
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.55.0
 github.com/Masterminds/semver/v3 v3.5.0
 github.com/ProtonMail/go-crypto v1.4.1
+github.com/approvals/go-approval-tests v1.11.0
 github.com/aws/aws-sdk-go-v2 v1.43.6
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.18
 github.com/aws/aws-sdk-go-v2/config v1.32.25
@@ -67,6 +68,7 @@ github.com/go-openapi/swag/stringutils v0.28.0
 github.com/go-openapi/swag/typeutils v0.28.0
 github.com/go-openapi/swag/yamlutils v0.28.0
 github.com/google/gnostic-models v0.7.1
+github.com/google/go-cmp v0.7.0
 github.com/google/go-containerregistry v0.21.9
 github.com/google/go-github/v53 v53.2.0
 github.com/google/go-querystring v1.1.0
@@ -81,11 +83,14 @@ github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
 github.com/opencontainers/go-digest v1.0.0
 github.com/opencontainers/image-spec v1.1.1
+github.com/pkg/errors v0.9.1
 github.com/projectcalico/calico
 github.com/sirupsen/logrus v1.9.4
 github.com/slack-go/slack v0.26.0
 github.com/snowzach/rotatefilehook v0.0.0-20220211133110-53752135082d
+github.com/spf13/cast v1.10.0
 github.com/spiffe/go-spiffe/v2 v2.8.1
+github.com/stretchr/testify v1.12.1
 github.com/urfave/cli v1.22.16
 github.com/urfave/cli/v3 v3.10.0
 github.com/x448/float16 v0.8.4
@@ -116,6 +121,7 @@ google.golang.org/protobuf v1.36.12
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/natefinch/lumberjack.v2 v2.2.1
 gopkg.in/yaml.v3 v3.0.1
+helm.sh/helm/v3 v3.21.4
 k8s.io/api v0.37.1
 k8s.io/apiextensions-apiserver v0.37.1
 k8s.io/apimachinery v0.37.1
