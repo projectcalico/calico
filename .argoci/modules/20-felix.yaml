@@ -76,10 +76,11 @@ steps:
       cd felix
       make static-checks
 
-  # Non-root because two suites branch on geteuid() and take the wrong branch as
-  # root. The build image has no passwd entry for that user, so HOME has to be
-  # set and writable. build-calico-image is a dependency for the cgo and race
-  # binaries it uploads, not for the image.
+  # The tests run non-root because two suites branch on geteuid() and take the
+  # wrong branch as root. The pod itself stays root: the build image has a passwd
+  # entry only for root, and the ssh checkout refuses to run without one. HOME is
+  # set because OpenSSH and Go read it. build-calico-image is a dependency for
+  # the cgo and race binaries it uploads, not for the image.
   - name: felix-ut
     # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
     override:
@@ -87,7 +88,6 @@ steps:
       tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     depends: [build-calico-image, check-go]
     timeout: 45m
-    runAsNonRoot: true
     scratchVolumes: [/home/ci]
     env:
       - name: BUILD_CACHE_GROUP
@@ -107,11 +107,13 @@ steps:
       - fv-guru-db
     commands: |
       .semaphore/scripts/load-felix-prereqs.sh
-      cd felix
       # The failure analysis reads the log from here.
-      mkdir -p ../artifacts
+      mkdir -p artifacts
+      useradd -u 1000 -U -M -d /home/ci ci
+      chown -R ci:ci . /home/ci /go
+      cd felix
       set -o pipefail
-      make ut 2>&1 | tee ../artifacts/ut.log
+      su-exec ci make ut 2>&1 | tee ../artifacts/ut.log
     epilogue: |
       cd "${CI_HOME}/${CI_GIT_DIR}/felix"
       # Before the push: it annotates the reports.
