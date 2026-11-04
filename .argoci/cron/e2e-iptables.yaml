@@ -906,11 +906,11 @@ steps:
       - name: USE_HASH_RELEASE
         value: "true"
     matrix:
-      - name: https-raw-githubusercontent-com-projectcalico-calico-v3-28-2-manifests-canal-yaml
+      - name: canal-v3-28-2
         env:
           - name: DOWNLEVEL_MANIFEST
             value: https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/canal.yaml
-      - name: https-raw-githubusercontent-com-coreos-flannel-master-documentation-kube-flannel-yml
+      - name: flannel-master
         env:
           - name: DOWNLEVEL_MANIFEST
             value: https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
