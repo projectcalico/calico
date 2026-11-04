@@ -34,10 +34,9 @@ func Load(path string) (*Config, error) {
 
 // LoadAll loads each config and merges them left to right, the same way an
 // extends list folds its parents, so naming several configs selects what one
-// config extending all of them would. This is how a lane composes its
-// selection from one file per fragment. The merged result is checked again,
-// because a rule like the include labels and name patterns clash can span two
-// files that each pass alone.
+// config extending all of them would. The merged result is validated again,
+// because a rule such as "include sets both labels and name patterns" can be
+// broken by two files that each pass alone.
 func LoadAll(paths []string) (*Config, error) {
 	if len(paths) == 0 {
 		return nil, fmt.Errorf("no config paths given")

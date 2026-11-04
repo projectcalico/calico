@@ -153,8 +153,7 @@ func init() {
 }
 
 // TestConfigPaths returns the test selection config files, in the order given,
-// or nil if none was specified. The binary merges them into one selection, so
-// a lane can name a config per fragment instead of one combined file.
+// or nil if none was specified. The binary merges them into one selection.
 func TestConfigPaths() []string {
 	return strings.Fields(allConfigOptions[testConfig].actualValue)
 }
