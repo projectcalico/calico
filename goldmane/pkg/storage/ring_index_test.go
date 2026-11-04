@@ -16,7 +16,6 @@ package storage_test
 
 import (
 	"fmt"
-	"iter"
 	"math"
 	"slices"
 	"strings"
@@ -38,7 +37,7 @@ const (
 
 // TestRingListPagesTiedStartTimes pages through flows that mostly share one start time, which
 // is the normal case since starts are bucket-aligned. Every flow must appear once, in the same
-// order on every walk.
+// order on every pass through the pages.
 func TestRingListPagesTiedStartTimes(t *testing.T) {
 	ring := newPagingRing()
 	newer := ring.EndOfHistory() - 2*pagingInterval
@@ -53,7 +52,7 @@ func TestRingListPagesTiedStartTimes(t *testing.T) {
 	}
 
 	req := &proto.FlowListRequest{StartTimeGte: older, StartTimeLt: newer + pagingInterval, PageSize: 7}
-	first := walkPages(t, ring, req)
+	first := allPages(t, ring, req)
 	require.Len(t, first, numNewer+numOlder)
 
 	seen := map[string]bool{}
@@ -74,7 +73,7 @@ func TestRingListPagesTiedStartTimes(t *testing.T) {
 	require.Equal(t, older, first[len(first)-1].StartTime)
 
 	for range 5 {
-		require.Equal(t, keyNames(first), keyNames(walkPages(t, ring, req)))
+		require.Equal(t, keyNames(first), keyNames(allPages(t, ring, req)))
 	}
 }
 
@@ -184,36 +183,58 @@ func TestRingListPagesMatchFullSort(t *testing.T) {
 	}
 }
 
-// TestFlowCandidatesWalks checks that nesting two walks of the ring's buckets panics, since the
-// inner walk would make the outer one yield flows twice, and that leaving a walk early ends it.
-func TestFlowCandidatesWalks(t *testing.T) {
+// TestRingFlowsYieldsEachFlowOnce checks that reading a range's buckets yields a flow in several
+// of them once, that a read left early ends, and that a nested read panics rather than letting
+// the outer read yield flows twice.
+func TestRingFlowsYieldsEachFlowOnce(t *testing.T) {
 	ring := newPagingRing()
 	start := ring.EndOfHistory() - 2*pagingInterval
+	old := start - 10*pagingInterval
 	for i := range 10 {
-		ring.AddFlow(storage.FlowFromNode{Flow: pagingFlow(fmt.Sprintf("flow-%d", i), start)})
+		ring.AddFlow(storage.FlowFromNode{Flow: pagingFlow(fmt.Sprintf("both-%d", i), start-pagingInterval)})
+		ring.AddFlow(storage.FlowFromNode{Flow: pagingFlow(fmt.Sprintf("both-%d", i), start)})
+	}
+	for i := range 5 {
+		ring.AddFlow(storage.FlowFromNode{Flow: pagingFlow(fmt.Sprintf("early-%d", i), old)})
+		ring.AddFlow(storage.FlowFromNode{Flow: pagingFlow(fmt.Sprintf("early-%d", i), start)})
 	}
 
-	// Flows outside the walked bucket keep the ring from scanning every flow instead.
+	// Flows outside the range keep the ring reading its buckets rather than every flow.
 	for i := range 20 {
-		ring.AddFlow(storage.FlowFromNode{Flow: pagingFlow(fmt.Sprintf("other-%d", i), start-10*pagingInterval)})
+		ring.AddFlow(storage.FlowFromNode{Flow: pagingFlow(fmt.Sprintf("other-%d", i), old)})
 	}
-	walk := func() iter.Seq[*storage.DiachronicFlow] {
-		flows, _ := ring.FlowCandidates(start, start+1)
-		return flows
+	flowNames := func() []string {
+		flows, _ := ring.Flows(start-pagingInterval, start+1)
+		var names []string
+		for d := range flows {
+			names = append(names, d.Key.DestName())
+		}
+		slices.Sort(names)
+		return names
 	}
 
-	for range walk() {
+	var want []string
+	for i := range 10 {
+		want = append(want, fmt.Sprintf("both-%d", i))
+	}
+	for i := range 5 {
+		want = append(want, fmt.Sprintf("early-%d", i))
+	}
+	slices.Sort(want)
+	require.Equal(t, want, flowNames())
+
+	flows, _ := ring.Flows(start-pagingInterval, start+1)
+	for range flows {
 		break
 	}
-	require.Len(t, slices.Collect(walk()), 10, "a walk left early must not block the next one")
+	require.Equal(t, want, flowNames(), "a read left early must not block the next one")
 
 	require.Panics(t, func() {
-		for range walk() {
-			for range walk() {
-			}
+		for range flows {
+			flowNames()
 		}
 	})
-	require.Len(t, slices.Collect(walk()), 10, "a panicking walk must not block the next one")
+	require.Equal(t, want, flowNames(), "a panicking read must not block the next one")
 }
 
 type candidateRangeCase struct {
@@ -223,7 +244,7 @@ type candidateRangeCase struct {
 	wantRecent int
 }
 
-// TestRingListCandidateRanges covers both ways the ring gathers candidates: walking the
+// TestRingListCandidateRanges covers both ways the ring gathers flows: reading the
 // buckets in a narrow range, and scanning every flow when the range's buckets hold most of them.
 func TestRingListCandidateRanges(t *testing.T) {
 	ring := newPagingRing()
@@ -241,7 +262,7 @@ func TestRingListCandidateRanges(t *testing.T) {
 	}
 
 	for _, tc := range []candidateRangeCase{
-		{name: "two buckets, walked", gte: newest - pagingInterval, wantRecent: 10},
+		{name: "two buckets, read from the buckets", gte: newest - pagingInterval, wantRecent: 10},
 		{name: "six buckets, scanned and filtered by time", gte: newest - 5*pagingInterval, wantRecent: 10},
 		{name: "the whole ring", gte: old, wantOld: 10, wantRecent: 10},
 	} {
@@ -339,7 +360,7 @@ func pagingFlow(dest string, start int64) *types.Flow {
 	}
 }
 
-func walkPages(t *testing.T, ring *storage.BucketRing, req *proto.FlowListRequest) []*types.Flow {
+func allPages(t *testing.T, ring *storage.BucketRing, req *proto.FlowListRequest) []*types.Flow {
 	t.Helper()
 	var all []*types.Flow
 	for page := int64(0); ; page++ {

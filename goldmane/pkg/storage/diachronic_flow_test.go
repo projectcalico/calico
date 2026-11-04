@@ -466,9 +466,8 @@ func TestDiachronicFlowRangeMatchesLinearScan(t *testing.T) {
 			outsideCases++
 		}
 
-		start, within := diachronic.SortStartTime(startGte, startLt)
-		require.Equal(t, want.within, within, "seed %d [%d, %d): SortStartTime", seed, startGte, startLt)
-		require.Equal(t, want.within, diachronic.Within(startGte, startLt), "seed %d [%d, %d): Within", seed, startGte, startLt)
+		start, within := diachronic.Within(startGte, startLt)
+		require.Equal(t, want.within, within, "seed %d [%d, %d): Within", seed, startGte, startLt)
 		require.Equal(t, want.start, start, "seed %d [%d, %d): start", seed, startGte, startLt)
 
 		f := diachronic.Aggregate(startGte, startLt)
