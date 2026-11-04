@@ -17,7 +17,10 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"iter"
+	"maps"
 	"sort"
+	"unique"
 
 	"github.com/sirupsen/logrus"
 
@@ -83,6 +86,9 @@ type BucketRing struct {
 
 	// dedupBuckets is how many buckets back from the head keep their dedup state.
 	dedupBuckets int
+
+	// visits reads flows out of several buckets without yielding a flow twice.
+	visits flowVisits
 }
 
 func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *BucketRing {
@@ -196,13 +202,13 @@ func (r *BucketRing) List(req *proto.FlowListRequest) ([]*types.Flow, *types.Lis
 	return flows, &meta, nil
 }
 
-// extractPolicyFieldsFromFlowKey is a convenience function to extract policy fields from a flow key. The given function
-// is run over all policy hits (enforced and pending) to get all of the values.
-func extractPolicyFieldsFromFlowKey(getField func(*proto.PolicyHit) string) func(key *types.FlowKey) []string {
-	return func(key *types.FlowKey) []string {
+// extractPolicyFields is a convenience function to extract policy fields from a flow key's policy trace. The given
+// function is run over all policy hits (enforced and pending) to get all of the values.
+func extractPolicyFields(getField func(*proto.PolicyHit) string) policyValueFunc {
+	return func(policies unique.Handle[string]) []string {
 		var values []string
 
-		policyTrace := types.FlowLogPolicyToProto(key.Policies())
+		policyTrace := types.FlowLogPolicyToProto(policies)
 		for _, policyList := range [][]*proto.PolicyHit{policyTrace.EnforcedPolicies, policyTrace.PendingPolicies} {
 			for _, p := range policyList {
 				// Skip Profiles in hints, as these aren't a real kind in Kubernetes clusters - these are
@@ -227,7 +233,7 @@ func extractPolicyFieldsFromFlowKey(getField func(*proto.PolicyHit) string) func
 
 func (r *BucketRing) FilterHints(req *proto.FilterHintsRequest) ([]string, *types.ListMeta, error) {
 	var sortBy proto.SortBy
-	var valueFunc func(*types.FlowKey) []string
+	var valueFunc policyValueFunc
 	switch req.Type {
 	case proto.FilterType_FilterTypeDestName:
 		sortBy = proto.SortBy_DestName
@@ -238,25 +244,25 @@ func (r *BucketRing) FilterHints(req *proto.FilterHintsRequest) ([]string, *type
 	case proto.FilterType_FilterTypeSourceNamespace:
 		sortBy = proto.SortBy_SourceNamespace
 	case proto.FilterType_FilterTypePolicyTier:
-		valueFunc = extractPolicyFieldsFromFlowKey(
+		valueFunc = extractPolicyFields(
 			func(p *proto.PolicyHit) string {
 				return p.Tier
 			},
 		)
 	case proto.FilterType_FilterTypePolicyName:
-		valueFunc = extractPolicyFieldsFromFlowKey(
+		valueFunc = extractPolicyFields(
 			func(p *proto.PolicyHit) string {
 				return p.Name
 			},
 		)
 	case proto.FilterType_FilterTypePolicyKind:
-		valueFunc = extractPolicyFieldsFromFlowKey(
+		valueFunc = extractPolicyFields(
 			func(p *proto.PolicyHit) string {
 				return p.Kind.String()
 			},
 		)
 	case proto.FilterType_FilterTypePolicyNamespace:
-		valueFunc = extractPolicyFieldsFromFlowKey(
+		valueFunc = extractPolicyFields(
 			func(p *proto.PolicyHit) string {
 				return p.Namespace
 			},
@@ -453,21 +459,29 @@ func dedupWindowBuckets(interval, numBuckets int) int {
 	return numBuckets - 1
 }
 
-// FlowSet returns the set of flows that exist across buckets within the given time range.
-func (r *BucketRing) FlowSet(startGt, startLt int64) set.Set[*DiachronicFlow] {
-	// TODO: Right now, this iterates all the buckets. We can make a minor optimization here
-	// by calculating the buckets to iterate based on the time range.
-	flows := set.New[*DiachronicFlow]()
+// Flows yields every flow with data in [startGt, startLt) exactly once, plus a size hint. It may
+// also yield flows with none, so callers check each one. A flow sits in every bucket it has a
+// window in, so reading the range's buckets costs a step per flow per bucket, while reading the
+// ring's flow map costs a step per flow, including flows outside the range. Flows reads the map
+// once the buckets hold twice its entries.
+func (r *BucketRing) Flows(startGt, startLt int64) (iter.Seq[*DiachronicFlow], int) {
+	var inRange []*AggregationBucket
+	numEntries, largestBucketLen := 0, 0
 	for _, b := range r.buckets {
 		if (startGt == 0 || b.StartTime >= startGt) &&
 			(startLt == 0 || b.StartTime <= startLt) {
-
-			for d := range b.Flows.All() {
-				flows.Add(d)
-			}
+			inRange = append(inRange, b)
+			numEntries += b.Flows.Len()
+			largestBucketLen = max(largestBucketLen, b.Flows.Len())
 		}
 	}
-	return flows
+	if numEntries >= 2*len(r.diachronics) {
+		return maps.Values(r.diachronics), len(r.diachronics)
+	}
+
+	// The largest bucket is a lower bound on the flows yielded, unlike the entry total, which counts
+	// a flow once per bucket.
+	return r.visits.read(inRange), largestBucketLen
 }
 
 // BeginningOfHistory returns the start time of the oldest bucket in the ring.
