@@ -35,9 +35,9 @@ type DiachronicFlow struct {
 	ID  int64
 	Key types.FlowKey
 
-	// visited holds the number of the last walk that yielded this flow, so a walk can skip flows
-	// it has already yielded. Only the main loop touches it.
-	visited uint64
+	// lastVisited is the number of the last flowVisits read that yielded this flow. Only the main
+	// loop touches it.
+	lastVisited uint64
 
 	// mu guards windows and the IP sets, which streams read off the aggregator goroutine.
 	mu sync.Mutex
@@ -302,7 +302,7 @@ func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *types.Flow {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	ws := d.windowsStarting(startGte, startLt)
+	ws := d.windowsWithin(startGte, startLt)
 	if len(ws) == 0 {
 		return nil
 	}
@@ -318,14 +318,22 @@ func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *types.Flow {
 	return f
 }
 
-// SortStartTime returns the StartTime that Aggregate would give the flow, without building it,
-// and whether the flow is Within the range at all.
-func (d *DiachronicFlow) SortStartTime(startGte, startLt int64) (int64, bool) {
+// Within reports whether the flow has data in [startGte, startLt), a zero bound being open, and if
+// so returns the StartTime that Aggregate would give it, without building the flow. That start is
+// zero when the flow's only window in the range is the current bucket's, which ends after
+// startLt (CORE-13930).
+func (d *DiachronicFlow) Within(startGte, startLt int64) (int64, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	ws := d.windowsStarting(startGte, startLt)
+	ws := d.windowsWithin(startGte, startLt)
 	if len(ws) == 0 {
+		if logrus.IsLevelEnabled(logrus.DebugLevel) {
+			logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+				"startGte": startGte,
+				"startLt":  startLt,
+			}).Debug("DiachronicFlow does not have data for time range")
+		}
 		return 0, false
 	}
 
@@ -336,9 +344,10 @@ func (d *DiachronicFlow) SortStartTime(startGte, startLt int64) (int64, bool) {
 	return 0, true
 }
 
-// windowsStarting returns the windows that start in [startGte, startLt), a zero bound being
-// open. Every window that inRange accepts is among them. Callers must hold mu.
-func (d *DiachronicFlow) windowsStarting(startGte, startLt int64) []Window {
+// windowsWithin returns the windows that start in [startGte, startLt), a zero bound being open.
+// They may end after startLt, unlike the windows Window.inRange accepts, which start and end in
+// the range; every one of those is among them. Callers must hold mu.
+func (d *DiachronicFlow) windowsWithin(startGte, startLt int64) []Window {
 	lo, hi := 0, len(d.windows)
 	if startGte != 0 {
 		lo = sort.Search(hi, func(i int) bool { return d.windows[i].start >= startGte })
@@ -356,7 +365,7 @@ func (d *DiachronicFlow) bucketWindow(startGte, startLt int64) (Window, bool) {
 	defer d.mu.Unlock()
 
 	// Ends rise with starts, so if the first window starting in the range ends past it, every one does.
-	if ws := d.windowsStarting(startGte, startLt); len(ws) > 0 && ws[0].inRange(startGte, startLt) {
+	if ws := d.windowsWithin(startGte, startLt); len(ws) > 0 && ws[0].inRange(startGte, startLt) {
 		return ws[0], true
 	}
 	return Window{}, false
@@ -411,30 +420,13 @@ func (d *DiachronicFlow) aggregateWindow(f *types.Flow, w *Window) {
 }
 
 func (d *DiachronicFlow) Matches(filter *proto.Filter, startGte, startLt int64) bool {
-	if !d.Within(startGte, startLt) {
+	if _, ok := d.Within(startGte, startLt); !ok {
 		return false
 	}
 	if filter == nil {
 		return true
 	}
 	return types.Matches(filter, &d.Key)
-}
-
-func (d *DiachronicFlow) Within(startGte, startLt int64) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if len(d.windowsStarting(startGte, startLt)) > 0 {
-		return true
-	}
-
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
-			"startGte": startGte,
-			"startLt":  startLt,
-		}).Debug("DiachronicFlow does not have data for time range")
-	}
-	return false
 }
 
 // intersection returns the intersection of two comma-separated label sets stored as unique handles.

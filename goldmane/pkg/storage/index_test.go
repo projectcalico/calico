@@ -33,10 +33,10 @@ type simpleLogAggregatorStub struct {
 	diachronics []*DiachronicFlow
 }
 
-func (l simpleLogAggregatorStub) FlowCandidates(startGt, startLt int64) (iter.Seq[*DiachronicFlow], int) {
+func (l simpleLogAggregatorStub) Flows(startGt, startLt int64) (iter.Seq[*DiachronicFlow], int) {
 	var within []*DiachronicFlow
 	for _, d := range l.diachronics {
-		if d.Within(startGt, startLt) {
+		if _, ok := d.Within(startGt, startLt); ok {
 			within = append(within, d)
 		}
 	}
