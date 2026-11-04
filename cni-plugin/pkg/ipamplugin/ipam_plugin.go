@@ -520,6 +520,9 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 
 // addressNotOursError builds the CNI error that tells the plugin the requested address does not
 // belong to this pod or cannot be assigned to it, so the caller may fall back to a fresh address.
+// Reuse returns it when another pod or a non-pod handle owns the address or it's in cooldown.
+// Any requested address also gets it when its pool is gone, disallows workloads, or strict
+// affinity puts its block on another node.
 func addressNotOursError(format string, args ...any) error {
 	return cnitypes.NewError(types.ErrCodeAddressNotOurs, fmt.Sprintf(format, args...), "")
 }

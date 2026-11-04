@@ -28,8 +28,8 @@ import (
 const ErrCodeSandboxSuperseded = 101
 
 // ErrCodeAddressNotOurs means calico-ipam refused a requested address: the pod asked to migrate
-// an IP that isn't its own, or its pool or strict affinity rules the address out. Only this code
-// earns a fresh address.
+// an IP that isn't its own, or the address's pool or strict affinity forbids assigning it. Only
+// this code earns a fresh address.
 const ErrCodeAddressNotOurs = 102
 
 // Valid values for NetConf.DeviceType.

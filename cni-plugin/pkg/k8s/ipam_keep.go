@@ -75,7 +75,7 @@ func failedAddCleanup(
 }
 
 // releaseUnusedAddresses frees this sandbox's IPAM allocations but keeps the addresses wep
-// lists when wep names another sandbox, since the pod still uses them there. An empty container
+// lists when wep names another sandbox, since the endpoint still lists them. An empty container
 // ID counts as another sandbox. When wep is nil or names this sandbox, the IPAM type isn't
 // calico-ipam, the pod is a KubeVirt pod, or wep lists no parsable address, it runs the IPAM
 // plugin's DEL. Otherwise it releases the handle's unlisted addresses one at a time, never the
