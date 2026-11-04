@@ -74,17 +74,20 @@ func (i *IPPoolAccessor) getPools(poolNames []string, ipVersion int, caller stri
 	sort.Strings(poolNames)
 
 	pools := make([]v3.IPPool, 0)
-	automatic := v3.Automatic
 	var poolsToPrint []string
 	for _, p := range poolNames {
 		c := cnet.MustParseCIDR(p)
 		if (ipVersion == 0) || (c.Version() == ipVersion) {
+			mode := i.Pools[p].AssignmentMode
+			if mode == "" {
+				mode = v3.Automatic
+			}
 			pool := v3.IPPool{ObjectMeta: metav1.ObjectMeta{Name: p}, Spec: v3.IPPoolSpec{
 				CIDR:              p,
 				NodeSelector:      i.Pools[p].NodeSelector,
 				NamespaceSelector: i.Pools[p].NamespaceSelector,
 				AllowedUses:       i.Pools[p].AllowedUses,
-				AssignmentMode:    &automatic,
+				AssignmentMode:    &mode,
 				BlockSize:         i.Pools[p].BlockSize,
 			}}
 			pool.Spec.AllowedUses = accounting.AllowedUses(&pool)
