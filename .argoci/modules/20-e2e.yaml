@@ -106,7 +106,7 @@ steps:
       make ${E2E_TARGET} 2>&1 | tee artifacts/e2e.log || rc=$?
       # Here rather than in the epilogue: the cluster and the report are on the VM.
       SANDCAT_REPORT=report/report.json
-      [ -f "${SANDCAT_REPORT}" ] || SANDCAT_REPORT=$(ls -t report/*.xml 2>/dev/null | head -1)
+      [ -f "${SANDCAT_REPORT}" ] || SANDCAT_REPORT=$(ls -t report/*.xml 2>/dev/null | head -1) || true
       if [ -n "${SANDCAT_REPORT}" ]; then
         .argoci/scripts/sandcat/sandcat.sh analyze --report "${SANDCAT_REPORT}" --source-dir "$(pwd)" || true
       elif [ "${rc}" != 0 ]; then
