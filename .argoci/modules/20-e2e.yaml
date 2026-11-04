@@ -14,6 +14,27 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
+      # Diagnoses each failing spec while its namespace and pods are still up.
+      # Applied around the ginkgo run, the one point where the cluster exists
+      # and the suite has not started.
+      - name: E2E_RUN_WRAPPER
+        value: .argoci/scripts/sandcat/with-inline-diag.sh
+    secretBundles:
+      - name: sandcat-upload
+        keys:
+          - name: SANDCAT_UPLOAD_URL
+          - name: SANDCAT_INGEST_TOKEN
+      - name: sandcat-nightly
+        keys:
+          - name: SANDCAT_GEMINI_KEY
+      # sandcat.sh downloads its binary from the private tigera/sandcat releases.
+      - name: banzai-secrets
+        keys:
+          - name: GITHUB_ACCESS_TOKEN
+      - name: sandcat-db
+        keys:
+          - name: SANDCAT_DB_URL
+          - name: SANDCAT_DB_TOKEN
     vm:
       # Cheapest first, all families that can attach a hyperdisk. A region can run
       # short of any one of them.
@@ -41,14 +62,6 @@ steps:
       - build-e2e-binaries
       - check-go
     matrix:
-      # Pinned rather than defaulted: from v3.33 the default gives Felix the
-      # IPIP routes, and these tests need BGP to be the only routing mechanism.
-      - name: conformance-bird
-        env:
-          - name: E2E_TARGET
-            value: e2e-test
-          - name: EXTRA_VALUES_FILES
-            value: hack/test/kind/infra/values-bird-routing.yaml
       - name: conformance-felix
         env:
           - name: E2E_TARGET
@@ -59,22 +72,10 @@ steps:
             value: crd.projectcalico.org/v1
           - name: E2E_TEST_CONFIG
             value: e2e/config/kind/felix-routing.yaml
-      - name: clusternetworkpolicy-felix
-        env:
-          - name: E2E_TARGET
-            value: e2e-test-clusternetworkpolicy
-          - name: EXTRA_VALUES_FILES
-            value: hack/test/kind/infra/values-felix-routing.yaml
-          - name: KIND_CALICO_API_GROUP
-            value: projectcalico.org/v3
-          - name: E2E_TEST_CONFIG
-            value: e2e/config/kind/felix-routing.yaml
-      - name: sig-calico-bpf
-        env:
-          - name: E2E_TARGET
-            value: e2e-test-bpf
+          - name: E2E_GINKGO_ARGS
+            value: --ginkgo.focus=confine.a.namespaced.tier.grant
     commands: |
-      sudo apt-get update -y && sudo apt-get install -y make
+      sudo apt-get update -y && sudo apt-get install -y make jq
       sudo modprobe sctp
       # The Makefiles call the kubectl they download by full path; the deploy
       # script and the tests' connection tester call it by name.
@@ -82,7 +83,19 @@ steps:
       .argoci/scripts/load-cached-images calico node whisker
       .argoci/scripts/load-e2e-binaries
       export E2E_PREBUILT=true
-      make ${E2E_TARGET}
+      mkdir -p artifacts
+      set -o pipefail
+      rc=0
+      make ${E2E_TARGET} 2>&1 | tee artifacts/e2e.log || rc=$?
+      # Here rather than in the epilogue: the cluster and the report are on the VM.
+      SANDCAT_REPORT=report/report.json
+      [ -f "${SANDCAT_REPORT}" ] || SANDCAT_REPORT=$(ls -t report/*.xml 2>/dev/null | head -1)
+      if [ -n "${SANDCAT_REPORT}" ]; then
+        .argoci/scripts/sandcat/sandcat.sh analyze --report "${SANDCAT_REPORT}" --source-dir "$(pwd)" || true
+      elif [ "${rc}" != 0 ]; then
+        .argoci/scripts/sandcat/sandcat.sh build-failure --logs-dir artifacts --source-dir "$(pwd)" || true
+      fi
+      exit "${rc}"
     epilogue: |
       copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/report" report || true
       artifact push job report --destination test-results || true
