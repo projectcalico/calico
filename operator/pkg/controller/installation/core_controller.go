@@ -704,19 +704,7 @@ func fillDefaults(instance *operatorv1.Installation, currentPools *v3.IPPoolList
 
 	// If not specified by the user, set the flex volume plugin location based on platform.
 	if len(instance.Spec.FlexVolumePath) == 0 {
-		if instance.Spec.KubernetesProvider.IsOpenShift() {
-			// In OpenShift 4.x, the location for flexvolume plugins has changed.
-			// See: https://bugzilla.redhat.com/show_bug.cgi?id=1667606#c5
-			instance.Spec.FlexVolumePath = "/etc/kubernetes/kubelet-plugins/volume/exec/"
-		} else if instance.Spec.KubernetesProvider.IsGKE() {
-			instance.Spec.FlexVolumePath = "/home/kubernetes/flexvolume/"
-		} else if instance.Spec.KubernetesProvider.IsAKS() {
-			instance.Spec.FlexVolumePath = "/etc/kubernetes/volumeplugins/"
-		} else if instance.Spec.KubernetesProvider.IsRKE2() {
-			instance.Spec.FlexVolumePath = "/var/lib/kubelet/volumeplugins/"
-		} else {
-			instance.Spec.FlexVolumePath = "/usr/libexec/kubernetes/kubelet-plugins/volume/exec/"
-		}
+		instance.Spec.FlexVolumePath = render.DefaultFlexVolumePath(instance.Spec.KubernetesProvider)
 	}
 
 	if len(instance.Spec.KubeletVolumePluginPath) == 0 {
