@@ -33,7 +33,7 @@
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv4 [calicoiptables-ipv4] | cron/e2e-bpf/bpf-run-matrix-kops-w-calico-cni-ipv4-calicoiptables-ipv4 | 218
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 [calicobpf-ipv6] | cron/e2e-bpf/bpf-run-matrix-kops-w-calico-cni-ipv6-calicobpf-ipv6 | 214
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 [calicoiptables-ipv6] | cron/e2e-bpf/bpf-run-matrix-kops-w-calico-cni-ipv6-calicoiptables-ipv6 | 218
-.argoci/cron/e2e-bpf.yaml | kubevirt-e2e-tests | cron/e2e-bpf/kubevirt-e2e-tests | 9
+.argoci/cron/e2e-bpf.yaml | kubevirt-e2e-tests | cron/e2e-bpf/kubevirt-e2e-tests | 12
 .argoci/cron/e2e-bpf.yaml | usage-reporting-with-bpf [stable] | (usage-reporting) | -
 .argoci/cron/e2e-bpf.yaml | wireguard | cron/e2e-bpf/wireguard | 216
 .argoci/cron/e2e-certification.yaml | hcp-hosted-setup-and-tests [4-18-27] | (ocp-cert) | -
@@ -76,7 +76,7 @@
 .argoci/cron/e2e-iptables.yaml | ipvs [beta-or-stable] | cron/e2e-iptables/ipvs-beta-or-stable | 226
 .argoci/cron/e2e-iptables.yaml | k8s-beta-runs [beta-or-stable-calico-yaml-iptables] | cron/e2e-iptables/k8s-beta-runs-beta-or-stable-calico-yaml-iptables | 212
 .argoci/cron/e2e-iptables.yaml | k8s-distros [gcp-rancher] | cron/e2e-iptables/k8s-distros-gcp-rancher | 227
-.argoci/cron/e2e-iptables.yaml | kubevirt-e2e-tests | cron/e2e-iptables/kubevirt-e2e-tests | 9
+.argoci/cron/e2e-iptables.yaml | kubevirt-e2e-tests | cron/e2e-iptables/kubevirt-e2e-tests | 12
 .argoci/cron/e2e-iptables.yaml | migration [canal-v3-28-2] | cron/e2e-iptables/migration-canal-v3-28-2 | 212
 .argoci/cron/e2e-iptables.yaml | migration [canal-v3-28-2] [pre-migration] | cron/e2e-iptables/migration-canal-v3-28-2-pre-migration | 1
 .argoci/cron/e2e-iptables.yaml | migration [flannel-master] | cron/e2e-iptables/migration-flannel-master | 212
@@ -95,7 +95,7 @@
 .argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-new [stable] | cron/e2e-iptables/wireguard-regression-k8s-e2e-kdd-new-stable | 213
 .argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-old [stable-3] | cron/e2e-iptables/wireguard-regression-k8s-e2e-kdd-old-stable-3 | 209
 .argoci/cron/e2e-iptables.yaml | wireguard-vxlan-k8s-e2e [beta-or-stable] | cron/e2e-iptables/wireguard-vxlan-k8s-e2e-beta-or-stable | 213
-.argoci/cron/e2e-nftables.yaml | kubevirt-e2e-tests | cron/e2e-nftables/kubevirt-e2e-tests | 9
+.argoci/cron/e2e-nftables.yaml | kubevirt-e2e-tests | cron/e2e-nftables/kubevirt-e2e-tests | 12
 .argoci/cron/e2e-nftables.yaml | nftables-mode-arm64-wg [beta-or-stable-rocky-linux-9-arm64] | cron/e2e-nftables/nftables-mode-arm64-wg-beta-or-stable-rocky-linux-9-arm64 | 230
 .argoci/cron/e2e-nftables.yaml | nftables-mode-arm64-wg [beta-or-stable-ubuntu-2204-lts-arm64] | cron/e2e-nftables/nftables-mode-arm64-wg-beta-or-stable-ubuntu-2204-lts-arm64 | 230
 .argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-aws-cni [amazonvpc] | cron/e2e-nftables/nftables-mode-eks-eks-w-aws-cni-amazonvpc | 216
@@ -110,7 +110,7 @@
 .argoci/cron/e2e-openstack.yaml | multi-region [carajammy] | (openstack-e2e) | -
 .argoci/cron/e2e-openstack.yaml | multi-region [caranoble] | (openstack-e2e) | -
 .argoci/cron/e2e-patch-verification.yaml | kind-tests | cron/e2e-patch-verification/kind-tests | 91
-.argoci/cron/e2e-patch-verification.yaml | kubevirt-e2e-tests | cron/e2e-patch-verification/kubevirt-e2e-tests | 9
+.argoci/cron/e2e-patch-verification.yaml | kubevirt-e2e-tests | cron/e2e-patch-verification/kubevirt-e2e-tests | 12
 .argoci/cron/e2e-patch-verification.yaml | manifests-calico-etcd | cron/e2e-patch-verification/manifests-calico-etcd | 87
 .argoci/cron/e2e-patch-verification.yaml | manifests-canal | cron/e2e-patch-verification/manifests-canal | 87
 .argoci/cron/e2e-patch-verification.yaml | manifests-canal-migration | cron/e2e-patch-verification/manifests-canal-migration | 87
