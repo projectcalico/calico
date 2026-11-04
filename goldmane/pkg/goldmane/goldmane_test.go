@@ -23,6 +23,8 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
@@ -1463,6 +1465,23 @@ func TestStreams(t *testing.T) {
 			stream.Close()
 		}
 	})
+}
+
+func TestStreamLimit(t *testing.T) {
+	c := newClock(initialNow)
+	defer setupTest(t, goldmane.WithRolloverTime(15*time.Second), goldmane.WithNowFunc(c.Now))()
+	<-gm.Run(c.Now().Unix())
+
+	// The stream manager allows 100 concurrent streams.
+	for i := range 100 {
+		s, err := gm.Stream(&proto.FlowStreamRequest{})
+		require.NoError(t, err, "stream %d", i)
+		defer s.Close()
+	}
+
+	s, err := gm.Stream(&proto.FlowStreamRequest{})
+	require.Equal(t, codes.ResourceExhausted, status.Code(err), "err: %v", err)
+	require.True(t, s == nil, "expected no stream, got %T", s)
 }
 
 // TestSortOrder tests basic functionality of the various sorted indices supported by goldmane.

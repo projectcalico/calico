@@ -152,10 +152,13 @@ func (m *streamManager) Run(ctx context.Context) {
 		select {
 		case req := <-m.streamRequests:
 			stream := m.register(req)
-			req.respCh <- stream
-			if stream != nil {
-				m.backfillRequests <- stream
+			if stream == nil {
+				// Send an untyped nil. A nil *stream in a chan Stream arrives as a non-nil interface.
+				req.respCh <- nil
+				continue
 			}
+			req.respCh <- stream
+			m.backfillRequests <- stream
 		case id := <-m.closedStreamsCh:
 			m.unregister(id)
 		case <-ctx.Done():
