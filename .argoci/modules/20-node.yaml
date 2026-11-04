@@ -18,15 +18,13 @@ steps:
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
     commands: |
-      # TEMPORARY: the build image lacks the zstd CLI. Timed apart from the unpack.
-      s=$(date +%s); dnf install -y -q zstd; echo "CACHE-TEST node-static-checks dnf $(( $(date +%s) - s ))s"
       # TEMPORARY: unpacks the Go caches from the volume cache rather than GCS.
       s=$(date +%s)
       mkdir -p "$GO_MOD_ROOT"
-      zstd -dc /cache/go-build.tar.zst | tar -xf - &
-      zstd -dc /cache/go-mod.tar.zst | tar -C "$GO_MOD_ROOT" -xf - &
+      unpigz -c /cache/go-build.tar.gz | tar -xf - &
+      unpigz -c /cache/go-mod.tar.gz | tar -C "$GO_MOD_ROOT" -xf - &
       wait
-      echo "CACHE-TEST node-static-checks unpack $(( $(date +%s) - s ))s"
+      echo "CACHE-TEST node-static-checks unpack-pigz $(( $(date +%s) - s ))s"
       make -C node static-checks DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
 
   - name: node-ut
