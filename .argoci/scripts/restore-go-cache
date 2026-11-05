@@ -1,0 +1,20 @@
+#!/bin/bash
+# TEMPORARY: unpacks the Go build and module caches go-cache left on the volume
+# cache, in place of restoring them from GCS. The go-build image has unpigz and
+# ci-base only gzip; either way the node's disk, not decompression, is the limit.
+set -euo pipefail
+
+step=${1:?usage: restore-go-cache <step> [cache-dir]}
+dir=${2:-/cache}
+gunzip=gzip
+if command -v unpigz >/dev/null; then gunzip=unpigz; fi
+
+start=$(date +%s)
+mkdir -p "${GO_MOD_ROOT}"
+"${gunzip}" -dc "${dir}/go-build.tar.gz" | tar -C "${CI_HOME}/${CI_GIT_DIR}" -xf - &
+build=$!
+"${gunzip}" -dc "${dir}/go-mod.tar.gz" | tar -C "${GO_MOD_ROOT}" -xf - &
+mods=$!
+wait "${build}"
+wait "${mods}"
+echo "CACHE-TEST ${step} unpack $(( $(date +%s) - start ))s"

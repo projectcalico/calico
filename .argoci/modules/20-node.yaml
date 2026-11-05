@@ -15,7 +15,7 @@ steps:
     override:
       nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
       tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
-    depends: [check-go, go-mod-download]
+    depends: [check-go, go-cache]
     cache:
       - {name: go, mode: read}
     requests: {cpu: 5500m, memory: 3.75Gi}
@@ -23,13 +23,7 @@ steps:
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
     commands: |
-      # TEMPORARY: unpacks the Go caches from the volume cache rather than GCS.
-      s=$(date +%s)
-      mkdir -p "$GO_MOD_ROOT"
-      unpigz -c /cache/go-build.tar.gz | tar -xf - &
-      unpigz -c /cache/go-mod.tar.gz | tar -C "$GO_MOD_ROOT" -xf - &
-      wait
-      echo "CACHE-TEST node-static-checks unpack-pigz $(( $(date +%s) - s ))s"
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" node-static-checks
       make -C node static-checks DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
 
   - name: node-ut
