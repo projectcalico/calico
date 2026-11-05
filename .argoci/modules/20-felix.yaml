@@ -43,7 +43,7 @@ steps:
         value: "7"
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [build-calico-image, check-go, felix-fv-plan]
+    depends: [build-calico-image, calico-test-binaries, check-go, felix-fv-plan]
     timeout: 40m
     jobSize: large
     requests: {cpu: 2500m, memory: 10Gi}
@@ -75,7 +75,7 @@ steps:
       # request drops to the measured average.
       - name: GOMAXPROCS
         value: "4"
-    depends: [build-calico-image, check-go, go-mod-download]
+    depends: [build-calico-image, calico-test-binaries, check-go, go-mod-download]
     cache:
       - {name: go, mode: read}
     timeout: 30m
@@ -98,14 +98,14 @@ steps:
   # The tests run non-root because two suites branch on geteuid() and take the
   # wrong branch as root. The pod itself stays root: the build image has a passwd
   # entry only for root, and the ssh checkout refuses to run without one. HOME is
-  # set because OpenSSH and Go read it. build-calico-image is a dependency for
-  # the cgo and race binaries it uploads, not for the image.
+  # set because OpenSSH and Go read it. calico-test-binaries supplies the cgo and
+  # race binaries and libbpf.
   - name: felix-ut
     # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
     override:
       nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
       tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
-    depends: [build-calico-image, check-go]
+    depends: [calico-test-binaries, check-go]
     timeout: 45m
     scratchVolumes: [/home/ci]
     env:
@@ -151,7 +151,7 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [build-calico-image, check-go]
+    depends: [build-calico-image, calico-test-binaries, check-go]
     timeout: 45m
     runOn: vm
     vm:
