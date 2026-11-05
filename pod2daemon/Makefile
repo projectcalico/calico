@@ -86,6 +86,7 @@ endif
 
 $(BINDIR)/node-driver-registrar-%: clone-registrar-upstream
 	$(REGISTRAR_RUN) /bin/bash -c $(REGISTRAR_BUILD_CMD)
+	mkdir -p $(dir $@)
 	mv $(REGISTRAR_IMAGE)/$(BINDIR)/csi-node-driver-registrar $@
 
 clone-registrar-upstream:
