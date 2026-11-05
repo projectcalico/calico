@@ -10,11 +10,15 @@ defaults:
 steps:
   - name: libcalico-go-ci
     env:
+      # TEMPORARY: the thread pool the old 5000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "5"
       - name: BUILD_CACHE_GROUP
         value: calico
     depends: [check-go]
     # A kind control plane shares this pod's cores with the tests.
-    requests: {cpu: 5000m, memory: 9.5Gi}
+    requests: {cpu: 2750m, memory: 9.5Gi}
     matrix:
       - name: crd-v1
       - name: v3
