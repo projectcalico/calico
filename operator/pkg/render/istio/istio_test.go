@@ -244,8 +244,8 @@ var _ = Describe("Istio Component Rendering", func() {
 			objsToCreate, objsToDelete := crds.Objects()
 			Expect(objsToDelete).To(BeEmpty())
 
-			// Verify we have exactly 14 Istio CRDs
-			Expect(objsToCreate).To(HaveLen(14))
+			// Verify we have exactly 15 Istio CRDs
+			Expect(objsToCreate).To(HaveLen(15))
 
 			// Check that all returned objects are actually CRDs
 			for _, obj := range objsToCreate {
@@ -264,6 +264,7 @@ var _ = Describe("Istio Component Rendering", func() {
 			// Verify all expected Istio CRDs
 			Expect(crdNames).To(ConsistOf(
 				"wasmplugins.extensions.istio.io",
+				"trafficextensions.extensions.istio.io",
 				"destinationrules.networking.istio.io",
 				"envoyfilters.networking.istio.io",
 				"gateways.networking.istio.io",

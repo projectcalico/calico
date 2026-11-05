@@ -28,6 +28,7 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -264,6 +265,102 @@ var _ = Describe("Istio controller tests", func() {
 				// The controller should successfully handle the Istio CNI daemonset customization
 				Expect(err).ShouldNot(HaveOccurred())
 			})
+		})
+	})
+
+	Context("Istio CRD tests", func() {
+		It("updates an Istio CRD left by an earlier release to the bundled version", func() {
+			createResources()
+			Expect(cli.Create(ctx, &apiextensionsv1.CustomResourceDefinition{
+				ObjectMeta: metav1.ObjectMeta{Name: "sidecars.networking.istio.io"},
+				Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+					Group: "networking.istio.io",
+					Names: apiextensionsv1.CustomResourceDefinitionNames{Plural: "sidecars", Kind: "Sidecar"},
+					Scope: apiextensionsv1.NamespaceScoped,
+					Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+						{Name: "v1alpha3", Served: true, Storage: true},
+					},
+				},
+			})).NotTo(HaveOccurred())
+
+			r := &ReconcileIstio{Client: cli, scheme: scheme, provider: operatorv1.ProviderNone, status: mockStatus}
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			crd := &apiextensionsv1.CustomResourceDefinition{}
+			Expect(cli.Get(ctx, client.ObjectKey{Name: "sidecars.networking.istio.io"}, crd)).NotTo(HaveOccurred())
+			var versions []string
+			for _, v := range crd.Spec.Versions {
+				versions = append(versions, v.Name)
+				Expect(v.Schema).NotTo(BeNil(), "version %s has no schema", v.Name)
+			}
+			Expect(versions).To(ConsistOf("v1", "v1alpha3", "v1beta1"))
+		})
+	})
+
+	Context("Gateway API CRD version tests", func() {
+		var r *ReconcileIstio
+
+		gatewayAPICRD := func(name string, annotations map[string]string) *apiextensionsv1.CustomResourceDefinition {
+			return &apiextensionsv1.CustomResourceDefinition{
+				ObjectMeta: metav1.ObjectMeta{Name: name, Annotations: annotations},
+			}
+		}
+		bundle := func(v string) map[string]string {
+			return map[string]string{"gateway.networking.k8s.io/bundle-version": v}
+		}
+		warning := func() string {
+			for _, call := range mockStatus.Calls {
+				if call.Method == "SetWarning" && call.Arguments.String(0) == gatewayAPIWarningKey {
+					return call.Arguments.String(1)
+				}
+			}
+			return ""
+		}
+
+		BeforeEach(func() {
+			createResources()
+			r = &ReconcileIstio{Client: cli, scheme: scheme, provider: operatorv1.ProviderNone, status: mockStatus}
+		})
+
+		reconcileIstio := func() {
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).ShouldNot(HaveOccurred())
+		}
+
+		It("clears the warning when the operator creates the bundled CRDs", func() {
+			reconcileIstio()
+			Expect(warning()).To(BeEmpty())
+			mockStatus.AssertCalled(GinkgoT(), "ClearWarning", gatewayAPIWarningKey)
+		})
+
+		It("warns about each CRD below the version Istio needs, and not about the others", func() {
+			Expect(cli.Create(ctx, gatewayAPICRD("tlsroutes.gateway.networking.k8s.io", bundle("v1.4.1")))).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, gatewayAPICRD("tcproutes.gateway.networking.k8s.io", bundle("v1.5.1")))).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, gatewayAPICRD("grpcroutes.gateway.networking.k8s.io", bundle("v1.3.0")))).NotTo(HaveOccurred())
+			reconcileIstio()
+
+			msg := warning()
+			Expect(msg).To(ContainSubstring("tlsroutes.gateway.networking.k8s.io is at Gateway API v1.4.1, Istio needs v1.5.0 or newer"))
+			Expect(msg).To(ContainSubstring("tcproutes.gateway.networking.k8s.io is at Gateway API v1.5.1, Istio needs v1.6.0 or newer"))
+			Expect(msg).NotTo(ContainSubstring("grpcroutes"))
+			Expect(msg).To(ContainSubstring("crdManagement to Reconcile"))
+		})
+
+		It("accepts a pre-release of the minimum version, as Istio does", func() {
+			Expect(cli.Create(ctx, gatewayAPICRD("tcproutes.gateway.networking.k8s.io", bundle("v1.6.0-rc.1")))).NotTo(HaveOccurred())
+			reconcileIstio()
+			Expect(warning()).To(BeEmpty())
+		})
+
+		It("warns about a CRD without a usable bundle version", func() {
+			Expect(cli.Create(ctx, gatewayAPICRD("tlsroutes.gateway.networking.k8s.io", nil))).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, gatewayAPICRD("tcproutes.gateway.networking.k8s.io", bundle("latest")))).NotTo(HaveOccurred())
+			reconcileIstio()
+
+			msg := warning()
+			Expect(msg).To(ContainSubstring("tlsroutes.gateway.networking.k8s.io has no gateway.networking.k8s.io/bundle-version annotation"))
+			Expect(msg).To(ContainSubstring(`tcproutes.gateway.networking.k8s.io has bundle version "latest"`))
 		})
 	})
 
