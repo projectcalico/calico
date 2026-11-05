@@ -106,6 +106,18 @@ var (
 		Name: "goldmane_aggr_duplicate_flows_total",
 		Help: "Total number of already-seen flows skipped by the aggregator.",
 	})
+
+	// The trace cache lives in the types package, which Felix also imports, so its metrics are
+	// registered here rather than there.
+	policyTraceCacheSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "goldmane_policy_trace_cache_size",
+		Help: "Number of decoded policy trace entries across both cache generations.",
+	}, func() float64 { return float64(types.PolicyTraceCacheSize()) })
+
+	policyTraceCacheRotations = prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "goldmane_policy_trace_cache_rotations_total",
+		Help: "Total number of times the policy trace cache started a new generation.",
+	}, func() float64 { return float64(types.PolicyTraceCacheRotations()) })
 )
 
 func init() {
@@ -119,6 +131,8 @@ func init() {
 	prometheus.MustRegister(numUniqueFlows)
 	prometheus.MustRegister(numDroppedFlows)
 	prometheus.MustRegister(numDuplicateFlows)
+	prometheus.MustRegister(policyTraceCacheSize)
+	prometheus.MustRegister(policyTraceCacheRotations)
 }
 
 // sinkRequest is an internal helper used to set the sink for the aggregator, which can by modified at runtime.

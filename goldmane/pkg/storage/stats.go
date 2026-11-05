@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"slices"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/types"
@@ -82,7 +84,7 @@ func (s *statistics) add(flow *types.Flow, action proto.Action) {
 		s.packets.AllowedOut += flow.PacketsOut
 		s.bytes.AllowedIn += flow.BytesIn
 		s.bytes.AllowedOut += flow.BytesOut
-		switch direction(flow) {
+		switch direction(flow.Key) {
 		case "ingress":
 			s.connections.AllowedIn += flow.NumConnectionsLive
 		case "egress":
@@ -93,7 +95,7 @@ func (s *statistics) add(flow *types.Flow, action proto.Action) {
 		s.packets.DeniedOut += flow.PacketsOut
 		s.bytes.DeniedIn += flow.BytesIn
 		s.bytes.DeniedOut += flow.BytesOut
-		switch direction(flow) {
+		switch direction(flow.Key) {
 		case "ingress":
 			s.connections.DeniedIn += flow.NumConnectionsLive
 		case "egress":
@@ -104,7 +106,7 @@ func (s *statistics) add(flow *types.Flow, action proto.Action) {
 		s.packets.PassedOut += flow.PacketsOut
 		s.bytes.PassedIn += flow.BytesIn
 		s.bytes.PassedOut += flow.BytesOut
-		switch direction(flow) {
+		switch direction(flow.Key) {
 		case "ingress":
 			s.connections.PassedIn += flow.NumConnectionsLive
 		case "egress":
@@ -119,6 +121,10 @@ func (s *statistics) add(flow *types.Flow, action proto.Action) {
 type statisticsIndex struct {
 	statistics
 	policies map[StatisticsKey]*policyStatistics
+
+	// rules is AddFlow's scratch buffer, reused so each flow's rules cost no allocation. The
+	// owning bucket holds its lock across AddFlow, so calls never overlap.
+	rules []policyRule
 }
 
 func newStatisticsIndex() *statisticsIndex {
@@ -213,86 +219,80 @@ func (s *statisticsIndex) retrieve(k StatisticsKey, groupBy *proto.StatisticsGro
 	return nil
 }
 
-func direction(flow *types.Flow) string {
-	if flow.Key.Reporter() == proto.Reporter_Src {
+func direction(key *types.FlowKey) string {
+	if key.Reporter() == proto.Reporter_Src {
 		return "egress"
 	}
 	return "ingress"
 }
 
-func (s *statisticsIndex) AddFlow(flow *types.Flow) {
-	logrus.WithField("flow", flow).Debug("Adding flow to statistics index")
+// policyRule is one rule a flow's statistics are added to. The rule's policy is key.policyID()
+// and its action is key.Action.
+type policyRule struct {
+	key StatisticsKey
+}
 
+// policyRulesInto derives the deduplicated rules that the key's enforced and pending policy hits
+// contribute to, from the cached decoded trace. It reuses buf's storage, so a caller that keeps
+// the result between calls allocates only when a trace has more rules than any before it.
+func policyRulesInto(buf []policyRule, k *types.FlowKey) []policyRule {
+	trace := types.CachedPolicyTrace(k.Policies())
+	dir := direction(k)
+
+	// Pending hits may duplicate the enforced ones, which the rule check below drops.
+	rules := buf[:0]
+	for _, hits := range [2][]*proto.PolicyHit{trace.EnforcedPolicies, trace.PendingPolicies} {
+		for _, hit := range hits {
+			meta := hit
+			if meta.Kind == proto.PolicyKind_EndOfTier {
+				// For EndOfTier policies, use the policy that triggered the end of tier action to come into effect.
+				// Note that the Action is still attached to the EndOfTier hit, not the trigger.
+				meta = hit.Trigger
+			}
+
+			sk := StatisticsKey{
+				Namespace: meta.Namespace,
+				Name:      meta.Name,
+				Kind:      meta.Kind,
+				Tier:      meta.Tier,
+				Action:    hit.Action,
+				RuleIndex: meta.PolicyIndex,
+				Direction: dir,
+			}
+			if slices.ContainsFunc(rules, func(r policyRule) bool { return r.key == sk }) {
+				continue
+			}
+			rules = append(rules, policyRule{key: sk})
+		}
+	}
+	return rules
+}
+
+// AddFlow adds the flow's statistics to the index, and to each rule its policy trace hits and
+// that rule's policy.
+func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 	// Add the stats from this Flow, aggregated across all the policies it matches.
 	s.add(flow, flow.Key.Action())
 
-	// For each policy in the flow, add the stats to the policy. The PolicyStatistics object
-	// is responsible for tracking the stats for each rule in the policy.
-	policyHits := types.FlowLogPolicyToProto(flow.Key.Policies()).EnforcedPolicies
-
-	// Add pending policies as well - these may contain duplicates of the enforced rules, but
-	// we deduplicate them in the loop below.
-	policyHits = append(policyHits, types.FlowLogPolicyToProto(flow.Key.Policies()).PendingPolicies...)
-
-	// Build a map of policies to rules within the policy hit by this Flow. We want to add this Flow's
-	// statistics contribution once to each Policy, and once to each Rule within the Policy.
-	polToRules := make(map[StatisticsKey]map[StatisticsKey]proto.Action)
-	for _, hit := range policyHits {
-		// Build a key for the policy, excluding per-rule information.
-		meta := hit
-		if meta.Kind == proto.PolicyKind_EndOfTier {
-			// For EndOfTier policies, use the policy that triggered the end of tier action to come into effect.
-			// Note that the Action is still attached to the EndOfTier hit, not the trigger.
-			meta = hit.Trigger
-		}
-
-		sk := StatisticsKey{
-			Namespace: meta.Namespace,
-			Name:      meta.Name,
-			Kind:      meta.Kind,
-			Tier:      meta.Tier,
-			Action:    hit.Action,
-			RuleIndex: meta.PolicyIndex,
-			Direction: direction(flow),
-		}
-		pk := sk.policyID()
-		if _, ok := polToRules[pk]; !ok {
-			polToRules[pk] = make(map[StatisticsKey]proto.Action)
-		}
-		if action, ok := polToRules[pk][sk]; ok && action != hit.Action {
-			logrus.WithFields(logrus.Fields{
-				"policy":      sk,
-				"conflicting": hit.Action,
-				"selected":    action,
-			}).Warnf("Policy rule has conflicting actions, using the first action")
-		} else {
-			polToRules[pk][sk] = hit.Action
-		}
-	}
-
-	// For each Policy, add this Flow to the PolicyStatistics object.
-	for pk, rules := range polToRules {
-		logrus.WithField("policy", pk).Debug("Adding flow statistics to policy")
+	s.rules = policyRulesInto(s.rules, flow.Key)
+	for i := range s.rules {
+		rule := &s.rules[i]
+		pk := rule.key.policyID()
 		ps, ok := s.policies[pk]
 		if !ok {
 			ps = &policyStatistics{rules: make(map[StatisticsKey]*statistics)}
 			s.policies[pk] = ps
 		}
 
-		// Add the Flow's stats to each rule within the policy as well.
-		for k, action := range rules {
-			// Add the Flow's stats the the policy.
-			ps.add(flow, action)
+		// Add the Flow's stats to the policy.
+		ps.add(flow, rule.key.Action)
 
-			// Add the Flow's stats to the rule within the policy.
-			rs, ok := ps.rules[k]
-			if !ok {
-				rs = &statistics{}
-				ps.rules[k] = rs
-			}
-
-			logrus.WithField("rule", k).Debug("Adding flow statistics to rule")
-			rs.add(flow, action)
+		// Add the Flow's stats to the rule within the policy.
+		rs, ok := ps.rules[rule.key]
+		if !ok {
+			rs = &statistics{}
+			ps.rules[rule.key] = rs
 		}
+		rs.add(flow, rule.key.Action)
 	}
 }
