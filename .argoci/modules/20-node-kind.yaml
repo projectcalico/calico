@@ -8,7 +8,7 @@ defaults:
 steps:
   - name: node-kind-cluster-tests
     depends: [build-calico-image, build-node-image, build-whisker-image, check-go]
-    requests: {cpu: 2000m, memory: 4Gi}
+    requests: {cpu: 750m, memory: 4Gi}
     services:
       - docker
     secretBundles:
@@ -17,6 +17,10 @@ steps:
           - name: google-service-account-for-gce-key.json
             as: GCE_SERVICE_ACCOUNT_KEY
     env:
+      # TEMPORARY: the thread pool the old 2000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "2"
       - name: BUILD_CACHE_GROUP
         value: calico
       - name: COMPONENT
