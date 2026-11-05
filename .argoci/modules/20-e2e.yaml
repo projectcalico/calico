@@ -3,6 +3,7 @@
 version: condensed-module
 
 defaults:
+  tiers: []
   # Longer than the default hour: a cluster plus a conformance suite.
   timeout: 1h30m
   runOn: vm
