@@ -21,6 +21,7 @@ steps:
   # DevStack installs OpenStack over the machine it runs on — uninstalling
   # system packages as it goes — so it gets one of its own.
   - name: openstack-devstack
+    tiers: []
     depends: [check-python]
     runOn: vm
     # Longer than the default hour: DevStack installs the whole control plane.

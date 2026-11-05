@@ -130,6 +130,11 @@ defaults:
   secretBundles:
     - docker-hub
 
+  # Every step is in the `basic-ci` tier new PRs start on. A step that needs VMs
+  # or a cluster opts out with `tiers: []` in its module; `tiers: []` on an
+  # include below is a no-op, since include tiers only add.
+  tiers: [basic]
+
 includes:
   # Each check inside carries its own gate.
   - path: .argoci/modules/10-prerequisites.yaml
