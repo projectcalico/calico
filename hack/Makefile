@@ -32,13 +32,12 @@ GINKGO_FOCUS?=.*
 .PHONY:ut
 ## Run the fast set of unit tests in a container.
 ut:
-	$(DOCKER_RUN) --privileged $(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && go test ./...'
+	$(if $(DOCKER_GO_BUILD_RECURSIVE),$(DOCKER_RUN) --privileged $(CALICO_BUILD)) \
+		sh -c 'go test ./...'
 
 fv:
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && \
-		       go run ./cmd/calico-selector set-name "has(a)"&& \
+	$(DOCKER_GO_BUILD_RECURSIVE) \
+		sh -c 'go run ./cmd/calico-selector set-name "has(a)"&& \
                go run ./cmd/calico-selector print-tree "a == \"b\" || has(d) || has(e) && has(g)"'
 
 st:
