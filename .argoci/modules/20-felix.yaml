@@ -75,7 +75,7 @@ steps:
       # request drops to the measured average.
       - name: GOMAXPROCS
         value: "4"
-    depends: [build-calico-image, check-go]
+    depends: [build-calico-image, check-go, go-mod-download]
     cache:
       - {name: go, mode: read}
     timeout: 30m
@@ -87,7 +87,7 @@ steps:
       s=$(date +%s)
       mkdir -p "$GO_MOD_ROOT"
       zstd -dc /cache/go-build.tar.zst | tar -xf - &
-      zstd -dc /cache/go-mod.tar.zst | tar -C "$GO_MOD_ROOT" -xf - &
+      gzip -dc /cache/go-mod.tar.gz | tar -C "$GO_MOD_ROOT" -xf - &
       wait
       echo "CACHE-TEST felix-static-checks unpack-zstd $(( $(date +%s) - s ))s"
       .argoci/scripts/load-cached-images calico
