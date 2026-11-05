@@ -10,10 +10,14 @@ defaults:
 steps:
   - name: e2e-ut
     env:
+      # TEMPORARY: the thread pool the old 4250m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "4"
       - name: BUILD_CACHE_GROUP
         value: calico
     depends: [check-go]
-    requests: {cpu: 4250m, memory: 4.75Gi}
+    requests: {cpu: 3000m, memory: 4.75Gi}
     commands: |
       cd e2e
       make ci
