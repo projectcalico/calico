@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -424,6 +424,9 @@ func TestManyFlows(t *testing.T) {
 		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
+
+	// Debug logs for 20k flows written to the test log take about 20s under -race.
+	utils.ConfigureLogging("INFO")
 	<-gm.Run(now)
 
 	// Create 20k flows and send them as fast as we can. See how Goldmane handles it.
