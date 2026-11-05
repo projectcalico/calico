@@ -21,17 +21,12 @@ import (
 )
 
 type GlobalConfig struct {
-	IstioNamespace         string              `json:"istioNamespace,omitempty"`
-	OperatorManageWebhooks bool                `json:"operatorManageWebhooks,omitempty"`
-	Proxy                  *ProxyConfig        `json:"proxy,omitempty"`
-	ProxyInit              *ProxyInitConfig    `json:"proxy_init,omitempty"`
-	Platform               string              `json:"platform,omitempty"`
-	ImagePullSecrets       []string            `json:"imagePullSecrets,omitempty"`
-	MultiCluster           *MultiClusterConfig `json:"multiCluster,omitempty"`
-}
-
-type MultiClusterConfig struct {
-	ClusterName string `json:"clusterName,omitempty"`
+	IstioNamespace         string           `json:"istioNamespace,omitempty"`
+	OperatorManageWebhooks bool             `json:"operatorManageWebhooks,omitempty"`
+	Proxy                  *ProxyConfig     `json:"proxy,omitempty"`
+	ProxyInit              *ProxyInitConfig `json:"proxy_init,omitempty"`
+	Platform               string           `json:"platform,omitempty"`
+	ImagePullSecrets       []string         `json:"imagePullSecrets,omitempty"`
 }
 
 type ProxyConfig struct {
@@ -61,7 +56,6 @@ type IstiodOpts struct {
 	Gateways                *GatewaysConfig `json:"gateways,omitempty"`
 	Profile                 string          `json:"profile,omitempty"`
 	TrustedZtunnelNamespace string          `json:"trustedZtunnelNamespace,omitempty"`
-	ExtraContainerArgs      []string        `json:"extraContainerArgs,omitempty"`
 }
 
 type CNIConfig struct {

@@ -3,7 +3,6 @@
 version: condensed-module
 
 defaults:
-  tiers: []
   timeout: 1h30m
   runOn: vm
   services:
