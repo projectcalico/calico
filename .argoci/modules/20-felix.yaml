@@ -37,16 +37,12 @@ steps:
   # configure usually broke here.
   - name: felix-build
     env:
-      # TEMPORARY: the thread pool the old 7000m request gave, while the
-      # request drops to the measured average.
-      - name: GOMAXPROCS
-        value: "7"
       - name: BUILD_CACHE_GROUP
         value: calico
     depends: [build-calico-image, calico-test-binaries, check-go, felix-fv-plan]
     timeout: 40m
     jobSize: large
-    requests: {cpu: 2500m, memory: 10Gi}
+    requests: {cpu: 7000m, memory: 10Gi}
     services:
       - docker
     secretBundles:
@@ -292,16 +288,12 @@ steps:
     tiers: []
     depends: [felix-build-windows, build-calico-image, build-node-image, build-operator-image, build-windows-images]
     timeout: 1h30m
-    requests: {cpu: 1500m, memory: 6Gi}
+    requests: {cpu: 3000m, memory: 6Gi}
     services:
       - docker
     secretBundles:
       - banzai-secrets
     env:
-      # TEMPORARY: the thread pool the old 3000m request gave, while the
-      # request drops to the measured average.
-      - name: GOMAXPROCS
-        value: "3"
       - name: BUILD_CACHE_GROUP
         value: calico
       - name: FV_TYPE
