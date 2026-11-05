@@ -152,6 +152,59 @@ func TestLinkAddrMgr_IPV6(t *testing.T) {
 	Expect(addrs).To(ConsistOf(v6AddrOSAssigned, v4Addr200, v6Addr179))
 }
 
+// A workload interface that disappears between resync() listing it and apply() looking it up
+// (a pod deleted while Felix starts) must not leave a pending deletion that fails forever.
+func TestLinkAddrMgr_IfaceGoneBeforeResyncDeletion(t *testing.T) {
+	dataplane, mgr := setup(t, 6)
+
+	linkCali := dataplane.AddIface(5, "cali1", true, true)
+	nl, err := mgr.nl.Handle()
+	Expect(err).NotTo(HaveOccurred())
+	err = nl.AddrAdd(linkCali, toNetlinkAddr(v6AddrOSAssigned))
+	Expect(err).NotTo(HaveOccurred())
+	err = nl.AddrAdd(linkCali, toNetlinkAddr(v6Addr200))
+	Expect(err).NotTo(HaveOccurred())
+
+	dataplane.FailuresToSimulate = mocknetlink.FailNextLinkByNameNotFound
+	err = mgr.Apply()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(dataplane.FailuresToSimulate).To(BeZero(), "resync should have queued a deletion that looks up cali1")
+	dataplane.DelIface("cali1")
+
+	for range 3 {
+		err = mgr.Apply()
+		Expect(err).NotTo(HaveOccurred())
+	}
+	Expect(mgr.ifaceNameToAddrs.PendingDeletions().Len()).To(BeZero())
+}
+
+// An interface holding only OS-assigned or other-family addresses must not be recorded,
+// since resync would then queue a spurious removal for it.
+func TestLinkAddrMgr_ResyncSkipsIfacesWithoutProgrammableAddr(t *testing.T) {
+	dataplane, mgr := setup(t, 6)
+
+	nl, err := mgr.nl.Handle()
+	Expect(err).NotTo(HaveOccurred())
+	linkWithAddr := dataplane.AddIface(5, "cali1", true, true)
+	linkOSAddrOnly := dataplane.AddIface(6, "cali2", true, true)
+	linkOtherFamily := dataplane.AddIface(7, "cali3", true, true)
+	err = nl.AddrAdd(linkWithAddr, toNetlinkAddr(v6AddrOSAssigned))
+	Expect(err).NotTo(HaveOccurred())
+	err = nl.AddrAdd(linkWithAddr, toNetlinkAddr(v6Addr200))
+	Expect(err).NotTo(HaveOccurred())
+	err = nl.AddrAdd(linkOSAddrOnly, toNetlinkAddr(v6AddrOSAssigned))
+	Expect(err).NotTo(HaveOccurred())
+	err = nl.AddrAdd(linkOtherFamily, toNetlinkAddr(v4Addr200))
+	Expect(err).NotTo(HaveOccurred())
+
+	err = mgr.resync(nl)
+	Expect(err).NotTo(HaveOccurred())
+
+	recorded := map[string]ip.CIDR{}
+	mgr.ifaceNameToAddrs.Dataplane().Iter(func(k string, v ip.CIDR) { recorded[k] = v })
+	Expect(recorded).To(Equal(map[string]ip.CIDR{"cali1": ip.MustParseCIDROrIP(v6Addr200)}))
+}
+
 func toNetlinkAddr(s string) *netlink.Addr {
 	net, err := netlink.ParseIPNet(s)
 	Expect(err).NotTo(HaveOccurred())
