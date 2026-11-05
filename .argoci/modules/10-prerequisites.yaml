@@ -8,8 +8,13 @@ defaults:
 
 steps:
   - name: check-yaml
+    env:
+      # TEMPORARY: the thread pool the old 3500m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "3"
     jobSize: medium
-    requests: {cpu: 3500m, memory: 1Gi}
+    requests: {cpu: 1750m, memory: 1Gi}
     services: [docker]
     changes:
       in:
@@ -35,11 +40,15 @@ steps:
     cache:
       - {name: go, mode: write}
     env:
+      # TEMPORARY: the thread pool the old 7000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "7"
       # Runs the Makefiles' go-build recipes here rather than in a nested container.
       - name: NATIVE_GO_BUILD
         value: "true"
     jobSize: large
-    requests: {cpu: 7000m, memory: 4Gi}
+    requests: {cpu: 4500m, memory: 4Gi}
     useGoBuild: true
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
@@ -88,8 +97,13 @@ steps:
       ls -l /cache
 
   - name: check-python
+    env:
+      # TEMPORARY: the thread pool the old 2000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "2"
     jobSize: small
-    requests: {cpu: 2000m, memory: 0.75Gi}
+    requests: {cpu: 1750m, memory: 0.75Gi}
     services: [docker]
     changes:
       in:
@@ -104,12 +118,17 @@ steps:
 
   # Grep-speed checks, so one step rather than three.
   - name: check-language-dockerfiles
+    env:
+      # TEMPORARY: the thread pool the old 2250m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "2"
     # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
     override:
       nodeSelector: {role: argoci, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
       tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     jobSize: small
-    requests: {cpu: 2250m, memory: 548Mi}
+    requests: {cpu: 2000m, memory: 548Mi}
     useGoBuild: true
     workspaceVolumes: none
     changes:
@@ -381,9 +400,14 @@ steps:
 
   # TypeScript, so there is no Go import graph to gate on.
   - name: build-whisker-image
+    env:
+      # TEMPORARY: the thread pool the old 2000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "2"
     services: [docker]
     timeout: 1h
-    requests: {cpu: 2000m, memory: 1.75Gi}
+    requests: {cpu: 1750m, memory: 1.75Gi}
     changes:
       in:
         - '^whisker/'
@@ -398,12 +422,16 @@ steps:
   # (localhost:5000/calico/<name>:test-build) are the ones they install.
   - name: build-operator-image
     env:
+      # TEMPORARY: the thread pool the old 7000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "7"
       - name: BUILD_CACHE_GROUP
         value: calico
     services: [docker]
     timeout: 1h
     jobSize: large
-    requests: {cpu: 7000m, memory: 8Gi}
+    requests: {cpu: 2000m, memory: 8Gi}
     changes:
       dependsOn: [operator]
       in:
@@ -424,10 +452,15 @@ steps:
   # Windows FV installs these rather than building its own. Nothing else builds
   # them, so this is also where a break in them shows up.
   - name: build-windows-images
+    env:
+      # TEMPORARY: the thread pool the old 7000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "7"
     services: [docker]
     timeout: 1h
     jobSize: large
-    requests: {cpu: 7000m, memory: 8Gi}
+    requests: {cpu: 3250m, memory: 8Gi}
     changes:
       dependsOn: [node, cni-plugin]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
@@ -470,6 +503,10 @@ steps:
   # steps' differing package sets.
   - name: build-e2e-binaries
     env:
+      # TEMPORARY: the thread pool the old 7000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "7"
       - name: BUILD_CACHE_GROUP
         value: e2e
       - name: STORE_BUILD_CACHE
@@ -477,7 +514,7 @@ steps:
     services: [docker]
     timeout: 1h
     jobSize: large
-    requests: {cpu: 7000m, memory: 8Gi}
+    requests: {cpu: 1500m, memory: 8Gi}
     depends: [build-calico-image]
     changes:
       dependsOn: [e2e]

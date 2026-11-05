@@ -7,10 +7,14 @@ defaults:
 steps:
   - name: operator-ci
     env:
+      # TEMPORARY: the thread pool the old 5000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "5"
       - name: BUILD_CACHE_GROUP
         value: calico
     depends: [check-go]
-    requests: {cpu: 5000m, memory: 6Gi}
+    requests: {cpu: 4250m, memory: 6Gi}
     services: [docker]
     commands: |
       cd operator
