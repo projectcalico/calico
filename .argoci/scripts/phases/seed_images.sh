@@ -18,8 +18,8 @@
 # the pods pulling for themselves, which is the behaviour without this phase, so
 # it must not abort the job under the caller's `set -eo pipefail`.
 
-# Keep in sync with e2e/pkg/utils/images/images.go. TestImagesAreSeeded fails if
-# a Linux workload image is added there without being listed here.
+# Keep in sync with e2e/pkg/utils/images/images.go. TestWorkloadImagesAreSeeded
+# runs this script with --list, and fails if the two lists differ.
 _seed_images=(
   "docker.io/alpine:3"
   "docker.io/alpine/socat:1.8.0.1"
@@ -83,4 +83,9 @@ _seed_images_main() {
   rm -f "${_tar}"
 }
 
-_seed_images_main || echo "[WARN] seed_images: phase failed, pods will pull for themselves"
+# When sourced, $1 is the caller's argument, so only a direct run can list.
+if [[ "${BASH_SOURCE[0]}" == "$0" && "${1:-}" == "--list" ]]; then
+  printf '%s\n' "${_seed_images[@]}"
+else
+  _seed_images_main || echo "[WARN] seed_images: phase failed, pods will pull for themselves"
+fi
