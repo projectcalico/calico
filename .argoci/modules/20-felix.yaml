@@ -14,14 +14,22 @@ steps:
   # inputs; felix-build and the lanes skip what it
   # says passed.  FELIX_FV_MEMO=off runs everything.
   - name: felix-fv-plan
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     useGoBuild: true
     env:
+      # TEMPORARY: the thread pool the old 4000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "4"
       - name: BUILD_CACHE_GROUP
         value: calico
       - name: FELIX_FV_MEMO
         value: "on"
     timeout: 20m
-    requests: {cpu: 4000m, memory: 4Gi}
+    requests: {cpu: 1750m, memory: 4Gi}
     commands: |
       .argoci/scripts/felix-fv-plan
 
@@ -29,12 +37,16 @@ steps:
   # configure usually broke here.
   - name: felix-build
     env:
+      # TEMPORARY: the thread pool the old 7000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "7"
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [build-calico-image, check-go, felix-fv-plan]
+    depends: [build-calico-image, calico-test-binaries, check-go, felix-fv-plan]
     timeout: 40m
     jobSize: large
-    requests: {cpu: 7000m, memory: 10Gi}
+    requests: {cpu: 2500m, memory: 10Gi}
     services:
       - docker
     secretBundles:
@@ -59,48 +71,68 @@ steps:
 
   - name: felix-static-checks
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-    depends: [build-calico-image, check-go]
+      # TEMPORARY: the thread pool the old 4000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "4"
+    depends: [build-calico-image, calico-test-binaries, check-go, go-cache]
+    cache:
+      - {name: go, mode: read}
     timeout: 30m
-    requests: {cpu: 4000m, memory: 6Gi}
+    requests: {cpu: 3750m, memory: 6Gi}
     services:
       - docker
     commands: |
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" felix-static-checks
       .argoci/scripts/load-cached-images calico
       .semaphore/scripts/load-felix-prereqs.sh
       cd felix
       make static-checks
 
-  # Non-root because two suites branch on geteuid() and take the wrong branch as
-  # root. The volume and HOME match the image's non-root user, since OpenSSH
-  # reads the home from passwd rather than the environment.
+  # The tests run non-root because two suites branch on geteuid() and take the
+  # wrong branch as root. The pod itself stays root: the build image has a passwd
+  # entry only for root, and the ssh checkout refuses to run without one. HOME is
+  # set because OpenSSH and Go read it. calico-test-binaries supplies the cgo and
+  # race binaries and libbpf.
   - name: felix-ut
-    depends: [build-calico-image, check-go]
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    depends: [calico-test-binaries, check-go]
     timeout: 45m
-    runAsNonRoot: true
     scratchVolumes: [/home/ci]
     env:
+      # TEMPORARY: the thread pool the old 7000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "7"
       - name: BUILD_CACHE_GROUP
         value: calico
       - name: HOME
         value: /home/ci
+      - name: NATIVE_GO_BUILD
+        value: "true"
     jobSize: large
-    requests: {cpu: 7000m, memory: 10Gi}
-    services:
-      - docker
+    requests: {cpu: 2000m, memory: 7Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     secretBundles:
       - fv-tests-guru-github-token
       - gemini-api-key
       - fv-guru-db
     commands: |
-      .argoci/scripts/load-cached-images calico
+      # The prereqs ship zstd-compressed and the build image lacks the CLI.
+      dnf install -y -q zstd
       .semaphore/scripts/load-felix-prereqs.sh
-      cd felix
       # The failure analysis reads the log from here.
-      mkdir -p ../artifacts
+      mkdir -p artifacts
+      useradd -u 1000 -U -M -d /home/ci ci
+      chown -R ci:ci . /home/ci /go
+      cd felix
       set -o pipefail
-      make ut 2>&1 | tee ../artifacts/ut.log
+      su-exec ci make ut 2>&1 | tee ../artifacts/ut.log
     epilogue: |
       cd "${CI_HOME}/${CI_GIT_DIR}/felix"
       # Before the push: it annotates the reports.
@@ -113,7 +145,7 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [build-calico-image, check-go]
+    depends: [build-calico-image, calico-test-binaries, check-go]
     timeout: 45m
     runOn: vm
     vm:
@@ -143,7 +175,7 @@ steps:
     tiers: []
     depends: [felix-build]
     timeout: 1h30m
-    requests: {cpu: 2000m, memory: 4Gi}
+    requests: {cpu: 1000m, memory: 4Gi}
     secretBundles:
       - name: google-service-account-for-gce
         keys:
@@ -153,6 +185,10 @@ steps:
       - gemini-api-key
       - fv-guru-db
     env:
+      # TEMPORARY: the thread pool the old 2000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "2"
       - name: JOB_TIMEOUT_MINUTES
         value: "60"
     matrix:
@@ -236,10 +272,14 @@ steps:
 
   - name: felix-build-windows
     env:
+      # TEMPORARY: the thread pool the old 7000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "7"
       - name: BUILD_CACHE_GROUP
         value: calico
     jobSize: large
-    requests: {cpu: 7000m, memory: 8Gi}
+    requests: {cpu: 3500m, memory: 8Gi}
     services:
       - docker
     commands: |
@@ -252,12 +292,16 @@ steps:
     tiers: []
     depends: [felix-build-windows, build-calico-image, build-node-image, build-operator-image, build-windows-images]
     timeout: 1h30m
-    requests: {cpu: 3000m, memory: 6Gi}
+    requests: {cpu: 1500m, memory: 6Gi}
     services:
       - docker
     secretBundles:
       - banzai-secrets
     env:
+      # TEMPORARY: the thread pool the old 3000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "3"
       - name: BUILD_CACHE_GROUP
         value: calico
       - name: FV_TYPE

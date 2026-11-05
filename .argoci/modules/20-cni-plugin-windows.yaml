@@ -13,7 +13,7 @@ defaults:
 steps:
   - name: cni-plugin-windows-fv
     depends: [check-go]
-    requests: {cpu: 3, memory: 6Gi}
+    requests: {cpu: 1500m, memory: 6Gi}
     matrix:
       - name: overlay
         env:
@@ -24,6 +24,10 @@ steps:
           - name: BACKEND
             value: l2bridge
     env:
+      # TEMPORARY: the thread pool the old 3 request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "3"
       - name: BUILD_CACHE_GROUP
         value: calico
       - name: AZURE_LOCATION
