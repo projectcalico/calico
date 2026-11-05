@@ -15,8 +15,10 @@
 package externalnode
 
 import (
+	"errors"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -110,4 +112,17 @@ func fileContains(t *testing.T, path, s string) bool {
 		t.Fatalf("reading %s: %v", path, err)
 	}
 	return strings.Contains(string(contents), s)
+}
+
+// ExecTimeout used to type-assert its error to *exec.ExitError. A failure that
+// produced no exit status — here, no `timeout` binary on PATH — panicked and
+// took the whole Ginkgo node down instead of failing the caller's assertion.
+func TestExecTimeoutReturnsFailureWithoutExitStatus(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	c := &Client{extIP: "10.0.0.1", extKey: "/dev/null", extUser: "test"}
+
+	_, err := c.ExecTimeout(1, "sh", "-c", "true")
+	if !errors.Is(err, exec.ErrNotFound) {
+		t.Fatalf("ExecTimeout() error = %v, want exec.ErrNotFound", err)
+	}
 }
