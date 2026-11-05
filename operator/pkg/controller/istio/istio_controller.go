@@ -168,11 +168,13 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
+	// Before the finalizer handling, so the status of a deleting CR is reported
+	// after an operator restart too.
+	r.status.OnCRFound()
+
 	if res, err, finished := r.maintainFinalizer(ctx, instance, reqLogger); err != nil || finished {
 		return res, err
 	}
-
-	r.status.OnCRFound()
 
 	// SetMetaData in the TigeraStatus such as observedGenerations.
 	defer r.status.SetMetaData(&instance.ObjectMeta)
