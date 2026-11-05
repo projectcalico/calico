@@ -26,29 +26,53 @@ steps:
     commands: |
       make yaml-lint
 
-  # TEMPORARY: fills the Go module cache for every module in the repo, for every
-  # platform, and hands it over the volume cache. Download only, so it is done long
-  # before any step that compiles needs it.
-  - name: go-mod-download
+  # TEMPORARY: builds this commit's Go caches once, for every step that compiles
+  # with the same settings: the module cache for every module in the repo, and the
+  # build cache from check-go's vet and the calico binary. Handed over the volume
+  # cache in place of a GCS restore.
+  - name: go-cache
     override:
-      nodeSelector: {role: argoci, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
-      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
-    jobSize: small
-    requests: {cpu: 2000m, memory: 2Gi}
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    jobSize: large
+    requests: {cpu: 7000m, memory: 6Gi}
     useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
     cache:
       - {name: go, mode: write}
+    changes:
+      in:
+        - ^go\.mod$
+        - ^go\.sum$
+        - ^.*\.go$
+        - ^.*deps\.txt$
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/depstree\.yaml$
+        - ^\.argoci/config\.yaml$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
       s=$(date +%s)
       for mod in $(git ls-files '*go.mod' | grep -v -e '^third_party/' -e '/vendor/'); do
         ( cd "$(dirname "$mod")" && go mod download )
       done
-      echo "CACHE-TEST go-mod-download download $(( $(date +%s) - s ))s"
-      du -sh "$GO_MOD_ROOT/pkg/mod"
+      echo "CACHE-TEST go-cache download $(( $(date +%s) - s ))s"
+      # Through make, so the settings are the ones the readers build with.
       s=$(date +%s)
-      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | pigz -1 > /cache/go-mod.tar.gz
-      echo "CACHE-TEST go-mod-download pack $(( $(date +%s) - s ))s"
+      make go-vet
+      make -C cmd/calico build
+      echo "CACHE-TEST go-cache compile $(( $(date +%s) - s ))s"
+      du -sh .go-pkg-cache "$GO_MOD_ROOT/pkg/mod"
+      s=$(date +%s)
+      tar -cf - .go-pkg-cache | pigz -1 > /cache/go-build.tar.gz &
+      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | pigz -1 > /cache/go-mod.tar.gz &
+      wait
+      echo "CACHE-TEST go-cache pack $(( $(date +%s) - s ))s"
       ls -l /cache
 
   # go vet fans out across every package, so it scales with the cores it gets.
@@ -59,11 +83,10 @@ steps:
     override:
       nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
       tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
-    # TEMPORARY: builds the Go caches from cold instead of restoring them from GCS,
-    # and hands them to felix-static-checks and node-static-checks over the volume
-    # cache.
+    # TEMPORARY: compiles against the caches go-cache built.
+    depends: [go-cache]
     cache:
-      - {name: go, mode: write}
+      - {name: go, mode: read}
     env:
       # TEMPORARY: the thread pool the old 7000m request gave, while the
       # request drops to the measured average.
@@ -90,6 +113,7 @@ steps:
         - ^\.argoci/config\.yaml$
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" check-go
       # `useGoBuild` steps take their image tag from config.yaml rather than from
       # the toolchain the Makefiles build with.
       want=$(make --no-print-directory -s -f metadata.mk --eval 'print: ; @echo $(GO_BUILD_VER)' print)
@@ -106,18 +130,6 @@ steps:
       # A cron or tag has no range to diff against, so it reformats everything.
       if [ "${CI_GIT_REF_TYPE}" = PR ] || [ "${CI_GIT_REF_TYPE}" = MERGE ]; then make fix-changed; else make fix-all; fi
       make check-dirty
-      # TEMPORARY: writes this commit's Go build cache for the volume-cache readers.
-      dnf install -y -q zstd
-      du -sh .go-pkg-cache "$GO_MOD_ROOT/pkg/mod"
-      s=$(date +%s)
-      tar -cf - .go-pkg-cache | pigz -1 > /cache/go-build.tar.gz &
-      wait
-      echo "CACHE-TEST check-go compress-pigz $(( $(date +%s) - s ))s"
-      s=$(date +%s)
-      tar -cf - .go-pkg-cache | zstd -T0 -1 -q -c > /cache/go-build.tar.zst &
-      wait
-      echo "CACHE-TEST check-go compress-zstd $(( $(date +%s) - s ))s"
-      ls -l /cache
 
   - name: check-python
     env:
@@ -278,7 +290,7 @@ steps:
   # with rootless buildkit, and build-calico-image publishes the tar the image
   # loaders pull. The last keeps the name every consumer depends on.
   - name: calico-image-context
-    depends: [go-mod-download]
+    depends: [go-cache]
     # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
     override:
       nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
@@ -293,17 +305,13 @@ steps:
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
     cache:
-      - {name: go, mode: read, path: /gomod}
+      - {name: go, mode: read, path: /gocache}
       - {name: image, mode: write}
     changes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     commands: |
-      # TEMPORARY: the module cache go-mod-download filled, in place of a GCS restore.
-      s=$(date +%s)
-      mkdir -p "$GO_MOD_ROOT"
-      unpigz -c /gomod/go-mod.tar.gz | tar -C "$GO_MOD_ROOT" -xf -
-      echo "CACHE-TEST calico-image-context unpack-mod $(( $(date +%s) - s ))s"
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" calico-image-context /gocache
       make -C cmd/calico image-context
       mkdir -p /cache/calico-image
       cp -a cmd/calico/bin/image-context-amd64/. /cache/calico-image/
@@ -316,7 +324,7 @@ steps:
     override:
       nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
       tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
-    depends: [go-mod-download]
+    depends: [go-cache]
     env:
       - name: NATIVE_GO_BUILD
         value: "true"
@@ -327,16 +335,14 @@ steps:
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
     cache:
-      - {name: go, mode: read, path: /gomod}
+      - {name: go, mode: read, path: /gocache}
     changes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     commands: |
       # TEMPORARY: the build image lacks the zstd CLI the libbpf tarball needs.
       dnf install -y -q zstd
-      # TEMPORARY: the module cache go-mod-download filled, in place of a GCS restore.
-      mkdir -p "$GO_MOD_ROOT"
-      unpigz -c /gomod/go-mod.tar.gz | tar -C "$GO_MOD_ROOT" -xf -
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" calico-test-binaries /gocache
       # Shipped for the Felix FVs, which would otherwise build them per lane.
       make -C cmd/calico build-cgo build-race
       artifact push workflow cmd/calico/bin/calico-cgo-amd64
