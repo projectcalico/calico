@@ -75,7 +75,7 @@ steps:
       # request drops to the measured average.
       - name: GOMAXPROCS
         value: "4"
-    depends: [build-calico-image, calico-test-binaries, check-go, go-mod-download]
+    depends: [build-calico-image, calico-test-binaries, check-go, go-cache]
     cache:
       - {name: go, mode: read}
     timeout: 30m
@@ -83,13 +83,7 @@ steps:
     services:
       - docker
     commands: |
-      # TEMPORARY: unpacks the Go caches from the volume cache rather than GCS.
-      s=$(date +%s)
-      mkdir -p "$GO_MOD_ROOT"
-      zstd -dc /cache/go-build.tar.zst | tar -xf - &
-      gzip -dc /cache/go-mod.tar.gz | tar -C "$GO_MOD_ROOT" -xf - &
-      wait
-      echo "CACHE-TEST felix-static-checks unpack-zstd $(( $(date +%s) - s ))s"
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" felix-static-checks
       .argoci/scripts/load-cached-images calico
       .semaphore/scripts/load-felix-prereqs.sh
       cd felix
