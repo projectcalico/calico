@@ -14,7 +14,6 @@ steps:
   # inputs; felix-build and the lanes skip what it
   # says passed.  FELIX_FV_MEMO=off runs everything.
   - name: felix-fv-plan
-    tiers: []
     useGoBuild: true
     env:
       - name: BUILD_CACHE_GROUP
@@ -29,7 +28,6 @@ steps:
   # Every FV VM unpacks this step's output, so a lane whose batches all fail to
   # configure usually broke here.
   - name: felix-build
-    tiers: []
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
