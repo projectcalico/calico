@@ -22,15 +22,27 @@ steps:
       make yaml-lint
 
   # go vet fans out across every package, so it scales with the cores it gets.
+  # Every module waits on this step, so it runs in the build image directly
+  # rather than paying dind's start-up and image pull.
   - name: check-go
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    # TEMPORARY: builds the Go caches from cold instead of restoring them from GCS,
+    # and hands them to felix-static-checks and node-static-checks over the volume
+    # cache.
+    cache:
+      - {name: go, mode: write}
     env:
-      - name: BUILD_CACHE_GROUP
-        value: preflight-go-checks
-      - name: STORE_BUILD_CACHE
+      # Runs the Makefiles' go-build recipes here rather than in a nested container.
+      - name: NATIVE_GO_BUILD
         value: "true"
     jobSize: large
-    requests: {cpu: 14000m, memory: 16Gi}
-    services: [docker]
+    requests: {cpu: 7000m, memory: 4Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     changes:
       in:
         - ^go\.mod$
@@ -60,6 +72,20 @@ steps:
       # A cron or tag has no range to diff against, so it reformats everything.
       if [ "${CI_GIT_REF_TYPE}" = PR ] || [ "${CI_GIT_REF_TYPE}" = MERGE ]; then make fix-changed; else make fix-all; fi
       make check-dirty
+      # TEMPORARY: writes this commit's Go caches for the volume-cache readers.
+      dnf install -y -q zstd
+      du -sh .go-pkg-cache "$GO_MOD_ROOT/pkg/mod"
+      s=$(date +%s)
+      tar -cf - .go-pkg-cache | pigz -1 > /cache/go-build.tar.gz &
+      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | pigz -1 > /cache/go-mod.tar.gz &
+      wait
+      echo "CACHE-TEST check-go compress-pigz $(( $(date +%s) - s ))s"
+      s=$(date +%s)
+      tar -cf - .go-pkg-cache | zstd -T0 -1 -q -c > /cache/go-build.tar.zst &
+      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | zstd -T0 -1 -q -c > /cache/go-mod.tar.zst &
+      wait
+      echo "CACHE-TEST check-go compress-zstd $(( $(date +%s) - s ))s"
+      ls -l /cache
 
   - name: check-python
     jobSize: small
@@ -78,6 +104,10 @@ steps:
 
   # Grep-speed checks, so one step rather than three.
   - name: check-language-dockerfiles
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     jobSize: small
     requests: {cpu: 2250m, memory: 548Mi}
     useGoBuild: true
@@ -149,9 +179,17 @@ steps:
   # A chart can change what it renders without any committed manifest changing,
   # which a diff of the tree cannot see.
   - name: check-helm-charts
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     jobSize: small
     requests: {cpu: 2000m, memory: 1Gi}
-    services: [docker]
+    useGoBuild: true
+    workspaceVolumes: none
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     changes:
       in:
         - ^charts/
@@ -165,8 +203,16 @@ steps:
   # Regenerating the patches must be a no-op. metadata.mk is in the trigger
   # because `go mod tidy`'s output depends on the toolchain.
   - name: check-thirdparty-dep-patches
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     requests: {cpu: 2000m, memory: 2Gi}
-    services: [docker]
+    useGoBuild: true
+    workspaceVolumes: none
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     changes:
       in:
         - ^hack/thirdparty/
@@ -185,26 +231,41 @@ steps:
       make check-thirdparty-dep-patches
       make check-dirty
 
-  - name: build-calico-image
+  # The calico/calico image is built without Docker: calico-image-context compiles
+  # and stages everything the Dockerfile reads, calico-image-buildkit builds it
+  # with rootless buildkit, and build-calico-image publishes the tar the image
+  # loaders pull. The last keeps the name every consumer depends on.
+  - name: calico-image-context
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
       - name: STORE_BUILD_CACHE
         value: "true"
-    services: [docker]
+      - name: NATIVE_GO_BUILD
+        value: "true"
     timeout: 1h
     jobSize: large
-    requests: {cpu: 7000m, memory: 8Gi}
+    requests: {cpu: 7000m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    cache:
+      - {name: image, mode: write}
     changes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     commands: |
-      make -C cmd/calico image
+      # TEMPORARY: the build image lacks the zstd CLI the libbpf tarball needs.
+      dnf install -y -q zstd
+      make -C cmd/calico image-context
+      mkdir -p /cache/calico-image
+      cp -a cmd/calico/bin/image-context-amd64/. /cache/calico-image/
       # Shipped for the Felix FVs, which would otherwise build them per lane.
       make -C cmd/calico build-cgo build-race
-      docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
-      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/calico-image.tar
-      artifact push workflow /tmp/calico-image.tar.zst
       artifact push workflow cmd/calico/bin/calico-cgo-amd64
       artifact push workflow cmd/calico/bin/calico-race-amd64
       # Shipped so no Felix lane clones libbpf; the cgo build has usually made it.
@@ -215,6 +276,31 @@ steps:
       test -f "felix/bpf-gpl/.libbpf-${LIBBPF_VERSION}" || { echo "libbpf version marker felix/bpf-gpl/.libbpf-${LIBBPF_VERSION} missing" >&2; exit 1; }
       tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
       artifact push workflow /tmp/libbpf-amd64.tar.zst
+
+  - name: calico-image-buildkit
+    depends: [calico-image-context]
+    changes:
+      dependsOn: [cmd]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    cache:
+      - {name: image, mode: read}
+      - {name: image, mode: write, path: /out}
+    buildkit:
+      tag: calico/calico:latest-amd64
+      context: /cache/calico-image
+      tar: /out/calico-image.tar
+
+  - name: build-calico-image
+    depends: [calico-image-buildkit]
+    jobSize: small
+    changes:
+      dependsOn: [cmd]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    cache:
+      - {name: image, mode: read}
+    commands: |
+      zstd -3 -T0 -o /tmp/calico-image.tar.zst /cache/calico-image.tar
+      artifact push workflow /tmp/calico-image.tar.zst
 
   # Tagged by a hash of the recipe, so an unchanged one is a pull rather than a
   # ~20 minute emulated build.
