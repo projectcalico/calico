@@ -130,13 +130,14 @@ defaults:
   secretBundles:
     - docker-hub
 
-# A PR on the basic tier (the `basic-ci` label, added to every new PR) skips
-# the costly suites: Felix FVs, node STs, e2es and the other FV and cluster
-# lanes. Opt-in, so a new module only joins basic when listed.
+  # Every step is in the `basic-ci` tier new PRs start on. A step that needs VMs
+  # or a cluster opts out with `tiers: []` in its module; `tiers: []` on an
+  # include below is a no-op, since include tiers only add.
+  tiers: [basic]
+
 includes:
   # Each check inside carries its own gate.
   - path: .argoci/modules/10-prerequisites.yaml
-    tiers: [basic]
 
   # Ungated: the sweep must run on every build.
   - path: .argoci/modules/99-cleanup.yaml
@@ -144,14 +145,12 @@ includes:
   # Each module is also gated on its own file, so editing one retests it. Match
   # it exactly — a bare `^\.argoci/` would fire everything on any CI edit.
   - path: .argoci/modules/20-lib.yaml
-    tiers: [basic]
     changes:
       in:
         - ^lib/
         - ^\.argoci/modules/20-lib\.yaml$
 
   - path: .argoci/modules/20-api.yaml
-    tiers: [basic]
     changes:
       in:
         - ^api/
@@ -165,73 +164,61 @@ includes:
         - (^|/)LICENSE$
 
   - path: .argoci/modules/20-calicoctl.yaml
-    tiers: [basic]
     changes:
       dependsOn: [calicoctl]
       in: ['^\.argoci/modules/20-calicoctl\.yaml$']
 
   - path: .argoci/modules/20-confd.yaml
-    tiers: [basic]
     changes:
       dependsOn: [confd]
       in: ['^\.argoci/modules/20-confd\.yaml$']
 
   - path: .argoci/modules/20-pod2daemon.yaml
-    tiers: [basic]
     changes:
       dependsOn: [pod2daemon]
       in: ['^\.argoci/modules/20-pod2daemon\.yaml$']
 
   - path: .argoci/modules/20-app-policy.yaml
-    tiers: [basic]
     changes:
       dependsOn: [app-policy]
       in: ['^\.argoci/modules/20-app-policy\.yaml$']
 
   - path: .argoci/modules/20-goldmane.yaml
-    tiers: [basic]
     changes:
       dependsOn: [goldmane]
       in: ['^\.argoci/modules/20-goldmane\.yaml$']
 
   - path: .argoci/modules/20-guardian.yaml
-    tiers: [basic]
     changes:
       dependsOn: [guardian]
       in: ['^\.argoci/modules/20-guardian\.yaml$']
 
   - path: .argoci/modules/20-libcalico-go.yaml
-    tiers: [basic]
     changes:
       dependsOn: [libcalico-go]
       in: ['^\.argoci/modules/20-libcalico-go\.yaml$']
 
   - path: .argoci/modules/20-apiserver.yaml
-    tiers: [basic]
     changes:
       dependsOn: [apiserver]
       in: ['^\.argoci/modules/20-apiserver\.yaml$']
 
   - path: .argoci/modules/20-whisker-backend.yaml
-    tiers: [basic]
     changes:
       dependsOn: [whisker-backend]
       in: ['^\.argoci/modules/20-whisker-backend\.yaml$']
 
   - path: .argoci/modules/20-webhooks.yaml
-    tiers: [basic]
     changes:
       dependsOn: [webhooks, api, apiserver]
       in: ['^\.argoci/modules/20-webhooks\.yaml$']
 
   - path: .argoci/modules/20-tools.yaml
-    tiers: [basic]
     changes:
       dependsOn: [hack, api, libcalico-go]
       in: ['^\.argoci/modules/20-tools\.yaml$']
 
   - path: .argoci/modules/20-whisker.yaml
-    tiers: [basic]
     changes:
       in:
         - ^whisker/
@@ -244,20 +231,17 @@ includes:
         - (^|/)LICENSE$
 
   - path: .argoci/modules/20-cmd-calico.yaml
-    tiers: [basic]
     changes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/20-cmd-calico\.yaml$']
 
   - path: .argoci/modules/20-e2e-ut.yaml
-    tiers: [basic]
     changes:
       dependsOn: [e2e]
       in: ['^\.argoci/modules/20-e2e-ut\.yaml$']
 
   # The drift check reads the workflow definitions, so editing one re-runs it.
   - path: .argoci/modules/20-e2e-test-sets.yaml
-    tiers: [basic]
     changes:
       dependsOn: [e2e]
       in:
@@ -268,7 +252,6 @@ includes:
         - ^\.argoci/modules/
 
   - path: .argoci/modules/20-e2e-validation.yaml
-    tiers: [basic]
     changes:
       in:
         - ^\.argoci/cron/
@@ -277,19 +260,16 @@ includes:
         - ^\.argoci/modules/20-e2e-validation\.yaml$
 
   - path: .argoci/modules/30-key-cert-provisioner.yaml
-    tiers: [basic]
     changes:
       dependsOn: [key-cert-provisioner]
       in: ['^\.argoci/modules/30-key-cert-provisioner\.yaml$']
 
   - path: .argoci/modules/60-mock-node.yaml
-    tiers: [basic]
     changes:
       dependsOn: [test-tools/mocknode]
       in: ['^\.argoci/modules/60-mock-node\.yaml$']
 
   - path: .argoci/modules/90-release.yaml
-    tiers: [basic]
     changes:
       dependsOn: [release]
       in: ['^\.argoci/modules/90-release\.yaml$']
@@ -297,7 +277,6 @@ includes:
   # Literal paths: the generated `third_party` entry would fire all four on a
   # change to any one.
   - path: .argoci/modules/20-envoy-gateway.yaml
-    tiers: [basic]
     changes:
       in:
         - ^third_party/envoy-gateway/
@@ -310,7 +289,6 @@ includes:
         - (^|/)LICENSE$
 
   - path: .argoci/modules/20-envoy-proxy.yaml
-    tiers: [basic]
     changes:
       in:
         - ^third_party/envoy-proxy/
@@ -323,7 +301,6 @@ includes:
         - (^|/)LICENSE$
 
   - path: .argoci/modules/20-envoy-ratelimit.yaml
-    tiers: [basic]
     changes:
       in:
         - ^third_party/envoy-ratelimit/
@@ -336,7 +313,6 @@ includes:
         - (^|/)LICENSE$
 
   - path: .argoci/modules/20-third-party-cni-plugins.yaml
-    tiers: [basic]
     changes:
       in:
         - ^third_party/cni-plugins/
@@ -349,7 +325,6 @@ includes:
         - (^|/)LICENSE$
 
   - path: .argoci/modules/20-e2e-images.yaml
-    tiers: [basic]
     changes:
       in:
         - ^e2e/images/
@@ -362,7 +337,6 @@ includes:
         - (^|/)LICENSE$
 
   - path: .argoci/modules/10-check-images.yaml
-    tiers: [basic]
     changes:
       in:
         - ^charts/
@@ -372,7 +346,6 @@ includes:
   # The chart is what the FV installs the operator from, so it belongs in the
   # trigger even though no Go file references it.
   - path: .argoci/modules/20-operator.yaml
-    tiers: [basic]
     changes:
       dependsOn: [operator]
       in:
@@ -384,7 +357,6 @@ includes:
   # moves with the versions of the libraries gen-bundle writes the bundle with,
   # and lib.Makefile and metadata.mk decide how gen-bundle itself is built.
   - path: .argoci/modules/20-operator-bundle.yaml
-    tiers: [basic]
     changes:
       in:
         - ^operator/hack/gen-bundle/
@@ -401,7 +373,6 @@ includes:
         - ^\.argoci/modules/20-operator-bundle\.yaml$
 
   - path: .argoci/modules/20-node.yaml
-    tiers: [basic]
     changes:
       dependsOn: [node]
       in: ['^\.argoci/modules/20-node\.yaml$']
@@ -475,7 +446,6 @@ includes:
         - ^\.argoci/modules/40-openstack\.yaml$
 
   - path: .argoci/modules/20-kube-controllers.yaml
-    tiers: [basic]
     changes:
       dependsOn: [kube-controllers]
       in: ['^\.argoci/modules/20-kube-controllers\.yaml$']
@@ -486,7 +456,6 @@ includes:
       in: ['^\.argoci/modules/20-typha\.yaml$']
 
   - path: .argoci/modules/20-cni-plugin.yaml
-    tiers: [basic]
     changes:
       dependsOn: [cni-plugin]
       in: ['^\.argoci/modules/20-cni-plugin\.yaml$']
@@ -505,7 +474,6 @@ includes:
   # No generated component: the tree holds Dockerfiles and a Makefile, and the
   # sources they build come from upstream.
   - path: .argoci/modules/20-istio.yaml
-    tiers: [basic]
     changes:
       in:
         - ^istio/
@@ -515,7 +483,6 @@ includes:
         - ^\.argoci/modules/20-istio\.yaml$
 
   - path: .argoci/modules/10-check-operator-images.yaml
-    tiers: [basic]
     changes:
       dependsOn: [release]
       in:
