@@ -121,7 +121,7 @@ func qualifyPools(req poolRequest, enabledPools []v3.IPPool) (poolQualification,
 // not requested. A named pool must fit the block size, and only its allowed uses are checked.
 func qualifyRequested(req poolRequest, enabledPools []v3.IPPool, fitting map[string]v3.IPPool) (poolQualification, error) {
 	var q poolQualification
-	claim := req.claim(true)
+	claim := newNamedClaim(req)
 	named := map[string]bool{}
 	for _, rp := range req.requested {
 		cidr := rp.Network()
@@ -129,7 +129,7 @@ func qualifyRequested(req poolRequest, enabledPools []v3.IPPool, fitting map[str
 		if !ok {
 			return poolQualification{}, fmt.Errorf("the given pool (%s) does not exist, or is not enabled", cidr.String())
 		}
-		reason, err := claim.reject(&pool)
+		reason, err := claim.qualify(&pool)
 		if err != nil {
 			return poolQualification{}, err
 		}
@@ -158,9 +158,9 @@ func normalizedCIDR(pool v3.IPPool) string {
 // the allowed uses. Unlike named pools, it doesn't check each pool's block size against maxPrefixLen.
 func qualifyBySelection(req poolRequest, enabledPools []v3.IPPool) (poolQualification, error) {
 	var q poolQualification
-	claim := req.claim(false)
+	claim := newUnnamedClaim(req)
 	for _, pool := range enabledPools {
-		reason, err := claim.reject(&pool)
+		reason, err := claim.qualify(&pool)
 		if err != nil {
 			return poolQualification{}, err
 		}
@@ -169,9 +169,18 @@ func qualifyBySelection(req poolRequest, enabledPools []v3.IPPool) (poolQualific
 	return q, nil
 }
 
-// claim is the request as a PoolClaim, matching selectors against the request's node and namespace.
-func (r poolRequest) claim(named bool) PoolClaim {
-	return PoolClaim{Use: r.use, Named: named, Selectors: claimSelectors{node: r.node, namespace: r.namespace}}
+// newNamedClaim builds the claim for a request that names its pools. Only each named pool's allowed uses are
+// checked.
+func newNamedClaim(r poolRequest) PoolClaim {
+	c := newUnnamedClaim(r)
+	c.Named = true
+	return c
+}
+
+// newUnnamedClaim builds the claim for a request that names no pool. Each pool's selectors are matched against the
+// request's node and namespace.
+func newUnnamedClaim(r poolRequest) PoolClaim {
+	return PoolClaim{Use: r.use, Selectors: claimSelectors{node: r.node, namespace: r.namespace}}
 }
 
 // candidate builds the request's candidate for a pool, recording whether the pool's node selector picks the node. A
@@ -260,9 +269,10 @@ func isSelecting(r rejectReason) bool {
 	return r == "" || r == rejectUse
 }
 
-// PoolClaim is an address claim as one IP pool sees it: the use it asks for, whether it names its pools, and how the
-// pool's selectors match the claiming node and namespace. IPAM decides which pools a claim draws from with Draws, so
-// code that must agree with that choice, such as a report of which nodes are at their block limit, can call it too.
+// PoolClaim holds the parts of an address request that decide which IP pools it may use: the use it asks for,
+// whether it names its pools, and whether each pool's selectors match the requesting node and namespace. IPAM picks
+// pools with MayUse, so code that must agree with that choice, such as a report of which nodes are at their block
+// limit, can call it too.
 type PoolClaim struct {
 	Use v3.IPPoolAllowedUse
 
@@ -281,16 +291,16 @@ type PoolSelectors interface {
 	SelectsNamespace(pool *v3.IPPool) (bool, error)
 }
 
-// Draws reports whether the claim may draw addresses from the pool, claiming blocks in it as needed. The node's blocks
-// in the pools a claim draws from are what IPAM counts against maxBlocksPerHost for that claim. The pool must be
+// MayUse reports whether the claim may draw addresses from the pool, claiming blocks in it as needed. The node's
+// blocks in the pools a claim may use are what IPAM counts against maxBlocksPerHost for that claim. The pool must be
 // enabled, since IPAM never offers a disabled pool to a claim, named or not.
-func (c PoolClaim) Draws(pool *v3.IPPool) (bool, error) {
-	reason, err := c.reject(pool)
+func (c PoolClaim) MayUse(pool *v3.IPPool) (bool, error) {
+	reason, err := c.qualify(pool)
 	return reason == "", err
 }
 
-// reject is why the claim may not draw from the pool, or empty when it may.
-func (c PoolClaim) reject(pool *v3.IPPool) (rejectReason, error) {
+// qualify checks the pool against the claim, returning why the claim may not use it, or empty when it may.
+func (c PoolClaim) qualify(pool *v3.IPPool) (rejectReason, error) {
 	if !c.Named {
 		reason, err := c.checkSelection(pool)
 		if reason != "" || err != nil {
