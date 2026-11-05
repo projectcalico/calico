@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -112,7 +112,7 @@ func (a *pendingActionMatch) matches() bool {
 		return true
 	}
 
-	policyTrace := FlowLogPolicyToProto(a.key.Policies())
+	policyTrace := CachedPolicyTrace(a.key.Policies())
 
 	for _, hit := range policyTrace.PendingPolicies {
 		if slices.Contains(a.filter, hit.Action) {
@@ -201,7 +201,7 @@ func (c policyComparison) matches() bool {
 
 	// We need to unfurl the policy trace to see if the filter matches.
 	// Return a match if any of the policy hits match.
-	flowVal := FlowLogPolicyToProto(c.key.Policies())
+	flowVal := CachedPolicyTrace(c.key.Policies())
 
 	// Check the enforced and pending policies.
 	if slices.ContainsFunc(flowVal.EnforcedPolicies, c.policyHitMatches) {
