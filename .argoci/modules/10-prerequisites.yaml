@@ -299,8 +299,6 @@ steps:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     commands: |
-      # TEMPORARY: the build image lacks the zstd CLI the libbpf tarball needs.
-      dnf install -y -q zstd
       # TEMPORARY: the module cache go-mod-download filled, in place of a GCS restore.
       s=$(date +%s)
       mkdir -p "$GO_MOD_ROOT"
@@ -309,6 +307,36 @@ steps:
       make -C cmd/calico image-context
       mkdir -p /cache/calico-image
       cp -a cmd/calico/bin/image-context-amd64/. /cache/calico-image/
+
+  # The cgo and race calico binaries and the libbpf tree, for the Felix steps.
+  # Apart from the image so the image build doesn't wait on them; -race recompiles
+  # every package, so it gains nothing from a shared build cache either.
+  - name: calico-test-binaries
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    depends: [go-mod-download]
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    timeout: 1h
+    jobSize: large
+    requests: {cpu: 7000m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    cache:
+      - {name: go, mode: read, path: /gomod}
+    changes:
+      dependsOn: [cmd]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    commands: |
+      # TEMPORARY: the build image lacks the zstd CLI the libbpf tarball needs.
+      dnf install -y -q zstd
+      # TEMPORARY: the module cache go-mod-download filled, in place of a GCS restore.
+      mkdir -p "$GO_MOD_ROOT"
+      unpigz -c /gomod/go-mod.tar.gz | tar -C "$GO_MOD_ROOT" -xf -
       # Shipped for the Felix FVs, which would otherwise build them per lane.
       make -C cmd/calico build-cgo build-race
       artifact push workflow cmd/calico/bin/calico-cgo-amd64
@@ -541,7 +569,7 @@ steps:
     timeout: 1h
     jobSize: large
     requests: {cpu: 1500m, memory: 8Gi}
-    depends: [build-calico-image]
+    depends: [calico-test-binaries]
     changes:
       dependsOn: [e2e]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
