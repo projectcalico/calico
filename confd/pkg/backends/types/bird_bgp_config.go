@@ -49,7 +49,7 @@ type BirdBGPPeer struct {
 	Port            string
 	ASNumber        string
 	LocalASNumber   string
-	Type            string // "mesh", "global", "nodeLocal", "globalLocal"
+	Type            string // "mesh", "global", "node", "local_workload"
 	ImportFilter    string
 	ExportFilter    string
 	Password        string
@@ -64,6 +64,7 @@ type BirdBGPPeer struct {
 	GracefulRestart string // restart time value
 	KeepaliveTime   string
 	NumAllowLocalAs string
+	ReachableBy     string
 }
 
 // CommunityRule represents BGP community application rules

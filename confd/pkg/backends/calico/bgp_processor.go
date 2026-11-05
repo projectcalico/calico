@@ -534,9 +534,10 @@ func (c *client) buildPeerFromData(peer *backends.BGPPeer, prefix string, config
 	}
 
 	result := &types.BirdBGPPeer{
-		Name: peerName,
-		IP:   peerIP,
-		Type: strings.ToLower(prefix),
+		Name:        peerName,
+		IP:          peerIP,
+		Type:        strings.ToLower(prefix),
+		ReachableBy: peer.ReachableBy,
 	}
 
 	// Basic fields

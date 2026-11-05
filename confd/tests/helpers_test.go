@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -992,6 +993,8 @@ func copyDir(t *testing.T, src, dst string) {
 	}
 }
 
+var relativeDestRegexp = regexp.MustCompile(`(?m)^dest = "([^/"][^"]*)"`)
+
 func rewriteDestPaths(t *testing.T, confDDir, outputDir string) {
 	t.Helper()
 	entries, err := os.ReadDir(confDDir)
@@ -1004,6 +1007,10 @@ func rewriteDestPaths(t *testing.T, confDDir, outputDir string) {
 		data, err := os.ReadFile(path)
 		require.NoError(t, err)
 		newData := strings.ReplaceAll(string(data), "/etc/calico/confd/config/", outputDir+"/")
+
+		// The Windows TOMLs have relative dest paths, which confd would resolve against the
+		// test's working directory.
+		newData = relativeDestRegexp.ReplaceAllString(newData, `dest = "`+outputDir+`/$1"`)
 		require.NoError(t, os.WriteFile(path, []byte(newData), 0644))
 	}
 }
@@ -1017,6 +1024,9 @@ type confdDaemon struct {
 	outputDir string
 	cancel    context.CancelFunc
 	errCh     chan error
+
+	// goldenFiles are the rendered files that expectOutput compares.
+	goldenFiles []string
 }
 
 // confdDaemonOption configures startConfdDaemon.
@@ -1029,6 +1039,21 @@ type confdDaemonConfig struct {
 	// endpointStatusFiles maps filename → JSON content to write under
 	// <tmpDir>/endpoint-status/ before starting confd.
 	endpointStatusFiles map[string]string
+
+	// srcConfDir is the directory whose conf.d and templates confd runs with, and
+	// goldenFiles are the rendered files that expectOutput compares.
+	srcConfDir  string
+	goldenFiles []string
+}
+
+// birdGoldenFiles are the files rendered by the Linux BIRD templates.
+var birdGoldenFiles = []string{
+	"bird.cfg",
+	"bird6.cfg",
+	"bird_ipam.cfg",
+	"bird6_ipam.cfg",
+	"bird_aggr.cfg",
+	"bird6_aggr.cfg",
 }
 
 // withNodeName overrides the default "kube-master" node name for this
@@ -1048,12 +1073,25 @@ func withEndpointStatus(files map[string]string) confdDaemonOption {
 	return func(c *confdDaemonConfig) { c.endpointStatusFiles = files }
 }
 
+// withWindowsTemplates runs confd with the Windows templates instead of the Linux BIRD ones,
+// and makes expectOutput compare the rendered Windows peerings.
+func withWindowsTemplates() confdDaemonOption {
+	return func(c *confdDaemonConfig) {
+		c.srcConfDir = filepath.Join("..", "windows-packaging")
+		c.goldenFiles = []string{"peerings.ps1"}
+	}
+}
+
 // startConfdDaemon starts confd in daemon mode (not oneshot). The caller
 // applies resources and calls expectOutput at each step. Call stop() when done.
 func startConfdDaemon(t *testing.T, be *datastoreBackend, opts ...confdDaemonOption) *confdDaemon {
 	t.Helper()
 
-	cfg := confdDaemonConfig{nodeName: "kube-master"}
+	cfg := confdDaemonConfig{
+		nodeName:    "kube-master",
+		srcConfDir:  filepath.Join("..", "etc", "calico", "confd"),
+		goldenFiles: birdGoldenFiles,
+	}
 	for _, o := range opts {
 		o(&cfg)
 	}
@@ -1073,9 +1111,8 @@ func startConfdDaemon(t *testing.T, be *datastoreBackend, opts ...confdDaemonOpt
 	outputDir := filepath.Join(confDir, "config")
 	require.NoError(t, os.MkdirAll(outputDir, 0755))
 
-	srcConfDir := filepath.Join("..", "etc", "calico", "confd")
-	copyDir(t, filepath.Join(srcConfDir, "conf.d"), filepath.Join(confDir, "conf.d"))
-	copyDir(t, filepath.Join(srcConfDir, "templates"), filepath.Join(confDir, "templates"))
+	copyDir(t, filepath.Join(cfg.srcConfDir, "conf.d"), filepath.Join(confDir, "conf.d"))
+	copyDir(t, filepath.Join(cfg.srcConfDir, "templates"), filepath.Join(confDir, "templates"))
 	rewriteDestPaths(t, filepath.Join(confDir, "conf.d"), outputDir)
 
 	if len(cfg.endpointStatusFiles) > 0 {
@@ -1117,11 +1154,12 @@ func startConfdDaemon(t *testing.T, be *datastoreBackend, opts ...confdDaemonOpt
 	time.Sleep(500 * time.Millisecond)
 
 	d := &confdDaemon{
-		t:         t,
-		be:        be,
-		outputDir: outputDir,
-		cancel:    cancel,
-		errCh:     errCh,
+		t:           t,
+		be:          be,
+		outputDir:   outputDir,
+		cancel:      cancel,
+		errCh:       errCh,
+		goldenFiles: cfg.goldenFiles,
 	}
 	t.Cleanup(d.stop)
 	return d
@@ -1145,14 +1183,7 @@ func (d *confdDaemon) stop() {
 func (d *confdDaemon) expectOutput(goldenDir string) {
 	d.t.Helper()
 
-	goldenFiles := []string{
-		"bird.cfg",
-		"bird6.cfg",
-		"bird_ipam.cfg",
-		"bird6_ipam.cfg",
-		"bird_aggr.cfg",
-		"bird6_aggr.cfg",
-	}
+	goldenFiles := d.goldenFiles
 
 	deadline := time.Now().Add(10 * time.Second)
 	for {
