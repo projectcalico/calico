@@ -110,7 +110,7 @@ func runInlineDiagnosis(ctx context.Context, report ginkgo.SpecReport, namespace
 		"--kubeconfig", kubeconfig,
 		"--source-dir", os.Getenv("E2E_SANDCAT_SOURCE_DIR"),
 		"--e2e-binary", os.Getenv("E2E_SANDCAT_E2E_BINARY"),
-		"--sha", envOr("E2E_SANDCAT_SHA", os.Getenv("SEMAPHORE_GIT_SHA")),
+		"--sha", os.Getenv("E2E_SANDCAT_SHA"),
 	}
 	if namespace != "" {
 		args = append(args, "--namespace", namespace)

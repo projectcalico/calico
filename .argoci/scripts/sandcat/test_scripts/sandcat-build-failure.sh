@@ -21,12 +21,14 @@ newhome() {
   export LOGS_DIR SEEN TMPDIR
   cat > "${HOME}/.local/bin/sandcat" <<'STUB'
 #!/usr/bin/env bash
-lf=""
+lf="" bf=""
 while [[ $# -gt 0 ]]; do
   [[ "$1" == "--log-file" ]] && lf="$2"
+  [[ "$1" == "--build-failure" ]] && bf=yes
   shift
 done
 {
+  echo "BUILD_FAILURE=${bf}"
   echo "LOG_FILE=${lf}"
   echo "FIRST_LINE=$(head -n1 "${lf}" 2>/dev/null)"
   echo "LAST_LINE=$(tail -n1 "${lf}" 2>/dev/null)"
@@ -34,10 +36,12 @@ done
   # A marker in the middle of the log is invisible to the first/last line pair,
   # and the elision notice is by definition in the middle.
   sed -n 's/^\(\[sandcat\].*\)$/MARKER=\1/p' "${lf}" 2>/dev/null
-} > "${SEEN}"
+} >> "${SEEN}"
+[[ -n "${lf}" && "${STUB_LOG_FAIL:-}" == 1 ]] && exit 1
+exit 0
 STUB
   chmod +x "${HOME}/.local/bin/sandcat"
-  # Without this shim a run on a Semaphore agent would publish a fake record.
+  # Keeps `artifact push` from publishing to a real job.
   cat > "${HOME}/bin/artifact" <<'STUB'
 #!/usr/bin/env bash
 exit 0
@@ -47,6 +51,7 @@ STUB
   export PATH
   # Required to pass the upload gate; port 9 refuses the upload locally.
   export SANDCAT_INGEST_TOKEN=t SANDCAT_UPLOAD_URL=http://127.0.0.1:9/ignored
+  unset STUB_LOG_FAIL
 }
 
 # Explicit mtimes, so "newest" does not depend on test timing.
@@ -54,8 +59,8 @@ age() {
   touch -d "2020-01-01 00:00:${2}" "$1"
 }
 
-# run <name> [args...] -- invoke build-failure from a scratch dir, since the
-# synthetic path writes its record into the working directory.
+# run <name> [args...] -- invoke build-failure from a scratch dir, where analyze
+# writes its run record.
 run() {
   local name="$1"
   shift
@@ -168,14 +173,14 @@ expect "FIRST_LINE=phase started" "LAST_LINE=[sandcat] this log is incomplete"
 newhome
 echo "never made it to disk" | gzip > "${LOGS_DIR}/install.log.gz"
 truncate -s 10 "${LOGS_DIR}/install.log.gz"
-run "a gzip that recovers nothing: sandcat is not invoked" --logs-dir "${LOGS_DIR}"
-expect "!LOG_FILE="
+run "a gzip that recovers nothing: recorded without a log" --logs-dir "${LOGS_DIR}"
+expect "BUILD_FAILURE=yes" "!LOG_FILE=/"
 
 # Left by a phase killed the instant `tee` created its file.
 newhome
 : > "${LOGS_DIR}/install.log"
-run "an empty plain log: sandcat is not invoked" --logs-dir "${LOGS_DIR}"
-expect "!LOG_FILE="
+run "an empty plain log: recorded without a log" --logs-dir "${LOGS_DIR}"
+expect "BUILD_FAILURE=yes" "!LOG_FILE=/"
 
 # sandcat anchors on the end of the log, so the bound keeps both ends.
 newhome
@@ -240,8 +245,8 @@ expect "FIRST_LINE=error: the first phase"
 newhome
 : > "${LOGS_DIR}/provision.log.gz"; age "${LOGS_DIR}/provision.log.gz" 01
 : > "${LOGS_DIR}/install.log.gz"; age "${LOGS_DIR}/install.log.gz" 02
-run "all candidates empty: sandcat is not invoked" --logs-dir "${LOGS_DIR}"
-expect "!LOG_FILE="
+run "all candidates empty: recorded without a log" --logs-dir "${LOGS_DIR}"
+expect "BUILD_FAILURE=yes" "!LOG_FILE=/"
 
 # Paths must survive a directory name with a space in it.
 newhome
@@ -268,12 +273,18 @@ run "an explicit --log-file wins over the directory" \
 expect "FIRST_LINE=this one"
 
 newhome
-run "no logs at all: sandcat is not invoked" --logs-dir "${LOGS_DIR}"
-expect "!LOG_FILE="
+run "no logs at all: recorded without a log" --logs-dir "${LOGS_DIR}"
+expect "BUILD_FAILURE=yes" "!LOG_FILE=/"
 
 newhome
-run "no directory and no file: sandcat is not invoked"
-expect "!LOG_FILE="
+run "no directory and no file: recorded without a log"
+expect "BUILD_FAILURE=yes" "!LOG_FILE=/"
+
+newhome
+echo "error: install failed" > "${LOGS_DIR}/install.log"
+export STUB_LOG_FAIL=1
+run "a failed log analysis: the failure is recorded without the log" --logs-dir "${LOGS_DIR}"
+expect "FIRST_LINE=error: install failed" "BUILD_FAILURE=yes" "log analysis failed"
 
 newhome
 echo '{}' > "${HOME}/report.json"

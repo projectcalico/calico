@@ -5,7 +5,7 @@
 # Usage:
 #   sandcat.sh analyze             analyze a ginkgo report and upload the result
 #     --spec-dir DIR               inline diagnoses dir, when not beside the report
-#   sandcat.sh build-failure       analyze the job log; synthetic record fallback
+#   sandcat.sh build-failure       analyze the job log, or record the failure without one
 #     --log-file FILE | --logs-dir DIR
 #   sandcat.sh push-specs          push the inline diagnoses as one artifact
 #     --spec-dir DIR | --report FILE
@@ -127,7 +127,7 @@ cmd_inline_env() {
     return 1
   fi
 
-# A disabled Semaphore secret injects nothing without error, so report it here.
+# A secret that is not granted injects nothing and no error, so report it here.
   local db_missing=()
   [[ -n "${SANDCAT_DB_URL:-}" ]] || db_missing+=("SANDCAT_DB_URL")
   [[ -n "${SANDCAT_DB_TOKEN:-}" ]] || db_missing+=("SANDCAT_DB_TOKEN")
@@ -185,7 +185,6 @@ cmd_inline_env() {
 
 _sandcat_common_vars() {
   SANDCAT_SHA=$(git -C "${SOURCE_DIR:-.}" rev-parse HEAD 2>/dev/null || echo "")
-  SANDCAT_JOB_URL="https://tigera.semaphoreci.com/jobs/${SEMAPHORE_JOB_ID:-}"
 }
 
 # Print the newest existing path; non-zero when none exist.
@@ -217,7 +216,7 @@ _sandcat_push_artifact() {
   local newest
   newest=$(_sandcat_newest data/runs/*.json) || return 0
   echo "[INFO] sandcat: pushing analysis to job artifacts"
-  artifact push job "${newest}" --destination semaphore/sandcat-analysis.json || true
+  artifact push job "${newest}" --destination sandcat/sandcat-analysis.json || true
 }
 
 # One JSON object per inline-diagnosed spec. A crashed diagnosis is synthesised
@@ -265,7 +264,7 @@ cmd_push_specs() {
   if _sandcat_specs_index "${spec_dir}" | jq -s '.' >"${out}" &&
     jq -e 'length > 0' "${out}" >/dev/null; then
     echo "[INFO] sandcat: pushing inline per-spec diagnoses"
-    artifact push job "${out}" --destination semaphore/sandcat-specs.json || true
+    artifact push job "${out}" --destination sandcat/sandcat-specs.json || true
   else
     echo "[WARN] sandcat: no inline diagnoses collected from ${spec_dir}" >&2
   fi
@@ -455,64 +454,28 @@ cmd_build_failure() {
     _sandcat_rm_on_exit "${plain_log}"
   fi
 
-  # Log-only agent analysis extracts the real error; synthetic record is the fallback.
-  if [[ -n "${plain_log}" ]] && _sandcat_download; then
+  _sandcat_download || { echo "[WARN] sandcat: download failed; build failure not recorded"; return 0; }
+  if [[ -n "${plain_log}" ]]; then
     echo "[INFO] sandcat: analyzing build failure from log (sha=${SANDCAT_SHA:-unknown})..."
     if "${SANDCAT_BIN}" analyze \
       --log-file "${plain_log}" \
       --sha "${SANDCAT_SHA}" \
       --source-dir "${source_dir}" \
-      --agent \
-      --upload "${SANDCAT_UPLOAD_URL}" \
       --timeout 10m; then
       _sandcat_push_artifact
       return 0
     fi
-    echo "[WARN] sandcat: log analysis failed; falling back to synthetic record"
+    echo "[WARN] sandcat: log analysis failed"
   fi
 
-  echo "[INFO] sandcat: uploading build-failure record"
-  # CI merge commits resolve to the second parent, matching the binary's behavior.
-  local commit_ref="${SANDCAT_SHA}" commit_msg="" commit_author=""
-  if [[ -n "${SANDCAT_SHA}" ]]; then
-    local subject parents
-    subject=$(git -C "${source_dir}" log -1 --format=%s "${SANDCAT_SHA}" 2>/dev/null || echo "")
-    parents=$(git -C "${source_dir}" log -1 --format=%P "${SANDCAT_SHA}" 2>/dev/null || echo "")
-    if [[ "${subject}" == Merge\ * && $(wc -w <<< "${parents}") -eq 2 ]]; then
-      commit_ref=$(awk '{print $2}' <<< "${parents}")
-    fi
-    commit_msg=$(git -C "${source_dir}" log -1 --format=%s "${commit_ref}" 2>/dev/null || echo "")
-    commit_author=$(git -C "${source_dir}" log -1 --format=%an "${commit_ref}" 2>/dev/null || echo "")
-  fi
-  local run_id now payload
-  run_id="$(date -u +%Y%m%d-%H%M%S)-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  payload=$(jq -n \
-    --arg id "$run_id" \
-    --arg started "$now" \
-    --arg finished "$now" \
-    --arg sha "$SANDCAT_SHA" \
-    --arg commit_msg "$commit_msg" \
-    --arg commit_author "$commit_author" \
-    --arg test_name "${SEMAPHORE_JOB_NAME:-build}" \
-    --arg ci_job_url "$SANDCAT_JOB_URL" \
-    --arg ci_job_name "${SEMAPHORE_JOB_NAME:-}" \
-    '{run: {id: $id, started_at: $started, finished_at: $finished,
-            repo: "tigera/calico-private", sha: $sha, test_name: $test_name,
-            commit_msg: $commit_msg, commit_author: $commit_author,
-            passed: false, verdict: "infra", confidence: 1.0,
-            root_cause: "Build/setup failed before tests could run. No JUnit report was produced.",
-            broken_by: "", ci_job_url: $ci_job_url, ci_job_name: $ci_job_name},
-     report: null}')
-
-  curl -fsSL -X POST "${SANDCAT_UPLOAD_URL}" \
-    -H "Authorization: Bearer ${SANDCAT_INGEST_TOKEN}" \
-    -H "Content-Type: application/json" \
-    -d "${payload}" || echo "[WARN] sandcat: build-failure upload failed (non-fatal)"
-
-  if command -v artifact >/dev/null; then
-    printf '%s\n' "${payload}" > sandcat-build-failure.json
-    artifact push job sandcat-build-failure.json --destination semaphore/sandcat-analysis.json || true
+  echo "[INFO] sandcat: recording build failure without a log (sha=${SANDCAT_SHA:-unknown})"
+  if "${SANDCAT_BIN}" analyze --build-failure \
+    --sha "${SANDCAT_SHA}" \
+    --source-dir "${source_dir}" \
+    --timeout 10m; then
+    _sandcat_push_artifact
+  else
+    echo "[WARN] sandcat: build failure not recorded (non-fatal)"
   fi
 }
 
