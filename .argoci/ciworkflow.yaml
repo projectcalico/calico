@@ -235,6 +235,15 @@ includes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/20-cmd-calico\.yaml$']
 
+  - path: .argoci/modules/20-e2e-openstack.yaml
+    changes:
+      in:
+        - ^networking-calico/e2e/
+        - ^\.argoci/modules/20-e2e-openstack\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+
   - path: .argoci/modules/20-e2e-ut.yaml
     changes:
       dependsOn: [e2e]
@@ -444,6 +453,10 @@ includes:
         - ^metadata\.mk$
         - ^lib\.Makefile$
         - ^\.argoci/modules/40-openstack\.yaml$
+
+      # The OpenStack e2e suite, which 20-e2e-openstack.yaml builds.
+      exclude:
+        - ^networking-calico/e2e/
 
   - path: .argoci/modules/20-kube-controllers.yaml
     changes:
