@@ -221,9 +221,13 @@ function do_net_cal {
     # Build networking-calico packages, with RPM packages built first to be consistent
     # with felix (which has a hard requirement on building rpm first at the moment)
     pushd "${rootdir}/networking-calico"
+
+    # e2e/ is the OpenStack e2e test suite, which isn't part of what we package.
+    # debian/source/options keeps it out of the Debian source.
     PKG_NAME=networking-calico \
             NAME=networking-calico \
             DEB_EPOCH=3: \
+            RPM_TAR_ARGS='--exclude=e2e' \
             "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
     # Packages are produced in rootDir/ - move them to the output dir.
     # The glob has no '-' in it because the shared .orig tarball is named
