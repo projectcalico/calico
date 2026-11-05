@@ -27,6 +27,7 @@ usage: ${BASH_SOURCE[0]} [options ...]
    -t ... target directory where the driver image is copied
    -i ... source binary name
    -d ... destination binary name
+   -p ... only replace a driver that is already installed
 EOF
   exit 2
 }
@@ -35,13 +36,15 @@ SRCDIR=/usr/local/bin
 DSTDIR=/host/driver
 IMAGE=flexvol
 DSTIMAGE=uds
+IFPRESENT=
 
-while getopts s:t:i:d: arg; do
+while getopts s:t:i:d:p arg; do
   case ${arg} in
   s) SRCDIR="${OPTARG}" ;;
   t) DSTDIR="${OPTARG}" ;;
   i) IMAGE="${OPTARG}" ;;
   d) DSTIMAGE="${OPTARG}" ;;
+  p) IFPRESENT=1 ;;
   *) usage "Invalid option: -${OPTARG}" ;;
   esac
 done
@@ -49,6 +52,11 @@ done
 if [ ! -f ${SRCDIR}/${IMAGE} ]; then
   echo "Image not present ${SRCDIR}/${IMAGE}"
   exit 2
+fi
+
+if [ -n "${IFPRESENT}" ] && [ ! -e ${DSTDIR}/${DSTIMAGE} ] && [ ! -L ${DSTDIR}/${DSTIMAGE} ]; then
+  echo "No driver at ${DSTDIR}/${DSTIMAGE}, nothing to replace"
+  exit 0
 fi
 
 if [ ! -d ${DSTDIR} ]; then
