@@ -89,6 +89,12 @@ global_job_config:
           git fetch origin --tags --prune-tags ${SEMAPHORE_GIT_SHA}
           if [ "$SEMAPHORE_GIT_REF_TYPE" = "branch" ]; then
             git checkout ${SEMAPHORE_GIT_SHA} -B "${SEMAPHORE_GIT_BRANCH}"
+            # Build branches hand their Go caches to the release build (see the
+            # epilogue), so drop anything the restored working copy carried
+            # beyond the commit itself.
+            if [[ ${SEMAPHORE_GIT_BRANCH} == build-v* ]]; then
+              git clean -ffdxq
+            fi
           else
             git checkout ${SEMAPHORE_GIT_SHA}
           fi
@@ -106,6 +112,11 @@ global_job_config:
           tar --use-compress-program="zstd -3" -cf /tmp/build-cache.tar.zstd go ${CALICO_DIR_NAME}/.go-pkg-cache
           gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
           gcloud storage cp /tmp/build-cache.tar.zstd "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
+          # Also hand the caches to the release promotion in this workflow;
+          # .semaphore/release/restore-build-cache.sh restores them.
+          if [[ ${SEMAPHORE_GIT_BRANCH} == build-v* ]]; then
+            artifact push workflow /tmp/build-cache.tar.zstd -d "go-cache/build-cache-${BUILD_CACHE_GROUP}.tar.zstd" --force || true
+          fi
         fi
       - cd "$CALICO_DIR"
       - .semaphore/publish-artifacts
