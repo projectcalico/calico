@@ -109,6 +109,7 @@ steps:
 
   # On a VM because the suite loads ip6_tables, which a pod cannot.
   - name: felix-k8sfv
+    tiers: []
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
@@ -139,6 +140,7 @@ steps:
   # retries, plus slack so the fleet's own watchdog can capture a hung VM's
   # console first.
   - name: felix-fv
+    tiers: []
     depends: [felix-build]
     timeout: 1h30m
     requests: {cpu: 2000m, memory: 4Gi}
@@ -247,6 +249,7 @@ steps:
 
   # Kubeadm on Azure VMs, installed from this commit's images.
   - name: felix-windows-fv
+    tiers: []
     depends: [felix-build-windows, build-calico-image, build-node-image, build-operator-image, build-windows-images]
     timeout: 1h30m
     requests: {cpu: 3000m, memory: 6Gi}

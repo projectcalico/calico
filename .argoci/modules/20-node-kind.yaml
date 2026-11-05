@@ -2,6 +2,7 @@
 version: condensed-module
 
 defaults:
+  tiers: []
   timeout: 2h30m
 
 steps:
