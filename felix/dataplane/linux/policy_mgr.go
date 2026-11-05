@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@ type policyManager struct {
 type policyRenderer interface {
 	PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain
 	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
+	NonFilterTableChains(chains []*generictables.Chain) []*generictables.Chain
 }
 
 func newPolicyManager(rawTable, mangleTable, filterTable Table, ruleRenderer policyRenderer, ipVersion uint8, nft bool) *policyManager {
@@ -104,8 +105,9 @@ func (m *policyManager) OnUpdate(msg any) {
 		// We can't easily tell whether the policy is in use in a particular table, and, if the policy
 		// type gets changed it may move between tables.  Hence, we put the policy into all tables.
 		// The iptables layer will avoid programming it if it is not actually used.
-		m.rawTable.UpdateChains(chains)
-		m.mangleTable.UpdateChains(chains)
+		nonFilterChains := m.ruleRenderer.NonFilterTableChains(chains)
+		m.rawTable.UpdateChains(nonFilterChains)
+		m.mangleTable.UpdateChains(nonFilterChains)
 
 		if slices.Contains(msg.Policy.PerfHints, string(v3.PerfHintAssumeNeededOnEveryNode)) {
 			// For the filter table only (since it is the mainline), treat the
@@ -134,7 +136,7 @@ func (m *policyManager) OnUpdate(msg any) {
 		log.WithField("id", msg.Id).Debug("Updating profile chains")
 		inbound, outbound := m.ruleRenderer.ProfileToIptablesChains(&id, msg.Profile, m.ipVersion)
 		m.filterTable.UpdateChains([]*generictables.Chain{inbound, outbound})
-		m.mangleTable.UpdateChains([]*generictables.Chain{outbound})
+		m.mangleTable.UpdateChains(m.ruleRenderer.NonFilterTableChains([]*generictables.Chain{outbound}))
 	case *proto.ActiveProfileRemove:
 		log.WithField("id", msg.Id).Debug("Removing profile chains")
 		id := types.ProtoToProfileID(msg.GetId())

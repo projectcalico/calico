@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -74,6 +74,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			RuleDirIngress,
 			ingressPolicy,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
+			r.IptablesFilterDenyAction(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			qosControls,
@@ -95,6 +96,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			RuleDirEgress,
 			egressPolicy,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
+			r.IptablesFilterDenyAction(),
 			allowVXLANEncapFromWorkloads,
 			allowIPIPEncapFromWorkloads,
 			qosControls,
@@ -140,6 +142,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			RuleDirEgress,
 			egressPolicy,
 			r.filterAllowAction,
+			r.IptablesFilterDenyAction(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			nil,
@@ -159,6 +162,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			RuleDirIngress,
 			ingressPolicy,
 			r.filterAllowAction,
+			r.IptablesFilterDenyAction(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			nil,
@@ -178,6 +182,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			RuleDirEgress,
 			egressPolicy,
 			r.filterAllowAction,
+			r.IptablesFilterDenyAction(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			nil,
@@ -197,6 +202,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			RuleDirIngress,
 			ingressPolicy,
 			r.filterAllowAction,
+			r.IptablesFilterDenyAction(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			nil,
@@ -241,6 +247,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 			RuleDirEgress,
 			egressPolicy,
 			r.Return(),
+			r.Drop(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			nil,
@@ -267,6 +274,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 		RuleDirEgress,
 		egressPolicy,
 		r.Allow(),
+		r.Drop(),
 		alwaysAllowVXLANEncap,
 		alwaysAllowIPIPEncap,
 		nil,
@@ -296,6 +304,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			RuleDirIngress,
 			ingressPolicy,
 			r.Allow(),
+			r.Drop(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			nil,
@@ -325,6 +334,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 			RuleDirIngress,
 			ingressPolicy,
 			r.mangleAllowAction,
+			r.Drop(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			nil,
@@ -433,6 +443,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	dir RuleDir,
 	policyType string,
 	allowAction generictables.Action,
+	// denyAction must be DROP for chains outside the filter table, where REJECT is not a valid target.
+	denyAction generictables.Action,
 	allowVXLANEncap bool,
 	allowIPIPEncap bool,
 	qosControls *proto.QoSControls,
@@ -445,7 +457,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		// Endpoint is admin-down, drop all traffic to/from it.
 		rules = append(rules, generictables.Rule{
 			Match:   r.NewMatch(),
-			Action:  r.IptablesFilterDenyAction(),
+			Action:  denyAction,
 			Comment: []string{"Endpoint admin disabled"},
 		})
 		return &generictables.Chain{
@@ -539,7 +551,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	if chainType != chainTypeUntracked {
 		// Tracked chain: install conntrack rules, which implement our stateful connections.
 		// This allows return traffic associated with a previously-permitted request.
-		rules = r.appendConntrackRules(rules, allowAction, chainType)
+		rules = r.appendConntrackRules(rules, allowAction, denyAction, chainType)
 	}
 
 	// Add QoS controls for number of connections if applicable
@@ -595,8 +607,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		rules = append(rules, generictables.Rule{
 			Match: r.NewMatch().ProtocolNum(ProtoUDP).
 				DestPorts(uint16(r.VXLANPort)),
-			Action:  r.IptablesFilterDenyAction(),
-			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", r.IptablesFilterDenyAction())},
+			Action:  denyAction,
+			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", denyAction)},
 		})
 	}
 	if !allowIPIPEncap {
@@ -604,8 +616,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		// bypass restrictive egress policies.
 		rules = append(rules, generictables.Rule{
 			Match:   r.NewMatch().ProtocolNum(ProtoIPIP),
-			Action:  r.IptablesFilterDenyAction(),
-			Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", r.IptablesFilterDenyAction())},
+			Action:  denyAction,
+			Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", denyAction)},
 		})
 	}
 
@@ -701,11 +713,11 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 					}
 					rules = append(rules, generictables.Rule{
 						Match:  r.NewMatch().MarkClear(r.MarkPass),
-						Action: r.IptablesFilterDenyAction(),
+						Action: denyAction,
 						Comment: []string{
 							fmt.Sprintf("End of tier %s. %s if no policies passed packet",
 								tier.Name,
-								r.IptablesFilterDenyAction()),
+								denyAction),
 						},
 					})
 				} else if r.FlowLogsEnabled {
@@ -769,8 +781,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 
 		rules = append(rules, generictables.Rule{
 			Match:   r.NewMatch(),
-			Action:  r.IptablesFilterDenyAction(),
-			Comment: []string{fmt.Sprintf("%s if no profiles matched", r.IptablesFilterDenyAction())},
+			Action:  denyAction,
+			Comment: []string{fmt.Sprintf("%s if no profiles matched", denyAction)},
 		})
 	}
 
@@ -780,7 +792,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	}
 }
 
-func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, allowAction generictables.Action, chainType endpointChainType) []generictables.Rule {
+func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, allowAction, denyAction generictables.Action, chainType endpointChainType) []generictables.Rule {
 	if r.LogConnectionTransitions && chainType != chainTypePreDNAT {
 		// The connection matched a Log rule and this is the first response packet seen;
 		// log the state transition (and clear the bit) before the conntrack rules below
@@ -814,7 +826,7 @@ func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, a
 		// connection.
 		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch().ConntrackState("INVALID"),
-			Action: r.IptablesFilterDenyAction(),
+			Action: denyAction,
 		})
 	}
 	return rules
