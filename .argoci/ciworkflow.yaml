@@ -9,10 +9,10 @@ generateName: calico-
 # Catches a hang outside any step's own timeout.
 timeout: 4h
 
-# TEMPORARY: sizes the volume-cache test's disks. Persistent disk throughput
-# scales with size, so this buys bandwidth rather than space.
+# TEMPORARY: sizes the volume-cache test's disks, one per writer and per reader.
+# The caches are a few GB compressed.
 cache:
-  size: 200Gi
+  size: 50Gi
   storageClass: premium-rwo
 
 notifications:

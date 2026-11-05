@@ -26,6 +26,31 @@ steps:
     commands: |
       make yaml-lint
 
+  # TEMPORARY: fills the Go module cache for every module in the repo, for every
+  # platform, and hands it over the volume cache. Download only, so it is done long
+  # before any step that compiles needs it.
+  - name: go-mod-download
+    override:
+      nodeSelector: {role: argoci, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    jobSize: small
+    requests: {cpu: 2000m, memory: 2Gi}
+    useGoBuild: true
+    workspaceVolumes: none
+    cache:
+      - {name: go, mode: write}
+    commands: |
+      s=$(date +%s)
+      for mod in $(git ls-files '*go.mod' | grep -v -e '^third_party/' -e '/vendor/'); do
+        ( cd "$(dirname "$mod")" && go mod download )
+      done
+      echo "CACHE-TEST go-mod-download download $(( $(date +%s) - s ))s"
+      du -sh "$GO_MOD_ROOT/pkg/mod"
+      s=$(date +%s)
+      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | pigz -1 > /cache/go-mod.tar.gz
+      echo "CACHE-TEST go-mod-download pack $(( $(date +%s) - s ))s"
+      ls -l /cache
+
   # go vet fans out across every package, so it scales with the cores it gets.
   # Every module waits on this step, so it runs in the build image directly
   # rather than paying dind's start-up and image pull.
@@ -81,17 +106,15 @@ steps:
       # A cron or tag has no range to diff against, so it reformats everything.
       if [ "${CI_GIT_REF_TYPE}" = PR ] || [ "${CI_GIT_REF_TYPE}" = MERGE ]; then make fix-changed; else make fix-all; fi
       make check-dirty
-      # TEMPORARY: writes this commit's Go caches for the volume-cache readers.
+      # TEMPORARY: writes this commit's Go build cache for the volume-cache readers.
       dnf install -y -q zstd
       du -sh .go-pkg-cache "$GO_MOD_ROOT/pkg/mod"
       s=$(date +%s)
       tar -cf - .go-pkg-cache | pigz -1 > /cache/go-build.tar.gz &
-      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | pigz -1 > /cache/go-mod.tar.gz &
       wait
       echo "CACHE-TEST check-go compress-pigz $(( $(date +%s) - s ))s"
       s=$(date +%s)
       tar -cf - .go-pkg-cache | zstd -T0 -1 -q -c > /cache/go-build.tar.zst &
-      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | zstd -T0 -1 -q -c > /cache/go-mod.tar.zst &
       wait
       echo "CACHE-TEST check-go compress-zstd $(( $(date +%s) - s ))s"
       ls -l /cache
@@ -255,15 +278,12 @@ steps:
   # with rootless buildkit, and build-calico-image publishes the tar the image
   # loaders pull. The last keeps the name every consumer depends on.
   - name: calico-image-context
+    depends: [go-mod-download]
     # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
     override:
       nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
       tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-      - name: STORE_BUILD_CACHE
-        value: "true"
       - name: NATIVE_GO_BUILD
         value: "true"
     timeout: 1h
@@ -273,6 +293,7 @@ steps:
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
     cache:
+      - {name: go, mode: read, path: /gomod}
       - {name: image, mode: write}
     changes:
       dependsOn: [cmd]
@@ -280,6 +301,11 @@ steps:
     commands: |
       # TEMPORARY: the build image lacks the zstd CLI the libbpf tarball needs.
       dnf install -y -q zstd
+      # TEMPORARY: the module cache go-mod-download filled, in place of a GCS restore.
+      s=$(date +%s)
+      mkdir -p "$GO_MOD_ROOT"
+      unpigz -c /gomod/go-mod.tar.gz | tar -C "$GO_MOD_ROOT" -xf -
+      echo "CACHE-TEST calico-image-context unpack-mod $(( $(date +%s) - s ))s"
       make -C cmd/calico image-context
       mkdir -p /cache/calico-image
       cp -a cmd/calico/bin/image-context-amd64/. /cache/calico-image/
