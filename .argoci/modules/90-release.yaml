@@ -53,11 +53,13 @@ steps:
     env:
       - name: HASHRELEASE_SERVER_BUCKET
         value: hashreleaseserver-static
-      - name: GOOGLE_APPLICATION_CREDENTIALS
-        value: /root/secrets/hashrelease-publisher.json
     commands: |
       # A fork carries no tags, and the version comes from them.
       git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
+      $(command -v sudo) apt-get update -qq && $(command -v sudo) apt-get install -y -qq --no-install-recommends rsync
+      # Kept out of the epilogue, whose artifact push needs the CI account.
+      export CLOUDSDK_CONFIG="$(mktemp -d)"
+      export GOOGLE_APPLICATION_CREDENTIALS=/root/secrets/hashrelease-publisher.json
       gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
       cd release
       make e2e
