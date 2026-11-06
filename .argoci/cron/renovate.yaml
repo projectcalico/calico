@@ -1,0 +1,74 @@
+# Renovate for this repo. One run from master covers every branch: Renovate's
+# own config names the release branches it opens PRs against.
+version: condensed
+generateName: renovate-
+
+schedule: 0 1 * * 2,5
+
+notifications:
+  slack:
+    channel: ci-notifications-os
+    when: failure
+    includeFailedSteps: true
+
+steps:
+  - name: renovate
+    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
+    timeout: 2h
+    # The post-upgrade make targets regenerate deps files in go-build containers.
+    services: [docker]
+    jobSize: medium
+    requests: {cpu: "4", memory: 8Gi}
+    secretBundles:
+      - marvin-github-token
+    env:
+      - {name: RENOVATE_REPOSITORIES, value: projectcalico/calico}
+      - {name: RENOVATE_ALLOWED_COMMANDS, value: '["^make gen-deps-files$", "^make regen-thirdparty-dep-patches$"]'}
+      # Must match the author on Renovate's existing branches, or it treats them
+      # as hand-edited and stops updating them.
+      - {name: RENOVATE_GIT_AUTHOR, value: "marvin-tigera <marvin-tigera@users.noreply.github.com>"}
+      # Renovate strips the environment its commands run with, so this is how
+      # the make targets see a CPU budget; without it they size -j from the
+      # node's cores rather than this step's request.
+      - {name: RENOVATE_CUSTOM_ENV_VARIABLES, value: '{"GOMAXPROCS": "4"}'}
+      - {name: LOG_LEVEL, value: info}
+    commands: |
+      set -o pipefail
+
+      # A release branch cut from master carries this file and deploys its own
+      # copy; only master's schedule should fire, or each run is doubled. An
+      # on-demand run from a PR is not a scheduled fire, so it goes ahead.
+      if [ "${CI_GIT_REF_TYPE}" = NIGHTLY ] && [ "${CI_GIT_BRANCH}" != master ]; then
+        echo "Renovate runs from master only; skipping on ${CI_GIT_BRANCH}."
+        exit 0
+      fi
+
+      # The image has no Node.
+      node_url=https://nodejs.org/dist/latest-v24.x
+      cd "$(mktemp -d)"
+      curl -fsSLO "${node_url}/SHASUMS256.txt"
+      node_tar=$(awk '/linux-x64\.tar\.xz$/ {print $2}' SHASUMS256.txt)
+      curl -fsSLO "${node_url}/${node_tar}"
+      grep " ${node_tar}\$" SHASUMS256.txt | sha256sum -c -
+      mkdir -p "${HOME}/node"
+      tar -xJf "${node_tar}" --strip-components=1 -C "${HOME}/node"
+      export PATH="${HOME}/node/bin:${PATH}"
+      npm install -g renovate@43
+
+      # Renovate's gomod manager runs go itself, and the image has none. Go's
+      # toolchain switching then fetches whatever version go.mod asks for.
+      go_tar="$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -1).linux-amd64.tar.gz"
+      curl -fsSLO "https://dl.google.com/go/${go_tar}"
+      echo "$(curl -fsSL "https://dl.google.com/go/${go_tar}.sha256")  ${go_tar}" | sha256sum -c -
+      # Not ~/go, which is GOPATH.
+      mkdir -p "${HOME}/goroot"
+      tar -xzf "${go_tar}" --strip-components=1 -C "${HOME}/goroot"
+      export PATH="${HOME}/goroot/bin:${PATH}"
+
+      # Pushes here follow a redirect that drops the credentials Renovate puts
+      # in the remote URL; git still asks a helper for the redirected host.
+      git config --global credential.https://github.com.helper store
+      printf 'https://x-access-token:%s@github.com\n' "${MARVIN_GITHUB_TOKEN}" > "${HOME}/.git-credentials"
+      chmod 600 "${HOME}/.git-credentials"
+
+      RENOVATE_TOKEN="${MARVIN_GITHUB_TOKEN}" renovate --platform=github --autodiscover=false
