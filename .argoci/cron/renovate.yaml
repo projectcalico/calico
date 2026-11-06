@@ -55,4 +55,21 @@ steps:
       export PATH="${HOME}/node/bin:${PATH}"
       npm install -g renovate@43
 
+      # Renovate's gomod manager runs go itself, and the image has none. Go's
+      # toolchain switching then fetches whatever version go.mod asks for.
+      go_tar="$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -1).linux-amd64.tar.gz"
+      curl -fsSLO "https://dl.google.com/go/${go_tar}"
+      echo "$(curl -fsSL "https://dl.google.com/go/${go_tar}.sha256")  ${go_tar}" | sha256sum -c -
+      # Not ~/go, which is GOPATH.
+      mkdir -p "${HOME}/goroot"
+      tar -xzf "${go_tar}" --strip-components=1 -C "${HOME}/goroot"
+      export PATH="${HOME}/goroot/bin:${PATH}"
+
+      # A redirect on the push drops the credentials Renovate puts in the URL;
+      # git still asks a helper for the redirected host.
+      echo "HTTPS_PROXY=${HTTPS_PROXY:-unset} https_proxy=${https_proxy:-unset}"
+      git config --global credential.https://github.com.helper store
+      printf 'https://x-access-token:%s@github.com\n' "${MARVIN_GITHUB_TOKEN}" > "${HOME}/.git-credentials"
+      chmod 600 "${HOME}/.git-credentials"
+
       RENOVATE_TOKEN="${MARVIN_GITHUB_TOKEN}" renovate --platform=github --autodiscover=false
