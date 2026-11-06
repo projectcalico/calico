@@ -2333,6 +2333,51 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - malformed policies", fu
 		}))
 		Expect(kvp.Revision).To(Equal("5678"))
 	})
+
+	// An empty protocol entry is what remains of a rule after the API server prunes
+	// a field missing from the installed CRD, such as destinationNamedPort.
+	DescribeTable("should fail closed on an empty protocol entry",
+		func(action clusternetpol.ClusterNetworkPolicyRuleAction, expectedEgress []apiv3.Rule) {
+			rule := clusternetpol.ClusterNetworkPolicyEgressRule{
+				Name:   "pruned-named-port",
+				Action: action,
+				Protocols: []clusternetpol.ClusterNetworkPolicyProtocol{
+					{TCP: &clusternetpol.ClusterNetworkPolicyProtocolTCP{
+						DestinationPort: &clusternetpol.Port{Number: 443},
+					}},
+					{},
+				},
+				To: []clusternetpol.ClusterNetworkPolicyEgressPeer{
+					{Namespaces: &metav1.LabelSelector{}},
+				},
+			}
+			cnp := clusternetpol.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test.policy"},
+				Spec: clusternetpol.ClusterNetworkPolicySpec{
+					Tier:     clusternetpol.AdminTier,
+					Priority: 100,
+					Subject: clusternetpol.ClusterNetworkPolicySubject{
+						Namespaces: &metav1.LabelSelector{},
+					},
+					Egress: []clusternetpol.ClusterNetworkPolicyEgressRule{rule},
+				},
+			}
+			expectedErr := cerrors.ErrorClusterNetworkPolicyConversion{
+				PolicyName: "test.policy",
+				Rules: []cerrors.ErrorClusterNetworkPolicyConversionRule{{
+					EgressRule: &rule,
+					Reason:     "k8s rule couldn't be converted: protocol entry has no supported fields set",
+				}},
+			}
+
+			gnp := convertToGNP(&cnp, &expectedErr)
+
+			Expect(gnp.Spec.Egress).To(Equal(expectedEgress))
+		},
+		Entry("Accept rule is dropped", clusternetpol.ClusterNetworkPolicyRuleActionAccept, []apiv3.Rule(nil)),
+		Entry("Deny rule becomes deny-all", clusternetpol.ClusterNetworkPolicyRuleActionDeny, []apiv3.Rule{{Action: apiv3.Deny}}),
+		Entry("Pass rule becomes deny-all", clusternetpol.ClusterNetworkPolicyRuleActionPass, []apiv3.Rule{{Action: apiv3.Deny}}),
+	)
 })
 
 func convertToGNP(
