@@ -61,16 +61,38 @@ steps:
       - build-e2e-binaries
       - check-go
     matrix:
-      - name: build-failure-log
+      # Pinned rather than defaulted: from v3.33 the default gives Felix the
+      # IPIP routes, and these tests need BGP to be the only routing mechanism.
+      - name: conformance-bird
         env:
           - name: E2E_TARGET
-            value: sandcat-no-such-target
-      - name: build-failure-nolog
+            value: e2e-test
+          - name: EXTRA_VALUES_FILES
+            value: hack/test/kind/infra/values-bird-routing.yaml
+      - name: conformance-felix
         env:
           - name: E2E_TARGET
-            value: sandcat-no-such-target
-          - name: SANDCAT_TEST_EMPTY_LOG
-            value: "1"
+            value: e2e-test
+          - name: EXTRA_VALUES_FILES
+            value: hack/test/kind/infra/values-felix-routing.yaml
+          - name: KIND_CALICO_API_GROUP
+            value: crd.projectcalico.org/v1
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/felix-routing.yaml
+      - name: clusternetworkpolicy-felix
+        env:
+          - name: E2E_TARGET
+            value: e2e-test-clusternetworkpolicy
+          - name: EXTRA_VALUES_FILES
+            value: hack/test/kind/infra/values-felix-routing.yaml
+          - name: KIND_CALICO_API_GROUP
+            value: projectcalico.org/v3
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/felix-routing.yaml
+      - name: sig-calico-bpf
+        env:
+          - name: E2E_TARGET
+            value: e2e-test-bpf
     commands: |
       sudo apt-get update -y && sudo apt-get install -y make jq
       sudo modprobe sctp
@@ -84,7 +106,6 @@ steps:
       set -o pipefail
       rc=0
       make ${E2E_TARGET} 2>&1 | tee artifacts/e2e.log || rc=$?
-      [ "${SANDCAT_TEST_EMPTY_LOG:-}" = 1 ] && : > artifacts/e2e.log || true
       # Here rather than in the epilogue: the cluster and the report are on the VM.
       .argoci/scripts/sandcat/sandcat.sh push-specs --spec-dir report/sandcat || true
       SANDCAT_REPORT=report/report.json
