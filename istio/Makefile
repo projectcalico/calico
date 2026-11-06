@@ -18,7 +18,7 @@ BUILD_IMAGES ?= $(ISTIO_CNI_IMAGE) $(ISTIO_PILOT_IMAGE) $(ISTIO_PROXYV2_IMAGE) $
 ARCHES = amd64 arm64
 
 # Upstream version (configurable)
-ISTIO_VERSION ?= 1.29.8
+ISTIO_VERSION ?= 1.29.10
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -48,7 +48,6 @@ $(ISTIO_DOWNLOADED):
 	tar xz --strip-components=1 -C istio -f /tmp/calico-istio.tar.gz
 	rm -f /tmp/calico-istio.tar.gz
 	patch -d istio -p1 < patches/0001-feat-cni-DSCP-magic-mark-support-for-transparent-net.patch
-	patch -d istio -p1 < patches/0003-Update-deps-for-CVE-fixes.patch
 	touch $@
 
 $(ZTUNNEL_DOWNLOADED):
