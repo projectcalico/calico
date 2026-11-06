@@ -1,12 +1,9 @@
-# Required repo secrets (the branch-monitor agent's, the same pair Semaphore
-# reads from its slack-master-release-monitor secret):
+# Required repo secrets, the same values as Semaphore's slack-master-release-monitor:
 #   RELEASE_MONITOR_AGENT_URL   — the agent's A2A endpoint
 #   RELEASE_MONITOR_AGENT_TOKEN — its bearer token
 #
-# Hands every finished ArgoCI merge run on master / release-* to the
-# branch-monitor agent, pass and fail, as Semaphore's after_pipeline does.
-# The agent records the run and posts to Slack itself. A no-op without the
-# secrets.
+# Sends each finished ArgoCI merge run on master / release-* to the branch-monitor
+# agent. A no-op without the secrets.
 
 name: Branch CI monitor (ArgoCI)
 
@@ -37,7 +34,8 @@ jobs:
        github.event.state != 'pending' &&
        contains(github.event.target_url, '-merge-'))
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    # Three 320s attempts plus their pauses.
+    timeout-minutes: 18
     env:
       RELEASE_MONITOR_AGENT_URL: ${{ secrets.RELEASE_MONITOR_AGENT_URL }}
       RELEASE_MONITOR_AGENT_TOKEN: ${{ secrets.RELEASE_MONITOR_AGENT_TOKEN }}
@@ -76,7 +74,10 @@ jobs:
             exit 0
           fi
           # A merge run tests the branch its PR merged into.
-          BRANCH=$(gh api "repos/$REPO/pulls/${BASH_REMATCH[1]}" --jq .base.ref)
+          if ! BRANCH=$(gh api "repos/$REPO/pulls/${BASH_REMATCH[1]}" --jq .base.ref); then
+            echo "::warning::could not read PR #${BASH_REMATCH[1]} for '$RUN' — skipping"
+            exit 0
+          fi
           if [[ ! "$BRANCH" =~ ^(master|release-[a-z0-9.]+)$ ]]; then
             echo "branch '$BRANCH' not monitored"; exit 0
           fi
@@ -85,23 +86,26 @@ jobs:
             "$BRANCH" "$RUN" "$RUN_ID" "$RESULT" "$SHA")
           echo "branch-monitor: sending"; echo "$msg"
           req=$(jq -n --arg t "$msg" '{jsonrpc:"2.0",id:"1",method:"message/stream",params:{message:{role:"user",kind:"message",messageId:"1",parts:[{kind:"text",text:$t}]}}}')
-          # The agent runs the task to completion server-side, so only the trigger
-          # must land. Retry only on an empty reply: any SSE data means the agent
-          # has the task, and re-POSTing would record the run twice.
+          # A 2xx means the agent has the task, which runs to completion server-side.
+          # Retry only on no reply or a 5xx.
           for i in 1 2 3; do
-            resp=$(curl -sS -N -m 320 -X POST "$RELEASE_MONITOR_AGENT_URL" \
+            http=$(curl -sS -N -m 320 -o resp.txt -w '%{http_code}' -X POST "$RELEASE_MONITOR_AGENT_URL" \
               -H "Authorization: Bearer $RELEASE_MONITOR_AGENT_TOKEN" \
               -H "Content-Type: application/json" -H "Accept: text/event-stream" \
               -d "$req" || true)
-            echo "attempt $i SSE stream: $resp"
-            if [[ -n "$resp" ]]; then
-              if printf '%s' "$resp" | grep -Eq '"state":"(completed|failed)"|"final":[[:space:]]*true'; then
-                echo "branch-monitor: agent run finished"
-              else
-                echo "branch-monitor: agent received the trigger (task continues server-side)"
-              fi
-              exit 0
-            fi
-            echo "attempt $i: no response (gateway/agent cold) — retrying"; sleep 15
+            echo "attempt $i: HTTP $http, SSE stream: $(cat resp.txt 2>/dev/null)"
+            case "$http" in
+              2??)
+                if grep -Eq '"state":"(completed|failed)"|"final":[[:space:]]*true' resp.txt 2>/dev/null; then
+                  echo "branch-monitor: agent run finished"
+                else
+                  echo "branch-monitor: agent received the trigger (task continues server-side)"
+                fi
+                exit 0 ;;
+              4??)
+                echo "::warning::branch-monitor: agent refused the trigger (HTTP $http) — run $RUN_ID not recorded"
+                exit 0 ;;
+            esac
+            echo "attempt $i: no answer or HTTP $http (gateway/agent cold) — retrying"; sleep 15
           done
-          echo "branch-monitor: agent unreachable after retries — skipping"
+          echo "::warning::branch-monitor: agent unreachable after retries — run $RUN_ID not recorded"
