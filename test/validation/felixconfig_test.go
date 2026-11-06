@@ -16,6 +16,7 @@ package validation_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -283,6 +284,29 @@ func TestFelixConfiguration_Validation(t *testing.T) {
 				Spec:       v3.FelixConfigurationSpec{ExternalNodesCIDRList: &[]string{"10.0.0.0/33"}},
 			},
 			wantErr: "externalNodesList entries must be IPv4 CIDRs or IPv4 addresses",
+		},
+		{
+			name: "openstackRegion that is a DNS label is accepted",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{OpenstackRegion: strings.Repeat("r", 46)},
+			},
+		},
+		{
+			name: "openstackRegion longer than 46 characters is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{OpenstackRegion: strings.Repeat("r", 47)},
+			},
+			wantErr: "spec.openstackRegion: Too long",
+		},
+		{
+			name: "openstackRegion that is not a DNS label is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{OpenstackRegion: "Region_One"},
+			},
+			wantErr: "spec.openstackRegion: Invalid value",
 		},
 	}
 
