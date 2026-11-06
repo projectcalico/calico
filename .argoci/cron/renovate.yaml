@@ -36,8 +36,9 @@ steps:
       set -o pipefail
 
       # A release branch cut from master carries this file and deploys its own
-      # copy; only master's should run, or each run is doubled.
-      if [ "${CI_GIT_BRANCH}" != master ]; then
+      # copy; only master's schedule should fire, or each run is doubled. An
+      # on-demand run from a PR is not a scheduled fire, so it goes ahead.
+      if [ "${CI_GIT_REF_TYPE}" = NIGHTLY ] && [ "${CI_GIT_BRANCH}" != master ]; then
         echo "Renovate runs from master only; skipping on ${CI_GIT_BRANCH}."
         exit 0
       fi
