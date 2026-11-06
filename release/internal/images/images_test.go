@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -1475,4 +1477,39 @@ func TestMetadata(t *testing.T) {
 			t.Error("described images with no records dir")
 		}
 	})
+}
+
+func TestReadsFromMake(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "comp"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	makefile := "build-images:\n\t@echo comp comp-windows\nimage-tag-prefix:\n\t@echo pre-\n"
+	if err := os.WriteFile(filepath.Join(root, "comp", "Makefile"), []byte(makefile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := Image{RepoRoot: root}
+
+	for _, makeflags := range []string{"", "w"} {
+		t.Run("with MAKEFLAGS="+makeflags, func(t *testing.T) {
+			t.Setenv("MAKEFLAGS", makeflags)
+			u := unit{variant: StandardVariant, dir: "comp", env: os.Environ()}
+
+			names, err := c.imageNames(u)
+			if err != nil {
+				t.Fatalf("imageNames: %v", err)
+			}
+			if want := []string{"comp"}; !slices.Equal(names, want) {
+				t.Errorf("image names = %q, want %q", names, want)
+			}
+
+			prefix, err := c.tagPrefix(u)
+			if err != nil {
+				t.Fatalf("tagPrefix: %v", err)
+			}
+			if prefix != "pre-" {
+				t.Errorf("tag prefix = %q, want %q", prefix, "pre-")
+			}
+		})
+	}
 }

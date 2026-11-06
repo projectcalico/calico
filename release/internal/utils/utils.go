@@ -74,7 +74,7 @@ func buildImages(dir string, release bool) ([]string, error) {
 	if release {
 		env = append(env, "RELEASE=true")
 	}
-	out, err := command.MakeInDir(dir, []string{"-s", "build-images"}, env)
+	out, err := command.MakeInDir(dir, []string{"-s", "--no-print-directory", "build-images"}, env)
 	if err != nil {
 		logrus.Error(out)
 		return nil, fmt.Errorf("failed to get images for release dir %s: %w", dir, err)

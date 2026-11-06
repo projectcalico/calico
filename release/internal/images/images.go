@@ -524,7 +524,7 @@ func (c Image) imageNames(u unit) ([]string, error) {
 	// RELEASE selects the released image names, set here so they cannot
 	// depend on the caller's environment.
 	env := append(slices.Clone(u.env), utils.EnvTrue(utils.EnvRelease))
-	out, err := c.Runner().RunInDir("", "make", []string{"-C", dir, "-s", "build-images"}, env)
+	out, err := c.Runner().RunInDir("", "make", []string{"-C", dir, "-s", "--no-print-directory", "build-images"}, env)
 	if err != nil {
 		return nil, fmt.Errorf("reading images in %s: %w", u.dir, err)
 	}
@@ -547,7 +547,7 @@ func (c Image) imageNames(u unit) ([]string, error) {
 // than declared here.
 func (c Image) tagPrefix(u unit) (string, error) {
 	dir := filepath.Join(c.RepoRoot, u.dir)
-	out, err := c.Runner().RunInDir("", "make", []string{"-C", dir, "-s", "image-tag-prefix"}, u.env)
+	out, err := c.Runner().RunInDir("", "make", []string{"-C", dir, "-s", "--no-print-directory", "image-tag-prefix"}, u.env)
 	if err != nil {
 		return "", fmt.Errorf("reading tag prefix in %s: %w", u.dir, err)
 	}
