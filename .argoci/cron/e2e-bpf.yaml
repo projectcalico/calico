@@ -319,7 +319,7 @@ steps:
         value: azr-aks
     commands: |
       .argoci/scripts/body_standard.sh
-  - name: bpf-run-matrix-aws-kops-rhel8
+  - name: bpf-run-matrix-aws-kops-rhel8-2
     services:
       - docker
       - http-cache-proxy
