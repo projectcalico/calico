@@ -33,13 +33,10 @@ import (
 	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
-// The name becomes the log directory, so it is qualified: a bare "build"
-// would collide with another group's.
 const (
-	buildStep = "charts-build"
-
-	// PublishStep names the step, and so the record a resume reads back.
-	PublishStep = "charts-publish"
+	Step        = "charts"
+	buildStep   = Step + "-build"
+	PublishStep = Step + "-publish"
 )
 
 const (

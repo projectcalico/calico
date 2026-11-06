@@ -547,7 +547,7 @@ var (
 			windowsArchiveFlag(envBuildWindowsArchive, envReleaseWindowsArchive),
 		}
 		if hashrelease {
-			f = append(f, e2eBinariesFlag, releaseNotesFlag)
+			f = append(f, releaseNotesFlag, e2eBinariesFlag)
 		}
 		return f
 	}

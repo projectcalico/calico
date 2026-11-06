@@ -98,4 +98,15 @@ func TestReleaseDirsImages(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("under a parent make", func(t *testing.T) {
+		t.Setenv("MAKEFLAGS", "w")
+		images, err := BuildReleaseImageList(repoRoot, "whisker")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if diff := cmp.Diff([]string{"whisker"}, images); diff != "" {
+			t.Errorf("images mismatch (-want +got):\n%s", diff)
+		}
+	})
 }

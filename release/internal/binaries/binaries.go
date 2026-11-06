@@ -32,11 +32,10 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-// The name becomes the log directory, so it is qualified: a bare "build"
-// would collide with another group's.
 const (
-	buildStep   = "binaries-build"
-	archiveStep = "binaries-archive"
+	Step        = "binaries"
+	buildStep   = Step + "-build"
+	archiveStep = Step + "-archive"
 )
 
 const binDirName = "bin"
