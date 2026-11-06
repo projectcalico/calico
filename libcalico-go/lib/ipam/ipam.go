@@ -2246,10 +2246,9 @@ func (c ipamClient) convertBackendToIPAMConfig(cfg *model.IPAMConfig) *IPAMConfi
 	}
 }
 
-// ensureConsistentAffinity retrieves the pool and node for the given block and determines
-// if the pool still selects node. If it no longer matches, it will release the block
-// affinity for that node.
-// Returns a bool indicating if the block affinity was released.
+// ensureConsistentAffinity runs after IPs are freed from a block. It releases the block's affinity to its node once
+// the block is empty, unless pool qualification says the node keeps it: a pool covering the block still selects the
+// node, or no enabled pool covers it.
 func (c ipamClient) ensureConsistentAffinity(ctx context.Context, config *IPAMConfig, b *model.AllocationBlock) error {
 	// Retrieve node for this allocation. We do this so we can clean up affinity for blocks
 	// which should no longer be affine to this host.
@@ -2286,23 +2285,19 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, config *IPAMCo
 		return fmt.Errorf("Datastore returned malformed node object")
 	}
 
-	// Fetch the pool for the given CIDR and check if it selects the node.
-	pool, err := c.blockReaderWriter.getPoolForIP(ctx, net.IP{IP: b.CIDR.IPNet.IP}, nil)
+	enabledPools, err := c.pools.GetEnabledPools(ctx, b.CIDR.Version())
 	if err != nil {
 		return err
 	}
-
-	if pool == nil {
-		logCtx.Debug("No pools own this block")
-		return nil
-	} else if sel, err := SelectsNode(*pool, *v3n); err != nil {
-		logCtx.WithField("selector", pool.Spec.NodeSelector).WithError(err).Error("Failed to determine node selection")
+	kept, err := nodePools(*v3n, enabledPools).keepsBlock(b.CIDR)
+	if err != nil {
 		return err
-	} else if sel {
-		logCtx.Debug("Pool selects node, no change")
+	}
+	if kept {
+		logCtx.Debug("Node keeps its affinity to this block, no change")
 		return nil
 	}
-	logCtx.WithField("selector", pool.Spec.NodeSelector).Debug("Pool no longer selects node, releasing block affinity")
+	logCtx.Debug("No pool covering this block selects the node, releasing block affinity")
 
 	// Pool does not match this node's label, release this block's affinity.
 	if err = c.blockReaderWriter.releaseBlockAffinity(ctx, config, *affinityCfg, b.CIDR, releaseAffinityOpts{
