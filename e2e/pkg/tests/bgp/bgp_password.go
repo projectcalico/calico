@@ -42,6 +42,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithFeature("BGPPeer"),
 	describe.WithCategory(describe.Networking),
 	describe.RequiresBGP(),
+	describe.RequiresOperator(),
 	describe.RequiresV3CRDs(),
 	describe.WithSerial(),
 	"BGP password",

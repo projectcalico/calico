@@ -1,12 +1,6 @@
 [sig-calico] [Team:CORE] [Category:Networking] [Feature:HostPorts] HostPorts tests with host port resources active on :8080 should support Pod HostPorts [Conformance] [Serial]
 [sig-calico] [Team:CORE] [Category:Networking] [Feature:Pods] Pod Termination Grace Period should allow client to reach server while client is terminating [Conformance]
 [sig-calico] [Team:CORE] [Category:Networking] [Feature:Pods] Pod Termination Grace Period should allow pinging a server pod while it is terminating
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedGlobalNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedKubernetesNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedGlobalNetworkPolicy should enforce a deny policy
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedKubernetesNetworkPolicy should enforce a deny policy
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedNetworkPolicy should enforce a deny policy
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests doNotTrack policy should deny connections to the specified port in a doNotTrack deny policy [Serial]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests should allow connections using a named port [Conformance] [Serial]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests should allow inbound connections with an allow-all [Serial]
@@ -105,9 +99,6 @@
 [sig-calico] [Team:CORE] [Feature:IPAM] [RequiresCalicoIPAM] [Category:Networking] IPAM StrictAffinity should respect StrictAffinity when toggled [Serial]
 [sig-calico] [Team:CORE] [Feature:IPPool] [Category:Operator] operator IPPool management tests should create and delete IP pools [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] Istio OpenShift Platform Configuration should deploy Istio with correct OpenShift platform configuration [Serial]
-[sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should allow UDP traffic to bypass ztunnel while Calico enforces UDP policy [Serial]
-[sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should encrypt traffic with ambient mode and enforce Calico NetworkPolicy [Serial]
-[sig-calico] [Team:CORE] [Feature:MTU] [Category:Networking] [RequiresOperator] Automatic MTU tests should select the correct MTU for the platform
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should correctly isolate namespaces [Conformance]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should provide a default allow [Conformance]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should support a 'deny egress' policy [Conformance]
