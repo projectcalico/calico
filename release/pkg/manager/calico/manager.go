@@ -25,6 +25,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"go.yaml.in/yaml/v3"
@@ -1363,7 +1365,12 @@ func (r *CalicoManager) buildContainerImages() error {
 	}
 	releaseDirs := append(imageReleaseDirs, "felix")
 
-	logrus.Info("Building container images")
+	linuxImages, windowsImages := r.releaseImagesByDir()
+	totalImages := 0
+	for _, images := range linuxImages {
+		totalImages += len(images)
+	}
+	logrus.WithFields(logrus.Fields{"dirs": len(releaseDirs), "images": totalImages}).Info("Building container images")
 
 	// Build env.
 	env := append(os.Environ(),
@@ -1384,7 +1391,11 @@ func (r *CalicoManager) buildContainerImages() error {
 		env = append(env, fmt.Sprintf("BRANCH_NAME=%s", branch))
 	}
 
-	for _, dir := range releaseDirs {
+	builtImages := 0
+	for i, dir := range releaseDirs {
+		log := progressLogger(dir, linuxImages[dir], i+1, len(releaseDirs))
+		log.Info("Building container images")
+		start := time.Now()
 		// Use an absolute path for the directory to build.
 		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-build", env...)
 		if err != nil {
@@ -1392,6 +1403,11 @@ func (r *CalicoManager) buildContainerImages() error {
 			return fmt.Errorf("failed to build %s: %s", dir, err)
 		}
 		logrus.Info(out)
+		builtImages += len(linuxImages[dir])
+		log.WithFields(logrus.Fields{
+			"duration": time.Since(start).Round(time.Second),
+			"built":    fmt.Sprintf("%d/%d", builtImages, totalImages),
+		}).Info("Finished building container images")
 	}
 
 	// Build Windows images only after every Linux image is built. image-windows
@@ -1402,15 +1418,60 @@ func (r *CalicoManager) buildContainerImages() error {
 	// reference, which only exists in the local docker daemon (node and istio
 	// rely on this). Running the Windows builds in a separate trailing loop
 	// keeps the builder switch from poisoning those Linux builds.
-	for _, dir := range windowsReleaseDirs {
+	for i, dir := range windowsReleaseDirs {
+		log := progressLogger(dir, windowsImages[dir], i+1, len(windowsReleaseDirs))
+		log.Info("Building Windows container images")
+		start := time.Now()
 		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "image-windows", env...)
 		if err != nil {
 			logrus.Error(out)
 			return fmt.Errorf("failed to build %s windows images: %s", dir, err)
 		}
 		logrus.Info(out)
+		log.WithField("duration", time.Since(start).Round(time.Second)).Info("Finished building Windows container images")
 	}
 	return nil
+}
+
+// releaseImagesByDir maps each image release directory to the Linux and Windows images it builds.
+// The names only feed progress logging, so a directory whose lookup fails is logged and left out
+// rather than failing the build.
+func (r *CalicoManager) releaseImagesByDir() (linux, windows map[string][]string) {
+	lookups := make([][]string, len(imageReleaseDirs))
+	var g errgroup.Group
+	for i, dir := range imageReleaseDirs {
+		g.Go(func() error {
+			images, err := utils.BuildReleaseImageList(r.repoRoot, dir)
+			if err != nil {
+				logrus.WithError(err).WithField("dir", dir).Warn("Could not list images; progress will omit them")
+				return nil
+			}
+			lookups[i] = images
+			return nil
+		})
+	}
+	_ = g.Wait()
+
+	linux, windows = map[string][]string{}, map[string][]string{}
+	for i, dir := range imageReleaseDirs {
+		for _, image := range lookups[i] {
+			// build-images reports a directory's Windows image alongside its Linux ones.
+			if strings.HasSuffix(image, "-windows") {
+				windows[dir] = append(windows[dir], image)
+			} else {
+				linux[dir] = append(linux[dir], image)
+			}
+		}
+	}
+	return linux, windows
+}
+
+func progressLogger(dir string, images []string, n, total int) *logrus.Entry {
+	fields := logrus.Fields{"dir": dir, "progress": fmt.Sprintf("%d/%d", n, total)}
+	if len(images) > 0 {
+		fields["images"] = strings.Join(images, ",")
+	}
+	return logrus.WithFields(fields)
 }
 
 func (r *CalicoManager) publishGitTag() error {
@@ -1504,7 +1565,7 @@ func (r *CalicoManager) publishContainerImages() error {
 			out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), target, env...)
 			if err != nil {
 				if attempt < maxRetries {
-					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
+					logrus.WithFields(logrus.Fields{"dir": dir, "attempt": attempt}).WithError(err).Warn("Publish failed, retrying")
 					attempt++
 					continue
 				}
@@ -1517,14 +1578,45 @@ func (r *CalicoManager) publishContainerImages() error {
 			return nil
 		}
 	}
+	linuxImages, windowsImages := r.releaseImagesByDir()
+	totalImages := 0
+	for _, images := range linuxImages {
+		totalImages += len(images)
+	}
+	logrus.WithFields(logrus.Fields{"dirs": len(imageReleaseDirs), "images": totalImages}).Info("Publishing container images")
+
+	// Directories finish out of order, so completions are counted separately from starts.
+	var mu sync.Mutex
+	started, finishedDirs, publishedImages := 0, 0, 0
+
 	// Each directory already pushes to every registry concurrently, so a small limit is
 	// enough to saturate the uplink without tripping registry rate limits.
 	var g errgroup.Group
 	g.SetLimit(publishDirConcurrency)
 	for _, dir := range imageReleaseDirs {
 		g.Go(func() error {
-			logrus.WithField("dir", dir).Info("Publishing images")
-			return publish(dir, "release-publish")
+			mu.Lock()
+			started++
+			log := progressLogger(dir, linuxImages[dir], started, len(imageReleaseDirs))
+			mu.Unlock()
+
+			log.Info("Publishing container images")
+			start := time.Now()
+			if err := publish(dir, "release-publish"); err != nil {
+				return err
+			}
+
+			mu.Lock()
+			finishedDirs++
+			publishedImages += len(linuxImages[dir])
+			log = log.WithFields(logrus.Fields{
+				"duration":  time.Since(start).Round(time.Second),
+				"finished":  fmt.Sprintf("%d/%d", finishedDirs, len(imageReleaseDirs)),
+				"published": fmt.Sprintf("%d/%d", publishedImages, totalImages),
+			})
+			mu.Unlock()
+			log.Info("Finished publishing container images")
+			return nil
 		})
 	}
 	if err := g.Wait(); err != nil {
@@ -1533,10 +1625,14 @@ func (r *CalicoManager) publishContainerImages() error {
 	// Publish Windows images in a separate trailing loop, mirroring the build
 	// step: release-windows runs setup-windows-builder, which switches the
 	// global default buildx builder, so keep it out of the Linux publish loop.
-	for _, dir := range windowsReleaseDirs {
+	for i, dir := range windowsReleaseDirs {
+		log := progressLogger(dir, windowsImages[dir], i+1, len(windowsReleaseDirs))
+		log.Info("Publishing Windows container images")
+		start := time.Now()
 		if err := publish(dir, "release-windows"); err != nil {
 			return err
 		}
+		log.WithField("duration", time.Since(start).Round(time.Second)).Info("Finished publishing Windows container images")
 	}
 	return nil
 }
