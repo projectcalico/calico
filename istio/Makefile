@@ -48,6 +48,7 @@ $(ISTIO_DOWNLOADED):
 	tar xz --strip-components=1 -C istio -f /tmp/calico-istio.tar.gz
 	rm -f /tmp/calico-istio.tar.gz
 	patch -d istio -p1 < patches/0001-feat-cni-DSCP-magic-mark-support-for-transparent-net.patch
+	patch -d istio -p1 < patches/0003-Update-deps-for-CVE-fixes.patch
 	touch $@
 
 $(ZTUNNEL_DOWNLOADED):
@@ -56,6 +57,7 @@ $(ZTUNNEL_DOWNLOADED):
 	tar xz --strip-components=1 -C ztunnel -f /tmp/calico-ztunnel.tar.gz
 	rm -f /tmp/calico-ztunnel.tar.gz
 	patch -d ztunnel -p1 < patches/0002-transparent-policies.patch
+	patch -d ztunnel -p1 < patches/0004-Update-ztunnel-deps-for-CVE-fixes.patch
 	touch $@
 
 ###############################################################################
