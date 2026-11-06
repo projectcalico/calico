@@ -1,15 +1,10 @@
 # Test resources for migration testing. These are applied via the Calico apiserver
-# (which stores them in v1 CRDs). The migration controller should copy them to v3 CRDs.
+# (which stores them in v1 CRDs) so the migration has real data to move while the
+# connectivity probe runs.
 #
-# Resources cover the main types handled by the migration controller:
-# - Tiers (custom, beyond the auto-created "default")
-# - GlobalNetworkPolicy (in default tier — tests "default." prefix stripping)
-# - GlobalNetworkPolicy (in custom tier — tests non-default tier handling)
-# - NetworkPolicy (namespaced, default tier)
-# - HostEndpoint
-# - GlobalNetworkSet
-# - NetworkSet (namespaced)
-# - BGPPeer
+# What lands in v3 is asserted by the envtest FV, not by run_test.sh. See
+# kube-controllers/pkg/controllers/migration/controller_v1crd_fv_test.go, which
+# seeds the same shapes.
 
 ---
 apiVersion: projectcalico.org/v3

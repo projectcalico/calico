@@ -1,0 +1,56 @@
+# This MutatingAdmissionPolicy carries the two IP pool defaults a static CRD default
+# cannot express: blockSize depends on the CIDR family, and allowedUses depends on
+# whether a namespaceSelector is set.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "ippool.policy.projectcalico.org"
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - ippools
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  variables:
+    # Mutation runs before schema validation, so a missing or malformed CIDR has to
+    # be tolerated here and left for the validator to reject.
+    - name: cidrUsable
+      expression: |
+        has(object.spec.cidr) && isCIDR(object.spec.cidr)
+    - name: blockSizeUnset
+      expression: |
+        !has(object.spec.blockSize) || object.spec.blockSize == 0
+    - name: blockSize
+      expression: |
+        variables.cidrUsable && cidr(object.spec.cidr).ip().family() == 6 ? 122 : 26
+    - name: allowedUsesUnset
+      expression: |
+        !has(object.spec.allowedUses) || size(object.spec.allowedUses) == 0
+    # A pool that names a namespace is a workload pool, and Tunnel is rejected
+    # alongside a namespaceSelector, so the back-compatible pair is wrong there.
+    - name: namespaceScoped
+      expression: |
+        has(object.spec.namespaceSelector) && size(object.spec.namespaceSelector) != 0
+  mutations:
+    # Also on update: blockSize is immutable, but its transition rule cannot fire
+    # when the field is absent, so a write that omits it would otherwise clear it.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          variables.cidrUsable && variables.blockSizeUnset ?
+            [JSONPatch{op: "add", path: "/spec/blockSize", value: variables.blockSize}] :
+            []
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          variables.allowedUsesUnset ?
+            [JSONPatch{
+              op: "add",
+              path: "/spec/allowedUses",
+              value: variables.namespaceScoped ? ["Workload"] : ["Workload", "Tunnel"],
+            }] :
+            []

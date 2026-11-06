@@ -59,7 +59,7 @@ forwarding decisions. The handoff is via packet metadata:
 - On the TC ingress hook, the program calls
   `xdp2tc_get_metadata(skb)` and, on
   `CALI_META_ACCEPTED_BY_XDP`, sets
-  `skb->mark = CALI_SKB_MARK_BYPASS_XDP` (`bpf.h`) and skips the
+  `skb->mark = CALI_SKB_MARK_BYPASS_XDP` (`cali_bpf.h`) and skips the
   policy step.
 
 The same jump-map / preamble machinery from [bpf-tc-programs.md → TC program layout](./bpf-tc-programs.md) applies. XDP has its
@@ -100,17 +100,9 @@ the regular tracked path regardless of what XDP would have done.
 
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane works in the area this file
-covers must update the relevant section in the same PR — new
-mechanism, new flag, new map field, new config knob, or any
-change to the packet path. Exemptions: (a) bug fix restoring
-documented behaviour, (b) mechanical refactor with no observable
-change, (c) comment / log-message edits, (d) dependency bumps.
-If in doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).

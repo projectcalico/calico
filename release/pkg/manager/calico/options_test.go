@@ -35,7 +35,10 @@ func requiredOpts() []Option {
 // contract. CLI gating relies on these defaults being on at the manager
 // layer; flipping a default silently breaks every release without a flag set.
 func TestNewManagerStepDefaults(t *testing.T) {
-	m := NewManager(requiredOpts()...)
+	m, err := NewManager(requiredOpts()...)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
 	cases := []struct {
 		name string
 		got  bool
@@ -50,10 +53,12 @@ func TestNewManagerStepDefaults(t *testing.T) {
 		{"tarball", m.tarball},
 		{"windowsArchive", m.windowsArchive},
 		{"helmCharts", m.helmCharts},
+		{"operator", m.operator},
 		{"helmIndex", m.helmIndex},
 		{"e2eBinaries", m.e2eBinaries},
 		{"gitRef", m.gitRef},
 		{"githubRelease", m.githubRelease},
+		{"releaseNotes", m.releaseNotes},
 	}
 	for _, tc := range cases {
 		if !tc.got {
@@ -177,8 +182,11 @@ func TestPreBuildValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			m := NewManager(tc.opts...)
-			err := m.PreBuildValidation()
+			m, err := NewManager(tc.opts...)
+			if err != nil {
+				t.Fatalf("NewManager: %v", err)
+			}
+			err = m.PreBuildValidation()
 			if tc.expectErr {
 				if err == nil {
 					t.Fatalf("expected error containing %q, got nil", tc.wantErr)
@@ -198,6 +206,35 @@ func TestPreBuildValidation(t *testing.T) {
 				if strings.Contains(err.Error(), sub) {
 					t.Fatalf("unexpected guarded-invariant error: %v", err)
 				}
+			}
+		})
+	}
+}
+
+func TestWithVersion(t *testing.T) {
+	t.Run("rejects a non-semver version", func(t *testing.T) {
+		if _, err := NewManager(append(requiredOpts(), WithVersion("release-v3.99"))...); err == nil {
+			t.Error("want an error")
+		}
+	})
+}
+
+func TestWithDryRun(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		opts []Option
+		want bool
+	}{
+		{name: "off by default"},
+		{name: "on", opts: []Option{WithDryRun(true)}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := NewManager(append(requiredOpts(), tc.opts...)...)
+			if err != nil {
+				t.Fatalf("NewManager: %v", err)
+			}
+			if m.dryRun != tc.want {
+				t.Errorf("dryRun = %v, want %v", m.dryRun, tc.want)
 			}
 		})
 	}

@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -34,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/lib/logrusr"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type routeManager struct {
@@ -41,6 +43,7 @@ type routeManager struct {
 	routeTable           routetable.Interface
 	routeClassTunnel     routetable.RouteClass
 	routeClassSameSubnet routetable.RouteClass
+	routeClassBlackhole  routetable.RouteClass
 	ipVersion            uint8
 	ippoolType           proto.IPPoolType
 
@@ -77,6 +80,11 @@ type routeManager struct {
 	// created and maintained by the V4 manager and the V6 manager is
 	// responsible only for assigning the right V6 IP to the device.
 	maintainIPOnly bool
+
+	// tunnelVNIs, if set, is the exact VNI filter of a VNI-filtering VXLAN device.
+	tunnelVNIs []uint32
+	// vniFilterSupported starts from feature detection and is cleared if the kernel drops the filter.
+	vniFilterSupported bool
 }
 
 func newRouteManager(
@@ -96,6 +104,7 @@ func newRouteManager(
 		routeTable:           mainRouteTable,
 		routeClassTunnel:     routeClassTunnel,
 		routeClassSameSubnet: routeClassSameSubnet,
+		routeClassBlackhole:  blackholeRouteClass(ippoolType),
 		routesByDest:         map[string]*proto.RouteUpdate{},
 		localIPAMBlocks:      map[string]*proto.RouteUpdate{},
 		tunnelChangedC:       make(chan struct{}, 1),
@@ -111,6 +120,24 @@ func newRouteManager(
 			"ipVersion":    ipVersion,
 			"tunnelDevice": tunnelDevice,
 		}),
+	}
+}
+
+// ipamBlockDropRouteClass returns the route class to use for the blackhole "drop" routes programmed
+// by this manager. For example, to cover local affine blocks. Each encap type gets its own class to
+// avoid conflicts when multiple encapsulation types are enabled.
+func blackholeRouteClass(ippoolType proto.IPPoolType) routetable.RouteClass {
+	switch ippoolType {
+	case proto.IPPoolType_VXLAN:
+		return routetable.RouteClassBlackholeVXLAN
+	case proto.IPPoolType_IPIP:
+		return routetable.RouteClassBlackholeIPIP
+	case proto.IPPoolType_NO_ENCAP:
+		return routetable.RouteClassBlackholeNoEncap
+	default:
+		logrus.WithField("ippoolType", ippoolType).Error(
+			"Unexpected IP pool type for IPAM block blackhole routes; blackhole routes may be missing.")
+		return routetable.RouteClassBlackholeNoEncap
 	}
 }
 
@@ -165,7 +192,7 @@ func (m *routeManager) OnUpdate(protoBufMsg any) {
 		m.deleteRoute(msg.Dst)
 
 		// Process remote IPAM blocks.
-		if isType(msg, proto.RouteType_REMOTE_WORKLOAD) && msg.IpPoolType == m.ippoolType {
+		if isRemoteWorkload(msg) && msg.IpPoolType == m.ippoolType {
 			m.logCtx.WithField("msg", msg).Debug("Route manager received route update")
 			m.routesByDest[msg.Dst] = msg
 			m.routesDirty = true
@@ -216,9 +243,17 @@ func (m *routeManager) triggerRouteUpdate() {
 
 func (m *routeManager) updateParentIfaceAddr(addr string) {
 	m.parentDeviceLock.Lock()
-	defer m.parentDeviceLock.Unlock()
 	m.parentDeviceAddr = addr
-	m.tunnelChangedC <- struct{}{}
+	m.parentDeviceLock.Unlock()
+
+	// Kick the device-sync goroutine so that it picks up the new address without
+	// waiting for its next poll. The kick must not block to avoid a deadlock. If there's already
+	// a kick pending, we can just ride that one.
+	select {
+	case m.tunnelChangedC <- struct{}{}:
+	default:
+		m.logCtx.Debug("Tunnel-changed kick already pending, not sending another.")
+	}
 }
 
 func (m *routeManager) parentIfaceAddr() string {
@@ -233,6 +268,12 @@ func (m *routeManager) vxlanEnabled() bool {
 
 func isType(msg *proto.RouteUpdate, t proto.RouteType) bool {
 	return msg.Types&t == t
+}
+
+// A borrowed IP is flagged both local and remote; LocalWorkload is the calc
+// graph's tie-break and wins.
+func isRemoteWorkload(msg *proto.RouteUpdate) bool {
+	return isType(msg, proto.RouteType_REMOTE_WORKLOAD) && !msg.LocalWorkload
 }
 
 func (m *routeManager) routeIsLocalBlock(msg *proto.RouteUpdate) bool {
@@ -255,6 +296,7 @@ func (m *routeManager) routeIsLocalBlock(msg *proto.RouteUpdate) bool {
 	if err != nil {
 		logrus.WithError(err).WithField("msg", msg).
 			Warning("Unable to parse destination into a CIDR. Treating block as external.")
+		return false
 	}
 	// Ignore exact routes, i.e. /32 (ipv4) or /128 (ipv6) routes in any case for two reasons:
 	// * If we have a /32 or /128 block then our blackhole route would stop the CNI plugin from
@@ -374,7 +416,7 @@ func (m *routeManager) updateRoutes() {
 
 	bhRoutes := blackholeRoutes(m.localIPAMBlocks, m.routeProtocol)
 	m.logCtx.WithField("routes", bhRoutes).Debug("Route manager setting blackhole routes")
-	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
+	m.routeTable.SetRoutes(m.routeClassBlackhole, routetable.InterfaceNone, bhRoutes)
 
 	if m.parentDevice != "" {
 		m.logCtx.WithFields(logrus.Fields{
@@ -559,7 +601,8 @@ func (m *routeManager) keepDeviceInSync(
 func (m *routeManager) configureTunnelDevice(
 	newLink netlink.Link,
 	addr string,
-	mtu int, xsumBroken bool) error {
+	mtu int, xsumBroken bool,
+) error {
 	if newLink == nil {
 		return fmt.Errorf("no tunnel link provided")
 	}
@@ -598,6 +641,9 @@ func (m *routeManager) configureTunnelDevice(
 	}
 
 	if m.vxlanEnabled() {
+		if vx, ok := newLink.(*netlink.Vxlan); ok && !m.vniFilterSupported {
+			vx.VniFilter = false
+		}
 		// At this point, we have successfully queried the existing device, or made sure it exists if it didn't
 		// already. Check for mismatched configuration. If they don't match, recreate the device.
 		if incompat := vxlanLinksIncompat(newLink, link); incompat != "" {
@@ -616,6 +662,19 @@ func (m *routeManager) configureTunnelDevice(
 			if err != nil {
 				return err
 			}
+		}
+		if vniFilterDropped(newLink, link) {
+			// Only a FeatureDetectOverride can request the filter from a kernel that lacks it.
+			m.logCtx.Error("Kernel created the VXLAN device without the VNI filter; using it unfiltered. " +
+				"Check FeatureDetectOverride for VXLANVNIFilter=true.")
+			m.vniFilterSupported = false
+		}
+	}
+
+	// Checked every pass: other programs manage VNIs on the shared port and may remove ours.
+	if m.vniFilterSupported {
+		if err := m.ensureVNIFilter(link); err != nil {
+			return fmt.Errorf("failed to set VNI filter: %w", err)
 		}
 	}
 
@@ -656,6 +715,72 @@ func (m *routeManager) configureTunnelDevice(
 	}
 
 	return nil
+}
+
+// vniFilterDropped reports whether want asks for a VNI filter that the kernel left off got.
+func vniFilterDropped(want, got netlink.Link) bool {
+	w, ok := want.(*netlink.Vxlan)
+	if !ok || !w.VniFilter {
+		return false
+	}
+	g, ok := got.(*netlink.Vxlan)
+	return ok && !g.VniFilter
+}
+
+// ensureVNIFilter makes the device's VNI filter exactly tunnelVNIs, leaving other VNIs on its port free.
+func (m *routeManager) ensureVNIFilter(link netlink.Link) error {
+	all, err := m.nlHandle.BridgeVniList()
+	if err != nil {
+		return fmt.Errorf("failed to list VNI filters: %w", err)
+	}
+	desired := set.FromArray(m.tunnelVNIs)
+	present := set.New[uint32]()
+	for _, info := range all[int32(link.Attrs().Index)] {
+		start, end := info.Vni, max(info.VniEnd, info.Vni)
+		if allDesired(start, end, desired) {
+			for vni := start; vni <= end; vni++ {
+				present.Add(vni)
+			}
+			continue
+		}
+		m.logCtx.WithFields(logrus.Fields{"start": start, "end": end}).Info("Removing stale VNIs from tunnel device filter")
+		var err error
+		if end > start {
+			err = m.nlHandle.BridgeVniDelRange(link, start, end)
+		} else {
+			err = m.nlHandle.BridgeVniDel(link, start)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to remove VNIs %d-%d: %w", start, end, err)
+		}
+	}
+
+	for vni := range desired.All() {
+		if present.Contains(vni) {
+			continue
+		}
+		m.logCtx.WithField("vni", vni).Info("Adding VNI to tunnel device filter")
+		if err := m.nlHandle.BridgeVniAdd(link, vni); errors.Is(err, syscall.EEXIST) {
+			return fmt.Errorf("VNI %d is already used by another VXLAN device on port %d; "+
+				"change VXLANVNI or the other device's VNI: %w", vni, m.dpConfig.RulesConfig.VXLANPort, err)
+		} else if err != nil {
+			return fmt.Errorf("failed to add VNI %d: %w", vni, err)
+		}
+	}
+	return nil
+}
+
+// allDesired reports whether every VNI in [start, end] is desired; a range longer than the set cannot be.
+func allDesired(start, end uint32, desired set.Set[uint32]) bool {
+	if end-start >= uint32(desired.Len()) {
+		return false
+	}
+	for vni := start; vni <= end; vni++ {
+		if !desired.Contains(vni) {
+			return false
+		}
+	}
+	return true
 }
 
 // ensureAddressOnLink reconciles the Calico-managed address on the tunnel device so that the desired

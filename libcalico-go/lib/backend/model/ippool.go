@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -115,4 +115,9 @@ type IPPool struct {
 	DisableBGPExport bool                  `json:"disableBGPExport"`
 	AssignmentMode   v3.AssignmentMode     `json:"assignment_mode"`
 	AllowedUses      []v3.IPPoolAllowedUse `json:"allowed_uses,omitempty"`
+	NodeSelector     string                `json:"node_selector,omitempty"`
+
+	// Deleting is set once the v3 pool has a deletion timestamp. The tunnel address
+	// allocator treats a deleting pool as disabled, and needs this to see the change.
+	Deleting bool `json:"deleting,omitempty"`
 }

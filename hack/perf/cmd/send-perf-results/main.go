@@ -20,6 +20,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -28,8 +29,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (
@@ -48,7 +52,7 @@ func main() {
 	dir := flag.String("dir", "artifacts/perf", "Directory to scan for per-family subdirectories of JSON docs.")
 	tmplDir := flag.String("templates", "hack/perf/index-templates", "Directory containing one <family>.json template per index family.")
 	dryRun := flag.Bool("dry-run", false, "Parse and augment but do not POST.  Prints each doc to stdout.")
-	requireCreds := flag.Bool("require-creds", false, "Exit non-zero if Elasticsearch credentials are not configured.")
+	requirePublication := flag.Bool("require-publication", false, "Exit non-zero unless every document found was published.")
 	flag.Parse()
 
 	esURL := os.Getenv("ELASTICSEARCH_URL")
@@ -57,10 +61,10 @@ func main() {
 		// "Lens is observability, not a critical path" -- see
 		// hack/perf/README.md.  Missing creds in a local dev run is normal;
 		// in CI it usually means the pipeline secret wasn't attached, which
-		// a --require-creds caller can turn into a hard failure.
+		// a --require-publication caller can turn into a hard failure.
 		msg := "ELASTICSEARCH_URL or credentials unset; skipping send"
-		if *requireCreds {
-			log.Fatalf("%s (--require-creds set)", msg)
+		if *requirePublication {
+			log.Fatalf("%s (--require-publication set)", msg)
 		}
 		log.Printf("%s", msg)
 		if *dryRun {
@@ -73,20 +77,30 @@ func main() {
 	client := &http.Client{Timeout: 30 * time.Second}
 	metadata := ciMetadata()
 
-	// Apply index templates first.  ES treats PUT _index_template/<name>
-	// as an upsert, so committing template changes auto-propagates the next
-	// time the tool runs.  Failures here are warnings -- a missing template
-	// means new fields will get default mappings, which is a Kibana
-	// inconvenience, not a data-loss event.
-	if !*dryRun {
-		if err := applyTemplates(client, esURL, auth, *tmplDir); err != nil {
-			log.Printf("warning: applying templates failed: %v", err)
+	sent, failed, err := publish(client, esURL, auth, *dir, *tmplDir, metadata, *dryRun)
+	if err != nil {
+		// Observability failures should not propagate into CI (see README) --
+		// except for a caller that exists to publish, where a green run that
+		// published nothing is the worse outcome.  Same reasoning as the
+		// missing-credentials case above, and the same flag governs both.
+		if *requirePublication {
+			log.Fatalf("send failed: %v (--require-publication set)", err)
 		}
+		log.Printf("warning: publication hit an error: %v", err)
+		return
 	}
 
-	if err := walkAndSend(client, esURL, auth, *dir, metadata, *dryRun); err != nil {
-		// Observability failures should not propagate into CI (see README).
-		log.Printf("warning: walkAndSend returned an error: %v", err)
+	// The counts, not the returned error, are what catch the likely failures
+	// here: a rejected credential fails each POST separately and walkAndSend
+	// logs those as warnings, so it still returns nil.  Having nothing to send
+	// is equally wrong for a caller whose output is the documents.
+	if *requirePublication {
+		switch {
+		case sent == 0 && failed == 0:
+			log.Fatalf("found no documents to publish under %s (--require-publication set)", *dir)
+		case failed > 0:
+			log.Fatalf("published %d of %d documents, %d failed (--require-publication set)", sent, sent+failed, failed)
+		}
 	}
 }
 
@@ -114,35 +128,209 @@ func basicAuthHeader(user, password string) string {
 	return r.Header.Get("Authorization")
 }
 
+// firstEnv returns the first of names that is set to a non-empty value.
+// It lets the CI-provenance fields below be filled from whichever CI system
+// is running us, without the caller caring which.
+func firstEnv(names ...string) string {
+	for _, n := range names {
+		if v := os.Getenv(n); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // ciMetadata gathers the fields the tool injects into every doc whose
 // producer hasn't already set them.
+//
+// Provenance comes from whichever CI system is running us: Semaphore exports
+// SEMAPHORE_*, ArgoCI exports CI_GIT_*.  Reading both means a test moved
+// between them keeps landing complete documents, rather than silently
+// recording blank git_commit/git_branch and an env of "dev" -- which would be
+// indistinguishable from a developer's laptop run and would pollute the trend
+// data (see hack/perf/README.md).
+//
+// env defaults to "dev", becomes "ci" when a recognised CI run ID is present,
+// and can be set explicitly with PERF_ENV.  Scheduled runs should set
+// PERF_ENV so their results can be told apart from per-PR ones -- they may
+// use different machine types, so their timings are not comparable.
 func ciMetadata() map[string]any {
-	sha := os.Getenv("SEMAPHORE_GIT_SHA")
+	sha := firstEnv("SEMAPHORE_GIT_SHA", "CI_GIT_SHA")
 	codeVer := sha
 	if len(codeVer) > 12 {
 		codeVer = codeVer[:12]
 	}
+	runID := firstEnv("SEMAPHORE_JOB_ID", "CI_JOB_ID", "CI_WORKFLOW_NAME")
 	env := "dev"
-	if os.Getenv("SEMAPHORE_JOB_ID") != "" {
+	if runID != "" {
 		env = "ci"
+	}
+	if e := os.Getenv("PERF_ENV"); e != "" {
+		env = e
 	}
 	m := map[string]any{
 		fieldTimestamp:   time.Now().UTC().Format(time.RFC3339),
 		fieldGitCommit:   sha,
-		fieldGitBranch:   os.Getenv("SEMAPHORE_GIT_BRANCH"),
+		fieldGitBranch:   firstEnv("SEMAPHORE_GIT_BRANCH", "CI_GIT_BRANCH"),
 		fieldCodeVersion: codeVer,
-		fieldCIRunID:     os.Getenv("SEMAPHORE_JOB_ID"),
+		fieldCIRunID:     runID,
 		fieldEnv:         env,
 	}
-	if pr := os.Getenv("SEMAPHORE_GIT_PR_NUMBER"); pr != "" {
+	if pr := firstEnv("SEMAPHORE_GIT_PR_NUMBER", "CI_GIT_PR_NUMBER"); pr != "" && pr != "none" {
 		m[fieldPRNumber] = pr
 	}
 	return m
 }
 
-// applyTemplates PUTs each <family>.json in tmplDir to ES at
-// /_index_template/<family>.
-func applyTemplates(client *http.Client, esURL, auth, tmplDir string) error {
+// publish applies the index templates and sends every document under dir, returning the
+// totals from walkAndSend.
+//
+// A PR run must not change the schema: a field's type is fixed once it is first mapped, and a
+// PR is still being iterated on.  So a PR run leaves templates and mappings alone, and holds
+// back any field the live index has not mapped yet.  The first run after merge applies the
+// reviewed template and publishes the new fields.
+func publish(client *http.Client, esURL, auth, dir, tmplDir string, metadata map[string]any, dryRun bool) (int, int, error) {
+	_, prRun := metadata[fieldPRNumber]
+	year := indexYear()
+	var fields fieldFilter
+	switch {
+	case dryRun:
+		// A dry run won't touch ES at all, even for reading.  (It might not have ES
+		// credentials.)  Hence it also doesn't filter the new perf records against the
+		// fields that are known already to be mapped in ES, before printing those records
+		// out.
+	case prRun:
+		// A PR run will not write the index template or update the mappings of an existing
+		// index, and it also takes care to filter the new perf records down to the set of
+		// fields that are already mapped in the index, so as not to accidentally push a
+		// field that would acquire an ES-inferred mapping.  Hence we construct a
+		// fieldFilter here that is limited to the fields that are mapped in the current
+		// index.
+		//
+		// (A PR run will also not create the index if it does not yet exist.)
+		//
+		// When perf records include new fields - i.e. those not yet in the live mapping -
+		// we also want to check that those new fields have been declared in the index
+		// template file (hack/perf/index-templates/<family>.json) and report any missing
+		// declarations.  Hence `declaredFields` reads that index template file and returns
+		// the set of declared field names.
+		log.Printf("PR run: leaving index templates and mappings unchanged")
+		fields = func(family string) (mapped, declared set.Set[string], err error) {
+			live, err := liveProperties(client, esURL, auth, family+"_"+year)
+			if err != nil {
+				return nil, nil, err
+			}
+			return live.names(), declaredFields(tmplDir, family), nil
+		}
+	default:
+		// A non-dry non-PR run - e.g. a post-merge or weekly cron run - will write the
+		// index template, so as to be ready for when the next annual index is created, will
+		// create the index if it does not already exist, and will add new field mappings,
+		// as defined in the index template, to the mappings of the live index.  Hence we
+		// know that mappings should be present and correct for all perf record fields, and
+		// should do not need to filter any of those out, or detect any missing
+		// declarations.
+		//
+		// If warnings were ignored on previous PR runs, it's possible, at this point, for
+		// new perf records to include new fields that have not been declared in the index
+		// template file.  But we don't want this to cause failure of non-PR CI.  In this
+		// case the new fields will be dynamically mapped by ES.
+		//
+		// Failures here are warnings -- a missing mapping means new fields get default
+		// mappings, which is a Kibana inconvenience, not a data-loss event.
+		if err := applyTemplates(client, esURL, auth, tmplDir, year); err != nil {
+			log.Printf("warning: applying templates failed: %v", err)
+		}
+	}
+	return walkAndSend(client, esURL, auth, dir, year, metadata, fields, dryRun)
+}
+
+// fieldFilter returns the fields a family's index has mapped, which are all its documents may
+// carry, and the fields its committed template declares.  A nil filter means no limit.
+type fieldFilter func(family string) (mapped, declared set.Set[string], err error)
+
+// errIndexNotCreated means the year's index does not exist yet.  A PR run must not create it:
+// it would be built from whatever template ES holds, and any field that template lacks would
+// then be mapped by inference.
+var errIndexNotCreated = errors.New("index not created yet")
+
+// properties is the "properties" object of an ES mapping: each top-level field's own mapping.
+type properties map[string]json.RawMessage
+
+func (p properties) names() set.Set[string] {
+	names := set.New[string]()
+	for name := range p {
+		names.Add(name)
+	}
+	return names
+}
+
+// liveProperties returns the top-level fields that index has mapped, or errIndexNotCreated.
+func liveProperties(client *http.Client, esURL, auth, index string) (properties, error) {
+	endpoint := fmt.Sprintf("%s/%s/_mapping", strings.TrimRight(esURL, "/"), url.PathEscape(index))
+	body, err := esGet(client, endpoint, auth)
+	var httpErr *esHTTPError
+	if errors.As(err, &httpErr) && httpErr.status == http.StatusNotFound {
+		return nil, errIndexNotCreated
+	} else if err != nil {
+		return nil, err
+	}
+	// Keyed by concrete index name, which differs from the one asked for if that is an alias.
+	var resp map[string]struct {
+		Mappings struct {
+			Properties properties `json:"properties"`
+		} `json:"mappings"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("parse mapping of %s: %w", index, err)
+	}
+	live := properties{}
+	for _, idx := range resp {
+		for name, mapping := range idx.Mappings.Properties {
+			live[name] = mapping
+		}
+	}
+	return live, nil
+}
+
+// templateProperties returns the top-level fields an index template declares.
+func templateProperties(templateBody []byte) (properties, error) {
+	var tmpl struct {
+		Template struct {
+			Mappings struct {
+				Properties properties `json:"properties"`
+			} `json:"mappings"`
+		} `json:"template"`
+	}
+	if err := json.Unmarshal(templateBody, &tmpl); err != nil {
+		return nil, err
+	}
+	return tmpl.Template.Mappings.Properties, nil
+}
+
+// declaredFields returns the fields tmplDir's template for family declares.  An unreadable
+// template declares nothing, so every new field is reported as undeclared.
+func declaredFields(tmplDir, family string) set.Set[string] {
+	path := filepath.Join(tmplDir, family+".json")
+	body, err := os.ReadFile(path)
+	if err == nil {
+		var props properties
+		if props, err = templateProperties(body); err == nil {
+			return props.names()
+		}
+	}
+	log.Printf("warning: read template %s: %v", path, err)
+	return set.New[string]()
+}
+
+// applyTemplates PUTs each <family>.json in tmplDir to ES at /_index_template/<family>, and its
+// mappings to the live <family>_<year> index.
+//
+// A template only shapes an index when the index is created, but fields are added part-way through
+// a year.  Without the live-index PUT, a new field's first document would fix its type by inference
+// -- a string becomes text plus .keyword -- and next year's index, built from the template, would
+// disagree with this year's.
+func applyTemplates(client *http.Client, esURL, auth, tmplDir, year string) error {
 	entries, err := os.ReadDir(tmplDir)
 	if err != nil {
 		// A missing templates directory is not fatal: a deployment might
@@ -167,25 +355,98 @@ func applyTemplates(client *http.Client, esURL, auth, tmplDir string) error {
 		endpoint := fmt.Sprintf("%s/_index_template/%s", strings.TrimRight(esURL, "/"), url.PathEscape(family))
 		if err := esRequest(client, "PUT", endpoint, auth, body); err != nil {
 			log.Printf("warning: PUT template %s: %v", family, err)
-			continue
+		} else {
+			log.Printf("applied template %s", family)
 		}
-		log.Printf("applied template %s", family)
+
+		// Independent of the template PUT: putting a template needs a cluster privilege
+		// that a writer of documents may lack, while extending an index's mapping is an
+		// index privilege.
+		applyLiveMapping(client, esURL, auth, family, year, body)
 	}
 	return nil
 }
 
+// applyLiveMapping PUTs to the family's index for year those fields of the template that the
+// index has not mapped yet.  Only those: ES applies a mapping PUT all or nothing, so a field whose
+// type differs -- a type change, waiting for the next index -- would otherwise block every new
+// field until then.
+func applyLiveMapping(client *http.Client, esURL, auth, family, year string, templateBody []byte) {
+	declared, err := templateProperties(templateBody)
+	if err != nil {
+		log.Printf("warning: parse template %s: %v", family, err)
+		return
+	}
+	if len(declared) == 0 {
+		return
+	}
+	index := family + "_" + year
+	live, err := liveProperties(client, esURL, auth, index)
+	if errors.Is(err, errIndexNotCreated) {
+		// The year's first document will create the index from the template.
+		log.Printf("index %s does not exist yet; it will be created from the template", index)
+		return
+	} else if err != nil {
+		log.Printf("warning: read mappings of %s: %v", index, err)
+		return
+	}
+
+	names := declared.names().Slice()
+	sort.Strings(names)
+	missing := properties{}
+	for _, name := range names {
+		liveMapping, ok := live[name]
+		if !ok {
+			missing[name] = declared[name]
+		} else if lt, tt := fieldType(liveMapping), fieldType(declared[name]); lt != tt {
+			log.Printf("warning: %s maps %s as %s, the template as %s; the template's type applies from the next index",
+				index, name, lt, tt)
+		}
+	}
+	if len(missing) == 0 {
+		return
+	}
+	body, _ := json.Marshal(map[string]properties{"properties": missing})
+	endpoint := fmt.Sprintf("%s/%s/_mapping", strings.TrimRight(esURL, "/"), url.PathEscape(index))
+	added := missing.names().Slice()
+	sort.Strings(added)
+	if err := esRequest(client, "PUT", endpoint, auth, body); err != nil {
+		log.Printf("warning: PUT mappings to %s: %v", index, err)
+		return
+	}
+	log.Printf("mapped new fields in %s: %s", index, strings.Join(added, ", "))
+}
+
+// fieldType is a field mapping's "type"; ES leaves it out for an object field.
+func fieldType(mapping json.RawMessage) string {
+	var m struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(mapping, &m) != nil || m.Type == "" {
+		return "object"
+	}
+	return m.Type
+}
+
+// indexYear is the suffix of the indices this run writes to.
+func indexYear() string {
+	return time.Now().UTC().Format("2006")
+}
+
 // walkAndSend processes every <dir>/<family>/*.json file, augmenting and
-// POSTing to <family>_<UTC year>.
-func walkAndSend(client *http.Client, esURL, auth, dir string, metadata map[string]any, dryRun bool) error {
+// POSTing to <family>_<UTC year>.  It returns the totals across all families
+// as well as an error: everything short of "the directory could not be read"
+// is a warning here, so a caller gating on the outcome has to read the counts.
+func walkAndSend(client *http.Client, esURL, auth, dir, year string, metadata map[string]any, fields fieldFilter, dryRun bool) (int, int, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Printf("perf-results directory %s does not exist; nothing to send", dir)
-			return nil
+			return 0, 0, nil
 		}
-		return fmt.Errorf("read dir %s: %w", dir, err)
+		return 0, 0, fmt.Errorf("read dir %s: %w", dir, err)
 	}
-	year := time.Now().UTC().Format("2006")
+	totalSent, totalFailed := 0, 0
 	for _, e := range entries {
 		if !e.IsDir() {
 			// Stray files at the top level are not part of the convention.
@@ -196,18 +457,41 @@ func walkAndSend(client *http.Client, esURL, auth, dir string, metadata map[stri
 		}
 		family := e.Name()
 		familyDir := filepath.Join(dir, family)
-		sent, failed, err := sendFamily(client, esURL, auth, familyDir, family, year, metadata, dryRun)
-		if err != nil {
-			log.Printf("warning: family %s: %v", family, err)
+		var allowed, declared set.Set[string]
+		if fields != nil {
+			var aerr error
+			allowed, declared, aerr = fields(family)
+			if errors.Is(aerr, errIndexNotCreated) {
+				log.Printf("family %s: not sent, %s_%s is not created yet; a run after merge creates it", family, family, year)
+				continue
+			} else if aerr != nil {
+				// Sending without knowing what is mapped could add fields to the
+				// schema.
+				log.Printf("warning: family %s: not sent, could not tell which fields are mapped: %v", family, aerr)
+				totalFailed++
+				continue
+			}
+		}
+		sent, failed, ferr := sendFamily(client, esURL, auth, familyDir, family, year, metadata, allowed, declared, dryRun)
+		if ferr != nil {
+			log.Printf("warning: family %s: %v", family, ferr)
+			// A family that could not be walked published nothing, and has no
+			// per-document failures to show for it.  Count one so the totals
+			// cannot report a clean run.
+			failed++
 		}
 		log.Printf("family %s: sent %d, failed %d", family, sent, failed)
+		totalSent += sent
+		totalFailed += failed
 	}
-	return nil
+	return totalSent, totalFailed, nil
 }
 
 // sendFamily handles one <family> subdirectory: walks all *.json under it,
-// augments with metadata, and POSTs to <family>_<year>.
-func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string, metadata map[string]any, dryRun bool) (sent, failed int, err error) {
+// augments with metadata, and POSTs to <family>_<year>.  A non-nil allowed
+// drops every field not in it; declared says which of those the template
+// declares.
+func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string, metadata map[string]any, allowed, declared set.Set[string], dryRun bool) (sent, failed int, err error) {
 	files, err := filepath.Glob(filepath.Join(familyDir, "*.json"))
 	if err != nil {
 		return 0, 0, fmt.Errorf("glob %s: %w", familyDir, err)
@@ -217,6 +501,27 @@ func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string
 		url.PathEscape(family),
 		year,
 	)
+	heldBack := set.New[string]()
+	defer func() {
+		var pending, undeclared []string
+		for name := range heldBack.All() {
+			if declared != nil && declared.Contains(name) {
+				pending = append(pending, name)
+			} else {
+				undeclared = append(undeclared, name)
+			}
+		}
+		sort.Strings(pending)
+		sort.Strings(undeclared)
+		if len(pending) > 0 {
+			log.Printf("family %s: held back fields not yet mapped, until a run after merge: %s", family, strings.Join(pending, ", "))
+		}
+		if len(undeclared) > 0 {
+			// After merge these would be mapped by inference, which the template exists
+			// to prevent.
+			log.Printf("warning: family %s: held back fields its index template does not declare: %s", family, strings.Join(undeclared, ", "))
+		}
+	}()
 	for _, f := range files {
 		raw, rerr := os.ReadFile(f)
 		if rerr != nil {
@@ -236,6 +541,14 @@ func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string
 				doc[k] = v
 			}
 		}
+		if allowed != nil {
+			for k := range doc {
+				if !allowed.Contains(k) {
+					delete(doc, k)
+					heldBack.Add(k)
+				}
+			}
+		}
 		body, _ := json.Marshal(doc)
 		if dryRun {
 			log.Printf("dry-run: would POST %s\n  %s", endpoint, string(body))
@@ -252,13 +565,34 @@ func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string
 	return sent, failed, nil
 }
 
+// esHTTPError is a non-2xx response from ES.
+type esHTTPError struct {
+	method, endpoint string
+	status           int
+	body             string
+}
+
+func (e *esHTTPError) Error() string {
+	return fmt.Sprintf("%s %s: HTTP %d: %s", e.method, e.endpoint, e.status, e.body)
+}
+
 // esRequest performs a single HTTP request to ES with the given method,
 // endpoint, auth header, and JSON body.  Returns an error on transport
-// failure or any non-2xx response.
+// failure, or an *esHTTPError on any non-2xx response.
 func esRequest(client *http.Client, method, endpoint, auth string, body []byte) error {
+	_, err := esDo(client, method, endpoint, auth, body)
+	return err
+}
+
+// esGet is esRequest for a GET, returning the response body.
+func esGet(client *http.Client, endpoint, auth string) ([]byte, error) {
+	return esDo(client, "GET", endpoint, auth, nil)
+}
+
+func esDo(client *http.Client, method, endpoint, auth string, body []byte) ([]byte, error) {
 	req, err := http.NewRequest(method, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if auth != "" {
@@ -266,13 +600,12 @@ func esRequest(client *http.Client, method, endpoint, auth string, body []byte) 
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("%s %s: HTTP %d: %s", method, endpoint, resp.StatusCode, strings.TrimSpace(string(respBody)))
+		return nil, &esHTTPError{method: method, endpoint: endpoint, status: resp.StatusCode, body: strings.TrimSpace(string(respBody))}
 	}
-	_, _ = io.Copy(io.Discard, resp.Body)
-	return nil
+	return io.ReadAll(resp.Body)
 }

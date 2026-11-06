@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netlink/nl"
 	"golang.org/x/sys/unix"
 )
 
@@ -27,11 +28,18 @@ type Interface interface {
 	SetSocketTimeout(to time.Duration) error
 	SetStrictCheck(b bool) error
 	LinkList() ([]netlink.Link, error)
+	LinkByIndex(index int) (netlink.Link, error)
 	LinkByName(name string) (netlink.Link, error)
 	LinkAdd(link netlink.Link) error
 	LinkDel(link netlink.Link) error
 	LinkSetMTU(link netlink.Link, mtu int) error
 	LinkSetUp(link netlink.Link) error
+	LinkSetMaster(link netlink.Link, master netlink.Link) error
+	LinkSetNoMaster(link netlink.Link) error
+	BridgeVniAdd(link netlink.Link, vni uint32) error
+	BridgeVniDel(link netlink.Link, vni uint32) error
+	BridgeVniDelRange(link netlink.Link, vniStart, vniEnd uint32) error
+	BridgeVniList() (map[int32][]*nl.BridgeVniInfo, error)
 	RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error)
 	RouteListFilteredIter(family int, filter *netlink.Route, filterMask uint64, f func(netlink.Route) (cont bool)) error
 	RouteAdd(route *netlink.Route) error
@@ -86,6 +94,10 @@ func (r *RealNetlink) LinkList() ([]netlink.Link, error) {
 	}
 }
 
+func (r *RealNetlink) LinkByIndex(index int) (netlink.Link, error) {
+	return r.nlHandle.LinkByIndex(index)
+}
+
 func (r *RealNetlink) LinkByName(name string) (netlink.Link, error) {
 	return r.nlHandle.LinkByName(name)
 }
@@ -104,6 +116,30 @@ func (r *RealNetlink) LinkSetMTU(link netlink.Link, mtu int) error {
 
 func (r *RealNetlink) LinkSetUp(link netlink.Link) error {
 	return r.nlHandle.LinkSetUp(link)
+}
+
+func (r *RealNetlink) LinkSetMaster(link netlink.Link, master netlink.Link) error {
+	return r.nlHandle.LinkSetMaster(link, master)
+}
+
+func (r *RealNetlink) LinkSetNoMaster(link netlink.Link) error {
+	return r.nlHandle.LinkSetNoMaster(link)
+}
+
+func (r *RealNetlink) BridgeVniAdd(link netlink.Link, vni uint32) error {
+	return r.nlHandle.BridgeVniAdd(link, vni)
+}
+
+func (r *RealNetlink) BridgeVniDel(link netlink.Link, vni uint32) error {
+	return r.nlHandle.BridgeVniDel(link, vni)
+}
+
+func (r *RealNetlink) BridgeVniDelRange(link netlink.Link, vniStart, vniEnd uint32) error {
+	return r.nlHandle.BridgeVniDelRange(link, vniStart, vniEnd)
+}
+
+func (r *RealNetlink) BridgeVniList() (map[int32][]*nl.BridgeVniInfo, error) {
+	return r.nlHandle.BridgeVniList()
 }
 
 func (r *RealNetlink) RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error) {

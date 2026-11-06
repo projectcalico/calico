@@ -20,11 +20,39 @@ import (
 )
 
 // BGPConfigurationInformer provides access to a shared informer and lister for
-// BGPConfigurations.
+// BGPConfigurations. Prefer using the type-safe variant (see [TypedBGPConfigurationInformer]).
 type BGPConfigurationInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.BGPConfigurationLister
 }
+
+// TypedBGPConfigurationInformer provides access to a shared informer and lister for
+// BGPConfigurations, including the type-safe TypedInformer variant.
+// It is a superset of BGPConfigurationInformer.
+type TypedBGPConfigurationInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() BGPConfigurationIndexInformer
+	Lister() projectcalicov3.BGPConfigurationLister
+}
+
+// BGPConfigurationIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type BGPConfigurationIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.BGPConfiguration]
+
+// BGPConfigurationHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for BGPConfiguration.
+type BGPConfigurationHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.BGPConfiguration]
+
+// BGPConfigurationDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for BGPConfiguration.
+type BGPConfigurationDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.BGPConfiguration]
+
+// BGPConfigurationFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for BGPConfiguration.
+type BGPConfigurationFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.BGPConfiguration]
+
+// BGPConfigurationIndexers is a specialization of [cache.TypedIndexers] for BGPConfiguration.
+type BGPConfigurationIndexers = cache.TypedIndexers[*apisprojectcalicov3.BGPConfiguration]
+
+// DeletedBGPConfiguration is a specialization of [cache.DeletedObject] for BGPConfiguration.
+type DeletedBGPConfiguration = cache.DeletedObject[*apisprojectcalicov3.BGPConfiguration]
 
 type bGPConfigurationInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type bGPConfigurationInformer struct {
 // NewBGPConfigurationInformer constructs a new informer for BGPConfiguration type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedBGPConfigurationInformer]).
 func NewBGPConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewBGPConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedBGPConfigurationInformer constructs a new informer for BGPConfiguration type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedBGPConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers BGPConfigurationIndexers) BGPConfigurationIndexInformer {
+	return NewTypedBGPConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredBGPConfigurationInformer constructs a new informer for BGPConfiguration type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredBGPConfigurationInformer]).
 func NewFilteredBGPConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewBGPConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedBGPConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredBGPConfigurationInformer constructs a new informer for BGPConfiguration type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredBGPConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers BGPConfigurationIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) BGPConfigurationIndexInformer {
+	return NewTypedBGPConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewBGPConfigurationInformerWithOptions constructs a new informer for BGPConfiguration type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedBGPConfigurationInformerWithOptions]).
 func NewBGPConfigurationInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedBGPConfigurationInformerWithOptions(client, options)
+}
+
+// NewTypedBGPConfigurationInformerWithOptions constructs a new informer for BGPConfiguration type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedBGPConfigurationInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) BGPConfigurationIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "bgpconfigurations"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.BGPConfiguration](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewBGPConfigurationInformerWithOptions(client clientset.Interface, options 
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *bGPConfigurationInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewBGPConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedBGPConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *bGPConfigurationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.BGPConfiguration{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *bGPConfigurationInformer) TypedInformer() BGPConfigurationIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.BGPConfiguration](f.factory.InformerFor(&apisprojectcalicov3.BGPConfiguration{}, f.defaultInformer))
 }
 
 func (f *bGPConfigurationInformer) Lister() projectcalicov3.BGPConfigurationLister {
 	return projectcalicov3.NewBGPConfigurationLister(f.Informer().GetIndexer())
+}
+
+// ToTypedBGPConfigurationInformer converts an untyped informer into a TypedBGPConfigurationInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *BGPConfiguration. If that is not the case, calling type-safe methods of the returned
+// TypedBGPConfigurationInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedBGPConfigurationInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedBGPConfigurationInformer(informer BGPConfigurationInformer) TypedBGPConfigurationInformer {
+	if informer, ok := informer.(TypedBGPConfigurationInformer); ok {
+		return informer
+	}
+	return &bGPConfigurationTypedInformerAdapter{informer}
+}
+
+type bGPConfigurationTypedInformerAdapter struct {
+	BGPConfigurationInformer
+}
+
+func (a *bGPConfigurationTypedInformerAdapter) TypedInformer() BGPConfigurationIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.BGPConfiguration](a.Informer())
+}
+
+// ToBGPConfigurationIndexInformer converts an untyped informer into a BGPConfigurationIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *BGPConfiguration. If that is not the case, calling type-safe methods of the returned
+// BGPConfigurationIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a BGPConfigurationIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToBGPConfigurationIndexInformer(informer cache.SharedIndexInformer) BGPConfigurationIndexInformer {
+	if informer, ok := informer.(BGPConfigurationIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.BGPConfiguration](informer)
 }

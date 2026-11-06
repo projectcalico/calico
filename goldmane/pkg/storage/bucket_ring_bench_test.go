@@ -81,6 +81,6 @@ func BenchmarkBucketRing_AddFlow(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := range b.N {
-		ring.AddFlow(testFlows[i%numKeys])
+		ring.AddFlow(storage.FlowFromNode{Flow: testFlows[i%numKeys]})
 	}
 }

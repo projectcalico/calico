@@ -6,10 +6,10 @@ developed principally by Tigera and released under the Apache 2.0 License.
 
 For general documentation about Calico, including how to get started with a
 Calico/OpenStack installation, and how to use various OpenStack/Neutron
-features with Calico, please see http://docs.projectcalico.org/master.
+features with Calico, please see https://docs.tigera.io/calico/latest/getting-started/openstack/.
 
 * Free software: Apache license
-* Documentation: http://docs.projectcalico.org/master
+* Documentation: https://docs.tigera.io/calico/latest/getting-started/openstack/
 * Source: https://github.com/projectcalico/networking-calico
 * Bugs: https://github.com/projectcalico/networking-calico/issues and
   (legacy) http://bugs.launchpad.net/networking-calico

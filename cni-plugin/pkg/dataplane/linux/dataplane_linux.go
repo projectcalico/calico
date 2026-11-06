@@ -84,7 +84,11 @@ func (d *LinuxDataplane) DoNetworking(
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create host netlink handle: %v", err)
 	}
-	defer hostNlHandle.Close()
+	defer func() {
+		if err := hostNlHandle.Close(); err != nil {
+			d.logger.WithError(err).Warn("Failed to close netlink handle")
+		}
+	}()
 
 	contVethMAC, err = d.DoWorkloadNetnsSetUp(
 		hostNlHandle,
@@ -541,10 +545,10 @@ func (d *LinuxDataplane) configureSysctls(hostVethName string, hasIPv4, hasIPv6 
 			return fmt.Errorf("failed to set net.ipv6.conf.%s.disable_ipv6=0: %s", hostVethName, err)
 		}
 
-		// Enable proxy NDP, similarly to proxy ARP, described above in IPv4 section.
-		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", hostVethName), "1"); err != nil {
-			return fmt.Errorf("failed to set net.ipv6.conf.%s.proxy_ndp=1: %s", hostVethName, err)
-		}
+		// Note: deliberately no proxy_ndp counterpart to the proxy_arp set in the
+		// IPv4 section above.  IPv6 needs no proxying because we use
+		// the IPv6 link-local address as the workload's gateway.
+		// See felix/design/neighbour-discovery.md.
 
 		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
 		// be forwarded in both directions we need this flag to be set on the fabric-facing

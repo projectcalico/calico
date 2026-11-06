@@ -30,6 +30,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/calico/lib/logrusr"
+	stdlog "github.com/projectcalico/calico/lib/std/log"
 )
 
 // countingCounter is a trivial Counter used by the destination tests.
@@ -91,6 +92,68 @@ func TestCallerReporting_WithField(t *testing.T) {
 	if !strings.Contains(buf.String(), "destination_test.go") {
 		t.Errorf("expected destination_test.go in output: %s", buf.String())
 	}
+}
+
+// TestCallerReporting_WrittenFromALoggingGoroutine covers a line written from a
+// goroutine the logging code itself started, where the stack holds no caller at
+// all: an AggregatingLogger holds occurrences and writes them out when the
+// window closes on a timer. Walking off the end of that stack finds the runtime
+// frame the goroutine was started at, which names an assembly file and tells a
+// reader nothing. Name the logging code that wrote the line instead.
+func TestCallerReporting_WrittenFromALoggingGoroutine(t *testing.T) {
+	var out syncBuffer
+	saved := log.StandardLogger().Out
+	log.StandardLogger().Out = &out
+	t.Cleanup(func() { log.StandardLogger().Out = saved })
+
+	savedDefault := stdlog.Default()
+	t.Cleanup(func() { stdlog.SetDefaultLogger(savedDefault) })
+	stdlog.SetDefaultLogger(New(log.StandardLogger()))
+
+	a := stdlog.NewAggregatingLogger("Test log", "values", stdlog.OptInterval(50*time.Millisecond))
+	a.Record("v:first")  // Written inline, from this goroutine.
+	a.Record("v:second") // Folds into a window that closes on a timer.
+
+	var closed string
+	for range 200 {
+		if lines := out.lines(); len(lines) == 2 {
+			closed = lines[1]
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if closed == "" {
+		t.Fatalf("the window never closed: %s", out.String())
+	}
+	if !strings.Contains(closed, "aggregating.go") {
+		t.Errorf("expected aggregating.go in the closed window's line: %s", closed)
+	}
+	if strings.Contains(closed, "asm_") || strings.Contains(closed, FileNameUnknown) {
+		t.Errorf("expected a logging frame, not the goroutine's entry point: %s", closed)
+	}
+}
+
+// syncBuffer is a log destination a test can read while another goroutine is
+// still writing to it.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func (b *syncBuffer) lines() []string {
+	return strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n")
 }
 
 func TestCallerReporting_RateLimitedLogger(t *testing.T) {

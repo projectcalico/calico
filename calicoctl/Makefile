@@ -177,19 +177,19 @@ run-kubernetes-control-plane: stop-kubernetes-control-plane
             --root-ca-file=/home/user/certs/ca.pem
 
 	# Create a Node in the API for the tests to use.
-	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	while ! docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		apply -f /code/tests/st/manifests/${KUBE_MOCK_NODE_MANIFEST}; \
 		do echo "Waiting for node to apply successfully..."; sleep 2; done
 
 	# Apply CRDs because the tests require them.
-	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	while ! docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		apply -f /go/src/github.com/projectcalico/calico/$(CALICO_CRD_PATH); \
 		do echo "Waiting for Calico CRDs to apply successfully..."; sleep 2; done
 
 	# Create a namespace in the API for the tests to use.
-	-docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	-docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		create namespace test
 

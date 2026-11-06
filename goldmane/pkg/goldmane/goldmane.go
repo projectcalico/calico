@@ -57,9 +57,12 @@ var (
 		Help: "Total number of flows received by Goldmane aggregator.",
 	})
 
-	flowIndexLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "goldmane_aggr_flow_index_latency_ms",
-		Help: "Summary measuring the time taken to index a flow.",
+	// flowIndexLatency is observed once per flow on the main loop. A Summary's quantile
+	// upkeep there costs more than indexing the flow, so this is a Histogram.
+	flowIndexLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "goldmane_aggr_flow_index_latency_seconds",
+		Help:    "Histogram of the time taken to index a flow, in seconds.",
+		Buckets: prometheus.ExponentialBuckets(1e-6, 4, 11),
 	})
 
 	flowIndexBatchSize = cprometheus.NewSummary(prometheus.SummaryOpts{
@@ -96,6 +99,13 @@ var (
 		Name: "goldmane_aggr_dropped_flows_total",
 		Help: "Total number of flows dropped by the aggregator.",
 	})
+
+	// numDuplicateFlows counts flows a node had already reported into the same bucket,
+	// which is what a client replaying its cache after a reconnect looks like.
+	numDuplicateFlows = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "goldmane_aggr_duplicate_flows_total",
+		Help: "Total number of already-seen flows skipped by the aggregator.",
+	})
 )
 
 func init() {
@@ -108,6 +118,7 @@ func init() {
 	prometheus.MustRegister(backfillLatency)
 	prometheus.MustRegister(numUniqueFlows)
 	prometheus.MustRegister(numDroppedFlows)
+	prometheus.MustRegister(numDuplicateFlows)
 }
 
 // sinkRequest is an internal helper used to set the sink for the aggregator, which can by modified at runtime.
@@ -169,8 +180,9 @@ type Goldmane struct {
 	listRequests        chan listRequest
 	filterHintsRequests chan filterHintsRequest
 	statisticsRequests  chan statisticsRequest
+	streamRequests      chan streamRequest
 	sinkChan            chan *sinkRequest
-	recvChan            chan *types.Flow
+	recvChan            chan storage.FlowFromNode
 }
 
 func NewGoldmane(opts ...Option) *Goldmane {
@@ -181,8 +193,9 @@ func NewGoldmane(opts ...Option) *Goldmane {
 		listRequests:        make(chan listRequest),
 		filterHintsRequests: make(chan filterHintsRequest),
 		statisticsRequests:  make(chan statisticsRequest),
+		streamRequests:      make(chan streamRequest),
 		sinkChan:            make(chan *sinkRequest, 10),
-		recvChan:            make(chan *types.Flow, channelDepth),
+		recvChan:            make(chan storage.FlowFromNode, channelDepth),
 		rolloverFunc:        time.After,
 		bucketsToAggregate:  20,
 		pushIndex:           30,
@@ -257,12 +270,6 @@ func (a *Goldmane) run(startTime int64, ready chan<- struct{}) {
 		a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 	}
 
-	// Start the stream manager on its own goroutine so we can process stream creation and closure
-	// requests asynchronously from the main loop.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go a.streams.Run(ctx)
-
 	// Schedule the first rollover one aggregation period from now.
 	rolloverCh := a.rolloverFunc(a.bucketDuration)
 
@@ -281,8 +288,8 @@ func (a *Goldmane) run(startTime int64, ready chan<- struct{}) {
 			req.respCh <- a.queryFilterHints(req.req)
 		case req := <-a.statisticsRequests:
 			req.respCh <- a.queryStatistics(req.req)
-		case stream := <-a.streams.Backfills():
-			a.backfill(stream)
+		case req := <-a.streamRequests:
+			req.respCh <- a.openStream(req.req)
 		case req := <-a.sinkChan:
 			logrus.WithField("sink", req.sink).Info("Setting aggregator sink")
 			a.sink = req.sink
@@ -303,35 +310,51 @@ func (a *Goldmane) SetSink(s storage.Sink) chan struct{} {
 	return done
 }
 
-// Receive is used to send a flow update to the aggregator.
-func (a *Goldmane) Receive(f *types.Flow) {
-	if err := chanutil.WriteWithDeadline(context.Background(), a.recvChan, f, 5*time.Second); err != nil {
+// Receive is used to send a flow update to the aggregator. node identifies the reporting
+// node, and may be empty if the caller cannot determine it.
+func (a *Goldmane) Receive(f *types.Flow, node string) {
+	if err := chanutil.WriteWithDeadline(context.Background(), a.recvChan, storage.FlowFromNode{Flow: f, Node: node}, 5*time.Second); err != nil {
 		numDroppedFlows.Inc()
 		a.rl.Warn("Aggregator receive channel full, dropping flow(s)")
 	}
 }
 
-// Stream returns a new Stream from the stream manager.
+// streamRequest carries a Stream call onto the main loop, which opens the stream and replies on
+// respCh with it, or with nil when the stream limit has been reached.
+type streamRequest struct {
+	respCh chan stream.Stream
+	req    *proto.FlowStreamRequest
+}
+
+// Stream opens a new Stream. The main loop backfills it and subscribes it to rollovers in one
+// step, so the stream sees every bucket exactly once.
 func (a *Goldmane) Stream(req *proto.FlowStreamRequest) (stream.Stream, error) {
 	logrus.WithField("req", req).Debug("Received stream request")
 
-	if req.StartTimeGte != 0 {
-		// Sanitize the time range, resolving any relative time values.
-		// Note that for stream requests, 0 means "now" instead of "beginning of history". As such,
-		// we only resolve relative times for StartTimeGt.
-		req.StartTimeGte, _ = a.normalizeTimeRange(req.StartTimeGte, 0)
-	}
-
-	// Register the stream with the stream manager. This will return a new Stream object.
-	respCh := a.streams.Register(req, 2*numBuckets)
+	respCh := make(chan stream.Stream)
 	defer close(respCh)
-
-	// Wait for a response.
+	a.streamRequests <- streamRequest{respCh, req}
 	s := <-respCh
 	if s == nil {
 		return nil, status.Error(codes.ResourceExhausted, "max number of streams reached, try again later")
 	}
 	return s, nil
+}
+
+// openStream runs on the main loop. It registers the stream and queues its backfill before any
+// later rollover can reach it, and returns nil when the stream limit has been reached.
+func (a *Goldmane) openStream(req *proto.FlowStreamRequest) stream.Stream {
+	if req.StartTimeGte != 0 {
+		// For stream requests, 0 means the current time rather than the beginning of history, so
+		// only non-zero start times are resolved.
+		req.StartTimeGte, _ = a.normalizeTimeRange(req.StartTimeGte, 0)
+	}
+	s := a.streams.Register(req, 2*numBuckets)
+	if s == nil {
+		return nil
+	}
+	a.backfill(s)
+	return s
 }
 
 func (a *Goldmane) validateTimeRange(startTimeGt, startTimeLt int64) error {
@@ -467,7 +490,7 @@ func (a *Goldmane) rollover() time.Duration {
 	return rolloverIn
 }
 
-func (a *Goldmane) handleFlowBatch(first *types.Flow) {
+func (a *Goldmane) handleFlowBatch(first storage.FlowFromNode) {
 	// Index the flow that triggered the batch.
 	a.indexFlow(first)
 
@@ -484,7 +507,9 @@ batchLoop:
 			break batchLoop
 		}
 	}
-	logrus.WithField("num", numHandled).Debug("Processed flow batch")
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithField("num", numHandled).Debug("Processed flow batch")
+	}
 
 	// Set the number of unique flows in the aggregator based on the number of DiachronicFlows.
 	numUniqueFlows.Set(float64(a.flowStore.Size()))
@@ -492,16 +517,20 @@ batchLoop:
 	flowIndexBatchSize.Observe(float64(numHandled))
 }
 
-func (a *Goldmane) indexFlow(flow *types.Flow) {
+func (a *Goldmane) indexFlow(f storage.FlowFromNode) {
 	flowStart := time.Now()
-	logrus.WithField("flow", flow).Debug("Received Flow")
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithField("flow", f.Flow).Debug("Received Flow")
+	}
 
 	// Increment the received flow counter.
 	receivedFlowCounter.Inc()
 
 	// Add the Flow to our bucket ring.
-	a.flowStore.AddFlow(flow)
+	if a.flowStore.AddFlow(f) {
+		numDuplicateFlows.Inc()
+	}
 
 	// Record time taken to process the flow.
-	flowIndexLatency.Observe(float64(time.Since(flowStart).Milliseconds()))
+	flowIndexLatency.Observe(time.Since(flowStart).Seconds())
 }

@@ -74,7 +74,7 @@ Project Calico, created and maintained by [Tigera][tigera], is an open-source pr
 [resources]: https://docs.tigera.io/calico/latest/about/training-resources
 [issues]: https://github.com/projectcalico/calico/issues
 [api]: https://github.com/projectcalico/api
-[operator]: https://github.com/tigera/operator
+[operator]: https://github.com/projectcalico/calico/tree/master/operator
 [vpp]: https://github.com/projectcalico/vpp-dataplane
 [news]: https://www.tigera.io/project-calico/#:~:text=Join%20Calico%20Open%20Source%20community%20newsletter
 [youtube]: https://www.youtube.com/channel/UCFpTnXDNcBoXI4gqCDmegFA

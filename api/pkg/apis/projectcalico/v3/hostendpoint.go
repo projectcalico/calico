@@ -38,6 +38,7 @@ type HostEndpointList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:selectablefield:JSONPath=`.spec.node`
 // +kubebuilder:resource:scope=Cluster,shortName={hep,heps}
 // +kubebuilder:printcolumn:name="Node",type=string,JSONPath=".spec.node",description="The node name identifying the Calico node instance that is targeted by this HostEndpoint"
 // +kubebuilder:printcolumn:name="Interface",type=string,JSONPath=".spec.interfaceName",description="The name of the interface that is targeted by this HostEndpoint"
@@ -97,6 +98,7 @@ type HostEndpointSpec struct {
 	Ports []EndpointPort `json:"ports,omitempty" validate:"dive"`
 }
 
+// +kubebuilder:validation:XValidation:rule="type(self.protocol) == int ? self.protocol in [6, 17, 132] : self.protocol in ['TCP', 'UDP', 'SCTP']",message="protocol must be one of TCP, UDP, SCTP, or their numbers 6, 17, 132",reason=FieldValueInvalid
 type EndpointPort struct {
 	Name     string               `json:"name" validate:"portName"`
 	Protocol numorstring.Protocol `json:"protocol"`

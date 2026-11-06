@@ -39,7 +39,7 @@ NAME="${EXTERNAL_NODE_NAME:-kind-external-node}"
 NETWORK="${KIND_NETWORK:-kind}"
 # docker-in-docker: provides an sshd-able base plus a Docker daemon for tests
 # that launch client/server containers on the external node.
-IMAGE="${EXTERNAL_NODE_IMAGE:-docker:28-dind}"
+IMAGE="${EXTERNAL_NODE_IMAGE:-docker:28.5.2-dind}"
 KEY="${KIND_DIR}/external-node-key"
 IP_FILE="${KIND_DIR}/external-node-ip"
 
@@ -64,7 +64,15 @@ up() {
 		return 1
 	fi
 
-	docker exec "$NAME" apk add --no-cache openssh sudo iproute2 curl bash >/dev/null
+	# Alpine's CDN fails often enough to matter, and one blip here takes the lane down.
+	for attempt in 1 2 3; do
+		docker exec "$NAME" apk add --no-cache openssh sudo iproute2 curl bash >/dev/null && break
+		if [[ $attempt == 3 ]]; then
+			log "ERROR: apk add failed after 3 attempts"
+			return 1
+		fi
+		sleep 5
+	done
 	# Create the ubuntu user for the framework to SSH in as, and harden sshd to
 	# key-only auth. NOTE: alpine's `adduser -D` leaves the account locked (! in
 	# /etc/shadow), which silently blocks public-key auth; unlock it with a random
@@ -104,6 +112,37 @@ up() {
 	return 1
 }
 
+# Images the e2e specs start on the external node with `docker run`. RapidClient
+# is absent because it is built from PR source and loaded separately.
+SEED_IMAGES=(
+	"docker.io/alpine:3"
+	"calico/bird:v0.3.3-211-g9111ec3c"
+	"registry.k8s.io/e2e-test-images/agnhost:2.47"
+)
+
+# The dind daemon pulls anonymously and the framework gives each `docker run` a
+# short ssh timeout, so a slow registry fails the spec. The runner is logged in
+# to the registries, so pull there once and `docker load` into the node.
+# Failures only warn, because the specs can still pull for themselves.
+seed() {
+	local img attempt
+	for img in "${SEED_IMAGES[@]}"; do
+		for attempt in 1 2 3; do
+			docker pull --quiet "$img" >/dev/null && break
+			if [[ $attempt == 3 ]]; then
+				log "WARN: could not pull $img on the runner, skipping seed"
+				return 0
+			fi
+			sleep 5
+		done
+	done
+	if docker save "${SEED_IMAGES[@]}" | docker exec -i "$NAME" docker load; then
+		log "seed: loaded ${#SEED_IMAGES[@]} images into $NAME"
+	else
+		log "WARN: docker load into $NAME failed, specs will pull for themselves"
+	fi
+}
+
 down() {
 	docker rm -f "$NAME" >/dev/null 2>&1 || true
 	# Remove the generated IP file and keypair (regenerated on the next `up`) so
@@ -114,9 +153,10 @@ down() {
 
 case "${1:-up}" in
 up) up ;;
+seed) seed ;;
 down) down ;;
 *)
-	echo "usage: $(basename "$0") up|down" >&2
+	echo "usage: $(basename "$0") up|seed|down" >&2
 	exit 1
 	;;
 esac

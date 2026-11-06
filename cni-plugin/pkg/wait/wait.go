@@ -60,12 +60,23 @@ func ForEndpointReadyWithTimeout(policyDir string, endpoint *internalapi.Workloa
 	return nil
 }
 
+// ForFileWithTimeout blocks until the file at the given path exists.
+// Unblocks with an error after exceeding timeout.
+func ForFileWithTimeout(path string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := waitUntilFileExists(ctx, filepath.Dir(path), filepath.Base(path)); err != nil {
+		return fmt.Errorf("timed out after %s waiting for file '%s': %w", timeout, path, err)
+	}
+	return nil
+}
+
 // Unblocks without error when the designated file is seen in directory.
 // Returns with error if context is cancelled before file is found.
 func waitUntilFileExists(ctx context.Context, directory, filename string) error {
 	log := logrus.WithFields(logrus.Fields{
 		"directory":   directory,
-		"disiredFile": filename,
+		"desiredFile": filename,
 	})
 
 	retryInterval := 500 * time.Millisecond
@@ -186,13 +197,11 @@ func waitForCreateEvent(ctx context.Context, watcher *fsnotify.Watcher, filename
 		select {
 		case e := <-watcher.Events:
 			log.WithField("eventName", e.Name).Debug("Received watch event")
-			switch e.Op {
-			case fsnotify.Create:
+			if e.Has(fsnotify.Create) {
 				if filepath.Base(e.Name) == filename {
 					log.WithField("eventName", e.Name).Debug("FS 'Create' event seen for file. Firing notification and stopping watch")
 					return true, nil
 				}
-			default:
 			}
 
 		case err := <-watcher.Errors:

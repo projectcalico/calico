@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,4 +22,9 @@ type SetOptions struct {
 	// TTL for the datastore entry.
 	// +optional
 	TTL time.Duration
+
+	// DryRun validates the write the same way as a real one, including the datastore's
+	// own checks, without persisting it.
+	// +optional
+	DryRun bool
 }

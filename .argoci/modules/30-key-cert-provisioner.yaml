@@ -1,0 +1,22 @@
+# key-cert-provisioner `make ci`.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: key-cert-provisioner-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    depends: [check-go]
+    requests: {cpu: 3750m, memory: 2Gi}
+    commands: |
+      cd key-cert-provisioner
+      make ci
+    epilogue: |
+      # Epilogues don't inherit the commands' `cd` or exports.
+      cd "${CI_HOME}/${CI_GIT_DIR}/key-cert-provisioner"
+      artifact push job report --destination test-results || true

@@ -27,6 +27,7 @@ import (
 // confirms that `calico component node health --bird-ready` then exits
 // non-zero. Mirrors test_health.py:TestReadiness.test_readiness_bird_down.
 func TestReadinessBirdDown(t *testing.T) {
+	defer utils.CollectDiagsOnFailure(t)()
 	nodes := readinessFixture(t)
 	assertReadiness(t, nodes[0], "bird", true)
 	utils.MustExecInCalicoNode(t, nodes[0], "sv stop /etc/service/enabled/bird")
@@ -37,6 +38,7 @@ func TestReadinessBirdDown(t *testing.T) {
 // TestReadinessBird6Down is the IPv6 analogue of TestReadinessBirdDown.
 // Mirrors test_health.py:TestReadiness.test_readiness_bird6_down.
 func TestReadinessBird6Down(t *testing.T) {
+	defer utils.CollectDiagsOnFailure(t)()
 	nodes := readinessFixture(t)
 	assertReadiness(t, nodes[0], "bird6", true)
 	utils.MustExecInCalicoNode(t, nodes[0], "sv stop /etc/service/enabled/bird6")
@@ -50,6 +52,7 @@ func TestReadinessBird6Down(t *testing.T) {
 // generated config stale, which is treated as a liveness signal.)
 // Mirrors test_health.py:TestReadiness.test_readiness_confd_down.
 func TestReadinessConfdDown(t *testing.T) {
+	defer utils.CollectDiagsOnFailure(t)()
 	nodes := readinessFixture(t)
 	assertLiveness(t, nodes[0], "bird", true)
 	utils.MustExecInCalicoNode(t, nodes[0], "sv stop /etc/service/enabled/confd")
@@ -60,6 +63,7 @@ func TestReadinessConfdDown(t *testing.T) {
 // TestFelixDown stops felix and confirms that its readiness flag flips
 // to not-ready. Mirrors test_health.py:TestReadiness.test_felix_down.
 func TestFelixDown(t *testing.T) {
+	defer utils.CollectDiagsOnFailure(t)()
 	nodes := readinessFixture(t)
 	assertReadiness(t, nodes[0], "felix", true)
 	utils.MustExecInCalicoNode(t, nodes[0], "sv stop /etc/service/enabled/felix")
@@ -75,7 +79,6 @@ func TestFelixDown(t *testing.T) {
 // test_health.py:TestReadiness.
 func readinessFixture(t *testing.T) []string {
 	t.Helper()
-	defer utils.CollectDiagsOnFailure(t)()
 
 	// Wait for all Calico pods to be ready before exercising the health
 	// flags — otherwise the "before" assertion can spuriously fail on

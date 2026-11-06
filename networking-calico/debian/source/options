@@ -4,3 +4,16 @@ tar-ignore = "Makefile"
 tar-ignore = ".semaphore"
 tar-ignore = ".testr.conf"
 tar-ignore = "rpm"
+
+# The tar-ignore lines above are applied by
+# release/packaging/utils/make-packages.sh when it builds the .orig tarball,
+# as well as by dpkg-source when it builds the .debian tarball.
+#
+# The .orig tarball for this package is not a real upstream release; it is
+# generated from this same working tree, immediately before the per-series
+# source packages are built.  By construction there are therefore no upstream
+# changes for dpkg-source to represent as a patch, and debian/patches/ is
+# deliberately empty.  Without extend-diff-ignore, dpkg-source would treat the
+# paths that we deliberately keep out of the .orig tarball as new upstream
+# files, and abort because it cannot express a binary file as a patch.
+extend-diff-ignore = ".*"

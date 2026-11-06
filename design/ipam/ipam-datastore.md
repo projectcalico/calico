@@ -35,6 +35,7 @@ An `IPAMBlock` is a contiguous slice of a pool, default /26 for IPv4 and /122 fo
 - The `Unallocated` queue cycling is load-bearing for IP-reuse delay. Code that punches the bitmap directly breaks reuse rate-limiting.
 - Don't mutate the in-memory `*model.AllocationBlock` before persisting. Persist via `updateBlock`, then update auxiliary state. See
   https://github.com/projectcalico/calico/pull/12697.
+- A new allocation `type` attribute needs a case in [`accounting.Allocation.Kind`](../../libcalico-go/lib/ipam/accounting/allocation.go). Nothing fails without one: the type reads as `Unknown`, which every accounting reader (`calicoctl ipam check` today) counts under no allowed use and never reports leaked. The constants live in [`block.go`](../../libcalico-go/lib/backend/model/block.go), but a writer can also set the attribute from a string defined elsewhere (the LoadBalancer controller uses `corev1.ServiceTypeLoadBalancer`), so check new writers too.
 - Both the v1 and v3 backends must round-trip `ReleasedAt`. If a conversion drops it, a released IP reloads with no timestamp, never deallocates, and leaks permanently on the
   default v1 datastore. The cooldown default of 0 hides this in CI, so a round-trip test through the KDD v1 backend is required.
 

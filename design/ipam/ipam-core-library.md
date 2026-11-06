@@ -19,7 +19,7 @@ The library's contract is `Interface` in [`interface.go`](../../libcalico-go/lib
 here. A few methods carry design-relevant constraints worth calling out:
 
 - **`AutoAssign`** returns block-masked CIDRs, not `/32` (or `/128`). Callers narrow at the boundary. This is load-bearing for the CNI plugin's per-block route programming.
-- **`AssignIP`** enforces the target pool's `allowedUses` when `AssignIPArgs.IntendedUse` is non-empty: it fails if the pool containing the requested IP does not permit that use, mirroring the `filterPoolsByUse` filter `AutoAssign` applies. Callers that leave `IntendedUse` empty are exempt (back-compat). This closes a gap where a specific-IP request (e.g. the CNI `ipAddrs` annotation) could draw from a pool not sanctioned for its use.
+- **`AssignIP`** enforces the target pool's `allowedUses` when `AssignIPArgs.IntendedUse` is non-empty: it fails if the pool containing the requested IP does not permit that use, using the same allowed-use check pool qualification applies for `AutoAssign`. Callers that leave `IntendedUse` empty are exempt (back-compat). This closes a gap where a specific-IP request (e.g. the CNI `ipAddrs` annotation) could draw from a pool not sanctioned for its use.
 - **`GetUtilization`** reports `Capacity`, `InUse`, `Reserved` and `Available` per pool and per block. `InUse` (allocated) and `Reserved` (covered by an `IPReservation`) overlap when an
   address was allocated before it was reserved, so `Capacity` is not their sum plus `Available`; `Available` counts addresses that are neither, and is the only one of the four that
   answers "how many can still be handed out". Consumers must read it rather than deriving it. Pool-level counts span the whole pool CIDR, including space no block covers yet - a
@@ -31,6 +31,9 @@ here. A few methods carry design-relevant constraints worth calling out:
 - **`ReleaseIPs`** takes `ReleaseOptions` with a sequence number; every release path must plumb it through (see [CAS retry and sequence numbers](#cas-retry-and-sequence-numbers)).
 - **`SetOwnerAttributes`** is KubeVirt-only and swaps owner attributes under preconditions, without releasing and re-allocating. Felix's live-migration monitor is the only non-CNI
   caller.
+- **`MoveIPToHandle`** re-points an allocated address at a different handle in one block CAS, without releasing it, so the address is never unowned and never enters cooldown.
+  `ExpectedOwner` is required and has to name a namespace and a pod, so only the address's current owner can move it; handing an address to a different workload is a release and a
+  fresh assignment.
 - **`GetIPAMConfig` / `SetIPAMConfig`** read and write the v1 `IPAMConfig` / v3 `IPAMConfiguration` singleton. Field-level bounds are enforced by the CRD schema in k8s mode, but the
   cross-field rules live only in `SetIPAMConfig` - a direct CRD write can persist a config that violates them, which the library rejects on read (see [IPAMConfig](#ipamconfig)).
 
@@ -42,8 +45,11 @@ here. A few methods carry design-relevant constraints worth calling out:
 - `AutoAssign` returning block-masked CIDRs is load-bearing for the CNI plugin's routing. Don't quietly switch to `/32`.
 - Anything that makes an address unassignable has to be discounted by `GetUtilization` as well as by the allocation path, or the reporting surfaces over-count free addresses. The
   two must be fed from the same set of reserved CIDRs: allocation and the per-block counts share the `addrFilter`, and the pool-level counts use the same CIDRs as a set.
-- There is one implementation of the reserved-set arithmetic, in [`reserved.go`](../../libcalico-go/lib/ipam/reserved.go). `GetUtilization` and `NumReservedIPsInCIDR` are both thin
-  callers of it. Don't grow a second copy in a consumer - a reporting surface that disagrees with `calicoctl ipam show` is worse than no surface.
+- There is one implementation of the reserved-set arithmetic, in [`accounting/reserved.go`](../../libcalico-go/lib/ipam/accounting/reserved.go), beside the shared pool counts,
+  block attribution and leak predicate. `GetUtilization` and `NumReservedIPsInCIDR` are both thin callers of it. Don't grow a second copy in a consumer - a reporting
+  surface that disagrees with `calicoctl ipam show` is worse than no surface.
+  Addresses that allocation skips for only some pools are counted through the tracker's reserved classes (`setExtraReserved`), so a block's counts follow its pool's class
+  wherever it moves. The classes only count: the allocation path must skip those addresses itself, and `NumReservedIPsInCIDR`, which takes a CIDR rather than a pool, sees none of them.
 
 ## AutoAssign and host affinity
 
@@ -55,7 +61,7 @@ Three invariants frame this section:
 - **`StrictAffinity=true` is the only way to suppress non-affine fallback.** Anything that needs "borrow nothing" semantics must set it, not invent a parallel switch.
 
 `AutoAssign` is the hot path. Entry point is `autoAssign` in [`ipam.go`](../../libcalico-go/lib/ipam/ipam.go). The walk splits at three chokepoints:
-`prepareAffinityBlocksForHost` resolves the node + pools and lists existing affinities; `findOrClaimBlock` walks affine blocks and lazily reconstructs an `IPAMBlock` if an affinity
+`prepareAffinityBlocksForHost` resolves the node, asks pool qualification which pools the request may use, and lists existing affinities; `findOrClaimBlock` walks affine blocks and lazily reconstructs an `IPAMBlock` if an affinity
 exists but the block doesn't (recovery for a node that crashed mid-claim); `findUsableBlock` claims a new block via the two-phase `pending → confirmed` protocol or, with
 `StrictAffinity=false`, falls back to `randomBlockGenerator` over non-affine blocks.
 
@@ -67,6 +73,12 @@ A few non-obvious design points:
   release](./ipam-gc.md#empty-block-release) safe.
 - The block cap is `min(global MaxBlocksPerHost, request-level)`, defaulting to 20 if both are zero. Once a node reaches it, `allowNewClaim` is forced false; existing blocks still
   fill.
+- Pool qualification ([`pool_qualification.go`](../../libcalico-go/lib/ipam/pool_qualification.go)) is the one place that decides which pools a request may draw from, and which of the node's affine blocks an assignment may release: AutoAssign and
+  EnsureBlock use its full rule set, AssignIP a narrower one. A new eligibility criterion goes there, not in a caller. Releasing IPs takes a separate path: `ensureConsistentAffinity` releases a block's affinity when the block's pool stops selecting the node, so a node-selection change has to land in both. Pools a request names skip the selectors and `AssignmentMode`, nothing else.
+- `GetEnabledPools` skips a pool that lacks `Allocatable=True` when an allocatable or terminating pool covers its CIDR. The IP pool controller resolves overlap asynchronously, so
+  without this a pool created over an active one is allocatable until the controller's first status write - unbounded while kube-controllers is down. A pool already marked
+  `Allocatable=True` is taken at its word and never tested against the others. Administratively disabled pools never mask, including while they are terminating, which matches the
+  controller's trie.
 
 **Review notes**
 
@@ -75,6 +87,8 @@ A few non-obvious design points:
 - Treat pending block affinities as if absent when deciding ownership or advertising routes.
 - Pre-existing blocks may lack `AffinityType`; default to `"host"` on read. https://github.com/projectcalico/calico/pull/11179 was a crash from this assumption.
 - Pool resolution is in the hot path. `ResolvePools` was hand-optimized in https://github.com/projectcalico/calico/pull/9891 - preserve the fast path.
+- Overlap is enforced at pool selection, not only by the IP pool controller. Don't reduce the gate back to a bare `Allocatable=False` check; that reopens the window a new
+  overlapping pool is allocatable in.
 - `MaxBlocksPerHost` defaults are a recurring doc/code drift point (https://github.com/projectcalico/calico/issues/9462). If you change the default in code, update the docs in the
   same PR.
 
@@ -139,8 +153,8 @@ Conventions in use:
 
 | Caller | Handle ID format |
 |---|---|
-| CNI workload (default) | `<network-name>.<container-id>` via `cni-plugin/internal/pkg/utils.GetHandleID`. For the default network, `<network-name>` is `k8s-pod-network`. |
-| CNI workload (KubeVirt persistent) | `<network-name>.<namespace>-<vm-name>` so live-migrated VMs keep the same handle. |
+| CNI workload (default) | `<network-name>.<container-id>` via `ipam.PodHandleID`. For the default network, `<network-name>` is `k8s-pod-network`. |
+| CNI workload (KubeVirt persistent) | `<network-name>.vmi.<namespace>.<vm-name>` via `vmipam.CreateVMHandleID`, so live-migrated VMs keep the same handle. Hashed if it would exceed 128 characters. |
 | IPIP tunnel | `ipip-tunnel-addr-<node>` |
 | VXLAN tunnel | `vxlan-tunnel-addr-<node>`; IPv6 variant is `vxlan-v6-tunnel-addr-<node>` (note the `-v6-` infix, not a suffix) |
 | WireGuard tunnel | `wireguard-tunnel-addr-<node>`; IPv6 variant is `wireguard-v6-tunnel-addr-<node>` |
@@ -158,6 +172,8 @@ found - see [`./ipam-cni.md`](./ipam-cni.md).
   handles on node rename. That parser's prefix list is v4-only today (`ipip-tunnel-addr-`, `vxlan-tunnel-addr-`, `wireguard-tunnel-addr-`), so it already skips the `*-v6-tunnel-addr-`
   handles - add v6 prefixes there if you touch it.
 - Skipping the workload-ID release on CNI DEL leaks IPs whose container-ID changed under CRI. Don't drop the second release call.
+- Every change to an allocation's `(handle, active owner, alternate owner)` tuple goes through `updateAllocationOwnership`, which re-points the ordinal at a new attribute entry.
+  Editing an entry in place rewrites the ownership of every other address sharing it, since `findOrAddAttribute` de-duplicates entries by value.
 
 ## IPAMConfig
 

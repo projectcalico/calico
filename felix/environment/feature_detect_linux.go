@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"reflect"
 	"regexp"
@@ -27,8 +28,10 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 )
@@ -77,9 +80,18 @@ type FeatureDetector struct {
 
 	newNetlinkHandle            func() (netlinkshim.Interface, error)
 	cachedNetlinkSupportsStrict *bool
+	cachedVXLANVNIFilter        *bool
+	vniFilterProbeEnabled       bool
 }
 
 type Option func(detector *FeatureDetector)
+
+// WithVXLANVNIFilterProbe enables the VXLANVNIFilter probe, which creates a throwaway VXLAN device.
+func WithVXLANVNIFilterProbe() Option {
+	return func(detector *FeatureDetector) {
+		detector.vniFilterProbeEnabled = true
+	}
+}
 
 func WithNetlinkOverride(f func() (netlinkshim.Interface, error)) Option {
 	return func(detector *FeatureDetector) {
@@ -141,6 +153,7 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 		NFLogSize:                kerV.Compare(v4Dot8Dot0) >= 0,
 		KernelHasUDPGSOFix:       kerV.Compare(v6Dot16Dot0) >= 0,
 		NFTablesSupported:        true,
+		VXLANVNIFilter:           d.vxlanSupportsVNIFilter(),
 	}
 
 	for k, v := range d.featureOverride {
@@ -317,6 +330,69 @@ func (d *FeatureDetector) netlinkSupportsStrict() (bool, error) {
 	return false, nil
 }
 
+const vniFilterProbeName = "cali-vnif-probe"
+
+// vxlanSupportsVNIFilter probes the kernel, since distros backport vnifilter (upstream 5.18).
+func (d *FeatureDetector) vxlanSupportsVNIFilter() bool {
+	if d.cachedVXLANVNIFilter != nil {
+		return *d.cachedVXLANVNIFilter
+	}
+	if _, overridden := d.featureOverride["VXLANVNIFilter"]; overridden || !d.vniFilterProbeEnabled {
+		return false
+	}
+	result, err := d.probeVXLANVNIFilter()
+	if err != nil {
+		log.WithError(err).Warn("Failed to probe for VXLAN VNI filter support; assuming none. " +
+			"Other VXLAN devices will not be able to share Calico's VXLAN port.")
+		result = false
+	}
+	log.WithField("supported", result).Info("Detected VXLAN VNI filter support")
+	d.cachedVXLANVNIFilter = &result
+	return result
+}
+
+func (d *FeatureDetector) probeVXLANVNIFilter() (bool, error) {
+	h, err := d.newNetlinkHandle()
+	if err != nil {
+		return false, fmt.Errorf("failed to open netlink handle: %w", err)
+	}
+	defer h.Delete()
+
+	// A filtering vxlan.calico proves support, so a failed probe never downgrades it.
+	if link, err := h.LinkByName(dataplanedefs.VXLANIfaceNameV4); err == nil {
+		if vx, ok := link.(*netlink.Vxlan); ok && vx.VniFilter {
+			log.Debug("Existing VXLAN device already filters VNIs")
+			return true, nil
+		}
+	}
+
+	// Removes a probe device left behind by a crashed Felix.
+	if old, err := h.LinkByName(vniFilterProbeName); err == nil {
+		_ = h.LinkDel(old)
+	}
+
+	la := netlink.NewLinkAttrs()
+	la.Name = vniFilterProbeName
+	// The device is never set up, so it never binds the VXLAN UDP port.
+	probe := &netlink.Vxlan{LinkAttrs: la, FlowBased: true, VniFilter: true}
+	if err := h.LinkAdd(probe); err != nil {
+		return false, fmt.Errorf("failed to create probe device: %w", err)
+	}
+	defer func() {
+		if err := h.LinkDel(probe); err != nil {
+			log.WithError(err).Warn("Failed to delete VXLAN VNI filter probe device")
+		}
+	}()
+
+	// Kernels without vnifilter ignore the attribute, so check that it took effect.
+	link, err := h.LinkByName(la.Name)
+	if err != nil {
+		return false, fmt.Errorf("failed to read back probe device: %w", err)
+	}
+	vx, ok := link.(*netlink.Vxlan)
+	return ok && vx.VniFilter, nil
+}
+
 func countRulesInIptableOutput(in []byte) int {
 	count := 0
 	for x := range bytes.SplitSeq(in, []byte("\n")) {
@@ -333,49 +409,68 @@ func hasKubernetesChains(output []byte) bool {
 	return strings.Contains(string(output), "KUBE-IPTABLES-HINT") || strings.Contains(string(output), "KUBE-KUBELET-CANARY")
 }
 
+// The two iptables backends: iptables-legacy programs the legacy xtables dataplane, iptables-nft
+// renders the same rules into nftables.
+const (
+	IPTablesBackendLegacy = "legacy"
+	IPTablesBackendNFT    = "nft"
+)
+
+// LegacyIPTablesModulesLoaded reports whether the legacy xtables modules are loaded. Stat'ing the
+// file the kernel creates alongside them autoloads nothing, unlike iptables-legacy-save. A var so
+// tests can fake it.
+var LegacyIPTablesModulesLoaded = func(ipVersion uint8) bool {
+	path := "/proc/net/ip_tables_names"
+	if ipVersion == 6 {
+		path = "/proc/net/ip6_tables_names"
+	}
+	if _, err := os.Stat(path); err != nil {
+		log.WithField("file", path).Info("iptables-legacy not loaded on this host")
+		return false
+	}
+	return true
+}
+
 // GetIptablesBackend attempts to detect the iptables backend being used where Felix is running.
 // This code is duplicating the detection method found at
 // https://github.com/kubernetes-sigs/iptables-wrappers/blob/master/iptables-wrapper-installer.sh#L107
 // If there is a specifiedBackend then it is used but if it does not match the detected
 // backend then a warning is logged.
 func DetectBackend(lookPath func(file string) (string, error), newCmd cmdshim.CmdFactory, specifiedBackend string) string {
-	ip6NftSave := FindBestBinary(lookPath, 6, "nft", "save")
-	ip4NftSave := FindBestBinary(lookPath, 4, "nft", "save")
+	save := func(backendMode string, ipVersion uint8, args ...string) []byte {
+		if backendMode == IPTablesBackendLegacy && !LegacyIPTablesModulesLoaded(ipVersion) {
+			// Probing an unloaded backend autoloads its modules, putting legacy hooks on a node
+			// that deliberately runs nftables only. Nothing of ours can be there anyway.
+			return nil
+		}
 
-	ip6nm, _ := newCmd(ip6NftSave, "-t", "mangle").Output()
-	log.WithField("ip6n", string(ip6nm)).Debug("Ip6tables save out")
-	ip4nm, _ := newCmd(ip4NftSave, "-t", "mangle").Output()
-	log.WithField("ip4n", string(ip4nm)).Debug("Iptables save out")
+		binary := FindBestBinary(lookPath, ipVersion, backendMode, "save")
+		out, _ := newCmd(binary, args...).Output()
+		log.WithFields(log.Fields{"binary": binary, "args": args, "output": string(out)}).Debug("iptables save output")
+		return out
+	}
+
+	ip6nm := save(IPTablesBackendNFT, 6, "-t", "mangle")
+	ip4nm := save(IPTablesBackendNFT, 4, "-t", "mangle")
 
 	var detectedBackend string
 	if hasKubernetesChains(ip6nm) || hasKubernetesChains(ip4nm) {
-		detectedBackend = "nft"
+		detectedBackend = IPTablesBackendNFT
 	} else {
-		ip6LgcySave := FindBestBinary(lookPath, 6, "legacy", "save")
-		ip4LgcySave := FindBestBinary(lookPath, 4, "legacy", "save")
-		ip6lm, _ := newCmd(ip6LgcySave, "-t", "mangle").Output()
-		log.WithField("ip6l", string(ip6lm)).Debug("Ip6tables legacy save -t mangle out")
-		ip4lm, _ := newCmd(ip4LgcySave, "-t", "mangle").Output()
-		log.WithField("ip4l", string(ip4lm)).Debug("Iptables legacy save -t mangle out")
+		ip6lm := save(IPTablesBackendLegacy, 6, "-t", "mangle")
+		ip4lm := save(IPTablesBackendLegacy, 4, "-t", "mangle")
 
 		if hasKubernetesChains(ip6lm) || hasKubernetesChains(ip4lm) {
-			detectedBackend = "legacy"
+			detectedBackend = IPTablesBackendLegacy
 		} else {
-			ip6l, _ := newCmd(ip6LgcySave).Output()
-			log.WithField("ip6l", string(ip6l)).Debug("Ip6tables legacy save out")
-			ip4l, _ := newCmd(ip4LgcySave).Output()
-			log.WithField("ip4l", string(ip4l)).Debug("Iptables legacy save out")
-			legacyLines := countRulesInIptableOutput(ip6l) + countRulesInIptableOutput(ip4l)
-
-			ip6n, _ := newCmd(ip6NftSave).Output()
-			log.WithField("ip6n", string(ip6n)).Debug("Ip6tables save out")
-			ip4n, _ := newCmd(ip4NftSave).Output()
-			log.WithField("ip4n", string(ip4n)).Debug("Iptables save out")
-			nftLines := countRulesInIptableOutput(ip6n) + countRulesInIptableOutput(ip4n)
+			legacyLines := countRulesInIptableOutput(save(IPTablesBackendLegacy, 6)) +
+				countRulesInIptableOutput(save(IPTablesBackendLegacy, 4))
+			nftLines := countRulesInIptableOutput(save(IPTablesBackendNFT, 6)) +
+				countRulesInIptableOutput(save(IPTablesBackendNFT, 4))
 			if legacyLines >= nftLines {
-				detectedBackend = "legacy" // default to legacy mode
+				detectedBackend = IPTablesBackendLegacy // default to legacy mode
 			} else {
-				detectedBackend = "nft"
+				detectedBackend = IPTablesBackendNFT
 			}
 		}
 	}
@@ -389,6 +484,26 @@ func DetectBackend(lookPath func(file string) (string, error), newCmd cmdshim.Cm
 		return specifiedBackend
 	}
 	return detectedBackend
+}
+
+// BackendBinariesPresent reports whether this host has the binaries for the named backend. Without
+// them FindBestBinary falls back to plain iptables, which on a modern distro is iptables-nft.
+func BackendBinariesPresent(lookPath func(file string) (string, error), ipVersion uint8, backendMode string) bool {
+	if lookPath == nil {
+		lookPath = exec.LookPath
+	}
+	verInfix := ""
+	if ipVersion == 6 {
+		verInfix = "6"
+	}
+	for _, saveOrRestore := range []string{"save", "restore"} {
+		binary := "ip" + verInfix + "tables-" + backendMode + "-" + saveOrRestore
+		if _, err := lookPath(binary); err != nil {
+			log.WithField("binary", binary).Info("Backend binary not available to Felix")
+			return false
+		}
+	}
+	return true
 }
 
 // FindBestBinary tries to find an iptables binary for the specific variant (legacy/nftables mode) and returns the name

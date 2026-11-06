@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -164,9 +164,8 @@ type GetUtilizationArgs struct {
 // BlockUtilization reports IP utilization for a single allocation block.
 //
 // InUse and Reserved overlap: an IP allocated before an IPReservation covered it
-// is counted in both.  Available excludes both, so it is the only field that
-// answers "how many IPs can still be handed out here?" and it cannot be derived
-// by subtracting the other fields from Capacity.
+// is counted in both.  Free excludes both, so it cannot be derived by
+// subtracting the other fields from Capacity.
 type BlockUtilization struct {
 	// This block's CIDR.
 	CIDR net.IPNet
@@ -177,19 +176,21 @@ type BlockUtilization struct {
 	// Number of allocated IPs in this block, whether or not they are also reserved.
 	InUse int
 
+	// Number of InUse IPs released and waiting out their cooldown before reuse.
+	Cooling int
+
 	// Number of reserved IPs in this block, whether or not they are also allocated.
 	Reserved int
 
 	// Number of IPs in this block that are neither allocated nor reserved.
-	Available int
+	Free int
 }
 
 // PoolUtilization reports IP utilization for a single IP pool.
 //
 // The counts cover the whole pool CIDR, including space that no allocation block
 // has been carved from yet, so Capacity is not the sum of the blocks' capacities.
-// InUse, Reserved and Available have the same meanings (and the same overlap) as
-// in BlockUtilization.
+// The other fields mean the same as in BlockUtilization.
 type PoolUtilization struct {
 	// This pool's name.
 	Name string
@@ -197,17 +198,22 @@ type PoolUtilization struct {
 	// This pool's CIDR.
 	CIDR net.IPNet
 
-	// Number of possible IPs in this pool.
+	// Number of possible IPs in this pool. A pool nested inside this one is counted here too, so totals summed across
+	// pools double count it.
 	Capacity int
 
 	// Number of allocated IPs in this pool, whether or not they are also reserved.
 	InUse int
 
+	// Number of InUse IPs released and waiting out their cooldown before reuse.
+	Cooling int
+
 	// Number of reserved IPs in this pool, whether or not they are also allocated.
 	Reserved int
 
-	// Number of IPs in this pool that are neither allocated nor reserved.
-	Available int
+	// Number of IPs in this pool that are neither allocated nor reserved. Like Capacity, it covers any nested pool's
+	// space, so a nested pool's allocations read as free here.
+	Free int
 
 	// Utilization for each of this pool's blocks.
 	Blocks []BlockUtilization
@@ -258,6 +264,25 @@ type ReleaseOptions struct {
 	// highly recommended that both values be set on release requests.
 	Handle         string
 	SequenceNumber *uint64
+}
+
+// MoveOptions specifies a transfer of an allocated address between handles. See
+// Interface.MoveIPToHandle.
+type MoveOptions struct {
+	// ToHandle is the handle that will own the address after the move.
+	ToHandle string
+
+	// Attrs replaces the allocation's attributes as part of the move. A move onto the
+	// handle that already owns the address returns early and leaves the attributes as
+	// they are.
+	Attrs map[string]string
+
+	// ExpectedOwner is required: the move only proceeds if the allocation's current owner
+	// attributes identify this workload.
+	ExpectedOwner *AttributeOwner
+
+	// If provided, the move only proceeds if the allocation currently sits on this handle.
+	ExpectedHandle string
 }
 
 type AffinityConfig struct {

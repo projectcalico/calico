@@ -21,7 +21,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -198,11 +197,6 @@ type BackgroundHook struct {
 	debugFileNameRE *regexp.Regexp
 
 	destinations []*Destination
-
-	// Our own copy of the dropped logs counter, used for logging out when we drop logs.
-	// Must be read/updated using atomic.XXX.
-	numDroppedLogs  uint64
-	lastDropLogTime time.Duration
 
 	// Counter
 	counter Counter

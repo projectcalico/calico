@@ -18,10 +18,19 @@ func NewContext(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *Context {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &Context{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -315,8 +324,8 @@ func (_c *Context_Value_Call) Run(run func(key any)) *Context_Value_Call {
 	return _c
 }
 
-func (_c *Context_Value_Call) Return(v any) *Context_Value_Call {
-	_c.Call.Return(v)
+func (_c *Context_Value_Call) Return(anyMoqParam any) *Context_Value_Call {
+	_c.Call.Return(anyMoqParam)
 	return _c
 }
 

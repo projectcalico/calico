@@ -25,9 +25,17 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 )
 
-// Bandwidth QoS controls are supported on iptables and nftables modes, and on BPF mode if 'tcx' attach mode is used.
+// Bandwidth QoS controls are supported on iptables and nftables modes, and on BPF
+// mode if 'tcx' attach mode is used. The configured attach type is not the
+// mechanism: 'netkit' means netkit on workload netkit devices and TCX everywhere
+// else, so it qualifies too. Resolve it before comparing, or the QoS qdiscs are
+// silently never programmed.
 func (m *endpointManager) isQoSBandwidthSupported() bool {
-	return !m.cfg.bpfEnabled || (m.cfg.bpfEnabled && m.cfg.bpfAttachType == apiv3.BPFAttachOptionTCX && tc.IsTcxSupported())
+	if !m.cfg.bpfEnabled {
+		return true
+	}
+	mechanism, _ := tc.ResolveAttachType(m.cfg.bpfAttachType)
+	return mechanism == apiv3.BPFAttachOptionTCX
 }
 
 func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoint) error {
@@ -88,6 +96,15 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 		currentEgress, err := qos.ReadEgressQdisc(newName)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error reading egress qdisc from workload %s: %w", newName, err))
+		}
+		if currentEgress != nil && desiredEgress != nil {
+			redirected, err := qos.HasEgressRedirect(newName)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("error reading egress redirect on workload %s: %w", newName, err))
+			} else if !redirected {
+				// Take the add path, which reuses the existing IFB and installs the redirect.
+				currentEgress = nil
+			}
 		}
 
 		if currentIngress == nil && desiredIngress != nil {

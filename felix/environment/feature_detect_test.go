@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
 	. "github.com/projectcalico/calico/felix/environment"
@@ -324,6 +325,15 @@ func TestFeatureDetectionOverride(t *testing.T) {
 func TestIptablesBackendDetection(t *testing.T) {
 	RegisterTestingT(t)
 
+	// Pin the module check so detection doesn't depend on what the test host has loaded.
+	realModulesLoaded := LegacyIPTablesModulesLoaded
+	LegacyIPTablesModulesLoaded = func(ipVersion uint8) bool {
+		return true
+	}
+	defer func() {
+		LegacyIPTablesModulesLoaded = realModulesLoaded
+	}()
+
 	type test struct {
 		name            string
 		spec            string
@@ -470,6 +480,30 @@ func TestIptablesBackendDetection(t *testing.T) {
 			Expect(DetectBackend(testutils.LookPathAll, tst.cmdF.NewCmd, strings.ToUpper(tst.spec))).To(Equal(tst.expectedBackend), "Capitalization affected output")
 		})
 	}
+}
+
+func TestIptablesBackendDetectionSkipsUnloadedLegacy(t *testing.T) {
+	RegisterTestingT(t)
+
+	realModulesLoaded := LegacyIPTablesModulesLoaded
+	LegacyIPTablesModulesLoaded = func(ipVersion uint8) bool {
+		return false
+	}
+	defer func() {
+		LegacyIPTablesModulesLoaded = realModulesLoaded
+	}()
+
+	cmdF := ipOutputFactory{Ip6legacy: 20, Ip4legacy: 20, Ip6Nft: 10, Ip4Nft: 10}
+	var invoked []string
+	newCmd := func(name string, arg ...string) cmdshim.CmdIface {
+		invoked = append(invoked, name)
+		return cmdF.NewCmd(name, arg...)
+	}
+
+	// The legacy backend outweighs nft, but the modules aren't loaded, so those rules can't be
+	// there and probing for them would autoload the modules.
+	Expect(DetectBackend(testutils.LookPathAll, newCmd, "auto")).To(Equal(IPTablesBackendNFT))
+	Expect(invoked).NotTo(ContainElement(ContainSubstring("legacy")))
 }
 
 type ipOutputFactory struct {
@@ -748,4 +782,84 @@ type mockKernelVersion struct {
 
 func (kv mockKernelVersion) GetKernelVersionReader() (io.Reader, error) {
 	return bytes.NewBufferString(kv.kernelVersion), nil
+}
+
+func TestVXLANVNIFilterDetection(t *testing.T) {
+	addVXLAN := func(nl *mocknetlink.MockNetlinkDataplane, name string, vniFilter bool) {
+		la := netlink.NewLinkAttrs()
+		la.Name = name
+		Expect(nl.LinkAdd(&netlink.Vxlan{LinkAttrs: la, FlowBased: true, VniFilter: vniFilter})).To(Succeed())
+	}
+	for _, tst := range []struct {
+		name          string
+		setup         func(nl *mocknetlink.MockNetlinkDataplane)
+		expected      bool
+		expectedProbe bool
+		override      map[string]string
+	}{
+		{"kernel supports vnifilter", func(nl *mocknetlink.MockNetlinkDataplane) {}, true, true, nil},
+		{"kernel ignores vnifilter", func(nl *mocknetlink.MockNetlinkDataplane) { nl.KernelLacksVniFilter = true }, false, true, nil},
+		{"probe device creation fails", func(nl *mocknetlink.MockNetlinkDataplane) {
+			nl.FailuresToSimulate = mocknetlink.FailNextLinkAdd
+		}, false, false, nil},
+		{"existing VNI-filtering device proves support", func(nl *mocknetlink.MockNetlinkDataplane) {
+			addVXLAN(nl, "vxlan.calico", true)
+			nl.KernelLacksVniFilter = true // Would fail if probed.
+		}, true, false, nil},
+		{"failed probe does not downgrade a filtering vxlan.calico", func(nl *mocknetlink.MockNetlinkDataplane) {
+			addVXLAN(nl, "vxlan.calico", true)
+			nl.FailuresToSimulate = mocknetlink.FailNextLinkAdd
+		}, true, false, nil},
+		{"unfiltered vxlan.calico does not prove support", func(nl *mocknetlink.MockNetlinkDataplane) {
+			addVXLAN(nl, "vxlan.calico", false)
+			nl.KernelLacksVniFilter = true
+		}, false, true, nil},
+		{"leftover probe device is replaced", func(nl *mocknetlink.MockNetlinkDataplane) {
+			addVXLAN(nl, "cali-vnif-probe", false)
+		}, true, true, nil},
+		{"override skips the probe", func(nl *mocknetlink.MockNetlinkDataplane) {}, false, false, map[string]string{"VXLANVNIFilter": "false"}},
+		{"override can force it on without probing", func(nl *mocknetlink.MockNetlinkDataplane) {
+			nl.KernelLacksVniFilter = true
+		}, true, false, map[string]string{"VXLANVNIFilter": "true"}},
+	} {
+		t.Run(tst.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			dataplane := testutils.NewMockDataplane("filter", map[string][]string{}, "legacy")
+			dataplane.KernelVersion = "Linux version 6.8.0"
+			mockNL := mocknetlink.New()
+			_, err := mockNL.NewMockNetlink()
+			Expect(err).NotTo(HaveOccurred())
+			tst.setup(mockNL)
+			mockNL.ResetDeltas()
+			mockNL.Delete()
+			featureDetector := NewFeatureDetector(tst.override, WithNetlinkOverride(mockNL.NewMockNetlink), WithVXLANVNIFilterProbe())
+			featureDetector.NewCmd = dataplane.NewCmd
+			featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
+
+			Expect(featureDetector.GetFeatures().VXLANVNIFilter).To(Equal(tst.expected))
+			probed := false
+			for name := range mockNL.AddedLinks.All() {
+				if strings.HasPrefix(name, "cali-vnif-") {
+					probed = true
+				}
+			}
+			Expect(probed).To(Equal(tst.expectedProbe))
+			for name := range mockNL.NameToLink {
+				Expect(name).NotTo(HavePrefix("cali-vnif-"), "probe device should be cleaned up")
+			}
+		})
+	}
+}
+
+func TestVXLANVNIFilterNotProbedByDefault(t *testing.T) {
+	RegisterTestingT(t)
+	dataplane := testutils.NewMockDataplane("filter", map[string][]string{}, "legacy")
+	dataplane.KernelVersion = "Linux version 6.8.0"
+	mockNL := mocknetlink.New()
+	featureDetector := NewFeatureDetector(nil, WithNetlinkOverride(mockNL.NewMockNetlink))
+	featureDetector.NewCmd = dataplane.NewCmd
+	featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
+
+	Expect(featureDetector.GetFeatures().VXLANVNIFilter).To(BeFalse())
+	Expect(mockNL.NumLinkAddCalls).To(BeZero())
 }

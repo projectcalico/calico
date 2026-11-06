@@ -143,13 +143,13 @@ func (f *fakeVMIInterface) List(ctx context.Context, options metav1.ListOptions)
 		Items: []kubevirtv1.VirtualMachineInstance{},
 	}
 
-	nsVMIs, exists := f.client.vmis[f.namespace]
-	if !exists {
-		return list, nil
-	}
-
-	for _, vmi := range nsVMIs {
-		list.Items = append(list.Items, *vmi.DeepCopy())
+	for ns, nsVMIs := range f.client.vmis {
+		if f.namespace != metav1.NamespaceAll && ns != f.namespace {
+			continue
+		}
+		for _, vmi := range nsVMIs {
+			list.Items = append(list.Items, *vmi.DeepCopy())
+		}
 	}
 
 	return list, nil
@@ -188,13 +188,13 @@ func (f *fakeVMInterface) List(ctx context.Context, options metav1.ListOptions) 
 		Items: []kubevirtv1.VirtualMachine{},
 	}
 
-	nsVMs, exists := f.client.vms[f.namespace]
-	if !exists {
-		return list, nil
-	}
-
-	for _, vm := range nsVMs {
-		list.Items = append(list.Items, *vm.DeepCopy())
+	for ns, nsVMs := range f.client.vms {
+		if f.namespace != metav1.NamespaceAll && ns != f.namespace {
+			continue
+		}
+		for _, vm := range nsVMs {
+			list.Items = append(list.Items, *vm.DeepCopy())
+		}
 	}
 
 	return list, nil

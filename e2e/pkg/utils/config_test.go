@@ -17,20 +17,40 @@ package utils
 import (
 	"context"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
+// A calico-apiserver restart takes tens of seconds. Guard against shrinking the
+// budget back below that.
+func TestConfigRetryBudgetCoversAPIServerRestart(t *testing.T) {
+	g := NewWithT(t)
+
+	b := configRetry
+	var total time.Duration
+	for b.Steps > 0 {
+		total += b.Step()
+	}
+	g.Expect(total).To(BeNumerically(">=", 90*time.Second), "config retry budget should outlast a calico-apiserver restart")
+}
+
 // A ServiceUnavailable from the aggregation layer (the "unexpected EOF" flake
 // when calico-apiserver is rolling) should be retried until it clears.
 func TestConfigureWithCleanupRetriesTransientUpdate(t *testing.T) {
 	g := NewWithT(t)
+
+	// Shrink the backoff so the retry path doesn't sleep on the real budget.
+	orig := configRetry
+	configRetry = wait.Backoff{Steps: 5, Duration: time.Millisecond}
+	t.Cleanup(func() { configRetry = orig })
 
 	existing := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{Name: "default"},

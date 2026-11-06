@@ -66,23 +66,22 @@ func init() {
 }
 
 func TestE2E(t *testing.T) {
-	if path := caliconfig.TestConfigPath(); path != "" {
-		if err := applyTestConfig(path); err != nil {
-			t.Fatalf("Failed to apply test config %q: %v", path, err)
+	if paths := caliconfig.TestConfigPaths(); len(paths) > 0 {
+		if err := applyTestConfig(paths); err != nil {
+			t.Fatalf("Failed to apply test config %q: %v", paths, err)
 		}
 	}
 	e2e.RunE2ETests(t)
 }
 
-// applyTestConfig loads a YAML test selection config and injects its label
-// filter and skip patterns into Ginkgo's suite config via the standard flag
-// interface. Ginkgo binds --ginkgo.label-filter and --ginkgo.skip against its
-// package-level suite config at init time, so setting them here before
-// e2e.RunE2ETests reads the config is equivalent to passing them on the
-// command line. This lets us reuse the upstream RunE2ETests unchanged rather
-// than forking it.
-func applyTestConfig(path string) error {
-	cfg, err := testconfig.Load(path)
+// applyTestConfig loads the YAML test selection configs, merged into one, and
+// injects the label filter and skip patterns into Ginkgo's suite config via the
+// standard flag interface. Ginkgo binds --ginkgo.label-filter and --ginkgo.skip
+// against its package-level suite config at init time, so setting them here
+// before e2e.RunE2ETests reads the config is equivalent to passing them on the
+// command line, and the upstream RunE2ETests stays unforked.
+func applyTestConfig(paths []string) error {
+	cfg, err := testconfig.LoadAll(paths)
 	if err != nil {
 		return fmt.Errorf("load: %w", err)
 	}
@@ -96,6 +95,12 @@ func applyTestConfig(path string) error {
 		logrus.Infof("Test config: ginkgo.label-filter = %s", flags.LabelFilter)
 		if err := flag.Set("ginkgo.label-filter", flags.LabelFilter); err != nil {
 			return fmt.Errorf("set ginkgo.label-filter: %w", err)
+		}
+	}
+	if focus := flags.FocusString(); focus != "" {
+		logrus.Infof("Test config: ginkgo.focus = %s", focus)
+		if err := flag.Set("ginkgo.focus", focus); err != nil {
+			return fmt.Errorf("set ginkgo.focus: %w", err)
 		}
 	}
 	if skip := flags.SkipString(); skip != "" {

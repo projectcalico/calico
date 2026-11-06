@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,6 +65,7 @@ func PodTransformer(podControllerEnabled bool) cache.TransformFunc {
 				conversion.AnnotationPodIP,
 				conversion.AnnotationPodIPs,
 				conversion.AnnotationAWSPodIPs,
+				conversion.AnnotationContainerID,
 			} {
 				if value, ok := pod.Annotations[annotation]; ok {
 					if p.Annotations == nil {

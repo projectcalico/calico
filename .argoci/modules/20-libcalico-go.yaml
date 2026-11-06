@@ -1,0 +1,34 @@
+# libcalico-go `make ci`, once per API group: a change can work through one and
+# break the other.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: libcalico-go-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    depends: [check-go]
+    # A kind control plane shares this pod's cores with the tests.
+    requests: {cpu: 5000m, memory: 9.5Gi}
+    matrix:
+      - name: crd-v1
+      - name: v3
+        env:
+          - name: CALICO_API_GROUP
+            value: projectcalico.org/v3
+          - name: GINKGO_SKIP
+            value: etcdv3 backend
+    commands: |
+      cd libcalico-go
+      make ci
+    epilogue: |
+      # Epilogues don't inherit the commands' `cd` or exports.
+      cd "${CI_HOME}/${CI_GIT_DIR}/libcalico-go"
+      # Skipped specs would otherwise be reported as cases.
+      python3 ../hack/strip-skipped-tests.py ./report/*.xml 2>/dev/null || true
+      artifact push job report --destination test-results || true

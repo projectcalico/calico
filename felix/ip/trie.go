@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -249,6 +249,12 @@ func (n *CIDRNode) covers(cidr CIDR) bool {
 	childIdx := cidr.Addr().NthBit(uint(n.cidr.Prefix() + 1))
 	child := n.children[childIdx]
 	return child.covers(cidr)
+}
+
+// Overlaps returns true if the trie holds a CIDR that intersects the given one, in either
+// direction of containment.
+func (t *CIDRTrie) Overlaps(cidr CIDR) bool {
+	return t.Covers(cidr) || t.Intersects(cidr)
 }
 
 func (t *CIDRTrie) Intersects(cidr CIDR) bool {

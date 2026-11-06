@@ -1,9 +1,11 @@
 import React from 'react';
 import { jsonTabStyles, tableStyles } from './styles';
 import { FlowLog } from '@/types/render';
+import { ServiceRef } from '@/types/api';
 import FlowLogActionIndicator from '@/components/common/FlowLogActionIndicator';
 import { LogDetailsView } from '@/libs/tigera/ui-components/components/common';
 import PoliciesLogDetails from '../PoliciesLogDetails';
+import IpAddressList from '../IpAddressList';
 
 const TABS_HEIGHT = 38;
 const PADDING = 16;
@@ -19,8 +21,10 @@ const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog, height }) => {
         end_time,
         source_namespace,
         source_name,
+        source_ips,
         dest_namespace,
         dest_name,
+        dest_ips,
         action,
         policies,
         id: _id,
@@ -32,8 +36,10 @@ const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog, height }) => {
         end_time: end_time.toLocaleTimeString(),
         source_namespace,
         source_name,
+        ...(source_ips && { source_ips }),
         dest_namespace,
         dest_name,
+        ...(dest_ips && { dest_ips }),
         action,
         policies,
         ...rest,
@@ -41,8 +47,11 @@ const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog, height }) => {
 
     const tableData = {
         ...jsonData,
+        ...(source_ips && { source_ips: <IpAddressList ips={source_ips} /> }),
+        ...(dest_ips && { dest_ips: <IpAddressList ips={dest_ips} /> }),
         action: <FlowLogActionIndicator action={action} />,
         policies: JSON.stringify(policies),
+        ...(rest.service && { service: formatService(rest.service) }),
     };
 
     return (
@@ -66,5 +75,8 @@ const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog, height }) => {
         />
     );
 };
+
+const formatService = ({ namespace, name, port, port_name }: ServiceRef) =>
+    `${namespace}/${name}:${port_name ? `${port} (${port_name})` : port}`;
 
 export default FlowLogDetails;

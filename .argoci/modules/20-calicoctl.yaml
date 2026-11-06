@@ -1,0 +1,22 @@
+# calicoctl `make ci`.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: calicoctl-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    depends: [check-go]
+    requests: {cpu: 3000m, memory: 3.5Gi}
+    commands: |
+      cd calicoctl
+      make ci
+    epilogue: |
+      # Epilogues don't inherit the commands' `cd` or exports.
+      cd "${CI_HOME}/${CI_GIT_DIR}/calicoctl"
+      artifact push job report --destination test-results || true

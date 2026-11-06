@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,11 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 )
+
+// ErrCodeSandboxSuperseded is the CNI error code calico-ipam returns when a newer sandbox of the
+// pod claimed the address after this ADD started. The caller fails the ADD rather than retry with
+// a fresh address.
+const ErrCodeSandboxSuperseded = 101
 
 // Valid values for NetConf.DeviceType.
 const (

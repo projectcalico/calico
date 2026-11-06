@@ -74,8 +74,11 @@ var features = map[string]bool{
 	"Pods":            true,
 	"QoS":             true,
 	"Datapath":        true,
+	"IngressGateway":  true,
 	"Istio":           true,
 	"KubeVirt":        true,
+	"Wireguard":       true,
+	"Flow-Logs":       true,
 }
 
 // RequiresRealKubeVirt marks tests that need a real KubeVirt installation with
@@ -105,6 +108,14 @@ func RequiresCalicoAPIServer() any {
 	return framework.WithLabel("RequiresCalicoAPIServer")
 }
 
+// RequiresV3CRDs marks tests that need kube-apiserver to serve projectcalico.org/v3
+// itself, from the v3 CRDs. Tests that disable the BGP mesh withdraw the route to the
+// calico-apiserver pod, so on a lane running the aggregated API server they lose the
+// Calico API mid-test and cannot restore the mesh. Exclude it on those lanes.
+func RequiresV3CRDs() any {
+	return framework.WithLabel("RequiresV3CRDs")
+}
+
 // RequiresNoEncap marks tests that require unencapsulated traffic to function.
 // This is typically used for tests that verify BGP functionality without IPIP, or other similar tests.
 // Such tests must be run on clusters that support unencapsulated traffic, such as bare-metal clusters
@@ -127,6 +138,40 @@ func RequiresGoldmane() any {
 // via --ginkgo.skip=RequiresBGPMesh.
 func RequiresBGPMesh() any {
 	return framework.WithLabel("RequiresBGPMesh")
+}
+
+// RequiresBGP marks tests that need Calico to be doing BGP at all, i.e. BIRD is
+// running and programming routes. Weaker than RequiresBGPMesh, which additionally
+// needs the node-to-node mesh to be the *only* routing path.
+//
+// Clusters that fail this: Felix routing (no BIRD), and managed clusters using
+// their provider's CNI (AzureVNET, AmazonVPC), where Calico runs policy-only.
+// Carry this rather than leaving each config to know which spec files are
+// BGP-shaped -- that knowledge was previously spread across every lane.
+func RequiresBGP() any {
+	return framework.WithLabel("RequiresBGP")
+}
+
+// RequiresOperator marks tests that need an operator-managed cluster: they create a
+// CR for tigera-operator to reconcile, or read an operator resource such as the
+// Installation. Manifest-installed clusters (INSTALLER=manual/packaged, i.e. a
+// MANIFEST_FILE like calico.yaml) have neither, so such a test fails or waits out
+// its timeout rather than skipping.
+func RequiresOperator() any {
+	return framework.WithLabel("RequiresOperator")
+}
+
+// RequiresCalicoIPAM marks tests that need Calico to be the IPAM plugin. Clusters
+// running a provider's CNI and IPAM (AWS VPC, Azure, GKE host-local) keep no
+// Calico IPAM state for these specs to read.
+func RequiresCalicoIPAM() any {
+	return framework.WithLabel("RequiresCalicoIPAM")
+}
+
+// RequiresCalicoCNI marks tests that need Calico as the CNI plugin, not a provider's
+// (AWS VPC, Azure, GKE).
+func RequiresCalicoCNI() any {
+	return framework.WithLabel("RequiresCalicoCNI")
 }
 
 // WithFeature marks tests as verifying a specific feature.
@@ -163,10 +208,6 @@ func RequiresAWS() any {
 // and additional configuration passed to the e2e code in order to run commands on that node.
 func WithExternalNode() any {
 	return framework.WithLabel("ExternalNode")
-}
-
-func RequiresExternalNode() any {
-	return framework.WithLabel("RequiresExternalNode")
 }
 
 // RequiresAzureIPAM marks tests that require a cluster with Azure IPAM.

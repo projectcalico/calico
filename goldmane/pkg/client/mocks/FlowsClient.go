@@ -18,10 +18,19 @@ func NewFlowsClient(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *FlowsClient {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &FlowsClient{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -249,8 +258,8 @@ func (_c *FlowsClient_Stream_Call) Run(run func(ctx context.Context, request *pr
 	return _c
 }
 
-func (_c *FlowsClient_Stream_Call) Return(v proto.Flows_StreamClient, err error) *FlowsClient_Stream_Call {
-	_c.Call.Return(v, err)
+func (_c *FlowsClient_Stream_Call) Return(flows_StreamClient proto.Flows_StreamClient, err error) *FlowsClient_Stream_Call {
+	_c.Call.Return(flows_StreamClient, err)
 	return _c
 }
 

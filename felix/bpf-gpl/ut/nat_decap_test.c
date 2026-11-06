@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #include "ut.h"
-#include "bpf.h"
+
+#include "cali_bpf.h"
 #include "nat.h"
 
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
