@@ -41,3 +41,8 @@ workflows:
     workflowFile: .argoci/publish/e2e-images.yaml
     runWhen:
       alwaysRunOnMerge: true
+
+  - name: e2e-openstack-image
+    workflowFile: .argoci/publish/e2e-openstack-image.yaml
+    runWhen:
+      alwaysRunOnMerge: true

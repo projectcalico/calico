@@ -1,0 +1,69 @@
+From 29eb3f1b673f89281c012f9bd70f1b4df01723c2 Mon Sep 17 00:00:00 2001
+From: Nell Jerram <nell@tigera.io>
+Date: Mon, 24 Feb 2025 11:30:07 +0000
+Subject: [PATCH] Add support for packet-rate-limit rules
+
+Change-Id: I81b2d3e0e82f6bf80ebda148f640231eaf15e40b
+---
+ openstackclient/network/v2/network_qos_rule.py | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/openstackclient/network/v2/network_qos_rule.py b/openstackclient/network/v2/network_qos_rule.py
+index a6529c8b..80e1339c 100644
+--- a/openstackclient/network/v2/network_qos_rule.py
++++ b/openstackclient/network/v2/network_qos_rule.py
+@@ -26,17 +26,20 @@ RULE_TYPE_BANDWIDTH_LIMIT = 'bandwidth-limit'
+ RULE_TYPE_DSCP_MARKING = 'dscp-marking'
+ RULE_TYPE_MINIMUM_BANDWIDTH = 'minimum-bandwidth'
+ RULE_TYPE_MINIMUM_PACKET_RATE = 'minimum-packet-rate'
++RULE_TYPE_PACKET_RATE_LIMIT = 'packet-rate-limit'
+ MANDATORY_PARAMETERS = {
+     RULE_TYPE_MINIMUM_BANDWIDTH: {'min_kbps', 'direction'},
+     RULE_TYPE_MINIMUM_PACKET_RATE: {'min_kpps', 'direction'},
+     RULE_TYPE_DSCP_MARKING: {'dscp_mark'},
+     RULE_TYPE_BANDWIDTH_LIMIT: {'max_kbps'},
++    RULE_TYPE_PACKET_RATE_LIMIT: {'max_kpps'},
+ }
+ OPTIONAL_PARAMETERS = {
+     RULE_TYPE_MINIMUM_BANDWIDTH: set(),
+     RULE_TYPE_MINIMUM_PACKET_RATE: set(),
+     RULE_TYPE_DSCP_MARKING: set(),
+     RULE_TYPE_BANDWIDTH_LIMIT: {'direction', 'max_burst_kbps'},
++    RULE_TYPE_PACKET_RATE_LIMIT: {'direction'},
+ }
+ DIRECTION_EGRESS = 'egress'
+ DIRECTION_INGRESS = 'ingress'
+@@ -121,6 +124,8 @@ def _get_attrs(network_client, parsed_args, is_create=False):
+         rule_type = parsed_args.type
+     if parsed_args.max_kbps is not None:
+         attrs['max_kbps'] = parsed_args.max_kbps
++    if parsed_args.max_kpps is not None:
++        attrs['max_kpps'] = parsed_args.max_kpps
+     if parsed_args.max_burst_kbits is not None:
+         # NOTE(ralonsoh): this parameter must be changed in SDK and then in
+         #                 Neutron API, from 'max_burst_kbps' to
+@@ -180,6 +185,13 @@ def _add_rule_arguments(parser):
+         type=int,
+         help=_('Maximum bandwidth in kbps'),
+     )
++    parser.add_argument(
++        '--max-kpps',
++        dest='max_kpps',
++        metavar='<max-kpps>',
++        type=int,
++        help=_('Maximum packet rate in kpps')
++    )
+     parser.add_argument(
+         '--max-burst-kbits',
+         dest='max_burst_kbits',
+@@ -258,6 +270,7 @@ class CreateNetworkQosRule(
+                 RULE_TYPE_MINIMUM_PACKET_RATE,
+                 RULE_TYPE_DSCP_MARKING,
+                 RULE_TYPE_BANDWIDTH_LIMIT,
++                RULE_TYPE_PACKET_RATE_LIMIT,
+             ],
+             help=(
+                 _('QoS rule type (%s)')
+-- 
+2.34.1
+
