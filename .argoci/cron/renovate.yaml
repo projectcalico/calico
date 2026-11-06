@@ -1,0 +1,49 @@
+# Runs Renovate for this repo, replacing .semaphore/renovate.yml. One run from
+# master covers every branch: renovate.json's baseBranchPatterns lists the
+# release branches it opens PRs against.
+version: condensed
+generateName: renovate-
+
+schedule: 0 1 * * 2,5
+
+notifications:
+  slack:
+    channel: ci-notifications-os
+    when: failure
+    includeFailedSteps: true
+
+steps:
+  - name: renovate
+    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
+    timeout: 2h
+    # The post-upgrade make targets regenerate deps files in go-build containers.
+    services: [docker]
+    jobSize: medium
+    requests: {cpu: "4", memory: 8Gi}
+    secretBundles:
+      - marvin-github-token
+    env:
+      - {name: RENOVATE_REPOSITORIES, value: projectcalico/calico}
+      - {name: RENOVATE_ALLOWED_COMMANDS, value: '["^make gen-deps-files$", "^make regen-thirdparty-dep-patches$"]'}
+      # The owner of marvin-github-token, so commits match the account pushing them.
+      - {name: RENOVATE_GIT_AUTHOR, value: "marvin-tigera <19392133+marvin-tigera@users.noreply.github.com>"}
+      - {name: LOG_LEVEL, value: info}
+      # gen-deps-files sizes its parallelism from this, not the node's cores.
+      - {name: GOMAXPROCS, value: "4"}
+    commands: |
+      # A release branch cut from master carries this file and deploys its own
+      # copy; only master's should run, or each run is doubled.
+      if [ "${CI_GIT_BRANCH}" != master ]; then
+        echo "Renovate runs from master only; skipping on ${CI_GIT_BRANCH}."
+        exit 0
+      fi
+
+      # The image has no Node.
+      node_dir="${HOME}/node"
+      mkdir -p "${node_dir}"
+      node_tar=$(curl -fsSL https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt | awk '/linux-x64\.tar\.xz$/ {print $2}')
+      curl -fsSL "https://nodejs.org/dist/latest-v24.x/${node_tar}" | tar -xJ --strip-components=1 -C "${node_dir}"
+      export PATH="${node_dir}/bin:${PATH}"
+      npm install -g renovate@43
+
+      RENOVATE_TOKEN="${MARVIN_GITHUB_TOKEN}" renovate --platform=github --autodiscover=false
