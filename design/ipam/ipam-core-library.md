@@ -75,6 +75,7 @@ A few non-obvious design points:
   fill.
 - Pool qualification ([`pool_qualification.go`](../../libcalico-go/lib/ipam/pool_qualification.go)) is the one place that decides which pools a request may draw from, and which of the node's affine blocks an assignment may release: AutoAssign and
   EnsureBlock use its full rule set, AssignIP a narrower one. A new eligibility criterion goes there, not in a caller. Releasing IPs takes a separate path: `ensureConsistentAffinity` releases a block's affinity when the block's pool stops selecting the node, so a node-selection change has to land in both. Pools a request names skip the selectors and `AssignmentMode`, nothing else.
+  Code outside the package that must agree with that choice, such as reporting which nodes are at their block cap, asks `PoolClaim.MayUse` rather than re-deriving the rule.
 - `GetEnabledPools` skips a pool that lacks `Allocatable=True` when an allocatable or terminating pool covers its CIDR. The IP pool controller resolves overlap asynchronously, so
   without this a pool created over an active one is allocatable until the controller's first status write - unbounded while kube-controllers is down. A pool already marked
   `Allocatable=True` is taken at its word and never tested against the others. Administratively disabled pools never mask, including while they are terminating, which matches the
