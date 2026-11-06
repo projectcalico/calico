@@ -42,7 +42,7 @@ def log_banner(msg, *args, **kwargs):
     level = kwargs.pop("level", logging.INFO)
     msg = elapsed_hms + str(msg) % args
     banner = "+" + ("-" * (len(msg) + 2)) + "+"
-    _log.log(level, "\n" + banner + "\n" "| " + msg + " |\n" + banner)
+    _log.log(level, "\n" + banner + "\n| " + msg + " |\n" + banner)
 
 
 def decorate_test(test_method):
@@ -246,7 +246,7 @@ def retry_until_success(
             except Exception as e:
                 if ex_class and e.__class__ is not ex_class:
                     _log.exception(
-                        "Hit unexpected exception in function - " "not retrying."
+                        "Hit unexpected exception in function - not retrying."
                     )
                     raise
                 if retry < retries:
@@ -255,7 +255,7 @@ def retry_until_success(
                 else:
                     if log_exception:
                         _log.exception(
-                            "Function %s did not succeed before " "timeout.", function
+                            "Function %s did not succeed before timeout.", function
                         )
                     raise
             else:

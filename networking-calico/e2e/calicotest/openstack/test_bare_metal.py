@@ -807,8 +807,7 @@ class TestBareMetalPolicyOpenSource(_BareMetalPolicyTest):
         )
 
         _log.info(
-            "Starting test_src_dst_tag.\n"
-            "Check we can get to test port before starting."
+            "Starting test_src_dst_tag.\nCheck we can get to test port before starting."
         )
         self.assert_can_access_tcp_service()
 

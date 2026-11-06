@@ -63,5 +63,4 @@ class TestVmDns(Topology):
         _log.info("nslookup output:\n%s", result.stdout)
         if result.return_code != 0:
             _log.warning("nslookup stderr:\n%s", result.stderr)
-        assert result.return_code == 0, \
-            "DNS resolution failed for archive.ubuntu.com"
+        assert result.return_code == 0, "DNS resolution failed for archive.ubuntu.com"

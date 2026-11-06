@@ -205,12 +205,12 @@ class Vm(object):
         if ipv6:
             assert (
                 len(ipv6_addrs) == 1
-            ), "Expected a single IPv6 address, " "found %s" % len(ipv6_addrs)
+            ), "Expected a single IPv6 address, found %s" % len(ipv6_addrs)
             ip = ipv6_addrs[0]
         else:
             assert (
                 len(ipv4_addrs) == 1
-            ), "Expected a single IPv4 address, " "found %s" % len(ipv4_addrs)
+            ), "Expected a single IPv4 address, found %s" % len(ipv4_addrs)
             ip = ipv4_addrs[0]
 
         _log.debug("Attempting to connect to %s", str(ip))
@@ -379,7 +379,7 @@ class Vm(object):
             state = self.get_current_status()
             if state != desired_state:
                 if state == "ERROR":
-                    raise VmErrorState("VM is in state 'ERROR' and must be " "deleted.")
+                    raise VmErrorState("VM is in state 'ERROR' and must be deleted.")
                 else:
                     raise WrongState(
                         "Expected state: %s, got: %s." % (desired_state, state)
@@ -406,7 +406,7 @@ class Vm(object):
             interfaces = self.vm.interface_list()
         except Exception:
             if not self.tenant.controller.rebooting:
-                _log.error("Controller is not rebooting but cannot query " "interfaces")
+                _log.error("Controller is not rebooting but cannot query interfaces")
                 raise
             _log.info("Using cached interface info during controller reboot")
             interfaces = self.cached_interfaces
@@ -568,8 +568,8 @@ class Vm(object):
         :return:
         """
         command = (
-            "sudo iptables -t nat -A POSTROUTING -p icmp -j SNAT "
-            "--to-source %s" % new_ip
+            "sudo iptables -t nat -A POSTROUTING -p icmp -j SNAT --to-source %s"
+            % new_ip
         )
         self.execute(command)
 
@@ -601,8 +601,9 @@ class Vm(object):
         self.output_file = output_file
         # -A means we should get the payloads included in the file
         self.execute(
-            "sudo tcpdump -AlU -i any icmp> {output_file} "
-            "2>&1 & disown".format(output_file=output_file)
+            "sudo tcpdump -AlU -i any icmp> {output_file} 2>&1 & disown".format(
+                output_file=output_file
+            )
         )
         # Wait for tcpdump to be ready to catch packets
         time.sleep(5)

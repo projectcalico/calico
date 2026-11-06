@@ -165,8 +165,7 @@ class TestGracefulRestart(Topology2SecurityGroupsUbuntu):
             retry_until_success(
                 migrate,
                 60,
-                context_string="TestGracefulRestart.test_migrate_vm."
-                "migrate_vm_to_node",
+                context_string="TestGracefulRestart.test_migrate_vm.migrate_vm_to_node",
             )
             vm.wait_for_state("ACTIVE", 20)
 
@@ -504,7 +503,8 @@ class TestCompaction(Topology):
         else:
             cls.controller.execute(
                 "sudo crudini --set /etc/neutron/neutron.conf "
-                "calico etcd_compaction_period_mins %s" % cls.original_compaction_period
+                "calico etcd_compaction_period_mins %s"
+                % cls.original_compaction_period
             )
 
         # restore ETCD_COMPACTION_MIN_REVISIONS
@@ -516,7 +516,8 @@ class TestCompaction(Topology):
         else:
             cls.controller.execute(
                 "sudo crudini --set /etc/neutron/neutron.conf "
-                "calico etcd_compaction_min_revisions %s" % cls.original_compaction_revs
+                "calico etcd_compaction_min_revisions %s"
+                % cls.original_compaction_revs
             )
 
         # restart neutron server to allow settings to take effect
@@ -540,7 +541,7 @@ class TestCompaction(Topology):
             new_compact_point = self.find_compaction_rev()
 
             _log.info(
-                "\nOriginal compaction rev: %s\n" "New compaction rev     : %s",
+                "\nOriginal compaction rev: %s\nNew compaction rev     : %s",
                 origin_compact_point,
                 new_compact_point,
             )

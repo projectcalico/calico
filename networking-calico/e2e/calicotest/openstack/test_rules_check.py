@@ -61,7 +61,7 @@ class TestRules(TopologyUbuntuVm):
         # to fail when run the previous test had (and then deleted) a relevant
         # security rule
         # This sleep can be removed when test_established_connection passes
-        _log.info("Sleeping for 30s to allow connection to no longer " "be established")
+        _log.info("Sleeping for 30s to allow connection to no longer be established")
         time.sleep(30)
 
     def test_wildcard_protocol_rule(self):
@@ -175,8 +175,9 @@ class TestRules(TopologyUbuntuVm):
         id_string = "FVport"
 
         _log.info(
-            "Adding security rules for tcp and udp for ports {min} to "
-            "{max}".format(min=port_min, max=port_max)
+            "Adding security rules for tcp and udp for ports {min} to {max}".format(
+                min=port_min, max=port_max
+            )
         )
         self.add_rule(
             self.UBUNTU_GROUPNAME, "udp", port_min, port_max, self.my_ipv4 + "/32"
@@ -186,8 +187,7 @@ class TestRules(TopologyUbuntuVm):
         )
 
         _log.info(
-            "Sending packets for each port from {first_port} to "
-            "{last_port}".format(
+            "Sending packets for each port from {first_port} to {last_port}".format(
                 first_port=blocked_ports[0], last_port=blocked_ports[-1]
             )
         )
@@ -209,7 +209,7 @@ class TestRules(TopologyUbuntuVm):
                 blocked_ports.extend(([id_udp, id_tcp]))
         send(packets)
 
-        _log.info("Checking that precisely the expected packets reached " "the VM")
+        _log.info("Checking that precisely the expected packets reached the VM")
         retry_until_success(
             self.check_packets_arrived,
             function_args=[allowed_ids, blocked_ids, self.target_vm, self.output_file],
@@ -239,7 +239,7 @@ class TestRules(TopologyUbuntuVm):
         # security rule
         # This sleep can be removed when test_established_connection passes
 
-        _log.info("Sleeping for 30s to allow connection to no longer " "be established")
+        _log.info("Sleeping for 30s to allow connection to no longer be established")
         time.sleep(30)
 
         # These are the only types we can easily test
@@ -271,7 +271,7 @@ class TestRules(TopologyUbuntuVm):
 
         # Allow time for Felix to propagate rules before testing
         time.sleep(2)
-        _log.info("Checking that precisely the expected packets reached the " "VM")
+        _log.info("Checking that precisely the expected packets reached the VM")
         retry_until_success(
             self.check_packets_arrived,
             function_args=[allowed_ids, blocked_ids, self.target_vm, self.output_file],
@@ -382,14 +382,16 @@ class TestRules(TopologyUbuntuVm):
         for cur_id in allowed_ids:
             self.assertTrue(
                 self.packet_received(target_vm, output_file, cur_id),
-                "Packet with id {id} not received on {vm} "
-                "as expected".format(id=cur_id, vm=target_vm.name),
+                "Packet with id {id} not received on {vm} as expected".format(
+                    id=cur_id, vm=target_vm.name
+                ),
             )
         for cur_id in blocked_ids:
             self.assertFalse(
                 self.packet_received(target_vm, output_file, cur_id),
-                "Packet with id {id} received on {vm} "
-                "but should not have".format(id=cur_id, vm=target_vm.name),
+                "Packet with id {id} received on {vm} but should not have".format(
+                    id=cur_id, vm=target_vm.name
+                ),
             )
 
     def return_packet_per_protocol(self, id_string, target_ip):

@@ -52,8 +52,7 @@ class TestPingFunctions(basetest.TestBase):
             )
         except self.failureException:
             _log.info(
-                "TestBase.ping correctly noticed failing pings that "
-                "were meant to fail"
+                "TestBase.ping correctly noticed failing pings that were meant to fail"
             )
         try:
             self.check_mutual_connectivity(pass_list, pass_list, retries=0)

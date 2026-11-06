@@ -178,7 +178,7 @@ class _TestEpStatusReportingBase(Topology):
         _log.info("Restarting felix on host: %s", host)
         host.execute("sudo service calico-felix restart")
         _log.info(
-            "Sleeping for %ss to allow Felix to complete " "startup processing",
+            "Sleeping for %ss to allow Felix to complete startup processing",
             waittime,
         )
         time.sleep(waittime)
@@ -200,7 +200,7 @@ class _TestEpStatusReportingBase(Topology):
                 break
 
         # Check we actually found it
-        assert subnet_id is not None, "Couldn't find an address with " "IP %s" % ip
+        assert subnet_id is not None, "Couldn't find an address with IP %s" % ip
         return subnet_id
 
     def change_port_admin_state(self, port, admin_up):
@@ -289,8 +289,8 @@ class TestEndpointStatusReporting(_TestEpStatusReportingBase):
         self.assertEqual(
             status,
             0,
-            msg="Attempt to set interface %s down failed.  "
-            "Stdout/stderr: [%s]/[%s]" % (tap_name, stdout, stderr),
+            msg="Attempt to set interface %s down failed.  Stdout/stderr: [%s]/[%s]"
+            % (tap_name, stdout, stderr),
         )
 
         # check port state is down in Neutron
@@ -307,8 +307,8 @@ class TestEndpointStatusReporting(_TestEpStatusReportingBase):
         self.assertEqual(
             status,
             0,
-            msg="Attempt to set interface %s up failed.  "
-            "Stdout/stderr: [%s]/[%s]" % (tap_name, stdout, stderr),
+            msg="Attempt to set interface %s up failed.  Stdout/stderr: [%s]/[%s]"
+            % (tap_name, stdout, stderr),
         )
 
         # Check port is up and new IP is added.

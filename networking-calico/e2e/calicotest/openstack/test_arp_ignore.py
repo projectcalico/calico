@@ -85,9 +85,9 @@ class TestARPIgnore(TopologyBasic):
                 },
             ],
         }
-        datamodel_v3.put("GlobalNetworkPolicy",
-                         "default.allow_test_node",
-                         allow_test_node)
+        datamodel_v3.put(
+            "GlobalNetworkPolicy", "default.allow_test_node", allow_test_node
+        )
 
         super(TestARPIgnore, cls).setUpClass()
 
@@ -102,7 +102,7 @@ class TestARPIgnore(TopologyBasic):
         def check_arp_state():
             # For debugging, check the ARP state on each compute node.
             for node in LAYOUT.compute_nodes:
-                node.execute("ip neigh | grep \"dev tap\"")
+                node.execute('ip neigh | grep "dev tap"')
 
         check_arp_state()
 
@@ -113,21 +113,29 @@ class TestARPIgnore(TopologyBasic):
         max_duration = 240
         ignored_initial_window = 60
         debug_interval_count = 0
-        while (time.time() <= start_time + max_duration
-               and successful_ping_count < required_successful_pings):
+        while (
+            time.time() <= start_time + max_duration
+            and successful_ping_count < required_successful_pings
+        ):
             pings_succeeded_this_time = True
             for i in range(len(self.vms)):
                 try:
-                    _log.info("Ping VM #%d successful_ping_count=%d T=%ds",
-                              i, successful_ping_count, int(time.time() - start_time))
+                    _log.info(
+                        "Ping VM #%d successful_ping_count=%d T=%ds",
+                        i,
+                        successful_ping_count,
+                        int(time.time() - start_time),
+                    )
                     subprocess.check_call(
                         ["ping", "-c", "1", "-W", "1", str(self.vms[i].get_ip_addr())]
                     )
                 except subprocess.CalledProcessError:
                     pings_succeeded_this_time = False
 
-            if (pings_succeeded_this_time
-                and time.time() > start_time + ignored_initial_window):
+            if (
+                pings_succeeded_this_time
+                and time.time() > start_time + ignored_initial_window
+            ):
                 successful_ping_count += 1
             else:
                 successful_ping_count = 0

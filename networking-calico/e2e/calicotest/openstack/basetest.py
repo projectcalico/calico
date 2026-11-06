@@ -33,7 +33,7 @@ from calicotest.openstack.config import LAYOUT
 _log = logging.getLogger(__name__)
 
 # Regex to match the diags filename in calico-diags output.
-DIAGS_RE = re.compile('Diags saved to \\"(.*)\\" and ' 'compressed to \\"(.*)\\"')
+DIAGS_RE = re.compile('Diags saved to \\"(.*)\\" and compressed to \\"(.*)\\"')
 
 # Regex to match felix log entries.  Notes:
 # - Golang timestamps use '.' vs Python's ',' for separating milliseconds.
@@ -85,7 +85,6 @@ LOGS_IGNORE_ALL_TESTS = [
     # this as a retriable condition, but we still get the traceback in the log,
     # so we have to ignore it here.
     "oslo_db.sqlalchemy.exc_filters",
-
     # The Noble version of sqlalchemy emits ERROR logs about "do not call blocking
     # functions from the mainloop", but they do not appear to cause any real problem.
     # We will fix these eventually, either by improving our DB access coding, or by
@@ -259,10 +258,13 @@ class TestBase(TestWithHooks):
             errors = la.get_latest_logs(logfilter=cls.log_filter_in_errors)
             if errors:
                 hit_errors = True
-                detail += "***** Start of errors in logs from %s on %s *****" "\n\n%s\n\n" % (
-                    la.filename,
-                    la.ssh.fqdn,
-                    "\n\n".join(map(str, errors)),
+                detail += (
+                    "***** Start of errors in logs from %s on %s *****\n\n%s\n\n"
+                    % (
+                        la.filename,
+                        la.ssh.fqdn,
+                        "\n\n".join(map(str, errors)),
+                    )
                 )
                 detail += "****** End of errors in logs from %s on %s ******\n\n" % (
                     la.filename,
@@ -435,7 +437,7 @@ class TestBase(TestWithHooks):
             node.execute("sudo rm %s" % output_tar)
             if not output_dir.startswith(os.path.sep + "tmp" + os.path.sep):
                 raise Exception(
-                    "Output directory from diags script MUST " "start with /tmp/"
+                    "Output directory from diags script MUST start with /tmp/"
                 )
             if "*" in output_dir:
                 raise Exception("Output dir contains a *")
@@ -482,7 +484,7 @@ class TestBase(TestWithHooks):
             elif traffic == "ping":
                 test_func = self.do_ping_check
             else:
-                raise ValueError("traffic argument was neither 'tcp' nor " "'ping'")
+                raise ValueError("traffic argument was neither 'tcp' nor 'ping'")
             for vm in source_list:
                 thread = threading.Thread(
                     target=test_func,
@@ -530,9 +532,11 @@ class TestBase(TestWithHooks):
                             vm.name,
                             dest.name,
                             ip,
-                            "CAN PING (EXPECTED)"
-                            if can_ping
-                            else "CANNOT PING (WRONG)",
+                            (
+                                "CAN PING (EXPECTED)"
+                                if can_ping
+                                else "CANNOT PING (WRONG)"
+                            ),
                         )
                         if not can_ping:
                             failures.append(
@@ -547,9 +551,11 @@ class TestBase(TestWithHooks):
                             vm.name,
                             dest.name,
                             ip,
-                            "CAN PING (WRONG)"
-                            if can_ping
-                            else "CANNOT PING (EXPECTED)",
+                            (
+                                "CAN PING (WRONG)"
+                                if can_ping
+                                else "CANNOT PING (EXPECTED)"
+                            ),
                         )
                         if can_ping:
                             failures.append(
@@ -713,9 +719,11 @@ class TestBase(TestWithHooks):
                                 vm.name,
                                 dest.name,
                                 ip,
-                                "CAN TCP (EXPECTED)"
-                                if can_tcp
-                                else "CANNOT TCP (WRONG)",
+                                (
+                                    "CAN TCP (EXPECTED)"
+                                    if can_tcp
+                                    else "CANNOT TCP (WRONG)"
+                                ),
                             )
                             if not can_tcp:
                                 failures.append("%s cannot tcp %s" % (vm.name, ip))
@@ -730,9 +738,11 @@ class TestBase(TestWithHooks):
                                 vm.name,
                                 dest.name,
                                 ip,
-                                "CAN TCP (WRONG)"
-                                if can_tcp
-                                else "CANNOT TCP (EXPECTED)",
+                                (
+                                    "CAN TCP (WRONG)"
+                                    if can_tcp
+                                    else "CANNOT TCP (EXPECTED)"
+                                ),
                             )
                             if can_tcp:
                                 failures.append(
@@ -793,7 +803,7 @@ class TestBase(TestWithHooks):
 
         for _ in range(NETCAT_RETRIES):
             # Briefly run netcat and get a response.
-            command = "nc -l -w {timeout} -p {port}" "".format(
+            command = "nc -l -w {timeout} -p {port}".format(
                 timeout=NETCAT_TIMEOUT, port=NETCAT_PORT
             )
             result = vm.execute(command)
@@ -825,7 +835,7 @@ class TestBase(TestWithHooks):
         for _ in range(NETCAT_RETRIES):
             # Send our message via netcat.
 
-            command = "cat temp_file | nc -w {timeout} {ip} {port}" "".format(
+            command = "cat temp_file | nc -w {timeout} {ip} {port}".format(
                 timeout=NETCAT_TIMEOUT, ip=dest_ip, port=NETCAT_PORT
             )
             result = vm.execute(command)
@@ -871,7 +881,7 @@ class TestBase(TestWithHooks):
                     # limiting, taking tens of minutes per host.
                     "-Pn",  # Skip ping, which may be blocked.
                     # Limit the ports scanned or it takes too long.
-                    "-p%s" % (",".join([str(s) for s in sorted(ports_to_scan)])),
+                    "-p%s" % ",".join([str(s) for s in sorted(ports_to_scan)]),
                     "--open",  # Only list open ports.
                     node.get_ipv4(),
                 ]
@@ -894,9 +904,8 @@ class TestBase(TestWithHooks):
             self.assertEqual(
                 set(expected_ports),
                 open_ports,
-                "Unexpected ports open on node %s\n"
-                "Expected: %r\n"
-                "Actual:   %r" % (node, expected_ports, open_ports),
+                "Unexpected ports open on node %s\nExpected: %r\nActual:   %r"
+                % (node, expected_ports, open_ports),
             )
 
     def restart_bird(self):
