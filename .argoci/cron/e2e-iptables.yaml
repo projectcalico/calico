@@ -340,7 +340,7 @@ steps:
       - name: beta-calico-yaml-iptables
         env:
           - name: K8S_VERSION
-            value: beta
+            value: beta-or-stable
           - name: MANIFEST_FILE
             value: calico.yaml
           - name: KUBE_PROXY_MODE
@@ -353,7 +353,7 @@ steps:
       - http-cache-proxy
     env:
       - name: K8S_VERSION
-        value: v1.31.3
+        value: stable-1.31
       - name: RKE_VERSION
         value: v1.7.1
     matrix:
@@ -670,6 +670,10 @@ steps:
         value: helmerator
       - name: K8S_E2E_FLAGS
         value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+      # The global default 192.168.0.0/16 overlaps the eksctl VPC CIDR, which
+      # breaks pod -> API server traffic on EKS with Calico CNI.
+      - name: IPV4_POD_CIDR
+        value: 172.16.0.0/16
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
