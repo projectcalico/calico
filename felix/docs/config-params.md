@@ -870,6 +870,7 @@ Chosen directory should match the directory used by the CNI plugin for PodStartu
 
 A list of CIDR's of external, non-Calico nodes from which VXLAN/IPIP overlay traffic
 will be allowed. By default, external tunneled traffic is blocked to reduce attack surface.
+Entries must be IPv4 CIDRs or IPv4 addresses.
 
 | Detail |   |
 | --- | --- |
