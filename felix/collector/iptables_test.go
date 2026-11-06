@@ -18,74 +18,147 @@ package collector
 
 import (
 	"errors"
-	"strings"
 	"testing"
+	"time"
 
-	"github.com/projectcalico/calico/felix/nfnetlink"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
-// A reader that cannot subscribe produces no rule hits and no policy verdicts for the lifetime of
-// the process, so Start must report the failure rather than looking like it succeeded.
-func TestNFLogReaderStartReportsSubscribeFailure(t *testing.T) {
-	subscribeErr := errors.New("no NFLOG for you")
+const (
+	ingressGroup = 1
+	egressGroup  = 2
+)
 
-	for _, tc := range []struct {
-		name string
-		// failOnGroup is the netlink group whose subscription fails.
-		failOnGroup int
-		wantInErr   string
-	}{
-		{"ingress subscription fails", 1, "ingress"},
-		{"egress subscription fails", 2, "egress"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			var subscribed []chan struct{}
-			withStubbedNflogSubscribe(t, func(gn int, _ int, _ chan map[nfnetlink.NflogPacketTuple]*nfnetlink.NflogPacketAggregate, doneC chan struct{}, _ bool) error {
-				if gn == tc.failOnGroup {
-					return subscribeErr
-				}
-				subscribed = append(subscribed, doneC)
-				return nil
-			})
-
-			err := NewNFLogReader(nil, 1, 2, 0, false).Start()
-			if err == nil {
-				t.Fatal("Start() returned nil after the subscription failed")
-			}
-			// A subscription that did succeed owns a netlink socket, which it only closes when
-			// its done channel does.
-			for _, doneC := range subscribed {
-				select {
-				case <-doneC:
-				default:
-					t.Error("Start() left a successful subscription running after the other one failed")
-				}
-			}
-			if !errors.Is(err, subscribeErr) {
-				t.Errorf("Start() error does not wrap the subscribe error: %v", err)
-			}
-			if !strings.Contains(err.Error(), tc.wantInErr) {
-				t.Errorf("Start() error %q does not say which direction failed (want %q)", err, tc.wantInErr)
-			}
-		})
+// A reader that isn't subscribed produces no rule hits or policy verdicts, so it must report not
+// ready and keep trying to subscribe, whether the subscribe call fails or a running subscription
+// does.
+func TestNFLogReaderMaintainsSubscriptions(t *testing.T) {
+	ha := health.NewHealthAggregator()
+	r, subscribeCalls := newStubbedNFLogReader(ha)
+	if err := r.Start(); err != nil {
+		t.Fatalf("Start() failed: %v", err)
 	}
+	t.Cleanup(r.Stop)
+
+	nextSubscribe(t, subscribeCalls[ingressGroup]).succeed()
+
+	nextSubscribe(t, subscribeCalls[egressGroup]).fail(errors.New("no NFLOG for you"))
+	expectReady(t, ha, false)
+
+	egress := nextSubscribe(t, subscribeCalls[egressGroup]).succeed()
+	eventuallyReady(t, ha)
+
+	egress <- errors.New("socket broke")
+	retry := nextSubscribe(t, subscribeCalls[egressGroup])
+	// The reader reports the failure before it resubscribes.
+	expectReady(t, ha, false)
+	retry.succeed()
+	eventuallyReady(t, ha)
+
+	r.Stop()
+	expectReady(t, ha, false)
 }
 
-func TestNFLogReaderStartSucceeds(t *testing.T) {
-	withStubbedNflogSubscribe(t, func(int, int, chan map[nfnetlink.NflogPacketTuple]*nfnetlink.NflogPacketAggregate, chan struct{}, bool) error {
-		return nil
-	})
-
-	r := NewNFLogReader(nil, 1, 2, 0, false)
+func TestNFLogReaderStartsOnce(t *testing.T) {
+	r, _ := newStubbedNFLogReader(nil)
 	if err := r.Start(); err != nil {
-		t.Fatalf("Start() failed with a working subscription: %v", err)
+		t.Fatalf("Start() failed: %v", err)
+	}
+	if err := r.Start(); err == nil {
+		t.Error("second Start() succeeded")
 	}
 	r.Stop()
+	if err := r.Start(); err == nil {
+		t.Error("Start() after Stop() succeeded")
+	}
 }
 
-func withStubbedNflogSubscribe(t *testing.T, stub func(int, int, chan map[nfnetlink.NflogPacketTuple]*nfnetlink.NflogPacketAggregate, chan struct{}, bool) error) {
+// newStubbedNFLogReader returns a reader whose subscribe calls are sent, per group, to the
+// returned channels for the test to answer.
+func newStubbedNFLogReader(ha *health.HealthAggregator) (*NFLogReader, map[int]chan subscribeCall) {
+	calls := map[int]chan subscribeCall{
+		ingressGroup: make(chan subscribeCall),
+		egressGroup:  make(chan subscribeCall),
+	}
+	r := NewNFLogReader(nil, ha, ingressGroup, egressGroup, 0, false)
+	r.retryInterval = time.Millisecond
+	r.subscribe = func(gn int, _ int, _ chan<- nflogAggregates, done <-chan struct{}, _ bool) (<-chan error, error) {
+		errStopped := errors.New("stopped")
+		call := subscribeCall{reply: make(chan subscribeReply)}
+		select {
+		case calls[gn] <- call:
+		case <-done:
+			return nil, errStopped
+		}
+		var reply subscribeReply
+		select {
+		case reply = <-call.reply:
+		case <-done:
+			return nil, errStopped
+		}
+		if reply.err != nil {
+			return nil, reply.err
+		}
+		// Like NflogSubscribe, report nil once done closes.
+		endC := make(chan error, 1)
+		go func() {
+			select {
+			case err := <-reply.failC:
+				endC <- err
+			case <-done:
+				endC <- nil
+			}
+		}()
+		return endC, nil
+	}
+	return r, calls
+}
+
+type subscribeCall struct {
+	reply chan subscribeReply
+}
+
+type subscribeReply struct {
+	err   error
+	failC chan error
+}
+
+// succeed lets the subscribe call succeed and returns a channel that fails the subscription.
+func (c subscribeCall) succeed() chan<- error {
+	failC := make(chan error, 1)
+	c.reply <- subscribeReply{failC: failC}
+	return failC
+}
+
+func (c subscribeCall) fail(err error) {
+	c.reply <- subscribeReply{err: err}
+}
+
+func nextSubscribe(t *testing.T, calls chan subscribeCall) subscribeCall {
 	t.Helper()
-	orig := subscribeToNflog
-	subscribeToNflog = stub
-	t.Cleanup(func() { subscribeToNflog = orig })
+	select {
+	case call := <-calls:
+		return call
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for the reader to subscribe")
+		return subscribeCall{}
+	}
+}
+
+func expectReady(t *testing.T, ha *health.HealthAggregator, want bool) {
+	t.Helper()
+	if got := ha.Summary().Ready; got != want {
+		t.Fatalf("health aggregator Ready = %v, want %v", got, want)
+	}
+}
+
+func eventuallyReady(t *testing.T, ha *health.HealthAggregator) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !ha.Summary().Ready {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for the reader to report ready")
+		}
+		time.Sleep(time.Millisecond)
+	}
 }

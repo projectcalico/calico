@@ -18,6 +18,7 @@ package nfnetlink
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"syscall"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink/nl"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/nfnetlink/nfnl"
 	"github.com/projectcalico/calico/felix/nfnetlink/pkt"
@@ -95,23 +97,71 @@ var (
 	rll = logrusr.NewRateLimitedLogger(logrusr.OptInterval(time.Minute))
 )
 
-func NflogSubscribe(groupNum int, bufSize int, ch chan<- map[NflogPacketTuple]*NflogPacketAggregate, done <-chan struct{}, includeConnTrack bool) error {
-	resChan, err := openAndReadNFNLSocket(groupNum, bufSize, done, 2*cap(ch), false, includeConnTrack)
-	if err != nil {
-		return err
-	}
-	parseAndAggregateFlowLogs(groupNum, resChan, ch)
-	return nil
-}
-
-func openAndReadNFNLSocket(
-	groupNum int, bufSize int, done <-chan struct{}, chanCap int, immediateFlush bool, includeConnTrack bool,
-) (chan [][]byte, error) {
-	sock, err := nl.Subscribe(syscall.NETLINK_NETFILTER)
+// NflogSubscribe subscribes to NFLOG group groupNum and sends aggregated packets to ch until done
+// is closed or the subscription fails.  It returns an error if the subscription can't be set up.
+// Otherwise, the returned channel receives the subscription's outcome once it has stopped sending
+// to ch: nil after done is closed, or the error that ended it.  ch is never closed, so the caller
+// can resubscribe with the same channel.
+func NflogSubscribe(
+	groupNum int,
+	bufSize int,
+	ch chan<- map[NflogPacketTuple]*NflogPacketAggregate,
+	done <-chan struct{},
+	includeConnTrack bool,
+) (<-chan error, error) {
+	resChan, receiveErrC, err := openAndReadNFNLSocket(groupNum, bufSize, done, 2*cap(ch), false, includeConnTrack)
 	if err != nil {
 		return nil, err
 	}
+	endC := make(chan error, 1)
+	go func() {
+		parseAndAggregateFlowLogs(groupNum, resChan, ch, done)
+		endC <- <-receiveErrC
+	}()
+	return endC, nil
+}
 
+// openAndReadNFNLSocket opens and configures an NFLOG socket, then reads from it in the background,
+// sending each batch of NFLOG messages to the returned data channel.  When reading stops, because
+// done was closed or the socket failed, it closes the socket, sends the outcome to the returned
+// error channel (nil if done was closed) and closes the data channel.
+func openAndReadNFNLSocket(
+	groupNum int, bufSize int, done <-chan struct{}, chanCap int, immediateFlush bool, includeConnTrack bool,
+) (<-chan [][]byte, <-chan error, error) {
+	sock, err := nl.Subscribe(syscall.NETLINK_NETFILTER)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := configureNflogSocket(sock, groupNum, bufSize, immediateFlush, includeConnTrack); err != nil {
+		sock.Close()
+		return nil, nil, err
+	}
+
+	readerExited := make(chan struct{})
+	go func() {
+		// Closing the socket is what unblocks a Receive when done closes.
+		select {
+		case <-done:
+		case <-readerExited:
+		}
+		sock.Close()
+	}()
+
+	// Channel to pass raw netlink messages for further processing. We keep it at
+	// twice the size of the processor's outgoing channel so that reading netlink
+	// messages from the socket can be buffered until they can be consumed.
+	resChan := make(chan [][]byte, chanCap)
+	errC := make(chan error, 1)
+	go func() {
+		defer close(resChan)
+		defer close(readerExited)
+		errC <- receiveNflogs(sock, groupNum, done, resChan)
+	}()
+
+	return resChan, errC, nil
+}
+
+func configureNflogSocket(sock *nl.NetlinkSocket, groupNum int, bufSize int, immediateFlush bool, includeConnTrack bool) error {
 	nlMsgType := nfnl.NFNL_SUBSYS_ULOG<<8 | nfnl.NFULNL_MSG_CONFIG
 	nlMsgFlags := syscall.NLM_F_REQUEST
 
@@ -124,7 +174,7 @@ func openAndReadNFNLSocket(
 	nfattr := nl.NewRtAttr(nfnl.NFULA_CFG_CMD, nflogcmd.Serialize())
 	req.AddData(nfattr)
 	if err := sock.Send(req); err != nil {
-		return nil, err
+		return err
 	}
 
 	// Globally bind NFLOG to the protocol family.
@@ -135,7 +185,7 @@ func openAndReadNFNLSocket(
 	nfattr = nl.NewRtAttr(nfnl.NFULA_CFG_CMD, nflogcmd.Serialize())
 	req.AddData(nfattr)
 	if err := sock.Send(req); err != nil {
-		return nil, err
+		return err
 	}
 
 	// Bind our socket to the group number so we get the expected messages.
@@ -146,7 +196,7 @@ func openAndReadNFNLSocket(
 	nfattr = nl.NewRtAttr(nfnl.NFULA_CFG_CMD, nflogcmd.Serialize())
 	req.AddData(nfattr)
 	if err := sock.Send(req); err != nil {
-		return nil, err
+		return err
 	}
 
 	// Set the packet copy mode; we need to receive a prefix of the packet.
@@ -157,7 +207,7 @@ func openAndReadNFNLSocket(
 	nfattr = nl.NewRtAttr(nfnl.NFULA_CFG_MODE, nflogcfg.Serialize())
 	req.AddData(nfattr)
 	if err := sock.Send(req); err != nil {
-		return nil, err
+		return err
 	}
 
 	if includeConnTrack {
@@ -170,7 +220,7 @@ func openAndReadNFNLSocket(
 		nfattr = nl.NewRtAttr(nfnl.NFULA_CFG_FLAGS, nflogct.Serialize())
 		req.AddData(nfattr)
 		if err := sock.Send(req); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
@@ -189,7 +239,7 @@ func openAndReadNFNLSocket(
 	nfattr = nl.NewRtAttr(nfnl.NFULA_CFG_NLBUFSIZ, nflogbufsiz.Serialize())
 	req.AddData(nfattr)
 	if err := sock.Send(req); err != nil {
-		return nil, err
+		return err
 	}
 
 	if immediateFlush {
@@ -202,177 +252,180 @@ func openAndReadNFNLSocket(
 		nfattr = nl.NewRtAttr(nfnl.NFULA_CFG_TIMEOUT, timeout.Serialize())
 		req.AddData(nfattr)
 		if err := sock.Send(req); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	go func() {
-		<-done
-		sock.Close()
-	}()
-
-	// Channel to pass raw netlink messages for further processing. We keep it at
-	// twice the size of the processor's outgoing channel so that reading netlink
-	// messages from the socket can be buffered until they can be consumed.
-	resChan := make(chan [][]byte, chanCap)
-	// Start a goroutine for receiving netlink messages from the kernel.
-	go func() {
-		defer close(resChan)
-		logCtx := log.WithFields(log.Fields{
-			"groupNum": groupNum,
-		})
-		groupNumStr := fmt.Sprint(groupNum)
-		msgsReceived := counterVecMessagesReceived.WithLabelValues(groupNumStr)
-		nflogsReceived := counterVecNFLOGSReceived.WithLabelValues(groupNumStr)
-		numOverruns := counterVecBufferOverruns.WithLabelValues(groupNumStr)
-		chanWait := counterVecChanWaitTime.WithLabelValues(groupNumStr)
-		var lastChanDelay time.Duration
-
-	Recvloop:
-		for {
-			var res [][]byte
-			msgs, _, err := sock.Receive()
-			if err != nil {
-				select {
-				case <-done:
-					// Closing done closes the socket, which is what failed the Receive.
-					return
-				default:
-				}
-				switch err := err.(type) {
-				case syscall.Errno:
-					if err == syscall.ENOBUFS {
-						logCtx.WithField("chanDelay", lastChanDelay).Warnf(
-							"NFLOG buffer overrun (ENOBUFS), some NFLOG messages lost.")
-						numOverruns.Inc()
-						continue
-					} else if err.Temporary() {
-						logCtx.Warnf("NflogSubscribe Receive: %v", err)
-						continue
-					}
-				default:
-					logCtx.Fatalf("NflogSubscribe Receive: %v", err)
-				}
-			}
-			msgsReceived.Inc()
-			nflogsReceived.Add(float64(len(msgs)))
-			for _, m := range msgs {
-				mType := m.Header.Type
-				if mType == syscall.NLMSG_DONE {
-					break
-				}
-				if mType == syscall.NLMSG_ERROR {
-					native := binary.LittleEndian
-					err := int32(native.Uint32(m.Data[0:4]))
-					logCtx.Warnf("NLMSG_ERROR: %v", syscall.Errno(-err))
-					continue Recvloop
-				}
-				res = append(res, m.Data)
-			}
-			chanWaitStart := time.Now()
-			resChan <- res
-			lastChanDelay = time.Since(chanWaitStart)
-			chanWait.Add(lastChanDelay.Seconds())
-		}
-	}()
-
-	return resChan, nil
+	return nil
 }
 
-func parseAndAggregateFlowLogs(groupNum int, resChan <-chan [][]byte, ch chan<- map[NflogPacketTuple]*NflogPacketAggregate) {
-	// Start another goroutine for parsing netlink messages into nflog objects
-	go func() {
-		defer close(ch)
-		logCtx := rll.WithFields(log.Fields{
-			"groupNum": groupNum,
-		})
+// nflogSocket is the part of *nl.NetlinkSocket that receiveNflogs uses.
+type nflogSocket interface {
+	Receive() ([]syscall.NetlinkMessage, *unix.SockaddrNetlink, error)
+}
 
-		groupNumStr := fmt.Sprint(groupNum)
-		numParseErrors := counterVecParseErrors.WithLabelValues(groupNumStr)
-		numAggregatesCreated := counterVecAggregatesCreated.WithLabelValues(groupNumStr)
-		numAggregatesFlushed := counterVecAggregatesFlushed.WithLabelValues(groupNumStr)
+// receiveNflogs sends each batch of NFLOG messages from sock to resChan.  It returns nil once done
+// is closed, or the error that broke the socket.
+func receiveNflogs(sock nflogSocket, groupNum int, done <-chan struct{}, resChan chan<- [][]byte) error {
+	// A limiter of our own, so that this socket's errors aren't hidden by parse errors.
+	logCtx := logrusr.NewRateLimitedLogger(logrusr.OptInterval(time.Minute)).WithField("groupNum", groupNum)
+	groupNumStr := fmt.Sprint(groupNum)
+	msgsReceived := counterVecMessagesReceived.WithLabelValues(groupNumStr)
+	nflogsReceived := counterVecNFLOGSReceived.WithLabelValues(groupNumStr)
+	numOverruns := counterVecBufferOverruns.WithLabelValues(groupNumStr)
+	chanWait := counterVecChanWaitTime.WithLabelValues(groupNumStr)
+	var lastChanDelay time.Duration
 
-		// We batch NFLOG objects and send them to the subscriber every
-		// "AggregationDuration" time interval.
-		sendTicker := time.NewTicker(AggregationDuration)
-		defer sendTicker.Stop()
-
-		// Batching is done like so:
-		// For each NflogPacketTuple if it's a prefix we've already seen we update
-		// packet and byte counters on exising NflogPrefix and discard the parsed
-		// packet.
-		aggregate := make(map[NflogPacketTuple]*NflogPacketAggregate)
-	loop:
-		for {
+Recvloop:
+	for {
+		var res [][]byte
+		msgs, _, err := sock.Receive()
+		if err != nil {
 			select {
-			case res, ok := <-resChan:
-				if !ok {
-					logCtx.Info("parseAndAggregateFlowLogs: result channel closed.")
-					break loop
-				}
-				for _, m := range res {
-					msg := nfnl.DeserializeNfGenMsg(m)
-					nflogPacket, err := parseNflog(m[msg.Len():])
-					if err != nil {
-						logCtx.Warnf("Error parsing NFLOG %v", err)
-						numParseErrors.Inc()
-						continue
-					}
-					var pktAggr *NflogPacketAggregate
-					updatePrefix := true
-					pktAggr, seen := aggregate[nflogPacket.Tuple]
-					if seen {
-						for i, prefix := range pktAggr.Prefixes {
-							if prefix.Equals(&nflogPacket.Prefix) {
-								prefix.Packets++
-								prefix.Bytes += nflogPacket.Bytes
-								pktAggr.Prefixes[i] = prefix
-								updatePrefix = false
-								break
-							}
-						}
-						// We reached here, so we didn't find a prefix. Appending this prefix
-						// is handled below.
-					} else {
-						pktAggr = &NflogPacketAggregate{
-							Tuple: nflogPacket.Tuple,
-						}
-						numAggregatesCreated.Inc()
-					}
-					if updatePrefix {
-						pktAggr.Prefixes = append(pktAggr.Prefixes, nflogPacket.Prefix)
-						aggregate[nflogPacket.Tuple] = pktAggr
-					}
+			case <-done:
+				// Closing done closes the socket, which is what failed the Receive.
+				return nil
+			default:
+			}
+			if errors.Is(err, syscall.ENOBUFS) {
+				logCtx.WithField("chanDelay", lastChanDelay).Warn(
+					"NFLOG buffer overrun (ENOBUFS), some NFLOG messages lost.")
+				numOverruns.Inc()
+				continue
+			}
+			if errno, ok := errors.AsType[syscall.Errno](err); ok && errno.Temporary() {
+				logCtx.WithError(err).Warn("Temporary error receiving from NFLOG socket.")
+				continue
+			}
+			return fmt.Errorf("receiving from NFLOG socket: %w", err)
+		}
+		msgsReceived.Inc()
+		nflogsReceived.Add(float64(len(msgs)))
+		for _, m := range msgs {
+			mType := m.Header.Type
+			if mType == syscall.NLMSG_DONE {
+				break
+			}
+			if mType == syscall.NLMSG_ERROR {
+				native := binary.LittleEndian
+				err := int32(native.Uint32(m.Data[0:4]))
+				logCtx.Warnf("NLMSG_ERROR: %v", syscall.Errno(-err))
+				continue Recvloop
+			}
+			res = append(res, m.Data)
+		}
+		if len(res) == 0 {
+			continue
+		}
+		chanWaitStart := time.Now()
+		resChan <- res
+		lastChanDelay = time.Since(chanWaitStart)
+		chanWait.Add(lastChanDelay.Seconds())
+	}
+}
 
-					// Copy across any pre-DNAT info, if newly discovered through a CT message.
-					if !pktAggr.IsDNAT && nflogPacket.IsDNAT {
-						pktAggr.IsDNAT = true
-						pktAggr.OriginalTuple = nflogPacket.OriginalTuple
-					}
-				}
-			case <-sendTicker.C:
-				if len(aggregate) == 0 {
+// parseAndAggregateFlowLogs parses NFLOG messages from resChan and sends aggregates of them to ch
+// every AggregationDuration.  It returns once resChan is closed and it has sent the final
+// aggregate, which it drops if done is closed.
+func parseAndAggregateFlowLogs(
+	groupNum int,
+	resChan <-chan [][]byte,
+	ch chan<- map[NflogPacketTuple]*NflogPacketAggregate,
+	done <-chan struct{},
+) {
+	logCtx := rll.WithFields(log.Fields{
+		"groupNum": groupNum,
+	})
+
+	groupNumStr := fmt.Sprint(groupNum)
+	numParseErrors := counterVecParseErrors.WithLabelValues(groupNumStr)
+	numAggregatesCreated := counterVecAggregatesCreated.WithLabelValues(groupNumStr)
+	numAggregatesFlushed := counterVecAggregatesFlushed.WithLabelValues(groupNumStr)
+
+	// We batch NFLOG objects and send them to the subscriber every
+	// "AggregationDuration" time interval.
+	sendTicker := time.NewTicker(AggregationDuration)
+	defer sendTicker.Stop()
+
+	// Batching is done like so:
+	// For each NflogPacketTuple if it's a prefix we've already seen we update
+	// packet and byte counters on exising NflogPrefix and discard the parsed
+	// packet.
+	aggregate := make(map[NflogPacketTuple]*NflogPacketAggregate)
+loop:
+	for {
+		select {
+		case res, ok := <-resChan:
+			if !ok {
+				logCtx.Info("parseAndAggregateFlowLogs: result channel closed.")
+				break loop
+			}
+			for _, m := range res {
+				msg := nfnl.DeserializeNfGenMsg(m)
+				nflogPacket, err := parseNflog(m[msg.Len():])
+				if err != nil {
+					logCtx.Warnf("Error parsing NFLOG %v", err)
+					numParseErrors.Inc()
 					continue
 				}
+				var pktAggr *NflogPacketAggregate
+				updatePrefix := true
+				pktAggr, seen := aggregate[nflogPacket.Tuple]
+				if seen {
+					for i, prefix := range pktAggr.Prefixes {
+						if prefix.Equals(&nflogPacket.Prefix) {
+							prefix.Packets++
+							prefix.Bytes += nflogPacket.Bytes
+							pktAggr.Prefixes[i] = prefix
+							updatePrefix = false
+							break
+						}
+					}
+					// We reached here, so we didn't find a prefix. Appending this prefix
+					// is handled below.
+				} else {
+					pktAggr = &NflogPacketAggregate{
+						Tuple: nflogPacket.Tuple,
+					}
+					numAggregatesCreated.Inc()
+				}
+				if updatePrefix {
+					pktAggr.Prefixes = append(pktAggr.Prefixes, nflogPacket.Prefix)
+					aggregate[nflogPacket.Tuple] = pktAggr
+				}
 
-				// Don't block when trying to send to slow receivers.
-				// In case of slow receivers, simply continue aggregating and
-				// retry sending next time around.
-				select {
-				case ch <- aggregate:
-					numAggregatesFlushed.Add(float64(len(aggregate)))
-					aggregate = make(map[NflogPacketTuple]*NflogPacketAggregate)
-				default:
+				// Copy across any pre-DNAT info, if newly discovered through a CT message.
+				if !pktAggr.IsDNAT && nflogPacket.IsDNAT {
+					pktAggr.IsDNAT = true
+					pktAggr.OriginalTuple = nflogPacket.OriginalTuple
 				}
 			}
+		case <-sendTicker.C:
+			if len(aggregate) == 0 {
+				continue
+			}
+
+			// Don't block when trying to send to slow receivers.
+			// In case of slow receivers, simply continue aggregating and
+			// retry sending next time around.
+			select {
+			case ch <- aggregate:
+				numAggregatesFlushed.Add(float64(len(aggregate)))
+				aggregate = make(map[NflogPacketTuple]*NflogPacketAggregate)
+			default:
+			}
 		}
-		if len(aggregate) > 0 {
-			logCtx.Info("parseAndAggregateFlowLogs: sending final aggregate.")
-			ch <- aggregate
+	}
+	if len(aggregate) > 0 {
+		logCtx.Info("parseAndAggregateFlowLogs: sending final aggregate.")
+		select {
+		case ch <- aggregate:
 			numAggregatesFlushed.Add(float64(len(aggregate)))
+		case <-done:
+			// Nobody is reading ch any more.
 		}
-		logCtx.Info("parseAndAggregateFlowLogs: done.")
-	}()
+	}
+	logCtx.Info("parseAndAggregateFlowLogs: done.")
 }
 
 func parseNflog(m []byte) (NflogPacket, error) {
