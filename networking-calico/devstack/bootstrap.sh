@@ -1,7 +1,5 @@
 #!/bin/bash
-# Copyright 2015 Metaswitch Networks
-# All Rights Reserved.
-# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2025 Tigera, Inc. All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain

@@ -1545,7 +1545,7 @@ var branchChangedPaths = []string{
 	chartsDir,
 	manifests.DirName,
 	".semaphore",
-	"test-tools/mocknode",
+	"test-tools",
 }
 
 // CutBranch cuts the release branch off main and advances main to the next
@@ -1637,8 +1637,8 @@ func (r *CalicoManager) cutPlan() (*branch.CutPlan, error) {
 func derivedBranchEdits(derived, stream string) []branch.Edit {
 	return []branch.Edit{
 		{File: "test-tools/mocknode/mock-node.yaml", Pattern: `([a-zA-Z .]+)([a-zA-Z.]+/mock-node:)[^[:space:]]+`, Replacement: fmt.Sprintf(`${1}${2}%s`, derived)},
-		{File: "process/testing/aso/export-env.sh", Pattern: `export RELEASE_STREAM="\$\{RELEASE_STREAM:=master\}"`, Replacement: fmt.Sprintf(`export RELEASE_STREAM="${RELEASE_STREAM:=%s}"`, stream)},
-		{File: "process/testing/aso/install-calico.sh", Pattern: `: \$\{RELEASE_STREAM:="master"\} # Default to master`, Replacement: fmt.Sprintf(`: ${RELEASE_STREAM:="%s"} # Default to %s`, stream, stream)},
+		{File: "process/testing/aso/export-env.sh", Pattern: `export RELEASE_STREAM="\$\{RELEASE_STREAM:=[a-zA-Z0-9.-]+\}"`, Replacement: fmt.Sprintf(`export RELEASE_STREAM="$${RELEASE_STREAM:=%s}"`, stream)},
+		{File: "process/testing/aso/install-calico.sh", Pattern: `: \$\{RELEASE_STREAM:="[a-zA-Z0-9.-]+"\} # Default to [a-zA-Z0-9.-]+`, Replacement: fmt.Sprintf(`: $${RELEASE_STREAM:="%s"} # Default to %s`, stream, stream)},
 	}
 }
 

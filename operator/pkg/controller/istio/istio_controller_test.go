@@ -16,6 +16,7 @@ package istio
 
 import (
 	"context"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,6 +28,7 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -46,6 +48,8 @@ import (
 	"github.com/projectcalico/calico/operator/test"
 )
 
+const testClusterGUID = "0123456789abcdef0123456789abcdef"
+
 var _ = Describe("Istio controller tests", func() {
 	var (
 		cli                 client.Client
@@ -54,6 +58,7 @@ var _ = Describe("Istio controller tests", func() {
 		mockStatus          *status.MockStatus
 		installation        *operatorv1.Installation
 		istioCR             *operatorv1.Istio
+		clusterInfo         *v3.ClusterInformation
 		objTrackerWithCalls test.ObjectTrackerWithCalls
 		replicas            int32
 	)
@@ -116,6 +121,15 @@ var _ = Describe("Istio controller tests", func() {
 			},
 		}
 
+		clusterInfo = &v3.ClusterInformation{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "default",
+			},
+			Spec: v3.ClusterInformationSpec{
+				ClusterGUID: testClusterGUID,
+			},
+		}
+
 		replicas = 2
 	})
 
@@ -123,6 +137,7 @@ var _ = Describe("Istio controller tests", func() {
 		// Clear any existing resourceVersion to avoid creation conflicts
 		Expect(cli.Create(ctx, installation)).NotTo(HaveOccurred())
 		Expect(cli.Create(ctx, istioCR)).NotTo(HaveOccurred())
+		Expect(cli.Create(ctx, clusterInfo)).NotTo(HaveOccurred())
 	}
 
 	Context("Reconcile tests", func() {
@@ -253,6 +268,102 @@ var _ = Describe("Istio controller tests", func() {
 		})
 	})
 
+	Context("Istio CRD tests", func() {
+		It("updates an Istio CRD left by an earlier release to the bundled version", func() {
+			createResources()
+			Expect(cli.Create(ctx, &apiextensionsv1.CustomResourceDefinition{
+				ObjectMeta: metav1.ObjectMeta{Name: "sidecars.networking.istio.io"},
+				Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+					Group: "networking.istio.io",
+					Names: apiextensionsv1.CustomResourceDefinitionNames{Plural: "sidecars", Kind: "Sidecar"},
+					Scope: apiextensionsv1.NamespaceScoped,
+					Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+						{Name: "v1alpha3", Served: true, Storage: true},
+					},
+				},
+			})).NotTo(HaveOccurred())
+
+			r := &ReconcileIstio{Client: cli, scheme: scheme, provider: operatorv1.ProviderNone, status: mockStatus}
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			crd := &apiextensionsv1.CustomResourceDefinition{}
+			Expect(cli.Get(ctx, client.ObjectKey{Name: "sidecars.networking.istio.io"}, crd)).NotTo(HaveOccurred())
+			var versions []string
+			for _, v := range crd.Spec.Versions {
+				versions = append(versions, v.Name)
+				Expect(v.Schema).NotTo(BeNil(), "version %s has no schema", v.Name)
+			}
+			Expect(versions).To(ConsistOf("v1", "v1alpha3", "v1beta1"))
+		})
+	})
+
+	Context("Gateway API CRD version tests", func() {
+		var r *ReconcileIstio
+
+		gatewayAPICRD := func(name string, annotations map[string]string) *apiextensionsv1.CustomResourceDefinition {
+			return &apiextensionsv1.CustomResourceDefinition{
+				ObjectMeta: metav1.ObjectMeta{Name: name, Annotations: annotations},
+			}
+		}
+		bundle := func(v string) map[string]string {
+			return map[string]string{"gateway.networking.k8s.io/bundle-version": v}
+		}
+		warning := func() string {
+			for _, call := range mockStatus.Calls {
+				if call.Method == "SetWarning" && call.Arguments.String(0) == gatewayAPIWarningKey {
+					return call.Arguments.String(1)
+				}
+			}
+			return ""
+		}
+
+		BeforeEach(func() {
+			createResources()
+			r = &ReconcileIstio{Client: cli, scheme: scheme, provider: operatorv1.ProviderNone, status: mockStatus}
+		})
+
+		reconcileIstio := func() {
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).ShouldNot(HaveOccurred())
+		}
+
+		It("clears the warning when the operator creates the bundled CRDs", func() {
+			reconcileIstio()
+			Expect(warning()).To(BeEmpty())
+			mockStatus.AssertCalled(GinkgoT(), "ClearWarning", gatewayAPIWarningKey)
+		})
+
+		It("warns about each CRD below the version Istio needs, and not about the others", func() {
+			Expect(cli.Create(ctx, gatewayAPICRD("tlsroutes.gateway.networking.k8s.io", bundle("v1.4.1")))).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, gatewayAPICRD("tcproutes.gateway.networking.k8s.io", bundle("v1.5.1")))).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, gatewayAPICRD("grpcroutes.gateway.networking.k8s.io", bundle("v1.3.0")))).NotTo(HaveOccurred())
+			reconcileIstio()
+
+			msg := warning()
+			Expect(msg).To(ContainSubstring("tlsroutes.gateway.networking.k8s.io is at Gateway API v1.4.1, Istio needs v1.5.0 or newer"))
+			Expect(msg).To(ContainSubstring("tcproutes.gateway.networking.k8s.io is at Gateway API v1.5.1, Istio needs v1.6.0 or newer"))
+			Expect(msg).NotTo(ContainSubstring("grpcroutes"))
+			Expect(msg).To(ContainSubstring("crdManagement to Reconcile"))
+		})
+
+		It("accepts a pre-release of the minimum version, as Istio does", func() {
+			Expect(cli.Create(ctx, gatewayAPICRD("tcproutes.gateway.networking.k8s.io", bundle("v1.6.0-rc.1")))).NotTo(HaveOccurred())
+			reconcileIstio()
+			Expect(warning()).To(BeEmpty())
+		})
+
+		It("warns about a CRD without a usable bundle version", func() {
+			Expect(cli.Create(ctx, gatewayAPICRD("tlsroutes.gateway.networking.k8s.io", nil))).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, gatewayAPICRD("tcproutes.gateway.networking.k8s.io", bundle("latest")))).NotTo(HaveOccurred())
+			reconcileIstio()
+
+			msg := warning()
+			Expect(msg).To(ContainSubstring("tlsroutes.gateway.networking.k8s.io has no gateway.networking.k8s.io/bundle-version annotation"))
+			Expect(msg).To(ContainSubstring(`tcproutes.gateway.networking.k8s.io has bundle version "latest"`))
+		})
+	})
+
 	Context("Status tests", func() {
 		BeforeEach(func() {
 			createResources()
@@ -355,6 +466,27 @@ var _ = Describe("Istio controller tests", func() {
 				return errors.IsNotFound(err)
 			}).Should(BeTrue())
 		})
+		// After an operator restart the first reconcile can already see a deleting
+		// CR, and a dormant status manager would not report how its cleanup goes.
+		It("enables the status while the CR is deleting", func() {
+			r := &ReconcileIstio{
+				Client:   cli,
+				scheme:   scheme,
+				provider: operatorv1.ProviderNone,
+				status:   mockStatus,
+			}
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).NotTo(HaveOccurred())
+			current := &operatorv1.Istio{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, current)).NotTo(HaveOccurred())
+			Expect(cli.Delete(ctx, current)).NotTo(HaveOccurred())
+			mockStatus.Calls = nil
+
+			_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).NotTo(HaveOccurred())
+
+			mockStatus.AssertCalled(GinkgoT(), "OnCRFound")
+		})
 	})
 
 	Context("Default value tests", func() {
@@ -367,6 +499,7 @@ var _ = Describe("Istio controller tests", func() {
 			}
 			Expect(cli.Create(ctx, installation)).NotTo(HaveOccurred())
 			Expect(cli.Create(ctx, istioNoDSCP)).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, clusterInfo)).NotTo(HaveOccurred())
 
 			r := &ReconcileIstio{
 				Client:   cli,
@@ -405,6 +538,7 @@ var _ = Describe("Istio controller tests", func() {
 			}
 			Expect(cli.Create(ctx, installation)).NotTo(HaveOccurred())
 			Expect(cli.Create(ctx, istioCustomDSCP)).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, clusterInfo)).NotTo(HaveOccurred())
 
 			r := &ReconcileIstio{
 				Client:   cli,
@@ -696,6 +830,7 @@ var _ = Describe("Istio controller tests", func() {
 			}
 			Expect(cli.Create(ctx, installation)).NotTo(HaveOccurred())
 			Expect(cli.Create(ctx, istioCR)).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, clusterInfo)).NotTo(HaveOccurred())
 
 			r := &ReconcileIstio{
 				Client:   cli,
@@ -806,4 +941,98 @@ var _ = Describe("Istio controller tests", func() {
 		})
 
 	})
+
+	Context("Cluster ID tests", func() {
+		var r *ReconcileIstio
+
+		BeforeEach(func() {
+			Expect(cli.Create(ctx, installation)).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, istioCR)).NotTo(HaveOccurred())
+			r = &ReconcileIstio{
+				Client:   cli,
+				scheme:   scheme,
+				provider: operatorv1.ProviderNone,
+				status:   mockStatus,
+			}
+		})
+
+		It("should render the clusterGUID as the istiod cluster ID", func() {
+			Expect(cli.Create(ctx, clusterInfo)).NotTo(HaveOccurred())
+
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			istiodDeploy := &appsv1.Deployment{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, istiodDeploy)).NotTo(HaveOccurred())
+			Expect(istiodDeploy.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "CLUSTER_ID",
+				Value: testClusterGUID,
+			}))
+			mockStatus.AssertCalled(GinkgoT(), "ClearDegraded")
+		})
+
+		It("should degrade and requeue when ClusterInformation is missing", func() {
+			result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(result.RequeueAfter).NotTo(BeZero())
+
+			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceNotFound,
+				mock.MatchedBy(func(msg string) bool { return strings.Contains(msg, "ClusterInformation") }),
+				mock.Anything, mock.Anything)
+			mockStatus.AssertNotCalled(GinkgoT(), "ClearDegraded")
+
+			istiodDeploy := &appsv1.Deployment{}
+			Expect(errors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, istiodDeploy))).To(BeTrue())
+		})
+
+		DescribeTable("should degrade without rendering when the clusterGUID is invalid",
+			func(guid string, problem string) {
+				clusterInfo.Spec.ClusterGUID = guid
+				Expect(cli.Create(ctx, clusterInfo)).NotTo(HaveOccurred())
+
+				_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+				Expect(err).ShouldNot(HaveOccurred())
+
+				mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceValidationError,
+					mock.MatchedBy(func(msg string) bool { return strings.Contains(msg, problem) }),
+					mock.Anything, mock.Anything)
+				mockStatus.AssertNotCalled(GinkgoT(), "ClearDegraded")
+
+				istiodDeploy := &appsv1.Deployment{}
+				Expect(errors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, istiodDeploy))).To(BeTrue())
+			},
+			Entry("empty", "", "clusterGUID is empty"),
+			Entry("too long", strings.Repeat("a", 234), "234 characters long, the maximum is 233"),
+			Entry("uppercase", "Kubernetes", "must match"),
+			Entry("leading hyphen", "-abc", "must match"),
+			Entry("trailing dot", "abc.", "must match"),
+			Entry("underscore", "a_b", "must match"),
+		)
+	})
 })
+
+var _ = DescribeTable("validateClusterGUID",
+	func(guid string, valid bool) {
+		err := validateClusterGUID(guid)
+		if valid {
+			Expect(err).NotTo(HaveOccurred())
+		} else {
+			Expect(err).To(HaveOccurred())
+		}
+	},
+	Entry("libcalico-go hex GUID", testClusterGUID, true),
+	Entry("single character", "a", true),
+	Entry("digits only", "42", true),
+	Entry("hyphens and dots inside", "us-west.cluster-1", true),
+	Entry("maximum length", strings.Repeat("a", 233), true),
+	Entry("empty", "", false),
+	Entry("one over the maximum length", strings.Repeat("a", 234), false),
+	Entry("uppercase", "Kubernetes", false),
+	Entry("leading hyphen", "-a", false),
+	Entry("trailing hyphen", "a-", false),
+	Entry("leading dot", ".a", false),
+	Entry("trailing dot", "a.", false),
+	Entry("underscore", "a_b", false),
+	Entry("space", "a b", false),
+	Entry("slash", "a/b", false),
+)

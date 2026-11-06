@@ -39,6 +39,8 @@ type Features struct {
 	// NFTablesSupported controls if we can use the nftables for purposes other than policy
 	// programming.
 	NFTablesSupported bool
+	// VXLANVNIFilter is true if a collect-metadata VXLAN device can filter the VNIs it accepts.
+	VXLANVNIFilter bool
 }
 
 type FeatureDetectorIface interface {

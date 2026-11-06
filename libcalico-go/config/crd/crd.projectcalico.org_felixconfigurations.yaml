@@ -991,8 +991,15 @@ spec:
                     anyOf:
                       - type: integer
                       - type: string
+                    maxLength: 11
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
+                    x-kubernetes-validations:
+                      - message: port ranges must be written low:high
+                        reason: FieldValueInvalid
+                        rule:
+                          type(self) != string || !self.contains(':') || int(self.split(':')[0])
+                          <= int(self.split(':')[1])
                   maxItems: 7
                   type: array
                 liveMigrationRouteConvergenceTime:

@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	v1 "k8s.io/api/core/v1"
@@ -356,7 +357,11 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Assert if the host side route is programmed correctly.
 			nlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
 			Expect(err).ShouldNot(HaveOccurred())
-			defer nlHandle.Close()
+			defer func() {
+				if err := nlHandle.Close(); err != nil {
+					log.WithError(err).Warn("Failed to close netlink handle")
+				}
+			}()
 			hostRoutes, err := netlinkutils.RouteListRetryEINTR(nlHandle, hostVeth, syscall.AF_INET)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(hostRoutes[0]).Should(Equal(netlink.Route{
