@@ -41,8 +41,12 @@ export KUBECONFIG=$BZ_LOCAL/kubeconfig
 export PATH=$PATH:$BZ_LOCAL/bin
 
 # Modern OSes no longer include br_netfilter by default, which breaks flannel.
-echo "[INFO] installing br_netfilter..."
-sudo modprobe br_netfilter
+# Only the kind cell runs flannel on this host, and the runner image has no
+# modprobe, so a failed load warns rather than ending the job.
+if [[ ! -d /sys/module/br_netfilter ]]; then
+  echo "[INFO] installing br_netfilter..."
+  sudo modprobe br_netfilter || echo "[WARN] could not load br_netfilter on the runner; only a kind cluster needs it here"
+fi
 
 mkdir -p "$BZ_LOGS_DIR"
 cd "${BZ_HOME}"

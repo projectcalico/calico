@@ -325,7 +325,7 @@ steps:
       - http-cache-proxy
     env:
       - name: CLUSTER_IMAGE
-        value: ami-02f147dfb8be58a10
+        value: 309956199498/RHEL-8.10.0_HVM-20261013-x86_64-2315-Hourly2-GP3
       - name: CLUSTER_NODES
         value: "3"
       - name: ENABLE_EXTERNAL_NODE
