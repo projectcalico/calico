@@ -1,26 +1,52 @@
 #!/bin/bash
 
-# Load pre-built Docker images from GCS cache, if available.
+# Load pre-built Docker images from the S3 cache, if available.
 # Touch marker files so Make skips rebuilding.
+#
+# Usage: load-cached-images [component...]
+#
+# The optional component names (calico, node, whisker; default all three) are
+# the images the calling block declares as "Build: <x> image" dependencies.
+# They matter only when the cache turns up empty. A build without S3
+# credentials runs read-only (see .semaphore/s3-cmd), so the producer blocks
+# had nowhere to upload their tarballs and there is no cache to hit; the
+# declared images are built from source instead. Jobs invoke the *-no-prereqs
+# make targets, which never build an image themselves, so without this they
+# fail on a "manifest unknown" from Docker.
+#
+# With credentials a miss is left alone, as before: it means the producer block
+# for that image did not run (its change_in trigger did not fire), and a job
+# that does not list it as a dependency is not expected to need it.
 
 set -euo pipefail
 
 ARCH=${ARCH:-amd64}
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
-load_image() {
-    local name=$1
-    local gcs_path=$2
-    local marker=$3
+REQUESTED=("$@")
+if [ ${#REQUESTED[@]} -eq 0 ]; then
+    REQUESTED=(calico node whisker)
+fi
 
-    if ! gcloud storage cp "${GCS_WORKFLOW_DIR}/${gcs_path}" "/tmp/${gcs_path}" 2>/dev/null; then
-        echo "No cached ${name} image found, will build from source."
+load_image() {
+    local component=$1
+    local name=$2
+    local s3_path=$3
+    local marker=$4
+
+    if ! "${REPO_ROOT}/.semaphore/s3-cmd" cp "${S3_WORKFLOW_DIR}/${s3_path}" "/tmp/${s3_path}" 2>/dev/null; then
+        if have_credentials || ! was_requested "$component"; then
+            echo "No cached ${name} image found; leaving Make to build it if a target needs it."
+            return
+        fi
+        echo "No cached ${name} image (credential-less build); building it from source."
+        build_image "$component" "$marker"
         return
     fi
 
     echo "Loading cached ${name} image..."
-    local tar_path="/tmp/${gcs_path%.zst}"
-    zstd -d --rm -o "${tar_path}" "/tmp/${gcs_path}"
+    local tar_path="/tmp/${s3_path%.zst}"
+    zstd -d --rm -o "${tar_path}" "/tmp/${s3_path}"
     docker load -i "${tar_path}"
     rm -f "${tar_path}"
 
@@ -30,6 +56,36 @@ load_image() {
     fi
 }
 
-load_image "calico/calico"  "calico-image.tar.zst"  "${REPO_ROOT}/cmd/calico/.image.created-${ARCH}"
-load_image "calico/node"    "node-image.tar.zst"    "${REPO_ROOT}/node/.image.created-${ARCH}"
-load_image "calico/whisker" "whisker-image.tar.zst" "${REPO_ROOT}/whisker/.image.created-${ARCH}"
+# True when the S3 credentials are present. Mirrors .semaphore/s3-cmd, which
+# skips uploads without them — the reason the cache can be empty here.
+have_credentials() {
+    [[ -n "${CALICO_S3_ACCESS_KEY:-}" && -n "${CALICO_S3_SECRET_KEY:-}" ]]
+}
+
+was_requested() {
+    local want=$1 component
+    for component in "${REQUESTED[@]}"; do
+        [[ "$component" == "$want" ]] && return 0
+    done
+    return 1
+}
+
+# Build a component's image through the .image.created marker rule in
+# lib.Makefile, the same rule the producer block builds it with.
+build_image() {
+    local component=$1
+    local marker=$2
+
+    # node's Dockerfile takes the patched nftables RPMs from a local image. Its
+    # build would produce that image from scratch (~20 min); pulling the
+    # published one first is much cheaper when it exists.
+    if [ "$component" = node ]; then
+        "${REPO_ROOT}/.semaphore/scripts/load-nft-rpms.sh" "$ARCH"
+    fi
+
+    make -C "${REPO_ROOT}" "$marker" ARCH="$ARCH"
+}
+
+load_image calico  "calico/calico"  "calico-image.tar.zst"  "${REPO_ROOT}/cmd/calico/.image.created-${ARCH}"
+load_image node    "calico/node"    "node-image.tar.zst"    "${REPO_ROOT}/node/.image.created-${ARCH}"
+load_image whisker "calico/whisker" "whisker-image.tar.zst" "${REPO_ROOT}/whisker/.image.created-${ARCH}"
