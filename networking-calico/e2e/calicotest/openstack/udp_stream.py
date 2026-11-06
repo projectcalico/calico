@@ -162,7 +162,7 @@ class UdpStream:
         # UDP buffer size:  208 KByte (default)
         # ------------------------------------------------------------
         # [  3] local 10.28.0.160 port 5001 connected with 10.28.2.233 port 54904
-        # [ ID] Interval       Transfer     Bandwidth        Jitter   Lost/Total Datagrams
+        # [ ID] Interval       Transfer     Bandwidth        Jitter   Lost/Total Datagrams  # noqa: E501
         # [  3]  0.0- 1.0 sec  60.3 KBytes   494 Kbits/sec  19.495 ms    0/   42 (0%)
         # [  3]  1.0- 2.0 sec  35.9 KBytes   294 Kbits/sec  27.183 ms    0/   25 (0%)
         # [  3]  2.0- 3.0 sec  35.9 KBytes   294 Kbits/sec  28.718 ms    0/   25 (0%)

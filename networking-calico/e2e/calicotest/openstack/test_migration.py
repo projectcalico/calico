@@ -139,7 +139,7 @@ class _LiveMigrationDiagnostics(object):
         # The set of compute nodes to capture on.  Use Node objects so we
         # pick up whatever the cluster layout tells us, not a hardcoded list.
         self.computes = [
-            (f"compute{i+1}", node) for i, node in enumerate(LAYOUT.compute_nodes[:3])
+            (f"compute{i + 1}", node) for i, node in enumerate(LAYOUT.compute_nodes[:3])
         ]
 
     # ----- entry / exit -----------------------------------------------------
