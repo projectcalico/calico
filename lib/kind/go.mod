@@ -1,11 +1,11 @@
 module github.com/projectcalico/calico/lib/kind
 
-go 1.27.1
+go 1.27.3
 
 require (
 	github.com/google/go-containerregistry v0.21.6
 	github.com/projectcalico/calico/lib/std v0.0.0-00010101000000-000000000000
-	k8s.io/client-go v0.37.1
+	k8s.io/client-go v0.37.2
 	sigs.k8s.io/kind v0.31.0
 )
 
@@ -39,7 +39,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.18.7 // indirect
+	github.com/klauspost/compress v1.20.2 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
@@ -65,8 +65,8 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
-	k8s.io/api v0.37.1 // indirect
-	k8s.io/apimachinery v0.37.1 // indirect
+	k8s.io/api v0.37.2 // indirect
+	k8s.io/apimachinery v0.37.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad // indirect
 	k8s.io/utils v0.0.0-20260626114624-be93311217bd // indirect
