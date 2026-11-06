@@ -297,7 +297,8 @@ e2e_config_path = $(abspath $(if $(filter /% e2e/config/%,$(1)),$(1),e2e/config/
 E2E_TEST_CONFIG_FLAGS = $(foreach c,$(E2E_TEST_CONFIG),--calico.test-config=$(call e2e_config_path,$(c)))
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
-K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
+# ClusterNetworkPolicyNamedPorts needs the experimental-channel CRD; we install the standard one.
+K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
 
 # rapidclient helper image for the packet-size and maglev specs. e2e-test-bpf loads
