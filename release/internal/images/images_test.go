@@ -729,7 +729,11 @@ func TestPrefixedVariantRecordsPrefixedRefs(t *testing.T) {
 func TestArchiveSavesStandardImagesOnly(t *testing.T) {
 	f := &imageNameRunner{images: "node node-windows"}
 	dir := t.TempDir()
-	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...).Contribute(dir); err != nil {
+	a, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...)
+	if err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	if err := a.Contribute(dir); err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
 	var saved []string
@@ -749,7 +753,11 @@ func TestArchiveSavesStandardImagesOnly(t *testing.T) {
 func TestArchivePullsWhenAsked(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
 	f.failures = map[string]int{"inspect": 9}
-	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f, WithPull(true))...).Contribute(t.TempDir()); err != nil {
+	a, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f, WithPull(true))...)
+	if err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	if err := a.Contribute(t.TempDir()); err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
 	var pulled bool
@@ -765,7 +773,11 @@ func TestArchivePullsWhenAsked(t *testing.T) {
 
 func TestArchiveRejectsNoDir(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
-	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...).Contribute(""); err == nil {
+	a, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...)
+	if err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	if err := a.Contribute(""); err == nil {
 		t.Fatal("expected an error when no archive directory is given")
 	}
 }
@@ -774,10 +786,24 @@ func TestArchiveRejectsNoDir(t *testing.T) {
 // than indexed into.
 func TestArchiveRejectsNoRegistry(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
-	err := Archive(testRepoRoot, testVersion, []string{"node"}, WithRunner(f)).Contribute(t.TempDir())
-	if err == nil {
+	if _, err := Archive(testRepoRoot, testVersion, []string{"node"}, WithRunner(f)); err == nil {
 		t.Fatal("expected an error when no registry is given")
 	}
+	if len(f.calls) != 0 {
+		t.Errorf("ran %d commands before rejecting the archive", len(f.calls))
+	}
+}
+
+func TestArchive(t *testing.T) {
+	t.Run("a missing version fails before anything runs", func(t *testing.T) {
+		f := &imageNameRunner{images: "node"}
+		if _, err := Archive(testRepoRoot, "", []string{"node"}, archiveOpts(f)...); err == nil {
+			t.Fatal("expected an error when no version is given")
+		}
+		if len(f.calls) != 0 {
+			t.Errorf("ran %d commands before rejecting the archive", len(f.calls))
+		}
+	})
 }
 
 // A unit whose refs are already recorded at the digest the registry serves is

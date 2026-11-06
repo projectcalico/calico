@@ -46,23 +46,23 @@ func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) er
 	return nil
 }
 
-// Archive writes each image to its own tar under tarDir.
-func Archive(repoRoot, version string, imageDirs []string, opts ...ArchiveOption) archives.Contributor {
-	return archiver{
-		RepoRoot: repoRoot,
-		Version:  version,
-		Variants: NarrowVariants(StandardVariants(PublishVariants), imageDirs),
-		Options:  opts,
+// Archive writes each image to its own tar under tarDir. It validates when
+// called, so a bad version fails before any build rather than at staging.
+func Archive(repoRoot, version string, imageDirs []string, opts ...ArchiveOption) (archives.Contributor, error) {
+	s, err := newSettings(archiveStep, repoRoot, version, NarrowVariants(StandardVariants(PublishVariants), imageDirs), opts)
+	if err != nil {
+		return nil, err
 	}
+	if len(s.Registries) == 0 {
+		return nil, s.Errorf("no registry to archive images from")
+	}
+	return archiver{s: s}, nil
 }
 
 var _ archives.Contributor = archiver{}
 
 type archiver struct {
-	RepoRoot string
-	Version  string
-	Variants []Variant
-	Options  []ArchiveOption
+	s settings
 }
 
 func (a archiver) Name() string {
@@ -70,20 +70,14 @@ func (a archiver) Name() string {
 }
 
 func (a archiver) Contribute(dir string) error {
-	s, err := newSettings(archiveStep, a.RepoRoot, a.Version, a.Variants, a.Options)
-	if err != nil {
-		return err
-	}
+	s := a.s
 	if dir == "" {
 		return s.Errorf("no directory to write images to")
 	}
 	dest := filepath.Join(dir, "images")
-	if len(s.Registries) == 0 {
-		return s.Errorf("no registry to archive images from")
-	}
 	units := s.units(s.env())
 	s.Logger().WithField("images", len(units)).Info("Archiving container images")
-	if err := os.MkdirAll(dest, os.ModePerm); err != nil {
+	if err := os.MkdirAll(dest, utils.DirPerms); err != nil {
 		return fmt.Errorf("creating images dir %s: %w", dest, err)
 	}
 

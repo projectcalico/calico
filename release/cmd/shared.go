@@ -16,7 +16,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"path"
 	"runtime"
 	"strings"
@@ -155,15 +157,20 @@ func oncePin(pin pinned) pinned {
 
 var (
 	loadPin pinned = func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
-		pin, err := pinnedversion.Load(localPinLoader(pinConfig(cfg, c)))
+		pin, err := pinnedversion.Load(pinLoader(pinConfig(cfg, c), c))
 		if err != nil {
 			return nil, fmt.Errorf("load pin: %w", err)
 		}
 		return pin, nil
 	}
 	pinForBuild        = loadPin
-	builtPin    pinned = func(cfg *Config, _ *cli.Command) (*pinnedversion.Pin, error) {
+	builtPin    pinned = func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
 		pin, err := pinnedversion.Load(pinnedversion.FileLoader{Dir: cfg.TmpDir, RootDir: cfg.RepoRootDir})
+		// A planned build writes no pin, so a plan of build then publish has none to load.
+		if errors.Is(err, fs.ErrNotExist) && c != nil && c.Bool(planFlag.Name) {
+			logrus.WithError(err).Warn("No built pin, planning against the pin a build would write")
+			return loadPin(cfg, c)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("load built pin: %w", err)
 		}
@@ -171,6 +178,14 @@ var (
 	}
 	pinForPublish = builtPin
 )
+
+func pinLoader(pc pinnedversion.Config, c *cli.Command) pinnedversion.Loader {
+	l := localPinLoader(pc)
+	if c.Bool(planFlag.Name) {
+		return pinnedversion.PreviewLoader{LocalLoader: l}
+	}
+	return l
+}
 
 // A generated pin versions the operator like the product; a release takes the
 // operator's own version from the manifests.
