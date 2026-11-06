@@ -17,6 +17,9 @@
 #
 # Sourced from body_*.sh. Exits with the test exit code.
 
+# A child `bash` doesn't inherit the caller's pipefail, so `e2e | tee` would report tee's status.
+set -o pipefail
+
 for _var in BZ_LOCAL_DIR BZ_LOGS_DIR HOME REPORT_DIR TEST_TYPE; do
   if [[ -z "${!_var}" ]]; then echo "[ERROR] ${_var} is required but not set"; exit 1; fi
 done
