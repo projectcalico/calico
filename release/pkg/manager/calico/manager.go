@@ -64,24 +64,6 @@ const (
 	helmIndexStep   = "helm-index"
 )
 
-// BuildSteps are the steps a release build can skip, in the order they run.
-func BuildSteps() []string { return slices.Concat(releaseBuildSteps, sharedBuildSteps) }
-
-// HashreleaseBuildSteps are the steps a hashrelease build can skip, in the
-// order they run.
-func HashreleaseBuildSteps() []string {
-	return slices.Concat(hashreleaseBuildSteps, sharedBuildSteps)
-}
-
-// PublishSteps are the steps a release publish can skip, in the order they run.
-func PublishSteps() []string { return slices.Concat(sharedPublishSteps, releasePublishSteps) }
-
-// HashreleasePublishSteps are the steps a hashrelease publish can skip, in the
-// order they run.
-func HashreleasePublishSteps() []string {
-	return slices.Concat(sharedPublishSteps, hashreleasePublishSteps)
-}
-
 var (
 	releaseBuildSteps     = []string{tagStep}
 	hashreleaseBuildSteps = []string{outputs.ReleaseNotesStep}
@@ -92,6 +74,24 @@ var (
 	sharedPublishSteps      = []string{operator.Step, images.Step, charts.Step, outputs.MetadataStep, distribution.ChecksumStep}
 	releasePublishSteps     = []string{distribution.GithubTagStep, distribution.GithubReleaseStep, helmIndexStep}
 	hashreleasePublishSteps = []string{distribution.HashreleasePublishStep}
+
+	// BuildSteps are the steps a release build can skip, in the order they run.
+	BuildSteps = func() []string { return slices.Concat(releaseBuildSteps, sharedBuildSteps) }
+
+	// HashreleaseBuildSteps are the steps a hashrelease build can skip, in the
+	// order they run.
+	HashreleaseBuildSteps = func() []string {
+		return slices.Concat(hashreleaseBuildSteps, sharedBuildSteps)
+	}
+
+	// PublishSteps are the steps a release publish can skip, in the order they run.
+	PublishSteps = func() []string { return slices.Concat(sharedPublishSteps, releasePublishSteps) }
+
+	// HashreleasePublishSteps are the steps a hashrelease publish can skip, in the
+	// order they run.
+	HashreleasePublishSteps = func() []string {
+		return slices.Concat(sharedPublishSteps, hashreleasePublishSteps)
+	}
 )
 
 var (
