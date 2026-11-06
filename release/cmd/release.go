@@ -132,7 +132,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithDryRun(c.Bool(localFlag.Name)),
 					// The operator carries the versions of the images it deploys in its binary, so a
 					// release rebuilds it rather than retagging the one a hashrelease published.
-					calico.WithOperator(operatorBuild(c, *o, false, filepath.Join(cfg.LogsDir, o.ProductVersion))),
+					calico.WithOperator(operatorBuild(c, *o, operatorVariants(c), false, filepath.Join(cfg.LogsDir, o.ProductVersion))),
 					calico.WithPlanOptions(plan.Options{
 						Preview: c.Bool(planFlag.Name),
 						Skip:    skipSet(c.StringSlice(skipFlagName)),
@@ -203,7 +203,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					opts = append(opts, calico.WithS3Bucket(v))
 				}
 				opts = append(opts,
-					calico.WithOperator(operatorPublish(c, *o, false, outputs.RecordsDir(cfg.OutputDir, o.ProductVersion), filepath.Join(cfg.LogsDir, o.ProductVersion))),
+					calico.WithOperator(operatorPublish(c, *o, operatorVariants(c), false, outputs.RecordsDir(cfg.OutputDir, o.ProductVersion), filepath.Join(cfg.LogsDir, o.ProductVersion))),
 					calico.WithPlanOptions(plan.Options{
 						Preview: c.Bool(planFlag.Name),
 						Skip:    skipSet(c.StringSlice(skipFlagName)),
@@ -300,16 +300,16 @@ func releaseBuildFlags() []cli.Flag {
 	return f
 }
 
-func operatorBuild(c *cli.Command, o operator.Operator, hashrelease bool, logsDir string) func() error {
+func operatorBuild(c *cli.Command, o operator.Operator, variants []operator.Variant, hashrelease bool, logsDir string) func() error {
 	if !c.Bool(operatorFlagName) {
 		return nil
 	}
 	return func() error {
-		return operator.Build(o, operatorVariants(c), hashrelease, operatorBuildOptions(c, logsDir)...)
+		return operator.Build(o, variants, hashrelease, operatorBuildOptions(c, logsDir)...)
 	}
 }
 
-func operatorPublish(c *cli.Command, o operator.Operator, hashrelease bool, recordsDir, logsDir string) func() error {
+func operatorPublish(c *cli.Command, o operator.Operator, variants []operator.Variant, hashrelease bool, recordsDir, logsDir string) func() error {
 	if !c.Bool(operatorFlagName) {
 		return nil
 	}
@@ -318,7 +318,7 @@ func operatorPublish(c *cli.Command, o operator.Operator, hashrelease bool, reco
 		if err != nil {
 			return fmt.Errorf("operator publish options: %w", err)
 		}
-		return operator.Publish(o, operatorVariants(c), hashrelease, opts...)
+		return operator.Publish(o, variants, hashrelease, opts...)
 	}
 }
 

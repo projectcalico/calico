@@ -56,8 +56,8 @@ func TestOperatorSteps(t *testing.T) {
 				Name:  "build",
 				Flags: []cli.Flag{operatorFlag()},
 				Action: func(_ context.Context, c *cli.Command) error {
-					build = operatorBuild(c, operator.Operator{}, false, t.TempDir())
-					publish = operatorPublish(c, operator.Operator{}, false, t.TempDir(), t.TempDir())
+					build = operatorBuild(c, operator.Operator{}, operatorVariants(c), false, t.TempDir())
+					publish = operatorPublish(c, operator.Operator{}, operatorVariants(c), false, t.TempDir(), t.TempDir())
 					return nil
 				},
 			}
