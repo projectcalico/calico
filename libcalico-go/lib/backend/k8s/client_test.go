@@ -39,8 +39,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
-	clusternetpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha2"
-	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
+	clusternetpolicy "sigs.k8s.io/network-policy-api/apis/v1beta1"
+	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1beta1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
@@ -3056,7 +3056,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
 	var (
 		c          *KubeClient
-		kcnpClient *netpolicyclient.PolicyV1alpha2Client
+		kcnpClient *netpolicyclient.PolicyV1beta1Client
 		ctx        context.Context
 	)
 

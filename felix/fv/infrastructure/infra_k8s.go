@@ -37,7 +37,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
+	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1beta1"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -73,7 +73,7 @@ type K8sDatastoreInfra struct {
 
 	calicoClient client.Interface
 	K8sClient    *kubernetes.Clientset
-	KcnpClient   *netpolicyclient.PolicyV1alpha2Client
+	KcnpClient   *netpolicyclient.PolicyV1beta1Client
 
 	Endpoint    string
 	EndpointIP  string
@@ -1217,7 +1217,7 @@ func cleanupAllK8sNetworkPolicies(clientset *kubernetes.Clientset, _ client.Inte
 	log.WithField("count", len(knps.Items)).Info("Cleaned up Kubernetes network policies")
 }
 
-func cleanupAllK8sClusterNetworkPolicies(kcnpClient *netpolicyclient.PolicyV1alpha2Client) {
+func cleanupAllK8sClusterNetworkPolicies(kcnpClient *netpolicyclient.PolicyV1beta1Client) {
 	log.Info("Cleaning up Kubernetes cluster network policies")
 	ctx := context.Background()
 	kcnps, err := kcnpClient.ClusterNetworkPolicies().List(ctx, metav1.ListOptions{})

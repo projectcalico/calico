@@ -21,7 +21,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
+	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1beta1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
