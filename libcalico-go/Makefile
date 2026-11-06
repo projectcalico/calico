@@ -6,8 +6,10 @@ LOCAL_CHECKS = check-gen-files
 
 KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
-NETPOL_CNP_VER = v0.2.0
-NETPOL_CNP_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/tags/$(NETPOL_CNP_VER)/config/crd/standard
+# Tag or commit; must match the sigs.k8s.io/network-policy-api version in go.mod.
+# TODO: switch to the v0.3.0 tag once it is released.
+NETPOL_CNP_VER = 8cb5432b3e0f4d04b990a8b84d3aae8369527632
+NETPOL_CNP_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/$(NETPOL_CNP_VER)/config/crd/standard
 NETPOL_CNP_CRD = policy.networking.k8s.io_clusternetworkpolicies.yaml
 
 ###############################################################################
