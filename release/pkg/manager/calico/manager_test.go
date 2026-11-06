@@ -833,6 +833,12 @@ func TestAssertReleaseNotesPresent(t *testing.T) {
 			}
 		})
 	}
+	t.Run("build validation fails without notes", func(t *testing.T) {
+		r := &CalicoManager{repoRoot: t.TempDir(), calicoVersion: testVersion(t, ver)}
+		if err := r.PreReleaseValidate(); err == nil || !strings.Contains(err.Error(), "release notes") {
+			t.Errorf("PreReleaseValidate() = %v, want a release notes error", err)
+		}
+	})
 }
 
 func TestBuildNodes(t *testing.T) {

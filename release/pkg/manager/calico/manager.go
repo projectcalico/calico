@@ -661,6 +661,10 @@ func (r *CalicoManager) checkBranch(check func() error) error {
 }
 
 func (r *CalicoManager) PreReleaseValidate() error {
+	if err := r.assertReleaseNotesPresent(r.calicoVersion.String()); err != nil {
+		return err
+	}
+
 	// Check that we are on a release branch
 	if err := r.checkBranch(func() error {
 		branch, err := utils.GitBranch(r.repoRoot)
