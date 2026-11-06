@@ -23,7 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
+	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1beta1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -344,26 +344,25 @@ func unpackCNPProtocols(cnpProtocols []clusternetpol.ClusterNetworkPolicyProtoco
 	map[string][]numorstring.Port,
 	[]string, error,
 ) {
-	// If there are no ports, represent that as zero struct.
-	protocols := []clusternetpol.ClusterNetworkPolicyProtocol{{}}
-	if cnpProtocols != nil && len(cnpProtocols) != 0 {
-		protocols = cnpProtocols
+	if len(cnpProtocols) == 0 {
+		// A nil protocol with nil ports matches all traffic.
+		return map[string][]numorstring.Port{"": nil}, []string{""}, nil
 	}
 
 	protocolPorts := map[string][]numorstring.Port{}
 
-	for _, p := range protocols {
+	for _, p := range cnpProtocols {
 		protocol, calicoPort, err := k8sCNPPortToCalicoFields(&p)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to parse k8s protocol: %s", err)
 		}
 
 		if protocol == nil && calicoPort == nil {
-			// If nil, no ports were specified, or an empty port struct was provided, which we translate to allowing all.
-			// We want to use a nil protocol and a nil list of ports, which will allow any destination (for ingress).
-			// Given we're gonna allow all, we may as well break here and keep only this rule
-			protocolPorts = map[string][]numorstring.Port{"": nil}
-			break
+			// The CRD requires exactly one field per entry, so an empty entry means the
+			// API server pruned a field that its CRD doesn't define (for example,
+			// destinationNamedPort is absent from the standard-channel CRD). Matching all
+			// ports here would widen the rule.
+			return nil, nil, fmt.Errorf("protocol entry has no supported fields set")
 		}
 
 		pStr := "" // for named ports protocol is nil
