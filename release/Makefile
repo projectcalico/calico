@@ -47,6 +47,16 @@ fv st:
 	$(info *** Release tool does not have $@ tests, skipping)
 	@true
 
+.PHONY: e2e e2e/hashrelease e2e/release
+e2e: e2e/hashrelease e2e/release
+
+e2e/hashrelease: var-require-all-HASHRELEASE_SERVER_BUCKET
+	PLAN=true $(MAKE) hashrelease
+	LOCAL=true BRANCH_CHECK=false $(MAKE) hashrelease
+
+e2e/release:
+	PLAN=true $(MAKE) -C ../ release release-publish
+
 ###############################################################################
 # Checks
 ###############################################################################
