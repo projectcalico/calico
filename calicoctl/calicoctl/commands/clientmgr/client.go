@@ -41,8 +41,8 @@ func NewClient(cf string) (client.Interface, error) {
 	// It embeds K8sAPIToken, KubeconfigInline, EtcdPassword, EtcdKey, and EtcdCert.
 	log.WithFields(log.Fields{
 		"datastoreType":       cfg.Spec.DatastoreType,
-		"etcdEndpoints":       cfg.Spec.EtcdEndpoints,
-		"k8sAPIEndpoint":      cfg.Spec.K8sAPIEndpoint,
+		"etcdEndpointsSet":    cfg.Spec.EtcdEndpoints != "",
+		"k8sAPIEndpointSet":   cfg.Spec.K8sAPIEndpoint != "",
 		"kubeconfig":          cfg.Spec.Kubeconfig,
 		"kubeconfigInlineSet": cfg.Spec.KubeconfigInline != "",
 		"etcdUsernameSet":     cfg.Spec.EtcdUsername != "",

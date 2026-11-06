@@ -15,7 +15,6 @@
 package checker
 
 import (
-	"fmt"
 	"net"
 	"net/url"
 	"path"
@@ -328,8 +327,8 @@ func matchHTTPMethods(methods []string, reqMethod *string) bool {
 func matchHTTPPaths(paths []*proto.HTTPMatch_PathMatch, reqPath *string) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
-			"paths":   paths,
-			"reqPath": reqPath,
+			"paths":          paths,
+			"hasRequestPath": reqPath != nil,
 		}).Debug("Matching HTTP Paths")
 	}
 	if len(paths) == 0 {
@@ -342,14 +341,14 @@ func matchHTTPPaths(paths []*proto.HTTPMatch_PathMatch, reqPath *string) bool {
 	}
 	// Accept only valid paths.
 	if !strings.HasPrefix(*reqPath, "/") {
-		s := fmt.Sprintf("Invalid HTTP Path \"%s\"", *reqPath)
+		s := "Invalid HTTP Path"
 		log.Error(s)
 		// Let the caller recover from the panic.
 		panic(&InvalidDataFromDataPlane{s})
 	}
 	normalizedReq, ok := normalizeHTTPPath(*reqPath)
 	if !ok {
-		log.WithField("reqPath", *reqPath).Debug("HTTP Path could not be normalized; not matched.")
+		log.Debug("HTTP Path could not be normalized; not matched.")
 		return false
 	}
 	for _, pathMatch := range paths {

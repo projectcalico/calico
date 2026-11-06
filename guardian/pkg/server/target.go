@@ -143,7 +143,7 @@ func MustCreateTarget(path, dest string, opts ...TargetOption) Target {
 
 	destURL, err := url.Parse(dest)
 	if err != nil {
-		logrus.WithError(err).Fatalf("incorrect URL %s for path %s", dest, path)
+		logrus.Fatalf("incorrect destination URL for path %s", path)
 	}
 
 	target := &Target{

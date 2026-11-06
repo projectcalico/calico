@@ -106,7 +106,7 @@ func (wc defaultWorkloadEndpointConverter) PodToWorkloadEndpoints(pod *kapiv1.Po
 // PodToWorkloadEndpoint requires a Pods Name and Node Name to be populated. It will
 // fail to convert from a Pod to WorkloadEndpoint otherwise.
 func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error) {
-	log.WithField("pod", pod).Debug("Converting pod to WorkloadEndpoint")
+	log.WithFields(log.Fields{"pod": pod.Name, "namespace": pod.Namespace, "uid": pod.UID}).Debug("Converting pod to WorkloadEndpoint")
 	// Get all the profiles that apply
 	var profiles []string
 
@@ -231,7 +231,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 	qosControls, err := handleQoSControlsAnnotations(pod.Annotations)
 	if err != nil {
 		// If QoSControls can't be parsed, log the error but keep processing the workload
-		log.WithField("pod", pod).WithError(err).Warn("Error parsing QoSControl annotations")
+		log.WithFields(log.Fields{"pod": pod.Name, "namespace": pod.Namespace, "uid": pod.UID}).WithError(err).Warn("Error parsing QoSControl annotations")
 	}
 
 	// Create the workload endpoint.

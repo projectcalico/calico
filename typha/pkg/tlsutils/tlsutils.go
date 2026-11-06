@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -77,7 +78,7 @@ func CertificateVerifier(logCxt *log.Entry, roots *x509.CertPool, requiredCN, re
 
 		requiredCNFound := false
 		if requiredCN != "" {
-			requiredCNFound = (leafCert.Subject.CommonName == requiredCN)
+			requiredCNFound = strings.EqualFold(leafCert.Subject.CommonName, requiredCN)
 		}
 
 		requiredURIFound := false

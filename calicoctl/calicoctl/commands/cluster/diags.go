@@ -382,9 +382,10 @@ func collectCalicoResource(dir string) {
 func collectCalicoSystemNamespace(dir string) {
 	commands := []common.Cmd{}
 	commands = append(commands, common.Cmd{
-		Info:     fmt.Sprintf("Collect all in %s (yaml)", common.CalicoNamespace),
-		CmdStr:   fmt.Sprintf("kubectl get all -n %s -o yaml", common.CalicoNamespace),
-		FilePath: fmt.Sprintf("%s/calico-system.yaml", dir),
+		Info:           fmt.Sprintf("Collect all in %s (yaml)", common.CalicoNamespace),
+		CmdStr:         fmt.Sprintf("kubectl get all -n %s -o yaml", common.CalicoNamespace),
+		SanitizeOutput: sanitizeDiagnosticResources,
+		FilePath:       fmt.Sprintf("%s/calico-system.yaml", dir),
 	}, common.Cmd{
 		Info:     fmt.Sprintf("Collect all in %s (wide text)", common.CalicoNamespace),
 		CmdStr:   fmt.Sprintf("kubectl get all -n %s -o wide", common.CalicoNamespace),
@@ -396,9 +397,10 @@ func collectCalicoSystemNamespace(dir string) {
 func collectTigeraOperatorNamespace(dir string) {
 	commands := []common.Cmd{}
 	commands = append(commands, common.Cmd{
-		Info:     fmt.Sprintf("Collect all in %s (yaml)", common.TigeraOperatorNamespace),
-		CmdStr:   fmt.Sprintf("kubectl get all -n %s -o yaml", common.TigeraOperatorNamespace),
-		FilePath: fmt.Sprintf("%s/tigera-operator.yaml", dir),
+		Info:           fmt.Sprintf("Collect all in %s (yaml)", common.TigeraOperatorNamespace),
+		CmdStr:         fmt.Sprintf("kubectl get all -n %s -o yaml", common.TigeraOperatorNamespace),
+		SanitizeOutput: sanitizeDiagnosticResources,
+		FilePath:       fmt.Sprintf("%s/tigera-operator.yaml", dir),
 	}, common.Cmd{
 		Info:     fmt.Sprintf("Collect all in %s (wide text)", common.TigeraOperatorNamespace),
 		CmdStr:   fmt.Sprintf("kubectl get all -n %s -o wide", common.TigeraOperatorNamespace),
@@ -442,9 +444,10 @@ func kubernetesResourceCmds(dir string) []common.Cmd {
 		"udproutes",
 	} {
 		commands = append(commands, common.Cmd{
-			Info:     fmt.Sprintf("Collect %v (yaml)", resource),
-			CmdStr:   fmt.Sprintf("kubectl get %v --all-namespaces -o yaml", resource),
-			FilePath: fmt.Sprintf("%s/%v.yaml", dir, resource),
+			Info:           fmt.Sprintf("Collect %v (yaml)", resource),
+			CmdStr:         fmt.Sprintf("kubectl get %v --all-namespaces -o yaml", resource),
+			SanitizeOutput: diagnosticSanitizer(resource),
+			FilePath:       fmt.Sprintf("%s/%v.yaml", dir, resource),
 		}, common.Cmd{
 			Info:     fmt.Sprintf("Collect %v (wide text)", resource),
 			CmdStr:   fmt.Sprintf("kubectl get %v --all-namespaces -o wide", resource),
@@ -552,9 +555,10 @@ func thirdPartyResourceCmds(dir string) []common.Cmd {
 		"datavolumes.cdi.kubevirt.io",
 	} {
 		commands = append(commands, common.Cmd{
-			Info:     fmt.Sprintf("Collect %v (yaml)", resource),
-			CmdStr:   fmt.Sprintf("kubectl get %v --all-namespaces -o yaml", resource),
-			FilePath: fmt.Sprintf("%s/%v.yaml", dir, resource),
+			Info:           fmt.Sprintf("Collect %v (yaml)", resource),
+			CmdStr:         fmt.Sprintf("kubectl get %v --all-namespaces -o yaml", resource),
+			SanitizeOutput: diagnosticSanitizer(resource),
+			FilePath:       fmt.Sprintf("%s/%v.yaml", dir, resource),
 		}, common.Cmd{
 			Info:     fmt.Sprintf("Collect %v (wide text)", resource),
 			CmdStr:   fmt.Sprintf("kubectl get %v --all-namespaces -o wide", resource),
@@ -639,6 +643,8 @@ func censorSecret(secret *apiv1.Secret) {
 		}
 	}
 	secret.Data = newData
+	secret.StringData = nil
+	secret.ObjectMeta = v1.ObjectMeta{Name: secret.Name, Namespace: secret.Namespace, UID: secret.UID, ResourceVersion: secret.ResourceVersion, CreationTimestamp: secret.CreationTimestamp}
 }
 
 // collectGlobalClusterInformation collects the Kubernetes resource, Calico Resource and Tigera operator details

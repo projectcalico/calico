@@ -638,12 +638,12 @@ func (p *EndpointListParam) Parse(raw string) (result any, err error) {
 		var u *url.URL
 		u, err = url.Parse(endpoint)
 		if err != nil {
-			err = p.parseFailed(raw,
-				fmt.Sprintf("%v is not a valid URL", endpoint))
+			err = p.parseFailed("<redacted>",
+				"endpoint is not a valid URL")
 			return
 		}
 		if scheme != "" && u.Scheme != scheme {
-			err = p.parseFailed(raw,
+			err = p.parseFailed("<redacted>",
 				"all endpoints must have the same scheme")
 			return
 		}
@@ -655,7 +655,7 @@ func (p *EndpointListParam) Parse(raw string) (result any, err error) {
 			u.Fragment != "" {
 			// Do not log the full URL — it may contain credentials in userinfo.
 			log.WithField("url", u.Host).Error("Unsupported URL part")
-			err = p.parseFailed(raw,
+			err = p.parseFailed("<redacted>",
 				"endpoint contained unsupported URL part; "+
 					"expected http(s)://hostname:port only.")
 			return
@@ -841,7 +841,7 @@ func realGetKubernetesService(namespace, svcName string) (*v1.Service, error) {
 	// FIXME: get rid of this and call rest.InClusterConfig() directly when containerd v1.6 is EOL'd
 	k8scfg, err := winutils.GetInClusterConfig()
 	if err != nil {
-		log.WithError(err).Info("Unable to create in-cluster Kubernetes config, attemping environments instead")
+		log.WithError(err).Info("Unable to create in-cluster Kubernetes config, attempting environments instead")
 
 		cfgFile := os.Getenv("KUBECONFIG")
 		// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot

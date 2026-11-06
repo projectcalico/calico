@@ -110,7 +110,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: calico-webhooks
-          image: {{.Values.calico.registry}}/{{.Values.calico.image}}:{{ .Values.version }}
+          image: {{.Values.calico.registry | lower }}/{{.Values.calico.image | lower }}:{{ .Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           args:
             - component

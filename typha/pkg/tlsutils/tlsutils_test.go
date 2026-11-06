@@ -18,6 +18,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -56,12 +57,14 @@ func genTestCases() []TableEntry {
 	cnConfigs := []string{
 		"", // No CN.
 		goodCN,
+		strings.ToUpper(goodCN),
 		badCN,
 	}
 	uriSANConfigs := []string{
 		"", // No URI SAN.
 		goodURISAN,
 		badURISAN,
+		strings.ToUpper(goodURISAN),
 	}
 	var certConfigs []*certConfig
 	for _, signature := range signatureConfigs {
@@ -87,6 +90,7 @@ func genTestCases() []TableEntry {
 	cnConfigs = []string{
 		"", // No CN.
 		goodCN,
+		strings.ToUpper(goodCN),
 	}
 	uriSANConfigs = []string{
 		"", // No URI SAN.
@@ -157,7 +161,7 @@ func errChecker(certConfig *certConfig, typhaConfig *typhaConfig) func(error) {
 	}
 
 	// Possible errors based on certificate content.
-	if typhaConfig.CN != "" && certConfig.CN == typhaConfig.CN {
+	if typhaConfig.CN != "" && strings.EqualFold(certConfig.CN, typhaConfig.CN) {
 		// Good.
 		return expectOK
 	}

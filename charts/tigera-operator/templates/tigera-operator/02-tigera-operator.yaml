@@ -128,7 +128,7 @@ spec:
                 optional: true
         # Install any v3 API resources provided in the calico-resources ConfigMap.
         - name: create-initial-resources
-          image: {{.Values.calicoctl.image}}:{{.Values.calicoctl.tag}}
+          image: {{.Values.calicoctl.image | lower}}:{{.Values.calicoctl.tag}}
           {{- with .Values.containerSecurityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}

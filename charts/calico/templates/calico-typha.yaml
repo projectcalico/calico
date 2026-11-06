@@ -86,7 +86,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - image: {{ .Values.calico.registry }}/{{ .Values.calico.image }}:{{.Values.version }}
+        - image: {{ .Values.calico.registry | lower }}/{{ .Values.calico.image | lower }}:{{.Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           name: calico-typha
           args: ["component", "typha"]

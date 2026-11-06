@@ -258,7 +258,7 @@ func (c *profileClient) parseProfileName(name string) (ns, sa string, err error)
 	if err == nil {
 		return
 	}
-	err = fmt.Errorf("profile name neither namespace or service account %s", name)
+	err = fmt.Errorf("profile name %s is neither a namespace nor a service account", name)
 	return
 }
 

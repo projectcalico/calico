@@ -17,7 +17,7 @@ const Error: React.FC<ErrorProps> = ({ buttonLabel, navigateTo, sx }) => {
                 <WarningTwoIcon color='tigeraGoldMedium40' boxSize={24} />
 
                 <Text fontSize='xl' fontWeight='bold'>
-                    Ooops, something went wrong.
+                    Oops, something went wrong.
                 </Text>
 
                 <Text fontSize='md'>An unexpected error occurred.</Text>

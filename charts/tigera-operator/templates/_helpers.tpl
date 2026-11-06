@@ -1,9 +1,9 @@
 {{/* generate the image name for a component*/}}
 {{- define "tigera-operator.image" -}}
 {{- if .registry -}}
-    {{- .registry | trimSuffix "/" -}}/
+    {{- .registry | trimSuffix "/" | lower -}}/
 {{- end -}}
-{{- .image -}}:{{- .version -}}
+{{- .image | lower -}}:{{- .version -}}
 {{- end -}}
 
 {{/*

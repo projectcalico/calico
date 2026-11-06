@@ -58,15 +58,18 @@ func IsSensitiveParam(name string) bool {
 }
 
 // RedactURL parses a URL string and returns a redacted form that masks any
-// userinfo password while preserving the scheme, host, port, and path.
+// userinfo while preserving the scheme, host, port, and path.
 // Query strings and fragments are stripped because they may carry credentials
 // (e.g. ?token=, ?X-Amz-Signature=) that url.Redacted() does not handle.
 // If the URL cannot be parsed, it returns "<invalid-url>".
 func RedactURL(raw string) string {
 	u, err := url.Parse(raw)
-	if err != nil {
+	if err != nil || u.Scheme == "" || u.Host == "" || u.Opaque != "" {
 		return "<invalid-url>"
 	}
+	u.User = nil
+	u.ForceQuery = false
+	u.RawFragment = ""
 	u.RawQuery = ""
 	u.Fragment = ""
 	return u.Redacted()

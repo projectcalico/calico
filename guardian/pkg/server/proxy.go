@@ -22,6 +22,8 @@ import (
 	"net/http/httputil"
 	"os"
 
+	"github.com/projectcalico/calico/lib/logrusr"
+
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -52,7 +54,7 @@ func NewProxy(tgts []Target) (*Proxy, error) {
 			return nil, err
 		}
 		p.mux.HandleFunc(t.Path, hdlr)
-		logrus.Debugf("Proxy target %q -> %q", t.Path, t.Dest)
+		logrus.Debugf("Proxy target %q -> %q", t.Path, logrusr.RedactURL(t.Dest.String()))
 	}
 
 	return p, nil
@@ -77,7 +79,7 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 				return nil, fmt.Errorf("failed to create target handler for path %s: ca bundle was empty", tgt.Path)
 			}
 
-			logrus.Debugf("Detected secure transport for %s. Will pick up system cert pool", tgt.Dest)
+			logrus.Debugf("Detected secure transport for %s. Will pick up system cert pool", logrusr.RedactURL(tgt.Dest.String()))
 			var ca *x509.CertPool
 			ca, err := x509.SystemCertPool()
 			if err != nil {
@@ -112,8 +114,8 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Do not log the full Target struct — it contains OAuth tokens and client cert paths.
-		// Use Redacted() on the URL to mask any userinfo credentials.
-		logCtx := logrus.WithField("dst", tgt.Dest.Redacted())
+		// Strip userinfo, query parameters and fragments from the destination.
+		logCtx := logrus.WithField("dst", logrusr.RedactURL(tgt.Dest.String()))
 		if tgt.PathRegexp != nil {
 			if !tgt.PathRegexp.MatchString(r.URL.Path) {
 				http.Error(w, "Not found", 404)
@@ -144,7 +146,7 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 		}
 
 		// Do not log r.RequestURI — it may contain query-string credentials (?access_token=...).
-		logCtx.Debugf("Received request %s will proxy to %s", r.URL.Path, tgt.Dest.Redacted())
+		logCtx.Debugf("Received request %s will proxy to %s", r.URL.Path, logrusr.RedactURL(tgt.Dest.String()))
 
 		p.ServeHTTP(w, r)
 	}, nil
