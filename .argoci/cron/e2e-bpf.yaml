@@ -30,6 +30,11 @@ steps:
         value: "true"
       - name: GOOGLE_MACHINE_TYPE
         value: t2a-standard-2
+      # T2A only exists in some zones; unpinned lanes can land where it doesn't.
+      - name: GOOGLE_REGION
+        value: us-central1
+      - name: GOOGLE_ZONE
+        value: us-central1-a
       - name: INSTALLER
         value: operator
       - name: K8S_VERSION
