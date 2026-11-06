@@ -27,6 +27,11 @@ import (
 // a fresh address.
 const ErrCodeSandboxSuperseded = 101
 
+// ErrCodeAddressNotOurs means calico-ipam refused a requested address: the pod asked to migrate
+// an IP that isn't its own, or the address's pool or strict affinity forbids assigning it. Only
+// this code earns a fresh address.
+const ErrCodeAddressNotOurs = 102
+
 // Valid values for NetConf.DeviceType.
 const (
 	DeviceTypeVeth   = "veth"
@@ -74,23 +79,38 @@ type NetworkInfo struct {
 	} `json:"labels"`
 }
 
+// IPAMConfig is the ipam section of the network config.
+type IPAMConfig struct {
+	Name       string
+	Type       string   `json:"type"`
+	Subnet     string   `json:"subnet"`
+	AssignIpv4 *string  `json:"assign_ipv4"`
+	AssignIpv6 *string  `json:"assign_ipv6"`
+	IPv4Pools  []string `json:"ipv4_pools,omitempty"`
+	IPv6Pools  []string `json:"ipv6_pools,omitempty"`
+}
+
+// AssignsIPv4 reports whether calico-ipam allocates an IPv4 address under this config. It
+// does unless assign_ipv4 is "false".
+func (c IPAMConfig) AssignsIPv4() bool {
+	return c.AssignIpv4 == nil || *c.AssignIpv4 != "false"
+}
+
+// AssignsIPv6 reports whether calico-ipam allocates an IPv6 address under this config. It
+// does only if assign_ipv6 is "true".
+func (c IPAMConfig) AssignsIPv6() bool {
+	return c.AssignIpv6 != nil && *c.AssignIpv6 == "true"
+}
+
 // NetConf stores the common network config for Calico CNI plugin
 type NetConf struct {
-	CNIVersion     string `json:"cniVersion,omitempty"`
-	Name           string `json:"name"`
-	Type           string `json:"type"`
-	Mode           string `json:"mode"`
-	VXLANMacPrefix string `json:"vxlan_mac_prefix"`
-	VXLANVNI       uint64 `json:"vxlan_vni"`
-	IPAM           struct {
-		Name       string
-		Type       string   `json:"type"`
-		Subnet     string   `json:"subnet"`
-		AssignIpv4 *string  `json:"assign_ipv4"`
-		AssignIpv6 *string  `json:"assign_ipv6"`
-		IPv4Pools  []string `json:"ipv4_pools,omitempty"`
-		IPv6Pools  []string `json:"ipv6_pools,omitempty"`
-	} `json:"ipam"`
+	CNIVersion           string            `json:"cniVersion,omitempty"`
+	Name                 string            `json:"name"`
+	Type                 string            `json:"type"`
+	Mode                 string            `json:"mode"`
+	VXLANMacPrefix       string            `json:"vxlan_mac_prefix"`
+	VXLANVNI             uint64            `json:"vxlan_vni"`
+	IPAM                 IPAMConfig        `json:"ipam"`
 	QPS                  int               `json:"qps,omitempty"`
 	Burst                int               `json:"burst,omitempty"`
 	Args                 Args              `json:"args"`

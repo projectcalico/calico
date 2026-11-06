@@ -365,11 +365,12 @@ var _ = DescribeTable("qualifyPoolForIP",
 			Expect(err).NotTo(HaveOccurred())
 		} else {
 			Expect(err).To(MatchError(expectedErr))
+			Expect(err).To(MatchError(ErrUseNotAllowed))
 		}
 	},
 	Entry("use is allowed", v3.IPPoolAllowedUseWorkload, ""),
 	Entry("no use declared", v3.IPPoolAllowedUse(""), ""),
-	Entry("use isn't allowed", v3.IPPoolAllowedUseTunnel, `IP address 10.0.0.1 is in IP pool "10.0.0.0/24", which is not allowed for use "Tunnel" (allowedUses: [Workload])`),
+	Entry("use isn't allowed", v3.IPPoolAllowedUseTunnel, `IP address 10.0.0.1 is in IP pool "10.0.0.0/24", which is not allowed for use "Tunnel" (allowedUses: [Workload]): IP pool does not allow the requested use`),
 )
 
 // undefaultedPool returns a pool as a caller might build it before clientv3 defaults it, with no assignment mode
