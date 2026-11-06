@@ -8,8 +8,13 @@ defaults:
 
 steps:
   - name: check-yaml
+    env:
+      # TEMPORARY: the thread pool the old 3500m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "3"
     jobSize: medium
-    requests: {cpu: 3500m, memory: 1Gi}
+    requests: {cpu: 1750m, memory: 1Gi}
     services: [docker]
     changes:
       in:
@@ -21,16 +26,24 @@ steps:
     commands: |
       make yaml-lint
 
-  # go vet fans out across every package, so it scales with the cores it gets.
-  - name: check-go
+  # TEMPORARY: builds this commit's Go caches once, for every step that compiles
+  # with the same settings: the module cache for every module in the repo, and the
+  # build cache from check-go's vet and the calico binary. Handed over the volume
+  # cache in place of a GCS restore.
+  - name: go-cache
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     env:
-      - name: BUILD_CACHE_GROUP
-        value: preflight-go-checks
-      - name: STORE_BUILD_CACHE
+      - name: NATIVE_GO_BUILD
         value: "true"
     jobSize: large
-    requests: {cpu: 14000m, memory: 16Gi}
-    services: [docker]
+    requests: {cpu: 7000m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    cache:
+      - {name: go, mode: write}
     changes:
       in:
         - ^go\.mod$
@@ -44,6 +57,63 @@ steps:
         - ^\.argoci/config\.yaml$
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
+      s=$(date +%s)
+      for mod in $(git ls-files '*go.mod' | grep -v -e '^third_party/' -e '/vendor/'); do
+        ( cd "$(dirname "$mod")" && go mod download )
+      done
+      echo "CACHE-TEST go-cache download $(( $(date +%s) - s ))s"
+      # Through make, so the settings are the ones the readers build with.
+      s=$(date +%s)
+      make go-vet
+      make -C cmd/calico build
+      echo "CACHE-TEST go-cache compile $(( $(date +%s) - s ))s"
+      du -sh .go-pkg-cache "$GO_MOD_ROOT/pkg/mod"
+      s=$(date +%s)
+      tar -cf - .go-pkg-cache | pigz -1 > /cache/go-build.tar.gz &
+      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | pigz -1 > /cache/go-mod.tar.gz &
+      wait
+      echo "CACHE-TEST go-cache pack $(( $(date +%s) - s ))s"
+      ls -l /cache
+
+  # go vet fans out across every package, so it scales with the cores it gets.
+  # Every module waits on this step, so it runs in the build image directly
+  # rather than paying dind's start-up and image pull.
+  - name: check-go
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    # TEMPORARY: compiles against the caches go-cache built.
+    depends: [go-cache]
+    cache:
+      - {name: go, mode: read}
+    env:
+      # TEMPORARY: the thread pool the old 7000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "7"
+      # Runs the Makefiles' go-build recipes here rather than in a nested container.
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    jobSize: large
+    requests: {cpu: 4500m, memory: 4Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    changes:
+      in:
+        - ^go\.mod$
+        - ^go\.sum$
+        - ^.*\.go$
+        - ^.*deps\.txt$
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/depstree\.yaml$
+        - ^\.argoci/config\.yaml$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" check-go
       # `useGoBuild` steps take their image tag from config.yaml rather than from
       # the toolchain the Makefiles build with.
       want=$(make --no-print-directory -s -f metadata.mk --eval 'print: ; @echo $(GO_BUILD_VER)' print)
@@ -62,8 +132,13 @@ steps:
       make check-dirty
 
   - name: check-python
+    env:
+      # TEMPORARY: the thread pool the old 2000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "2"
     jobSize: small
-    requests: {cpu: 2000m, memory: 0.75Gi}
+    requests: {cpu: 1750m, memory: 0.75Gi}
     services: [docker]
     changes:
       in:
@@ -78,8 +153,17 @@ steps:
 
   # Grep-speed checks, so one step rather than three.
   - name: check-language-dockerfiles
+    env:
+      # TEMPORARY: the thread pool the old 2250m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "2"
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     jobSize: small
-    requests: {cpu: 2250m, memory: 548Mi}
+    requests: {cpu: 2000m, memory: 548Mi}
     useGoBuild: true
     workspaceVolumes: none
     changes:
@@ -149,9 +233,17 @@ steps:
   # A chart can change what it renders without any committed manifest changing,
   # which a diff of the tree cannot see.
   - name: check-helm-charts
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     jobSize: small
     requests: {cpu: 2000m, memory: 1Gi}
-    services: [docker]
+    useGoBuild: true
+    workspaceVolumes: none
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     changes:
       in:
         - ^charts/
@@ -165,8 +257,16 @@ steps:
   # Regenerating the patches must be a no-op. metadata.mk is in the trigger
   # because `go mod tidy`'s output depends on the toolchain.
   - name: check-thirdparty-dep-patches
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     requests: {cpu: 2000m, memory: 2Gi}
-    services: [docker]
+    useGoBuild: true
+    workspaceVolumes: none
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     changes:
       in:
         - ^hack/thirdparty/
@@ -185,26 +285,66 @@ steps:
       make check-thirdparty-dep-patches
       make check-dirty
 
-  - name: build-calico-image
+  # The calico/calico image is built without Docker: calico-image-context compiles
+  # and stages everything the Dockerfile reads, calico-image-buildkit builds it
+  # with rootless buildkit, and build-calico-image publishes the tar the image
+  # loaders pull. The last keeps the name every consumer depends on.
+  - name: calico-image-context
+    depends: [go-cache]
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-      - name: STORE_BUILD_CACHE
+      - name: NATIVE_GO_BUILD
         value: "true"
-    services: [docker]
     timeout: 1h
     jobSize: large
-    requests: {cpu: 7000m, memory: 8Gi}
+    requests: {cpu: 7000m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    cache:
+      - {name: go, mode: read, path: /gocache}
+      - {name: image, mode: write}
     changes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     commands: |
-      make -C cmd/calico image
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" calico-image-context /gocache
+      make -C cmd/calico image-context
+      mkdir -p /cache/calico-image
+      cp -a cmd/calico/bin/image-context-amd64/. /cache/calico-image/
+
+  # The cgo and race calico binaries and the libbpf tree, for the Felix steps.
+  # Apart from the image so the image build doesn't wait on them; -race recompiles
+  # every package, so it gains nothing from a shared build cache either.
+  - name: calico-test-binaries
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    depends: [go-cache]
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    timeout: 1h
+    jobSize: large
+    requests: {cpu: 7000m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    cache:
+      - {name: go, mode: read, path: /gocache}
+    changes:
+      dependsOn: [cmd]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    commands: |
+      # TEMPORARY: the build image lacks the zstd CLI the libbpf tarball needs.
+      dnf install -y -q zstd
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" calico-test-binaries /gocache
       # Shipped for the Felix FVs, which would otherwise build them per lane.
       make -C cmd/calico build-cgo build-race
-      docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
-      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/calico-image.tar
-      artifact push workflow /tmp/calico-image.tar.zst
       artifact push workflow cmd/calico/bin/calico-cgo-amd64
       artifact push workflow cmd/calico/bin/calico-race-amd64
       # Shipped so no Felix lane clones libbpf; the cgo build has usually made it.
@@ -215,6 +355,31 @@ steps:
       test -f "felix/bpf-gpl/.libbpf-${LIBBPF_VERSION}" || { echo "libbpf version marker felix/bpf-gpl/.libbpf-${LIBBPF_VERSION} missing" >&2; exit 1; }
       tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
       artifact push workflow /tmp/libbpf-amd64.tar.zst
+
+  - name: calico-image-buildkit
+    depends: [calico-image-context]
+    changes:
+      dependsOn: [cmd]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    cache:
+      - {name: image, mode: read}
+      - {name: image, mode: write, path: /out}
+    buildkit:
+      tag: calico/calico:latest-amd64
+      context: /cache/calico-image
+      tar: /out/calico-image.tar
+
+  - name: build-calico-image
+    depends: [calico-image-buildkit]
+    jobSize: small
+    changes:
+      dependsOn: [cmd]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    cache:
+      - {name: image, mode: read}
+    commands: |
+      zstd -3 -T0 -o /tmp/calico-image.tar.zst /cache/calico-image.tar
+      artifact push workflow /tmp/calico-image.tar.zst
 
   # Tagged by a hash of the recipe, so an unchanged one is a pull rather than a
   # ~20 minute emulated build.
@@ -295,9 +460,14 @@ steps:
 
   # TypeScript, so there is no Go import graph to gate on.
   - name: build-whisker-image
+    env:
+      # TEMPORARY: the thread pool the old 2000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "2"
     services: [docker]
     timeout: 1h
-    requests: {cpu: 2000m, memory: 1.75Gi}
+    requests: {cpu: 1750m, memory: 1.75Gi}
     changes:
       in:
         - '^whisker/'
@@ -312,12 +482,16 @@ steps:
   # (localhost:5000/calico/<name>:test-build) are the ones they install.
   - name: build-operator-image
     env:
+      # TEMPORARY: the thread pool the old 7000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "7"
       - name: BUILD_CACHE_GROUP
         value: calico
     services: [docker]
     timeout: 1h
     jobSize: large
-    requests: {cpu: 7000m, memory: 8Gi}
+    requests: {cpu: 2000m, memory: 8Gi}
     changes:
       dependsOn: [operator]
       in:
@@ -338,10 +512,15 @@ steps:
   # Windows FV installs these rather than building its own. Nothing else builds
   # them, so this is also where a break in them shows up.
   - name: build-windows-images
+    env:
+      # TEMPORARY: the thread pool the old 7000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "7"
     services: [docker]
     timeout: 1h
     jobSize: large
-    requests: {cpu: 7000m, memory: 8Gi}
+    requests: {cpu: 3250m, memory: 8Gi}
     changes:
       dependsOn: [node, cni-plugin]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
@@ -384,6 +563,10 @@ steps:
   # steps' differing package sets.
   - name: build-e2e-binaries
     env:
+      # TEMPORARY: the thread pool the old 7000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "7"
       - name: BUILD_CACHE_GROUP
         value: e2e
       - name: STORE_BUILD_CACHE
@@ -391,8 +574,8 @@ steps:
     services: [docker]
     timeout: 1h
     jobSize: large
-    requests: {cpu: 7000m, memory: 8Gi}
-    depends: [build-calico-image]
+    requests: {cpu: 1500m, memory: 8Gi}
+    depends: [calico-test-binaries]
     changes:
       dependsOn: [e2e]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
