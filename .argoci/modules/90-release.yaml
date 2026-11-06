@@ -34,3 +34,34 @@ steps:
       # A promotion is a separate run with its own artifact namespace, so the
       # commit is what ties the two together.
       artifact cache store "release-${CI_GIT_SHA}" bin
+
+  - name: release-e2e
+    depends: [check-go, release-build]
+    timeout: 2h
+    requests: {cpu: 3500m, memory: 8Gi}
+    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
+    services:
+      - docker
+    secretBundles:
+      - iss-image-scanning
+      - releasebot-slack
+      - name: argoci-hashrelease-publisher
+        keys:
+          - name: argoci-hashrelease-publisher.json
+            as: HASHRELEASE_PUBLISHER_KEY
+            localFile: /root/secrets/hashrelease-publisher.json
+    env:
+      - name: HASHRELEASE_SERVER_BUCKET
+        value: hashreleaseserver-static
+    commands: |
+      # A fork carries no tags, and the version comes from them.
+      git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
+      $(command -v sudo) apt-get update -qq && $(command -v sudo) apt-get install -y -qq --no-install-recommends rsync
+      # Kept out of the epilogue, whose artifact push needs the CI account.
+      export CLOUDSDK_CONFIG="$(mktemp -d)"
+      export GOOGLE_APPLICATION_CREDENTIALS=/root/secrets/hashrelease-publisher.json
+      gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
+      cd release
+      make e2e
+    epilogue: |
+      artifact push job "${CI_HOME}/${CI_GIT_DIR}/release/_logs" --destination release-e2e-logs || true

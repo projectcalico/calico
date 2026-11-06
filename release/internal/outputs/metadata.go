@@ -33,7 +33,11 @@ import (
 	"github.com/projectcalico/calico/release/internal/registry"
 )
 
-const metadataFileName = "metadata.yaml"
+const (
+	metadataFileName = "metadata.yaml"
+
+	MetadataStep = "metadata"
+)
 
 type Record interface {
 	// attest validates the record before marshalling it, so an invalid record
