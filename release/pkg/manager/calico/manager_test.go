@@ -1152,7 +1152,7 @@ func imageManager(t *testing.T, f *fakeRunner, logsDir string) (*CalicoManager, 
 	// A publish asks each directory for its image names before recording refs.
 	for _, dir := range images.VariantDirs(images.PublishVariants) {
 		base := path.Base(dir)
-		f.on(fmt.Sprintf("make -C %s/%s -s build-images", root, dir), base+" "+base+"-windows", nil)
+		f.on(fmt.Sprintf("make -C %s/%s -s --no-print-directory build-images", root, dir), base+" "+base+"-windows", nil)
 	}
 	if _, ok := f.responses["git rev-parse --abbrev-ref HEAD"]; !ok {
 		f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30\n", nil)
