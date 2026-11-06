@@ -318,17 +318,9 @@ func (l LocalLoader) Valid() error {
 }
 
 func (l LocalLoader) Load() (*Pin, error) {
-	if p, err := reusable(l, l.Config.Dir); err != nil {
-		return nil, err
-	} else if p != nil {
-		if err := setBranch(p, l.Config.RootDir); err != nil {
-			return nil, err
-		}
-		return p, nil
-	}
-	pin, err := l.source()
-	if err != nil {
-		return nil, fmt.Errorf("source pin: %w", err)
+	pin, reused, err := l.find()
+	if err != nil || reused {
+		return pin, err
 	}
 	dirs := []string{l.Config.Dir}
 	if l.Config.HashreleaseDir != "" {
@@ -342,6 +334,34 @@ func (l LocalLoader) Load() (*Pin, error) {
 
 func (l LocalLoader) Reuse(p *Pin) bool {
 	return localCheck(l, p)
+}
+
+// find returns the pin in Dir while the checkout still matches it, else a new one.
+func (l LocalLoader) find() (pin *Pin, reused bool, err error) {
+	if p, err := reusable(l, l.Config.Dir); err != nil {
+		return nil, false, err
+	} else if p != nil {
+		if err := setBranch(p, l.Config.RootDir); err != nil {
+			return nil, false, err
+		}
+		return p, true, nil
+	}
+	pin, err = l.source()
+	if err != nil {
+		return nil, false, fmt.Errorf("source pin: %w", err)
+	}
+	return pin, false, nil
+}
+
+// PreviewLoader loads the pin a LocalLoader would, without writing it, so a
+// preview never replaces the pin a build left for its publish.
+type PreviewLoader struct {
+	LocalLoader
+}
+
+func (l PreviewLoader) Load() (*Pin, error) {
+	pin, _, err := l.find()
+	return pin, err
 }
 
 // localCheck is the reuse rule for LocalLoader.

@@ -25,7 +25,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/operatorimages"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 var imagesSubCommands = func(cfg *Config) []*cli.Command {
@@ -147,7 +146,7 @@ func imagesPublishCommand(cfg *Config) *cli.Command {
 }
 
 // releaseImageList runs make in every release directory, so a test replaces it.
-var releaseImageList = utils.BuildReleaseImageList
+var releaseImageList = images.BuildImages
 
 var imagesCheckOperatorAction = func(cfg *Config) func(ctx context.Context, c *cli.Command) error {
 	return func(_ context.Context, _ *cli.Command) error {

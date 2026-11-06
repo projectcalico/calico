@@ -63,9 +63,13 @@ while `archives` only builds.
   `<logsDir>/<step>/<slug>.log`, so a failed component's log can be found
   without reading the whole run.
 
-The **flow** (`pkg/manager/calico`) builds step values from flags and calls
-verbs in order. The manager predates the step packages and still does some work
-itself. New behaviour goes into a step package; the manager keeps only building
+The **flow** (`pkg/manager/calico`) builds step values from flags into a plan of
+named nodes (`internal/plan`). Every node validates before any node runs, a
+failure rolls back the finished nodes newest first, and a node runs only after
+the nodes it `Requires`. `--plan` lists the nodes and runs only their checks,
+warning on a failure rather than exiting.
+The manager predates the step packages and still does some work itself.
+New behaviour goes into a step package; the manager keeps only building
 values and choosing order.
 
 `cmd/` maps CLI commands and flags onto the flow and onto single-step commands

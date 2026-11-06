@@ -35,13 +35,12 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-// Steps that drive images. The name becomes the log directory and the verb in
-// a failure, so a new step adds one here rather than passing a literal.
 const (
-	buildStep   = "images-build"
-	PublishStep = "images-publish"
-	archiveStep = "images-archive"
-	ResolveStep = "images-resolve"
+	Step        = "images"
+	buildStep   = Step + "-build"
+	PublishStep = Step + "-publish"
+	archiveStep = Step + "-archive"
+	ResolveStep = Step + "-resolve"
 )
 
 // Caps units and each unit's lookups alike, so a registry sees at most its
@@ -57,28 +56,54 @@ const (
 )
 
 var (
+	// StandardReleaseDirs are the component directories whose Makefiles
+	// publish standalone images via release-build/release-publish.
+	// Components bundled into the combined calico image (kube-controllers,
+	// apiserver, dikastes, webhooks, typha, goldmane, guardian,
+	// whisker-backend, key-cert-provisioner, CSI, flexvol, Linux CNI) live
+	// under cmd/calico and are not listed here.
+	StandardReleaseDirs = []string{
+		"cmd/calico",
+		"istio",
+		"node",
+		"third_party/cni-plugins",
+		"third_party/envoy-gateway",
+		"third_party/envoy-proxy",
+		"third_party/envoy-ratelimit",
+		"whisker",
+	}
+
+	// WindowsReleaseDirs are the component directories that ship a Windows
+	// image. Some (node) also ship a standard image; others (cni-plugin) ship
+	// only a Windows image, their Linux counterparts being bundled into the
+	// combined calico image.
+	WindowsReleaseDirs = []string{
+		"cni-plugin",
+		"node",
+	}
+
 	BuildVariants = []Variant{
 		{
 			Name:        StandardVariant,
 			Target:      "release-build",
-			ReleaseDirs: slices.Clone(utils.ImageReleaseDirs),
+			ReleaseDirs: slices.Clone(StandardReleaseDirs),
 		},
 		{
 			Name:        WindowsVariant,
 			Target:      "image-windows",
-			ReleaseDirs: slices.Clone(utils.WindowsReleaseDirs),
+			ReleaseDirs: slices.Clone(WindowsReleaseDirs),
 		},
 	}
 	PublishVariants = []Variant{
 		{
 			Name:        StandardVariant,
 			Target:      "release-publish",
-			ReleaseDirs: slices.Clone(utils.ImageReleaseDirs),
+			ReleaseDirs: slices.Clone(StandardReleaseDirs),
 		},
 		{
 			Name:        WindowsVariant,
 			Target:      "release-windows",
-			ReleaseDirs: slices.Clone(utils.WindowsReleaseDirs),
+			ReleaseDirs: slices.Clone(WindowsReleaseDirs),
 		},
 	}
 )
@@ -95,7 +120,7 @@ var releaseImages = sync.OnceValues(func() ([]string, error) {
 		return nil, fmt.Errorf("determining root git dir: %w", err)
 	}
 	dirs := ReleaseDirs()
-	imgs, err := utils.BuildReleaseImageList(rootDir, dirs...)
+	imgs, err := BuildImages(rootDir, dirs...)
 	if err != nil {
 		return nil, fmt.Errorf("building release images list for release dirs[%s]: %w", strings.Join(dirs, ","), err)
 	}
@@ -107,6 +132,30 @@ var releaseImages = sync.OnceValues(func() ([]string, error) {
 func ReleaseImages() ([]string, error) {
 	imgs, err := releaseImages()
 	return slices.Clone(imgs), err
+}
+
+// BuildImages returns every image built in dirs, whatever the variant.
+func BuildImages(rootDir string, dirs ...string) ([]string, error) {
+	var all []string
+	for _, d := range dirs {
+		imgs, err := buildImages(&command.RealCommandRunner{}, filepath.Join(rootDir, d), os.Environ())
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, imgs...)
+	}
+	return all, nil
+}
+
+func buildImages(r command.CommandRunner, dir string, env []string) ([]string, error) {
+	// RELEASE selects the released image names, set here so they cannot
+	// depend on the caller's environment.
+	env = append(slices.Clone(env), utils.EnvTrue(utils.EnvRelease))
+	out, err := r.RunInDir("", "make", []string{"-C", dir, "-s", "--no-print-directory", "build-images"}, env)
+	if err != nil {
+		return nil, fmt.Errorf("reading images in %s: %w", dir, err)
+	}
+	return strings.Fields(out), nil
 }
 
 // Variant is one kind of image and the directories that ship it.
@@ -174,11 +223,23 @@ func NarrowVariants(variants []Variant, dirs []string) []Variant {
 	}
 	out := make([]Variant, 0, len(variants))
 	for _, v := range variants {
-		v.ReleaseDirs = utils.FilterDirs(dirs, v.ReleaseDirs)
+		v.ReleaseDirs = filterDirs(dirs, v.ReleaseDirs)
 		if len(v.ReleaseDirs) == 0 {
 			continue
 		}
 		out = append(out, v)
+	}
+	return out
+}
+
+// filterDirs keeps the entries of want that appear in have, in their original
+// order.
+func filterDirs(have, want []string) []string {
+	var out []string
+	for _, w := range want {
+		if slices.Contains(have, w) {
+			out = append(out, w)
+		}
 	}
 	return out
 }
@@ -521,18 +582,14 @@ func (c Image) imageNames(u unit) ([]string, error) {
 	if len(u.images) > 0 {
 		return u.images, nil
 	}
-	dir := filepath.Join(c.RepoRoot, u.dir)
-	// RELEASE selects the released image names, set here so they cannot
-	// depend on the caller's environment.
-	env := append(slices.Clone(u.env), utils.EnvTrue(utils.EnvRelease))
-	out, err := c.Runner().RunInDir("", "make", []string{"-C", dir, "-s", "build-images"}, env)
+	all, err := buildImages(c.Runner(), filepath.Join(c.RepoRoot, u.dir), u.env)
 	if err != nil {
-		return nil, fmt.Errorf("reading images in %s: %w", u.dir, err)
+		return nil, err
 	}
 
 	wantWindows := u.variant == WindowsVariant
 	var names []string
-	for name := range strings.FieldsSeq(out) {
+	for _, name := range all {
 		if strings.HasSuffix(name, windowsImageSuffix) == wantWindows {
 			names = append(names, name)
 		}
@@ -548,7 +605,7 @@ func (c Image) imageNames(u unit) ([]string, error) {
 // than declared here.
 func (c Image) tagPrefix(u unit) (string, error) {
 	dir := filepath.Join(c.RepoRoot, u.dir)
-	out, err := c.Runner().RunInDir("", "make", []string{"-C", dir, "-s", "image-tag-prefix"}, u.env)
+	out, err := c.Runner().RunInDir("", "make", []string{"-C", dir, "-s", "--no-print-directory", "image-tag-prefix"}, u.env)
 	if err != nil {
 		return "", fmt.Errorf("reading tag prefix in %s: %w", u.dir, err)
 	}
