@@ -58,7 +58,7 @@
 .argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-old [stable-1-calico-typha-yaml] | cron/e2e-iptables/datastore-k8s-e2e-kdd-old-stable-1-calico-typha-yaml | 212
 .argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-old [stable-1-calico-yaml] | cron/e2e-iptables/datastore-k8s-e2e-kdd-old-stable-1-calico-yaml | 212
 .argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-old [stable-1-canal-yaml] | cron/e2e-iptables/datastore-k8s-e2e-kdd-old-stable-1-canal-yaml | 210
-.argoci/cron/e2e-iptables.yaml | distro-support [centos-stream-8-gcp-kubeadm] | cron/e2e-iptables/distro-support-centos-stream-8-gcp-kubeadm | 225
+.argoci/cron/e2e-iptables.yaml | distro-support [centos-stream-9-gcp-kubeadm] | cron/e2e-iptables/distro-support-centos-stream-9-gcp-kubeadm | 225
 .argoci/cron/e2e-iptables.yaml | distro-support [rhel-10-gcp-kubeadm] | cron/e2e-iptables/distro-support-rhel-10-gcp-kubeadm | 225
 .argoci/cron/e2e-iptables.yaml | distro-support [rhel-9-gcp-kubeadm] | cron/e2e-iptables/distro-support-rhel-9-gcp-kubeadm | 225
 .argoci/cron/e2e-iptables.yaml | distro-support [rocky-linux-8-gcp-kubeadm] | cron/e2e-iptables/distro-support-rocky-linux-8-gcp-kubeadm | 225
