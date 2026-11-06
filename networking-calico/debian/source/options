@@ -4,6 +4,7 @@ tar-ignore = "Makefile"
 tar-ignore = ".semaphore"
 tar-ignore = ".testr.conf"
 tar-ignore = "rpm"
+tar-ignore = "e2e"
 
 # The tar-ignore lines above are applied by
 # release/packaging/utils/make-packages.sh when it builds the .orig tarball,
