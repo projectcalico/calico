@@ -30,6 +30,7 @@ steps:
     requests: {cpu: 500m, memory: 1Gi}
     depends:
       - build-node-image
+      - build-whisker-image
       - build-operator-image
       - build-third-party-images
       - build-e2e-binaries
@@ -38,7 +39,7 @@ steps:
     commands: |
       mkdir -p /cache/kind-inputs
       cd /cache/kind-inputs
-      for f in node-image.tar.zst operator-image.tar.zst third-party-images.tar.zst e2e-binaries.tar.zst; do
+      for f in node-image.tar.zst whisker-image.tar.zst operator-image.tar.zst third-party-images.tar.zst e2e-binaries.tar.zst; do
         artifact pull workflow "$f" &
       done
       wait
@@ -59,6 +60,7 @@ steps:
       put:
         - /cache/calico-image.tar:prefetched/calico-image.tar
         - /cache/kind-inputs/node-image.tar.zst:prefetched/node-image.tar.zst
+        - /cache/kind-inputs/whisker-image.tar.zst:prefetched/whisker-image.tar.zst
         - /cache/kind-inputs/operator-image.tar.zst:prefetched/operator-image.tar.zst
         - /cache/kind-inputs/third-party-images.tar.zst:prefetched/third-party-images.tar.zst
         - /cache/kind-inputs/e2e-binaries.tar.zst:prefetched/e2e-binaries.tar.zst
@@ -80,7 +82,7 @@ steps:
         command -v zstd >/dev/null || { sudo apt-get update -y && sudo apt-get install -y zstd; }
         export PATH="$(pwd)/hack/test/kind:${PATH}"
         export PREFETCHED_ARTIFACTS="${HOME}/prefetched"
-        .argoci/scripts/load-cached-images calico node
+        .argoci/scripts/load-cached-images calico node whisker
         .argoci/scripts/load-e2e-binaries
         export E2E_PREBUILT=true
         make kind-manifest-install-test
