@@ -13,9 +13,10 @@ notifications:
 
 steps:
   - name: renovate
-    # Renovate runs go itself, at the version the repo builds with.
-    useGoBuild: true
+    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
     timeout: 2h
+    # The post-upgrade make targets regenerate deps files in go-build containers.
+    services: [docker]
     jobSize: medium
     requests: {cpu: "4", memory: 8Gi}
     secretBundles:
@@ -27,10 +28,9 @@ steps:
       # as hand-edited and stops updating them.
       - {name: RENOVATE_GIT_AUTHOR, value: "marvin-tigera <marvin-tigera@users.noreply.github.com>"}
       # Renovate strips the environment its commands run with, so this is how
-      # the make targets see them. GOMAXPROCS: they size -j from it, not the
-      # node's cores. NATIVE_GO_BUILD: build here rather than in a nested
-      # go-build container, as this pod has no docker.
-      - {name: RENOVATE_CUSTOM_ENV_VARIABLES, value: '{"GOMAXPROCS": "4", "NATIVE_GO_BUILD": "true"}'}
+      # the make targets see a CPU budget; without it they size -j from the
+      # node's cores rather than this step's request.
+      - {name: RENOVATE_CUSTOM_ENV_VARIABLES, value: '{"GOMAXPROCS": "4"}'}
       - {name: LOG_LEVEL, value: info}
     commands: |
       set -o pipefail
@@ -54,6 +54,16 @@ steps:
       tar -xJf "${node_tar}" --strip-components=1 -C "${HOME}/node"
       export PATH="${HOME}/node/bin:${PATH}"
       npm install -g renovate@43
+
+      # Renovate's gomod manager runs go itself, and the image has none. Go's
+      # toolchain switching then fetches whatever version go.mod asks for.
+      go_tar="$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -1).linux-amd64.tar.gz"
+      curl -fsSLO "https://dl.google.com/go/${go_tar}"
+      echo "$(curl -fsSL "https://dl.google.com/go/${go_tar}.sha256")  ${go_tar}" | sha256sum -c -
+      # Not ~/go, which is GOPATH.
+      mkdir -p "${HOME}/goroot"
+      tar -xzf "${go_tar}" --strip-components=1 -C "${HOME}/goroot"
+      export PATH="${HOME}/goroot/bin:${PATH}"
 
       # A redirect on the push drops the credentials Renovate puts in the URL;
       # git still asks a helper for the redirected host.
