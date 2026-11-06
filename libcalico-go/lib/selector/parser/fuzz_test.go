@@ -168,7 +168,7 @@ func labelSetsFor(selector string) []map[string]string {
 		}
 	}
 	// Give each label a different value, and leave each one out in turn.
-	for offset := range values {
+	for offset := range max(len(labels), len(values)) {
 		set := map[string]string{}
 		for i, l := range labels {
 			if i != offset {
