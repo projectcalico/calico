@@ -151,7 +151,7 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 			calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 			calico.WithVersion(pin.ProductVersion),
 			calico.WithOperatorImage(operator.Registry(o), o.Image, o.Version),
-			calico.WithOperator(operatorBuild(c, o, true, filepath.Join(cfg.LogsDir, pin.ProductVersion))),
+			calico.WithOperator(operatorBuild(c, o, operatorVariants(c), true, filepath.Join(cfg.LogsDir, pin.ProductVersion))),
 			calico.WithOutputDir(hashrel.Source),
 			calico.WithRecordsDir(outputs.RecordsDir(cfg.OutputDir, hashrel.Hash)),
 			calico.WithTmpDir(cfg.TmpDir),
@@ -263,7 +263,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 			calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 			calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 			calico.WithDryRun(c.Bool(localFlag.Name)),
-			calico.WithOperator(operatorPublish(c, o, true, outputs.RecordsDir(cfg.OutputDir, hashrel.Hash), filepath.Join(cfg.LogsDir, hashrel.ProductVersion))),
+			calico.WithOperator(operatorPublish(c, o, operatorVariants(c), true, outputs.RecordsDir(cfg.OutputDir, hashrel.Hash), filepath.Join(cfg.LogsDir, hashrel.ProductVersion))),
 			calico.WithPlanOptions(plan.Options{
 				Preview: c.Bool(planFlag.Name),
 				Skip:    skipSet(c.StringSlice(skipFlagName)),
