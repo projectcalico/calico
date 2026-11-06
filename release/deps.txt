@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.27.1
+go 1.27.3
 cel.dev/expr v0.25.3
 cloud.google.com/go v0.123.0
 cloud.google.com/go/auth v0.20.0
@@ -122,9 +122,9 @@ gopkg.in/inf.v0 v0.9.1
 gopkg.in/natefinch/lumberjack.v2 v2.2.1
 gopkg.in/yaml.v3 v3.0.1
 helm.sh/helm/v3 v3.21.4
-k8s.io/api v0.37.1
-k8s.io/apiextensions-apiserver v0.37.1
-k8s.io/apimachinery v0.37.1
+k8s.io/api v0.37.2
+k8s.io/apiextensions-apiserver v0.37.2
+k8s.io/apimachinery v0.37.2
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.140.0
 k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad
