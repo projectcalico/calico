@@ -16,24 +16,31 @@ package command
 
 // GitInDir runs a git command in a specific directory.
 func GitInDir(dir string, args ...string) (string, error) {
-	return runner().RunInDir(dir, "git", args, nil)
+	return git(args, WithDir(dir))
 }
 
-// Git runs a git command.
-func Git(args ...string) (string, error) {
-	return runner().Run("git", args, nil)
+func git(args []string, opts ...Option) (string, error) {
+	s := &settings{
+		name:   "git",
+		args:   args,
+		runner: runner(),
+	}
+	for _, o := range opts {
+		o.apply(s)
+	}
+	return run(s)
 }
 
-func GitVersion(dir string, includeDirty bool) (string, error) {
+func GitVersion(dir string, includeDirty bool, opts ...Option) (string, error) {
 	args := []string{"describe", "--tags", "--always", "--long", "--abbrev=12"}
 	if includeDirty {
 		args = append(args, "--dirty")
 	}
-	return GitInDir(dir, args...)
+	return git(args, append(opts, WithDir(dir))...)
 }
 
 // GitDir returns the root directory of the git repository.
 func GitDir() (string, error) {
 	args := []string{"rev-parse", "--show-toplevel"}
-	return Git(args...)
+	return git(args)
 }
