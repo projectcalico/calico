@@ -142,6 +142,6 @@ steps:
         .argoci/scripts/load-cached-images calico node whisker
         .argoci/scripts/load-e2e-binaries
         export E2E_PREBUILT=true
-        make "${E2E_TARGET}"
+        make ${E2E_TARGET}
     outputs:
       - {name: e2e-kind, path: /tmp/e2e-kind/e2e-kind.tgz, optional: true}
