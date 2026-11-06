@@ -650,8 +650,7 @@ class Topology(TestBase):
 
         if service["alive"] != expect_alive:
             raise ServiceStateError(
-                "service['alive'] is {0:s} for {1:s} on {2:s}"
-                " - expected {3:s}".format(
+                "service['alive'] is {0:s} for {1:s} on {2:s} - expected {3:s}".format(
                     str(service["alive"]), service_name, hostname, str(expect_alive)
                 )
             )
@@ -684,8 +683,8 @@ class Topology(TestBase):
 
         self.assertTrue(
             len(compute_node_names) == 0,
-            msg="Didn't find felix on %s.  "
-            "Felix was down on %s " % (compute_node_names, felix_down_nodes),
+            msg="Didn't find felix on %s.  Felix was down on %s "
+            % (compute_node_names, felix_down_nodes),
         )
 
     @classmethod
@@ -960,7 +959,7 @@ class Topology2SecurityGroupsBase(Topology):
         be able to ping each other, Group 2 VMs should be able to ping each
         other, but cannot ping between groups.
         """
-        _log.info("Check correct connectivity within and between security " "groups")
+        _log.info("Check correct connectivity within and between security groups")
         self.check_mutual_connectivity(
             pass_list=self.default_group, fail_list=self.group2
         )

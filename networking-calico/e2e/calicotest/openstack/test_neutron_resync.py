@@ -87,7 +87,8 @@ class NeutronResync(TopologyBasic):
         )
         node.execute("sudo cat %s || true" % log_file)
         self.assertEqual(
-            result.return_code, 0,
+            result.return_code,
+            0,
             "calico-resync failed on %s" % node.fqdn,
         )
         return True

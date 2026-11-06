@@ -314,11 +314,8 @@ class TestQoSIPerf(TopologyTwoUbuntuVms):
         # Create rule to limit egress bandwidth.
         run(
             "openstack network qos rule create --type bandwidth-limit"
-            + " --max-kbps %d --max-burst-kbits %d --%s bw-limiter" % (
-                max_kbps,
-                max_burst,
-                direction
-            ),
+            + " --max-kbps %d --max-burst-kbits %d --%s bw-limiter"
+            % (max_kbps, max_burst, direction),
             env=self.env,
         )
         self.trigger_port_qos_update()
@@ -332,8 +329,13 @@ class TestQoSIPerf(TopologyTwoUbuntuVms):
 
         # Verify that the tbf qdisc shows up in 'sudo tc qdisc' in the compute node
         node = LAYOUT.compute_nodes[0]
-        qdisc = node.execute("sudo tc qdisc | grep 'qdisc tbf .*: dev.*rate %d.*peakrate %d.*'" % (max_kbps, max_burst))
-        _log.info("compute_node %s: 'tc qdisc | grep ...' output:\n%s" % (node, qdisc.stdout))
+        qdisc = node.execute(
+            "sudo tc qdisc | grep 'qdisc tbf .*: dev.*rate %d.*peakrate %d.*'"
+            % (max_kbps, max_burst)
+        )
+        _log.info(
+            "compute_node %s: 'tc qdisc | grep ...' output:\n%s" % (node, qdisc.stdout)
+        )
         self.assertEqual(qdisc.return_code, 0)
 
         # Run iperf again.  Expect to see packet loss - i.e. the server
@@ -366,9 +368,8 @@ class TestQoSIPerf(TopologyTwoUbuntuVms):
         if not stream.wait_for_stream_to_finish():
             self.assertTrue(
                 False,
-                msg="The UDP stream did not complete; client:\n%s\nserver:\n%s" % (
-                    stream.client_output(), stream.server_output()
-                )
+                msg="The UDP stream did not complete; client:\n%s\nserver:\n%s"
+                % (stream.client_output(), stream.server_output()),
             )
         return stream
 

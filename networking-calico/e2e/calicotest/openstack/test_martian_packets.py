@@ -125,8 +125,7 @@ class TestMartianPackets(TopologyTwoUbuntuVms):
         _log.info("Checking that packets arrived/didn't arrive as expected")
         self.assertFalse(
             self.target_vm.packet_received(martian_id_string),
-            "Martian packets arrived at destination, from "
-            "the following IPs:"
+            "Martian packets arrived at destination, from the following IPs:"
             + str(self.target_vm.packet_ids_received(martian_id_string)),
         )
         self.assertTrue(

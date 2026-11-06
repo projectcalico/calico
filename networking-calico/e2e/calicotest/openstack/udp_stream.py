@@ -122,13 +122,13 @@ class UdpStream:
             success = True
         else:
             _log.info(
-                "%s packets dropped? " "Check for out of order packets",
+                "%s packets dropped? Check for out of order packets",
                 lost_packets,
             )
             ooo_packets = 0
             m = re.search(r"(\d+) datagrams received out-of-order", additional_line)
             if m:
-                _log.info("Got some datagrams out of order.  " "Looking closer")
+                _log.info("Got some datagrams out of order.  Looking closer")
                 ooo_packets = int(m.group(1))
                 _log.info("Saw %s out-of-order packets", ooo_packets)
             else:
@@ -209,7 +209,7 @@ class UdpStream:
         return False
 
     def server_bandwidth_kbps(self):
-        server_output = self.target_vm.execute('cat test.txt').stdout
+        server_output = self.target_vm.execute("cat test.txt").stdout
         total_time_secs = 0
         total_rcvd_kbytes = 0
         for line in server_output.splitlines():
@@ -218,9 +218,9 @@ class UdpStream:
                 words = line.split()
                 for i in range(1, len(words)):
                     if words[i] == "Kbits/sec":
-                        return int(float(words[i-1]))
+                        return int(float(words[i - 1]))
                     elif words[i] == "Mbits/sec":
-                        return int(float(words[i-1]) * 1000)
+                        return int(float(words[i - 1]) * 1000)
             # When packet loss is expected, the server might not emit the final
             # line that we're looking for just above.  Instead we rely on
             # server timeout to terminate the server iperf process, and we need
@@ -230,10 +230,10 @@ class UdpStream:
                 words = line.split()
                 for i in range(1, len(words)):
                     if words[i] == "KBytes":
-                        total_rcvd_kbytes += float(words[i-1])
+                        total_rcvd_kbytes += float(words[i - 1])
                         break
                     elif words[i] == "MBytes":
-                        total_rcvd_kbytes += float(words[i-1]) * 1000
+                        total_rcvd_kbytes += float(words[i - 1]) * 1000
                         break
                 total_time_secs += 1
 
@@ -257,7 +257,7 @@ class UdpStream:
         return False
 
     def client_output(self):
-        self.vm.execute('cat test.txt').stdout
+        self.vm.execute("cat test.txt").stdout
 
     def server_output(self):
-        self.target_vm.execute('cat test.txt').stdout
+        self.target_vm.execute("cat test.txt").stdout

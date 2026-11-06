@@ -204,8 +204,12 @@ class Controller(object):
             if cidr is not None:
                 body = {
                     "subnets": [
-                        {"cidr": cidr, "ip_version": 4, "network_id": network_id,
-                         "dns_nameservers": ["8.8.8.8"]}
+                        {
+                            "cidr": cidr,
+                            "ip_version": 4,
+                            "network_id": network_id,
+                            "dns_nameservers": ["8.8.8.8"],
+                        }
                     ]
                 }
                 self.tenants[tenant].neutron.create_subnet(body=body)

@@ -133,9 +133,9 @@ class _LiveMigrationDiagnostics(object):
         safe_id = test_self.id().replace(":", "_").replace("/", "_")
         self.dir = os.path.join(LOCAL_DIAGS_DIR, f"{safe_id}-{ts}")
         os.makedirs(self.dir, exist_ok=True)
-        self._bg = []          # local subprocess captures: (name, Popen, [files])
-        self._remote_bg = []   # remote nohup captures: (name, node, pid)
-        self._to_pull = []     # files to scp back: (node, remote_path, local_basename)
+        self._bg = []  # local subprocess captures: (name, Popen, [files])
+        self._remote_bg = []  # remote nohup captures: (name, node, pid)
+        self._to_pull = []  # files to scp back: (node, remote_path, local_basename)
         # The set of compute nodes to capture on.  Use Node objects so we
         # pick up whatever the cluster layout tells us, not a hardcoded list.
         self.computes = [
@@ -184,8 +184,9 @@ class _LiveMigrationDiagnostics(object):
 
         try:
             files = sorted(os.listdir(self.dir))
-            _log.info("=== Diags collected in %s ===\n  %s",
-                      self.dir, "\n  ".join(files))
+            _log.info(
+                "=== Diags collected in %s ===\n  %s", self.dir, "\n  ".join(files)
+            )
         except Exception as e:
             _log.warning("Could not list diags directory %s: %s", self.dir, e)
 
@@ -198,9 +199,16 @@ class _LiveMigrationDiagnostics(object):
         # be root, but fall back to "sudo -n" if not.
         argv = [
             "tcpdump",
-            "-n", "-s", "0", "-U", "-i", "any",
-            "-w", path,
-            "host", self.vm_ip,
+            "-n",
+            "-s",
+            "0",
+            "-U",
+            "-i",
+            "any",
+            "-w",
+            path,
+            "host",
+            self.vm_ip,
         ]
         if os.geteuid() != 0:
             argv = ["sudo", "-n"] + argv
@@ -236,10 +244,7 @@ class _LiveMigrationDiagnostics(object):
         self._start_remote_capture(
             name=f"conntrack-{label}",
             node=node,
-            command=(
-                f"sudo -n conntrack -E -o timestamp,id -p tcp "
-                f"> {remote} 2>&1"
-            ),
+            command=f"sudo -n conntrack -E -o timestamp,id -p tcp > {remote} 2>&1",
             remote_file=remote,
             local_basename=f"conntrack-{label}.log",
         )
@@ -257,10 +262,7 @@ class _LiveMigrationDiagnostics(object):
         self._remote_bg so stop() can SIGTERM it; the file is queued for
         SFTP at stop() under `local_basename`.
         """
-        full_cmd = (
-            f"nohup {command} < /dev/null & "
-            f"echo $!"
-        )
+        full_cmd = f"nohup {command} < /dev/null & echo $!"
         _log.info("Starting remote %s on %s", name, node.fqdn)
         try:
             result = node.execute(full_cmd)
@@ -268,14 +270,18 @@ class _LiveMigrationDiagnostics(object):
             _log.warning("Failed to start %s on %s: %s", name, node.fqdn, e)
             return
         if result.return_code != 0:
-            _log.warning("Remote %s on %s exited rc=%s stderr=%r",
-                         name, node.fqdn, result.return_code, result.stderr)
+            _log.warning(
+                "Remote %s on %s exited rc=%s stderr=%r",
+                name,
+                node.fqdn,
+                result.return_code,
+                result.stderr,
+            )
             return
         try:
             pid = int(result.stdout.strip().splitlines()[-1])
         except (ValueError, IndexError):
-            _log.warning("Could not parse PID for %s from %r",
-                         name, result.stdout)
+            _log.warning("Could not parse PID for %s from %r", name, result.stdout)
             return
         self._remote_bg.append((name, node, pid))
         self._to_pull.append((node, remote_file, local_basename))
@@ -285,15 +291,16 @@ class _LiveMigrationDiagnostics(object):
         try:
             node.execute(
                 f"sudo -n kill -TERM {pid} 2>/dev/null; "
-                f"for i in 1 2 3 4 5; do "
-                f"  sleep 0.2; "
+                "for i in 1 2 3 4 5; do "
+                "  sleep 0.2; "
                 f"  kill -0 {pid} 2>/dev/null || break; "
-                f"done; "
+                "done; "
                 f"sudo -n kill -KILL {pid} 2>/dev/null; true"
             )
         except Exception as e:
-            _log.warning("Failed to stop %s (pid=%s) on %s: %s",
-                         name, pid, node.fqdn, e)
+            _log.warning(
+                "Failed to stop %s (pid=%s) on %s: %s", name, pid, node.fqdn, e
+            )
             return
         _log.info("Stopped remote %s (pid=%s) on %s", name, pid, node.fqdn)
 
@@ -304,10 +311,10 @@ class _LiveMigrationDiagnostics(object):
         # Note: redirect must be on the compound statement; "exec while"
         # is a bash syntax error.
         script = (
-            f"while true; do "
-            f"  printf -- '--- %s ---\\n' \"$(date '+%s.%N %Y-%m-%dT%H:%M:%S.%6N')\"; "
+            "while true; do "
+            "  printf -- '--- %s ---\\n' \"$(date '+%s.%N %Y-%m-%dT%H:%M:%S.%6N')\"; "
             f"  ss --tcp --extended --info --options dst {self.vm_ip}; "
-            f"  sleep 0.5; "
+            "  sleep 0.5; "
             f"done > {path} 2>&1"
         )
         self._start_bg("ss-test-node", ["bash", "-c", script])
@@ -344,7 +351,10 @@ class _LiveMigrationDiagnostics(object):
             _log.warning(
                 "Background %s exited immediately with rc=%s; "
                 "see %s and %s for details",
-                name, rc, out_path, err_path,
+                name,
+                rc,
+                out_path,
+                err_path,
             )
 
     # ----- snapshots -------------------------------------------------------
@@ -485,7 +495,8 @@ class TestLiveMigration(Migration):
                 _ = ssh.execute("date")
                 if (
                     migration_done_at is not None
-                    and time.monotonic() - migration_done_at >= observe_after_migration_s
+                    and time.monotonic() - migration_done_at
+                    >= observe_after_migration_s
                 ):
                     break
                 time.sleep(probe_interval_s)

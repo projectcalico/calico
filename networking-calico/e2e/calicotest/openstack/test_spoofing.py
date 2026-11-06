@@ -352,8 +352,8 @@ class TestSpoofing(Topology):
         self.assertEqual(
             num_packets,
             2,
-            msg="Test Failure - saw %s packets at "
-            "target - expected exactly 2." % num_packets,
+            msg="Test Failure - saw %s packets at target - expected exactly 2."
+            % num_packets,
         )
 
         # Leave the VM the way we found it.
@@ -374,7 +374,7 @@ class TestSpoofing(Topology):
         # Flags on this command set snooping on any interface (-i any),
         # suppressing some protocol info (-q), using IPs rather than
         # FQDNs (-n), don't buffer the output (-l)
-        command = "sudo timeout %s tcpdump -qnl -i any " "%s > %s 2>&1 & disown" % (
+        command = "sudo timeout %s tcpdump -qnl -i any %s > %s 2>&1 & disown" % (
             run_time,
             proto,
             cls.TCPDUMP_FILE_NAME,

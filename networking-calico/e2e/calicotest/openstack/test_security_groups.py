@@ -279,8 +279,10 @@ class TestLargeSecurityGroup(Topology):
                 "tcp",
                 80,
                 80,
-                ["10.253.%d.%d/32" % (ii / 255, (ii % 255) + 1)
-                 for ii in range(settings.OPENSTACK_MAX_RULES_IN_TEST)],
+                [
+                    "10.253.%d.%d/32" % (ii / 255, (ii % 255) + 1)
+                    for ii in range(settings.OPENSTACK_MAX_RULES_IN_TEST)
+                ],
                 update_cache=False,
             )
         except Exception:

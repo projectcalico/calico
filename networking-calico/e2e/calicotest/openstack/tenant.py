@@ -908,27 +908,30 @@ class Tenant(object):
             # check if there is a rule like this already:
             # ... and create it if not
             if not any(
-                    x["port_range_min"] == from_port
-                    and x["port_range_max"] == to_port
-                    and x["direction"] == direction
-                    and x["protocol"] == proto
-                    and x["remote_ip_prefix"] in cidrs
-                    for x in parent_group["security_group_rules"]
+                x["port_range_min"] == from_port
+                and x["port_range_max"] == to_port
+                and x["direction"] == direction
+                and x["protocol"] == proto
+                and x["remote_ip_prefix"] in cidrs
+                for x in parent_group["security_group_rules"]
             ):
                 _log.debug("Adding RULES with:")
                 _log.debug("ip_proto=%s", proto)
                 _log.debug("from_port=%s", from_port)
                 _log.debug("to_port=%s", to_port)
                 body = {
-                    "security_group_rules": [{
-                        "security_group_id": parent_group["id"],
-                        "direction": direction,
-                        "protocol": proto,
-                        "port_range_min": from_port,
-                        "port_range_max": to_port,
-                        "remote_ip_prefix": cidr,
-                        "ethertype": ethertype,
-                    } for cidr in cidrs],
+                    "security_group_rules": [
+                        {
+                            "security_group_id": parent_group["id"],
+                            "direction": direction,
+                            "protocol": proto,
+                            "port_range_min": from_port,
+                            "port_range_max": to_port,
+                            "remote_ip_prefix": cidr,
+                            "ethertype": ethertype,
+                        }
+                        for cidr in cidrs
+                    ],
                 }
                 self.neutron.create_security_group_rule(body)
                 changes_made.append(True)
@@ -1092,11 +1095,11 @@ class Tenant(object):
             # Update our cache.
             if parent_group and update_cache:
                 _log.info("Update cache")
-                self.security_groups[
-                    parent_groupname
-                ] = self.neutron.show_security_group(parent_group["id"])[
-                    "security_group"
-                ]
+                self.security_groups[parent_groupname] = (
+                    self.neutron.show_security_group(parent_group["id"])[
+                        "security_group"
+                    ]
+                )
                 _log.info("Updated group: %s", self.security_groups[parent_groupname])
             break
         else:

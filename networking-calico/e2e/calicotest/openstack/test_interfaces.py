@@ -103,9 +103,11 @@ class TestMultipleInterfaces(Topology):
         ]
         for source, dest in can_ping:
             ping = functools.partial(self.assert_can_ping, source, dest)
-            context = (
-                "TestMultipleInterfaces.test_multiple_interfaces(%s, %s, %s)"
-            ) % (self.assert_can_ping, source, dest)
+            context = "TestMultipleInterfaces.test_multiple_interfaces(%s, %s, %s)" % (
+                self.assert_can_ping,
+                source,
+                dest,
+            )
             retry_until_success(ping, context_string=context)
 
 
@@ -199,7 +201,8 @@ class TestMultipleInterfacesSecGroups(Topology):
             context = (
                 "TestMultipleInterfacesSecGroups."
                 "test_multiple_interfaces_and_sec_groups(%s, %s, %s)"
-            ) % (self.assert_can_ping, source, dest)
+                % (self.assert_can_ping, source, dest)
+            )
             retry_until_success(ping, context_string=context)
 
         # ... but *not* the interface of vm_both that isn't on their network.
@@ -307,6 +310,7 @@ class TestFlapInterfaces(Topology):
             interfaces = vm.vm.interface_list()
             _log.info("interfaces = %r", interfaces)
             assert not interfaces
+
         retry_until_success(interface_gone, retries=10, wait_time=5)
 
         _log.info("Detached port; checking connectivity")

@@ -105,7 +105,9 @@ class LiveMigrationLatency(Topology):
         """
         self.migrate_vm.vm.get()
         current_host = getattr(
-            self.migrate_vm.vm, "OS-EXT-SRV-ATTR:host", None,
+            self.migrate_vm.vm,
+            "OS-EXT-SRV-ATTR:host",
+            None,
         )
         _log.info("migrate_vm is currently on %s", current_host)
         for node in [self.node2, self.node3]:
@@ -115,8 +117,7 @@ class LiveMigrationLatency(Topology):
             "Could not find migration target; VM is on %s" % current_host
         )
 
-    def _measure_ping_gap(self, client_vm, target_ip, duration,
-                          interval=0.2):
+    def _measure_ping_gap(self, client_vm, target_ip, duration, interval=0.2):
         """
         Run ping from client_vm to target_ip for the given duration,
         in a background thread.  Returns a ThreadWithReturn whose
@@ -126,10 +127,10 @@ class LiveMigrationLatency(Topology):
 
         Parse the ping output afterwards with _parse_ping_gap().
         """
+
         def run_ping():
             return client_vm.execute(
-                "ping -i %s -w %d %s"
-                % (interval, duration, target_ip)
+                "ping -i %s -w %d %s" % (interval, duration, target_ip)
             )
 
         thread = ThreadWithReturn(target=run_ping)
@@ -187,7 +188,10 @@ class TestLiveMigrationConnectivity(LiveMigrationLatency):
 
         # Start pinging in a background thread.
         ping_thread = self._measure_ping_gap(
-            self.client_vm, target_ip, duration=120, interval=0.2,
+            self.client_vm,
+            target_ip,
+            duration=120,
+            interval=0.2,
         )
 
         # Give ping a few seconds to start.
@@ -195,15 +199,15 @@ class TestLiveMigrationConnectivity(LiveMigrationLatency):
 
         # Trigger live migration and wait for it to complete.
         target = self._migration_target()
-        _log.info("Live-migrating %s to %s", self.migrate_vm.name,
-                  target.fqdn)
+        _log.info("Live-migrating %s to %s", self.migrate_vm.name, target.fqdn)
         self.migrate_vm.live_migrate(
             self.zonify(target),
             block_migration=False,
             disk_over_commit=False,
         )
         self.migrate_vm.wait_for_state(
-            "ACTIVE", retries=self.migrate_vm.image.active_time,
+            "ACTIVE",
+            retries=self.migrate_vm.image.active_time,
         )
         _log.info("Migration complete")
 
@@ -217,10 +221,9 @@ class TestLiveMigrationConnectivity(LiveMigrationLatency):
 
         gap = self._parse_ping_gap(ping_result.stdout, interval=0.2)
         _log.info("Measured connectivity gap: %.1f seconds", gap)
-        assert gap <= MAX_MIGRATION_GAP_SECS, (
-            "Connectivity gap %.1fs exceeds maximum %ds"
-            % (gap, MAX_MIGRATION_GAP_SECS)
-        )
+        assert (
+            gap <= MAX_MIGRATION_GAP_SECS
+        ), "Connectivity gap %.1fs exceeds maximum %ds" % (gap, MAX_MIGRATION_GAP_SECS)
 
         self.check_mutual_connectivity(self.vms)
 
@@ -237,16 +240,12 @@ class TestLiveMigrationConnectivity(LiveMigrationLatency):
         # Start iperf server on the migrating VM.  Redirect output and
         # use nohup so the SSH channel closes promptly.
         self.migrate_vm.execute("pkill iperf || true")
-        self.migrate_vm.execute(
-            "nohup iperf -s </dev/null >/dev/null 2>&1 &"
-        )
+        self.migrate_vm.execute("nohup iperf -s </dev/null >/dev/null 2>&1 &")
         time.sleep(1)
 
         # Run iperf client in a background thread.
         def run_iperf():
-            return self.client_vm.execute(
-                "iperf -c %s -t 120 -i 1" % server_ip
-            )
+            return self.client_vm.execute("iperf -c %s -t 120 -i 1" % server_ip)
 
         iperf_thread = ThreadWithReturn(target=run_iperf)
         iperf_thread.start()
@@ -254,15 +253,15 @@ class TestLiveMigrationConnectivity(LiveMigrationLatency):
 
         # Trigger live migration.
         target = self._migration_target()
-        _log.info("Live-migrating %s to %s", self.migrate_vm.name,
-                  target.fqdn)
+        _log.info("Live-migrating %s to %s", self.migrate_vm.name, target.fqdn)
         self.migrate_vm.live_migrate(
             self.zonify(target),
             block_migration=False,
             disk_over_commit=False,
         )
         self.migrate_vm.wait_for_state(
-            "ACTIVE", retries=self.migrate_vm.image.active_time,
+            "ACTIVE",
+            retries=self.migrate_vm.image.active_time,
         )
         _log.info("Migration complete")
 
@@ -276,8 +275,9 @@ class TestLiveMigrationConnectivity(LiveMigrationLatency):
 
         # iperf exits 0 if the connection completed successfully.
         # A broken TCP connection would cause a non-zero exit.
-        assert iperf_result.return_code == 0, \
-            "iperf exited with error — TCP connection was broken"
+        assert (
+            iperf_result.return_code == 0
+        ), "iperf exited with error — TCP connection was broken"
 
         self.check_mutual_connectivity(self.vms)
 
@@ -295,9 +295,7 @@ class TestLiveMigrationRouteMetrics(LiveMigrationLatency):
         Returns the metric as an integer, or None if no route found.
         """
         node.connect()
-        result = node.execute(
-            "ip route show %s" % vm_ip
-        )
+        result = node.execute("ip route show %s" % vm_ip)
         # Example output: "10.28.0.5 dev tap12345 proto 80 metric 1024"
         match = re.search(r"metric\s+(\d+)", result.stdout)
         if match:
@@ -315,15 +313,15 @@ class TestLiveMigrationRouteMetrics(LiveMigrationLatency):
         vm_ip = self.migrate_vm.get_ip_addr()
 
         target = self._migration_target()
-        _log.info("Live-migrating %s to %s", self.migrate_vm.name,
-                  target.fqdn)
+        _log.info("Live-migrating %s to %s", self.migrate_vm.name, target.fqdn)
         self.migrate_vm.live_migrate(
             self.zonify(target),
             block_migration=False,
             disk_over_commit=False,
         )
         self.migrate_vm.wait_for_state(
-            "ACTIVE", retries=self.migrate_vm.image.active_time,
+            "ACTIVE",
+            retries=self.migrate_vm.image.active_time,
         )
         _log.info("Migration complete")
 
@@ -333,11 +331,8 @@ class TestLiveMigrationRouteMetrics(LiveMigrationLatency):
         # field in FelixConfiguration.
         metric = self._get_route_metric(target, vm_ip)
         _log.info("Route metric immediately after migration: %s", metric)
-        assert metric is not None, \
-            "No route for %s on destination node" % vm_ip
-        assert metric < 1024, (
-            "Route metric %d is not elevated after migration" % metric
-        )
+        assert metric is not None, "No route for %s on destination node" % vm_ip
+        assert metric < 1024, "Route metric %d is not elevated after migration" % metric
 
         # Wait for TimeWait to expire and check the metric reverts.  Note,
         # "TimeWait" here means the time for which we continue advertising a
@@ -374,7 +369,10 @@ class TestRapidSequentialMigration(LiveMigrationLatency):
         target_ip = self.migrate_vm.get_ip_addr()
 
         ping_thread = self._measure_ping_gap(
-            self.client_vm, target_ip, duration=180, interval=0.2,
+            self.client_vm,
+            target_ip,
+            duration=180,
+            interval=0.2,
         )
         time.sleep(3)
 
@@ -387,7 +385,8 @@ class TestRapidSequentialMigration(LiveMigrationLatency):
             disk_over_commit=False,
         )
         self.migrate_vm.wait_for_state(
-            "ACTIVE", retries=self.migrate_vm.image.active_time,
+            "ACTIVE",
+            retries=self.migrate_vm.image.active_time,
         )
         _log.info("Migration 1 complete")
 
@@ -400,7 +399,8 @@ class TestRapidSequentialMigration(LiveMigrationLatency):
             disk_over_commit=False,
         )
         self.migrate_vm.wait_for_state(
-            "ACTIVE", retries=self.migrate_vm.image.active_time,
+            "ACTIVE",
+            retries=self.migrate_vm.image.active_time,
         )
         _log.info("Migration 2 complete")
 
@@ -414,9 +414,11 @@ class TestRapidSequentialMigration(LiveMigrationLatency):
         gap = self._parse_ping_gap(ping_result.stdout, interval=0.2)
         _log.info("Measured max connectivity gap: %.1f seconds", gap)
         # Allow slightly more for two migrations.
-        assert gap <= MAX_MIGRATION_GAP_SECS * 2, (
-            "Connectivity gap %.1fs exceeds maximum %ds for 2 migrations"
-            % (gap, MAX_MIGRATION_GAP_SECS * 2)
+        assert (
+            gap <= MAX_MIGRATION_GAP_SECS * 2
+        ), "Connectivity gap %.1fs exceeds maximum %ds for 2 migrations" % (
+            gap,
+            MAX_MIGRATION_GAP_SECS * 2,
         )
 
         self.check_mutual_connectivity(self.vms)

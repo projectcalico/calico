@@ -102,7 +102,7 @@ class SSH(object):
                     raise
                 else:
                     _log.info(
-                        "Hit expected paramiko error, retrying. " "Retries left %s",
+                        "Hit expected paramiko error, retrying. Retries left %s",
                         retries,
                     )
                     retries -= 1
