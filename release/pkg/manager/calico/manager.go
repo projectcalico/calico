@@ -105,7 +105,7 @@ var (
 	// Windows ships one manifest, so its branch tag is a registry-side copy.
 	windowsBranchTagTarget = "retag-windows-image-with-registries"
 
-	windowsBranchTagDirs = slices.Clone(utils.WindowsReleaseDirs)
+	windowsBranchTagDirs = slices.Clone(images.WindowsReleaseDirs)
 )
 
 func NewManager(opts ...Option) (*CalicoManager, error) {
