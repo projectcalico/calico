@@ -29,6 +29,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"go.yaml.in/yaml/v3"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
@@ -60,6 +61,9 @@ var (
 	helmIndexFileName = "index.yaml"
 
 	s3ACLPublicRead = []string{"--acl", "public-read"}
+
+	// Number of image release directories published at once.
+	publishDirConcurrency = 3
 )
 
 func NewManager(opts ...Option) *CalicoManager {
@@ -673,11 +677,14 @@ func (r *CalicoManager) buildHelmIndex(chartDir, chartURL string) error {
 	if err := os.MkdirAll(tmpChartsDir, utils.DirPerms); err != nil {
 		return fmt.Errorf("create temp dir for building helm index: %w", err)
 	}
-	defer func() {
-		if err := os.RemoveAll(tmpChartsDir); err != nil {
-			logrus.WithError(err).Warnf("failed to remove helm index staging dir %s", tmpChartsDir)
-		}
-	}()
+	// Releases must keep the staging dir: updateHelmChartIndex uploads index.yaml from it at publish time.
+	if r.isHashRelease {
+		defer func() {
+			if err := os.RemoveAll(tmpChartsDir); err != nil {
+				logrus.WithError(err).Warnf("failed to remove helm index staging dir %s", tmpChartsDir)
+			}
+		}()
+	}
 
 	for _, chart := range utils.AllReleaseCharts() {
 		srcChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion()))
@@ -1555,10 +1562,18 @@ func (r *CalicoManager) publishContainerImages() error {
 			return nil
 		}
 	}
+	// Each directory already pushes to every registry concurrently, so a small limit is
+	// enough to saturate the uplink without tripping registry rate limits.
+	var g errgroup.Group
+	g.SetLimit(publishDirConcurrency)
 	for _, dir := range imageReleaseDirs {
-		if err := publish(dir, "release-publish", "publish"); err != nil {
-			return err
-		}
+		g.Go(func() error {
+			logrus.WithField("dir", dir).Info("Publishing images")
+			return publish(dir, "release-publish", "publish")
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return err
 	}
 	for _, dir := range windowsReleaseDirs {
 		if err := publish(dir, "release-windows", "publish-windows"); err != nil {

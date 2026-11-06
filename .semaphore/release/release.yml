@@ -40,6 +40,8 @@ blocks:
           - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://eu.gcr.io
           - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://asia.gcr.io
           - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://us.gcr.io
+          # The upload limit is daemon-wide and shared by every concurrent image push; the default of 5 serialises them.
+          - ./hack/set-docker-max-concurrent-uploads.sh 20
       jobs:
         - name: "Release on Semaphore VM"
           execution_time_limit:
