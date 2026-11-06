@@ -1513,3 +1513,49 @@ func TestReadsFromMake(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildImages(t *testing.T) {
+	root, err := command.GitDir()
+	if err != nil {
+		t.Fatalf("repo root: %v", err)
+	}
+	for _, tc := range []struct {
+		name    string
+		dirs    []string
+		want    []string
+		wantErr bool
+	}{
+		{name: "one dir", dirs: []string{"cmd/calico"}, want: []string{"calico"}},
+		{name: "a dir with a windows image", dirs: []string{"node"}, want: []string{"node", "node-windows"}},
+		{name: "a dir with no windows image", dirs: []string{"whisker"}, want: []string{"whisker"}},
+		{name: "several dirs", dirs: []string{"whisker", "cmd/calico"}, want: []string{"whisker", "calico"}},
+		{name: "a dir with no images", dirs: []string{"api"}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := BuildImages(root, tc.dirs...)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("got %q, want an error", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("BuildImages: %v", err)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	t.Run("under a parent make", func(t *testing.T) {
+		t.Setenv("MAKEFLAGS", "w")
+		got, err := BuildImages(root, "whisker")
+		if err != nil {
+			t.Fatalf("BuildImages: %v", err)
+		}
+		if want := []string{"whisker"}; !slices.Equal(got, want) {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+}
