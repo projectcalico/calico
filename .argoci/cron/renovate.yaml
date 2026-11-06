@@ -65,9 +65,8 @@ steps:
       tar -xzf "${go_tar}" --strip-components=1 -C "${HOME}/goroot"
       export PATH="${HOME}/goroot/bin:${PATH}"
 
-      # A redirect on the push drops the credentials Renovate puts in the URL;
-      # git still asks a helper for the redirected host.
-      echo "HTTPS_PROXY=${HTTPS_PROXY:-unset} https_proxy=${https_proxy:-unset}"
+      # Pushes here follow a redirect that drops the credentials Renovate puts
+      # in the remote URL; git still asks a helper for the redirected host.
       git config --global credential.https://github.com.helper store
       printf 'https://x-access-token:%s@github.com\n' "${MARVIN_GITHUB_TOKEN}" > "${HOME}/.git-credentials"
       chmod 600 "${HOME}/.git-credentials"
