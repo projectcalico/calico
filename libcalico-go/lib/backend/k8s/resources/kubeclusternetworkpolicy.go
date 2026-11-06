@@ -23,8 +23,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
-	client "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
+	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1beta1"
+	client "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1beta1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
@@ -36,7 +36,7 @@ import (
 // Note that this client is only intended for use by the felix syncer in KDD mode,
 // and as such is largely unimplemented except for the functions required by the syncer.
 func NewKubernetesClusterNetworkPolicyClient(
-	client *client.PolicyV1alpha2Client,
+	client *client.PolicyV1beta1Client,
 ) K8sResourceClient {
 	return &clusterNetworkPolicyClient{
 		Converter: conversion.NewConverter(),
@@ -47,7 +47,7 @@ func NewKubernetesClusterNetworkPolicyClient(
 // Implements the api.Client interface for Kubernetes ClusterNetworkPolicy.
 type clusterNetworkPolicyClient struct {
 	conversion.Converter
-	client *client.PolicyV1alpha2Client
+	client *client.PolicyV1beta1Client
 }
 
 func (c *clusterNetworkPolicyClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
