@@ -30,6 +30,18 @@ fi
 
 fetch_tarball() {
     local name=$1
+    # A machine with no artifact-store credentials has its tarballs shipped here.
+    # An image built straight to a tar arrives uncompressed.
+    if [ -n "${PREFETCHED_ARTIFACTS:-}" ]; then
+        if [ -f "${PREFETCHED_ARTIFACTS}/${name}" ]; then
+            mv "${PREFETCHED_ARTIFACTS}/${name}" "/tmp/${name}"
+        elif [ -f "${PREFETCHED_ARTIFACTS}/${name%.zst}" ]; then
+            mv "${PREFETCHED_ARTIFACTS}/${name%.zst}" "/tmp/${name%.zst}"
+        else
+            return 1
+        fi
+        return
+    fi
     if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
         ( cd /tmp && artifact pull workflow "${name}" )
         return
@@ -47,7 +59,7 @@ load_image() {
 
     if ! fetch_tarball "${s3_path}"; then
         # Under ArgoCI the producer has already run, so a miss is a real failure.
-        if [ -n "${CI_ARTIFACT_STORAGE:-}" ] && was_requested "$component"; then
+        if [ -n "${CI_ARTIFACT_STORAGE:-}${PREFETCHED_ARTIFACTS:-}" ] && was_requested "$component"; then
             echo "Expected ${name} from ${CI_ARTIFACT_STORAGE}/${s3_path} and it was not there." >&2
             return 1
         fi
@@ -62,7 +74,9 @@ load_image() {
 
     echo "Loading cached ${name} image..."
     local tar_path="/tmp/${s3_path%.zst}"
-    zstd -d --rm -o "${tar_path}" "/tmp/${s3_path}"
+    if [ -f "/tmp/${s3_path}" ]; then
+        zstd -d --rm -f -o "${tar_path}" "/tmp/${s3_path}"
+    fi
     docker load -i "${tar_path}"
     rm -f "${tar_path}"
 
