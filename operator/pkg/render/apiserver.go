@@ -600,6 +600,12 @@ func (c *apiServerComponent) calicoCustomResourcesClusterRole() *rbacv1.ClusterR
 				"patch",
 			},
 		},
+		{
+			// IPPool creation marks the pool Allocatable via the status subresource.
+			APIGroups: []string{"crd.projectcalico.org"},
+			Resources: []string{"ippools/status"},
+			Verbs:     []string{"update"},
+		},
 	}
 	//nolint:staticcheck // Ignore QF1001 could apply De Morgan's law
 	if c.cfg.KubernetesVersion == nil || !(c.cfg.KubernetesVersion != nil && c.cfg.KubernetesVersion.Major < 2 && c.cfg.KubernetesVersion.Minor < 30) {
