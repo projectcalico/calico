@@ -1644,7 +1644,6 @@ components:
       - ^lib/std/log/[^/]*\.go$
       - ^lib\.Makefile$
       - ^metadata\.mk$
-      - ^pkg/buildinfo/[^/]*\.go$
       - ^pod2daemon/
     exclude:
       - ^(?:[^/]+/)*AUTHORS[^/]*$
@@ -1656,7 +1655,6 @@ components:
       - ^(?:[^/]+/)*[^/]*\.md$
       - ^(?:[^/]+/)*\.gitignore$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
-      - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
   release:
     in:
       - ^api/pkg/lib/numorstring/[^/]*\.go$
