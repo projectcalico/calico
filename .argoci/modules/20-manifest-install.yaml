@@ -16,9 +16,8 @@ defaults:
 steps:
   - name: manifest-install-kind-vm
     createVM:
-      # TEMPORARY: the family createVM derives keeps go-build's release suffix,
-      # which the image families drop.
-      vmImage: ci-base-1-27-3-llvm21-1-8-k8s1-37-1-1
+      # TEMPORARY: a test build of scratch-utils v0.6.
+      image: gcr.io/unique-caldron-775/scratch-utils:v0.6-test-190c538
       machineType: e2-standard-8
       diskType: pd-ssd
       diskSize: 200GB
@@ -56,6 +55,7 @@ steps:
     cache:
       - {name: kind-inputs, mode: read}
     runOnVM:
+      image: gcr.io/unique-caldron-775/scratch-utils:v0.6-test-190c538
       put:
         - /cache/calico-image.tar:prefetched/calico-image.tar
         - /cache/kind-inputs/node-image.tar.zst:prefetched/node-image.tar.zst
