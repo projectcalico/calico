@@ -24,6 +24,9 @@ sleep $((RANDOM % 60))
 createLocalSecret "marvin" "${HOME}/.keys/marvin" || true
 createLocalSecret "banzai-google-service-account.json" "${HOME}/secrets/banzai-google-service-account.json" || true
 createLocalSecret "docker_cfg.json" "${HOME}/.docker/config.json" || true
+# bz init copies ~/secrets into the profile, where Calico installs look for the
+# registry pull secret.
+createLocalSecret "docker_cfg.json" "${HOME}/secrets/docker_cfg.json" || true
 # Red Hat pull secret for aws-openshift provisioning; no-op until the secret is
 # added to the argoci store (see aws-openshift:check-prereqs). Staged into the
 # bz profile below.
