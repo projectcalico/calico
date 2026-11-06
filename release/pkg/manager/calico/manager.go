@@ -859,7 +859,6 @@ func (r *CalicoManager) PublishRelease() error {
 func (r *CalicoManager) publishPlan() []plan.Node {
 	nodes := []plan.Node{
 		{Name: prepPublishStep, Validate: r.publishPrereqs},
-		// Before images, whose scan sends the operator to ISS.
 		r.operatorNode(),
 	}
 	for _, u := range r.uploads() {
@@ -871,7 +870,7 @@ func (r *CalicoManager) publishPlan() []plan.Node {
 func (r *CalicoManager) uploads() []distribution.Upload {
 	// The registries go first: metadata records the digests they produce
 	uploads := []distribution.Upload{
-		{Handler: distribution.Publisher{Kind: images.Step, Action: r.imagesAction()}},
+		{Handler: distribution.Publisher{Kind: images.Step, Action: r.imagesAction()}, Requires: r.beforeImagesPublish()},
 		{Handler: distribution.Publisher{Kind: chartsDir, Action: r.publishHelmCharts}},
 	}
 	uploads = append(uploads,
@@ -888,6 +887,14 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 	// Last: the index it writes points at the github release's download URLs,
 	// which 404 until that release exists.
 	return append(uploads, r.helmIndexUpload())
+}
+
+// The images scan sends these to ISS, which a skip defers to a later scan.
+func (r *CalicoManager) beforeImagesPublish() []string {
+	if r.operator == nil || r.planOptions.Skip[operator.Step] {
+		return nil
+	}
+	return []string{operator.Step}
 }
 
 func (r *CalicoManager) buildMetadata() error {

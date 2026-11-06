@@ -2266,6 +2266,47 @@ func TestPublishNodes(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("the images upload requires the operator ISS scans", func(t *testing.T) {
+		requires := func(r *CalicoManager) []string {
+			for _, n := range r.publishPlan() {
+				if n.Name == images.Step {
+					return n.Requires
+				}
+			}
+			t.Fatalf("no %s node", images.Step)
+			return nil
+		}
+
+		t.Run("when the operator publishes", func(t *testing.T) {
+			r := &CalicoManager{calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir(), operator: func() error { return nil }}
+			if diff := cmp.Diff([]string{operator.Step}, requires(r)); diff != "" {
+				t.Errorf("requires (-want +got):\n%s", diff)
+			}
+			got := names(r)
+			if slices.Index(got, operator.Step) >= slices.Index(got, images.Step) {
+				t.Errorf("%s does not run before %s", operator.Step, images.Step)
+			}
+		})
+
+		t.Run("not when it does not", func(t *testing.T) {
+			r := &CalicoManager{calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir()}
+			if got := requires(r); got != nil {
+				t.Errorf("requires %v with no operator publish", got)
+			}
+		})
+
+		t.Run("not when the operator is skipped", func(t *testing.T) {
+			r := &CalicoManager{
+				calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir(),
+				operator:    func() error { return nil },
+				planOptions: plan.Options{Skip: map[string]bool{operator.Step: true}},
+			}
+			if got := requires(r); got != nil {
+				t.Errorf("requires %v with the operator skipped", got)
+			}
+		})
+	})
 }
 
 func TestPublishRelease(t *testing.T) {
