@@ -337,7 +337,7 @@ steps:
       - name: USE_HASH_RELEASE
         value: "true"
     matrix:
-      - name: beta-calico-yaml-iptables
+      - name: beta-or-stable-calico-yaml-iptables
         env:
           - name: K8S_VERSION
             value: beta-or-stable
