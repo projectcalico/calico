@@ -289,7 +289,7 @@ func validate(cfg *Config, path string) error {
 
 	for i, c := range cfg.Provides {
 		if !capabilityName.MatchString(c) {
-			return fmt.Errorf("%s: provides[%d] (%q) must be a CamelCase capability name, letters and digits only", path, i, c)
+			return fmt.Errorf("%s: provides[%d] (%q) must be a capability name of letters and digits only", path, i, c)
 		}
 	}
 

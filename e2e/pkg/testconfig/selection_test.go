@@ -81,6 +81,11 @@ exclude:
       quarantined: 18/09/2026
 `
 
+	emptyNeedsYAML = `
+needs:
+  - ""
+`
+
 	badUpstreamYAML = `
 upstream:
   - pattern: "("
@@ -190,6 +195,7 @@ func TestSelectionFieldsRejectBadValues(t *testing.T) {
 		"capability.yaml": badCapabilityYAML,
 		"date.yaml":       badDateYAML,
 		"upstream.yaml":   badUpstreamYAML,
+		"needs.yaml":      emptyNeedsYAML,
 	} {
 		if _, err := Load(writeFile(t, dir, name, content)); err == nil {
 			t.Errorf("Load(%s) succeeded, want an error", name)
