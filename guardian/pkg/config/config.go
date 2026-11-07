@@ -56,7 +56,10 @@ type Config struct {
 
 	// Configuration for health checking.
 	HealthEnabled bool `json:"health_enabled" envconfig:"HEALTH_ENABLED" default:"true"`
-	HealthPort    int  `json:"health_port" envconfig:"HEALTH_PORT" default:"8080"`
+	// HealthPort must not default to ListenPort (8080). The Voltron proxy binds
+	// ListenPort, and the operator probes /liveness and /readiness on 9080, which
+	// is the port guardian used before the health aggregator (v3.32 and earlier).
+	HealthPort int `json:"health_port" envconfig:"HEALTH_PORT" default:"9080"`
 
 	KeepAliveEnable   bool `default:"true" split_words:"true"`
 	KeepAliveInterval int  `default:"100" split_words:"true"`
