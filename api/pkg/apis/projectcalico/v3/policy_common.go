@@ -266,7 +266,7 @@ type ServiceAccountMatch struct {
 	Selector string `json:"selector,omitempty" validate:"omitempty,selector"`
 }
 
-// +kubebuilder:validation:Enum=Allow;Deny;Log;Pass
+// +kubebuilder:validation:Enum=Allow;Deny;Log;Pass;Reject
 type Action string
 
 const (
@@ -274,6 +274,14 @@ const (
 	Deny  Action = "Deny"
 	Log   Action = "Log"
 	Pass  Action = "Pass"
+	// ActionReject denies the traffic like Deny, but actively rejects it (a TCP
+	// reset for TCP, an ICMP unreachable reply otherwise) instead of silently
+	// dropping it, so that clients fail fast rather than waiting for a timeout.
+	// It is supported by the iptables and nftables dataplanes; the eBPF and
+	// Windows dataplanes treat it as Deny.  It cannot be used in doNotTrack or
+	// preDNAT policy.  (The constant is not called Reject because that name is
+	// taken by BGPFilterAction.)
+	ActionReject Action = "Reject"
 )
 
 // +kubebuilder:validation:Enum=Set;Delete;Learn;Ignore

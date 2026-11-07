@@ -748,6 +748,32 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 			Match:  r.NewMatch(),
 			Action: r.IptablesFilterDenyAction(),
 		})
+	case "reject":
+		// Reject is a deny that actively rejects the packet rather than silently dropping
+		// it.  It sets the drop mark and is logged as a deny, so flow logs and the policy
+		// lookup cache treat it exactly like a deny.
+		mark = r.MarkDrop
+
+		// NFLOG the reject as a deny - we don't do this for untracked due to the performance hit.
+		if !untracked && r.FlowLogsEnabled {
+			rules = append(rules, generictables.Rule{
+				Match: r.NewMatch(),
+				Action: r.Nflog(
+					nflogGroup,
+					CalculateNFLOGPrefixStr(RuleActionDeny, owner, dir, idx, id),
+					0,
+				),
+			})
+		}
+
+		// Policy chains are programmed into the raw and mangle tables as well as the
+		// filter table, but REJECT is only valid in the filter table.  Rather than
+		// rendering the policy differently per table, jump to a static chain that
+		// rejects in the filter table and drops everywhere else.
+		rules = append(rules, generictables.Rule{
+			Match:  r.NewMatch(),
+			Action: r.Jump(ChainReject),
+		})
 	case "log":
 		// Handled above.
 	default:

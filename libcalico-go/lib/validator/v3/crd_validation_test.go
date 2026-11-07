@@ -936,6 +936,105 @@ func TestCRDValidation_GlobalNetworkPolicy(t *testing.T) {
 	})
 }
 
+// TestCRDValidation_RejectAction tests where the Reject rule action is accepted.
+func TestCRDValidation_RejectAction(t *testing.T) {
+	gnp := func(spec apiv3.GlobalNetworkPolicySpec) *apiv3.GlobalNetworkPolicy {
+		return &apiv3.GlobalNetworkPolicy{
+			TypeMeta:   metav1.TypeMeta{Kind: "GlobalNetworkPolicy", APIVersion: "projectcalico.org/v3"},
+			ObjectMeta: metav1.ObjectMeta{Name: "test-gnp"},
+			Spec:       spec,
+		}
+	}
+	reject := []apiv3.Rule{{Action: apiv3.Allow}, {Action: apiv3.ActionReject}}
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "GNP with Reject ingress and egress rules passes",
+			obj:  gnp(apiv3.GlobalNetworkPolicySpec{Ingress: reject, Egress: reject}),
+		},
+		{
+			name: "GNP with an unknown action fails",
+			obj: gnp(apiv3.GlobalNetworkPolicySpec{
+				Ingress: []apiv3.Rule{{Action: apiv3.Action("Bounce")}},
+			}),
+			errSubstr: `supported values: "Allow", "Deny", "Log", "Pass", "Reject"`,
+		},
+		{
+			name: "doNotTrack with a Reject ingress rule fails",
+			obj: gnp(apiv3.GlobalNetworkPolicySpec{
+				DoNotTrack:     true,
+				ApplyOnForward: true,
+				Ingress:        reject,
+			}),
+			errSubstr: "Reject rules are not supported in doNotTrack or preDNAT policy",
+		},
+		{
+			name: "doNotTrack with a Reject egress rule fails",
+			obj: gnp(apiv3.GlobalNetworkPolicySpec{
+				DoNotTrack:     true,
+				ApplyOnForward: true,
+				Egress:         reject,
+			}),
+			errSubstr: "Reject rules are not supported in doNotTrack or preDNAT policy",
+		},
+		{
+			name: "preDNAT with a Reject ingress rule fails",
+			obj: gnp(apiv3.GlobalNetworkPolicySpec{
+				PreDNAT:        true,
+				ApplyOnForward: true,
+				Ingress:        reject,
+			}),
+			errSubstr: "Reject rules are not supported in doNotTrack or preDNAT policy",
+		},
+		{
+			name: "doNotTrack with Deny rules passes",
+			obj: gnp(apiv3.GlobalNetworkPolicySpec{
+				DoNotTrack:     true,
+				ApplyOnForward: true,
+				Ingress:        []apiv3.Rule{{Action: apiv3.Deny}},
+				Egress:         []apiv3.Rule{{Action: apiv3.Deny}},
+			}),
+		},
+		{
+			name: "staged GNP with doNotTrack and a Reject rule fails",
+			obj: &apiv3.StagedGlobalNetworkPolicy{
+				TypeMeta:   metav1.TypeMeta{Kind: "StagedGlobalNetworkPolicy", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-sgnp"},
+				Spec: apiv3.StagedGlobalNetworkPolicySpec{
+					DoNotTrack:     true,
+					ApplyOnForward: true,
+					Ingress:        reject,
+				},
+			},
+			errSubstr: "Reject rules are not supported in doNotTrack or preDNAT policy",
+		},
+		{
+			name: "staged GNP with a Reject rule passes",
+			obj: &apiv3.StagedGlobalNetworkPolicy{
+				TypeMeta:   metav1.TypeMeta{Kind: "StagedGlobalNetworkPolicy", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-sgnp"},
+				Spec:       apiv3.StagedGlobalNetworkPolicySpec{Ingress: reject},
+			},
+		},
+		{
+			name: "NetworkPolicy with a Reject rule passes",
+			obj: &apiv3.NetworkPolicy{
+				TypeMeta:   metav1.TypeMeta{Kind: "NetworkPolicy", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-np", Namespace: "default"},
+				Spec:       apiv3.NetworkPolicySpec{Ingress: reject, Egress: reject},
+			},
+		},
+		{
+			name: "Tier with a Reject default action fails",
+			obj: &apiv3.Tier{
+				TypeMeta:   metav1.TypeMeta{Kind: "Tier", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-tier"},
+				Spec:       apiv3.TierSpec{DefaultAction: ptr.To(apiv3.ActionReject)},
+			},
+			errSubstr: `supported values: "Pass", "Deny"`,
+		},
+	})
+}
+
 // TestCRDValidation_NetworkPolicy_GlobalSelector tests CEL rules on NetworkPolicySpec.
 func TestCRDValidation_NetworkPolicy_GlobalSelector(t *testing.T) {
 	runCRDTests(t, []crdTestCase{
