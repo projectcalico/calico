@@ -404,15 +404,6 @@ func (w *windowsRunner) RunInDirToFile(dir, name string, args, env []string, _ s
 	return w.RunInDir(dir, name, args, env)
 }
 
-func (w *windowsRunner) RunInDirNoCapture(dir, name string, args, env []string) error {
-	_, err := w.RunInDir(dir, name, args, env)
-	return err
-}
-
-func (w *windowsRunner) RunNoCapture(name string, args, env []string) error {
-	return w.RunInDirNoCapture("", name, args, env)
-}
-
 func windowsFixture(t *testing.T) (Archive, *windowsRunner) {
 	t.Helper()
 	root := t.TempDir()

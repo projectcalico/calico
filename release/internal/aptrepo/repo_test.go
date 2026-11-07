@@ -52,18 +52,8 @@ func (f *fakeRunner) Run(name string, args, _ []string) (string, error) {
 	return "", nil
 }
 
-func (f *fakeRunner) RunNoCapture(name string, args, env []string) error {
-	_, err := f.Run(name, args, env)
-	return err
-}
-
 func (f *fakeRunner) RunInDir(_, name string, args, env []string) (string, error) {
 	return f.Run(name, args, env)
-}
-
-func (f *fakeRunner) RunInDirNoCapture(_, name string, args, env []string) error {
-	_, err := f.Run(name, args, env)
-	return err
 }
 
 func (f *fakeRunner) RunInDirToFile(_, name string, args, env []string, _ string) (string, error) {

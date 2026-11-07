@@ -88,9 +88,6 @@ func (f *fakeRunner) record(name string, args, env []string, logPath string) (st
 	return "ok", nil
 }
 
-func (f *fakeRunner) RunNoCapture(string, []string, []string) error              { return nil }
-func (f *fakeRunner) RunInDirNoCapture(string, string, []string, []string) error { return nil }
-
 // Keyed on chart file plus destination: keying on the command alone could not
 // tell two pushes apart, and would hide a mistargeted one.
 func failKey(name string, args []string) string {

@@ -56,11 +56,6 @@ func (r *recordingRunner) Run(_ string, args, env []string) (string, error) {
 	return r.record(args, env, "")
 }
 
-func (r *recordingRunner) RunNoCapture(_ string, args, env []string) error {
-	_, err := r.record(args, env, "")
-	return err
-}
-
 func (r *recordingRunner) RunInDir(_, _ string, args, env []string) (string, error) {
 	if slices.Contains(args, "build-images") {
 		// The publish asks each directory for its image names before recording.
@@ -70,11 +65,6 @@ func (r *recordingRunner) RunInDir(_, _ string, args, env []string) (string, err
 		return "calico calico-windows", nil
 	}
 	return r.record(args, env, "")
-}
-
-func (r *recordingRunner) RunInDirNoCapture(_, _ string, args, env []string) error {
-	_, err := r.record(args, env, "")
-	return err
 }
 
 func (r *recordingRunner) RunInDirToFile(_, _ string, args, env []string, logPath string) (string, error) {

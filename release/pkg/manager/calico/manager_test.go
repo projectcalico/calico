@@ -121,18 +121,8 @@ func (f *fakeRunner) Run(name string, args, env []string) (string, error) {
 	return f.recordFull(name, args, env, "")
 }
 
-func (f *fakeRunner) RunNoCapture(name string, args, env []string) error {
-	_, err := f.record(name, args)
-	return err
-}
-
 func (f *fakeRunner) RunInDir(dir, name string, args, env []string) (string, error) {
 	return f.recordFull(name, args, env, "")
-}
-
-func (f *fakeRunner) RunInDirNoCapture(dir, name string, args, env []string) error {
-	_, err := f.record(name, args)
-	return err
 }
 
 func (f *fakeRunner) RunInDirToFile(dir, name string, args, env []string, logPath string) (string, error) {

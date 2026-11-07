@@ -31,10 +31,8 @@ type CommandRunner interface {
 	// Run takes the command to run, a list of args, and list of environment variables
 	// in the form A=B, and returns stdout / error.
 	Run(string, []string, []string) (string, error)
-	RunNoCapture(string, []string, []string) error
 
 	RunInDir(string, string, []string, []string) (string, error)
-	RunInDirNoCapture(string, string, []string, []string) error
 
 	// RunInDirToFile behaves like RunInDir, but additionally writes a copy of stdout
 	// and stderr to logPath. Use this for long-running commands whose output is
@@ -113,26 +111,6 @@ func (r *RealCommandRunner) runInDir(dir, name string, args, env []string, extra
 	return strings.TrimSpace(outb.String()), err
 }
 
-func (r *RealCommandRunner) RunInDirNoCapture(dir, name string, args []string, env []string) error {
-	cmd := exec.Command(name, args...)
-	if len(env) != 0 {
-		cmd.Env = env
-	}
-	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	logrus.WithFields(logrus.Fields{
-		"cmd": cmd.String(),
-		"dir": dir,
-	}).Debugf("Running %s command", name)
-	err := cmd.Run()
-	return err
-}
-
 func (r *RealCommandRunner) Run(name string, args []string, env []string) (string, error) {
 	return r.RunInDir("", name, args, env)
-}
-
-func (r *RealCommandRunner) RunNoCapture(name string, args []string, env []string) error {
-	return r.RunInDirNoCapture("", name, args, env)
 }
