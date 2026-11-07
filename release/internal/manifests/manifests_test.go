@@ -57,15 +57,6 @@ func (f *fakeRunner) RunToFile(name string, args, env []string, _ string) (strin
 	return f.record(name, args, env)
 }
 
-func (f *fakeRunner) RunInDirNoCapture(_, name string, args, env []string) error {
-	_, err := f.record(name, args, env)
-	return err
-}
-
-func (f *fakeRunner) RunNoCapture(name string, args, env []string) error {
-	return f.RunInDirNoCapture("", name, args, env)
-}
-
 func (f *fakeRunner) record(name string, args, env []string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

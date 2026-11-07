@@ -80,9 +80,6 @@ func (f *fakeRunner) Run(_ string, args, env []string) (string, error) {
 	return f.record("", args, env, "")
 }
 
-func (f *fakeRunner) RunNoCapture(string, []string, []string) error              { return nil }
-func (f *fakeRunner) RunInDirNoCapture(string, string, []string, []string) error { return nil }
-
 // targetsFor returns the make targets invoked for a component directory.
 func (f *fakeRunner) targetsFor(dir string) []string {
 	var out []string

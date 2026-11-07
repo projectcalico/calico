@@ -69,9 +69,6 @@ func (f *fakeRunner) record(name string, args, env []string, logPath string) (st
 	return "ok", nil
 }
 
-func (f *fakeRunner) RunNoCapture(string, []string, []string) error              { return nil }
-func (f *fakeRunner) RunInDirNoCapture(string, string, []string, []string) error { return nil }
-
 // Reads the component out of `make -C <root>/<component> <target>`.
 func componentOf(args []string) string {
 	if len(args) < 2 || args[0] != "-C" {
