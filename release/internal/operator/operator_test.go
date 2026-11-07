@@ -56,16 +56,8 @@ func (f *fakeRunner) Run(_ string, args, env []string) (string, error) {
 	return "", f.record(args, env)
 }
 
-func (f *fakeRunner) RunNoCapture(_ string, args, env []string) error {
-	return f.record(args, env)
-}
-
 func (f *fakeRunner) RunInDir(_, _ string, args, env []string) (string, error) {
 	return "", f.record(args, env)
-}
-
-func (f *fakeRunner) RunInDirNoCapture(_, _ string, args, env []string) error {
-	return f.record(args, env)
 }
 
 func (f *fakeRunner) RunInDirToFile(_, _ string, args, env []string, _ string) (string, error) {
