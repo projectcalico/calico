@@ -191,16 +191,24 @@ func TestUpstreamAndNeedsMerge(t *testing.T) {
 
 func TestSelectionFieldsRejectBadValues(t *testing.T) {
 	dir := t.TempDir()
-	for name, content := range map[string]string{
-		"capability.yaml": badCapabilityYAML,
-		"date.yaml":       badDateYAML,
-		"upstream.yaml":   badUpstreamYAML,
-		"needs.yaml":      emptyNeedsYAML,
+	for name, bad := range map[string]badValueCase{
+		"capability.yaml": {content: badCapabilityYAML, wantErr: "must be a capability name"},
+		"date.yaml":       {content: badDateYAML, wantErr: "is not YYYY-MM-DD"},
+		"upstream.yaml":   {content: badUpstreamYAML, wantErr: "upstream.namePatterns[0]: invalid regex"},
+		"needs.yaml":      {content: emptyNeedsYAML, wantErr: "needs[0] is empty"},
 	} {
-		if _, err := Load(writeFile(t, dir, name, content)); err == nil {
-			t.Errorf("Load(%s) succeeded, want an error", name)
+		_, err := Load(writeFile(t, dir, name, bad.content))
+		if err == nil || !strings.Contains(err.Error(), bad.wantErr) {
+			t.Errorf("Load(%s) err = %v, want one containing %q", name, err, bad.wantErr)
 		}
 	}
+}
+
+// badValueCase is a config holding one bad value and the error it must cause,
+// so a file failing for some other reason doesn't pass the test.
+type badValueCase struct {
+	content string
+	wantErr string
 }
 
 // checkSelection parses the config's label filter with Ginkgo's own parser
