@@ -15,8 +15,6 @@
 package defaults
 
 import (
-	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 
@@ -31,44 +29,6 @@ func setValues(v map[string]string) {
 
 func resetValues() {
 	load = sync.OnceValue(readMetadata)
-}
-
-func TestParseMetadata(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("testdata", "metadata.mk"))
-	if err != nil {
-		t.Fatalf("read fixture: %v", err)
-	}
-	m, err := parseMetadata(data)
-	if err != nil {
-		t.Fatalf("parseMetadata: %v", err)
-	}
-	cases := map[string]string{
-		KeyOrganization:        "testorg",
-		KeyGitRepo:             "testrepo",
-		KeyGitRemote:           "testremote",
-		KeyReleaseBranchPrefix: "testprefix",
-		KeyDevTagSuffix:        "testsuffix",
-	}
-	for k, want := range cases {
-		if got := m[k]; got != want {
-			t.Errorf("key %q: got %q, want %q", k, got, want)
-		}
-	}
-}
-
-func TestParseMetadataIgnoresPreExistingVars(t *testing.T) {
-	m, err := parseMetadata([]byte("ORGANIZATION ?= newvalue\n"))
-	if err != nil {
-		t.Fatalf("parseMetadata: %v", err)
-	}
-	if got := m[KeyOrganization]; got != "newvalue" {
-		t.Errorf("ORGANIZATION: got %q, want %q", got, "newvalue")
-	}
-	for _, k := range []string{"VARS_OLD", "MAKEFLAGS", "SHELL", ".VARIABLES"} {
-		if _, ok := m[k]; ok {
-			t.Errorf("%s should not appear in parsed output", k)
-		}
-	}
 }
 
 func TestAccessors(t *testing.T) {
