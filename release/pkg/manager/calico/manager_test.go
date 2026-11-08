@@ -422,6 +422,28 @@ func TestReleasePrereqsTagConflict(t *testing.T) {
 	}
 }
 
+func TestAssertImageVersions(t *testing.T) {
+	t.Run("checks the images it is given without sweeping", func(t *testing.T) {
+		const ver = "v3.30.0"
+		f := newFakeRunner().on("docker inspect", ver, nil)
+		r := &CalicoManager{
+			runner:          f,
+			calicoVersion:   testVersion(t, ver),
+			imageRegistries: []string{"quay.io/calico"},
+			releaseImages:   func() ([]string, error) { return []string{"whisker"}, nil },
+		}
+		if err := r.assertImageVersions(); err != nil {
+			t.Fatalf("assertImageVersions: %v", err)
+		}
+		if f.ran("make") {
+			t.Errorf("ran make, want the given list used: %v", f.calls())
+		}
+		if !f.ran("docker inspect") {
+			t.Errorf("did not inspect whisker: %v", f.calls())
+		}
+	})
+}
+
 func TestPublishGitTag(t *testing.T) {
 	const (
 		ver       = "v3.30.0"

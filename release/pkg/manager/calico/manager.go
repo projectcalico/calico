@@ -185,6 +185,9 @@ type CalicoManager struct {
 	// Allow specification of command runner so it can be overridden in tests.
 	runner command.CommandRunner
 
+	// releaseImages defaults to sweeping the release dirs with make.
+	releaseImages func() ([]string, error)
+
 	// The product code for the release.
 	productCode string
 
@@ -974,7 +977,11 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 func (r *CalicoManager) assertImageVersions() error {
 	logrus.Info("Checking built images exists with the correct version")
 	buildInfoVersionRegex := regexp.MustCompile(`(?m)^Version:\s+(.*)$`)
-	imgs, err := images.ReleaseImages()
+	list := r.releaseImages
+	if list == nil {
+		list = func() ([]string, error) { return images.ReleaseImages(r.runner, r.repoRoot) }
+	}
+	imgs, err := list()
 	if err != nil {
 		return fmt.Errorf("failed to determine release images: %w", err)
 	}

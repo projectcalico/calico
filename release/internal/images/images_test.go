@@ -30,6 +30,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/outputs"
@@ -1513,7 +1515,7 @@ func TestBuildImages(t *testing.T) {
 		{name: "a dir with no images", dirs: []string{"api"}, wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := BuildImages(root, tc.dirs...)
+			got, err := BuildImages(&command.RealCommandRunner{}, root, tc.dirs...)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("got %q, want an error", got)
@@ -1531,12 +1533,36 @@ func TestBuildImages(t *testing.T) {
 
 	t.Run("under a parent make", func(t *testing.T) {
 		t.Setenv("MAKEFLAGS", "w")
-		got, err := BuildImages(root, "whisker")
+		got, err := BuildImages(&command.RealCommandRunner{}, root, "whisker")
 		if err != nil {
 			t.Fatalf("BuildImages: %v", err)
 		}
 		if want := []string{"whisker"}; !slices.Equal(got, want) {
 			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+}
+
+func TestReleaseImages(t *testing.T) {
+	t.Run("lists each release dir through the given runner", func(t *testing.T) {
+		r := &command.Recorder{Reply: func(c command.Call) (string, error) {
+			return filepath.Base(c.Dir), nil
+		}}
+		got, err := ReleaseImages(r, "/repo")
+		if err != nil {
+			t.Fatalf("ReleaseImages: %v", err)
+		}
+		var want []string
+		for _, d := range ReleaseDirs() {
+			want = append(want, filepath.Base(d))
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("images (-want +got):\n%s", diff)
+		}
+		for _, c := range r.Calls() {
+			if c.Name != "make" || !strings.HasPrefix(c.Dir, "/repo/") {
+				t.Errorf("unexpected call %s in %q", c.Name, c.Dir)
+			}
 		}
 	})
 }
