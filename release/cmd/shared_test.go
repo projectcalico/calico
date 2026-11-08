@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/command"
@@ -228,6 +229,32 @@ func TestHashreleaseBuilds(t *testing.T) {
 					t.Errorf("ReleaseBranchPrefix = %q, want %q", got.ReleaseBranchPrefix, releaseBranchPrefixFlag.Value)
 				}
 			})
+		}
+	})
+}
+
+func TestConfigReleaseImages(t *testing.T) {
+	t.Run("sweeps once however often it is asked", func(t *testing.T) {
+		r := newFakeRunner()
+		prev := commandRunner
+		commandRunner = r
+		t.Cleanup(func() { commandRunner = prev })
+
+		cfg := &Config{RepoRootDir: "/repo"}
+		first, err := cfg.ReleaseImages()
+		if err != nil {
+			t.Fatalf("first: %v", err)
+		}
+		sweep := len(r.Calls())
+		second, err := cfg.ReleaseImages()
+		if err != nil {
+			t.Fatalf("second: %v", err)
+		}
+		if diff := cmp.Diff(first, second); diff != "" {
+			t.Errorf("lists differ (-first +second):\n%s", diff)
+		}
+		if got := len(r.Calls()); got != sweep {
+			t.Errorf("second call ran %d more commands, want 0", got-sweep)
 		}
 	})
 }

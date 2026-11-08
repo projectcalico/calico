@@ -82,19 +82,7 @@ func (g GitRunner) Run(args ...string) (string, error) {
 	return g.r.Run("git", args, WithDir(g.dir))
 }
 
-func GitVersion(includeDirty bool, opts ...Option) (string, error) {
-	return Git(RealRunner).In(newSettings(opts).dir).Version(includeDirty)
-}
-
 // GitDir returns the root directory of the git repository.
 func GitDir() (string, error) {
 	return Git(RealRunner).RepoRoot()
-}
-
-func GitDirty(dir string) (bool, error) {
-	return Git(RealRunner).In(dir).Dirty()
-}
-
-func GitBranch(dir string) (string, error) {
-	return Git(RealRunner).In(dir).Branch()
 }

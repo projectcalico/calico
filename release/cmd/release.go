@@ -25,7 +25,6 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
@@ -190,7 +189,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				if err != nil {
 					return err
 				}
-				opts = append(opts, calico.WithComponents(pin.Released()))
+				opts = append(opts, calico.WithComponents(pin.Released()), calico.WithReleaseImages(cfg.ReleaseImages))
 				if reg := c.StringSlice(helmRegistryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithHelmRegistries(reg))
 				}
@@ -357,7 +356,7 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 				return err
 			}
 
-			imgs, err := images.ReleaseImages()
+			imgs, err := cfg.ReleaseImages()
 			if err != nil {
 				return err
 			}

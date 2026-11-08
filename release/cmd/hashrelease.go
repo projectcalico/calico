@@ -52,6 +52,8 @@ var (
 		return pinnedversion.Config{
 			Dir:                 cfg.TmpDir,
 			RootDir:             cfg.RepoRootDir,
+			Runner:              commandRunner,
+			ReleaseImages:       cfg.ReleaseImages,
 			ReleaseBranchPrefix: c.String(releaseBranchPrefixFlag.Name),
 			Registry:            productRegistry(c),
 			Operator: registry.Component{
@@ -277,7 +279,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		} else {
 			opts = append(opts, calico.WithImageScanning(c.Bool(imageScanFlag.Name), *imageScanningAPIConfig(c)))
 		}
-		opts = append(opts, calico.WithComponents(pin.Released()))
+		opts = append(opts, calico.WithComponents(pin.Released()), calico.WithReleaseImages(cfg.ReleaseImages))
 		if reg := c.StringSlice(helmRegistryFlag.Name); len(reg) > 0 {
 			opts = append(opts, calico.WithHelmRegistries(reg))
 		}
