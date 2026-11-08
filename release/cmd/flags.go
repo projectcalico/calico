@@ -332,10 +332,9 @@ var (
 
 // External flags are flags used to interact with external services
 var (
-	// CI flags for interacting with CI services (Semaphore)
-	ciFlags     = []cli.Flag{ciFlag, ciBaseURLFlag, ciJobIDFlag, ciPipelineIDFlag, ciTokenFlag}
-	semaphoreCI = "semaphore"
-	ciFlag      = &cli.BoolFlag{
+	// CI flags for interacting with CI services
+	ciFlags = []cli.Flag{ciFlag, ciBaseURLFlag, ciJobIDFlag}
+	ciFlag  = &cli.BoolFlag{
 		Name:     "ci",
 		Category: ciCategory,
 		Usage:    "Run in a continuous integration (CI) environment",
@@ -345,26 +344,14 @@ var (
 	ciBaseURLFlag = &cli.StringFlag{
 		Name:     "ci-url",
 		Category: ciCategory,
-		Usage:    fmt.Sprintf("The URL for accesing %s CI", semaphoreCI),
+		Usage:    "The CI base URL, used to build links to CI jobs",
 		Sources:  cli.EnvVars("SEMAPHORE_ORGANIZATION_URL"),
 	}
 	ciJobIDFlag = &cli.StringFlag{
 		Name:     "ci-job-id",
 		Category: ciCategory,
-		Usage:    fmt.Sprintf("The job ID for the %s CI job", semaphoreCI),
+		Usage:    "The CI job ID for the run",
 		Sources:  cli.EnvVars("SEMAPHORE_JOB_ID"),
-	}
-	ciPipelineIDFlag = &cli.StringFlag{
-		Name:     "ci-pipeline-id",
-		Category: ciCategory,
-		Usage:    fmt.Sprintf("The pipeline ID for the %s CI pipeline", semaphoreCI),
-		Sources:  cli.EnvVars("SEMAPHORE_PIPELINE_ID"),
-	}
-	ciTokenFlag = &cli.StringFlag{
-		Name:     "ci-token",
-		Category: ciCategory,
-		Usage:    fmt.Sprintf("The token for interacting with %s API", semaphoreCI),
-		Sources:  cli.EnvVars("SEMAPHORE_API_TOKEN"),
 	}
 
 	// Slack flags for posting messages to Slack
