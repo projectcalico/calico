@@ -30,13 +30,13 @@ import (
 	"github.com/projectcalico/calico/release/internal/registry"
 )
 
-// recordingRunner runs nothing and records what it was asked to run.
-type recordingRunner struct {
+// fakeRunner runs nothing and records what it was asked to run.
+type fakeRunner struct {
 	*command.Recorder
 }
 
-func newRecordingRunner() *recordingRunner {
-	return &recordingRunner{&command.Recorder{Reply: func(c command.Call) (string, error) {
+func newFakeRunner() *fakeRunner {
+	return &fakeRunner{&command.Recorder{Reply: func(c command.Call) (string, error) {
 		// Stand in for helm: `repo index <dir>` writes the index into that dir.
 		if len(c.Args) > 2 && c.Args[0] == "repo" && c.Args[1] == "index" {
 			_ = os.WriteFile(filepath.Join(c.Args[2], "index.yaml"), []byte("entries:"), 0o644)
@@ -50,7 +50,7 @@ func newRecordingRunner() *recordingRunner {
 }
 
 // dirAndArgs lets a match name the dir a command ran in as if it were an arg.
-func (r *recordingRunner) dirAndArgs() [][]string {
+func (r *fakeRunner) dirAndArgs() [][]string {
 	var out [][]string
 	for _, c := range r.Calls() {
 		out = append(out, append([]string{c.Dir}, c.Args...))
@@ -58,7 +58,7 @@ func (r *recordingRunner) dirAndArgs() [][]string {
 	return out
 }
 
-func (r *recordingRunner) args() [][]string {
+func (r *fakeRunner) args() [][]string {
 	var out [][]string
 	for _, c := range r.Calls() {
 		out = append(out, c.Args)
@@ -66,7 +66,7 @@ func (r *recordingRunner) args() [][]string {
 	return out
 }
 
-func (r *recordingRunner) envs() [][]string {
+func (r *fakeRunner) envs() [][]string {
 	var out [][]string
 	for _, c := range r.Calls() {
 		out = append(out, c.Env)
@@ -74,7 +74,7 @@ func (r *recordingRunner) envs() [][]string {
 	return out
 }
 
-func (r *recordingRunner) logPaths() []string {
+func (r *fakeRunner) logPaths() []string {
 	var out []string
 	for _, c := range r.Calls() {
 		out = append(out, c.LogFile)
@@ -84,7 +84,7 @@ func (r *recordingRunner) logPaths() []string {
 
 // envFor returns the environment of the first recorded call whose dir or args
 // contain every one of want.
-func (r *recordingRunner) envFor(want ...string) []string {
+func (r *fakeRunner) envFor(want ...string) []string {
 	for _, c := range r.Calls() {
 		if containsAll(append([]string{c.Dir}, c.Args...), want) {
 			return c.Env
@@ -95,7 +95,7 @@ func (r *recordingRunner) envFor(want ...string) []string {
 
 // ranExactly is ran for callers that pass whole arguments: a target name is a
 // prefix of a longer one, so a substring match cannot tell them apart.
-func (r *recordingRunner) ranExactly(want ...string) bool {
+func (r *fakeRunner) ranExactly(want ...string) bool {
 	return slices.ContainsFunc(r.dirAndArgs(), func(args []string) bool {
 		for _, w := range want {
 			if !slices.Contains(args, w) {
@@ -107,7 +107,7 @@ func (r *recordingRunner) ranExactly(want ...string) bool {
 }
 
 // ran reports whether any recorded call's dir or args contain every one of want.
-func (r *recordingRunner) ran(want ...string) bool {
+func (r *fakeRunner) ran(want ...string) bool {
 	return slices.ContainsFunc(r.dirAndArgs(), func(args []string) bool {
 		return containsAll(args, want)
 	})

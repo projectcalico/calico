@@ -754,12 +754,11 @@ func (r *CalicoManager) tagState() *tagCheck {
 		return r.tagAtHEAD
 	}
 	tc := &tagCheck{}
-	tagCommit, err := r.git("rev-parse", "-q", "--verify", "refs/tags/"+r.calicoVersion.String()+"^{commit}")
-	if err != nil || strings.TrimSpace(tagCommit) == "" {
+	tagCommit, ok := command.Git(r.runner).In(r.repoRoot).Resolve("refs/tags/" + r.calicoVersion.String() + "^{commit}")
+	if !ok {
 		r.tagAtHEAD = tc
 		return tc
 	}
-	tagCommit = strings.TrimSpace(tagCommit)
 	headCommit, err := r.git("rev-parse", "HEAD")
 	if err != nil {
 		tc.err = fmt.Errorf("resolve HEAD: %w", err)
@@ -1278,8 +1277,8 @@ func (r *CalicoManager) githubTagUpload() distribution.Upload {
 		Kind:   "git tag",
 		Action: r.publishGitTag,
 		Check: func() error {
-			if _, err := r.git("rev-parse", "--verify", "refs/tags/"+r.calicoVersion.String()); err != nil {
-				return fmt.Errorf("no local tag %s: %w", r.calicoVersion.String(), err)
+			if _, ok := command.Git(r.runner).In(r.repoRoot).Resolve("refs/tags/" + r.calicoVersion.String()); !ok {
+				return fmt.Errorf("no local tag %s", r.calicoVersion.String())
 			}
 			return nil
 		},
@@ -1720,6 +1719,7 @@ func (r *CalicoManager) CutBranch() error {
 	}
 	d := &branch.Driver{
 		RepoRoot:            r.repoRoot,
+		Runner:              r.runner,
 		Remote:              r.remote,
 		MainBranch:          r.mainBranch,
 		DevTagIdentifier:    r.devTagIdentifier,
@@ -1760,14 +1760,14 @@ func (r *CalicoManager) requireOnMainBranch(derived string) error {
 		logrus.Warn("Skipping main branch validation")
 		return nil
 	}
-	if exists, err := command.GitInDir(r.repoRoot, "rev-parse", "--verify", "--quiet", "refs/heads/"+derived); err == nil && strings.TrimSpace(exists) != "" {
+	if _, ok := command.Git(r.runner).In(r.repoRoot).Resolve("refs/heads/" + derived); ok {
 		return nil // resume: the derived branch already exists
 	}
-	out, err := command.GitInDir(r.repoRoot, "rev-parse", "--abbrev-ref", "HEAD")
+	cur, err := command.Git(r.runner).In(r.repoRoot).Branch()
 	if err != nil {
 		return fmt.Errorf("determining current branch: %w", err)
 	}
-	if cur := strings.TrimSpace(out); cur != r.mainBranch {
+	if cur != r.mainBranch {
 		return fmt.Errorf("branch cut must run on %s, but the current branch is %s", r.mainBranch, cur)
 	}
 	return nil
@@ -1778,11 +1778,11 @@ func (r *CalicoManager) requireOnMainBranch(derived string) error {
 func (r *CalicoManager) cutPlan() (*branch.CutPlan, error) {
 	// Read the version from main, not HEAD: the branch is cut from main and its
 	// name and tags must derive from main's commit.
-	mainVersion, err := command.GitInDir(r.repoRoot, "describe", "--tags", "--abbrev=0", r.mainBranch)
+	mainVersion, err := command.Git(r.runner).In(r.repoRoot).Run("describe", "--tags", "--abbrev=0", r.mainBranch)
 	if err != nil {
 		return nil, fmt.Errorf("determining %s version: %w", r.mainBranch, err)
 	}
-	cur, err := version.New(strings.TrimSpace(mainVersion))
+	cur, err := version.New(mainVersion)
 	if err != nil {
 		return nil, err
 	}
