@@ -147,7 +147,6 @@ local:release/internal/archives
 local:release/internal/binaries
 local:release/internal/branch
 local:release/internal/charts
-local:release/internal/ci
 local:release/internal/command
 local:release/internal/defaults
 local:release/internal/distribution
