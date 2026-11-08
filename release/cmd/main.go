@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
@@ -26,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -46,6 +48,23 @@ type Config struct {
 	// runs don't clobber each other. CI may override the default by setting
 	// the LOGS_DIR environment variable.
 	LogsDir string
+
+	images releaseImages
+}
+
+type releaseImages struct {
+	list []string
+	err  error
+	once sync.Once
+}
+
+// ReleaseImages sweeps every release dir with make on first use, so the pin
+// and the publish checks share one list.
+func (c *Config) ReleaseImages() ([]string, error) {
+	c.images.once.Do(func() {
+		c.images.list, c.images.err = images.ReleaseImages(commandRunner, c.RepoRootDir)
+	})
+	return c.images.list, c.images.err
 }
 
 // loadConfig loads the configuration for the release tool.
