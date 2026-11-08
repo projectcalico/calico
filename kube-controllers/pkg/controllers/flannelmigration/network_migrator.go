@@ -85,6 +85,27 @@ func (m *networkMigrator) Initialise() error {
 	return nil
 }
 
+// flannelIPTablesCleanup removes the iptables chains that Flannel programs:
+// FLANNEL-POSTRTG in the nat table and FLANNEL-FWD in the filter table.
+// Deleting the Flannel daemonset and tunnel devices does not remove these
+// rules, so they survive the migration. In particular the masquerade rule in
+// FLANNEL-POSTRTG SNATs cross-node pod-to-pod traffic to the node's tunnel IP,
+// which silently breaks Calico NetworkPolicy after migration: the source
+// address no longer matches pod-selector based rules and the traffic is dropped
+// by the default-deny. Flush the chains on the node so Calico (cali-nat-outgoing)
+// is the only owner of pod masquerading. Both the legacy and nft iptables
+// backends are cleaned since either may hold the rules; missing binaries are
+// skipped, and every command is idempotent.
+const flannelIPTablesCleanup = `for ipt in iptables-legacy iptables-nft ip6tables-legacy ip6tables-nft; do ` +
+	`command -v "$ipt" >/dev/null 2>&1 || continue; ` +
+	`"$ipt" -w -t nat -D POSTROUTING -j FLANNEL-POSTRTG 2>/dev/null; ` +
+	`"$ipt" -w -t nat -F FLANNEL-POSTRTG 2>/dev/null; ` +
+	`"$ipt" -w -t nat -X FLANNEL-POSTRTG 2>/dev/null; ` +
+	`"$ipt" -w -t filter -D FORWARD -j FLANNEL-FWD 2>/dev/null; ` +
+	`"$ipt" -w -t filter -F FLANNEL-FWD 2>/dev/null; ` +
+	`"$ipt" -w -t filter -X FLANNEL-FWD 2>/dev/null; ` +
+	`done; `
+
 // Remove Flannel network device/routes on node.
 // Write a dummy calico cni config file in front of Flannel/Canal CNI config.
 // This will prevent Flannel CNI from running and make sure new pod created will not get networked
@@ -105,6 +126,11 @@ func (m *networkMigrator) removeFlannelNetworkAndInstallDummyCalicoCNI(node *v1.
 		cmd = fmt.Sprintf("{ ip link show cni0; ip link show flannel.%d; } || exit 0 && { echo '%s' > /host/%s/%s ; ip link delete cni0 type bridge; ip link delete flannel.%d; } && exit 0 || exit 1",
 			m.config.FlannelVNI, dummyCNI, m.config.CniConfigDir, m.calicoCNIConfigName, m.config.FlannelVNI)
 	}
+
+	// Removing the daemonset and the tunnel/bridge devices above does not delete
+	// the iptables chains Flannel installed, so flush them as part of the same
+	// node cleanup. See flannelIPTablesCleanup for why this is required.
+	cmd = flannelIPTablesCleanup + cmd
 
 	// Run a remove-flannel pod with specified nodeName, this will bypass kube-scheduler.
 	// https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#nodename
