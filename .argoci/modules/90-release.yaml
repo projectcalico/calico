@@ -35,7 +35,7 @@ steps:
       # commit is what ties the two together.
       artifact cache store "release-${CI_GIT_SHA}" bin
 
-  - name: release-e2e
+  - name: release-st
     depends: [check-go, release-build]
     timeout: 2h
     requests: {cpu: 3500m, memory: 8Gi}
@@ -62,6 +62,6 @@ steps:
       export GOOGLE_APPLICATION_CREDENTIALS=/root/secrets/hashrelease-publisher.json
       gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
       cd release
-      make e2e
+      make st
     epilogue: |
-      artifact push job "${CI_HOME}/${CI_GIT_DIR}/release/_logs" --destination release-e2e-logs || true
+      artifact push job "${CI_HOME}/${CI_GIT_DIR}/release/_logs" --destination release-st-logs || true

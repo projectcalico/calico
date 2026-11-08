@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -55,10 +54,6 @@ func stepDriver(repoRoot string, r command.CommandRunner, plan bool, skip map[st
 	return d, command.Git(d.runner()).In(repoRoot)
 }
 
-func realGit(root string) command.GitRunner {
-	return command.Git(command.RealRunner).In(root)
-}
-
 func TestRunStepsResumesAndSkips(t *testing.T) {
 	var order []string
 	steps := []Step{
@@ -66,13 +61,13 @@ func TestRunStepsResumesAndSkips(t *testing.T) {
 		{Name: "b", Done: func() (bool, error) { return false, nil }, Do: func() error { order = append(order, "b"); return nil }}, // runs
 		{Name: "c", Done: func() (bool, error) { return false, nil }, Do: func() error { order = append(order, "c"); return nil }}, // skipped by flag
 	}
-	d, _ := stepDriver("", nil, false, map[string]bool{"c": true})
+	d, _ := stepDriver("", &command.Recorder{}, false, map[string]bool{"c": true})
 	require.NoError(t, d.runSteps(steps))
 	require.Equal(t, []string{"b"}, order) // a already done, c skipped
 
 	// plan mode acts on nothing
 	order = nil
-	plan, _ := stepDriver("", nil, true, nil)
+	plan, _ := stepDriver("", &command.Recorder{}, true, nil)
 	require.NoError(t, plan.runSteps(steps))
 	require.Empty(t, order)
 }
@@ -83,7 +78,7 @@ func TestRunStepsSkipDoesNotProbe(t *testing.T) {
 	steps := []Step{
 		{Name: "x", Done: func() (bool, error) { probed = true; return false, fmt.Errorf("must not be called") }, Do: func() error { return nil }},
 	}
-	d, _ := stepDriver("", nil, false, map[string]bool{"x": true})
+	d, _ := stepDriver("", &command.Recorder{}, false, map[string]bool{"x": true})
 	require.NoError(t, d.runSteps(steps), "a skipped step must not run its Done() probe")
 	require.False(t, probed, "Done() must not run for a skipped step")
 }
@@ -184,379 +179,6 @@ func readFile(t *testing.T, root, rel string) string {
 	return string(b)
 }
 
-// initGitRepo makes a temp repo with one commit on "master" and returns its root.
-func initGitRepo(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	run := func(args ...string) {
-		_, err := realGit(root).Run(args...)
-		require.NoError(t, err, "git %v", args)
-	}
-	run("init", "-q", "-b", "master")
-	run("config", "user.email", "test@example.com")
-	run("config", "user.name", "test")
-	run("config", "commit.gpgsign", "false")
-	writeFile(t, root, "metadata.mk", "MANAGER_BRANCH ?= master\n")
-	run("add", ".")
-	run("commit", "-q", "-m", "initial")
-	return root
-}
-
-func gitHeadSubject(t *testing.T, root, ref string) string {
-	t.Helper()
-	out, err := realGit(root).Run("log", "-1", "--format=%s", ref)
-	require.NoError(t, err)
-	return strings.TrimSpace(out)
-}
-
-// localCutSteps keeps the cut, edit, and tag steps in order,
-// dropping push-refs and post-push (which need a remote).
-func localCutSteps(t *testing.T, d *Driver, g command.GitRunner, p *CutPlan) []Step {
-	all := d.steps(g, p)
-	return []Step{
-		findStep(t, all, "cut-branch"),
-		findStep(t, all, "update-derived"),
-		findStep(t, all, "tag-derived"),
-		findStep(t, all, "update-main"),
-		findStep(t, all, "tag-main"),
-	}
-}
-
-// The flow creates the branch with the edit on its head, not an
-// empty commit; plan mode commits nothing.
-func TestFlowLandsEditOnNewBranch(t *testing.T) {
-	root := initGitRepo(t)
-
-	newPlan := func() *CutPlan {
-		return &CutPlan{
-			Derived: testPrefix + "-v3.33",
-			Source:  "master",
-			TagTargets: []TagTarget{
-				{Branch: testPrefix + "-v3.33", DevTag: "v3.33.0-" + testSuffix},
-			},
-		}
-	}
-	prepare := func(string) ([]string, error) {
-		written, _, err := ApplyEdits(root, []Edit{
-			{File: "metadata.mk", Pattern: `^MANAGER_BRANCH.*`, Replacement: "MANAGER_BRANCH ?= " + testPrefix + "-v3.33"},
-		})
-		return written, err
-	}
-
-	// plan mode: nothing is created or committed.
-	planD, planG := stepDriver(root, nil, true, nil)
-	planD.PrepareDerived = prepare
-	require.NoError(t, planD.runSteps(localCutSteps(t, planD, planG, newPlan())))
-	require.False(t, localBranchExists(planG, testPrefix+"-v3.33"), "plan mode must not create the branch")
-
-	// apply mode: branch is created, edit is committed on its head.
-	applyD, applyG := stepDriver(root, nil, false, nil)
-	applyD.PrepareDerived = prepare
-	require.NoError(t, applyD.runSteps(localCutSteps(t, applyD, applyG, newPlan())))
-
-	require.True(t, localBranchExists(applyG, testPrefix+"-v3.33"))
-
-	// The edited file content on the new branch reflects the edit.
-	content, err := realGit(root).Run("show", testPrefix+"-v3.33:metadata.mk")
-	require.NoError(t, err)
-	require.Contains(t, content, "MANAGER_BRANCH ?= "+testPrefix+"-v3.33")
-
-	// The head is the edits commit, not an empty "Begin development" commit.
-	subject := gitHeadSubject(t, root, testPrefix+"-v3.33")
-	require.Equal(t, "Updates for "+testPrefix+"-v3.33 release branch", subject)
-
-	// The edits commit is not empty: it differs from its parent.
-	_, err = realGit(root).Run("diff", "--quiet", testPrefix+"-v3.33~1", testPrefix+"-v3.33")
-	require.Error(t, err, "the new branch head must contain the edit, not be an empty commit")
-}
-
-// A stale local derived tag reads as not-done and tag-derived
-// force-moves it onto the branch head.
-func TestTagDerivedMovesStaleLocalTag(t *testing.T) {
-	root := initGitRepo(t)
-
-	p := &CutPlan{
-		Derived: testPrefix + "-v3.33",
-		Source:  "master",
-		TagTargets: []TagTarget{
-			{Branch: testPrefix + "-v3.33", DevTag: "v3.33.0-" + testSuffix},
-		},
-	}
-	d, g := stepDriver(root, nil, false, nil)
-	d.PrepareDerived = func(string) ([]string, error) {
-		written, _, err := ApplyEdits(root, []Edit{
-			{File: "metadata.mk", Pattern: `^MANAGER_BRANCH.*`, Replacement: "MANAGER_BRANCH ?= " + testPrefix + "-v3.33"},
-		})
-		return written, err
-	}
-
-	// Create the stale tag on master, at a commit that is not the derived head.
-	_, err := realGit(root).Run("tag", "--no-sign", "v3.33.0-"+testSuffix)
-	require.NoError(t, err)
-	staleSha, err := realGit(root).Run("rev-parse", "v3.33.0-"+testSuffix+"^{commit}")
-	require.NoError(t, err)
-
-	all := d.steps(g, p)
-	cut := findStep(t, all, "cut-branch")
-	update := findStep(t, all, "update-derived")
-	tagDerived := findStep(t, all, "tag-derived")
-
-	require.NoError(t, cut.Do())
-	require.NoError(t, update.Do())
-
-	// The tag exists locally but not at the derived head: Done must be false.
-	done, err := tagDerived.Done()
-	require.NoError(t, err)
-	require.False(t, done, "a local tag at the wrong commit must not read as done")
-
-	require.NoError(t, tagDerived.Do())
-
-	head, err := realGit(root).Run("rev-parse", testPrefix+"-v3.33")
-	require.NoError(t, err)
-	movedSha, err := realGit(root).Run("rev-parse", "v3.33.0-"+testSuffix+"^{commit}")
-	require.NoError(t, err)
-	require.Equal(t, strings.TrimSpace(head), strings.TrimSpace(movedSha), "the tag must move onto the derived head")
-	require.NotEqual(t, strings.TrimSpace(staleSha), strings.TrimSpace(movedSha), "the tag must have actually moved")
-
-	// Idempotent resume: the tag is now on the correct head, so Done is true
-	// and re-running Do is harmless.
-	done, err = tagDerived.Done()
-	require.NoError(t, err)
-	require.True(t, done, "once the tag sits on the derived head, the step must read as done")
-}
-
-// A cut off main has no derived tag; tag-derived and pushRefs no-op.
-func TestFlowMainOnlyPlanNoDerivedTag(t *testing.T) {
-	root := srcBumpRepo(t)
-
-	p := &CutPlan{
-		Derived: testPrefix + "-v3.33",
-		Source:  "master",
-		TagTargets: []TagTarget{
-			{Branch: "master", DevTag: "v3.34.0-" + testSuffix},
-		},
-	}
-	d, g := stepDriver(root, nil, false, nil)
-	d.PrepareDerived = branchEditPrepare(t, root, testPrefix+"-v3.33")
-
-	require.NoError(t, d.runSteps(localCutSteps(t, d, g, p)))
-
-	// The derived branch exists with its edits commit but no dev tag.
-	require.True(t, localBranchExists(g, testPrefix+"-v3.33"))
-	// pushRefs pushes the derived branch and main's tag, but no derived tag.
-	require.NotContains(t, d.pushRefs(p), "v3.33.0-"+testSuffix)
-
-	// Main advanced: its dev tag sits on master's head.
-	tagged, err := realGit(root).Run("rev-parse", "v3.34.0-"+testSuffix+"^{commit}")
-	require.NoError(t, err)
-	head, err := realGit(root).Run("rev-parse", "master")
-	require.NoError(t, err)
-	require.Equal(t, strings.TrimSpace(head), strings.TrimSpace(tagged))
-}
-
-// Every file the PrepareDerived hook returns is committed on the derived branch.
-func TestUpdateDerivedCommitsHookReturnedFiles(t *testing.T) {
-	root := initGitRepo(t)
-
-	p := &CutPlan{
-		Derived: testPrefix + "-v3.33",
-		Source:  "master",
-	}
-	d, g := stepDriver(root, nil, false, nil)
-	d.PrepareDerived = func(string) ([]string, error) {
-		written, _, err := ApplyEdits(root, []Edit{
-			{File: "metadata.mk", Pattern: `^MANAGER_BRANCH.*`, Replacement: "MANAGER_BRANCH ?= " + testPrefix + "-v3.33"},
-		})
-		require.NoError(t, err)
-		writeFile(t, root, "hook-file.txt", "written by the hook\n")
-		return append(written, "hook-file.txt"), nil
-	}
-
-	all := d.steps(g, p)
-	local := []Step{findStep(t, all, "cut-branch"), findStep(t, all, "update-derived")}
-	require.NoError(t, d.runSteps(local))
-
-	// The hook's extra file is committed on the derived branch head.
-	content, err := realGit(root).Run("show", testPrefix+"-v3.33:hook-file.txt")
-	require.NoError(t, err)
-	require.Contains(t, content, "written by the hook")
-
-	// The hook's edit landed in the same commit.
-	meta, err := realGit(root).Run("show", testPrefix+"-v3.33:metadata.mk")
-	require.NoError(t, err)
-	require.Contains(t, meta, "MANAGER_BRANCH ?= "+testPrefix+"-v3.33")
-}
-
-// srcBumpRepo makes a temp repo whose metadata.mk carries CALICO_VERSION v3.33.0.
-func srcBumpRepo(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	run := func(args ...string) {
-		_, err := realGit(root).Run(args...)
-		require.NoError(t, err, "git %v", args)
-	}
-	run("init", "-q", "-b", "master")
-	run("config", "user.email", "test@example.com")
-	run("config", "user.name", "test")
-	run("config", "commit.gpgsign", "false")
-	writeFile(t, root, "metadata.mk", "MANAGER_BRANCH ?= master\nCALICO_VERSION=v3.33.0\n")
-	run("add", ".")
-	run("commit", "-q", "-m", "initial")
-	return root
-}
-
-// branchEditPrepare returns a PrepareDerived hook that bumps MANAGER_BRANCH,
-// a stand-in for the real derived-branch edit.
-func branchEditPrepare(t *testing.T, root, derived string) func(string) ([]string, error) {
-	t.Helper()
-	return func(string) ([]string, error) {
-		written, skipped, err := ApplyEdits(root, []Edit{
-			{File: "metadata.mk", Pattern: `^MANAGER_BRANCH.*`, Replacement: "MANAGER_BRANCH ?= " + derived},
-		})
-		require.Empty(t, skipped)
-		return written, err
-	}
-}
-
-// bumpMainPrepare returns a PrepareMain hook that bumps CALICO_VERSION on the
-// main branch and records the branch it ran on.
-func bumpMainPrepare(t *testing.T, root string, ranOn *string) func(string) ([]string, error) {
-	t.Helper()
-	return func(mainBranch string) ([]string, error) {
-		*ranOn = mainBranch
-		written, skipped, err := ApplyEdits(root, []Edit{
-			{File: "metadata.mk", Pattern: `^CALICO_VERSION=.*`, Replacement: "CALICO_VERSION=v3.34.0"},
-		})
-		require.Empty(t, skipped)
-		return written, err
-	}
-}
-
-// PrepareMain bumps CALICO_VERSION on main, not the new branch; main's dev tag
-// sits on main's head.
-func TestFlowMainBumpAndTag(t *testing.T) {
-	root := srcBumpRepo(t)
-	var ranOn string
-
-	p := &CutPlan{
-		Derived: testPrefix + "-v3.33-1",
-		Source:  "master",
-		TagTargets: []TagTarget{
-			{Branch: testPrefix + "-v3.33-1", DevTag: "v3.33.0-1.0-" + testSuffix},
-			{Branch: "master", DevTag: "v3.34.0-1.0-" + testSuffix},
-		},
-	}
-	d, g := stepDriver(root, nil, false, nil)
-	d.PrepareDerived = branchEditPrepare(t, root, testPrefix+"-v3.33-1")
-	d.PrepareMain = bumpMainPrepare(t, root, &ranOn)
-
-	require.NoError(t, d.runSteps(localCutSteps(t, d, g, p)))
-
-	// PrepareMain ran on main, not the new branch.
-	require.Equal(t, "master", ranOn)
-
-	// master's CALICO_VERSION is bumped; the new branch's is not.
-	masterMeta, err := realGit(root).Run("show", "master:metadata.mk")
-	require.NoError(t, err)
-	require.Contains(t, masterMeta, "CALICO_VERSION=v3.34.0")
-
-	newMeta, err := realGit(root).Run("show", testPrefix+"-v3.33-1:metadata.mk")
-	require.NoError(t, err)
-	require.Contains(t, newMeta, "CALICO_VERSION=v3.33.0", "the main bump must not land on the new branch")
-	require.Contains(t, newMeta, "MANAGER_BRANCH ?= "+testPrefix+"-v3.33-1", "the new-branch edit must land on the new branch")
-
-	// master's dev tag sits on master's head.
-	tagged, err := realGit(root).Run("rev-parse", "v3.34.0-1.0-"+testSuffix+"^{commit}")
-	require.NoError(t, err)
-	head, err := realGit(root).Run("rev-parse", "master")
-	require.NoError(t, err)
-	require.Equal(t, strings.TrimSpace(head), strings.TrimSpace(tagged))
-}
-
-// Skipping update-main leaves main's pin unbumped, while tag-main still tags
-// master's head with an empty commit.
-func TestFlowSkipUpdateMainLeavesPinUnbumped(t *testing.T) {
-	root := srcBumpRepo(t)
-	var ranOn string
-
-	p := &CutPlan{
-		Derived: testPrefix + "-v3.33-1",
-		Source:  "master",
-		TagTargets: []TagTarget{
-			{Branch: testPrefix + "-v3.33-1", DevTag: "v3.33.0-1.0-" + testSuffix},
-			{Branch: "master", DevTag: "v3.34.0-1.0-" + testSuffix},
-		},
-	}
-	d, g := stepDriver(root, nil, false, map[string]bool{stepUpdateMain: true})
-	d.PrepareDerived = branchEditPrepare(t, root, testPrefix+"-v3.33-1")
-	d.PrepareMain = bumpMainPrepare(t, root, &ranOn)
-
-	require.NoError(t, d.runSteps(localCutSteps(t, d, g, p)))
-
-	// update-main was skipped, so PrepareMain never ran and the pin is unbumped.
-	require.Empty(t, ranOn, "update-main must not run when skipped")
-	masterMeta, err := realGit(root).Run("show", "master:metadata.mk")
-	require.NoError(t, err)
-	require.Contains(t, masterMeta, "CALICO_VERSION=v3.33.0", "skipping update-main must leave main's pin unbumped")
-
-	// tag-main still tags master's head.
-	tagged, err := realGit(root).Run("rev-parse", "v3.34.0-1.0-"+testSuffix+"^{commit}")
-	require.NoError(t, err)
-	head, err := realGit(root).Run("rev-parse", "master")
-	require.NoError(t, err)
-	require.Equal(t, strings.TrimSpace(head), strings.TrimSpace(tagged))
-}
-
-// With no main tag target, update-main and tag-main no-op even when a
-// PrepareMain hook is set.
-func TestFlowNoMainTargetSkipsMainSteps(t *testing.T) {
-	root := srcBumpRepo(t)
-	var ranOn string
-
-	p := &CutPlan{
-		Derived: testPrefix + "-v3.33-1",
-		Source:  "master",
-		TagTargets: []TagTarget{
-			{Branch: testPrefix + "-v3.33-1", DevTag: "v3.33.0-1.0-" + testSuffix},
-		},
-	}
-	d, g := stepDriver(root, nil, false, nil)
-	d.PrepareDerived = branchEditPrepare(t, root, testPrefix+"-v3.33-1")
-	d.PrepareMain = bumpMainPrepare(t, root, &ranOn)
-
-	require.NoError(t, d.runSteps(localCutSteps(t, d, g, p)))
-
-	// No main target: PrepareMain must not run and main is untouched.
-	require.Empty(t, ranOn, "no main target must not run PrepareMain")
-	masterMeta, err := realGit(root).Run("show", "master:metadata.mk")
-	require.NoError(t, err)
-	require.Contains(t, masterMeta, "CALICO_VERSION=v3.33.0", "no main target must leave the pin unbumped")
-
-	// No main dev tag is created.
-	_, err = realGit(root).Run("rev-parse", "--verify", "--quiet", "refs/tags/v3.34.0-1.0-"+testSuffix)
-	require.Error(t, err, "no main target must not create a main dev tag")
-}
-
-// A GA master cut with no PrepareSource leaves the source metadata untouched.
-func TestFlowNoPrepareSourceForGACut(t *testing.T) {
-	root := srcBumpRepo(t)
-
-	p := &CutPlan{
-		Derived: testPrefix + "-v3.33",
-		Source:  "master",
-		TagTargets: []TagTarget{
-			{Branch: testPrefix + "-v3.33", DevTag: "v3.33.0-" + testSuffix},
-		},
-	}
-	d, g := stepDriver(root, nil, false, nil)
-	d.PrepareDerived = branchEditPrepare(t, root, testPrefix+"-v3.33")
-	require.NoError(t, d.runSteps(localCutSteps(t, d, g, p)))
-
-	masterMeta, err := realGit(root).Run("show", "master:metadata.mk")
-	require.NoError(t, err)
-	require.Contains(t, masterMeta, "CALICO_VERSION=v3.33.0", "a GA cut must not bump the source CALICO_VERSION")
-}
-
 // post-push is the last step: runs its hook in apply mode,
 // skippable via --skip, and does not run in plan mode.
 func TestPostPushStepIsLastSkippableAndPlanned(t *testing.T) {
@@ -651,26 +273,6 @@ func TestPostPushNilHookIsDone(t *testing.T) {
 	require.True(t, done, "a nil PostPush hook is already done")
 }
 
-// An unrelated pre-staged file left in the index must not enter the cut commit.
-func TestStageAndCommitScopedToPaths(t *testing.T) {
-	root := initGitRepo(t)
-	g := realGit(root)
-
-	writeFile(t, root, "wanted.txt", "wanted\n")
-	writeFile(t, root, "unrelated.txt", "unrelated\n")
-	_, err := g.Run("add", "unrelated.txt")
-	require.NoError(t, err)
-
-	committed, err := stageAndCommit(g, "cut edit", []string{"wanted.txt"})
-	require.NoError(t, err)
-	require.True(t, committed)
-
-	files, err := realGit(root).Run("show", "--name-only", "--format=", "HEAD")
-	require.NoError(t, err)
-	require.Contains(t, files, "wanted.txt")
-	require.NotContains(t, files, "unrelated.txt", "an unrelated pre-staged file must not enter the cut commit")
-}
-
 // A repo with other values sets them in an init().
 var (
 	testPrefix = "release"
@@ -698,137 +300,10 @@ func newTestDriver(t *testing.T, d Driver) *Driver {
 	return &d
 }
 
-// initGitRemote makes a bare repo to serve as root's "origin", pushes master to
-// it, and returns the remote path.
-func initGitRemote(t *testing.T, root string) string {
-	t.Helper()
-	remote := t.TempDir()
-	run := func(dir string, args ...string) string {
-		out, err := realGit(dir).Run(args...)
-		require.NoError(t, err, "git %v", args)
-		return out
-	}
-	run(remote, "init", "-q", "--bare", "-b", "master")
-	run(remote, "config", "tag.gpgsign", "false")
-	run(root, "remote", "add", "origin", remote)
-	run(root, "push", "-q", "origin", "master")
-	return remote
-}
-
-// Validate off skips the dirty-tree reject, so a dirty tree does not error.
-func TestValidateFreshCutNoValidate(t *testing.T) {
-	root := initGitRepo(t)
-	initGitRemote(t, root)
-	_, err := realGit(root).Run("branch", "--set-upstream-to=origin/master", "master")
-	require.NoError(t, err)
-	writeFile(t, root, "metadata.mk", "MANAGER_BRANCH ?= dirty\n")
-	d := newTestDriver(t, Driver{RepoRoot: root, Validate: false})
-	p := &CutPlan{Derived: testPrefix + "-v3.33", Source: "master"}
-	require.NoError(t, d.validateFreshCut(realGit(root), p))
-}
-
-// TestValidateFreshCutDirtyTree: a fresh cut with Validate rejects a dirty tree;
-// a resume and plan mode do not.
-func TestValidateFreshCutDirtyTree(t *testing.T) {
-	root := initGitRepo(t)
-	// master is current with its upstream so the base check passes and only the
-	// dirty-tree gate is under test.
-	initGitRemote(t, root)
-	_, err := realGit(root).Run("branch", "--set-upstream-to=origin/master", "master")
-	require.NoError(t, err)
-	// Make the tracked tree dirty.
-	writeFile(t, root, "metadata.mk", "MANAGER_BRANCH ?= dirty\n")
-
-	g := realGit(root)
-	p := &CutPlan{Derived: testPrefix + "-v3.33", Source: "master"}
-
-	d := newTestDriver(t, Driver{RepoRoot: root, Validate: true})
-
-	// fresh cut (derived branch absent) + dirty -> rejected.
-	err = d.validateFreshCut(g, p)
-	require.ErrorContains(t, err, "uncommitted changes")
-
-	// plan mode skips the dirty-tree reject.
-	planD := newTestDriver(t, Driver{RepoRoot: root, Validate: true, Plan: true})
-	require.NoError(t, planD.validateFreshCut(g, p))
-
-	// --skip is not a resume signal: a fresh cut with --skip still validates.
-	skipD := newTestDriver(t, Driver{RepoRoot: root, Validate: true, Skip: map[string]bool{"cut-branch": true}})
-	err = skipD.validateFreshCut(g, p)
-	require.ErrorContains(t, err, "uncommitted changes", "--skip must not bypass the dirty-tree check on a fresh cut")
-
-	// resume: derived branch exists -> not validated even when dirty.
-	_, err = realGit(root).Run("branch", p.Derived)
-	require.NoError(t, err)
-	require.NoError(t, d.validateFreshCut(g, p))
-}
-
-// TestValidateFreshCutBaseCheckRunsWithoutValidate checks the base check runs even
-// with Validate off: a main behind its upstream is still rejected.
-func TestValidateFreshCutBaseCheckRunsWithoutValidate(t *testing.T) {
-	root := initGitRepo(t)
-	initGitRemote(t, root)
-	run := func(args ...string) {
-		_, err := realGit(root).Run(args...)
-		require.NoError(t, err, "git %v", args)
-	}
-	// Push an extra commit to origin, then reset local master back so it is behind
-	// its upstream.
-	run("branch", "--set-upstream-to=origin/master", "master")
-	run("commit", "-q", "--allow-empty", "-m", "ahead")
-	run("push", "-q", "origin", "master")
-	run("reset", "-q", "--hard", "HEAD~1")
-
-	d := newTestDriver(t, Driver{RepoRoot: root, Validate: false})
-	p := &CutPlan{Derived: testPrefix + "-v3.33", Source: "master"}
-	err := d.validateFreshCut(realGit(root), p)
-	require.ErrorContains(t, err, "not in sync", "the base check must run even with --no-validation")
-}
-
 // A cut whose source equals its derived branch is rejected before any git work.
 func TestCutReleaseBranchRejectsSourceEqualsDerived(t *testing.T) {
 	d := newTestDriver(t, Driver{RepoRoot: t.TempDir()})
 	p := &CutPlan{Derived: "release-v3.33", Source: "release-v3.33", Remote: "origin"}
 	err := d.CutReleaseBranch(p)
 	require.ErrorContains(t, err, "cannot be the same as derived")
-}
-
-// A resume re-cuts the derived branch from source when source advanced, so new
-// source commits are picked up; an unchanged source leaves the branch in place.
-func TestUpdateDerivedResetsWhenSourceAdvanced(t *testing.T) {
-	root := initGitRepo(t)
-	derived := testPrefix + "-v3.33"
-	p := &CutPlan{Derived: derived, Source: "master"}
-	prepare := func(string) ([]string, error) {
-		written, _, err := ApplyEdits(root, []Edit{
-			{File: "metadata.mk", Pattern: `^MANAGER_BRANCH.*`, Replacement: "MANAGER_BRANCH ?= " + derived},
-		})
-		return written, err
-	}
-	d, g := stepDriver(root, nil, false, nil)
-	d.PrepareDerived = prepare
-
-	// First cut: create derived off master and apply the edit.
-	all := d.steps(g, p)
-	require.NoError(t, d.runSteps([]Step{findStep(t, all, "cut-branch"), findStep(t, all, "update-derived")}))
-
-	// Advance master with a new commit the derived branch does not have.
-	_, err := realGit(root).Run("checkout", "-q", "master")
-	require.NoError(t, err)
-	writeFile(t, root, "new-on-master.txt", "added after the cut\n")
-	_, err = realGit(root).Run("add", ".")
-	require.NoError(t, err)
-	_, err = realGit(root).Run("commit", "-q", "-m", "advance master")
-	require.NoError(t, err)
-
-	// Resume update-derived: it must re-cut derived from the advanced master.
-	require.NoError(t, d.runSteps([]Step{findStep(t, d.steps(g, p), "update-derived")}))
-
-	// The derived branch now contains master's new file, and still has the edit.
-	content, err := realGit(root).Run("show", derived+":new-on-master.txt")
-	require.NoError(t, err)
-	require.Contains(t, content, "added after the cut", "derived must pick up the advanced source commit")
-	meta, err := realGit(root).Run("show", derived+":metadata.mk")
-	require.NoError(t, err)
-	require.Contains(t, meta, "MANAGER_BRANCH ?= "+derived, "the edit must be re-applied after the reset")
 }
