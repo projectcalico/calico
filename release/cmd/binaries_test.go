@@ -64,7 +64,7 @@ func stageBuiltBinaries(t *testing.T, root string) {
 func runBinaries(t *testing.T, root string, args ...string) *recordingRunner {
 	t.Helper()
 	stageBuiltBinaries(t, root)
-	r := &recordingRunner{}
+	r := newRecordingRunner()
 	prev := commandRunner
 	commandRunner = r
 	t.Cleanup(func() { commandRunner = prev })
@@ -88,7 +88,7 @@ func TestBinariesBuildRunsEveryComponent(t *testing.T) {
 
 	for component, target := range binariesCLIComponents {
 		if !r.ranExactly(filepath.Join(root, component), target) {
-			t.Errorf("did not build %s with %s, ran: %v", component, target, r.args)
+			t.Errorf("did not build %s with %s, ran: %v", component, target, r.args())
 		}
 	}
 }
@@ -111,9 +111,9 @@ func TestBinariesBuildMatchesTheManagerComponents(t *testing.T) {
 	r := runBinaries(t, root, "build")
 
 	var built []string
-	for _, args := range r.args {
-		if len(args) > 1 && args[0] == "-C" {
-			built = append(built, filepath.Base(args[1]))
+	for _, c := range r.Calls() {
+		if c.Name == "make" {
+			built = append(built, filepath.Base(c.Dir))
 		}
 	}
 	slices.Sort(built)

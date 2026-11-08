@@ -60,27 +60,23 @@ type fakeResult struct {
 	err    error
 }
 
-// fakeRunner is a command.CommandRunner that returns canned output per command
-// and records every invocation so tests can assert what was (and was not) run.
+// fakeRunner returns canned output per command, so tests can drive what a
+// step sees and assert what it ran.
 type fakeRunner struct {
-	mu sync.Mutex
+	*command.Recorder
 
 	// responses maps a command key ("name arg1 arg2 ...") to its canned result.
 	// A key that is a prefix of the invoked command also matches (longest-prefix
 	// wins), so tests can match on a stable command head without spelling out
 	// variable trailing args (a temp-file path, an enumerated asset list).
+	// A key of "<dir> $ name args" matches only a command run in dir.
 	responses map[string]fakeResult
-
-	// calls records every command invoked, as "name arg1 arg2 ...".
-	calls []string
-
-	// Parallel to calls, so a test can assert what a step passed to make.
-	envs     [][]string
-	logPaths []string
 }
 
 func newFakeRunner() *fakeRunner {
-	return &fakeRunner{responses: map[string]fakeResult{}}
+	f := &fakeRunner{responses: map[string]fakeResult{}}
+	f.Recorder = &command.Recorder{Reply: f.reply}
+	return f
 }
 
 // on registers a canned result for a command key.
@@ -89,20 +85,19 @@ func (f *fakeRunner) on(key, stdout string, err error) *fakeRunner {
 	return f
 }
 
-func (f *fakeRunner) record(name string, args []string) (string, error) {
-	return f.recordFull(name, args, nil, "")
+func (f *fakeRunner) reply(c command.Call) (string, error) {
+	if c.Dir != "" {
+		if res, ok := f.lookup(dirKey(c)); ok {
+			return res.stdout, res.err
+		}
+	}
+	res, _ := f.lookup(callKey(c))
+	return res.stdout, res.err
 }
 
-// Image steps run their units concurrently, so recording has to be locked.
-func (f *fakeRunner) recordFull(name string, args, env []string, logPath string) (string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	cmd := strings.TrimSpace(name + " " + strings.Join(args, " "))
-	f.calls = append(f.calls, cmd)
-	f.envs = append(f.envs, slices.Clone(env))
-	f.logPaths = append(f.logPaths, logPath)
+func (f *fakeRunner) lookup(cmd string) (fakeResult, bool) {
 	if res, ok := f.responses[cmd]; ok {
-		return res.stdout, res.err
+		return res, true
 	}
 	var bestKey string
 	for key := range f.responses {
@@ -110,23 +105,29 @@ func (f *fakeRunner) recordFull(name string, args, env []string, logPath string)
 			bestKey = key
 		}
 	}
-	if bestKey != "" {
-		res := f.responses[bestKey]
-		return res.stdout, res.err
+	res, ok := f.responses[bestKey]
+	return res, ok && bestKey != ""
+}
+
+func callKey(c command.Call) string {
+	return strings.TrimSpace(c.Name + " " + strings.Join(c.Args, " "))
+}
+
+// dirKey names a call by where it ran as well as what ran: "<dir> $ <cmd>".
+func dirKey(c command.Call) string {
+	return c.Dir + " $ " + callKey(c)
+}
+
+func matches(c command.Call, prefix string) bool {
+	return strings.HasPrefix(callKey(c), prefix) || strings.HasPrefix(dirKey(c), prefix)
+}
+
+func (f *fakeRunner) calls() []string {
+	var out []string
+	for _, c := range f.Calls() {
+		out = append(out, callKey(c))
 	}
-	return "", nil
-}
-
-func (f *fakeRunner) Run(name string, args, env []string) (string, error) {
-	return f.recordFull(name, args, env, "")
-}
-
-func (f *fakeRunner) RunInDir(dir, name string, args, env []string) (string, error) {
-	return f.recordFull(name, args, env, "")
-}
-
-func (f *fakeRunner) RunInDirToFile(dir, name string, args, env []string, logPath string) (string, error) {
-	return f.recordFull(name, args, env, logPath)
+	return out
 }
 
 // ran reports whether any recorded call starts with the given command prefix.
@@ -137,8 +138,8 @@ func (f *fakeRunner) ran(prefix string) bool {
 // count returns how many recorded calls start with the given command prefix.
 func (f *fakeRunner) count(prefix string) int {
 	n := 0
-	for _, c := range f.calls {
-		if strings.HasPrefix(c, prefix) {
+	for _, c := range f.Calls() {
+		if matches(c, prefix) {
 			n++
 		}
 	}
@@ -147,9 +148,9 @@ func (f *fakeRunner) count(prefix string) int {
 
 // envFor returns the env of the first recorded call matching the given prefix.
 func (f *fakeRunner) envFor(prefix string) []string {
-	for i, c := range f.calls {
-		if strings.HasPrefix(c, prefix) {
-			return f.envs[i]
+	for _, c := range f.Calls() {
+		if matches(c, prefix) {
+			return c.Env
 		}
 	}
 	return nil
@@ -216,7 +217,7 @@ func TestTagRelease(t *testing.T) {
 				t.Fatalf("TagRelease() unexpected error: %v", err)
 			}
 			if got := f.ran("git tag -a "); got != tt.wantTag {
-				t.Errorf("git tag issued = %v, want %v (calls: %v)", got, tt.wantTag, f.calls)
+				t.Errorf("git tag issued = %v, want %v (calls: %v)", got, tt.wantTag, f.calls())
 			}
 		})
 	}
@@ -258,13 +259,13 @@ func TestBuild(t *testing.T) {
 			f.on("git rev-parse HEAD", headSHA, nil)
 			f.on(fmt.Sprintf("git rev-parse -q --verify refs/tags/%s^{commit}", ver), "", fmt.Errorf("exit status 1"))
 			// Fail a binaries target so Build returns after the tag is taken.
-			f.on("make -C "+root+"/felix release-build", "", fmt.Errorf("boom"))
+			f.on(root+"/felix $ make release-build", "", fmt.Errorf("boom"))
 
 			if err := m.Build(); err == nil {
 				t.Fatal("Build() = nil, want error")
 			}
 			if got := f.ran("git tag -d " + ver); got != tt.wantDelete {
-				t.Errorf("git tag -d issued = %v, want %v (calls: %v)", got, tt.wantDelete, f.calls)
+				t.Errorf("git tag -d issued = %v, want %v (calls: %v)", got, tt.wantDelete, f.calls())
 			}
 		})
 	}
@@ -277,7 +278,6 @@ func TestBuild(t *testing.T) {
 		m.images = false
 		m.binaries = true
 		m.tarball = true
-		f.calls = nil
 		return f, m
 	}
 
@@ -287,8 +287,8 @@ func TestBuild(t *testing.T) {
 		if err := m.Build(); err != nil {
 			t.Fatalf("Build() unexpected error: %v", err)
 		}
-		if want := []string{gitDescribe}; !slices.Equal(f.calls, want) {
-			t.Errorf("ran %v, want %v", f.calls, want)
+		if want := []string{gitDescribe}; !slices.Equal(f.calls(), want) {
+			t.Errorf("ran %v, want %v", f.calls(), want)
 		}
 	})
 
@@ -301,8 +301,8 @@ func TestBuild(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "run release prep first") {
 			t.Fatalf("Build() error = %v, want a prep mismatch", err)
 		}
-		if want := []string{gitDescribe}; !slices.Equal(f.calls, want) || built {
-			t.Errorf("ran %v, operator built = %v", f.calls, built)
+		if want := []string{gitDescribe}; !slices.Equal(f.calls(), want) || built {
+			t.Errorf("ran %v, operator built = %v", f.calls(), built)
 		}
 	})
 
@@ -313,8 +313,8 @@ func TestBuild(t *testing.T) {
 		if err := m.Build(); err != nil {
 			t.Fatalf("Build() unexpected error: %v", err)
 		}
-		if want := []string{gitDescribe}; !slices.Equal(f.calls, want) {
-			t.Errorf("ran %v, want %v", f.calls, want)
+		if want := []string{gitDescribe}; !slices.Equal(f.calls(), want) {
+			t.Errorf("ran %v, want %v", f.calls(), want)
 		}
 	})
 
@@ -327,8 +327,8 @@ func TestBuild(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "no records directory specified") {
 			t.Fatalf("Build() error = %v, want a missing records directory", err)
 		}
-		if want := []string{gitDescribe}; !slices.Equal(f.calls, want) || built {
-			t.Errorf("ran %v, operator built = %v", f.calls, built)
+		if want := []string{gitDescribe}; !slices.Equal(f.calls(), want) || built {
+			t.Errorf("ran %v, operator built = %v", f.calls(), built)
 		}
 	})
 
@@ -339,8 +339,8 @@ func TestBuild(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), `requires "binaries"`) {
 			t.Fatalf("Build() error = %v, want a missing binaries requirement", err)
 		}
-		if want := []string{gitDescribe}; !slices.Equal(f.calls, want) {
-			t.Errorf("ran %v, want only %v", f.calls, want)
+		if want := []string{gitDescribe}; !slices.Equal(f.calls(), want) {
+			t.Errorf("ran %v, want only %v", f.calls(), want)
 		}
 	})
 
@@ -360,8 +360,8 @@ func TestBuild(t *testing.T) {
 		if diff := cmp.Diff([]string{"custom"}, ran); diff != "" {
 			t.Errorf("ran (-want +got):\n%s", diff)
 		}
-		if len(f.calls) != 0 {
-			t.Errorf("built-in steps ran: %v", f.calls)
+		if len(f.calls()) != 0 {
+			t.Errorf("built-in steps ran: %v", f.calls())
 		}
 	})
 
@@ -373,7 +373,7 @@ func TestBuild(t *testing.T) {
 			t.Fatal("Build() = nil, want error")
 		}
 		if f.ran("git tag") {
-			t.Errorf("tagged before validating the archive (calls: %v)", f.calls)
+			t.Errorf("tagged before validating the archive (calls: %v)", f.calls())
 		}
 	})
 }
@@ -393,7 +393,7 @@ func TestTagStateMemoized(t *testing.T) {
 		t.Fatal(tc.err)
 	}
 	if got := f.count("git rev-parse -q --verify refs/tags/" + ver); got != 1 {
-		t.Errorf("tag rev-parse ran %d times, want 1 (calls: %v)", got, f.calls)
+		t.Errorf("tag rev-parse ran %d times, want 1 (calls: %v)", got, f.calls())
 	}
 }
 
@@ -494,7 +494,7 @@ func TestPublishGitTag(t *testing.T) {
 				t.Fatalf("publishGitTag() unexpected error: %v", err)
 			}
 			if got := f.ran(fmt.Sprintf("git push %s %s", remote, ver)); got != tt.wantPush {
-				t.Errorf("git push issued = %v, want %v (calls: %v)", got, tt.wantPush, f.calls)
+				t.Errorf("git push issued = %v, want %v (calls: %v)", got, tt.wantPush, f.calls())
 			}
 		})
 	}
@@ -513,8 +513,8 @@ func TestPublishGithubReleaseSkipped(t *testing.T) {
 	if upload := r.githubReleaseUpload(); !upload.Skip {
 		t.Errorf("expected the upload skipped with the flag off, got %+v", upload)
 	}
-	if len(f.calls) != 0 {
-		t.Errorf("expected nothing run with the flag off, got %v", f.calls)
+	if len(f.calls()) != 0 {
+		t.Errorf("expected nothing run with the flag off, got %v", f.calls())
 	}
 }
 
@@ -647,8 +647,8 @@ func TestPrepareDerived(t *testing.T) {
 		if _, err := r.prepareDerived("master"); err == nil {
 			t.Fatal("want an error")
 		}
-		if len(f.calls) > 0 {
-			t.Errorf("ran %v before rejecting the branch", f.calls)
+		if len(f.calls()) > 0 {
+			t.Errorf("ran %v before rejecting the branch", f.calls())
 		}
 	})
 }
@@ -660,7 +660,7 @@ func TestPrepareRelease(t *testing.T) {
 		r := &CalicoManager{runner: f, repoRoot: t.TempDir(), calicoVersion: testVersion(t, "v3.30.0"), releaseBranchPrefix: "release"}
 		r.beforePrep = func() error {
 			if f.ran("git switch") {
-				t.Errorf("switched branch before beforePrep (calls: %v)", f.calls)
+				t.Errorf("switched branch before beforePrep (calls: %v)", f.calls())
 			}
 			return os.ErrInvalid
 		}
@@ -668,7 +668,7 @@ func TestPrepareRelease(t *testing.T) {
 			t.Fatalf("PrepareRelease() = %v, want beforePrep's error", err)
 		}
 		if f.ran("git switch") {
-			t.Errorf("switched branch after beforePrep failed (calls: %v)", f.calls)
+			t.Errorf("switched branch after beforePrep failed (calls: %v)", f.calls())
 		}
 	})
 
@@ -702,7 +702,7 @@ func TestPrepareRelease(t *testing.T) {
 			t.Fatalf("PrepareRelease() unexpected error: %v", err)
 		}
 		if want := "git commit -m build: v3.30.0 release --trailer Release-branch: release-v3.30"; !f.ran(want) {
-			t.Errorf("did not run %q (calls: %v)", want, f.calls)
+			t.Errorf("did not run %q (calls: %v)", want, f.calls())
 		}
 	})
 }
@@ -778,17 +778,17 @@ func TestPushPrepBranch(t *testing.T) {
 			if err := r.pushPrepBranch("release-v3.30", "build-v3.30.0"); err != nil {
 				t.Fatalf("pushPrepBranch() unexpected error: %v", err)
 			}
-			if got := slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "git push") }); got != (tc.wantPush != "") {
-				t.Errorf("pushed = %v, want %v (calls: %v)", got, tc.wantPush != "", f.calls)
+			if got := slices.ContainsFunc(f.calls(), func(c string) bool { return strings.HasPrefix(c, "git push") }); got != (tc.wantPush != "") {
+				t.Errorf("pushed = %v, want %v (calls: %v)", got, tc.wantPush != "", f.calls())
 			}
-			if tc.wantPush != "" && !slices.Contains(f.calls, tc.wantPush) {
-				t.Errorf("did not run %q (calls: %v)", tc.wantPush, f.calls)
+			if tc.wantPush != "" && !slices.Contains(f.calls(), tc.wantPush) {
+				t.Errorf("did not run %q (calls: %v)", tc.wantPush, f.calls())
 			}
 			if got := f.ran("./bin/gh pr create"); got != tc.wantPR {
-				t.Errorf("opened a PR = %v, want %v (calls: %v)", got, tc.wantPR, f.calls)
+				t.Errorf("opened a PR = %v, want %v (calls: %v)", got, tc.wantPR, f.calls())
 			}
 			if want := "git switch -f release-v3.30"; !f.ran(want) {
-				t.Errorf("did not switch back to the base branch (calls: %v)", f.calls)
+				t.Errorf("did not switch back to the base branch (calls: %v)", f.calls())
 			}
 		})
 	}
@@ -915,9 +915,9 @@ func TestRequireOnMainBranch(t *testing.T) {
 // envForDir returns the environment of the first recorded make call in a
 // component directory.
 func (f *fakeRunner) envForDir(dir string) []string {
-	for i, c := range f.calls {
-		if strings.Contains(c, dir) {
-			return f.envs[i]
+	for _, c := range f.Calls() {
+		if strings.Contains(dirKey(c), dir) {
+			return c.Env
 		}
 	}
 	return nil
@@ -927,10 +927,10 @@ func (f *fakeRunner) envForDir(dir string) []string {
 // component directory.
 func (f *fakeRunner) logPathsForDir(dir string) []string {
 	var out []string
-	for i, c := range f.calls {
+	for _, c := range f.Calls() {
 		// Only unit targets are logged to a file.
-		if strings.Contains(c, dir) && f.logPaths[i] != "" {
-			out = append(out, f.logPaths[i])
+		if strings.Contains(dirKey(c), dir) && c.LogFile != "" {
+			out = append(out, c.LogFile)
 		}
 	}
 	return out
@@ -940,7 +940,7 @@ func (f *fakeRunner) logPathsForDir(dir string) []string {
 // image-name queries.
 func unitCalls(f *fakeRunner, target string) []string {
 	var out []string
-	for _, c := range f.calls {
+	for _, c := range f.calls() {
 		if strings.Contains(c, " "+target) {
 			out = append(out, c)
 		}
@@ -969,9 +969,9 @@ func TestBuildBinariesBuildsFelixWhateverTheImagesFlagIs(t *testing.T) {
 			if err := m.buildBinaries(); err != nil {
 				t.Fatalf("buildBinaries: %v", err)
 			}
-			for _, want := range []string{"make -C " + root + "/felix release-build", "make -C " + root + "/calicoctl build-all"} {
+			for _, want := range []string{root + "/felix $ make release-build", root + "/calicoctl $ make build-all"} {
 				if !f.ran(want) {
-					t.Errorf("did not run %q, ran: %v", want, f.calls)
+					t.Errorf("did not run %q, ran: %v", want, f.calls())
 				}
 			}
 		})
@@ -1054,16 +1054,16 @@ func TestHashreleaseManifestsAreCollectedBeforeTheArchiveReadsThem(t *testing.T)
 
 	// The archive reads the collected copy, so the copy has to happen while
 	// building the manifests rather than in a later pass.
-	gen := slices.IndexFunc(f.calls, func(c string) bool { return strings.Contains(c, "gen-manifests") })
-	copied := slices.IndexFunc(f.calls, func(c string) bool {
+	gen := slices.IndexFunc(f.calls(), func(c string) bool { return strings.Contains(c, "gen-manifests") })
+	copied := slices.IndexFunc(f.calls(), func(c string) bool {
 		return strings.Contains(c, filepath.Join(out, manifests.DirName)) ||
 			strings.HasSuffix(c, out)
 	})
 	if gen < 0 || copied < 0 {
-		t.Fatalf("expected a manifest build and a copy, ran: %v", f.calls)
+		t.Fatalf("expected a manifest build and a copy, ran: %v", f.calls())
 	}
 	if copied < gen {
-		t.Errorf("manifests were copied before they were generated, ran: %v", f.calls)
+		t.Errorf("manifests were copied before they were generated, ran: %v", f.calls())
 	}
 }
 
@@ -1148,7 +1148,7 @@ func imageManager(t *testing.T, f *fakeRunner, logsDir string) (*CalicoManager, 
 	// A publish asks each directory for its image names before recording refs.
 	for _, dir := range images.VariantDirs(images.PublishVariants) {
 		base := path.Base(dir)
-		f.on(fmt.Sprintf("make -C %s/%s -s --no-print-directory build-images", root, dir), base+" "+base+"-windows", nil)
+		f.on(fmt.Sprintf("%s/%s $ make -s --no-print-directory build-images", root, dir), base+" "+base+"-windows", nil)
 	}
 	if _, ok := f.responses["git rev-parse --abbrev-ref HEAD"]; !ok {
 		f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30\n", nil)
@@ -1189,8 +1189,8 @@ func TestPublishContainerImagesConfirms(t *testing.T) {
 	if err := m.publishContainerImages(); err != nil {
 		t.Fatalf("publishContainerImages: %v", err)
 	}
-	if !f.ran("make -C " + root + "/cmd/calico " + imagePublishTarget) {
-		t.Errorf("publish did not run %s in cmd/calico, calls: %v", imagePublishTarget, f.calls)
+	if !f.ran(root + "/cmd/calico $ make " + imagePublishTarget) {
+		t.Errorf("publish did not run %s in cmd/calico, calls: %v", imagePublishTarget, f.calls())
 	}
 	env := f.envForDir(root + "/cmd/calico ")
 	if !slices.Contains(env, "CONFIRM=true") {
@@ -1229,7 +1229,7 @@ func TestResolveContainerImages(t *testing.T) {
 		if refs := readRefs(t, m, "images-publish"); len(refs) != 0 {
 			t.Errorf("a resolve wrote the publish record: %v", refs)
 		}
-		for _, c := range f.calls {
+		for _, c := range f.calls() {
 			if strings.HasSuffix(c, " "+imagePublishTarget) {
 				t.Errorf("a resolve ran the publish target: %s", c)
 			}
@@ -1743,22 +1743,22 @@ func TestPublishBranchTag(t *testing.T) {
 					t.Fatalf("publishContainerImages() unexpected error: %v", err)
 				}
 
-				if got := f.ran("make -C " + root + "/cmd/calico " + imagePublishTarget); got != tt.wantPublish {
-					t.Errorf("%s ran = %v, want %v (calls: %v)", imagePublishTarget, got, tt.wantPublish, f.calls)
+				if got := f.ran(root + "/cmd/calico $ make " + imagePublishTarget); got != tt.wantPublish {
+					t.Errorf("%s ran = %v, want %v (calls: %v)", imagePublishTarget, got, tt.wantPublish, f.calls())
 				}
-				if got := f.ran("make -C " + root + "/cmd/calico " + branchTagTarget); got != tt.wantBranchTag {
-					t.Errorf("branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
+				if got := f.ran(root + "/cmd/calico $ make " + branchTagTarget); got != tt.wantBranchTag {
+					t.Errorf("branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls())
 				}
 				if tt.wantBranchTag {
-					if got := f.envFor("make -C " + root + "/cmd/calico " + branchTagTarget); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
+					if got := f.envFor(root + "/cmd/calico $ make " + branchTagTarget); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
 						t.Errorf("branch tag env = %v, want IMAGETAG=%s", got, tt.wantTag)
 					}
 				}
 
 				// The operator carries the branch tag too, published to its own registries.
-				opTarget := "make -C " + root + "/operator retag-build-images-with-registries"
+				opTarget := root + "/operator $ make retag-build-images-with-registries"
 				if got := f.ran(opTarget); got != tt.wantBranchTag {
-					t.Errorf("operator branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
+					t.Errorf("operator branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls())
 				}
 				if tt.wantBranchTag {
 					env := f.envFor(opTarget)
@@ -1786,8 +1786,8 @@ func TestPublishBranchTag(t *testing.T) {
 		if err := r.publishContainerImages(); err != nil {
 			t.Fatalf("publishContainerImages: %v", err)
 		}
-		if got := "make -C " + root + "/cmd/calico " + branchTagTarget; f.ran(got) {
-			t.Errorf("ran %q for a registry outside the default (calls: %v)", got, f.calls)
+		if got := root + "/cmd/calico $ make " + branchTagTarget; f.ran(got) {
+			t.Errorf("ran %q for a registry outside the default (calls: %v)", got, f.calls())
 		}
 	})
 
@@ -1798,8 +1798,8 @@ func TestPublishBranchTag(t *testing.T) {
 		if err := r.publishContainerImages(); err != nil {
 			t.Fatalf("publishContainerImages: %v", err)
 		}
-		if got := "make -C " + root + "/operator " + branchTagTarget; f.ran(got) {
-			t.Errorf("ran %q with the operator off (calls: %v)", got, f.calls)
+		if got := root + "/operator $ make " + branchTagTarget; f.ran(got) {
+			t.Errorf("ran %q with the operator off (calls: %v)", got, f.calls())
 		}
 	})
 
@@ -1810,8 +1810,8 @@ func TestPublishBranchTag(t *testing.T) {
 		if err := r.publishContainerImages(); err != nil {
 			t.Fatalf("publishContainerImages: %v", err)
 		}
-		if got := "make -C " + root + "/operator " + branchTagTarget; f.ran(got) {
-			t.Errorf("ran %q for a registry outside the defaults (calls: %v)", got, f.calls)
+		if got := root + "/operator $ make " + branchTagTarget; f.ran(got) {
+			t.Errorf("ran %q for a registry outside the defaults (calls: %v)", got, f.calls())
 		}
 	})
 
@@ -1823,12 +1823,12 @@ func TestPublishBranchTag(t *testing.T) {
 		if err := m.publishContainerImages(); err != nil {
 			t.Fatalf("publishContainerImages: %v", err)
 		}
-		if got := "make -C " + root + "/cni-plugin " + branchTagTarget; f.ran(got) {
-			t.Errorf("branch tag ran %q, which has no arch images to retag (calls: %v)", got, f.calls)
+		if got := root + "/cni-plugin $ make " + branchTagTarget; f.ran(got) {
+			t.Errorf("branch tag ran %q, which has no arch images to retag (calls: %v)", got, f.calls())
 		}
-		want := "make -C " + root + "/cni-plugin " + windowsBranchTagTarget
+		want := root + "/cni-plugin $ make " + windowsBranchTagTarget
 		if !f.ran(want) {
-			t.Errorf("did not run %q, ran: %v", want, f.calls)
+			t.Errorf("did not run %q, ran: %v", want, f.calls())
 		}
 
 		// The copy is registry side, so it needs the tag it copies from.
@@ -1847,11 +1847,11 @@ func TestPublishBranchTag(t *testing.T) {
 		if err := m.publishContainerImages(); err != nil {
 			t.Fatalf("publishContainerImages: %v", err)
 		}
-		if got := "make -C " + root + "/cni-plugin " + windowsBranchTagTarget; f.ran(got) {
-			t.Errorf("ran %q with no windows dirs (calls: %v)", got, f.calls)
+		if got := root + "/cni-plugin $ make " + windowsBranchTagTarget; f.ran(got) {
+			t.Errorf("ran %q with no windows dirs (calls: %v)", got, f.calls())
 		}
-		if got := "make -C " + root + "/cmd/calico " + branchTagTarget; !f.ran(got) {
-			t.Errorf("did not run %q, ran: %v", got, f.calls)
+		if got := root + "/cmd/calico $ make " + branchTagTarget; !f.ran(got) {
+			t.Errorf("did not run %q, ran: %v", got, f.calls())
 		}
 	})
 }
@@ -1877,8 +1877,8 @@ func TestImageStepsNarrowedToReleaseDirs(t *testing.T) {
 			if len(units) != 1 {
 				t.Fatalf("expected one unit for whisker, ran: %v", units)
 			}
-			if !f.ran("make -C " + root + "/whisker " + tc.target) {
-				t.Errorf("did not run %s in whisker, ran: %v", tc.target, f.calls)
+			if !f.ran(root + "/whisker $ make " + tc.target) {
+				t.Errorf("did not run %s in whisker, ran: %v", tc.target, f.calls())
 			}
 		})
 	}
@@ -1893,7 +1893,7 @@ func TestImageStepsUnnarrowedByDefault(t *testing.T) {
 	}
 	want := len(images.VariantDirs([]images.Variant{images.PublishVariants[0]}))
 	if got := len(unitCalls(f, imagePublishTarget)); got != want {
-		t.Errorf("published %d dirs, want every one of %d: %v", got, want, f.calls)
+		t.Errorf("published %d dirs, want every one of %d: %v", got, want, f.calls())
 	}
 }
 
@@ -1973,8 +1973,8 @@ func TestAssertOperatorImageVersion(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.Len(t, f.calls, 1)
-			require.Contains(t, f.calls[0], "quay.io/tigera/operator:"+version)
+			require.Len(t, f.calls(), 1)
+			require.Contains(t, f.calls()[0], "quay.io/tigera/operator:"+version)
 		})
 	}
 }
@@ -2103,7 +2103,7 @@ func TestHelmIndexUploadSetsCachePolicy(t *testing.T) {
 func TestCheckCodeGeneration(t *testing.T) {
 	const (
 		status = "git status --porcelain"
-		check  = "make -C"
+		check  = "make generate check-dirty"
 		reset  = "git checkout -- ."
 		clean  = "git clean -fd"
 	)
@@ -2138,12 +2138,12 @@ func TestCheckCodeGeneration(t *testing.T) {
 			if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
 				t.Fatalf("checkCodeGeneration() error = %v, want %q", err, tc.wantErr)
 			}
-			if len(f.calls) != len(tc.want) {
-				t.Fatalf("ran %v, want %v", f.calls, tc.want)
+			if len(f.calls()) != len(tc.want) {
+				t.Fatalf("ran %v, want %v", f.calls(), tc.want)
 			}
 			for i, prefix := range tc.want {
-				if !strings.HasPrefix(f.calls[i], prefix) {
-					t.Errorf("call %d = %q, want it to start with %q", i, f.calls[i], prefix)
+				if !strings.HasPrefix(f.calls()[i], prefix) {
+					t.Errorf("call %d = %q, want it to start with %q", i, f.calls()[i], prefix)
 				}
 			}
 		})
@@ -2166,7 +2166,7 @@ func TestPublishGitTagPreviewsThePushOnADryRun(t *testing.T) {
 		t.Fatalf("publishGitTag() = %v, want nil", err)
 	}
 	if !f.ran("git push origin v3.30.0 --dry-run") {
-		t.Errorf("expected a previewed push, got %v", f.calls)
+		t.Errorf("expected a previewed push, got %v", f.calls())
 	}
 }
 
@@ -2667,4 +2667,44 @@ func testVersion(t testing.TB, s string) version.Version {
 		t.Fatal(err)
 	}
 	return v
+}
+
+func TestCreatePrepPR(t *testing.T) {
+	const existing = "https://github.com/someorg/somerepo/pull/42"
+	tests := []struct {
+		name    string
+		ghErr   error
+		wantErr bool
+	}{
+		{
+			name: "existing PR switches back to the base branch",
+			ghErr: &command.Error{
+				Stderr: "a pull request for branch \"prep\" into branch \"master\" already exists:\n" + existing,
+				Err:    errors.New("exit status 1"),
+			},
+		},
+		{
+			name:    "other failure is returned",
+			ghErr:   &command.Error{Stderr: "HTTP 502", Err: errors.New("exit status 1")},
+			wantErr: true,
+		},
+		{
+			name:    "already exists outside stderr is not an existing PR",
+			ghErr:   errors.New("already exists"),
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeRunner().on("./bin/gh pr create", "", tt.ghErr)
+			r := &CalicoManager{runner: f, githubOrg: "someorg", repo: "somerepo"}
+			err := r.createPrepPR("master", "prep")
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("createPrepPR() = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got := f.ran("git switch -f master"); got == tt.wantErr {
+				t.Errorf("switched back to base = %v, want %v", got, !tt.wantErr)
+			}
+		})
+	}
 }

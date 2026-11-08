@@ -34,7 +34,7 @@ func TestOperatorPrintedImagesInExpectedList(t *testing.T) {
 	}
 
 	t.Logf("Running operator image %s with --print-images=listcalico", fqOperatorImage)
-	out, err := command.Run("docker", []string{"run", "--rm", fqOperatorImage, "--print-images=listcalico"})
+	out, err := command.Runner(commandRunner).Run("docker", []string{"run", "--rm", fqOperatorImage, "--print-images=listcalico"})
 	if err != nil {
 		t.Fatalf("failed to run operator image %s with --print-images=listcalico: %v\n%s", fqOperatorImage, err, string(out))
 	}

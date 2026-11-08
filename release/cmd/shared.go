@@ -205,7 +205,7 @@ func pinForRelease(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
 // releaseVersion is the version being released. A hashrelease is versioned from git.
 var releaseVersion = func(cfg *Config, c *cli.Command) (*version.Version, error) {
 	if c.Bool(hashreleaseFlag.Name) {
-		v, err := command.GitVersion(cfg.RepoRootDir, true)
+		v, err := command.Git(commandRunner).In(cfg.RepoRootDir).Version(true)
 		if err != nil {
 			return nil, fmt.Errorf("git version: %w", err)
 		}

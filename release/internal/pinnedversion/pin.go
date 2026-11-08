@@ -65,7 +65,7 @@ func (r Repo) Validate() error {
 }
 
 func (r Repo) GitVersion() (string, error) {
-	return command.GitVersion(r.Dir, true)
+	return command.GitVersion(true, command.WithDir(r.Dir))
 }
 
 // Config is the input to loading a pin.
@@ -300,7 +300,7 @@ func (l FileLoader) Load() (*Pin, error) {
 
 // setBranch resolves the branch a file-read pin lacks; it decides the publish stream.
 var setBranch = func(p *Pin, repoDir string) error {
-	branch, err := utils.GitBranch(repoDir)
+	branch, err := command.GitBranch(repoDir)
 	if err != nil {
 		return fmt.Errorf("git branch: %w", err)
 	}
@@ -378,7 +378,7 @@ var localCheck = func(l LocalLoader, p *Pin) bool {
 
 // source pins the versions of this repository and any extra repos.
 func (l LocalLoader) source() (*Pin, error) {
-	branch, err := utils.GitBranch(l.Config.RootDir)
+	branch, err := command.GitBranch(l.Config.RootDir)
 	if err != nil {
 		return nil, fmt.Errorf("git branch: %w", err)
 	}

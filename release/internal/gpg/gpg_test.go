@@ -497,7 +497,7 @@ func TestSignArgs(t *testing.T) {
 		{name: "rpmsign rejects --rpmv4", help: "  --resign   sign packages", supported: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			keyring, err := NewRPMKeyring(&helpRunner{out: tc.help}, filepath.Join(t.TempDir(), "rpmdb"))
+			keyring, err := NewRPMKeyring(helpRunner(tc.help, nil), filepath.Join(t.TempDir(), "rpmdb"))
 			if err != nil {
 				t.Fatalf("NewRPMKeyring: %v", err)
 			}
@@ -537,7 +537,7 @@ func TestNewRPMKeyring(t *testing.T) {
 		{name: "rpmsign fails", err: errors.New("not found"), want: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r := &helpRunner{out: tc.help, err: tc.err}
+			r := helpRunner(tc.help, tc.err)
 			keyring, err := NewRPMKeyring(r, filepath.Join(t.TempDir(), "rpmdb"))
 			if err != nil {
 				t.Fatalf("NewRPMKeyring: %v", err)
@@ -547,26 +547,20 @@ func TestNewRPMKeyring(t *testing.T) {
 					t.Errorf("supportsRPMV4() = %v, want %v", got, tc.want)
 				}
 			}
-			if r.calls != 1 {
-				t.Errorf("rpmsign --help ran %d times, want 1", r.calls)
+			if n := len(r.Calls()); n != 1 {
+				t.Errorf("rpmsign --help ran %d times, want 1", n)
 			}
 		})
 	}
 }
 
-type helpRunner struct {
-	command.RealCommandRunner
-	out   string
-	err   error
-	calls int
-}
-
-func (r *helpRunner) Run(name string, args, _ []string) (string, error) {
-	if name != "rpmsign" || !slices.Equal(args, []string{"--help"}) {
-		return "", fmt.Errorf("unexpected command %s %v", name, args)
-	}
-	r.calls++
-	return r.out, r.err
+func helpRunner(out string, err error) *command.Recorder {
+	return &command.Recorder{Reply: func(c command.Call) (string, error) {
+		if c.Name != "rpmsign" || !slices.Equal(c.Args, []string{"--help"}) {
+			return "", fmt.Errorf("unexpected command %s %v", c.Name, c.Args)
+		}
+		return out, err
+	}}
 }
 
 // TestSignArgsOverridesGPGPath verifies rpmsign is pointed at the gpg that is
