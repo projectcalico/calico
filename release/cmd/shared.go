@@ -165,7 +165,7 @@ var (
 	}
 	pinForBuild        = loadPin
 	builtPin    pinned = func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
-		pin, err := pinnedversion.Load(pinnedversion.FileLoader{Dir: cfg.TmpDir, RootDir: cfg.RepoRootDir})
+		pin, err := pinnedversion.Load(pinnedversion.FileLoader{Dir: cfg.TmpDir, RootDir: cfg.RepoRootDir, Runner: commandRunner})
 		// A planned build writes no pin, so a plan of build then publish has none to load.
 		if errors.Is(err, fs.ErrNotExist) && c != nil && c.Bool(planFlag.Name) {
 			logrus.WithError(err).Warn("No built pin, planning against the pin a build would write")

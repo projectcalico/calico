@@ -64,13 +64,19 @@ func (r Repo) Validate() error {
 	return nil
 }
 
-func (r Repo) GitVersion() (string, error) {
-	return command.GitVersion(true, command.WithDir(r.Dir))
+func (r Repo) GitVersion(cr command.CommandRunner) (string, error) {
+	return command.Git(cr).In(r.Dir).Version(true)
 }
 
 // Config is the input to loading a pin.
 type Config struct {
 	RootDir string
+
+	// Runner defaults to running real commands.
+	Runner command.CommandRunner
+
+	// ReleaseImages lists the released images. Only a generated pin calls it.
+	ReleaseImages func() ([]string, error)
 
 	Dir string
 
@@ -92,6 +98,10 @@ type Config struct {
 	// ChartVersion qualifies the chart version when the charts rev separately
 	// from the product. Empty means they share the product version.
 	ChartVersion string
+}
+
+func (c Config) runner() command.CommandRunner {
+	return command.Runner(c.Runner)
 }
 
 func (c Config) Valid() error {
@@ -273,6 +283,9 @@ type FileLoader struct {
 
 	// RootDir is set when the pin needs its branch resolved.
 	RootDir string
+
+	// Runner defaults to running real commands.
+	Runner command.CommandRunner
 }
 
 func (l FileLoader) Valid() error {
@@ -285,13 +298,17 @@ func (l FileLoader) Valid() error {
 	return nil
 }
 
+func (l FileLoader) runner() command.CommandRunner {
+	return command.Runner(l.Runner)
+}
+
 func (l FileLoader) Load() (*Pin, error) {
 	p, err := read(l.Dir)
 	if err != nil {
 		return nil, err
 	}
 	if p.branch == "" && l.RootDir != "" {
-		if err := setBranch(p, l.RootDir); err != nil {
+		if err := setBranch(l.runner(), p, l.RootDir); err != nil {
 			return nil, err
 		}
 	}
@@ -299,8 +316,8 @@ func (l FileLoader) Load() (*Pin, error) {
 }
 
 // setBranch resolves the branch a file-read pin lacks; it decides the publish stream.
-var setBranch = func(p *Pin, repoDir string) error {
-	branch, err := command.GitBranch(repoDir)
+var setBranch = func(r command.CommandRunner, p *Pin, repoDir string) error {
+	branch, err := command.Git(r).In(repoDir).Branch()
 	if err != nil {
 		return fmt.Errorf("git branch: %w", err)
 	}
@@ -341,7 +358,7 @@ func (l LocalLoader) find() (pin *Pin, reused bool, err error) {
 	if p, err := reusable(l, l.Config.Dir); err != nil {
 		return nil, false, err
 	} else if p != nil {
-		if err := setBranch(p, l.Config.RootDir); err != nil {
+		if err := setBranch(l.Config.runner(), p, l.Config.RootDir); err != nil {
 			return nil, false, err
 		}
 		return p, true, nil
@@ -366,7 +383,7 @@ func (l PreviewLoader) Load() (*Pin, error) {
 
 // localCheck is the reuse rule for LocalLoader.
 var localCheck = func(l LocalLoader, p *Pin) bool {
-	productVer, err := productVersion(l.Config.RootDir)
+	productVer, err := productVersion(l.Config.runner(), l.Config.RootDir)
 	if err != nil {
 		return false
 	}
@@ -378,11 +395,12 @@ var localCheck = func(l LocalLoader, p *Pin) bool {
 
 // source pins the versions of this repository and any extra repos.
 func (l LocalLoader) source() (*Pin, error) {
-	branch, err := command.GitBranch(l.Config.RootDir)
+	r := l.Config.runner()
+	branch, err := command.Git(r).In(l.Config.RootDir).Branch()
 	if err != nil {
 		return nil, fmt.Errorf("git branch: %w", err)
 	}
-	productVer, err := productVersion(l.Config.RootDir)
+	productVer, err := productVersion(r, l.Config.RootDir)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +408,7 @@ func (l LocalLoader) source() (*Pin, error) {
 	if err != nil {
 		return nil, err
 	}
-	repos, err := repoComponents(l.Config.Repos)
+	repos, err := repoComponents(r, l.Config.Repos)
 	if err != nil {
 		return nil, err
 	}

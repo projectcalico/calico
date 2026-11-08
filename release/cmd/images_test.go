@@ -279,7 +279,7 @@ func TestScanRequestSeparatesHashreleases(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			original := releaseImageList
-			releaseImageList = func(string, ...string) ([]string, error) {
+			releaseImageList = func(command.CommandRunner, string, ...string) ([]string, error) {
 				return []string{"node"}, nil
 			}
 			defer func() { releaseImageList = original }()
@@ -326,7 +326,7 @@ func TestImagesCheckOperatorCoversTheOperatorDir(t *testing.T) {
 
 	original := releaseImageList
 	var gotDirs []string
-	releaseImageList = func(_ string, dirs ...string) ([]string, error) {
+	releaseImageList = func(_ command.CommandRunner, _ string, dirs ...string) ([]string, error) {
 		gotDirs = dirs
 		return []string{"node", "operator"}, nil
 	}
