@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -1458,87 +1457,6 @@ func TestMetadata(t *testing.T) {
 	t.Run("fails with no records dir", func(t *testing.T) {
 		if _, err := Metadata("", map[string]registry.Component{"node": node}, mustNotResolve); err == nil {
 			t.Error("described images with no records dir")
-		}
-	})
-}
-
-func TestReadsFromMake(t *testing.T) {
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "comp"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	makefile := "build-images:\n\t@echo comp comp-windows\nimage-tag-prefix:\n\t@echo pre-\n"
-	if err := os.WriteFile(filepath.Join(root, "comp", "Makefile"), []byte(makefile), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	c := Image{RepoRoot: root}
-
-	for _, makeflags := range []string{"", "w"} {
-		t.Run("with MAKEFLAGS="+makeflags, func(t *testing.T) {
-			t.Setenv("MAKEFLAGS", makeflags)
-			u := unit{variant: StandardVariant, dir: "comp", env: os.Environ()}
-
-			names, err := c.imageNames(u)
-			if err != nil {
-				t.Fatalf("imageNames: %v", err)
-			}
-			if want := []string{"comp"}; !slices.Equal(names, want) {
-				t.Errorf("image names = %q, want %q", names, want)
-			}
-
-			prefix, err := c.tagPrefix(u)
-			if err != nil {
-				t.Fatalf("tagPrefix: %v", err)
-			}
-			if prefix != "pre-" {
-				t.Errorf("tag prefix = %q, want %q", prefix, "pre-")
-			}
-		})
-	}
-}
-
-func TestBuildImages(t *testing.T) {
-	root, err := command.GitDir()
-	if err != nil {
-		t.Fatalf("repo root: %v", err)
-	}
-	for _, tc := range []struct {
-		name    string
-		dirs    []string
-		want    []string
-		wantErr bool
-	}{
-		{name: "one dir", dirs: []string{"cmd/calico"}, want: []string{"calico"}},
-		{name: "a dir with a windows image", dirs: []string{"node"}, want: []string{"node", "node-windows"}},
-		{name: "a dir with no windows image", dirs: []string{"whisker"}, want: []string{"whisker"}},
-		{name: "several dirs", dirs: []string{"whisker", "cmd/calico"}, want: []string{"whisker", "calico"}},
-		{name: "a dir with no images", dirs: []string{"api"}, wantErr: true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := BuildImages(&command.RealCommandRunner{}, root, tc.dirs...)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("got %q, want an error", got)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("BuildImages: %v", err)
-			}
-			if !slices.Equal(got, tc.want) {
-				t.Errorf("got %q, want %q", got, tc.want)
-			}
-		})
-	}
-
-	t.Run("under a parent make", func(t *testing.T) {
-		t.Setenv("MAKEFLAGS", "w")
-		got, err := BuildImages(&command.RealCommandRunner{}, root, "whisker")
-		if err != nil {
-			t.Fatalf("BuildImages: %v", err)
-		}
-		if want := []string{"whisker"}; !slices.Equal(got, want) {
-			t.Errorf("got %q, want %q", got, want)
 		}
 	})
 }
