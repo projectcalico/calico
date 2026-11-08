@@ -26,6 +26,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -148,16 +149,14 @@ func (s settings) build() error {
 	if err := os.MkdirAll(s.BaseDir, utils.DirPerms); err != nil {
 		return s.Errorf("creating chart dir: %w", err)
 	}
-	env := append(os.Environ(),
+	env := []string{
 		utils.Env(utils.EnvGitVersion, s.Version()),
 		utils.Env(utils.EnvChartDestination, s.BaseDir),
-	)
+	}
 	env = append(env, s.env...)
 
-	out, err := s.Run("make", []string{"-C", s.RepoRoot, chartTarget}, env, s.LogPath("charts"))
+	_, err := s.Make().Run(chartTarget, command.WithEnv(env...), command.WithLogFile(s.LogPath("charts")))
 	if err != nil {
-		// Surface the captured output; the failure cause is usually only there.
-		s.Logger().Error(out)
 		return s.Errorf("building helm charts: %w", err)
 	}
 	return nil
@@ -175,7 +174,7 @@ func (s settings) verify() error {
 }
 
 func (s settings) resetTree() {
-	if _, err := s.Runner().RunInDir(s.RepoRoot, "git", []string{"checkout", chartsDirName}, nil); err != nil {
+	if _, err := command.Git(s.Runner()).In(s.RepoRoot).Run("checkout", chartsDirName); err != nil {
 		s.Logger().WithError(err).Error("Failed to reset changes to charts")
 	}
 }
@@ -217,9 +216,8 @@ func (s settings) buildIndex() error {
 		"--merge", merged,
 	}
 	// helm stamps entries with the current time; UTC keeps the index stable.
-	env := append(os.Environ(), utils.Env(utils.EnvTZ, "UTC"))
-	if out, err := s.Helm(args, env, s.LogPath("index")); err != nil {
-		s.Logger().Error(out)
+	env := []string{utils.Env(utils.EnvTZ, "UTC")}
+	if _, err := s.Helm(args, env, s.LogPath("index")); err != nil {
 		return s.Errorf("building helm index: %w", err)
 	}
 
@@ -241,8 +239,7 @@ func (s settings) downloadIndex() (string, error) {
 	if err := os.MkdirAll(filepath.Dir(dest), utils.DirPerms); err != nil {
 		return "", s.Errorf("creating dir for downloaded helm index: %w", err)
 	}
-	if out, err := s.Runner().Run("curl", []string{"-fsSL", "--retry", "3", indexURL, "-o", dest}, nil); err != nil {
-		s.Logger().Error(out)
+	if _, err := s.Runner().Run("curl", []string{"-fsSL", "--retry", "3", indexURL, "-o", dest}); err != nil {
 		return "", s.Errorf("downloading previous helm index from %s: %w", indexURL, err)
 	}
 	return dest, nil
@@ -327,7 +324,7 @@ func (s settings) pushUnit(u unit) error {
 	}
 
 	for attempt := 0; ; attempt++ {
-		out, err := s.Run(helmBinary, args, nil, s.LogPath(u.slug()))
+		_, err := s.Run(helmBinary, args, command.WithLogFile(s.LogPath(u.slug())))
 		if err == nil {
 			log.Info("Published helm chart")
 			return nil
@@ -336,7 +333,6 @@ func (s settings) pushUnit(u unit) error {
 			log.WithError(err).WithField("attempt", attempt).Warn("Publish failed, retrying")
 			continue
 		}
-		log.Error(out)
 		return s.Errorf("publishing %s to %s: %w", u.chart, u.registry, err)
 	}
 }

@@ -171,7 +171,7 @@ func calicoComponents(cfg Config, branch, productVer string) (map[string]registr
 
 // productVersion returns the git-describe version of the product repository.
 var productVersion = func(rootDir string) (string, error) {
-	v, err := command.GitVersion(rootDir, true)
+	v, err := command.GitVersion(true, command.WithDir(rootDir))
 	if err != nil {
 		return "", fmt.Errorf("git version: %w", err)
 	}
