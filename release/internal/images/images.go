@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -138,7 +137,7 @@ func ReleaseImages() ([]string, error) {
 func BuildImages(rootDir string, dirs ...string) ([]string, error) {
 	var all []string
 	for _, d := range dirs {
-		imgs, err := buildImages(&command.RealCommandRunner{}, filepath.Join(rootDir, d), os.Environ())
+		imgs, err := buildImages(command.RealRunner, filepath.Join(rootDir, d), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -151,7 +150,7 @@ func buildImages(r command.CommandRunner, dir string, env []string) ([]string, e
 	// RELEASE selects the released image names, set here so they cannot
 	// depend on the caller's environment.
 	env = append(slices.Clone(env), utils.EnvTrue(utils.EnvRelease))
-	out, err := r.RunInDir("", "make", []string{"-C", dir, "-s", "--no-print-directory", "build-images"}, env)
+	out, err := command.Make(r, dir).Print("build-images", command.WithEnv(env...))
 	if err != nil {
 		return nil, fmt.Errorf("reading images in %s: %w", dir, err)
 	}
@@ -486,10 +485,10 @@ func (c Image) validate() error {
 }
 
 func (c Image) env() []string {
-	env := append(os.Environ(),
+	env := []string{
 		utils.Env(utils.EnvVersion, c.Version),
 		utils.Env(utils.EnvImageTag, c.Version),
-	)
+	}
 	if len(c.Registries) > 0 {
 		env = append(env, utils.Env(utils.EnvDevRegistries, strings.Join(c.Registries, " ")))
 	}
@@ -521,9 +520,8 @@ func (s settings) runUnit(u unit) error {
 	log := s.Logger().WithFields(logrus.Fields{"variant": u.variant, "component": u.dir, "target": u.target})
 	dir := filepath.Join(s.RepoRoot, u.dir)
 
-	args := append([]string{"-C", dir}, strings.Fields(u.target)...)
 	for attempt := 0; ; attempt++ {
-		out, err := s.Run("make", args, u.env, s.logPath(u))
+		out, err := command.Make(s.Runner(), dir).Run(strings.Fields(u.target), command.WithEnv(u.env...), command.WithLogFile(s.logPath(u)))
 		if err == nil {
 			log.Debug(out)
 			return nil
@@ -532,8 +530,6 @@ func (s settings) runUnit(u unit) error {
 			log.WithError(err).WithField("attempt", attempt).Warn("Image step failed, retrying")
 			continue
 		}
-		// Surface the captured output; the failure cause is usually only in there.
-		log.Error(out)
 		return s.Errorf("%s images in %s: %w", u.variant, u.dir, err)
 	}
 }
@@ -605,7 +601,7 @@ func (c Image) imageNames(u unit) ([]string, error) {
 // than declared here.
 func (c Image) tagPrefix(u unit) (string, error) {
 	dir := filepath.Join(c.RepoRoot, u.dir)
-	out, err := c.Runner().RunInDir("", "make", []string{"-C", dir, "-s", "--no-print-directory", "image-tag-prefix"}, u.env)
+	out, err := command.Make(c.Runner(), dir).Print("image-tag-prefix", command.WithEnv(u.env...))
 	if err != nil {
 		return "", fmt.Errorf("reading tag prefix in %s: %w", u.dir, err)
 	}
@@ -809,17 +805,21 @@ func (s settings) addRefs(got []resolved) error {
 	return nil
 }
 
+func (s settings) docker(args ...string) (string, error) {
+	return s.Runner().Run("docker", args)
+}
+
 // save fetches the image first when it is not already local.
 func save(s settings, image, out string) error {
 	if s.pull {
-		if _, err := s.Runner().Run("docker", []string{"image", "inspect", image}, nil); err != nil {
+		if _, err := s.docker("image", "inspect", image); err != nil {
 			s.Logger().WithField("image", image).Info("Image not found locally, pulling")
-			if _, err := s.Runner().Run("docker", []string{"pull", image}, nil); err != nil {
+			if _, err := s.docker("pull", image); err != nil {
 				return fmt.Errorf("pulling %s: %w", image, err)
 			}
 		}
 	}
-	if _, err := s.Runner().Run("docker", []string{"save", "--output", out, image}, nil); err != nil {
+	if _, err := s.docker("save", "--output", out, image); err != nil {
 		return s.Errorf("%w", err)
 	}
 	return nil

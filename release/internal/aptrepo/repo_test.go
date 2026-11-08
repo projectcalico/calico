@@ -23,54 +23,39 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/projectcalico/calico/release/internal/command"
 )
 
-type call struct {
-	name string
-	args []string
-}
-
 // fakeRunner answers dpkg-deb with a version per file and gpg with a fixed key.
-type fakeRunner struct {
-	versions map[string]string
-	key      string
-	calls    []call
-}
-
-func (f *fakeRunner) Run(name string, args, _ []string) (string, error) {
-	f.calls = append(f.calls, call{name: name, args: args})
-	switch name {
-	case "dpkg-deb":
-		v, ok := f.versions[filepath.Base(args[len(args)-1])]
-		if !ok {
-			return "", fmt.Errorf("no version for %s", args[len(args)-1])
+func fakeRunner(versions map[string]string, key string) *command.Recorder {
+	return &command.Recorder{Reply: func(c command.Call) (string, error) {
+		switch c.Name {
+		case "dpkg-deb":
+			deb := c.Args[len(c.Args)-1]
+			v, ok := versions[filepath.Base(deb)]
+			if !ok {
+				return "", fmt.Errorf("no version for %s", deb)
+			}
+			return v, nil
+		case "gpg":
+			return key, nil
 		}
-		return v, nil
-	case "gpg":
-		return f.key, nil
-	}
-	return "", nil
+		return "", nil
+	}}
 }
 
-func (f *fakeRunner) RunInDir(_, name string, args, env []string) (string, error) {
-	return f.Run(name, args, env)
-}
-
-func (f *fakeRunner) RunInDirToFile(_, name string, args, env []string, _ string) (string, error) {
-	return f.Run(name, args, env)
-}
-
-func (f *fakeRunner) named(name string) [][]string {
+func named(r *command.Recorder, name string) [][]string {
 	var out [][]string
-	for _, c := range f.calls {
-		if c.name == name {
-			out = append(out, c.args)
+	for _, c := range r.Calls() {
+		if c.Name == name {
+			out = append(out, c.Args)
 		}
 	}
 	return out
 }
 
-func newTestRepo(t *testing.T, r *fakeRunner) *Repo {
+func newTestRepo(t *testing.T, r *command.Recorder) *Repo {
 	t.Helper()
 	tmp := t.TempDir()
 	repo, err := NewRepo(tmp, filepath.Join(tmp, "out"), RepoConfig{
@@ -98,10 +83,10 @@ func writeDebs(t *testing.T, names ...string) string {
 
 func TestRecursiveAddDebsFromDirectories(t *testing.T) {
 	t.Run("includes each package in the suite after its version's tilde", func(t *testing.T) {
-		r := &fakeRunner{versions: map[string]string{
+		r := fakeRunner(map[string]string{
 			"a.deb":  "1.2.0~noble",
 			"b.ddeb": "1.2.0-1~bookworm",
-		}}
+		}, "")
 		repo := newTestRepo(t, r)
 		dir := writeDebs(t, "a.deb", "b.ddeb", "notes.txt")
 
@@ -114,31 +99,31 @@ func TestRecursiveAddDebsFromDirectories(t *testing.T) {
 			append(slices.Clone(base), "includedeb", "bookworm", filepath.Join(dir, "b.ddeb")),
 			append(slices.Clone(base), "includedeb", "noble", filepath.Join(dir, "a.deb")),
 		}
-		got := r.named("reprepro")
+		got := named(r, "reprepro")
 		slices.SortFunc(got, func(a, b []string) int { return strings.Compare(strings.Join(a, " "), strings.Join(b, " ")) })
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("reprepro calls (-want +got):\n%s", diff)
 		}
-		if n := len(r.named("dpkg-deb")); n != 2 {
+		if n := len(named(r, "dpkg-deb")); n != 2 {
 			t.Errorf("dpkg-deb ran %d times, want 2", n)
 		}
 	})
 
 	t.Run("a suite the repo does not configure fails", func(t *testing.T) {
-		r := &fakeRunner{versions: map[string]string{"a.deb": "1.2.0~jammy"}}
+		r := fakeRunner(map[string]string{"a.deb": "1.2.0~jammy"}, "")
 		repo := newTestRepo(t, r)
 
 		err := repo.RecursiveAddDebsFromDirectories([]string{writeDebs(t, "a.deb")})
 		if err == nil || !strings.Contains(err.Error(), "jammy") {
 			t.Errorf("want an error naming jammy, got %v", err)
 		}
-		if calls := r.named("reprepro"); len(calls) != 0 {
+		if calls := named(r, "reprepro"); len(calls) != 0 {
 			t.Errorf("reprepro ran: %v", calls)
 		}
 	})
 
 	t.Run("a version without a tilde fails", func(t *testing.T) {
-		r := &fakeRunner{versions: map[string]string{"a.deb": "1.2.0"}}
+		r := fakeRunner(map[string]string{"a.deb": "1.2.0"}, "")
 		repo := newTestRepo(t, r)
 
 		err := repo.RecursiveAddDebsFromDirectories([]string{writeDebs(t, "a.deb")})
@@ -150,7 +135,7 @@ func TestRecursiveAddDebsFromDirectories(t *testing.T) {
 
 func TestWriteSourcesFile(t *testing.T) {
 	t.Run("embeds the key read through the runner", func(t *testing.T) {
-		r := &fakeRunner{key: "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nabc\n-----END PGP PUBLIC KEY BLOCK-----\n"}
+		r := fakeRunner(nil, "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nabc\n-----END PGP PUBLIC KEY BLOCK-----\n")
 		repo := newTestRepo(t, r)
 		if err := os.MkdirAll(repo.OutputDirectory, 0o755); err != nil {
 			t.Fatal(err)
@@ -160,7 +145,7 @@ func TestWriteSourcesFile(t *testing.T) {
 			t.Fatalf("WriteSourcesFile: %v", err)
 		}
 
-		if diff := cmp.Diff([][]string{{"--armor", "--export", "KEYID"}}, r.named("gpg")); diff != "" {
+		if diff := cmp.Diff([][]string{{"--armor", "--export", "KEYID"}}, named(r, "gpg")); diff != "" {
 			t.Errorf("gpg calls (-want +got):\n%s", diff)
 		}
 		got, err := os.ReadFile(filepath.Join(repo.OutputDirectory, "noble.sources"))
@@ -184,12 +169,12 @@ Signed-By:  -----BEGIN PGP PUBLIC KEY BLOCK-----
 	})
 
 	t.Run("a codename the repo does not configure fails", func(t *testing.T) {
-		r := &fakeRunner{}
+		r := &command.Recorder{}
 		if err := newTestRepo(t, r).WriteSourcesFile("jammy"); err == nil {
 			t.Error("want an error, got nil")
 		}
-		if len(r.calls) != 0 {
-			t.Errorf("commands ran: %v", r.calls)
+		if calls := r.Calls(); len(calls) != 0 {
+			t.Errorf("commands ran: %v", calls)
 		}
 	})
 }
@@ -216,7 +201,7 @@ func TestRepositoryDBExists(t *testing.T) {
 		}, want: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			repo := newTestRepo(t, &fakeRunner{})
+			repo := newTestRepo(t, &command.Recorder{})
 			tc.setup(t, filepath.Join(repo.BaseDirectory, "db"))
 
 			got, err := repo.RepositoryDBExists()

@@ -22,7 +22,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/command"
 )
 
 // Step names. --skip validates its values against stepNames.
@@ -174,7 +174,7 @@ func (d *Driver) validateFreshCut(g git, p *CutPlan) error {
 	// --no-validation turns off only the dirty-tree reject; the base check always
 	// runs. Plan mode previews both without acting.
 	if d.Validate && !d.Plan {
-		if dirty, err := utils.GitIsDirty(d.RepoRoot); err != nil {
+		if dirty, err := command.GitDirty(d.RepoRoot); err != nil {
 			return err
 		} else if dirty {
 			return fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before creating a new release branch")

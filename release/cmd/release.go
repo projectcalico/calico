@@ -17,9 +17,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -27,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/operator"
@@ -67,7 +65,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				configureLogging("release-notes.log")
 
 				// Determine the versions to use for the release.
-				gitVer, err := version.GitVersion()
+				gitVer, err := version.GitVersion(commandRunner)
 				if err != nil {
 					return err
 				}
@@ -236,7 +234,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 		Flags: flags,
 		Action: withLogging(withSummary(cfg, "release-prep", func(_ context.Context, c *cli.Command) (string, map[string]any, error) {
 			// Determine the versions to use for the release.
-			gitVer, err := version.GitVersion()
+			gitVer, err := version.GitVersion(commandRunner)
 			if err != nil {
 				return "", nil, err
 			}
@@ -377,23 +375,8 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 				fmt.Sprintf("-images=%s", strings.Join(imgs, " ")),
 			}
 
-			cmd := exec.Command(filepath.Join(cfg.RepoRootDir, "bin", "gotestsum"), args...)
-			cmd.Dir = postreleaseDir
-			var errb strings.Builder
-			if logrus.IsLevelEnabled(logrus.DebugLevel) {
-				// If debug level is enabled, also write to stdout.
-				cmd.Stdout = io.MultiWriter(os.Stdout, logrus.StandardLogger().Out)
-				cmd.Stderr = io.MultiWriter(os.Stderr, &errb)
-			} else {
-				// Otherwise, just capture the output to return.
-				cmd.Stdout = io.MultiWriter(logrus.StandardLogger().Out)
-				cmd.Stderr = io.MultiWriter(&errb)
-			}
 			logTestCmdSecure(postreleaseDir, "gotestsum", args)
-			err = cmd.Run()
-			if err != nil {
-				err = fmt.Errorf("%s: %s", err, strings.TrimSpace(errb.String()))
-			}
+			_, err = commandRunner.Run(filepath.Join(cfg.RepoRootDir, "bin", "gotestsum"), args, command.WithDir(postreleaseDir), command.WithStream())
 			return err
 		},
 	}

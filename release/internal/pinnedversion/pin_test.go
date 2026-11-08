@@ -27,7 +27,6 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 var dateApprovalScrubber = approvals.NewDateScrubber(`[a-zA-Z]{3}, \d{1,2} [a-zA-Z]{3} \d{4} \d{2}:\d{2}:\d{2} [A-Z]{3}`)
@@ -316,7 +315,7 @@ func TestReusedPinKeepsStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("git root: %v", err)
 	}
-	branch, err := utils.GitBranch(root)
+	branch, err := command.GitBranch(root)
 	if err != nil {
 		t.Fatalf("git branch: %v", err)
 	}
@@ -467,12 +466,11 @@ func TestReuseRules(t *testing.T) {
 	if local.Reuse(other) {
 		t.Error("reused a pin from another product version")
 	}
-
 }
 
 func isDirty(t *testing.T, dir string) bool {
 	t.Helper()
-	v, err := command.GitVersion(dir, true)
+	v, err := command.GitVersion(true, command.WithDir(dir))
 	if err != nil {
 		t.Fatalf("git version: %v", err)
 	}
