@@ -67,7 +67,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				configureLogging("release-notes.log")
 
 				// Determine the versions to use for the release.
-				gitVer, err := version.GitVersion()
+				gitVer, err := version.GitVersion(commandRunner)
 				if err != nil {
 					return err
 				}
@@ -236,7 +236,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 		Flags: flags,
 		Action: withLogging(withSummary(cfg, "release-prep", func(_ context.Context, c *cli.Command) (string, map[string]any, error) {
 			// Determine the versions to use for the release.
-			gitVer, err := version.GitVersion()
+			gitVer, err := version.GitVersion(commandRunner)
 			if err != nil {
 				return "", nil, err
 			}

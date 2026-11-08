@@ -286,7 +286,7 @@ func TestBuildLogsTar(t *testing.T) {
 	logs := filepath.Join(t.TempDir(), "logs")
 
 	a := testArchive(outputDir, testContent{name: "manifests", to: manifestsDir, files: []string{"calico.yaml"}})
-	if err := Build(a, WithRunner(&command.RealCommandRunner{}), WithLogsDir(logs)); err != nil {
+	if err := Build(a, WithRunner(command.RealRunner), WithLogsDir(logs)); err != nil {
 		t.Fatalf("Build() = %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(logs, buildStep, "tar.log")); err != nil {
@@ -375,43 +375,28 @@ func stagedFiles(t *testing.T, dir string) []string {
 	return got
 }
 
-// A runner that records what it ran and creates the files make would produce.
-type windowsRunner struct {
-	calls []string
-	dist  string
-	made  []string
-}
-
-func (w *windowsRunner) Run(name string, args, env []string) (string, error) {
-	return w.RunInDir("", name, args, env)
-}
-
-func (w *windowsRunner) RunInDir(_, name string, args, _ []string) (string, error) {
-	w.calls = append(w.calls, name+" "+strings.Join(args, " "))
-	for _, f := range w.made {
-		path := filepath.Join(w.dist, f)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return "", err
-		}
-		if err := os.WriteFile(path, []byte(f), 0o644); err != nil {
-			return "", err
-		}
-	}
-	return "", nil
-}
-
-func (w *windowsRunner) RunInDirToFile(dir, name string, args, env []string, _ string) (string, error) {
-	return w.RunInDir(dir, name, args, env)
-}
-
-func windowsFixture(t *testing.T) (Archive, *windowsRunner) {
+// windowsFixture's runner creates the made files where make would, defaulting
+// to the archive and the install script.
+func windowsFixture(t *testing.T, made ...string) (Archive, *command.Recorder) {
 	t.Helper()
 	root := t.TempDir()
 	w := testWindowsArchive(root, testOutputDir(t))
-	return w, &windowsRunner{
-		dist: filepath.Join(root, windowsComponent, windowsDistDir),
-		made: []string{WindowsFileName(testVersion), windowsScript},
+	if len(made) == 0 {
+		made = []string{WindowsFileName(testVersion), windowsScript}
 	}
+	dist := filepath.Join(root, windowsComponent, windowsDistDir)
+	return w, &command.Recorder{Reply: func(command.Call) (string, error) {
+		for _, f := range made {
+			path := filepath.Join(dist, f)
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				return "", err
+			}
+			if err := os.WriteFile(path, []byte(f), 0o644); err != nil {
+				return "", err
+			}
+		}
+		return "", nil
+	}}
 }
 
 func TestBuildWindowsPlacesBothFilesInTheOutputDir(t *testing.T) {
@@ -436,13 +421,13 @@ func TestBuildWindowsRunsBothTargets(t *testing.T) {
 	}
 	for _, target := range []string{windowsArchiveTarget, windowsScriptTarget} {
 		var ran bool
-		for _, c := range runner.calls {
-			if strings.Contains(c, target) {
+		for _, c := range runner.Calls() {
+			if slices.Contains(c.Args, target) {
 				ran = true
 			}
 		}
 		if !ran {
-			t.Errorf("did not run %q, ran: %v", target, runner.calls)
+			t.Errorf("did not run %q, ran: %v", target, runner.Calls())
 		}
 	}
 }
@@ -450,7 +435,8 @@ func TestBuildWindowsRunsBothTargets(t *testing.T) {
 // The install script is a file target with no prerequisites, so make skips it
 // when one exists: a stale script must be cleared or the old version survives.
 func TestBuildWindowsClearsAStaleInstallScript(t *testing.T) {
-	w, runner := windowsFixture(t)
+	// The runner only writes the archive, so anything left is the stale file.
+	w, runner := windowsFixture(t, WindowsFileName(testVersion))
 	stale := filepath.Join(w.RepoRoot, windowsComponent, windowsScriptTarget)
 	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
 		t.Fatal(err)
@@ -458,9 +444,6 @@ func TestBuildWindowsClearsAStaleInstallScript(t *testing.T) {
 	if err := os.WriteFile(stale, []byte("stale"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// The runner only writes the archive, so anything left is the stale file.
-	runner.made = []string{WindowsFileName(testVersion)}
-
 	if err := BuildWindows(w, WithRunner(runner)); err == nil {
 		t.Error("BuildWindows() = nil, want an error when the script was not rebuilt")
 	}

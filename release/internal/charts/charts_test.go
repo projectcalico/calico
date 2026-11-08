@@ -27,16 +27,17 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/yaml"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
-// fakeRunner records every invocation and can fail a command a set number of
-// times before succeeding, to exercise the retry.
+// fakeRunner stands in for helm's side effects and can fail a command a set
+// number of times before succeeding, to exercise the retry.
 type fakeRunner struct {
-	mu    sync.Mutex
-	calls []call
+	*command.Recorder
+	mu sync.Mutex
 	// failures maps a key from failKey to how many times it should fail.
 	failures map[string]int
 	// staged is what the index directory held when helm was asked to index it.
@@ -45,44 +46,30 @@ type fakeRunner struct {
 	onRun func(env []string)
 }
 
-type call struct {
-	name string
-	args []string
-	env  []string
-	// logPath is empty when output was captured in memory.
-	logPath string
+func newFakeRunner(failures map[string]int) *fakeRunner {
+	f := &fakeRunner{failures: failures}
+	f.Recorder = &command.Recorder{Reply: f.reply}
+	return f
 }
 
-func (f *fakeRunner) RunInDir(_, name string, args, env []string) (string, error) {
-	return f.record(name, args, env, "")
-}
-
-func (f *fakeRunner) RunInDirToFile(_, name string, args, env []string, logPath string) (string, error) {
-	return f.record(name, args, env, logPath)
-}
-
-func (f *fakeRunner) Run(name string, args, env []string) (string, error) {
-	return f.record(name, args, env, "")
-}
-
-func (f *fakeRunner) record(name string, args, env []string, logPath string) (string, error) {
+func (f *fakeRunner) reply(c command.Call) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.calls = append(f.calls, call{name: name, args: slices.Clone(args), env: slices.Clone(env), logPath: logPath})
 	if f.onRun != nil {
-		f.onRun(env)
+		f.onRun(c.Env)
 	}
-	// Stand in for helm: `repo index <dir>` writes the index into that dir.
-	if name == helmBinary && len(args) > 2 && args[0] == "repo" && args[1] == "index" {
-		if entries, err := os.ReadDir(args[2]); err == nil {
+	// `repo index <dir>` writes the index into that dir.
+	if c.Name == helmBinary && len(c.Args) > 2 && c.Args[0] == "repo" && c.Args[1] == "index" {
+		if entries, err := os.ReadDir(c.Args[2]); err == nil {
 			for _, e := range entries {
 				f.staged = append(f.staged, e.Name())
 			}
 		}
-		_ = os.WriteFile(filepath.Join(args[2], indexFileName), []byte("entries:"), 0o644)
+		_ = os.WriteFile(filepath.Join(c.Args[2], indexFileName), []byte("entries:"), 0o644)
 	}
-	if n, ok := f.failures[failKey(name, args)]; ok && n > 0 {
-		f.failures[failKey(name, args)] = n - 1
+	key := failKey(c.Name, c.Args)
+	if n := f.failures[key]; n > 0 {
+		f.failures[key] = n - 1
 		return "boom", fmt.Errorf("command failed")
 	}
 	return "ok", nil
@@ -99,19 +86,19 @@ func failKey(name string, args []string) string {
 
 func (f *fakeRunner) pushes() []string {
 	var out []string
-	for _, c := range f.calls {
-		if c.name == helmBinary && len(c.args) > 2 && c.args[0] == "push" {
-			out = append(out, filepath.Base(c.args[1])+" "+c.args[2])
+	for _, c := range f.Calls() {
+		if c.Name == helmBinary && len(c.Args) > 2 && c.Args[0] == "push" {
+			out = append(out, filepath.Base(c.Args[1])+" "+c.Args[2])
 		}
 	}
 	slices.Sort(out)
 	return out
 }
 
-func (f *fakeRunner) callsTo(name string) []call {
-	var out []call
-	for _, c := range f.calls {
-		if c.name == name {
+func (f *fakeRunner) callsTo(name string) []command.Call {
+	var out []command.Call
+	for _, c := range f.Calls() {
+		if c.Name == name {
 			out = append(out, c)
 		}
 	}
@@ -162,7 +149,7 @@ func writeCharts(t *testing.T, c Chart, names ...string) {
 func TestBuildRunsChartTargetOnce(t *testing.T) {
 	c := testChart(t)
 	writeCharts(t, c, c.Names...)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	if err := Build(c, WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
@@ -173,13 +160,13 @@ func TestBuildRunsChartTargetOnce(t *testing.T) {
 	if len(makes) != 1 {
 		t.Fatalf("expected one make invocation, got %d", len(makes))
 	}
-	if !slices.Contains(makes[0].args, chartTarget) {
-		t.Errorf("expected the %q target, got %v", chartTarget, makes[0].args)
+	if !slices.Contains(makes[0].Args, chartTarget) {
+		t.Errorf("expected the %q target, got %v", chartTarget, makes[0].Args)
 	}
-	if !hasEnv(makes[0].env, "GIT_VERSION=v3.30.0") {
+	if !hasEnv(makes[0].Env, "GIT_VERSION=v3.30.0") {
 		t.Error("expected GIT_VERSION in the build environment")
 	}
-	if !hasEnv(makes[0].env, "CHART_DESTINATION="+c.BaseDir) {
+	if !hasEnv(makes[0].Env, "CHART_DESTINATION="+c.BaseDir) {
 		t.Error("expected CHART_DESTINATION in the build environment")
 	}
 }
@@ -187,12 +174,12 @@ func TestBuildRunsChartTargetOnce(t *testing.T) {
 func TestBuildPassesExtraEnv(t *testing.T) {
 	c := testChart(t)
 	writeCharts(t, c, c.Names...)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	if err := Build(c, WithRunner(f), WithEnv("RELEASE_STREAM=v3.30")); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if !hasEnv(f.callsTo("make")[0].env, "RELEASE_STREAM=v3.30") {
+	if !hasEnv(f.callsTo("make")[0].Env, "RELEASE_STREAM=v3.30") {
 		t.Error("expected the caller's extra environment to reach the target")
 	}
 }
@@ -201,7 +188,7 @@ func TestBuildFailsWhenAChartIsMissing(t *testing.T) {
 	c := testChart(t)
 	writeCharts(t, c, "chart-one")
 
-	err := Build(c, WithRunner(&fakeRunner{}))
+	err := Build(c, WithRunner(newFakeRunner(nil)))
 	if err == nil {
 		t.Fatal("expected a build that packaged only one chart to fail")
 	}
@@ -213,7 +200,7 @@ func TestBuildFailsWhenAChartIsMissing(t *testing.T) {
 func TestBuildRestoresTreeAfterModifyingValues(t *testing.T) {
 	c := testChart(t)
 	writeCharts(t, c, c.Names...)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	path := writeChartValues(t, c.RepoRoot, "chart-one", "version: master\n")
 
@@ -230,7 +217,7 @@ func TestBuildRestoresTreeAfterModifyingValues(t *testing.T) {
 
 func TestBuildRestoresTreeWhenBuildFails(t *testing.T) {
 	c := testChart(t)
-	f := &fakeRunner{failures: map[string]int{"make": 1}}
+	f := newFakeRunner(map[string]int{"make": 1})
 
 	if err := Build(c, WithRunner(f), WithModifiedValues([]ValueEdit{{Chart: "chart-one", Edit: yamledit.Edit{Key: "version", To: "v3.30.0"}}})); err == nil {
 		t.Fatal("expected the build to fail")
@@ -244,7 +231,7 @@ func TestBuildRestoresTreeWhenBuildFails(t *testing.T) {
 func TestBuildDoesNotBuildTheIndex(t *testing.T) {
 	c := testChart(t)
 	writeCharts(t, c, c.Names...)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	if err := Build(c, WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
@@ -271,7 +258,7 @@ func TestBuildRejectsIncompleteCharts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testChart(t)
 			tc.mut(&c)
-			if err := Build(c, WithRunner(&fakeRunner{})); err == nil {
+			if err := Build(c, WithRunner(newFakeRunner(nil))); err == nil {
 				t.Fatal("expected an incomplete chart set to be rejected")
 			}
 		})
@@ -283,14 +270,14 @@ func TestBuildRejectsIncompleteCharts(t *testing.T) {
 func TestBuildLogsUnderItsOwnStep(t *testing.T) {
 	c := testChart(t)
 	writeCharts(t, c, c.Names...)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 	logs := filepath.Join(t.TempDir(), "logs")
 
 	if err := Build(c, WithRunner(f), WithLogsDir(logs)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	want := filepath.Join(logs, buildStep, "charts.log")
-	if got := f.callsTo("make")[0].logPath; got != want {
+	if got := f.callsTo("make")[0].LogFile; got != want {
 		t.Errorf("log path: got %q, want %q", got, want)
 	}
 }
@@ -298,12 +285,12 @@ func TestBuildLogsUnderItsOwnStep(t *testing.T) {
 func TestBuildWithoutLogsDirCapturesInMemory(t *testing.T) {
 	c := testChart(t)
 	writeCharts(t, c, c.Names...)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	if err := Build(c, WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if got := f.callsTo("make")[0].logPath; got != "" {
+	if got := f.callsTo("make")[0].LogFile; got != "" {
 		t.Errorf("expected in-memory capture, got log path %q", got)
 	}
 }
@@ -316,7 +303,7 @@ const (
 func TestBuildIndexMergesThePublishedIndex(t *testing.T) {
 	c := testChart(t)
 	writeCharts(t, c, c.Names...)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 	indexDir := filepath.Join(t.TempDir(), "index")
 
 	if err := Build(c, WithRunner(f),
@@ -328,8 +315,8 @@ func TestBuildIndexMergesThePublishedIndex(t *testing.T) {
 	if len(curls) != 1 {
 		t.Fatalf("expected the published index to be downloaded once, got %d", len(curls))
 	}
-	if !slices.Contains(curls[0].args, testRepoURL+"/"+indexFileName) {
-		t.Errorf("expected the repo index url to be fetched, got %v", curls[0].args)
+	if !slices.Contains(curls[0].Args, testRepoURL+"/"+indexFileName) {
+		t.Errorf("expected the repo index url to be fetched, got %v", curls[0].Args)
 	}
 
 	helms := f.callsTo(helmBinary)
@@ -338,20 +325,20 @@ func TestBuildIndexMergesThePublishedIndex(t *testing.T) {
 	}
 	// Merging keeps the entries the repository already served; replacing would
 	// drop every earlier release from the index.
-	if !slices.Contains(helms[0].args, "--merge") {
+	if !slices.Contains(helms[0].Args, "--merge") {
 		t.Error("expected the published index to be merged rather than replaced")
 	}
 	// The index tells clients where to download from, which is not the
 	// repository it was merged from.
-	if !slices.Contains(helms[0].args, testChartURL) {
+	if !slices.Contains(helms[0].Args, testChartURL) {
 		t.Error("expected the index to point at the chart url")
 	}
-	if slices.Contains(helms[0].args, testRepoURL) {
+	if slices.Contains(helms[0].Args, testRepoURL) {
 		t.Error("expected the repo url not to be used as the download url")
 	}
 	// helm indexes a whole directory, so it must be pointed at one holding
 	// only this release's charts, not the output directory.
-	dir := helms[0].args[2]
+	dir := helms[0].Args[2]
 	if dir == c.BaseDir {
 		t.Error("expected the index built over a staging dir, not the chart dir")
 	}
@@ -369,13 +356,13 @@ func TestBuildIndexMergesThePublishedIndex(t *testing.T) {
 func TestBuildIndexUsesUTC(t *testing.T) {
 	c := testChart(t)
 	writeCharts(t, c, c.Names...)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	if err := Build(c, WithRunner(f),
 		WithIndex(testRepoURL, testChartURL, filepath.Join(t.TempDir(), "index"), t.TempDir())); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if !hasEnv(f.callsTo(helmBinary)[0].env, "TZ=UTC") {
+	if !hasEnv(f.callsTo(helmBinary)[0].Env, "TZ=UTC") {
 		t.Error("expected the index to be built in UTC")
 	}
 }
@@ -388,7 +375,7 @@ func TestBuildIndexIsRepeatable(t *testing.T) {
 	tmp := t.TempDir()
 
 	for i := range 2 {
-		if err := Build(c, WithRunner(&fakeRunner{}),
+		if err := Build(c, WithRunner(newFakeRunner(nil)),
 			WithIndex(testRepoURL, testChartURL, indexDir, tmp)); err != nil {
 			t.Fatalf("Build run %d: %v", i, err)
 		}
@@ -400,7 +387,7 @@ func TestBuildIndexIsRepeatable(t *testing.T) {
 func TestBuildIndexLogsBesideTheCharts(t *testing.T) {
 	c := testChart(t)
 	writeCharts(t, c, c.Names...)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 	logs := filepath.Join(t.TempDir(), "logs")
 
 	if err := Build(c, WithRunner(f), WithLogsDir(logs),
@@ -408,7 +395,7 @@ func TestBuildIndexLogsBesideTheCharts(t *testing.T) {
 		t.Fatalf("Build: %v", err)
 	}
 	want := filepath.Join(logs, buildStep, "index.log")
-	if got := f.callsTo(helmBinary)[0].logPath; got != want {
+	if got := f.callsTo(helmBinary)[0].LogFile; got != want {
 		t.Errorf("log path: got %q, want %q", got, want)
 	}
 }
@@ -421,7 +408,7 @@ func TestBuildIndexRejectsMissingLocations(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testChart(t)
-			if err := Build(c, WithRunner(&fakeRunner{}),
+			if err := Build(c, WithRunner(newFakeRunner(nil)),
 				WithIndex(tc.repoURL, tc.chartURL, tc.indexDir, t.TempDir())); err == nil {
 				t.Fatal("expected an index build missing a location to be rejected")
 			}
@@ -440,7 +427,7 @@ func publishable(t *testing.T) Chart {
 // count-only check.
 func TestPublishPushesEveryChartToEveryRegistry(t *testing.T) {
 	c := publishable(t)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	if err := Publish(c, []string{"quay.test/charts", "docker.test/charts"}, true, WithRunner(f)); err != nil {
 		t.Fatalf("Publish: %v", err)
@@ -459,7 +446,7 @@ func TestPublishPushesEveryChartToEveryRegistry(t *testing.T) {
 
 func TestPublishRetriesAFailedPush(t *testing.T) {
 	c := publishable(t)
-	f := &fakeRunner{failures: map[string]int{"chart-one-v3.30.0.tgz oci://quay.test/charts": 1}}
+	f := newFakeRunner(map[string]int{"chart-one-v3.30.0.tgz oci://quay.test/charts": 1})
 
 	if err := Publish(c, []string{"quay.test/charts"}, true, WithRunner(f)); err != nil {
 		t.Fatalf("expected the retry to recover the push: %v", err)
@@ -471,7 +458,7 @@ func TestPublishRetriesAFailedPush(t *testing.T) {
 
 func TestPublishReportsFailureAfterRetriesExhausted(t *testing.T) {
 	c := publishable(t)
-	f := &fakeRunner{failures: map[string]int{"chart-one-v3.30.0.tgz oci://quay.test/charts": 99}}
+	f := newFakeRunner(map[string]int{"chart-one-v3.30.0.tgz oci://quay.test/charts": 99})
 
 	err := Publish(c, []string{"quay.test/charts"}, true, WithRunner(f))
 	if err == nil {
@@ -490,7 +477,7 @@ func TestPublishFailsBeforePushingWhenAChartIsMissing(t *testing.T) {
 	if err := os.Remove(filepath.Join(c.BaseDir, FileName("chart-two", c.Version()))); err != nil {
 		t.Fatalf("removing chart: %v", err)
 	}
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	if err := Publish(c, []string{"quay.test/charts"}, true, WithRunner(f)); err == nil {
 		t.Fatal("expected a publish with a missing chart to fail")
@@ -501,14 +488,14 @@ func TestPublishFailsBeforePushingWhenAChartIsMissing(t *testing.T) {
 }
 
 func TestPublishRejectsNoRegistries(t *testing.T) {
-	if err := Publish(publishable(t), nil, true, WithRunner(&fakeRunner{})); err == nil {
+	if err := Publish(publishable(t), nil, true, WithRunner(newFakeRunner(nil))); err == nil {
 		t.Fatal("expected a publish with no registries to be rejected")
 	}
 }
 
 func TestPublishLogsPerChartAndRegistry(t *testing.T) {
 	c := publishable(t)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 	logs := filepath.Join(t.TempDir(), "logs")
 
 	if err := Publish(c, []string{"quay.test/charts"}, true, WithRunner(f), WithLogsDir(logs)); err != nil {
@@ -516,7 +503,7 @@ func TestPublishLogsPerChartAndRegistry(t *testing.T) {
 	}
 	// A chart goes to several registries, so the slug carries both.
 	want := filepath.Join(logs, PublishStep, "chart-one-quay.test-charts.log")
-	if !slices.ContainsFunc(f.callsTo(helmBinary), func(c call) bool { return c.logPath == want }) {
+	if !slices.ContainsFunc(f.callsTo(helmBinary), func(c command.Call) bool { return c.LogFile == want }) {
 		t.Errorf("expected a per-chart log at %q", want)
 	}
 }
@@ -540,7 +527,7 @@ func TestPublishRecordsWhatItPushed(t *testing.T) {
 	rec := &recorder{}
 
 	err := Publish(c, []string{"quay.test/charts"}, true,
-		WithRunner(&fakeRunner{}),
+		WithRunner(newFakeRunner(nil)),
 		WithResolver(resolvesPerChart(map[string]string{
 			"chart-one": "sha256:aaa",
 			"chart-two": "sha256:bbb",
@@ -561,7 +548,7 @@ func TestPublishRecordsWhatItPushed(t *testing.T) {
 
 func TestPublishDryRunPushesAndRecordsNothing(t *testing.T) {
 	c := publishable(t)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 	rec := &recorder{}
 
 	if err := Publish(c, []string{"quay.test/charts"}, false,
@@ -579,7 +566,7 @@ func TestPublishDryRunPushesAndRecordsNothing(t *testing.T) {
 
 func TestPublishResumeSkipsChartsAlreadyPublished(t *testing.T) {
 	c := publishable(t)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	err := Publish(c, []string{"quay.test/charts"}, true,
 		WithRunner(f),
@@ -603,7 +590,7 @@ func TestPublishResumeSkipsChartsAlreadyPublished(t *testing.T) {
 // A digest disagreeing with the record means the tag moved under us.
 func TestPublishResumeFailsOnDigestMismatch(t *testing.T) {
 	c := publishable(t)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	err := Publish(c, []string{"quay.test/charts"}, true,
 		WithRunner(f),
@@ -624,7 +611,7 @@ func TestPublishResumeFailsOnDigestMismatch(t *testing.T) {
 
 func TestPublishResumeForceRepublishesOverAMismatch(t *testing.T) {
 	c := publishable(t)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	err := Publish(c, []string{"quay.test/charts"}, true,
 		WithRunner(f),
@@ -640,7 +627,7 @@ func TestPublishResumeForceRepublishesOverAMismatch(t *testing.T) {
 
 func TestPublishResumePublishesUnrecordedCharts(t *testing.T) {
 	c := publishable(t)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	err := Publish(c, []string{"quay.test/charts"}, true,
 		WithRunner(f),
@@ -703,7 +690,7 @@ func TestVersionedDir(t *testing.T) {
 // never landed.
 func TestPublishResumeJudgesEachChartByItsOwnDigest(t *testing.T) {
 	c := publishable(t)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	// chart-one still matches its record; chart-two has moved.
 	err := Publish(c, []string{"quay.test/charts"}, true,
@@ -733,7 +720,7 @@ func TestPublishRecordsPartialRefsWhenALookupFails(t *testing.T) {
 	rec := &recorder{}
 
 	err := Publish(c, []string{"quay.test/charts"}, true,
-		WithRunner(&fakeRunner{}),
+		WithRunner(newFakeRunner(nil)),
 		WithResolver(func(ref string) (string, bool, error) {
 			if strings.Contains(ref, "chart-two") {
 				return "", false, fmt.Errorf("registry unreachable")
@@ -753,7 +740,7 @@ func TestPublishRecordsPartialRefsWhenALookupFails(t *testing.T) {
 // A modify that fails partway has already written some edits.
 func TestBuildRestoresTreeWhenModifyingValuesFails(t *testing.T) {
 	c := testChart(t)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 	// No values file to edit, so the modify fails before the build runs.
 
 	if err := Build(c, WithRunner(f), WithModifiedValues([]ValueEdit{{Chart: "chart-one", Edit: yamledit.Edit{Key: "version", To: "v3.30.0"}}})); err == nil {
@@ -771,7 +758,7 @@ func TestBuildLeavesTheIndexWhereAsked(t *testing.T) {
 	// Such a release points the index at its own output directory.
 	indexDir := filepath.Join(c.BaseDir, "charts")
 
-	if err := Build(c, WithRunner(&fakeRunner{}),
+	if err := Build(c, WithRunner(newFakeRunner(nil)),
 		WithIndex(testRepoURL, testChartURL, indexDir, filepath.Join(c.RepoRoot, "tmp"))); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -785,7 +772,7 @@ func TestBuildLeavesTheIndexWhereAsked(t *testing.T) {
 func TestBuildWithoutModifiedValuesLeavesTheTree(t *testing.T) {
 	c := testChart(t)
 	writeCharts(t, c, c.Names...)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	if err := Build(c, WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
@@ -798,7 +785,7 @@ func TestBuildWithoutModifiedValuesLeavesTheTree(t *testing.T) {
 func TestBuildModifiesValuesWhenAsked(t *testing.T) {
 	c := testChart(t)
 	writeCharts(t, c, c.Names...)
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 
 	path := writeChartValues(t, c.RepoRoot, "chart-one", "version: master\n")
 
@@ -834,7 +821,7 @@ func TestPublishRefsNameTheResolvedVersion(t *testing.T) {
 	writeCharts(t, c, c.Names...)
 	rec := &recorder{}
 	err := Publish(c, []string{"quay.test/charts"}, true,
-		WithRunner(&fakeRunner{}),
+		WithRunner(newFakeRunner(nil)),
 		WithResolver(func(ref string) (string, bool, error) {
 			if !strings.Contains(ref, ":"+c.Version()) {
 				t.Errorf("ref %q does not name version %q", ref, c.Version())
@@ -866,7 +853,7 @@ func TestBuildIndexDropsStaleCharts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 	if err := Build(c, WithRunner(f),
 		WithIndex(testRepoURL, testChartURL, filepath.Join(t.TempDir(), "index"), tmp)); err != nil {
 		t.Fatalf("Build: %v", err)
@@ -883,7 +870,7 @@ func TestBuildWithAChartVersionSuffix(t *testing.T) {
 	c.ChartVersion = "2"
 
 	var gitVersion string
-	f := &fakeRunner{}
+	f := newFakeRunner(nil)
 	if err := os.MkdirAll(c.BaseDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -917,7 +904,7 @@ func TestModifyValues(t *testing.T) {
 
 	err := ModifyValues(Values{RepoRoot: root, Edits: []ValueEdit{
 		{Chart: "chart-one", Edit: yamledit.Edit{Key: "version", To: "v3.30.0"}},
-	}}, WithRunner(&fakeRunner{}))
+	}}, WithRunner(newFakeRunner(nil)))
 	if err != nil {
 		t.Fatalf("ModifyValues: %v", err)
 	}
@@ -939,7 +926,7 @@ func TestModifyValuesFailsWhenAKeyIsMissing(t *testing.T) {
 
 	err := ModifyValues(Values{RepoRoot: root, Edits: []ValueEdit{
 		{Chart: "chart-one", Edit: yamledit.Edit{Key: "renamed", To: "v3.30.0"}},
-	}}, WithRunner(&fakeRunner{}))
+	}}, WithRunner(newFakeRunner(nil)))
 	if err == nil {
 		t.Fatal("expected a missing key to fail")
 	}

@@ -58,7 +58,8 @@ while `archives` only builds.
   this rule and still take one, such as `operator.Build` and `operator.Publish`.
 - Every step embeds `steps.Step`, which carries the command runner, working dir,
   step name and logs dir. The zero value runs real commands. Tests swap the
-  runner.
+  runner. git and make go through `command.Git(r)` and `command.Make(r)`, not
+  a raw `Run("git", ...)`, so their shared logic stays in one place.
 - Log lines carry the step name. Each command a step runs logs to
   `<logsDir>/<step>/<slug>.log`, so a failed component's log can be found
   without reading the whole run.

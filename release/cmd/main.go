@@ -50,7 +50,7 @@ type Config struct {
 
 // loadConfig loads the configuration for the release tool.
 func loadConfig() (*Config, error) {
-	repoRoot, err := command.GitDir()
+	repoRoot, err := command.Git(commandRunner).RepoRoot()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repo root dir: %w", err)
 	}

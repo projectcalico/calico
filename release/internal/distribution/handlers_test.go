@@ -29,6 +29,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	ghapi "github.com/google/go-github/v53/github"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	gh "github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/outputs"
@@ -342,6 +343,27 @@ func TestPublishIsIdempotent(t *testing.T) {
 			t.Errorf("a second run changed the sums file:\nfirst:\n%s\nsecond:\n%s", first, bs)
 		}
 	}
+}
+
+func TestSHA256Sums(t *testing.T) {
+	t.Run("checksums through the given runner", func(t *testing.T) {
+		dir := dirWith(t, "a.tgz", "b.tgz")
+		r := &command.Recorder{Reply: func(command.Call) (string, error) { return "abc  a.tgz\ndef  b.tgz", nil }}
+		if err := SHA256Sums(dir, WithRunner(r)); err != nil {
+			t.Fatalf("SHA256Sums: %v", err)
+		}
+		want := []command.Call{{Name: "sha256sum", Args: []string{"a.tgz", "b.tgz"}, Dir: dir}}
+		if diff := cmp.Diff(want, r.Calls()); diff != "" {
+			t.Errorf("calls (-want +got):\n%s", diff)
+		}
+		got, err := os.ReadFile(filepath.Join(dir, sumsFileName))
+		if err != nil {
+			t.Fatalf("reading sums: %v", err)
+		}
+		if string(got) != "abc  a.tgz\ndef  b.tgz" {
+			t.Errorf("sums file = %q, want the runner's output", got)
+		}
+	})
 }
 
 func TestArtifactFiles(t *testing.T) {

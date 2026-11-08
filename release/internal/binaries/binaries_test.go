@@ -24,66 +24,38 @@ import (
 	"testing"
 
 	"github.com/projectcalico/calico/release/internal/archives"
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-// fakeRunner records every invocation and can fail a command a set number of
-// times before succeeding, to exercise the retry.
-type fakeRunner struct {
-	mu    sync.Mutex
-	calls []call
-	// failures maps a component to how many times its build should fail.
-	failures map[string]int
+// failingRunner fails a component's build a set number of times before it
+// succeeds, to exercise the retry.
+func failingRunner(failures map[string]int) *command.Recorder {
+	var mu sync.Mutex
+	return &command.Recorder{Reply: func(c command.Call) (string, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		component := componentOf(c)
+		if n := failures[component]; n > 0 {
+			failures[component] = n - 1
+			return "boom", fmt.Errorf("command failed")
+		}
+		return "ok", nil
+	}}
 }
 
-type call struct {
-	name string
-	args []string
-	env  []string
-	// logPath is empty when output was captured in memory.
-	logPath string
+func componentOf(c command.Call) string {
+	return filepath.Base(c.Dir)
 }
 
-func (f *fakeRunner) RunInDir(_, name string, args, env []string) (string, error) {
-	return f.record(name, args, env, "")
-}
-
-func (f *fakeRunner) RunInDirToFile(_, name string, args, env []string, logPath string) (string, error) {
-	return f.record(name, args, env, logPath)
-}
-
-func (f *fakeRunner) Run(name string, args, env []string) (string, error) {
-	return f.record(name, args, env, "")
-}
-
-func (f *fakeRunner) record(name string, args, env []string, logPath string) (string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.calls = append(f.calls, call{name: name, args: slices.Clone(args), env: slices.Clone(env), logPath: logPath})
-	component := componentOf(args)
-	if n, ok := f.failures[component]; ok && n > 0 {
-		f.failures[component] = n - 1
-		return "boom", fmt.Errorf("command failed")
-	}
-	return "ok", nil
-}
-
-// Reads the component out of `make -C <root>/<component> <target>`.
-func componentOf(args []string) string {
-	if len(args) < 2 || args[0] != "-C" {
-		return ""
-	}
-	return filepath.Base(args[1])
-}
-
-func (f *fakeRunner) invocations() []string {
+func invocations(f *command.Recorder) []string {
 	var out []string
-	for _, c := range f.calls {
-		if c.name != "make" || len(c.args) < 3 {
+	for _, c := range f.Calls() {
+		if c.Name != "make" {
 			continue
 		}
-		out = append(out, componentOf(c.args)+" "+strings.Join(c.args[2:], " "))
+		out = append(out, componentOf(c)+" "+strings.Join(c.Args, " "))
 	}
 	slices.Sort(out)
 	return out
@@ -110,45 +82,45 @@ func writeBinary(t *testing.T, repoRoot, component, name string) {
 }
 
 func TestBuildRunsEveryBuildersTarget(t *testing.T) {
-	f := &fakeRunner{}
+	f := &command.Recorder{}
 	if err := Build("/repo", "v1.2.3", testBuilders(""), WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	want := []string{"alpha build-all", "beta release-build"}
-	if got := f.invocations(); !slices.Equal(got, want) {
+	if got := invocations(f); !slices.Equal(got, want) {
 		t.Errorf("ran %v, want %v", got, want)
 	}
 }
 
 func TestBuildRunsEachTargetInItsComponentDirectory(t *testing.T) {
-	f := &fakeRunner{}
+	f := &command.Recorder{}
 	if err := Build("/repo", "v1.2.3", testBuilders(""), WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	for _, c := range f.calls {
-		want := filepath.Join("/repo", componentOf(c.args))
-		if c.args[1] != want {
-			t.Errorf("ran make in %q, want %q", c.args[1], want)
+	want := map[string]string{"build-all": "/repo/alpha", "release-build": "/repo/beta"}
+	for _, c := range f.Calls() {
+		if dir := want[strings.Join(c.Args, " ")]; c.Dir != dir {
+			t.Errorf("ran make %v in %q, want %q", c.Args, c.Dir, dir)
 		}
 	}
 }
 
 func TestBuildPassesTheVersion(t *testing.T) {
-	f := &fakeRunner{}
+	f := &command.Recorder{}
 	if err := Build("/repo", "v1.2.3", testBuilders(""), WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	want := utils.Env(utils.EnvVersion, "v1.2.3")
-	for _, c := range f.calls {
-		if !slices.Contains(c.env, want) {
-			t.Errorf("call %v missing %q", c.args, want)
+	for _, c := range f.Calls() {
+		if !slices.Contains(c.Env, want) {
+			t.Errorf("call %v missing %q", c.Args, want)
 		}
 	}
 }
 
 // A builder's own environment reaches only its target.
 func TestBuildPassesABuildersEnv(t *testing.T) {
-	f := &fakeRunner{}
+	f := &command.Recorder{}
 	builders := []Builder{
 		e2eBinaries{arches: []string{"amd64"}},
 		releaseBinaries{name: "alpha", target: "build-all"},
@@ -157,16 +129,16 @@ func TestBuildPassesABuildersEnv(t *testing.T) {
 		t.Fatalf("Build: %v", err)
 	}
 	want := utils.Env(utils.EnvArches, "amd64")
-	for _, c := range f.calls {
-		if got := slices.Contains(c.env, want); got != (componentOf(c.args) == E2EComponent) {
-			t.Errorf("%s built with %q = %v", componentOf(c.args), want, got)
+	for _, c := range f.Calls() {
+		if got := slices.Contains(c.Env, want); got != (componentOf(c) == E2EComponent) {
+			t.Errorf("%s built with %q = %v", componentOf(c), want, got)
 		}
 	}
 }
 
 // One builder failing must not hide the rest.
 func TestBuildReportsEveryFailingBuilder(t *testing.T) {
-	f := &fakeRunner{failures: map[string]int{"alpha": 99, "beta": 99}}
+	f := failingRunner(map[string]int{"alpha": 99, "beta": 99})
 	err := Build("/repo", "v1.2.3", testBuilders(""), WithRunner(f))
 	if err == nil {
 		t.Fatal("Build succeeded, want an error")
@@ -179,13 +151,13 @@ func TestBuildReportsEveryFailingBuilder(t *testing.T) {
 }
 
 func TestBuildRetriesAFailedBuilder(t *testing.T) {
-	f := &fakeRunner{failures: map[string]int{"alpha": 1}}
+	f := failingRunner(map[string]int{"alpha": 1})
 	if err := Build("/repo", "v1.2.3", testBuilders(""), WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	var alpha int
-	for _, c := range f.calls {
-		if componentOf(c.args) == "alpha" {
+	for _, c := range f.Calls() {
+		if componentOf(c) == "alpha" {
 			alpha++
 		}
 	}
@@ -196,55 +168,55 @@ func TestBuildRetriesAFailedBuilder(t *testing.T) {
 
 // Concurrent builds interleave, so each needs a log of its own.
 func TestBuildLogsPerComponent(t *testing.T) {
-	f := &fakeRunner{}
+	f := &command.Recorder{}
 	if err := Build("/repo", "v1.2.3", testBuilders(""), WithRunner(f), WithLogsDir("/logs")); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	seen := map[string]bool{}
-	for _, c := range f.calls {
-		want := filepath.Join("/logs", buildStep, componentOf(c.args)+".log")
-		if c.logPath != want {
-			t.Errorf("logged to %q, want %q", c.logPath, want)
+	for _, c := range f.Calls() {
+		want := filepath.Join("/logs", buildStep, componentOf(c)+".log")
+		if c.LogFile != want {
+			t.Errorf("logged to %q, want %q", c.LogFile, want)
 		}
-		if seen[c.logPath] {
-			t.Errorf("two builders share the log %q", c.logPath)
+		if seen[c.LogFile] {
+			t.Errorf("two builders share the log %q", c.LogFile)
 		}
-		seen[c.logPath] = true
+		seen[c.LogFile] = true
 	}
 }
 
 // A Builder cannot carry an empty component or target, so the repo root is all
 // that is left to check.
 func TestBuildNeedsARepoRoot(t *testing.T) {
-	f := &fakeRunner{}
+	f := &command.Recorder{}
 	if err := Build("", "v1.2.3", testBuilders(""), WithRunner(f)); err == nil {
 		t.Error("Build succeeded, want an error")
 	}
-	if len(f.calls) != 0 {
-		t.Errorf("ran %v despite failing validation", f.calls)
+	if len(f.Calls()) != 0 {
+		t.Errorf("ran %v despite failing validation", f.Calls())
 	}
 }
 
 // A constructor returns nil when a product ships none of that kind, so a caller
 // can append it without checking.
 func TestBuildSkipsNilBuilders(t *testing.T) {
-	f := &fakeRunner{}
+	f := &command.Recorder{}
 	builders := []Builder{E2E([]string{"ppc64le"}, t.TempDir())}
 	if err := Build("/repo", "v1.2.3", builders, WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if len(f.calls) != 0 {
-		t.Errorf("ran %v, want nothing", f.calls)
+	if len(f.Calls()) != 0 {
+		t.Errorf("ran %v, want nothing", f.Calls())
 	}
 }
 
 func TestBuildWithNoBuildersDoesNothing(t *testing.T) {
-	f := &fakeRunner{}
+	f := &command.Recorder{}
 	if err := Build("/repo", "v1.2.3", nil, WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if len(f.calls) != 0 {
-		t.Errorf("ran %v, want nothing", f.calls)
+	if len(f.Calls()) != 0 {
+		t.Errorf("ran %v, want nothing", f.Calls())
 	}
 }
 
@@ -254,7 +226,7 @@ func TestBuildCollectsWhereTheBuilderSays(t *testing.T) {
 	writeBinary(t, repoRoot, "alpha", "alpha-amd64")
 	writeBinary(t, repoRoot, "beta", "beta-amd64")
 
-	if err := Build(repoRoot, "v1.2.3", testBuilders(outputDir), WithRunner(&fakeRunner{})); err != nil {
+	if err := Build(repoRoot, "v1.2.3", testBuilders(outputDir), WithRunner(&command.Recorder{})); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(outputDir, "alpha-amd64")); err != nil {
@@ -272,7 +244,7 @@ func TestBuildCollectsByHardLink(t *testing.T) {
 	writeBinary(t, repoRoot, "alpha", "alpha-amd64")
 	writeBinary(t, repoRoot, "beta", "beta-amd64")
 
-	if err := Build(repoRoot, "v1.2.3", testBuilders(outputDir), WithRunner(&fakeRunner{})); err != nil {
+	if err := Build(repoRoot, "v1.2.3", testBuilders(outputDir), WithRunner(&command.Recorder{})); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	src, err := os.Stat(filepath.Join(sourceDir(repoRoot, "alpha"), "alpha-amd64"))
@@ -295,7 +267,7 @@ func TestBuildFailsWhenThereIsNothingToCollect(t *testing.T) {
 	if err := os.MkdirAll(sourceDir(repoRoot, "alpha"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	err := Build(repoRoot, "v1.2.3", testBuilders(outputDir), WithRunner(&fakeRunner{}))
+	err := Build(repoRoot, "v1.2.3", testBuilders(outputDir), WithRunner(&command.Recorder{}))
 	if err == nil {
 		t.Fatal("Build succeeded, want an error")
 	}
@@ -317,7 +289,7 @@ func writeE2EBinary(t *testing.T, repoRoot, name string) {
 
 func TestE2EBuildsAndCollectsTheShippedBinaries(t *testing.T) {
 	repoRoot, outputDir := t.TempDir(), t.TempDir()
-	f := &fakeRunner{}
+	f := &command.Recorder{}
 	for _, name := range []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test", "e2e.test"} {
 		writeE2EBinary(t, repoRoot, name)
 	}
@@ -326,7 +298,7 @@ func TestE2EBuildsAndCollectsTheShippedBinaries(t *testing.T) {
 	if err := Build(repoRoot, "v1.2.3", builders, WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if got := f.invocations(); !slices.Equal(got, []string{E2EComponent + " " + e2eTarget}) {
+	if got := invocations(f); !slices.Equal(got, []string{E2EComponent + " " + e2eTarget}) {
 		t.Errorf("ran %v, want the e2e build target", got)
 	}
 	for _, want := range []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"} {
@@ -342,7 +314,7 @@ func TestE2EBuildsAndCollectsTheShippedBinaries(t *testing.T) {
 
 func TestE2ENarrowsToSupportedArches(t *testing.T) {
 	repoRoot, outputDir := t.TempDir(), t.TempDir()
-	f := &fakeRunner{}
+	f := &command.Recorder{}
 	writeE2EBinary(t, repoRoot, "e2e-linux-amd64.test")
 
 	builders := []Builder{E2E([]string{"amd64", "ppc64le"}, outputDir)}
@@ -350,13 +322,13 @@ func TestE2ENarrowsToSupportedArches(t *testing.T) {
 		t.Fatalf("Build: %v", err)
 	}
 	want := utils.Env(utils.EnvArches, "amd64")
-	for _, c := range f.calls {
-		if !slices.Contains(c.env, want) {
-			t.Errorf("built without %q, env: %v", want, c.env)
+	for _, c := range f.Calls() {
+		if !slices.Contains(c.Env, want) {
+			t.Errorf("built without %q, env: %v", want, c.Env)
 		}
 		// lib.Makefile assigns VALIDARCHES with `=`, so setting it would be
 		// ignored and the build would cover every arch.
-		for _, e := range c.env {
+		for _, e := range c.Env {
 			if strings.HasPrefix(e, "VALIDARCHES=") {
 				t.Errorf("built with %q, want the arches restricted through ARCHES", e)
 			}
@@ -377,7 +349,7 @@ func TestE2EFailsWhenTheBuildProducedNothing(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	builders := []Builder{E2E(nil, t.TempDir())}
-	if err := Build(repoRoot, "v1.2.3", builders, WithRunner(&fakeRunner{})); err == nil {
+	if err := Build(repoRoot, "v1.2.3", builders, WithRunner(&command.Recorder{})); err == nil {
 		t.Error("Build succeeded, want an error when nothing was built")
 	}
 }

@@ -111,7 +111,7 @@ var (
 func NewManager(opts ...Option) (*CalicoManager, error) {
 	// Configure defaults here.
 	b := &CalicoManager{
-		runner:           &command.RealCommandRunner{},
+		runner:           command.RealRunner,
 		productCode:      defaults.ProductCode,
 		validate:         true,
 		validateBranch:   true,
@@ -384,7 +384,7 @@ func (r *CalicoManager) mustBuildValidation() error {
 		return errors.Join(errs...)
 	}
 
-	out, err := command.GitVersion(r.repoRoot, true, command.WithRunner(r.runner))
+	out, err := command.Git(r.runner).In(r.repoRoot).Version(true)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("determine git version: %w", err))
 		return errors.Join(errs...)
@@ -604,7 +604,7 @@ var (
 func (r *CalicoManager) PreHashreleaseValidate() error {
 	var errStack error
 	if err := r.checkBranch(func() error {
-		branch, err := utils.GitBranch(r.repoRoot)
+		branch, err := command.Git(r.runner).In(r.repoRoot).Branch()
 		if err != nil {
 			return fmt.Errorf("failed to determine branch: %s", err)
 		}
@@ -616,7 +616,7 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 	}); err != nil {
 		errStack = errors.Join(errStack, err)
 	}
-	dirty, err := utils.GitIsDirty(r.repoRoot)
+	dirty, err := command.Git(r.runner).In(r.repoRoot).Dirty()
 	if err != nil {
 		return fmt.Errorf("failed to check if git is dirty: %s", err)
 	}
@@ -632,17 +632,18 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 // The checkout must start clean, so a failed check can reset everything
 // make generate left behind without losing anyone's work.
 func (r *CalicoManager) checkCodeGeneration() error {
-	status, err := r.runner.RunInDir(r.repoRoot, "git", []string{"status", "--porcelain"}, nil)
+	// Untracked files count: a failed check runs git clean, which would delete them.
+	dirty, err := command.Git(r.runner).In(r.repoRoot).Porcelain()
 	if err != nil {
 		return fmt.Errorf("check git status: %w", err)
 	}
-	if strings.TrimSpace(status) != "" {
+	if dirty {
 		return fmt.Errorf("cannot check code generation in a checkout with changes")
 	}
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate check-dirty"); err != nil {
+	if _, err := command.Make(r.runner, r.repoRoot).Run([]string{"generate", "check-dirty"}); err != nil {
 		logrus.WithError(err).Error("Failed to check code generation")
 		for _, args := range [][]string{{"checkout", "--", "."}, {"clean", "-fd"}} {
-			if _, err := r.runner.RunInDir(r.repoRoot, "git", args, nil); err != nil {
+			if _, err := command.Git(r.runner).In(r.repoRoot).Run(args...); err != nil {
 				logrus.WithError(err).Error("Failed to reset changes from code generation")
 			}
 		}
@@ -667,7 +668,7 @@ func (r *CalicoManager) PreReleaseValidate() error {
 
 	// Check that we are on a release branch
 	if err := r.checkBranch(func() error {
-		branch, err := utils.GitBranch(r.repoRoot)
+		branch, err := command.Git(r.runner).In(r.repoRoot).Branch()
 		if err != nil {
 			return fmt.Errorf("failed to determine branch: %s", err)
 		}
@@ -907,7 +908,7 @@ func (r *CalicoManager) buildMetadata() error {
 
 // Users verify a download with: sha256sum -c --ignore-missing SHA256SUMS
 func (r *CalicoManager) writeChecksums() error {
-	return distribution.SHA256Sums(r.uploadDir())
+	return distribution.SHA256Sums(r.uploadDir(), distribution.WithRunner(r.runner))
 }
 
 // Check general prerequisites for cutting and publishing a release.
@@ -982,7 +983,7 @@ func (r *CalicoManager) assertImageVersions() error {
 		switch img {
 		case "calico":
 			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion.String()), "version"}, nil)
+				out, err := r.docker("run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion.String()), "version")
 				if err != nil {
 					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
 				} else if len(buildInfoVersionRegex.FindStringSubmatch(out)) == 0 {
@@ -993,7 +994,7 @@ func (r *CalicoManager) assertImageVersions() error {
 			// Skip windows images
 		case "third-party-cni-plugins", "envoy-gateway", "envoy-proxy", "envoy-ratelimit", "istio-install-cni", "istio-pilot", "istio-proxyv2", "istio-ztunnel", "whisker":
 			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion.String())}, nil)
+				out, err := r.docker("inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion.String()))
 				if err != nil {
 					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
 				} else if !strings.Contains(out, r.calicoVersion.String()) {
@@ -1002,7 +1003,7 @@ func (r *CalicoManager) assertImageVersions() error {
 			}
 		case "node":
 			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion.String()), "versions"}, nil)
+				out, err := r.docker("run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion.String()), "versions")
 				if err != nil {
 					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
 				} else if len(buildInfoVersionRegex.FindStringSubmatch(out)) == 0 {
@@ -1020,7 +1021,7 @@ func (r *CalicoManager) assertImageVersions() error {
 // The operator publishes to registries of its own, so it is absent from the release images.
 func (r *CalicoManager) assertOperatorImageVersion() error {
 	img := fmt.Sprintf("%s/%s:%s", r.operatorRegistry, r.operatorImage, r.operatorVersion)
-	out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, img}, nil)
+	out, err := r.docker("inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, img)
 	if err != nil {
 		return fmt.Errorf("failed to get version from operator image %s: %w", img, err)
 	}
@@ -1062,7 +1063,7 @@ func (r *CalicoManager) publishPrereqs() error {
 			errStack = errors.Join(errStack, fmt.Errorf("no S3 bucket specified for pushing helm index"))
 		}
 	}
-	if dirty, err := utils.GitIsDirty(r.repoRoot); dirty || err != nil {
+	if dirty, err := command.Git(r.runner).In(r.repoRoot).Dirty(); dirty || err != nil {
 		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before publishing the release"))
 	}
 	if errStack != nil {
@@ -1682,20 +1683,12 @@ func (r *CalicoManager) determineBranch() (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
+func (r *CalicoManager) docker(args ...string) (string, error) {
+	return r.runner.Run("docker", args)
+}
+
 func (r *CalicoManager) git(args ...string) (string, error) {
-	return r.runner.Run("git", args, nil)
-}
-
-func (r *CalicoManager) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
-	targets := strings.Split(target, " ")
-	args := []string{"-C", dir}
-	args = append(args, targets...)
-	return r.runner.Run("make", args, env)
-}
-
-func (r *CalicoManager) makeInDirectoryIgnoreOutput(dir, target string, env ...string) error {
-	_, err := r.makeInDirectoryWithOutput(dir, target, env...)
-	return err
+	return command.Git(r.runner).In(r.repoRoot).Run(args...)
 }
 
 func (r *CalicoManager) releaseBranchPrereqs() error {
@@ -1833,8 +1826,8 @@ func (r *CalicoManager) prepareDerived(derived string) ([]string, error) {
 	}
 
 	logrus.Debug("Running code generation")
-	env := append(os.Environ(), fmt.Sprintf("DEFAULT_BRANCH_OVERRIDE=%s", derived))
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate", env...); err != nil {
+	env := []string{fmt.Sprintf("DEFAULT_BRANCH_OVERRIDE=%s", derived)}
+	if _, err := command.Make(r.runner, r.repoRoot).Run([]string{"generate"}, command.WithEnv(env...)); err != nil {
 		return nil, fmt.Errorf("failed to run code generation: %w", err)
 	}
 
@@ -1904,8 +1897,7 @@ func (r *CalicoManager) prepBranchName() string {
 // switchToPrepBranch records the current branch for cleanup, then creates
 // and switches to the prep branch. Safe to re-run (force-creates).
 func (r *CalicoManager) switchToPrepBranch(prepBranch string) error {
-	if out, err := r.git("switch", "-C", prepBranch); err != nil {
-		logrus.Error(out)
+	if _, err := r.git("switch", "-C", prepBranch); err != nil {
 		return fmt.Errorf("create branch %s: %w", prepBranch, err)
 	}
 	return nil
@@ -1924,7 +1916,7 @@ func (r *CalicoManager) updateAndCommitPrep(baseBranch string) error {
 	if err := r.modifyHelmChartsValues(r.calicoVersion.String(), r.operatorVersion); err != nil {
 		return fmt.Errorf("failed to update chart versions: %w", err)
 	}
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate"); err != nil {
+	if _, err := command.Make(r.runner, r.repoRoot).Run([]string{"generate"}); err != nil {
 		return fmt.Errorf("failed to run make generate: %w", err)
 	}
 
@@ -1977,11 +1969,12 @@ func (r *CalicoManager) createPrepPR(baseBranch, prepBranch string) error {
 	}
 	fallbackURL := fmt.Sprintf("https://github.com/%s/%s/pulls?q=is%%3Aopen+head%%3A%s", r.githubOrg, r.repo, prepBranch)
 	logrus.WithField("args", args).Debug("Creating PR for release preparation")
-	pr, err := r.runner.RunInDir(r.repoRoot, "./bin/gh", args, nil)
+	pr, err := r.runner.Run("./bin/gh", args, command.WithDir(r.repoRoot))
 	if err != nil {
 		pr = fallbackURL
-		if strings.Contains(err.Error(), "already exists") {
-			if m := regexp.MustCompile(`(?:^|\s)(https://github\.com/[\w.-]+/[\w.-]+/pull/\d+)(?:$|\s)`).FindStringSubmatch(err.Error()); len(m) > 1 {
+		var cmdErr *command.Error
+		if errors.As(err, &cmdErr) && strings.Contains(cmdErr.Stderr, "already exists") {
+			if m := regexp.MustCompile(`(?:^|\s)(https://github\.com/[\w.-]+/[\w.-]+/pull/\d+)(?:$|\s)`).FindStringSubmatch(cmdErr.Stderr); len(m) > 1 {
 				if u, err := url.Parse(m[1]); err != nil {
 					logrus.WithField("PR", pr).Warn("PR already exists but could not parse URL from error, find using fallback PR URL")
 					return fmt.Errorf("parsing URL for PR: %w", err)
@@ -2002,8 +1995,7 @@ func (r *CalicoManager) createPrepPR(baseBranch, prepBranch string) error {
 }
 
 func (r *CalicoManager) switchToBaseBranch(baseBranch string) error {
-	if out, err := r.git("switch", "-f", baseBranch); err != nil {
-		logrus.Error(out)
+	if _, err := r.git("switch", "-f", baseBranch); err != nil {
 		return fmt.Errorf("failed to switch back to base branch %s: %w", baseBranch, err)
 	}
 	return nil
@@ -2016,7 +2008,7 @@ func (r *CalicoManager) prepPrereqs() error {
 	}
 
 	// Check that the git repo is clean.
-	if dirty, err := utils.GitIsDirty(r.repoRoot); err != nil {
+	if dirty, err := command.Git(r.runner).In(r.repoRoot).Dirty(); err != nil {
 		return fmt.Errorf("failed to check if git repo is clean: %w", err)
 	} else if dirty {
 		return fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before preparing the release")
