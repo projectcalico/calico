@@ -31,7 +31,9 @@ type settings struct {
 func newSettings(opts []Option) *settings {
 	s := &settings{}
 	for _, o := range opts {
-		o.apply(s)
+		if o != nil {
+			o.apply(s)
+		}
 	}
 	return s
 }

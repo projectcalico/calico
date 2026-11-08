@@ -29,9 +29,9 @@ import (
 )
 
 // runImages drives the real images command with a recording runner.
-func runImages(t *testing.T, root string, args ...string) *recordingRunner {
+func runImages(t *testing.T, root string, args ...string) *fakeRunner {
 	t.Helper()
-	r := newRecordingRunner()
+	r := newFakeRunner()
 	prev, prevResolve := commandRunner, registryDigestResolver
 	commandRunner = r
 	registryDigestResolver = func(string) (string, bool, error) { return "sha256:aaa", true, nil }
@@ -120,7 +120,7 @@ func TestImagesLogPaths(t *testing.T) {
 	}
 }
 
-var _ command.CommandRunner = (*recordingRunner)(nil)
+var _ command.CommandRunner = (*fakeRunner)(nil)
 
 // Narrowing must scope the work to the named directories.
 func TestImagesNarrowedToReleaseDirs(t *testing.T) {
@@ -154,7 +154,7 @@ func TestImagesNarrowedKeepsEveryVariant(t *testing.T) {
 // worth reporting rather than a build that quietly does nothing.
 func TestImagesRejectsFelixAsAnImageDir(t *testing.T) {
 	prev := commandRunner
-	r := newRecordingRunner()
+	r := newFakeRunner()
 	commandRunner = r
 	t.Cleanup(func() { commandRunner = prev })
 
@@ -180,7 +180,7 @@ func TestImagesRejectsFelixAsAnImageDir(t *testing.T) {
 // not recognise.
 func TestImagesRejectsUnknownReleaseDir(t *testing.T) {
 	prev := commandRunner
-	commandRunner = newRecordingRunner()
+	commandRunner = newFakeRunner()
 	t.Cleanup(func() { commandRunner = prev })
 
 	root := fakeRepo(t, "v3.30.0")
@@ -243,7 +243,7 @@ func TestImagesPublishSkipDevImageRetag(t *testing.T) {
 // error rather than a silent fresh push.
 func TestImagesPublishRejectsHalfConfiguredRetag(t *testing.T) {
 	prev := commandRunner
-	commandRunner = newRecordingRunner()
+	commandRunner = newFakeRunner()
 	t.Cleanup(func() { commandRunner = prev })
 
 	root := fakeRepo(t, "v3.30.0")

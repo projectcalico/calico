@@ -19,15 +19,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/projectcalico/calico/release/internal/command"
 )
 
 // tagReleased tags HEAD as a release, then commits past it so the tag is not main's head.
 func tagReleased(t *testing.T, root, tagName string, push bool) string {
 	t.Helper()
 	run := func(args ...string) string {
-		out, err := command.GitInDir(root, args...)
+		out, err := realGit(root).Run(args...)
 		require.NoError(t, err, "git %v", args)
 		return strings.TrimSpace(out)
 	}
@@ -47,7 +45,7 @@ func TestCutFromTag(t *testing.T) {
 	root := initGitRepo(t)
 	remote := initGitRemote(t, root)
 	released := tagReleased(t, root, "v3.23.1", true)
-	mainBefore, err := command.GitInDir(root, "rev-parse", "master")
+	mainBefore, err := realGit(root).Run("rev-parse", "master")
 	require.NoError(t, err)
 
 	derived := "release-v3.23.1-hotfix"
@@ -63,21 +61,21 @@ func TestCutFromTag(t *testing.T) {
 	require.NoError(t, d.CutReleaseBranch(&CutPlan{Derived: derived, Source: TagSource("v3.23.1"), Remote: "origin"}))
 
 	// The derived branch is the tag plus the edits commit.
-	parent, err := command.GitInDir(root, "rev-parse", derived+"^")
+	parent, err := realGit(root).Run("rev-parse", derived+"^")
 	require.NoError(t, err)
 	require.Equal(t, released, strings.TrimSpace(parent))
 	require.Equal(t, "Updates for "+derived+" release branch", gitHeadSubject(t, root, derived))
 
 	// It is on the remote; main is untouched and no dev tag was made.
-	onRemote, err := command.GitInDir(remote, "rev-parse", derived)
+	onRemote, err := realGit(remote).Run("rev-parse", derived)
 	require.NoError(t, err)
-	local, err := command.GitInDir(root, "rev-parse", derived)
+	local, err := realGit(root).Run("rev-parse", derived)
 	require.NoError(t, err)
 	require.Equal(t, strings.TrimSpace(local), strings.TrimSpace(onRemote))
-	mainAfter, err := command.GitInDir(root, "rev-parse", "master")
+	mainAfter, err := realGit(root).Run("rev-parse", "master")
 	require.NoError(t, err)
 	require.Equal(t, mainBefore, mainAfter)
-	tags, err := command.GitInDir(remote, "tag", "--list")
+	tags, err := realGit(remote).Run("tag", "--list")
 	require.NoError(t, err)
 	require.Equal(t, "v3.23.1", strings.TrimSpace(tags))
 }
@@ -86,7 +84,7 @@ func TestCutFromTag(t *testing.T) {
 func TestCheckTagOnRemote(t *testing.T) {
 	root := initGitRepo(t)
 	initGitRemote(t, root)
-	g := gitIn(root)
+	g := realGit(root)
 
 	tagReleased(t, root, "v3.23.1", true)
 	require.NoError(t, checkTagOnRemote(g, "v3.23.1", "origin", false))
@@ -99,7 +97,7 @@ func TestCheckTagOnRemote(t *testing.T) {
 	require.NoError(t, checkTagOnRemote(g, "v3.23.2", "origin", true))
 
 	// A local tag that moved from what was released is rejected.
-	_, err := command.GitInDir(root, "tag", "-f", "-a", "v3.23.1", "-m", "moved")
+	_, err := realGit(root).Run("tag", "-f", "-a", "v3.23.1", "-m", "moved")
 	require.NoError(t, err)
 	require.ErrorContains(t, checkTagOnRemote(g, "v3.23.1", "origin", false), "does not match")
 	require.NoError(t, checkTagOnRemote(g, "v3.23.1", "origin", true))
@@ -113,7 +111,7 @@ func TestCutFromTagRejectsMainTarget(t *testing.T) {
 	root := initGitRepo(t)
 	initGitRemote(t, root)
 	tagReleased(t, root, "v3.23.1", true)
-	mainBefore, err := command.GitInDir(root, "rev-parse", "master")
+	mainBefore, err := realGit(root).Run("rev-parse", "master")
 	require.NoError(t, err)
 
 	d := newTestDriver(t, Driver{RepoRoot: root, Validate: true, Publish: true})
@@ -125,8 +123,8 @@ func TestCutFromTagRejectsMainTarget(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "a cut from v3.23.1 cannot advance master")
 
-	require.False(t, localBranchExists(gitIn(root), "release-v3.23.1-hotfix"))
-	mainAfter, err := command.GitInDir(root, "rev-parse", "master")
+	require.False(t, localBranchExists(realGit(root), "release-v3.23.1-hotfix"))
+	mainAfter, err := realGit(root).Run("rev-parse", "master")
 	require.NoError(t, err)
 	require.Equal(t, mainBefore, mainAfter)
 }
@@ -139,5 +137,5 @@ func TestCutFromTagPlan(t *testing.T) {
 
 	d := newTestDriver(t, Driver{RepoRoot: root, Validate: true, Plan: true})
 	require.NoError(t, d.CutReleaseBranch(&CutPlan{Derived: "release-v3.23.2-hotfix", Source: TagSource("v3.23.2"), Remote: "origin"}))
-	require.False(t, localBranchExists(gitIn(root), "release-v3.23.2-hotfix"))
+	require.False(t, localBranchExists(realGit(root), "release-v3.23.2-hotfix"))
 }

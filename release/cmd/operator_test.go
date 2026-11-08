@@ -205,7 +205,7 @@ func TestOperatorCommand(t *testing.T) {
 
 	t.Run("logs under the product version", func(t *testing.T) {
 		t.Chdir(t.TempDir())
-		r := newRecordingRunner()
+		r := newFakeRunner()
 		prevRunner, prevPin := commandRunner, pinForBuild
 		commandRunner = r
 		pinForBuild = func(*Config, *cli.Command) (*pinnedversion.Pin, error) {
@@ -233,7 +233,7 @@ func TestOperatorCommand(t *testing.T) {
 
 	t.Run("publish resumes from its record", func(t *testing.T) {
 		t.Chdir(t.TempDir())
-		r := newRecordingRunner()
+		r := newFakeRunner()
 		prevRunner, prevPin, prevResolve := commandRunner, pinForPublish, registryDigestResolver
 		commandRunner = r
 		pinForPublish = func(*Config, *cli.Command) (*pinnedversion.Pin, error) {

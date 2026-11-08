@@ -61,10 +61,10 @@ func stageBuiltBinaries(t *testing.T, root string) {
 	}
 }
 
-func runBinaries(t *testing.T, root string, args ...string) *recordingRunner {
+func runBinaries(t *testing.T, root string, args ...string) *fakeRunner {
 	t.Helper()
 	stageBuiltBinaries(t, root)
-	r := newRecordingRunner()
+	r := newFakeRunner()
 	prev := commandRunner
 	commandRunner = r
 	t.Cleanup(func() { commandRunner = prev })

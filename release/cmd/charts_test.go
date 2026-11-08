@@ -98,7 +98,7 @@ func chartsCLIFirstChart(t *testing.T) string {
 
 // runCharts drives the real charts command with a recording runner. It returns
 // the runner and the config, so a test can assert on what reached disk.
-var runCharts = func(t *testing.T, args ...string) (*recordingRunner, *Config) {
+var runCharts = func(t *testing.T, args ...string) (*fakeRunner, *Config) {
 	t.Helper()
 	root := fakeRepo(t, chartsCLITestVersion)
 	cfg := &Config{
@@ -115,9 +115,9 @@ var runCharts = func(t *testing.T, args ...string) (*recordingRunner, *Config) {
 
 // runChartsIn drives the charts command against an existing config, so a test
 // can run twice over one output directory.
-func runChartsIn(t *testing.T, cfg *Config, args ...string) *recordingRunner {
+func runChartsIn(t *testing.T, cfg *Config, args ...string) *fakeRunner {
 	t.Helper()
-	r := newRecordingRunner()
+	r := newFakeRunner()
 	prev, prevResolve := commandRunner, registryDigestResolver
 	commandRunner = r
 	registryDigestResolver = func(string) (string, bool, error) { return chartsCLIDigest, true, nil }
@@ -300,7 +300,7 @@ func TestChartsPublishForceRepublishesOverAMovedDigest(t *testing.T) {
 	_, cfg := runCharts(t, "publish", "--helm-registry", chartsCLIRegistry)
 
 	prev, prevResolve := commandRunner, registryDigestResolver
-	r := newRecordingRunner()
+	r := newFakeRunner()
 	commandRunner = r
 	registryDigestResolver = func(string) (string, bool, error) { return "sha256:moved", true, nil }
 	t.Cleanup(func() { commandRunner, registryDigestResolver = prev, prevResolve })
@@ -320,7 +320,7 @@ func TestChartsPublishFailsOnAMovedDigestWithoutForce(t *testing.T) {
 	_, cfg := runCharts(t, "publish", "--helm-registry", chartsCLIRegistry)
 
 	prev, prevResolve := commandRunner, registryDigestResolver
-	r := newRecordingRunner()
+	r := newFakeRunner()
 	commandRunner = r
 	registryDigestResolver = func(string) (string, bool, error) { return "sha256:moved", true, nil }
 	t.Cleanup(func() { commandRunner, registryDigestResolver = prev, prevResolve })
