@@ -196,7 +196,7 @@ func TestTagRelease(t *testing.T) {
 			f := newFakeRunner()
 			f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30", nil)
 			f.on("git rev-parse HEAD", headSHA, nil)
-			f.on(fmt.Sprintf("git rev-parse -q --verify refs/tags/%s^{commit}", ver), tt.tagCommit, tt.tagErr)
+			f.on(fmt.Sprintf("git rev-parse --verify --quiet refs/tags/%s^{commit}", ver), tt.tagCommit, tt.tagErr)
 			f.on(fmt.Sprintf("git tag -a -m Release %s %s", ver, ver), "", nil)
 
 			r := &CalicoManager{runner: f, calicoVersion: testVersion(t, ver)}
@@ -257,7 +257,7 @@ func TestBuild(t *testing.T) {
 			m.binaries = true
 			f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30", nil)
 			f.on("git rev-parse HEAD", headSHA, nil)
-			f.on(fmt.Sprintf("git rev-parse -q --verify refs/tags/%s^{commit}", ver), "", fmt.Errorf("exit status 1"))
+			f.on(fmt.Sprintf("git rev-parse --verify --quiet refs/tags/%s^{commit}", ver), "", fmt.Errorf("exit status 1"))
 			// Fail a binaries target so Build returns after the tag is taken.
 			f.on(root+"/felix $ make release-build", "", fmt.Errorf("boom"))
 
@@ -383,7 +383,7 @@ func TestBuild(t *testing.T) {
 func TestTagStateMemoized(t *testing.T) {
 	const ver = "v3.30.0"
 	f := newFakeRunner()
-	f.on(fmt.Sprintf("git rev-parse -q --verify refs/tags/%s^{commit}", ver), "", fmt.Errorf("exit status 1"))
+	f.on(fmt.Sprintf("git rev-parse --verify --quiet refs/tags/%s^{commit}", ver), "", fmt.Errorf("exit status 1"))
 
 	r := &CalicoManager{runner: f, calicoVersion: testVersion(t, ver)}
 	if tc := r.tagState(); tc.err != nil {
@@ -392,7 +392,7 @@ func TestTagStateMemoized(t *testing.T) {
 	if tc := r.tagState(); tc.err != nil {
 		t.Fatal(tc.err)
 	}
-	if got := f.count("git rev-parse -q --verify refs/tags/" + ver); got != 1 {
+	if got := f.count("git rev-parse --verify --quiet refs/tags/" + ver); got != 1 {
 		t.Errorf("tag rev-parse ran %d times, want 1 (calls: %v)", got, f.calls())
 	}
 }
@@ -408,7 +408,7 @@ func TestReleasePrereqsTagConflict(t *testing.T) {
 	f := newFakeRunner()
 	f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30", nil)
 	f.on("git rev-parse HEAD", headSHA, nil)
-	f.on(fmt.Sprintf("git rev-parse -q --verify refs/tags/%s^{commit}", ver), otherSHA, nil)
+	f.on(fmt.Sprintf("git rev-parse --verify --quiet refs/tags/%s^{commit}", ver), otherSHA, nil)
 
 	r := &CalicoManager{runner: f, calicoVersion: testVersion(t, ver), githubOrg: "myfork", repo: "calico"}
 	err := r.releasePrereqs()
@@ -600,20 +600,9 @@ func TestOwnerFromRemoteURL(t *testing.T) {
 // TestCutPlanAdvancesMain asserts a cut off main emits no derived tag and
 // advances main to the next minor.
 func TestCutPlanAdvancesMain(t *testing.T) {
+	f := newFakeRunner().on("git describe --tags --abbrev=0 master", "v3.33.0-0.dev", nil)
+	m := &CalicoManager{runner: f}
 	root := t.TempDir()
-	run := func(args ...string) {
-		_, err := command.GitInDir(root, args...)
-		require.NoError(t, err, "git %v", args)
-	}
-	run("init", "-q", "-b", "master")
-	run("config", "user.email", "test@example.com")
-	run("config", "user.name", "test")
-	run("config", "commit.gpgsign", "false")
-	run("config", "tag.gpgsign", "false")
-	run("commit", "-q", "--allow-empty", "-m", "initial")
-	run("tag", "--no-sign", "v3.33.0-0.dev")
-
-	m := &CalicoManager{}
 	for _, opt := range []Option{
 		WithRepoRoot(root),
 		WithMainBranch("master"),
@@ -708,18 +697,6 @@ func TestPrepareRelease(t *testing.T) {
 }
 
 func TestPrepPrereqs(t *testing.T) {
-	root := t.TempDir()
-	for _, args := range [][]string{
-		{"init", "-q", "-b", "release-v3.30"},
-		{
-			"-c", "user.email=test@example.com", "-c", "user.name=test", "-c", "commit.gpgsign=false",
-			"commit", "-q", "--allow-empty", "-m", "initial",
-		},
-	} {
-		if _, err := command.GitInDir(root, args...); err != nil {
-			t.Fatalf("git %v: %v", args, err)
-		}
-	}
 	for _, tc := range []struct {
 		name           string
 		remote         string
@@ -737,7 +714,7 @@ func TestPrepPrereqs(t *testing.T) {
 			f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30\n", nil)
 			f.on("git config --get remote.origin.url", tc.remote+"\n", nil)
 			r := &CalicoManager{
-				runner: f, repoRoot: root, remote: "origin", githubOrg: "projectcalico",
+				runner: f, repoRoot: "/repo", remote: "origin", githubOrg: "projectcalico",
 				calicoVersion: testVersion(t, "v3.30.0"), operatorVersion: "v1.38.0",
 				releaseBranchPrefix: "release", validate: true, validateBranch: tc.validateBranch,
 				gitRef: true, dryRun: true,
@@ -881,35 +858,34 @@ func TestBuildNodes(t *testing.T) {
 }
 
 func TestRequireOnMainBranch(t *testing.T) {
-	root := t.TempDir()
-	run := func(args ...string) {
-		_, err := command.GitInDir(root, args...)
-		require.NoError(t, err, "git %v", args)
+	const verify = "git rev-parse --verify --quiet refs/heads/release-v3.33"
+	for _, tc := range []struct {
+		name    string
+		current string
+		derived string
+		wantErr bool
+	}{
+		{name: "a fresh cut on master is allowed", current: "master"},
+		{name: "a fresh cut off master is rejected", current: "some-feature", wantErr: true},
+		{name: "a resume is allowed off master once the derived branch exists", current: "release-v3.33", derived: "abc123"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeRunner().on("git rev-parse --abbrev-ref HEAD", tc.current, nil)
+			if tc.derived != "" {
+				f.on(verify, tc.derived, nil)
+			} else {
+				f.on(verify, "", errors.New("exit status 1"))
+			}
+			m := &CalicoManager{runner: f, repoRoot: "/repo", mainBranch: "master", validate: true}
+			err := m.requireOnMainBranch("release-v3.33")
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("requireOnMainBranch() = %v, want error %v", err, tc.wantErr)
+			}
+			if err != nil && !strings.Contains(err.Error(), "must run on master") {
+				t.Errorf("error %q does not name the main branch", err)
+			}
+		})
 	}
-	run("init", "-q", "-b", "master")
-	run("config", "user.email", "test@example.com")
-	run("config", "user.name", "test")
-	run("config", "commit.gpgsign", "false")
-	run("commit", "-q", "--allow-empty", "-m", "initial")
-
-	m := &CalicoManager{}
-	for _, opt := range []Option{WithRepoRoot(root), WithMainBranch("master"), WithValidation(true)} {
-		require.NoError(t, opt(m))
-	}
-
-	// On master, a fresh cut (derived branch absent) is allowed.
-	require.NoError(t, m.requireOnMainBranch("release-v3.33"), "on master the cut is allowed")
-
-	// Off a non-main branch, a fresh cut (derived branch absent) is rejected.
-	run("checkout", "-q", "-b", "some-feature")
-	err := m.requireOnMainBranch("release-v3.33")
-	require.Error(t, err, "a fresh cut off a non-main branch must be rejected")
-	require.Contains(t, err.Error(), "must run on master")
-
-	// Resume: the derived branch exists, so the rerun is allowed off it.
-	run("checkout", "-q", "-b", "release-v3.33")
-	require.NoError(t, m.requireOnMainBranch("release-v3.33"),
-		"a resume must be allowed when the derived branch exists")
 }
 
 // envForDir returns the environment of the first recorded make call in a
@@ -2341,7 +2317,7 @@ func TestPublishRelease(t *testing.T) {
 
 	t.Run("a missing local tag fails before anything publishes", func(t *testing.T) {
 		published := false
-		f := newFakeRunner().on("git rev-parse --verify refs/tags/v3.30.0", "", errors.New("needed a single revision"))
+		f := newFakeRunner().on("git rev-parse --verify --quiet refs/tags/v3.30.0", "", errors.New("needed a single revision"))
 		r := &CalicoManager{
 			runner:        f,
 			calicoVersion: testVersion(t, "v3.30.0"),

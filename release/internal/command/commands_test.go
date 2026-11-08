@@ -143,6 +143,16 @@ func TestRecorder(t *testing.T) {
 		}
 	})
 
+	t.Run("nil options are skipped", func(t *testing.T) {
+		var r Recorder
+		if _, err := r.Run("git", []string{"status"}, nil, WithDir("/src"), nil); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		if diff := cmp.Diff([]Call{{Name: "git", Args: []string{"status"}, Dir: "/src"}}, r.Calls()); diff != "" {
+			t.Errorf("calls (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("reply gives the output and error", func(t *testing.T) {
 		boom := errors.New("boom")
 		r := Recorder{Reply: func(c Call) (string, error) {
