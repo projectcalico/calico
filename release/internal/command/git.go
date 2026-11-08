@@ -82,11 +82,6 @@ func (g GitRunner) Run(args ...string) (string, error) {
 	return g.r.Run("git", args, WithDir(g.dir))
 }
 
-// GitInDir runs a git command in a specific directory.
-func GitInDir(dir string, args ...string) (string, error) {
-	return Git(&RealCommandRunner{}).In(dir).Run(args...)
-}
-
 func GitVersion(includeDirty bool, opts ...Option) (string, error) {
 	return Git(&RealCommandRunner{}).In(newSettings(opts).dir).Version(includeDirty)
 }

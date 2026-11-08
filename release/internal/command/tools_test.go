@@ -15,6 +15,7 @@
 package command
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -92,6 +93,33 @@ func TestGit(t *testing.T) {
 			}
 		})
 	}
+	t.Run("resolve returns the commit a ref names", func(t *testing.T) {
+		r := &Recorder{Reply: func(Call) (string, error) { return "abc123", nil }}
+		got, ok := Git(r).In("/repo").Resolve("refs/tags/v1")
+		if !ok || got != "abc123" {
+			t.Errorf("got (%q, %v), want (abc123, true)", got, ok)
+		}
+		want := []Call{{Name: "git", Args: []string{"rev-parse", "--verify", "--quiet", "refs/tags/v1"}, Dir: "/repo"}}
+		if diff := cmp.Diff(want, r.Calls()); diff != "" {
+			t.Errorf("calls (-want +got):\n%s", diff)
+		}
+	})
+	t.Run("resolve reports a missing ref as not found", func(t *testing.T) {
+		r := &Recorder{Reply: func(Call) (string, error) { return "", errors.New("exit status 1") }}
+		if _, ok := Git(r).Resolve("refs/tags/v1"); ok {
+			t.Error("ok = true, want false")
+		}
+	})
+	t.Run("is-ancestor reads git's exit status", func(t *testing.T) {
+		yes := &Recorder{}
+		no := &Recorder{Reply: func(Call) (string, error) { return "", errors.New("exit status 1") }}
+		if !Git(yes).IsAncestor("a", "b") {
+			t.Error("exit 0: got false, want true")
+		}
+		if Git(no).IsAncestor("a", "b") {
+			t.Error("exit 1: got true, want false")
+		}
+	})
 }
 
 func TestMake(t *testing.T) {
