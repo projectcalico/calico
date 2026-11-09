@@ -70,6 +70,7 @@ func validateKind(cfg *Config, data []byte, path string) error {
 		return fmt.Errorf("%s: a %s file belongs %s", path, cfg.Kind, rule.where)
 	}
 
+	// upstream is the one key that depends on the directory, not just the kind.
 	allowed := append([]string{"kind"}, rule.keys...)
 	if cfg.Kind == KindCluster && filepath.Base(filepath.Dir(path)) == "platform" {
 		allowed = append(allowed, "upstream")
@@ -91,6 +92,7 @@ func validateKind(cfg *Config, data []byte, path string) error {
 		return fmt.Errorf("%s: %s (line %d) is not allowed in a %s file, which carries only %s", path, key.Value, key.Line, cfg.Kind, strings.Join(allowed, ", "))
 	}
 
+	// Keys are fine, but exclude carries two lists and each kind owns one.
 	switch {
 	case cfg.Kind == KindQuarantine && len(cfg.Exclude.Labels) > 0:
 		return fmt.Errorf("%s: exclude.labels[0] (%q): a quarantine file excludes by name only, and label exclusions belong in the policy file", path, cfg.Exclude.Labels[0].Label)
