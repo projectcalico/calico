@@ -69,9 +69,7 @@ func restConfig(conf types.NetConf) (*rest.Config, error) {
 	}
 
 	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
-	return winutils.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
-		configOverrides)
+	return winutils.NewNonInteractiveDeferredLoadingClientConfig(&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig}, configOverrides)
 }
 
 // New creates a Kubernetes clientset from the CNI network configuration's kubeconfig and
