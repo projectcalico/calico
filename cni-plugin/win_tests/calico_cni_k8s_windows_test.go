@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,10 +36,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/calico/cni-plugin/internal/pkg/k8sclient"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/windows"
-	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
@@ -175,7 +175,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			logger := log.WithFields(log.Fields{
 				"Namespace": testutils.HnsNoneNs,
 			})
-			clientset, err = k8s.NewK8sClient(conf, logger)
+			clientset, err = k8sclient.New(conf, logger)
 			if err != nil {
 				panic(err)
 			}
@@ -1090,7 +1090,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			logger := log.WithFields(log.Fields{
 				"Namespace": testutils.HnsNoneNs,
 			})
-			clientset, err = k8s.NewK8sClient(conf, logger)
+			clientset, err = k8sclient.New(conf, logger)
 			if err != nil {
 				panic(err)
 			}
@@ -1230,7 +1230,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			logger := log.WithFields(log.Fields{
 				"Namespace": testutils.HnsNoneNs,
 			})
-			clientset, err = k8s.NewK8sClient(conf, logger)
+			clientset, err = k8sclient.New(conf, logger)
 			if err != nil {
 				panic(err)
 			}
@@ -1372,7 +1372,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			logger := log.WithFields(log.Fields{
 				"Namespace": testutils.HnsNoneNs,
 			})
-			clientset, err = k8s.NewK8sClient(conf, logger)
+			clientset, err = k8sclient.New(conf, logger)
 			if err != nil {
 				panic(err)
 			}
@@ -1619,7 +1619,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				logger := log.WithFields(log.Fields{
 					"Namespace": testutils.HnsNoneNs,
 				})
-				clientset, err = k8s.NewK8sClient(conf, logger)
+				clientset, err = k8sclient.New(conf, logger)
 				if err != nil {
 					panic(err)
 				}
@@ -1751,7 +1751,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			logger := log.WithFields(log.Fields{
 				"Namespace": testutils.HnsNoneNs,
 			})
-			clientset, err = k8s.NewK8sClient(conf, logger)
+			clientset, err = k8sclient.New(conf, logger)
 			if err != nil {
 				panic(err)
 			}
@@ -1925,7 +1925,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			"Namespace": testutils.HnsNoneNs,
 		})
 
-		clientset, err = k8s.NewK8sClient(conf, logger)
+		clientset, err = k8sclient.New(conf, logger)
 		if err != nil {
 			panic(err)
 		}

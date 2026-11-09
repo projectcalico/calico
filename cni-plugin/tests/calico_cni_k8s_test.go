@@ -2196,6 +2196,71 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(victimIPs[0].String()).To(Equal(podIPv6))
 		})
 
+		It("keeps a moved address for a virt-launcher-named pod that is not a VM after a failed ADD and its DEL", func() {
+			// The name alone must not skip the keep rule: only a VM with address
+			// persistence uses a VM handle, and this pod has no VMI owner.
+			podName := "virt-launcher-" + testPodName
+			podIP := "10.123.0.63"
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: podName,
+					Annotations: map[string]string{
+						"cni.projectcalico.org/ipAddrs": fmt.Sprintf("[%q]", podIP),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{Name: podName, Image: "ignore"}},
+					NodeName:   testNodeName,
+				},
+			})
+			DeferCleanup(func() { ensurePodDeleted(clientset, testutils.K8S_TEST_NS, podName) })
+
+			const sandboxX, sandboxY = "container-id-virt-launcher-keep-x", "container-id-virt-launcher-keep-y"
+			_, _, _, contAddresses, _, contNs, err := testutils.CreateContainerWithId(netconf, podName, testutils.K8S_TEST_NS, "", sandboxX)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(contAddresses).To(HaveLen(1))
+			Expect(contAddresses[0].IP.String()).To(Equal(podIP))
+			DeferCleanup(func() {
+				_, err := testutils.DeleteContainerWithId(netconf, contNs.Path(), podName, testutils.K8S_TEST_NS, sandboxX)
+				Expect(err).NotTo(HaveOccurred())
+			})
+			sandboxYHandle := ipam.PodHandleID("calico-uts", sandboxY)
+			DeferCleanup(func() {
+				Expect(calicoClient.IPAM().ReleaseByHandle(ctx, sandboxYHandle)).To(Or(Succeed(), BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{})))
+			})
+
+			// Renaming the veth makes sandbox Y's networking fail after its address move.
+			realVeth := k8sconversion.NewConverter().VethNameForWorkload(testutils.K8S_TEST_NS, podName)
+			tweakedVeth := strings.Replace(realVeth, "cali", "sali", 1)
+			renameVeth(realVeth, tweakedVeth)
+			restored := false
+			restoreVeth := func() {
+				if !restored {
+					restored = true
+					renameVeth(tweakedVeth, realVeth)
+				}
+			}
+			DeferCleanup(restoreVeth)
+
+			_, _, _, _, err = testutils.RunCNIPluginWithId(netconf, podName, testutils.K8S_TEST_NS, "", sandboxY, "eth0", contNs)
+			Expect(err).To(HaveOccurred())
+
+			attrs, err := calicoClient.IPAM().GetAssignmentAttributes(ctx, cnet.IP{IP: net.ParseIP(podIP)})
+			Expect(err).NotTo(HaveOccurred(), "the failed ADD released the pod's address")
+			Expect(attrs.HandleID).NotTo(BeNil())
+			Expect(*attrs.HandleID).To(Equal(sandboxYHandle))
+
+			// The runtime deletes the failed sandbox.
+			restoreVeth()
+			exitCode, err := testutils.DeleteContainerWithId(netconf, contNs.Path(), podName, testutils.K8S_TEST_NS, sandboxY)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exitCode).To(Equal(0))
+
+			attrs, err = calicoClient.IPAM().GetAssignmentAttributes(ctx, cnet.IP{IP: net.ParseIP(podIP)})
+			Expect(err).NotTo(HaveOccurred(), "the sandbox DEL released the pod's address")
+			Expect(attrs.ActiveOwnerAttrs).To(HaveKeyWithValue(ipam.AttributePod, podName))
+		})
+
 		It("releases only this sandbox's unlisted addresses on a stale DEL", func() {
 			const victimIP, unlistedIP = "10.123.0.42", "10.123.0.62"
 			const sandboxX, sandboxY = "container-id-stale-del-x", "container-id-stale-del-y"

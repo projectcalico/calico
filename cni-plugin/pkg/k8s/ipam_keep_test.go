@@ -23,64 +23,58 @@ import (
 	"path/filepath"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/gofrs/flock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
-	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-// stubHandleIPAM is an ipam.Interface that serves a fixed IPsByHandle answer and records
-// what ReleaseIPs is asked to release. Other methods panic through the nil embedded interface.
-// Each call also records its context's error, whether that context has a deadline and, when
-// lockPath is set, whether that lock was free.
+// stubCalicoClient is a Calico client that serves a stub IPAM. Other methods panic through the
+// nil embedded interface.
+type stubCalicoClient struct {
+	calicoclient.Interface
+	ipam ipam.Interface
+}
+
+func (c stubCalicoClient) IPAM() ipam.Interface {
+	return c.ipam
+}
+
+// stubHandleIPAM is an ipam.Interface that serves a fixed IPsByHandle answer and records what
+// ReleaseIPs and ReleaseByHandle are asked to release, and each call's context error. Other
+// methods panic through the nil embedded interface.
 type stubHandleIPAM struct {
 	ipam.Interface
-	ips         []cnet.IP
-	ipsErr      error
-	releaseErr  error
-	released    []ipam.ReleaseOptions
-	lockPath    string
-	ctxErrs     []error
-	hasDeadline []bool
-	lockFree    []bool
+	ips             []cnet.IP
+	ipsErr          error
+	released        []ipam.ReleaseOptions
+	releasedHandles []string
+	ctxErrs         []error
 }
 
 func (s *stubHandleIPAM) IPsByHandle(ctx context.Context, _ string) ([]cnet.IP, error) {
-	s.observe(ctx)
+	s.ctxErrs = append(s.ctxErrs, ctx.Err())
 	return s.ips, s.ipsErr
 }
 
 func (s *stubHandleIPAM) ReleaseIPs(ctx context.Context, opts ...ipam.ReleaseOptions) ([]cnet.IP, []ipam.ReleaseOptions, error) {
-	s.observe(ctx)
-	s.released = append(s.released, opts...)
-	return nil, nil, s.releaseErr
-}
-
-func (s *stubHandleIPAM) observe(ctx context.Context) {
 	s.ctxErrs = append(s.ctxErrs, ctx.Err())
-	_, ok := ctx.Deadline()
-	s.hasDeadline = append(s.hasDeadline, ok)
-	if s.lockPath != "" {
-		s.lockFree = append(s.lockFree, lockIsFree(s.lockPath))
-	}
+	s.released = append(s.released, opts...)
+	return nil, nil, nil
 }
 
-// lockIsFree reports whether another holder could take the flock at path.
-func lockIsFree(path string) bool {
-	lock := flock.New(path)
-	locked, err := lock.TryLock()
-	Expect(err).NotTo(HaveOccurred())
-	if locked {
-		Expect(lock.Unlock()).To(Succeed())
-	}
-	return locked
+func (s *stubHandleIPAM) ReleaseByHandle(ctx context.Context, handleID string) error {
+	s.ctxErrs = append(s.ctxErrs, ctx.Err())
+	s.releasedHandles = append(s.releasedHandles, handleID)
+	return nil
 }
 
 func stubIPs(addrs ...string) []cnet.IP {
@@ -93,57 +87,67 @@ func stubIPs(addrs ...string) []cnet.IP {
 
 var (
 	errStubLookup  = errors.New("datastore down")
-	errStubRelease = errors.New("release failed")
 	errStubIPAMDel = errors.New("IPAM DEL failed")
 )
 
 // releaseCase is one releaseUnusedAddresses scenario: the sandbox's IPAM type and pod, the
-// pod's endpoint, how the handle lookup, ReleaseIPs and the IPAM plugin answer, and the
-// expected IPAM DEL, direct releases and error.
+// pod's endpoint, how the handle lookup and the IPAM plugin answer, and the expected IPAM DEL,
+// whole-handle releases, single-address releases and error.
 type releaseCase struct {
 	ipamType     string
 	pod          string
 	wep          *internalapi.WorkloadEndpoint
 	handleIPs    []string
 	ipsErr       error
-	releaseErr   error
 	delErr       error
 	wantIPAMDel  bool
+	wantHandles  bool
 	wantReleased []string
 	wantErr      error
 }
 
 var _ = Describe("releaseUnusedAddresses", func() {
-	const network, sandbox, otherSandbox = "k8s-pod-network", "sandbox-y", "sandbox-x"
+	const network, namespace, sandbox, otherSandbox = "k8s-pod-network", "ns", "sandbox-y", "sandbox-x"
 	handle := ipam.PodHandleID(network, sandbox)
 	logger := logrus.WithField("test", "releaseUnusedAddresses")
 
 	var fake *fakeIPAMExec
-	var lockPath string
 	BeforeEach(func() {
 		fake = &fakeIPAMExec{}
 		utils.IPAMExec = fake
 		DeferCleanup(func() { utils.IPAMExec = nil })
 		GinkgoT().Setenv("CNI_COMMAND", "ADD")
-		lockPath = filepath.Join(GinkgoT().TempDir(), "ipam.lock")
 	})
 
-	sandboxConf := func(ipamType string) (types.NetConf, *skel.CmdArgs) {
-		conf := types.NetConf{Name: network, IPAMLockFile: lockPath}
+	sandboxConf := func(ipamType, pod string) (types.NetConf, *skel.CmdArgs) {
+		conf := types.NetConf{Name: network, Nodename: "node1", IPAMLockFile: filepath.Join(GinkgoT().TempDir(), "ipam.lock")}
 		conf.IPAM.Type = ipamType
-		args := &skel.CmdArgs{ContainerID: sandbox, StdinData: fmt.Appendf(nil, `{"ipam":{"type":%q}}`, ipamType)}
+		args := &skel.CmdArgs{
+			ContainerID: sandbox,
+			IfName:      "eth0",
+			Args:        "K8S_POD_NAMESPACE=" + namespace + ";K8S_POD_NAME=" + pod,
+			StdinData:   fmt.Appendf(nil, `{"ipam":{"type":%q}}`, ipamType),
+		}
 		return conf, args
 	}
 
-	release := func(ctx context.Context, stub ipam.Interface, ipamType, pod string, wep *internalapi.WorkloadEndpoint) error {
-		conf, args := sandboxConf(ipamType)
-		return releaseUnusedAddresses(ctx, stub, conf, args, utils.WEPIdentifiers{Pod: pod}, wep, logger)
+	// podContext carries the pod the way the calico plugin passes it to calico-ipam, so a
+	// virt-launcher pod's VMI check reads it instead of calling the API server.
+	podContext := func(ctx context.Context, pod string) context.Context {
+		return utils.WithSandboxLookups(ctx, utils.SandboxLookups{
+			Pod: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: pod, Namespace: namespace}},
+		})
 	}
 
-	DescribeTable("chooses between the IPAM DEL and releasing only unlisted addresses",
+	release := func(ctx context.Context, stub ipam.Interface, ipamType, pod string, wep *internalapi.WorkloadEndpoint) error {
+		conf, args := sandboxConf(ipamType, pod)
+		return releaseUnusedAddresses(podContext(ctx, pod), stubCalicoClient{ipam: stub}, conf, args, wep, logger)
+	}
+
+	DescribeTable("decides what to keep and which release runs",
 		func(c releaseCase) {
 			fake.delErr = c.delErr
-			stub := &stubHandleIPAM{ips: stubIPs(c.handleIPs...), ipsErr: c.ipsErr, releaseErr: c.releaseErr}
+			stub := &stubHandleIPAM{ips: stubIPs(c.handleIPs...), ipsErr: c.ipsErr}
 
 			err := release(context.Background(), stub, c.ipamType, c.pod, c.wep)
 
@@ -154,9 +158,13 @@ var _ = Describe("releaseUnusedAddresses", func() {
 			}
 			if c.wantIPAMDel {
 				Expect(fake.callsFor("DEL")).To(HaveLen(1))
-				Expect(stub.ctxErrs).To(BeEmpty(), "the handle was read directly as well")
 			} else {
 				Expect(fake.calls).To(BeEmpty())
+			}
+			if c.wantHandles {
+				Expect(stub.releasedHandles).To(Equal([]string{handle, namespace + "." + c.pod}))
+			} else {
+				Expect(stub.releasedHandles).To(BeEmpty(), "released a whole handle")
 			}
 			var released []string
 			for _, opt := range stub.released {
@@ -166,59 +174,45 @@ var _ = Describe("releaseUnusedAddresses", func() {
 			Expect(released).To(ConsistOf(c.wantReleased))
 			Expect(os.Getenv("CNI_COMMAND")).To(Equal("ADD"))
 		},
-		Entry("no endpoint runs the IPAM DEL", releaseCase{
+		Entry("no endpoint releases the sandbox's handles whole", releaseCase{
 			ipamType: "calico-ipam", pod: "web-0", handleIPs: []string{"10.0.0.6"},
-			wantIPAMDel: true,
+			wantHandles: true,
 		}),
-		Entry("an endpoint naming this sandbox runs the IPAM DEL despite listing an address", releaseCase{
+		Entry("an endpoint naming this sandbox releases its handles whole despite listing an address", releaseCase{
 			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(sandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.5"},
-			wantIPAMDel: true,
+			wantHandles: true,
 		}),
-		Entry("an endpoint naming another sandbox but listing nothing runs the IPAM DEL", releaseCase{
+		Entry("an endpoint naming another sandbox but listing nothing releases its handles whole", releaseCase{
 			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox), handleIPs: []string{"10.0.0.6"},
-			wantIPAMDel: true,
+			wantHandles: true,
 		}),
-		Entry("another IPAM type runs the IPAM DEL despite an address to keep", releaseCase{
-			ipamType: "host-local", pod: "web-0", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.5"},
-			wantIPAMDel: true,
-		}),
-		Entry("a virt-launcher pod runs the IPAM DEL despite an address to keep", releaseCase{
-			ipamType: "calico-ipam", pod: "virt-launcher-vm1-abcde", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.5"},
-			wantIPAMDel: true,
-		}),
-		Entry("an endpoint naming another sandbox releases only unlisted addresses, without the IPAM DEL", releaseCase{
-			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.5", "10.0.0.6", "fd00::6"},
-			wantReleased: []string{"10.0.0.6", "fd00::6"},
+		Entry("an endpoint naming another sandbox releases only unlisted addresses", releaseCase{
+			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.5", "10.0.0.6"},
+			wantReleased: []string{"10.0.0.6"},
 		}),
 		Entry("an endpoint naming no sandbox keeps its addresses like one naming another sandbox", releaseCase{
 			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox("", "10.0.0.5/32"), handleIPs: []string{"10.0.0.5", "10.0.0.6"},
 			wantReleased: []string{"10.0.0.6"},
 		}),
-		Entry("a kept IPv6 address stays and the other is released", releaseCase{
-			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox, "fd00::5/128"), handleIPs: []string{"fd00::5", "fd00::6"},
-			wantReleased: []string{"fd00::6"},
+		Entry("a virt-launcher pod that is not a VM keeps the endpoint's addresses like any pod", releaseCase{
+			ipamType: "calico-ipam", pod: "virt-launcher-vm1-abcde", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.5", "10.0.0.6"},
+			wantReleased: []string{"10.0.0.6"},
 		}),
-		Entry("a handle holding only kept addresses releases nothing", releaseCase{
-			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.5"},
-		}),
-		Entry("a missing handle is nothing to release, without the IPAM DEL", releaseCase{
-			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), ipsErr: cerrors.ErrorResourceDoesNotExist{},
-		}),
-		Entry("another handle lookup error is returned, without the IPAM DEL", releaseCase{
+		Entry("a calico-ipam release error is returned", releaseCase{
 			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), ipsErr: errStubLookup,
 			wantErr: errStubLookup,
 		}),
-		Entry("a ReleaseIPs error is returned", releaseCase{
-			ipamType: "calico-ipam", pod: "web-0", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.6"}, releaseErr: errStubRelease,
-			wantReleased: []string{"10.0.0.6"}, wantErr: errStubRelease,
+		Entry("another IPAM type runs its plugin's DEL despite an address to keep", releaseCase{
+			ipamType: "host-local", pod: "web-0", wep: wepOnSandbox(otherSandbox, "10.0.0.5/32"), handleIPs: []string{"10.0.0.5"},
+			wantIPAMDel: true,
 		}),
-		Entry("an IPAM DEL error is returned", releaseCase{
-			ipamType: "calico-ipam", pod: "web-0", delErr: errStubIPAMDel,
+		Entry("another IPAM type's DEL error is returned", releaseCase{
+			ipamType: "host-local", pod: "web-0", delErr: errStubIPAMDel,
 			wantIPAMDel: true, wantErr: errStubIPAMDel,
 		}),
 	)
 
-	It("still looks up and releases after the caller's context is canceled, within a timeout", func() {
+	It("still looks up and releases after the caller's context is canceled", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.5", "10.0.0.6")}
@@ -228,30 +222,20 @@ var _ = Describe("releaseUnusedAddresses", func() {
 		Expect(stub.released).To(Equal([]ipam.ReleaseOptions{{Address: "10.0.0.6", Handle: handle}}))
 		Expect(stub.ctxErrs).To(HaveLen(2))
 		Expect(stub.ctxErrs).To(HaveEach(BeNil()))
-		Expect(stub.hasDeadline).To(Equal([]bool{true, true}))
-	})
-
-	It("holds the host IPAM lock while it looks up and releases, and frees it after", func() {
-		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.6"), lockPath: lockPath}
-
-		Expect(release(context.Background(), stub, "calico-ipam", "web-0", wepOnSandbox(otherSandbox, "10.0.0.5/32"))).To(Succeed())
-
-		Expect(stub.lockFree).To(Equal([]bool{false, false}))
-		Expect(lockIsFree(lockPath)).To(BeTrue())
 	})
 
 	It("judges a failed ADD by the endpoint as the ADD found it, not as the ADD rewrote it", func() {
 		stub := &stubHandleIPAM{ips: stubIPs("10.0.0.5", "10.0.0.6")}
-		conf, args := sandboxConf("calico-ipam")
+		conf, args := sandboxConf("calico-ipam", "web-0")
 		endpoint := wepOnSandbox(otherSandbox, "10.0.0.5/32")
-		cleanup := failedAddCleanup(context.Background(), stub, conf, args, utils.WEPIdentifiers{Pod: "web-0"}, endpoint, logger)
+		cleanup := failedAddCleanup(context.Background(), stubCalicoClient{ipam: stub}, conf, args, endpoint, logger)
 
 		// The ADD rewrites the endpoint like this before a later step can fail.
 		endpoint.Spec.ContainerID = sandbox
 		endpoint.Spec.IPNetworks = []string{"10.0.0.6/32"}
 		cleanup()
 
-		Expect(fake.calls).To(BeEmpty(), "the IPAM DEL would release the pod's address")
+		Expect(stub.releasedHandles).To(BeEmpty(), "a whole-handle release frees the pod's address")
 		Expect(stub.released).To(Equal([]ipam.ReleaseOptions{{Address: "10.0.0.6", Handle: handle}}))
 	})
 })

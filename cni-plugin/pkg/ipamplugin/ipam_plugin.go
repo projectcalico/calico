@@ -24,6 +24,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -38,8 +39,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/calico/cni-plugin/internal/pkg/k8sclient"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
-	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/cni-plugin/pkg/upgrade"
 	"github.com/projectcalico/calico/lib/logrusr"
@@ -655,7 +656,7 @@ func k8sClientFor(ctx context.Context, conf types.NetConf, logger *logrus.Entry)
 	if lookups := utils.SandboxLookupsFrom(ctx); lookups.K8sClient != nil {
 		return lookups.K8sClient, nil
 	}
-	return k8s.NewK8sClient(conf, logger)
+	return k8sclient.New(conf, logger)
 }
 
 // errPodNotFound is returned by getVMIInfoForPod when the pod has been deleted
@@ -694,7 +695,7 @@ func getVMIInfoForPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPI
 	}
 
 	// Create KubeVirt client for VMI verification
-	virtClient, err := k8s.NewKubeVirtClient(conf, logger)
+	virtClient, err := k8sclient.NewKubeVirt(conf, logger)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create KubeVirt client for VMI detection")
 		return nil, err
@@ -740,7 +741,15 @@ func del(ctx context.Context, args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
+	return ReleaseSandbox(ctx, calicoClient, conf, args, nil)
+}
 
+// ReleaseSandbox is calico-ipam's DEL release for the sandbox args describes, for callers that
+// must keep some of its addresses. With no keepAddresses it releases the sandbox's handle and
+// the v2.x workload ID handle, as DEL does. Otherwise it releases only the sandbox handle's
+// addresses not in keepAddresses. A KubeVirt pod with VM address persistence ignores
+// keepAddresses, since its VM handle is shared across the VM's pods and released by owner.
+func ReleaseSandbox(ctx context.Context, calicoClient client.Interface, conf types.NetConf, args *skel.CmdArgs, keepAddresses []net.IP) error {
 	nodename := utils.DetermineNodename(conf)
 
 	// Release the IP address by using the handle - which is workloadID.
@@ -800,15 +809,46 @@ func del(ctx context.Context, args *skel.CmdArgs) error {
 
 	logger = logger.WithField("HandleID", handleID)
 
-	logger.Info("Releasing address using handleID")
-
 	// Acquire a best-effort host-wide lock to prevent multiple copies of the CNI plugin trying to assign/delete
 	// concurrently. ReleaseXXX is concurrency safe already but serialising the CNI plugins means that
 	// we only attempt one IPAM update at a time.  This reduces the load on the API server by a factor of the
 	// number of concurrent requests with essentially no downside.
+	if ipPersistenceEnabledForVM || len(keepAddresses) == 0 {
+		logger.Info("Releasing address using handleID")
+		return utils.WithIPAMLock(ctx, conf.IPAMLockFile, func(ctx context.Context) error {
+			return releaseHandle(ctx, calicoClient, handleID, epIDs, vmiInfo, ipPersistenceEnabledForVM, logger)
+		})
+	}
+	logger.WithField("keep", keepAddresses).Info("Releasing the handle's addresses other than those to keep")
 	return utils.WithIPAMLock(ctx, conf.IPAMLockFile, func(ctx context.Context) error {
-		return releaseHandle(ctx, calicoClient, handleID, epIDs, vmiInfo, ipPersistenceEnabledForVM, logger)
+		return releaseUnlisted(ctx, calicoClient.IPAM(), handleID, keepAddresses, logger)
 	})
+}
+
+// releaseUnlisted releases each address on handleID that is not in keepAddresses, never the
+// whole handle. A handle that doesn't exist has nothing to release. Its caller runs it under
+// the host-wide IPAM lock.
+func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID string, keepAddresses []net.IP, logger *logrus.Entry) error {
+	ips, err := ipamClient.IPsByHandle(ctx, handleID)
+	if err != nil {
+		if errors.As(err, &cerrors.ErrorResourceDoesNotExist{}) {
+			return nil
+		}
+		return fmt.Errorf("listing addresses on handle %s: %w", handleID, err)
+	}
+
+	var errs []error
+	for _, ip := range ips {
+		if slices.ContainsFunc(keepAddresses, ip.Equal) {
+			logger.WithField("ip", ip).Info("Keeping address the endpoint lists")
+			continue
+		}
+		logger.WithField("ip", ip).Info("Releasing address the endpoint does not list")
+		if _, _, err := ipamClient.ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ip.String(), Handle: handleID}); err != nil {
+			errs = append(errs, fmt.Errorf("releasing %s: %w", ip, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // releaseHandle frees the addresses a sandbox holds on handleID, plus any held under the

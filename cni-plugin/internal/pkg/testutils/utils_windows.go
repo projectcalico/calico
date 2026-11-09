@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,8 +37,8 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/cni-plugin/internal/pkg/k8sclient"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/windows"
-	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	plugintypes "github.com/projectcalico/calico/cni-plugin/pkg/types"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
@@ -54,7 +54,7 @@ func WipeK8sPods(netconf string) {
 	logger := log.WithFields(log.Fields{
 		"Namespace": HnsNoneNs,
 	})
-	clientset, err := k8s.NewK8sClient(conf, logger)
+	clientset, err := k8sclient.New(conf, logger)
 	if err != nil {
 		panic(err)
 	}

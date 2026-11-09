@@ -34,9 +34,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/projectcalico/calico/cni-plugin/internal/pkg/k8sclient"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/cri"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
@@ -50,7 +49,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
 // CmdAddK8s performs the "ADD" operation on a kubernetes pod
@@ -83,7 +81,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 	// Allocate the IP and update/create the endpoint. Do this even if the endpoint already exists and has an IP
 	// allocation. The kubelet will send a DEL call for any old containers and we'll clean up the old IPs then.
-	client, err := NewK8sClient(conf, logger)
+	client, err := k8sclient.New(conf, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +388,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		logger.Debugf("IPAM result set to: %+v", result)
 	}
 
-	releaseIPAM := failedAddCleanup(ctx, calicoClient.IPAM(), conf, args, epIDs, endpoint, logger)
+	releaseIPAM := failedAddCleanup(ctx, calicoClient, conf, args, endpoint, logger)
 
 	// Configure the endpoint (creating if required).
 	if endpoint == nil {
@@ -670,7 +668,7 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 	}
 
 	logger.Info("Releasing IP address(es)")
-	if err := releaseUnusedAddresses(ctx, c.IPAM(), conf, args, epIDs, wep, logger); err != nil {
+	if err := releaseUnusedAddresses(ctx, c, conf, args, wep, logger); err != nil {
 		return err
 	}
 
@@ -1027,73 +1025,6 @@ func parseIPAddrs(ipAddrsStr string, logger *logrus.Entry) ([]string, error) {
 	logger.Debugf("IPs parsed: %v", ips)
 
 	return ips, nil
-}
-
-// getK8sRestConfig creates a Kubernetes REST config from the CNI network configuration.
-// This helper function builds the config with kubeconfig file and overrides from the network config.
-func getK8sRestConfig(conf types.NetConf) (*rest.Config, error) {
-	// Some config can be passed in a kubeconfig file
-	kubeconfig := conf.Kubernetes.Kubeconfig
-
-	// Config can be overridden by config passed in explicitly in the network config.
-	configOverrides := &clientcmd.ConfigOverrides{}
-
-	// If an API root is given, make sure we're using the name / port rather than
-	// the full URL. Earlier versions of the config required the full `/api/v1/` extension,
-	// so split that off to ensure compatibility.
-	conf.Policy.K8sAPIRoot = strings.Split(conf.Policy.K8sAPIRoot, "/api/")[0]
-
-	overridesMap := []struct {
-		variable *string
-		value    string
-	}{
-		{&configOverrides.ClusterInfo.Server, conf.Policy.K8sAPIRoot},
-		{&configOverrides.AuthInfo.ClientCertificate, conf.Policy.K8sClientCertificate},
-		{&configOverrides.AuthInfo.ClientKey, conf.Policy.K8sClientKey},
-		{&configOverrides.ClusterInfo.CertificateAuthority, conf.Policy.K8sCertificateAuthority},
-		{&configOverrides.AuthInfo.Token, conf.Policy.K8sAuthToken},
-	}
-
-	// Using the override map above, populate any non-empty values.
-	for _, override := range overridesMap {
-		if override.value != "" {
-			*override.variable = override.value
-		}
-	}
-
-	// Also allow the K8sAPIRoot to appear under the "kubernetes" block in the network config.
-	if conf.Kubernetes.K8sAPIRoot != "" {
-		configOverrides.ClusterInfo.Server = conf.Kubernetes.K8sAPIRoot
-	}
-
-	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
-	return winutils.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
-		configOverrides)
-}
-
-func NewK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clientset, error) {
-	// Get the Kubernetes REST config
-	config, err := getK8sRestConfig(conf)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create the clientset
-	return kubernetes.NewForConfig(config)
-}
-
-// NewKubeVirtClient creates a KubeVirt client from the CNI network configuration.
-// Note: This will return an error if KubeVirt is not installed in the cluster.
-func NewKubeVirtClient(conf types.NetConf, logger *logrus.Entry) (kubevirt.VirtClientInterface, error) {
-	// Get the Kubernetes REST config
-	config, err := getK8sRestConfig(conf)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create KubeVirt client
-	return kubevirt.NewVirtClient(config)
 }
 
 func getK8sNamespace(ctx context.Context, client *kubernetes.Clientset, podNamespace string) (*corev1.Namespace, error) {
