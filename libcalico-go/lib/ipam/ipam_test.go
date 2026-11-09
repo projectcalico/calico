@@ -754,7 +754,15 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// silently drawing from a pool not sanctioned for that use.
 			err := assign("10.0.0.1", v3.IPPoolAllowedUseTunnel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("not allowed for use"))
+			Expect(err.Error()).To(ContainSubstring("which is not allowed for use"))
+			Expect(errors.Is(err, ErrUseNotAllowed)).To(BeTrue())
+			Expect(errors.Is(err, ErrNotInPool)).To(BeFalse())
+		})
+
+		It("should report an IP outside every pool with ErrNotInPool, not ErrUseNotAllowed", func() {
+			err := assign("30.0.0.1", v3.IPPoolAllowedUseWorkload)
+			Expect(errors.Is(err, ErrNotInPool)).To(BeTrue())
+			Expect(errors.Is(err, ErrUseNotAllowed)).To(BeFalse())
 		})
 
 		It("should allow an IP whose pool permits the intended use", func() {
@@ -4747,7 +4755,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		Entry("Assign 1 IPv6 from a configured pool", net.ParseIP("fd80:24e2:f998:72d6::"), "test-host", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, nil),
 
 		// Test 3: Assign 1 IPv4 from a non-configured pool - expect an error returned.
-		Entry("Assign 1 IPv4 from a non-configured pool", net.ParseIP("1.1.1.1"), "test-host", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, errors.New("The provided IP address is not in a configured pool\n")),
+		Entry("Assign 1 IPv4 from a non-configured pool", net.ParseIP("1.1.1.1"), "test-host", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, ErrNotInPool),
 
 		// Test 4: Assign 1 IPv4 from a configured pool twice:
 		// - Expect no error returned while assigning the IP for the first time.
