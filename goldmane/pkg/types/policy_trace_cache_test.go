@@ -22,6 +22,7 @@ import (
 	"unique"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protowire"
 	googleproto "google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
@@ -353,8 +354,8 @@ func TestFlowIntoProtoUncachedSkipsCache(t *testing.T) {
 }
 
 // TestFlowIntoProtoOverwritesEveryField converts into a message with every field already set,
-// as a reused message is. Any field FlowIntoProto forgets to assign keeps its stale value and
-// fails the comparison with a fresh conversion.
+// as a reused message is, plus unknown fields that no assignment can clear. Anything the previous
+// flow left behind fails the comparison with a fresh conversion.
 func TestFlowIntoProtoOverwritesEveryField(t *testing.T) {
 	full := &proto.Flow{
 		Key: &proto.FlowKey{
@@ -398,12 +399,48 @@ func TestFlowIntoProtoOverwritesEveryField(t *testing.T) {
 			fillMessage(stale.ProtoReflect(), 2)
 			requireAllFieldsSet(t, stale.ProtoReflect())
 			requireAllFieldsSet(t, stale.Key.ProtoReflect())
+			stale.ProtoReflect().SetUnknown(staleUnknownField())
+			stale.Key.ProtoReflect().SetUnknown(staleUnknownField())
 
 			types.FlowIntoProto(f, stale)
 			want := types.FlowToProto(f)
 			require.True(t, googleproto.Equal(want, stale), "reused message differs from a fresh conversion:\nwant %v\ngot  %v", want, stale)
 		})
 	}
+}
+
+// staleUnknownField encodes a field number the schema doesn't define, as a message parsed from a
+// newer sender would carry.
+func staleUnknownField() protoreflect.RawFields {
+	b := protowire.AppendTag(nil, 999, protowire.VarintType)
+	return protowire.AppendVarint(b, 1)
+}
+
+// TestFlowIntoProtoReusesLabelBuffers alternates labeled and unlabeled flows through one message
+// and checks the label slices are never reallocated.
+func TestFlowIntoProtoReusesLabelBuffers(t *testing.T) {
+	labeled := types.ProtoToFlow(&proto.Flow{
+		Key:          &proto.FlowKey{SourceName: "client", Policies: cacheTestTrace("labels")},
+		SourceLabels: []string{"a=1", "b=2", "c=3"},
+		DestLabels:   []string{"d=4", "e=5"},
+	})
+	unlabeled := types.ProtoToFlow(&proto.Flow{
+		Key: &proto.FlowKey{SourceName: "client", Policies: cacheTestTrace("labels")},
+	})
+
+	pf := &proto.Flow{}
+	types.FlowIntoProto(labeled, pf)
+	types.FlowIntoProto(unlabeled, pf)
+	require.Empty(t, pf.SourceLabels)
+	require.Empty(t, pf.DestLabels)
+
+	allocs := testing.AllocsPerRun(100, func() {
+		types.FlowIntoProto(unlabeled, pf)
+		types.FlowIntoProto(labeled, pf)
+	})
+	require.Zero(t, allocs, "an unlabeled flow dropped the reusable label slices")
+	require.Equal(t, []string{"a=1", "b=2", "c=3"}, pf.SourceLabels)
+	require.Equal(t, []string{"d=4", "e=5"}, pf.DestLabels)
 }
 
 // flowIntoProtoCase is a flow to convert into a reused message that starts fully populated.

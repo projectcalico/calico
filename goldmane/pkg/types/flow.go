@@ -272,16 +272,22 @@ func flowIntoProto(f *Flow, pf *proto.Flow, decode func(unique.Handle[string]) *
 	if pf == nil {
 		logrus.Panic("FlowIntoProto called with nil proto")
 	}
-	if pf.Key == nil {
-		pf.Key = &proto.FlowKey{}
-	}
 
-	// Every field is assigned rather than reset, so the key and label slices are reused.
+	// Reset so no field carries over from the previous flow, but keep the key and label buffers.
+	key, srcLabels, dstLabels := pf.Key, pf.SourceLabels[:0], pf.DestLabels[:0]
+	goproto.Reset(pf)
+	if key == nil {
+		key = &proto.FlowKey{}
+	} else {
+		goproto.Reset(key)
+	}
+	pf.Key = key
+
 	flowKeyIntoProto(f.Key, pf.Key, decode)
 	pf.StartTime = f.StartTime
 	pf.EndTime = f.EndTime
-	pf.SourceLabels = splitHandleInto(pf.SourceLabels[:0], f.SourceLabels)
-	pf.DestLabels = splitHandleInto(pf.DestLabels[:0], f.DestLabels)
+	pf.SourceLabels = splitHandleInto(srcLabels, f.SourceLabels)
+	pf.DestLabels = splitHandleInto(dstLabels, f.DestLabels)
 	pf.SourceIps = f.SourceIps
 	pf.DestIps = f.DestIps
 	pf.PacketsIn = f.PacketsIn
@@ -318,12 +324,12 @@ func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey, decode func(unique.Handle[
 	pfk.Policies = decode(k.Policies())
 }
 
-// splitHandleInto appends the comma-separated elements of h to dst, or returns nil when h is
-// empty, matching fromHandles.
+// splitHandleInto appends the comma-separated elements of h to dst. An empty h returns dst
+// unchanged, so a reused buffer survives flows without labels.
 func splitHandleInto(dst []string, h unique.Handle[string]) []string {
 	v := h.Value()
 	if v == "" {
-		return nil
+		return dst
 	}
 	for {
 		i := strings.IndexByte(v, ',')
