@@ -70,9 +70,9 @@ func failedAddCleanup(
 }
 
 // releaseUnusedAddresses frees this sandbox's IPAM allocations but keeps the addresses wep
-// lists when wep names another sandbox, since the endpoint still lists them. An empty container
-// ID counts as another sandbox. For calico-ipam it runs calico-ipam's release in this process
-// with that keep set, finishing even if ctx is canceled. Any other IPAM type gets its plugin's DEL.
+// lists when wep names another sandbox or none, since the endpoint still lists them. For
+// calico-ipam it runs calico-ipam's release in this process with that keep set, finishing even
+// if ctx is canceled. Any other IPAM type gets its plugin's DEL.
 func releaseUnusedAddresses(
 	ctx context.Context,
 	calicoClient calicoclient.Interface,
@@ -85,6 +85,10 @@ func releaseUnusedAddresses(
 		return utils.ReleaseIPAllocation(ctx, logger, conf, args)
 	}
 	var keepAddresses []net.IP
+
+	// An empty container ID is an unknown sandbox, which keeps its addresses: freeing a live
+	// address is worse than IPAM GC freeing it later. CmdDelK8s's endpoint delete deliberately
+	// treats it as this sandbox instead.
 	if wep != nil && wep.Spec.ContainerID != args.ContainerID {
 		keepAddresses = addressesFromEndpoint(wep, logger)
 	}
