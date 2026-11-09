@@ -800,12 +800,19 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 		}
 		return dsa
 	case *admissionregv1.MutatingWebhookConfiguration:
-		dw, dok := desired.(*admissionregv1.MutatingWebhookConfiguration)
-		cw, cok := current.(*admissionregv1.MutatingWebhookConfiguration)
-		if dok && cok {
-			preserveWebhookCABundles(dw, cw)
-		}
-		return desired
+		dw := desired.(*admissionregv1.MutatingWebhookConfiguration)
+		cw := current.(*admissionregv1.MutatingWebhookConfiguration)
+		preserveWebhookServerPatches(dw.Webhooks, cw.Webhooks, func(w *admissionregv1.MutatingWebhook) (string, *admissionregv1.WebhookClientConfig, **admissionregv1.FailurePolicyType) {
+			return w.Name, &w.ClientConfig, &w.FailurePolicy
+		})
+		return dw
+	case *admissionregv1.ValidatingWebhookConfiguration:
+		dw := desired.(*admissionregv1.ValidatingWebhookConfiguration)
+		cw := current.(*admissionregv1.ValidatingWebhookConfiguration)
+		preserveWebhookServerPatches(dw.Webhooks, cw.Webhooks, func(w *admissionregv1.ValidatingWebhook) (string, *admissionregv1.WebhookClientConfig, **admissionregv1.FailurePolicyType) {
+			return w.Name, &w.ClientConfig, &w.FailurePolicy
+		})
+		return dw
 	case *v3.NetworkPolicy:
 		cnp := current.(*v3.NetworkPolicy)
 		dnp := desired.(*v3.NetworkPolicy)
@@ -833,18 +840,32 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 	}
 }
 
-// preserveWebhookCABundles copies each webhook's caBundle from the cluster when the operator
-// renders that webhook without one. Another controller, such as the Envoy Gateway certgen Job,
-// owns the bundle in that case, and a full Update without it would clear the field until that
-// controller writes it again.
-func preserveWebhookCABundles(desired, current *admissionregv1.MutatingWebhookConfiguration) {
-	bundles := map[string][]byte{}
-	for _, w := range current.Webhooks {
-		bundles[w.Name] = w.ClientConfig.CABundle
+// preserveWebhookServerPatches keeps what a webhook server patched in when the
+// operator renders a webhook without a caBundle. In that case another
+// controller owns the bundle, such as istiod or the Envoy Gateway certgen Job,
+// and a full Update without it would clear the field until that controller
+// writes it again. istiod also raises failurePolicy from Ignore to Fail once it
+// serves the webhook, so writing the rendered Ignore back would turn
+// validation off.
+func preserveWebhookServerPatches[W any](desired, current []W, fields func(*W) (string, *admissionregv1.WebhookClientConfig, **admissionregv1.FailurePolicyType)) {
+	live := make(map[string]*W, len(current))
+	for i := range current {
+		name, _, _ := fields(&current[i])
+		live[name] = &current[i]
 	}
-	for i := range desired.Webhooks {
-		if len(desired.Webhooks[i].ClientConfig.CABundle) == 0 {
-			desired.Webhooks[i].ClientConfig.CABundle = bundles[desired.Webhooks[i].Name]
+	for i := range desired {
+		name, dc, dp := fields(&desired[i])
+		c, ok := live[name]
+		if !ok {
+			continue
+		}
+		_, cc, cp := fields(c)
+		if len(dc.CABundle) != 0 || len(cc.CABundle) == 0 {
+			continue
+		}
+		dc.CABundle = cc.CABundle
+		if *dp != nil && **dp == admissionregv1.Ignore && *cp != nil && **cp == admissionregv1.Fail {
+			*dp = *cp
 		}
 	}
 }

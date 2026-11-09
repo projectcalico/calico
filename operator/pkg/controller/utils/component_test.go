@@ -1999,6 +1999,46 @@ var _ = Describe("Component handler tests", func() {
 			Expect(webhooks[0].ClientConfig.CABundle).To(Equal([]byte("operator-ca")))
 		})
 	})
+	Context("validating webhook updates", func() {
+		webhook := func(name string, caBundle string, policy admissionregv1.FailurePolicyType) admissionregv1.ValidatingWebhook {
+			w := admissionregv1.ValidatingWebhook{Name: name, FailurePolicy: ptr.To(policy)}
+			if caBundle != "" {
+				w.ClientConfig.CABundle = []byte(caBundle)
+			}
+			return w
+		}
+
+		It("keeps the caBundle and failurePolicy a webhook server patched in", func() {
+			live := &admissionregv1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "validator"},
+				Webhooks: []admissionregv1.ValidatingWebhook{
+					webhook("patched", "live-ca", admissionregv1.Fail),
+					webhook("owned", "rendered-ca", admissionregv1.Ignore),
+					webhook("unpatched", "", admissionregv1.Ignore),
+				},
+			}
+			Expect(c.Create(ctx, live)).NotTo(HaveOccurred())
+
+			desired := &admissionregv1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "validator"},
+				Webhooks: []admissionregv1.ValidatingWebhook{
+					webhook("patched", "", admissionregv1.Ignore),
+					webhook("owned", "new-rendered-ca", admissionregv1.Fail),
+					webhook("unpatched", "", admissionregv1.Ignore),
+				},
+			}
+			fc := &fakeComponent{supportedOSType: rmeta.OSTypeLinux, objs: []client.Object{desired}}
+			Expect(handler.CreateOrUpdateOrDelete(ctx, fc, sm)).NotTo(HaveOccurred())
+
+			got := &admissionregv1.ValidatingWebhookConfiguration{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: "validator"}, got)).NotTo(HaveOccurred())
+			Expect(got.Webhooks).To(Equal([]admissionregv1.ValidatingWebhook{
+				webhook("patched", "live-ca", admissionregv1.Fail),
+				webhook("owned", "new-rendered-ca", admissionregv1.Fail),
+				webhook("unpatched", "", admissionregv1.Ignore),
+			}))
+		})
+	})
 	Context("volumes and volume mounts", func() {
 		It("orders by name alphabetically", func() {
 			fc := &fakeComponent{
