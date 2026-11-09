@@ -899,10 +899,8 @@ func callIPAMWithIP(ctx context.Context, ip net.IP, conf types.NetConf, args *sk
 	// Restore the CNI_ARGS ENV var to it's original value,
 	// so the subsequent calls don't get polluted by the old IP value.
 	if err := os.Setenv("CNI_ARGS", originalArgs); err != nil {
-		// Need to clean up IP allocation if this step doesn't succeed.
-		if err := utils.ReleaseIPAllocation(ctx, logger, conf, args); err != nil {
-			logger.WithError(err).Warning("Failed to clean up IP allocations for failed ADD")
-		}
+		// Releasing here could free an address the endpoint lists. The DEL for this failed
+		// ADD releases with that check instead.
 		logger.Errorf("Error setting CNI_ARGS environment variable: %v", err)
 		return nil, err
 	}
