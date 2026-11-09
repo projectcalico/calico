@@ -18,6 +18,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -562,8 +563,9 @@ func TestUpdateBundle(t *testing.T) {
 		operatorDir:       operatorDir,
 		version:           "3.34.0",
 		prevVersion:       "3.33.0",
+		channel:           "release-v3.34",
 		capabilities:      "Basic Install",
-		openShiftVersions: "v4.19-v4.22",
+		openShiftVersions: "v4.22,v5.0",
 	}, image{
 		digest:        "quay.io/tigera/operator@sha256:bbb",
 		created:       "2026-01-02T03:04:05Z",
@@ -575,8 +577,88 @@ func TestUpdateBundle(t *testing.T) {
 
 	versionDir := filepath.Join(operatorDir, bundleDir, "3.34.0")
 	assertContains(t, readFile(t, filepath.Join(versionDir, "manifests", csvName)), "replaces: tigera-operator.v3.33.0")
-	assertContains(t, readFile(t, filepath.Join(versionDir, "metadata", "annotations.yaml")), "com.redhat.openshift.versions: v4.19-v4.22")
+	assertContains(t, readFile(t, filepath.Join(versionDir, "metadata", "annotations.yaml")), "com.redhat.openshift.versions: v4.22,v5.0")
 	assertContains(t, readFile(t, filepath.Join(operatorDir, bundleDir, "bundle-v3.34.0.Dockerfile")), "COPY 3.34.0/manifests /manifests/")
+	assertContains(t, readFile(t, filepath.Join(versionDir, releaseConfigName)), "template_name: v5.0.yaml")
+}
+
+// TestUpdateBundleRejectsRange checks that a range is refused before the
+// generated bundle is touched, rather than after it has been half rearranged.
+func TestUpdateBundleRejectsRange(t *testing.T) {
+	t.Parallel()
+
+	operatorDir := t.TempDir()
+	generated := filepath.Join(operatorDir, bundleDir, "manifests")
+	if err := os.MkdirAll(generated, 0o755); err != nil {
+		t.Fatalf("creating %s: %v", generated, err)
+	}
+
+	err := updateBundle(bundleConfig{
+		operatorDir:       operatorDir,
+		version:           "3.34.0",
+		prevVersion:       "3.33.0",
+		channel:           "release-v3.34",
+		capabilities:      "Basic Install",
+		openShiftVersions: "v4.19-v4.22",
+	}, image{})
+	if err == nil {
+		t.Fatal("updateBundle accepted a range, want an error")
+	}
+	if _, err := os.Stat(generated); err != nil {
+		t.Errorf("generated bundle was moved: %v", err)
+	}
+}
+
+func TestParseOpenShiftVersions(t *testing.T) {
+	t.Parallel()
+
+	got, err := parseOpenShiftVersions("v4.20, v4.21,v5.0")
+	if err != nil {
+		t.Fatalf("parseOpenShiftVersions: %v", err)
+	}
+	if want := []string{"v4.20", "v4.21", "v5.0"}; !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+
+	for _, value := range []string{
+		"",
+		"v4.20",             // means v4.20 and later
+		"v4.19-v4.22",       // a range
+		"v4.20,v4.19-v4.22", // a range in a list
+		"4.20,4.21",         // no v
+		"v4.20,,v4.21",      // an empty entry
+		"v4.20,v4.20",       // a duplicate
+		"v4.20,v4.21.1",     // a patch version
+		"v4.20,../v4.21",    // a path
+	} {
+		if _, err := parseOpenShiftVersions(value); err == nil {
+			t.Errorf("%q was accepted, want an error", value)
+		}
+	}
+}
+
+func TestWriteReleaseConfig(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), releaseConfigName)
+	if err := writeReleaseConfig(path, "3.34.0", "release-v3.34", []string{"v4.22", "v5.0"}); err != nil {
+		t.Fatalf("writeReleaseConfig: %v", err)
+	}
+
+	const want = `---
+catalog_templates:
+  - template_name: v4.22.yaml
+    channels: [release-v3.34]
+    defaultChannel: release-v3.34
+    skipRange: "<3.34.0"
+  - template_name: v5.0.yaml
+    channels: [release-v3.34]
+    defaultChannel: release-v3.34
+    skipRange: "<3.34.0"
+`
+	if got := readFile(t, path); got != want {
+		t.Errorf("release config is\n%s\nwant\n%s", got, want)
+	}
 }
 
 func encode(content string) string {
