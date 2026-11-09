@@ -210,6 +210,18 @@ func (repo *Repo) RecursiveAddDebsFromDirectories(searchPaths []string) error {
 
 	for suite, filesList := range debsBySuite {
 		for _, filename := range filesList {
+			// Packages whose version didn't change since a previous release (e.g. fluent-bit)
+			// get rebuilt with different contents; reprepro refuses to replace the existing
+			// file, so keep the already-published package instead.
+			published, err := repo.isPublished(suite, filename)
+			if err != nil {
+				publishingErrors = append(publishingErrors, err)
+				continue
+			}
+			if published {
+				logrus.WithField("suite", suite).Warnf("Package version from %s is already published, skipping", filename)
+				continue
+			}
 			if err := repo.IncludeDeb(suite, filename); err != nil {
 				publishingErrors = append(publishingErrors, err)
 			}
@@ -219,6 +231,20 @@ func (repo *Repo) RecursiveAddDebsFromDirectories(searchPaths []string) error {
 		return fmt.Errorf("encountered errors publishing Apt repository: %w", err)
 	}
 	return nil
+}
+
+// isPublished checks whether the package name, version and architecture of debFile
+// are already present in the specified component of the repo
+func (repo *Repo) isPublished(component, debFile string) (bool, error) {
+	info, err := getPackageInfoFromDebFile(debFile)
+	if err != nil {
+		return false, err
+	}
+	out, err := repo.execWithOutput("--list-format", "${architecture} ${version}\\n", "list", component, info.Name)
+	if err != nil {
+		return false, fmt.Errorf("could not check if %s is already published in component %s: %w", debFile, component, err)
+	}
+	return slices.Contains(strings.Split(out, "\n"), info.Architecture+" "+info.Version), nil
 }
 
 // WriteSourcesFile writes out the <codename>.sources file for a given codename to the repo's output directory

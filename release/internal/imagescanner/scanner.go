@@ -45,7 +45,22 @@ type Config struct {
 }
 
 func (c *Config) Valid() bool {
-	return c.APIURL != "" && c.Token != "" && c.Scanner != ""
+	return len(c.Missing()) == 0
+}
+
+// Missing lists the settings that are not set, naming the environment variable for each.
+func (c *Config) Missing() []string {
+	var missing []string
+	if c.APIURL == "" {
+		missing = append(missing, "API URL (IMAGE_SCANNER_API)")
+	}
+	if c.Token == "" {
+		missing = append(missing, "token (IMAGE_SCANNING_TOKEN)")
+	}
+	if c.Scanner == "" {
+		missing = append(missing, "scanner (IMAGE_SCANNER_SELECT)")
+	}
+	return missing
 }
 
 type scanResult struct {
@@ -67,7 +82,7 @@ func New(cfg Config) *Scanner {
 // Scan sends a request to the image scanner to scan the given images for the given product code and stream.
 func (i *Scanner) Scan(productCode string, images []string, stream string, release bool, outputDir string) error {
 	if !i.config.Valid() {
-		return fmt.Errorf("invalid image scanner configuration")
+		return fmt.Errorf("invalid image scanner configuration: missing %s", strings.Join(i.config.Missing(), ", "))
 	}
 	if len(images) == 0 {
 		logrus.Warn("No images to send to scanner, skipping...")

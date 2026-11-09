@@ -16,6 +16,7 @@ package command
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -61,9 +62,29 @@ func (r *RealCommandRunner) RunInDir(dir, name string, args []string, env []stri
 	}).Debugf("Running %s command", name)
 	err := cmd.Run()
 	if err != nil {
-		err = fmt.Errorf("%s: %s", err, strings.TrimSpace(errb.String()))
+		msg := fmt.Sprintf("%s: %s", err, strings.TrimSpace(errb.String()))
+		// Many tools (make in particular) report the actual failure on stdout, which would
+		// otherwise be lost unless debug logging was on.
+		if !logrus.IsLevelEnabled(logrus.DebugLevel) {
+			if tail := lastLines(outb.String(), errorStdoutLines); tail != "" {
+				msg = fmt.Sprintf("%s\nlast %d lines of stdout:\n%s", msg, errorStdoutLines, tail)
+			}
+		}
+		err = errors.New(msg)
 	}
 	return strings.TrimSpace(outb.String()), err
+}
+
+// errorStdoutLines is how much of a failed command's stdout RunInDir includes in its error.
+const errorStdoutLines = 50
+
+// lastLines returns at most the last n lines of s, without surrounding whitespace.
+func lastLines(s string, n int) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 func (r *RealCommandRunner) RunInDirNoCapture(dir, name string, args []string, env []string) error {

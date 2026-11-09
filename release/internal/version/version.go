@@ -73,12 +73,24 @@ func (v *HashreleaseVersions) ReleaseBranch(releaseBranchPrefix string) string {
 // Version represents a version, and contains methods for working with versions.
 type Version string
 
-// New creates a new Version object from the given string.
+// New creates a new Version object from the given string, terminating the process if the
+// string is not a valid version. Use Parse instead wherever the caller can report the
+// failure itself.
 func New(version string) Version {
-	if _, err := semver.NewVersion(strings.TrimPrefix(version, "v")); err != nil {
+	v, err := Parse(version)
+	if err != nil {
 		logrus.WithField("version", version).WithError(err).Fatal("Failed to parse version")
 	}
-	return Version(version)
+	return v
+}
+
+// Parse creates a new Version object from the given string, returning an error if the
+// string is not a valid version.
+func Parse(version string) (Version, error) {
+	if _, err := semver.NewVersion(strings.TrimPrefix(version, "v")); err != nil {
+		return "", fmt.Errorf("failed to parse version %q: %w", version, err)
+	}
+	return Version(version), nil
 }
 
 // String returns the string representation of the version.
@@ -187,7 +199,7 @@ func IsEarlyPreviewVersion(v *semver.Version) (bool, int) {
 	return false, -1
 }
 
-// GitVersion returns the current git version of the directory as a Version object.
+// GitVersion returns the current git version of the working directory as a Version object.
 func GitVersion() Version {
 	// First, determine the git revision.
 	previousTag, err := command.GitVersion(".", true)
@@ -196,6 +208,25 @@ func GitVersion() Version {
 	}
 	logrus.WithField("out", previousTag).Info("Current git describe")
 	return New(previousTag)
+}
+
+// GitVersionInDir returns the current git version of the given directory as a Version object.
+// Use this instead of GitVersion whenever the repository being inspected is not the working
+// directory, for example a repository the release tool has cloned into its tmp dir.
+func GitVersionInDir(dir string) (Version, error) {
+	previousTag, err := command.GitVersion(dir, true)
+	if err != nil {
+		return "", fmt.Errorf("failed to determine latest git version in %s: %w", dir, err)
+	}
+	logrus.WithFields(logrus.Fields{"dir": dir, "out": previousTag}).Info("Current git describe")
+	// git describe falls back to a bare commit hash if the repo carries no matching tag,
+	// so parse rather than New here: the caller gets an error instead of the release tool
+	// exiting.
+	v, err := Parse(previousTag)
+	if err != nil {
+		return "", fmt.Errorf("git version %q in %s is not a valid version: %w", previousTag, dir, err)
+	}
+	return v, nil
 }
 
 // HasDevTag returns true if the version has the given dev tag suffix.
@@ -210,8 +241,44 @@ func GitVersion() Version {
 // The "dirty" suffix indicates that the working directory is dirty.
 func HasDevTag(v Version, devTagSuffix string) bool {
 	devTagSuffix = strings.TrimPrefix(devTagSuffix, "-")
-	re := regexp.MustCompile(fmt.Sprintf(`^v\d+\.\d+\.\d+(-\d+\.\d+)?-%s-\d+-g[0-9a-f]{12}(-dirty)?$`, devTagSuffix))
+	return matchesDevTag(v, regexp.QuoteMeta(devTagSuffix))
+}
+
+// HasDevTagFamily is like HasDevTag, but it also accepts a dev tag whose numeric component
+// differs from the one in devTagSuffix. A release branch does not necessarily carry the base
+// dev tag: CreateNextDevelopmentTag increments the numeric component when the base tag name is
+// already taken, so a branch seeded from a "calient-0.dev" suffix can legitimately sit on
+// "calient-1.dev", "calient-2.dev", and so on.
+//
+// Use this for validating that a repository is sitting on a dev tag. Use HasDevTag when the
+// exact suffix matters, for example when it is used to split the version out of the tag.
+func HasDevTagFamily(v Version, devTagSuffix string) bool {
+	devTagSuffix = strings.TrimPrefix(devTagSuffix, "-")
+	return matchesDevTag(v, devTagSuffixPattern(devTagSuffix))
+}
+
+func matchesDevTag(v Version, devTagSuffixPattern string) bool {
+	re := regexp.MustCompile(fmt.Sprintf(`^v\d+\.\d+\.\d+(-\d+\.\d+)?-%s-\d+-g[0-9a-f]{12}(-dirty)?$`, devTagSuffixPattern))
 	return re.MatchString(string(v))
+}
+
+// devTagSuffixPattern turns a dev tag suffix into a regexp fragment that matches the whole
+// family of that suffix, i.e. "calient-0.dev" becomes `calient-\d+\.dev`. Suffixes that do not
+// have the "<prefix>-<number>.<tail>" shape that the increment logic expects are matched
+// literally.
+func devTagSuffixPattern(devTagSuffix string) string {
+	base, tail, found := strings.Cut(devTagSuffix, ".")
+	if !found {
+		return regexp.QuoteMeta(devTagSuffix)
+	}
+	prefix := ""
+	if i := strings.LastIndex(base, "-"); i >= 0 {
+		prefix, base = base[:i+1], base[i+1:]
+	}
+	if _, err := strconv.Atoi(base); err != nil {
+		return regexp.QuoteMeta(devTagSuffix)
+	}
+	return regexp.QuoteMeta(prefix) + `\d+\.` + regexp.QuoteMeta(tail)
 }
 
 // DetermineReleaseVersion uses historical clues to figure out the next semver

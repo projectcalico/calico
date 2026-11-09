@@ -14,6 +14,11 @@
 
 package command
 
+import (
+	"slices"
+	"strings"
+)
+
 // GitInDir runs a git command in a specific directory.
 func GitInDir(dir string, args ...string) (string, error) {
 	return runner().RunInDir(dir, "git", args, nil)
@@ -30,6 +35,15 @@ func GitVersion(dir string, includeDirty bool) (string, error) {
 		args = append(args, "--dirty")
 	}
 	return GitInDir(dir, args...)
+}
+
+// GitTagPointsAtHead returns true if the given tag exists and points at HEAD in dir.
+func GitTagPointsAtHead(dir, tag string) (bool, error) {
+	out, err := GitInDir(dir, "tag", "--points-at", "HEAD")
+	if err != nil {
+		return false, err
+	}
+	return slices.Contains(strings.Fields(out), tag), nil
 }
 
 // GitDir returns the root directory of the git repository.
