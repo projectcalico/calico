@@ -130,6 +130,11 @@ defaults:
   secretBundles:
     - docker-hub
 
+  # Every step is in the `basic-ci` tier new PRs start on. A step that needs VMs
+  # or a cluster opts out with `tiers: []` in its module; `tiers: []` on an
+  # include below is a no-op, since include tiers only add.
+  tiers: [basic]
+
 includes:
   # Each check inside carries its own gate.
   - path: .argoci/modules/10-prerequisites.yaml
@@ -229,6 +234,15 @@ includes:
     changes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/20-cmd-calico\.yaml$']
+
+  - path: .argoci/modules/20-e2e-openstack.yaml
+    changes:
+      in:
+        - ^networking-calico/e2e/
+        - ^\.argoci/modules/20-e2e-openstack\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
 
   - path: .argoci/modules/20-e2e-ut.yaml
     changes:
@@ -439,6 +453,10 @@ includes:
         - ^metadata\.mk$
         - ^lib\.Makefile$
         - ^\.argoci/modules/40-openstack\.yaml$
+
+      # The OpenStack e2e suite, which 20-e2e-openstack.yaml builds.
+      exclude:
+        - ^networking-calico/e2e/
 
   - path: .argoci/modules/20-kube-controllers.yaml
     changes:

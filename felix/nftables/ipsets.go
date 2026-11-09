@@ -293,6 +293,13 @@ func (s *IPSets) filterAndCanonicaliseMembers(ipSetType ipsets.IPSetType, member
 	filtered := set.New[SetMember]()
 	wantIPV6 := s.IPVersionConfig.Family == ipsets.IPFamilyV6
 	for _, member := range members {
+		// Desired members are normally generated from validated Felix state, but
+		// a malformed member can be left behind in a NetworkSet and returned by
+		// the datastore.  Do not turn that external input into a Felix panic.
+		if _, err := parseMember(ipSetType, member); err != nil {
+			s.logCxt.WithError(err).WithField("member", member).Warn("Ignoring invalid IP set member")
+			continue
+		}
 		isIPV6 := ipSetType.IsMemberIPV6(member)
 		if wantIPV6 != isIPV6 {
 			continue

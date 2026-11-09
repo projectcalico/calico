@@ -59,3 +59,7 @@ venv
 debian/changelog
 debian/files
 rpm/networking-calico.spec
+
+# Caches (black, pip, virtualenv) from the test container, which runs with HOME
+# set to this directory.
+/.cache

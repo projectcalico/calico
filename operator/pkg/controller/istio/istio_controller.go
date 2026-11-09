@@ -17,6 +17,7 @@ package istio
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
@@ -91,6 +92,11 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		return fmt.Errorf("istio-controller failed to watch FelixConfiguration resource: %w", err)
 	}
 
+	err = c.WatchObject(&v3.ClusterInformation{}, &handler.EnqueueRequestForObject{})
+	if err != nil {
+		return fmt.Errorf("istio-controller failed to watch ClusterInformation resource: %w", err)
+	}
+
 	if err = utils.AddPeriodicReconcile(c, utils.PeriodicReconcileTime, &handler.EnqueueRequestForObject{}); err != nil {
 		return fmt.Errorf("istio-controller failed to create periodic reconcile watch: %w", err)
 	}
@@ -162,11 +168,13 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
+	// Before the finalizer handling, so the status of a deleting CR is reported
+	// after an operator restart too.
+	r.status.OnCRFound()
+
 	if res, err, finished := r.maintainFinalizer(ctx, instance, reqLogger); err != nil || finished {
 		return res, err
 	}
-
-	r.status.OnCRFound()
 
 	// SetMetaData in the TigeraStatus such as observedGenerations.
 	defer r.status.SetMetaData(&instance.ObjectMeta)
@@ -206,6 +214,25 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
+	clusterInfo, err := utils.FetchClusterInformation(ctx, r.Client)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			r.status.SetDegraded(operatorv1.ResourceNotFound,
+				fmt.Sprintf("ClusterInformation %q not found; its clusterGUID is the Istio cluster ID", utils.DefaultInstanceKey.Name),
+				err, reqLogger)
+			return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
+		}
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying ClusterInformation", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+	clusterID := clusterInfo.Spec.ClusterGUID
+	if err := validateClusterGUID(clusterID); err != nil {
+		r.status.SetDegraded(operatorv1.ResourceValidationError,
+			fmt.Sprintf("ClusterInformation %q cannot be used to set this cluster name in Istio: %v", utils.DefaultInstanceKey.Name, err),
+			nil, reqLogger)
+		return reconcile.Result{}, nil
+	}
+
 	// Get the Kubernetes Gateway API CRDs.
 	essentialCRDs, optionalCRDs, err := gatewayapi.K8SGatewayAPICRDs(installationSpec.KubernetesProvider, r.scheme)
 	if err != nil {
@@ -233,6 +260,7 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		Istio:          instance,
 		IstioNamespace: istio.IstioNamespace,
 		Scheme:         r.scheme,
+		ClusterID:      clusterID,
 	}
 	istioComponentCRDs, istioComponent, err := istio.Istio(istioCfg)
 	if err != nil {
@@ -260,9 +288,11 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
-	// Deploy Istio CRDs
-	err = handler.CreateOrUpdateOrDelete(ctx, istioComponentCRDs, nil)
-	if err != nil && !errors.IsAlreadyExists(err) {
+	// Unlike the Gateway API CRDs, which other implementations may share, the
+	// Istio CRDs belong to the Istio the operator runs. Istio requires them to be
+	// upgraded before istiod, so they are updated, not only created.
+	err = utils.NewComponentHandler(log, r, r.scheme, nil).CreateOrUpdateOrDelete(ctx, istioComponentCRDs, nil)
+	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error rendering Calico Istio CRDs", err, log)
 		return reconcile.Result{}, err
 	}
@@ -285,6 +315,17 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
+	outdated, err := outdatedGatewayAPICRDs(ctx, r.Client)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading Gateway API CRDs", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+	if len(outdated) > 0 {
+		r.status.SetWarning(gatewayAPIWarningKey, gatewayAPIWarning(outdated))
+	} else {
+		r.status.ClearWarning(gatewayAPIWarningKey)
+	}
+
 	// Clear the degraded bit if we've reached this far.
 	r.status.ClearDegraded()
 
@@ -296,6 +337,24 @@ func updateDefaults(istio *operatorv1.Istio) {
 		dscpMark := numorstring.DSCPFromInt(23)
 		istio.Spec.DSCPMark = &dscpMark
 	}
+}
+
+const clusterGUIDMaxLength = 233
+
+// clusterGUIDPattern is what Istio accepts for a cluster ID.
+var clusterGUIDPattern = regexp.MustCompile(`^[a-z0-9]([-.a-z0-9]*[a-z0-9])?$`)
+
+func validateClusterGUID(guid string) error {
+	if guid == "" {
+		return fmt.Errorf("clusterGUID is empty")
+	}
+	if len(guid) > clusterGUIDMaxLength {
+		return fmt.Errorf("clusterGUID is %d characters long, the maximum is %d", len(guid), clusterGUIDMaxLength)
+	}
+	if !clusterGUIDPattern.MatchString(guid) {
+		return fmt.Errorf("clusterGUID %q must match %s", guid, clusterGUIDPattern)
+	}
+	return nil
 }
 
 func (r *ReconcileIstio) setIstioFelixConfiguration(ctx context.Context, instance *operatorv1.Istio, fc *v3.FelixConfiguration, remove bool) (bool, error) {

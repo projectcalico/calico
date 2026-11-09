@@ -589,6 +589,52 @@ func TestLocalLoaderReuseDoesNotRegenerate(t *testing.T) {
 	}
 }
 
+func TestPreviewLoader(t *testing.T) {
+	root, err := command.GitDir()
+	if err != nil {
+		t.Fatalf("git root: %v", err)
+	}
+	t.Run("reuses the pin a build left", func(t *testing.T) {
+		original := localCheck
+		localCheck = func(LocalLoader, *Pin) bool { return true }
+		t.Cleanup(func() { localCheck = original })
+
+		dir := t.TempDir()
+		existing := testPin()
+		existing.ReleaseName = "must-be-reused"
+		if err := write(existing, dir); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		got, err := Load(PreviewLoader{LocalLoader{Config: Config{
+			Dir: dir, RootDir: root, ReleaseBranchPrefix: "release",
+		}}})
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if got.ReleaseName != existing.ReleaseName {
+			t.Errorf("ReleaseName = %q, want the reused %q", got.ReleaseName, existing.ReleaseName)
+		}
+	})
+	t.Run("sources a pin without writing it", func(t *testing.T) {
+		original := writePin
+		writePin = func(Config, *Pin, ...string) error {
+			t.Error("wrote a pinned version file")
+			return nil
+		}
+		t.Cleanup(func() { writePin = original })
+
+		got, err := Load(PreviewLoader{LocalLoader{Config: Config{
+			Dir: t.TempDir(), HashreleaseDir: t.TempDir(), RootDir: root, ReleaseBranchPrefix: "release",
+		}}})
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if got == nil || got.ProductVersion == "" {
+			t.Errorf("pin is not resolved: %+v", got)
+		}
+	})
+}
+
 // A generated pin is persisted through writePin, not Write directly. A product
 // whose file carries fields Pin does not model replaces that seam, so a Load
 // that bypassed it would drop those fields with no error.

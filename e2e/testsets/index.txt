@@ -58,7 +58,7 @@
 .argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-old [stable-1-calico-typha-yaml] | cron/e2e-iptables/datastore-k8s-e2e-kdd-old-stable-1-calico-typha-yaml | 212
 .argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-old [stable-1-calico-yaml] | cron/e2e-iptables/datastore-k8s-e2e-kdd-old-stable-1-calico-yaml | 212
 .argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-old [stable-1-canal-yaml] | cron/e2e-iptables/datastore-k8s-e2e-kdd-old-stable-1-canal-yaml | 210
-.argoci/cron/e2e-iptables.yaml | distro-support [centos-stream-8-gcp-kubeadm] | cron/e2e-iptables/distro-support-centos-stream-8-gcp-kubeadm | 225
+.argoci/cron/e2e-iptables.yaml | distro-support [centos-stream-9-gcp-kubeadm] | cron/e2e-iptables/distro-support-centos-stream-9-gcp-kubeadm | 225
 .argoci/cron/e2e-iptables.yaml | distro-support [rhel-10-gcp-kubeadm] | cron/e2e-iptables/distro-support-rhel-10-gcp-kubeadm | 225
 .argoci/cron/e2e-iptables.yaml | distro-support [rhel-9-gcp-kubeadm] | cron/e2e-iptables/distro-support-rhel-9-gcp-kubeadm | 225
 .argoci/cron/e2e-iptables.yaml | distro-support [rocky-linux-8-gcp-kubeadm] | cron/e2e-iptables/distro-support-rocky-linux-8-gcp-kubeadm | 225
@@ -146,6 +146,7 @@
 .argoci/cron/e2e-vpp.yaml | vpp-openshift [aws-openshift] | cron/e2e-vpp/vpp-openshift-aws-openshift | 128
 .argoci/cron/e2e-windows.yaml | calico-windows-azr-aks-2022-stable-1-iptables-no-encap-azure-cni | cron/e2e-windows/calico-windows-azr-aks-2022-stable-1-iptables-no-encap-azure-cni | 8
 .argoci/cron/e2e-windows.yaml | calico-windows-azr-aso-2022-stable-nftables-vxlan | cron/e2e-windows/calico-windows-azr-aso-2022-stable-nftables-vxlan | 8
+.argoci/cron/renovate.yaml | renovate | (no tests) | -
 .argoci/cron/resync-scale.yaml | resync-scale | (no tests) | -
 .argoci/modules/20-e2e.yaml | e2e-kind [conformance-bird] | modules/20-e2e/e2e-kind-conformance-bird | 77
 .argoci/modules/20-e2e.yaml | e2e-kind [conformance-felix] | modules/20-e2e/e2e-kind-conformance-felix | 78

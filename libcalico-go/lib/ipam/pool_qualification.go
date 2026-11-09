@@ -208,33 +208,52 @@ func (q poolQualification) qualified() []v3.IPPool {
 	return q.filter(isQualified)
 }
 
-// releasable returns the pools whose blocks affine to the node IPAM may release: those whose node selector skips the
-// node, other than pools the request named. A block is released only once it is empty.
-func (q poolQualification) releasable() []v3.IPPool {
-	return q.pools(func(c poolCandidate) bool { return !c.keepsBlocks() })
-}
-
-// blocksToRelease returns the affine blocks, out of those the request can't use, that IPAM may release once empty: a
-// block in some enabled pool but in none that keeps its blocks. An overlapping pool that skips the node doesn't
-// override one that keeps them.
+// blocksToRelease returns the affine blocks, out of those the request can't use, that IPAM may release once empty.
 func (q poolQualification) blocksToRelease(blocks []net.IPNet) ([]net.IPNet, error) {
-	_, unkept, err := filterBlocksByPools(blocks, q.pools(poolCandidate.keepsBlocks))
-	if err != nil {
-		return nil, err
-	}
-	release, _, err := filterBlocksByPools(unkept, q.pools(func(poolCandidate) bool { return true }))
-	return release, err
-}
-
-// pools returns the candidates' pools that satisfy keep, in candidate order.
-func (q poolQualification) pools(keep func(poolCandidate) bool) []v3.IPPool {
-	var pools []v3.IPPool
-	for _, c := range q.candidates {
-		if keep(c) {
-			pools = append(pools, c.pool)
+	var release []net.IPNet
+	for _, block := range blocks {
+		kept, err := q.keepsBlock(block)
+		if err != nil {
+			return nil, err
+		}
+		if !kept {
+			release = append(release, block)
 		}
 	}
-	return pools
+	return release, nil
+}
+
+// keepsBlock reports whether IPAM keeps the node's affinity to a block once it is empty. It does when any candidate
+// pool covering the block keeps its blocks, even if an overlapping pool skips the node, and when no candidate covers
+// it.
+func (q poolQualification) keepsBlock(block net.IPNet) (bool, error) {
+	covered := false
+	for _, c := range q.candidates {
+		_, cidr, err := net.ParseCIDR(c.pool.Spec.CIDR)
+		if err != nil {
+			return false, err
+		}
+		if !cidr.Contains(block.IP) {
+			continue
+		}
+		if c.keepsBlocks() {
+			return true, nil
+		}
+		covered = true
+	}
+	return !covered, nil
+}
+
+// nodeKeepsBlock reports whether a node keeps its affinity to an empty block when no request is behind the check,
+// as after IPs are released. It applies the keepsBlock rule to every enabled pool. The candidates it builds carry no
+// rejection reasons, so they stay inside this function rather than being returned as a poolQualification.
+func nodeKeepsBlock(node internalapi.Node, enabledPools []v3.IPPool, block net.IPNet) (bool, error) {
+	req := poolRequest{node: node}
+	var q poolQualification
+	for _, pool := range enabledPools {
+		q.candidates = append(q.candidates, req.candidate(pool, "", false))
+	}
+	return q.keepsBlock(block)
 }
 
 // keepsBlocks reports whether IPAM keeps the node's affine blocks in the candidate's pool: the request named it, or

@@ -414,7 +414,7 @@ steps:
       - name: E2E_TEST_CONFIG
         value: e2e/config/iptables/xtables.yaml
       - name: K8S_VERSION
-        value: v1.32.13
+        value: stable-1.32
       - name: RKE_VERSION
         value: v1.8.14
     matrix:
@@ -741,6 +741,10 @@ steps:
         value: "true"
       - name: INSTALLER
         value: helmerator
+      # The global default 192.168.0.0/16 overlaps the eksctl VPC CIDR, which
+      # breaks pod -> API server traffic on EKS with Calico CNI.
+      - name: IPV4_POD_CIDR
+        value: 172.16.0.0/16
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -762,7 +766,7 @@ steps:
       - name: ubuntu-2404-lts-gcp-kubeadm
         env:
           - name: CLUSTER_IMAGE
-            value: ubuntu-2404-lts
+            value: ubuntu-2404-lts-amd64
           - name: PROVISIONER
             value: gcp-kubeadm
       - name: ubuntu-2204-lts-gcp-kubeadm
@@ -777,10 +781,10 @@ steps:
             value: rhel-10
           - name: PROVISIONER
             value: gcp-kubeadm
-      - name: centos-stream-8-gcp-kubeadm
+      - name: centos-stream-9-gcp-kubeadm
         env:
           - name: CLUSTER_IMAGE
-            value: centos-stream-8
+            value: centos-stream-9
           - name: PROVISIONER
             value: gcp-kubeadm
       - name: rhel-9-gcp-kubeadm

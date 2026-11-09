@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -729,7 +731,11 @@ func TestPrefixedVariantRecordsPrefixedRefs(t *testing.T) {
 func TestArchiveSavesStandardImagesOnly(t *testing.T) {
 	f := &imageNameRunner{images: "node node-windows"}
 	dir := t.TempDir()
-	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...).Contribute(dir); err != nil {
+	a, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...)
+	if err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	if err := a.Contribute(dir); err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
 	var saved []string
@@ -749,7 +755,11 @@ func TestArchiveSavesStandardImagesOnly(t *testing.T) {
 func TestArchivePullsWhenAsked(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
 	f.failures = map[string]int{"inspect": 9}
-	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f, WithPull(true))...).Contribute(t.TempDir()); err != nil {
+	a, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f, WithPull(true))...)
+	if err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	if err := a.Contribute(t.TempDir()); err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
 	var pulled bool
@@ -765,7 +775,11 @@ func TestArchivePullsWhenAsked(t *testing.T) {
 
 func TestArchiveRejectsNoDir(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
-	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...).Contribute(""); err == nil {
+	a, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...)
+	if err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	if err := a.Contribute(""); err == nil {
 		t.Fatal("expected an error when no archive directory is given")
 	}
 }
@@ -774,10 +788,24 @@ func TestArchiveRejectsNoDir(t *testing.T) {
 // than indexed into.
 func TestArchiveRejectsNoRegistry(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
-	err := Archive(testRepoRoot, testVersion, []string{"node"}, WithRunner(f)).Contribute(t.TempDir())
-	if err == nil {
+	if _, err := Archive(testRepoRoot, testVersion, []string{"node"}, WithRunner(f)); err == nil {
 		t.Fatal("expected an error when no registry is given")
 	}
+	if len(f.calls) != 0 {
+		t.Errorf("ran %d commands before rejecting the archive", len(f.calls))
+	}
+}
+
+func TestArchive(t *testing.T) {
+	t.Run("a missing version fails before anything runs", func(t *testing.T) {
+		f := &imageNameRunner{images: "node"}
+		if _, err := Archive(testRepoRoot, "", []string{"node"}, archiveOpts(f)...); err == nil {
+			t.Fatal("expected an error when no version is given")
+		}
+		if len(f.calls) != 0 {
+			t.Errorf("ran %d commands before rejecting the archive", len(f.calls))
+		}
+	})
 }
 
 // A unit whose refs are already recorded at the digest the registry serves is
@@ -1447,6 +1475,87 @@ func TestMetadata(t *testing.T) {
 	t.Run("fails with no records dir", func(t *testing.T) {
 		if _, err := Metadata("", map[string]registry.Component{"node": node}, mustNotResolve); err == nil {
 			t.Error("described images with no records dir")
+		}
+	})
+}
+
+func TestReadsFromMake(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "comp"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	makefile := "build-images:\n\t@echo comp comp-windows\nimage-tag-prefix:\n\t@echo pre-\n"
+	if err := os.WriteFile(filepath.Join(root, "comp", "Makefile"), []byte(makefile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := Image{RepoRoot: root}
+
+	for _, makeflags := range []string{"", "w"} {
+		t.Run("with MAKEFLAGS="+makeflags, func(t *testing.T) {
+			t.Setenv("MAKEFLAGS", makeflags)
+			u := unit{variant: StandardVariant, dir: "comp", env: os.Environ()}
+
+			names, err := c.imageNames(u)
+			if err != nil {
+				t.Fatalf("imageNames: %v", err)
+			}
+			if want := []string{"comp"}; !slices.Equal(names, want) {
+				t.Errorf("image names = %q, want %q", names, want)
+			}
+
+			prefix, err := c.tagPrefix(u)
+			if err != nil {
+				t.Fatalf("tagPrefix: %v", err)
+			}
+			if prefix != "pre-" {
+				t.Errorf("tag prefix = %q, want %q", prefix, "pre-")
+			}
+		})
+	}
+}
+
+func TestBuildImages(t *testing.T) {
+	root, err := command.GitDir()
+	if err != nil {
+		t.Fatalf("repo root: %v", err)
+	}
+	for _, tc := range []struct {
+		name    string
+		dirs    []string
+		want    []string
+		wantErr bool
+	}{
+		{name: "one dir", dirs: []string{"cmd/calico"}, want: []string{"calico"}},
+		{name: "a dir with a windows image", dirs: []string{"node"}, want: []string{"node", "node-windows"}},
+		{name: "a dir with no windows image", dirs: []string{"whisker"}, want: []string{"whisker"}},
+		{name: "several dirs", dirs: []string{"whisker", "cmd/calico"}, want: []string{"whisker", "calico"}},
+		{name: "a dir with no images", dirs: []string{"api"}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := BuildImages(root, tc.dirs...)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("got %q, want an error", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("BuildImages: %v", err)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	t.Run("under a parent make", func(t *testing.T) {
+		t.Setenv("MAKEFLAGS", "w")
+		got, err := BuildImages(root, "whisker")
+		if err != nil {
+			t.Fatalf("BuildImages: %v", err)
+		}
+		if want := []string{"whisker"}; !slices.Equal(got, want) {
+			t.Errorf("got %q, want %q", got, want)
 		}
 	})
 }

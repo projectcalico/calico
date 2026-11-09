@@ -48,6 +48,7 @@ var (
 	_ validator = GCS{}
 	_ validator = GithubRelease{}
 	_ validator = HashreleaseServer{}
+	_ validator = Preparer{}
 )
 
 type S3 struct {
@@ -465,9 +466,17 @@ type Preparer struct {
 	Kind string
 
 	Action func() error
+	Check  func() error
 }
 
 func (d Preparer) Name() string { return d.Kind }
+
+func (d Preparer) Validate(Upload) error {
+	if d.Check == nil {
+		return nil
+	}
+	return d.Check()
+}
 
 func (d Preparer) Publish(context.Context, string) error { return d.Action() }
 
