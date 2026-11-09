@@ -28,6 +28,11 @@ $(CONTAINERNETWORKING_PLUGINS_CLONED):
 	rm -rf containernetworking-plugins .containernetworking-plugins-*.cloned
 	git clone https://github.com/containernetworking/plugins.git containernetworking-plugins
 	git -C containernetworking-plugins checkout $(CNI_VERSION)
+	for patch in patches/*.patch; do \
+		if [ -f "$$patch" ]; then \
+			patch -d containernetworking-plugins -p1 < "$$patch" || exit 1; \
+		fi; \
+	done
 	touch $@
 
 $(FLANNEL_CNI_PLUGIN_CLONED):
@@ -51,7 +56,7 @@ $(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning &: $(CONTAINERNET
 		$(EXTRA_DOCKER_ARGS) \
 		-v $(CURDIR)/containernetworking-plugins:/go/src/github.com/containernetworking/plugins:z \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/containernetworking/plugins --rm $(CALICO_BUILD) \
-		/bin/sh -xe -c 'GOFLAGS="-buildvcs=false" CGO_ENABLED=0 GOARCH=$(ARCH) ./build_linux.sh $(CN_FLAGS)'
+		/bin/sh -xe -c 'go mod vendor && GOFLAGS="-buildvcs=false" CGO_ENABLED=0 GOARCH=$(ARCH) ./build_linux.sh $(CN_FLAGS)'
 	mkdir -p $(BIN)
 	@$(foreach file,$(CN_FILES),cp containernetworking-plugins/bin/$(file) $(BIN)/$(file);)
 
@@ -100,7 +105,7 @@ CNI_PLUGINS_HASH_INPUTS := \
 	$(FLANNEL_VERSION) \
 	$(GO_BUILD_VER) \
 	$(CALICO_BASE_VER) \
-	$(shell find Dockerfile Makefile cmd -type f | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
+	$(shell find Dockerfile Makefile cmd patches -type f | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
 CNI_PLUGINS_HASH := $(shell echo "$(CNI_PLUGINS_HASH_INPUTS)" | sha256sum | cut -c1-12)
 
 # The cache registry to probe for an existing content-addressed image. Defaults
