@@ -68,11 +68,12 @@ a new OpenShift version is added, add its mapping there; the pipeline creates
 the template itself.
 
 **The first bundle built from this repo** is a move off the `release-v1.YY`
-channels that tigera/operator published into, which top out at
-`tigera-operator.v1.42.2`. Build it with `PREV_VERSION=1.42.2`, not the previous
-Calico version, which was never published as a bundle. Its channel entry
-should `replace` `tigera-operator.v1.42.2`; the `olm.skipRange` of
-`<VERSION>` already covers every 1.x bundle.
+channels that tigera/operator published into. Build it with `PREV_VERSION` set
+to the newest 1.x bundle in the certified-operators catalog templates
+(`tigera-operator.v1.44.0` at the time of writing), not the previous Calico
+version, which was never published as a bundle. Its channel entry needs no
+`replaces`: the `skipRange` of `<VERSION>` in `release-config.yaml` already
+upgrades from every 1.x bundle.
 
 ## What runs, in order
 
