@@ -50,6 +50,7 @@ type StagedGlobalNetworkPolicy struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.ingress) || self.ingress.all(r, !has(r.destination) || !has(r.destination.services))",message="services are not allowed in an ingress rule destination",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.egress) || self.egress.all(r, !has(r.destination) || !has(r.destination.services) || (has(r.destination.services.namespace) && size(r.destination.services.namespace) > 0))",message="services in a global policy must specify a namespace",reason=FieldValueRequired
 // +kubebuilder:validation:XValidation:rule="!has(self.ingress) || self.ingress.all(r, !has(r.source) || !has(r.source.services) || (has(r.source.services.namespace) && size(r.source.services.namespace) > 0))",message="services in a global policy must specify a namespace",reason=FieldValueRequired
+// +kubebuilder:validation:XValidation:rule="!has(self.egress) || self.egress.all(r, !has(r.http))",message="HTTP match is not allowed in egress rules",reason=FieldValueForbidden
 type StagedGlobalNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
 	// +kubebuilder:default=Set
