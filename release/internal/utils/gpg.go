@@ -16,7 +16,11 @@ package utils
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -34,4 +38,46 @@ func GetGPGPubKey(gpgKeyID string) (string, error) {
 		return "", fmt.Errorf("exporting gpg key: %w", err)
 	}
 	return string(gpgOut), nil
+}
+
+// GPGTestSign signs a throwaway message with the given key, so that gpg-agent asks for
+// the passphrase (and caches it) now, rather than part way through a long build.
+func GPGTestSign(gpgKeyID string) error {
+	cmd := exec.Command("gpg", "--local-user", gpgKeyID, "--sign", "--output", os.DevNull)
+	cmd.Stdin = strings.NewReader("release tool GPG check\n")
+	// Leave stdout/stderr on the terminal so a curses or tty pinentry can prompt.
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("test signing with GPG key %s: %w", gpgKeyID, err)
+	}
+	return nil
+}
+
+// GPGAgentCacheTTLs returns gpg-agent's effective default-cache-ttl (how long a passphrase
+// stays cached after its last use) and max-cache-ttl (how long it can stay cached at all).
+func GPGAgentCacheTTLs() (defaultTTL, maxTTL time.Duration, err error) {
+	out, err := command.Run("gpgconf", []string{"--list-options", "gpg-agent"})
+	if err != nil {
+		return 0, 0, fmt.Errorf("listing gpg-agent options: %w", err)
+	}
+	ttls := map[string]time.Duration{}
+	for _, line := range strings.Split(out, "\n") {
+		// Fields are name:flags:level:description:type:alt-type:argname:default:argdef:value,
+		// and value is empty when the option is left at its default.
+		f := strings.Split(line, ":")
+		if len(f) < 10 || (f[0] != "default-cache-ttl" && f[0] != "max-cache-ttl") {
+			continue
+		}
+		v := f[9]
+		if v == "" {
+			v = f[7]
+		}
+		secs, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, 0, fmt.Errorf("parsing gpg-agent %s %q: %w", f[0], v, err)
+		}
+		ttls[f[0]] = time.Duration(secs) * time.Second
+	}
+	return ttls["default-cache-ttl"], ttls["max-cache-ttl"], nil
 }
