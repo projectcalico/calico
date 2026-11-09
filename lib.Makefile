@@ -1381,7 +1381,13 @@ bin/crane: $(REPO_ROOT)/bin/crane
 $(REPO_ROOT)/bin/crane:
 	$(info ::: Downloading crane from $(CRANE_URL))
 	@mkdir -p $(REPO_ROOT)/bin
-	@curl -sSfL --retry 5 $(CRANE_URL) | tar xz -C $(REPO_ROOT)/bin crane
+	@# Many makes run this in parallel during a release, so download into a private temp dir
+	@# and move the binary into place atomically.
+	@tmp=$$(mktemp -d) && \
+		trap 'rm -rf "$$tmp"' EXIT && \
+		curl -sSfL --retry 5 --retry-all-errors -o "$$tmp/crane.tar.gz" $(CRANE_URL) && \
+		tar xz -C "$$tmp" -f "$$tmp/crane.tar.gz" crane && \
+		mv -f "$$tmp/crane" $@
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
