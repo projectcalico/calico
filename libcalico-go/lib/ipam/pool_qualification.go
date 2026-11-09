@@ -121,6 +121,7 @@ func qualifyPools(req poolRequest, enabledPools []v3.IPPool) (poolQualification,
 // not requested. A named pool must fit the block size, and only its allowed uses are checked.
 func qualifyRequested(req poolRequest, enabledPools []v3.IPPool, fitting map[string]v3.IPPool) (poolQualification, error) {
 	var q poolQualification
+	claim := newClaim(req)
 	named := map[string]bool{}
 	for _, rp := range req.requested {
 		cidr := rp.Network()
@@ -128,19 +129,28 @@ func qualifyRequested(req poolRequest, enabledPools []v3.IPPool, fitting map[str
 		if !ok {
 			return poolQualification{}, fmt.Errorf("the given pool (%s) does not exist, or is not enabled", cidr.String())
 		}
-		q.add(req.candidate(pool, checkUse(pool, req.use), true))
+		reason, err := claim.qualify(&pool)
+		if err != nil {
+			return poolQualification{}, err
+		}
+		q.add(req.candidate(pool, reason, true))
 		named[cidr.String()] = true
 	}
 	for _, pool := range enabledPools {
-		if !named[normalizedCIDR(pool)] {
-			q.add(req.candidate(pool, rejectNotRequested, false))
+		if named[normalizedCIDR(pool)] {
+			continue
 		}
+		reason, err := claim.qualify(&pool)
+		if err != nil {
+			return poolQualification{}, err
+		}
+		q.add(req.candidate(pool, reason, false))
 	}
 	return q, nil
 }
 
-// normalizedCIDR is the pool's CIDR in the form fitting is keyed by, or empty when it doesn't parse. Pools are
-// matched by CIDR, not name, the way requests name them.
+// normalizedCIDR is the pool's CIDR in the form fitting is keyed by, or empty when it doesn't parse. IPAM requests
+// name pools by CIDR, since the CNI plugin resolves pool names before calling IPAM.
 func normalizedCIDR(pool v3.IPPool) string {
 	_, cidr, err := net.ParseCIDR(pool.Spec.CIDR)
 	if err != nil {
@@ -153,17 +163,25 @@ func normalizedCIDR(pool v3.IPPool) string {
 // the allowed uses. Unlike named pools, it doesn't check each pool's block size against maxPrefixLen.
 func qualifyBySelection(req poolRequest, enabledPools []v3.IPPool) (poolQualification, error) {
 	var q poolQualification
+	claim := newClaim(req)
 	for _, pool := range enabledPools {
-		reason, err := checkSelection(pool, req)
+		reason, err := claim.qualify(&pool)
 		if err != nil {
 			return poolQualification{}, err
-		}
-		if reason == "" {
-			reason = checkUse(pool, req.use)
 		}
 		q.add(req.candidate(pool, reason, false))
 	}
 	return q, nil
+}
+
+// newClaim builds the claim for a request, naming the pools the request names by CIDR and matching selectors
+// against the request's node and namespace.
+func newClaim(r poolRequest) PoolClaim {
+	var pools []string
+	for _, rp := range r.requested {
+		pools = append(pools, rp.Network().String())
+	}
+	return PoolClaim{Use: r.use, Pools: pools, Selectors: claimSelectors{node: r.node, namespace: r.namespace}}
 }
 
 // candidate builds the request's candidate for a pool, recording whether the pool's node selector picks the node. A
@@ -271,14 +289,75 @@ func isSelecting(r rejectReason) bool {
 	return r == "" || r == rejectUse
 }
 
-// checkSelection applies the rules that only automatic selection uses. A pool with no assignment mode is treated as
-// Automatic, the default clientv3 stores.
-func checkSelection(pool v3.IPPool, req poolRequest) (rejectReason, error) {
+// PoolClaim holds the parts of an address request that decide which IP pools it may use: the use it asks for,
+// the pools it names, and whether each pool's selectors match the requesting node and namespace. IPAM picks
+// pools with MayUse, so code that must agree with that choice, such as a report of which nodes are at their block
+// limit, can call it too.
+type PoolClaim struct {
+	Use v3.IPPoolAllowedUse
+
+	// Pools names the pools the claim asks for, each by name or CIDR. A claim naming pools may use only those, and
+	// only their allowed uses are checked. Empty means the claim names no pool.
+	Pools []string
+
+	// Selectors is consulted only for a claim that names no pool, and only once the pool's assignment mode passes.
+	Selectors PoolSelectors
+}
+
+// PoolSelectors reports whether an IP pool's node and namespace selectors match a claim's node and namespace. IPAM
+// parses each selector per claim; a caller that keeps parsed selectors can answer from those instead.
+type PoolSelectors interface {
+	SelectsNode(pool *v3.IPPool) (bool, error)
+	SelectsNamespace(pool *v3.IPPool) (bool, error)
+}
+
+// MayUse reports whether the claim may draw addresses from the pool, claiming blocks in it as needed. The node's
+// blocks in the pools a claim may use are what IPAM counts against maxBlocksPerHost for that claim. The pool must be
+// enabled, since IPAM never offers a disabled pool to a claim, named or not.
+func (c PoolClaim) MayUse(pool *v3.IPPool) (bool, error) {
+	reason, err := c.qualify(pool)
+	return reason == "", err
+}
+
+// qualify checks the pool against the claim, returning why the claim may not use it, or empty when it may.
+func (c PoolClaim) qualify(pool *v3.IPPool) (rejectReason, error) {
+	if len(c.Pools) > 0 {
+		if !c.names(pool) {
+			return rejectNotRequested, nil
+		}
+	} else {
+		reason, err := c.checkSelection(pool)
+		if reason != "" || err != nil {
+			return reason, err
+		}
+	}
+	return checkUse(*pool, c.Use), nil
+}
+
+// names reports whether the claim names the pool. An entry that parses as a CIDR matches the pool's network in any
+// form, and any other entry matches the pool's name, the order the CNI plugin resolves them in.
+func (c PoolClaim) names(pool *v3.IPPool) bool {
+	poolCIDR := normalizedCIDR(*pool)
+	for _, p := range c.Pools {
+		if _, cidr, err := net.ParseCIDR(p); err == nil {
+			if poolCIDR != "" && cidr.String() == poolCIDR {
+				return true
+			}
+		} else if p == pool.Name {
+			return true
+		}
+	}
+	return false
+}
+
+// checkSelection applies the rules that only a claim naming no pool uses. A pool with no assignment mode is treated
+// as Automatic, the default clientv3 stores.
+func (c PoolClaim) checkSelection(pool *v3.IPPool) (rejectReason, error) {
 	if pool.Spec.AssignmentMode != nil && *pool.Spec.AssignmentMode != v3.Automatic {
 		return rejectAssignmentMode, nil
 	}
 
-	nodeMatches, err := SelectsNode(pool, req.node)
+	nodeMatches, err := c.Selectors.SelectsNode(pool)
 	if err != nil {
 		log.WithError(err).WithField("pool", pool).Error("failed to determine if node matches pool")
 		return "", err
@@ -287,7 +366,7 @@ func checkSelection(pool v3.IPPool, req poolRequest) (rejectReason, error) {
 		return rejectNodeSelector, nil
 	}
 
-	namespaceMatches, err := SelectsNamespace(pool, req.namespace)
+	namespaceMatches, err := c.Selectors.SelectsNamespace(pool)
 	if err != nil {
 		log.WithError(err).WithField("pool", pool).Error("failed to determine if namespace matches pool")
 		return "", err
@@ -296,6 +375,23 @@ func checkSelection(pool v3.IPPool, req poolRequest) (rejectReason, error) {
 		return rejectNamespaceSelector, nil
 	}
 	return "", nil
+}
+
+// claimSelectors matches pool selectors against the node and namespace of an IPAM request, parsing each selector.
+type claimSelectors struct {
+	node      internalapi.Node
+	namespace *corev1.Namespace
+}
+
+// SelectsNode parses the pool's node selector and matches it against the request's node.
+func (s claimSelectors) SelectsNode(pool *v3.IPPool) (bool, error) {
+	return SelectsNode(*pool, s.node)
+}
+
+// SelectsNamespace parses the pool's namespace selector and matches it against the request's namespace, which some
+// requests, such as tunnel addresses, leave nil.
+func (s claimSelectors) SelectsNamespace(pool *v3.IPPool) (bool, error) {
+	return SelectsNamespace(*pool, s.namespace)
 }
 
 // checkUse returns rejectUse when the pool's allowed uses, with the default applied, exclude use.

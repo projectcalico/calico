@@ -15,6 +15,8 @@
 package ipam
 
 import (
+	"errors"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -505,6 +507,118 @@ var _ = Describe("qualifyPools with unnamed pools", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(collectCIDRs(q.qualified())).To(Equal([]string{v4Pool2}))
 		Expect(releasedPools(q, pools)).To(Equal([]string{v4Pool1}))
+	})
+})
+
+var errSelectorsConsulted = errors.New("selectors consulted")
+
+// fixedSelectors answers the selector checks with fixed results. When untouchable, it fails any check, so a case can
+// show that MayUse decided without the selectors.
+type fixedSelectors struct {
+	node        bool
+	namespace   bool
+	untouchable bool
+}
+
+func (s fixedSelectors) SelectsNode(*v3.IPPool) (bool, error) {
+	if s.untouchable {
+		return false, errSelectorsConsulted
+	}
+	return s.node, nil
+}
+
+func (s fixedSelectors) SelectsNamespace(*v3.IPPool) (bool, error) {
+	if s.untouchable {
+		return false, errSelectorsConsulted
+	}
+	return s.namespace, nil
+}
+
+// mayUseCase is one row of the PoolClaim.MayUse table. The claim asks for Workload use. The pool is named after its
+// CIDR unless poolName is set.
+type mayUseCase struct {
+	pool      testPool
+	poolName  string
+	pools     []string
+	selectors fixedSelectors
+	want      bool
+}
+
+var _ = DescribeTable("PoolClaim.MayUse",
+	func(tc mayUseCase) {
+		pool := tc.pool.build()
+		if tc.poolName != "" {
+			pool.Name = tc.poolName
+		}
+		claim := PoolClaim{Use: v3.IPPoolAllowedUseWorkload, Pools: tc.pools, Selectors: tc.selectors}
+		Expect(claim.MayUse(&pool)).To(Equal(tc.want))
+	},
+	Entry("an Automatic pool whose selectors match", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		selectors: fixedSelectors{node: true, namespace: true},
+		want:      true,
+	}),
+	Entry("not a Manual pool, for a claim naming no pool, without consulting its selectors", mayUseCase{
+		pool:      testPool{cidr: v4Pool1, manual: true},
+		selectors: fixedSelectors{untouchable: true},
+	}),
+	Entry("a Manual pool the claim names", mayUseCase{
+		pool:      testPool{cidr: v4Pool1, manual: true},
+		pools:     []string{v4Pool1},
+		selectors: fixedSelectors{untouchable: true},
+		want:      true,
+	}),
+	Entry("a pool the claim names by name", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		poolName:  "pool-a",
+		pools:     []string{"pool-a"},
+		selectors: fixedSelectors{untouchable: true},
+		want:      true,
+	}),
+	Entry("not a pool when the claim names a different pool by name", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		poolName:  "pool-a",
+		pools:     []string{"pool-b"},
+		selectors: fixedSelectors{untouchable: true},
+	}),
+	Entry("a pool the claim names by another form of its CIDR", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		pools:     []string{"10.0.0.0/24"},
+		selectors: fixedSelectors{untouchable: true},
+		want:      true,
+	}),
+	Entry("not a pool the claim doesn't name, without consulting its selectors", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		pools:     []string{v4Pool2},
+		selectors: fixedSelectors{untouchable: true},
+	}),
+	Entry("not a pool whose node selector skips the node", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		selectors: fixedSelectors{namespace: true},
+	}),
+	Entry("a pool whose selectors skip the node and namespace, when the claim names it", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		pools:     []string{v4Pool1},
+		selectors: fixedSelectors{untouchable: true},
+		want:      true,
+	}),
+	Entry("not a pool whose namespace selector skips the namespace", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		selectors: fixedSelectors{node: true},
+	}),
+	Entry("not a named pool that doesn't allow the use", mayUseCase{
+		pool:      testPool{cidr: v4Pool1, uses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
+		pools:     []string{v4Pool1},
+		selectors: fixedSelectors{untouchable: true},
+	}),
+)
+
+var _ = Describe("PoolClaim.MayUse errors", func() {
+	It("returns a selector's error", func() {
+		pool := testPool{cidr: v4Pool1}.build()
+		claim := PoolClaim{Use: v3.IPPoolAllowedUseWorkload, Selectors: fixedSelectors{untouchable: true}}
+		_, err := claim.MayUse(&pool)
+		Expect(err).To(MatchError(errSelectorsConsulted))
 	})
 })
 
