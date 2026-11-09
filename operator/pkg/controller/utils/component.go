@@ -26,6 +26,7 @@ import (
 
 	"github.com/go-logr/logr"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	admregv1 "k8s.io/api/admissionregistration/v1"
 	apps "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -798,6 +799,8 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 			dsa.ImagePullSecrets = csa.ImagePullSecrets
 		}
 		return dsa
+	case *admregv1.ValidatingWebhookConfiguration:
+		return mergeValidatingWebhooks(desired.(*admregv1.ValidatingWebhookConfiguration), current.(*admregv1.ValidatingWebhookConfiguration))
 	case *v3.NetworkPolicy:
 		cnp := current.(*v3.NetworkPolicy)
 		dnp := desired.(*v3.NetworkPolicy)
@@ -823,6 +826,31 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 		// Default to just using the desired state, with an updated RV.
 		return desired
 	}
+}
+
+// mergeValidatingWebhooks keeps the caBundle the webhook server patched in when
+// the desired webhook leaves it empty. istiod does this, and also raises
+// failurePolicy from Ignore to Fail once it serves the webhook. Writing the
+// rendered values back would turn validation off until istiod patches again,
+// and every reconcile would race its writes.
+func mergeValidatingWebhooks(desired, current *admregv1.ValidatingWebhookConfiguration) client.Object {
+	live := make(map[string]admregv1.ValidatingWebhook, len(current.Webhooks))
+	for _, w := range current.Webhooks {
+		live[w.Name] = w
+	}
+	for i := range desired.Webhooks {
+		d := &desired.Webhooks[i]
+		c, ok := live[d.Name]
+		if !ok || len(d.ClientConfig.CABundle) != 0 || len(c.ClientConfig.CABundle) == 0 {
+			continue
+		}
+		d.ClientConfig.CABundle = c.ClientConfig.CABundle
+		if d.FailurePolicy != nil && *d.FailurePolicy == admregv1.Ignore &&
+			c.FailurePolicy != nil && *c.FailurePolicy == admregv1.Fail {
+			d.FailurePolicy = c.FailurePolicy
+		}
+	}
+	return desired
 }
 
 // modifyPodSpec is a helper for pulling out pod specifications from an arbitrary object.

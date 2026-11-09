@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	ocsv1 "github.com/openshift/api/security/v1"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	admregv1 "k8s.io/api/admissionregistration/v1"
 	apps "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -1951,6 +1952,46 @@ var _ = Describe("Component handler tests", func() {
 			Expect(c.Get(ctx, client.ObjectKey{Name: "a", Namespace: "a"}, sa)).NotTo(HaveOccurred())
 			Expect(sa.Secrets).To(HaveLen(1))
 			Expect(sa.ImagePullSecrets).To(HaveLen(1))
+		})
+	})
+	Context("validating webhook updates", func() {
+		webhook := func(name string, caBundle string, policy admregv1.FailurePolicyType) admregv1.ValidatingWebhook {
+			w := admregv1.ValidatingWebhook{Name: name, FailurePolicy: ptr.To(policy)}
+			if caBundle != "" {
+				w.ClientConfig.CABundle = []byte(caBundle)
+			}
+			return w
+		}
+
+		It("keeps the caBundle and failurePolicy a webhook server patched in", func() {
+			live := &admregv1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "validator"},
+				Webhooks: []admregv1.ValidatingWebhook{
+					webhook("patched", "live-ca", admregv1.Fail),
+					webhook("owned", "rendered-ca", admregv1.Ignore),
+					webhook("unpatched", "", admregv1.Ignore),
+				},
+			}
+			Expect(c.Create(ctx, live)).NotTo(HaveOccurred())
+
+			desired := &admregv1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "validator"},
+				Webhooks: []admregv1.ValidatingWebhook{
+					webhook("patched", "", admregv1.Ignore),
+					webhook("owned", "new-rendered-ca", admregv1.Fail),
+					webhook("unpatched", "", admregv1.Ignore),
+				},
+			}
+			fc := &fakeComponent{supportedOSType: rmeta.OSTypeLinux, objs: []client.Object{desired}}
+			Expect(handler.CreateOrUpdateOrDelete(ctx, fc, sm)).NotTo(HaveOccurred())
+
+			got := &admregv1.ValidatingWebhookConfiguration{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: "validator"}, got)).NotTo(HaveOccurred())
+			Expect(got.Webhooks).To(Equal([]admregv1.ValidatingWebhook{
+				webhook("patched", "live-ca", admregv1.Fail),
+				webhook("owned", "new-rendered-ca", admregv1.Fail),
+				webhook("unpatched", "", admregv1.Ignore),
+			}))
 		})
 	})
 	Context("volumes and volume mounts", func() {
