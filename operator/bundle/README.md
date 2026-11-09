@@ -20,7 +20,7 @@ make -C operator bundle VERSION=3.34.0 PREV_VERSION=3.33.0 CHANNEL=release-v3.34
 | `CHANNEL` | The OperatorHub channel, which must be a `release-v3.YY` branch name. Defaults to the current branch when that branch is one; from any other branch, pass it explicitly. |
 | `DEFAULT_CHANNEL` | Optional. The bundle's `channel.default.v1` annotation. Defaults to, and must equal, `CHANNEL`. It does not change the package's default channel, which the catalog decides - see below. |
 | `BUNDLE_OPERATOR_IMAGE` | Optional. The fully qualified repository the operator image is pinned from. Defaults to `quay.io/calico/operator`. |
-| `BUNDLE_OPENSHIFT_VERSIONS` | Optional. The `com.redhat.openshift.versions` range, e.g. `v4.19-v4.22`. The default in `gen-bundle` moves with each release; a bundle only reaches the catalog of an OpenShift version inside this range. |
+| `BUNDLE_OPENSHIFT_VERSIONS` | Optional. The supported OpenShift versions, as a comma-separated list of at least two, e.g. `v4.20,v4.21,v4.22,v5.0`. Ranges such as `v4.19-v4.22` are refused, since `release-config.yaml` needs one catalog template per version. The default in `gen-bundle` moves with each release; a bundle only reaches the catalog of an OpenShift version in this list. |
 
 Output:
 
@@ -28,7 +28,11 @@ Output:
 bundle/bundle-v<VERSION>.Dockerfile   # builds the bundle image
 bundle/<VERSION>/manifests/           # CSV + CRDs
 bundle/<VERSION>/metadata/            # annotations.yaml
+bundle/<VERSION>/release-config.yaml  # which catalogs Red Hat adds the bundle to
 ```
+
+Copy all of `bundle/<VERSION>/`, including `release-config.yaml`, into
+`operators/tigera-operator/<VERSION>/` in the certified-operators repo.
 
 `make bundle` pulls and inspects the operator image, so it runs docker on the
 host — the build container has no docker-in-docker.
@@ -49,6 +53,20 @@ bundle supports:
 - a `release-v3.YY` channel block with an entry for the new bundle, and
 - `defaultChannel` moved to it, if it should become the default.
 
+`gen-bundle` writes both into `release-config.yaml`, one entry per version in
+`BUNDLE_OPENSHIFT_VERSIONS`, with `skipRange: "<VERSION>"` and the new channel as
+the default. Once the bundle PR merges, Red Hat's release pipeline opens a
+follow-up PR that adds the published bundle to those templates and renders the
+catalogs; that PR is where the bundle image's `registry.connect.redhat.com`
+digest first appears. See
+[FBC auto-release](https://redhat-openshift-ecosystem.github.io/operator-pipelines/users/fbc_autorelease/).
+Edit `release-config.yaml` before opening the bundle PR if a release needs
+something else, e.g. a `replaces`, or to leave `defaultChannel` where it is.
+
+Every version listed needs a mapping in the certified-operators `ci.yaml`. When
+a new OpenShift version is added, add its mapping there; the pipeline creates
+the template itself.
+
 **The first bundle built from this repo** is a move off the `release-v1.YY`
 channels that tigera/operator published into, which top out at
 `tigera-operator.v1.42.2`. Build it with `PREV_VERSION=1.42.2`, not the previous
@@ -68,8 +86,8 @@ any one of them runs the steps ahead of it too:
    bundle`, which merges the static CSV base with the staged deployment, RBAC
    and CRDs.
 2. **`update-bundle`** — runs `gen-bundle update-bundle`, which moves the
-   generated output under `bundle/<VERSION>/` and writes the values that are
-   only knowable at build time.
+   generated output under `bundle/<VERSION>/`, writes the values that are
+   only knowable at build time, and writes `release-config.yaml`.
 3. **`bundle-validate`** — `operator-sdk bundle validate`, against the full
    `operatorframework` suite rather than only the required checks, because this
    bundle is built to be certified.
@@ -79,8 +97,8 @@ any one of them runs the steps ahead of it too:
 unit tests run by `make -C operator hack/gen-bundle/ut` (and by `make ci`). Both
 of its commands take their paths from flags (`--repo-root`, `--operator-dir`)
 that default to running from `operator/`, so pass them when running it by hand
-from anywhere else. `update-bundle` also needs `--image`, which the Makefile
-fills in from `BUNDLE_OPERATOR_IMAGE`.
+from anywhere else. `update-bundle` also needs `--image` and `--channel`, which
+the Makefile fills in from `BUNDLE_OPERATOR_IMAGE` and `CHANNEL`.
 
 ## Where each piece comes from
 

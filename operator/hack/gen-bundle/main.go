@@ -114,14 +114,29 @@ var (
 		Required:  true,
 		Validator: semverFlag("prev-version"),
 	}
-	// The supported OpenShift range moves with every release, and a bundle only
-	// appears in the catalog for an OpenShift version that this range includes.
+	// The supported OpenShift versions move with every release, and a bundle only
+	// appears in the catalog for an OpenShift version listed here.
 	openShiftVersionsFlag = &cli.StringFlag{
-		Name:      "openshift-versions",
-		Usage:     "The OpenShift versions the bundle supports, as vX.Y-vX.Y, or vX.Y for that version and later",
-		Sources:   cli.EnvVars("BUNDLE_OPENSHIFT_VERSIONS"),
-		Value:     "v4.19-v4.22",
-		Validator: nonEmpty("openshift-versions"),
+		Name:    "openshift-versions",
+		Usage:   "The OpenShift versions the bundle supports, as a comma-separated list such as vX.Y,vX.Z",
+		Sources: cli.EnvVars("BUNDLE_OPENSHIFT_VERSIONS"),
+		// A list rather than a range, for two reasons: the supported versions
+		// span a major version, and a range cannot say where 4.x ends; and
+		// release-config.yaml names one catalog template per version.
+		Value: "v4.20,v4.21,v4.22,v5.0",
+		Validator: func(value string) error {
+			_, err := parseOpenShiftVersions(value)
+			return err
+		},
+	}
+	// The channel is also the one the Red Hat release pipeline publishes the
+	// bundle into, via release-config.yaml.
+	channelFlag = &cli.StringFlag{
+		Name:      "channel",
+		Usage:     "The OperatorHub channel the bundle is published into, e.g. release-v3.34",
+		Sources:   cli.EnvVars("CHANNEL"),
+		Required:  true,
+		Validator: nonEmpty("channel"),
 	}
 	// The capabilities level is the claim the bundle is certified against, so it
 	// is only raised deliberately - hence the flag rather than a value in the CSV

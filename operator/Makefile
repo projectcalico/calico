@@ -563,6 +563,7 @@ update-bundle: bundle-generate $(BINDIR)/gen-bundle
 		--operator-dir "$(CURDIR)" \
 		--version "$(VERSION)" \
 		--prev-version "$(PREV_VERSION)" \
+		--channel "$(CHANNEL)" \
 		--image "$(BUNDLE_OPERATOR_IMAGE)"
 
 # Built for the host, which runs it, so cgo is off to keep it from linking
