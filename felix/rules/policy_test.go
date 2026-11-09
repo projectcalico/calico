@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1094,6 +1094,80 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			returnRule,
 		}),
 	)
+
+	DescribeTable(
+		"nftables CIDR list tests",
+		func(numSrc, numNotSrc, numDst, numNotDst int, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal, true)
+			pRule := proto.Rule{
+				SrcNet:    []string{"10.0.0.0/24", "10.0.1.0/24"}[:numSrc],
+				NotSrcNet: []string{"11.0.0.0/24", "11.0.1.0/24"}[:numNotSrc],
+				DstNet:    []string{"12.0.0.0/24", "12.0.1.0/24"}[:numDst],
+				NotDstNet: []string{"13.0.0.0/24", "13.0.1.0/24"}[:numNotDst],
+				Action:    "allow",
+			}
+			rules := renderer.ProtoRuleToIptablesRules(
+				&pRule,
+				4,
+				RuleOwnerTypePolicy,
+				RuleDirIngress,
+				0,
+				fooPolicyID,
+				defaultTier,
+				false,
+			)
+
+			// No CIDR match blocks: one rule matches and sets the accept mark, one returns.
+			Expect(rules).To(HaveLen(2))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+		},
+		Entry("1 src", 1, 0, 0, 0, "ip saddr 10.0.0.0/24"),
+		Entry("2 src", 2, 0, 0, 0, "ip saddr { 10.0.0.0/24, 10.0.1.0/24 }"),
+		Entry("2 !src", 0, 2, 0, 0, "ip saddr != { 11.0.0.0/24, 11.0.1.0/24 }"),
+		Entry("2 dst", 0, 0, 2, 0, "ip daddr { 12.0.0.0/24, 12.0.1.0/24 }"),
+		Entry("2 !dst", 0, 0, 0, 2, "ip daddr != { 13.0.0.0/24, 13.0.1.0/24 }"),
+		Entry("1 src, 1 !src", 1, 1, 0, 0, "ip saddr 10.0.0.0/24 ip saddr != 11.0.0.0/24"),
+		Entry(
+			"2 of everything",
+			2,
+			2,
+			2,
+			2,
+			"ip saddr { 10.0.0.0/24, 10.0.1.0/24 } ip daddr { 12.0.0.0/24, 12.0.1.0/24 } "+
+				"ip saddr != { 11.0.0.0/24, 11.0.1.0/24 } ip daddr != { 13.0.0.0/24, 13.0.1.0/24 }",
+		),
+	)
+
+	It("should keep nftables CIDR lists in the main rule when ports need a match block", func() {
+		rrConfigNormal.FlowLogsEnabled = false
+		renderer := NewRenderer(rrConfigNormal, true)
+		pRule := proto.Rule{
+			Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			DstPorts:             []*proto.PortRange{{First: 80, Last: 80}},
+			DstNamedPortIpSetIds: []string{"ipset-1"},
+			SrcNet:               []string{"10.0.0.0/24", "10.0.1.0/24"},
+			Action:               "allow",
+		}
+		rules := renderer.ProtoRuleToIptablesRules(
+			&pRule,
+			4,
+			RuleOwnerTypePolicy,
+			RuleDirIngress,
+			0,
+			fooPolicyID,
+			defaultTier,
+			false,
+		)
+
+		// Mark reset, one rule per port match, then the main rule and the return.
+		Expect(rules).To(HaveLen(5))
+		for _, r := range rules[1:3] {
+			Expect(r.Match.Render()).NotTo(ContainSubstring("saddr"))
+		}
+		Expect(rules[3].Match.Render()).To(Equal(
+			"meta l4proto tcp ip saddr { 10.0.0.0/24, 10.0.1.0/24 } meta mark & 0x200 == 0x200"))
+	})
 
 	DescribeTable(
 		"CIDR split tests with flowlogs enabled",

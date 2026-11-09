@@ -59,6 +59,14 @@ type NFTMatchCriteria interface {
 
 	ConntrackStatus(statusNames string) generictables.MatchCriteria
 	NotConntrackStatus(statusNames string) generictables.MatchCriteria
+
+	// SourceNets, NotSourceNets, DestNets and NotDestNets match any of the given CIDRs
+	// in a single clause. iptables needs a rule per CIDR for this, which makes policy
+	// chains with large ipBlock lists very long.
+	SourceNets(nets []string) generictables.MatchCriteria
+	NotSourceNets(nets []string) generictables.MatchCriteria
+	DestNets(nets []string) generictables.MatchCriteria
+	NotDestNets(nets []string) generictables.MatchCriteria
 }
 
 // Combine creates a copy of m1 and appends the values of m2 to the copy, creating a new MatchCritera with the values
@@ -396,6 +404,36 @@ func (m nftMatch) DestNet(net string) generictables.MatchCriteria {
 func (m nftMatch) NotDestNet(net string) generictables.MatchCriteria {
 	m.clauses = append(m.clauses, fmt.Sprintf("<IPV> daddr != %s", net))
 	return m
+}
+
+// SourceNets matches packets whose source address is in any of nets.
+func (m nftMatch) SourceNets(nets []string) generictables.MatchCriteria {
+	m.clauses = append(m.clauses, fmt.Sprintf("<IPV> saddr %s", netsToSet(nets)))
+	return m
+}
+
+// NotSourceNets matches packets whose source address is in none of nets.
+func (m nftMatch) NotSourceNets(nets []string) generictables.MatchCriteria {
+	m.clauses = append(m.clauses, fmt.Sprintf("<IPV> saddr != %s", netsToSet(nets)))
+	return m
+}
+
+// DestNets matches packets whose destination address is in any of nets.
+func (m nftMatch) DestNets(nets []string) generictables.MatchCriteria {
+	m.clauses = append(m.clauses, fmt.Sprintf("<IPV> daddr %s", netsToSet(nets)))
+	return m
+}
+
+// NotDestNets matches packets whose destination address is in none of nets.
+func (m nftMatch) NotDestNets(nets []string) generictables.MatchCriteria {
+	m.clauses = append(m.clauses, fmt.Sprintf("<IPV> daddr != %s", netsToSet(nets)))
+	return m
+}
+
+// netsToSet renders CIDRs as an nftables anonymous set. nft merges overlapping and
+// duplicate CIDRs in an anonymous set itself, so callers need not normalize them.
+func netsToSet(nets []string) string {
+	return fmt.Sprintf("{ %s }", strings.Join(nets, ", "))
 }
 
 func (m nftMatch) SourceIPSet(name string) generictables.MatchCriteria {

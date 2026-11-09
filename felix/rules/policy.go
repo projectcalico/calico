@@ -321,14 +321,18 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		ruleCopy.DstNamedPortIpSetIds = nil
 	}
 
+	// nftables matches a CIDR list in one rule with an anonymous set. A rule per CIDR makes
+	// long chains, and the kernel's chain dump is quadratic in chain length.
+	useCIDRBlocks := !r.nft
+
 	// If there's more than one positive source/destination CIDR match, we have to render a block.
 	// Otherwise, if there's exactly one, we'll include it in the main rule below.
-	if len(ruleCopy.SrcNet) > 1 {
+	if useCIDRBlocks && len(ruleCopy.SrcNet) > 1 {
 		matchBlockBuilder.AppendCIDRMatchBlock(ruleCopy.SrcNet, src)
 		// Since we're using a block for this, nil out the match.
 		ruleCopy.SrcNet = nil
 	}
-	if len(ruleCopy.DstNet) > 1 {
+	if useCIDRBlocks && len(ruleCopy.DstNet) > 1 {
 		matchBlockBuilder.AppendCIDRMatchBlock(ruleCopy.DstNet, dst)
 		// Since we're using a block for this, nil out the match.
 		ruleCopy.DstNet = nil
@@ -344,7 +348,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	// any negative matches will tip the count over 1.  Otherwise, we'll need 2 or more negative
 	// matches to make the count more than 1.
 	totalSrcMatches := len(ruleCopy.SrcNet) + len(ruleCopy.NotSrcNet)
-	if totalSrcMatches > 1 {
+	if useCIDRBlocks && totalSrcMatches > 1 {
 		// We have some negated source CIDR matches and the total number of source
 		// CIDR matches won't fit in the rule.  Render a block of rules to do the
 		// negated match.
@@ -353,7 +357,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		ruleCopy.NotSrcNet = nil
 	}
 	totalDstMatches := len(ruleCopy.DstNet) + len(ruleCopy.NotDstNet)
-	if totalDstMatches > 1 {
+	if useCIDRBlocks && totalDstMatches > 1 {
 		// We have some negated dest CIDR matches and the total number of dest
 		// CIDR matches won't fit in the rule.  Render a block of rules to do the
 		// negated match.
@@ -546,6 +550,57 @@ func (sod srcOrDst) MatchNet(m generictables.MatchCriteria, cidr string) generic
 	}
 	logrus.WithField("srcOrDst", sod).Panic("Unknown source or dest type.")
 	return nil
+}
+
+// MatchNets returns m with a match on any of the given CIDRs. A single CIDR renders as
+// a plain match for either backend. More than one needs nftables, because iptables
+// rules get a CIDR match block from ProtoRuleToIptablesRules instead.
+func (sod srcOrDst) MatchNets(m generictables.MatchCriteria, cidrs []string) generictables.MatchCriteria {
+	if len(cidrs) == 1 {
+		return sod.MatchNet(m, cidrs[0])
+	}
+	nm := mustNFTMatch(m, cidrs)
+	switch sod {
+	case src:
+		return nm.SourceNets(cidrs)
+	case dst:
+		return nm.DestNets(cidrs)
+	}
+	logrus.WithField("srcOrDst", sod).Panic("Unknown source or dest type.")
+	return nil
+}
+
+// NotMatchNets returns m with a match on none of the given CIDRs. Like MatchNets, it
+// needs nftables for more than one CIDR.
+func (sod srcOrDst) NotMatchNets(m generictables.MatchCriteria, cidrs []string) generictables.MatchCriteria {
+	if len(cidrs) == 1 {
+		switch sod {
+		case src:
+			return m.NotSourceNet(cidrs[0])
+		case dst:
+			return m.NotDestNet(cidrs[0])
+		}
+	}
+	nm := mustNFTMatch(m, cidrs)
+	switch sod {
+	case src:
+		return nm.NotSourceNets(cidrs)
+	case dst:
+		return nm.NotDestNets(cidrs)
+	}
+	logrus.WithField("srcOrDst", sod).Panic("Unknown source or dest type.")
+	return nil
+}
+
+// mustNFTMatch returns m as nftables match criteria, panicking otherwise. Reaching it
+// with an iptables match means ProtoRuleToIptablesRules left a CIDR list in the rule
+// instead of rendering a match block.
+func mustNFTMatch(m generictables.MatchCriteria, cidrs []string) nftrender.NFTMatchCriteria {
+	nm, ok := m.(nftrender.NFTMatchCriteria)
+	if !ok {
+		logrus.WithField("cidrs", cidrs).Panic("Bug: more than one CIDR left in a non-nftables rule.")
+	}
+	return nm
 }
 
 func (sod srcOrDst) AppendMatchPorts(m generictables.MatchCriteria, pr []*proto.PortRange) generictables.MatchCriteria {
@@ -858,12 +913,9 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	// First, process positive (non-negated) match criteria.
 	match = appendProtocolMatch(match, pRule.Protocol, logCxt)
 
-	if len(pRule.SrcNet) == 1 {
-		logCxt.WithField("cidr", pRule.SrcNet[0]).Debug("Adding src CIDR match")
-		match = match.SourceNet(pRule.SrcNet[0])
-	} else if len(pRule.SrcNet) > 1 {
-		logrus.WithField("rule", pRule).Panic(
-			"CalculateRuleMatch() passed more than one CIDR in SrcNet.")
+	if len(pRule.SrcNet) > 0 {
+		logCxt.WithField("cidrs", pRule.SrcNet).Debug("Adding src CIDR match")
+		match = src.MatchNets(match, pRule.SrcNet)
 	}
 
 	nameForIPSet := func(ipsetID string) string {
@@ -903,12 +955,9 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		match = match.SourceIPPortSet(ipsetName)
 	}
 
-	if len(pRule.DstNet) == 1 {
-		logCxt.WithField("cidr", pRule.DstNet[0]).Debug("Adding dest CIDR match")
-		match = match.DestNet(pRule.DstNet[0])
-	} else if len(pRule.DstNet) > 1 {
-		logrus.WithField("rule", pRule).Panic(
-			"CalculateRuleMatch() passed more than one CIDR in DstNet.")
+	if len(pRule.DstNet) > 0 {
+		logCxt.WithField("cidrs", pRule.DstNet).Debug("Adding dest CIDR match")
+		match = dst.MatchNets(match, pRule.DstNet)
 	}
 
 	for _, ipsetID := range pRule.DstIpSetIds {
@@ -984,11 +1033,9 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		}
 	}
 
-	if len(pRule.NotSrcNet) == 1 {
-		logCxt.WithField("cidr", pRule.NotSrcNet[0]).Debug("Adding negated src CIDR match")
-		match = match.NotSourceNet(pRule.NotSrcNet[0])
-	} else if len(pRule.NotSrcNet) > 1 {
-		logrus.WithField("rule", pRule).Panic("CalculateRuleMatch() passed more than one CIDR in NotSrcNet.")
+	if len(pRule.NotSrcNet) > 0 {
+		logCxt.WithField("cidrs", pRule.NotSrcNet).Debug("Adding negated src CIDR match")
+		match = src.NotMatchNets(match, pRule.NotSrcNet)
 	}
 
 	for _, ipsetID := range pRule.NotSrcIpSetIds {
@@ -1018,11 +1065,9 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		match = match.NotSourceIPPortSet(ipsetName)
 	}
 
-	if len(pRule.NotDstNet) == 1 {
-		logCxt.WithField("cidr", pRule.NotDstNet[0]).Debug("Adding !dst CIDR match")
-		match = match.NotDestNet(pRule.NotDstNet[0])
-	} else if len(pRule.NotDstNet) > 1 {
-		logrus.WithField("rule", pRule).Panic("CalculateRuleMatch() passed more than one CIDR in NotDstNet.")
+	if len(pRule.NotDstNet) > 0 {
+		logCxt.WithField("cidrs", pRule.NotDstNet).Debug("Adding !dst CIDR match")
+		match = dst.NotMatchNets(match, pRule.NotDstNet)
 	}
 
 	for _, ipsetID := range pRule.NotDstIpSetIds {
