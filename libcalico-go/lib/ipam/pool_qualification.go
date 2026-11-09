@@ -15,6 +15,7 @@
 package ipam
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 
@@ -174,14 +175,10 @@ func qualifyBySelection(req poolRequest, enabledPools []v3.IPPool) (poolQualific
 	return q, nil
 }
 
-// newClaim builds the claim for a request, naming the pools the request names by CIDR and matching selectors
-// against the request's node and namespace.
+// newClaim builds the claim for a request, naming the pools the request names and matching selectors against the
+// request's node and namespace.
 func newClaim(r poolRequest) PoolClaim {
-	var pools []string
-	for _, rp := range r.requested {
-		pools = append(pools, rp.Network().String())
-	}
-	return NewPoolClaim(r.use, pools, claimSelectors{node: r.node, namespace: r.namespace})
+	return NewPoolClaim(r.use, r.requested, claimSelectors{node: r.node, namespace: r.namespace})
 }
 
 // candidate builds the request's candidate for a pool, recording whether the pool's node selector picks the node. A
@@ -294,17 +291,59 @@ func isSelecting(r rejectReason) bool {
 // pools with MayUse, so code that must agree with that choice, such as a report of which nodes are at their block
 // limit, can call it too.
 type PoolClaim struct {
-	use       v3.IPPoolAllowedUse
-	pools     []string
+	use v3.IPPoolAllowedUse
+
+	// pools holds the normalized CIDRs of the pools the claim names.
+	pools     map[string]bool
 	selectors PoolSelectors
 }
 
-// NewPoolClaim builds a claim for an address request asking for use. pools names the pools it asks for, each by name
-// or CIDR as the CNI plugin accepts them; a claim naming pools may use only those, and only their allowed uses are
-// checked. selectors matches each pool's selectors against the requesting node and namespace, and is consulted only
-// when pools is empty.
-func NewPoolClaim(use v3.IPPoolAllowedUse, pools []string, selectors PoolSelectors) PoolClaim {
-	return PoolClaim{use: use, pools: slices.Clone(pools), selectors: selectors}
+// errClaimWithoutSelectors is returned for a claim that names no pool and has no selectors to choose pools with.
+var errClaimWithoutSelectors = errors.New("pool claim names no pool and has no selectors")
+
+// NewPoolClaim builds a claim for an address request asking for use. pools are the CIDRs of the pools it names, as
+// ResolvePools returns them; a claim naming pools may use only those, and only their allowed uses are checked.
+// selectors matches each pool's selectors against the requesting node and namespace. It may be nil when pools is not
+// empty, since only a claim naming no pool consults it.
+func NewPoolClaim(use v3.IPPoolAllowedUse, pools []net.IPNet, selectors PoolSelectors) PoolClaim {
+	named := map[string]bool{}
+	for _, p := range pools {
+		named[p.Network().String()] = true
+	}
+	return PoolClaim{use: use, pools: named, selectors: selectors}
+}
+
+// ResolvePools turns pool names and CIDRs, the forms the CNI plugin accepts, into the CIDRs NewPoolClaim takes. An
+// entry that parses as a CIDR must match a pool's network in any form; any other entry must be a pool's name. It
+// returns an error for an entry that matches no pool, so a mistyped name fails rather than matching nothing.
+func ResolvePools(pools []v3.IPPool, entries []string) ([]net.IPNet, error) {
+	resolved := make([]net.IPNet, 0, len(entries))
+	for _, entry := range entries {
+		cidr, err := resolvePool(pools, entry)
+		if err != nil {
+			return nil, err
+		}
+		resolved = append(resolved, cidr)
+	}
+	return resolved, nil
+}
+
+// resolvePool returns the CIDR of the pool an entry names, by CIDR or by name.
+func resolvePool(pools []v3.IPPool, entry string) (net.IPNet, error) {
+	_, entryCIDR, cidrErr := net.ParseCIDR(entry)
+	for _, pool := range pools {
+		_, poolCIDR, err := net.ParseCIDR(pool.Spec.CIDR)
+		if err != nil {
+			return net.IPNet{}, fmt.Errorf("pool %s has invalid CIDR %s: %w", pool.Name, pool.Spec.CIDR, err)
+		}
+		if cidrErr == nil && poolCIDR.String() == entryCIDR.String() {
+			return *poolCIDR, nil
+		}
+		if cidrErr != nil && entry != "" && pool.Name == entry {
+			return *poolCIDR, nil
+		}
+	}
+	return net.IPNet{}, fmt.Errorf("no IP pool has name or CIDR %q", entry)
 }
 
 // PoolSelectors reports whether an IP pool's node and namespace selectors match a claim's node and namespace. IPAM
@@ -315,8 +354,9 @@ type PoolSelectors interface {
 }
 
 // MayUse reports whether the claim may draw addresses from the pool, claiming blocks in it as needed. The node's
-// blocks in the pools a claim may use are what IPAM counts against maxBlocksPerHost for that claim. The pool must be
-// enabled, since IPAM never offers a disabled pool to a claim, named or not.
+// blocks in the pools a claim may use are what IPAM counts against maxBlocksPerHost for that claim. Pass pools as
+// GetEnabledPools returns them, since IPAM never offers a disabled pool, or one masked by an overlapping allocatable
+// pool.
 func (c PoolClaim) MayUse(pool *v3.IPPool) (bool, error) {
 	reason, err := c.qualify(pool)
 	return reason == "", err
@@ -325,32 +365,19 @@ func (c PoolClaim) MayUse(pool *v3.IPPool) (bool, error) {
 // qualify checks the pool against the claim, returning why the claim may not use it, or empty when it may.
 func (c PoolClaim) qualify(pool *v3.IPPool) (rejectReason, error) {
 	if len(c.pools) > 0 {
-		if !c.names(pool) {
+		if !c.pools[normalizedCIDR(*pool)] {
 			return rejectNotRequested, nil
 		}
 	} else {
+		if c.selectors == nil {
+			return "", errClaimWithoutSelectors
+		}
 		reason, err := c.checkSelection(pool)
 		if reason != "" || err != nil {
 			return reason, err
 		}
 	}
 	return checkUse(*pool, c.use), nil
-}
-
-// names reports whether the claim names the pool. An entry that parses as a CIDR matches the pool's network in any
-// form, and any other entry matches the pool's name, the order the CNI plugin resolves them in.
-func (c PoolClaim) names(pool *v3.IPPool) bool {
-	poolCIDR := normalizedCIDR(*pool)
-	for _, p := range c.pools {
-		if _, cidr, err := net.ParseCIDR(p); err == nil {
-			if poolCIDR != "" && cidr.String() == poolCIDR {
-				return true
-			}
-		} else if p == pool.Name {
-			return true
-		}
-	}
-	return false
 }
 
 // checkSelection applies the rules that only a claim naming no pool uses. A pool with no assignment mode is treated

@@ -534,11 +534,9 @@ func (s fixedSelectors) SelectsNamespace(*v3.IPPool) (bool, error) {
 	return s.namespace, nil
 }
 
-// mayUseCase is one row of the PoolClaim.MayUse table. The claim asks for Workload use. The pool is named after its
-// CIDR unless poolName is set.
+// mayUseCase is one row of the PoolClaim.MayUse table. The claim asks for Workload use and names pools by CIDR.
 type mayUseCase struct {
 	pool      testPool
-	poolName  string
 	pools     []string
 	selectors fixedSelectors
 	want      bool
@@ -547,10 +545,7 @@ type mayUseCase struct {
 var _ = DescribeTable("PoolClaim.MayUse",
 	func(tc mayUseCase) {
 		pool := tc.pool.build()
-		if tc.poolName != "" {
-			pool.Name = tc.poolName
-		}
-		claim := NewPoolClaim(v3.IPPoolAllowedUseWorkload, tc.pools, tc.selectors)
+		claim := NewPoolClaim(v3.IPPoolAllowedUseWorkload, parseRequestedPools(tc.pools...), tc.selectors)
 		Expect(claim.MayUse(&pool)).To(Equal(tc.want))
 	},
 	Entry("an Automatic pool whose selectors match", mayUseCase{
@@ -567,19 +562,6 @@ var _ = DescribeTable("PoolClaim.MayUse",
 		pools:     []string{v4Pool1},
 		selectors: fixedSelectors{untouchable: true},
 		want:      true,
-	}),
-	Entry("a pool the claim names by name", mayUseCase{
-		pool:      testPool{cidr: v4Pool1},
-		poolName:  "pool-a",
-		pools:     []string{"pool-a"},
-		selectors: fixedSelectors{untouchable: true},
-		want:      true,
-	}),
-	Entry("not a pool when the claim names a different pool by name", mayUseCase{
-		pool:      testPool{cidr: v4Pool1},
-		poolName:  "pool-a",
-		pools:     []string{"pool-b"},
-		selectors: fixedSelectors{untouchable: true},
 	}),
 	Entry("a pool the claim names by another form of its CIDR", mayUseCase{
 		pool:      testPool{cidr: v4Pool1},
@@ -620,7 +602,72 @@ var _ = Describe("PoolClaim.MayUse errors", func() {
 		_, err := claim.MayUse(&pool)
 		Expect(err).To(MatchError(errSelectorsConsulted))
 	})
+
+	It("needs no selectors for a claim that names its pools", func() {
+		pool := testPool{cidr: v4Pool1}.build()
+		claim := NewPoolClaim(v3.IPPoolAllowedUseWorkload, parseRequestedPools(v4Pool1), nil)
+		Expect(claim.MayUse(&pool)).To(BeTrue())
+	})
+
+	It("returns an error for a claim that names no pool and has no selectors", func() {
+		pool := testPool{cidr: v4Pool1, manual: true}.build()
+		claim := NewPoolClaim(v3.IPPoolAllowedUseWorkload, nil, nil)
+		_, err := claim.MayUse(&pool)
+		Expect(err).To(MatchError(errClaimWithoutSelectors))
+	})
 })
+
+// resolveCase is one row of the ResolvePools table, resolving against pool-a (10.0.0.0/24), pool-b (20.0.0.0/24),
+// and a pool with no name (30.0.0.0/24).
+type resolveCase struct {
+	entries []string
+	want    []string
+	err     string
+}
+
+var _ = DescribeTable("ResolvePools",
+	func(tc resolveCase) {
+		pools := buildPools([]testPool{{cidr: "10.0.0.0/24"}, {cidr: "20.0.0.0/24"}, {cidr: "30.0.0.0/24"}})
+		pools[0].Name = "pool-a"
+		pools[1].Name = "pool-b"
+		pools[2].Name = ""
+
+		resolved, err := ResolvePools(pools, tc.entries)
+		if tc.err != "" {
+			Expect(err).To(MatchError(tc.err))
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+		got := []string{}
+		for _, r := range resolved {
+			got = append(got, r.String())
+		}
+		Expect(got).To(Equal(tc.want))
+	},
+	Entry("no entries", resolveCase{
+		want: []string{},
+	}),
+	Entry("names and CIDRs, in the order given", resolveCase{
+		entries: []string{"pool-b", "10.0.0.0/24"},
+		want:    []string{"20.0.0.0/24", "10.0.0.0/24"},
+	}),
+	Entry("a CIDR written with host bits set", resolveCase{
+		entries: []string{"10.0.0.1/24"},
+		want:    []string{"10.0.0.0/24"},
+	}),
+	Entry("a name no pool has", resolveCase{
+		entries: []string{"pool-a", "pool-c"},
+		err:     `no IP pool has name or CIDR "pool-c"`,
+	}),
+	Entry("a CIDR inside a pool but not equal to it", resolveCase{
+		entries: []string{"10.0.0.0/26"},
+		err:     `no IP pool has name or CIDR "10.0.0.0/26"`,
+	}),
+	Entry("an empty entry, even though a pool has no name", resolveCase{
+		entries: []string{""},
+		err:     `no IP pool has name or CIDR ""`,
+	}),
+)
 
 // keepCase is one row of the release-time keepsBlock table, for a node labeled foo=bar and an empty block.
 type keepCase struct {
