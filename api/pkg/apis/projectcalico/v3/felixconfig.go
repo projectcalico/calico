@@ -381,6 +381,7 @@ type FelixConfigurationSpec struct {
 
 	// IptablesFilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic
 	// with an iptables "DROP" action. If you want to use "REJECT" action instead you can configure it in here.
+	// REJECT only applies in the filter table; untracked and pre-DNAT policy, which run in the raw and mangle tables, always DROP.
 	// +kubebuilder:validation:Pattern=`^(?i)(Drop|Reject)?$`
 	IptablesFilterDenyAction string `json:"iptablesFilterDenyAction,omitempty"`
 

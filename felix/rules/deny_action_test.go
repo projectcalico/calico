@@ -91,27 +91,36 @@ var _ = Describe("Deny action outside the filter table", func() {
 		Expect(actions).NotTo(ContainElement(RejectAction{}))
 	})
 
-	It("should swap REJECT for DROP in policy chains for raw and mangle without changing the originals", func() {
-		chains := renderer.PolicyToIptablesChains(
-			&types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
-			&proto.Policy{
-				InboundRules:  []*proto.Rule{{Action: "deny"}},
-				OutboundRules: []*proto.Rule{{Action: "deny"}},
-			},
-			4,
-		)
+	It("should render policy deny rules as DROP only with the non-filter table renderer", func() {
+		policyID := &types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy}
+		policy := &proto.Policy{
+			InboundRules:  []*proto.Rule{{Action: "deny"}},
+			OutboundRules: []*proto.Rule{{Action: "deny"}},
+		}
 
-		nonFilter := renderer.NonFilterTableChains(chains)
+		filterActions := chainActions(renderer.PolicyToIptablesChains(policyID, policy, 4)...)
+		Expect(filterActions).To(ContainElement(RejectAction{}))
+		Expect(filterActions).NotTo(ContainElement(DropAction{}))
 
-		Expect(chainActions(nonFilter...)).To(ContainElement(DropAction{}))
-		Expect(chainActions(nonFilter...)).NotTo(ContainElement(RejectAction{}))
-		Expect(chainActions(chains...)).To(ContainElement(RejectAction{}))
-		Expect(chainActions(chains...)).NotTo(ContainElement(DropAction{}))
+		nonFilterActions := chainActions(renderer.NonFilterTableRenderer().PolicyToIptablesChains(policyID, policy, 4)...)
+		Expect(nonFilterActions).To(ContainElement(DropAction{}))
+		Expect(nonFilterActions).NotTo(ContainElement(RejectAction{}))
 	})
 
-	It("should return the same chains when the deny action is already DROP", func() {
+	It("should render profile deny rules as DROP only with the non-filter table renderer", func() {
+		profileID := &types.ProfileID{Name: "prof1"}
+		profile := &proto.Profile{OutboundRules: []*proto.Rule{{Action: "deny"}}}
+
+		_, filterOutbound := renderer.ProfileToIptablesChains(profileID, profile, 4)
+		Expect(chainActions(filterOutbound)).To(ContainElement(RejectAction{}))
+
+		_, nonFilterOutbound := renderer.NonFilterTableRenderer().ProfileToIptablesChains(profileID, profile, 4)
+		Expect(chainActions(nonFilterOutbound)).To(ContainElement(DropAction{}))
+		Expect(chainActions(nonFilterOutbound)).NotTo(ContainElement(RejectAction{}))
+	})
+
+	It("should use the same renderer for every table when the deny action is already DROP", func() {
 		renderer = NewRenderer(denyActionTestConfig("DROP"), false)
-		chains := renderer.PolicyToIptablesChains(&types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy}, &proto.Policy{InboundRules: []*proto.Rule{{Action: "deny"}}}, 4)
-		Expect(renderer.NonFilterTableChains(chains)).To(Equal(chains))
+		Expect(renderer.NonFilterTableRenderer()).To(BeIdenticalTo(renderer))
 	})
 })

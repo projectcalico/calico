@@ -338,7 +338,7 @@ type RuleRenderer interface {
 	WireguardIncomingMarkChain() *generictables.Chain
 
 	IptablesFilterDenyAction() generictables.Action
-	NonFilterTableChains(chains []*generictables.Chain) []*generictables.Chain
+	NonFilterTableRenderer() RuleRenderer
 
 	FilterInputChainAllowWG(ipVersion uint8, c Config, allowAction generictables.Action) []generictables.Rule
 	ICMPv6Filter(action generictables.Action) []generictables.Rule
@@ -366,36 +366,20 @@ type DefaultRuleRenderer struct {
 
 	// nft is true if we are generating NFTables rules.
 	nft bool
+
+	// nonFilterTableRenderer renders chains for the raw and mangle tables.
+	nonFilterTableRenderer *DefaultRuleRenderer
 }
 
 func (r *DefaultRuleRenderer) IptablesFilterDenyAction() generictables.Action {
 	return r.iptablesFilterDenyAction
 }
 
-// NonFilterTableChains returns the chains with the deny action swapped for DROP, for programming
-// into the raw and mangle tables, where REJECT is not a valid target.
-func (r *DefaultRuleRenderer) NonFilterTableChains(chains []*generictables.Chain) []*generictables.Chain {
-	drop := r.Drop()
-	if r.iptablesFilterDenyAction == drop {
-		return chains
-	}
-	out := make([]*generictables.Chain, 0, len(chains))
-	for _, chain := range chains {
-		if chain == nil {
-			out = append(out, nil)
-			continue
-		}
-		c := *chain
-		c.Rules = make([]generictables.Rule, len(chain.Rules))
-		for i, rule := range chain.Rules {
-			if rule.Action == r.iptablesFilterDenyAction {
-				rule.Action = drop
-			}
-			c.Rules[i] = rule
-		}
-		out = append(out, &c)
-	}
-	return out
+// NonFilterTableRenderer returns the renderer to use for chains programmed into the raw and mangle
+// tables. It denies with DROP, because REJECT is not a valid target outside the filter table. When
+// the configured deny action is already DROP, it returns this renderer.
+func (r *DefaultRuleRenderer) NonFilterTableRenderer() RuleRenderer {
+	return r.nonFilterTableRenderer
 }
 
 func (r *DefaultRuleRenderer) ipSetConfig(ipVersion uint8) *ipsets.IPVersionConfig {
@@ -647,7 +631,7 @@ func NewRenderer(config Config, nft bool) RuleRenderer {
 		maxNameLength = nftrender.MaxChainNameLength
 	}
 
-	return &DefaultRuleRenderer{
+	renderer := &DefaultRuleRenderer{
 		Config:                   config,
 		ActionFactory:            actions,
 		NewMatch:                 newMatchFn,
@@ -661,4 +645,12 @@ func NewRenderer(config Config, nft bool) RuleRenderer {
 		CombineMatches:           combineMatches,
 		nft:                      nft,
 	}
+	renderer.nonFilterTableRenderer = renderer
+	if iptablesFilterDenyAction != drop {
+		nonFilter := *renderer
+		nonFilter.iptablesFilterDenyAction = drop
+		nonFilter.nonFilterTableRenderer = &nonFilter
+		renderer.nonFilterTableRenderer = &nonFilter
+	}
+	return renderer
 }

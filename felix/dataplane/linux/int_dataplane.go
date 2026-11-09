@@ -1019,7 +1019,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			rules.IPSetIDThisHostIPs,
 			ipSetsV4,
 			config.MaxIPSetSize))
-		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, nftablesEnabled))
+		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, ruleRenderer.NonFilterTableRenderer(), 4, nftablesEnabled))
 
 		// Clean up any leftover BPF state.
 		err := bpfnat.RemoveConnectTimeLoadBalancer(true, "")
@@ -1030,7 +1030,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfutils.RemoveBPFSpecialDevices()
 	} else {
 		// In BPF mode we still use iptables for raw egress policy.
-		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter, nftablesEnabled))
+		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer.NonFilterTableRenderer(), 4, ipSetsV4.SetFilter, nftablesEnabled))
 	}
 
 	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
@@ -1553,9 +1553,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				rules.IPSetIDThisHostIPs,
 				ipSetsV6,
 				config.MaxIPSetSize))
-			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, nftablesEnabled))
+			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, ruleRenderer.NonFilterTableRenderer(), 6, nftablesEnabled))
 		} else {
-			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, nftablesEnabled))
+			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer.NonFilterTableRenderer(), 6, ipSetsV6.SetFilter, nftablesEnabled))
 		}
 
 		var filterMapsV6 nftables.MapsDataplane
