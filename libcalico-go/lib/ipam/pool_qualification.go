@@ -293,35 +293,44 @@ func isSelecting(r rejectReason) bool {
 type PoolClaim struct {
 	use v3.IPPoolAllowedUse
 
-	// pools holds the normalized CIDRs of the pools the claim names.
-	pools     map[string]bool
+	// pools holds the normalized CIDRs of the pools the claim names, keyed by IP version.
+	pools     map[int]map[string]bool
 	selectors PoolSelectors
 }
 
-// errClaimWithoutSelectors is returned for a claim that names no pool and has no selectors to choose pools with.
-var errClaimWithoutSelectors = errors.New("pool claim names no pool and has no selectors")
+// errClaimWithoutSelectors is returned when a claim has no selectors to choose a pool with, because it names no pool
+// in that pool's IP family.
+var errClaimWithoutSelectors = errors.New("pool claim names no pool in the pool's IP family and has no selectors")
 
-// NewPoolClaim builds a claim for an address request asking for use. pools are the CIDRs of the pools it names, as
-// ResolvePools returns them; a claim naming pools may use only those, and only their allowed uses are checked.
-// selectors matches each pool's selectors against the requesting node and namespace. It may be nil when pools is not
-// empty, since only a claim naming no pool consults it.
+// NewPoolClaim builds a claim for an address request asking for use. pools must be CIDRs that ResolvePools returned,
+// and may span both IP families. Named pools apply per family, as AutoAssign applies IPv4Pools and IPv6Pools: in a
+// family where the claim names pools it may use only those, and in a family where it names none it chooses by
+// selectors. selectors may be nil when no pool passed to MayUse is in a family the claim names no pool in.
 func NewPoolClaim(use v3.IPPoolAllowedUse, pools []net.IPNet, selectors PoolSelectors) PoolClaim {
-	named := map[string]bool{}
+	named := map[int]map[string]bool{}
 	for _, p := range pools {
-		named[p.Network().String()] = true
+		cidr := p.Network()
+		if named[cidr.Version()] == nil {
+			named[cidr.Version()] = map[string]bool{}
+		}
+		named[cidr.Version()][cidr.String()] = true
 	}
 	return PoolClaim{use: use, pools: named, selectors: selectors}
 }
 
-// ResolvePools turns pool names and CIDRs, the forms the CNI plugin accepts, into the CIDRs NewPoolClaim takes. An
-// entry that parses as a CIDR must match a pool's network in any form; any other entry must be a pool's name. It
-// returns an error for an entry that matches no pool, so a mistyped name fails rather than matching nothing.
-func ResolvePools(pools []v3.IPPool, entries []string) ([]net.IPNet, error) {
+// ResolvePools turns pool names and CIDRs, the forms the CNI plugin accepts, into the CIDRs of IP version version
+// that NewPoolClaim takes. Pass every IP pool, as the CNI plugin does, so a disabled pool's name still resolves. An
+// entry that parses as a CIDR must match a pool's network in any form; any other entry must be a pool's name. An
+// entry that matches no pool, or a pool of the other family, is an error.
+func ResolvePools(pools []v3.IPPool, entries []string, version int) ([]net.IPNet, error) {
 	resolved := make([]net.IPNet, 0, len(entries))
 	for _, entry := range entries {
 		cidr, err := resolvePool(pools, entry)
 		if err != nil {
 			return nil, err
+		}
+		if cidr.Version() != version {
+			return nil, fmt.Errorf("IP pool %q is not an IPv%d pool", entry, version)
 		}
 		resolved = append(resolved, cidr)
 	}
@@ -356,16 +365,20 @@ type PoolSelectors interface {
 // MayUse reports whether the claim may draw addresses from the pool, claiming blocks in it as needed. The node's
 // blocks in the pools a claim may use are what IPAM counts against maxBlocksPerHost for that claim. Pass pools as
 // GetEnabledPools returns them, since IPAM never offers a disabled pool, or one masked by an overlapping allocatable
-// pool.
+// pool. It returns false whenever it returns an error.
 func (c PoolClaim) MayUse(pool *v3.IPPool) (bool, error) {
 	reason, err := c.qualify(pool)
-	return reason == "", err
+	return err == nil && reason == "", err
 }
 
 // qualify checks the pool against the claim, returning why the claim may not use it, or empty when it may.
 func (c PoolClaim) qualify(pool *v3.IPPool) (rejectReason, error) {
-	if len(c.pools) > 0 {
-		if !c.pools[normalizedCIDR(*pool)] {
+	_, cidr, err := net.ParseCIDR(pool.Spec.CIDR)
+	if err != nil {
+		return "", fmt.Errorf("pool %s has invalid CIDR %s: %w", pool.Name, pool.Spec.CIDR, err)
+	}
+	if named := c.pools[cidr.Version()]; len(named) > 0 {
+		if !named[cidr.String()] {
 			return rejectNotRequested, nil
 		}
 	} else {
