@@ -363,9 +363,9 @@ type DefaultRuleRenderer struct {
 	// maxNameLength is the maximum length of a chain name.
 	maxNameLength int
 
-	// matchLimits is how many CIDRs and ports one rule's match can hold before the
-	// policy renderer has to split them across a mark-bit match block.
-	matchLimits generictables.MatchLimits
+	// matchCapabilities is how many CIDRs and ports one rule's match can hold before
+	// the policy renderer has to split them across a mark-bit match block.
+	matchCapabilities generictables.MatchCapabilities
 
 	// nft is true if we are generating NFTables rules.
 	nft bool
@@ -619,11 +619,11 @@ func NewRenderer(config Config, nft bool) RuleRenderer {
 
 	maxNameLength := iptables.MaxChainNameLength
 	wildcard := iptables.Wildcard
-	matchLimits := iptables.MatchLimits
+	matchCapabilities := iptables.MatchCapabilities
 	if nft {
 		wildcard = nftrender.Wildcard
 		maxNameLength = nftrender.MaxChainNameLength
-		matchLimits = nftrender.MatchLimits
+		matchCapabilities = nftrender.MatchCapabilities
 	}
 
 	return &DefaultRuleRenderer{
@@ -637,7 +637,7 @@ func NewRenderer(config Config, nft bool) RuleRenderer {
 		iptablesFilterDenyAction: iptablesFilterDenyAction,
 		wildcard:                 wildcard,
 		maxNameLength:            maxNameLength,
-		matchLimits:              matchLimits,
+		matchCapabilities:        matchCapabilities,
 		CombineMatches:           combineMatches,
 		nft:                      nft,
 	}

@@ -304,7 +304,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	} else {
 		ipSetConfig = r.IPSetConfigV6
 	}
-	srcPortSplits := SplitPortList(ruleCopy.SrcPorts, r.matchLimits.PortSlots)
+	srcPortSplits := SplitPortList(ruleCopy.SrcPorts, r.matchCapabilities.PortsPerRule)
 	if len(srcPortSplits)+len(ruleCopy.SrcNamedPortIpSetIds) > 1 {
 		// Render a block for the source ports.
 		matchBlockBuilder.AppendPortMatchBlock(ipSetConfig, ruleCopy.Protocol, srcPortSplits, ruleCopy.SrcNamedPortIpSetIds, src)
@@ -312,7 +312,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		ruleCopy.SrcPorts = nil
 		ruleCopy.SrcNamedPortIpSetIds = nil
 	}
-	dstPortSplits := SplitPortList(ruleCopy.DstPorts, r.matchLimits.PortSlots)
+	dstPortSplits := SplitPortList(ruleCopy.DstPorts, r.matchCapabilities.PortsPerRule)
 	if len(dstPortSplits)+len(ruleCopy.DstNamedPortIpSetIds) > 1 {
 		// Render a block for the destination ports.
 		matchBlockBuilder.AppendPortMatchBlock(ipSetConfig, ruleCopy.Protocol, dstPortSplits, ruleCopy.DstNamedPortIpSetIds, dst)
@@ -321,7 +321,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		ruleCopy.DstNamedPortIpSetIds = nil
 	}
 
-	cidrLimit := r.matchLimits.CIDRsPerDirection
+	cidrLimit := r.matchCapabilities.CIDRsPerRule
 
 	// If there are more positive source/destination CIDR matches than one rule can hold, we have
 	// to render a block. Otherwise, we'll include them in the main rule below.
@@ -572,13 +572,12 @@ func (sod srcOrDst) MatchIPPortIPSet(m generictables.MatchCriteria, setID string
 	return nil
 }
 
-// SplitPortList splits the input list of ports into groups that each fit in a port match of
-// the given number of slots. If the input list is empty, it returns an empty slice.
+// SplitPortList splits the input list of ports into groups that each fit in one port match
+// of maxPorts ports. If the input list is empty, it returns an empty slice.
 //
-// A single port takes up one slot and a range of ports takes two, as in an iptables multiport
-// match, which holds 15 slots.
-func SplitPortList(ports []*proto.PortRange, slots int) (splits [][]*proto.PortRange) {
-	slotsAvailableInCurrentSplit := slots
+// A range of ports counts as two, as in an iptables multiport match, which holds 15 ports.
+func SplitPortList(ports []*proto.PortRange, maxPorts int) (splits [][]*proto.PortRange) {
+	slotsAvailableInCurrentSplit := maxPorts
 	var split []*proto.PortRange
 	for _, portRange := range ports {
 		// First figure out how many slots adding this PortRange would require.
@@ -589,10 +588,10 @@ func SplitPortList(ports []*proto.PortRange, slots int) (splits [][]*proto.PortR
 			numSlotsRequired = 2
 		}
 		if slotsAvailableInCurrentSplit < numSlotsRequired {
-			// Adding this port to the current split would take it over the slot
+			// Adding this port to the current split would take it over the port
 			// limit, start a new split.
 			splits = append(splits, split)
-			slotsAvailableInCurrentSplit = slots
+			slotsAvailableInCurrentSplit = maxPorts
 			split = nil
 		}
 		split = append(split, portRange)
@@ -998,7 +997,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		logCxt.WithFields(logrus.Fields{
 			"ports": pRule.NotSrcPorts,
 		}).Debug("Adding negated src port match")
-		for _, portSplit := range SplitPortList(pRule.NotSrcPorts, r.matchLimits.PortSlots) {
+		for _, portSplit := range SplitPortList(pRule.NotSrcPorts, r.matchCapabilities.PortsPerRule) {
 			match = match.NotSourcePortRanges(portSplit)
 		}
 	}
@@ -1030,7 +1029,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		logCxt.WithFields(logrus.Fields{
 			"ports": pRule.NotDstPorts,
 		}).Debug("Adding negated dst port match")
-		for _, portSplit := range SplitPortList(pRule.NotDstPorts, r.matchLimits.PortSlots) {
+		for _, portSplit := range SplitPortList(pRule.NotDstPorts, r.matchCapabilities.PortsPerRule) {
 			match = match.NotDestPortRanges(portSplit)
 		}
 	}

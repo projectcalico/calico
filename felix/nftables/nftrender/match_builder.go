@@ -31,9 +31,9 @@ import (
 
 var Wildcard = "*"
 
-// MatchLimits has no per-rule limit: anonymous sets let one nft rule match any number
+// MatchCapabilities has no per-rule limit: anonymous sets let one nft rule match any number
 // of CIDRs or ports, so policy rules never need mark-bit match blocks for them.
-var MatchLimits = generictables.MatchLimits{CIDRsPerDirection: math.MaxInt, PortSlots: math.MaxInt}
+var MatchCapabilities = generictables.MatchCapabilities{CIDRsPerRule: math.MaxInt, PortsPerRule: math.MaxInt}
 
 var (
 	_ generictables.MatchCriteria = nftMatch{}

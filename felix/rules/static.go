@@ -104,7 +104,7 @@ func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain(ipVersion uint8
 	)
 
 	// If packet is accessing local host within kubernetes NodePort range, it belongs to a forwarded traffic.
-	for _, portSplit := range SplitPortList(portRanges, r.matchLimits.PortSlots) {
+	for _, portSplit := range SplitPortList(portRanges, r.matchCapabilities.PortsPerRule) {
 		fwRules = append(fwRules,
 			generictables.Rule{
 				Match: r.NewMatch().Protocol("tcp").

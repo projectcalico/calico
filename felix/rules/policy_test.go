@@ -1170,8 +1170,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"meta l4proto tcp ip saddr { 10.0.0.0/24, 10.0.1.0/24 } meta mark & 0x200 == 0x200"))
 	})
 
-	// Sixteen multiport slots, one more than an iptables rule holds.
-	sixteenPortSlots := []*proto.PortRange{
+	// Eight ranges count as sixteen ports, one more than an iptables multiport match holds.
+	sixteenPorts := []*proto.PortRange{
 		{First: 1, Last: 2},
 		{First: 3, Last: 4},
 		{First: 5, Last: 6},
@@ -1182,12 +1182,12 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		{First: 15, Last: 16},
 	}
 
-	It("should match more than 15 nftables port slots in the main rule", func() {
+	It("should match more than 15 nftables ports in the main rule", func() {
 		rrConfigNormal.FlowLogsEnabled = false
 		renderer := NewRenderer(rrConfigNormal, true)
 		pRule := proto.Rule{
 			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
-			SrcPorts: sixteenPortSlots,
+			SrcPorts: sixteenPorts,
 			Action:   "allow",
 		}
 		rules := renderer.ProtoRuleToIptablesRules(
@@ -1203,15 +1203,15 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 		Expect(rules).To(HaveLen(2))
 		Expect(rules[0].Match.Render()).To(Equal(
-			nftrender.Match().Protocol("udp").SourcePortRanges(sixteenPortSlots).Render()))
+			nftrender.Match().Protocol("udp").SourcePortRanges(sixteenPorts).Render()))
 	})
 
-	It("should match more than 15 negated nftables port slots in one clause", func() {
+	It("should match more than 15 negated nftables ports in one clause", func() {
 		rrConfigNormal.FlowLogsEnabled = false
 		renderer := NewRenderer(rrConfigNormal, true)
 		pRule := proto.Rule{
 			Protocol:    &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
-			NotDstPorts: sixteenPortSlots,
+			NotDstPorts: sixteenPorts,
 			Action:      "allow",
 		}
 		rules := renderer.ProtoRuleToIptablesRules(
@@ -1227,7 +1227,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 		Expect(rules).To(HaveLen(2))
 		Expect(rules[0].Match.Render()).To(Equal(
-			nftrender.Match().Protocol("tcp").NotDestPortRanges(sixteenPortSlots).Render()))
+			nftrender.Match().Protocol("tcp").NotDestPortRanges(sixteenPorts).Render()))
 	})
 
 	DescribeTable(
@@ -2330,7 +2330,7 @@ var _ = Describe("Filtered rules (negated catch-all CIDR validation)", func() {
 
 var _ = DescribeTable("Port split tests",
 	func(in []*proto.PortRange, expected [][]*proto.PortRange) {
-		Expect(SplitPortList(in, iptables.MatchLimits.PortSlots)).To(Equal(expected))
+		Expect(SplitPortList(in, iptables.MatchCapabilities.PortsPerRule)).To(Equal(expected))
 	},
 	Entry("nil input", ([]*proto.PortRange)(nil), ([][]*proto.PortRange)(nil)),
 	Entry("empty input", []*proto.PortRange{}, ([][]*proto.PortRange)(nil)),
