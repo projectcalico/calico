@@ -191,18 +191,6 @@ func (q poolQualification) qualified() []v3.IPPool {
 	return q.filter(isQualified)
 }
 
-// releasable returns the pools whose blocks affine to the node IPAM may release: those whose node selector skips the
-// node, other than pools the request named. A block is released only once it is empty.
-func (q poolQualification) releasable() []v3.IPPool {
-	var pools []v3.IPPool
-	for _, c := range q.candidates {
-		if !c.keepsBlocks() {
-			pools = append(pools, c.pool)
-		}
-	}
-	return pools
-}
-
 // blocksToRelease returns the affine blocks, out of those the request can't use, that IPAM may release once empty.
 func (q poolQualification) blocksToRelease(blocks []net.IPNet) ([]net.IPNet, error) {
 	var release []net.IPNet
@@ -220,7 +208,7 @@ func (q poolQualification) blocksToRelease(blocks []net.IPNet) ([]net.IPNet, err
 
 // keepsBlock reports whether IPAM keeps the node's affinity to a block once it is empty. It does when any candidate
 // pool covering the block keeps its blocks, even if an overlapping pool skips the node, and when no candidate covers
-// it. Assignment and IP release both decide with this rule.
+// it.
 func (q poolQualification) keepsBlock(block net.IPNet) (bool, error) {
 	covered := false
 	for _, c := range q.candidates {
@@ -239,15 +227,16 @@ func (q poolQualification) keepsBlock(block net.IPNet) (bool, error) {
 	return !covered, nil
 }
 
-// nodePools records every enabled pool as a candidate for the node, with no request behind it. IP release uses it to
-// ask keepsBlock whether the node should keep a block it just emptied.
-func nodePools(node internalapi.Node, enabledPools []v3.IPPool) poolQualification {
+// nodeKeepsBlock reports whether a node keeps its affinity to an empty block when no request is behind the check,
+// as after IPs are released. It applies the keepsBlock rule to every enabled pool. The candidates it builds carry no
+// rejection reasons, so they stay inside this function rather than being returned as a poolQualification.
+func nodeKeepsBlock(node internalapi.Node, enabledPools []v3.IPPool, block net.IPNet) (bool, error) {
 	req := poolRequest{node: node}
 	var q poolQualification
 	for _, pool := range enabledPools {
 		q.candidates = append(q.candidates, req.candidate(pool, "", false))
 	}
-	return q
+	return q.keepsBlock(block)
 }
 
 // keepsBlocks reports whether IPAM keeps the node's affine blocks in the candidate's pool: the request named it, or

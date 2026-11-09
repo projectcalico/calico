@@ -87,6 +87,20 @@ func collectCIDRs(pools []v3.IPPool) []string {
 	return cidrs
 }
 
+// releasedPools returns the CIDRs of the pools whose empty affine blocks the qualification releases, asking keepsBlock
+// about one block at the start of each pool.
+func releasedPools(q poolQualification, pools []v3.IPPool) []string {
+	released := []string{}
+	for _, p := range pools {
+		kept, err := q.keepsBlock(cnet.MustParseNetwork(p.Spec.CIDR))
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		if !kept {
+			released = append(released, p.Spec.CIDR)
+		}
+	}
+	return released
+}
+
 func parseRequestedPools(cidrs ...string) []cnet.IPNet {
 	var nets []cnet.IPNet
 	for _, c := range cidrs {
@@ -108,10 +122,11 @@ type qualificationCase struct {
 	use          v3.IPPoolAllowedUse
 	maxPrefixLen int
 
-	// Either both pool lists or the error message is checked. releasable is unordered, and empty when left out.
-	qualified  []string
-	releasable []string
-	err        string
+	// Either both pool lists or the error message is checked. released lists the pools whose empty affine blocks are
+	// released, unordered, and is empty when left out.
+	qualified []string
+	released  []string
+	err       string
 }
 
 var _ = DescribeTable("qualifyPools",
@@ -137,7 +152,8 @@ var _ = DescribeTable("qualifyPools",
 			maxPrefixLen: maxPrefixLen,
 		}
 
-		q, err := qualifyPools(req, buildPools(tc.pools))
+		pools := buildPools(tc.pools)
+		q, err := qualifyPools(req, pools)
 
 		if tc.err != "" {
 			Expect(err).To(MatchError(tc.err))
@@ -145,7 +161,7 @@ var _ = DescribeTable("qualifyPools",
 		}
 		Expect(err).NotTo(HaveOccurred())
 		Expect(collectCIDRs(q.qualified())).To(Equal(tc.qualified))
-		Expect(collectCIDRs(q.releasable())).To(ConsistOf(tc.releasable))
+		Expect(releasedPools(q, pools)).To(ConsistOf(tc.released))
 	},
 
 	// Node selectors, with and without named pools. A disabled pool is one GetEnabledPools leaves out.
@@ -159,14 +175,14 @@ var _ = DescribeTable("qualifyPools",
 		qualified: []string{v4Pool1},
 	}),
 	Entry("only pool1 selects the node", qualificationCase{
-		pools:      []testPool{{cidr: v4Pool1, nodeSelector: `foo == "bar"`}, {cidr: v4Pool2, nodeSelector: `foo != "bar"`}},
-		qualified:  []string{v4Pool1},
-		releasable: []string{v4Pool2},
+		pools:     []testPool{{cidr: v4Pool1, nodeSelector: `foo == "bar"`}, {cidr: v4Pool2, nodeSelector: `foo != "bar"`}},
+		qualified: []string{v4Pool1},
+		released:  []string{v4Pool2},
 	}),
 	Entry("pool1 doesn't select the node, pool2 selects all()", qualificationCase{
-		pools:      []testPool{{cidr: v4Pool1, nodeSelector: `foo != "bar"`}, {cidr: v4Pool2, nodeSelector: "all()"}},
-		qualified:  []string{v4Pool2},
-		releasable: []string{v4Pool1},
+		pools:     []testPool{{cidr: v4Pool1, nodeSelector: `foo != "bar"`}, {cidr: v4Pool2, nodeSelector: "all()"}},
+		qualified: []string{v4Pool2},
+		released:  []string{v4Pool1},
 	}),
 	Entry("pool2 named although pool1 selects the node", qualificationCase{
 		pools:     []testPool{{cidr: v4Pool1, nodeSelector: `foo == "bar"`}, {cidr: v4Pool2}},
@@ -201,10 +217,10 @@ var _ = DescribeTable("qualifyPools",
 		qualified: []string{v6Pool1, v6Pool2},
 	}),
 	Entry("IPv6 pool named in full representation", qualificationCase{
-		pools:      []testPool{{cidr: v6Pool1, nodeSelector: `foo == "bar"`}, {cidr: v6Pool2, nodeSelector: `foo != "bar"`}},
-		requested:  []string{v6Pool1},
-		qualified:  []string{v6Pool1},
-		releasable: []string{v6Pool2},
+		pools:     []testPool{{cidr: v6Pool1, nodeSelector: `foo == "bar"`}, {cidr: v6Pool2, nodeSelector: `foo != "bar"`}},
+		requested: []string{v6Pool1},
+		qualified: []string{v6Pool1},
+		released:  []string{v6Pool2},
 	}),
 
 	// Namespace selectors.
@@ -302,10 +318,10 @@ var _ = DescribeTable("qualifyPools",
 	}),
 
 	// Release follows the node selector alone, whatever else rejected the pool, and never touches a named pool.
-	Entry("a Manual pool whose node selector skips the node is releasable", qualificationCase{
-		pools:      []testPool{{cidr: v4Pool1, manual: true, nodeSelector: `foo != "bar"`}, {cidr: v4Pool2}},
-		qualified:  []string{v4Pool2},
-		releasable: []string{v4Pool1},
+	Entry("a Manual pool whose node selector skips the node releases its blocks", qualificationCase{
+		pools:     []testPool{{cidr: v4Pool1, manual: true, nodeSelector: `foo != "bar"`}, {cidr: v4Pool2}},
+		qualified: []string{v4Pool2},
+		released:  []string{v4Pool1},
 	}),
 	Entry("a pool rejected only by its namespace selector keeps its blocks", qualificationCase{
 		pools: []testPool{
@@ -315,11 +331,11 @@ var _ = DescribeTable("qualifyPools",
 		namespace: testNamespace(map[string]string{"environment": "development"}),
 		qualified: []string{v4Pool2},
 	}),
-	Entry("an unnamed pool that skips the node is releasable, a named one is not", qualificationCase{
-		pools:      []testPool{{cidr: v4Pool1, nodeSelector: `foo != "bar"`}, {cidr: v4Pool2, nodeSelector: `foo != "bar"`}},
-		requested:  []string{v4Pool1},
-		qualified:  []string{v4Pool1},
-		releasable: []string{v4Pool2},
+	Entry("an unnamed pool that skips the node releases its blocks, a named one does not", qualificationCase{
+		pools:     []testPool{{cidr: v4Pool1, nodeSelector: `foo != "bar"`}, {cidr: v4Pool2, nodeSelector: `foo != "bar"`}},
+		requested: []string{v4Pool1},
+		qualified: []string{v4Pool1},
+		released:  []string{v4Pool2},
 	}),
 	Entry("a pool whose node selector doesn't parse keeps its blocks", qualificationCase{
 		pools:     []testPool{{cidr: v4Pool1, manual: true, nodeSelector: "invalid selector syntax ["}, {cidr: v4Pool2}},
@@ -474,7 +490,7 @@ var _ = DescribeTable("blocksToRelease",
 )
 
 var _ = Describe("qualifyPools with unnamed pools", func() {
-	It("matches named pools by CIDR, so an unrequested pool that skips the node stays releasable", func() {
+	It("matches named pools by CIDR, so an unrequested pool that skips the node still releases its blocks", func() {
 		pools := buildPools([]testPool{{cidr: v4Pool1, nodeSelector: `foo != "bar"`}, {cidr: v4Pool2}})
 		for i := range pools {
 			pools[i].Name = ""
@@ -488,7 +504,7 @@ var _ = Describe("qualifyPools with unnamed pools", func() {
 		q, err := qualifyPools(req, pools)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(collectCIDRs(q.qualified())).To(Equal([]string{v4Pool2}))
-		Expect(collectCIDRs(q.releasable())).To(Equal([]string{v4Pool1}))
+		Expect(releasedPools(q, pools)).To(Equal([]string{v4Pool1}))
 	})
 })
 
@@ -499,10 +515,10 @@ type keepCase struct {
 	kept  bool
 }
 
-var _ = DescribeTable("nodePools keepsBlock",
+var _ = DescribeTable("nodeKeepsBlock",
 	func(tc keepCase) {
 		node := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
-		kept, err := nodePools(node, buildPools(tc.pools)).keepsBlock(cnet.MustParseNetwork(tc.block))
+		kept, err := nodeKeepsBlock(node, buildPools(tc.pools), cnet.MustParseNetwork(tc.block))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kept).To(Equal(tc.kept))
 	},

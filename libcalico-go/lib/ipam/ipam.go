@@ -1359,7 +1359,6 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, config *IPAMConfig,
 			}
 		}
 
-		// Determine whether or not the block's pool still matches the node.
 		if err := c.ensureConsistentAffinity(ctx, config, obj.Value.(*model.AllocationBlock)); err != nil {
 			logCtx.WithError(err).Warn("Error ensuring consistent affinity but IP already released. Returning no error.")
 		}
@@ -1948,7 +1947,6 @@ func (c ipamClient) releaseByHandle(ctx context.Context, config *IPAMConfig, blo
 			logCtx.WithError(err).Warn("Failed to decrement handle")
 		}
 
-		// Determine whether or not the block's pool still matches the node.
 		if err = c.ensureConsistentAffinity(ctx, config, block.AllocationBlock); err != nil {
 			logCtx.WithError(err).Warn("Error ensuring consistent affinity but IP already released. Returning no error.")
 		}
@@ -2265,9 +2263,7 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, config *IPAMCo
 		return nil
 	}
 
-	// If the IP pool which owns this block no longer selects this node,
-	// we should release the block's affinity to this node so it can be
-	// used elsewhere.
+	// Release the affinity once no enabled pool covering the block selects the node.
 	logCtx.Debugf("Looking up node labels for host affinity")
 	node, err := c.client.Get(ctx, model.ResourceKey{Kind: internalapi.KindNode, Name: affinityCfg.Host}, "")
 	if err != nil {
@@ -2289,7 +2285,7 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, config *IPAMCo
 	if err != nil {
 		return err
 	}
-	kept, err := nodePools(*v3n, enabledPools).keepsBlock(b.CIDR)
+	kept, err := nodeKeepsBlock(*v3n, enabledPools, b.CIDR)
 	if err != nil {
 		return err
 	}
@@ -2298,8 +2294,6 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, config *IPAMCo
 		return nil
 	}
 	logCtx.Debug("No pool covering this block selects the node, releasing block affinity")
-
-	// Pool does not match this node's label, release this block's affinity.
 	if err = c.blockReaderWriter.releaseBlockAffinity(ctx, config, *affinityCfg, b.CIDR, releaseAffinityOpts{
 		RequireEmpty: true,
 	}); err != nil {
