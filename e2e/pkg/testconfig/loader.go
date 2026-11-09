@@ -270,7 +270,7 @@ func validate(cfg *Config, path string) error {
 		}
 	}
 
-	if err := validatePatterns(cfg.Include.NamePatterns, path, "include"); err != nil {
+	if err := validatePatterns(cfg.Include.NamePatterns, path, "include.namePatterns"); err != nil {
 		return err
 	}
 
@@ -283,7 +283,7 @@ func validate(cfg *Config, path string) error {
 		}
 	}
 
-	if err := validatePatterns(cfg.Exclude.NamePatterns, path, "exclude"); err != nil {
+	if err := validatePatterns(cfg.Exclude.NamePatterns, path, "exclude.namePatterns"); err != nil {
 		return err
 	}
 
@@ -307,14 +307,14 @@ func validate(cfg *Config, path string) error {
 // any of its operator characters.
 var capabilityName = regexp.MustCompile(`^[A-Za-z0-9]+$`)
 
-func validatePatterns(entries []NamePatternEntry, path, section string) error {
+func validatePatterns(entries []NamePatternEntry, path, field string) error {
 	for i, entry := range entries {
 		if err := entry.Validate(); err != nil {
-			return fmt.Errorf("%s: %s.namePatterns[%d]: %w", path, section, i, err)
+			return fmt.Errorf("%s: %s[%d]: %w", path, field, i, err)
 		}
 		for _, p := range entry.AllPatterns() {
 			if _, err := regexp.Compile(p); err != nil {
-				return fmt.Errorf("%s: %s.namePatterns[%d]: invalid regex %q: %w", path, section, i, p, err)
+				return fmt.Errorf("%s: %s[%d]: invalid regex %q: %w", path, field, i, p, err)
 			}
 		}
 	}

@@ -194,7 +194,7 @@ func TestSelectionFieldsRejectBadValues(t *testing.T) {
 	for name, bad := range map[string]badValueCase{
 		"capability.yaml": {content: badCapabilityYAML, wantErr: "must be a capability name"},
 		"date.yaml":       {content: badDateYAML, wantErr: "is not YYYY-MM-DD"},
-		"upstream.yaml":   {content: badUpstreamYAML, wantErr: "upstream.namePatterns[0]: invalid regex"},
+		"upstream.yaml":   {content: badUpstreamYAML, wantErr: "upstream[0]: invalid regex"},
 		"needs.yaml":      {content: emptyNeedsYAML, wantErr: "needs[0] is empty"},
 	} {
 		_, err := Load(writeFile(t, dir, name, bad.content))
