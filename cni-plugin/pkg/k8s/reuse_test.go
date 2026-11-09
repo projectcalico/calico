@@ -188,10 +188,27 @@ var _ = Describe("assignPodIPs", func() {
 			wantErr:     true,
 			wantErrCode: types.ErrCodeSandboxSuperseded,
 		}),
-		Entry("an IPv4-only endpoint under a dual-stack config keeps IPv4 only", reuseCase{
+		Entry("an IPv4-only endpoint under a dual-stack config reuses IPv4 and assigns IPv6 only", reuseCase{
 			endpointIPs: []string{"10.0.0.5"},
 			dualStack:   true,
-			wantIPs:     []string{"10.0.0.5"},
+			wantIPs:     []string{"10.0.0.5", "fd00::99"},
+			wantFresh:   expectFreshAddForIPv6Only,
+		}),
+		Entry("an IPv6-only endpoint under a dual-stack config reuses IPv6, assigns IPv4 only and lists IPv4 first", reuseCase{
+			endpointIPs: []string{"fd00::5"},
+			dualStack:   true,
+			wantIPs:     []string{"10.0.0.99", "fd00::5"},
+			wantFresh:   expectFreshAddForIPv4Only,
+		}),
+		Entry("an IPv6-only endpoint under an IPv4-only config keeps its reused IPv6 and assigns IPv4", reuseCase{
+			endpointIPs: []string{"fd00::5"},
+			wantIPs:     []string{"10.0.0.99", "fd00::5"},
+			wantFresh:   expectFreshAddForIPv4Only,
+		}),
+		Entry("an endpoint listing IPv6 before IPv4 with nothing missing lists IPv4 first", reuseCase{
+			endpointIPs: []string{"fd00::5", "10.0.0.5"},
+			dualStack:   true,
+			wantIPs:     []string{"10.0.0.5", "fd00::5"},
 		}),
 		Entry("a lost IPv4-only endpoint under a dual-stack config uses the full config", reuseCase{
 			endpointIPs: []string{"10.0.0.5"},

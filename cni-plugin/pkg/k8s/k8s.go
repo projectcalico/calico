@@ -698,10 +698,10 @@ func ipAddrsResult(ctx context.Context, ipAddrs string, conf types.NetConf, args
 // already holds. Reuse lets an in-place sandbox rebuild succeed in a pool that has no
 // spare capacity for a second allocation.
 //
-// IPAM answers ErrCodeAddressNotOurs when a requested address isn't the pod's to take. Then
-// only that family gets a fresh address, and only if the IPAM config assigns it. Any other
-// error fails the ADD without releasing anything, since addresses already moved onto this
-// sandbox are still the endpoint's.
+// IPAM answers ErrCodeAddressNotOurs when a requested address isn't the pod's to take. Each
+// family the IPAM config assigns but no reused address covers then gets a fresh address. Any
+// other error fails the ADD without releasing anything, since addresses already moved onto
+// this sandbox are still the endpoint's.
 func assignPodIPs(
 	ctx context.Context,
 	conf types.NetConf,
@@ -716,23 +716,23 @@ func assignPodIPs(
 		return utils.AddIPAM(ctx, conf, args, logger)
 	}
 
-	// Ask IPAM to move each listed address onto this sandbox, noting which families it refuses.
+	// Ask IPAM to move each listed address onto this sandbox, noting which families it gives back.
 	logger.WithField("ips", priorIPs).Info("Reassigning existing IP to new sandbox")
-	kept := cniv1.Result{CNIVersion: cniv1.ImplementedSpecVersion}
-	var v4Lost, v6Lost bool
+	got := cniv1.Result{CNIVersion: cniv1.ImplementedSpecVersion}
+	var gotV4, gotV6 bool
 	for _, ip := range priorIPs {
 		r, err := callIPAMWithIP(ctx, ip, conf, args, logger)
 		switch {
 		case err == nil:
-			kept.IPs = append(kept.IPs, r.IPs[0])
-			kept.Routes = append(kept.Routes, r.Routes...)
+			got.IPs = append(got.IPs, r.IPs[0])
+			got.Routes = append(got.Routes, r.Routes...)
+			if ip.To4() != nil {
+				gotV4 = true
+			} else {
+				gotV6 = true
+			}
 		case isAddressNotOurs(err):
 			logger.WithField("ip", ip).Info("Endpoint's address is not this pod's to reuse, assigning a new one")
-			if ip.To4() != nil {
-				v4Lost = true
-			} else {
-				v6Lost = true
-			}
 		default:
 			// Includes ErrCodeSandboxSuperseded: a newer sandbox owns the pod's network, and
 			// networking this one even with a fresh address would replace its host interface.
@@ -740,44 +740,43 @@ func assignPodIPs(
 		}
 	}
 
-	if !v4Lost && !v6Lost {
-		// All previously allocated addresses were migrated to the new sandbox.
-		return &kept, nil
-	}
-
 	// Nothing carried over, so this is an ordinary fresh ADD.
-	if len(kept.IPs) == 0 {
+	if len(got.IPs) == 0 {
 		return utils.AddIPAM(ctx, conf, args, logger)
 	}
 
-	// Replace a lost family only if this pod's IPAM config assigns it. Read that from stdin,
-	// not conf: the ipFamilies annotation rewrote stdin's assign_ipv4 and assign_ipv6 after
-	// conf was parsed.
+	// Read the wanted families from stdin, not conf: the ipFamilies annotation rewrote stdin's
+	// assign_ipv4 and assign_ipv6 after conf was parsed.
 	var stdinConf types.NetConf
 	if err := json.Unmarshal(args.StdinData, &stdinConf); err != nil {
 		return nil, err
 	}
-	wantV4, wantV6 := v4Lost && stdinConf.IPAM.AssignsIPv4(), v6Lost && stdinConf.IPAM.AssignsIPv6()
-	if !wantV4 && !wantV6 {
-		return &kept, nil
+	missingV4 := stdinConf.IPAM.AssignsIPv4() && !gotV4
+	missingV6 := stdinConf.IPAM.AssignsIPv6() && !gotV6
+	if missingV4 || missingV6 {
+		freshArgs := *args
+		stdin, err := withAssignFamilies(args.StdinData, missingV4, missingV6)
+		if err != nil {
+			return nil, err
+		}
+		freshArgs.StdinData = stdin
+		fresh, err := utils.AddIPAM(ctx, conf, &freshArgs, logger)
+		if err != nil {
+			return nil, err
+		}
+		got.IPs = append(got.IPs, fresh.IPs...)
+		got.Routes = append(got.Routes, fresh.Routes...)
 	}
 
-	// Allocate only the lost families, then merge them into the carried-over result.
-	freshArgs := *args
-	stdin, err := withAssignFamilies(args.StdinData, wantV4, wantV6)
-	if err != nil {
-		return nil, err
-	}
-	freshArgs.StdinData = stdin
-	fresh, err := utils.AddIPAM(ctx, conf, &freshArgs, logger)
-	if err != nil {
-		return nil, err
-	}
-	kept.IPs = append(kept.IPs, fresh.IPs...)
-	kept.Routes = append(kept.Routes, fresh.Routes...)
+	sortIPv4First(got.IPs)
+	return &got, nil
+}
 
-	// The first address becomes the pod's primary IP, so IPv4 stays first.
-	slices.SortStableFunc(kept.IPs, func(a, b *cniv1.IPConfig) int {
+// sortIPv4First orders ips with IPv4 before IPv6, keeping the order within each family. The
+// first address becomes the pod's primary IP, which is IPv4 on a dual-stack pod whatever
+// order the endpoint listed or IPAM returned them in.
+func sortIPv4First(ips []*cniv1.IPConfig) {
+	slices.SortStableFunc(ips, func(a, b *cniv1.IPConfig) int {
 		v6a, v6b := a.Address.IP.To4() == nil, b.Address.IP.To4() == nil
 		switch {
 		case v6a == v6b:
@@ -787,7 +786,6 @@ func assignPodIPs(
 		}
 		return -1
 	})
-	return &kept, nil
 }
 
 // isAddressNotOurs reports whether err is IPAM's answer that a requested address is not this
