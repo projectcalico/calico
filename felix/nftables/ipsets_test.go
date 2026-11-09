@@ -412,6 +412,19 @@ var _ = DescribeTable("CanonicalizeMember",
 	Entry(string(ipsets.IPSetTypeBitmapPort), ipsets.IPSetTypeBitmapPort, "80", "80", []string{"80"}),
 )
 
+var _ = Describe("IP set member filtering", func() {
+	It("ignores malformed members instead of panicking", func() {
+		f := NewFake(knftables.IPv4Family, "calico")
+		ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil)
+		s := NewIPSets(ipv, f, logrusr.NewSummarizer("test loop"))
+
+		Expect(func() {
+			s.AddOrReplaceIPSet(ipsets.IPSetMetadata{SetID: "malformed", Type: ipsets.IPSetTypeHashNet}, []string{""})
+			s.ApplyUpdates(nil)
+		}).NotTo(Panic())
+	})
+})
+
 var _ = DescribeTable("NFTablesSet",
 	func(meta ipsets.IPSetMetadata, exp *knftables.Set) {
 		f := NewFake(knftables.IPv4Family, "calico")
