@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	. "github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
@@ -1094,6 +1095,140 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			returnRule,
 		}),
 	)
+
+	DescribeTable(
+		"nftables CIDR list tests",
+		func(numSrc, numNotSrc, numDst, numNotDst int, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal, true)
+			pRule := proto.Rule{
+				SrcNet:    []string{"10.0.0.0/24", "10.0.1.0/24"}[:numSrc],
+				NotSrcNet: []string{"11.0.0.0/24", "11.0.1.0/24"}[:numNotSrc],
+				DstNet:    []string{"12.0.0.0/24", "12.0.1.0/24"}[:numDst],
+				NotDstNet: []string{"13.0.0.0/24", "13.0.1.0/24"}[:numNotDst],
+				Action:    "allow",
+			}
+			rules := renderer.ProtoRuleToIptablesRules(
+				&pRule,
+				4,
+				RuleOwnerTypePolicy,
+				RuleDirIngress,
+				0,
+				fooPolicyID,
+				defaultTier,
+				false,
+			)
+
+			// No CIDR match blocks: one rule matches and sets the accept mark, one returns.
+			Expect(rules).To(HaveLen(2))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+		},
+		Entry("1 src", 1, 0, 0, 0, "ip saddr 10.0.0.0/24"),
+		Entry("2 src", 2, 0, 0, 0, "ip saddr { 10.0.0.0/24, 10.0.1.0/24 }"),
+		Entry("2 !src", 0, 2, 0, 0, "ip saddr != { 11.0.0.0/24, 11.0.1.0/24 }"),
+		Entry("2 dst", 0, 0, 2, 0, "ip daddr { 12.0.0.0/24, 12.0.1.0/24 }"),
+		Entry("2 !dst", 0, 0, 0, 2, "ip daddr != { 13.0.0.0/24, 13.0.1.0/24 }"),
+		Entry("1 src, 1 !src", 1, 1, 0, 0, "ip saddr 10.0.0.0/24 ip saddr != 11.0.0.0/24"),
+		Entry(
+			"2 of everything",
+			2,
+			2,
+			2,
+			2,
+			"ip saddr { 10.0.0.0/24, 10.0.1.0/24 } ip daddr { 12.0.0.0/24, 12.0.1.0/24 } "+
+				"ip saddr != { 11.0.0.0/24, 11.0.1.0/24 } ip daddr != { 13.0.0.0/24, 13.0.1.0/24 }",
+		),
+	)
+
+	It("should keep nftables CIDR lists in the main rule when ports need a match block", func() {
+		rrConfigNormal.FlowLogsEnabled = false
+		renderer := NewRenderer(rrConfigNormal, true)
+		pRule := proto.Rule{
+			Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			DstPorts:             []*proto.PortRange{{First: 80, Last: 80}},
+			DstNamedPortIpSetIds: []string{"ipset-1"},
+			SrcNet:               []string{"10.0.0.0/24", "10.0.1.0/24"},
+			Action:               "allow",
+		}
+		rules := renderer.ProtoRuleToIptablesRules(
+			&pRule,
+			4,
+			RuleOwnerTypePolicy,
+			RuleDirIngress,
+			0,
+			fooPolicyID,
+			defaultTier,
+			false,
+		)
+
+		// Mark reset, one rule per port match, then the main rule and the return.
+		Expect(rules).To(HaveLen(5))
+		for _, r := range rules[1:3] {
+			Expect(r.Match.Render()).NotTo(ContainSubstring("saddr"))
+		}
+		Expect(rules[3].Match.Render()).To(Equal(
+			"meta l4proto tcp ip saddr { 10.0.0.0/24, 10.0.1.0/24 } meta mark & 0x200 == 0x200"))
+	})
+
+	// Eight ranges count as sixteen ports, one more than an iptables multiport match holds.
+	sixteenPorts := []*proto.PortRange{
+		{First: 1, Last: 2},
+		{First: 3, Last: 4},
+		{First: 5, Last: 6},
+		{First: 7, Last: 8},
+		{First: 9, Last: 10},
+		{First: 11, Last: 12},
+		{First: 13, Last: 14},
+		{First: 15, Last: 16},
+	}
+
+	It("should match more than 15 nftables ports in the main rule", func() {
+		rrConfigNormal.FlowLogsEnabled = false
+		renderer := NewRenderer(rrConfigNormal, true)
+		pRule := proto.Rule{
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+			SrcPorts: sixteenPorts,
+			Action:   "allow",
+		}
+		rules := renderer.ProtoRuleToIptablesRules(
+			&pRule,
+			4,
+			RuleOwnerTypePolicy,
+			RuleDirIngress,
+			0,
+			fooPolicyID,
+			defaultTier,
+			false,
+		)
+
+		Expect(rules).To(HaveLen(2))
+		Expect(rules[0].Match.Render()).To(Equal(
+			nftrender.Match().Protocol("udp").SourcePortRanges(sixteenPorts).Render()))
+	})
+
+	It("should match more than 15 negated nftables ports in one clause", func() {
+		rrConfigNormal.FlowLogsEnabled = false
+		renderer := NewRenderer(rrConfigNormal, true)
+		pRule := proto.Rule{
+			Protocol:    &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			NotDstPorts: sixteenPorts,
+			Action:      "allow",
+		}
+		rules := renderer.ProtoRuleToIptablesRules(
+			&pRule,
+			4,
+			RuleOwnerTypePolicy,
+			RuleDirIngress,
+			0,
+			fooPolicyID,
+			defaultTier,
+			false,
+		)
+
+		Expect(rules).To(HaveLen(2))
+		Expect(rules[0].Match.Render()).To(Equal(
+			nftrender.Match().Protocol("tcp").NotDestPortRanges(sixteenPorts).Render()))
+	})
 
 	DescribeTable(
 		"CIDR split tests with flowlogs enabled",
@@ -2195,7 +2330,7 @@ var _ = Describe("Filtered rules (negated catch-all CIDR validation)", func() {
 
 var _ = DescribeTable("Port split tests",
 	func(in []*proto.PortRange, expected [][]*proto.PortRange) {
-		Expect(SplitPortList(in)).To(Equal(expected))
+		Expect(SplitPortList(in, iptables.MatchCapabilities.PortsPerRule)).To(Equal(expected))
 	},
 	Entry("nil input", ([]*proto.PortRange)(nil), ([][]*proto.PortRange)(nil)),
 	Entry("empty input", []*proto.PortRange{}, ([][]*proto.PortRange)(nil)),

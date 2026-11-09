@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,6 +54,11 @@ var _ = Describe("MatchBuilder failure cases", func() {
 			Match().ConnMarkMatchesWithMask(0x0, 0x0)
 		}).To(Panic())
 	})
+	It("should panic if SourceNets is passed more than one CIDR", func() {
+		Expect(func() {
+			Match().SourceNets([]string{"10.0.0.0/24", "10.0.1.0/24"})
+		}).To(Panic())
+	})
 })
 
 var _ = DescribeTable("MatchBuilder",
@@ -90,6 +95,10 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotSourceNet", Match().NotSourceNet("10.0.0.4"), "! --source 10.0.0.4"),
 	Entry("DestNet", Match().DestNet("10.0.0.4"), "--destination 10.0.0.4"),
 	Entry("NotDestNet", Match().NotDestNet("10.0.0.4"), "! --destination 10.0.0.4"),
+	Entry("SourceNets", Match().SourceNets([]string{"10.0.0.4"}), "--source 10.0.0.4"),
+	Entry("NotSourceNets", Match().NotSourceNets([]string{"10.0.0.4"}), "! --source 10.0.0.4"),
+	Entry("DestNets", Match().DestNets([]string{"10.0.0.4"}), "--destination 10.0.0.4"),
+	Entry("NotDestNets", Match().NotDestNets([]string{"10.0.0.4"}), "! --destination 10.0.0.4"),
 	// IP sets.
 	Entry("SourceIPSet", Match().SourceIPSet("calits:12345abc-_"), "-m set --match-set calits:12345abc-_ src"),
 	Entry("NotSourceIPSet", Match().NotSourceIPSet("calits:12345abc-_"), "-m set ! --match-set calits:12345abc-_ src"),

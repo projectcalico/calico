@@ -17,6 +17,7 @@ package nftrender
 import (
 	"fmt"
 	"log"
+	"math"
 	"math/bits"
 	"regexp"
 	"strings"
@@ -29,6 +30,10 @@ import (
 )
 
 var Wildcard = "*"
+
+// MatchCapabilities has no per-rule limit: anonymous sets let one nft rule match any number
+// of CIDRs or ports, so policy rules never need mark-bit match blocks for them.
+var MatchCapabilities = generictables.MatchCapabilities{CIDRsPerRule: math.MaxInt, PortsPerRule: math.MaxInt}
 
 var (
 	_ generictables.MatchCriteria = nftMatch{}
@@ -396,6 +401,40 @@ func (m nftMatch) DestNet(net string) generictables.MatchCriteria {
 func (m nftMatch) NotDestNet(net string) generictables.MatchCriteria {
 	m.clauses = append(m.clauses, fmt.Sprintf("<IPV> daddr != %s", net))
 	return m
+}
+
+// SourceNets matches packets whose source address is in any of nets.
+func (m nftMatch) SourceNets(nets []string) generictables.MatchCriteria {
+	m.clauses = append(m.clauses, fmt.Sprintf("<IPV> saddr %s", netsToSet(nets)))
+	return m
+}
+
+// NotSourceNets matches packets whose source address is in none of nets.
+func (m nftMatch) NotSourceNets(nets []string) generictables.MatchCriteria {
+	m.clauses = append(m.clauses, fmt.Sprintf("<IPV> saddr != %s", netsToSet(nets)))
+	return m
+}
+
+// DestNets matches packets whose destination address is in any of nets.
+func (m nftMatch) DestNets(nets []string) generictables.MatchCriteria {
+	m.clauses = append(m.clauses, fmt.Sprintf("<IPV> daddr %s", netsToSet(nets)))
+	return m
+}
+
+// NotDestNets matches packets whose destination address is in none of nets.
+func (m nftMatch) NotDestNets(nets []string) generictables.MatchCriteria {
+	m.clauses = append(m.clauses, fmt.Sprintf("<IPV> daddr != %s", netsToSet(nets)))
+	return m
+}
+
+// netsToSet renders CIDRs as an nftables anonymous set, or a lone CIDR as itself so
+// that single-CIDR rules keep their rule hashes. nft merges overlapping and duplicate
+// CIDRs in an anonymous set itself, so callers need not normalize them.
+func netsToSet(nets []string) string {
+	if len(nets) == 1 {
+		return nets[0]
+	}
+	return fmt.Sprintf("{ %s }", strings.Join(nets, ", "))
 }
 
 func (m nftMatch) SourceIPSet(name string) generictables.MatchCriteria {

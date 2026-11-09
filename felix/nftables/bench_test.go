@@ -32,7 +32,10 @@ import (
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/nftables/nftrender"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/rules/rulesdefs"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/lib/logrusr"
 )
 
@@ -58,6 +61,10 @@ type scaleSpec struct {
 	membersPerSet int
 	numPolicies   int
 	rulesPerChain int
+
+	// cidrsPerRule, when set, makes each policy rule match a list of that many
+	// CIDRs, as a large ipBlock does, instead of an IP set.
+	cidrsPerRule int
 }
 
 // scaleSpecs is a deliberately modest first sweep.  The dimensions can be
@@ -69,6 +76,14 @@ var scaleSpecs = []scaleSpec{
 	{name: "2000sets_2000chains", numIPSets: 2000, membersPerSet: 100, numPolicies: 2000, rulesPerChain: 10},
 }
 
+// ipBlockSpecs sweep the CIDR list length on one large policy, to check that the
+// rendered chain length, and with it the resync cost, stays flat as the lists grow.
+var ipBlockSpecs = []scaleSpec{
+	{name: "400rules_10cidrs", numPolicies: 1, rulesPerChain: 400, cidrsPerRule: 10},
+	{name: "400rules_30cidrs", numPolicies: 1, rulesPerChain: 400, cidrsPerRule: 30},
+	{name: "400rules_90cidrs", numPolicies: 1, rulesPerChain: 400, cidrsPerRule: 90},
+}
+
 // BenchmarkResync measures the cost of a full resync against an already-correct
 // dataplane: read the current state back, diff it against the desired state,
 // and reconcile.  This is the periodic-refresh cost and the analogue of
@@ -78,24 +93,43 @@ func BenchmarkResync(b *testing.B) {
 		b.Run(s.name, func(b *testing.B) {
 			table, ipv := newRealTable(b)
 			buildState(table, ipv, s)
-			table.ApplyUpdates(nil)
-			table.Apply()
-
-			b.ReportAllocs()
-			rec := record(b, s, "resync")
-			b.ResetTimer()
-
-			for range b.N {
-				table.InvalidateDataplaneCache("bench")
-				table.QueueResync()
-				table.ApplyUpdates(nil)
-				table.Apply()
-			}
-
-			b.StopTimer()
-			rec.finish()
+			benchResync(b, table, s, "resync")
 		})
 	}
+}
+
+// BenchmarkIPBlockResync measures a full resync of a policy whose rules each match
+// a long CIDR list. The rules go through the real policy renderer, so the chain is
+// as long as Felix would make it, and the nft_rules metric reports that length.
+func BenchmarkIPBlockResync(b *testing.B) {
+	for _, s := range ipBlockSpecs {
+		b.Run(s.name, func(b *testing.B) {
+			table, ipv := newRealTable(b)
+			numNFTRules := buildIPBlockState(table, ipv, s)
+			benchResync(b, table, s, "ipblock_resync")
+			b.ReportMetric(float64(numNFTRules), "nft_rules")
+		})
+	}
+}
+
+// benchResync programs the queued state, then times full resyncs against it.
+func benchResync(b *testing.B, table *nftables.NftablesTable, s scaleSpec, phase string) {
+	table.ApplyUpdates(nil)
+	table.Apply()
+
+	b.ReportAllocs()
+	rec := record(b, s, phase)
+	b.ResetTimer()
+
+	for range b.N {
+		table.InvalidateDataplaneCache("bench")
+		table.QueueResync()
+		table.ApplyUpdates(nil)
+		table.Apply()
+	}
+
+	b.StopTimer()
+	rec.finish()
 }
 
 // BenchmarkDeltaUpdate measures the incremental write cost: each iteration
@@ -249,9 +283,7 @@ func buildState(table *nftables.NftablesTable, ipv *ipsets.IPVersionConfig, s sc
 		)
 	}
 
-	jumps := make([]generictables.Rule, s.numPolicies)
-	for p := range s.numPolicies {
-		chainName := fmt.Sprintf("cali-pi-%06d", p)
+	addPolicyChains(table, s, func(p int) []generictables.Rule {
 		policyRules := make([]generictables.Rule, s.rulesPerChain)
 		for r := range s.rulesPerChain {
 			setName := setNames[(p*s.rulesPerChain+r)%s.numIPSets]
@@ -263,7 +295,62 @@ func buildState(table *nftables.NftablesTable, ipv *ipsets.IPVersionConfig, s sc
 				Action: nftrender.ReturnAction{},
 			}
 		}
-		table.UpdateChain(&generictables.Chain{Name: chainName, Rules: policyRules})
+		return policyRules
+	})
+}
+
+// buildIPBlockState queues numPolicies chains, each rendered by the nftables policy
+// renderer from rulesPerChain allow rules that match cidrsPerRule distinct /24s. It
+// returns the total number of nft rules in those chains.
+func buildIPBlockState(table *nftables.NftablesTable, ipv *ipsets.IPVersionConfig, s scaleSpec) int {
+	renderer := rules.NewRenderer(rules.Config{
+		IPSetConfigV4: ipv,
+		IPSetConfigV6: ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, ipsets.IPSetNamePrefix, nil, nil),
+		MarkAccept:    0x80,
+		MarkPass:      0x100,
+		MarkScratch0:  0x200,
+		MarkScratch1:  0x400,
+		MarkDrop:      0x800,
+		MarkEndpoint:  0xff000,
+	}, true)
+	policyID := &types.PolicyID{Name: "bench"}
+
+	numNFTRules := 0
+	nextNet := uint32(10 << 24)
+	addPolicyChains(table, s, func(p int) []generictables.Rule {
+		var policyRules []generictables.Rule
+		for r := range s.rulesPerChain {
+			cidrs := make([]string, s.cidrsPerRule)
+			for i := range cidrs {
+				cidrs[i] = intToIP(nextNet) + "/24"
+				nextNet += 1 << 8
+			}
+			pRule := &proto.Rule{Action: "allow", SrcNet: cidrs}
+			policyRules = append(policyRules, renderer.ProtoRuleToIptablesRules(
+				pRule,
+				4,
+				rules.RuleOwnerTypePolicy,
+				rules.RuleDirIngress,
+				r,
+				policyID,
+				"default",
+				false,
+			)...)
+		}
+		numNFTRules += len(policyRules)
+		return policyRules
+	})
+	return numNFTRules
+}
+
+// addPolicyChains queues numPolicies policy chains, with rules from policyRules,
+// and jumps to each from filter-FORWARD so that they are referenced and therefore
+// programmed.
+func addPolicyChains(table *nftables.NftablesTable, s scaleSpec, policyRules func(p int) []generictables.Rule) {
+	jumps := make([]generictables.Rule, s.numPolicies)
+	for p := range s.numPolicies {
+		chainName := fmt.Sprintf("cali-pi-%06d", p)
+		table.UpdateChain(&generictables.Chain{Name: chainName, Rules: policyRules(p)})
 		jumps[p] = generictables.Rule{
 			Match:  nftrender.Match(),
 			Action: nftrender.JumpAction{Target: chainName},
@@ -344,18 +431,19 @@ func (r *recorder) writePerfDoc(wallNsPerOp, cpuNsPerOp, bytesPerOp, allocsPerOp
 		return
 	}
 	doc := map[string]any{
-		"test_name":         "nft_dataplane",
-		"dataplane":         "nftables",
-		"phase":             r.phase,
-		"scale_ipsets":      r.spec.numIPSets,
-		"scale_set_members": r.spec.numIPSets * r.spec.membersPerSet,
-		"scale_chains":      r.spec.numPolicies,
-		"scale_rules":       r.spec.numPolicies * r.spec.rulesPerChain,
-		"wall_ns_per_op":    wallNsPerOp,
-		"cpu_ns_per_op":     cpuNsPerOp,
-		"bytes_per_op":      bytesPerOp,
-		"allocs_per_op":     allocsPerOp,
-		"ok":                true,
+		"test_name":            "nft_dataplane",
+		"dataplane":            "nftables",
+		"phase":                r.phase,
+		"scale_ipsets":         r.spec.numIPSets,
+		"scale_set_members":    r.spec.numIPSets * r.spec.membersPerSet,
+		"scale_chains":         r.spec.numPolicies,
+		"scale_rules":          r.spec.numPolicies * r.spec.rulesPerChain,
+		"scale_cidrs_per_rule": r.spec.cidrsPerRule,
+		"wall_ns_per_op":       wallNsPerOp,
+		"cpu_ns_per_op":        cpuNsPerOp,
+		"bytes_per_op":         bytesPerOp,
+		"allocs_per_op":        allocsPerOp,
+		"ok":                   true,
 	}
 	familyDir := filepath.Join(dir, perfFamily)
 	if err := os.MkdirAll(familyDir, 0o755); err != nil {
