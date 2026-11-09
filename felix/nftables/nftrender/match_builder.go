@@ -17,6 +17,7 @@ package nftrender
 import (
 	"fmt"
 	"log"
+	"math"
 	"math/bits"
 	"regexp"
 	"strings"
@@ -29,6 +30,10 @@ import (
 )
 
 var Wildcard = "*"
+
+// MatchLimits has no per-rule limit: anonymous sets let one nft rule match any number
+// of CIDRs or ports, so policy rules never need mark-bit match blocks for them.
+var MatchLimits = generictables.MatchLimits{CIDRsPerDirection: math.MaxInt, PortSlots: math.MaxInt}
 
 var (
 	_ generictables.MatchCriteria = nftMatch{}
@@ -59,14 +64,6 @@ type NFTMatchCriteria interface {
 
 	ConntrackStatus(statusNames string) generictables.MatchCriteria
 	NotConntrackStatus(statusNames string) generictables.MatchCriteria
-
-	// SourceNets, NotSourceNets, DestNets and NotDestNets match any of the given CIDRs
-	// in a single clause. iptables needs a rule per CIDR for this, which makes policy
-	// chains with large ipBlock lists very long.
-	SourceNets(nets []string) generictables.MatchCriteria
-	NotSourceNets(nets []string) generictables.MatchCriteria
-	DestNets(nets []string) generictables.MatchCriteria
-	NotDestNets(nets []string) generictables.MatchCriteria
 }
 
 // Combine creates a copy of m1 and appends the values of m2 to the copy, creating a new MatchCritera with the values
@@ -430,9 +427,13 @@ func (m nftMatch) NotDestNets(nets []string) generictables.MatchCriteria {
 	return m
 }
 
-// netsToSet renders CIDRs as an nftables anonymous set. nft merges overlapping and
-// duplicate CIDRs in an anonymous set itself, so callers need not normalize them.
+// netsToSet renders CIDRs as an nftables anonymous set, or a lone CIDR as itself so
+// that single-CIDR rules keep their rule hashes. nft merges overlapping and duplicate
+// CIDRs in an anonymous set itself, so callers need not normalize them.
 func netsToSet(nets []string) string {
+	if len(nets) == 1 {
+		return nets[0]
+	}
 	return fmt.Sprintf("{ %s }", strings.Join(nets, ", "))
 }
 

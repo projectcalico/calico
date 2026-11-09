@@ -296,15 +296,15 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	// Port matches.  We only need to render blocks of ports if, in total, there's more than one
 	// source or more than one destination match that needs to be or-ed together.
 	//
-	// Split the port list into blocks of 15, as per iptables limit and add in the number of
-	// named ports.
+	// Split the port list into blocks that fit the backend's port match and add in the number
+	// of named ports.
 	var ipSetConfig *ipsets.IPVersionConfig
 	if ipVersion == 4 {
 		ipSetConfig = r.IPSetConfigV4
 	} else {
 		ipSetConfig = r.IPSetConfigV6
 	}
-	srcPortSplits := SplitPortList(ruleCopy.SrcPorts)
+	srcPortSplits := SplitPortList(ruleCopy.SrcPorts, r.matchLimits.PortSlots)
 	if len(srcPortSplits)+len(ruleCopy.SrcNamedPortIpSetIds) > 1 {
 		// Render a block for the source ports.
 		matchBlockBuilder.AppendPortMatchBlock(ipSetConfig, ruleCopy.Protocol, srcPortSplits, ruleCopy.SrcNamedPortIpSetIds, src)
@@ -312,7 +312,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		ruleCopy.SrcPorts = nil
 		ruleCopy.SrcNamedPortIpSetIds = nil
 	}
-	dstPortSplits := SplitPortList(ruleCopy.DstPorts)
+	dstPortSplits := SplitPortList(ruleCopy.DstPorts, r.matchLimits.PortSlots)
 	if len(dstPortSplits)+len(ruleCopy.DstNamedPortIpSetIds) > 1 {
 		// Render a block for the destination ports.
 		matchBlockBuilder.AppendPortMatchBlock(ipSetConfig, ruleCopy.Protocol, dstPortSplits, ruleCopy.DstNamedPortIpSetIds, dst)
@@ -321,18 +321,16 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		ruleCopy.DstNamedPortIpSetIds = nil
 	}
 
-	// nftables matches a CIDR list in one rule with an anonymous set. A rule per CIDR makes
-	// long chains, and the kernel's chain dump is quadratic in chain length.
-	useCIDRBlocks := !r.nft
+	cidrLimit := r.matchLimits.CIDRsPerDirection
 
-	// If there's more than one positive source/destination CIDR match, we have to render a block.
-	// Otherwise, if there's exactly one, we'll include it in the main rule below.
-	if useCIDRBlocks && len(ruleCopy.SrcNet) > 1 {
+	// If there are more positive source/destination CIDR matches than one rule can hold, we have
+	// to render a block. Otherwise, we'll include them in the main rule below.
+	if len(ruleCopy.SrcNet) > cidrLimit {
 		matchBlockBuilder.AppendCIDRMatchBlock(ruleCopy.SrcNet, src)
 		// Since we're using a block for this, nil out the match.
 		ruleCopy.SrcNet = nil
 	}
-	if useCIDRBlocks && len(ruleCopy.DstNet) > 1 {
+	if len(ruleCopy.DstNet) > cidrLimit {
 		matchBlockBuilder.AppendCIDRMatchBlock(ruleCopy.DstNet, dst)
 		// Since we're using a block for this, nil out the match.
 		ruleCopy.DstNet = nil
@@ -348,7 +346,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	// any negative matches will tip the count over 1.  Otherwise, we'll need 2 or more negative
 	// matches to make the count more than 1.
 	totalSrcMatches := len(ruleCopy.SrcNet) + len(ruleCopy.NotSrcNet)
-	if useCIDRBlocks && totalSrcMatches > 1 {
+	if totalSrcMatches > cidrLimit {
 		// We have some negated source CIDR matches and the total number of source
 		// CIDR matches won't fit in the rule.  Render a block of rules to do the
 		// negated match.
@@ -357,7 +355,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		ruleCopy.NotSrcNet = nil
 	}
 	totalDstMatches := len(ruleCopy.DstNet) + len(ruleCopy.NotDstNet)
-	if useCIDRBlocks && totalDstMatches > 1 {
+	if totalDstMatches > cidrLimit {
 		// We have some negated dest CIDR matches and the total number of dest
 		// CIDR matches won't fit in the rule.  Render a block of rules to do the
 		// negated match.
@@ -552,57 +550,6 @@ func (sod srcOrDst) MatchNet(m generictables.MatchCriteria, cidr string) generic
 	return nil
 }
 
-// MatchNets returns m with a match on any of the given CIDRs. A single CIDR renders as
-// a plain match for either backend. More than one needs nftables, because iptables
-// rules get a CIDR match block from ProtoRuleToIptablesRules instead.
-func (sod srcOrDst) MatchNets(m generictables.MatchCriteria, cidrs []string) generictables.MatchCriteria {
-	if len(cidrs) == 1 {
-		return sod.MatchNet(m, cidrs[0])
-	}
-	nm := mustNFTMatch(m, cidrs)
-	switch sod {
-	case src:
-		return nm.SourceNets(cidrs)
-	case dst:
-		return nm.DestNets(cidrs)
-	}
-	logrus.WithField("srcOrDst", sod).Panic("Unknown source or dest type.")
-	return nil
-}
-
-// NotMatchNets returns m with a match on none of the given CIDRs. Like MatchNets, it
-// needs nftables for more than one CIDR.
-func (sod srcOrDst) NotMatchNets(m generictables.MatchCriteria, cidrs []string) generictables.MatchCriteria {
-	if len(cidrs) == 1 {
-		switch sod {
-		case src:
-			return m.NotSourceNet(cidrs[0])
-		case dst:
-			return m.NotDestNet(cidrs[0])
-		}
-	}
-	nm := mustNFTMatch(m, cidrs)
-	switch sod {
-	case src:
-		return nm.NotSourceNets(cidrs)
-	case dst:
-		return nm.NotDestNets(cidrs)
-	}
-	logrus.WithField("srcOrDst", sod).Panic("Unknown source or dest type.")
-	return nil
-}
-
-// mustNFTMatch returns m as nftables match criteria, panicking otherwise. Reaching it
-// with an iptables match means ProtoRuleToIptablesRules left a CIDR list in the rule
-// instead of rendering a match block.
-func mustNFTMatch(m generictables.MatchCriteria, cidrs []string) nftrender.NFTMatchCriteria {
-	nm, ok := m.(nftrender.NFTMatchCriteria)
-	if !ok {
-		logrus.WithField("cidrs", cidrs).Panic("Bug: more than one CIDR left in a non-nftables rule.")
-	}
-	return nm
-}
-
 func (sod srcOrDst) AppendMatchPorts(m generictables.MatchCriteria, pr []*proto.PortRange) generictables.MatchCriteria {
 	switch sod {
 	case src:
@@ -625,13 +572,13 @@ func (sod srcOrDst) MatchIPPortIPSet(m generictables.MatchCriteria, setID string
 	return nil
 }
 
-// SplitPortList splits the input list of ports into groups containing up to 15 port numbers.
-// If the input list is empty, it returns an empty slice.
+// SplitPortList splits the input list of ports into groups that each fit in a port match of
+// the given number of slots. If the input list is empty, it returns an empty slice.
 //
-// The requirement to split into groups of 15, comes from iptables' limit on the number of ports
-// "slots" in a multiport match.  A single port takes up one slot, a range of ports requires 2.
-func SplitPortList(ports []*proto.PortRange) (splits [][]*proto.PortRange) {
-	slotsAvailableInCurrentSplit := 15
+// A single port takes up one slot and a range of ports takes two, as in an iptables multiport
+// match, which holds 15 slots.
+func SplitPortList(ports []*proto.PortRange, slots int) (splits [][]*proto.PortRange) {
+	slotsAvailableInCurrentSplit := slots
 	var split []*proto.PortRange
 	for _, portRange := range ports {
 		// First figure out how many slots adding this PortRange would require.
@@ -642,10 +589,10 @@ func SplitPortList(ports []*proto.PortRange) (splits [][]*proto.PortRange) {
 			numSlotsRequired = 2
 		}
 		if slotsAvailableInCurrentSplit < numSlotsRequired {
-			// Adding this port to the current split would take it over the 15 slot
+			// Adding this port to the current split would take it over the slot
 			// limit, start a new split.
 			splits = append(splits, split)
-			slotsAvailableInCurrentSplit = 15
+			slotsAvailableInCurrentSplit = slots
 			split = nil
 		}
 		split = append(split, portRange)
@@ -915,7 +862,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 
 	if len(pRule.SrcNet) > 0 {
 		logCxt.WithField("cidrs", pRule.SrcNet).Debug("Adding src CIDR match")
-		match = src.MatchNets(match, pRule.SrcNet)
+		match = match.SourceNets(pRule.SrcNet)
 	}
 
 	nameForIPSet := func(ipsetID string) string {
@@ -957,7 +904,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 
 	if len(pRule.DstNet) > 0 {
 		logCxt.WithField("cidrs", pRule.DstNet).Debug("Adding dest CIDR match")
-		match = dst.MatchNets(match, pRule.DstNet)
+		match = match.DestNets(pRule.DstNet)
 	}
 
 	for _, ipsetID := range pRule.DstIpSetIds {
@@ -1035,7 +982,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 
 	if len(pRule.NotSrcNet) > 0 {
 		logCxt.WithField("cidrs", pRule.NotSrcNet).Debug("Adding negated src CIDR match")
-		match = src.NotMatchNets(match, pRule.NotSrcNet)
+		match = match.NotSourceNets(pRule.NotSrcNet)
 	}
 
 	for _, ipsetID := range pRule.NotSrcIpSetIds {
@@ -1051,7 +998,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		logCxt.WithFields(logrus.Fields{
 			"ports": pRule.NotSrcPorts,
 		}).Debug("Adding negated src port match")
-		for _, portSplit := range SplitPortList(pRule.NotSrcPorts) {
+		for _, portSplit := range SplitPortList(pRule.NotSrcPorts, r.matchLimits.PortSlots) {
 			match = match.NotSourcePortRanges(portSplit)
 		}
 	}
@@ -1067,7 +1014,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 
 	if len(pRule.NotDstNet) > 0 {
 		logCxt.WithField("cidrs", pRule.NotDstNet).Debug("Adding !dst CIDR match")
-		match = dst.NotMatchNets(match, pRule.NotDstNet)
+		match = match.NotDestNets(pRule.NotDstNet)
 	}
 
 	for _, ipsetID := range pRule.NotDstIpSetIds {
@@ -1083,7 +1030,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		logCxt.WithFields(logrus.Fields{
 			"ports": pRule.NotDstPorts,
 		}).Debug("Adding negated dst port match")
-		for _, portSplit := range SplitPortList(pRule.NotDstPorts) {
+		for _, portSplit := range SplitPortList(pRule.NotDstPorts, r.matchLimits.PortSlots) {
 			match = match.NotDestPortRanges(portSplit)
 		}
 	}

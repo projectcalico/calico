@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	. "github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
@@ -1169,6 +1170,66 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"meta l4proto tcp ip saddr { 10.0.0.0/24, 10.0.1.0/24 } meta mark & 0x200 == 0x200"))
 	})
 
+	// Sixteen multiport slots, one more than an iptables rule holds.
+	sixteenPortSlots := []*proto.PortRange{
+		{First: 1, Last: 2},
+		{First: 3, Last: 4},
+		{First: 5, Last: 6},
+		{First: 7, Last: 8},
+		{First: 9, Last: 10},
+		{First: 11, Last: 12},
+		{First: 13, Last: 14},
+		{First: 15, Last: 16},
+	}
+
+	It("should match more than 15 nftables port slots in the main rule", func() {
+		rrConfigNormal.FlowLogsEnabled = false
+		renderer := NewRenderer(rrConfigNormal, true)
+		pRule := proto.Rule{
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+			SrcPorts: sixteenPortSlots,
+			Action:   "allow",
+		}
+		rules := renderer.ProtoRuleToIptablesRules(
+			&pRule,
+			4,
+			RuleOwnerTypePolicy,
+			RuleDirIngress,
+			0,
+			fooPolicyID,
+			defaultTier,
+			false,
+		)
+
+		Expect(rules).To(HaveLen(2))
+		Expect(rules[0].Match.Render()).To(Equal(
+			nftrender.Match().Protocol("udp").SourcePortRanges(sixteenPortSlots).Render()))
+	})
+
+	It("should match more than 15 negated nftables port slots in one clause", func() {
+		rrConfigNormal.FlowLogsEnabled = false
+		renderer := NewRenderer(rrConfigNormal, true)
+		pRule := proto.Rule{
+			Protocol:    &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			NotDstPorts: sixteenPortSlots,
+			Action:      "allow",
+		}
+		rules := renderer.ProtoRuleToIptablesRules(
+			&pRule,
+			4,
+			RuleOwnerTypePolicy,
+			RuleDirIngress,
+			0,
+			fooPolicyID,
+			defaultTier,
+			false,
+		)
+
+		Expect(rules).To(HaveLen(2))
+		Expect(rules[0].Match.Render()).To(Equal(
+			nftrender.Match().Protocol("tcp").NotDestPortRanges(sixteenPortSlots).Render()))
+	})
+
 	DescribeTable(
 		"CIDR split tests with flowlogs enabled",
 		func(numSrc, numNotSrc, numDst, numNotDst int, expected []string) {
@@ -2269,7 +2330,7 @@ var _ = Describe("Filtered rules (negated catch-all CIDR validation)", func() {
 
 var _ = DescribeTable("Port split tests",
 	func(in []*proto.PortRange, expected [][]*proto.PortRange) {
-		Expect(SplitPortList(in)).To(Equal(expected))
+		Expect(SplitPortList(in, iptables.MatchLimits.PortSlots)).To(Equal(expected))
 	},
 	Entry("nil input", ([]*proto.PortRange)(nil), ([][]*proto.PortRange)(nil)),
 	Entry("empty input", []*proto.PortRange{}, ([][]*proto.PortRange)(nil)),
