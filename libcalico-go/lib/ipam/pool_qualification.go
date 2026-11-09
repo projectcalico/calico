@@ -181,7 +181,7 @@ func newClaim(r poolRequest) PoolClaim {
 	for _, rp := range r.requested {
 		pools = append(pools, rp.Network().String())
 	}
-	return PoolClaim{Use: r.use, Pools: pools, Selectors: claimSelectors{node: r.node, namespace: r.namespace}}
+	return NewPoolClaim(r.use, pools, claimSelectors{node: r.node, namespace: r.namespace})
 }
 
 // candidate builds the request's candidate for a pool, recording whether the pool's node selector picks the node. A
@@ -294,14 +294,17 @@ func isSelecting(r rejectReason) bool {
 // pools with MayUse, so code that must agree with that choice, such as a report of which nodes are at their block
 // limit, can call it too.
 type PoolClaim struct {
-	Use v3.IPPoolAllowedUse
+	use       v3.IPPoolAllowedUse
+	pools     []string
+	selectors PoolSelectors
+}
 
-	// Pools names the pools the claim asks for, each by name or CIDR. A claim naming pools may use only those, and
-	// only their allowed uses are checked. Empty means the claim names no pool.
-	Pools []string
-
-	// Selectors is consulted only for a claim that names no pool, and only once the pool's assignment mode passes.
-	Selectors PoolSelectors
+// NewPoolClaim builds a claim for an address request asking for use. pools names the pools it asks for, each by name
+// or CIDR as the CNI plugin accepts them; a claim naming pools may use only those, and only their allowed uses are
+// checked. selectors matches each pool's selectors against the requesting node and namespace, and is consulted only
+// when pools is empty.
+func NewPoolClaim(use v3.IPPoolAllowedUse, pools []string, selectors PoolSelectors) PoolClaim {
+	return PoolClaim{use: use, pools: slices.Clone(pools), selectors: selectors}
 }
 
 // PoolSelectors reports whether an IP pool's node and namespace selectors match a claim's node and namespace. IPAM
@@ -321,7 +324,7 @@ func (c PoolClaim) MayUse(pool *v3.IPPool) (bool, error) {
 
 // qualify checks the pool against the claim, returning why the claim may not use it, or empty when it may.
 func (c PoolClaim) qualify(pool *v3.IPPool) (rejectReason, error) {
-	if len(c.Pools) > 0 {
+	if len(c.pools) > 0 {
 		if !c.names(pool) {
 			return rejectNotRequested, nil
 		}
@@ -331,14 +334,14 @@ func (c PoolClaim) qualify(pool *v3.IPPool) (rejectReason, error) {
 			return reason, err
 		}
 	}
-	return checkUse(*pool, c.Use), nil
+	return checkUse(*pool, c.use), nil
 }
 
 // names reports whether the claim names the pool. An entry that parses as a CIDR matches the pool's network in any
 // form, and any other entry matches the pool's name, the order the CNI plugin resolves them in.
 func (c PoolClaim) names(pool *v3.IPPool) bool {
 	poolCIDR := normalizedCIDR(*pool)
-	for _, p := range c.Pools {
+	for _, p := range c.pools {
 		if _, cidr, err := net.ParseCIDR(p); err == nil {
 			if poolCIDR != "" && cidr.String() == poolCIDR {
 				return true
@@ -357,7 +360,7 @@ func (c PoolClaim) checkSelection(pool *v3.IPPool) (rejectReason, error) {
 		return rejectAssignmentMode, nil
 	}
 
-	nodeMatches, err := c.Selectors.SelectsNode(pool)
+	nodeMatches, err := c.selectors.SelectsNode(pool)
 	if err != nil {
 		log.WithError(err).WithField("pool", pool).Error("failed to determine if node matches pool")
 		return "", err
@@ -366,7 +369,7 @@ func (c PoolClaim) checkSelection(pool *v3.IPPool) (rejectReason, error) {
 		return rejectNodeSelector, nil
 	}
 
-	namespaceMatches, err := c.Selectors.SelectsNamespace(pool)
+	namespaceMatches, err := c.selectors.SelectsNamespace(pool)
 	if err != nil {
 		log.WithError(err).WithField("pool", pool).Error("failed to determine if namespace matches pool")
 		return "", err

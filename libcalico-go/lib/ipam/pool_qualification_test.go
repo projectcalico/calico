@@ -550,7 +550,7 @@ var _ = DescribeTable("PoolClaim.MayUse",
 		if tc.poolName != "" {
 			pool.Name = tc.poolName
 		}
-		claim := PoolClaim{Use: v3.IPPoolAllowedUseWorkload, Pools: tc.pools, Selectors: tc.selectors}
+		claim := NewPoolClaim(v3.IPPoolAllowedUseWorkload, tc.pools, tc.selectors)
 		Expect(claim.MayUse(&pool)).To(Equal(tc.want))
 	},
 	Entry("an Automatic pool whose selectors match", mayUseCase{
@@ -616,7 +616,7 @@ var _ = DescribeTable("PoolClaim.MayUse",
 var _ = Describe("PoolClaim.MayUse errors", func() {
 	It("returns a selector's error", func() {
 		pool := testPool{cidr: v4Pool1}.build()
-		claim := PoolClaim{Use: v3.IPPoolAllowedUseWorkload, Selectors: fixedSelectors{untouchable: true}}
+		claim := NewPoolClaim(v3.IPPoolAllowedUseWorkload, nil, fixedSelectors{untouchable: true})
 		_, err := claim.MayUse(&pool)
 		Expect(err).To(MatchError(errSelectorsConsulted))
 	})
