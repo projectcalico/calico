@@ -71,13 +71,13 @@ func (p TransitionPhase) String() string { return strconv.Itoa(int(p)) }
 func (p TransitionPhase) Describe(deadline time.Time) string {
 	switch p {
 	case TransitionDistributeRoot:
-		return "phase 1 of 4: root-cert.pem carries the current and the new root while the current CA keeps signing; waiting for istiod to roll"
+		return "phase 1/4: adding the new root; waiting for istiod to roll out"
 	case TransitionAwaitDistribution:
-		return "phase 2 of 4: waiting until " + deadline.UTC().Format(time.RFC3339) + " for every ztunnel to refresh its certificate and trust both roots"
+		return "phase 2/4: waiting until " + deadline.UTC().Format(time.RFC3339) + " for workload certificates to renew"
 	case TransitionSwitchSigner:
-		return "phase 3 of 4: istiod signs with the new CA and still trusts the old root; waiting for istiod to roll"
+		return "phase 3/4: signing with the new CA; waiting for istiod to roll out"
 	case TransitionAwaitExpiry:
-		return "phase 4 of 4: waiting until " + deadline.UTC().Format(time.RFC3339) + " for every certificate from the old CA to expire before its root is dropped"
+		return "phase 4/4: waiting until " + deadline.UTC().Format(time.RFC3339) + " to remove the old root"
 	}
 	return ""
 }

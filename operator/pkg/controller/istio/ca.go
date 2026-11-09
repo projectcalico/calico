@@ -86,8 +86,7 @@ func (r *ReconcileIstio) resolveSigner(ctx context.Context, in *trustInputs, sel
 		// in progress carries, are still what other clusters must trust.
 		in.ownRoots = append(append([]*x509.Certificate{}, current.roots...), recorded.Roots()...)
 		if recorded.Phase != istio.TransitionNone {
-			in.notice = fmt.Sprintf("Istio CA transition holds at %s; it resumes once the certificate authority is usable again",
-				recorded.Phase.Describe(recorded.Deadline))
+			in.notice = fmt.Sprintf("Istio CA rotation paused at phase %s/4 until the CA is usable", recorded.Phase)
 		}
 		return nil
 	}
@@ -198,23 +197,24 @@ func (r *ReconcileIstio) clock() time.Time {
 	return time.Now()
 }
 
-// transitionNotice is the status warning while a transition runs: which CA
-// istiod moves to, from which, and what the phase waits for.
+// transitionNotice is the status warning while a transition runs. Until the
+// signer switches, it names the CA the mesh moves away from, if the operator
+// did not create it.
 func transitionNotice(step istio.TransitionStep, currentSource, desiredSource istio.CASource) string {
 	t := step.Transition
-	if t.Phase >= istio.TransitionSwitchSigner {
-		return fmt.Sprintf("Istio CA transition to %s, %s", describeCASource(step.Source), t.Phase.Describe(t.Deadline))
+	from := ""
+	if t.Phase < istio.TransitionSwitchSigner && currentSource != desiredSource {
+		from = " from " + describeCASource(currentSource)
 	}
-	return fmt.Sprintf("Istio CA transition from %s to %s, %s",
-		describeCASource(currentSource), describeCASource(desiredSource), t.Phase.Describe(t.Deadline))
+	return fmt.Sprintf("Istio CA rotation%s, %s", from, t.Phase.Describe(t.Deadline))
 }
 
 func describeCASource(source istio.CASource) string {
 	switch source {
 	case istio.CASourceSelfSigned:
-		return fmt.Sprintf("Istio's self-signed CA in Secret %s/%s", istio.IstioNamespace, istio.IstioSelfSignedCASecretName)
+		return fmt.Sprintf("Istio's self-signed CA (%s/%s)", istio.IstioNamespace, istio.IstioSelfSignedCASecretName)
 	case istio.CASourceUnmanaged:
-		return fmt.Sprintf("the CA in Secret %s/%s, which the operator did not create", istio.IstioNamespace, istio.CACertsSecretName)
+		return fmt.Sprintf("a user-provided CA (%s/%s)", istio.IstioNamespace, istio.CACertsSecretName)
 	}
 	return "the operator-managed CA"
 }
