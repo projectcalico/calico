@@ -424,6 +424,11 @@ _client = None
 # here so that test code can override it after importing this file.
 _possible_etcd_api_paths = ["/v3/", "/v3beta/", "/v3alpha/"]
 
+# The key that Etcd3AuthClient.status() reads, to get etcd's response header.  It
+# needn't exist; it just has to be readable, so it's a key that networking-calico
+# itself reads and writes.
+_STATUS_KEY = "/calico/resources/v3/projectcalico.org/clusterinformations/default"
+
 
 # Wrap Etcd3Client to authenticate when needed and add an
 # Authorization header to the session headers.
@@ -501,6 +506,22 @@ class Etcd3AuthClient(Etcd3Client):
                 # current exception.
                 if not possible_api_paths:
                     raise
+
+    def status(self):
+        """Get the etcd response header, with the cluster ID and current revision.
+
+        etcd3gw's status() calls the maintenance Status API, which etcd v3.4.42 made
+        admin-only, as did v3.5.28 to v3.5.31 and v3.6.9 to v3.6.11
+        (CVE-2026-33413).  So when etcd auth is enabled, that fails for the non-admin
+        user that networking-calico normally runs as.  Instead, do a count-only read
+        of a key under /calico/, which that user can read.  Its response has the
+        same header as a Status response, and the header is all that our callers
+        use.
+        """
+        return self.post(
+            self.get_url("/kv/range"),
+            json={"key": _encode(_STATUS_KEY), "count_only": True},
+        )
 
     def authenticate(self):
         # When authenticating, there mustn't be an Authorization
