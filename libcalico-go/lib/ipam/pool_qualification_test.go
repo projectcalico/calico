@@ -534,10 +534,12 @@ func (s fixedSelectors) SelectsNamespace(*v3.IPPool) (bool, error) {
 	return s.namespace, nil
 }
 
-// mayUseCase is one row of the PoolClaim.MayUse table. The claim asks for Workload use.
+// mayUseCase is one row of the PoolClaim.MayUse table. The claim asks for Workload use. The pool is named after its
+// CIDR unless poolName is set.
 type mayUseCase struct {
 	pool      testPool
-	named     bool
+	poolName  string
+	pools     []string
 	selectors fixedSelectors
 	want      bool
 }
@@ -545,7 +547,10 @@ type mayUseCase struct {
 var _ = DescribeTable("PoolClaim.MayUse",
 	func(tc mayUseCase) {
 		pool := tc.pool.build()
-		claim := PoolClaim{Use: v3.IPPoolAllowedUseWorkload, Named: tc.named, Selectors: tc.selectors}
+		if tc.poolName != "" {
+			pool.Name = tc.poolName
+		}
+		claim := PoolClaim{Use: v3.IPPoolAllowedUseWorkload, Pools: tc.pools, Selectors: tc.selectors}
 		Expect(claim.MayUse(&pool)).To(Equal(tc.want))
 	},
 	Entry("an Automatic pool whose selectors match", mayUseCase{
@@ -559,9 +564,33 @@ var _ = DescribeTable("PoolClaim.MayUse",
 	}),
 	Entry("a Manual pool the claim names", mayUseCase{
 		pool:      testPool{cidr: v4Pool1, manual: true},
-		named:     true,
+		pools:     []string{v4Pool1},
 		selectors: fixedSelectors{untouchable: true},
 		want:      true,
+	}),
+	Entry("a pool the claim names by name", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		poolName:  "pool-a",
+		pools:     []string{"pool-a"},
+		selectors: fixedSelectors{untouchable: true},
+		want:      true,
+	}),
+	Entry("not a pool when the claim names a different pool by name", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		poolName:  "pool-a",
+		pools:     []string{"pool-b"},
+		selectors: fixedSelectors{untouchable: true},
+	}),
+	Entry("a pool the claim names by another form of its CIDR", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		pools:     []string{"10.0.0.0/24"},
+		selectors: fixedSelectors{untouchable: true},
+		want:      true,
+	}),
+	Entry("not a pool the claim doesn't name, without consulting its selectors", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		pools:     []string{v4Pool2},
+		selectors: fixedSelectors{untouchable: true},
 	}),
 	Entry("not a pool whose node selector skips the node", mayUseCase{
 		pool:      testPool{cidr: v4Pool1},
@@ -569,7 +598,7 @@ var _ = DescribeTable("PoolClaim.MayUse",
 	}),
 	Entry("a pool whose selectors skip the node and namespace, when the claim names it", mayUseCase{
 		pool:      testPool{cidr: v4Pool1},
-		named:     true,
+		pools:     []string{v4Pool1},
 		selectors: fixedSelectors{untouchable: true},
 		want:      true,
 	}),
@@ -579,7 +608,7 @@ var _ = DescribeTable("PoolClaim.MayUse",
 	}),
 	Entry("not a named pool that doesn't allow the use", mayUseCase{
 		pool:      testPool{cidr: v4Pool1, uses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
-		named:     true,
+		pools:     []string{v4Pool1},
 		selectors: fixedSelectors{untouchable: true},
 	}),
 )
