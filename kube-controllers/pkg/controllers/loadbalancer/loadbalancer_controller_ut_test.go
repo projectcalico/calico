@@ -573,19 +573,43 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		Expect(cli.IPAMUpgradeCallCount()).To(Equal(2))
 	})
 
-	It("should recognize spec.loadBalancerIP as calico-managed in RequestedServicesOnly mode", func() {
-		// With no annotations and no spec.loadBalancerIP, not managed in RequestedServicesOnly mode.
-		managed := IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
-		Expect(managed).To(BeFalse())
-
-		// Setting spec.loadBalancerIP should make it calico-managed (user is requesting a specific IP).
+	It("should require loadBalancerClass calico for spec.loadBalancerIP in RequestedServicesOnly mode", func() {
 		svc.Spec.LoadBalancerIP = "10.0.0.5"
-		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
-		Expect(managed).To(BeTrue())
+		Expect(IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)).To(BeFalse())
+		Expect(IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices)).To(BeTrue())
 
-		// Should still be managed in AllServices mode.
-		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices)
-		Expect(managed).To(BeTrue())
+		loadBalancerClass := "calico"
+		svc.Spec.LoadBalancerClass = &loadBalancerClass
+		Expect(IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)).To(BeTrue())
+	})
+
+	// Another LB implementation owns this Service; Calico must
+	// neither allocate its IP nor clear the status the other controller wrote.
+	It("should leave a service with only spec.loadBalancerIP alone in RequestedServicesOnly mode", func() {
+		c.cfg.AssignIPs = apiv3.RequestedServicesOnly
+		c.syncStatus = bapi.InSync
+		c.ipPools["test-pool"] = apiv3.IPPool{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+			Spec: apiv3.IPPoolSpec{
+				CIDR:        "10.0.0.0/24",
+				AllowedUses: []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+			},
+		}
+
+		svc.Spec.LoadBalancerIP = "10.0.0.5"
+		svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "10.0.0.5"}}
+		created, err := c.clientSet.CoreV1().Services(svc.Namespace).Create(context.Background(), &svc, metav1.CreateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(c.serviceInformer.GetIndexer().Add(created)).To(Succeed())
+		svcKey, err := serviceKeyFromService(&svc)
+		Expect(err).ToNot(HaveOccurred())
+
+		c.syncService(*svcKey)
+
+		Expect(c.allocationTracker.ipsByService[*svcKey]).To(BeEmpty())
+		fetched, err := c.clientSet.CoreV1().Services(svc.Namespace).Get(context.Background(), svc.Name, metav1.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(fetched.Status.LoadBalancer.Ingress).To(ConsistOf(v1.LoadBalancerIngress{IP: "10.0.0.5"}))
 	})
 
 	It("should handle invalid IP addresses in allocation tracker without panicking", func() {
