@@ -25,6 +25,11 @@ import (
 // It defines which tests to include and exclude using Ginkgo v2 labels and
 // test name patterns.
 type Config struct {
+	// Kind says what the file is for, which fixes the keys it may carry and the
+	// directory it sits in. A file without one loads as the old shape, with
+	// every key allowed.
+	Kind Kind `yaml:"kind,omitempty"`
+
 	// Extends names parent config files (relative to this file's directory)
 	// whose include and exclude lists this config inherits. Parents are merged
 	// left-to-right and this config's own entries are appended last, so a lane
