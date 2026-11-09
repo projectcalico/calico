@@ -62,6 +62,9 @@ func ToFlags(cfg *Config) (*GinkgoFlags, error) {
 	for _, entry := range cfg.Exclude.NamePatterns {
 		flags.SkipPatterns = append(flags.SkipPatterns, entry.AllPatterns()...)
 	}
+	for _, entry := range cfg.Upstream {
+		flags.SkipPatterns = append(flags.SkipPatterns, entry.AllPatterns()...)
+	}
 
 	for _, entry := range cfg.Include.NamePatterns {
 		flags.FocusPatterns = append(flags.FocusPatterns, entry.AllPatterns()...)
@@ -73,7 +76,8 @@ func ToFlags(cfg *Config) (*GinkgoFlags, error) {
 // buildLabelFilter constructs the --ginkgo.label-filter expression from the
 // config's include and exclude labels.
 func buildLabelFilter(cfg *Config) (string, error) {
-	if len(cfg.Include.Labels) == 0 && len(cfg.Exclude.Labels) == 0 {
+	requires := requiresClause(cfg)
+	if len(cfg.Include.Labels) == 0 && len(cfg.Exclude.Labels) == 0 && requires == "" {
 		return "", nil
 	}
 
@@ -89,7 +93,7 @@ func buildLabelFilter(cfg *Config) (string, error) {
 		}
 
 		includeStr := strings.Join(includeExprs, " || ")
-		if len(includeExprs) > 1 && len(cfg.Exclude.Labels) > 0 {
+		if len(includeExprs) > 1 && (len(cfg.Exclude.Labels) > 0 || requires != "") {
 			includeStr = "(" + includeStr + ")"
 		}
 		parts = append(parts, includeStr)
@@ -104,5 +108,27 @@ func buildLabelFilter(cfg *Config) (string, error) {
 		parts = append(parts, "!"+label)
 	}
 
+	if requires != "" {
+		parts = append(parts, requires)
+	}
+
 	return strings.Join(parts, " && "), nil
+}
+
+// requiresKey is the label set key specs declare preconditions under, as in
+// Requires:BGP.
+const requiresKey = "Requires"
+
+// requiresClause returns the label filter term that drops every spec needing
+// a capability the lane doesn't provide, or "" when no config declared
+// provides. Ginkgo's isSubsetOf passes a spec with no Requires: labels at all,
+// and rejects an empty set, so a lane declaring no capabilities uses isEmpty.
+func requiresClause(cfg *Config) string {
+	if cfg.Provides == nil {
+		return ""
+	}
+	if len(cfg.Provides) == 0 {
+		return requiresKey + ": isEmpty"
+	}
+	return requiresKey + ": isSubsetOf {" + strings.Join(cfg.Provides, ", ") + "}"
 }
