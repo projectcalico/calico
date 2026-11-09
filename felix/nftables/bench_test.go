@@ -92,8 +92,8 @@ func BenchmarkResync(b *testing.B) {
 	for _, s := range scaleSpecs {
 		b.Run(s.name, func(b *testing.B) {
 			table, ipv := newRealTable(b)
-			buildState(table, ipv, s)
-			benchResync(b, table, s, "resync")
+			nftRules := buildState(table, ipv, s)
+			benchResync(b, table, s, "resync", nftRules)
 		})
 	}
 }
@@ -105,20 +105,19 @@ func BenchmarkIPBlockResync(b *testing.B) {
 	for _, s := range ipBlockSpecs {
 		b.Run(s.name, func(b *testing.B) {
 			table, ipv := newRealTable(b)
-			numNFTRules := buildIPBlockState(table, ipv, s)
-			benchResync(b, table, s, "ipblock_resync")
-			b.ReportMetric(float64(numNFTRules), "nft_rules")
+			nftRules := buildIPBlockState(table, ipv, s)
+			benchResync(b, table, s, "ipblock_resync", nftRules)
 		})
 	}
 }
 
 // benchResync programs the queued state, then times full resyncs against it.
-func benchResync(b *testing.B, table *nftables.NftablesTable, s scaleSpec, phase string) {
+func benchResync(b *testing.B, table *nftables.NftablesTable, s scaleSpec, phase string, nftRules int) {
 	table.ApplyUpdates(nil)
 	table.Apply()
 
 	b.ReportAllocs()
-	rec := record(b, s, phase)
+	rec := record(b, s, phase, nftRules)
 	b.ResetTimer()
 
 	for range b.N {
@@ -139,7 +138,7 @@ func BenchmarkDeltaUpdate(b *testing.B) {
 	for _, s := range scaleSpecs {
 		b.Run(s.name, func(b *testing.B) {
 			table, ipv := newRealTable(b)
-			buildState(table, ipv, s)
+			nftRules := buildState(table, ipv, s)
 			table.ApplyUpdates(nil)
 			table.Apply()
 			// The first Apply() programs the whole table, which invalidates the
@@ -149,7 +148,7 @@ func BenchmarkDeltaUpdate(b *testing.B) {
 			table.Apply()
 
 			b.ReportAllocs()
-			rec := record(b, s, "delta")
+			rec := record(b, s, "delta", nftRules)
 			b.ResetTimer()
 
 			// Toggle one member of set 0 in and out so each iteration is a real
@@ -177,14 +176,14 @@ func BenchmarkChainUpdate(b *testing.B) {
 	for _, s := range scaleSpecs {
 		b.Run(s.name, func(b *testing.B) {
 			table, ipv := newRealTable(b)
-			buildState(table, ipv, s)
+			nftRules := buildState(table, ipv, s)
 			table.ApplyUpdates(nil)
 			table.Apply()
 			// Settle the cache before timing (see BenchmarkDeltaUpdate).
 			table.Apply()
 
 			b.ReportAllocs()
-			rec := record(b, s, "chain_update")
+			rec := record(b, s, "chain_update", nftRules)
 			b.ResetTimer()
 
 			// Toggle one rule's destination port on a single chain so each
@@ -261,8 +260,9 @@ func deleteBenchTable() {
 // buildState queues the desired state onto the table: numIPSets hash:ip sets,
 // and numPolicies chains each holding rulesPerChain rules that match on a source
 // IP set and TCP destination port.  Each chain is jumped to from filter-FORWARD
-// so it is referenced and therefore programmed.
-func buildState(table *nftables.NftablesTable, ipv *ipsets.IPVersionConfig, s scaleSpec) {
+// so it is referenced and therefore programmed.  It returns the total number of
+// nft rules in the policy chains.
+func buildState(table *nftables.NftablesTable, ipv *ipsets.IPVersionConfig, s scaleSpec) int {
 	ipCounter := uint32(10 << 24)
 	setNames := make([]string, s.numIPSets)
 	for i := range s.numIPSets {
@@ -283,7 +283,7 @@ func buildState(table *nftables.NftablesTable, ipv *ipsets.IPVersionConfig, s sc
 		)
 	}
 
-	addPolicyChains(table, s, func(p int) []generictables.Rule {
+	return addPolicyChains(table, s, func(p int) []generictables.Rule {
 		policyRules := make([]generictables.Rule, s.rulesPerChain)
 		for r := range s.rulesPerChain {
 			setName := setNames[(p*s.rulesPerChain+r)%s.numIPSets]
@@ -315,9 +315,8 @@ func buildIPBlockState(table *nftables.NftablesTable, ipv *ipsets.IPVersionConfi
 	}, true)
 	policyID := &types.PolicyID{Name: "bench"}
 
-	numNFTRules := 0
 	nextNet := uint32(10 << 24)
-	addPolicyChains(table, s, func(p int) []generictables.Rule {
+	return addPolicyChains(table, s, func(p int) []generictables.Rule {
 		var policyRules []generictables.Rule
 		for r := range s.rulesPerChain {
 			cidrs := make([]string, s.cidrsPerRule)
@@ -337,26 +336,28 @@ func buildIPBlockState(table *nftables.NftablesTable, ipv *ipsets.IPVersionConfi
 				false,
 			)...)
 		}
-		numNFTRules += len(policyRules)
 		return policyRules
 	})
-	return numNFTRules
 }
 
 // addPolicyChains queues numPolicies policy chains, with rules from policyRules,
 // and jumps to each from filter-FORWARD so that they are referenced and therefore
-// programmed.
-func addPolicyChains(table *nftables.NftablesTable, s scaleSpec, policyRules func(p int) []generictables.Rule) {
+// programmed. It returns the total number of nft rules in the policy chains.
+func addPolicyChains(table *nftables.NftablesTable, s scaleSpec, policyRules func(p int) []generictables.Rule) int {
+	numRules := 0
 	jumps := make([]generictables.Rule, s.numPolicies)
 	for p := range s.numPolicies {
 		chainName := fmt.Sprintf("cali-pi-%06d", p)
-		table.UpdateChain(&generictables.Chain{Name: chainName, Rules: policyRules(p)})
+		chainRules := policyRules(p)
+		numRules += len(chainRules)
+		table.UpdateChain(&generictables.Chain{Name: chainName, Rules: chainRules})
 		jumps[p] = generictables.Rule{
 			Match:  nftrender.Match(),
 			Action: nftrender.JumpAction{Target: chainName},
 		}
 	}
 	table.InsertOrAppendRules("filter-FORWARD", jumps)
+	return numRules
 }
 
 func intToIP(v uint32) string {
@@ -377,9 +378,10 @@ const (
 // testing.B and (if enabled) writes a hack/perf doc for it. Start it immediately
 // before b.ResetTimer() and finish it immediately after b.StopTimer().
 type recorder struct {
-	b     *testing.B
-	spec  scaleSpec
-	phase string
+	b        *testing.B
+	spec     scaleSpec
+	phase    string
+	nftRules int
 
 	proc      procfs.Proc
 	startCPU  float64
@@ -387,13 +389,14 @@ type recorder struct {
 	startMem  runtime.MemStats
 }
 
-func record(b *testing.B, s scaleSpec, phase string) *recorder {
+func record(b *testing.B, s scaleSpec, phase string, nftRules int) *recorder {
 	proc, _ := procfs.NewProc(os.Getpid())
 	stat, _ := proc.Stat()
 	r := &recorder{
 		b:         b,
 		spec:      s,
 		phase:     phase,
+		nftRules:  nftRules,
 		proc:      proc,
 		startCPU:  stat.CPUTime(),
 		startWall: time.Now(),
@@ -420,6 +423,7 @@ func (r *recorder) finish() {
 	r.b.ReportMetric(float64(r.spec.numIPSets*r.spec.membersPerSet), "members")
 	r.b.ReportMetric(float64(r.spec.numPolicies), "chains")
 	r.b.ReportMetric(float64(r.spec.numPolicies*r.spec.rulesPerChain), "rules")
+	r.b.ReportMetric(float64(r.nftRules), "nft_rules")
 	r.b.ReportMetric(cpuNsPerOp, "ncpu/op")
 
 	r.writePerfDoc(wallNsPerOp, cpuNsPerOp, bytesPerOp, allocsPerOp)
@@ -439,6 +443,7 @@ func (r *recorder) writePerfDoc(wallNsPerOp, cpuNsPerOp, bytesPerOp, allocsPerOp
 		"scale_chains":         r.spec.numPolicies,
 		"scale_rules":          r.spec.numPolicies * r.spec.rulesPerChain,
 		"scale_cidrs_per_rule": r.spec.cidrsPerRule,
+		"nft_rules":            r.nftRules,
 		"wall_ns_per_op":       wallNsPerOp,
 		"cpu_ns_per_op":        cpuNsPerOp,
 		"bytes_per_op":         bytesPerOp,

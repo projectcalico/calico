@@ -1231,6 +1231,88 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	})
 
 	DescribeTable(
+		"should match all numeric ports in one port match block rule when a named port forces a block",
+		func(nft bool, expNumRules int, expNumericPortRules int) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal, nft)
+			pRule := proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				DstPorts:             sixteenPorts,
+				DstNamedPortIpSetIds: []string{"ipset-1"},
+				Action:               "allow",
+			}
+			rules := renderer.ProtoRuleToIptablesRules(&pRule, 4, RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
+
+			// Mark reset, the numeric port rules, the named port rule, then the main rule and the return.
+			Expect(rules).To(HaveLen(expNumRules))
+			numericPortRules := rules[1 : 1+expNumericPortRules]
+			if nft {
+				Expect(numericPortRules[0].Match.Render()).To(HavePrefix(nftrender.Match().Protocol("tcp").DestPortRanges(sixteenPorts).Render()))
+			}
+			Expect(rules[1+expNumericPortRules].Match.Render()).To(ContainSubstring("ipset-1"))
+		},
+		Entry("nftables", true, 5, 1),
+		Entry("iptables", false, 6, 2),
+	)
+
+	DescribeTable(
+		"should render a rule with 90 source CIDRs",
+		func(nft bool, expNumRules int) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal, nft)
+			var cidrs []string
+			for i := range 90 {
+				cidrs = append(cidrs, fmt.Sprintf("10.0.%d.0/24", i))
+			}
+			pRule := proto.Rule{SrcNet: cidrs, Action: "allow"}
+			rules := renderer.ProtoRuleToIptablesRules(&pRule, 4, RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
+
+			Expect(rules).To(HaveLen(expNumRules))
+		},
+		Entry("as one match rule and a return in nftables mode", true, 2),
+		Entry("as a mark reset, 90 CIDR match block rules, a mark check and a return in iptables mode", false, 93),
+	)
+
+	DescribeTable(
+		"should keep only the CIDRs of the rendered IP version in an nftables CIDR list",
+		func(ipVersion uint8, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal, true)
+			pRule := proto.Rule{
+				SrcNet: []string{"10.0.0.0/24", "fd00::/64", "fd01::/64"},
+				Action: "allow",
+			}
+			rules := renderer.ProtoRuleToIptablesRules(&pRule, ipVersion, RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
+
+			Expect(rules).To(HaveLen(2))
+
+			// The nftables table sets the rule's IP version when it renders it.
+			match, ok := rules[0].Match.(nftrender.NFTMatchCriteria)
+			Expect(ok).To(BeTrue())
+			Expect(match.IPVersion(ipVersion).Render()).To(Equal(expMatch))
+		},
+		Entry("IPv4 renders its lone CIDR without a set", uint8(4), "ip saddr 10.0.0.0/24"),
+		Entry("IPv6 renders both CIDRs as a set", uint8(6), "ip6 saddr { fd00::/64, fd01::/64 }"),
+	)
+
+	It("should keep nftables CIDR sets in the first rule and the NFLOG prefix with flow logs on", func() {
+		rrConfigNormal.FlowLogsEnabled = true
+		renderer := NewRenderer(rrConfigNormal, true)
+		pRule := proto.Rule{
+			SrcNet: []string{"10.0.0.0/24", "10.0.1.0/24"},
+			DstNet: []string{"12.0.0.0/24", "12.0.1.0/24"},
+			Action: "allow",
+		}
+		rules := renderer.ProtoRuleToIptablesRules(&pRule, 4, RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
+
+		Expect(rules).To(HaveLen(3))
+		Expect(rules[0].Match.Render()).To(Equal("ip saddr { 10.0.0.0/24, 10.0.1.0/24 } ip daddr { 12.0.0.0/24, 12.0.1.0/24 }"))
+		Expect(rules[0].Action).To(Equal(nftrender.SetMarkAction{Mark: 0x80}))
+		Expect(rules[1].Action).To(Equal(nftrender.NflogAction{Group: 1, Prefix: `"API0|gnp/default.foo"`}))
+		Expect(rules[1].Match.Render()).To(Equal(nftrender.Match().MarkSingleBitSet(0x80).Render()))
+	})
+
+	DescribeTable(
 		"CIDR split tests with flowlogs enabled",
 		func(numSrc, numNotSrc, numDst, numNotDst int, expected []string) {
 			rrConfigNormal.FlowLogsEnabled = true
