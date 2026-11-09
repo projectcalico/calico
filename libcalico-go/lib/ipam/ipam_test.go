@@ -3805,6 +3805,31 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(affineBlockIn(host, pool1)).To(BeTrue(), "the namespace-scoped pool's block affinity was released")
 		})
 
+		It("should keep a block's affinity when its last IP is released and an overlapping pool still selects the node", func() {
+			host := "host"
+
+			// The pools are listed by CIDR, so the /24 that skips the node comes before the /8 that selects it.
+			deselected := cnet.MustParseNetwork("10.0.0.0/24")
+			selecting := cnet.MustParseNetwork("10.0.0.0/8")
+
+			Expect(bc.Clean()).To(Succeed())
+			deleteAllPools()
+			applyNode(bc, kc, host, map[string]string{"foo": "bar"})
+			applyPool(deselected.String(), true, `foo == "bar"`)
+
+			v4ia, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{IntendedUse: v3.IPPoolAllowedUseWorkload, Num4: 1, Hostname: host})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v4ia.IPs).To(HaveLen(1))
+			Expect(affineBlockIn(host, deselected)).To(BeTrue())
+
+			applyPool(deselected.String(), true, `foo != "bar"`)
+			applyPool(selecting.String(), true, `foo == "bar"`)
+			_, _, err = ic.ReleaseIPs(context.Background(), buildReleaseOptions(cnet.IP{IP: v4ia.IPs[0].IP})...)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(affineBlockIn(host, deselected)).To(BeTrue(), "the block affinity was released though the overlapping pool selects the node")
+		})
+
 		// Create one ip pool, call AutoAssign, call ReleaseIPs,
 		// create another ip pool, call AutoAssign explicitly passing the second pool,
 		// ensure that the block affinity from the first ip pool is not released.
