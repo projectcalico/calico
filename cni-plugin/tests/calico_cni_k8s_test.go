@@ -2491,10 +2491,16 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				strictCfg := *cfg
 				strictCfg.StrictAffinity = true
 				Expect(calicoClient.IPAM().SetIPAMConfig(ctx, strictCfg)).To(Succeed())
+				DeferCleanup(func() {
+					Expect(calicoClient.IPAM().SetIPAMConfig(ctx, *cfg)).To(Succeed())
+				})
 
 				// Claims 10.123.0.128/26 for the other node.
 				otherNode := testNodeName + "-other"
 				Expect(testutils.AddNode(calicoClient, k8sClient, otherNode)).To(Succeed())
+				DeferCleanup(func() {
+					Expect(testutils.DeleteNode(calicoClient, k8sClient, otherNode)).To(Succeed())
+				})
 				handle := "other-node-workload"
 				Expect(calicoClient.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
 					IP:          cnet.IP{IP: net.ParseIP("10.123.0.131")},
@@ -2502,11 +2508,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					Hostname:    otherNode,
 					IntendedUse: api.IPPoolAllowedUseWorkload,
 				})).To(Succeed())
-				return func() {
+				DeferCleanup(func() {
 					Expect(calicoClient.IPAM().ReleaseByHandle(ctx, handle)).To(Succeed())
-					Expect(testutils.DeleteNode(calicoClient, k8sClient, otherNode)).To(Succeed())
-					Expect(calicoClient.IPAM().SetIPAMConfig(ctx, *cfg)).To(Succeed())
-				}
+				})
+				return func() {}
 			}, "cannot be assigned on this node"),
 			Entry("it's in cooldown", "10.123.0.92", func() func() {
 				cfg, err := calicoClient.IPAM().GetIPAMConfig(ctx)
@@ -3669,11 +3674,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		BeforeEach(func() {
 			testutils.MustCreateNewIPPool(calicoClient, ipPool4, false, false, true)
+			DeferCleanup(func() { testutils.MustDeleteIPPool(calicoClient, ipPool4) })
 			testutils.MustCreateNewIPPool(calicoClient, ipPool6, false, false, true)
-			DeferCleanup(func() {
-				testutils.MustDeleteIPPool(calicoClient, ipPool4)
-				testutils.MustDeleteIPPool(calicoClient, ipPool6)
-			})
+			DeferCleanup(func() { testutils.MustDeleteIPPool(calicoClient, ipPool6) })
 
 			netconf = fmt.Sprintf(`{
 				"cniVersion": "%s",
