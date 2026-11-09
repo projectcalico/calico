@@ -213,7 +213,40 @@ func merge(parent, child *Config) *Config {
 		}
 	}
 
+	seenUpstream := map[string]bool{}
+	for _, src := range [][]NamePatternEntry{parent.Upstream, child.Upstream} {
+		for _, e := range src {
+			key := patternKey(e)
+			if seenUpstream[key] {
+				continue
+			}
+			seenUpstream[key] = true
+			merged.Upstream = append(merged.Upstream, e)
+		}
+	}
+
+	merged.Provides = union(parent.Provides, child.Provides)
+	merged.Needs = union(parent.Needs, child.Needs)
 	return merged
+}
+
+// union appends b's entries to a's, dropping repeats. It returns nil only when
+// both are nil, so a list declared empty stays declared: an empty provides
+// means the lane has no capabilities, not that it never said.
+func union(a, b []string) []string {
+	if a == nil && b == nil {
+		return nil
+	}
+	out := make([]string, 0, len(a)+len(b))
+	seen := map[string]bool{}
+	for _, v := range append(append([]string(nil), a...), b...) {
+		if seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	return out
 }
 
 func patternKey(e NamePatternEntry) string {
@@ -237,7 +270,7 @@ func validate(cfg *Config, path string) error {
 		}
 	}
 
-	if err := validatePatterns(cfg.Include.NamePatterns, path, "include"); err != nil {
+	if err := validatePatterns(cfg.Include.NamePatterns, path, "include.namePatterns"); err != nil {
 		return err
 	}
 
@@ -250,17 +283,38 @@ func validate(cfg *Config, path string) error {
 		}
 	}
 
-	return validatePatterns(cfg.Exclude.NamePatterns, path, "exclude")
+	if err := validatePatterns(cfg.Exclude.NamePatterns, path, "exclude.namePatterns"); err != nil {
+		return err
+	}
+
+	for i, c := range cfg.Provides {
+		if !capabilityName.MatchString(c) {
+			return fmt.Errorf("%s: provides[%d] (%q) must be a capability name of letters and digits only", path, i, c)
+		}
+	}
+
+	for i, n := range cfg.Needs {
+		if n == "" {
+			return fmt.Errorf("%s: needs[%d] is empty", path, i)
+		}
+	}
+
+	return validatePatterns(cfg.Upstream, path, "upstream")
 }
 
-func validatePatterns(entries []NamePatternEntry, path, section string) error {
+// capabilityName is what a provides entry may be. It is compared with the
+// Requires: labels specs carry, and Ginkgo rejects a label set value holding
+// any of its operator characters.
+var capabilityName = regexp.MustCompile(`^[A-Za-z0-9]+$`)
+
+func validatePatterns(entries []NamePatternEntry, path, field string) error {
 	for i, entry := range entries {
 		if err := entry.Validate(); err != nil {
-			return fmt.Errorf("%s: %s.namePatterns[%d]: %w", path, section, i, err)
+			return fmt.Errorf("%s: %s[%d]: %w", path, field, i, err)
 		}
 		for _, p := range entry.AllPatterns() {
 			if _, err := regexp.Compile(p); err != nil {
-				return fmt.Errorf("%s: %s.namePatterns[%d]: invalid regex %q: %w", path, section, i, p, err)
+				return fmt.Errorf("%s: %s[%d]: invalid regex %q: %w", path, field, i, p, err)
 			}
 		}
 	}
