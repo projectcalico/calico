@@ -1827,6 +1827,9 @@ func (m *endpointManager) increfGroups(groups []*rules.PolicyGroup) {
 			// This group just became active.
 			chains := m.ruleRenderer.PolicyGroupToIptablesChains(group)
 			m.filterTable.UpdateChains(chains)
+			if nonFilter := m.ruleRenderer.NonFilterTableRenderer(); nonFilter != m.ruleRenderer {
+				chains = nonFilter.PolicyGroupToIptablesChains(group)
+			}
 			m.mangleTable.UpdateChains(chains)
 			m.rawTable.UpdateChains(chains)
 		}

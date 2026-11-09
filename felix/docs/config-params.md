@@ -1525,6 +1525,7 @@ iptables filter table (which is used for "normal" policy). The default will imme
 
 Controls what happens to traffic that is denied by network policy. By default Calico blocks traffic
 with an iptables "DROP" action. If you want to use "REJECT" action instead you can configure it in here.
+REJECT only applies in the filter table; untracked and pre-DNAT policy, which run in the raw and mangle tables, always DROP.
 
 | Detail |   |
 | --- | --- |
