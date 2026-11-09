@@ -14,7 +14,7 @@ import (
 // KubeControllersConfigurationSpec contains the values of the Kubernetes controllers configuration.
 type KubeControllersConfigurationSpecApplyConfiguration struct {
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-	// Valid values are: "None", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
+	// Valid values are: "Trace", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
 	LogSeverityScreen *string `json:"logSeverityScreen,omitempty"`
 	// HealthChecks enables or disables support for health checks [Default: Enabled]
 	// Valid values are: "Enabled", "Disabled".
