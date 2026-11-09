@@ -31,13 +31,16 @@ import (
 // policyManager simply renders policy/profile updates into generictables.Chain objects and sends
 // them to the dataplane layer.
 type policyManager struct {
-	rawTable         Table
-	mangleTable      Table
-	filterTable      Table
-	ruleRenderer     policyRenderer
-	ipVersion        uint8
-	rawEgressOnly    bool
-	ipSetFilterDirty bool // Only used in "raw only" mode.
+	rawTable              Table
+	mangleTable           Table
+	filterTable           Table
+	ruleRenderer          policyRenderer
+	nonFilterRuleRenderer policyRenderer
+	ipVersion             uint8
+	rawEgressOnly         bool
+
+	// ipSetFilterDirty is only used in "raw only" mode.
+	ipSetFilterDirty bool
 	neededIPSets     map[types.PolicyID]set.Set[string]
 	ipSetsCallback   func(neededIPSets set.Set[string])
 	nftablesEnabled  bool
@@ -46,31 +49,37 @@ type policyManager struct {
 type policyRenderer interface {
 	PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain
 	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
-	NonFilterTableChains(chains []*generictables.Chain) []*generictables.Chain
 }
 
-func newPolicyManager(rawTable, mangleTable, filterTable Table, ruleRenderer policyRenderer, ipVersion uint8, nft bool) *policyManager {
+// newPolicyManager returns a manager that programs policy and profile chains into all three
+// tables. nonFilterRuleRenderer renders the raw and mangle copies; see
+// rules.RuleRenderer.NonFilterTableRenderer.
+func newPolicyManager(rawTable, mangleTable, filterTable Table, ruleRenderer, nonFilterRuleRenderer policyRenderer, ipVersion uint8, nft bool) *policyManager {
 	return &policyManager{
-		rawTable:        rawTable,
-		mangleTable:     mangleTable,
-		filterTable:     filterTable,
-		ruleRenderer:    ruleRenderer,
-		ipVersion:       ipVersion,
-		nftablesEnabled: nft,
+		rawTable:              rawTable,
+		mangleTable:           mangleTable,
+		filterTable:           filterTable,
+		ruleRenderer:          ruleRenderer,
+		nonFilterRuleRenderer: nonFilterRuleRenderer,
+		ipVersion:             ipVersion,
+		nftablesEnabled:       nft,
 	}
 }
 
+// newRawEgressPolicyManager returns a manager that programs only untracked egress policy, into
+// the raw table, so ruleRenderer must be one that renders for the raw table.
 func newRawEgressPolicyManager(rawTable Table, ruleRenderer policyRenderer, ipVersion uint8,
 	ipSetsCallback func(neededIPSets set.Set[string]),
 	nft bool,
 ) *policyManager {
 	return &policyManager{
-		rawTable:      rawTable,
-		mangleTable:   generictables.NewNoopTable(),
-		filterTable:   generictables.NewNoopTable(),
-		ruleRenderer:  ruleRenderer,
-		ipVersion:     ipVersion,
-		rawEgressOnly: true,
+		rawTable:              rawTable,
+		mangleTable:           generictables.NewNoopTable(),
+		filterTable:           generictables.NewNoopTable(),
+		ruleRenderer:          ruleRenderer,
+		nonFilterRuleRenderer: ruleRenderer,
+		ipVersion:             ipVersion,
+		rawEgressOnly:         true,
 		// Make sure we set the filter at start-of-day, even if there are no policies.
 		ipSetFilterDirty: true,
 		neededIPSets:     make(map[types.PolicyID]set.Set[string]),
@@ -105,7 +114,10 @@ func (m *policyManager) OnUpdate(msg any) {
 		// We can't easily tell whether the policy is in use in a particular table, and, if the policy
 		// type gets changed it may move between tables.  Hence, we put the policy into all tables.
 		// The iptables layer will avoid programming it if it is not actually used.
-		nonFilterChains := m.ruleRenderer.NonFilterTableChains(chains)
+		nonFilterChains := chains
+		if m.nonFilterRuleRenderer != m.ruleRenderer {
+			nonFilterChains = m.nonFilterRuleRenderer.PolicyToIptablesChains(&id, msg.Policy, m.ipVersion)
+		}
 		m.rawTable.UpdateChains(nonFilterChains)
 		m.mangleTable.UpdateChains(nonFilterChains)
 
@@ -136,7 +148,10 @@ func (m *policyManager) OnUpdate(msg any) {
 		log.WithField("id", msg.Id).Debug("Updating profile chains")
 		inbound, outbound := m.ruleRenderer.ProfileToIptablesChains(&id, msg.Profile, m.ipVersion)
 		m.filterTable.UpdateChains([]*generictables.Chain{inbound, outbound})
-		m.mangleTable.UpdateChains(m.ruleRenderer.NonFilterTableChains([]*generictables.Chain{outbound}))
+		if m.nonFilterRuleRenderer != m.ruleRenderer {
+			_, outbound = m.nonFilterRuleRenderer.ProfileToIptablesChains(&id, msg.Profile, m.ipVersion)
+		}
+		m.mangleTable.UpdateChains([]*generictables.Chain{outbound})
 	case *proto.ActiveProfileRemove:
 		log.WithField("id", msg.Id).Debug("Removing profile chains")
 		id := types.ProtoToProfileID(msg.GetId())

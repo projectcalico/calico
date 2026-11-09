@@ -74,7 +74,6 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			RuleDirIngress,
 			ingressPolicy,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
-			r.IptablesFilterDenyAction(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			qosControls,
@@ -96,7 +95,6 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			RuleDirEgress,
 			egressPolicy,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
-			r.IptablesFilterDenyAction(),
 			allowVXLANEncapFromWorkloads,
 			allowIPIPEncapFromWorkloads,
 			qosControls,
@@ -142,7 +140,6 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			RuleDirEgress,
 			egressPolicy,
 			r.filterAllowAction,
-			r.IptablesFilterDenyAction(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			nil,
@@ -162,7 +159,6 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			RuleDirIngress,
 			ingressPolicy,
 			r.filterAllowAction,
-			r.IptablesFilterDenyAction(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			nil,
@@ -182,7 +178,6 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			RuleDirEgress,
 			egressPolicy,
 			r.filterAllowAction,
-			r.IptablesFilterDenyAction(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			nil,
@@ -202,7 +197,6 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			RuleDirIngress,
 			ingressPolicy,
 			r.filterAllowAction,
-			r.IptablesFilterDenyAction(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			nil,
@@ -233,7 +227,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 		// Chain for output traffic _to_ the endpoint.  Note, we use RETURN here rather than
 		// ACCEPT because the mangle table is typically used, if at all, for packet
 		// manipulations that might need to apply to our allowed traffic.
-		r.endpointIptablesChain(
+		r.nonFilterTableRenderer.endpointIptablesChain(
 			tiers,
 			profileIDs,
 			ifaceName,
@@ -247,7 +241,6 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 			RuleDirEgress,
 			egressPolicy,
 			r.Return(),
-			r.Drop(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			nil,
@@ -260,7 +253,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 	untrackedTiers []TierPolicyGroups,
 ) *generictables.Chain {
 	logrus.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint egress chain.")
-	return r.endpointIptablesChain(
+	return r.nonFilterTableRenderer.endpointIptablesChain(
 		untrackedTiers,
 		nil, // We don't render profiles into the raw table.
 		ifaceName,
@@ -274,7 +267,6 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 		RuleDirEgress,
 		egressPolicy,
 		r.Allow(),
-		r.Drop(),
 		alwaysAllowVXLANEncap,
 		alwaysAllowIPIPEncap,
 		nil,
@@ -290,7 +282,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 		// Chain for traffic _to_ the endpoint.
 		r.HostEndpointToRawEgressChain(ifaceName, untrackedTiers),
 		// Chain for traffic _from_ the endpoint.
-		r.endpointIptablesChain(
+		r.nonFilterTableRenderer.endpointIptablesChain(
 			untrackedTiers,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
@@ -304,7 +296,6 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			RuleDirIngress,
 			ingressPolicy,
 			r.Allow(),
-			r.Drop(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			nil,
@@ -320,7 +311,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 	return []*generictables.Chain{
 		// Chain for traffic _from_ the endpoint.  Pre-DNAT policy does not apply to
 		// outgoing traffic through a host endpoint.
-		r.endpointIptablesChain(
+		r.nonFilterTableRenderer.endpointIptablesChain(
 			preDNATTiers,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
@@ -334,7 +325,6 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 			RuleDirIngress,
 			ingressPolicy,
 			r.mangleAllowAction,
-			r.Drop(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 			nil,
@@ -443,8 +433,6 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	dir RuleDir,
 	policyType string,
 	allowAction generictables.Action,
-	// denyAction must be DROP for chains outside the filter table, where REJECT is not a valid target.
-	denyAction generictables.Action,
 	allowVXLANEncap bool,
 	allowIPIPEncap bool,
 	qosControls *proto.QoSControls,
@@ -457,7 +445,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		// Endpoint is admin-down, drop all traffic to/from it.
 		rules = append(rules, generictables.Rule{
 			Match:   r.NewMatch(),
-			Action:  denyAction,
+			Action:  r.IptablesFilterDenyAction(),
 			Comment: []string{"Endpoint admin disabled"},
 		})
 		return &generictables.Chain{
@@ -551,7 +539,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	if chainType != chainTypeUntracked {
 		// Tracked chain: install conntrack rules, which implement our stateful connections.
 		// This allows return traffic associated with a previously-permitted request.
-		rules = r.appendConntrackRules(rules, allowAction, denyAction, chainType)
+		rules = r.appendConntrackRules(rules, allowAction, chainType)
 	}
 
 	// Add QoS controls for number of connections if applicable
@@ -607,8 +595,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		rules = append(rules, generictables.Rule{
 			Match: r.NewMatch().ProtocolNum(ProtoUDP).
 				DestPorts(uint16(r.VXLANPort)),
-			Action:  denyAction,
-			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", denyAction)},
+			Action:  r.IptablesFilterDenyAction(),
+			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", r.IptablesFilterDenyAction())},
 		})
 	}
 	if !allowIPIPEncap {
@@ -616,8 +604,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		// bypass restrictive egress policies.
 		rules = append(rules, generictables.Rule{
 			Match:   r.NewMatch().ProtocolNum(ProtoIPIP),
-			Action:  denyAction,
-			Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", denyAction)},
+			Action:  r.IptablesFilterDenyAction(),
+			Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", r.IptablesFilterDenyAction())},
 		})
 	}
 
@@ -713,11 +701,11 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 					}
 					rules = append(rules, generictables.Rule{
 						Match:  r.NewMatch().MarkClear(r.MarkPass),
-						Action: denyAction,
+						Action: r.IptablesFilterDenyAction(),
 						Comment: []string{
 							fmt.Sprintf("End of tier %s. %s if no policies passed packet",
 								tier.Name,
-								denyAction),
+								r.IptablesFilterDenyAction()),
 						},
 					})
 				} else if r.FlowLogsEnabled {
@@ -781,8 +769,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 
 		rules = append(rules, generictables.Rule{
 			Match:   r.NewMatch(),
-			Action:  denyAction,
-			Comment: []string{fmt.Sprintf("%s if no profiles matched", denyAction)},
+			Action:  r.IptablesFilterDenyAction(),
+			Comment: []string{fmt.Sprintf("%s if no profiles matched", r.IptablesFilterDenyAction())},
 		})
 	}
 
@@ -792,7 +780,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	}
 }
 
-func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, allowAction, denyAction generictables.Action, chainType endpointChainType) []generictables.Rule {
+func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, allowAction generictables.Action, chainType endpointChainType) []generictables.Rule {
 	if r.LogConnectionTransitions && chainType != chainTypePreDNAT {
 		// The connection matched a Log rule and this is the first response packet seen;
 		// log the state transition (and clear the bit) before the conntrack rules below
@@ -826,7 +814,7 @@ func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, a
 		// connection.
 		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch().ConntrackState("INVALID"),
-			Action: denyAction,
+			Action: r.IptablesFilterDenyAction(),
 		})
 	}
 	return rules

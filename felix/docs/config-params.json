@@ -2769,8 +2769,8 @@
           "Required": true,
           "OnParseFailure": "Exit",
           "AllowedConfigSources": "All",
-          "Description": "Controls what happens to traffic that is denied by network policy. By default Calico blocks traffic\nwith an iptables \"DROP\" action. If you want to use \"REJECT\" action instead you can configure it in here.",
-          "DescriptionHTML": "<p>Controls what happens to traffic that is denied by network policy. By default Calico blocks traffic\nwith an iptables \"DROP\" action. If you want to use \"REJECT\" action instead you can configure it in here.</p>",
+          "Description": "Controls what happens to traffic that is denied by network policy. By default Calico blocks traffic\nwith an iptables \"DROP\" action. If you want to use \"REJECT\" action instead you can configure it in here.\nREJECT only applies in the filter table; untracked and pre-DNAT policy, which run in the raw and mangle tables, always DROP.",
+          "DescriptionHTML": "<p>Controls what happens to traffic that is denied by network policy. By default Calico blocks traffic\nwith an iptables \"DROP\" action. If you want to use \"REJECT\" action instead you can configure it in here.\nREJECT only applies in the filter table; untracked and pre-DNAT policy, which run in the raw and mangle tables, always DROP.</p>",
           "UserEditable": true,
           "GoType": "string"
         },

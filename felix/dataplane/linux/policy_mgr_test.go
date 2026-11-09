@@ -49,7 +49,7 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 			mangleTable = newMockTable("mangle")
 			filterTable = newMockTable("filter")
 			ruleRenderer = newMockPolRenderer()
-			policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, ipVersion, false)
+			policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, ruleRenderer, ipVersion, false)
 		})
 
 		It("shouldn't touch iptables", func() {
@@ -291,7 +291,7 @@ var _ = Describe("Policy manager deny action per table", func() {
 			MarkNonCaliEndpoint: 0x0100,
 			FilterDenyAction:    filterDenyAction,
 		}, false)
-		policyMgr := newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, 4, false)
+		policyMgr := newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, ruleRenderer.NonFilterTableRenderer(), 4, false)
 		policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
 			Id: &proto.PolicyID{Name: "pol1", Kind: v3.KindGlobalNetworkPolicy},
 			Policy: &proto.Policy{
@@ -515,10 +515,6 @@ func (r *mockPolRenderer) ProfileToIptablesChains(
 		Name: rules.ProfileChainName(rules.ProfileOutboundPfx, profID, false),
 	}
 	return
-}
-
-func (r *mockPolRenderer) NonFilterTableChains(chains []*generictables.Chain) []*generictables.Chain {
-	return chains
 }
 
 func newMockPolRenderer() *mockPolRenderer {
