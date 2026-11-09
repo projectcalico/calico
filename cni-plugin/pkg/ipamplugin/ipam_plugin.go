@@ -123,6 +123,11 @@ func Main(version string) {
 		"Calico CNI IPAM "+version)
 }
 
+// lockedIPAMTimeout bounds the IPAM work done while holding the host-wide IPAM lock. Each
+// caller starts it once it holds the lock, since a thundering herd of ADDs can hold the lock
+// for a long time.
+const lockedIPAMTimeout = 90 * time.Second
+
 type ipamArgs struct {
 	cnitypes.CommonArgs
 	IP net.IP `json:"ip,omitempty"`
@@ -288,6 +293,9 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 
 		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
 		err := utils.WithIPAMLock(ctx, conf.IPAMLockFile, func(ctx context.Context) error {
+			ctx, cancel := context.WithTimeout(ctx, lockedIPAMTimeout)
+			defer cancel()
+
 			if err := maybeUpgradeIPAM(ctx, calicoClient.IPAM(), nodename); err != nil {
 				return fmt.Errorf("failed to upgrade IPAM database: %w", err)
 			}
@@ -427,6 +435,9 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 		// claim at a time on the active block, cutting API server load by the number of concurrent requests.
 		var v4Assignments, v6Assignments *ipam.IPAMAssignments
 		err := utils.WithIPAMLock(ctx, conf.IPAMLockFile, func(ctx context.Context) error {
+			ctx, cancel := context.WithTimeout(ctx, lockedIPAMTimeout)
+			defer cancel()
+
 			var err error
 			v4Assignments, v6Assignments, err = calicoClient.IPAM().AutoAssign(ctx, assignArgs)
 			return err
@@ -809,18 +820,23 @@ func ReleaseSandbox(ctx context.Context, calicoClient client.Interface, conf typ
 
 	logger = logger.WithField("HandleID", handleID)
 
+	releaseWholeHandle := ipPersistenceEnabledForVM || len(keepAddresses) == 0
+	if releaseWholeHandle {
+		logger.Info("Releasing address using handleID")
+	} else {
+		logger.WithField("keep", keepAddresses).Info("Releasing the handle's addresses other than those to keep")
+	}
+
 	// Acquire a best-effort host-wide lock to prevent multiple copies of the CNI plugin trying to assign/delete
 	// concurrently. ReleaseXXX is concurrency safe already but serialising the CNI plugins means that
 	// we only attempt one IPAM update at a time.  This reduces the load on the API server by a factor of the
 	// number of concurrent requests with essentially no downside.
-	if ipPersistenceEnabledForVM || len(keepAddresses) == 0 {
-		logger.Info("Releasing address using handleID")
-		return utils.WithIPAMLock(ctx, conf.IPAMLockFile, func(ctx context.Context) error {
-			return releaseHandle(ctx, calicoClient, handleID, epIDs, vmiInfo, ipPersistenceEnabledForVM, logger)
-		})
-	}
-	logger.WithField("keep", keepAddresses).Info("Releasing the handle's addresses other than those to keep")
 	return utils.WithIPAMLock(ctx, conf.IPAMLockFile, func(ctx context.Context) error {
+		ctx, cancel := context.WithTimeout(ctx, lockedIPAMTimeout)
+		defer cancel()
+		if releaseWholeHandle {
+			return releaseHandle(ctx, calicoClient, handleID, epIDs, vmiInfo, ipPersistenceEnabledForVM, logger)
+		}
 		return releaseUnlisted(ctx, calicoClient.IPAM(), handleID, keepAddresses, logger)
 	})
 }

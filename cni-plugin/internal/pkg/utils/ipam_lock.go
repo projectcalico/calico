@@ -18,29 +18,21 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/gofrs/flock"
 	"github.com/sirupsen/logrus"
 )
 
-// ipamLockTimeout bounds the IPAM work done while holding the host-wide IPAM lock.
-const ipamLockTimeout = 90 * time.Second
-
 // UnlockFn releases a lock taken by AcquireIPAMLockBestEffort.
 type UnlockFn func()
 
-// WithIPAMLock runs fn holding the host-wide IPAM lock at lockPath, best effort as
-// AcquireIPAMLockBestEffort describes. fn's context gets a 90 second timeout that starts only
-// once the lock is held, since a thundering herd of ADDs can hold the lock for a long time.
-// fn's context is still canceled when ctx is. The lock isn't reentrant, so fn must not take it
+// WithIPAMLock runs fn with ctx while holding the host-wide IPAM lock at lockPath, best effort
+// as AcquireIPAMLockBestEffort describes, and releases the lock when fn returns. It sets no
+// timeout, so fn bounds its own IPAM work. The lock isn't reentrant, so fn must not take it
 // again or run calico-ipam in-process.
 func WithIPAMLock(ctx context.Context, lockPath string, fn func(context.Context) error) error {
 	unlock := AcquireIPAMLockBestEffort(lockPath)
 	defer unlock()
-
-	ctx, cancel := context.WithTimeout(ctx, ipamLockTimeout)
-	defer cancel()
 	return fn(ctx)
 }
 
