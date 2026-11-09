@@ -800,12 +800,27 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 		}
 		return dsa
 	case *admissionregv1.MutatingWebhookConfiguration:
-		dw, dok := desired.(*admissionregv1.MutatingWebhookConfiguration)
-		cw, cok := current.(*admissionregv1.MutatingWebhookConfiguration)
-		if dok && cok {
-			preserveWebhookCABundles(dw, cw)
+		dw := desired.(*admissionregv1.MutatingWebhookConfiguration)
+		cw := current.(*admissionregv1.MutatingWebhookConfiguration)
+		preserveWebhookCABundles(dw.Webhooks, cw.Webhooks, func(w *admissionregv1.MutatingWebhook) (string, *admissionregv1.WebhookClientConfig) {
+			return w.Name, &w.ClientConfig
+		})
+		return dw
+	case *admissionregv1.ValidatingWebhookConfiguration:
+		dw := desired.(*admissionregv1.ValidatingWebhookConfiguration)
+		cw := current.(*admissionregv1.ValidatingWebhookConfiguration)
+		preserved := preserveWebhookCABundles(dw.Webhooks, cw.Webhooks, func(w *admissionregv1.ValidatingWebhook) (string, *admissionregv1.WebhookClientConfig) {
+			return w.Name, &w.ClientConfig
+		})
+		// istiod raises failurePolicy from Ignore to Fail once it serves the
+		// webhook, so writing the rendered Ignore back would turn validation off.
+		for d, c := range preserved {
+			dp, cp := dw.Webhooks[d].FailurePolicy, cw.Webhooks[c].FailurePolicy
+			if dp != nil && *dp == admissionregv1.Ignore && cp != nil && *cp == admissionregv1.Fail {
+				dw.Webhooks[d].FailurePolicy = cp
+			}
 		}
-		return desired
+		return dw
 	case *v3.NetworkPolicy:
 		cnp := current.(*v3.NetworkPolicy)
 		dnp := desired.(*v3.NetworkPolicy)
@@ -833,20 +848,32 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 	}
 }
 
-// preserveWebhookCABundles copies each webhook's caBundle from the cluster when the operator
-// renders that webhook without one. Another controller, such as the Envoy Gateway certgen Job,
-// owns the bundle in that case, and a full Update without it would clear the field until that
-// controller writes it again.
-func preserveWebhookCABundles(desired, current *admissionregv1.MutatingWebhookConfiguration) {
-	bundles := map[string][]byte{}
-	for _, w := range current.Webhooks {
-		bundles[w.Name] = w.ClientConfig.CABundle
+// preserveWebhookCABundles copies each webhook's caBundle from the cluster when
+// the operator renders that webhook without one. Another controller, such as
+// istiod or the Envoy Gateway certgen Job, owns the bundle in that case, and a
+// full Update without it would clear the field until that controller writes it
+// again. It returns the index in current of each desired webhook it copied to.
+func preserveWebhookCABundles[W any](desired, current []W, clientConfig func(*W) (string, *admissionregv1.WebhookClientConfig)) map[int]int {
+	live := make(map[string]int, len(current))
+	for i := range current {
+		name, _ := clientConfig(&current[i])
+		live[name] = i
 	}
-	for i := range desired.Webhooks {
-		if len(desired.Webhooks[i].ClientConfig.CABundle) == 0 {
-			desired.Webhooks[i].ClientConfig.CABundle = bundles[desired.Webhooks[i].Name]
+	preserved := map[int]int{}
+	for i := range desired {
+		name, dc := clientConfig(&desired[i])
+		c, ok := live[name]
+		if !ok {
+			continue
 		}
+		_, cc := clientConfig(&current[c])
+		if len(dc.CABundle) != 0 || len(cc.CABundle) == 0 {
+			continue
+		}
+		dc.CABundle = cc.CABundle
+		preserved[i] = c
 	}
+	return preserved
 }
 
 // modifyPodSpec is a helper for pulling out pod specifications from an arbitrary object.
