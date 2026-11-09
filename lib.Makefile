@@ -1176,6 +1176,27 @@ var-require-all-%:
 var-require-one-of-%:
 	@$(MAKE) --quiet --no-print-directory var-require REQUIRED_VARS=$*
 
+###############################################################################
+# Package revisions
+###############################################################################
+# Components that build deb/RPM packages set PACKAGE_REVISION_VAR to the name of the
+# variable in their Makefile that holds the package revision. `release prep` calls
+# set-package-revision to pick the next revision; increment-package-revision and
+# reset-package-revision are for doing it by hand.
+.PHONY: increment-package-revision reset-package-revision set-package-revision
+increment-package-revision:
+	@$(MAKE) --no-print-directory set-package-revision PACKAGE_REVISION=$$(( $(or $($(PACKAGE_REVISION_VAR)),0) + 1 ))
+
+reset-package-revision:
+	@$(MAKE) --no-print-directory set-package-revision PACKAGE_REVISION=1
+
+set-package-revision:
+	@test -n '$(PACKAGE_REVISION_VAR)' || { echo 'PACKAGE_REVISION_VAR is not set in $(CURDIR)/Makefile' >&2; exit 1; }
+	@echo '$(PACKAGE_REVISION)' | grep -Eqx '[1-9][0-9]*' || { echo 'PACKAGE_REVISION must be a positive integer, got "$(PACKAGE_REVISION)"' >&2; exit 1; }
+	@grep -Eq '^$(PACKAGE_REVISION_VAR)[[:space:]]*=' Makefile || { echo '$(PACKAGE_REVISION_VAR) is not assigned in $(CURDIR)/Makefile' >&2; exit 1; }
+	@sed -i -E 's/^($(PACKAGE_REVISION_VAR)[[:space:]]*=[[:space:]]*).*/\1$(PACKAGE_REVISION)/' Makefile
+	@echo '$(PACKAGE_REVISION_VAR) = $(PACKAGE_REVISION) in $(CURDIR)/Makefile'
+
 # build-images echos the images that would be built.
 # If WINDOWS_IMAGE is set then it echos the windows image that would be built as well.
 build-images: var-require-all-BUILD_IMAGES
