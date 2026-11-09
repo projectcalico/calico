@@ -393,7 +393,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			Expect(hash).To(Equal(rmeta.SecretsAnnotationHash(cacerts)))
 			Expect(result.RequeueAfter).To(Equal(utils.StandardRetry))
 			expectNotDegraded()
-			expectWarningMentioning("phase 1 of 4", istio.IstioNamespace+"/"+istio.IstioSelfSignedCASecretName, "operator-managed CA")
+			expectWarningMentioning("phase 1/4", istio.IstioNamespace+"/"+istio.IstioSelfSignedCASecretName)
 
 			// No clock runs until istiod has rolled, however long that takes.
 			now = now.Add(time.Hour)
@@ -409,7 +409,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			Expect(result.RequeueAfter).To(Equal(wait))
 			Expect(getSecret(cacertsKey).Data).To(Equal(cacerts.Data))
 			Expect(istiodHash()).To(Equal(hash))
-			expectWarningMentioning("phase 2 of 4", state.Deadline.UTC().Format(time.RFC3339))
+			expectWarningMentioning("phase 2/4", state.Deadline.UTC().Format(time.RFC3339))
 
 			now = now.Add(wait / 2)
 			Expect(reconcileResult().RequeueAfter).To(Equal(wait / 2))
@@ -433,7 +433,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectPublished(selfSigned.cert, opRoot)
 			Expect(istiodHash()).NotTo(Equal(hash))
 			hash = istiodHash()
-			expectWarningMentioning("phase 3 of 4", "operator-managed CA")
+			expectWarningMentioning("rotation, phase 3/4")
 
 			// The request to roll is not the roll: a template still rolling out starts no clock.
 			markIstiodRolling()
@@ -447,7 +447,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectPhase(istio.TransitionAwaitExpiry, deadline)
 			Expect(result.RequeueAfter).To(Equal(wait))
 			Expect(istiodHash()).To(Equal(hash))
-			expectWarningMentioning("phase 4 of 4", deadline.UTC().Format(time.RFC3339))
+			expectWarningMentioning("phase 4/4", deadline.UTC().Format(time.RFC3339))
 
 			// Done: the old root goes, the record is cleared, istiod rolls once more.
 			now = now.Add(wait)
@@ -512,7 +512,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectSigner(selfSigned)
 			expectBundle(selfSigned.cert, root.cert)
 			expectPublished(selfSigned.cert, root.cert)
-			expectWarningMentioning("phase 1 of 4", "self-signed CA", "operator-managed CA")
+			expectWarningMentioning("phase 1/4", "self-signed CA")
 			expectNotDegraded()
 		})
 
@@ -563,7 +563,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			Expect(held.Annotations).To(Equal(cacerts.Annotations))
 			expectPublished(selfSigned.cert, op.Roots[0])
 			expectDegradedMentioning(operatorNS+"/"+istio.OperatorCASecretName, "does not match")
-			expectWarningMentioning("holds", "phase 2 of 4")
+			expectWarningMentioning("paused at phase 2/4")
 
 			caSecret = getSecret(operatorCAKey)
 			caSecret.Data[istio.CAKeyKey] = goodKey
@@ -619,7 +619,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			Expect(getSecret(cacertsKey).Data[istio.CACertKey]).To(Equal(old.CertPEM))
 			expectBundle(old.Roots[0], op.Roots[0])
 			expectPublished(old.Roots[0], op.Roots[0])
-			expectWarningMentioning("phase 1 of 4", "operator-managed CA")
+			expectWarningMentioning("rotation, phase 1/4")
 
 			advanceTo(istio.TransitionSwitchSigner)
 			cacerts := getSecret(cacertsKey)
@@ -662,7 +662,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectBundle(root.cert, operatorCA().Roots[0])
 			expectPublished(root.cert, operatorCA().Roots[0])
 			expectNotDegraded()
-			expectWarningMentioning("phase 1 of 4", istio.IstioNamespace+"/"+istio.CACertsSecretName, "did not create")
+			expectWarningMentioning("phase 1/4", istio.IstioNamespace+"/"+istio.CACertsSecretName, "user-provided")
 		})
 
 		It("goes Degraded and keeps a cacerts the operator did not create when it is not a usable CA", func() {
