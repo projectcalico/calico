@@ -190,6 +190,7 @@ func updateBundle(cfg bundleConfig, img image) error {
 	if err != nil {
 		return err
 	}
+	supported := openShiftVersionRange(openShiftVersions)
 
 	bundleRoot := filepath.Join(cfg.operatorDir, bundleDir)
 	versionDir := filepath.Join(bundleRoot, cfg.version)
@@ -199,37 +200,55 @@ func updateBundle(cfg bundleConfig, img image) error {
 	if err := updateCSV(filepath.Join(versionDir, "manifests", csvName), cfg.version, cfg.prevVersion, cfg.capabilities, img); err != nil {
 		return err
 	}
-	if err := updateDockerfile(cfg.operatorDir, cfg.version, cfg.openShiftVersions); err != nil {
+	if err := updateDockerfile(cfg.operatorDir, cfg.version, supported); err != nil {
 		return err
 	}
-	if err := updateAnnotations(filepath.Join(versionDir, "metadata", "annotations.yaml"), cfg.openShiftVersions); err != nil {
+	if err := updateAnnotations(filepath.Join(versionDir, "metadata", "annotations.yaml"), supported); err != nil {
 		return err
 	}
 	return writeReleaseConfig(filepath.Join(versionDir, releaseConfigName), cfg.version, cfg.channel, openShiftVersions)
 }
 
 // parseOpenShiftVersions splits a comma-separated list of OpenShift versions,
-// e.g. "v4.20,v4.21,v5.0". Ranges such as v4.20-v4.22, and a lone vX.Y meaning
-// "that version and later", are refused: release-config.yaml needs one catalog
-// template per version, which neither form spells out.
+// e.g. "v4.20,v4.21,v5.0", in ascending order. The list, not a range, is the
+// input because release-config.yaml needs one catalog template per version.
 func parseOpenShiftVersions(value string) ([]string, error) {
 	var versions []string
+	var prev *semver.Version
 	for _, v := range strings.Split(value, ",") {
 		v = strings.TrimSpace(v)
 		if !openShiftVersion.MatchString(v) {
 			return nil, fmt.Errorf("openshift-versions %q: %q is not an OpenShift version such as v4.20; give a comma-separated list, not a range", value, v)
 		}
-		if slices.Contains(versions, v) {
-			return nil, fmt.Errorf("openshift-versions %q lists %s twice", value, v)
+		sv, err := semver.NewVersion(v)
+		if err != nil {
+			return nil, fmt.Errorf("openshift-versions %q: %w", value, err)
 		}
+		// Ascending, so that the first and last entries bound the range that
+		// openShiftVersionRange writes.
+		if prev != nil && !sv.GreaterThan(prev) {
+			return nil, fmt.Errorf("openshift-versions %q: list the versions once each, in ascending order", value)
+		}
+		prev = sv
 		versions = append(versions, v)
 	}
-	// A single version is indistinguishable from "that version and later" in
-	// the annotation, which is not what a one-entry list means.
-	if len(versions) < 2 {
-		return nil, fmt.Errorf("openshift-versions %q: list at least two versions, since a single vX.Y means that version and later", value)
-	}
 	return versions, nil
+}
+
+// openShiftVersionRange gives the com.redhat.openshift.versions value for a
+// parsed --openshift-versions list. The Red Hat pipeline sends that value to
+// the catalog API, which accepts a comma-separated list only for OpenShift
+// 4.5-4.8, so the list becomes a range from its first entry to its last, or
+// =vX.Y for a single version (a lone vX.Y means that version and later).
+//
+// The range also covers any versions the list skips, e.g. v4.23 for
+// v4.22,v5.0. That only states what the bundle supports: release-config.yaml,
+// and the templates that ci.yaml maps, decide which catalogs get the bundle.
+func openShiftVersionRange(versions []string) string {
+	if len(versions) == 1 {
+		return "=" + versions[0]
+	}
+	return versions[0] + "-" + versions[len(versions)-1]
 }
 
 // writeReleaseConfig writes the release-config.yaml that Red Hat's release
@@ -435,7 +454,9 @@ func updateAnnotations(path, openShiftVersions string) error {
 			return line == "" || unwantedAnnotation.MatchString(line) || openShiftVersionsAnnotation.MatchString(line)
 		})
 		// Add required com.redhat.openshift.versions.
-		return append(lines, fmt.Sprintf("  com.redhat.openshift.versions: %s", openShiftVersions))
+		// Quoted, so that a value such as =v4.20 is read as a string by any
+		// YAML parser.
+		return append(lines, fmt.Sprintf("  com.redhat.openshift.versions: %q", openShiftVersions))
 	})
 	if err != nil {
 		return err

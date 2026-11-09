@@ -20,7 +20,7 @@ make -C operator bundle VERSION=3.34.0 PREV_VERSION=3.33.0 CHANNEL=release-v3.34
 | `CHANNEL` | The OperatorHub channel, which must be a `release-v3.YY` branch name. Defaults to the current branch when that branch is one; from any other branch, pass it explicitly. |
 | `DEFAULT_CHANNEL` | Optional. The bundle's `channel.default.v1` annotation. Defaults to, and must equal, `CHANNEL`. It does not change the package's default channel, which the catalog decides - see below. |
 | `BUNDLE_OPERATOR_IMAGE` | Optional. The fully qualified repository the operator image is pinned from. Defaults to `quay.io/calico/operator`. |
-| `BUNDLE_OPENSHIFT_VERSIONS` | Optional. The supported OpenShift versions, as a comma-separated list of at least two, e.g. `v4.20,v4.21,v4.22,v5.0`. Ranges such as `v4.19-v4.22` are refused, since `release-config.yaml` needs one catalog template per version. The default in `gen-bundle` moves with each release; a bundle only reaches the catalog of an OpenShift version in this list. |
+| `BUNDLE_OPENSHIFT_VERSIONS` | Optional. The supported OpenShift versions, as a comma-separated list in ascending order, e.g. `v4.20,v4.21,v4.22,v5.0`. Ranges such as `v4.19-v4.22` are refused, since `release-config.yaml` needs one catalog template per version. The bundle's `com.redhat.openshift.versions` is the range the list spans (`v4.20-v5.0`), or `=vX.Y` for one version, because the Red Hat pipeline's catalog API accepts a list only for OpenShift 4.5-4.8. The range can cover versions the list skips; that is harmless, since a bundle only reaches the catalog of an OpenShift version in the list. The default in `gen-bundle` moves with each release. |
 
 Output:
 

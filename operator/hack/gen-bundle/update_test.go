@@ -242,7 +242,7 @@ func TestUpdateAnnotations(t *testing.T) {
 	const want = `annotations:
   # Core bundle annotations.
   operators.operatorframework.io.bundle.package.v1: tigera-operator
-  com.redhat.openshift.versions: v4.19-v4.22
+  com.redhat.openshift.versions: "v4.19-v4.22"
 `
 
 	for name, content := range cases {
@@ -577,9 +577,16 @@ func TestUpdateBundle(t *testing.T) {
 
 	versionDir := filepath.Join(operatorDir, bundleDir, "3.34.0")
 	assertContains(t, readFile(t, filepath.Join(versionDir, "manifests", csvName)), "replaces: tigera-operator.v3.33.0")
-	assertContains(t, readFile(t, filepath.Join(versionDir, "metadata", "annotations.yaml")), "com.redhat.openshift.versions: v4.22,v5.0")
-	assertContains(t, readFile(t, filepath.Join(operatorDir, bundleDir, "bundle-v3.34.0.Dockerfile")), "COPY 3.34.0/manifests /manifests/")
-	assertContains(t, readFile(t, filepath.Join(versionDir, releaseConfigName)), "template_name: v5.0.yaml")
+	// The catalog API refuses a list for OpenShift > 4.8, so the bundle
+	// carries the range the list spans, while release-config.yaml keeps the
+	// list.
+	assertContains(t, readFile(t, filepath.Join(versionDir, "metadata", "annotations.yaml")), `com.redhat.openshift.versions: "v4.22-v5.0"`)
+	dockerfile := readFile(t, filepath.Join(operatorDir, bundleDir, "bundle-v3.34.0.Dockerfile"))
+	assertContains(t, dockerfile, "COPY 3.34.0/manifests /manifests/")
+	assertContains(t, dockerfile, `LABEL com.redhat.openshift.versions="v4.22-v5.0"`)
+	releaseConfig := readFile(t, filepath.Join(versionDir, releaseConfigName))
+	assertContains(t, releaseConfig, "template_name: v4.22.yaml")
+	assertContains(t, releaseConfig, "template_name: v5.0.yaml")
 }
 
 // TestUpdateBundleRejectsRange checks that a range is refused before the
@@ -612,27 +619,52 @@ func TestUpdateBundleRejectsRange(t *testing.T) {
 func TestParseOpenShiftVersions(t *testing.T) {
 	t.Parallel()
 
-	got, err := parseOpenShiftVersions("v4.20, v4.21,v5.0")
-	if err != nil {
-		t.Fatalf("parseOpenShiftVersions: %v", err)
-	}
-	if want := []string{"v4.20", "v4.21", "v5.0"}; !slices.Equal(got, want) {
-		t.Errorf("got %v, want %v", got, want)
+	for value, want := range map[string][]string{
+		"v4.20, v4.21,v5.0": {"v4.20", "v4.21", "v5.0"},
+		"v4.22,v5.0":        {"v4.22", "v5.0"}, // a gap is allowed
+		"v5.0":              {"v5.0"},
+	} {
+		got, err := parseOpenShiftVersions(value)
+		if err != nil {
+			t.Errorf("parseOpenShiftVersions(%q): %v", value, err)
+			continue
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("parseOpenShiftVersions(%q) is %v, want %v", value, got, want)
+		}
 	}
 
 	for _, value := range []string{
 		"",
-		"v4.20",             // means v4.20 and later
 		"v4.19-v4.22",       // a range
 		"v4.20,v4.19-v4.22", // a range in a list
 		"4.20,4.21",         // no v
 		"v4.20,,v4.21",      // an empty entry
 		"v4.20,v4.20",       // a duplicate
+		"v5.0,v4.22",        // out of order
+		"v4.9,v4.10,v4.1",   // out of order, numerically
 		"v4.20,v4.21.1",     // a patch version
 		"v4.20,../v4.21",    // a path
 	} {
 		if _, err := parseOpenShiftVersions(value); err == nil {
 			t.Errorf("%q was accepted, want an error", value)
+		}
+	}
+}
+
+func TestOpenShiftVersionRange(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		versions []string
+		want     string
+	}{
+		{[]string{"v4.20", "v4.21", "v4.22", "v5.0"}, "v4.20-v5.0"},
+		{[]string{"v4.22", "v5.0"}, "v4.22-v5.0"},
+		{[]string{"v5.0"}, "=v5.0"}, // a lone v5.0 would mean v5.0 and later
+	} {
+		if got := openShiftVersionRange(tc.versions); got != tc.want {
+			t.Errorf("openShiftVersionRange(%v) is %q, want %q", tc.versions, got, tc.want)
 		}
 	}
 }

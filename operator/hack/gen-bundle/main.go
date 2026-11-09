@@ -118,11 +118,11 @@ var (
 	// appears in the catalog for an OpenShift version listed here.
 	openShiftVersionsFlag = &cli.StringFlag{
 		Name:    "openshift-versions",
-		Usage:   "The OpenShift versions the bundle supports, as a comma-separated list such as vX.Y,vX.Z",
+		Usage:   "The OpenShift versions the bundle supports, as a comma-separated list in ascending order such as vX.Y,vX.Z",
 		Sources: cli.EnvVars("BUNDLE_OPENSHIFT_VERSIONS"),
-		// A list rather than a range, for two reasons: the supported versions
-		// span a major version, and a range cannot say where 4.x ends; and
-		// release-config.yaml names one catalog template per version.
+		// A list rather than a range, because release-config.yaml names one
+		// catalog template per version. The bundle's own annotation is the
+		// range the list spans - see openShiftVersionRange.
 		Value: "v4.20,v4.21,v4.22,v5.0",
 		Validator: func(value string) error {
 			_, err := parseOpenShiftVersions(value)
