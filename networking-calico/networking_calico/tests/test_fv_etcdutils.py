@@ -200,6 +200,21 @@ class TestFVEtcdutils(unittest.TestCase):
         value, _ = etcdv3.get("/calico/testkey")
         self.assertEqual("testvalue", value)
 
+        # The revision from get_status is the whole datastore's revision, not just that
+        # of the key that Etcd3AuthClient.status reads.  Write that key, and check that
+        # get_status gives its revision.  Then write another key, outside /calico/ (so
+        # as root), and check that get_status gives the new revision.
+        self.assertTrue(etcdv3.put(etcdv3._STATUS_KEY, "{}"))
+        _, status_key_revision = etcdv3.get(etcdv3._STATUS_KEY)
+        _, revision = etcdv3.get_status()
+        self.assertEqual(int(status_key_revision), int(revision))
+        root = etcdv3.Etcd3AuthClient(
+            host="127.0.0.1", port=2379, username="root", password="rootpw"
+        )
+        self.assertTrue(root.put("/other/testkey", "testvalue"))
+        _, revision = etcdv3.get_status()
+        self.assertEqual(int(status_key_revision) + 1, int(revision))
+
         # Kill the etcd server.
         self.stop_etcd_server()
 
