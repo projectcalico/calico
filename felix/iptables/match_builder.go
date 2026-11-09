@@ -27,6 +27,10 @@ import (
 
 var Wildcard string = "+"
 
+// MatchLimits are iptables' per-rule limits: one source and one destination CIDR,
+// whether negated or not, and 15 slots in a multiport match.
+var MatchLimits = generictables.MatchLimits{CIDRsPerDirection: 1, PortSlots: 15}
+
 var _ generictables.MatchCriteria = matchCriteria{}
 
 type matchCriteria []string
@@ -222,6 +226,36 @@ func (m matchCriteria) DestNet(net string) generictables.MatchCriteria {
 
 func (m matchCriteria) NotDestNet(net string) generictables.MatchCriteria {
 	return append(m, fmt.Sprintf("! --destination %s", net))
+}
+
+// SourceNets matches the one CIDR that MatchLimits allows in an iptables rule.
+func (m matchCriteria) SourceNets(nets []string) generictables.MatchCriteria {
+	return m.SourceNet(singleNet(nets))
+}
+
+// NotSourceNets matches packets outside the one CIDR that MatchLimits allows.
+func (m matchCriteria) NotSourceNets(nets []string) generictables.MatchCriteria {
+	return m.NotSourceNet(singleNet(nets))
+}
+
+// DestNets matches the one CIDR that MatchLimits allows in an iptables rule.
+func (m matchCriteria) DestNets(nets []string) generictables.MatchCriteria {
+	return m.DestNet(singleNet(nets))
+}
+
+// NotDestNets matches packets outside the one CIDR that MatchLimits allows.
+func (m matchCriteria) NotDestNets(nets []string) generictables.MatchCriteria {
+	return m.NotDestNet(singleNet(nets))
+}
+
+// singleNet returns the only CIDR in nets. More than one means the caller ignored
+// MatchLimits; iptables would expand a comma-separated list into several kernel rules
+// that Felix's rule hashes can't track.
+func singleNet(nets []string) string {
+	if len(nets) != 1 {
+		log.WithField("nets", nets).Panic("Bug: iptables rule can match exactly one CIDR per direction.")
+	}
+	return nets[0]
 }
 
 func (m matchCriteria) SourceIPSet(name string) generictables.MatchCriteria {
