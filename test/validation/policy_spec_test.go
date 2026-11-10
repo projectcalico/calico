@@ -85,7 +85,7 @@ func TestGlobalPolicy_ServicesNamespace(t *testing.T) {
 		}
 	}
 
-	// A namespaced policy falls back to its own namespace.
+	// The CRD only requires the namespace in global policies.
 	expectCreateSucceeds(t, policyKinds([]v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: withoutNamespace}}}, nil)["NetworkPolicy"])
 }
 
