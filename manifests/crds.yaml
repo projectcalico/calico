@@ -4426,6 +4426,13 @@ spec:
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.destination) || !has(r.destination.services)
+                        || (has(r.destination.services.namespace) && size(r.destination.services.namespace)
+                        > 0))
                 ingress:
                   description: |-
                     The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
@@ -5083,6 +5090,12 @@ spec:
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.source) || !has(r.source.services) || (has(r.source.services.namespace)
+                        && size(r.source.services.namespace) > 0))
                 namespaceSelector:
                   description:
                     NamespaceSelector is an optional field for an expression
@@ -5225,18 +5238,6 @@ spec:
                   rule:
                     "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
                     || !has(r.destination.services))"
-                - message: services in a global policy must specify a namespace
-                  reason: FieldValueRequired
-                  rule:
-                    "!has(self.egress) || self.egress.all(r, !has(r.destination) ||
-                    !has(r.destination.services) || (has(r.destination.services.namespace)
-                    && size(r.destination.services.namespace) > 0))"
-                - message: services in a global policy must specify a namespace
-                  reason: FieldValueRequired
-                  rule:
-                    "!has(self.ingress) || self.ingress.all(r, !has(r.source) || !has(r.source.services)
-                    || (has(r.source.services.namespace) && size(r.source.services.namespace)
-                    > 0))"
           type: object
       served: true
       storage: true
@@ -8834,6 +8835,13 @@ spec:
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.destination) || !has(r.destination.services)
+                        || (has(r.destination.services.namespace) && size(r.destination.services.namespace)
+                        > 0))
                 ingress:
                   description: |-
                     The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
@@ -9491,6 +9499,12 @@ spec:
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.source) || !has(r.source.services) || (has(r.source.services.namespace)
+                        && size(r.source.services.namespace) > 0))
                 namespaceSelector:
                   description:
                     NamespaceSelector is an optional field for an expression
@@ -9643,18 +9657,6 @@ spec:
                   rule:
                     "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
                     || !has(r.destination.services))"
-                - message: services in a global policy must specify a namespace
-                  reason: FieldValueRequired
-                  rule:
-                    "!has(self.egress) || self.egress.all(r, !has(r.destination) ||
-                    !has(r.destination.services) || (has(r.destination.services.namespace)
-                    && size(r.destination.services.namespace) > 0))"
-                - message: services in a global policy must specify a namespace
-                  reason: FieldValueRequired
-                  rule:
-                    "!has(self.ingress) || self.ingress.all(r, !has(r.source) || !has(r.source.services)
-                    || (has(r.source.services.namespace) && size(r.source.services.namespace)
-                    > 0))"
           type: object
       served: true
       storage: true

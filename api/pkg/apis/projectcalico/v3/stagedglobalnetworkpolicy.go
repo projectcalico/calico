@@ -48,8 +48,6 @@ type StagedGlobalNetworkPolicy struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))",message="services are not allowed in an egress rule source",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.ingress) || self.ingress.all(r, !has(r.destination) || !has(r.destination.services))",message="services are not allowed in an ingress rule destination",reason=FieldValueForbidden
-// +kubebuilder:validation:XValidation:rule="!has(self.egress) || self.egress.all(r, !has(r.destination) || !has(r.destination.services) || (has(r.destination.services.namespace) && size(r.destination.services.namespace) > 0))",message="services in a global policy must specify a namespace",reason=FieldValueRequired
-// +kubebuilder:validation:XValidation:rule="!has(self.ingress) || self.ingress.all(r, !has(r.source) || !has(r.source.services) || (has(r.source.services.namespace) && size(r.source.services.namespace) > 0))",message="services in a global policy must specify a namespace",reason=FieldValueRequired
 type StagedGlobalNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
 	// +kubebuilder:default=Set
@@ -72,11 +70,13 @@ type StagedGlobalNetworkPolicySpec struct {
 	// a corresponding action to apply. Limited to 1024 rules per policy.
 	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
+	// +kubebuilder:validation:XValidation:rule="self.all(r, !has(r.source) || !has(r.source.services) || (has(r.source.services.namespace) && size(r.source.services.namespace) > 0))",message="services in a global policy must specify a namespace",reason=FieldValueRequired
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply. Limited to 1024 rules per policy.
 	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
+	// +kubebuilder:validation:XValidation:rule="self.all(r, !has(r.destination) || !has(r.destination.services) || (has(r.destination.services.namespace) && size(r.destination.services.namespace) > 0))",message="services in a global policy must specify a namespace",reason=FieldValueRequired
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
 	// The selector is an expression used to pick out the endpoints that the policy should
 	// be applied to.
