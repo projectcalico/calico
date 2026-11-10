@@ -52,10 +52,10 @@ func configureLogging(filename string) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	logrus.SetFormatter(&logrus.TextFormatter{
+	logrus.SetFormatter(&multilineErrorFormatter{&logrus.TextFormatter{
 		DisableLevelTruncation: true,
 		CallerPrettyfier:       logPrettifier,
-	})
+	}})
 
 	rotateFileHook, err := rotatefilehook.NewRotateFileHook(rotatefilehook.RotateFileConfig{
 		Filename:   filename,
@@ -63,11 +63,11 @@ func configureLogging(filename string) {
 		MaxAge:     30,
 		MaxBackups: 10,
 		Level:      logrus.DebugLevel,
-		Formatter: &logrus.TextFormatter{
+		Formatter: &multilineErrorFormatter{&logrus.TextFormatter{
 			DisableColors:          true,
 			DisableLevelTruncation: true,
 			CallerPrettyfier:       logPrettifier,
-		},
+		}},
 	})
 	if err != nil {
 		panic(err)

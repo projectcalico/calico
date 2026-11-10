@@ -72,8 +72,9 @@ func TestScannerScan(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for invalid config, got nil")
 		}
-		if err.Error() != "invalid image scanner configuration" {
-			t.Errorf("expected error 'invalid image scanner configuration', got '%v'", err)
+		want := "invalid image scanner configuration: missing API URL (IMAGE_SCANNER_API), token (IMAGE_SCANNING_TOKEN), scanner (IMAGE_SCANNER_SELECT)"
+		if err.Error() != want {
+			t.Errorf("expected error '%s', got '%v'", want, err)
 		}
 	})
 

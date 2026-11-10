@@ -111,6 +111,27 @@ func getVersionFromDebfile(debfilePath string) (string, error) {
 	return string(out), nil
 }
 
+// debPackageInfo is the identifying information about a debian package file
+type debPackageInfo struct {
+	Name         string
+	Version      string
+	Architecture string
+}
+
+func getPackageInfoFromDebFile(debfilePath string) (debPackageInfo, error) {
+	logrus.WithField("debfile", debfilePath).Debug("Getting package information from debian package")
+	cmd := exec.Command("dpkg-deb", "--show", "--showformat", "${Package} ${Version} ${Architecture}", "--", debfilePath)
+	out, err := cmd.Output()
+	if err != nil {
+		return debPackageInfo{}, fmt.Errorf("getting package info for %s: %w", debfilePath, err)
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) != 3 {
+		return debPackageInfo{}, fmt.Errorf("unexpected package info for %s: %q", debfilePath, string(out))
+	}
+	return debPackageInfo{Name: fields[0], Version: fields[1], Architecture: fields[2]}, nil
+}
+
 func getComponentNameFromVersion(version string) (string, error) {
 	if lastIdx := strings.LastIndex(version, "~"); lastIdx != -1 {
 		return version[lastIdx+1:], nil
