@@ -230,10 +230,6 @@ func direction(key *types.FlowKey) string {
 // and its action is key.Action.
 type policyRule struct {
 	key StatisticsKey
-
-	// countPolicy is set on the first rule for each policy and action, so the policy's totals
-	// count the flow once per action however many of its rules the flow hits.
-	countPolicy bool
 }
 
 // policyRulesInto derives the deduplicated rules that the key's enforced and pending policy hits
@@ -266,11 +262,7 @@ func policyRulesInto(buf []policyRule, k *types.FlowKey) []policyRule {
 			if slices.ContainsFunc(rules, func(r policyRule) bool { return r.key == sk }) {
 				continue
 			}
-			pk := sk.policyID()
-			counted := slices.ContainsFunc(rules, func(r policyRule) bool {
-				return r.key.Action == hit.Action && r.key.policyID() == pk
-			})
-			rules = append(rules, policyRule{key: sk, countPolicy: !counted})
+			rules = append(rules, policyRule{key: sk})
 		}
 	}
 	return rules
@@ -292,7 +284,8 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 			s.policies[pk] = ps
 		}
 
-		if rule.countPolicy {
+		// A flow counts once toward each policy action, however many of the policy's rules it hits.
+		if !policyActionSeen(s.rules[:i], rule.key) {
 			ps.add(flow, rule.key.Action)
 		}
 
@@ -304,4 +297,13 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 		}
 		rs.add(flow, rule.key.Action)
 	}
+}
+
+// policyActionSeen reports whether any of rules shares key's policy and action. AddFlow uses it
+// to skip a policy's totals when an earlier rule already added the flow for that action.
+func policyActionSeen(rules []policyRule, key StatisticsKey) bool {
+	pk := key.policyID()
+	return slices.ContainsFunc(rules, func(r policyRule) bool {
+		return r.key.Action == key.Action && r.key.policyID() == pk
+	})
 }
