@@ -1148,7 +1148,7 @@ type FelixConfigurationSpec struct {
 
 	// Calico programs additional Linux route tables for various purposes.
 	// RouteTableRanges specifies a set of table index ranges that Calico should use.
-	// Deprecates`RouteTableRange`, overrides `RouteTableRange`. The ranges may target at most 65535
+	// Deprecates`RouteTableRange`, overrides `RouteTableRange`. The ranges may cover at most 65535
 	// tables in total.
 	RouteTableRanges *RouteTableRanges `json:"routeTableRanges,omitempty" validate:"omitempty,dive"`
 
@@ -1370,7 +1370,7 @@ type RouteTableIDRange struct {
 }
 
 // +kubebuilder:validation:MaxItems=100
-// +kubebuilder:validation:XValidation:rule="self.map(r, r.max - r.min + 1).sum() <= 65535",message="routeTableRanges must target at most 65535 tables in total",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="self.map(r, r.max - r.min + 1).sum() <= 65535",message="routeTableRanges must cover at most 65535 tables in total",reason=FieldValueInvalid
 type RouteTableRanges []RouteTableIDRange
 
 func (r RouteTableRanges) NumDesignatedTables() int {

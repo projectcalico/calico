@@ -3518,7 +3518,7 @@ spec:
                   description: |-
                     Calico programs additional Linux route tables for various purposes.
                     RouteTableRanges specifies a set of table index ranges that Calico should use.
-                    Deprecates`RouteTableRange`, overrides `RouteTableRange`. The ranges may target at most 65535
+                    Deprecates`RouteTableRange`, overrides `RouteTableRange`. The ranges may cover at most 65535
                     tables in total.
                   items:
                     properties:
@@ -3543,7 +3543,7 @@ spec:
                   maxItems: 100
                   type: array
                   x-kubernetes-validations:
-                    - message: routeTableRanges must target at most 65535 tables in total
+                    - message: routeTableRanges must cover at most 65535 tables in total
                       reason: FieldValueInvalid
                       rule: self.map(r, r.max - r.min + 1).sum() <= 65535
                 serviceLoopPrevention:
