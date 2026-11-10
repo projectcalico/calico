@@ -230,6 +230,10 @@ func direction(key *types.FlowKey) string {
 // and its action is key.Action.
 type policyRule struct {
 	key StatisticsKey
+
+	// countPolicy is set on the first rule for each policy and action, so the policy's totals
+	// count the flow once per action however many of its rules the flow hits.
+	countPolicy bool
 }
 
 // policyRulesInto derives the deduplicated rules that the key's enforced and pending policy hits
@@ -262,7 +266,11 @@ func policyRulesInto(buf []policyRule, k *types.FlowKey) []policyRule {
 			if slices.ContainsFunc(rules, func(r policyRule) bool { return r.key == sk }) {
 				continue
 			}
-			rules = append(rules, policyRule{key: sk})
+			pk := sk.policyID()
+			counted := slices.ContainsFunc(rules, func(r policyRule) bool {
+				return r.key.Action == hit.Action && r.key.policyID() == pk
+			})
+			rules = append(rules, policyRule{key: sk, countPolicy: !counted})
 		}
 	}
 	return rules
@@ -284,8 +292,9 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 			s.policies[pk] = ps
 		}
 
-		// Add the Flow's stats to the policy.
-		ps.add(flow, rule.key.Action)
+		if rule.countPolicy {
+			ps.add(flow, rule.key.Action)
+		}
 
 		// Add the Flow's stats to the rule within the policy.
 		rs, ok := ps.rules[rule.key]
