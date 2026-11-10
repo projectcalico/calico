@@ -29,9 +29,9 @@ import (
 )
 
 // runImages drives the real images command with a recording runner.
-func runImages(t *testing.T, root string, args ...string) *recordingRunner {
+func runImages(t *testing.T, root string, args ...string) *fakeRunner {
 	t.Helper()
-	r := &recordingRunner{}
+	r := newFakeRunner()
 	prev, prevResolve := commandRunner, registryDigestResolver
 	commandRunner = r
 	registryDigestResolver = func(string) (string, bool, error) { return "sha256:aaa", true, nil }
@@ -56,7 +56,7 @@ func TestImagesPublishLocalIsDryRun(t *testing.T) {
 		"publish", "--local", "--registry", "quay.io/calico", "--no-image-scan")
 
 	if !r.ran("cmd/calico", "release-publish") {
-		t.Fatalf("no release-publish for cmd/calico, ran: %v", r.args)
+		t.Fatalf("no release-publish for cmd/calico, ran: %v", r.args())
 	}
 	env := r.envFor("cmd/calico", "release-publish")
 	if !slices.Contains(env, "DRYRUN=true") {
@@ -90,12 +90,12 @@ func TestImagesBuildSkipsFelixAndDoesNotPublish(t *testing.T) {
 	r := runImages(t, fakeRepo(t, "v3.30.0"), "build", "--registry", "quay.io/calico")
 
 	if r.ran("felix") {
-		t.Errorf("image build reached felix, ran: %v", r.args)
+		t.Errorf("image build reached felix, ran: %v", r.args())
 	}
 	if !r.ran("node", "release-build") {
-		t.Fatalf("no image build ran at all, ran: %v", r.args)
+		t.Fatalf("no image build ran at all, ran: %v", r.args())
 	}
-	for _, env := range r.envs {
+	for _, env := range r.envs() {
 		for _, latch := range []string{"CONFIRM=true", "DRYRUN=true", "RELEASE=true"} {
 			if slices.Contains(env, latch) {
 				t.Errorf("build must not set %s", latch)
@@ -114,13 +114,13 @@ func TestImagesLogPaths(t *testing.T) {
 		"node-windows.log": filepath.Join(root, "_logs", "images-build", "node-windows.log"),
 	}
 	for name, path := range want {
-		if !slices.Contains(r.logPaths, path) {
-			t.Errorf("no unit logged to %s (%s), got %v", name, path, r.logPaths)
+		if !slices.Contains(r.logPaths(), path) {
+			t.Errorf("no unit logged to %s (%s), got %v", name, path, r.logPaths())
 		}
 	}
 }
 
-var _ command.CommandRunner = (*recordingRunner)(nil)
+var _ command.CommandRunner = (*fakeRunner)(nil)
 
 // Narrowing must scope the work to the named directories.
 func TestImagesNarrowedToReleaseDirs(t *testing.T) {
@@ -128,11 +128,11 @@ func TestImagesNarrowedToReleaseDirs(t *testing.T) {
 		"publish", "--local", "--registry", "quay.io/calico", "--no-image-scan",
 		"--image-release-dir", "whisker")
 
-	if len(r.args) != 1 {
-		t.Fatalf("expected one unit for whisker, ran: %v", r.args)
+	if len(r.args()) != 1 {
+		t.Fatalf("expected one unit for whisker, ran: %v", r.args())
 	}
 	if !r.ran("whisker", "release-publish") {
-		t.Errorf("did not publish whisker, ran: %v", r.args)
+		t.Errorf("did not publish whisker, ran: %v", r.args())
 	}
 }
 
@@ -143,10 +143,10 @@ func TestImagesNarrowedKeepsEveryVariant(t *testing.T) {
 		"--image-release-dir", "node")
 
 	if !r.ran("node", "release-publish") {
-		t.Errorf("did not publish the standard node image, ran: %v", r.args)
+		t.Errorf("did not publish the standard node image, ran: %v", r.args())
 	}
 	if !r.ran("node", "release-windows") {
-		t.Errorf("did not publish the windows node image, ran: %v", r.args)
+		t.Errorf("did not publish the windows node image, ran: %v", r.args())
 	}
 }
 
@@ -154,7 +154,7 @@ func TestImagesNarrowedKeepsEveryVariant(t *testing.T) {
 // worth reporting rather than a build that quietly does nothing.
 func TestImagesRejectsFelixAsAnImageDir(t *testing.T) {
 	prev := commandRunner
-	r := &recordingRunner{}
+	r := newFakeRunner()
 	commandRunner = r
 	t.Cleanup(func() { commandRunner = prev })
 
@@ -171,8 +171,8 @@ func TestImagesRejectsFelixAsAnImageDir(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected felix to be rejected as an image release dir")
 	}
-	if len(r.args) != 0 {
-		t.Errorf("ran make anyway: %v", r.args)
+	if len(r.args()) != 0 {
+		t.Errorf("ran make anyway: %v", r.args())
 	}
 }
 
@@ -180,7 +180,7 @@ func TestImagesRejectsFelixAsAnImageDir(t *testing.T) {
 // not recognise.
 func TestImagesRejectsUnknownReleaseDir(t *testing.T) {
 	prev := commandRunner
-	commandRunner = &recordingRunner{}
+	commandRunner = newFakeRunner()
 	t.Cleanup(func() { commandRunner = prev })
 
 	root := fakeRepo(t, "v3.30.0")
@@ -243,7 +243,7 @@ func TestImagesPublishSkipDevImageRetag(t *testing.T) {
 // error rather than a silent fresh push.
 func TestImagesPublishRejectsHalfConfiguredRetag(t *testing.T) {
 	prev := commandRunner
-	commandRunner = &recordingRunner{}
+	commandRunner = newFakeRunner()
 	t.Cleanup(func() { commandRunner = prev })
 
 	root := fakeRepo(t, "v3.30.0")
@@ -279,7 +279,7 @@ func TestScanRequestSeparatesHashreleases(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			original := releaseImageList
-			releaseImageList = func(string, ...string) ([]string, error) {
+			releaseImageList = func(command.CommandRunner, string, ...string) ([]string, error) {
 				return []string{"node"}, nil
 			}
 			defer func() { releaseImageList = original }()
@@ -326,7 +326,7 @@ func TestImagesCheckOperatorCoversTheOperatorDir(t *testing.T) {
 
 	original := releaseImageList
 	var gotDirs []string
-	releaseImageList = func(_ string, dirs ...string) ([]string, error) {
+	releaseImageList = func(_ command.CommandRunner, _ string, dirs ...string) ([]string, error) {
 		gotDirs = dirs
 		return []string{"node", "operator"}, nil
 	}

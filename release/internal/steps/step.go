@@ -72,18 +72,16 @@ func (s *Step) Apply(opts []Option) {
 
 // Runner defaults to running real commands.
 func (s Step) Runner() command.CommandRunner {
-	if s.runner == nil {
-		return &command.RealCommandRunner{}
-	}
-	return s.runner
+	return command.Runner(s.runner)
 }
 
-// Run sends output to logPath when there is one, else captures it in memory.
-func (s Step) Run(name string, args, env []string, logPath string) (string, error) {
-	if logPath == "" {
-		return s.Runner().RunInDir(s.dir, name, args, env)
-	}
-	return s.Runner().RunInDirToFile(s.dir, name, args, env, logPath)
+// Run runs in the step's dir unless opts set another.
+func (s Step) Run(name string, args []string, opts ...command.Option) (string, error) {
+	return s.Runner().Run(name, args, append([]command.Option{command.WithDir(s.dir)}, opts...)...)
+}
+
+func (s Step) Make() command.MakeRunner {
+	return command.Make(s.Runner(), s.dir)
 }
 
 // Logger tags every line with the step, so a release running several steps

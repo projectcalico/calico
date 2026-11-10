@@ -28,6 +28,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/outputs"
@@ -376,9 +377,8 @@ func sha256Sums(dir string, files []string) ([]string, error) {
 	for i, f := range files {
 		names[i] = filepath.Base(f)
 	}
-	out, err := s.Runner().RunInDir(dir, "sha256sum", names, nil)
+	out, err := s.Runner().Run("sha256sum", names, command.WithDir(dir))
 	if err != nil {
-		s.Logger().Error(out)
 		return nil, s.Errorf("checksumming files: %w", err)
 	}
 	if err := os.WriteFile(path, []byte(out), filePerms); err != nil {

@@ -28,59 +28,31 @@ import (
 
 // CommandRunner runs the given command. Useful for mocking commands in unit tests.
 type CommandRunner interface {
-	// Run takes the command to run, a list of args, and list of environment variables
-	// in the form A=B, and returns stdout / error.
-	Run(string, []string, []string) (string, error)
-	RunNoCapture(string, []string, []string) error
-
-	RunInDir(string, string, []string, []string) (string, error)
-	RunInDirNoCapture(string, string, []string, []string) error
-
-	// RunInDirToFile behaves like RunInDir, but additionally writes a copy of stdout
-	// and stderr to logPath. Use this for long-running commands whose output is
-	// worth retaining as a standalone artifact (e.g., per-component build/publish
-	// logs from a release run).
-	RunInDirToFile(string, string, []string, []string, string) (string, error)
+	// Run returns the command's trimmed stdout. A command that fails returns an *Error.
+	// For git and make, call Git(r) or Make(r, dir) instead.
+	Run(name string, args []string, opts ...Option) (string, error)
 }
 
 // RealCommandRunner runs a command for real on the host.
 type RealCommandRunner struct{}
 
-func (r *RealCommandRunner) RunInDir(dir, name string, args []string, env []string) (string, error) {
-	return r.runInDir(dir, name, args, env, nil, nil)
+// Runner returns r, or a RealCommandRunner when r is nil, so a zero-value
+// config runs real commands.
+func Runner(r CommandRunner) CommandRunner {
+	if r == nil {
+		return &RealCommandRunner{}
+	}
+	return r
 }
 
-func (r *RealCommandRunner) RunInDirToFile(dir, name string, args []string, env []string, logPath string) (string, error) {
-	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
-		return "", fmt.Errorf("create log dir %s: %w", filepath.Dir(logPath), err)
-	}
-	f, err := os.Create(logPath)
-	if err != nil {
-		return "", fmt.Errorf("create log file %s: %w", logPath, err)
-	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			logrus.WithError(cerr).Warnf("Failed to close log file %s", logPath)
-		}
-	}()
-	return r.runInDir(dir, name, args, env, f, f)
-}
-
-// runInDir is the shared implementation. extraOut and extraErr (if non-nil) receive
-// a copy of the child's stdout / stderr in addition to the captured buffer and the
-// live os.Stdout / os.Stderr stream.
-func (r *RealCommandRunner) runInDir(dir, name string, args, env []string, extraOut, extraErr io.Writer) (string, error) {
+func (r *RealCommandRunner) Run(name string, args []string, opts ...Option) (string, error) {
+	s := newSettings(opts)
 	cmd := exec.Command(name, args...)
-	if len(env) != 0 {
-		cmd.Env = env
+	if len(s.env) != 0 {
+		cmd.Env = append(os.Environ(), s.env...)
 	}
-	cmd.Dir = dir
+	cmd.Dir = s.dir
 
-	// Capture into a buffer for the return value, and (when given) tee to a
-	// log file so callers always have a persistent copy. Streaming to the
-	// parent's stdout/stderr is gated on debug to preserve the previous
-	// quiet default for non-debug runs.
-	//
 	// We deliberately don't pipe through logrus.WriterLevel: it sits on a
 	// synchronous io.Pipe whose scanner goroutine bails out on any line longer
 	// than bufio.MaxScanTokenSize, and after that the pipe has no reader and
@@ -89,50 +61,84 @@ func (r *RealCommandRunner) runInDir(dir, name string, args, env []string, extra
 	var outb, errb bytes.Buffer
 	stdoutWriters := []io.Writer{&outb}
 	stderrWriters := []io.Writer{&errb}
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+	streamed := logrus.IsLevelEnabled(logrus.DebugLevel)
+	if streamed {
 		stdoutWriters = append(stdoutWriters, os.Stdout)
 		stderrWriters = append(stderrWriters, os.Stderr)
 	}
-	if extraOut != nil {
-		stdoutWriters = append(stdoutWriters, extraOut)
-	}
-	if extraErr != nil {
-		stderrWriters = append(stderrWriters, extraErr)
+	if s.logFile != "" {
+		f, err := createLogFile(s.logFile)
+		if err != nil {
+			return "", err
+		}
+		defer func() {
+			if cerr := f.Close(); cerr != nil {
+				logrus.WithError(cerr).Warnf("Failed to close log file %s", s.logFile)
+			}
+		}()
+		stdoutWriters = append(stdoutWriters, f)
+		stderrWriters = append(stderrWriters, f)
 	}
 	cmd.Stdout = io.MultiWriter(stdoutWriters...)
 	cmd.Stderr = io.MultiWriter(stderrWriters...)
 
 	logrus.WithFields(logrus.Fields{
 		"cmd": cmd.String(),
-		"dir": dir,
+		"dir": s.dir,
 	}).Debugf("Running %s command", name)
 	err := cmd.Run()
+	out := strings.TrimSpace(outb.String())
 	if err != nil {
-		err = fmt.Errorf("%s: %s", err, strings.TrimSpace(errb.String()))
+		return out, &Error{Stdout: out, Stderr: strings.TrimSpace(errb.String()), Err: err, streamed: streamed}
 	}
-	return strings.TrimSpace(outb.String()), err
+	return out, nil
 }
 
-func (r *RealCommandRunner) RunInDirNoCapture(dir, name string, args []string, env []string) error {
-	cmd := exec.Command(name, args...)
-	if len(env) != 0 {
-		cmd.Env = env
+func createLogFile(path string) (*os.File, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, fmt.Errorf("create log dir %s: %w", filepath.Dir(path), err)
 	}
-	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	logrus.WithFields(logrus.Fields{
-		"cmd": cmd.String(),
-		"dir": dir,
-	}).Debugf("Running %s command", name)
-	err := cmd.Run()
-	return err
+	f, err := os.Create(path)
+	if err != nil {
+		return nil, fmt.Errorf("create log file %s: %w", path, err)
+	}
+	return f, nil
 }
 
-func (r *RealCommandRunner) Run(name string, args []string, env []string) (string, error) {
-	return r.RunInDir("", name, args, env)
+// Error is a command that ran and failed. Many tools (make in particular)
+// report the actual failure on stdout, so it is kept alongside stderr.
+type Error struct {
+	Stdout string
+	Stderr string
+	Err    error
+
+	// streamed means stdout already reached the terminal, so Error leaves it out.
+	streamed bool
 }
 
-func (r *RealCommandRunner) RunNoCapture(name string, args []string, env []string) error {
-	return r.RunInDirNoCapture("", name, args, env)
+const errorStdoutLines = 50
+
+func (e *Error) Error() string {
+	msg := fmt.Sprintf("%s: %s", e.Err, e.Stderr)
+	if !e.streamed {
+		if tail := lastLines(e.Stdout, errorStdoutLines); tail != "" {
+			msg = fmt.Sprintf("%s\nlast %d lines of stdout:\n%s", msg, errorStdoutLines, tail)
+		}
+	}
+	return msg
+}
+
+func (e *Error) Unwrap() error { return e.Err }
+
+func lastLines(s string, n int) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+// Run runs a command with arguments.
+func Run(command string, args []string) (string, error) {
+	return (&RealCommandRunner{}).Run(command, args)
 }

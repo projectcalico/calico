@@ -151,8 +151,8 @@ func (v Version) NextReleaseVersion() (Version, error) {
 }
 
 // GitVersion returns the current git version of the directory as a Version object.
-func GitVersion() (Version, error) {
-	previousTag, err := command.GitVersion(".", true)
+func GitVersion(r command.CommandRunner) (Version, error) {
+	previousTag, err := command.Git(r).In(".").Version(true)
 	if err != nil {
 		return Version{}, fmt.Errorf("determine git version: %w", err)
 	}

@@ -4,6 +4,8 @@ PACKAGE_NAME = github.com/projectcalico/calico/release
 
 include ../lib.Makefile
 
+LINT_ARGS += --build-tags fv
+
 .PHONY: build
 build: bin/release
 
@@ -29,34 +31,31 @@ bin/release: $(shell find . -name "*.go" -or -name "*.gotmpl") internal/defaults
 
 POSTRELEASE_TEST_PACKAGE		:= $(PACKAGE_NAME)/pkg/postrelease
 UNIT_TEST_PACKAGES	:= $(shell go list ./... | grep -v $(POSTRELEASE_TEST_PACKAGE))
+FV_TEST_PACKAGES	:= $(patsubst %/,%,$(sort $(dir $(shell find . -name '*_fv_test.go'))))
 
-.PHONY: ut fv st
-ifdef TESTS_NO_DOCKER
+.PHONY: ut fv
 ut:
-	@mkdir -p report
-	@gotestsum --junitfile report/unit-tests.xml \
-		-- -coverprofile=report/coverage.out $(UNIT_TEST_PACKAGES)
-else
-ut:
-	$(warning Running unit tests inside docker will skip some tests due to missing binaries.)
-	$(warning Run the tests without Docker to test this functionality as well.)
 	@mkdir -p report
 	@$(DOCKER_GO_BUILD) gotestsum --junitfile report/unit-tests.xml \
 		-- -coverprofile=report/coverage.out $(UNIT_TEST_PACKAGES)
+
+fv:
+ifneq ($(DOCKER_GO_BUILD),)
+	$(warning Running fv tests inside docker will skip some tests due to missing binaries.)
+	$(warning Run the tests without Docker (DOCKER_GO_BUILD=) to test this functionality as well.)
 endif
+	@mkdir -p report
+	@$(DOCKER_GO_BUILD) gotestsum --junitfile report/fv-tests.xml \
+		-- -tags fv $(FV_TEST_PACKAGES)
 
-fv st:
-	$(info *** Release tool does not have $@ tests, skipping)
-	@true
+.PHONY: st st/hashrelease st/release
+st: st/hashrelease st/release
 
-.PHONY: e2e e2e/hashrelease e2e/release
-e2e: e2e/hashrelease e2e/release
-
-e2e/hashrelease: var-require-all-HASHRELEASE_SERVER_BUCKET
+st/hashrelease: var-require-all-HASHRELEASE_SERVER_BUCKET
 	PLAN=true $(MAKE) hashrelease
 	LOCAL=true BRANCH_CHECK=false $(MAKE) hashrelease
 
-e2e/release:
+st/release:
 	PLAN=true $(MAKE) -C ../ release release-publish
 
 ###############################################################################
@@ -74,7 +73,7 @@ check-operator-images:
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: static-checks ut
+ci: static-checks ut fv
 
 ###############################################################################
 # Hashrelease
