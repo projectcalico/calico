@@ -15,11 +15,13 @@
 package github
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
+	"slices"
 	"testing"
+
+	"github.com/projectcalico/calico/release/internal/command"
 )
 
 // Pinned to literals: deriving them from the builders would pass for any URL.
@@ -45,17 +47,6 @@ func TestDownloadURL(t *testing.T) {
 }
 
 func TestResolveToken(t *testing.T) {
-	// A fake gh, so the result does not depend on this machine's login.
-	loggedIn := func(t *testing.T, token string) string {
-		t.Helper()
-		dir := t.TempDir()
-		script := "#!/bin/sh\necho " + token + "\n"
-		if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(script), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		return dir
-	}
-
 	for _, tc := range []struct {
 		name string
 		env  string
@@ -73,20 +64,25 @@ func TestResolveToken(t *testing.T) {
 			if tc.env != "" {
 				t.Setenv(TokenEnvVars[0], tc.env)
 			}
-			if tc.cli != "" {
-				t.Setenv("PATH", loggedIn(t, tc.cli))
-			} else {
-				t.Setenv("PATH", t.TempDir())
-			}
+			gh := fakeGH(tc.cli)
 
-			if got := resolveToken(); got != tc.want {
+			if got := resolveToken(gh); got != tc.want {
 				t.Errorf("resolveToken() = %q, want %q", got, tc.want)
 			}
-			if got := Authenticated(); got != (tc.want != "") {
+			if got := Authenticated(gh); got != (tc.want != "") {
 				t.Errorf("Authenticated() = %v, want %v", got, tc.want != "")
 			}
 		})
 	}
+}
+
+func fakeGH(token string) *command.Recorder {
+	return &command.Recorder{Reply: func(c command.Call) (string, error) {
+		if c.Name != "gh" || !slices.Equal(c.Args, []string{"auth", "token"}) || token == "" {
+			return "", errors.New("not logged in")
+		}
+		return token + "\n", nil
+	}}
 }
 
 func TestAuthTransport(t *testing.T) {
@@ -119,6 +115,23 @@ func TestAuthTransport(t *testing.T) {
 					t.Error("the caller's request was mutated; it must be cloned")
 				}
 			})
+		}
+	})
+
+	t.Run("asks its runner for the token", func(t *testing.T) {
+		for _, key := range TokenEnvVars {
+			t.Setenv(key, "")
+		}
+		seen := &recordingTransport{}
+		req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/o/r", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := (&GithubAuthTransport{Transport: seen, Runner: fakeGH("from-cli")}).RoundTrip(req); err != nil {
+			t.Fatal(err)
+		}
+		if seen.auth != "Bearer from-cli" {
+			t.Errorf("Authorization = %q, want the CLI's token", seen.auth)
 		}
 	})
 

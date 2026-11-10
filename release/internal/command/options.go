@@ -26,6 +26,7 @@ type settings struct {
 	dir     string
 	env     []string
 	logFile string
+	stdin   string
 }
 
 func newSettings(opts []Option) *settings {
@@ -48,6 +49,12 @@ func WithDir(dir string) Option {
 func WithEnv(env ...string) Option {
 	return setting(func(s *settings) {
 		s.env = env
+	})
+}
+
+func WithStdin(in string) Option {
+	return setting(func(s *settings) {
+		s.stdin = in
 	})
 }
 

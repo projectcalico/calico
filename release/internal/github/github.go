@@ -31,8 +31,8 @@ const baseURL = "https://github.com"
 var TokenEnvVars = []string{"GITHUB_TOKEN", "GH_TOKEN"}
 
 // Authenticated reports whether a release can reach the GitHub API.
-func Authenticated() bool {
-	return resolveToken() != ""
+func Authenticated(r command.CommandRunner) bool {
+	return resolveToken(r) != ""
 }
 
 // DownloadURL is where a release's artifacts are downloaded from.
@@ -43,6 +43,7 @@ func DownloadURL(org, repo, version string, file ...string) (string, error) {
 
 type GithubAuthTransport struct {
 	Transport http.RoundTripper
+	Runner    command.CommandRunner
 
 	once  sync.Once
 	token string
@@ -51,7 +52,7 @@ type GithubAuthTransport struct {
 func (g *GithubAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Only intercept requests destined for GitHub API endpoints
 	if req.URL.Host == "github.com" || strings.HasSuffix(req.URL.Host, ".github.com") {
-		g.once.Do(func() { g.token = resolveToken() })
+		g.once.Do(func() { g.token = resolveToken(command.Runner(g.Runner)) })
 		token := g.token
 
 		if token != "" {
@@ -72,7 +73,7 @@ func (g *GithubAuthTransport) RoundTrip(req *http.Request) (*http.Response, erro
 
 // resolveToken retrieves the GitHub authentication token from environment variables
 // or the GitHub CLI tool. Returns an empty string if no token is found.
-func resolveToken() string {
+func resolveToken(r command.CommandRunner) string {
 	// 1. Check common environment variables first
 	for _, envVar := range TokenEnvVars {
 		if token := os.Getenv(envVar); token != "" {
@@ -81,7 +82,7 @@ func resolveToken() string {
 	}
 
 	// 2. Fall back to executing the GitHub CLI tool (`gh auth token`)
-	out, err := command.Run("gh", []string{"auth", "token"})
+	out, err := r.Run("gh", []string{"auth", "token"})
 	if err == nil {
 		token := strings.TrimSpace(out)
 		if token != "" {

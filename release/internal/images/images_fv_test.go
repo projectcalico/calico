@@ -27,7 +27,7 @@ import (
 
 func TestImagesFromMake(t *testing.T) {
 	t.Run("lists the images each release dir builds", func(t *testing.T) {
-		root, err := command.GitDir()
+		root, err := command.Git(command.RealRunner).RepoRoot()
 		if err != nil {
 			t.Fatalf("repo root: %v", err)
 		}

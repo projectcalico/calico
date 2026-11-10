@@ -26,6 +26,7 @@ type Call struct {
 	Dir     string
 	Env     []string
 	LogFile string
+	Stdin   string
 }
 
 // Recorder is a CommandRunner that records each command instead of running it.
@@ -40,7 +41,7 @@ type Recorder struct {
 
 func (r *Recorder) Run(name string, args []string, opts ...Option) (string, error) {
 	s := newSettings(opts)
-	c := Call{Name: name, Args: slices.Clone(args), Dir: s.dir, Env: s.env, LogFile: s.logFile}
+	c := Call{Name: name, Args: slices.Clone(args), Dir: s.dir, Env: s.env, LogFile: s.logFile, Stdin: s.stdin}
 	r.mu.Lock()
 	r.calls = append(r.calls, c)
 	r.mu.Unlock()
