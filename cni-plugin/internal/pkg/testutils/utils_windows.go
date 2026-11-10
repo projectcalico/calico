@@ -51,10 +51,7 @@ func WipeK8sPods(netconf string) {
 	if err := json.Unmarshal([]byte(netconf), &conf); err != nil {
 		panic(err)
 	}
-	logger := log.WithFields(log.Fields{
-		"Namespace": HnsNoneNs,
-	})
-	clientset, err := k8sclient.New(conf, logger)
+	clientset, err := k8sclient.New(conf)
 	if err != nil {
 		panic(err)
 	}

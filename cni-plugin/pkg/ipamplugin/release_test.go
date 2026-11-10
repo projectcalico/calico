@@ -24,16 +24,24 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/gofrs/flock"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/utils/ptr"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
+	kubevirtfake "github.com/projectcalico/calico/libcalico-go/lib/kubevirt/fake"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 const (
@@ -47,8 +55,8 @@ var (
 	errReleaseIPs    = errors.New("release failed")
 )
 
-// stubClient is a Calico client that serves a stub IPAM. Other methods panic through the nil
-// embedded interface.
+// stubClient is a Calico client that serves a stub IPAM and no IPAMConfiguration resource.
+// Other methods panic through the nil embedded interface.
 type stubClient struct {
 	client.Interface
 	ipam ipam.Interface
@@ -58,17 +66,35 @@ func (c stubClient) IPAM() ipam.Interface {
 	return c.ipam
 }
 
+func (c stubClient) IPAMConfiguration() client.IPAMConfigurationInterface {
+	return missingIPAMConfig{}
+}
+
+// missingIPAMConfig is an IPAMConfiguration client with no resource, so KubeVirt VM address
+// persistence takes its default of enabled. Other methods panic through the nil embedded
+// interface.
+type missingIPAMConfig struct {
+	client.IPAMConfigurationInterface
+}
+
+func (missingIPAMConfig) Get(_ context.Context, name string, _ options.GetOptions) (*v3.IPAMConfiguration, error) {
+	return nil, cerrors.ErrorResourceDoesNotExist{Identifier: name}
+}
+
 // releaseStubIPAM serves IPsByHandle from a fixed map and records what ReleaseIPs and
-// ReleaseByHandle are asked to release. A handle missing from the map does not exist. Each call
+// ReleaseByHandle are asked to release. A handle missing from the map does not exist. It serves
+// owner attributes from attrs, recording each address whose active owner is cleared. Each call
 // records whether its context has a deadline and, when lockPath is set, whether that lock was
 // held. Other methods panic through the nil embedded interface.
 type releaseStubIPAM struct {
 	ipam.Interface
 	handleIPs       map[string][]string
+	attrs           map[string]*model.AllocationAttribute
 	ipsErr          error
 	releaseErr      error
 	released        []ipam.ReleaseOptions
 	releasedHandles []string
+	clearedActive   []string
 	lockPath        string
 	hasDeadline     []bool
 	lockHeld        []bool
@@ -105,6 +131,31 @@ func (s *releaseStubIPAM) ReleaseByHandle(ctx context.Context, handleID string) 
 	return nil
 }
 
+func (s *releaseStubIPAM) GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (*model.AllocationAttribute, error) {
+	s.observe(ctx)
+	attr, ok := s.attrs[addr.String()]
+	if !ok {
+		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: addr.String()}
+	}
+	return attr, nil
+}
+
+func (s *releaseStubIPAM) SetOwnerAttributes(ctx context.Context, ip cnet.IP, _ string, updates *ipam.OwnerAttributeUpdates, _ *ipam.OwnerAttributePreconditions) error {
+	s.observe(ctx)
+	attr, ok := s.attrs[ip.String()]
+	if !ok {
+		return cerrors.ErrorResourceDoesNotExist{Identifier: ip.String()}
+	}
+	if updates.ClearActiveOwner {
+		attr.ActiveOwnerAttrs = nil
+		s.clearedActive = append(s.clearedActive, ip.String())
+	}
+	if updates.ClearAlternateOwner {
+		attr.AlternateOwnerAttrs = nil
+	}
+	return nil
+}
+
 func (s *releaseStubIPAM) observe(ctx context.Context) {
 	_, ok := ctx.Deadline()
 	s.hasDeadline = append(s.hasDeadline, ok)
@@ -133,6 +184,15 @@ func (s *releaseStubIPAM) releasedAddresses(handle string) []string {
 // context as the calling plugin passes it, so VMI detection reads it from there.
 func releaseSandbox(t *testing.T, stub *releaseStubIPAM, pod string, keep ...string) error {
 	t.Helper()
+	return releaseSandboxWith(t, stub, utils.SandboxLookups{
+		Pod: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: pod, Namespace: releaseNamespace}},
+	}, keep...)
+}
+
+// releaseSandboxWith runs ReleaseSandbox for sandbox-y of lookups.Pod with stub, passing lookups
+// on the context as the calling plugin does.
+func releaseSandboxWith(t *testing.T, stub *releaseStubIPAM, lookups utils.SandboxLookups, keep ...string) error {
+	t.Helper()
 	conf := types.NetConf{Name: releaseNetwork, Nodename: "node1", IPAMLockFile: filepath.Join(t.TempDir(), "ipam.lock")}
 	if stub.lockPath != "" {
 		conf.IPAMLockFile = stub.lockPath
@@ -140,15 +200,13 @@ func releaseSandbox(t *testing.T, stub *releaseStubIPAM, pod string, keep ...str
 	args := &skel.CmdArgs{
 		ContainerID: releaseContainerID,
 		IfName:      "eth0",
-		Args:        "K8S_POD_NAMESPACE=" + releaseNamespace + ";K8S_POD_NAME=" + pod,
+		Args:        "K8S_POD_NAMESPACE=" + releaseNamespace + ";K8S_POD_NAME=" + lookups.Pod.Name,
 	}
 	var keepAddresses []net.IP
 	for _, k := range keep {
 		keepAddresses = append(keepAddresses, net.ParseIP(k))
 	}
-	ctx := utils.WithSandboxLookups(context.Background(), utils.SandboxLookups{
-		Pod: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: pod, Namespace: releaseNamespace}},
-	})
+	ctx := utils.WithSandboxLookups(context.Background(), lookups)
 	return ReleaseSandbox(ctx, stubClient{ipam: stub}, conf, args, keepAddresses)
 }
 
@@ -230,6 +288,84 @@ func TestReleaseSandboxKeepsAddressesForAVirtLauncherPodThatIsNotAVM(t *testing.
 
 	Expect(stub.releasedHandles).To(BeEmpty(), "released a whole handle")
 	Expect(stub.releasedAddresses(handle)).To(ConsistOf("10.0.0.6"))
+}
+
+const (
+	releaseVMName  = "vm1"
+	releaseVMIUID  = "vmi-uid"
+	releaseVMPod   = "virt-launcher-vm1-abcde"
+	releaseVMAddr  = "10.0.0.5"
+	releaseVMOther = "10.0.0.6"
+)
+
+// vmReleaseStub returns an IPAM stub whose VM handle for vm1 holds two addresses, each with the
+// virt-launcher pod as active owner, along with that handle.
+func vmReleaseStub() (*releaseStubIPAM, string) {
+	handle := vmipam.CreateVMHandleID(releaseNetwork, releaseNamespace, releaseVMName)
+	owner := func() map[string]string {
+		return map[string]string{
+			ipam.AttributeNamespace: releaseNamespace,
+			ipam.AttributePod:       releaseVMPod,
+		}
+	}
+	return &releaseStubIPAM{
+		handleIPs: map[string][]string{handle: {releaseVMAddr, releaseVMOther}},
+		attrs: map[string]*model.AllocationAttribute{
+			releaseVMAddr:  {ActiveOwnerAttrs: owner()},
+			releaseVMOther: {ActiveOwnerAttrs: owner()},
+		},
+	}, handle
+}
+
+// releaseVMSandbox runs ReleaseSandbox with keep for the virt-launcher pod of standalone VMI vm1,
+// with VM address persistence at its default of enabled. The VMI is being deleted if
+// vmiDeleting is set.
+func releaseVMSandbox(t *testing.T, stub *releaseStubIPAM, vmiDeleting bool, keep ...string) error {
+	t.Helper()
+	vmi := &kubevirtv1.VirtualMachineInstance{ObjectMeta: metav1.ObjectMeta{
+		Name:      releaseVMName,
+		Namespace: releaseNamespace,
+		UID:       releaseVMIUID,
+	}}
+	if vmiDeleting {
+		vmi.DeletionTimestamp = ptr.To(metav1.Now())
+	}
+	virtClient := kubevirtfake.NewFakeVirtClient()
+	virtClient.AddVMI(vmi)
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Name:      releaseVMPod,
+		Namespace: releaseNamespace,
+		OwnerReferences: []metav1.OwnerReference{{
+			APIVersion: kubevirt.VMIGroup + "/" + kubevirt.VMIVersion,
+			Kind:       "VirtualMachineInstance",
+			Name:       releaseVMName,
+			UID:        releaseVMIUID,
+			Controller: ptr.To(true),
+		}},
+	}}
+	return releaseSandboxWith(t, stub, utils.SandboxLookups{Pod: pod, VirtClient: virtClient}, keep...)
+}
+
+func TestReleaseSandboxIgnoresTheKeepListForALiveVMWithAddressPersistence(t *testing.T) {
+	RegisterTestingT(t)
+	stub, _ := vmReleaseStub()
+
+	Expect(releaseVMSandbox(t, stub, false, releaseVMAddr)).To(Succeed())
+
+	Expect(stub.clearedActive).To(ConsistOf(releaseVMAddr, releaseVMOther), "kept the pod as owner of a VM address")
+	Expect(stub.releasedHandles).To(BeEmpty(), "released a live VM's handle")
+	Expect(stub.released).To(BeEmpty(), "released a live VM's address")
+}
+
+func TestReleaseSandboxIgnoresTheKeepListForADeletedVMWithAddressPersistence(t *testing.T) {
+	RegisterTestingT(t)
+	stub, handle := vmReleaseStub()
+
+	Expect(releaseVMSandbox(t, stub, true, releaseVMAddr)).To(Succeed())
+
+	Expect(stub.clearedActive).To(ConsistOf(releaseVMAddr, releaseVMOther))
+	Expect(stub.releasedHandles).To(Equal([]string{handle}), "kept a deleted VM's handle")
+	Expect(stub.released).To(BeEmpty())
 }
 
 func TestReleaseSandboxReleasesNothingForADeletedVirtLauncherPod(t *testing.T) {

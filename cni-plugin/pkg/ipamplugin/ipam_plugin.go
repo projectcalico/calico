@@ -393,7 +393,7 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 		if (conf.Kubernetes.Kubeconfig != "" || conf.Policy.PolicyType == "k8s") && namespace != "" {
 			logger.Debugf("Getting namespace for: %s", namespace)
 
-			namespaceObj, err = getNamespace(ctx, conf, namespace, logger)
+			namespaceObj, err = getNamespace(ctx, conf, namespace)
 			if err != nil {
 				logger.WithError(err).Errorf("Failed to get namespace for %s", namespace)
 				return nil, fmt.Errorf("failed to get namespace %s: %w", namespace, err)
@@ -663,11 +663,19 @@ func calicoClientFor(ctx context.Context, conf types.NetConf) (client.Interface,
 }
 
 // k8sClientFor returns the Kubernetes client the calling plugin put in ctx, or builds one from the netconf.
-func k8sClientFor(ctx context.Context, conf types.NetConf, logger *logrus.Entry) (kubernetes.Interface, error) {
+func k8sClientFor(ctx context.Context, conf types.NetConf) (kubernetes.Interface, error) {
 	if lookups := utils.SandboxLookupsFrom(ctx); lookups.K8sClient != nil {
 		return lookups.K8sClient, nil
 	}
-	return k8sclient.New(conf, logger)
+	return k8sclient.New(conf)
+}
+
+// virtClientFor returns the KubeVirt client the calling plugin put in ctx, or builds one from the netconf.
+func virtClientFor(ctx context.Context, conf types.NetConf) (kubevirt.VirtClientInterface, error) {
+	if lookups := utils.SandboxLookupsFrom(ctx); lookups.VirtClient != nil {
+		return lookups.VirtClient, nil
+	}
+	return k8sclient.NewKubeVirt(conf)
 }
 
 // errPodNotFound is returned by getVMIInfoForPod when the pod has been deleted
@@ -689,7 +697,7 @@ func getVMIInfoForPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPI
 		return nil, nil
 	}
 
-	pod, err := getPod(ctx, conf, epIDs, logger)
+	pod, err := getPod(ctx, conf, epIDs)
 	if errors.Is(err, errPodNotFound) {
 		logger.Info("Pod not found, it may have been deleted")
 		return nil, err
@@ -706,7 +714,7 @@ func getVMIInfoForPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPI
 	}
 
 	// Create KubeVirt client for VMI verification
-	virtClient, err := k8sclient.NewKubeVirt(conf, logger)
+	virtClient, err := virtClientFor(ctx, conf)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create KubeVirt client for VMI detection")
 		return nil, err
@@ -1061,12 +1069,12 @@ func releaseHandle(
 // getPod returns the sandbox's pod. It uses the pod the calling plugin already fetched when
 // calico-ipam runs in-process, and otherwise reads it from the Kubernetes API, returning
 // errPodNotFound if the pod is gone.
-func getPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *logrus.Entry) (*corev1.Pod, error) {
+func getPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPIdentifiers) (*corev1.Pod, error) {
 	if pod := utils.SandboxLookupsFrom(ctx).Pod; pod != nil {
 		return pod, nil
 	}
 
-	k8sClient, err := k8sClientFor(ctx, conf, logger)
+	k8sClient, err := k8sClientFor(ctx, conf)
 	if err != nil {
 		return nil, err
 	}
@@ -1083,7 +1091,7 @@ func getPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPIdentifiers
 
 // getNamespace returns the named namespace, or nil for an empty name. It uses the namespace the
 // calling plugin already fetched when there is one, and otherwise reads it from the Kubernetes API.
-func getNamespace(ctx context.Context, conf types.NetConf, namespace string, logger *logrus.Entry) (*corev1.Namespace, error) {
+func getNamespace(ctx context.Context, conf types.NetConf, namespace string) (*corev1.Namespace, error) {
 	if namespace == "" {
 		return nil, nil
 	}
@@ -1091,7 +1099,7 @@ func getNamespace(ctx context.Context, conf types.NetConf, namespace string, log
 		return ns, nil
 	}
 
-	k8sClient, err := k8sClientFor(ctx, conf, logger)
+	k8sClient, err := k8sClientFor(ctx, conf)
 	if err != nil {
 		return nil, err
 	}

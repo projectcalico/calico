@@ -34,6 +34,7 @@ import (
 const (
 	singleStackStdin = `{"cniVersion":"1.0.0","name":"calico-uts","type":"calico","ipam":{"type":"calico-ipam"}}`
 	dualStackStdin   = `{"cniVersion":"1.0.0","name":"calico-uts","type":"calico","ipam":{"type":"calico-ipam","assign_ipv6":"true"}}`
+	ipv6OnlyStdin    = `{"cniVersion":"1.0.0","name":"calico-uts","type":"calico","ipam":{"type":"calico-ipam","assign_ipv4":"false","assign_ipv6":"true"}}`
 )
 
 // freshAddExpectation says what fresh (no IP=) ADD a reuse test expects.
@@ -46,15 +47,17 @@ const (
 	expectFreshAddForIPv4Only
 )
 
-// reuseCase is one row of the reuse policy table.
+// reuseCase is one row of the reuse policy table. An empty stdin means singleStackStdin, and
+// notRequested lists endpoint addresses IPAM must not be asked to reuse.
 type reuseCase struct {
-	endpointIPs []string
-	dualStack   bool
-	addErrs     map[string]error
-	wantErr     bool
-	wantErrCode uint
-	wantIPs     []string
-	wantFresh   freshAddExpectation
+	endpointIPs  []string
+	stdin        string
+	notRequested []string
+	addErrs      map[string]error
+	wantErr      bool
+	wantErrCode  uint
+	wantIPs      []string
+	wantFresh    freshAddExpectation
 }
 
 var _ = Describe("assignPodIPs", func() {
@@ -68,8 +71,8 @@ var _ = Describe("assignPodIPs", func() {
 	})
 
 	run := func(endpointIPs []string, stdin string) ([]string, error) {
-		conf := types.NetConf{}
-		conf.IPAM.Type = "calico-ipam"
+		var conf types.NetConf
+		Expect(json.Unmarshal([]byte(stdin), &conf)).To(Succeed())
 		args := &skel.CmdArgs{
 			ContainerID: "sandbox-y",
 			Args:        "IgnoreUnknown=1;K8S_POD_NAME=web-0",
@@ -97,12 +100,16 @@ var _ = Describe("assignPodIPs", func() {
 	DescribeTable("reuse policy",
 		func(e reuseCase) {
 			fake.addErrs = e.addErrs
-			stdin := singleStackStdin
-			if e.dualStack {
-				stdin = dualStackStdin
+			stdin := e.stdin
+			if stdin == "" {
+				stdin = singleStackStdin
 			}
 
 			ips, err := run(e.endpointIPs, stdin)
+
+			for _, call := range fake.callsFor("ADD") {
+				Expect(e.notRequested).NotTo(ContainElement(call.IP), "asked IPAM to reuse an address of an unwanted family")
+			}
 
 			if e.wantErr {
 				Expect(err).To(HaveOccurred())
@@ -143,7 +150,7 @@ var _ = Describe("assignPodIPs", func() {
 		},
 		Entry("transient error on the second family fails the ADD", reuseCase{
 			endpointIPs: []string{"10.0.0.5", "fd00::5"},
-			dualStack:   true,
+			stdin:       dualStackStdin,
 			addErrs:     map[string]error{"fd00::5": errors.New("etcdserver: request timed out")},
 			wantErr:     true,
 		}),
@@ -154,27 +161,34 @@ var _ = Describe("assignPodIPs", func() {
 		}),
 		Entry("lost IPv6 keeps IPv4 and assigns IPv6 only", reuseCase{
 			endpointIPs: []string{"10.0.0.5", "fd00::5"},
-			dualStack:   true,
+			stdin:       dualStackStdin,
 			addErrs:     map[string]error{"fd00::5": cnitypes.NewError(types.ErrCodeAddressNotOurs, "not ours", "")},
 			wantIPs:     []string{"10.0.0.5", "fd00::99"},
 			wantFresh:   expectFreshAddForIPv6Only,
 		}),
 		Entry("lost IPv4 keeps IPv6, assigns IPv4 only and lists IPv4 first", reuseCase{
 			endpointIPs: []string{"10.0.0.5", "fd00::5"},
-			dualStack:   true,
+			stdin:       dualStackStdin,
 			addErrs:     map[string]error{"10.0.0.5": cnitypes.NewError(types.ErrCodeAddressNotOurs, "not ours", "")},
 			wantIPs:     []string{"10.0.0.99", "fd00::5"},
 			wantFresh:   expectFreshAddForIPv4Only,
 		}),
-		Entry("lost IPv6 under a single-stack config is not requested", reuseCase{
-			endpointIPs: []string{"10.0.0.5", "fd00::5"},
-			addErrs:     map[string]error{"fd00::5": cnitypes.NewError(types.ErrCodeAddressNotOurs, "not ours", "")},
-			wantIPs:     []string{"10.0.0.5"},
-			wantFresh:   expectNoFreshAdd,
+		Entry("a dual-stack endpoint under a single-stack config reuses only IPv4", reuseCase{
+			endpointIPs:  []string{"10.0.0.5", "fd00::5"},
+			notRequested: []string{"fd00::5"},
+			wantIPs:      []string{"10.0.0.5"},
+			wantFresh:    expectNoFreshAdd,
+		}),
+		Entry("a dual-stack endpoint under an IPv6-only config reuses only IPv6", reuseCase{
+			endpointIPs:  []string{"10.0.0.5", "fd00::5"},
+			stdin:        ipv6OnlyStdin,
+			notRequested: []string{"10.0.0.5"},
+			wantIPs:      []string{"fd00::5"},
+			wantFresh:    expectNoFreshAdd,
 		}),
 		Entry("every family lost runs a normal fresh ADD", reuseCase{
 			endpointIPs: []string{"10.0.0.5", "fd00::5"},
-			dualStack:   true,
+			stdin:       dualStackStdin,
 			addErrs: map[string]error{
 				"10.0.0.5": cnitypes.NewError(types.ErrCodeAddressNotOurs, "not ours", ""),
 				"fd00::5":  cnitypes.NewError(types.ErrCodeAddressNotOurs, "not ours", ""),
@@ -190,29 +204,30 @@ var _ = Describe("assignPodIPs", func() {
 		}),
 		Entry("an IPv4-only endpoint under a dual-stack config reuses IPv4 and assigns IPv6 only", reuseCase{
 			endpointIPs: []string{"10.0.0.5"},
-			dualStack:   true,
+			stdin:       dualStackStdin,
 			wantIPs:     []string{"10.0.0.5", "fd00::99"},
 			wantFresh:   expectFreshAddForIPv6Only,
 		}),
 		Entry("an IPv6-only endpoint under a dual-stack config reuses IPv6, assigns IPv4 only and lists IPv4 first", reuseCase{
 			endpointIPs: []string{"fd00::5"},
-			dualStack:   true,
+			stdin:       dualStackStdin,
 			wantIPs:     []string{"10.0.0.99", "fd00::5"},
 			wantFresh:   expectFreshAddForIPv4Only,
 		}),
-		Entry("an IPv6-only endpoint under an IPv4-only config keeps its reused IPv6 and assigns IPv4", reuseCase{
-			endpointIPs: []string{"fd00::5"},
-			wantIPs:     []string{"10.0.0.99", "fd00::5"},
-			wantFresh:   expectFreshAddForIPv4Only,
+		Entry("an IPv6-only endpoint under an IPv4-only config drops its IPv6 and runs a normal fresh ADD", reuseCase{
+			endpointIPs:  []string{"fd00::5"},
+			notRequested: []string{"fd00::5"},
+			wantIPs:      []string{"10.0.0.99"},
+			wantFresh:    expectFreshAddWithOriginalStdin,
 		}),
 		Entry("an endpoint listing IPv6 before IPv4 with nothing missing lists IPv4 first", reuseCase{
 			endpointIPs: []string{"fd00::5", "10.0.0.5"},
-			dualStack:   true,
+			stdin:       dualStackStdin,
 			wantIPs:     []string{"10.0.0.5", "fd00::5"},
 		}),
 		Entry("a lost IPv4-only endpoint under a dual-stack config uses the full config", reuseCase{
 			endpointIPs: []string{"10.0.0.5"},
-			dualStack:   true,
+			stdin:       dualStackStdin,
 			addErrs:     map[string]error{"10.0.0.5": cnitypes.NewError(types.ErrCodeAddressNotOurs, "not ours", "")},
 			wantIPs:     []string{"10.0.0.99", "fd00::99"},
 			wantFresh:   expectFreshAddWithOriginalStdin,

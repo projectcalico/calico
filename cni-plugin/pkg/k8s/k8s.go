@@ -81,7 +81,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 	// Allocate the IP and update/create the endpoint. Do this even if the endpoint already exists and has an IP
 	// allocation. The kubelet will send a DEL call for any old containers and we'll clean up the old IPs then.
-	client, err := k8sclient.New(conf, logger)
+	client, err := k8sclient.New(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -219,99 +219,8 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 		// Check for calico IPAM specific annotations and set them if needed.
 		if conf.IPAM.Type == "calico-ipam" {
-
-			var v4pools, v6pools, ipFamilies string
-
-			// Sets  the Namespace annotation for IP pools as default
-			v4pools = annotNS["cni.projectcalico.org/ipv4pools"]
-			v6pools = annotNS["cni.projectcalico.org/ipv6pools"]
-			ipFamilies = annotNS["cni.projectcalico.org/ipFamilies"]
-
-			// Gets the POD annotation for IP Pools and overwrites Namespace annotation if it exists
-			v4poolpod := annot["cni.projectcalico.org/ipv4pools"]
-			if len(v4poolpod) != 0 {
-				v4pools = v4poolpod
-			}
-			v6poolpod := annot["cni.projectcalico.org/ipv6pools"]
-			if len(v6poolpod) != 0 {
-				v6pools = v6poolpod
-			}
-			ipFamiliesPod := annot["cni.projectcalico.org/ipFamilies"]
-			if len(ipFamiliesPod) != 0 {
-				ipFamilies = ipFamiliesPod
-			}
-
-			if len(v4pools) != 0 || len(v6pools) != 0 || len(ipFamilies) != 0 {
-				var stdinData map[string]any
-				if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
-					return nil, err
-				}
-				var v4PoolSlice, v6PoolSlice, ipFamilieSlice []string
-
-				if len(v4pools) > 0 {
-					if err := json.Unmarshal([]byte(v4pools), &v4PoolSlice); err != nil {
-						logger.WithField("IPv4Pool", v4pools).Error("Error parsing IPv4 IPPools")
-						return nil, err
-					}
-
-					if _, ok := stdinData["ipam"].(map[string]any); !ok {
-						return nil, errors.New("data on stdin was of unexpected type")
-					}
-					stdinData["ipam"].(map[string]any)["ipv4_pools"] = v4PoolSlice
-					logger.WithField("ipv4_pools", v4pools).Debug("Setting IPv4 Pools")
-				}
-				if len(v6pools) > 0 {
-					if err := json.Unmarshal([]byte(v6pools), &v6PoolSlice); err != nil {
-						logger.WithField("IPv6Pool", v6pools).Error("Error parsing IPv6 IPPools")
-						return nil, err
-					}
-
-					if _, ok := stdinData["ipam"].(map[string]any); !ok {
-						return nil, errors.New("data on stdin was of unexpected type")
-					}
-					stdinData["ipam"].(map[string]any)["ipv6_pools"] = v6PoolSlice
-					logger.WithField("ipv6_pools", v6pools).Debug("Setting IPv6 Pools")
-				}
-
-				if len(ipFamilies) > 0 {
-					if err := json.Unmarshal([]byte(ipFamilies), &ipFamilieSlice); err != nil {
-						logger.WithField("IPFamilies", ipFamilies).Error("Error parsing IPFamilies")
-						return nil, err
-					}
-
-					assignV4 := "false"
-					assignV6 := "false"
-					for _, ipFamily := range ipFamilieSlice {
-						switch ipFamily {
-						case "IPv4":
-							assignV4 = "true"
-						case "IPv6":
-							assignV6 = "true"
-						default:
-							logger.WithField("IPFamilies", ipFamilies).Error("Error parsing ipFamilies")
-							return nil, fmt.Errorf("error parsing ipFamilies: %s", ipFamilies)
-						}
-					}
-
-					if _, ok := stdinData["ipam"].(map[string]any); !ok {
-						return nil, errors.New("data on stdin was of unexpected type")
-					}
-
-					stdinData["ipam"].(map[string]any)["assign_ipv4"] = &assignV4
-					stdinData["ipam"].(map[string]any)["assign_ipv6"] = &assignV6
-					logger.WithField("assign_ipv4", assignV4).Debug("Setting assignV4")
-					logger.WithField("assign_ipv6", assignV6).Debug("Setting assignV6")
-				}
-
-				newData, err := json.Marshal(stdinData)
-				if err != nil {
-					// Do not log the stdinData map — it may contain K8sAuthToken,
-					// K8sClientKey, K8sCertificateAuthority.
-					logger.WithError(err).Error("Error marshaling CNI stdin data")
-					return nil, err
-				}
-				args.StdinData = newData
-				logger.Debug("Updated stdin data")
+			if err := applyIPAMAnnotations(&conf, args, annot, annotNS, logger); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -580,6 +489,103 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	return result, nil
 }
 
+// applyIPAMAnnotations applies the pod's, or failing that its namespace's, ipv4pools,
+// ipv6pools and ipFamilies annotations to the calico-ipam config. It rewrites args.StdinData
+// for the IPAM plugin and sets the same fields on conf, so later reads of conf see what IPAM
+// will be asked for.
+func applyIPAMAnnotations(conf *types.NetConf, args *skel.CmdArgs, annot, annotNS map[string]string, logger *logrus.Entry) error {
+	var v4pools, v6pools, ipFamilies string
+
+	// Sets  the Namespace annotation for IP pools as default
+	v4pools = annotNS["cni.projectcalico.org/ipv4pools"]
+	v6pools = annotNS["cni.projectcalico.org/ipv6pools"]
+	ipFamilies = annotNS["cni.projectcalico.org/ipFamilies"]
+
+	// Gets the POD annotation for IP Pools and overwrites Namespace annotation if it exists
+	v4poolpod := annot["cni.projectcalico.org/ipv4pools"]
+	if len(v4poolpod) != 0 {
+		v4pools = v4poolpod
+	}
+	v6poolpod := annot["cni.projectcalico.org/ipv6pools"]
+	if len(v6poolpod) != 0 {
+		v6pools = v6poolpod
+	}
+	ipFamiliesPod := annot["cni.projectcalico.org/ipFamilies"]
+	if len(ipFamiliesPod) != 0 {
+		ipFamilies = ipFamiliesPod
+	}
+
+	if len(v4pools) != 0 || len(v6pools) != 0 || len(ipFamilies) != 0 {
+		var stdinData map[string]any
+		if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
+			return err
+		}
+		ipamData, ok := stdinData["ipam"].(map[string]any)
+		if !ok {
+			return errors.New("data on stdin was of unexpected type")
+		}
+		var v4PoolSlice, v6PoolSlice, ipFamilieSlice []string
+
+		if len(v4pools) > 0 {
+			if err := json.Unmarshal([]byte(v4pools), &v4PoolSlice); err != nil {
+				logger.WithField("IPv4Pool", v4pools).Error("Error parsing IPv4 IPPools")
+				return err
+			}
+			ipamData["ipv4_pools"] = v4PoolSlice
+			conf.IPAM.IPv4Pools = v4PoolSlice
+			logger.WithField("ipv4_pools", v4pools).Debug("Setting IPv4 Pools")
+		}
+		if len(v6pools) > 0 {
+			if err := json.Unmarshal([]byte(v6pools), &v6PoolSlice); err != nil {
+				logger.WithField("IPv6Pool", v6pools).Error("Error parsing IPv6 IPPools")
+				return err
+			}
+			ipamData["ipv6_pools"] = v6PoolSlice
+			conf.IPAM.IPv6Pools = v6PoolSlice
+			logger.WithField("ipv6_pools", v6pools).Debug("Setting IPv6 Pools")
+		}
+
+		if len(ipFamilies) > 0 {
+			if err := json.Unmarshal([]byte(ipFamilies), &ipFamilieSlice); err != nil {
+				logger.WithField("IPFamilies", ipFamilies).Error("Error parsing IPFamilies")
+				return err
+			}
+
+			assignV4 := "false"
+			assignV6 := "false"
+			for _, ipFamily := range ipFamilieSlice {
+				switch ipFamily {
+				case "IPv4":
+					assignV4 = "true"
+				case "IPv6":
+					assignV6 = "true"
+				default:
+					logger.WithField("IPFamilies", ipFamilies).Error("Error parsing ipFamilies")
+					return fmt.Errorf("error parsing ipFamilies: %s", ipFamilies)
+				}
+			}
+
+			ipamData["assign_ipv4"] = &assignV4
+			ipamData["assign_ipv6"] = &assignV6
+			conf.IPAM.AssignIpv4 = &assignV4
+			conf.IPAM.AssignIpv6 = &assignV6
+			logger.WithField("assign_ipv4", assignV4).Debug("Setting assignV4")
+			logger.WithField("assign_ipv6", assignV6).Debug("Setting assignV6")
+		}
+
+		newData, err := json.Marshal(stdinData)
+		if err != nil {
+			// Do not log the stdinData map, since it may contain K8sAuthToken,
+			// K8sClientKey or K8sCertificateAuthority.
+			logger.WithError(err).Error("Error marshaling CNI stdin data")
+			return err
+		}
+		args.StdinData = newData
+		logger.Debug("Updated stdin data")
+	}
+	return nil
+}
+
 // CmdDelK8s performs CNI DEL processing when running under Kubernetes. In Kubernetes, we identify workload endpoints based on their
 // pod name and namespace rather than container ID, so we may receive multiple DEL calls for the same pod, but with different container IDs.
 // As such, we must only delete the workload endpoint when the provided CNI_CONTAINERID matches the value on the WorkloadEndpoint. If they do not match,
@@ -719,6 +725,11 @@ func assignPodIPs(
 	got := cniv1.Result{CNIVersion: cniv1.ImplementedSpecVersion}
 	var gotV4, gotV6 bool
 	for _, ip := range priorIPs {
+		if !assignsFamilyOf(conf.IPAM, ip) {
+			// The old sandbox's DEL or IPAM GC frees it once the rewritten endpoint drops it.
+			logger.WithField("ip", ip).Info("Endpoint's address is of a family IPAM no longer assigns, not reusing it")
+			continue
+		}
 		r, err := callIPAMWithIP(ctx, ip, conf, args, logger)
 		switch {
 		case err == nil:
@@ -743,14 +754,8 @@ func assignPodIPs(
 		return utils.AddIPAM(ctx, conf, args, logger)
 	}
 
-	// Read the wanted families from stdin, not conf: the ipFamilies annotation rewrote stdin's
-	// assign_ipv4 and assign_ipv6 after conf was parsed.
-	var stdinConf types.NetConf
-	if err := json.Unmarshal(args.StdinData, &stdinConf); err != nil {
-		return nil, err
-	}
-	missingV4 := stdinConf.IPAM.AssignsIPv4() && !gotV4
-	missingV6 := stdinConf.IPAM.AssignsIPv6() && !gotV6
+	missingV4 := conf.IPAM.AssignsIPv4() && !gotV4
+	missingV6 := conf.IPAM.AssignsIPv6() && !gotV6
 	if missingV4 || missingV6 {
 		freshArgs := *args
 		stdin, err := withAssignFamilies(args.StdinData, missingV4, missingV6)
@@ -768,6 +773,15 @@ func assignPodIPs(
 
 	sortIPv4First(got.IPs)
 	return &got, nil
+}
+
+// assignsFamilyOf reports whether ipam allocates addresses of ip's family, so a new sandbox
+// reuses only the endpoint addresses a fresh ADD would also have given it.
+func assignsFamilyOf(ipam types.IPAMConfig, ip net.IP) bool {
+	if ip.To4() != nil {
+		return ipam.AssignsIPv4()
+	}
+	return ipam.AssignsIPv6()
 }
 
 // sortIPv4First orders ips with IPv4 before IPv6, keeping the order within each family. The

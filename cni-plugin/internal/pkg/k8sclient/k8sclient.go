@@ -19,7 +19,6 @@ package k8sclient
 import (
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -74,7 +73,7 @@ func restConfig(conf types.NetConf) (*rest.Config, error) {
 
 // New creates a Kubernetes clientset from the CNI network configuration's kubeconfig and
 // any API server, certificate and token overrides it sets.
-func New(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clientset, error) {
+func New(conf types.NetConf) (*kubernetes.Clientset, error) {
 	// Get the Kubernetes REST config
 	config, err := restConfig(conf)
 	if err != nil {
@@ -87,7 +86,7 @@ func New(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clientset, error
 
 // NewKubeVirt creates a KubeVirt client from the CNI network configuration.
 // Note: This will return an error if KubeVirt is not installed in the cluster.
-func NewKubeVirt(conf types.NetConf, logger *logrus.Entry) (kubevirt.VirtClientInterface, error) {
+func NewKubeVirt(conf types.NetConf) (kubevirt.VirtClientInterface, error) {
 	// Get the Kubernetes REST config
 	config, err := restConfig(conf)
 	if err != nil {

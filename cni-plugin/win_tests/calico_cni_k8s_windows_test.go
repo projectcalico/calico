@@ -172,10 +172,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			if err := json.Unmarshal([]byte(netconf), &conf); err != nil {
 				panic(err)
 			}
-			logger := log.WithFields(log.Fields{
-				"Namespace": testutils.HnsNoneNs,
-			})
-			clientset, err = k8sclient.New(conf, logger)
+			clientset, err = k8sclient.New(conf)
 			if err != nil {
 				panic(err)
 			}
@@ -1087,10 +1084,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			if err := json.Unmarshal([]byte(netconf), &conf); err != nil {
 				panic(err)
 			}
-			logger := log.WithFields(log.Fields{
-				"Namespace": testutils.HnsNoneNs,
-			})
-			clientset, err = k8sclient.New(conf, logger)
+			clientset, err = k8sclient.New(conf)
 			if err != nil {
 				panic(err)
 			}
@@ -1227,10 +1221,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			if err := json.Unmarshal([]byte(netconf), &conf); err != nil {
 				panic(err)
 			}
-			logger := log.WithFields(log.Fields{
-				"Namespace": testutils.HnsNoneNs,
-			})
-			clientset, err = k8sclient.New(conf, logger)
+			clientset, err = k8sclient.New(conf)
 			if err != nil {
 				panic(err)
 			}
@@ -1369,10 +1360,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			if err := json.Unmarshal([]byte(netconf), &conf); err != nil {
 				panic(err)
 			}
-			logger := log.WithFields(log.Fields{
-				"Namespace": testutils.HnsNoneNs,
-			})
-			clientset, err = k8sclient.New(conf, logger)
+			clientset, err = k8sclient.New(conf)
 			if err != nil {
 				panic(err)
 			}
@@ -1616,10 +1604,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				if err := json.Unmarshal([]byte(netconf), &conf); err != nil {
 					panic(err)
 				}
-				logger := log.WithFields(log.Fields{
-					"Namespace": testutils.HnsNoneNs,
-				})
-				clientset, err = k8sclient.New(conf, logger)
+				clientset, err = k8sclient.New(conf)
 				if err != nil {
 					panic(err)
 				}
@@ -1748,10 +1733,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			if err := json.Unmarshal([]byte(vxlanConf), &conf); err != nil {
 				panic(err)
 			}
-			logger := log.WithFields(log.Fields{
-				"Namespace": testutils.HnsNoneNs,
-			})
-			clientset, err = k8sclient.New(conf, logger)
+			clientset, err = k8sclient.New(conf)
 			if err != nil {
 				panic(err)
 			}
@@ -1921,11 +1903,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		if err := json.Unmarshal([]byte(vxlanConf), &conf); err != nil {
 			panic(err)
 		}
-		logger := log.WithFields(log.Fields{
-			"Namespace": testutils.HnsNoneNs,
-		})
-
-		clientset, err = k8sclient.New(conf, logger)
+		clientset, err = k8sclient.New(conf)
 		if err != nil {
 			panic(err)
 		}
