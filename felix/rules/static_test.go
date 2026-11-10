@@ -1428,6 +1428,42 @@ var _ = Describe("Static", func() {
 				Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-forward-check")).To(Equal(expForwardCheck))
 			})
 		}
+
+		Describe("in nftables mode", func() {
+			JustBeforeEach(func() {
+				var ok bool
+				rr, ok = NewRenderer(conf, true).(*DefaultRuleRenderer)
+				Expect(ok).To(BeTrue())
+			})
+
+			It("should match all NodePort ranges in one rule per protocol", func() {
+				allRanges := []*proto.PortRange{
+					{First: 30030, Last: 30040},
+					{First: 30130, Last: 30140},
+					{First: 30230, Last: 30240},
+					{First: 30330, Last: 30340},
+					{First: 30430, Last: 30440},
+					{First: 30530, Last: 30540},
+					{First: 30630, Last: 30640},
+					{First: 30730, Last: 30740},
+					{First: 30830, Last: 30840},
+				}
+				ipSetThisHost := ipSetName(IPSetIDThisHostIPs, 4)
+
+				chain := findChain(rr.StaticFilterTableChains(4), "cali-forward-check")
+				Expect(chain).NotTo(BeNil())
+				var nodePortMatches []string
+				for _, r := range chain.Rules {
+					if len(r.Comment) == 1 && r.Comment[0] == "To kubernetes NodePort service" {
+						nodePortMatches = append(nodePortMatches, r.Match.Render())
+					}
+				}
+				Expect(nodePortMatches).To(Equal([]string{
+					nftrender.Match().Protocol("tcp").DestPortRanges(allRanges).DestIPSet(ipSetThisHost).Render(),
+					nftrender.Match().Protocol("udp").DestPortRanges(allRanges).DestIPSet(ipSetThisHost).Render(),
+				}))
+			})
+		})
 	})
 
 	Describe("with openstack special-cases", func() {

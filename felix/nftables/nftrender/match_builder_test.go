@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,6 +54,11 @@ var _ = Describe("MatchBuilder failure cases", func() {
 			nftrender.Match().ConnMarkMatchesWithMask(0x0, 0x0)
 		}).To(Panic())
 	})
+	It("should render a CIDR list for IPv6", func() {
+		m, ok := nftrender.Match().SourceNets([]string{"fd00::/64", "fd01::1"}).(nftrender.NFTMatchCriteria)
+		Expect(ok).To(BeTrue())
+		Expect(m.IPVersion(6).Render()).To(Equal("ip6 saddr { fd00::/64, fd01::1 }"))
+	})
 })
 
 var _ = DescribeTable("MatchBuilder",
@@ -98,6 +103,11 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotSourceNet", nftrender.Match().NotSourceNet("10.0.0.4"), "ip saddr != 10.0.0.4"),
 	Entry("DestNet", nftrender.Match().DestNet("10.0.0.4"), "ip daddr 10.0.0.4"),
 	Entry("NotDestNet", nftrender.Match().NotDestNet("10.0.0.4"), "ip daddr != 10.0.0.4"),
+	Entry("SourceNets single", nftrender.Match().SourceNets([]string{"10.0.0.4"}), "ip saddr 10.0.0.4"),
+	Entry("SourceNets", nftrender.Match().SourceNets([]string{"10.0.0.0/8", "10.1.0.4"}), "ip saddr { 10.0.0.0/8, 10.1.0.4 }"),
+	Entry("NotSourceNets", nftrender.Match().NotSourceNets([]string{"10.0.0.0/8", "10.1.0.4"}), "ip saddr != { 10.0.0.0/8, 10.1.0.4 }"),
+	Entry("DestNets", nftrender.Match().DestNets([]string{"10.0.0.0/8", "10.1.0.4"}), "ip daddr { 10.0.0.0/8, 10.1.0.4 }"),
+	Entry("NotDestNets", nftrender.Match().NotDestNets([]string{"10.0.0.0/8", "10.1.0.4"}), "ip daddr != { 10.0.0.0/8, 10.1.0.4 }"),
 
 	// IP sets.
 	Entry("SourceIPSet", nftrender.Match().SourceIPSet("calits:12345abc-_"), "ip saddr @calits-12345abc-_"),
@@ -179,6 +189,7 @@ var _ = DescribeTable("IPSetNames",
 	Entry("empty match", nftrender.Match(), nil),
 	Entry("ICMPType", nftrender.Match().ICMPType(123), nil),
 	Entry("SourceNet", nftrender.Match().SourceNet("10.0.0.0/24"), nil),
+	Entry("SourceNets", nftrender.Match().SourceNets([]string{"10.0.0.0/24", "10.1.0.0/24"}), nil),
 
 	// Multiple IP set matches.
 	Entry("Multiple matches", nftrender.Match().SourceIPSet("calits:12345abc-_").DestIPSet("calits:54321cba-_"), []string{"calits-12345abc-_", "calits-54321cba-_"}),
