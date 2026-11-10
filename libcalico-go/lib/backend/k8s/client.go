@@ -36,7 +36,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	kubevirtclient "kubevirt.io/client-go/kubevirt/typed/core/v1"
-	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
+	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1beta1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
@@ -61,7 +61,7 @@ type KubeClient struct {
 	ClientSet kubernetes.Interface
 
 	// Client for interacting with K8S Cluster Network Policy.
-	k8sClusterPolicyClient *netpolicyclient.PolicyV1alpha2Client
+	k8sClusterPolicyClient *netpolicyclient.PolicyV1beta1Client
 
 	// Contains methods for converting Kubernetes resources to
 	// Calico resources.
@@ -131,7 +131,7 @@ type ClientOptions struct {
 	RESTClient                 rest.Interface
 	Group                      resources.BackingAPIGroup
 	UsePodCIDR                 bool
-	ClusterNetworkPolicyClient *netpolicyclient.PolicyV1alpha2Client
+	ClusterNetworkPolicyClient *netpolicyclient.PolicyV1beta1Client
 	VMIMClientFactory          func(namespace string) resources.VMIMClient
 }
 
@@ -571,7 +571,7 @@ func (c *KubeClient) Close() error {
 }
 
 // clusterNetworkPolicyClient builds a RESTClient configured to interact Cluster Network Policy.
-func clusterNetworkPolicyClient(cfg *rest.Config) (*netpolicyclient.PolicyV1alpha2Client, error) {
+func clusterNetworkPolicyClient(cfg *rest.Config) (*netpolicyclient.PolicyV1beta1Client, error) {
 	return netpolicyclient.NewForConfig(cfg)
 }
 

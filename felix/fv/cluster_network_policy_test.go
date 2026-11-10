@@ -24,8 +24,8 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
-	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
+	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1beta1"
+	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1beta1"
 
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
@@ -78,7 +78,7 @@ var _ = infrastructure.DatastoreDescribe(
 			opts         infrastructure.TopologyOptions
 			tc           infrastructure.TopologyContainers
 			calicoClient client.Interface
-			kcnpClient   *netpolicyclient.PolicyV1alpha2Client
+			kcnpClient   *netpolicyclient.PolicyV1beta1Client
 			w            [3]*workload.Workload
 			cc           *connectivity.Checker
 		)
