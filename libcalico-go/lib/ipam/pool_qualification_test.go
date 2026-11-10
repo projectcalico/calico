@@ -15,6 +15,8 @@
 package ipam
 
 import (
+	"errors"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -507,6 +509,214 @@ var _ = Describe("qualifyPools with unnamed pools", func() {
 		Expect(releasedPools(q, pools)).To(Equal([]string{v4Pool1}))
 	})
 })
+
+var errSelectorsConsulted = errors.New("selectors consulted")
+
+// fixedSelectors answers the selector checks with fixed results. When untouchable, it fails any check, so a case can
+// show that MayUse decided without the selectors.
+type fixedSelectors struct {
+	node        bool
+	namespace   bool
+	untouchable bool
+}
+
+func (s fixedSelectors) SelectsNode(*v3.IPPool) (bool, error) {
+	if s.untouchable {
+		return false, errSelectorsConsulted
+	}
+	return s.node, nil
+}
+
+func (s fixedSelectors) SelectsNamespace(*v3.IPPool) (bool, error) {
+	if s.untouchable {
+		return false, errSelectorsConsulted
+	}
+	return s.namespace, nil
+}
+
+// mayUseCase is one row of the PoolClaim.MayUse table. The claim asks for Workload use and names pools by CIDR.
+type mayUseCase struct {
+	pool      testPool
+	pools     []string
+	selectors fixedSelectors
+	want      bool
+}
+
+var _ = DescribeTable("PoolClaim.MayUse",
+	func(tc mayUseCase) {
+		pool := tc.pool.build()
+		claim := NewPoolClaim(v3.IPPoolAllowedUseWorkload, parseRequestedPools(tc.pools...), tc.selectors)
+		Expect(claim.MayUse(&pool)).To(Equal(tc.want))
+	},
+	Entry("an Automatic pool whose selectors match", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		selectors: fixedSelectors{node: true, namespace: true},
+		want:      true,
+	}),
+	Entry("not a Manual pool, for a claim naming no pool, without consulting its selectors", mayUseCase{
+		pool:      testPool{cidr: v4Pool1, manual: true},
+		selectors: fixedSelectors{untouchable: true},
+	}),
+	Entry("a Manual pool the claim names", mayUseCase{
+		pool:      testPool{cidr: v4Pool1, manual: true},
+		pools:     []string{v4Pool1},
+		selectors: fixedSelectors{untouchable: true},
+		want:      true,
+	}),
+	Entry("a pool the claim names by another form of its CIDR", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		pools:     []string{"10.0.0.0/24"},
+		selectors: fixedSelectors{untouchable: true},
+		want:      true,
+	}),
+	Entry("not a pool the claim doesn't name, without consulting its selectors", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		pools:     []string{v4Pool2},
+		selectors: fixedSelectors{untouchable: true},
+	}),
+	Entry("not a pool whose node selector skips the node", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		selectors: fixedSelectors{namespace: true},
+	}),
+	Entry("a pool whose selectors skip the node and namespace, when the claim names it", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		pools:     []string{v4Pool1},
+		selectors: fixedSelectors{untouchable: true},
+		want:      true,
+	}),
+	Entry("not a pool whose namespace selector skips the namespace", mayUseCase{
+		pool:      testPool{cidr: v4Pool1},
+		selectors: fixedSelectors{node: true},
+	}),
+	Entry("not a named pool that doesn't allow the use", mayUseCase{
+		pool:      testPool{cidr: v4Pool1, uses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
+		pools:     []string{v4Pool1},
+		selectors: fixedSelectors{untouchable: true},
+	}),
+	Entry("an IPv6 pool whose selectors match, when the claim names only IPv4 pools", mayUseCase{
+		pool:      testPool{cidr: v6Pool1},
+		pools:     []string{v4Pool1},
+		selectors: fixedSelectors{node: true, namespace: true},
+		want:      true,
+	}),
+	Entry("not an IPv6 pool whose node selector skips the node, when the claim names only IPv4 pools", mayUseCase{
+		pool:      testPool{cidr: v6Pool1},
+		pools:     []string{v4Pool1},
+		selectors: fixedSelectors{namespace: true},
+	}),
+	Entry("not an IPv6 pool the claim doesn't name, when it names pools of both families", mayUseCase{
+		pool:      testPool{cidr: v6Pool2},
+		pools:     []string{v4Pool1, v6Pool1},
+		selectors: fixedSelectors{untouchable: true},
+	}),
+)
+
+var _ = Describe("PoolClaim.MayUse errors", func() {
+	It("returns a selector's error, and false", func() {
+		pool := testPool{cidr: v4Pool1}.build()
+		claim := NewPoolClaim(v3.IPPoolAllowedUseWorkload, nil, fixedSelectors{untouchable: true})
+		ok, err := claim.MayUse(&pool)
+		Expect(err).To(MatchError(errSelectorsConsulted))
+		Expect(ok).To(BeFalse())
+	})
+
+	It("needs no selectors for a claim that names its pools", func() {
+		pool := testPool{cidr: v4Pool1}.build()
+		claim := NewPoolClaim(v3.IPPoolAllowedUseWorkload, parseRequestedPools(v4Pool1), nil)
+		Expect(claim.MayUse(&pool)).To(BeTrue())
+	})
+
+	It("returns an error, and false, for a claim that names no pool and has no selectors", func() {
+		pool := testPool{cidr: v4Pool1, manual: true}.build()
+		claim := NewPoolClaim(v3.IPPoolAllowedUseWorkload, nil, nil)
+		ok, err := claim.MayUse(&pool)
+		Expect(err).To(MatchError(errClaimWithoutSelectors))
+		Expect(ok).To(BeFalse())
+	})
+
+	It("needs selectors for a pool in a family the claim names no pool in", func() {
+		pool := testPool{cidr: v6Pool1}.build()
+		claim := NewPoolClaim(v3.IPPoolAllowedUseWorkload, parseRequestedPools(v4Pool1), nil)
+		ok, err := claim.MayUse(&pool)
+		Expect(err).To(MatchError(errClaimWithoutSelectors))
+		Expect(ok).To(BeFalse())
+	})
+})
+
+// resolveCase is one row of the ResolvePools table, resolving against pool-a (10.0.0.0/24), pool-b (20.0.0.0/24),
+// a pool with no name (30.0.0.0/24), and pool-v6 (5001:0:0:1a::/64).
+type resolveCase struct {
+	entries []string
+	version int
+	want    []string
+	err     string
+}
+
+var _ = DescribeTable("ResolvePools",
+	func(tc resolveCase) {
+		pools := buildPools([]testPool{{cidr: "10.0.0.0/24"}, {cidr: "20.0.0.0/24"}, {cidr: "30.0.0.0/24"}, {cidr: v6Pool1}})
+		pools[0].Name = "pool-a"
+		pools[1].Name = "pool-b"
+		pools[2].Name = ""
+		pools[3].Name = "pool-v6"
+
+		resolved, err := ResolvePools(pools, tc.entries, tc.version)
+		if tc.err != "" {
+			Expect(err).To(MatchError(tc.err))
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+		got := []string{}
+		for _, r := range resolved {
+			got = append(got, r.String())
+		}
+		Expect(got).To(Equal(tc.want))
+	},
+	Entry("no entries", resolveCase{
+		version: 4,
+		want:    []string{},
+	}),
+	Entry("names and CIDRs, in the order given", resolveCase{
+		entries: []string{"pool-b", "10.0.0.0/24"},
+		version: 4,
+		want:    []string{"20.0.0.0/24", "10.0.0.0/24"},
+	}),
+	Entry("a CIDR written with host bits set", resolveCase{
+		entries: []string{"10.0.0.1/24"},
+		version: 4,
+		want:    []string{"10.0.0.0/24"},
+	}),
+	Entry("an IPv6 pool by name and by CIDR", resolveCase{
+		entries: []string{"pool-v6", "5001:0:0:1a::/64"},
+		version: 6,
+		want:    []string{"5001:0:0:1a::/64", "5001:0:0:1a::/64"},
+	}),
+	Entry("a name no pool has", resolveCase{
+		entries: []string{"pool-a", "pool-c"},
+		version: 4,
+		err:     `no IP pool has name or CIDR "pool-c"`,
+	}),
+	Entry("a CIDR inside a pool but not equal to it", resolveCase{
+		entries: []string{"10.0.0.0/26"},
+		version: 4,
+		err:     `no IP pool has name or CIDR "10.0.0.0/26"`,
+	}),
+	Entry("an empty entry, even though a pool has no name", resolveCase{
+		entries: []string{""},
+		version: 4,
+		err:     `no IP pool has name or CIDR ""`,
+	}),
+	Entry("an IPv6 pool's name, resolving IPv4 pools", resolveCase{
+		entries: []string{"pool-a", "pool-v6"},
+		version: 4,
+		err:     `IP pool "pool-v6" is not an IPv4 pool`,
+	}),
+	Entry("an IPv4 pool's CIDR, resolving IPv6 pools", resolveCase{
+		entries: []string{"10.0.0.0/24"},
+		version: 6,
+		err:     `IP pool "10.0.0.0/24" is not an IPv6 pool`,
+	}),
+)
 
 // keepCase is one row of the release-time keepsBlock table, for a node labeled foo=bar and an empty block.
 type keepCase struct {
