@@ -322,6 +322,7 @@ local:felix/wireguard
 local:goldmane/pkg/client
 local:goldmane/pkg/goldmane
 local:goldmane/pkg/internal/flowcache
+local:goldmane/pkg/internal/topk
 local:goldmane/pkg/server
 local:goldmane/pkg/storage
 local:goldmane/pkg/stream
