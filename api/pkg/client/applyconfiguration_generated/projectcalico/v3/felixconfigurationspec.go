@@ -372,6 +372,7 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	IPForwarding *string `json:"ipForwarding,omitempty"`
 	// ExternalNodesCIDRList is a list of CIDR's of external, non-Calico nodes from which VXLAN/IPIP overlay traffic
 	// will be allowed.  By default, external tunneled traffic is blocked to reduce attack surface.
+	// Entries must be IPv4 CIDRs or IPv4 addresses.
 	ExternalNodesCIDRList *[]string `json:"externalNodesList,omitempty"`
 	// DebugMemoryProfilePath is the path to write the memory profile to when triggered by signal.
 	DebugMemoryProfilePath *string `json:"debugMemoryProfilePath,omitempty"`
