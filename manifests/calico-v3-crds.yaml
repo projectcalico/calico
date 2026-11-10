@@ -4645,6 +4645,13 @@ spec:
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.destination) || !has(r.destination.services)
+                        || (has(r.destination.services.namespace) && size(r.destination.services.namespace)
+                        > 0))
                 ingress:
                   description: |-
                     The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
@@ -5302,6 +5309,12 @@ spec:
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.source) || !has(r.source.services) || (has(r.source.services.namespace)
+                        && size(r.source.services.namespace) > 0))
                 namespaceSelector:
                   description:
                     NamespaceSelector is an optional field for an expression
@@ -9222,6 +9235,13 @@ spec:
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.destination) || !has(r.destination.services)
+                        || (has(r.destination.services.namespace) && size(r.destination.services.namespace)
+                        > 0))
                 ingress:
                   description: |-
                     The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
@@ -9879,6 +9899,12 @@ spec:
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.source) || !has(r.source.services) || (has(r.source.services.namespace)
+                        && size(r.source.services.namespace) > 0))
                 namespaceSelector:
                   description:
                     NamespaceSelector is an optional field for an expression
