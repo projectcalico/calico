@@ -231,6 +231,7 @@ type Community struct {
 	// Where, `aa` is an AS Number, `nn` and `mm` are per-AS identifier.
 	// +kubebuilder:validation:MaxLength=40
 	// +kubebuilder:validation:Pattern=`^(\d+):(\d+)$|^(\d+):(\d+):(\d+)$`
+	// +kubebuilder:validation:XValidation:rule="self.split(':').all(p, p.matches('^[0-9]{1,10}$') && int(p) <= (size(self.split(':')) == 2 ? 65535 : 4294967295))",message="standard community values must be 16-bit numbers and large community values 32-bit numbers",reason=FieldValueInvalid
 	Value string `json:"value,omitempty" validate:"required"`
 }
 
