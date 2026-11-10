@@ -72,6 +72,7 @@ components:
       - ^libcalico-go/lib/watch/[^/]*\.go$
       - ^libcalico-go/lib/winutils/[^/]*\.go$
       - ^metadata\.mk$
+      - ^pkg/buildinfo/[^/]*\.go$
     exclude:
       - ^(?:[^/]+/)*AUTHORS[^/]*$
       - ^(?:[^/]+/)*CONTRIBUTING[^/]*$
@@ -86,6 +87,7 @@ components:
       - ^felix/(?:[^/]+/)*[^/]*_test\.go$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
       - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
+      - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
   app-policy:
     in:
       - ^api/[^/]*\.go$
@@ -168,6 +170,7 @@ components:
       - ^libcalico-go/lib/winutils/[^/]*\.go$
       - ^metadata\.mk$
       - ^node/pkg/lifecycle/utils/[^/]*\.go$
+      - ^pkg/buildinfo/[^/]*\.go$
       - ^typha/pkg/validator/v1/[^/]*\.go$
     exclude:
       - ^(?:[^/]+/)*AUTHORS[^/]*$
@@ -184,6 +187,7 @@ components:
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
       - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
       - ^node/(?:[^/]+/)*[^/]*_test\.go$
+      - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
       - ^typha/(?:[^/]+/)*[^/]*_test\.go$
   calicoctl:
     in:
@@ -897,6 +901,7 @@ components:
       - ^libcalico-go/lib/winutils/[^/]*\.go$
       - ^metadata\.mk$
       - ^operator/api/v1/[^/]*\.go$
+      - ^pkg/buildinfo/[^/]*\.go$
       - ^whisker-backend/pkg/apis/v1/[^/]*\.go$
     exclude:
       - ^(?:[^/]+/)*AUTHORS[^/]*$
@@ -914,6 +919,7 @@ components:
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
       - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
       - ^operator/(?:[^/]+/)*[^/]*_test\.go$
+      - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
       - ^whisker-backend/(?:[^/]+/)*[^/]*_test\.go$
   felix:
     in:
@@ -1179,6 +1185,7 @@ components:
       - ^libcalico-go/lib/watch/[^/]*\.go$
       - ^libcalico-go/lib/winutils/[^/]*\.go$
       - ^metadata\.mk$
+      - ^pkg/buildinfo/[^/]*\.go$
     exclude:
       - ^(?:[^/]+/)*AUTHORS[^/]*$
       - ^(?:[^/]+/)*CONTRIBUTING[^/]*$
@@ -1193,6 +1200,7 @@ components:
       - ^felix/(?:[^/]+/)*[^/]*_test\.go$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
       - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
+      - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
   key-cert-provisioner:
     in:
       - ^hack/test/certs/
@@ -1354,6 +1362,7 @@ components:
       - ^lib\.Makefile$
       - ^libcalico-go/
       - ^metadata\.mk$
+      - ^pkg/buildinfo/[^/]*\.go$
     exclude:
       - ^(?:[^/]+/)*AUTHORS[^/]*$
       - ^(?:[^/]+/)*CONTRIBUTING[^/]*$
@@ -1367,6 +1376,7 @@ components:
       - ^crypto/(?:[^/]+/)*[^/]*_test\.go$
       - ^felix/(?:[^/]+/)*[^/]*_test\.go$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
+      - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
   node:
     in:
       - ^Makefile$

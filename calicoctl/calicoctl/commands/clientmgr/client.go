@@ -55,6 +55,9 @@ func NewClient(cf string) (client.Interface, error) {
 }
 
 func NewClientFromConfig(cfg *apiconfig.CalicoAPIConfig) (client.Interface, error) {
+	if cfg.Spec.UserAgent == "" {
+		cfg.Spec.UserAgent = apiconfig.UserAgentFor("calicoctl")
+	}
 	c, err := client.New(*cfg)
 	if err != nil {
 		return nil, err

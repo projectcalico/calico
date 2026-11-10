@@ -125,6 +125,8 @@ func createClients(cfg *config.Config) (clientv3.Interface, kubernetes.Interface
 		return nil, nil, nil, fmt.Errorf("loading calico client config: %w", err)
 	}
 
+	clientCfg.Spec.UserAgent = apiconfig.UserAgentFor("calico-node-confd")
+
 	cc, err := clientv3.New(*clientCfg)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("creating calico client: %w", err)

@@ -318,6 +318,12 @@ func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config,
 	config.AcceptContentTypes = strings.Join([]string{k8sruntime.ContentTypeProtobuf, k8sruntime.ContentTypeJSON}, ",")
 	config.ContentType = k8sruntime.ContentTypeProtobuf
 
+	// Without this the API server sees Go's default user agent and records every
+	// Calico component's writes under one field manager.
+	if ca.UserAgent != "" {
+		config.UserAgent = ca.UserAgent
+	}
+
 	// Overwrite the QPS if provided. Default QPS is 5.
 	if ca.K8sClientQPS != float32(0) {
 		config.QPS = ca.K8sClientQPS
