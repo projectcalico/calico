@@ -55,6 +55,9 @@ func (r *realCommandRunner) Run(name string, args []string, opts ...Option) (str
 		cmd.Env = append(os.Environ(), s.env...)
 	}
 	cmd.Dir = s.dir
+	if s.stdin != "" {
+		cmd.Stdin = strings.NewReader(s.stdin)
+	}
 
 	// We deliberately don't pipe through logrus.WriterLevel: it sits on a
 	// synchronous io.Pipe whose scanner goroutine bails out on any line longer
@@ -139,9 +142,4 @@ func lastLines(s string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
-}
-
-// Run runs a command with arguments.
-func Run(command string, args []string) (string, error) {
-	return RealRunner.Run(command, args)
 }

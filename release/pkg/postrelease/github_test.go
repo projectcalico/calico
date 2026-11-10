@@ -36,7 +36,7 @@ func calicoctlBinaryList() []string {
 	return binaries
 }
 
-var githubClient = sync.OnceValue(igithub.Client)
+var githubClient = sync.OnceValue(func() *github.Client { return igithub.Client(commandRunner) })
 
 func TestGitHubRelease(t *testing.T) {
 	t.Parallel()

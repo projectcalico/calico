@@ -81,8 +81,3 @@ func (g GitRunner) IsAncestor(a, b string) bool {
 func (g GitRunner) Run(args ...string) (string, error) {
 	return g.r.Run("git", args, WithDir(g.dir))
 }
-
-// GitDir returns the root directory of the git repository.
-func GitDir() (string, error) {
-	return Git(RealRunner).RepoRoot()
-}

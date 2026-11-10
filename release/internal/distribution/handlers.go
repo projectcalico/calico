@@ -196,7 +196,8 @@ type GithubRelease struct {
 	Draft  bool
 	DryRun bool
 
-	Log *logrus.Entry
+	Log    *logrus.Entry
+	Runner command.CommandRunner
 
 	releases *github.Releases
 }
@@ -207,7 +208,7 @@ func (d GithubRelease) github() (*github.Releases, error) {
 	if d.releases != nil {
 		return d.releases, nil
 	}
-	return github.NewReleases(d.Repo, nil)
+	return github.NewReleases(d.Repo, github.Client(d.Runner).Repositories)
 }
 
 func (d GithubRelease) Publish(ctx context.Context, src string) error {

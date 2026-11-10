@@ -1337,6 +1337,7 @@ Additional links:
 			Body:   releaseNote,
 			Draft:  r.draftRelease,
 			DryRun: r.dryRun,
+			Runner: r.runner,
 		},
 	}
 }
@@ -1657,7 +1658,7 @@ func (r *CalicoManager) buildReleaseNotes() error {
 	if err != nil {
 		return fmt.Errorf("determine release version: %w", err)
 	}
-	_, err = outputs.ReleaseNotes(r.githubOrg, r.repoRoot, filepath.Join(r.outputDir, outputs.ReleaseNotesDir), ver)
+	_, err = outputs.ReleaseNotes(r.runner, r.githubOrg, r.repoRoot, filepath.Join(r.outputDir, outputs.ReleaseNotesDir), ver)
 	return err
 }
 

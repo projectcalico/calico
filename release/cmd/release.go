@@ -74,7 +74,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				}
 
 				// Generate the release notes.
-				filePath, err := outputs.ReleaseNotes(c.String(orgFlag.Name), cfg.RepoRootDir, "", ver)
+				filePath, err := outputs.ReleaseNotes(commandRunner, c.String(orgFlag.Name), cfg.RepoRootDir, "", ver)
 				if err != nil {
 					return fmt.Errorf("failed to generate release notes: %w", err)
 				}
@@ -248,7 +248,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			outs["operator"] = operatorVer
 
 			// Generate release notes
-			if _, err := outputs.ReleaseNotes(c.String(orgFlag.Name), cfg.RepoRootDir, "", ver); err != nil {
+			if _, err := outputs.ReleaseNotes(commandRunner, c.String(orgFlag.Name), cfg.RepoRootDir, "", ver); err != nil {
 				return ver.String(), outs, fmt.Errorf("generate release notes: %w", err)
 			}
 
