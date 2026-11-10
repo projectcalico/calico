@@ -61,7 +61,22 @@ catalogs; that PR is where the bundle image's `registry.connect.redhat.com`
 digest first appears. See
 [FBC auto-release](https://redhat-openshift-ecosystem.github.io/operator-pipelines/users/fbc_autorelease/).
 Edit `release-config.yaml` before opening the bundle PR if a release needs
-something else, e.g. a `replaces`, or to leave `defaultChannel` where it is.
+something else, e.g. a `replaces`.
+
+The pipeline only uses `defaultChannel` for a template it creates. In a
+template that already exists, it adds the new channel but leaves
+`defaultChannel` where it was. For 1.44.0, it added `release-v1.44` to the
+4.20-4.22 templates, which still defaulted to `release-v1.42`. To move the
+default there, open a second PR after the pipeline's PR merges:
+
+1. Edit `defaultChannel` in each template.
+2. Run `make catalogs` and `make validate-catalogs` from
+   `operators/tigera-operator/`.
+3. Commit the templates and the rendered `catalogs/` together, e.g.
+   redhat-openshift-ecosystem/certified-operators#10200.
+
+A template that the pipeline creates also has no package icon. Copy the
+`icon` block from an existing template in the same PR.
 
 Every version listed needs a mapping in the certified-operators `ci.yaml`. When
 a new OpenShift version is added, add its mapping there; the pipeline creates

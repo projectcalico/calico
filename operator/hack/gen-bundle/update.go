@@ -257,8 +257,10 @@ func openShiftVersionRange(versions []string) string {
 // catalog template of each OpenShift version, and renders the catalogs. Without
 // this file nothing adds the bundle to any catalog.
 //
-// Each template gets an entry in the bundle's channel, which also becomes the
-// package's default channel. The entry has a skipRange of <VERSION> and no
+// Each template gets an entry in the bundle's channel. defaultChannel names
+// that channel too, but the pipeline only applies it to a template it
+// creates; moving the default of an existing template takes a separate PR -
+// see bundle/README.md. The entry has a skipRange of <VERSION> and no
 // replaces: the previous version is in a different channel, and the skipRange
 // already upgrades from every earlier version. See
 // https://redhat-openshift-ecosystem.github.io/operator-pipelines/users/fbc_autorelease/
