@@ -22,6 +22,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
@@ -58,9 +59,8 @@ func (s settings) generate() (cleanup func() error, err error) {
 	cleanup = s.reset
 
 	s.Logger().WithField("version", s.Version).Info("Generating manifests")
-	env := append(os.Environ(), Env(s.Manifests)...)
-	if out, err := s.Run("make", []string{"-C", s.RepoRoot, generateTarget}, env, s.LogPath(generateTarget)); err != nil {
-		s.Logger().Error(out)
+	env := Env(s.Manifests)
+	if _, err := s.Make().Run(generateTarget, command.WithEnv(env...), command.WithLogFile(s.LogPath(generateTarget))); err != nil {
 		return cleanup, s.Errorf("generating manifests: %w", err)
 	}
 	if !s.collect {
@@ -72,8 +72,7 @@ func (s settings) generate() (cleanup func() error, err error) {
 // Logged rather than returned: the caller's own error is the one worth having.
 func (s settings) reset() error {
 	args := append([]string{"checkout"}, generatedTrees...)
-	if out, err := s.Run("git", args, nil, ""); err != nil {
-		s.Logger().Error(out)
+	if _, err := command.Git(s.Runner()).In(s.RepoRoot).Run(args...); err != nil {
 		return fmt.Errorf("resetting manifests: %v", err)
 	}
 	return nil
@@ -86,8 +85,7 @@ func (s settings) collectInto(dest string) error {
 	// Trailing separators stop rsync nesting the directory inside itself.
 	args := rsyncArgs()
 	args = append(args, Dir(s.RepoRoot)+"/", dest+"/")
-	if out, err := s.Run("rsync", args, nil, s.LogPath("rsync")); err != nil {
-		s.Logger().Error(out)
+	if _, err := s.Run("rsync", args, command.WithLogFile(s.LogPath("rsync"))); err != nil {
 		return s.Errorf("copying manifests to %s: %w", dest, err)
 	}
 	s.Logger().WithField("dir", dest).Info("Collected manifests")
@@ -109,10 +107,9 @@ func rsyncArgs() []string {
 // collecting separately.
 func (s settings) buildOCPBundle() error {
 	s.Logger().Info("Building OCP bundle")
-	env := append(os.Environ(), Env(s.Manifests)...)
+	env := Env(s.Manifests)
 
-	if out, err := s.Run("make", []string{"-C", s.RepoRoot, ocpBundleTarget}, env, s.LogPath(ocpBundleTarget)); err != nil {
-		s.Logger().Error(out)
+	if _, err := s.Make().Run(ocpBundleTarget, command.WithEnv(env...), command.WithLogFile(s.LogPath(ocpBundleTarget))); err != nil {
 		return s.Errorf("building OCP bundle: %w", err)
 	}
 	if err := os.MkdirAll(s.OutputDir, utils.DirPerms); err != nil {

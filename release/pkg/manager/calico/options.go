@@ -293,6 +293,13 @@ func WithImageScanning(scanning bool, cfg imagescanner.Config) Option {
 	}
 }
 
+func WithReleaseImages(list func() ([]string, error)) Option {
+	return func(r *CalicoManager) error {
+		r.releaseImages = list
+		return nil
+	}
+}
+
 func WithComponents(components map[string]registry.Component) Option {
 	return func(r *CalicoManager) error {
 		r.components = components
