@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -271,8 +272,9 @@ var _ = describe.CalicoDescribe(
 
 		var (
 			nodeNames []string
-			nodeIPs   []string
-			tunnelIPs []string
+			nodeIPs   map[utils.IPFamily][]string
+			tunnelIPs map[utils.IPFamily][]string
+			families  []utils.IPFamily
 			dp        utils.ClusterDataplane
 		)
 
@@ -281,15 +283,16 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred())
 
 			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 3, false)
-			allNames := nodesInfo.GetNames()
-			allIPs := nodesInfo.GetIPv4s()
-			allTunnelIPs := nodesInfo.GetTunnelIPs()
-			Expect(len(allIPs)).To(BeNumerically(">=", 3),
-				"workload ingress tests require at least 3 nodes with IPv4 addresses, found %d", len(allIPs))
-			nodeNames = allNames[:3]
-			nodeIPs = allIPs[:3]
-			tunnelIPs = allTunnelIPs[:3]
-			logrus.Infof("Nodes: %v IPs: %v tunnelIPs: %v", nodeNames, nodeIPs, tunnelIPs)
+			families, err = nodesInfo.Families()
+			Expect(err).NotTo(HaveOccurred(), "workload ingress tests need every node to have the cluster's IP families")
+			nodeNames = nodesInfo.GetNames()[:3]
+			nodeIPs = map[utils.IPFamily][]string{}
+			tunnelIPs = map[utils.IPFamily][]string{}
+			for _, fam := range families {
+				nodeIPs[fam] = nodesInfo.GetIPs(fam)[:3]
+				tunnelIPs[fam] = nodesInfo.GetTunnelIPs(fam)[:3]
+			}
+			logrus.Infof("Nodes: %v families: %v IPs: %v tunnelIPs: %v", nodeNames, families, nodeIPs, tunnelIPs)
 
 			dp = utils.DetectDataplane(cli, f.ClientSet)
 			logrus.Infof("Cluster dataplane: calico=%s BPF=%v IPVS=%v VPP=%v",
@@ -326,51 +329,46 @@ var _ = describe.CalicoDescribe(
 			}
 		}
 
-		// srcNodeIP returns the IPv4 of the scenario's source node.
-		srcNodeIP := func(srcNode string) string {
+		// srcNodeIndex maps a scenario's source node onto nodeNames/nodeIPs/tunnelIPs.
+		srcNodeIndex := func(srcNode string) int {
 			switch srcNode {
 			case "node0":
-				return nodeIPs[0]
+				return 0
 			case "node1":
-				return nodeIPs[1]
+				return 1
 			case "svcNode":
-				return nodeIPs[2]
+				return 2
 			default:
 				framework.Failf("unknown srcNode %q", srcNode)
-				return ""
+				return -1
 			}
 		}
 
-		// srcNodeTunnelIP returns the tunnel IP for the scenario's source node.
-		srcNodeTunnelIP := func(srcNode string) string {
-			switch srcNode {
-			case "node0":
-				return tunnelIPs[0]
-			case "node1":
-				return tunnelIPs[1]
-			case "svcNode":
-				return tunnelIPs[2]
-			default:
-				framework.Failf("unknown srcNode %q", srcNode)
-				return ""
+		// srcNodeCIDRs covers the source node's own and tunnel addresses in every
+		// family, so one policy serves each family's checks.
+		srcNodeCIDRs := func(srcNode string) []string {
+			i := srcNodeIndex(srcNode)
+			var ips []string
+			for _, fam := range families {
+				ips = append(ips, nodeIPs[fam][i], tunnelIPs[fam][i])
 			}
+			return ingressHostCIDRs(ips)
 		}
 
 		// buildTarget returns the connection target for the given scenario, using the
 		// already-deployed server. All targets use HTTP GET /clientip so that
 		// checkConnection can verify SNAT behavior from the response body.
-		buildTarget := func(s ingressScenario, server conncheck.Server) conncheck.Target {
+		buildTarget := func(s ingressScenario, server conncheck.Server, fam utils.IPFamily) conncheck.Target {
 			clientIPOpt := conncheck.WithHTTP("GET", "/clientip", nil)
 			switch s.dest {
 			case "clusterIP":
-				// TODO: Also test IPv6 ClusterIP on dual-stack clusters.
-				return server.ClusterIPv4(clientIPOpt).Port(80)
+				return server.ClusterIPFor(fam, clientIPOpt).Port(80)
 			case "svcNodePort":
-				return server.NodePort(nodeIPs[2], clientIPOpt)
+				return server.NodePort(nodeIPs[fam][2], clientIPOpt)
 			case "node1NodePort":
-				return server.NodePort(nodeIPs[1], clientIPOpt)
+				return server.NodePort(nodeIPs[fam][1], clientIPOpt)
 			case "node0NodePort":
-				return server.NodePort(nodeIPs[0], clientIPOpt)
+				return server.NodePort(nodeIPs[fam][0], clientIPOpt)
 			default:
 				framework.Failf("unknown dest %q", s.dest)
 				return nil
@@ -422,15 +420,18 @@ var _ = describe.CalicoDescribe(
 			ct.Deploy()
 			DeferCleanup(ct.Stop)
 
-			target := buildTarget(s, server)
+			targets := map[utils.IPFamily]conncheck.Target{}
+			for _, fam := range families {
+				targets[fam] = buildTarget(s, server, fam)
+			}
 
 			By("Verifying baseline: both clients can reach the server before any policy")
 			baselineResult := reachableNoSNAT
 			if expect != noSNAT {
 				baselineResult = reachableSNAT
 			}
-			checkConnection(ct, clientA, target, baselineResult)
-			checkConnection(ct, clientB, target, baselineResult)
+			checkFamilies(ct, clientA, families, targets, baselineResult)
+			checkFamilies(ct, clientB, families, targets, baselineResult)
 
 			// alwaysAllowed: host-networked clients on the same node share an IP, so a
 			// pod-selector policy cannot distinguish them. Install a deny-all to confirm
@@ -440,8 +441,8 @@ var _ = describe.CalicoDescribe(
 				denyAll := ingressCreateDenyAllPolicy(f)
 				DeferCleanup(ingressDeletePolicy, f, denyAll.Namespace, denyAll.Name)
 				By("Verifying both clients are still reachable (shared host IP, policy has no effect)")
-				checkConnection(ct, clientA, target, reachableNoSNAT)
-				checkConnection(ct, clientB, target, reachableNoSNAT)
+				checkFamilies(ct, clientA, families, targets, reachableNoSNAT)
+				checkFamilies(ct, clientB, families, targets, reachableNoSNAT)
 				return
 			}
 
@@ -450,15 +451,14 @@ var _ = describe.CalicoDescribe(
 			DeferCleanup(ingressDeletePolicy, f, denyAll.Namespace, denyAll.Name)
 
 			By("Verifying both clients are blocked after deny-all")
-			checkConnection(ct, clientA, target, unreachable)
-			checkConnection(ct, clientB, target, unreachable)
+			checkFamilies(ct, clientA, families, targets, unreachable)
+			checkFamilies(ct, clientB, families, targets, unreachable)
 
 			if s.hostNetworked {
 				// Host-networked pods share the node IP, so we allow by source CIDR
 				// rather than pod label. Both client-a and client-b will be affected
 				// the same way since they're indistinguishable by source IP.
-				nodeIP := srcNodeIP(s.srcNode)
-				cidrs := ingressNodeCIDRs(nodeIP, []string{srcNodeTunnelIP(s.srcNode)})
+				cidrs := srcNodeCIDRs(s.srcNode)
 				By(fmt.Sprintf("Installing allow-by-CIDR policy for node CIDRs %v (host-networked scenario)", cidrs))
 				allowCIDR := ingressCreateAllowByCIDRPolicy(f, cidrs)
 				DeferCleanup(ingressDeletePolicy, f, allowCIDR.Namespace, allowCIDR.Name)
@@ -466,16 +466,16 @@ var _ = describe.CalicoDescribe(
 				switch expect {
 				case noSNAT:
 					By("Verifying both clients are allowed (CIDR policy, source IP preserved)")
-					checkConnection(ct, clientA, target, reachableNoSNAT)
-					checkConnection(ct, clientB, target, reachableNoSNAT)
+					checkFamilies(ct, clientA, families, targets, reachableNoSNAT)
+					checkFamilies(ct, clientB, families, targets, reachableNoSNAT)
 				case snatWorkingPolicy:
 					By("Verifying both clients are allowed (CIDR policy works despite SNAT)")
-					checkConnection(ct, clientA, target, reachableSNAT)
-					checkConnection(ct, clientB, target, reachableSNAT)
+					checkFamilies(ct, clientA, families, targets, reachableSNAT)
+					checkFamilies(ct, clientB, families, targets, reachableSNAT)
 				case snatNoWorkingPolicy:
 					By("Verifying both clients are still blocked (SNAT changes source IP, CIDR policy has no effect)")
-					checkConnection(ct, clientA, target, unreachable)
-					checkConnection(ct, clientB, target, unreachable)
+					checkFamilies(ct, clientA, families, targets, unreachable)
+					checkFamilies(ct, clientB, families, targets, unreachable)
 				}
 				return
 			}
@@ -490,23 +490,23 @@ var _ = describe.CalicoDescribe(
 				// Source IP is preserved; the pod-selector policy correctly distinguishes
 				// client-a from client-b.
 				By("Verifying client-a is blocked (not selected by policy)")
-				checkConnection(ct, clientA, target, unreachable)
+				checkFamilies(ct, clientA, families, targets, unreachable)
 				By("Verifying client-b is allowed (selected by policy)")
-				checkConnection(ct, clientB, target, reachableNoSNAT)
+				checkFamilies(ct, clientB, families, targets, reachableNoSNAT)
 
 			case snatWorkingPolicy:
 				// SNAT occurs but policy still works via host IP or equivalent mechanism.
 				By("Verifying client-a is blocked")
-				checkConnection(ct, clientA, target, unreachable)
+				checkFamilies(ct, clientA, families, targets, unreachable)
 				By("Verifying client-b is allowed (policy works despite SNAT)")
-				checkConnection(ct, clientB, target, reachableSNAT)
+				checkFamilies(ct, clientB, families, targets, reachableSNAT)
 
 			case snatNoWorkingPolicy:
 				// SNAT makes both clients appear as the same source IP. The policy
 				// cannot distinguish them, so both are blocked.
 				By("Verifying both clients are blocked (SNAT prevents policy from distinguishing source IPs)")
-				checkConnection(ct, clientA, target, unreachable)
-				checkConnection(ct, clientB, target, unreachable)
+				checkFamilies(ct, clientA, families, targets, unreachable)
+				checkFamilies(ct, clientB, families, targets, unreachable)
 			}
 		}
 
@@ -535,29 +535,40 @@ var _ = describe.CalicoDescribe(
 			ct.Deploy()
 			DeferCleanup(ct.Stop)
 
-			var targetAddr string
+			var targetNode int
 			switch s.dest {
 			case "svcNodePort":
-				targetAddr = fmt.Sprintf("%s:%d", nodeIPs[2], server.NodePortPort())
+				targetNode = 2
 			case "node0NodePort":
-				targetAddr = fmt.Sprintf("%s:%d", nodeIPs[0], server.NodePortPort())
+				targetNode = 0
 			default:
 				framework.Failf("unsupported dest %q for external scenario", s.dest)
 			}
+			nodePort := strconv.Itoa(server.NodePortPort())
 
+			connectFamily := func(fam utils.IPFamily) (string, error) {
+				addr := net.JoinHostPort(nodeIPs[fam][targetNode], nodePort)
+				_, err := extNode.Exec("sh", "-c", fmt.Sprintf("wget -qO- -T 5 http://%s/clientip", addr))
+				return addr, err
+			}
+
+			// Every family must succeed (or be blocked) for the check to pass.
 			tryConnect := func() error {
-				cmd := fmt.Sprintf("wget -qO- -T 5 http://%s/clientip", targetAddr)
-				_, err := extNode.Exec("sh", "-c", cmd)
-				return err
+				for _, fam := range families {
+					if _, err := connectFamily(fam); err != nil {
+						return fmt.Errorf("%s: %w", fam, err)
+					}
+				}
+				return nil
 			}
 
 			tryConnectBlocked := func() error {
-				cmd := fmt.Sprintf("wget -qO- -T 5 http://%s/clientip", targetAddr)
-				_, err := extNode.Exec("sh", "-c", cmd)
-				if err != nil {
-					return nil // blocked as expected
+				for _, fam := range families {
+					if addr, err := connectFamily(fam); err == nil {
+						return fmt.Errorf("%s: expected connection to %s to be blocked but it succeeded", fam, addr)
+					}
 				}
-				return fmt.Errorf("expected connection to be blocked but it succeeded")
+				return nil
 			}
 
 			By("Verifying baseline: external node can reach the server before any policy")
@@ -571,15 +582,7 @@ var _ = describe.CalicoDescribe(
 			Eventually(tryConnectBlocked, 30*time.Second, 2*time.Second).Should(Succeed())
 			Consistently(tryConnectBlocked, 5*time.Second, 1*time.Second).Should(Succeed())
 
-			// Build /32 (IPv4) or /128 (IPv6) CIDRs for the external node's source IPs.
-			cidrs := make([]string, 0, len(extIPs))
-			for _, ip := range extIPs {
-				if net.ParseIP(ip).To4() != nil {
-					cidrs = append(cidrs, ip+"/32")
-				} else {
-					cidrs = append(cidrs, ip+"/128")
-				}
-			}
+			cidrs := ingressHostCIDRs(extIPs)
 			By(fmt.Sprintf("Installing allow-by-CIDR policy for external node IPs: %v", cidrs))
 			allowExt := ingressCreateAllowByCIDRPolicy(f, cidrs)
 			DeferCleanup(ingressDeletePolicy, f, allowExt.Namespace, allowExt.Name)
@@ -720,24 +723,18 @@ func ingressDeletePolicy(f *framework.Framework, namespace, name string) {
 	}
 }
 
-// ingressNodeCIDRs returns /32 CIDRs for a node's primary IP and its tunnel IP
-// (if any), deduplicating and skipping empty values.
-func ingressNodeCIDRs(nodeIP string, tunnelIPs []string) []string {
+// ingressHostCIDRs returns a single-address CIDR for each IP, deduplicating and
+// skipping empty or unparseable values.
+func ingressHostCIDRs(ips []string) []string {
 	seen := map[string]bool{}
 	var cidrs []string
-	add := func(ip string) {
-		if ip == "" || seen[ip] {
-			return
-		}
-		if net.ParseIP(ip) == nil {
-			return
+	for _, ip := range ips {
+		fam, ok := utils.FamilyOf(ip)
+		if !ok || seen[ip] {
+			continue
 		}
 		seen[ip] = true
-		cidrs = append(cidrs, ip+"/32")
-	}
-	add(nodeIP)
-	for _, t := range tunnelIPs {
-		add(t)
+		cidrs = append(cidrs, fmt.Sprintf("%s/%d", ip, fam.HostBits()))
 	}
 	return cidrs
 }
