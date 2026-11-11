@@ -200,7 +200,7 @@ var _ = describe.CalicoDescribe(
 		var (
 			cli         ctrlclient.Client
 			dp          utils.ClusterDataplane
-			encapIface  string
+			encapIfaces map[utils.IPFamily]string
 			nodeNames   []string
 			nodeIPs     map[utils.IPFamily][]string
 			calicoNames []string
@@ -227,14 +227,15 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("HEP nodes: %v families: %v IPs: %v calico: %v", nodeNames, families, nodeIPs, calicoNames)
 
 			dp = utils.DetectDataplane(cli, f.ClientSet)
-			encapIface = detectEncapInterface(cli)
-			logrus.Infof("Encap interface: %q", encapIface)
+			encapIfaces = detectEncapInterfaces(cli)
+			logrus.Infof("Encap interfaces: %v", encapIfaces)
 		})
 
 		// hepInterfaceName returns the interface name to use for the HEP based on
 		// the scenario and encapsulation mode. On tunnel-based dataplanes, forwarded
 		// traffic traverses the tunnel device rather than eth0.
-		hepInterfaceName := func(s hepScenario) string {
+		hepInterfaceName := func(s hepScenario, fam utils.IPFamily) string {
+			encapIface := encapIfaces[fam]
 			if s.dstHostNetworked {
 				// Traffic to a host-networked pod goes directly to the host — use default.
 				return ""
@@ -357,36 +358,41 @@ var _ = describe.CalicoDescribe(
 				}
 			})
 
-			// One HEP serves every family's checks, so it must claim node0's address in each.
-			var expectedIPs []string
+			// Each family's traffic may cross a different device (vxlan.calico vs
+			// vxlan-v6.calico), so families sharing an interface share one HEP.
+			hepIPsByIface := map[string][]string{}
+			var ifaces []string
 			for _, fam := range families {
-				expectedIPs = append(expectedIPs, nodeIPs[fam][0])
-			}
-			By("Creating HostEndpoint on node0")
-			hep := &v3.HostEndpoint{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   utils.GenerateRandomName("hep"),
-					Labels: map[string]string{"hep": "node0"},
-				},
-				Spec: v3.HostEndpointSpec{
-					Node:        calicoNames[0],
-					ExpectedIPs: expectedIPs,
-				},
-			}
-			ifaceName := hepInterfaceName(s)
-			if ifaceName != "" {
-				hep.Spec.InterfaceName = ifaceName
-			}
-			hepCtx, hepCancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer hepCancel()
-			Expect(cli.Create(hepCtx, hep)).To(Succeed())
-			DeferCleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cleanupCancel()
-				if err := cli.Delete(cleanupCtx, hep); err != nil && !apierrors.IsNotFound(err) {
-					framework.Logf("WARNING: failed to delete HEP: %v", err)
+				iface := hepInterfaceName(s, fam)
+				if _, ok := hepIPsByIface[iface]; !ok {
+					ifaces = append(ifaces, iface)
 				}
-			})
+				hepIPsByIface[iface] = append(hepIPsByIface[iface], nodeIPs[fam][0])
+			}
+			for _, iface := range ifaces {
+				By(fmt.Sprintf("Creating HostEndpoint on node0 (interface %q, expectedIPs %v)", iface, hepIPsByIface[iface]))
+				hep := &v3.HostEndpoint{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   utils.GenerateRandomName("hep"),
+						Labels: map[string]string{"hep": "node0"},
+					},
+					Spec: v3.HostEndpointSpec{
+						Node:          calicoNames[0],
+						InterfaceName: iface,
+						ExpectedIPs:   hepIPsByIface[iface],
+					},
+				}
+				hepCtx, hepCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer hepCancel()
+				Expect(cli.Create(hepCtx, hep)).To(Succeed())
+				DeferCleanup(func() {
+					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cleanupCancel()
+					if err := cli.Delete(cleanupCtx, hep); err != nil && !apierrors.IsNotFound(err) {
+						framework.Logf("WARNING: failed to delete HEP: %v", err)
+					}
+				})
+			}
 
 			// Check whether the HEP causes default deny.
 			isDefaultDeny := (s.dstHostNetworked && s.policyDirection == "ingress") ||

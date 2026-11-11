@@ -86,8 +86,8 @@ var _ = describe.CalicoDescribe(
 
 			nodesInfo := utils.GetNodesInfo(f, nodes, false)
 			nodeNames = nodesInfo.GetNames()
-			nodeIPv4s := nodesInfo.GetIPv4s()
-			nodeIPv6s := nodesInfo.GetIPv6s()
+			nodeIPv4s := nodesInfo.GetIPs(utils.IPv4)
+			nodeIPv6s := nodesInfo.GetIPs(utils.IPv6)
 			Expect(len(nodeNames)).Should(BeNumerically(">", 0), "Expected at least one schedulable node")
 			framework.Logf("Found %d nodes for testing: %v", len(nodeNames), nodeNames)
 

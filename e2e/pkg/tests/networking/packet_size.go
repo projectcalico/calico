@@ -177,7 +177,7 @@ var _ = describe.CalicoDescribe(
 				// External client uses SSH — build targets and test via ext client helpers.
 				for _, fam := range families {
 					By(fam.String(), func() {
-						getLengths, postLengths, udpLengths := generatePacketLengths(podMTU, ipHeaderBytes(fam))
+						getLengths, postLengths, udpLengths := generatePacketLengths(podMTU, fam.HeaderBytes())
 						target := packetBaseTarget(server, nodesInfo.GetIPs(fam)[0], fam, targetType)
 						packetTestExternal(extClient, target, getLengths, postLengths, udpLengths)
 					})
@@ -200,7 +200,7 @@ var _ = describe.CalicoDescribe(
 
 				for _, fam := range families {
 					By(fam.String(), func() {
-						getLengths, postLengths, udpLengths := generatePacketLengths(podMTU, ipHeaderBytes(fam))
+						getLengths, postLengths, udpLengths := generatePacketLengths(podMTU, fam.HeaderBytes())
 						baseTarget := packetBaseTarget(server, nodesInfo.GetIPs(fam)[0], fam, targetType)
 						packetTestViaConncheck(ct, client, baseTarget, getLengths, postLengths, udpLengths)
 					})
@@ -258,13 +258,6 @@ func packetBaseTarget(server conncheck.Server, nodeIP string, fam utils.IPFamily
 		port:     packetServerPort,
 		nodePort: server.NodePortPort(),
 	}
-}
-
-func ipHeaderBytes(fam utils.IPFamily) int {
-	if fam == utils.IPv6 {
-		return 40
-	}
-	return 20
 }
 
 func (t packetTarget) getTarget(length int) conncheck.Target {

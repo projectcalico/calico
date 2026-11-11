@@ -45,6 +45,14 @@ func (f IPFamily) HostBits() int {
 	return 32
 }
 
+// HeaderBytes is the fixed IP header size, without options or extension headers.
+func (f IPFamily) HeaderBytes() int {
+	if f == IPv6 {
+		return 40
+	}
+	return 20
+}
+
 // FamilyOf returns the family of a textual IP, and false if it doesn't parse.
 func FamilyOf(ip string) (IPFamily, bool) {
 	parsed := net.ParseIP(ip)

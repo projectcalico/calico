@@ -546,12 +546,16 @@ var _ = describe.CalicoDescribe(
 			}
 			nodePort := strconv.Itoa(server.NodePortPort())
 
+			connectFamily := func(fam utils.IPFamily) (string, error) {
+				addr := net.JoinHostPort(nodeIPs[fam][targetNode], nodePort)
+				_, err := extNode.Exec("sh", "-c", fmt.Sprintf("wget -qO- -T 5 http://%s/clientip", addr))
+				return addr, err
+			}
+
 			// Every family must succeed (or be blocked) for the check to pass.
 			tryConnect := func() error {
 				for _, fam := range families {
-					addr := net.JoinHostPort(nodeIPs[fam][targetNode], nodePort)
-					cmd := fmt.Sprintf("wget -qO- -T 5 http://%s/clientip", addr)
-					if _, err := extNode.Exec("sh", "-c", cmd); err != nil {
+					if _, err := connectFamily(fam); err != nil {
 						return fmt.Errorf("%s: %w", fam, err)
 					}
 				}
@@ -560,9 +564,7 @@ var _ = describe.CalicoDescribe(
 
 			tryConnectBlocked := func() error {
 				for _, fam := range families {
-					addr := net.JoinHostPort(nodeIPs[fam][targetNode], nodePort)
-					cmd := fmt.Sprintf("wget -qO- -T 5 http://%s/clientip", addr)
-					if _, err := extNode.Exec("sh", "-c", cmd); err == nil {
+					if addr, err := connectFamily(fam); err == nil {
 						return fmt.Errorf("%s: expected connection to %s to be blocked but it succeeded", fam, addr)
 					}
 				}

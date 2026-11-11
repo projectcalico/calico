@@ -35,8 +35,8 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 )
 
-// Neither address is routed anywhere, so a reply proves the dataplane
-// intercepted the connection in-cluster.
+// The IPv6 address is documentation space; the IPv4 one is public, so a dataplane
+// that fails to intercept may send the connection out of the cluster.
 var defaultExternalIPs = map[utils.IPFamily]string{
 	utils.IPv4: "60.70.80.90",
 	utils.IPv6: "2001:db8:60:70::90",
