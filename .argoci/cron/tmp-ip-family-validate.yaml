@@ -19,6 +19,17 @@ defaults:
   secretBundles:
     - banzai-secrets
 steps:
+  # Lanes otherwise run the master hashrelease's e2e binary, not this branch's.
+  - name: build-e2e-binary
+    services:
+      - docker
+    jobSize: large
+    env:
+      - name: PROVISIONER
+        value: aws-kubeadm
+    commands: |
+      make -C e2e bin/k8s/e2e-linux-amd64.test
+      artifact push workflow e2e/bin/k8s/e2e-linux-amd64.test
   - name: bpf-run-matrix-aws-kubeadm-dual-stack
     services:
       - docker
@@ -63,7 +74,12 @@ steps:
             value: CalicoIptables
           - name: E2E_TEST_CONFIG
             value: e2e/config/bpf/xtables-encap-extnode-aws.yaml
+    depends:
+      - build-e2e-binary
     commands: |
+      mkdir -p "${HOME}/pr-e2e/files/e2e"
+      ( cd "${HOME}/pr-e2e/files/e2e" && artifact pull workflow e2e-linux-amd64.test )
+      export K8S_E2E_BINARY_BASE_URL="file://${HOME}/pr-e2e"
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-kops-w-calico-cni-ipv6
     services:
@@ -113,7 +129,12 @@ steps:
             value: ipv6
           - name: E2E_TEST_CONFIG
             value: e2e/config/bpf/kops-xtables-encap-nobgp-extnode-aws.yaml
+    depends:
+      - build-e2e-binary
     commands: |
+      mkdir -p "${HOME}/pr-e2e/files/e2e"
+      ( cd "${HOME}/pr-e2e/files/e2e" && artifact pull workflow e2e-linux-amd64.test )
+      export K8S_E2E_BINARY_BASE_URL="file://${HOME}/pr-e2e"
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-kops-w-calico-cni-ipv4
     services:
@@ -149,5 +170,10 @@ steps:
             value: ipv4
           - name: E2E_TEST_CONFIG
             value: e2e/config/bpf/kops-bpf-encap-nobgp-extnode-aws.yaml
+    depends:
+      - build-e2e-binary
     commands: |
+      mkdir -p "${HOME}/pr-e2e/files/e2e"
+      ( cd "${HOME}/pr-e2e/files/e2e" && artifact pull workflow e2e-linux-amd64.test )
+      export K8S_E2E_BINARY_BASE_URL="file://${HOME}/pr-e2e"
       .argoci/scripts/body_standard.sh
