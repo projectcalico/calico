@@ -35,10 +35,6 @@ type DiachronicFlow struct {
 	ID  int64
 	Key types.FlowKey
 
-	// lastVisited is the number of the last flowVisits read that yielded this flow. Only the main
-	// loop touches it.
-	lastVisited uint64
-
 	// mu guards windows and the IP sets, which streams read off the aggregator goroutine.
 	mu sync.Mutex
 
@@ -321,7 +317,7 @@ func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *types.Flow {
 // Within reports whether the flow has data in [startGte, startLt), a zero bound being open, and if
 // so returns the StartTime that Aggregate would give it, without building the flow. That start is
 // zero when the flow's only window in the range is the current bucket's, which ends after
-// startLt (CORE-13930).
+// startLt.
 func (d *DiachronicFlow) Within(startGte, startLt int64) (int64, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -337,7 +333,8 @@ func (d *DiachronicFlow) Within(startGte, startLt int64) (int64, bool) {
 		return 0, false
 	}
 
-	// Ends rise with starts, so if the first window ends past the range, every window does.
+	// Each window starts after the one before it ends, so if the first window ends past the range,
+	// every window does.
 	if ws[0].inRange(startGte, startLt) {
 		return ws[0].start, true
 	}
@@ -364,7 +361,8 @@ func (d *DiachronicFlow) bucketWindow(startGte, startLt int64) (Window, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	// Ends rise with starts, so if the first window starting in the range ends past it, every one does.
+	// Each window starts after the one before it ends, so if the first window starting in the range
+	// ends past it, every one does.
 	if ws := d.windowsWithin(startGte, startLt); len(ws) > 0 && ws[0].inRange(startGte, startLt) {
 		return ws[0], true
 	}

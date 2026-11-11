@@ -88,7 +88,7 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	if pageOK {
 		limit = int(min(pageEnd, int64(math.MaxInt)))
 	}
-	top := topk.New(limit, compareRanked, sizeHint)
+	topFlows := topk.New(limit, compareRanked, sizeHint)
 	totalFlows := 0
 	for d := range candidates {
 		if opts.filter != nil && !types.Matches(opts.filter, &d.Key) {
@@ -96,11 +96,11 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 		}
 		if start, ok := d.Within(opts.startTimeGt, opts.startTimeLt); ok {
 			totalFlows++
-			top.Offer(rankedFlow{start: start, flow: d})
+			topFlows.Offer(rankedFlow{start: start, flow: d})
 		}
 	}
 
-	ranked := top.Sorted()
+	ranked := topFlows.Sorted()
 	meta := calculateListMeta(totalFlows, int(opts.pageSize))
 	if pageStart >= int64(len(ranked)) {
 		return nil, meta
