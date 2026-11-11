@@ -18,13 +18,14 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
@@ -113,7 +114,7 @@ var (
 		Usage:    "The Calico version to use (e.g. v3.32.5). If not set, it is determined from git",
 		Sources:  cli.EnvVars("VERSION"),
 		Action: func(_ context.Context, c *cli.Command, s string) error {
-			if _, err := version.Parse(s); err != nil {
+			if _, err := semver.NewVersion(strings.TrimPrefix(s, "v")); err != nil {
 				return fmt.Errorf("invalid --version: %w", err)
 			}
 			return nil
