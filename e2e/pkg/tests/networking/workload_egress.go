@@ -35,7 +35,12 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 )
 
-const defaultExternalIP = "60.70.80.90"
+// The IPv6 address is documentation space; the IPv4 one is public, so a dataplane
+// that fails to intercept may send the connection out of the cluster.
+var defaultExternalIPs = map[utils.IPFamily]string{
+	utils.IPv4: "60.70.80.90",
+	utils.IPv6: "2001:db8:60:70::90",
+}
 
 // egressScenario defines a single egress test scenario.
 type egressScenario struct {
@@ -43,7 +48,8 @@ type egressScenario struct {
 	dstPod int
 	// dstHostNetworked indicates the destination pod is host-networked.
 	dstHostNetworked bool
-	// accessType is how the client accesses the service.
+	// accessType is how the client accesses the service. "externalIP" also gives
+	// the Service an external IP per cluster family.
 	accessType string // "clusterIP", "node0NodePort", "node1NodePort", "externalIP"
 	// svcOpts are additional server options for the destination service.
 	svcOpts []conncheck.ServerOption
@@ -76,7 +82,8 @@ var _ = describe.CalicoDescribe(
 
 		var (
 			nodeNames []string
-			nodeIPs   []string
+			nodeIPs   map[utils.IPFamily][]string
+			families  []utils.IPFamily
 			bpfMode   bool
 		)
 
@@ -85,13 +92,14 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred())
 
 			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
-			allNames := nodesInfo.GetNames()
-			allIPs := nodesInfo.GetIPv4s()
-			Expect(len(allIPs)).To(BeNumerically(">=", 2),
-				"workload egress tests require at least 2 nodes with IPv4 addresses, found %d", len(allIPs))
-			nodeNames = allNames[:2]
-			nodeIPs = allIPs[:2]
-			logrus.Infof("Nodes: %v IPs: %v", nodeNames, nodeIPs)
+			families, err = nodesInfo.Families()
+			Expect(err).NotTo(HaveOccurred(), "workload egress tests need every node to have the cluster's IP families")
+			nodeNames = nodesInfo.GetNames()[:2]
+			nodeIPs = map[utils.IPFamily][]string{}
+			for _, fam := range families {
+				nodeIPs[fam] = nodesInfo.GetIPs(fam)[:2]
+			}
+			logrus.Infof("Nodes: %v families: %v IPs: %v", nodeNames, families, nodeIPs)
 
 			// Detect BPF dataplane mode.
 			bpfMode = utils.DetectDataplane(cli, f.ClientSet).IsBPF()
@@ -101,7 +109,7 @@ var _ = describe.CalicoDescribe(
 		runEgressTest := func(
 			ct conncheck.ConnectionTester,
 			clientPod conncheck.Client,
-			target conncheck.Target,
+			targets map[utils.IPFamily]conncheck.Target,
 			expectSNAT bool,
 			scenario egressScenario,
 			applyLabels map[string]string,
@@ -112,7 +120,7 @@ var _ = describe.CalicoDescribe(
 			}
 
 			By("Allowing connection with no NetworkPolicy")
-			checkConnection(ct, clientPod, target, expected)
+			checkFamilies(ct, clientPod, families, targets, expected)
 
 			if scenario.expectPolicyBypass {
 				By("Skipping policy tests — BPF bypasses policy for self-connections")
@@ -144,7 +152,7 @@ var _ = describe.CalicoDescribe(
 				_ = f.ClientSet.NetworkingV1().NetworkPolicies(f.Namespace.Name).Delete(ctx, denyPolicy.Name, metav1.DeleteOptions{})
 			})
 
-			checkConnection(ct, clientPod, target, unreachable)
+			checkFamilies(ct, clientPod, families, targets, unreachable)
 
 			if scenario.dstHostNetworked {
 				By("Skipping further policy tests — host-networked destination not implemented")
@@ -181,7 +189,7 @@ var _ = describe.CalicoDescribe(
 			allowPolicy, err = f.ClientSet.NetworkingV1().NetworkPolicies(f.Namespace.Name).Create(ctx, allowPolicy, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			checkConnection(ct, clientPod, target, expected)
+			checkFamilies(ct, clientPod, families, targets, expected)
 
 			By("Denying traffic after removing the target-specific policy")
 			ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
@@ -189,7 +197,7 @@ var _ = describe.CalicoDescribe(
 			err = f.ClientSet.NetworkingV1().NetworkPolicies(f.Namespace.Name).Delete(ctx, allowPolicy.Name, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			checkConnection(ct, clientPod, target, unreachable)
+			checkFamilies(ct, clientPod, families, targets, unreachable)
 
 			By("Allowing traffic after removing the default-deny policy")
 			ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
@@ -197,7 +205,7 @@ var _ = describe.CalicoDescribe(
 			err = f.ClientSet.NetworkingV1().NetworkPolicies(f.Namespace.Name).Delete(ctx, denyPolicy.Name, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			checkConnection(ct, clientPod, target, expected)
+			checkFamilies(ct, clientPod, families, targets, expected)
 		}
 
 		// setupAndRun creates the topology for a scenario and runs the test.
@@ -232,6 +240,11 @@ var _ = describe.CalicoDescribe(
 				serverOpts = append(serverOpts, conncheck.WithHostNetworking())
 			}
 			serverOpts = append(serverOpts, scenario.svcOpts...)
+			if scenario.accessType == "externalIP" {
+				for _, fam := range families {
+					serverOpts = append(serverOpts, conncheck.WithExternalIP(defaultExternalIPs[fam]))
+				}
+			}
 			server := conncheck.NewServer(serverName, f.Namespace, serverOpts...)
 			ct.AddServer(server)
 
@@ -254,28 +267,30 @@ var _ = describe.CalicoDescribe(
 
 			// Determine the target and expected SNAT behavior.
 			expectSNAT := scenario.dstPod == 0 // Loopback always expects SNAT.
-			var target conncheck.Target
+			targets := map[utils.IPFamily]conncheck.Target{}
 
 			// All targets use HTTP GET /clientip for SNAT detection via conncheck.
 			clientIPOpt := conncheck.WithHTTP("GET", "/clientip", nil)
 
-			switch scenario.accessType {
-			case "clusterIP":
-				target = server.ClusterIPv4(clientIPOpt).Port(serverPort)
-				if scenario.dstHostNetworked {
+			for _, fam := range families {
+				switch scenario.accessType {
+				case "clusterIP":
+					targets[fam] = server.ClusterIPFor(fam, clientIPOpt).Port(serverPort)
+					if scenario.dstHostNetworked {
+						expectSNAT = true
+					}
+				case "node0NodePort":
 					expectSNAT = true
+					targets[fam] = server.NodePort(nodeIPs[fam][0], clientIPOpt)
+				case "node1NodePort":
+					expectSNAT = true
+					targets[fam] = server.NodePort(nodeIPs[fam][1], clientIPOpt)
+				case "externalIP":
+					expectSNAT = true
+					targets[fam] = conncheck.NewTarget(defaultExternalIPs[fam], conncheck.TypeClusterIP, conncheck.HTTP, clientIPOpt).Port(serverPort)
+				default:
+					Fail(fmt.Sprintf("unhandled accessType: %s", scenario.accessType))
 				}
-			case "node0NodePort":
-				expectSNAT = true
-				target = server.NodePort(nodeIPs[0], clientIPOpt)
-			case "node1NodePort":
-				expectSNAT = true
-				target = server.NodePort(nodeIPs[1], clientIPOpt)
-			case "externalIP":
-				expectSNAT = true
-				target = conncheck.NewTarget(defaultExternalIP, conncheck.TypeClusterIP, conncheck.HTTP, clientIPOpt).Port(serverPort)
-			default:
-				Fail(fmt.Sprintf("unhandled accessType: %s", scenario.accessType))
 			}
 
 			// Adjust for BPF mode.
@@ -283,7 +298,7 @@ var _ = describe.CalicoDescribe(
 				scenario.expectPolicyBypass = true
 			}
 
-			runEgressTest(ct, clientPod, target, expectSNAT, scenario, applyLabels)
+			runEgressTest(ct, clientPod, targets, expectSNAT, scenario, applyLabels)
 		}
 
 		// ===== ClusterIP scenarios =====
@@ -390,7 +405,6 @@ var _ = describe.CalicoDescribe(
 					dstPod:     1,
 					accessType: "externalIP",
 					svcOpts: []conncheck.ServerOption{
-						conncheck.WithExternalIP(defaultExternalIP),
 						conncheck.WithExternalTrafficPolicy("Local"),
 					},
 				})
@@ -401,7 +415,6 @@ var _ = describe.CalicoDescribe(
 					dstPod:     1,
 					accessType: "externalIP",
 					svcOpts: []conncheck.ServerOption{
-						conncheck.WithExternalIP(defaultExternalIP),
 						conncheck.WithExternalTrafficPolicy("Cluster"),
 					},
 				})
@@ -412,7 +425,6 @@ var _ = describe.CalicoDescribe(
 					dstPod:     2,
 					accessType: "externalIP",
 					svcOpts: []conncheck.ServerOption{
-						conncheck.WithExternalIP(defaultExternalIP),
 						conncheck.WithExternalTrafficPolicy("Cluster"),
 					},
 				})
@@ -423,7 +435,6 @@ var _ = describe.CalicoDescribe(
 					dstPod:     0,
 					accessType: "externalIP",
 					svcOpts: []conncheck.ServerOption{
-						conncheck.WithExternalIP(defaultExternalIP),
 						conncheck.WithExternalTrafficPolicy("Local"),
 					},
 				})
@@ -434,7 +445,6 @@ var _ = describe.CalicoDescribe(
 					dstPod:     0,
 					accessType: "externalIP",
 					svcOpts: []conncheck.ServerOption{
-						conncheck.WithExternalIP(defaultExternalIP),
 						conncheck.WithExternalTrafficPolicy("Cluster"),
 					},
 				})

@@ -1,0 +1,179 @@
+# TEMPORARY: validation lanes for the IP-family-agnostic datapath specs.
+# Run from the PR with `/argoci cron tmp-ip-family-validate.yaml`; delete before merge.
+version: condensed
+generateName: tmp-ip-family-validate-
+schedule: 0 0 31 2 *
+globalPrologue: |
+  cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
+  export DATAPLANE="${DATAPLANE:-CalicoBPF}"
+  export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-bpf.yml}"
+  export INSTALLER="${INSTALLER:-operator}"
+  export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
+  export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
+  source .argoci/scripts/global_prologue.sh
+globalEpilogue: |
+  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+defaults:
+  secretBundles:
+    - banzai-secrets
+steps:
+  # Lanes otherwise run the master hashrelease's e2e binary, not this branch's.
+  - name: build-e2e-binary
+    services:
+      - docker
+    jobSize: large
+    env:
+      - name: PROVISIONER
+        value: aws-kubeadm
+    commands: |
+      make -C e2e bin/k8s/e2e-linux-amd64.test
+      artifact push workflow e2e/bin/k8s/e2e-linux-amd64.test
+  - name: bpf-run-matrix-aws-kubeadm-dual-stack
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: ENCAPSULATION_TYPE_V6
+        value: VXLAN
+      - name: INSTALLER
+        value: operator
+      - name: IPV4_POD_CIDR
+        value: 192.168.0.0/16
+      - name: IPV6_POD_CIDR
+        value: fd00:10:244::/64
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env IP_FAMILY
+      - name: NAT_OUTGOING
+        value: Enabled
+      - name: NAT_OUTGOING_V6
+        value: Enabled
+      - name: PROVISIONER
+        value: aws-kubeadm
+    matrix:
+      - name: dual-calicobpf
+        env:
+          - name: IP_FAMILY
+            value: dual
+          - name: DATAPLANE
+            value: CalicoBPF
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/bpf-encap-extnode-aws.yaml
+      - name: dual-calicoiptables
+        env:
+          - name: IP_FAMILY
+            value: dual
+          - name: DATAPLANE
+            value: CalicoIptables
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/xtables-encap-extnode-aws.yaml
+    depends:
+      - build-e2e-binary
+    commands: |
+      mkdir -p "${HOME}/pr-e2e/files/e2e"
+      ( cd "${HOME}/pr-e2e/files/e2e" && artifact pull workflow e2e-linux-amd64.test )
+      export K8S_E2E_BINARY_BASE_URL="file://${HOME}/pr-e2e"
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-kops-w-calico-cni-ipv6
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: BGP_STATUS
+        value: Disabled
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: CNI_PLUGIN
+        value: Calico
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENCAPSULATION_TYPE_V6
+        value: VXLAN
+      - name: INSTALLER
+        value: operator
+      - name: IPV4_POD_CIDR
+        value: ""
+      - name: IPV6_POD_CIDR
+        value: fd00:10:244::/64
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_VERSION
+        value: stable-1
+      - name: NAT_OUTGOING_V6
+        value: Enabled
+      - name: PROVISIONER
+        value: aws-kops
+      - name: USE_VENDORED_CNI
+        value: "false"
+    matrix:
+      - name: calicobpf-ipv6
+        env:
+          - name: DATAPLANE
+            value: CalicoBPF
+          - name: IP_FAMILY
+            value: ipv6
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/kops-bpf-encap-nobgp-extnode-aws.yaml
+      - name: calicoiptables-ipv6
+        env:
+          - name: DATAPLANE
+            value: CalicoIptables
+          - name: IP_FAMILY
+            value: ipv6
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/kops-xtables-encap-nobgp-extnode-aws.yaml
+    depends:
+      - build-e2e-binary
+    commands: |
+      mkdir -p "${HOME}/pr-e2e/files/e2e"
+      ( cd "${HOME}/pr-e2e/files/e2e" && artifact pull workflow e2e-linux-amd64.test )
+      export K8S_E2E_BINARY_BASE_URL="file://${HOME}/pr-e2e"
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-kops-w-calico-cni-ipv4
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: BGP_STATUS
+        value: Disabled
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: CNI_PLUGIN
+        value: Calico
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: INSTALLER
+        value: operator
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: NAT_OUTGOING
+        value: Enabled
+      - name: PROVISIONER
+        value: aws-kops
+      - name: USE_VENDORED_CNI
+        value: "false"
+    matrix:
+      - name: calicobpf-ipv4
+        env:
+          - name: DATAPLANE
+            value: CalicoBPF
+          - name: IP_FAMILY
+            value: ipv4
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/kops-bpf-encap-nobgp-extnode-aws.yaml
+    depends:
+      - build-e2e-binary
+    commands: |
+      mkdir -p "${HOME}/pr-e2e/files/e2e"
+      ( cd "${HOME}/pr-e2e/files/e2e" && artifact pull workflow e2e-linux-amd64.test )
+      export K8S_E2E_BINARY_BASE_URL="file://${HOME}/pr-e2e"
+      .argoci/scripts/body_standard.sh
