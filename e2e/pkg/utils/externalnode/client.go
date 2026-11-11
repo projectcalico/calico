@@ -170,11 +170,12 @@ func (e *Client) Get(target string, length int) string {
 	// - This whole string gets run in Exec() like this:
 	//   `ssh .... -- /bin/sh -c "<this string>"`
 	//   so we need to escape the double quotes here too.
-	return fmt.Sprintf(`curl -m2 -w \"\n%%{time_total}\" http://%v/length/%v`, target, length)
+	// -g stops curl reading the brackets of an IPv6 literal as a URL glob.
+	return fmt.Sprintf(`curl -g -m2 -w \"\n%%{time_total}\" http://%v/length/%v`, target, length)
 }
 
 func (e *Client) Post(target string, postdata string) string {
-	return fmt.Sprintf(`curl -m2 -w \"\n%%{time_total}\" -d "%v" -X POST http://%v/post`, postdata, target)
+	return fmt.Sprintf(`curl -g -m2 -w \"\n%%{time_total}\" -d "%v" -X POST http://%v/post`, postdata, target)
 }
 
 func (e *Client) UDP(target string, postdata string) string {
