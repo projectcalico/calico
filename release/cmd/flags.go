@@ -18,7 +18,9 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
@@ -105,6 +107,18 @@ var (
 		Usage:    "The suffix used to denote development tags",
 		Sources:  cli.NewValueSourceChain(cli.EnvVar("DEV_TAG_SUFFIX"), defaults.MK(defaults.KeyDevTagSuffix)),
 		Value:    utils.DefaultDevTagSuffix,
+	}
+	versionFlag = &cli.StringFlag{
+		Name:     "version",
+		Category: gitCategory,
+		Usage:    "The Calico version to use (e.g. v3.32.5). If not set, it is determined from git",
+		Sources:  cli.EnvVars("VERSION"),
+		Action: func(_ context.Context, c *cli.Command, s string) error {
+			if _, err := semver.NewVersion(strings.TrimPrefix(s, "v")); err != nil {
+				return fmt.Errorf("invalid --version: %w", err)
+			}
+			return nil
+		},
 	}
 	baseBranchFlag = &cli.StringFlag{
 		Name:     "base-branch",
