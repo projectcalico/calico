@@ -81,6 +81,20 @@ fv st:
 	@:
 
 ###############################################################################
+# Test sets
+###############################################################################
+# testsets/ records the specs each CI lane selects, so a selection change shows
+# up as a reviewable diff.
+.PHONY: gen-test-set
+gen-test-set: bin/k8s/e2e.test
+	$(DOCKER_RUN) $(CALICO_BUILD) go run ./cmd/gen-test-set -repo-root .. -binary e2e/bin/k8s/e2e.test -out e2e/testsets
+
+.PHONY: check-test-set
+check-test-set: gen-test-set
+	@test -z "$$(git status --porcelain testsets)" || \
+		( echo "e2e/testsets is out of date; run 'make -C e2e gen-test-set' and commit the result" && false )
+
+###############################################################################
 # test images
 ###############################################################################
 # test-images builds a local single-arch image for development (kind etc.).

@@ -1,8 +1,5 @@
 # bpf-aws-single-subnet.yaml - test selection for the AWS single-subnet BPF run.
 #
-# Standalone, not extending base.yaml: extends only ever adds, and base excludes
-# ExternalNode, which would drop this run's Maglev tests for good.
-#
 # This reproduces the set of tests the run selected back when it used a
 # --ginkgo.focus/--ginkgo.skip pair, expressed the way the config loader wants
 # it. Adding or removing entries here changes what that run covers.
@@ -17,6 +14,8 @@
 # tests labelled RequiresAWS, RequiresBGPMesh, NoEncap, ExternalNode,
 # RequiresGoldmane and RequiresCalicoAPIServer all still run.
 
+extends: base.yaml
+
 include:
   - sig-calico
   - Conformance
@@ -29,6 +28,9 @@ include:
 
 exclude:
   labels:
+    - label: RequiresV3CRDs
+      reason: "aggregated API server lane with no encap; the BGP mesh specs would cut kube-apiserver off from calico-apiserver, and with CLUSTER_ROUTING_MODE=Felix BGP isn't the sole routing mechanism they need anyway"
+
     - label: Feature:KubeVirt
       reason: "no KubeVirt on this cluster; these run on the dedicated KubeVirt job (e2e/config/gcp-kubevirt.yaml)"
 

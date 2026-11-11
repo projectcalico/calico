@@ -52,17 +52,17 @@ exclude:
 		t.Fatalf("Load: %v", err)
 	}
 
-	if len(cfg.Include) != 2 {
-		t.Fatalf("expected 2 includes, got %d", len(cfg.Include))
+	if len(cfg.Include.Labels) != 2 {
+		t.Fatalf("expected 2 includes, got %d", len(cfg.Include.Labels))
 	}
-	if cfg.Include[0].Label != "sig-calico" {
-		t.Errorf("include[0] = %q, want sig-calico", cfg.Include[0].Label)
+	if cfg.Include.Labels[0].Label != "sig-calico" {
+		t.Errorf("include[0] = %q, want sig-calico", cfg.Include.Labels[0].Label)
 	}
-	if cfg.Include[1].Label != "Conformance && sig-network" {
-		t.Errorf("include[1] = %q, want Conformance && sig-network", cfg.Include[1].Label)
+	if cfg.Include.Labels[1].Label != "Conformance && sig-network" {
+		t.Errorf("include[1] = %q, want Conformance && sig-network", cfg.Include.Labels[1].Label)
 	}
-	if cfg.Include[1].Reason != "only networking conformance" {
-		t.Errorf("include[1].reason = %q", cfg.Include[1].Reason)
+	if cfg.Include.Labels[1].Reason != "only networking conformance" {
+		t.Errorf("include[1].reason = %q", cfg.Include.Labels[1].Reason)
 	}
 
 	if len(cfg.Exclude.Labels) != 2 {
@@ -111,14 +111,14 @@ exclude:
 	}
 
 	// Includes should be merged: parent's sig-calico + child's Dataplane:BPF
-	if len(cfg.Include) != 2 {
-		t.Fatalf("expected 2 includes, got %d", len(cfg.Include))
+	if len(cfg.Include.Labels) != 2 {
+		t.Fatalf("expected 2 includes, got %d", len(cfg.Include.Labels))
 	}
-	if cfg.Include[0].Label != "sig-calico" {
-		t.Errorf("include[0] = %q, want sig-calico", cfg.Include[0].Label)
+	if cfg.Include.Labels[0].Label != "sig-calico" {
+		t.Errorf("include[0] = %q, want sig-calico", cfg.Include.Labels[0].Label)
 	}
-	if cfg.Include[1].Label != "Dataplane:BPF" {
-		t.Errorf("include[1] = %q, want Dataplane:BPF", cfg.Include[1].Label)
+	if cfg.Include.Labels[1].Label != "Dataplane:BPF" {
+		t.Errorf("include[1] = %q, want Dataplane:BPF", cfg.Include.Labels[1].Label)
 	}
 
 	// Exclude labels should be merged: parent's Slow + child's Feature:SCTP
@@ -179,8 +179,8 @@ exclude:
 	}
 
 	// Includes: base's sig-calico + bpf-eks's Dataplane:BPF
-	if len(cfg.Include) != 2 {
-		t.Fatalf("expected 2 includes, got %d", len(cfg.Include))
+	if len(cfg.Include.Labels) != 2 {
+		t.Fatalf("expected 2 includes, got %d", len(cfg.Include.Labels))
 	}
 
 	// Exclude labels: base's Slow + eks's Feature:SCTP
@@ -242,6 +242,41 @@ exclude:
 	}
 }
 
+func TestLoadRejectsIncludeLabelsAndNamePatterns(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "both.yaml", `
+include:
+  labels:
+    - sig-calico
+  namePatterns:
+    - pattern: "should serve a basic endpoint from pods"
+      reason: "smoke check"
+`)
+
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for include setting both labels and namePatterns")
+	}
+}
+
+func TestLoadRejectsIncludeNamePatternsInheritingLabels(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "parent.yaml", `
+include:
+  - sig-calico
+`)
+	path := writeFile(t, dir, "child.yaml", `
+extends: parent.yaml
+include:
+  namePatterns:
+    - pattern: "should serve a basic endpoint from pods"
+      reason: "smoke check"
+`)
+
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for namePatterns layered onto an inherited label include")
+	}
+}
+
 func TestLoadGroupNamePattern(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, "config.yaml", `
@@ -274,9 +309,9 @@ exclude:
 
 func TestToFlagsSimple(t *testing.T) {
 	cfg := &Config{
-		Include: []IncludeEntry{
+		Include: IncludeList{Labels: []IncludeEntry{
 			{Label: "sig-calico"},
-		},
+		}},
 		Exclude: Exclude{
 			Labels: []ExcludeLabel{
 				{Label: "Slow", Reason: "too slow"},
@@ -301,11 +336,11 @@ func TestToFlagsSimple(t *testing.T) {
 
 func TestToFlagsMultipleIncludes(t *testing.T) {
 	cfg := &Config{
-		Include: []IncludeEntry{
+		Include: IncludeList{Labels: []IncludeEntry{
 			{Label: "sig-calico"},
 			{Label: "Conformance && sig-network"},
 			{Label: "Dataplane:BPF"},
-		},
+		}},
 		Exclude: Exclude{
 			Labels: []ExcludeLabel{
 				{Label: "Slow", Reason: "too slow"},
@@ -373,9 +408,9 @@ func TestToFlagsEmpty(t *testing.T) {
 
 func TestToFlagsSingleIncludeWithOrAndExcludes(t *testing.T) {
 	cfg := &Config{
-		Include: []IncludeEntry{
+		Include: IncludeList{Labels: []IncludeEntry{
 			{Label: "sig-calico || sig-network"},
-		},
+		}},
 		Exclude: Exclude{
 			Labels: []ExcludeLabel{
 				{Label: "Slow", Reason: "too slow"},
@@ -396,9 +431,9 @@ func TestToFlagsSingleIncludeWithOrAndExcludes(t *testing.T) {
 
 func TestToFlagsSingleIncludeNoExcludes(t *testing.T) {
 	cfg := &Config{
-		Include: []IncludeEntry{
+		Include: IncludeList{Labels: []IncludeEntry{
 			{Label: "sig-calico"},
-		},
+		}},
 	}
 
 	flags, err := ToFlags(cfg)

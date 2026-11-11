@@ -220,7 +220,7 @@ type FelixConfigurationSpec struct {
 	// configuration.
 	// +optional
 	// +kubebuilder:validation:MaxLength=1024
-	NodeSelector *string `json:"nodeSelector,omitempty" confignamev1:"-"`
+	NodeSelector *string `json:"nodeSelector,omitempty" validate:"omitempty,selector" confignamev1:"-"`
 
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
 	// will launch an external dataplane driver and communicate with it over protobuf.
@@ -684,6 +684,7 @@ type FelixConfigurationSpec struct {
 	//
 	// [Default: EnabledIPIPOnly]
 	// +kubebuilder:validation:Enum=Enabled;Disabled;EnabledIPIPOnly;EnabledNoEncapOnly
+	// +kubebuilder:default=EnabledIPIPOnly
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
@@ -991,8 +992,8 @@ type FelixConfigurationSpec struct {
 	BPFMapSizePerCPUConntrack *int `json:"bpfMapSizePerCpuConntrack,omitempty"`
 
 	// BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending
-	// on its usage. 'Disabled' make the size stay at the default or whatever is set by
-	// BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even
+	// on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size.
+	// 'DoubleIfFull' doubles the size of an IP family's map when it is more than 80% full
 	// after cleanups. [Default: DoubleIfFull]
 	// +kubebuilder:validation:Pattern=`^(?i)(Disabled|DoubleIfFull)?$`
 	BPFMapSizeConntrackScaling string `json:"bpfMapSizeConntrackScaling,omitempty"`
@@ -1359,7 +1360,7 @@ type ProtoPort struct {
 	Net string `json:"net,omitempty"`
 }
 
-// +kubebuilder:validation:Pattern=`^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$`
+// +kubebuilder:validation:Pattern=`^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$`
 type BPFConntrackTimeout string
 
 type BPFConntrackTimeouts struct {

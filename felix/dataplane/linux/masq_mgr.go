@@ -22,7 +22,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -47,6 +49,10 @@ type masqManager struct {
 	masqPools       set.Set[string]
 	dirty           bool
 	ruleRenderer    rules.RuleRenderer
+
+	// Pool CIDRs may legitimately overlap, but nftables rejects overlapping elements in an
+	// interval set, so we only program the CIDRs that no other member covers.
+	suppressor labelindex.OverlapSuppressor
 
 	logCxt *logrus.Entry
 }
@@ -80,6 +86,7 @@ func newMasqManager(
 		masqPools:       set.New[string](),
 		dirty:           true,
 		ruleRenderer:    ruleRenderer,
+		suppressor:      labelindex.NewMemberOverlapSuppressor(),
 		logCxt:          logrus.WithField("ipVersion", ipVersion),
 	}
 }
@@ -108,11 +115,11 @@ func (m *masqManager) OnUpdate(msg any) {
 		// same IP is a no-op anyway.
 		logCxt.Debug("Removing old pool.")
 		if !isLoadBalancerOnly(oldPool) {
-			m.ipsetsDataplane.RemoveMembers(rules.IPSetIDNetworkPools, []string{oldPool.Cidr})
+			m.removePoolCIDR(rules.IPSetIDNetworkPools, oldPool.Cidr)
 		}
 		if oldPool.Masquerade {
 			logCxt.Debug("Masquerade was enabled on pool.")
-			m.ipsetsDataplane.RemoveMembers(rules.IPSetIDNATOutgoingMasqPools, []string{oldPool.Cidr})
+			m.removePoolCIDR(rules.IPSetIDNATOutgoingMasqPools, oldPool.Cidr)
 		}
 		delete(m.activePools, poolID)
 		m.masqPools.Discard(poolID)
@@ -134,16 +141,66 @@ func (m *masqManager) OnUpdate(msg any) {
 			logCxt.Debug("Skipping LoadBalancer-only pool from network-ip-pools IP set.")
 		} else {
 			logCxt.Debug("Adding IPAM pool to network-ip-pools IP set.")
-			m.ipsetsDataplane.AddMembers(rules.IPSetIDNetworkPools, []string{newPool.Cidr})
+			m.addPoolCIDR(rules.IPSetIDNetworkPools, newPool.Cidr)
 		}
 		if newPool.Masquerade {
 			logCxt.Debug("IPAM has masquerade enabled.")
-			m.ipsetsDataplane.AddMembers(rules.IPSetIDNATOutgoingMasqPools, []string{newPool.Cidr})
+			m.addPoolCIDR(rules.IPSetIDNATOutgoingMasqPools, newPool.Cidr)
 			m.masqPools.Add(poolID)
 		}
 		m.activePools[poolID] = newPool
 	}
 	m.dirty = true
+}
+
+// addPoolCIDR programs a pool CIDR into the given IP set and withdraws the members it now masks.
+func (m *masqManager) addPoolCIDR(setID, cidrStr string) {
+	cidr, ok := m.parsePoolCIDR(cidrStr)
+	if !ok {
+		return
+	}
+
+	// Withdraw the masked members first so the set never holds the new CIDR alongside one it covers.
+	add, masked := m.suppressor.Add(setID, cidr)
+	if len(masked) > 0 {
+		m.ipsetsDataplane.RemoveMembers(setID, cidrsToStrings(masked))
+	}
+	if add != nil {
+		m.ipsetsDataplane.AddMembers(setID, []string{add.String()})
+	}
+}
+
+// removePoolCIDR withdraws a pool CIDR from the given IP set and restores the members it was masking.
+func (m *masqManager) removePoolCIDR(setID, cidrStr string) {
+	cidr, ok := m.parsePoolCIDR(cidrStr)
+	if !ok {
+		return
+	}
+
+	rem, unmasked := m.suppressor.Remove(setID, cidr)
+	if rem != nil {
+		m.ipsetsDataplane.RemoveMembers(setID, []string{rem.String()})
+	}
+	if len(unmasked) > 0 {
+		m.ipsetsDataplane.AddMembers(setID, cidrsToStrings(unmasked))
+	}
+}
+
+func (m *masqManager) parsePoolCIDR(cidrStr string) (ip.CIDR, bool) {
+	cidr, err := ip.CIDRFromString(cidrStr)
+	if err != nil {
+		m.logCxt.WithError(err).WithField("cidr", cidrStr).Error("Ignoring IPAM pool with unparseable CIDR.")
+		return nil, false
+	}
+	return cidr, true
+}
+
+func cidrsToStrings(cidrs []ip.CIDR) []string {
+	strs := make([]string, len(cidrs))
+	for i, cidr := range cidrs {
+		strs[i] = cidr.String()
+	}
+	return strs
 }
 
 func (m *masqManager) CompleteDeferredWork() error {

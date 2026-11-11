@@ -183,6 +183,84 @@ func TestCRDValidation_BGPPeer(t *testing.T) {
 	})
 }
 
+// TestCRDValidation_BGPPeer_PeerIP tests the CEL XValidation rule on the peerIP
+// field, covering valid formats, port boundary values, and edge cases where
+// CEL's int() would accept a leading '+' sign or an unbracketed IPv6 address
+// would be mistaken for IPv4+port.
+func TestCRDValidation_BGPPeer_PeerIP(t *testing.T) {
+	const wantErr = "peerIP must be an IP address"
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "empty peerIP passes",
+			obj:  &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: ""}},
+		},
+		{
+			name: "plain IPv4 passes",
+			obj:  &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "10.0.0.1"}},
+		},
+		{
+			name: "plain IPv6 passes",
+			obj:  &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "fd00::1"}},
+		},
+		{
+			name: "IPv4 with port passes",
+			obj:  &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "10.0.0.1:179"}},
+		},
+		{
+			name: "IPv6 with port passes",
+			obj:  &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "[fd00::1]:179"}},
+		},
+		{
+			name: "IPv4 with max port passes",
+			obj:  &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "10.0.0.1:65535"}},
+		},
+		{
+			name: "IPv4 with min port passes",
+			obj:  &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "10.0.0.1:1"}},
+		},
+		{
+			name:      "invalid IP fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "notanip"}},
+			errSubstr: wantErr,
+		},
+		{
+			name:      "IPv4 with port 0 fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "10.0.0.1:0"}},
+			errSubstr: wantErr,
+		},
+		{
+			name:      "IPv4 with port > 65535 fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "10.0.0.1:65536"}},
+			errSubstr: wantErr,
+		},
+		{
+			name:      "IPv6 with port 0 fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "[fd00::1]:0"}},
+			errSubstr: wantErr,
+		},
+		{
+			name:      "IPv6 with port > 65535 fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "[fd00::1]:65536"}},
+			errSubstr: wantErr,
+		},
+		{
+			name:      "IPv4 with signed port +80 fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "10.0.0.1:+80"}},
+			errSubstr: wantErr,
+		},
+		{
+			name:      "IPv6 with signed port +80 fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "[fd00::1]:+80"}},
+			errSubstr: wantErr,
+		},
+		{
+			name:      "unbracketed IPv6 with port fails",
+			obj:       &apiv3.BGPPeer{ObjectMeta: metav1.ObjectMeta{Name: "p"}, Spec: apiv3.BGPPeerSpec{PeerIP: "1:2:3:4:5:6:7:8:179"}},
+			errSubstr: wantErr,
+		},
+	})
+}
+
 // TestCRDValidation_BGPPeer_ASNumber tests CEL rules involving asNumber, which
 // is a uint32 Go type. Verifies the JSON round-trip in toUnstructured() produces
 // the correct int type for CEL evaluation.
@@ -1637,6 +1715,72 @@ func TestCRDValidation_BGPConfiguration_Communities(t *testing.T) {
 					},
 				},
 			},
+		},
+	})
+}
+
+// TestCRDValidation_ListTypeSet covers the x-kubernetes-list-type: set
+// uniqueness invariant, which the kube-apiserver enforces from the structural
+// schema rather than from OpenAPI or CEL.
+func TestCRDValidation_ListTypeSet(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "networkSet with distinct nets passes",
+			obj: &apiv3.NetworkSet{
+				ObjectMeta: metav1.ObjectMeta{Name: "netset", Namespace: "default"},
+				Spec: apiv3.NetworkSetSpec{
+					Nets: []string{"10.0.0.1/32", "10.0.0.2/32"},
+				},
+			},
+		},
+		{
+			name: "networkSet with a repeated net fails",
+			obj: &apiv3.NetworkSet{
+				ObjectMeta: metav1.ObjectMeta{Name: "netset", Namespace: "default"},
+				Spec: apiv3.NetworkSetSpec{
+					Nets: []string{"10.0.0.1/32", "10.0.0.1/32"},
+				},
+			},
+			errSubstr: `Duplicate value: "10.0.0.1/32"`,
+		},
+		{
+			name: "globalNetworkSet with a repeated net fails",
+			obj: &apiv3.GlobalNetworkSet{
+				ObjectMeta: metav1.ObjectMeta{Name: "gnetset"},
+				Spec: apiv3.GlobalNetworkSetSpec{
+					Nets: []string{"10.0.0.0/8", "10.0.0.0/8"},
+				},
+			},
+			errSubstr: `Duplicate value: "10.0.0.0/8"`,
+		},
+		{
+			name: "entity rule with a repeated net fails",
+			obj: &apiv3.GlobalNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "gnp"},
+				Spec: apiv3.GlobalNetworkPolicySpec{
+					Selector: "all()",
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Nets: []string{"10.0.0.0/8", "10.0.0.0/8"},
+							},
+						},
+					},
+				},
+			},
+			errSubstr: `Duplicate value: "10.0.0.0/8"`,
+		},
+		{
+			name: "ipPool with a repeated allowedUse fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:        "192.168.0.0/16",
+					AllowedUses: []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseWorkload},
+				},
+			},
+			errSubstr: `Duplicate value: "Workload"`,
 		},
 	})
 }

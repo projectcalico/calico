@@ -2705,6 +2705,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					NFTablesFlowTableOffload:       ptr.To(apiv3.NFTablesFlowTableOffloadAll),
 					BPFConnectTimeLoadBalancing:    ptr.To(apiv3.BPFConnectTimeLBTCP),
 					BPFHostNetworkedNATWithoutCTLB: ptr.To(apiv3.BPFHostNetworkedNATEnabled),
+					ProgramClusterRoutes:           ptr.To(apiv3.EnabledIPIPOnly),
 				},
 			},
 		}

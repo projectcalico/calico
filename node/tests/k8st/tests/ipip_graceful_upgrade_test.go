@@ -299,6 +299,9 @@ func evictCalicoNodeFrom(
 				setLabel(ctx, n.Name, false)
 			}
 		}
+		// The other nodes' pods are already ready, so wait for the operator to schedule this one first.
+		g.Eventually(func() int { return calicoNodePodsOn(ctx, targetNode) }, "3m", "2s").
+			Should(Equal(1), "calico-node did not come back on %s", targetNode)
 		utils.WaitForPodsReady(t, "calico-system", "k8s-app=calico-node", 5*time.Minute)
 	}
 	t.Cleanup(restore)

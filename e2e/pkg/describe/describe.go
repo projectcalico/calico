@@ -107,6 +107,14 @@ func RequiresCalicoAPIServer() any {
 	return framework.WithLabel("RequiresCalicoAPIServer")
 }
 
+// RequiresV3CRDs marks tests that need kube-apiserver to serve projectcalico.org/v3
+// itself, from the v3 CRDs. Tests that disable the BGP mesh withdraw the route to the
+// calico-apiserver pod, so on a lane running the aggregated API server they lose the
+// Calico API mid-test and cannot restore the mesh. Exclude it on those lanes.
+func RequiresV3CRDs() any {
+	return framework.WithLabel("RequiresV3CRDs")
+}
+
 // RequiresNoEncap marks tests that require unencapsulated traffic to function.
 // This is typically used for tests that verify BGP functionality without IPIP, or other similar tests.
 // Such tests must be run on clusters that support unencapsulated traffic, such as bare-metal clusters
@@ -137,10 +145,11 @@ func RequiresBGPMesh() any {
 	return framework.WithLabel("RequiresBGPMesh")
 }
 
-// RequiresOperator marks tests that need tigera-operator running to reconcile a CR
-// they create. Manifest-installed clusters (INSTALLER=manual/packaged, i.e. a
-// MANIFEST_FILE like calico.yaml) have no operator, so such a test blocks until its
-// wait times out rather than skipping.
+// RequiresOperator marks tests that need an operator-managed cluster: they create a
+// CR for tigera-operator to reconcile, or read an operator resource such as the
+// Installation. Manifest-installed clusters (INSTALLER=manual/packaged, i.e. a
+// MANIFEST_FILE like calico.yaml) have neither, so such a test fails or waits out
+// its timeout rather than skipping.
 func RequiresOperator() any {
 	return framework.WithLabel("RequiresOperator")
 }

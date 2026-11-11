@@ -41,6 +41,8 @@ var _ = describe.CalicoDescribe(
 	describe.WithFeature("BGPPeer"),
 	describe.WithCategory(describe.Networking),
 	describe.RequiresBGP(),
+	describe.RequiresOperator(),
+	describe.RequiresV3CRDs(),
 	describe.WithDisruptive(),
 	describe.WithSerial(),
 	"Route reflectors",

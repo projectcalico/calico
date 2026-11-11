@@ -148,7 +148,9 @@ spec:
                   description:
                     "ASNumber is the default AS number used by a node. [Default:
                     64512]"
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 bindMode:
                   description: |-
@@ -309,6 +311,7 @@ spec:
                   type: array
                   x-kubernetes-list-type: atomic
                 programClusterRoutes:
+                  default: EnabledNoEncapOnly
                   description: |-
                     ProgramClusterRoutes controls which "cluster routes" are programmed by Calico's BGP
                     stack, i.e. the routes that a node needs in order to reach workloads on other nodes.  It
@@ -483,7 +486,12 @@ spec:
                           If non-empty, this filter rule will only apply to routes whose AS path begins with the
                           specified sequence of AS numbers.
                         items:
-                          format: int32
+                          description: |-
+                            ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                            number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                          format: int64
+                          maximum: 4294967295
+                          minimum: 0
                           type: integer
                         type: array
                         x-kubernetes-list-type: atomic
@@ -579,7 +587,12 @@ spec:
                                     The resulting path starts with these AS numbers in the order listed;
                                     e.g. [65000, 65001] produces the path "65000 65001 <original>".
                                   items:
-                                    format: int32
+                                    description: |-
+                                      ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                                      number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                                    format: int64
+                                    maximum: 4294967295
+                                    minimum: 0
                                     type: integer
                                   maxItems: 10
                                   minItems: 1
@@ -696,7 +709,12 @@ spec:
                           If non-empty, this filter rule will only apply to routes whose AS path begins with the
                           specified sequence of AS numbers.
                         items:
-                          format: int32
+                          description: |-
+                            ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                            number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                          format: int64
+                          maximum: 4294967295
+                          minimum: 0
                           type: integer
                         type: array
                         x-kubernetes-list-type: atomic
@@ -792,7 +810,12 @@ spec:
                                     The resulting path starts with these AS numbers in the order listed;
                                     e.g. [65000, 65001] produces the path "65000 65001 <original>".
                                   items:
-                                    format: int32
+                                    description: |-
+                                      ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                                      number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                                    format: int64
+                                    maximum: 4294967295
+                                    minimum: 0
                                     type: integer
                                   maxItems: 10
                                   minItems: 1
@@ -909,7 +932,12 @@ spec:
                           If non-empty, this filter rule will only apply to routes whose AS path begins with the
                           specified sequence of AS numbers.
                         items:
-                          format: int32
+                          description: |-
+                            ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                            number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                          format: int64
+                          maximum: 4294967295
+                          minimum: 0
                           type: integer
                         type: array
                         x-kubernetes-list-type: atomic
@@ -1005,7 +1033,12 @@ spec:
                                     The resulting path starts with these AS numbers in the order listed;
                                     e.g. [65000, 65001] produces the path "65000 65001 <original>".
                                   items:
-                                    format: int32
+                                    description: |-
+                                      ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                                      number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                                    format: int64
+                                    maximum: 4294967295
+                                    minimum: 0
                                     type: integer
                                   maxItems: 10
                                   minItems: 1
@@ -1122,7 +1155,12 @@ spec:
                           If non-empty, this filter rule will only apply to routes whose AS path begins with the
                           specified sequence of AS numbers.
                         items:
-                          format: int32
+                          description: |-
+                            ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                            number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                          format: int64
+                          maximum: 4294967295
+                          minimum: 0
                           type: integer
                         type: array
                         x-kubernetes-list-type: atomic
@@ -1218,7 +1256,12 @@ spec:
                                     The resulting path starts with these AS numbers in the order listed;
                                     e.g. [65000, 65001] produces the path "65000 65001 <original>".
                                   items:
-                                    format: int32
+                                    description: |-
+                                      ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                                      number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                                    format: int64
+                                    maximum: 4294967295
+                                    minimum: 0
                                     type: integer
                                   maxItems: 10
                                   minItems: 1
@@ -1363,7 +1406,9 @@ spec:
               properties:
                 asNumber:
                   description: The AS Number of the peer.
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 filters:
                   description: The ordered set of BGPFilters applied on this BGP peer.
@@ -1389,7 +1434,9 @@ spec:
                   description: |-
                     The optional Local AS Number to use when peering with this remote peer.
                     If not specified, the AS Number defined in default BGPConfiguration will be used.
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 localWorkloadSelector:
                   description: |-
@@ -1482,12 +1529,12 @@ spec:
                         <IPv4>:<port> or [<IPv6>]:<port>
                       reason: FieldValueInvalid
                       rule:
-                        self == '' || isIP(self) || (self.startsWith('[') && self.contains(']:')
-                        && isIP(self.substring(1, self.lastIndexOf(']:'))) && self.substring(self.lastIndexOf(']:')
-                        + 2).matches('^[0-9]{1,5}$') && int(self.substring(self.lastIndexOf(']:')
+                        self == '' || isIP(self) || (self.startsWith('[') && self.matches('[]]:[0-9]{1,5}$')
+                        && isIP(self.substring(1, self.lastIndexOf(']:'))) && int(self.substring(self.lastIndexOf(']:')
                         + 2)) >= 1 && int(self.substring(self.lastIndexOf(']:') + 2))
-                        <= 65535) || (self.matches('^[0-9.]+:[0-9]{1,5}$') && isIP(self.split(':')[0])
-                        && int(self.split(':')[1]) >= 1 && int(self.split(':')[1]) <=
+                        <= 65535) || (self.matches('^[0-9.]+:[0-9]{1,5}$') && isIP(self.substring(0,
+                        self.lastIndexOf(':'))) && int(self.substring(self.lastIndexOf(':')
+                        + 1)) >= 1 && int(self.substring(self.lastIndexOf(':') + 1)) <=
                         65535)
                 peerSelector:
                   description: |-
@@ -2209,7 +2256,7 @@ spec:
                       description: |-
                         CreationGracePeriod gives a generic grace period to new connections
                         before they are considered for cleanup [Default: 10s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     genericTimeout:
                       description: |-
@@ -2217,7 +2264,7 @@ spec:
                         entry for cleanup after the connection became idle. If set to 'Auto', the
                         value from nf_conntrack_generic_timeout is used. If nil, Calico uses its
                         own default value. [Default: 10m].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     icmpTimeout:
                       description: |-
@@ -2225,7 +2272,7 @@ spec:
                         entry for cleanup after the connection became idle. If set to 'Auto', the
                         value from nf_conntrack_icmp_timeout is used. If nil, Calico uses its
                         own default value. [Default: 5s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpEstablished:
                       description: |-
@@ -2233,7 +2280,7 @@ spec:
                         cleanup after the connection became idle. If set to 'Auto', the
                         value from nf_conntrack_tcp_timeout_established is used. If nil, Calico uses
                         its own default value. [Default: 1h].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpFinsSeen:
                       description: |-
@@ -2241,14 +2288,14 @@ spec:
                         cleanup after the connection was closed gracefully. If set to 'Auto', the
                         value from nf_conntrack_tcp_timeout_time_wait is used. If nil, Calico uses
                         its own default value. [Default: Auto].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpResetSeen:
                       description: |-
                         TCPResetSeen controls how long it takes before considering this entry for
                         cleanup after the connection was aborted. If nil, Calico uses its own
                         default value. [Default: 40s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpSynSent:
                       description: |-
@@ -2256,14 +2303,14 @@ spec:
                         cleanup after the last SYN without a response. If set to 'Auto', the
                         value from nf_conntrack_tcp_timeout_syn_sent is used. If nil, Calico uses
                         its own default value. [Default: 20s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     udpTimeout:
                       description: |-
                         UDPTimeout controls how long it takes before considering this entry for
                         cleanup after the connection became idle. If nil, Calico uses its own
                         default value. [Default: 60s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                   type: object
                 bpfDSROptoutCIDRs:
@@ -2467,8 +2514,8 @@ spec:
                 bpfMapSizeConntrackScaling:
                   description: |-
                     BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending
-                    on its usage. 'Disabled' make the size stay at the default or whatever is set by
-                    BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even
+                    on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size.
+                    'DoubleIfFull' doubles the size of an IP family's map when it is more than 80% full
                     after cleanups. [Default: DoubleIfFull]
                   pattern: ^(?i)(Disabled|DoubleIfFull)?$
                   type: string
@@ -3315,6 +3362,7 @@ spec:
                     like Application layer policy. [Default: Empty]
                   type: string
                 programClusterRoutes:
+                  default: EnabledIPIPOnly
                   description: |-
                     ProgramClusterRoutes controls which "cluster routes" Felix programs, i.e. the routes that
                     a node needs in order to reach workloads on other nodes.  It only applies to IP Pools
@@ -3856,6 +3904,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -3864,6 +3914,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -4165,6 +4216,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -4173,6 +4226,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -4428,6 +4482,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -4436,6 +4492,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -4737,6 +4794,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -4745,6 +4804,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -5992,6 +6052,7 @@ spec:
                                     description:
                                       NodeSelector allows the AutoHostEndpoint
                                       to be created only for specific nodes
+                                    maxLength: 1024
                                     type: string
                                 type: object
                               type: array
@@ -6087,9 +6148,9 @@ spec:
                 logSeverityScreen:
                   description: |-
                     LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-                    Valid values are: "None", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
+                    Valid values are: "Trace", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
                   enum:
-                    - None
+                    - Trace
                     - Debug
                     - Info
                     - Warning
@@ -6240,6 +6301,7 @@ spec:
                                         description:
                                           NodeSelector allows the AutoHostEndpoint
                                           to be created only for specific nodes
+                                        maxLength: 1024
                                         type: string
                                     type: object
                                   type: array
@@ -6339,9 +6401,9 @@ spec:
                     logSeverityScreen:
                       description: |-
                         LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-                        Valid values are: "None", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
+                        Valid values are: "Trace", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
                       enum:
-                        - None
+                        - Trace
                         - Debug
                         - Info
                         - Warning
@@ -6534,6 +6596,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -6542,6 +6606,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -6843,6 +6908,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -6851,6 +6918,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -7106,6 +7174,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -7114,6 +7184,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -7415,6 +7486,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -7423,6 +7496,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -7892,6 +7966,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -7900,6 +7976,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -8201,6 +8278,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -8209,6 +8288,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -8464,6 +8544,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -8472,6 +8554,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -8773,6 +8856,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -8781,6 +8866,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -9754,6 +9840,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -9762,6 +9850,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -10063,6 +10152,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -10071,6 +10162,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -10326,6 +10418,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -10334,6 +10428,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -10635,6 +10730,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -10643,6 +10740,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -12599,6 +12697,15 @@ rules:
     verbs:
       - create
       - update
+  # calico/node creates the default IPAMConfiguration at startup, even when
+  # Calico IPAM is not in use.
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
+    resources:
+      - ipamconfigurations
+      - ipamconfigs
+    verbs:
+      - get
+      - create
   # For monitoring KubeVirt live migration.
   - apiGroups: ["kubevirt.io"]
     resources:
@@ -12786,10 +12893,21 @@ spec:
       terminationGracePeriodSeconds: 0
       priorityClassName: system-node-critical
       initContainers:
+        # This container stages the upstream CNI plugins that the CNI config
+        # references (portmap, host-local, loopback, tuning, flannel) for
+        # install-cni to copy onto the host.
+        - name: cni-plugins
+          image: quay.io/calico/third-party-cni-plugins:v3.33.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - mountPath: /stage
+              name: cni-plugins-stage
+          securityContext:
+            runAsUser: 0
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/calico/calico:release-v3.33
+          image: quay.io/calico/calico:v3.33.0
           imagePullPolicy: IfNotPresent
           args: ["component", "cni", "install"]
           envFrom:
@@ -12832,6 +12950,8 @@ spec:
               name: cni-bin-dir
             - mountPath: /host/etc/cni/net.d
               name: cni-net-dir
+            - mountPath: /opt/cni/bin
+              name: cni-plugins-stage
           securityContext:
             privileged: true
             runAsUser: 0
@@ -12840,7 +12960,7 @@ spec:
         # networking to allow communication with the API Server. Calico-node initialization is executed
         # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptables mode.
         - name: "ebpf-bootstrap"
-          image: quay.io/calico/node:release-v3.33
+          image: quay.io/calico/node:v3.33.0
           imagePullPolicy: IfNotPresent
           command: ["calico", "component", "node", "init", "--best-effort"]
           volumeMounts:
@@ -12866,7 +12986,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: quay.io/calico/node:release-v3.33
+          image: quay.io/calico/node:v3.33.0
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
@@ -12977,13 +13097,6 @@ spec:
             # parent directory.
             - name: bpffs
               mountPath: /sys/fs/bpf
-            # Felix reads /sys/kernel/security/lockdown to detect kernel
-            # lockdown=confidentiality; under it, ftrace is disabled and Felix
-            # loads trace-printk-free BPF program variants. securityfs is a
-            # separate filesystem from /sys/fs, so it needs its own mount.
-            - name: sys-kernel-security
-              mountPath: /sys/kernel/security
-              readOnly: true
             - name: cni-log-dir
               mountPath: /var/log/calico/cni
               readOnly: true
@@ -13045,12 +13158,6 @@ spec:
           hostPath:
             path: /sys/fs/bpf
             type: Directory
-        # securityfs, read by Felix to detect kernel lockdown=confidentiality.
-        # No type set (like nodeproc below) so nodes without securityfs still
-        # start; Felix treats an unreadable lockdown file as "not locked down".
-        - name: sys-kernel-security
-          hostPath:
-            path: /sys/kernel/security
         # mount /proc at /nodeproc to be used by ebpf-bootstrap initContainer to mount root cgroup2 fs.
         - name: nodeproc
           hostPath:
@@ -13064,6 +13171,10 @@ spec:
           hostPath:
             path: /opt/cni/bin
             type: DirectoryOrCreate
+        # Staging area for the upstream CNI plugins, written by cni-plugins and
+        # read by install-cni.
+        - name: cni-plugins-stage
+          emptyDir: {}
         - name: cni-net-dir
           hostPath:
             path: /etc/cni/net.d
@@ -13118,23 +13229,25 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
-          image: quay.io/calico/calico:release-v3.33
+          image: quay.io/calico/calico:v3.33.0
           imagePullPolicy: IfNotPresent
-          args: ["component", "kube-controllers"]
+          args: ["component", "kube-controllers", "--health-port=9440"]
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
               value: node,loadbalancer
             - name: DATASTORE_TYPE
               value: kubernetes
+            # Name of the DaemonSet whose rollout the policy name migrator waits for.
+            - name: CALICO_NODE_DAEMONSET_NAME
+              value: canal
           livenessProbe:
             exec:
               command:
                 - /usr/bin/calico
-                - component
-                - kube-controllers
-                - kube-controllers-health
-                - -l
+                - health
+                - --port=9440
+                - --type=liveness
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -13143,10 +13256,9 @@ spec:
             exec:
               command:
                 - /usr/bin/calico
-                - component
-                - kube-controllers
-                - kube-controllers-health
-                - -r
+                - health
+                - --port=9440
+                - --type=readiness
             periodSeconds: 10
           securityContext:
             runAsNonRoot: true

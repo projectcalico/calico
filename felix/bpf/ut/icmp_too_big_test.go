@@ -157,6 +157,9 @@ func TestICMPTooBigNATNodePort(t *testing.T) {
 	err = natBEMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
+	defer resetMap(natMap)
+	defer resetMap(natBEMap)
+
 	err = natMap.Update(
 		nat.NewNATKey(node1ip, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
 		nat.NewNATValue(0, 1, 0, 0).AsBytes(),

@@ -74,11 +74,11 @@ type Rule struct {
 
 	// Source contains the match criteria that apply to source entity.
 	// +optional
-	Source EntityRule `json:"source,omitzero" validate:"omitempty"`
+	Source EntityRule `json:"source,omitempty" validate:"omitempty"`
 
 	// Destination contains the match criteria that apply to destination entity.
 	// +optional
-	Destination EntityRule `json:"destination,omitzero" validate:"omitempty"`
+	Destination EntityRule `json:"destination,omitempty" validate:"omitempty"`
 
 	// HTTP contains match criteria that apply to HTTP requests.
 	HTTP *HTTPMatch `json:"http,omitempty" validate:"omitempty"`
@@ -248,11 +248,14 @@ type ServiceAccountMatch struct {
 	// Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
 	// at) a pod running as a service account whose name is in the list.
 	// +listType=set
-	Names []string `json:"names,omitempty" validate:"omitempty"`
+	// +kubebuilder:validation:items:MaxLength=253
+	// +kubebuilder:validation:items:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	Names []string `json:"names,omitempty" validate:"omitempty,dive,name"`
 
 	// Selector is an optional field that restricts the rule to only apply to traffic that originates from
 	// (or terminates at) a pod running as a service account that matches the given label selector.
 	// If both Names and Selector are specified then they are AND'ed.
+	// +kubebuilder:validation:MaxLength=1024
 	Selector string `json:"selector,omitempty" validate:"omitempty,selector"`
 }
 

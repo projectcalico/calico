@@ -3947,7 +3947,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfMapSizeConntrackScaling": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending on its usage. 'Disabled' make the size stay at the default or whatever is set by BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even after cleanups. [Default: DoubleIfFull]",
+							Description: "BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size. 'DoubleIfFull' doubles the size of an IP family's map when it is more than 80% full after cleanups. [Default: DoubleIfFull]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -6012,7 +6012,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref commo
 				Properties: map[string]spec.Schema{
 					"logSeverityScreen": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info] Valid values are: \"None\", \"Debug\", \"Info\", \"Warning\", \"Error\", \"Fatal\", \"Panic\".",
+							Description: "LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info] Valid values are: \"Trace\", \"Debug\", \"Info\", \"Warning\", \"Error\", \"Fatal\", \"Panic\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},

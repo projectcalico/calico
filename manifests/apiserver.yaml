@@ -72,11 +72,12 @@ spec:
             - component
             - apiserver
             - --secure-port=5443
+            - --cert-dir=/code/apiserver.local.config/certificates
             - -v=5
           env:
             - name: DATASTORE_TYPE
               value: kubernetes
-          image: quay.io/calico/calico:release-v3.33
+          image: quay.io/calico/calico:v3.33.0
           name: calico-apiserver
           readinessProbe:
             httpGet:

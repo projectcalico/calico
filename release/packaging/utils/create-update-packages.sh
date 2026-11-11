@@ -56,11 +56,12 @@ function require_commands {
 }
 
 function require_version {
-    # VERSION must be specified.  It should be either "master" or
-    # "vX.Y.Z".  For "master" we build and publish packages from the HEAD
-    # of the master branch of the relevant Calico components.  For
-    # "vX.Y.Z" we build and publish packages from that tag in each
-    # relevant Calico component.
+    # VERSION must be specified.  It should be "master", a release branch name
+    # like "release-v3.32", "pr-<number>" or "vX.Y.Z".  For a branch we build
+    # and publish packages from the HEAD of that branch of the relevant Calico
+    # components.  For "pr-<number>" we build from the PR.  For "vX.Y.Z" we
+    # build and publish packages from that tag in each relevant Calico
+    # component.
     test -n "$VERSION" || error_exit 'VERSION must be specified; try `master` or `v3.30.2` for example'
     echo VERSION is "$VERSION"
 
@@ -68,7 +69,13 @@ function require_version {
     if [ $VERSION = master ]; then
         : ${REPO_NAME:=master}
     elif [[ $VERSION =~ ^release-v ]]; then
-        : ${REPO_NAME:=testing}
+        # Note, conventionally PPA and package names do not include the "v".
+        : ${REPO_NAME:=release-${VERSION#release-v}}
+
+        # Google Artifact Registry doesn't allow periods in registry names (see
+        # below), so e.g. "release-332" for release-v3.32.
+        RELEASE_MAJOR_MINOR=${VERSION#release-v}
+        : ${GCLOUD_REPO_NAME:=release-${RELEASE_MAJOR_MINOR//./}}
     elif [[ $VERSION =~ ^pr-[0-9]+$ ]]; then
         : ${REPO_NAME:=${VERSION}}
     elif [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-python2)?$ ]]; then

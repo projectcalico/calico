@@ -1,0 +1,8 @@
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-Policy] [RunsOnWindows] Tiered policy tests with a second tier can explicitly pass traffic
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-Policy] [RunsOnWindows] Tiered policy tests with a second tier should enforce a default deny
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-Policy] [RunsOnWindows] Tiered policy tests with a single tier taking precedence over the default tier can pass to the default tier, and allow traffic explicitly. [Conformance]
+[sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should correctly isolate namespaces [Conformance]
+[sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should provide a default allow [Conformance]
+[sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should support a 'deny egress' policy [Conformance]
+[sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should support namespace selectors [Conformance]
+[sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should support service account selectors [Conformance]

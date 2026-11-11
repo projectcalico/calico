@@ -1168,6 +1168,45 @@ func TestProcessMeshPeers_BasicMesh(t *testing.T) {
 	assert.True(t, peerIPs["10.0.0.3"])
 }
 
+func TestProcessMeshPeers_PeerASFallsBackToGlobal(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "node-1"
+	defer func() { NodeName = originalNodeName }()
+
+	meshConfigJSON, _ := json.Marshal(map[string]any{"enabled": true})
+
+	// This node has its own AS, node-2 has a different AS of its own, and node-3 has no AS of
+	// its own and so uses the global AS.
+	cache := map[string]string{
+		"/calico/bgp/v1/global/node_mesh":       string(meshConfigJSON),
+		"/calico/bgp/v1/global/as_num":          "64512",
+		"/calico/bgp/v1/host/node-1/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/host/node-1/as_num":     "64513",
+		"/calico/bgp/v1/host/node-2/ip_addr_v4": "10.0.0.2",
+		"/calico/bgp/v1/host/node-2/as_num":     "64514",
+		"/calico/bgp/v1/host/node-3/ip_addr_v4": "10.0.0.3",
+	}
+
+	c := newTestClient(cache, nil)
+
+	config := &types.BirdBGPConfig{
+		NodeIP:   "10.0.0.1",
+		ASNumber: "64513",
+	}
+
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "", 4)
+	require.NoError(t, err)
+
+	peerAS := make(map[string]string)
+	for _, peer := range config.Peers {
+		peerAS[peer.IP] = peer.ASNumber
+	}
+	assert.Equal(t, map[string]string{
+		"10.0.0.2": "64514",
+		"10.0.0.3": "64512",
+	}, peerAS)
+}
+
 func TestProcessMeshPeers_IPv6(t *testing.T) {
 	originalNodeName := NodeName
 	NodeName = "node-1"

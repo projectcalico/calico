@@ -18,7 +18,7 @@ BUILD_IMAGES ?= $(ISTIO_CNI_IMAGE) $(ISTIO_PILOT_IMAGE) $(ISTIO_PROXYV2_IMAGE) $
 ARCHES = amd64 arm64
 
 # Upstream version (configurable)
-ISTIO_VERSION ?= 1.29.4
+ISTIO_VERSION ?= 1.29.10
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -44,15 +44,20 @@ init-sources: $(ISTIO_DOWNLOADED) $(ZTUNNEL_DOWNLOADED)
 
 $(ISTIO_DOWNLOADED):
 	mkdir -p istio
-	curl -sfL https://github.com/istio/istio/archive/refs/tags/$(ISTIO_VERSION).tar.gz | tar xz --strip-components=1 -C istio
+	curl -sSfL --retry 5 --retry-all-errors -o /tmp/calico-istio.tar.gz https://github.com/istio/istio/archive/refs/tags/$(ISTIO_VERSION).tar.gz
+	tar xz --strip-components=1 -C istio -f /tmp/calico-istio.tar.gz
+	rm -f /tmp/calico-istio.tar.gz
 	patch -d istio -p1 < patches/0001-feat-cni-DSCP-magic-mark-support-for-transparent-net.patch
 	patch -d istio -p1 < patches/0003-Update-deps-for-CVE-fixes.patch
 	touch $@
 
 $(ZTUNNEL_DOWNLOADED):
 	mkdir -p ztunnel
-	curl -sfL https://github.com/istio/ztunnel/archive/refs/tags/$(ISTIO_VERSION).tar.gz | tar xz --strip-components=1 -C ztunnel
+	curl -sSfL --retry 5 --retry-all-errors -o /tmp/calico-ztunnel.tar.gz https://github.com/istio/ztunnel/archive/refs/tags/$(ISTIO_VERSION).tar.gz
+	tar xz --strip-components=1 -C ztunnel -f /tmp/calico-ztunnel.tar.gz
+	rm -f /tmp/calico-ztunnel.tar.gz
 	patch -d ztunnel -p1 < patches/0002-transparent-policies.patch
+	patch -d ztunnel -p1 < patches/0004-Update-ztunnel-deps-for-CVE-fixes.patch
 	touch $@
 
 ###############################################################################
@@ -78,9 +83,11 @@ bin/pilot-agent-$(ARCH): $(ISTIO_DOWNLOADED)
 bin/pilot-discovery-$(ARCH): $(ISTIO_DOWNLOADED)
 	$(call build_binary_dir,istio,./pilot/cmd/pilot-discovery,../$@)
 
+# cargo-auditable embeds the resolved crate list in the binary; without it,
+# image scanners (Trivy, Grype) cannot see ztunnel's Rust dependencies.
 bin/ztunnel-$(ARCH): $(ZTUNNEL_DOWNLOADED)
 	$(DOCKER_RUST_BUILD) \
-		sh -c 'cd ztunnel && cargo build --release'
+		sh -c 'cd ztunnel && cargo auditable build --release --locked'
 	cp ztunnel/out/rust/$(RUST_TARGET)/release/ztunnel bin/ztunnel-$(ARCH)
 
 ###############################################################################

@@ -101,6 +101,8 @@
 #define CALI_F_VXLAN		(((CALI_COMPILE_FLAGS) & CALI_TC_VXLAN) != 0)
 
 #define CALI_F_TUNNEL	(CALI_F_IPIP || CALI_F_WIREGUARD || CALI_F_VXLAN)
+/* Attached to an encapsulating device; every tunnel object is also a host-endpoint object. */
+#define IFACE_ENCAPS	CALI_F_TUNNEL
 
 #define CALI_F_CGROUP	(((CALI_COMPILE_FLAGS) & CALI_CGROUP) != 0)
 #define CALI_F_DSR	((CALI_COMPILE_FLAGS & CALI_TC_DSR) != 0)
@@ -202,6 +204,8 @@ enum calico_skb_mark {
 	/* Accepted by XDP untracked policy. */
 	CALI_SKB_MARK_BYPASS_XDP             = CALI_SKB_MARK_BYPASS  | 0x00500000,
 	CALI_SKB_MARK_BYPASS_MASK            = CALI_SKB_MARK_SEEN_MASK | 0x02f00000,
+	/* The 0x00f00000 nibble is a code, independent of the BYPASS flag; compare it whole. */
+	CALI_SKB_MARK_CODE_MASK              = CALI_SKB_MARK_SEEN_MASK | 0x00f00000,
 	/* The FALLTHROUGH bit is used by programs that are towards the host namespace to indicate
 	 * that the packet is not known in BPF conntrack. We have iptables rules to drop or allow
 	 * such packets based on their Linux conntrack state. This allows for us to handle flows that
@@ -261,6 +265,7 @@ static CALI_BPF_INLINE __attribute__((noreturn)) void bpf_exit(int rc) {
 #define debug_ip(ip) (&(ip))
 #define ip_is_dnf(ip) (true)
 #define ip_is_frag(ip) (false)
+#define ip_is_nonfirst_frag(ip) (false)
 
 #else
 
@@ -270,6 +275,7 @@ static CALI_BPF_INLINE __attribute__((noreturn)) void bpf_exit(int rc) {
 #define ip_is_dnf(ip) ((ip)->frag_off & bpf_htons(0x4000))
 #define ip_is_frag(ip) ((ip)->frag_off & bpf_htons(0x3fff))
 #define ip_is_first_frag(ip) (((ip)->frag_off & bpf_htons(0x3fff)) == bpf_htons(0x2000))
+#define ip_is_nonfirst_frag(ip) ((ip)->frag_off & bpf_htons(0x1fff))
 #define ip_is_last_frag(ip) (!((ip)->frag_off & bpf_htons(0x2000)))
 #endif
 

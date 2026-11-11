@@ -67,7 +67,9 @@ func New(cfg *rest.Config) (client.Client, error) {
 	return NewCalicoctlExecClient(c)
 }
 
-// NewAPIClient returns a new controller-runtime client configured to use the projectcalico.org/v3 API group.
+// NewAPIClient returns a client that always talks to the aggregated apiserver, with no
+// discovery wait and no calicoctl fallback. Prefer New unless the request identity
+// matters, as it does for an impersonating client.
 func NewAPIClient(cfg *rest.Config) (client.Client, error) {
 	scheme, err := newScheme()
 	if err != nil {

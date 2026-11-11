@@ -22,6 +22,9 @@ sleep $((RANDOM % 60))
 createLocalSecret "marvin" "${HOME}/.keys/marvin" || true
 createLocalSecret "banzai-google-service-account.json" "${HOME}/secrets/banzai-google-service-account.json" || true
 createLocalSecret "docker_cfg.json" "${HOME}/.docker/config.json" || true
+# bz init copies ~/secrets into the profile, where Calico installs look for the
+# registry pull secret.
+createLocalSecret "docker_cfg.json" "${HOME}/secrets/docker_cfg.json" || true
 # Red Hat pull secret for aws-openshift provisioning; no-op until the secret is
 # added to the argoci store (see aws-openshift:check-prereqs). Staged into the
 # bz profile below.
@@ -35,6 +38,12 @@ if [[ -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]]; then
 else
   echo "[WARN] GOOGLE_APPLICATION_CREDENTIALS missing: ${GOOGLE_APPLICATION_CREDENTIALS}"
 fi
+# gcr.io is Artifact-Registry-backed; the static token in docker_cfg.json is
+# short-lived, so a long job can no longer pull by the time the epilogue runs.
+# The helper mints a token per pull (must follow the docker_cfg.json secret
+# above, which it rewrites, and the service-account activation).
+gcloud auth --quiet configure-docker gcr.io || echo "[WARN] gcloud configure-docker failed"
+
 # Azure SP login for azr-* (bz's azure path needs an active az session).
 # Creds via banzai-secrets: AZ_SP_ID/AZ_SP_PASSWORD/AZ_TENANT_ID/AZ_SUBSCRIPTION_ID.
 if [[ "${PROVISIONER:-}" == azr-* ]]; then
@@ -158,7 +167,6 @@ export USE_LATEST_RELEASE="${USE_LATEST_RELEASE:-false}"
 export BZ_LOCAL_DIR=${BZ_LOCAL_DIR:-${BZ_HOME}/.local}
 export BZ_LOGS_DIR=${BZ_LOGS_DIR:-${HOME}/.bz/logs}
 export REPORT_DIR=${REPORT_DIR:-${BZ_LOCAL_DIR}/report/${TEST_TYPE}}
-export GS_BUCKET=${GS_BUCKET:-argoci-artifacts}
 mkdir -p "${BZ_LOGS_DIR}"   # BZ_HOME + .local are created by "bz init profile"
 
 # --- Install the banzai (bz) CLI: the ArgoCI runner image does not ship it ---

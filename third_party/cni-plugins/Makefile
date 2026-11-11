@@ -15,19 +15,24 @@ include ../../lib.Makefile
 ##############################################################################
 # Upstream sources
 ##############################################################################
-# The four plugins we copy from projectcalico/containernetworking-plugins.
+# The four plugins we copy from containernetworking/plugins.
 # bandwidth is intentionally excluded — Calico has its own QoS support.
 CN_FILES := host-local portmap loopback tuning
 
 CONTAINERNETWORKING_PLUGINS_CLONED = .containernetworking-plugins-$(CNI_VERSION).cloned
 FLANNEL_CNI_PLUGIN_CLONED          = .flannel-cni-plugin-$(FLANNEL_VERSION).cloned
 
-# CNI_VERSION is a commit SHA (the fork has no release tag at the toolchain we
-# build with), so clone then check it out rather than passing it to --branch.
+# CNI_VERSION is a commit SHA, so clone then check it out rather than passing
+# it to --branch.
 $(CONTAINERNETWORKING_PLUGINS_CLONED):
 	rm -rf containernetworking-plugins .containernetworking-plugins-*.cloned
-	git clone https://github.com/projectcalico/containernetworking-plugins.git
+	git clone https://github.com/containernetworking/plugins.git containernetworking-plugins
 	git -C containernetworking-plugins checkout $(CNI_VERSION)
+	for patch in patches/*.patch; do \
+		if [ -f "$$patch" ]; then \
+			patch -d containernetworking-plugins -p1 < "$$patch" || exit 1; \
+		fi; \
+	done
 	touch $@
 
 $(FLANNEL_CNI_PLUGIN_CLONED):
@@ -51,7 +56,7 @@ $(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning &: $(CONTAINERNET
 		$(EXTRA_DOCKER_ARGS) \
 		-v $(CURDIR)/containernetworking-plugins:/go/src/github.com/containernetworking/plugins:z \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/containernetworking/plugins --rm $(CALICO_BUILD) \
-		/bin/sh -xe -c 'GOFLAGS="-buildvcs=false" CGO_ENABLED=0 GOARCH=$(ARCH) ./build_linux.sh $(CN_FLAGS)'
+		/bin/sh -xe -c 'go mod vendor && GOFLAGS="-buildvcs=false" CGO_ENABLED=0 GOARCH=$(ARCH) ./build_linux.sh $(CN_FLAGS)'
 	mkdir -p $(BIN)
 	@$(foreach file,$(CN_FILES),cp containernetworking-plugins/bin/$(file) $(BIN)/$(file);)
 
@@ -100,7 +105,7 @@ CNI_PLUGINS_HASH_INPUTS := \
 	$(FLANNEL_VERSION) \
 	$(GO_BUILD_VER) \
 	$(CALICO_BASE_VER) \
-	$(shell find Dockerfile Makefile cmd -type f | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
+	$(shell find Dockerfile Makefile cmd patches -type f | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
 CNI_PLUGINS_HASH := $(shell echo "$(CNI_PLUGINS_HASH_INPUTS)" | sha256sum | cut -c1-12)
 
 # The cache registry to probe for an existing content-addressed image. Defaults

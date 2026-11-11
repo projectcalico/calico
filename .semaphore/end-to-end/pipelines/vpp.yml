@@ -36,8 +36,6 @@ global_job_config:
       value: "vpp-results"
     - name: DATAPLANE
       value: CalicoVPP
-    - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\]|Dataplane:BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|wireguard|Wireguard|WireGuard|calient|doNotTrack|performanceHints|Tiered-Policy|Feature:Maglev)
     - name: USE_LATEST_RELEASE
       value: "false"
     - name: ENABLE_EXTERNAL_NODE
@@ -78,37 +76,73 @@ blocks:
               values: ["v3.28"]
             - env_var: VPP_VERSION
               values: ["v3.28.0"]
+          env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/vpp/vpp-encap-extnode.yaml"
 
-        - name: VPP-kadm
+        - name: VPP-kadm - gcp
           execution_time_limit:
             hours: 7
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
-            - env_var: PROVISIONER
-              values:
-                - "gcp-kubeadm"
-                - "aws-kubeadm"
             - env_var: VPP_MANIFEST_FILE
               values:
                 - "calico-vpp-nohuge.yaml"
+          env_vars:
+            - name: PROVISIONER
+              value: "gcp-kubeadm"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/vpp/vpp-encap-extnode.yaml"
 
-        - name: VPP-kadm-Huge
+        - name: VPP-kadm - aws
           execution_time_limit:
             hours: 7
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
-            - env_var: PROVISIONER
+            - env_var: VPP_MANIFEST_FILE
               values:
-                - "gcp-kubeadm"
-                - "aws-kubeadm"
+                - "calico-vpp-nohuge.yaml"
+          env_vars:
+            - name: PROVISIONER
+              value: "aws-kubeadm"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/vpp/vpp-encap-extnode-aws.yaml"
+
+        - name: VPP-kadm-Huge - gcp
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
             - env_var: VPP_MANIFEST_FILE
               values:
                 - "calico-vpp-dpdk.yaml"
           env_vars:
+            - name: PROVISIONER
+              value: "gcp-kubeadm"
             - name: ENABLE_HUGEPAGES
               value: "true"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/vpp/vpp-encap-extnode.yaml"
+
+        - name: VPP-kadm-Huge - aws
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: VPP_MANIFEST_FILE
+              values:
+                - "calico-vpp-dpdk.yaml"
+          env_vars:
+            - name: PROVISIONER
+              value: "aws-kubeadm"
+            - name: ENABLE_HUGEPAGES
+              value: "true"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/vpp/vpp-encap-extnode-aws.yaml"
 
         - name: VPP-kadm-VX-Huge
           execution_time_limit:
@@ -129,6 +163,8 @@ blocks:
               value: "VXLAN"
             - name: BGP_STATUS
               value: "Enabled"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/vpp/vpp-encap-extnode.yaml"
 
         - name: VPP-kadm-WG-Huge
           execution_time_limit:
@@ -147,6 +183,8 @@ blocks:
               value: "true"
             - name: ENABLE_WIREGUARD
               value: "true"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/vpp/vpp-encap-extnode.yaml"
 
         - name: VPP-EKS
           execution_time_limit:
@@ -167,20 +205,8 @@ blocks:
               value: "172.16.0.0/16"
             - name: FAILSAFE_443
               value: "true"
-            # Skipping these upstream k8s tests since they are failing because EKS control plane nodes can't reach the pod net:
-            # - [IT] "Proxy version v1 A set of valid responses are returned for both pod and service Proxy"
-            # - [IT] "Proxy version v1 should proxy through a service and a pod"
-            # - [IT] "ReplicaSet should serve a basic image on each replica with a public image"
-            # - [IT] "ReplicationController should serve a basic image on each replica with a public image"
-            # - [It] "DNS should provide DNS for ExternalName services"
-            # - [It] "DNS should provide DNS for pods for Hostname"
-            # - [It] "DNS should provide DNS for pods for Subdomain"
-            # - [It] "DNS should provide DNS for services"
-            # - [It] "DNS should provide DNS for the cluster"
-            # - [It] "DNS should resolve DNS of partial qualified names for services"
-            # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|Dataplane-BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|wireguard|Wireguard|WireGuard|calient|doNotTrack|performanceHints|Tiered-Policy|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/vpp/eks-vpp-encap-extnode-aws.yaml"
 
         - name: VPP-EKS-dpdk
           execution_time_limit:
@@ -203,20 +229,8 @@ blocks:
               value: "172.16.0.0/16"
             - name: FAILSAFE_443
               value: "true"
-            # Skipping these upstream k8s tests since they are failing because EKS control plane nodes can't reach the pod net:
-            # - [IT] "Proxy version v1 A set of valid responses are returned for both pod and service Proxy"
-            # - [IT] "Proxy version v1 should proxy through a service and a pod"
-            # - [IT] "ReplicaSet should serve a basic image on each replica with a public image"
-            # - [IT] "ReplicationController should serve a basic image on each replica with a public image"
-            # - [It] "DNS should provide DNS for ExternalName services"
-            # - [It] "DNS should provide DNS for pods for Hostname"
-            # - [It] "DNS should provide DNS for pods for Subdomain"
-            # - [It] "DNS should provide DNS for services"
-            # - [It] "DNS should provide DNS for the cluster"
-            # - [It] "DNS should resolve DNS of partial qualified names for services"
-            # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|Dataplane-BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|wireguard|Wireguard|WireGuard|calient|doNotTrack|performanceHints|Tiered-Policy|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/vpp/eks-vpp-encap-extnode-aws.yaml"
 
         - name: VPP-kadm-IPSec-Huge
           execution_time_limit:
@@ -235,6 +249,8 @@ blocks:
               value: "true"
             - name: ENABLE_VPP_IPSEC
               value: "true"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/vpp/vpp-encap-extnode-aws.yaml"
 
   # Openshift needs f1-standard-2 (more disk) so these jobs live in their own blocks.
   - name: VPP-openshift
@@ -257,6 +273,8 @@ blocks:
           env_vars:
             - name: AWS_INSTANCE_TYPE
               value: "m5.xlarge"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/vpp/vpp-encap-extnode-aws.yaml"
 
   - name: Iptables (Openshift)
     dependencies: []
@@ -280,6 +298,8 @@ blocks:
               value: "CalicoIptables"
             - name: AWS_INSTANCE_TYPE
               value: "m5.xlarge"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/vpp/xtables-encap-extnode-aws.yaml"
 
 promotions:
   - name: Cleanup jobs

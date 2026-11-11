@@ -109,6 +109,7 @@ var (
 		Help: "Number of BPF endpoints that are successfully programmed.",
 	})
 	errApplyingPolicy = errors.New("error applying policy")
+	errLayoutLookup   = errors.New("error looking up program layout")
 )
 
 var (
@@ -173,6 +174,7 @@ type bpfDataplane interface {
 	ensureStarted()
 	ensureProgramAttached(attachPoint) error
 	ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error
+	ensureProgramLayout(ap *tc.AttachPoint, ipFamily proto.IPVersion) error
 	ensureNoProgram(attachPoint) error
 	ensureQdisc(iface string) (bool, error)
 	ensureBPFDevices() error
@@ -187,7 +189,7 @@ type bpfDataplane interface {
 	loadDefaultPolicies(hk hook.Hook) error
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
 	interfaceByIndex(int) (*net.Interface, error)
-	queryClassifier(string, string) bool
+	preambleAttached(ap *tc.AttachPoint, h hook.Hook) bool
 	getIfaceLink(string) (netlink.Link, error)
 	netkitPinned(string) bool
 }
@@ -285,6 +287,9 @@ type bpfInterfaceState struct {
 	// change under a live interface, so the link type is not a stand-in for
 	// this — see useNetkitAttach.
 	netkitJumps bool
+	// preambleGlobals is what each hook's attached preamble was configured
+	// with; zero means unknown.
+	preambleGlobals [hook.Count]libbpf.TcGlobalData
 }
 
 type bpfInterfaceJumpIndices struct {
@@ -1416,6 +1421,11 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	logrus.Debugf("Interface update for %v, state %v", update.Name, update.State)
 
+	if update.Name == tc.NetkitProbeIface {
+		// Felix's own feature probe, not an endpoint; it is gone before we could configure it.
+		return
+	}
+
 	if !m.isDataIface(update.Name) && !m.isWorkloadIface(update.Name) && !m.isL3Iface(update.Name) {
 		if update.State == ifacemonitor.StateUp {
 			if ai, ok := m.initAttaches[update.Name]; ok {
@@ -1531,7 +1541,21 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 				}
 			default:
 				if m.v4 != nil {
-					if err := m.dp.setRPFilter(update.Name, 2); err != nil {
+					rpFilter := 2
+					if !m.bpfOverlayIPOnDevice &&
+						(iface.info.ifaceType == IfaceTypeIPIP || iface.info.ifaceType == IfaceTypeVXLAN) {
+						// In BPFOverlayHostSourceIP=HostAddress mode the overlay
+						// device has no IP address, and the kernel drops packets
+						// arriving on an address-less device unless their source
+						// routes back via that device, even in loose RPF mode.
+						// Replies of host-networked connections to remote service
+						// backends are reverse-NATted here on tunnel ingress, so
+						// their source is the service IP, routed via bpfin.cali.
+						// Turn kernel RPF off like on the bpfin/bpfout devices;
+						// BPF does the RPF on its own.
+						rpFilter = 0
+					}
+					if err := m.dp.setRPFilter(update.Name, rpFilter); err != nil {
 						logrus.WithError(err).Warnf("Failed to set rp_filter for %s.", update.Name)
 					}
 				}
@@ -2821,12 +2845,18 @@ func (m *bpfEndpointManager) dataIfaceStateFillJumps(ap *tc.AttachPoint, xdpMode
 	return nil
 }
 
-func (m *bpfEndpointManager) queryClassifier(ifaceName, tcHook string) bool {
-	tcProgs, err := tc.ListAttachedPrograms(ifaceName, tcHook, false)
-	if err != nil || len(tcProgs) == 0 {
-		return false
+func (m *bpfEndpointManager) preambleAttached(ap *tc.AttachPoint, h hook.Hook) bool {
+	attached, err := ap.PreambleAttached(h)
+	if err != nil {
+		fields := logrus.Fields{"iface": ap.Iface, "hook": h}
+		// A device deleted under us; the attach that follows handles it.
+		if errors.Is(err, unix.ENODEV) || errors.As(err, &netlink.LinkNotFoundError{}) {
+			logrus.WithError(err).WithFields(fields).Debug("Device gone while querying the preamble.")
+		} else {
+			m.updateRateLimitedLog.WithError(err).WithFields(fields).Warn("Failed to query the preamble, re-attaching it.")
+		}
 	}
-	return true
+	return attached
 }
 
 // useNetkitAttach reports whether this interface should be driven through the
@@ -2907,6 +2937,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			// attached. Do the full attach!
 			state.v4Readiness = ifaceNotReady
 			state.v6Readiness = ifaceNotReady
+			state.preambleGlobals = [hook.Count]libbpf.TcGlobalData{}
 		}
 	}
 
@@ -2926,17 +2957,6 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	v4Readiness := state.v4Readiness
 	v6Readiness := state.v6Readiness
 
-	if v4Readiness == ifaceIsReady || v6Readiness == ifaceIsReady {
-		if !m.dp.queryClassifier(ifaceName, hook.Ingress.String()) {
-			v4Readiness = ifaceNotReady
-			v6Readiness = ifaceNotReady
-		}
-		if !m.dp.queryClassifier(ifaceName, hook.Egress.String()) {
-			v4Readiness = ifaceNotReady
-			v6Readiness = ifaceNotReady
-		}
-	}
-
 	ap := m.calculateTCAttachPoint(ifaceName)
 	ap.IfIndex = ifindex
 
@@ -2955,6 +2975,15 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		// FIB path uses plain bpf_redirect instead.
 		ap.RedirectPeer = false
 	}
+
+	if v4Readiness == ifaceIsReady || v6Readiness == ifaceIsReady {
+		if !m.dp.preambleAttached(ap, hook.Ingress) || !m.dp.preambleAttached(ap, hook.Egress) {
+			v4Readiness = ifaceNotReady
+			v6Readiness = ifaceNotReady
+			state.preambleGlobals = [hook.Count]libbpf.TcGlobalData{}
+		}
+	}
+
 	if wep != nil && wep.QosControls != nil {
 		// QoSControls are present, update state
 
@@ -3064,30 +3093,24 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	wg.Wait()
 
-	attachPreamble := false
-	if m.v6 != nil {
-		attachPreamble = v6Readiness != ifaceIsReady
-	}
-	if m.v4 != nil {
-		attachPreamble = v4Readiness != ifaceIsReady
+	// Without its layout a ready family would drop out of the preamble, so keep
+	// the attached preamble and fully reload that family next time.
+	if errors.Is(err4, errLayoutLookup) || errors.Is(err6, errLayoutLookup) {
+		if errors.Is(err4, errLayoutLookup) {
+			state.v4Readiness = ifaceNotReady
+		}
+		if errors.Is(err6, errLayoutLookup) {
+			state.v6Readiness = ifaceNotReady
+		}
+		return state, errors.Join(err4, err6)
 	}
 
-	// Attach preamble TC program
-	if attachPreamble {
-		wg.Go(func() {
-			ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
-			if ingressAP != nil {
-				m.loadFilterProgram(ingressAP)
-				ingressErr = m.dp.ensureProgramAttached(ingressAP)
-			}
-		})
-		egressAP := mergeAttachPoints(egressAP4, egressAP6)
-		if egressAP != nil {
-			m.loadFilterProgram(egressAP)
-			egressErr = m.dp.ensureProgramAttached(egressAP)
-		}
-		wg.Wait()
-	}
+	globals := wepPreambleGlobals(ingressAP4, ingressAP6, egressAP4, egressAP6)
+	wg.Go(func() {
+		ingressErr = m.ensureWepPreamble(&state, globals, ingressAP4, ingressAP6)
+	})
+	egressErr = m.ensureWepPreamble(&state, globals, egressAP4, egressAP6)
+	wg.Wait()
 
 	if ingressErr != nil {
 		return state, ingressErr
@@ -3329,6 +3352,9 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 			return nil, fmt.Errorf("attaching program to wep: %w", err)
 		}
 		ap.Log().Info("Attached programs to the WEP")
+	} else if err := d.mgr.dp.ensureProgramLayout(ap, d.ipFamily); err != nil {
+		// The preamble may be re-attached, and needs this family's jump tables.
+		return nil, fmt.Errorf("%w: %w", errLayoutLookup, err)
 	}
 
 	if err := d.wepApplyPolicy(ap, endpoint, polDirection); err != nil {
@@ -3336,6 +3362,55 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 	}
 
 	return ap, nil
+}
+
+// ensureWepPreamble re-attaches one hook's preamble when the globals it carries,
+// jump tables included, differ from what the kernel has.
+func (m *bpfEndpointManager) ensureWepPreamble(
+	state *bpfInterfaceState,
+	globals [hook.Count]libbpf.TcGlobalData,
+	ap4, ap6 *tc.AttachPoint,
+) error {
+	ap := mergeAttachPoints(ap4, ap6)
+	if ap == nil {
+		return nil
+	}
+	h := ap.HookName()
+	if globals[h] == state.preambleGlobals[h] {
+		return nil
+	}
+	m.loadFilterProgram(ap)
+	if err := m.dp.ensureProgramAttached(ap); err != nil {
+		// The hook may hold the old or the new preamble.
+		state.preambleGlobals[h] = libbpf.TcGlobalData{}
+		return err
+	}
+	state.preambleGlobals[h] = globals[h]
+	return nil
+}
+
+// wepPreambleGlobals returns the globals each hook's preamble would be
+// attached with. A family that failed to load contributes nothing.
+func wepPreambleGlobals(ingressAP4, ingressAP6, egressAP4, egressAP6 *tc.AttachPoint) [hook.Count]libbpf.TcGlobalData {
+	var globals [hook.Count]libbpf.TcGlobalData
+	for _, aps := range [][2]*tc.AttachPoint{{ingressAP4, ingressAP6}, {egressAP4, egressAP6}} {
+		merged := mergeAttachPoints(copyAttachPoint(aps[0]), copyAttachPoint(aps[1]))
+		if merged == nil {
+			continue
+		}
+		globals[merged.HookName()] = *merged.(*tc.AttachPoint).Configure()
+	}
+	return globals
+}
+
+// copyAttachPoint protects the caller's attach point, since mergeAttachPoints
+// writes into its v4 argument.
+func copyAttachPoint(ap *tc.AttachPoint) *tc.AttachPoint {
+	if ap == nil {
+		return nil
+	}
+	c := *ap
+	return &c
 }
 
 func (m *bpfEndpointManager) loadPrograms(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
@@ -4153,9 +4228,7 @@ func (m *bpfEndpointManager) setRPFilter(iface string, val int) error {
 	// We only support IPv4 for now.
 	path := fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", iface)
 	numval := strconv.Itoa(val)
-	err := writeProcSys(path, numval)
-	if err != nil {
-		logrus.WithField("err", err).Errorf("Failed to  set %s to %s", path, numval)
+	if err := writeProcSys(path, numval); err != nil {
 		return err
 	}
 
@@ -4445,37 +4518,52 @@ func (m *bpfEndpointManager) failedOptionalProgFeatureNames() []string {
 }
 
 // Ensure TC/XDP program is attached to the specified interface.
+// ensureProgramLayout fills in ap's jump tables for ipFamily, loading the
+// generic programs only if they are not loaded yet.
+func (m *bpfEndpointManager) ensureProgramLayout(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
+	// Derive the program attach type from the attach point. For netkit
+	// devices this will be "Netkit", otherwise it comes from the global config.
+	progAttachType := string(ap.AttachType)
+	if ap.IsNetkit() {
+		progAttachType = tc.AttachOptionNetkit
+	}
+
+	layout, err := m.loadTCObj(tcHookAttachType(ap, ipFamily), ap.ProgramsMap.(*hook.ProgramsMap), progAttachType)
+	if err != nil {
+		return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
+	}
+	if ipFamily == proto.IPVersion_IPV6 {
+		ap.HookLayoutV6 = layout
+	} else {
+		ap.HookLayoutV4 = layout
+	}
+	return nil
+}
+
+func tcHookAttachType(ap *tc.AttachPoint, ipFamily proto.IPVersion) hook.AttachType {
+	return hook.AttachType{
+		Hook:       ap.HookName(),
+		Family:     int(ipFamily),
+		Type:       ap.Type,
+		LogLevel:   ap.LogLevel,
+		ToHostDrop: ap.ToHostDrop,
+		DSR:        ap.DSR,
+	}
+}
+
 func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
 	var err error
 
 	if aptc, ok := ap.(*tc.AttachPoint); ok {
-		// Derive the program attach type from the attach point. For netkit
-		// devices this will be "Netkit", otherwise it comes from the global config.
-		progAttachType := string(aptc.AttachType)
-		if aptc.IsNetkit() {
-			progAttachType = tc.AttachOptionNetkit
-		}
-
-		at := hook.AttachType{
-			Hook:       aptc.HookName(),
-			Family:     int(ipFamily),
-			Type:       aptc.Type,
-			LogLevel:   aptc.LogLevel,
-			ToHostDrop: aptc.ToHostDrop,
-			DSR:        aptc.DSR,
-		}
+		at := tcHookAttachType(aptc, ipFamily)
 
 		policyIdx := aptc.PolicyIdxV4
 		ap.Log().Debugf("ensureProgramLoaded %d", ipFamily)
+		if err := m.ensureProgramLayout(aptc, ipFamily); err != nil {
+			return err
+		}
 		if ipFamily == proto.IPVersion_IPV6 {
-			if aptc.HookLayoutV6, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap), progAttachType); err != nil {
-				return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
-			}
 			policyIdx = aptc.PolicyIdxV6
-		} else {
-			if aptc.HookLayoutV4, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap), progAttachType); err != nil {
-				return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
-			}
 		}
 
 		jmpMap := m.commonMaps.JumpMaps[aptc.Hook]

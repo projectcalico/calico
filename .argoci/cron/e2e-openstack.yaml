@@ -4,25 +4,19 @@
 # Deployment is pure Banzai: the gcp-openstack provisioner stands up an
 # OpenStack (Caracal) cluster on GCE VMs and the packaged installer layers
 # Calico onto it.  banzai-core's defaults for this provisioner/installer pair
-# cover everything OpenStack-specific: GCP placement (europe-west3-c in the
-# openstack-calico-test VPC), Calico packages from ppa:project-calico/master,
-# calico/{ctl,node}:master images, and the test image
-# (gcr.io/unique-caldron-775/openstack-e2e:stable, built from
-# tigera/calico-test — the only remaining use of that repo's coding).
-# Release branches will need INSTALL_SOURCE / CALICOCTL_IMAGE /
-# CALICO_NODE_IMAGE overrides here once we publish packages and images from
-# release branches.
+# cover GCP placement (europe-west3-c in the openstack-calico-test VPC) and the
+# test image (gcr.io/unique-caldron-775/openstack-e2e:stable, built from
+# tigera/calico-test — the only remaining use of that repo's coding).  The
+# Calico debs and images default to master, so this branch overrides them in
+# globalPrologue below.
 #
 # Four jobs: {full-fv, multi-region} x {Ubuntu 24.04 Noble, 22.04 Jammy}.
 # There is no separate smoke job: smoke (a single mainline connectivity test)
 # is a strict subset of full-fv, so adds nothing on a weekly cadence.
 version: condensed
 generateName: e2e-openstack-
-# Feb 31 never fires.  Without the overrides noted above this would install
-# master packages and images, so it would report this branch's name while
-# testing master.  Un-park it once v3.33.0 ships the calico-3.33 PPA and the
-# matching images, adding those overrides at the same time.
-schedule: 0 0 31 2 *
+# Sundays 20:00 UTC: after master's 17:00 run, before release-v3.32's 23:00.
+schedule: 0 20 * * 0
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
   export ARGO_WORKFLOW_NAME="{{workflow.name}}"
@@ -35,6 +29,14 @@ globalPrologue: |
   # subset).  The multi-region tests within it self-activate on the jobs
   # whose cluster has a second region — see MULTI_REGION below.
   export OPENSTACK_TEST_SPEC="${OPENSTACK_TEST_SPEC:-full-fv}"
+
+  # This branch's tip, not master's.  Set unconditionally: a fallback here
+  # would silently test master under this branch's name.  The debs come from
+  # the branch-tip PPA that release-v3.33 merges publish to.  calicoctl is in
+  # calico/calico from v3.33, but confd still needs calico/node.
+  export INSTALL_SOURCE=ppa:project-calico/release-3.33
+  export CALICO_NODE_IMAGE=quay.io/calico/node:release-v3.33
+  export CALICOCTL_IMAGE=quay.io/calico/calico:release-v3.33
   source .argoci/scripts/global_prologue.sh
 globalEpilogue: |
   source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"

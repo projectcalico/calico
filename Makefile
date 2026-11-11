@@ -243,21 +243,19 @@ push-chart: bin/helm
 ###############################################################################
 E2E_PROCS ?= 4
 E2E_TIMEOUT ?= 90m
-E2E_TEST_CONFIG ?= e2e/config/kind.yaml
+# The conformance kind lane relies on this default. The provisioned lanes never
+# reach it: run_tests.sh always passes E2E_TEST_CONFIG on make's command line,
+# and a command-line assignment overrides ?= even when its value is empty.
+E2E_TEST_CONFIG ?= e2e/config/kind/conformance.yaml
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
 
-# rapidclient (packet-size / maglev helper image) for the kind e2e lanes. Fork PRs
-# can't push to quay, so the packet-size lane (e2e-test-bpf) builds the image from PR
-# source and loads it straight into the kind nodes + external node; pods then pin this
-# exact tag with ImagePullPolicy=Never (see images.RapidClientImage / packet_size.go).
-# This mirrors the gcp-kubeadm side-load in .semaphore/.../load_images.sh (pr-<N>).
-# ?= so the gcp path's own RAPIDCLIENT_TAG wins if it ever runs through here; exported
-# so the ginkgo e2e process (which reads os.Getenv) inherits it across the sub-make.
-RAPIDCLIENT_TAG ?= kind-e2e
-export RAPIDCLIENT_TAG
+# rapidclient helper image for the packet-size and maglev specs. e2e-test-bpf loads
+# a PR-built copy into the kind nodes under the tag the tests use, so
+# PullIfNotPresent finds it. Keep in sync with images.go.
+RAPIDCLIENT_TAG := latest
 RAPIDCLIENT_IMAGE := quay.io/tigeradev/rapidclient
 EXTERNAL_NODE_NAME ?= kind-external-node
 
@@ -303,13 +301,11 @@ e2e-test-bpf:
 	$(MAKE) e2e-run \
 		KIND_NAME=kind \
 		KUBECONFIG=$(KIND_KUBECONFIG) \
-		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind-bpf.yaml
+		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/bpf.yaml
 
 ## Build the rapidclient helper image from PR source and load it into the kind
-## nodes so the packet-size server pods (ImagePullPolicy=Never) find it. Note:
-## unlike the rest of the kind image flow (local registry + PullAlways), rapidclient
-## is loaded directly with `kind load` to match the containerd-import + PullNever
-## model that images.RapidClientImage()/packet_size.go already use for gcp.
+## nodes, so the packet-size server pods use the PR build rather than pulling
+## the published image.
 .PHONY: kind-load-rapidclient
 kind-load-rapidclient:
 	$(MAKE) -C e2e/images/rapidclient image TAG_NAME=$(RAPIDCLIENT_TAG)
@@ -332,13 +328,14 @@ e2e-test-clusternetworkpolicy:
 
 ## Run the general e2e tests against the cluster at $KUBECONFIG.
 ## Callers must set KUBECONFIG explicitly (e.g. $(KIND_KUBECONFIG) for kind).
-## Selection comes from E2E_TEST_CONFIG, or from E2E_GINKGO_ARGS (legacy
-## focus/skip regexes) when it is empty. E2E_GINKGO_ARGS expands in the shell so
-## its regex metacharacters survive.
+## Selection comes from E2E_TEST_CONFIG. E2E_GINKGO_ARGS passes extra ginkgo flags for
+## an ad-hoc local run; it expands in the shell so its regex metacharacters survive.
+## --fail-on-empty fails a run that selects no specs instead of passing it.
+## OpenShift keeps the legacy master taint on control-plane nodes, which otherwise blocks startup.
 e2e-run:
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
-	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- $${E2E_GINKGO_ARGS} $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
+	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --non-blocking-taints=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master $${E2E_GINKGO_ARGS} $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
 
 ## Run the ClusterNetworkPolicy specific e2e tests against the cluster at $KUBECONFIG.
 e2e-run-cnp:

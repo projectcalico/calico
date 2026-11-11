@@ -44,7 +44,9 @@ spec:
                   description:
                     "ASNumber is the default AS number used by a node. [Default:
                     64512]"
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 bindMode:
                   description: |-
@@ -205,6 +207,7 @@ spec:
                   type: array
                   x-kubernetes-list-type: atomic
                 programClusterRoutes:
+                  default: EnabledNoEncapOnly
                   description: |-
                     ProgramClusterRoutes controls which "cluster routes" are programmed by Calico's BGP
                     stack, i.e. the routes that a node needs in order to reach workloads on other nodes.  It

@@ -53,10 +53,8 @@ type AggregationBucket struct {
 	// Tracker for statistics within this bucket.
 	stats *statisticsIndex
 
-	// ready is set when this bucket is sent to any stream, and cleared when this bucket is reset.
-	// It can thus be used to determine when a bucket is rolled over between Goldmane deciding to stream it,
-	// and the bucket actually being emited. In this case, we should skip streaming the bucket as its contents
-	// are no longer valid.
+	// ready is set when the bucket is sent to a stream and cleared on reset. Iter checks it only
+	// while copying the flow list, so a reset after the copy does not stop that send.
 	ready bool
 }
 
@@ -130,21 +128,38 @@ func (b *AggregationBucket) markReady() {
 	b.ready = true
 }
 
-func (b *AggregationBucket) Iter(fn func(FlowBuilder) bool) {
+// Iter calls fn with a builder for each flow in the bucket that matches filter, stopping when
+// fn returns true. A nil filter matches every flow. Matching and fn both run without the bucket
+// lock, so neither a slow consumer nor the match pass blocks AddFlow.
+func (b *AggregationBucket) Iter(filter *proto.Filter, fn func(FlowBuilder) bool) {
+	flows, start, end := b.snapshot()
+	for _, d := range flows {
+		// The key is immutable, so matching it needs no lock.
+		if !types.Matches(filter, &d.Key) {
+			continue
+		}
+		if fn(NewDeferredFlowBuilder(d, start, end)) {
+			return
+		}
+	}
+}
+
+// snapshot copies the bucket's flows and time range under the read lock, or returns nothing if
+// the bucket has been reset since it was marked ready.
+func (b *AggregationBucket) snapshot() ([]*DiachronicFlow, int64, int64) {
 	b.RLock()
 	defer b.RUnlock()
 
 	if !b.ready {
-		// Bucket has been reset since it was streamed. Skip it.
 		logrus.WithFields(b.Fields()).Info("Skipping bucket that has since rolled over")
-		return
+		return nil, 0, 0
 	}
 
+	flows := make([]*DiachronicFlow, 0, b.Flows.Len())
 	for d := range b.Flows.All() {
-		if fn(NewDeferredFlowBuilder(d, b.StartTime, b.EndTime)) {
-			break
-		}
+		flows = append(flows, d)
 	}
+	return flows, b.StartTime, b.EndTime
 }
 
 func (b *AggregationBucket) QueryStatistics(q *proto.StatisticsRequest) map[StatisticsKey]*counts {

@@ -27,6 +27,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
@@ -190,6 +191,10 @@ type endpointManager struct {
 	// wlIfaceNamesToReconfigure contains names of workload interfaces that need to have
 	// their configuration (sysctls etc.) refreshed.
 	wlIfaceNamesToReconfigure set.Set[string]
+
+	// ifbCleanupPending starts true so that IFBs orphaned while Felix was down are swept at startup.
+	ifbCleanupPending   bool
+	cleanupOrphanedIfbs func(isWorkloadIface func(string) bool) error
 
 	// epIDsToUpdateStatus contains IDs of endpoints that we need to report status for.
 	// Mix of host and workload endpoint IDs.
@@ -364,6 +369,9 @@ func newEndpointManagerWithShims(
 
 		wlIfaceNamesToReconfigure: set.New[string](),
 
+		ifbCleanupPending:   true,
+		cleanupOrphanedIfbs: qos.CleanupOrphanedIfbDevices,
+
 		epIDsToUpdateStatus: set.New[any](),
 
 		sourceSpoofingConfig: map[string][]string{},
@@ -503,6 +511,10 @@ func (m *endpointManager) ResolveUpdateBatch() error {
 			}
 		} else {
 			m.activeUpIfaces.Discard(ifaceName)
+			// If the WorkloadEndpoint is already gone from the datastore, no removal event will clean up this IFB.
+			if state == ifacemonitor.StateNotPresent && m.wlIfacesRegexp.MatchString(ifaceName) {
+				m.ifbCleanupPending = true
+			}
 		}
 		// A workload interface appearing or disappearing changes the flowtable device
 		// list even when no endpoint update accompanies it (e.g. a veth removed on pod
@@ -531,6 +543,14 @@ func (m *endpointManager) ResolveUpdateBatch() error {
 func (m *endpointManager) CompleteDeferredWork() error {
 	m.markEPsWithDirtyPolicies()
 	m.resolveWorkloadEndpoints()
+
+	if m.ifbCleanupPending {
+		if err := m.cleanupOrphanedIfbs(m.wlIfacesRegexp.MatchString); err != nil {
+			log.WithError(err).Warn("Failed to clean up orphaned QoS IFB devices, will retry")
+		} else {
+			m.ifbCleanupPending = false
+		}
+	}
 
 	if m.hostEndpointsDirty {
 		log.Debug("Host endpoints updated, resolving them.")

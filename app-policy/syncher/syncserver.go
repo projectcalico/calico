@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package syncher
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -37,7 +38,7 @@ type SyncClient struct {
 	target           string
 	dialOpts         []grpc.DialOption
 	subscriptionType string
-	inSync           bool
+	inSync           atomic.Bool
 	storeManager     policystore.PolicyStoreManager
 }
 
@@ -79,7 +80,7 @@ func (s *SyncClient) Sync(cxt context.Context) {
 	for {
 		select {
 		case <-cxt.Done():
-			s.inSync = false
+			s.inSync.Store(false)
 			return
 		default:
 			inSync := make(chan struct{})
@@ -89,19 +90,19 @@ func (s *SyncClient) Sync(cxt context.Context) {
 			// Block until we receive InSync message, or cancelled.
 			select {
 			case <-inSync:
-				s.inSync = true
+				s.inSync.Store(true)
 			// Also catch the case where syncStore ends before it gets an InSync message.
 			case <-done:
 				// pass
 			case <-cxt.Done():
-				s.inSync = false
+				s.inSync.Store(false)
 				return
 			}
 
 			// Block until syncStore() ends (e.g. disconnected), or cancelled.
 			select {
 			case <-done:
-				s.inSync = false
+				s.inSync.Store(false)
 				// pass
 			case <-cxt.Done():
 				return
@@ -110,7 +111,7 @@ func (s *SyncClient) Sync(cxt context.Context) {
 			select {
 			case <-time.After(PolicySyncRetryTime):
 			case <-cxt.Done():
-				s.inSync = false
+				s.inSync.Store(false)
 				return
 			}
 		}
@@ -130,7 +131,7 @@ func (s *SyncClient) syncStore(cxt context.Context, inSync chan<- struct{}, done
 	stream, err := client.Sync(cxt, &proto.SyncRequest{})
 	if err != nil {
 		log.Warnf("failed to synchronize with Policy Sync server: %v", err)
-		s.inSync = false
+		s.inSync.Store(false)
 		return
 	}
 	log.Info("Starting synchronization with Policy Sync server")
@@ -143,7 +144,7 @@ func (s *SyncClient) syncStore(cxt context.Context, inSync chan<- struct{}, done
 		log.WithFields(log.Fields{"proto": update}).Debug("Received sync API Update")
 		switch update.Payload.(type) {
 		case *proto.ToDataplane_InSync:
-			s.inSync = true
+			s.inSync.Store(true)
 			s.storeManager.OnInSync()
 		default:
 			s.storeManager.DoWithLock(func(ps *policystore.PolicyStore) {
@@ -155,5 +156,5 @@ func (s *SyncClient) syncStore(cxt context.Context, inSync chan<- struct{}, done
 
 // Readiness returns whether the SyncClient is InSync.
 func (s *SyncClient) Readiness() bool {
-	return s.inSync
+	return s.inSync.Load()
 }

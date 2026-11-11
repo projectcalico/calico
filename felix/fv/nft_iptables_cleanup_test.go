@@ -76,10 +76,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ nftables cleanup of iptable
 			logNFTDiags(tc.Felixes[0])
 			tc.Felixes[0].Exec("iptables-nft-save")
 		}
-		tc.Stop()
-		if infra != nil {
-			infra.Stop()
-		}
 	})
 
 	It("cleans up the iptables rules and leaves the foreign ones alone", func() {

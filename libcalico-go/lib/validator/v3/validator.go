@@ -142,9 +142,16 @@ func Validate(current any) error {
 				if name == "" || name == "<nil>" {
 					name = resolveKind(rObj)
 				}
+
+				// Duplicate and required errors carry no detail, so fall back
+				// to the rendered body to keep the message meaningful.
+				reason := e.Detail
+				if reason == "" {
+					reason = e.ErrorBody()
+				}
 				verr.ErroredFields = append(verr.ErroredFields, errors.ErroredField{
 					Name:   name,
-					Reason: e.Detail,
+					Reason: reason,
 				})
 			}
 		}
@@ -455,7 +462,7 @@ func validateSelector(fl validator.FieldLevel) bool {
 	log.Debugf("Validate selector: %s", s)
 
 	// We use the selector parser to validate a selector string.
-	err := selector.Validate(s)
+	err := selector.Validate(s, selector.MaxAPIDepth)
 	if err != nil {
 		log.Debugf("Selector %#v was invalid: %v", s, err)
 		return false
