@@ -414,7 +414,7 @@ steps:
       - name: E2E_TEST_CONFIG
         value: e2e/config/iptables/xtables.yaml
       - name: K8S_VERSION
-        value: v1.32.13
+        value: stable-1.32
       - name: RKE_VERSION
         value: v1.8.14
     matrix:
@@ -431,6 +431,8 @@ steps:
     env:
       - name: E2E_TEST_CONFIG
         value: e2e/config/iptables/xtables-wireguard.yaml
+      - name: ENABLE_CALICOCTL_APISERVER
+        value: "true"
       - name: ENABLE_EXTERNAL_NODE
         value: "true"
       - name: ENABLE_WIREGUARD
@@ -459,6 +461,8 @@ steps:
     env:
       - name: E2E_TEST_CONFIG
         value: e2e/config/iptables/xtables-wireguard.yaml
+      - name: ENABLE_CALICOCTL_APISERVER
+        value: "true"
       - name: ENABLE_EXTERNAL_NODE
         value: "true"
       - name: ENABLE_WIREGUARD
@@ -552,6 +556,8 @@ steps:
       - http-cache-proxy
     env:
       - name: DISABLE_IPIP
+        value: "true"
+      - name: ENABLE_CALICOCTL_APISERVER
         value: "true"
       - name: ENABLE_WIREGUARD
         value: "true"
@@ -735,6 +741,10 @@ steps:
         value: "true"
       - name: INSTALLER
         value: helmerator
+      # The global default 192.168.0.0/16 overlaps the eksctl VPC CIDR, which
+      # breaks pod -> API server traffic on EKS with Calico CNI.
+      - name: IPV4_POD_CIDR
+        value: 172.16.0.0/16
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -756,7 +766,7 @@ steps:
       - name: ubuntu-2404-lts-gcp-kubeadm
         env:
           - name: CLUSTER_IMAGE
-            value: ubuntu-2404-lts
+            value: ubuntu-2404-lts-amd64
           - name: PROVISIONER
             value: gcp-kubeadm
       - name: ubuntu-2204-lts-gcp-kubeadm
@@ -771,10 +781,10 @@ steps:
             value: rhel-10
           - name: PROVISIONER
             value: gcp-kubeadm
-      - name: centos-stream-8-gcp-kubeadm
+      - name: centos-stream-9-gcp-kubeadm
         env:
           - name: CLUSTER_IMAGE
-            value: centos-stream-8
+            value: centos-stream-9
           - name: PROVISIONER
             value: gcp-kubeadm
       - name: rhel-9-gcp-kubeadm
@@ -817,6 +827,8 @@ steps:
             value: calico-typha.yaml
       - name: stable-1-canal-yaml
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/iptables/xtables-manifest-canal.yaml
           - name: K8S_VERSION
             value: stable-1
           - name: MANIFEST_FILE
@@ -849,6 +861,8 @@ steps:
             value: calico-typha.yaml
       - name: beta-or-stable-canal-yaml
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/iptables/xtables-manifest-canal.yaml
           - name: K8S_VERSION
             value: beta-or-stable
           - name: MANIFEST_FILE
@@ -896,11 +910,11 @@ steps:
       - name: USE_HASH_RELEASE
         value: "true"
     matrix:
-      - name: https-raw-githubusercontent-com-projectcalico-calico-v3-28-2-manifests-canal-yaml
+      - name: canal-v3-28-2
         env:
           - name: DOWNLEVEL_MANIFEST
             value: https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/canal.yaml
-      - name: https-raw-githubusercontent-com-coreos-flannel-master-documentation-kube-flannel-yml
+      - name: flannel-master
         env:
           - name: DOWNLEVEL_MANIFEST
             value: https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml

@@ -308,7 +308,11 @@ func RunCNIPluginWithIdContext(
 			return err
 		}
 
-		defer nlHandle.Close()
+		defer func() {
+			if err := nlHandle.Close(); err != nil {
+				log.WithError(err).Warn("Failed to close netlink handle")
+			}
+		}()
 		contVeth, err = nlHandle.LinkByName(ifName)
 		if err != nil {
 			return err

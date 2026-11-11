@@ -108,6 +108,9 @@ Felix (per-node) --gRPC--> FlowCollector --> Goldmane main loop --> BucketRing
 - The main loop serialises all operations. Adding a new operation
   that must not block the loop (e.g. a long-running query) needs
   an explicit design — do not just `go` it.
+- The main loop owns stream registration, so backfill and the first live
+  bucket are queued in one step. It never blocks on a stream: one that
+  falls too far behind is closed and the client reconnects.
 - A change to `BucketRing`'s sizing or `AggregationWindow`
   default affects memory footprint; benchmark before changing.
 
@@ -182,6 +185,13 @@ is a contract change for dashboards and alerting; record it here.
 **Stream metrics:**
 - `goldmane_num_streams` — number of active gRPC stream
   subscriptions.
+
+**Policy trace cache:**
+- `goldmane_policy_trace_cache_size` — decoded policy trace
+  entries across the cache's current and previous generations.
+- `goldmane_policy_trace_cache_rotations_total` — times the cache
+  started a new generation, dropping traces unused for a whole
+  generation; a fast rise means the working set exceeds one.
 
 ### Review notes
 

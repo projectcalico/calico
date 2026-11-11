@@ -7,10 +7,12 @@ include ../lib.Makefile
 .PHONY: build
 build: bin/release
 
+# The tool logs to the directory it ran from, so clean the repo root too.
 clean:
-	@rm -rf ./bin ./output ./_output ./report ./tmp
+	@rm -rf ./bin ./output ./_output ./report ./tmp ./_logs
 	@rm -f ./internal/defaults/metadata.mk
-	@find ../ -name '*release*.log' -delete
+	@find .. -maxdepth 1 -name '*.log' -delete
+	@find . -name '*.log' -delete
 	@find . -name '*.received.*' -delete
 
 # Stage metadata.mk next to embed.go so go:embed (which requires paths relative to the source file) can pick it up.
@@ -46,6 +48,16 @@ endif
 fv st:
 	$(info *** Release tool does not have $@ tests, skipping)
 	@true
+
+.PHONY: e2e e2e/hashrelease e2e/release
+e2e: e2e/hashrelease e2e/release
+
+e2e/hashrelease: var-require-all-HASHRELEASE_SERVER_BUCKET
+	PLAN=true $(MAKE) hashrelease
+	LOCAL=true BRANCH_CHECK=false $(MAKE) hashrelease
+
+e2e/release:
+	PLAN=true $(MAKE) -C ../ release release-publish
 
 ###############################################################################
 # Checks

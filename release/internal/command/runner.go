@@ -18,6 +18,37 @@ func runner() CommandRunner {
 	return &RealCommandRunner{}
 }
 
+type Option interface {
+	apply(*settings)
+}
+
+type setting func(*settings)
+
+func (f setting) apply(s *settings) { f(s) }
+
+type settings struct {
+	name   string
+	dir    string
+	args   []string
+	runner CommandRunner
+}
+
+func WithDir(dir string) Option {
+	return setting(func(s *settings) {
+		s.dir = dir
+	})
+}
+
+func WithRunner(runner CommandRunner) Option {
+	return setting(func(s *settings) {
+		s.runner = runner
+	})
+}
+
+func run(s *settings) (string, error) {
+	return s.runner.RunInDir(s.dir, s.name, s.args, nil)
+}
+
 // Run runs a command with arguments.
 func Run(command string, args []string) (string, error) {
 	return runner().Run(command, args, nil)

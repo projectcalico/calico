@@ -86,8 +86,8 @@ CALICO_LDFLAGS = -X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(CALICO_VERSIO
                  -X $(PACKAGE_NAME)/pkg/components.operatorImagePath=$(OPERATOR_IMAGE_PATH)
 
 # To update the Istio version, see "Updating the bundled version of Istio" in docs/common_tasks.md.
-ISTIO_HELM_REPO ?= https://istio-release.storage.googleapis.com/charts
-ISTIO_VERSION ?= 1.29.2
+ISTIO_HELM_REPO ?= https://blob.istio.io/istio-release/charts
+ISTIO_VERSION ?= 1.31.3
 ISTIO_RESOURCES_DIR = pkg/render/istio
 ISTIO_CHARTS = base istiod cni ztunnel
 ISTIO_CHART_FILES = $(addprefix $(ISTIO_RESOURCES_DIR)/,$(addsuffix .tgz,$(ISTIO_CHARTS)))

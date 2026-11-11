@@ -85,5 +85,53 @@ check "api error: rc" "$RC" "0"
 check "api error: warns" "$OUT" "::warning::could not assign alice to https://github.com/tigera/calico-private/pull/42"
 GH_EXIT=0
 
+# --- do_generate -----------------------------------------------------------
+# Stub make: with MAKE_CHANGES=1 it mimics the generators editing a tracked
+# file, adding an untracked one, and dropping an ignored build artifact; with 0
+# it is a no-op. Idempotent, so do_generate's two make calls are safe.
+MAKE_CHANGES=0
+make() {
+  [ "$MAKE_CHANGES" = "1" ] || return 0
+  printf 'regenerated\n' > generated/zz.go
+  printf 'new\n' > generated/new_gen.go
+  mkdir -p build && printf 'junk\n' > build/artifact
+}
+
+# A finalized pick: a base commit holding .gitignore, then the pick commit with
+# the picked source and a tracked generated file.
+gen_repo() {
+  local d; d="$(mktemp -d)"
+  ( cd "$d"
+    git init -q
+    git config user.email t@t; git config user.name t
+    printf 'build/\n' > .gitignore
+    git add .gitignore && git commit -q -m base
+    mkdir generated
+    printf 'orig\n' > generated/zz.go
+    printf 'src\n' > pick_src.go
+    git add generated/zz.go pick_src.go && git commit -q -m "pick commit" )
+  echo "$d"
+}
+
+committed_files() { git -C "$1" show --name-only --pretty=format: HEAD | sed '/^$/d' | sort | tr '\n' ' '; }
+
+# Generators change files: amend the pick, union the allowlist, skip the ignored file.
+MAKE_CHANGES=1
+WORKDIR="$(gen_repo)"; PICK_PATHS_FILE="$(mktemp)"; printf 'pick_src.go\n' > "$PICK_PATHS_FILE"
+GEN_OUT="$(GENERATE_TOKEN=x do_generate 2>&1)"
+check "change: generate=done"        "$(grep -c 'generate=done' <<<"$GEN_OUT")" "1"
+check "change: worktree clean"       "$(git -C "$WORKDIR" status --porcelain)" ""
+check "change: generated committed"  "$(committed_files "$WORKDIR")" "generated/new_gen.go generated/zz.go pick_src.go "
+check "change: allowlist unioned"    "$(sort "$PICK_PATHS_FILE" | tr '\n' ' ')" "generated/new_gen.go generated/zz.go pick_src.go "
+
+# No generator change: noop, the pick commit and the allowlist are untouched.
+MAKE_CHANGES=0
+WORKDIR="$(gen_repo)"; PICK_PATHS_FILE="$(mktemp)"; printf 'pick_src.go\n' > "$PICK_PATHS_FILE"
+BEFORE_HEAD="$(git -C "$WORKDIR" rev-parse HEAD)"
+NOOP_OUT="$(GENERATE_TOKEN=x do_generate 2>&1)"
+check "noop: generate=noop"   "$(grep -c 'generate=noop' <<<"$NOOP_OUT")" "1"
+check "noop: HEAD untouched"   "$(git -C "$WORKDIR" rev-parse HEAD)" "$BEFORE_HEAD"
+check "noop: allowlist kept"   "$(cat "$PICK_PATHS_FILE")" "pick_src.go"
+
 echo "${PASS} passed, ${FAIL} failed"
 [ "$FAIL" -eq 0 ]

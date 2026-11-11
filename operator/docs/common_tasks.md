@@ -212,3 +212,25 @@ spec:
 1. Commit everything and post as a single PR.
 
 1. Review, address issues, merge, monitor hashrelease builds, address any further issues, etc.
+
+## Updating the bundled version of Istio
+
+Istio is pinned in two places that move together. `ISTIO_VERSION` in `istio/Makefile` builds the istiod, ztunnel, istio-cni and proxyv2 images from the upstream istio and ztunnel source tags; Renovate tracks that pin as `istio/istio` (see `renovate.json`). `ISTIO_VERSION` and `ISTIO_HELM_REPO` in `operator/Makefile` fetch the `base`, `istiod`, `cni` and `ztunnel` Helm charts the operator renders; nothing tracks that pin, so move it by hand. With the two on different tags, one version's charts render the Deployment, DaemonSets and environment around another version's binaries.
+
+1. In `istio/Makefile`, update `ISTIO_VERSION`.
+
+1. Rebase the hand-written patches in `istio/patches/01-custom-patches/` and `istio/ztunnel-patches/01-custom-patches/` onto the new source tags. `make -C istio init-sources` downloads both trees into `istio/istio` and `istio/ztunnel` and applies the patches with `-F0`, so a hunk whose context no longer matches fails instead of landing somewhere approximate (offsets are fine); `make -C istio clean` removes the trees and the stamps so it can be re-run. Regenerate a patch whose hunks only moved so it applies cleanly, and explain any content change in the commit body. A patch that carries an open upstream fix says so in its header; drop it once the new tag ships the fix. Prove the result compiles without building the images: `go build ./cni/...` and `go test ./pilot/pkg/credentials/kube/` in `istio/istio`, `cargo check` in `istio/ztunnel`.
+
+1. Regenerate `istio/patches/02-auto-gen-patches/` with `make -C istio regen-dep-patches`: the dependency patch is derived from `istio/dep-pins.txt` against the new tag's `go.mod`, and a pin the new tag already satisfies drops out of it. `make -C istio check-dep-patches` confirms the checked-in patch matches. Do not edit the generated patch by hand.
+
+1. In `operator/Makefile`, update `ISTIO_VERSION`, and `ISTIO_HELM_REPO` if the chart host moved. From 1.31 the charts are published at `https://blob.istio.io/istio-release/charts`; the old `istio-release.storage.googleapis.com` host carries no 1.31 charts.
+
+1. Delete `operator/pkg/render/istio/*.tgz`. They are gitignored and only downloaded when absent, so stale charts are otherwise reused silently. `make -C operator istio_charts` fetches the new ones.
+
+1. Check that every chart value the operator sets in `operator/pkg/render/istio/config.go` still exists in the new charts' `values.yaml` and templates and still means the same thing. `istio.go` also relies on two chart-side conventions: the `cni` chart copies `cni.*` to the top level (`templates/zzy_descope_legacy.yaml`), and the charts resolve `global.platform` to the platform profile (`templates/zzz_profile.yaml`).
+
+1. Run `make -C operator ut UT_DIR=./pkg/render/istio` and `make -C operator ut UT_DIR=./pkg/controller/istio`, and address any issues. `pkg/render/istio/istio_test.go` asserts the CRD list from the `base` chart and the object counts from all four charts, so a release that adds a CRD or a resource changes those expectations.
+
+1. Read the upstream upgrade notes for every minor release crossed (`https://istio.io/latest/news/releases/<minor>.x/announcing-<minor>/upgrade-notes/`) and record anything that changes behaviour for an operator-managed ambient install. The Gateway API CRD requirement is the usual one: the operator creates those CRDs from the Envoy Gateway chart and only when they are absent, so check the bundle version there against what the new Istio requires. Copy the new tag's `MinimumCRDVersions` from `pkg/config/schema/gatewayapi/minimumversions.go` into `istioGatewayAPIMinimumVersions` in `operator/pkg/controller/istio/gatewayapi_crds.go`; the operator warns on the `istio` TigeraStatus about existing CRDs below those versions.
+
+1. Commit everything and post as a single PR.

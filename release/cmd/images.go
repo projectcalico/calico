@@ -25,7 +25,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/operatorimages"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 var imagesSubCommands = func(cfg *Config) []*cli.Command {
@@ -147,11 +146,7 @@ func imagesPublishCommand(cfg *Config) *cli.Command {
 }
 
 // releaseImageList runs make in every release directory, so a test replaces it.
-var releaseImageList = utils.BuildReleaseImageList
-
-// operatorCheckDirs lists the directories whose images the operator in this
-// repo must deploy.
-var operatorCheckDirs = images.ReleaseDirs
+var releaseImageList = images.BuildImages
 
 var imagesCheckOperatorAction = func(cfg *Config) func(ctx context.Context, c *cli.Command) error {
 	return func(_ context.Context, _ *cli.Command) error {
@@ -159,7 +154,7 @@ var imagesCheckOperatorAction = func(cfg *Config) func(ctx context.Context, c *c
 
 		// The operator publishes to registries of its own, so it is named apart from the
 		// release directories rather than discovered with them.
-		dirs := append(operatorCheckDirs(), operator.DirName)
+		dirs := append(images.ReleaseDirs(), operator.DirName)
 		built, err := releaseImageList(cfg.RepoRootDir, dirs...)
 		if err != nil {
 			return err

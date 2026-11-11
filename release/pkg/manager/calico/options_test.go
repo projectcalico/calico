@@ -17,6 +17,12 @@ package calico
 import (
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/internal/operator"
+	"github.com/projectcalico/calico/release/internal/plan"
 )
 
 // requiredOpts returns the bare-minimum opts needed for NewManager to pass
@@ -31,52 +37,80 @@ func requiredOpts() []Option {
 	}
 }
 
-// TestNewManagerStepDefaults pins down the all-step-flags-default-to-true
-// contract. CLI gating relies on these defaults being on at the manager
-// layer; flipping a default silently breaks every release without a flag set.
-func TestNewManagerStepDefaults(t *testing.T) {
-	m, err := NewManager(requiredOpts()...)
+func TestNewManager(t *testing.T) {
+	// The defaults are a release's steps, so a flag left unset changes nothing.
+	t.Run("steps default to a release's", func(t *testing.T) {
+		m, err := NewManager(requiredOpts()...)
+		if err != nil {
+			t.Fatalf("NewManager: %v", err)
+		}
+		checks := []struct {
+			step string
+			got  bool
+			want bool
+		}{
+			{"validate", m.validate, true},
+			{"validateBranch", m.validateBranch, true},
+			{"images", m.images, true},
+			{"archiveImages", m.archiveImages, true},
+			{"manifests", m.manifests, true},
+			{"binaries", m.binaries, true},
+			{"ocpBundle", m.ocpBundle, true},
+			{"tarball", m.tarball, true},
+			{"windowsArchive", m.windowsArchive, true},
+			{"helmCharts", m.helmCharts, true},
+			{"helmIndex", m.helmIndex, true},
+			{"e2eBinaries", m.e2eBinaries, true},
+			{"gitRef", m.gitRef, true},
+			{"githubRelease", m.githubRelease, true},
+			{"releaseNotes", m.releaseNotes, false},
+		}
+		for _, c := range checks {
+			if c.got != c.want {
+				t.Errorf("%s defaults to %v, want %v", c.step, c.got, c.want)
+			}
+		}
+	})
+
+	skip := map[string]bool{operator.Step: true, images.Step: true}
+	m, err := NewManager(append(requiredOpts(),
+		WithOperator(func() error { return nil }),
+		WithPlanOptions(plan.Options{Skip: skip}),
+	)...)
 	if err != nil {
 		t.Fatalf("NewManager: %v", err)
 	}
-	cases := []struct {
-		name string
-		got  bool
-	}{
-		{"validate", m.validate},
-		{"validateBranch", m.validateBranch},
-		{"images", m.images},
-		{"archiveImages", m.archiveImages},
-		{"manifests", m.manifests},
-		{"binaries", m.binaries},
-		{"ocpBundle", m.ocpBundle},
-		{"tarball", m.tarball},
-		{"windowsArchive", m.windowsArchive},
-		{"helmCharts", m.helmCharts},
-		{"operator", m.operator},
-		{"helmIndex", m.helmIndex},
-		{"e2eBinaries", m.e2eBinaries},
-		{"gitRef", m.gitRef},
-		{"githubRelease", m.githubRelease},
-		{"releaseNotes", m.releaseNotes},
-	}
-	for _, tc := range cases {
-		if !tc.got {
-			t.Errorf("default %s: got false, want true", tc.name)
+	t.Run("skipping the operator turns it off", func(t *testing.T) {
+		if m.operator != nil {
+			t.Error("operator is still on")
 		}
-	}
+	})
+	t.Run("skipping images turns them off but keeps their step", func(t *testing.T) {
+		if m.images {
+			t.Error("images are still on")
+		}
+		if m.planOptions.Skip[images.Step] {
+			t.Error("images step is still skipped")
+		}
+	})
+	t.Run("the caller's skip list is unchanged", func(t *testing.T) {
+		want := map[string]bool{operator.Step: true, images.Step: true}
+		if diff := cmp.Diff(want, skip); diff != "" {
+			t.Errorf("skip list (-want +got):\n%s", diff)
+		}
+	})
 }
 
-// TestPreBuildValidation covers the cross-flag invariants enforced at the
+// TestCanBuildValidation covers the cross-flag invariants enforced at the
 // manager layer. The test exercises the two non-trivial cases this PR
 // introduces: image-registries required when images/archive-images are on,
 // and ocp-bundle requires manifests on the hashrelease path.
-func TestPreBuildValidation(t *testing.T) {
+func TestCanBuildValidation(t *testing.T) {
 	cases := []struct {
 		name      string
 		opts      []Option
 		wantErr   string // substring match; empty means "the asserted invariants do not fire"
-		expectErr bool   // true if PreBuildValidation must return non-nil
+		expectErr bool   // true if canBuildValidation must return non-nil
 	}{
 		{
 			name: "happy path",
@@ -157,12 +191,12 @@ func TestPreBuildValidation(t *testing.T) {
 				WithManifests(false),
 				WithOCPBundle(false),
 			),
-			// PreHashreleaseValidate runs after PreBuildValidation's gates
+			// PreHashreleaseValidate runs after canBuildValidation's gates
 			// and may error on its own preconditions; we only assert that
 			// the manifests/ocp-bundle gate above doesn't fire here.
 		},
 		{
-			name: "non-hashrelease build with manifests off is allowed by PreBuildValidation",
+			name: "non-hashrelease build with manifests off is allowed by canBuildValidation",
 			opts: append(requiredOpts(),
 				WithVersion("v3.99.0"),
 				WithOperatorVersion("v9.99.0"),
@@ -171,7 +205,7 @@ func TestPreBuildValidation(t *testing.T) {
 			),
 		},
 	}
-	// Substrings owned by PreBuildValidation. Errors from downstream
+	// Substrings owned by canBuildValidation. Errors from downstream
 	// validators (PreHashreleaseValidate / PreReleaseValidate) may surface
 	// when no real repo is wired up; filter on the substrings we care about.
 	guarded := []string{
@@ -186,7 +220,7 @@ func TestPreBuildValidation(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewManager: %v", err)
 			}
-			err = m.PreBuildValidation()
+			err = m.canBuildValidation()
 			if tc.expectErr {
 				if err == nil {
 					t.Fatalf("expected error containing %q, got nil", tc.wantErr)

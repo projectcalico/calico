@@ -27,8 +27,9 @@ import (
 )
 
 const (
-	buildStep  = "manifests-build"
-	assertStep = "manifests-assert-versions"
+	Step       = "manifests"
+	buildStep  = Step + "-build"
+	assertStep = Step + "-assert-versions"
 )
 
 const (

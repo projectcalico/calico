@@ -1,0 +1,111 @@
+# Required repo secrets, the same values as Semaphore's slack-master-release-monitor:
+#   RELEASE_MONITOR_AGENT_URL   — the agent's A2A endpoint
+#   RELEASE_MONITOR_AGENT_TOKEN — its bearer token
+#
+# Sends each finished ArgoCI merge run on master / release-* to the branch-monitor
+# agent. A no-op without the secrets.
+
+name: Branch CI monitor (ArgoCI)
+
+on:
+  status: {}
+  workflow_dispatch:
+    inputs:
+      argo_workflow:
+        description: "ArgoCI merge run, e.g. calico-14463-merge-ffvp4"
+        required: true
+        type: string
+      result:
+        description: "Run result"
+        required: true
+        type: choice
+        options: [fail, pass]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  monitor:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'status' &&
+       github.event.context == 'continuous-integration/calico' &&
+       github.event.state != 'pending' &&
+       contains(github.event.target_url, '-merge-'))
+    runs-on: ubuntu-latest
+    # Three 320s attempts plus their pauses.
+    timeout-minutes: 18
+    env:
+      RELEASE_MONITOR_AGENT_URL: ${{ secrets.RELEASE_MONITOR_AGENT_URL }}
+      RELEASE_MONITOR_AGENT_TOKEN: ${{ secrets.RELEASE_MONITOR_AGENT_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Send the run to the branch-monitor agent
+        env:
+          INPUT_RUN: ${{ inputs.argo_workflow }}
+          INPUT_RESULT: ${{ inputs.result }}
+          TARGET: ${{ github.event.target_url }}
+          STATE: ${{ github.event.state }}
+          STATUS_ID: ${{ github.event.id }}
+          SHA: ${{ github.event.sha }}
+        run: |
+          if [[ -z "$RELEASE_MONITOR_AGENT_URL" || -z "$RELEASE_MONITOR_AGENT_TOKEN" ]]; then
+            echo "::warning::RELEASE_MONITOR_AGENT_URL or RELEASE_MONITOR_AGENT_TOKEN secret missing — skipping"
+            exit 0
+          fi
+          if [[ "${{ github.event_name }}" == workflow_dispatch ]]; then
+            RUN="$INPUT_RUN" RESULT="$INPUT_RESULT" RUN_ID="$INPUT_RUN@manual-$GITHUB_RUN_ID" SHA=""
+          else
+            # ArgoCI links the run as .../public/wf/<workflow name>.
+            RUN=$(printf '%s' "$TARGET" | sed -nE 's|.*/public/wf/([a-z0-9.-]+).*|\1|p')
+            case "$STATE" in
+              success) RESULT=pass ;;
+              failure|error) RESULT=fail ;;
+              *) echo "state '$STATE' — not recorded"; exit 0 ;;
+            esac
+            # A retry keeps the workflow name but posts a new status, so the status id tells runs apart.
+            RUN_ID="$RUN@$STATUS_ID"
+          fi
+          # The run name reaches the agent prompt, so it must match a strict pattern.
+          if [[ ! "$RUN" =~ ^[a-z0-9-]+-([0-9]+)-merge-[a-z0-9]+$ ]]; then
+            echo "::warning::'$RUN' is not an ArgoCI merge run — skipping"
+            exit 0
+          fi
+          # A merge run tests the branch its PR merged into.
+          if ! BRANCH=$(gh api "repos/$REPO/pulls/${BASH_REMATCH[1]}" --jq .base.ref); then
+            echo "::warning::could not read PR #${BASH_REMATCH[1]} for '$RUN' — skipping"
+            exit 0
+          fi
+          if [[ ! "$BRANCH" =~ ^(master|release-[a-z0-9.]+)$ ]]; then
+            echo "branch '$BRANCH' not monitored"; exit 0
+          fi
+
+          msg=$(printf 'ci: argo\nrepo: calico\nbranch: %s\nworkflow: %s\nrun_id: %s\nresult: %s\ncommit_sha: %s' \
+            "$BRANCH" "$RUN" "$RUN_ID" "$RESULT" "$SHA")
+          echo "branch-monitor: sending"; echo "$msg"
+          req=$(jq -n --arg t "$msg" '{jsonrpc:"2.0",id:"1",method:"message/stream",params:{message:{role:"user",kind:"message",messageId:"1",parts:[{kind:"text",text:$t}]}}}')
+          # A 2xx means the agent has the task, which runs to completion server-side.
+          # Retry only on no reply or a 5xx.
+          for i in 1 2 3; do
+            http=$(curl -sS -N -m 320 -o resp.txt -w '%{http_code}' -X POST "$RELEASE_MONITOR_AGENT_URL" \
+              -H "Authorization: Bearer $RELEASE_MONITOR_AGENT_TOKEN" \
+              -H "Content-Type: application/json" -H "Accept: text/event-stream" \
+              -d "$req" || true)
+            echo "attempt $i: HTTP $http, SSE stream: $(cat resp.txt 2>/dev/null)"
+            case "$http" in
+              2??)
+                if grep -Eq '"state":"(completed|failed)"|"final":[[:space:]]*true' resp.txt 2>/dev/null; then
+                  echo "branch-monitor: agent run finished"
+                else
+                  echo "branch-monitor: agent received the trigger (task continues server-side)"
+                fi
+                exit 0 ;;
+              4??)
+                echo "::warning::branch-monitor: agent refused the trigger (HTTP $http) — run $RUN_ID not recorded"
+                exit 0 ;;
+            esac
+            echo "attempt $i: no answer or HTTP $http (gateway/agent cold) — retrying"; sleep 15
+          done
+          echo "::warning::branch-monitor: agent unreachable after retries — run $RUN_ID not recorded"

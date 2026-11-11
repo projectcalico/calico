@@ -101,7 +101,7 @@ require (
 	github.com/tchap/go-patricia/v2 v2.3.3
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
 	github.com/urfave/cli/v3 v3.10.0
-	github.com/vishvananda/netlink v1.3.1
+	github.com/vishvananda/netlink v1.3.2-0.20260206161744-ab2b1904dc37
 	go.etcd.io/etcd/api/v3 v3.7.0
 	go.etcd.io/etcd/client/pkg/v3 v3.7.0
 	go.etcd.io/etcd/client/v3 v3.7.0
@@ -145,7 +145,7 @@ require (
 	sigs.k8s.io/gateway-api/conformance v1.6.1
 	sigs.k8s.io/kind v0.32.0
 	sigs.k8s.io/knftables v0.0.23-0.20260903141422-0087e9ef619d
-	sigs.k8s.io/network-policy-api v0.2.0
+	sigs.k8s.io/network-policy-api v0.3.0
 	sigs.k8s.io/randfill v1.0.0
 	sigs.k8s.io/secrets-store-csi-driver v1.6.0
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2

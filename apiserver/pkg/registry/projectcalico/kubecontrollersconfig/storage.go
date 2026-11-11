@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,11 +26,12 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/util"
 )
 
 // rest implements a RESTStorage for API services against etcd
 type REST struct {
-	*registry.Store
+	*util.Store
 	shortNames []string
 }
 
@@ -129,7 +130,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options, statusOpts server.Opti
 	statusStore.Storage = statusStorageInterface
 	statusStore.DestroyFunc = statusDFunc
 
-	return &REST{store, opts.ShortNames}, &StatusREST{&statusStore, opts.ShortNames}, nil
+	return &REST{util.NewStore(store), opts.ShortNames}, &StatusREST{&statusStore, opts.ShortNames}, nil
 }
 
 func configureKeyFunc(resourcePrefix string) func(obj runtime.Object) (string, error) {

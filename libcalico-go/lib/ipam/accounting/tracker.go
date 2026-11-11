@@ -48,8 +48,7 @@ type Tracker struct {
 	extraReserved map[reservedClass][]cnet.IPNet
 	reserved      reservedSets
 
-	// classOf picks a pool's reserved class when the pool is added or updated, so it must depend on nothing but the pool.
-	classOf func(*v3.IPPool) reservedClass
+	classes reservedClasses
 
 	// nodes stays nil until AddNodes is called, so a caller that never names nodes sees no stale affinity.
 	nodes set.Set[string]
@@ -99,9 +98,16 @@ type reservedClass string
 
 const defaultReservedClass reservedClass = ""
 
-// poolReservedClass is the hook for adding reserved classes: each new tracker classifies its pools with it. By default
-// every pool is in the default class, and no class has extra CIDRs until setExtraReserved gives it some.
-var poolReservedClass = func(*v3.IPPool) reservedClass { return defaultReservedClass }
+// reservedClasses picks a pool's reserved class. The tracker asks only when the pool is added or updated, so the answer
+// must depend on nothing but the pool.
+type reservedClasses interface {
+	classOf(*v3.IPPool) reservedClass
+}
+
+// defaultReservedClasses puts every pool in the default class.
+type defaultReservedClasses struct{}
+
+func (defaultReservedClasses) classOf(*v3.IPPool) reservedClass { return defaultReservedClass }
 
 type reservedSet struct {
 	cidrs []cnet.IPNet
@@ -171,13 +177,18 @@ func (s *blockSet) inOrder() []*trackedBlock {
 }
 
 func NewTracker() *Tracker {
+	return newTracker(newReservedClasses())
+}
+
+// newTracker classifies its pools with classes. No class has extra CIDRs until setExtraReserved gives it some.
+func newTracker(classes reservedClasses) *Tracker {
 	t := &Tracker{
 		pools:            make(map[string]*trackedPool),
 		blocks:           make(map[string]*trackedBlock),
 		blocksWithNoPool: newBlockSet(),
 		reservations:     make(map[string]*v3.IPReservation),
 		extraReserved:    make(map[reservedClass][]cnet.IPNet),
-		classOf:          poolReservedClass,
+		classes:          classes,
 		refsByAddress:    make(map[netip.Addr][]addressRefKey),
 	}
 	t.reserved = t.buildReserved()
@@ -205,7 +216,7 @@ func (t *Tracker) AddPools(ipPools ...*v3.IPPool) {
 			t.pools[ipPool.Name] = pool
 		}
 		ownBlocks := slices.Clone(pool.blocks.inOrder())
-		pool.ipPool, pool.net, pool.reservedClass = ipPool, poolNet, t.classOf(ipPool)
+		pool.ipPool, pool.net, pool.reservedClass = ipPool, poolNet, t.classes.classOf(ipPool)
 		pool.prefix, _ = poolNet.Mask.Size()
 		pool.blockSize, pool.lostOverlap = BlockSize(ipPool), LostOverlap(ipPool)
 		if !existed {

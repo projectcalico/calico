@@ -1677,6 +1677,10 @@ KIND_CONFIG ?= $(KIND_DIR)/kind.config
 KIND_NAME = $(basename $(notdir $(KIND_CONFIG)))
 KIND_KUBECONFIG?=$(KIND_DIR)/$(KIND_NAME)-kubeconfig.yaml
 
+# The external node runs docker-in-docker. Pinned so a new upstream tag cannot
+# change the lane under us. See external-node.sh.
+EXTERNAL_NODE_IMAGE?=docker:$(DOCKER_DIND_VERSION)-dind
+
 .PHONY: kind-registry-up kind-registry-destroy
 ## Start the local kind image registry (idempotent). Persists across cluster recreates.
 kind-registry-up:
@@ -2034,9 +2038,9 @@ $(ENVTEST_ASSETS_MARKER):
 		chmod +x $$d/kube-apiserver $$d/kubectl $$d/etcd'
 	touch $@
 
-# Minimum supported Kubernetes version. 1.32 is the first release that estimates
-# the cost of the CEL IP/CIDR library well enough for our CRD rules to install.
-MIN_K8S_VERSION ?= v1.32.0
+# Minimum supported Kubernetes version. 1.34 is the first release whose CEL cost
+# estimate honours maxLength on int-or-string list items, which the port-range rules need.
+MIN_K8S_VERSION ?= v1.34.0
 ifneq ($(OS),Windows_NT)
 ENVTEST_MIN_K8S_VERSION ?= $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
 # Major.minor prefix for globbing the downloaded envtest directory (e.g. "1.29").

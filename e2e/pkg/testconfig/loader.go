@@ -32,6 +32,31 @@ func Load(path string) (*Config, error) {
 	return load(path, nil)
 }
 
+// LoadAll loads each config and merges them left to right, the same way an
+// extends list folds its parents, so naming several configs selects what one
+// config extending all of them would. The merged result is validated again,
+// because a rule such as "include sets both labels and name patterns" can be
+// broken by two files that each pass alone.
+func LoadAll(paths []string) (*Config, error) {
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no config paths given")
+	}
+
+	merged := &Config{}
+	for _, p := range paths {
+		cfg, err := Load(p)
+		if err != nil {
+			return nil, err
+		}
+		merged = merge(merged, cfg)
+	}
+
+	if err := validateResolved(merged, strings.Join(paths, " ")); err != nil {
+		return nil, err
+	}
+	return merged, nil
+}
+
 func load(path string, seen []string) (*Config, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
@@ -58,6 +83,9 @@ func load(path string, seen []string) (*Config, error) {
 	}
 
 	if err := validate(&cfg, absPath); err != nil {
+		return nil, err
+	}
+	if err := validateKind(&cfg, data, absPath); err != nil {
 		return nil, err
 	}
 
@@ -188,7 +216,40 @@ func merge(parent, child *Config) *Config {
 		}
 	}
 
+	seenUpstream := map[string]bool{}
+	for _, src := range [][]NamePatternEntry{parent.Upstream, child.Upstream} {
+		for _, e := range src {
+			key := patternKey(e)
+			if seenUpstream[key] {
+				continue
+			}
+			seenUpstream[key] = true
+			merged.Upstream = append(merged.Upstream, e)
+		}
+	}
+
+	merged.Provides = union(parent.Provides, child.Provides)
+	merged.Needs = union(parent.Needs, child.Needs)
 	return merged
+}
+
+// union appends b's entries to a's, dropping repeats. It returns nil only when
+// both are nil, so a list declared empty stays declared: an empty provides
+// means the lane has no capabilities, not that it never said.
+func union(a, b []string) []string {
+	if a == nil && b == nil {
+		return nil
+	}
+	out := make([]string, 0, len(a)+len(b))
+	seen := map[string]bool{}
+	for _, v := range append(append([]string(nil), a...), b...) {
+		if seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	return out
 }
 
 func patternKey(e NamePatternEntry) string {
@@ -212,7 +273,7 @@ func validate(cfg *Config, path string) error {
 		}
 	}
 
-	if err := validatePatterns(cfg.Include.NamePatterns, path, "include"); err != nil {
+	if err := validatePatterns(cfg.Include.NamePatterns, path, "include.namePatterns"); err != nil {
 		return err
 	}
 
@@ -225,17 +286,38 @@ func validate(cfg *Config, path string) error {
 		}
 	}
 
-	return validatePatterns(cfg.Exclude.NamePatterns, path, "exclude")
+	if err := validatePatterns(cfg.Exclude.NamePatterns, path, "exclude.namePatterns"); err != nil {
+		return err
+	}
+
+	for i, c := range cfg.Provides {
+		if !capabilityName.MatchString(c) {
+			return fmt.Errorf("%s: provides[%d] (%q) must be a capability name of letters and digits only", path, i, c)
+		}
+	}
+
+	for i, n := range cfg.Needs {
+		if n == "" {
+			return fmt.Errorf("%s: needs[%d] is empty", path, i)
+		}
+	}
+
+	return validatePatterns(cfg.Upstream, path, "upstream")
 }
 
-func validatePatterns(entries []NamePatternEntry, path, section string) error {
+// capabilityName is what a provides entry may be. It is compared with the
+// Requires: labels specs carry, and Ginkgo rejects a label set value holding
+// any of its operator characters.
+var capabilityName = regexp.MustCompile(`^[A-Za-z0-9]+$`)
+
+func validatePatterns(entries []NamePatternEntry, path, field string) error {
 	for i, entry := range entries {
 		if err := entry.Validate(); err != nil {
-			return fmt.Errorf("%s: %s.namePatterns[%d]: %w", path, section, i, err)
+			return fmt.Errorf("%s: %s[%d]: %w", path, field, i, err)
 		}
 		for _, p := range entry.AllPatterns() {
 			if _, err := regexp.Compile(p); err != nil {
-				return fmt.Errorf("%s: %s.namePatterns[%d]: invalid regex %q: %w", path, section, i, p, err)
+				return fmt.Errorf("%s: %s[%d]: invalid regex %q: %w", path, field, i, p, err)
 			}
 		}
 	}

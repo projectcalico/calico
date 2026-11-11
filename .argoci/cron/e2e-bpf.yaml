@@ -30,6 +30,11 @@ steps:
         value: "true"
       - name: GOOGLE_MACHINE_TYPE
         value: t2a-standard-2
+      # T2A only exists in some zones; unpinned lanes can land where it doesn't.
+      - name: GOOGLE_REGION
+        value: us-central1
+      - name: GOOGLE_ZONE
+        value: us-central1-a
       - name: INSTALLER
         value: operator
       - name: K8S_VERSION
@@ -345,7 +350,7 @@ steps:
       - http-cache-proxy
     env:
       - name: CLUSTER_IMAGE
-        value: ami-02f147dfb8be58a10
+        value: 309956199498/RHEL-8.10.0_HVM-20261013-x86_64-2315-Hourly2-GP3
       - name: CLUSTER_NODES
         value: "3"
       - name: ENABLE_EXTERNAL_NODE

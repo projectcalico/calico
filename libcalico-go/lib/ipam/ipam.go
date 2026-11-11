@@ -254,104 +254,6 @@ func detectOS(ctx context.Context) string {
 	return runtime.GOOS
 }
 
-// determinePools compares a list of requested pools with the enabled pools and returns the intersect.
-// If any requested pool does not exist, or is not enabled, an error is returned.
-// If no pools are requested, all enabled pools are returned.
-// Also applies selector logic on node labels and namespace labels to determine if the pool is a match.
-// Returns the set of matching pools as well as the full set of ip pools.
-func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.IPNet, version int, node internalapi.Node, namespace *corev1.Namespace, maxPrefixLen int) (matchingPools, enabledPools []v3.IPPool, err error) {
-	// Get all the enabled IP pools from the datastore.
-	enabledPools, err = c.pools.GetEnabledPools(ctx, version)
-	if err != nil {
-		log.WithError(err).Errorf("Error getting IP pools")
-		return
-	}
-	log.Debugf("enabled pools: %v", enabledPools)
-	log.Debugf("requested pools: %v", requestedPoolNets)
-
-	// Build a map so we can lookup existing pools.
-	pm := map[string]v3.IPPool{}
-
-	var cidr *net.IPNet
-	for _, p := range enabledPools {
-		if p.Spec.BlockSize > maxPrefixLen {
-			log.Warningf("skipping pool %v due to blockSize %d bigger than %d", p, p.Spec.BlockSize, maxPrefixLen)
-			continue
-		}
-		_, cidr, err = net.ParseCIDR(p.Spec.CIDR)
-		if err != nil {
-			log.WithError(err).Errorf("Pool %s has invalid CIDR %s", p.Name, p.Spec.CIDR)
-			return
-		}
-		pm[cidr.String()] = p
-	}
-
-	if len(pm) == 0 {
-		// None of the enabled pools are qualified.
-		err = ErrNoQualifiedPool
-		return
-	}
-
-	// Build a list of requested IP pool objects based on the provided CIDRs, validating
-	// that each one actually exists and is enabled for IPAM.
-	requestedPools := []v3.IPPool{}
-	for _, rp := range requestedPoolNets {
-		cidr := rp.Network()
-		if pool, ok := pm[cidr.String()]; !ok {
-			// The requested pool doesn't exist.
-			err = fmt.Errorf("the given pool (%s) does not exist, or is not enabled", cidr.String())
-			return
-		} else {
-			requestedPools = append(requestedPools, pool)
-		}
-	}
-
-	// If requested IP pools are provided, use those unconditionally.
-	// We will ignore IP pool selectors in this case for backwards compatibility.
-	if len(requestedPools) > 0 {
-		log.Debugf("Using the requested IP pools")
-		matchingPools = requestedPools
-		return
-	}
-
-	// At this point, we need to apply both namespaceSelector and nodeSelector logic.
-	// We only want to use IP pools which actually match both this node and namespace.
-	for _, pool := range enabledPools {
-		if len(requestedPoolNets) == 0 && *pool.Spec.AssignmentMode != v3.Automatic {
-			continue
-		}
-
-		// Check node selector
-		nodeMatches, err := SelectsNode(pool, node)
-		if err != nil {
-			log.WithError(err).WithField("pool", pool).Error("failed to determine if node matches pool")
-			return nil, nil, err
-		}
-		if !nodeMatches {
-			// Do not consider pool enabled if the nodeSelector doesn't match the node's labels.
-			log.Debugf("IP pool does not match this node: %s", pool.Name)
-			continue
-		}
-
-		// Check namespace selector
-		namespaceMatches, err := SelectsNamespace(pool, namespace)
-		if err != nil {
-			log.WithError(err).WithField("pool", pool).Error("failed to determine if namespace matches pool")
-			return nil, nil, err
-		}
-		if !namespaceMatches {
-			// Do not consider pool enabled if the namespaceSelector doesn't match the namespace's labels.
-			log.WithField("namespace", namespace).Debugf("IP pool does not match this namespace: %s", pool.Name)
-			continue
-		}
-
-		log.Debugf("IP pool matches both node and namespace: %s", pool.Name)
-		matchingPools = append(matchingPools, pool)
-	}
-
-	return
-}
-
 // prepareAffinityBlocksForHost returns a list of blocks affine to a node based on requested IP pools.
 // It also releases any emptied blocks still affine to this host but no longer part of an IP Pool which
 // selects this node. It returns matching pools, list of host-affine blocks and any error encountered.
@@ -390,25 +292,26 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, config *IP
 		return nil, nil, err
 	}
 
-	// Determine the correct set of IP pools to use for this request.
-	// For some IPs (e.g., tunnel addresses), we don't have namespace context, so use empty values
-	poolsSelectingNode, allPools, err := c.determinePools(ctx, requestedPools, version, *v3n, namespace, maxPrefixLen)
+	allPools, err := c.pools.GetEnabledPools(ctx, version)
+	if err != nil {
+		log.WithError(err).Error("Error getting IP pools")
+		return nil, nil, err
+	}
+
+	// Some callers (e.g., tunnel address assignment) have no namespace, so namespace may be nil.
+	qualification, err := qualifyPools(poolRequest{
+		requested:    requestedPools,
+		host:         host,
+		node:         *v3n,
+		namespace:    namespace,
+		use:          use,
+		maxPrefixLen: maxPrefixLen,
+	}, allPools)
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(poolsSelectingNode) == 0 {
-		return nil, nil, fmt.Errorf("no configured Calico pools for node %s", host)
-	}
-
-	// Figure out what subset of the selecting pools we're allowed to use for the request according to the
-	// pool's allowed use.
-	poolsAllowedByUse := filterPoolsByUse(poolsSelectingNode, use)
+	poolsAllowedByUse := qualification.qualified()
 	log.Debugf("Pools filtered by allowed use: %v", poolsAllowedByUse)
-
-	// If there are no allowed pools, we cannot assign addresses.
-	if len(poolsAllowedByUse) == 0 {
-		return nil, nil, fmt.Errorf("%w, no pools match the required use (%v)", ErrNoQualifiedPool, use)
-	}
 
 	logCtx := log.WithFields(log.Fields{"host": host})
 
@@ -425,37 +328,14 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, config *IP
 	if err != nil {
 		return nil, nil, err
 	}
-	// Further, split the non-allowed blocks into ones that are from pools that select this node and pools that
-	// don't select this node.  We'll try to release the latter below.
-	_, affBlocksToRelease, err := filterBlocksByPools(nonAllowedAffBlocks, poolsSelectingNode)
+
+	// Of the rest, pool qualification picks the blocks to release below once they're empty.
+	affBlocksToRelease, err := qualification.blocksToRelease(nonAllowedAffBlocks)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Release any emptied blocks still affine to this host but no longer part of an IP Pool which selects this node.
 	for _, block := range affBlocksToRelease {
-		// Determine the pool for each block.
-		pool, err := c.blockReaderWriter.getPoolForIP(ctx, net.IP{IP: block.IP}, allPools)
-		if err != nil {
-			log.WithError(err).Warnf("Failed to get pool for IP")
-			continue
-		}
-		if pool == nil {
-			logCtx.WithFields(log.Fields{"block": block}).Warn("No pool found for block, skipping")
-			continue
-		}
-
-		// Determine if the pool selects the current node, refusing to release this particular block affinity if so.
-		blockSelectsNode, err := SelectsNode(*pool, *v3n)
-		if err != nil {
-			logCtx.WithError(err).WithField("pool", pool).Error("Failed to determine if node matches pool, skipping")
-			continue
-		}
-		if blockSelectsNode {
-			logCtx.WithFields(log.Fields{"pool": pool, "block": block}).Debug("Block's pool still selects node, refusing to remove affinity")
-			continue
-		}
-
 		// Release the block affinity, requiring it to be empty.
 		for range datastoreRetries {
 			if err = c.blockReaderWriter.releaseBlockAffinity(ctx, config, affinityCfg, block, releaseAffinityOpts{
@@ -478,18 +358,6 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, config *IP
 	}
 
 	return poolsAllowedByUse, allowedAffBlocks, nil
-}
-
-// filterPoolsByUse returns a slice containing the subset of the input pools that are allowed for the given use.
-// Handles defaulting of the allowed uses if not specified on the pool.
-func filterPoolsByUse(pools []v3.IPPool, use v3.IPPoolAllowedUse) []v3.IPPool {
-	var filteredPools []v3.IPPool
-	for _, p := range pools {
-		if slices.Contains(p.Spec.AllowedUses, use) {
-			filteredPools = append(filteredPools, p)
-		}
-	}
-	return filteredPools
 }
 
 // blockAssignState manages the state in relation to the request of finding or claiming a block for a host.
@@ -983,15 +851,8 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 		return errors.New("The provided IP address is not in a configured pool\n")
 	}
 
-	// Enforce the pool's AllowedUses against the caller's intended use, mirroring
-	// what the auto-assign path already does via filterPoolsByUse.  AutoAssign
-	// filters candidate pools by use, but AssignIP historically skipped the check,
-	// so a specific-IP request (e.g. the CNI ipAddrs annotation) could draw from a
-	// pool not sanctioned for that use.  Only enforce when the caller declares a
-	// use; callers that leave IntendedUse empty are unaffected.
-	if args.IntendedUse != "" && !slices.Contains(pool.Spec.AllowedUses, args.IntendedUse) {
-		return fmt.Errorf("IP address %s is in IP pool %q, which is not allowed for use %q (allowedUses: %v)",
-			args.IP, pool.Name, args.IntendedUse, pool.Spec.AllowedUses)
+	if err := qualifyPoolForIP(args.IP, *pool, args.IntendedUse); err != nil {
+		return err
 	}
 
 	cfg, err := c.GetIPAMConfig(ctx)
@@ -1498,7 +1359,6 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, config *IPAMConfig,
 			}
 		}
 
-		// Determine whether or not the block's pool still matches the node.
 		if err := c.ensureConsistentAffinity(ctx, config, obj.Value.(*model.AllocationBlock)); err != nil {
 			logCtx.WithError(err).Warn("Error ensuring consistent affinity but IP already released. Returning no error.")
 		}
@@ -2087,7 +1947,6 @@ func (c ipamClient) releaseByHandle(ctx context.Context, config *IPAMConfig, blo
 			logCtx.WithError(err).Warn("Failed to decrement handle")
 		}
 
-		// Determine whether or not the block's pool still matches the node.
 		if err = c.ensureConsistentAffinity(ctx, config, block.AllocationBlock); err != nil {
 			logCtx.WithError(err).Warn("Error ensuring consistent affinity but IP already released. Returning no error.")
 		}
@@ -2385,10 +2244,9 @@ func (c ipamClient) convertBackendToIPAMConfig(cfg *model.IPAMConfig) *IPAMConfi
 	}
 }
 
-// ensureConsistentAffinity retrieves the pool and node for the given block and determines
-// if the pool still selects node. If it no longer matches, it will release the block
-// affinity for that node.
-// Returns a bool indicating if the block affinity was released.
+// ensureConsistentAffinity runs after IPs are freed from a block. It releases the block's affinity to its node once
+// the block is empty, unless pool qualification says the node keeps it: a pool covering the block still selects the
+// node, or no enabled pool covers it.
 func (c ipamClient) ensureConsistentAffinity(ctx context.Context, config *IPAMConfig, b *model.AllocationBlock) error {
 	// Retrieve node for this allocation. We do this so we can clean up affinity for blocks
 	// which should no longer be affine to this host.
@@ -2405,9 +2263,7 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, config *IPAMCo
 		return nil
 	}
 
-	// If the IP pool which owns this block no longer selects this node,
-	// we should release the block's affinity to this node so it can be
-	// used elsewhere.
+	// Release the affinity once no enabled pool covering the block selects the node.
 	logCtx.Debugf("Looking up node labels for host affinity")
 	node, err := c.client.Get(ctx, model.ResourceKey{Kind: internalapi.KindNode, Name: affinityCfg.Host}, "")
 	if err != nil {
@@ -2425,25 +2281,19 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, config *IPAMCo
 		return fmt.Errorf("Datastore returned malformed node object")
 	}
 
-	// Fetch the pool for the given CIDR and check if it selects the node.
-	pool, err := c.blockReaderWriter.getPoolForIP(ctx, net.IP{IP: b.CIDR.IPNet.IP}, nil)
+	enabledPools, err := c.pools.GetEnabledPools(ctx, b.CIDR.Version())
 	if err != nil {
 		return err
 	}
-
-	if pool == nil {
-		logCtx.Debug("No pools own this block")
-		return nil
-	} else if sel, err := SelectsNode(*pool, *v3n); err != nil {
-		logCtx.WithField("selector", pool.Spec.NodeSelector).WithError(err).Error("Failed to determine node selection")
+	kept, err := nodeKeepsBlock(*v3n, enabledPools, b.CIDR)
+	if err != nil {
 		return err
-	} else if sel {
-		logCtx.Debug("Pool selects node, no change")
+	}
+	if kept {
+		logCtx.Debug("Node keeps its affinity to this block, no change")
 		return nil
 	}
-	logCtx.WithField("selector", pool.Spec.NodeSelector).Debug("Pool no longer selects node, releasing block affinity")
-
-	// Pool does not match this node's label, release this block's affinity.
+	logCtx.Debug("No pool covering this block selects the node, releasing block affinity")
 	if err = c.blockReaderWriter.releaseBlockAffinity(ctx, config, *affinityCfg, b.CIDR, releaseAffinityOpts{
 		RequireEmpty: true,
 	}); err != nil {

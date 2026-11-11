@@ -77,6 +77,14 @@ spec:
                         maxLength: 40
                         pattern: ^(\d+):(\d+)$|^(\d+):(\d+):(\d+)$
                         type: string
+                        x-kubernetes-validations:
+                          - message:
+                              standard community values must be 16-bit numbers
+                              and large community values 32-bit numbers
+                            reason: FieldValueInvalid
+                            rule:
+                              "self.split(':').all(p, p.matches('^[0-9]{1,10}$')
+                              && int(p) <= (size(self.split(':')) == 2 ? 65535 : 4294967295))"
                     type: object
                     x-kubernetes-map-type: atomic
                   maxItems: 500

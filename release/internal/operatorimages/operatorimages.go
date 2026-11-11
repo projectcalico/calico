@@ -26,6 +26,9 @@ import (
 // notDeployed maps an image this repo publishes to the reason the operator does not deploy it.
 var notDeployed = map[string]string{}
 
+// componentImages is the operator's component list for the product this repo builds.
+var componentImages = components.CalicoImages
+
 // Check fails when an image this repo builds is absent from the operator's component list. The
 // reverse is not checked: the operator also names images built outside this repo.
 func Check(built []string) error {
@@ -33,14 +36,14 @@ func Check(built []string) error {
 	if len(undeployed) == 0 {
 		return nil
 	}
-	return fmt.Errorf("the operator does not deploy images built here: %s; add each to a component list in operator/pkg/components, or to notDeployed with its reason",
+	return fmt.Errorf("the operator does not deploy images built here: %s; add each to the operator's component list, or to notDeployed with its reason",
 		strings.Join(undeployed, ", "))
 }
 
 // deployed returns the image names the operator's component list carries, plus the operator's
 // own image, which the list leaves out because the operator does not deploy itself.
 func deployed() []string {
-	comps := append(slices.Clone(components.CalicoImages), components.ComponentOperatorInit)
+	comps := append(slices.Clone(componentImages), components.ComponentOperatorInit)
 	out := make([]string, 0, len(comps))
 	for _, c := range comps {
 		out = append(out, c.Image)

@@ -60,3 +60,29 @@ func TestKubeControllersConfiguration_ExplicitZeroPortPreserved(t *testing.T) {
 		t.Errorf("expected spec.prometheusMetricsPort=0, got %v", got.Spec.PrometheusMetricsPort)
 	}
 }
+
+// kube-controllers parses the level with logrus, which knows Trace but not None.
+func TestKubeControllersConfiguration_LogSeverityScreen(t *testing.T) {
+	tests := []struct {
+		level   string
+		wantErr string
+	}{
+		{level: "Trace"},
+		{level: "Warning"},
+		{level: "None", wantErr: `Unsupported value: "None"`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.level, func(t *testing.T) {
+			obj := &v3.KubeControllersConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("kcc-log")},
+				Spec:       v3.KubeControllersConfigurationSpec{LogSeverityScreen: tt.level},
+			}
+			if tt.wantErr != "" {
+				expectCreateFails(t, obj, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, obj)
+			}
+		})
+	}
+}
