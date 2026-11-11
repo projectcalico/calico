@@ -168,12 +168,13 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 			return
 		}
 
-		// A LiveMigration's UID can affect every WEP that references it, so we only change the
-		// stored LiveMigration while no WEP references it.  Then every change to a WEP's role or
-		// UID comes from a change to that WEP's own references, where we can see it.  That means
-		// handling an update as a removal of the old LiveMigration and an addition of the new
-		// one.  A WEP can pass through an intermediate role in between, but only the final one
-		// reaches the dataplane.
+		// A WEP's role and UID depend on which LiveMigrations reference it, and on their UIDs.
+		// Changes are detected per WEP, by comparing before and after a LiveMigration starts or
+		// stops referencing it, so the stored LiveMigration, and hence its UID, must only change
+		// while it references no WEPs.  Hence an update is handled as removing all of the old
+		// version's references, then replacing the stored LiveMigration, then adding the new
+		// version's references.  A WEP can pass through an intermediate role in between, but
+		// only the final one reaches the dataplane.
 		if hadOld {
 			lmc.removeReferences(key, &old)
 			delete(lmc.liveMigrations, key)
