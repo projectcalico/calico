@@ -22,6 +22,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
@@ -311,6 +313,63 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 
 		// The block should have been cleaned up from the tracker.
 		Expect(c.allocationTracker.ipsByBlock).To(BeEmpty())
+	})
+
+	Context("block deletes and non-LoadBalancer blocks", func() {
+		var hook *logtest.Hook
+		var svcKey *serviceKey
+		var key model.BlockKey
+
+		BeforeEach(func() {
+			hook = captureLogs()
+			var err error
+			svcKey, err = serviceKeyFromService(&svc)
+			Expect(err).ToNot(HaveOccurred())
+			key = model.BlockKey{CIDR: model.PrefixFromIPNet(cnet.MustParseCIDR("10.0.0.4/30"))}
+			c.allocationTracker.assignAddressToBlock(key.String(), "10.0.0.4", *svcKey)
+		})
+
+		It("should release the block on delete without logging an error", func() {
+			// The syncer signals a delete with a nil Value.
+			c.handleBlockUpdate(model.KVPair{Key: key})
+
+			Expect(c.allocationTracker.ipsByBlock).To(BeEmpty())
+			Expect(c.allocationTracker.servicesByIP).To(BeEmpty())
+			Expect(c.allocationTracker.ipsByService[*svcKey]).To(BeEmpty())
+			Expect(errorEntries(hook)).To(BeEmpty())
+		})
+
+		It("should log an error and release the block for an unexpected value type", func() {
+			c.handleBlockUpdate(model.KVPair{Key: key, Value: &model.BlockAffinity{}})
+
+			Expect(c.allocationTracker.ipsByBlock).To(BeEmpty())
+			Expect(c.allocationTracker.servicesByIP).To(BeEmpty())
+			Expect(errorEntries(hook)).To(HaveLen(1))
+		})
+
+		It("should release a block with no affinity", func() {
+			idx0 := 0
+			block := model.AllocationBlock{
+				CIDR:        cnet.MustParseCIDR("10.0.0.4/30"),
+				Allocations: []*int{&idx0, nil, nil, nil},
+				Unallocated: []int{1, 2, 3},
+				Attributes: []model.AllocationAttribute{{
+					HandleID: &svcKey.handle,
+					ActiveOwnerAttrs: map[string]string{
+						ipam.AttributeService:   svc.Name,
+						ipam.AttributeNamespace: svc.Namespace,
+					},
+				}},
+			}
+
+			Expect(func() {
+				c.handleBlockUpdate(model.KVPair{Key: key, Value: &block})
+			}).ToNot(Panic())
+
+			Expect(c.allocationTracker.ipsByBlock).To(BeEmpty())
+			Expect(c.allocationTracker.servicesByIP).To(BeEmpty())
+			Expect(errorEntries(hook)).To(BeEmpty())
+		})
 	})
 
 	It("should skip allocations without a handle and track the rest of the block", func() {
@@ -702,3 +761,21 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		Expect(fetched.Status.LoadBalancer.Ingress[0].IP).To(Equal("10.0.0.4"))
 	})
 })
+
+func captureLogs() *logtest.Hook {
+	logger := log.StandardLogger()
+	oldHooks := logger.ReplaceHooks(make(log.LevelHooks))
+	hook := logtest.NewLocal(logger)
+	DeferCleanup(func() { logger.ReplaceHooks(oldHooks) })
+	return hook
+}
+
+func errorEntries(hook *logtest.Hook) []log.Entry {
+	var entries []log.Entry
+	for _, e := range hook.AllEntries() {
+		if e.Level <= log.ErrorLevel {
+			entries = append(entries, *e)
+		}
+	}
+	return entries
+}
