@@ -184,8 +184,7 @@ func TestRingListPagesMatchFullSort(t *testing.T) {
 }
 
 // TestRingFlowsYieldsEachFlowOnce checks that reading a range's buckets yields a flow in several
-// of them once, that a read left early ends, and that a nested read panics rather than letting
-// the outer read yield flows twice.
+// of them once, and that reads left early or nested inside another still yield every flow once.
 func TestRingFlowsYieldsEachFlowOnce(t *testing.T) {
 	ring := newPagingRing()
 	start := ring.EndOfHistory() - 2*pagingInterval
@@ -229,12 +228,13 @@ func TestRingFlowsYieldsEachFlowOnce(t *testing.T) {
 	}
 	require.Equal(t, want, flowNames(), "a read left early must not block the next one")
 
-	require.Panics(t, func() {
-		for range flows {
-			flowNames()
-		}
-	})
-	require.Equal(t, want, flowNames(), "a panicking read must not block the next one")
+	var outer []string
+	for d := range flows {
+		require.Equal(t, want, flowNames(), "a nested read must yield every flow")
+		outer = append(outer, d.Key.DestName())
+	}
+	slices.Sort(outer)
+	require.Equal(t, want, outer, "a nested read must not change what the outer read yields")
 }
 
 type candidateRangeCase struct {

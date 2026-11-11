@@ -86,9 +86,6 @@ type BucketRing struct {
 
 	// dedupBuckets is how many buckets back from the head keep their dedup state.
 	dedupBuckets int
-
-	// visits reads flows out of several buckets without yielding a flow twice.
-	visits flowVisits
 }
 
 func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *BucketRing {
@@ -462,8 +459,7 @@ func dedupWindowBuckets(interval, numBuckets int) int {
 // Flows yields every flow with data in [startGt, startLt) exactly once, plus a size hint. It may
 // also yield flows with none, so callers check each one. A flow sits in every bucket it has a
 // window in, so reading the range's buckets costs a step per flow per bucket, while reading the
-// ring's flow map costs a step per flow, including flows outside the range. Flows reads the map
-// once the buckets hold twice its entries.
+// ring's flow map costs a step per flow, including flows outside the range.
 func (r *BucketRing) Flows(startGt, startLt int64) (iter.Seq[*DiachronicFlow], int) {
 	var inRange []*AggregationBucket
 	numEntries, largestBucketLen := 0, 0
@@ -475,13 +471,36 @@ func (r *BucketRing) Flows(startGt, startLt int64) (iter.Seq[*DiachronicFlow], i
 			largestBucketLen = max(largestBucketLen, b.Flows.Len())
 		}
 	}
+
+	// A wide range holds each flow in many buckets, so the map is cheaper. Without this branch a
+	// full-ring List in BenchmarkMainLoopQuery takes two to eight times as long. Narrow ranges need
+	// the buckets.
 	if numEntries >= 2*len(r.diachronics) {
 		return maps.Values(r.diachronics), len(r.diachronics)
 	}
 
 	// The largest bucket is a lower bound on the flows yielded, unlike the entry total, which counts
 	// a flow once per bucket.
-	return r.visits.read(inRange), largestBucketLen
+	return flowsOnce(inRange, largestBucketLen), largestBucketLen
+}
+
+// flowsOnce yields each flow in the buckets once, remembering the flows it has yielded in a set
+// sized for sizeHint of them.
+func flowsOnce(buckets []*AggregationBucket, sizeHint int) iter.Seq[*DiachronicFlow] {
+	return func(yield func(*DiachronicFlow) bool) {
+		seen := make(map[*DiachronicFlow]struct{}, sizeHint)
+		for _, b := range buckets {
+			for d := range b.Flows.All() {
+				if _, ok := seen[d]; ok {
+					continue
+				}
+				seen[d] = struct{}{}
+				if !yield(d) {
+					return
+				}
+			}
+		}
+	}
 }
 
 // BeginningOfHistory returns the start time of the oldest bucket in the ring.
