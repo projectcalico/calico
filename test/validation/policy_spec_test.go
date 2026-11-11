@@ -89,6 +89,23 @@ func TestGlobalPolicy_ServicesNamespace(t *testing.T) {
 	expectCreateSucceeds(t, policyKinds([]v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: withoutNamespace}}}, nil)["NetworkPolicy"])
 }
 
+// The CRD checks a service namespace against the resource name format, as the Go validator does.
+func TestPolicy_ServicesNamespaceFormat(t *testing.T) {
+	valid := []v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: &v3.ServiceMatch{Name: "my-svc", Namespace: "kube-system"}}}}
+	invalid := []v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: &v3.ServiceMatch{Name: "my-svc", Namespace: "Not_Valid"}}}}
+
+	for kind, obj := range policyKinds(valid, nil) {
+		t.Run("valid namespace "+kind, func(t *testing.T) {
+			expectCreateSucceeds(t, obj)
+		})
+	}
+	for kind, obj := range policyKinds(invalid, nil) {
+		t.Run("invalid namespace "+kind, func(t *testing.T) {
+			expectCreateFails(t, obj, "source.services.namespace: Invalid value")
+		})
+	}
+}
+
 // A service match names the far end of the connection, so it only makes sense
 // as an egress destination or an ingress source.
 func TestPolicy_ServicesDirection(t *testing.T) {
