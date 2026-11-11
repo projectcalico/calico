@@ -429,7 +429,7 @@ _possible_etcd_api_paths = ["/v3/", "/v3beta/", "/v3alpha/"]
 # itself reads and writes.  Calico's docs give the etcd access that each component
 # needs (reference/etcd-rbac/calico-etcdv3-paths), and for both neutron-server and
 # the DHCP agent that includes reading /calico/resources/v3/projectcalico.org/*,
-# which covers this key.  So a role that's narrower than that may now fail here.
+# which covers this key.
 _STATUS_KEY = "/calico/resources/v3/projectcalico.org/clusterinformations/default"
 
 
