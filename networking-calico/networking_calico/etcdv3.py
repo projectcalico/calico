@@ -426,7 +426,10 @@ _possible_etcd_api_paths = ["/v3/", "/v3beta/", "/v3alpha/"]
 
 # The key that Etcd3AuthClient.status() reads, to get etcd's response header.  It
 # needn't exist; it just has to be readable, so it's a key that networking-calico
-# itself reads and writes.
+# itself reads and writes.  Calico's docs give the etcd access that each component
+# needs (reference/etcd-rbac/calico-etcdv3-paths), and for both neutron-server and
+# the DHCP agent that includes reading /calico/resources/v3/projectcalico.org/*,
+# which covers this key.  So a role that's narrower than that may now fail here.
 _STATUS_KEY = "/calico/resources/v3/projectcalico.org/clusterinformations/default"
 
 
