@@ -55,6 +55,12 @@ func checkConnection(ct conncheck.ConnectionTester, client conncheck.Client, tar
 		"expected": expected,
 	}).Info("Checking connection")
 
+	// Resolved up front: PodIPFor fails the spec, which must not happen mid-poll.
+	var clientIP string
+	if expected == reachableNoSNAT && !client.Pod().Spec.HostNetwork {
+		clientIP = utils.PodIPFor(client.Pod(), family)
+	}
+
 	var lastErr error
 	Eventually(func() error {
 		out, err := ct.Connect(client, target)
@@ -80,7 +86,6 @@ func checkConnection(ct conncheck.ConnectionTester, client conncheck.Client, tar
 			// we can't reliably check for SNAT.
 			return nil
 		}
-		clientIP := utils.PodIPFor(client.Pod(), family)
 
 		sourceIP := parseClientAddress(out)
 		if sourceIP == "" {

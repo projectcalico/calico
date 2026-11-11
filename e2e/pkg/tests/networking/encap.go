@@ -16,53 +16,63 @@ package networking
 
 import (
 	"context"
+	"net"
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectcalico/calico/e2e/pkg/utils"
 )
 
-// detectEncapInterface returns the name of the tunnel device used by the
-// cluster's encapsulation mode. It inspects the IPPools to determine
-// whether IPIP or VXLAN is in use:
-//   - IPIP (Always or CrossSubnet) → "tunl0"
-//   - VXLAN (Always or CrossSubnet) → "vxlan.calico"
-//   - No encapsulation → ""
-func detectEncapInterface(cli ctrlclient.Client) string {
+// detectEncapInterfaces returns the tunnel device each IP family's pools use:
+// "tunl0" for IPIP (IPv4 only), "vxlan.calico" / "vxlan-v6.calico" for VXLAN.
+// A family with no encapsulation, or no pools, is absent from the map.
+func detectEncapInterfaces(cli ctrlclient.Client) map[utils.IPFamily]string {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	result := map[utils.IPFamily]string{}
 	pools := &v3.IPPoolList{}
 	if err := cli.List(ctx, pools); err != nil {
 		logrus.WithError(err).Warn("Could not list IPPools for encap detection, assuming no tunnel")
-		return ""
-	}
-
-	var result string
-	for _, pool := range pools.Items {
-		switch {
-		case pool.Spec.IPIPMode == v3.IPIPModeAlways || pool.Spec.IPIPMode == v3.IPIPModeCrossSubnet:
-			logrus.Infof("Detected IPIP encapsulation from IPPool %s (mode=%s)", pool.Name, pool.Spec.IPIPMode)
-			if result != "" && result != "tunl0" {
-				logrus.Warnf("Mixed encapsulation detected: IPPool %s uses IPIP but another pool uses VXLAN; using %s", pool.Name, result)
-				continue
-			}
-			result = "tunl0"
-		case pool.Spec.VXLANMode == v3.VXLANModeAlways || pool.Spec.VXLANMode == v3.VXLANModeCrossSubnet:
-			logrus.Infof("Detected VXLAN encapsulation from IPPool %s (mode=%s)", pool.Name, pool.Spec.VXLANMode)
-			if result != "" && result != "vxlan.calico" {
-				logrus.Warnf("Mixed encapsulation detected: IPPool %s uses VXLAN but another pool uses IPIP; using %s", pool.Name, result)
-				continue
-			}
-			result = "vxlan.calico"
-		}
-	}
-
-	if result != "" {
 		return result
 	}
 
-	logrus.Info("No encapsulation detected from IPPools")
-	return ""
+	for _, pool := range pools.Items {
+		_, cidr, err := net.ParseCIDR(pool.Spec.CIDR)
+		if err != nil {
+			logrus.WithError(err).Warnf("Skipping IPPool %s with unparseable CIDR %q", pool.Name, pool.Spec.CIDR)
+			continue
+		}
+		fam := utils.IPv4
+		if cidr.IP.To4() == nil {
+			fam = utils.IPv6
+		}
+
+		var iface string
+		switch {
+		case fam == utils.IPv4 && (pool.Spec.IPIPMode == v3.IPIPModeAlways || pool.Spec.IPIPMode == v3.IPIPModeCrossSubnet):
+			iface = "tunl0"
+		case pool.Spec.VXLANMode == v3.VXLANModeAlways || pool.Spec.VXLANMode == v3.VXLANModeCrossSubnet:
+			iface = "vxlan.calico"
+			if fam == utils.IPv6 {
+				iface = "vxlan-v6.calico"
+			}
+		default:
+			continue
+		}
+		logrus.Infof("Detected %s encapsulation device %s from IPPool %s", fam, iface, pool.Name)
+		if prev, ok := result[fam]; ok && prev != iface {
+			logrus.Warnf("Mixed %s encapsulation: IPPool %s uses %s but another pool uses %s; using %s", fam, pool.Name, iface, prev, prev)
+			continue
+		}
+		result[fam] = iface
+	}
+
+	if len(result) == 0 {
+		logrus.Info("No encapsulation detected from IPPools")
+	}
+	return result
 }
