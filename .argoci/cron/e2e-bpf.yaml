@@ -611,7 +611,7 @@ steps:
           - name: IP_FAMILY
             value: ipv6
           - name: E2E_TEST_CONFIG
-            value: e2e/config/bpf/kops-bpf-encap-nobgp-extnode-aws.yaml
+            value: e2e/config/bpf/kops-bpf-encap-nobgp-extnode-aws-ipv6.yaml
       - name: calicoiptables-ipv6
         env:
           - name: DATAPLANE
@@ -619,7 +619,7 @@ steps:
           - name: IP_FAMILY
             value: ipv6
           - name: E2E_TEST_CONFIG
-            value: e2e/config/bpf/kops-xtables-encap-nobgp-extnode-aws.yaml
+            value: e2e/config/bpf/kops-xtables-encap-nobgp-extnode-aws-ipv6.yaml
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-kops-w-calico-cni-ipv4

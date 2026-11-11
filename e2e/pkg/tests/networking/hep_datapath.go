@@ -178,6 +178,7 @@ var hepScenarioTable = []hepScenario{
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("Host-Protection"),
+	describe.RequiresIPv4(),
 	describe.WithSerial(), // Creates cluster-scoped HEPs and GNPs.
 	describe.WithCategory(describe.Networking),
 	"Host Endpoint Datapath",

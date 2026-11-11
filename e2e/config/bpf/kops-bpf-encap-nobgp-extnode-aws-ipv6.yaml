@@ -1,0 +1,5 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# bpf: BPF dataplane, encapsulated, no Calico BGP, external node, AWS, on KOPS, IPv6-only.
+
+extends: [kops-bpf-encap-nobgp-extnode-aws.yaml, ../platform/ipv6-only.yaml]

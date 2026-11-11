@@ -248,6 +248,7 @@ var ingressScenarioTable = []ingressScenario{
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("Datapath"),
+	describe.RequiresIPv4(),
 	describe.WithCategory(describe.Networking),
 	"Workload Ingress Datapath",
 	func() {
