@@ -161,27 +161,30 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 			logrus.WithField("lm", key).Info("LiveMigrationCalculator: LiveMigration deleted")
 		}
 
+		// A WEP's role and UID depend on which LiveMigrations reference it, and on their UIDs.
+		// Changes are detected per WEP, by comparing before and after a LiveMigration starts or
+		// stops referencing it, so a LiveMigration's UID must only change while it references no
+		// WEPs.  Nothing else in the stored LiveMigration affects any WEP.
 		old, hadOld := lmc.liveMigrations[key]
-		if hadOld && lm != nil && sameUIDAndReferences(&old, lm) {
-			// Nothing that affects any WEP's role or UID has changed.
+		if hadOld && lm != nil && old.UID == lm.UID {
+			// Same UID, so the stored LiveMigration can be replaced at once, and only references
+			// that have changed need handling.  In particular, a LiveMigration often gains its
+			// source after its target.
 			lmc.liveMigrations[key] = *lm
+			lmc.updateReferences(key, &old, lm)
 			return
 		}
 
-		// A WEP's role and UID depend on which LiveMigrations reference it, and on their UIDs.
-		// Changes are detected per WEP, by comparing before and after a LiveMigration starts or
-		// stops referencing it, so the stored LiveMigration, and hence its UID, must only change
-		// while it references no WEPs.  Hence an update is handled as removing all of the old
-		// version's references, then replacing the stored LiveMigration, then adding the new
-		// version's references.  A WEP can pass through an intermediate role in between, but
-		// only the final one reaches the dataplane.
+		// Otherwise, remove all of the old version's references, then replace the stored
+		// LiveMigration, then add all of the new version's references.  A WEP can pass through
+		// an intermediate role in between, but only the final one reaches the dataplane.
 		if hadOld {
-			lmc.removeReferences(key, &old)
+			lmc.updateReferences(key, &old, &noLiveMigration)
 			delete(lmc.liveMigrations, key)
 		}
 		if lm != nil {
 			lmc.liveMigrations[key] = *lm
-			lmc.addReferences(key, lm)
+			lmc.updateReferences(key, &noLiveMigration, lm)
 		}
 	default:
 		logrus.Infof("Ignoring unexpected update: %v %#v",
@@ -214,8 +217,8 @@ func (lmc *LiveMigrationCalculator) updateSelectorMatch(
 	exactID := wepOwnerIDFromKey(wepKey)
 	wd := lmc.weps[exactID]
 	if wd == nil {
-		// Shouldn't happen, because this calculator sees each local WEP before the active rules
-		// calculator does, but harmless.
+		// Shouldn't happen, because a WEP update reaches this calculator before any selector
+		// match for that WEP, but harmless.
 		return
 	}
 	logrus.WithFields(logrus.Fields{
@@ -315,37 +318,41 @@ func (lmc *LiveMigrationCalculator) uidFromLMKeys(keys set.Set[model.ResourceKey
 	return best
 }
 
-func (lmc *LiveMigrationCalculator) addReferences(key model.ResourceKey, lm *internalapi.LiveMigration) {
-	if sourceID := extractSourceOwnerID(lm.Spec.Source); sourceID != (wepOwnerID{}) {
-		lmc.refDirectName(sourceID, key, source)
-	}
-	if targetID := extractTargetOwnerID(lm.Spec.Target); targetID != (wepOwnerID{}) {
-		lmc.refDirectName(targetID, key, target)
-	}
-	if selector := extractTargetSelector(lm.Spec.Target); selector != "" {
-		lmc.activeRulesCalc.AddExtraComputedSelector(selector, lmSelectorListener{lmc, key})
-	}
-}
+// noLiveMigration references nothing, for adding or removing all of a LiveMigration's references
+// with updateReferences.
+var noLiveMigration internalapi.LiveMigration
 
-func (lmc *LiveMigrationCalculator) removeReferences(key model.ResourceKey, lm *internalapi.LiveMigration) {
-	if sourceID := extractSourceOwnerID(lm.Spec.Source); sourceID != (wepOwnerID{}) {
-		lmc.unrefDirectName(sourceID, key, source)
+// updateReferences changes what the LiveMigration with the given key references, from what
+// oldLM references to what newLM references.
+func (lmc *LiveMigrationCalculator) updateReferences(
+	key model.ResourceKey,
+	oldLM, newLM *internalapi.LiveMigration,
+) {
+	empty := wepOwnerID{}
+	if oldID, newID := extractSourceOwnerID(oldLM.Spec.Source), extractSourceOwnerID(newLM.Spec.Source); oldID != newID {
+		if oldID != empty {
+			lmc.unrefDirectName(oldID, key, source)
+		}
+		if newID != empty {
+			lmc.refDirectName(newID, key, source)
+		}
 	}
-	if targetID := extractTargetOwnerID(lm.Spec.Target); targetID != (wepOwnerID{}) {
-		lmc.unrefDirectName(targetID, key, target)
+	if oldID, newID := extractTargetOwnerID(oldLM.Spec.Target), extractTargetOwnerID(newLM.Spec.Target); oldID != newID {
+		if oldID != empty {
+			lmc.unrefDirectName(oldID, key, target)
+		}
+		if newID != empty {
+			lmc.refDirectName(newID, key, target)
+		}
 	}
-	if selector := extractTargetSelector(lm.Spec.Target); selector != "" {
-		lmc.activeRulesCalc.RemoveExtraComputedSelector(selector, lmSelectorListener{lmc, key})
+	if oldSel, newSel := extractTargetSelector(oldLM.Spec.Target), extractTargetSelector(newLM.Spec.Target); oldSel != newSel {
+		if oldSel != "" {
+			lmc.activeRulesCalc.RemoveExtraComputedSelector(oldSel, lmSelectorListener{lmc, key})
+		}
+		if newSel != "" {
+			lmc.activeRulesCalc.AddExtraComputedSelector(newSel, lmSelectorListener{lmc, key})
+		}
 	}
-}
-
-// sameUIDAndReferences returns true if two versions of a LiveMigration have the same UID and
-// reference the same WEPs.
-func sameUIDAndReferences(a, b *internalapi.LiveMigration) bool {
-	return a.UID == b.UID &&
-		extractSourceOwnerID(a.Spec.Source) == extractSourceOwnerID(b.Spec.Source) &&
-		extractTargetOwnerID(a.Spec.Target) == extractTargetOwnerID(b.Spec.Target) &&
-		extractTargetSelector(a.Spec.Target) == extractTargetSelector(b.Spec.Target)
 }
 
 func (lmc *LiveMigrationCalculator) refDirectName(

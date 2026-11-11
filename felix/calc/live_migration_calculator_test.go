@@ -744,6 +744,37 @@ func TestLiveMigrationCalculator_UIDPropagation(t *testing.T) {
 	}
 }
 
+// A LiveMigration for KubeVirt is created with only a target selector, and then gains its
+// source, with the same UID, once the source pod is known.  The target WEP must not lose its
+// role in between, even transiently.
+func TestLiveMigrationCalculator_SourceAddedWithSameUID(t *testing.T) {
+	env := newTestLMCEnv()
+
+	srcKey := makeWEPKey("ns", "src-pod")
+	env.lmc.OnUpdate(makeWEPUpdate(srcKey))
+	dstKey := makeWEPKey("ns", "dst-pod")
+	env.addLabeledEndpoint(dstKey, map[string]string{"migrate": "true"})
+
+	lmKey := makeLMKey("lm1")
+	env.lmc.OnUpdate(makeLMUpdate(lmKey, makeLMWithUID(nil, makeTargetSelector("has(migrate)"), "uid-1")))
+	if env.lastRole(dstKey) != proto.LiveMigrationRole_TARGET {
+		t.Fatalf("expected TARGET, got %v", env.lastRole(dstKey))
+	}
+	eventCount := len(env.roleEvents)
+
+	env.lmc.OnUpdate(makeLMUpdate(lmKey, makeLMWithUID(
+		makeSourceWEI("host1", "k8s", "ns/src-pod", ""),
+		makeTargetSelector("has(migrate)"),
+		"uid-1",
+	)))
+
+	// Only the source WEP's role should be emitted.
+	newEvents := env.roleEvents[eventCount:]
+	if len(newEvents) != 1 || newEvents[0].key != srcKey || newEvents[0].role != proto.LiveMigrationRole_SOURCE {
+		t.Errorf("expected only a SOURCE event for src-pod, got %v", newEvents)
+	}
+}
+
 func TestLiveMigrationCalculator_UIDWithSelector(t *testing.T) {
 	env := newTestLMCEnv()
 
