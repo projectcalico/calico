@@ -40,7 +40,6 @@ type LiveMigrationCalculator struct {
 	// workloadKeys tracks LiveMigration resources that reference an entire workload
 	// (endpointID empty, matching all endpoints for that workload).
 	workloadKeys [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]
-	selectorKeys map[string]set.Set[model.ResourceKey]
 }
 
 type sourceOrTarget int
@@ -69,9 +68,16 @@ type wepData struct {
 	// i.e. in the union of both these sets.  But we've coded to allow for transient overlaps.
 	directNameKeys [numSourceOrTarget]set.Set[model.ResourceKey]
 
-	// The computed selector string that matched this WEP as a live migration target, or "" if
-	// no selector is currently matching.  Set by the active rules calculator's match callbacks.
-	targetSelectorMatched string
+	// Keys of LiveMigration resources whose target selector matches this WEP.
+	selectorKeys set.Set[model.ResourceKey]
+}
+
+// lmSelectorListener receives the matches for one LiveMigration's target selector.  There is one
+// per LiveMigration, rather than one per distinct selector, so that each match identifies the
+// LiveMigration that it is for.
+type lmSelectorListener struct {
+	lmc   *LiveMigrationCalculator
+	lmKey model.ResourceKey
 }
 
 func NewLiveMigrationCalculator(activeRulesCalc *ActiveRulesCalculator) *LiveMigrationCalculator {
@@ -87,7 +93,6 @@ func NewLiveMigrationCalculator(activeRulesCalc *ActiveRulesCalculator) *LiveMig
 			map[wepOwnerID]set.Set[model.ResourceKey]{},
 			map[wepOwnerID]set.Set[model.ResourceKey]{},
 		},
-		selectorKeys: map[string]set.Set[model.ResourceKey]{},
 	}
 	activeRulesCalc.RegisterPolicyMatchListener(lmc)
 	return lmc
@@ -114,6 +119,7 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 					set.New[model.ResourceKey](),
 					set.New[model.ResourceKey](),
 				},
+				selectorKeys: set.New[model.ResourceKey](),
 			}
 
 			lmc.withRoleUpdateIfNeeded(wd, func() {
@@ -141,72 +147,44 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 			return
 		}
 
-		// If we already had a LiveMigration with this key, get the IDs it indicated.
-		var oldSourceID, oldTargetID wepOwnerID
-		oldSelector := ""
-		if existing, ok := lmc.liveMigrations[key]; ok {
-			oldSourceID = extractSourceOwnerID(existing.Spec.Source)
-			oldTargetID = extractTargetOwnerID(existing.Spec.Target)
-			oldSelector = extractTargetSelector(existing.Spec.Target)
-		}
-
-		// Now check the new LiveMigration state.
-		var newSourceID, newTargetID wepOwnerID
-		newSelector := ""
+		var lm *internalapi.LiveMigration
 		if update.Value != nil {
-			lm := update.Value.(*internalapi.LiveMigration)
-			lmc.liveMigrations[key] = *lm
-			newSourceID = extractSourceOwnerID(lm.Spec.Source)
-			newTargetID = extractTargetOwnerID(lm.Spec.Target)
-			newSelector = extractTargetSelector(lm.Spec.Target)
+			lm = update.Value.(*internalapi.LiveMigration)
 			logrus.WithFields(logrus.Fields{
 				"lm":       key,
 				"uid":      lm.UID,
-				"source":   newSourceID,
-				"target":   newTargetID,
-				"selector": newSelector,
+				"source":   extractSourceOwnerID(lm.Spec.Source),
+				"target":   extractTargetOwnerID(lm.Spec.Target),
+				"selector": extractTargetSelector(lm.Spec.Target),
 			}).Info("LiveMigrationCalculator: LiveMigration created/updated")
 		} else {
 			logrus.WithField("lm", key).Info("LiveMigrationCalculator: LiveMigration deleted")
+		}
+
+		// A WEP's role and UID depend on which LiveMigrations reference it, and on their UIDs.
+		// Changes are detected per WEP, by comparing before and after a LiveMigration starts or
+		// stops referencing it, so a LiveMigration's UID must only change while it references no
+		// WEPs.  Nothing else in the stored LiveMigration affects any WEP.
+		old, hadOld := lmc.liveMigrations[key]
+		if hadOld && lm != nil && old.UID == lm.UID {
+			// Same UID, so the stored LiveMigration can be replaced at once, and only references
+			// that have changed need handling.  In particular, a LiveMigration often gains its
+			// source after its target.
+			lmc.liveMigrations[key] = *lm
+			lmc.updateReferences(key, &old, lm)
+			return
+		}
+
+		// Otherwise, remove all of the old version's references, then replace the stored
+		// LiveMigration, then add all of the new version's references.  A WEP can pass through
+		// an intermediate role in between, but only the final one reaches the dataplane.
+		if hadOld {
+			lmc.updateReferences(key, &old, &noLiveMigration)
 			delete(lmc.liveMigrations, key)
 		}
-
-		// Process the effects of this update on the roles of existing known endpoints, and
-		// on tracking for WEPs that we might hear about later.
-		//
-		// Note, even though we allow for multiple LiveMigration resources
-		// referencing the same WEP in transient overlapping situations, a single
-		// given LiveMigration will never reference the same WEP as both its source
-		// and its target; and will never transition from referencing a WEP as
-		// source to referencing that same WEP as target, or vice versa.  Hence it's
-		// correct to process the source and target fields independently here.
-		type ownerIDTuple struct {
-			oldID wepOwnerID
-			newID wepOwnerID
-			sot   sourceOrTarget
-		}
-		for _, pair := range []ownerIDTuple{
-			{oldSourceID, newSourceID, source},
-			{oldTargetID, newTargetID, target},
-		} {
-			if pair.newID != pair.oldID {
-				empty := wepOwnerID{}
-				if pair.oldID != empty {
-					lmc.unrefDirectName(pair.oldID, key, pair.sot)
-				}
-				if pair.newID != empty {
-					lmc.refDirectName(pair.newID, key, pair.sot)
-				}
-			}
-		}
-
-		if newSelector != oldSelector {
-			if oldSelector != "" {
-				lmc.unrefSelector(oldSelector, key)
-			}
-			if newSelector != "" {
-				lmc.refSelector(newSelector, key)
-			}
+		if lm != nil {
+			lmc.liveMigrations[key] = *lm
+			lmc.updateReferences(key, &noLiveMigration, lm)
 		}
 	default:
 		logrus.Infof("Ignoring unexpected update: %v %#v",
@@ -219,39 +197,42 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 func (lmc *LiveMigrationCalculator) OnPolicyMatch(_ model.PolicyKey, _ model.EndpointKey)        {}
 func (lmc *LiveMigrationCalculator) OnPolicyMatchStopped(_ model.PolicyKey, _ model.EndpointKey) {}
 
-func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey model.EndpointKey) {
-	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
-		exactID := wepOwnerIDFromKey(wepKey)
-		if wd := lmc.weps[exactID]; wd != nil {
-			logrus.WithFields(logrus.Fields{
-				"wep":      exactID,
-				"selector": cs,
-			}).Debug("LiveMigrationCalculator: selector matched WEP")
-			lmc.withRoleUpdateIfNeeded(wd, func() {
-				wd.targetSelectorMatched = cs
-			})
-		}
-		// If the WEP isn't tracked yet, we can ignore this callback.  The LMC is registered
-		// on localEndpointDispatcher before the ARC, so it always sees WEP updates first.
-		// The unknown WEP case here (wd == nil) shouldn't occur because
-		// LiveMigrationCalculator sees the same set of local WEPs as ActiveRulesCalculator,
-		// but it's harmless to be defensive here.
-	}
+func (l lmSelectorListener) OnComputedSelectorMatch(_ string, epKey model.EndpointKey) {
+	l.lmc.updateSelectorMatch(l.lmKey, epKey, true)
 }
 
-func (lmc *LiveMigrationCalculator) OnComputedSelectorMatchStopped(cs string, epKey model.EndpointKey) {
-	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
-		exactID := wepOwnerIDFromKey(wepKey)
-		if wd := lmc.weps[exactID]; wd != nil {
-			logrus.WithFields(logrus.Fields{
-				"wep":      exactID,
-				"selector": cs,
-			}).Debug("LiveMigrationCalculator: selector match stopped for WEP")
-			lmc.withRoleUpdateIfNeeded(wd, func() {
-				wd.targetSelectorMatched = ""
-			})
-		}
+func (l lmSelectorListener) OnComputedSelectorMatchStopped(_ string, epKey model.EndpointKey) {
+	l.lmc.updateSelectorMatch(l.lmKey, epKey, false)
+}
+
+func (lmc *LiveMigrationCalculator) updateSelectorMatch(
+	lmKey model.ResourceKey,
+	epKey model.EndpointKey,
+	matching bool,
+) {
+	wepKey, ok := epKey.(model.WorkloadEndpointKey)
+	if !ok {
+		return
 	}
+	exactID := wepOwnerIDFromKey(wepKey)
+	wd := lmc.weps[exactID]
+	if wd == nil {
+		// Shouldn't happen, because a WEP update reaches this calculator before any selector
+		// match for that WEP, but harmless.
+		return
+	}
+	logrus.WithFields(logrus.Fields{
+		"wep":      exactID,
+		"lm":       lmKey,
+		"matching": matching,
+	}).Debug("LiveMigrationCalculator: target selector match changed")
+	lmc.withRoleUpdateIfNeeded(wd, func() {
+		if matching {
+			wd.selectorKeys.Add(lmKey)
+		} else {
+			wd.selectorKeys.Discard(lmKey)
+		}
+	})
 }
 
 // isWorkloadLevel returns true if this ID matches all endpoints for a workload
@@ -309,8 +290,8 @@ func wepOwnerIDFromKey(k model.WorkloadEndpointKey) wepOwnerID {
 // determines the role, so they are consistent even during transient overlaps.
 func (lmc *LiveMigrationCalculator) liveMigrationRoleAndUID(wd *wepData) (proto.LiveMigrationRole, string) {
 	// Selector-based target match takes priority.
-	if wd.targetSelectorMatched != "" {
-		return proto.LiveMigrationRole_TARGET, lmc.uidFromLMKeys(lmc.selectorKeys[wd.targetSelectorMatched])
+	if wd.selectorKeys.Len() > 0 {
+		return proto.LiveMigrationRole_TARGET, lmc.uidFromLMKeys(wd.selectorKeys)
 	}
 	if wd.directNameKeys[target].Len() > 0 {
 		return proto.LiveMigrationRole_TARGET, lmc.uidFromLMKeys(wd.directNameKeys[target])
@@ -335,6 +316,43 @@ func (lmc *LiveMigrationCalculator) uidFromLMKeys(keys set.Set[model.ResourceKey
 		}
 	}
 	return best
+}
+
+// noLiveMigration references nothing, for adding or removing all of a LiveMigration's references
+// with updateReferences.
+var noLiveMigration internalapi.LiveMigration
+
+// updateReferences changes what the LiveMigration with the given key references, from what
+// oldLM references to what newLM references.
+func (lmc *LiveMigrationCalculator) updateReferences(
+	key model.ResourceKey,
+	oldLM, newLM *internalapi.LiveMigration,
+) {
+	empty := wepOwnerID{}
+	if oldID, newID := extractSourceOwnerID(oldLM.Spec.Source), extractSourceOwnerID(newLM.Spec.Source); oldID != newID {
+		if oldID != empty {
+			lmc.unrefDirectName(oldID, key, source)
+		}
+		if newID != empty {
+			lmc.refDirectName(newID, key, source)
+		}
+	}
+	if oldID, newID := extractTargetOwnerID(oldLM.Spec.Target), extractTargetOwnerID(newLM.Spec.Target); oldID != newID {
+		if oldID != empty {
+			lmc.unrefDirectName(oldID, key, target)
+		}
+		if newID != empty {
+			lmc.refDirectName(newID, key, target)
+		}
+	}
+	if oldSel, newSel := extractTargetSelector(oldLM.Spec.Target), extractTargetSelector(newLM.Spec.Target); oldSel != newSel {
+		if oldSel != "" {
+			lmc.activeRulesCalc.RemoveExtraComputedSelector(oldSel, lmSelectorListener{lmc, key})
+		}
+		if newSel != "" {
+			lmc.activeRulesCalc.AddExtraComputedSelector(newSel, lmSelectorListener{lmc, key})
+		}
+	}
 }
 
 func (lmc *LiveMigrationCalculator) refDirectName(
@@ -412,35 +430,6 @@ func (lmc *LiveMigrationCalculator) unrefDirectName(
 	}
 }
 
-func (lmc *LiveMigrationCalculator) refSelector(
-	selector string,
-	lmKey model.ResourceKey,
-) {
-	keys := lmc.selectorKeys[selector]
-	if keys == nil {
-		keys = set.New[model.ResourceKey]()
-		lmc.selectorKeys[selector] = keys
-	}
-	keys.Add(lmKey)
-	if keys.Len() == 1 {
-		lmc.activeRulesCalc.AddExtraComputedSelector(selector, lmc)
-	}
-}
-
-func (lmc *LiveMigrationCalculator) unrefSelector(
-	selector string,
-	lmKey model.ResourceKey,
-) {
-	keys := lmc.selectorKeys[selector]
-	if keys != nil {
-		keys.Discard(lmKey)
-		if keys.Len() == 0 {
-			lmc.activeRulesCalc.RemoveExtraComputedSelector(selector, lmc)
-			delete(lmc.selectorKeys, selector)
-		}
-	}
-}
-
 // extractSourceOwnerID extracts the wepOwnerID from a LiveMigrationSource.
 // Returns the zero value if the source is nil or has no identifying fields set.
 func extractSourceOwnerID(src *internalapi.LiveMigrationSource) wepOwnerID {
@@ -476,14 +465,14 @@ func extractTargetSelector(tgt *internalapi.LiveMigrationTarget) string {
 }
 
 func (lmc *LiveMigrationCalculator) withRoleUpdateIfNeeded(wepData *wepData, updateFunc func()) {
-	oldRole, _ := lmc.liveMigrationRoleAndUID(wepData)
+	oldRole, oldUID := lmc.liveMigrationRoleAndUID(wepData)
 	updateFunc()
 	newRole, newUID := lmc.liveMigrationRoleAndUID(wepData)
-	// Intentionally we only emit an update when the role changes, not when the
-	// UID changes with the same role.  Overlapping LiveMigrations referencing
-	// the same WEP are transient; avoiding a UID churn keeps the downstream
-	// state (and logs) more stable.
-	if newRole != oldRole {
+
+	// The UID must be emitted when it changes, even if the role doesn't, so that what we emit
+	// depends only on the current datastore state, not on the order of the updates that led to
+	// it.
+	if newRole != oldRole || newUID != oldUID {
 		logrus.WithFields(logrus.Fields{
 			"wep":  wepData.key,
 			"role": newRole,
