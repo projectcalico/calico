@@ -21,8 +21,17 @@ if [ "${Q_AGENT}" = calico-felix ]; then
                     # before project source is installed.
                     echo Calico plugin: pre-install
 
-                    # Add Calico master PPA as a package source.
-                    sudo apt-add-repository -y ppa:project-calico/master
+                    # Add Calico master PPA as a package source. It fetches the
+                    # signing key from Launchpad's API, which sometimes times out.
+                    for attempt in 1 2 3; do
+                        if sudo apt-add-repository -y ppa:project-calico/master; then
+                            break
+                        fi
+                        if [ "$attempt" = 3 ]; then
+                            die $LINENO "could not add ppa:project-calico/master"
+                        fi
+                        sleep 30
+                    done
                     REPOS_UPDATED=False
 
                     if [ "${CALICO_BGP_MODE}" = bird ]; then
