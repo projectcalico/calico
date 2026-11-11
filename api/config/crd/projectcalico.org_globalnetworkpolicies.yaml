@@ -252,6 +252,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -592,6 +593,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -916,6 +918,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -1256,6 +1259,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
