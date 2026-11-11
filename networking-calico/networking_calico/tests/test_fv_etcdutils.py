@@ -149,6 +149,75 @@ class TestFVEtcdutils(unittest.TestCase):
         # Kill the etcd server.
         self.stop_etcd_server()
 
+    def test_auth_non_admin_user(self):
+        # Start a real local etcd server.
+        self.start_etcd_server()
+        calico_config.register_options(cfg.CONF)
+        self.wait_etcd_ready()
+
+        # Enable auth, with a non-admin user that can only read and write under
+        # /calico/, as networking-calico is normally deployed.  Some etcd versions
+        # make the maintenance Status API admin-only (see Etcd3AuthClient.status),
+        # but this Dockerfile's etcd isn't one of them, so here this test only
+        # checks that networking-calico works with such a user.
+        def b64(s):
+            return base64.b64encode(s.encode()).decode()
+
+        admin = etcdv3.Etcd3Client(host="127.0.0.1", port=2379, api_path="/v3/")
+        for path, body in [
+            ("/auth/user/add", {"name": "root", "password": "rootpw"}),
+            ("/auth/user/grant", {"user": "root", "role": "root"}),
+            ("/auth/role/add", {"name": "calico"}),
+            (
+                "/auth/role/grant",
+                {
+                    "name": "calico",
+                    "perm": {
+                        "permType": "READWRITE",
+                        "key": b64("/calico/"),
+                        "range_end": b64("/calico0"),
+                    },
+                },
+            ),
+            ("/auth/user/add", {"name": "calicouser", "password": "calicopw"}),
+            ("/auth/user/grant", {"user": "calicouser", "role": "calico"}),
+            ("/auth/enable", {}),
+        ]:
+            admin.post(admin.get_url(path), json=body)
+
+        # Connect as that user.
+        cfg.CONF.set_override("etcd_username", "calicouser", group="calico")
+        cfg.CONF.set_override("etcd_password", "calicopw", group="calico")
+        self.addCleanup(cfg.CONF.clear_override, "etcd_username", group="calico")
+        self.addCleanup(cfg.CONF.clear_override, "etcd_password", group="calico")
+        etcdv3._client = None
+
+        # get_status works, and so do reads and writes under /calico/.
+        cluster_id, revision = etcdv3.get_status()
+        self.assertTrue(cluster_id)
+        self.assertTrue(int(revision) > 0)
+        self.assertTrue(etcdv3.put("/calico/testkey", "testvalue"))
+        value, _ = etcdv3.get("/calico/testkey")
+        self.assertEqual("testvalue", value)
+
+        # The revision from get_status is the whole datastore's revision, not just that
+        # of the key that Etcd3AuthClient.status reads.  Write that key, and check that
+        # get_status gives its revision.  Then write another key, outside /calico/ (so
+        # as root), and check that get_status gives the new revision.
+        self.assertTrue(etcdv3.put(etcdv3._STATUS_KEY, "{}"))
+        _, status_key_revision = etcdv3.get(etcdv3._STATUS_KEY)
+        _, revision = etcdv3.get_status()
+        self.assertEqual(int(status_key_revision), int(revision))
+        root = etcdv3.Etcd3AuthClient(
+            host="127.0.0.1", port=2379, username="root", password="rootpw"
+        )
+        self.assertTrue(root.put("/other/testkey", "testvalue"))
+        _, revision = etcdv3.get_status()
+        self.assertEqual(int(status_key_revision) + 1, int(revision))
+
+        # Kill the etcd server.
+        self.stop_etcd_server()
+
     def test_restart_resilience_2s(self):
         self._test_restart_resilience(2)
 
