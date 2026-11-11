@@ -56,6 +56,7 @@ type egressScenario struct {
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("Datapath"),
+	describe.RequiresIPv4(),
 	describe.WithCategory(describe.Networking),
 	"Workload Egress Datapath",
 	func() {

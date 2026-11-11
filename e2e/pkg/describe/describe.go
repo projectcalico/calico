@@ -233,6 +233,12 @@ func RequiresXtables() any {
 	return framework.WithLabel("RequiresXtables")
 }
 
+// RequiresIPv4 marks tests that need nodes with IPv4 addresses. Exclude it on
+// IPv6-only clusters via the RequiresIPv4 label in the test config.
+func RequiresIPv4() any {
+	return framework.WithLabel("RequiresIPv4")
+}
+
 // WithSmokeTest marks tests that are considered smoke tests.
 // A Smoke test must pass in under a minute, and is expected to pass on all platforms regardless of configuration.
 func WithSmokeTest() any {

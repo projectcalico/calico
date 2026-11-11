@@ -125,6 +125,7 @@ func withPacketSizeServer(pod *v1.Pod) {
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("Datapath"),
+	describe.RequiresIPv4(),
 	describe.WithCategory(describe.Networking),
 	"Packet Size Verification",
 	func() {

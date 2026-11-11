@@ -31,8 +31,8 @@
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-gcp-bpf-dp-encap-w-nodelocal-dnscache [true] | cron/e2e-bpf/bpf-run-matrix-gcp-bpf-dp-encap-w-nodelocal-dnscache-true | 226
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv4 [calicobpf-ipv4] | cron/e2e-bpf/bpf-run-matrix-kops-w-calico-cni-ipv4-calicobpf-ipv4 | 214
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv4 [calicoiptables-ipv4] | cron/e2e-bpf/bpf-run-matrix-kops-w-calico-cni-ipv4-calicoiptables-ipv4 | 218
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 [calicobpf-ipv6] | cron/e2e-bpf/bpf-run-matrix-kops-w-calico-cni-ipv6-calicobpf-ipv6 | 214
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 [calicoiptables-ipv6] | cron/e2e-bpf/bpf-run-matrix-kops-w-calico-cni-ipv6-calicoiptables-ipv6 | 218
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 [calicobpf-ipv6] | cron/e2e-bpf/bpf-run-matrix-kops-w-calico-cni-ipv6-calicobpf-ipv6 | 145
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 [calicoiptables-ipv6] | cron/e2e-bpf/bpf-run-matrix-kops-w-calico-cni-ipv6-calicoiptables-ipv6 | 145
 .argoci/cron/e2e-bpf.yaml | kubevirt-e2e-tests | cron/e2e-bpf/kubevirt-e2e-tests | 9
 .argoci/cron/e2e-bpf.yaml | usage-reporting-with-bpf [stable] | (usage-reporting) | -
 .argoci/cron/e2e-bpf.yaml | wireguard | cron/e2e-bpf/wireguard | 216
