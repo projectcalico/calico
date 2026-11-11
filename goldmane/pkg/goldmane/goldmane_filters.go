@@ -18,6 +18,8 @@ import (
 	"fmt"
 
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -90,6 +92,14 @@ func (a *Goldmane) validateListRequest(req *proto.FlowListRequest) error {
 	}
 	if len(req.SortBy) > 1 {
 		return fmt.Errorf("at most one sort order is supported")
+	}
+	return validatePage(req.Page, req.PageSize)
+}
+
+// validatePage rejects a negative page or page size, which no page of results can match.
+func validatePage(page, pageSize int64) error {
+	if page < 0 || pageSize < 0 {
+		return status.Errorf(codes.InvalidArgument, "page (%d) and page size (%d) must not be negative", page, pageSize)
 	}
 	return nil
 }

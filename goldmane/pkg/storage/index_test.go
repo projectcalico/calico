@@ -15,6 +15,9 @@
 package storage
 
 import (
+	"fmt"
+	"iter"
+	"slices"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -30,14 +33,14 @@ type simpleLogAggregatorStub struct {
 	diachronics []*DiachronicFlow
 }
 
-func (l simpleLogAggregatorStub) FlowSet(startGt, startLt int64) set.Set[*DiachronicFlow] {
-	s := set.New[*DiachronicFlow]()
+func (l simpleLogAggregatorStub) Flows(startGt, startLt int64) (iter.Seq[*DiachronicFlow], int) {
+	var within []*DiachronicFlow
 	for _, d := range l.diachronics {
-		if d.Within(startGt, startLt) {
-			s.Add(d)
+		if _, ok := d.Within(startGt, startLt); ok {
+			within = append(within, d)
 		}
 	}
-	return s
+	return slices.Values(within), len(within)
 }
 
 func setupTest(t *testing.T) func() {
@@ -785,4 +788,42 @@ func TestIndexListReturnsRequestedPage(t *testing.T) {
 	Expect(flows).To(HaveLen(2))
 	Expect(flows[0].Key.DestName()).To(Equal("bb"))
 	Expect(flows[1].Key.DestName()).To(Equal("c"))
+}
+
+func TestRingIndexPolicyHintsSkipOnlyMatchedTraces(t *testing.T) {
+	defer setupTest(t)()
+
+	newFlow := func(id int64, namespace, policy string) *DiachronicFlow {
+		k := types.NewFlowKey(
+			&types.FlowKeySource{},
+			&types.FlowKeyDestination{DestName: fmt.Sprint(id), DestNamespace: namespace},
+			&types.FlowKeyMeta{},
+			&proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{{
+				Kind:      proto.PolicyKind_CalicoNetworkPolicy,
+				Namespace: "policy-ns",
+				Name:      policy,
+				Tier:      "default",
+				Action:    proto.Action_Allow,
+			}}},
+		)
+		d := NewDiachronicFlow(k, id)
+		d.AddFlow(&types.Flow{Key: k, PacketsIn: 1}, 0, 15)
+		return d
+	}
+
+	// The stub yields in slice order, so the filtered-out flow sharing the matching flow's trace always
+	// comes first. Marking a trace seen before the filter check would then drop "shared".
+	idx := NewRingIndex(&simpleLogAggregatorStub{diachronics: []*DiachronicFlow{
+		newFlow(0, "ns-other", "shared"),
+		newFlow(1, "ns-match", "shared"),
+	}})
+	values, meta := idx.FilterValueSet(
+		extractPolicyFields(func(p *proto.PolicyHit) string { return p.Name }),
+		IndexFindOpts{
+			startTimeLt: 15,
+			filter:      &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns-match", Type: proto.MatchType_Exact}}},
+		},
+	)
+	Expect(values).To(Equal([]string{"shared"}))
+	Expect(meta.TotalResults).To(Equal(1))
 }

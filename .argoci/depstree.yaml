@@ -480,6 +480,7 @@ components:
       - ^goldmane/pkg/emitter/[^/]*\.go$
       - ^goldmane/pkg/goldmane/[^/]*\.go$
       - ^goldmane/pkg/internal/flowcache/[^/]*\.go$
+      - ^goldmane/pkg/internal/topk/[^/]*\.go$
       - ^goldmane/pkg/internal/utils/[^/]*\.go$
       - ^goldmane/pkg/server/[^/]*\.go$
       - ^goldmane/pkg/storage/[^/]*\.go$
@@ -932,6 +933,7 @@ components:
       - ^goldmane/pkg/client/[^/]*\.go$
       - ^goldmane/pkg/goldmane/[^/]*\.go$
       - ^goldmane/pkg/internal/flowcache/[^/]*\.go$
+      - ^goldmane/pkg/internal/topk/[^/]*\.go$
       - ^goldmane/pkg/server/[^/]*\.go$
       - ^goldmane/pkg/storage/[^/]*\.go$
       - ^goldmane/pkg/stream/[^/]*\.go$
@@ -1511,6 +1513,7 @@ components:
       - ^goldmane/pkg/client/[^/]*\.go$
       - ^goldmane/pkg/goldmane/[^/]*\.go$
       - ^goldmane/pkg/internal/flowcache/[^/]*\.go$
+      - ^goldmane/pkg/internal/topk/[^/]*\.go$
       - ^goldmane/pkg/server/[^/]*\.go$
       - ^goldmane/pkg/storage/[^/]*\.go$
       - ^goldmane/pkg/stream/[^/]*\.go$
