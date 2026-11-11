@@ -20,6 +20,12 @@ set -ex
 sudo pip uninstall -y setuptools
 sudo rm -rf /usr/local/lib/python3.8/dist-packages/setuptools-*.dist-info
 sudo find / -name "*setuptools*" || true
+# Newer agent images ship wheel>=0.46, whose bdist_wheel requires packaging>=24.
+# DevStack's venv sees system packages but pins packaging below that, so every
+# legacy sdist build in it fails. wheel 0.45 has no such requirement.
+sudo pip install 'wheel<0.46'
+# Package downloads from the Launchpad PPA intermittently fail mid-stack.
+echo 'Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/80-retries
 sudo pip list || true
 
 #------------------------------------------------------------------------------
