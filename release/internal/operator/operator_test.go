@@ -28,54 +28,21 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	logtest "github.com/sirupsen/logrus/hooks/test"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-type fakeRunner struct {
-	mu    sync.Mutex
-	calls []call
-	err   error
+func failingRunner(err error) *command.Recorder {
+	return &command.Recorder{Reply: func(command.Call) (string, error) { return "", err }}
 }
 
-type call struct {
-	args []string
-	env  []string
-}
-
-func (f *fakeRunner) record(args, env []string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.calls = append(f.calls, call{args: slices.Clone(args), env: slices.Clone(env)})
-	return f.err
-}
-
-func (f *fakeRunner) Run(_ string, args, env []string) (string, error) {
-	return "", f.record(args, env)
-}
-
-func (f *fakeRunner) RunNoCapture(_ string, args, env []string) error {
-	return f.record(args, env)
-}
-
-func (f *fakeRunner) RunInDir(_, _ string, args, env []string) (string, error) {
-	return "", f.record(args, env)
-}
-
-func (f *fakeRunner) RunInDirNoCapture(_, _ string, args, env []string) error {
-	return f.record(args, env)
-}
-
-func (f *fakeRunner) RunInDirToFile(_, _ string, args, env []string, _ string) (string, error) {
-	return "", f.record(args, env)
-}
-
-func (f *fakeRunner) targets() []string {
+func targets(f *command.Recorder) []string {
 	var out []string
-	for _, c := range f.calls {
-		out = append(out, strings.Join(c.args, " "))
+	for _, c := range f.Calls() {
+		out = append(out, strings.Join(c.Args, " "))
 	}
 	return out
 }
@@ -189,16 +156,16 @@ func TestVariants(t *testing.T) {
 
 	t.Run("env overrides the environment", func(t *testing.T) {
 		t.Setenv("VARIANT", "inherited")
-		f := &fakeRunner{}
+		f := &command.Recorder{}
 		variants := []Variant{{Name: "alt", Image: "operator-alt", Env: []string{"VARIANT=alt"}}}
 		if err := Build(testOperator(), variants, false, WithRunner(f), WithValidation(false)); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if len(f.calls) != 1 {
-			t.Fatalf("len = %d, want 1", len(f.calls))
+		if len(f.Calls()) != 1 {
+			t.Fatalf("len = %d, want 1", len(f.Calls()))
 		}
-		got, ok := envValue(f.calls[0].env, "VARIANT")
+		got, ok := envValue(f.Calls()[0].Env, "VARIANT")
 		if !(ok) {
 			t.Errorf("expected true")
 		}
@@ -210,12 +177,21 @@ func TestVariants(t *testing.T) {
 	// Each variant's make runs in the same tree, where a concurrent clean or tool
 	// download breaks the other.
 	t.Run("run one at a time", func(t *testing.T) {
-		f := &overlapRunner{}
+		var running atomic.Int32
+		var overlapped atomic.Bool
+		f := &command.Recorder{Reply: func(command.Call) (string, error) {
+			if running.Add(1) > 1 {
+				overlapped.Store(true)
+			}
+			defer running.Add(-1)
+			time.Sleep(20 * time.Millisecond)
+			return "", nil
+		}}
 		variants := []Variant{{Name: standardVariant}, {Name: "alt", Image: "operator-alt"}}
 		if err := Build(testOperator(), variants, false, WithRunner(f), WithValidation(false)); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if f.overlapped.Load() {
+		if overlapped.Load() {
 			t.Error("variants ran at the same time")
 		}
 	})
@@ -271,13 +247,13 @@ func TestProductEnv(t *testing.T) {
 	t.Run("reaches the build", func(t *testing.T) {
 		for _, hashrelease := range []bool{true, false} {
 			t.Run(fmt.Sprintf("hashrelease=%v", hashrelease), func(t *testing.T) {
-				f := &fakeRunner{}
+				f := &command.Recorder{}
 				if err := Build(testOperator(), oneVariant(), hashrelease, WithRunner(f), WithValidation(false)); err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
 
-				if len(f.calls) != 1 {
-					t.Fatalf("len = %d, want 1", len(f.calls))
+				if len(f.Calls()) != 1 {
+					t.Fatalf("len = %d, want 1", len(f.Calls()))
 				}
 				want, err := productEnv(testOperator())
 				if err != nil {
@@ -288,7 +264,7 @@ func TestProductEnv(t *testing.T) {
 				}
 				for _, e := range want {
 					name, value, _ := strings.Cut(e, "=")
-					got, ok := envValue(f.calls[0].env, name)
+					got, ok := envValue(f.Calls()[0].Env, name)
 					if !ok {
 						t.Errorf("%s is missing", name)
 						continue
@@ -312,15 +288,15 @@ func TestProductEnv(t *testing.T) {
 
 		for _, tc := range verbs() {
 			t.Run(tc.name, func(t *testing.T) {
-				f := &fakeRunner{}
+				f := &command.Recorder{}
 				if err := tc.run(testOperator(), f); err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
-				if got, _ := envValue(f.calls[0].env, "REPLACED_VERSION"); got != "v3.34.0" {
+				if got, _ := envValue(f.Calls()[0].Env, "REPLACED_VERSION"); got != "v3.34.0" {
 					t.Errorf("REPLACED_VERSION = %q, want v3.34.0", got)
 				}
 				for _, dropped := range []string{"CALICO_VERSION", "CALICO_REGISTRY", "CALICO_IMAGE_PATH"} {
-					if got, ok := envValue(f.calls[0].env, dropped); ok {
+					if got, ok := envValue(f.Calls()[0].Env, dropped); ok {
 						t.Errorf("%s = %q, want it dropped by the replacement", dropped, got)
 					}
 				}
@@ -334,11 +310,11 @@ func TestProductEnv(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				o := testOperator()
 				o.ProductRegistry = ""
-				f := &fakeRunner{}
+				f := &command.Recorder{}
 				if err := tc.run(o, f); err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
-				if got, ok := envValue(f.calls[0].env, "CALICO_REGISTRY"); ok {
+				if got, ok := envValue(f.Calls()[0].Env, "CALICO_REGISTRY"); ok {
 					t.Errorf("CALICO_REGISTRY = %q, want it unset", got)
 				}
 				// The product version still goes, whatever the product names it.
@@ -350,7 +326,7 @@ func TestProductEnv(t *testing.T) {
 					t.Error("productEnv dropped the product version along with the registry")
 				}
 				for _, e := range want {
-					if !slices.Contains(f.calls[0].env, e) {
+					if !slices.Contains(f.Calls()[0].Env, e) {
 						t.Errorf("env missing %s", e)
 					}
 				}
@@ -372,14 +348,14 @@ func TestProductEnv(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				o := testOperator()
 				o.Registries = tc.registries
-				f := &fakeRunner{}
+				f := &command.Recorder{}
 				if err := Build(o, oneVariant(), false, WithRunner(f), WithValidation(false)); err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
-				if got, _ := envValue(f.calls[0].env, "OPERATOR_IMAGE_REGISTRY"); got != tc.wantReg {
+				if got, _ := envValue(f.Calls()[0].Env, "OPERATOR_IMAGE_REGISTRY"); got != tc.wantReg {
 					t.Errorf("OPERATOR_IMAGE_REGISTRY = %q, want %q", got, tc.wantReg)
 				}
-				if got, _ := envValue(f.calls[0].env, "OPERATOR_IMAGE_PATH"); got != tc.wantPath {
+				if got, _ := envValue(f.Calls()[0].Env, "OPERATOR_IMAGE_PATH"); got != tc.wantPath {
 					t.Errorf("OPERATOR_IMAGE_PATH = %q, want %q", got, tc.wantPath)
 				}
 			})
@@ -389,7 +365,7 @@ func TestProductEnv(t *testing.T) {
 	// A repeated name is silently last-wins, so a build variable that appears
 	// twice would take whichever value came later.
 	t.Run("names each variable once", func(t *testing.T) {
-		f := &fakeRunner{}
+		f := &command.Recorder{}
 		if err := Build(testOperator(), oneVariant(), false, WithRunner(f), WithValidation(false)); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -405,7 +381,7 @@ func TestProductEnv(t *testing.T) {
 				continue
 			}
 			var seen int
-			for _, got := range f.calls[0].env {
+			for _, got := range f.Calls()[0].Env {
 				if n, _, _ := strings.Cut(got, "="); n == name {
 					seen++
 				}
@@ -452,11 +428,11 @@ func TestProductEnv(t *testing.T) {
 	t.Run("skips the operator's own image for a bare registry", func(t *testing.T) {
 		o := testOperator()
 		o.Registries = []string{"localhost:5000"}
-		f := &fakeRunner{}
+		f := &command.Recorder{}
 		if err := Publish(o, oneVariant(), false, WithRunner(f)); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got, ok := envValue(f.calls[0].env, "OPERATOR_IMAGE_REGISTRY"); ok {
+		if got, ok := envValue(f.Calls()[0].Env, "OPERATOR_IMAGE_REGISTRY"); ok {
 			t.Errorf("OPERATOR_IMAGE_REGISTRY = %q, want it unset", got)
 		}
 	})
@@ -468,17 +444,17 @@ func TestVerbs(t *testing.T) {
 			{Name: standardVariant},
 			{Name: "alt", Image: "operator-alt", Env: []string{"VARIANT=alt"}},
 		}
-		f := &fakeRunner{}
+		f := &command.Recorder{}
 		if err := Build(testOperator(), variants, false, WithRunner(f), WithValidation(false)); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(f.calls) != 2 {
-			t.Fatalf("len = %d, want 2", len(f.calls))
+		if len(f.Calls()) != 2 {
+			t.Fatalf("len = %d, want 2", len(f.Calls()))
 		}
 
 		var got []string
-		for _, c := range f.calls {
-			v, _ := envValue(c.env, "VARIANT")
+		for _, c := range f.Calls() {
+			v, _ := envValue(c.Env, "VARIANT")
 			got = append(got, v)
 		}
 		want := []string{"", "alt"}
@@ -488,7 +464,7 @@ func TestVerbs(t *testing.T) {
 	})
 
 	t.Run("report every variant's error", func(t *testing.T) {
-		f := &fakeRunner{err: fmt.Errorf("boom")}
+		f := failingRunner(fmt.Errorf("boom"))
 		variants := []Variant{{Name: standardVariant}, {Name: "alt", Image: "operator-alt"}}
 		err := Publish(testOperator(), variants, false, WithRunner(f))
 
@@ -501,8 +477,8 @@ func TestVerbs(t *testing.T) {
 		if !strings.Contains(err.Error(), "alt") {
 			t.Errorf("%q does not contain %q", err.Error(), "alt")
 		}
-		if len(f.calls) != 2 {
-			t.Fatalf("len = %d, want 2", len(f.calls))
+		if len(f.Calls()) != 2 {
+			t.Fatalf("len = %d, want 2", len(f.Calls()))
 		}
 	})
 
@@ -521,7 +497,7 @@ func TestVerbs(t *testing.T) {
 			"quay.io/a/operator-alt:v1.44.0":       "sha256:alt",
 			"quay.io/b/operator-alt:v1.44.0-arm64": "sha256:alt-arm64",
 		}
-		err := Publish(o, variants, false, WithRunner(&fakeRunner{}), WithRecord(rec),
+		err := Publish(o, variants, false, WithRunner(&command.Recorder{}), WithRecord(rec),
 			WithResolver(resolve.resolve), WithArches("arm64"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -542,7 +518,7 @@ func TestVerbs(t *testing.T) {
 	t.Run("publish records what a failed push left", func(t *testing.T) {
 		rec := &fakeRecorder{}
 		resolve := fakeResolver{"quay.io/a/operator:v1.44.0": "sha256:a"}
-		err := Publish(oneRegistryOperator(), oneVariant(), false, WithRunner(&fakeRunner{err: fmt.Errorf("boom")}),
+		err := Publish(oneRegistryOperator(), oneVariant(), false, WithRunner(failingRunner(fmt.Errorf("boom"))),
 			WithRecord(rec), WithResolver(resolve.resolve))
 		if err == nil {
 			t.Fatal("expected an error, got nil")
@@ -555,7 +531,7 @@ func TestVerbs(t *testing.T) {
 	t.Run("dry run records nothing", func(t *testing.T) {
 		rec := &fakeRecorder{}
 		resolve := fakeResolver{"quay.io/a/operator:v1.44.0": "sha256:a"}
-		err := Publish(oneRegistryOperator(), oneVariant(), false, WithRunner(&fakeRunner{}), WithDryRun(true),
+		err := Publish(oneRegistryOperator(), oneVariant(), false, WithRunner(&command.Recorder{}), WithDryRun(true),
 			WithRecord(rec), WithResolver(resolve.resolve))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -569,7 +545,7 @@ func TestVerbs(t *testing.T) {
 		hook := logtest.NewGlobal()
 		t.Cleanup(hook.Reset)
 		resolve := fakeResolver{"quay.io/a/operator:v1.44.0": "sha256:a"}
-		if err := Publish(oneRegistryOperator(), oneVariant(), false, WithRunner(&fakeRunner{}), WithDryRun(true),
+		if err := Publish(oneRegistryOperator(), oneVariant(), false, WithRunner(&command.Recorder{}), WithDryRun(true),
 			WithResolver(resolve.resolve)); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -593,7 +569,7 @@ func TestVerbs(t *testing.T) {
 				name: "build needs a product registry",
 				o:    func(o Operator) Operator { o.ProductRegistry = ""; return o },
 				run: func(o Operator) error {
-					return Build(o, oneVariant(), false, WithRunner(&fakeRunner{}), WithValidation(false))
+					return Build(o, oneVariant(), false, WithRunner(&command.Recorder{}), WithValidation(false))
 				},
 				want: "no product registry specified",
 			},
@@ -601,7 +577,7 @@ func TestVerbs(t *testing.T) {
 				name: "hashrelease build needs the product version",
 				o:    func(o Operator) Operator { o.ProductVersion = ""; return o },
 				run: func(o Operator) error {
-					return Build(o, oneVariant(), true, WithRunner(&fakeRunner{}), WithValidation(false))
+					return Build(o, oneVariant(), true, WithRunner(&command.Recorder{}), WithValidation(false))
 				},
 				want: "hashrelease requires the product version",
 			},
@@ -609,7 +585,7 @@ func TestVerbs(t *testing.T) {
 				name: "build needs a registry",
 				o:    func(o Operator) Operator { o.Registries = []string{""}; return o },
 				run: func(o Operator) error {
-					return Build(o, oneVariant(), false, WithRunner(&fakeRunner{}), WithValidation(false))
+					return Build(o, oneVariant(), false, WithRunner(&command.Recorder{}), WithValidation(false))
 				},
 				want: "no operator registries specified",
 			},
@@ -617,26 +593,26 @@ func TestVerbs(t *testing.T) {
 				name: "build needs an operator registry with a path",
 				o:    func(o Operator) Operator { o.Registries = []string{"localhost:5000"}; return o },
 				run: func(o Operator) error {
-					return Build(o, oneVariant(), false, WithRunner(&fakeRunner{}), WithValidation(false))
+					return Build(o, oneVariant(), false, WithRunner(&command.Recorder{}), WithValidation(false))
 				},
 				want: "operator registry",
 			},
 			{
 				name: "publish needs registries",
 				o:    func(o Operator) Operator { o.Registries = nil; return o },
-				run:  func(o Operator) error { return Publish(o, oneVariant(), false, WithRunner(&fakeRunner{})) },
+				run:  func(o Operator) error { return Publish(o, oneVariant(), false, WithRunner(&command.Recorder{})) },
 				want: "no operator registries specified",
 			},
 			{
 				name: "publish needs a version",
 				o:    func(o Operator) Operator { o.Version = ""; return o },
-				run:  func(o Operator) error { return Publish(o, oneVariant(), false, WithRunner(&fakeRunner{})) },
+				run:  func(o Operator) error { return Publish(o, oneVariant(), false, WithRunner(&command.Recorder{})) },
 				want: "no version specified",
 			},
 			{
 				name: "publish needs a repository root",
 				o:    func(o Operator) Operator { o.RepoRoot = ""; return o },
-				run:  func(o Operator) error { return Publish(o, oneVariant(), false, WithRunner(&fakeRunner{})) },
+				run:  func(o Operator) error { return Publish(o, oneVariant(), false, WithRunner(&command.Recorder{})) },
 				want: "no repository root specified",
 			},
 		} {
@@ -664,23 +640,23 @@ func TestVerbs(t *testing.T) {
 			{name: "dry run", opts: []PublishOption{WithDryRun(true)}, want: "DRYRUN", notSet: "CONFIRM"},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				f := &fakeRunner{}
+				f := &command.Recorder{}
 				opts := append([]PublishOption{WithRunner(f)}, tc.opts...)
 				if err := Publish(testOperator(), oneVariant(), false, opts...); err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
 
-				if len(f.calls) != 1 {
-					t.Fatalf("len = %d, want 1", len(f.calls))
+				if len(f.Calls()) != 1 {
+					t.Fatalf("len = %d, want 1", len(f.Calls()))
 				}
-				got, ok := envValue(f.calls[0].env, tc.want)
+				got, ok := envValue(f.Calls()[0].Env, tc.want)
 				if !(ok) {
 					t.Errorf("expected true")
 				}
 				if got != "true" {
 					t.Errorf("got %v, want %v", got, "true")
 				}
-				_, set := envValue(f.calls[0].env, tc.notSet)
+				_, set := envValue(f.Calls()[0].Env, tc.notSet)
 				if set {
 					t.Errorf("expected false")
 				}
@@ -697,11 +673,11 @@ func TestVerbs(t *testing.T) {
 			{hashrelease: true, wantSet: false},
 		} {
 			t.Run(fmt.Sprintf("hashrelease=%v", tc.hashrelease), func(t *testing.T) {
-				f := &fakeRunner{}
+				f := &command.Recorder{}
 				if err := Build(testOperator(), oneVariant(), tc.hashrelease, WithRunner(f), WithValidation(false)); err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
-				_, set := envValue(f.calls[0].env, "RELEASE")
+				_, set := envValue(f.Calls()[0].Env, "RELEASE")
 				if set != tc.wantSet {
 					t.Errorf("got %v, want %v", set, tc.wantSet)
 				}
@@ -745,7 +721,7 @@ func TestVerbs(t *testing.T) {
 			},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				f := &fakeRunner{}
+				f := &command.Recorder{}
 				err := Publish(oneRegistryOperator(), variants, false, WithRunner(f),
 					WithResolver(resolve.resolve), WithResume(tc.published, tc.force))
 				if tc.wantErr != "" {
@@ -757,31 +733,12 @@ func TestVerbs(t *testing.T) {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
-				if len(f.calls) != tc.wantRuns {
-					t.Errorf("runs = %d, want %d", len(f.calls), tc.wantRuns)
+				if len(f.Calls()) != tc.wantRuns {
+					t.Errorf("runs = %d, want %d", len(f.Calls()), tc.wantRuns)
 				}
 			})
 		}
 	})
-}
-
-type overlapRunner struct {
-	fakeRunner
-	running    atomic.Int32
-	overlapped atomic.Bool
-}
-
-func (f *overlapRunner) RunInDir(_, _ string, args, env []string) (string, error) {
-	if f.running.Add(1) > 1 {
-		f.overlapped.Store(true)
-	}
-	defer f.running.Add(-1)
-	time.Sleep(20 * time.Millisecond)
-	return "", f.record(args, env)
-}
-
-func (f *overlapRunner) RunInDirToFile(dir, name string, args, env []string, _ string) (string, error) {
-	return f.RunInDir(dir, name, args, env)
 }
 
 type fakeResolver map[string]string
@@ -814,7 +771,7 @@ func TestResolve(t *testing.T) {
 
 	t.Run("records what exists and needs only the first registry", func(t *testing.T) {
 		rec := &fakeRecorder{}
-		f := &fakeRunner{}
+		f := &command.Recorder{}
 		resolve := fakeResolver{
 			"quay.io/a/operator:v1.44.0":       "sha256:a",
 			"quay.io/a/operator:v1.44.0-arm64": "sha256:a-arm64",
@@ -829,8 +786,8 @@ func TestResolve(t *testing.T) {
 		if diff := cmp.Diff(want, rec.refs); diff != "" {
 			t.Errorf("refs mismatch (-want +got):\n%s", diff)
 		}
-		if len(f.calls) != 0 {
-			t.Errorf("ran %v", f.targets())
+		if len(f.Calls()) != 0 {
+			t.Errorf("ran %v", targets(f))
 		}
 	})
 
@@ -884,7 +841,7 @@ func TestPublishBranchTag(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				o := testOperator()
 				o.Version = tc.version
-				f := &fakeRunner{}
+				f := &command.Recorder{}
 
 				opts := append([]PublishOption{WithRunner(f)}, tc.opts...)
 				err := PublishBranchTag(o, oneVariant(), tc.branch, opts...)
@@ -892,27 +849,30 @@ func TestPublishBranchTag(t *testing.T) {
 					if err := err; err == nil {
 						t.Fatal("expected an error, got nil")
 					}
-					if len(f.calls) != 0 {
-						t.Errorf("expected empty, got %v", f.calls)
+					if len(f.Calls()) != 0 {
+						t.Errorf("expected empty, got %v", f.Calls())
 					}
 					return
 				}
 				if err := err; err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
-				if len(f.calls) != 1 {
-					t.Fatalf("len = %d, want 1", len(f.calls))
+				if len(f.Calls()) != 1 {
+					t.Fatalf("len = %d, want 1", len(f.Calls()))
 				}
-				got, ok := envValue(f.calls[0].env, utils.EnvImageTag)
+				got, ok := envValue(f.Calls()[0].Env, utils.EnvImageTag)
 				if !(ok) {
 					t.Errorf("expected true")
 				}
 				if got != tc.branch {
 					t.Errorf("got %v, want %v", got, tc.branch)
 				}
-				want := []string{"-C /repo/operator retag-build-images-with-registries push-images-to-registries push-manifests"}
-				if diff := cmp.Diff(want, f.targets()); diff != "" {
+				want := []string{"retag-build-images-with-registries push-images-to-registries push-manifests"}
+				if diff := cmp.Diff(want, targets(f)); diff != "" {
 					t.Errorf("targets mismatch (-want +got):\n%s", diff)
+				}
+				if dir := f.Calls()[0].Dir; dir != "/repo/operator" {
+					t.Errorf("ran in %q, want /repo/operator", dir)
 				}
 			})
 		}
@@ -925,15 +885,15 @@ func TestPublishBranchTag(t *testing.T) {
 			{Name: standardVariant},
 			{Name: "alt", Image: "operator-alt", Env: []string{"VARIANT=alt"}},
 		}
-		f := &fakeRunner{}
+		f := &command.Recorder{}
 		if err := PublishBranchTag(testOperator(), variants, "release-v3.33", WithRunner(f)); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if len(f.calls) != 1 {
-			t.Fatalf("len = %d, want 1", len(f.calls))
+		if len(f.Calls()) != 1 {
+			t.Fatalf("len = %d, want 1", len(f.Calls()))
 		}
-		if got, ok := envValue(f.calls[0].env, "VARIANT"); ok {
+		if got, ok := envValue(f.Calls()[0].Env, "VARIANT"); ok {
 			t.Errorf("VARIANT = %q, want the standard variant", got)
 		}
 	})
@@ -942,19 +902,19 @@ func TestPublishBranchTag(t *testing.T) {
 // Build comes first, so a test that cannot build takes verbs()[1:].
 func verbs() []struct {
 	name string
-	run  func(Operator, *fakeRunner) error
+	run  func(Operator, *command.Recorder) error
 } {
 	return []struct {
 		name string
-		run  func(Operator, *fakeRunner) error
+		run  func(Operator, *command.Recorder) error
 	}{
-		{name: "build", run: func(o Operator, f *fakeRunner) error {
+		{name: "build", run: func(o Operator, f *command.Recorder) error {
 			return Build(o, oneVariant(), false, WithRunner(f), WithValidation(false))
 		}},
-		{name: "publish", run: func(o Operator, f *fakeRunner) error {
+		{name: "publish", run: func(o Operator, f *command.Recorder) error {
 			return Publish(o, oneVariant(), false, WithRunner(f))
 		}},
-		{name: "branch tag", run: func(o Operator, f *fakeRunner) error {
+		{name: "branch tag", run: func(o Operator, f *command.Recorder) error {
 			return PublishBranchTag(o, oneVariant(), "release-v3.33", WithRunner(f))
 		}},
 	}

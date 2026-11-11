@@ -27,7 +27,6 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 var dateApprovalScrubber = approvals.NewDateScrubber(`[a-zA-Z]{3}, \d{1,2} [a-zA-Z]{3} \d{4} \d{2}:\d{2}:\d{2} [A-Z]{3}`)
@@ -279,11 +278,7 @@ func TestHashreleaseCarriesComponents(t *testing.T) {
 // A second load must not rename a hashrelease the first one may have published.
 func TestLoadReusesExistingPin(t *testing.T) {
 	dir := t.TempDir()
-	root, err := command.GitDir()
-	if err != nil {
-		t.Fatalf("git root: %v", err)
-	}
-	cfg := Config{Dir: dir, RootDir: root, ReleaseBranchPrefix: "release"}
+	cfg := fakeConfig(t, dir, fakeRepo(fakeVersion))
 
 	first, err := Load(LocalLoader{Config: cfg})
 	if err != nil {
@@ -292,14 +287,6 @@ func TestLoadReusesExistingPin(t *testing.T) {
 	second, err := Load(LocalLoader{Config: cfg})
 	if err != nil {
 		t.Fatalf("second Load: %v", err)
-	}
-
-	if isDirty(t, root) {
-		// A dirty tree re-pins by design, so only the version can be compared.
-		if first.ProductVersion != second.ProductVersion {
-			t.Errorf("product version changed: %q then %q", first.ProductVersion, second.ProductVersion)
-		}
-		return
 	}
 	if first.ReleaseName != second.ReleaseName {
 		t.Errorf("release name changed: %q then %q", first.ReleaseName, second.ReleaseName)
@@ -312,26 +299,14 @@ func TestLoadReusesExistingPin(t *testing.T) {
 // The file does not record the branch, but it decides the publish stream, so
 // a reused pin must resolve it rather than publish to the wrong stream.
 func TestReusedPinKeepsStream(t *testing.T) {
-	root, err := command.GitDir()
-	if err != nil {
-		t.Fatalf("git root: %v", err)
-	}
-	branch, err := utils.GitBranch(root)
-	if err != nil {
-		t.Fatalf("git branch: %v", err)
-	}
-	productVer, err := productVersion(root)
-	if err != nil {
-		t.Fatalf("product version: %v", err)
-	}
 	dir := t.TempDir()
 	fresh := testPin()
-	fresh.ProductVersion = productVer
-	fresh.SetBranch(branch)
+	fresh.ProductVersion = fakeVersion
+	fresh.SetBranch(fakeBranch)
 	if err := write(fresh, dir); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
-	reused, err := Load(LocalLoader{Config: Config{Dir: dir, RootDir: root, ReleaseBranchPrefix: "release"}})
+	reused, err := Load(LocalLoader{Config: fakeConfig(t, dir, fakeRepo(fakeVersion))})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -343,17 +318,13 @@ func TestReusedPinKeepsStream(t *testing.T) {
 // A pin from an older product version belongs to another build.
 func TestLoadReplacesStalePin(t *testing.T) {
 	dir := t.TempDir()
-	root, err := command.GitDir()
-	if err != nil {
-		t.Fatalf("git root: %v", err)
-	}
 	stale := testPin()
 	stale.ProductVersion = "v0.0.1"
 	if err := write(stale, dir); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 
-	got, err := Load(LocalLoader{Config: Config{Dir: dir, RootDir: root, ReleaseBranchPrefix: "release"}})
+	got, err := Load(LocalLoader{Config: fakeConfig(t, dir, fakeRepo(fakeVersion))})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -366,25 +337,15 @@ func TestLoadReplacesStalePin(t *testing.T) {
 // is not proof of matching inputs.
 func TestLoadReplacesDirtyPin(t *testing.T) {
 	dir := t.TempDir()
-	root, err := command.GitDir()
-	if err != nil {
-		t.Fatalf("git root: %v", err)
-	}
-	if !isDirty(t, root) {
-		t.Skip("working tree is clean")
-	}
-	productVer, err := productVersion(root)
-	if err != nil {
-		t.Fatalf("product version: %v", err)
-	}
+	dirty := fakeVersion + "-dirty"
 	existing := testPin()
-	existing.ProductVersion = productVer
+	existing.ProductVersion = dirty
 	existing.ReleaseName = "should-not-be-reused"
 	if err := write(existing, dir); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 
-	got, err := Load(LocalLoader{Config: Config{Dir: dir, RootDir: root, ReleaseBranchPrefix: "release"}})
+	got, err := Load(LocalLoader{Config: fakeConfig(t, dir, fakeRepo(dirty))})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -395,16 +356,11 @@ func TestLoadReplacesDirtyPin(t *testing.T) {
 
 // A fresh generate returns the pin and writes it to every dir.
 func TestLocalLoaderGenerates(t *testing.T) {
-	root, err := command.GitDir()
-	if err != nil {
-		t.Fatalf("git root: %v", err)
-	}
 	dir, hashreleaseBase := t.TempDir(), t.TempDir()
 
-	got, err := Load(LocalLoader{Config: Config{
-		Dir: dir, HashreleaseDir: hashreleaseBase, RootDir: root,
-		ReleaseBranchPrefix: "release",
-	}})
+	cfg := fakeConfig(t, dir, fakeRepo(fakeVersion))
+	cfg.HashreleaseDir = hashreleaseBase
+	got, err := Load(LocalLoader{Config: cfg})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -446,37 +402,25 @@ func TestFileLoaderMissingFile(t *testing.T) {
 }
 
 func TestReuseRules(t *testing.T) {
-	root, err := command.GitDir()
-	if err != nil {
-		t.Fatalf("git root: %v", err)
+	for _, tc := range []struct {
+		name     string
+		checkout string
+		pinned   string
+		want     bool
+	}{
+		{name: "matching version", checkout: fakeVersion, pinned: fakeVersion, want: true},
+		{name: "another version", checkout: fakeVersion, pinned: "v0.0.1"},
+		{name: "dirty checkout", checkout: fakeVersion + "-dirty", pinned: fakeVersion + "-dirty"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testPin()
+			p.ProductVersion = tc.pinned
+			local := LocalLoader{Config: fakeConfig(t, "", fakeRepo(tc.checkout))}
+			if got := local.Reuse(p); got != tc.want {
+				t.Errorf("Reuse() = %v, want %v", got, tc.want)
+			}
+		})
 	}
-	productVer, err := productVersion(root)
-	if err != nil {
-		t.Fatalf("product version: %v", err)
-	}
-	dirty := strings.HasSuffix(productVer, "-dirty")
-
-	local := LocalLoader{Config: Config{RootDir: root}}
-	same := testPin()
-	same.ProductVersion = productVer
-	if got := local.Reuse(same); got == dirty {
-		t.Errorf("matching product version: reuse=%v, tree dirty=%v", got, dirty)
-	}
-	other := testPin()
-	other.ProductVersion = "v0.0.1"
-	if local.Reuse(other) {
-		t.Error("reused a pin from another product version")
-	}
-
-}
-
-func isDirty(t *testing.T, dir string) bool {
-	t.Helper()
-	v, err := command.GitVersion(dir, true)
-	if err != nil {
-		t.Fatalf("git version: %v", err)
-	}
-	return len(v) > 6 && v[len(v)-6:] == "-dirty"
 }
 
 // The pin is written to the first dir and copied to the rest, so a hashrelease
@@ -561,10 +505,6 @@ func TestReadErrors(t *testing.T) {
 // A reused pin is returned as-is. Falling through to generate would mint a new
 // release name and orphan whatever the first one published.
 func TestLocalLoaderReuseDoesNotRegenerate(t *testing.T) {
-	root, err := command.GitDir()
-	if err != nil {
-		t.Fatalf("git root: %v", err)
-	}
 	// Accept whatever is on disk, so the reuse path runs whether or not the
 	// working tree happens to be clean.
 	original := localCheck
@@ -578,9 +518,7 @@ func TestLocalLoaderReuseDoesNotRegenerate(t *testing.T) {
 		t.Fatalf("Write: %v", err)
 	}
 
-	got, err := Load(LocalLoader{Config: Config{
-		Dir: dir, RootDir: root, ReleaseBranchPrefix: "release",
-	}})
+	got, err := Load(LocalLoader{Config: fakeConfig(t, dir, fakeRepo(fakeVersion))})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -590,10 +528,6 @@ func TestLocalLoaderReuseDoesNotRegenerate(t *testing.T) {
 }
 
 func TestPreviewLoader(t *testing.T) {
-	root, err := command.GitDir()
-	if err != nil {
-		t.Fatalf("git root: %v", err)
-	}
 	t.Run("reuses the pin a build left", func(t *testing.T) {
 		original := localCheck
 		localCheck = func(LocalLoader, *Pin) bool { return true }
@@ -605,9 +539,7 @@ func TestPreviewLoader(t *testing.T) {
 		if err := write(existing, dir); err != nil {
 			t.Fatalf("write: %v", err)
 		}
-		got, err := Load(PreviewLoader{LocalLoader{Config: Config{
-			Dir: dir, RootDir: root, ReleaseBranchPrefix: "release",
-		}}})
+		got, err := Load(PreviewLoader{LocalLoader{Config: fakeConfig(t, dir, fakeRepo(fakeVersion))}})
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
@@ -623,9 +555,9 @@ func TestPreviewLoader(t *testing.T) {
 		}
 		t.Cleanup(func() { writePin = original })
 
-		got, err := Load(PreviewLoader{LocalLoader{Config: Config{
-			Dir: t.TempDir(), HashreleaseDir: t.TempDir(), RootDir: root, ReleaseBranchPrefix: "release",
-		}}})
+		cfg := fakeConfig(t, t.TempDir(), fakeRepo(fakeVersion))
+		cfg.HashreleaseDir = t.TempDir()
+		got, err := Load(PreviewLoader{LocalLoader{Config: cfg}})
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
@@ -639,10 +571,6 @@ func TestPreviewLoader(t *testing.T) {
 // whose file carries fields Pin does not model replaces that seam, so a Load
 // that bypassed it would drop those fields with no error.
 func TestLocalLoaderWritesThroughTheSeam(t *testing.T) {
-	root, err := command.GitDir()
-	if err != nil {
-		t.Fatalf("git root: %v", err)
-	}
 	called := false
 	original := writePin
 	writePin = func(cfg Config, p *Pin, dirs ...string) error {
@@ -652,9 +580,7 @@ func TestLocalLoaderWritesThroughTheSeam(t *testing.T) {
 	defer func() { writePin = original }()
 
 	dir := t.TempDir()
-	if _, err := Load(LocalLoader{Config: Config{
-		Dir: dir, RootDir: root, ReleaseBranchPrefix: "release",
-	}}); err != nil {
+	if _, err := Load(LocalLoader{Config: fakeConfig(t, dir, fakeRepo(fakeVersion))}); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if !called {
@@ -679,33 +605,25 @@ func TestPinCarriesChartVersion(t *testing.T) {
 // FileLoader picks up the branch when RootDir is set, because the branch and
 // not the version decides an early-preview stream.
 func TestFileLoaderSetsBranch(t *testing.T) {
-	root, err := command.GitDir()
-	if err != nil {
-		t.Fatalf("git root: %v", err)
-	}
-	dir := t.TempDir()
-	if err := write(testPin(), dir); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	withRoot, err := Load(FileLoader{Dir: dir, RootDir: root})
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if withRoot.branch == "" {
-		t.Error("RootDir was set but the branch was not resolved")
-	}
-
 	// A pin that records no branch has nothing to recover, so RootDir is the
 	// only source left.
-	bare := t.TempDir()
+	dir := t.TempDir()
 	noBranch := testPin()
 	noBranch.branch = ""
 	noBranch.Note = ""
-	if err := write(noBranch, bare); err != nil {
+	if err := write(noBranch, dir); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	without, err := Load(FileLoader{Dir: bare})
+
+	withRoot, err := Load(FileLoader{Dir: dir, RootDir: "/repo", Runner: fakeRepo(fakeVersion)})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if withRoot.branch != fakeBranch {
+		t.Errorf("branch = %q, want the checkout's %q", withRoot.branch, fakeBranch)
+	}
+
+	without, err := Load(FileLoader{Dir: dir})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -718,26 +636,22 @@ func TestFileLoaderSetsBranch(t *testing.T) {
 // and published from another must keep the branch it was pinned from, or it
 // publishes to the wrong stream.
 func TestFileLoaderKeepsRecordedBranch(t *testing.T) {
-	root, err := command.GitDir()
-	if err != nil {
-		t.Fatalf("git root: %v", err)
-	}
 	dir := t.TempDir()
 	p := testPin()
-	p.SetBranch("master")
+	p.SetBranch("release-v3.31")
 	if err := write(p, dir); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	got, err := Load(FileLoader{Dir: dir, RootDir: root})
+	got, err := Load(FileLoader{Dir: dir, RootDir: "/repo", Runner: fakeRepo(fakeVersion)})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if got.branch != "master" {
+	if got.branch != "release-v3.31" {
 		t.Errorf("recorded branch replaced by the checkout: got %q", got.branch)
 	}
-	if stream := publishStream(t, got); stream != "master" {
-		t.Errorf("stream %q, want master", stream)
+	if stream := publishStream(t, got); stream != "v3.31" {
+		t.Errorf("stream %q, want v3.31", stream)
 	}
 }
 
@@ -832,10 +746,6 @@ func TestLoadPropagatesLoaderError(t *testing.T) {
 
 // A failing source must not leave a pinned version file behind.
 func TestLocalLoaderSourceErrorWritesNothing(t *testing.T) {
-	root, err := command.GitDir()
-	if err != nil {
-		t.Fatalf("git root: %v", err)
-	}
 	original := productComponents
 	productComponents = func(Config, string, string) (map[string]registry.Component, error) {
 		return nil, os.ErrInvalid
@@ -843,7 +753,7 @@ func TestLocalLoaderSourceErrorWritesNothing(t *testing.T) {
 	defer func() { productComponents = original }()
 
 	dir := t.TempDir()
-	if _, err := Load(LocalLoader{Config: Config{Dir: dir, RootDir: root, ReleaseBranchPrefix: "release"}}); err == nil {
+	if _, err := Load(LocalLoader{Config: fakeConfig(t, dir, fakeRepo(fakeVersion))}); err == nil {
 		t.Fatal("want the source's error, got none")
 	}
 	if _, statErr := os.Stat(FilePath(dir)); statErr == nil {
@@ -881,6 +791,35 @@ func TestImagesOperatorOptional(t *testing.T) {
 	p.Operator = registry.Component{Image: registry.OperatorImage, Version: testProductVersion}
 	if _, ok := p.Images()[registry.OperatorImage]; !ok {
 		t.Error("the operator is missing from the image map")
+	}
+}
+
+const (
+	fakeBranch  = "master"
+	fakeVersion = "v3.33.0-0.dev-12-gabcdef123456"
+)
+
+// fakeRepo answers git as a checkout of fakeBranch at version would.
+func fakeRepo(version string) *command.Recorder {
+	return &command.Recorder{Reply: func(c command.Call) (string, error) {
+		switch {
+		case c.Name == "git" && slices.Contains(c.Args, "--abbrev-ref"):
+			return fakeBranch, nil
+		case c.Name == "git" && slices.Contains(c.Args, "describe"):
+			return version, nil
+		}
+		return "", nil
+	}}
+}
+
+// fakeRoot is the repo root fakeConfig generates from. A build whose product
+// components read files under the root replaces it with a real dir.
+var fakeRoot = func(testing.TB) string { return "/repo" }
+
+func fakeConfig(t testing.TB, dir string, r command.CommandRunner) Config {
+	return Config{
+		Dir: dir, RootDir: fakeRoot(t), Runner: r, ReleaseBranchPrefix: "release",
+		ReleaseImages: func() ([]string, error) { return []string{testImageComponent}, nil },
 	}
 }
 
