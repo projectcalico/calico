@@ -87,8 +87,10 @@ batch_memo_report "$work" 16 0 >"$out"
 check "memo off: reported" grep -qE '^FV-MEMO-LANE lane=22.04-ipt outcome=off batches=16 cached=0 ran=16 result=pass .*reason=no-scope$' "$out"
 
 echo "== skip, record, and restore"
+# CI passes the artifacts dir as a relative path.
+cd "$work"
 export BATCH_MEMO_PREFIX=felix-fv-memo/pr-1/k1
-run1="$work/run1/artifacts"
+run1="run1/artifacts"
 for b in ut 2; do
   mkdir -p "$run1/$b/report"
   echo "<testsuites/>" >"$run1/$b/report/felix_fv_$b.xml"
@@ -103,7 +105,7 @@ check "a batch without reports is not recorded" [ ! -e "$STUB_CACHE/$BATCH_MEMO_
 # A cache entry without reports must not count as a pass.
 mkdir -p "$work/bare/1" && (cd "$work/bare" && artifact cache store "$BATCH_MEMO_PREFIX/batch-1" 1)
 
-run2="$work/run2/artifacts"
+run2="run2/artifacts"
 batches=(ut 1 2 3)
 batch_memo_skip_cached "$run2" >/dev/null
 check "cached batches are skipped" [ "${batches[*]}" = "1 3" ]
@@ -127,7 +129,7 @@ done
 batch_memo_record_lane "$run2" ut 1 2 3 4 >/dev/null
 check "a lane with a batch lacking reports is not recorded" [ ! -e "$STUB_CACHE/$BATCH_MEMO_PREFIX/lane" ]
 batch_memo_record_lane "$run2" ut 1 2 3 >/dev/null
-run3="$work/run3/artifacts"
+run3="run3/artifacts"
 batch_memo_restore_lane "$run3" >"$out"
 check "lane hit: reported" grep -qE '^FV-MEMO-LANE .* outcome=lane batches=4 cached=4 ran=0 result=pass ' "$out"
 for b in ut 1 2 3; do
@@ -135,14 +137,14 @@ for b in ut 1 2 3; do
 done
 
 touch "$STUB_CACHE/$BATCH_MEMO_PREFIX/lane.fail"
-run5="$work/run5/artifacts"
+run5="run5/artifacts"
 check "a lane restore that fails part way fails" fails batch_memo_restore_lane "$run5"
 check "a lane that fails to restore is deleted" [ ! -e "$STUB_CACHE/$BATCH_MEMO_PREFIX/lane" ]
 rm "$STUB_CACHE/$BATCH_MEMO_PREFIX/lane.fail"
 batch_memo_record_lane "$run2" ut 1 2 3 >/dev/null
 
 touch "$STUB_CACHE/$BATCH_MEMO_PREFIX/batch-2.fail"
-run6="$work/run6/artifacts"
+run6="run6/artifacts"
 batches=(2)
 batch_memo_skip_cached "$run6" >/dev/null
 check "a batch restore that fails part way runs the batch" [ "${batches[*]}" = "2" ]
@@ -150,7 +152,7 @@ check "a batch restore that fails part way is cleared" [ ! -e "$run6/2" ]
 rm "$STUB_CACHE/$BATCH_MEMO_PREFIX/batch-2.fail"
 
 rm "$STUB_CACHE/$BATCH_MEMO_PREFIX/lane"
-run4="$work/run4/artifacts"
+run4="run4/artifacts"
 check "a lane hit whose entry is gone fails" fails batch_memo_restore_lane "$run4"
 check "a failed lane restore is reported" grep -qE '^FV-MEMO-LANE .* outcome=lane .*result=fail .*reason=restore-failed$' "$out"
 
