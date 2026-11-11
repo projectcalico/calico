@@ -775,6 +775,23 @@ func TestLiveMigrationCalculator_SourceAddedWithSameUID(t *testing.T) {
 	}
 }
 
+// Deleting a LiveMigration must unregister its target selector, so that a WEP that matches the
+// selector afterwards gets no role from it.
+func TestLiveMigrationCalculator_SelectorUnregisteredOnDelete(t *testing.T) {
+	env := newTestLMCEnv()
+
+	lmKey := makeLMKey("lm1")
+	env.lmc.OnUpdate(makeLMUpdate(lmKey, makeLMWithUID(nil, makeTargetSelector("has(migrate)"), "uid-1")))
+	env.lmc.OnUpdate(makeLMDelete(lmKey))
+
+	wepKey := makeWEPKey("ns", "dst-pod")
+	env.addLabeledEndpoint(wepKey, map[string]string{"migrate": "true"})
+
+	if len(env.roleEvents) != 0 {
+		t.Errorf("expected no role events after the LiveMigration was deleted, got %v", env.roleEvents)
+	}
+}
+
 func TestLiveMigrationCalculator_UIDWithSelector(t *testing.T) {
 	env := newTestLMCEnv()
 

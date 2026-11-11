@@ -324,6 +324,9 @@ var noLiveMigration internalapi.LiveMigration
 
 // updateReferences changes what the LiveMigration with the given key references, from what
 // oldLM references to what newLM references.
+//
+// Each old reference is removed before the corresponding new one is added.  A WEP referenced by
+// both versions holds this LiveMigration's key only once, so removing after adding would lose it.
 func (lmc *LiveMigrationCalculator) updateReferences(
 	key model.ResourceKey,
 	oldLM, newLM *internalapi.LiveMigration,
