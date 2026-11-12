@@ -256,17 +256,20 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   esac
   mkdir -p "${go_cache}"
 
-  # inline-env prints host paths; the hook gets the container's view of the repo.
   sandcat_sh="$(cd "$(dirname "${BASH_SOURCE[0]}")/../sandcat" && pwd)/sandcat.sh"
+  rm -rf report/sandcat report/report.json "${HOME}/.sandcat-analyzed"
   sandcat_inline=()
-  if sandcat_env=$("${sandcat_sh}" inline-env \
+  sandcat_xtrace=""
+  [[ $- == *x* ]] && sandcat_xtrace=1 && set +x
+  if sandcat_env=$(SANDCAT_TOTAL_BUDGET="${SANDCAT_TOTAL_BUDGET:-10m}" "${sandcat_sh}" inline-env \
       --kubeconfig "${BZ_LOCAL_DIR}/kubeconfig" --source-dir "$(pwd)"); then
     eval "${sandcat_env}"
+    export SANDCAT_GEMINI_KEY="${SANDCAT_INLINE_GEMINI_KEY}"
     sandcat_inline=(
       -v "${SANDCAT_INLINE_BIN}:/usr/local/bin/sandcat:ro"
       -e SANDCAT_INLINE_DIAG=1
       -e SANDCAT_BIN=/usr/local/bin/sandcat
-      -e "SANDCAT_GEMINI_KEY=${SANDCAT_INLINE_GEMINI_KEY}"
+      -e SANDCAT_GEMINI_KEY
       -e E2E_SANDCAT_SOURCE_DIR=/go/src/github.com/projectcalico/calico
       -e E2E_SANDCAT_OUT_DIR=/go/src/github.com/projectcalico/calico/report/sandcat
       -e E2E_SANDCAT_E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
@@ -275,8 +278,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
       -e "SANDCAT_SIG_DIR=${SANDCAT_SIG_DIR}"
       -e "SANDCAT_MAX_DIAGNOSES=${SANDCAT_MAX_DIAGNOSES}"
       -e "SANDCAT_TOTAL_BUDGET=${SANDCAT_TOTAL_BUDGET}"
-      -e "SANDCAT_DB_URL=${SANDCAT_DB_URL:-}"
-      -e "SANDCAT_DB_TOKEN=${SANDCAT_DB_TOKEN:-}"
+      -e SANDCAT_DB_URL -e SANDCAT_DB_TOKEN
       -e CI_WORKFLOW_NAME -e CI_WORKFLOW_URL -e CI_STEP_NAME -e CI_STEP_ID
       -e CI_GIT_REPO_SLUG -e CI_GIT_BRANCH -e CI_GIT_REF_TYPE
       -e CI_GIT_PR_BRANCH -e CI_GIT_PR_NUMBER -e CI_GIT_PR_TITLE
@@ -294,6 +296,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
       )
     fi
   fi
+  [[ -n "${sandcat_xtrace}" ]] && set -x
 
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
@@ -329,8 +332,6 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   mkdir -p "${REPORT_DIR}"
   cp report/junit.xml "${REPORT_DIR}/junit.xml" 2>/dev/null || true
 
-  # Here while the cluster is up; a successful analyze leaves ~/.sandcat-analyzed
-  # so the epilogue does not analyze again.
   ("${sandcat_sh}" push-specs --spec-dir report/sandcat) || true
   ("${sandcat_sh}" analyze \
     --report report/report.json \

@@ -18,6 +18,8 @@ PAYLOAD_KEYS=(
   SANDCAT_MAX_DIAGNOSES
   SANDCAT_TOTAL_BUDGET
 )
+TEST_ROOT=$(mktemp -d)
+trap 'rm -rf "${TEST_ROOT}"' EXIT
 pass=0
 fail=0
 
@@ -87,7 +89,7 @@ check() {
 
 # A fresh HOME per case, since sandcat.sh caches both binaries under it.
 newhome() {
-  HOME=$(mktemp -d)
+  HOME=$(mktemp -d -p "${TEST_ROOT}")
   export HOME
   mkdir -p "${HOME}/.local/bin"
   # STUB_MCP_RC sets check-mcp's exit code (3 is "calico-mcp unavailable");
