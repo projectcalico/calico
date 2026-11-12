@@ -3,8 +3,6 @@ version: condensed-module
 
 defaults:
   timeout: 1h
-  services:
-    - docker
 
 steps:
   - name: operator-ci
@@ -13,6 +11,7 @@ steps:
         value: calico
     depends: [check-go]
     requests: {cpu: 5000m, memory: 6Gi}
+    services: [docker]
     commands: |
       cd operator
       make ci
@@ -21,10 +20,16 @@ steps:
       cd "${CI_HOME}/${CI_GIT_DIR}/operator"
       artifact push job report --destination test-results || true
 
-  # Pure Go, so cross-compiling is all the per-architecture coverage it needs.
+  # Pure Go, so cross-compiling is all the per-architecture coverage it needs,
+  # and the build image can do it without docker.
   - name: operator-build
     depends: [check-go]
-    requests: {cpu: 5000m, memory: 8Gi}
+    requests: {cpu: 5000m, memory: 6Gi}
+    useGoBuild: true
+    workspaceVolumes: none
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     matrix:
       - name: arm64
         env: [{name: ARCH, value: arm64}]
@@ -45,6 +50,7 @@ steps:
     depends: [build-calico-image, build-node-image, build-whisker-image, check-go]
     timeout: 1h
     requests: {cpu: 3500m, memory: 7Gi}
+    services: [docker]
     commands: |
       # The Makefiles call the kubectl they download by full path; the scripts
       # underneath call it by name.
