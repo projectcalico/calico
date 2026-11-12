@@ -86,7 +86,7 @@ driver absorb the resync complexity behind a declarative
 ## The OnUpdate / apply() split
 
 Every manager implements the `Manager` interface
-(`dataplane/linux/int_dataplane.go`):
+(`dataplane/linux/dataplanedefs/manager.go`):
 
 ```go
 type Manager interface {

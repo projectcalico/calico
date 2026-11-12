@@ -431,6 +431,7 @@ components:
       - ^felix/dataplane/ipsets/[^/]*\.go$
       - ^felix/dataplane/linux/[^/]*\.go$
       - ^felix/dataplane/linux/bpfepdefs/[^/]*\.go$
+      - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
       - ^felix/dataplane/linux/flowtabledefs/[^/]*\.go$
       - ^felix/dataplane/linux/ipipdefs/[^/]*\.go$
       - ^felix/dataplane/linux/qos/[^/]*\.go$
@@ -1474,6 +1475,7 @@ components:
       - ^felix/dataplane/ipsets/[^/]*\.go$
       - ^felix/dataplane/linux/[^/]*\.go$
       - ^felix/dataplane/linux/bpfepdefs/[^/]*\.go$
+      - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
       - ^felix/dataplane/linux/flowtabledefs/[^/]*\.go$
       - ^felix/dataplane/linux/ipipdefs/[^/]*\.go$
       - ^felix/dataplane/linux/qos/[^/]*\.go$
