@@ -466,7 +466,10 @@ var _ = DescribeTable("NFTablesSet",
 // sets (hash:net, created with knftables.IntervalFlag) reject overlapping/nested elements
 // with EEXIST, so the fake must too.
 var _ = Describe("fake nftables interval-set semantics", func() {
-	const setName = "cali40net"
+	const (
+		setName   = "cali40net"
+		chainName = "cali-test"
+	)
 
 	var f *fakeNFT
 
@@ -476,6 +479,18 @@ var _ = Describe("fake nftables interval-set semantics", func() {
 			tx.Add(&knftables.Element{Set: setName, Key: []string{key}})
 		}
 		return f.Run(context.Background(), tx)
+	}
+
+	addRule := func() int {
+		tx := f.NewTransaction()
+		tx.Add(&knftables.Chain{Name: chainName})
+		tx.Add(&knftables.Rule{Chain: chainName, Rule: "accept"})
+		Expect(f.Run(context.Background(), tx)).To(Succeed())
+
+		rules, err := f.ListRules(context.Background(), chainName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rules).To(HaveLen(1))
+		return *rules[0].Handle
 	}
 
 	BeforeEach(func() {
@@ -497,6 +512,39 @@ var _ = Describe("fake nftables interval-set semantics", func() {
 	It("rejects a CIDR that overlaps an already-programmed element", func() {
 		Expect(addElements("10.0.0.0/16")).To(Succeed())
 		Expect(addElements("10.0.0.0/24")).To(MatchError(ContainSubstring("File exists")))
+
+		elements, err := f.ListElements(context.Background(), "set", setName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(elements).To(HaveLen(1))
+		Expect(elements[0].Key).To(Equal([]string{"10.0.0.0/16"}))
+	})
+
+	It("rejects an overlapping CIDR in a transaction that also deletes a rule by handle", func() {
+		Expect(addElements("10.0.0.0/16")).To(Succeed())
+		handle := addRule()
+
+		tx := f.NewTransaction()
+		tx.Delete(&knftables.Rule{Chain: chainName, Handle: &handle})
+		tx.Add(&knftables.Element{Set: setName, Key: []string{"10.0.0.0/24"}})
+		Expect(f.Run(context.Background(), tx)).To(MatchError(ContainSubstring("File exists")))
+
+		rules, err := f.ListRules(context.Background(), chainName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rules).To(HaveLen(1))
+	})
+
+	It("deletes a rule by handle in a transaction that adds a disjoint CIDR", func() {
+		Expect(addElements("10.0.0.0/16")).To(Succeed())
+		handle := addRule()
+
+		tx := f.NewTransaction()
+		tx.Delete(&knftables.Rule{Chain: chainName, Handle: &handle})
+		tx.Add(&knftables.Element{Set: setName, Key: []string{"10.1.0.0/24"}})
+		Expect(f.Run(context.Background(), tx)).To(Succeed())
+
+		rules, err := f.ListRules(context.Background(), chainName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rules).To(BeEmpty())
 	})
 
 	It("accepts disjoint CIDRs", func() {

@@ -43,6 +43,9 @@ func NewFake(fam knftables.Family, name string) *fakeNFT {
 type fakeNFT struct {
 	lock sync.Mutex
 
+	// Serializes Run, so an interval-overlap rollback can't undo a concurrent transaction.
+	runLock sync.Mutex
+
 	// Wrap a knftables fake instance.
 	fake   *knftables.Fake
 	family knftables.Family
@@ -111,25 +114,43 @@ func (f *fakeNFT) NewTransaction() *knftables.Transaction {
 	return f.fake.NewTransaction()
 }
 
-// Run runs a Transaction and returns the result. The IsNotFound and
-// IsAlreadyExists methods can be used to test the result.
+// Run runs a Transaction and returns the result. IsNotFound and IsAlreadyExists work on
+// errors from the upstream fake. An interval-set overlap error only carries the "File
+// exists" text that nft prints, so match that instead.
 func (f *fakeNFT) Run(ctx context.Context, tx *knftables.Transaction) error {
 	f.preRun(tx)
 	if err := f.takeRunError(); err != nil {
 		logrus.WithError(err).Info("Returning test error from Run")
 		return err
 	}
+	return f.runRejectingIntervalOverlaps(ctx, tx)
+}
 
-	// Real nftables interval sets (those created with knftables.IntervalFlag) reject
-	// overlapping or nested elements with EEXIST, but the upstream knftables fake does
-	// not model this. Replay the transaction against a throwaway copy of the current
-	// state and fail here if it would leave any interval set holding overlapping members,
-	// so tests observe the same failure production hits against real nftables.
-	if err := f.checkIntervalOverlaps(ctx, tx); err != nil {
+// runRejectingIntervalOverlaps runs tx on the upstream fake, then rolls it back with an
+// nft-style "File exists" error if tx leaves an interval set with overlapping members. Real
+// nftables rejects those, but the upstream fake matches elements by exact key. Only the
+// end state is checked, because knftables doesn't expose a transaction's operations, so
+// an add that comes before the delete it conflicts with is still accepted.
+func (f *fakeNFT) runRejectingIntervalOverlaps(ctx context.Context, tx *knftables.Transaction) error {
+	f.runLock.Lock()
+	defer f.runLock.Unlock()
+
+	// The upstream fake applies a transaction to copies of its tables and swaps them in
+	// on success, so these still hold the state from before tx.
+	f.fake.RLock()
+	tables, table, lastTx := f.fake.Tables, f.fake.Table, f.fake.LastTransaction
+	f.fake.RUnlock()
+
+	if err := f.fake.Run(ctx, tx); err != nil {
 		return err
 	}
-
-	return f.fake.Run(ctx, tx)
+	if err := f.checkIntervalOverlaps(); err != nil {
+		f.fake.Lock()
+		f.fake.Tables, f.fake.Table, f.fake.LastTransaction = tables, table, lastTx
+		f.fake.Unlock()
+		return err
+	}
+	return nil
 }
 
 func (f *fakeNFT) takeRunError() error {
@@ -143,27 +164,16 @@ func (f *fakeNFT) takeRunError() error {
 	return errors.New("injected nft failure")
 }
 
-// checkIntervalOverlaps replays tx against a copy of the current dataplane state and
-// returns an nftables-style "File exists" error if any interval set would end up holding
-// overlapping members. It returns nil when tx would fail upstream validation anyway (the
-// real Run then surfaces that error) or when no interval set is affected.
-func (f *fakeNFT) checkIntervalOverlaps(ctx context.Context, tx *knftables.Transaction) error {
-	shadow := knftables.NewFake(f.family, f.name)
-	if dump := f.fake.Dump(); dump != "" {
-		if err := shadow.ParseDump(dump); err != nil {
-			return fmt.Errorf("nftables fake: snapshotting state for interval-set check: %w", err)
-		}
-	}
+// checkIntervalOverlaps returns an nft-style "File exists" error if any interval set in
+// the fake's table holds overlapping members.
+func (f *fakeNFT) checkIntervalOverlaps() error {
+	f.fake.RLock()
+	defer f.fake.RUnlock()
 
-	if err := shadow.Run(ctx, tx); err != nil {
-		// Not an interval-overlap problem; let the real Run reproduce this error.
+	if f.fake.Table == nil {
 		return nil
 	}
-	if shadow.Table == nil {
-		return nil
-	}
-
-	for name, s := range shadow.Table.Sets {
+	for name, s := range f.fake.Table.Sets {
 		if !isIntervalSet(s) {
 			continue
 		}
