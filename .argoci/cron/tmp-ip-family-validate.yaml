@@ -77,9 +77,9 @@ steps:
     depends:
       - build-e2e-binary
     commands: |
-      mkdir -p "${HOME}/pr-e2e/files/e2e"
-      ( cd "${HOME}/pr-e2e/files/e2e" && artifact pull workflow e2e-linux-amd64.test )
-      export K8S_E2E_BINARY_BASE_URL="file://${HOME}/pr-e2e"
+      mkdir -p e2e/bin/k8s
+      ( cd e2e/bin/k8s && artifact pull workflow e2e-linux-amd64.test && mv e2e-linux-amd64.test e2e.test && chmod +x e2e.test )
+      export RUN_LOCAL_TESTS=true E2E_PREBUILT=true
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-kops-w-calico-cni-ipv6
     services:
@@ -132,9 +132,9 @@ steps:
     depends:
       - build-e2e-binary
     commands: |
-      mkdir -p "${HOME}/pr-e2e/files/e2e"
-      ( cd "${HOME}/pr-e2e/files/e2e" && artifact pull workflow e2e-linux-amd64.test )
-      export K8S_E2E_BINARY_BASE_URL="file://${HOME}/pr-e2e"
+      mkdir -p e2e/bin/k8s
+      ( cd e2e/bin/k8s && artifact pull workflow e2e-linux-amd64.test && mv e2e-linux-amd64.test e2e.test && chmod +x e2e.test )
+      export RUN_LOCAL_TESTS=true E2E_PREBUILT=true
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-kops-w-calico-cni-ipv4
     services:
@@ -173,7 +173,7 @@ steps:
     depends:
       - build-e2e-binary
     commands: |
-      mkdir -p "${HOME}/pr-e2e/files/e2e"
-      ( cd "${HOME}/pr-e2e/files/e2e" && artifact pull workflow e2e-linux-amd64.test )
-      export K8S_E2E_BINARY_BASE_URL="file://${HOME}/pr-e2e"
+      mkdir -p e2e/bin/k8s
+      ( cd e2e/bin/k8s && artifact pull workflow e2e-linux-amd64.test && mv e2e-linux-amd64.test e2e.test && chmod +x e2e.test )
+      export RUN_LOCAL_TESTS=true E2E_PREBUILT=true
       .argoci/scripts/body_standard.sh
