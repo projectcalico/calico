@@ -152,7 +152,7 @@ function copy_rpms_to_host {
     rootdir=$(git_repo_root)
     shopt -s nullglob
     for arch in src noarch x86_64; do
-        set -- $(find ${rootdir}/release/packaging/output/dist/rpms-el7 -name "*.$arch.rpm")
+        set -- $(find ${rootdir}/release/packaging/output/dist/rpms-el8 -name "*.$arch.rpm")
         if test $# -gt 0; then
             $ssh_host -- mkdir -p $rpmdir/$reponame/$arch/
             $scp_host "$@" ${HOST}:$rpmdir/$reponame/$arch/
@@ -186,7 +186,7 @@ function copy_rpms_to_artifact_registry {
     upload_errors=""
     shopt -s nullglob
     echo "Uploading RPMs to Google Artifact Registry"
-    for rpmfile in $(find ${rootdir}/release/packaging/output/dist/rpms-el7 -name "*.rpm" -not -name "*.src.rpm" | sort); do
+    for rpmfile in $(find ${rootdir}/release/packaging/output/dist/rpms-el8 -name "*.rpm" -not -name "*.src.rpm" | sort); do
         filename=$(basename ${rpmfile}) 
         if check_rpm_is_uploaded_to_artifact_registry "${rpmfile}"; then
             echo "  Skipping  ${filename} (already uploaded)"
@@ -221,7 +221,7 @@ function update_repo_metadata {
     $ssh_host <<EOF
 set -x
 rm -f \`repomanage --old $rpmdir/$reponame\`
-rpm --define '_gpg_name Project Calico Maintainers' --resign $rpmdir/$reponame/*/*.rpm </dev/null
+GPG_TTY=/dev/null rpm --define '_gpg_name Project Calico Maintainers' --resign $rpmdir/$reponame/*/*.rpm </dev/null
 gpg --export -a "Project Calico Maintainers" > $rpmdir/$reponame/key
 createrepo $rpmdir/$reponame
 EOF

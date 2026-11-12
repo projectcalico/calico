@@ -53,7 +53,12 @@ esac
 
 # Build, and fix centos7 putting always '.centos7' in the rpm-name
 cd /tmp/rpmbuild
-rpmbuild --target=$(uname -m) --define '_topdir '`pwd` --define "dist .${EL_VERSION}" -ba SPECS/${spec}
+# The specs gate their systemd handling on %{el7}; define it so EL8 builds take
+# the same (systemd) path. EL8 also auto-generates (empty) debuginfo packages,
+# which fail the build, so disable those. Felix and calicoctl share a Go build
+# ID (-B 0x<git sha>), so EL8's /usr/lib/.build-id links would make their RPMs
+# conflict; skip those links.
+rpmbuild --target=$(uname -m) --define '_topdir '`pwd` --define "dist .${EL_VERSION}" --define 'el7 1' --define 'debug_package %{nil}' --define '_build_id_links none' -ba SPECS/${spec}
 mkdir -p /code/release/packaging/output/dist/rpms-${EL_VERSION}/src
 cp -r /tmp/rpmbuild/RPMS/* /code/release/packaging/output/dist/rpms-${EL_VERSION}/
 cp -r /tmp/rpmbuild/SRPMS/* /code/release/packaging/output/dist/rpms-${EL_VERSION}/src/
