@@ -1063,12 +1063,20 @@ func sampleIPAMOwner(ctx context.Context, lcgc clientv3.Interface, handleID, vmI
 		}
 		found = found || ip.Equal(want)
 	}
-	if !found || sameFamily != 1 {
-		return "", fmt.Errorf("%w: handle %s should hold %s and no other address of its family, holds %v", errOwnership, handleID, want, ips)
-	}
 	attrs, err := lcgc.IPAM().GetAssignmentAttributes(queryCtx, cnet.IP{IP: want})
 	if err != nil {
 		return "", fmt.Errorf("IPAM attributes of %s: %w", want, goneIsOwnership(err))
+	}
+	if attrs.HandleID == nil || *attrs.HandleID != handleID {
+		return "", fmt.Errorf("%w: %s is assigned to handle %v, not %s", errOwnership, want, attrs.HandleID, handleID)
+	}
+	// IPsByHandle skips blocks it fails to read, so a missing address the block
+	// still assigns to this handle is a read blip, not a broken invariant.
+	if !found {
+		return "", fmt.Errorf("handle %s listed %v without %s, which is still assigned to it", handleID, ips, want)
+	}
+	if sameFamily != 1 {
+		return "", fmt.Errorf("%w: handle %s should hold only %s of its family, holds %v", errOwnership, handleID, want, ips)
 	}
 	owner := attrs.ActiveOwnerAttrs[model.IPAMBlockAttributePod]
 	if owner == "" {
