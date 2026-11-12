@@ -298,3 +298,77 @@ func TestJSONObjectResponseError(t *testing.T) {
 	Expect(testutil.MustUnmarshal[apiutil.ErrorResponse](t, w.Body.Bytes())).
 		To(Equal(&apiutil.ErrorResponse{Error: "no such resource"}))
 }
+
+// Each response builder carries its error code into the body; the same handler
+// without SetErrorCode must write no code key, so existing callers are unchanged.
+type errorCodeCase struct {
+	name  string
+	serve func(cfg apiutil.RouterConfig, w http.ResponseWriter, r *http.Request)
+	body  string
+}
+
+func TestErrorCodeIsWrittenByEveryResponseBuilder(t *testing.T) {
+	setupTest(t)
+
+	type Request struct{}
+	type Response struct {
+		RespField string `json:"rspField"`
+	}
+
+	list := apiutil.NewJSONListHandler(func(ctx apicontext.Context, params Request) apiutil.ListResponse[Response] {
+		return apiutil.NewListResponse[Response]().SetStatus(http.StatusBadGateway).SetError("boom").SetErrorCode("UpstreamFailed")
+	})
+	object := apiutil.NewJSONObjectHandler(func(ctx apicontext.Context, params Request) apiutil.ObjectResponse[Response] {
+		return apiutil.NewObjectResponse[Response]().SetStatus(http.StatusNotFound).SetError("boom").SetErrorCode("PoolNotFound")
+	})
+	stream := apiutil.NewJSONListOrEventStreamHandler(func(ctx apicontext.Context, params Request) apiutil.ListOrStreamResponse[Response] {
+		return apiutil.NewListOrStreamResponse[Response]().SetStatus(http.StatusServiceUnavailable).SetError("boom").SetErrorCode("CacheNotSynced")
+	})
+	uncoded := apiutil.NewJSONListHandler(func(ctx apicontext.Context, params Request) apiutil.ListResponse[Response] {
+		return apiutil.NewListResponse[Response]().SetStatus(http.StatusInternalServerError).SetError("boom")
+	})
+
+	for _, tc := range []errorCodeCase{
+		{"list", list.ServeHTTP, `{"error":"boom","code":"UpstreamFailed"}`},
+		{"object", object.ServeHTTP, `{"error":"boom","code":"PoolNotFound"}`},
+		{"list or stream", stream.ServeHTTP, `{"error":"boom","code":"CacheNotSynced"}`},
+		{"no code set", uncoded.ServeHTTP, `{"error":"boom"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r, err := http.NewRequest(http.MethodGet, "foobar", nil)
+			Expect(err).NotTo(HaveOccurred())
+			tc.serve(apiutil.NewNOOPRouterConfig(), w, r)
+			Expect(w.Body.String()).To(MatchJSON(tc.body))
+		})
+	}
+}
+
+func TestRequestDecodingErrorIsInvalidParameter(t *testing.T) {
+	setupTest(t)
+
+	type Request struct {
+		Page int `urlQuery:"page"`
+	}
+	type Response struct{}
+
+	hdlr := apiutil.NewJSONListHandler(func(ctx apicontext.Context, params Request) apiutil.ListResponse[Response] {
+		return apiutil.NewListResponse[Response]().SetStatus(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	r, err := http.NewRequest(http.MethodGet, "foobar?page=notanumber", nil)
+	Expect(err).NotTo(HaveOccurred())
+	hdlr.ServeHTTP(apiutil.NewNOOPRouterConfig(), w, r)
+
+	Expect(w.Code).To(Equal(http.StatusBadRequest))
+	Expect(testutil.MustUnmarshal[apiutil.ErrorResponse](t, w.Body.Bytes()).Code).To(Equal("InvalidParameter"))
+
+	// A request that decodes cleanly reaches the handler and carries no error code.
+	w = httptest.NewRecorder()
+	r, err = http.NewRequest(http.MethodGet, "foobar?page=1", nil)
+	Expect(err).NotTo(HaveOccurred())
+	hdlr.ServeHTTP(apiutil.NewNOOPRouterConfig(), w, r)
+	Expect(w.Code).To(Equal(http.StatusOK))
+	Expect(w.Body.String()).NotTo(ContainSubstring("InvalidParameter"))
+}
