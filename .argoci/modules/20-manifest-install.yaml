@@ -2,46 +2,89 @@
 # catches a manifest missing a piece the operator supplies, then upgrades to the
 # operator, the one place the migration out of kube-system runs against the
 # manifests we ship. On a VM for the kernel modules the datapath specs need.
+#
+# TEMPORARY: on a createVM machine, booted while the images build, and fed from
+# the volume cache rather than the artifact store.
 version: condensed-module
 
 defaults:
   tiers: []
-  # Longer than the default hour: a cluster plus its suite.
-  timeout: 1h30m
-  runOn: vm
-  services:
-    - docker
+  # The compute SA createVM, runOnVM and the teardown authenticate with.
+  secretBundles:
+    - banzai-secrets
 
 steps:
-  - name: manifest-install-kind
-    env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-    vm:
+  - name: manifest-install-kind-vm
+    createVM:
+      # TEMPORARY: a test build of scratch-utils v0.6.
+      image: gcr.io/unique-caldron-775/scratch-utils:v0.6-test-190c538
       machineType: e2-standard-8
       diskType: pd-ssd
       diskSize: 200GB
+      maxRunDuration: 2h
+
+  # The machine has no artifact-store credentials, so what the run needs from
+  # other steps is staged into the cache here and shipped across with `put`.
+  - name: manifest-install-kind-inputs
+    jobSize: small
+    requests: {cpu: 500m, memory: 1Gi}
     depends:
-      - build-calico-image
       - build-node-image
+      - build-whisker-image
       - build-operator-image
       - build-third-party-images
       - build-e2e-binaries
-      - check-go
+    cache:
+      - {name: kind-inputs, mode: write}
     commands: |
-      sudo apt-get update -y && sudo apt-get install -y make
-      # The Makefiles call the kubectl they download by full path; the deploy
-      # script and the tests' connection tester call it by name.
-      export PATH="$(pwd)/hack/test/kind:${PATH}"
-      .argoci/scripts/load-cached-images calico node
-      .argoci/scripts/load-e2e-binaries
-      export E2E_PREBUILT=true
-      make kind-manifest-install-test
-    epilogue: |
-      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/report" report || true
-      artifact push job report --destination test-results || true
-      if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
-        # Collected where the cluster is; the script pushes its own bundle. This
-        # lane's kubeconfig is not the one the script would find.
-        sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && KUBECONFIG="$(pwd)/hack/test/kind/kind-manifests-kubeconfig.yaml" .semaphore/collect-kind-diags' || true
-      fi
+      mkdir -p /cache/kind-inputs
+      cd /cache/kind-inputs
+      for f in node-image.tar.zst whisker-image.tar.zst operator-image.tar.zst third-party-images.tar.zst e2e-binaries.tar.zst; do
+        artifact pull workflow "$f" &
+      done
+      wait
+      ls -la
+
+  - name: manifest-install-kind
+    timeout: 1h30m
+    depends:
+      - manifest-install-kind-vm
+      - manifest-install-kind-inputs
+      - calico-image-buildkit
+      - check-go
+    checkout: true
+    cache:
+      - {name: kind-inputs, mode: read}
+    runOnVM:
+      image: gcr.io/unique-caldron-775/scratch-utils:v0.6-test-190c538
+      put:
+        - /cache/calico-image.tar:prefetched/calico-image.tar
+        - /cache/kind-inputs/node-image.tar.zst:prefetched/node-image.tar.zst
+        - /cache/kind-inputs/whisker-image.tar.zst:prefetched/whisker-image.tar.zst
+        - /cache/kind-inputs/operator-image.tar.zst:prefetched/operator-image.tar.zst
+        - /cache/kind-inputs/third-party-images.tar.zst:prefetched/third-party-images.tar.zst
+        - /cache/kind-inputs/e2e-binaries.tar.zst:prefetched/e2e-binaries.tar.zst
+      get:
+        - manifest-install:/tmp/manifest-install
+      source: |
+        set -euo pipefail
+        out="${HOME}/manifest-install"
+        mkdir -p "$out"
+        # There is no epilogue on a machine, so the report and, on a failure, the
+        # cluster's diagnostics are gathered on the way out for `get` to fetch.
+        collect() {
+          rc=$?
+          [ "$rc" = 0 ] || KUBECONFIG="$(pwd)/hack/test/kind/kind-manifests-kubeconfig.yaml" .semaphore/collect-kind-diags || true
+          tar -czf "$out/manifest-install.tgz" report artifacts 2>/dev/null || true
+        }
+        trap collect EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        command -v zstd >/dev/null || { sudo apt-get update -y && sudo apt-get install -y zstd; }
+        export PATH="$(pwd)/hack/test/kind:${PATH}"
+        export PREFETCHED_ARTIFACTS="${HOME}/prefetched"
+        .argoci/scripts/load-cached-images calico node whisker
+        .argoci/scripts/load-e2e-binaries
+        export E2E_PREBUILT=true
+        make kind-manifest-install-test
+    outputs:
+      - {name: manifest-install, path: /tmp/manifest-install/manifest-install.tgz, optional: true}
