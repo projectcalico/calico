@@ -9,9 +9,13 @@ defaults:
 steps:
   - name: kube-controllers-ci
     env:
+      # TEMPORARY: the thread pool the old 5750m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "5"
       - name: BUILD_CACHE_GROUP
         value: calico
-    requests: {cpu: 5750m, memory: 5.5Gi}
+    requests: {cpu: 2250m, memory: 5.5Gi}
     depends: [build-calico-image, check-go]
     matrix:
       - name: crd-v1
