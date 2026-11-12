@@ -1,21 +1,22 @@
 # Kubernetes e2e suites on a kind cluster, one lane per routing mode and suite.
 # On a VM because the suites exercise SCTP, which the pod nodes' image lacks.
+#
+# TEMPORARY: on createVM machines, booted while the images build, and fed from
+# the volume cache rather than the artifact store.
 version: condensed-module
 
 defaults:
   tiers: []
-  # Longer than the default hour: a cluster plus a conformance suite.
-  timeout: 1h30m
-  runOn: vm
-  services:
-    - docker
+  # The compute SA createVM, runOnVM and the teardowns authenticate with.
+  secretBundles:
+    - banzai-secrets
 
 steps:
-  - name: e2e-kind
-    env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-    vm:
+  - name: e2e-kind-vm
+    createVM:
+      # TEMPORARY: a test build of scratch-utils v0.6, for the machine-type list
+      # and the provisioned hyperdisk.
+      image: gcr.io/unique-caldron-775/scratch-utils:v0.6-test-190c538
       # Cheapest first, all families that can attach a hyperdisk. A region can run
       # short of any one of them.
       machineTypes:
@@ -25,22 +26,53 @@ steps:
         - c4d-standard-8
         - c4-standard-8
         - c3-standard-8
-      # The artifact store's region, in any zone: capacity runs out zone by zone.
-      zone: us-central1
       # kind wants tens of thousands of IOPS, which pd-ssd only reaches at about
       # a terabyte.
       diskType: hyperdisk-balanced
       diskSize: 200GB
       provisionedIops: 10000
       provisionedThroughput: 200
+      # The run's own timeout plus the wait for the images.
+      maxRunDuration: 2h
+    matrix:
+      - name: conformance-bird
+      - name: conformance-felix
+      - name: clusternetworkpolicy-felix
+      - name: sig-calico-bpf
+
+  # The machines have no artifact-store credentials, so what the runs need from
+  # other steps is staged into the cache here and shipped across with `put`.
+  - name: e2e-kind-inputs
+    jobSize: small
+    requests: {cpu: 500m, memory: 1Gi}
     depends:
-      - build-calico-image
       - build-node-image
       - build-whisker-image
       - build-operator-image
       - build-third-party-images
       - build-e2e-binaries
+    cache:
+      - {name: e2e-kind-inputs, mode: write, dir: e2e-kind-inputs}
+    commands: |
+      mkdir -p /cache/e2e-kind-inputs
+      cd /cache/e2e-kind-inputs
+      for f in node-image.tar.zst whisker-image.tar.zst operator-image.tar.zst third-party-images.tar.zst e2e-binaries.tar.zst; do
+        artifact pull workflow "$f" &
+      done
+      wait
+      ls -la
+
+  - name: e2e-kind
+    # Longer than the default hour: a cluster plus a conformance suite.
+    timeout: 1h30m
+    depends:
+      - e2e-kind-vm
+      - e2e-kind-inputs
+      - calico-image-buildkit
       - check-go
+    checkout: true
+    cache:
+      - {name: e2e-kind-inputs, mode: read}
     matrix:
       # Pinned rather than defaulted: from v3.33 the default gives Felix the
       # IPIP routes, and these tests need BGP to be the only routing mechanism.
@@ -74,26 +106,42 @@ steps:
         env:
           - name: E2E_TARGET
             value: e2e-test-bpf
-    commands: |
-      sudo apt-get update -y && sudo apt-get install -y make
-      sudo modprobe sctp
-      # The Makefiles call the kubectl they download by full path; the deploy
-      # script and the tests' connection tester call it by name.
-      export PATH="$(pwd)/hack/test/kind:${PATH}"
-      .argoci/scripts/load-cached-images calico node whisker
-      .argoci/scripts/load-e2e-binaries
-      export E2E_PREBUILT=true
-      make ${E2E_TARGET}
-    epilogue: |
-      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/report" report || true
-      artifact push job report --destination test-results || true
-      if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
-        # Collected where the cluster is; the script pushes its own bundle.
-        sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && .semaphore/collect-kind-diags' || true
-        # The snapshot tool is only in the CI image, and the VM has no registry
-        # credentials of its own.
-        sshOnVirtualMachine 'docker login -u _json_key --password-stdin https://gcr.io < "${CI_ARTIFACT_SA_KEY_FILE}"' || true
-        sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && docker run --rm --network host -v "$PWD:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4 kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz' || true
-        copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/kind-snapshot.tar.gz" kind-snapshot.tar.gz || true
-        artifact push job kind-snapshot.tar.gz --destination kind-snapshot.tar.gz || true
-      fi
+    runOnVM:
+      image: gcr.io/unique-caldron-775/scratch-utils:v0.6-test-190c538
+      vm: e2e-kind-vm
+      # An entry's unset ones are skipped.
+      env: [E2E_TARGET, EXTRA_VALUES_FILES, KIND_CALICO_API_GROUP, E2E_TEST_CONFIG]
+      put:
+        - /cache/calico-image-tar/calico-image.tar:prefetched/calico-image.tar
+        - /cache/e2e-kind-inputs/node-image.tar.zst:prefetched/node-image.tar.zst
+        - /cache/e2e-kind-inputs/whisker-image.tar.zst:prefetched/whisker-image.tar.zst
+        - /cache/e2e-kind-inputs/operator-image.tar.zst:prefetched/operator-image.tar.zst
+        - /cache/e2e-kind-inputs/third-party-images.tar.zst:prefetched/third-party-images.tar.zst
+        - /cache/e2e-kind-inputs/e2e-binaries.tar.zst:prefetched/e2e-binaries.tar.zst
+      get:
+        - e2e-kind:/tmp/e2e-kind
+      source: |
+        set -euo pipefail
+        out="${HOME}/e2e-kind"
+        mkdir -p "$out"
+        # There is no epilogue on a machine, so the report and, on a failure, the
+        # cluster's diagnostics are gathered on the way out for `get` to fetch.
+        collect() {
+          rc=$?
+          [ "$rc" = 0 ] || .semaphore/collect-kind-diags || true
+          tar -czf "$out/e2e-kind.tgz" report artifacts 2>/dev/null || true
+        }
+        trap collect EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        command -v zstd >/dev/null || { sudo apt-get update -y && sudo apt-get install -y zstd; }
+        sudo modprobe sctp
+        # The Makefiles call the kubectl they download by full path; the deploy
+        # script and the tests' connection tester call it by name.
+        export PATH="$(pwd)/hack/test/kind:${PATH}"
+        export PREFETCHED_ARTIFACTS="${HOME}/prefetched"
+        .argoci/scripts/load-cached-images calico node whisker
+        .argoci/scripts/load-e2e-binaries
+        export E2E_PREBUILT=true
+        make ${E2E_TARGET}
+    outputs:
+      - {name: e2e-kind, path: /tmp/e2e-kind/e2e-kind.tgz, optional: true}
