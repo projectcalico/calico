@@ -60,6 +60,7 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/bpfepdeps"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdeps"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandeps"
 	"github.com/projectcalico/calico/felix/environment"
@@ -76,7 +77,6 @@ import (
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
-	"github.com/projectcalico/calico/felix/routerule"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
 	"github.com/projectcalico/calico/felix/rules"
@@ -142,8 +142,6 @@ var (
 
 	processStartTime time.Time
 	zeroKey          = wgtypes.Key{}
-
-	maxCleanupRetries = 5
 )
 
 func init() {
@@ -338,14 +336,6 @@ func (config *Config) ctlbUDPAffinityTimeout() time.Duration {
 	return config.BPFConntrackTimeouts.UDPTimeout.Truncate(time.Second)
 }
 
-type UpdateBatchResolver interface {
-	// Opportunity for a manager component to resolve state that depends jointly on the updates
-	// that it has seen since the preceding CompleteDeferredWork call.  Processing here can
-	// include passing resolved state to other managers.  It should not include any actual
-	// dataplane updates yet.  (Those should be actioned in CompleteDeferredWork.)
-	ResolveUpdateBatch() error
-}
-
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
 // and ipsets.  It communicates with the datastore-facing part of Felix via the
 // Send/RecvMessage methods, which operate on the protobuf-defined API objects.
@@ -415,9 +405,9 @@ type InternalDataplane struct {
 
 	endpointStatusCombiner *endpointStatusCombiner
 
-	allManagers             []Manager
-	managersWithRouteTables []ManagerWithRouteTables
-	managersWithRouteRules  []ManagerWithRouteRules
+	allManagers             []dataplanedefs.Manager
+	managersWithRouteTables []dataplanedefs.ManagerWithRouteTables
+	managersWithRouteRules  []dataplanedefs.ManagerWithRouteRules
 	ruleRenderer            rules.RuleRenderer
 
 	// datastoreInSync is set to true after we receive the "in sync" message from the datastore.
@@ -1886,34 +1876,6 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 	}
 }
 
-type Manager interface {
-	// OnUpdate is called for each protobuf message from the datastore.  May either directly
-	// send updates to the IPSets and generictables.Table objects (which will queue the updates
-	// until the main loop instructs them to act) or (for efficiency) may wait until
-	// a call to CompleteDeferredWork() to flush updates to the dataplane.
-	OnUpdate(protoBufMsg any)
-	// Called before the main loop flushes updates to the dataplane to allow for batched
-	// work to be completed.
-	CompleteDeferredWork() error
-}
-
-type ManagerWithRouteTables interface {
-	Manager
-	GetRouteTableSyncers() []routetable.SyncerInterface
-}
-
-type ManagerWithRouteRules interface {
-	Manager
-	GetRouteRules() []routeRules
-}
-
-type routeRules interface {
-	SetRule(rule *routerule.Rule)
-	RemoveRule(rule *routerule.Rule)
-	QueueResync()
-	Apply() error
-}
-
 func (d *InternalDataplane) routeTableSyncers() []routetable.SyncerInterface {
 	rts := d.mainRouteTables
 	for _, mrts := range d.managersWithRouteTables {
@@ -1922,8 +1884,8 @@ func (d *InternalDataplane) routeTableSyncers() []routetable.SyncerInterface {
 	return rts
 }
 
-func (d *InternalDataplane) routeRules() []routeRules {
-	var rrs []routeRules
+func (d *InternalDataplane) routeRules() []dataplanedefs.RouteRules {
+	var rrs []dataplanedefs.RouteRules
 	for _, mrrs := range d.managersWithRouteRules {
 		rrs = append(rrs, mrrs.GetRouteRules()...)
 	}
@@ -1931,8 +1893,8 @@ func (d *InternalDataplane) routeRules() []routeRules {
 	return rrs
 }
 
-func (d *InternalDataplane) RegisterManager(mgr Manager) {
-	tableMgr, ok := mgr.(ManagerWithRouteTables)
+func (d *InternalDataplane) RegisterManager(mgr dataplanedefs.Manager) {
+	tableMgr, ok := mgr.(dataplanedefs.ManagerWithRouteTables)
 	if ok {
 		// Used to log the whole manager out here but if we do that then we cause races if the manager has
 		// other threads or locks.
@@ -1940,7 +1902,7 @@ func (d *InternalDataplane) RegisterManager(mgr Manager) {
 		d.managersWithRouteTables = append(d.managersWithRouteTables, tableMgr)
 	}
 
-	rulesMgr, ok := mgr.(ManagerWithRouteRules)
+	rulesMgr, ok := mgr.(dataplanedefs.ManagerWithRouteRules)
 	if ok {
 		log.WithField("manager", mgr).Debug("registering ManagerWithRouteRules")
 		d.managersWithRouteRules = append(d.managersWithRouteRules, rulesMgr)
@@ -1963,10 +1925,8 @@ func (d *InternalDataplane) Start() {
 // onIfaceInSync is used as a callback from the interface monitor.  We use it to send a message back to
 // the main goroutine via a channel.
 func (d *InternalDataplane) onIfaceInSync() {
-	d.ifaceUpdates <- &ifaceInSync{}
+	d.ifaceUpdates <- &dataplanedefs.IfaceInSync{}
 }
-
-type ifaceInSync struct{}
 
 // onIfaceStateChange is our interface monitor callback.  It gets called from the monitor's thread.
 func (d *InternalDataplane) onIfaceStateChange(ifaceName string, state ifacemonitor.State, ifIndex int) {
@@ -1975,25 +1935,7 @@ func (d *InternalDataplane) onIfaceStateChange(ifaceName string, state ifacemoni
 		"ifIndex":   ifIndex,
 		"state":     state,
 	}).Info("Linux interface state changed.")
-	d.ifaceUpdates <- &ifaceStateUpdate{
-		Name:  ifaceName,
-		State: state,
-		Index: ifIndex,
-	}
-}
-
-type ifaceStateUpdate struct {
-	Name  string
-	State ifacemonitor.State
-	Index int
-}
-
-func NewIfaceStateUpdate(name string, state ifacemonitor.State, index int) any {
-	return &ifaceStateUpdate{
-		Name:  name,
-		State: state,
-		Index: index,
-	}
+	d.ifaceUpdates <- dataplanedefs.NewIfaceStateUpdate(ifaceName, state, ifIndex)
 }
 
 // Check if current felix ipvs config is correct when felix gets a kube-ipvs0 interface update.
@@ -2051,21 +1993,9 @@ func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set[s
 		"ifaceName": ifaceName,
 		"addrs":     addrs,
 	}).Info("Linux interface addrs changed.")
-	d.ifaceUpdates <- &ifaceAddrsUpdate{
+	d.ifaceUpdates <- &dataplanedefs.IfaceAddrsUpdate{
 		Name:  ifaceName,
 		Addrs: addrs,
-	}
-}
-
-type ifaceAddrsUpdate struct {
-	Name  string
-	Addrs set.Set[string]
-}
-
-func NewIfaceAddrsUpdate(name string, ips ...string) any {
-	return &ifaceAddrsUpdate{
-		Name:  name,
-		Addrs: set.FromArray[string](ips),
 	}
 }
 
@@ -2714,11 +2644,11 @@ func (d *InternalDataplane) onLiveMigrationGARPDetected(id types.WorkloadEndpoin
 
 func (d *InternalDataplane) processIfaceUpdate(ifaceUpdate any) {
 	switch ifaceUpdateMsg := ifaceUpdate.(type) {
-	case *ifaceStateUpdate:
+	case *dataplanedefs.IfaceStateUpdate:
 		d.processIfaceStateUpdate(ifaceUpdateMsg)
-	case *ifaceAddrsUpdate:
+	case *dataplanedefs.IfaceAddrsUpdate:
 		d.processIfaceAddrsUpdate(ifaceUpdateMsg)
-	case *ifaceInSync:
+	case *dataplanedefs.IfaceInSync:
 		d.processIfaceInSync()
 	}
 }
@@ -2732,7 +2662,7 @@ func (d *InternalDataplane) processIfaceInSync() {
 	d.dataplaneNeedsSync = true
 }
 
-func (d *InternalDataplane) processIfaceStateUpdate(ifaceUpdate *ifaceStateUpdate) {
+func (d *InternalDataplane) processIfaceStateUpdate(ifaceUpdate *dataplanedefs.IfaceStateUpdate) {
 	log.WithField("msg", ifaceUpdate).Info("Received interface update")
 	d.dataplaneNeedsSync = true
 	d.linkUpdateBatchSize++
@@ -2759,7 +2689,7 @@ func (d *InternalDataplane) processIfaceStateUpdate(ifaceUpdate *ifaceStateUpdat
 	}
 }
 
-func (d *InternalDataplane) processIfaceAddrsUpdate(ifaceAddrsUpdate *ifaceAddrsUpdate) {
+func (d *InternalDataplane) processIfaceAddrsUpdate(ifaceAddrsUpdate *dataplanedefs.IfaceAddrsUpdate) {
 	log.WithField("msg", ifaceAddrsUpdate).Info("Received interface addresses update")
 	d.dataplaneNeedsSync = true
 	d.addrsUpdateBatchSize++
@@ -2848,7 +2778,7 @@ func (d *InternalDataplane) apply() {
 	// manager (BPFEndpointManager.OnHEPUpdate) that must happen before either of those managers
 	// begins its dataplane programming updates.
 	for _, mgr := range d.allManagers {
-		if handler, ok := mgr.(UpdateBatchResolver); ok {
+		if handler, ok := mgr.(dataplanedefs.UpdateBatchResolver); ok {
 			err := handler.ResolveUpdateBatch()
 			if err != nil {
 				log.WithField("manager", reflect.TypeOf(mgr).Name()).WithError(err).Debug(
@@ -2982,7 +2912,7 @@ func (d *InternalDataplane) apply() {
 	var rulesWG sync.WaitGroup
 	for _, r := range d.routeRules() {
 		rulesWG.Add(1)
-		go func(r routeRules) {
+		go func(r dataplanedefs.RouteRules) {
 			err := r.Apply()
 			if err != nil {
 				log.Warn("Failed to synchronize routing rules, will retry...")
@@ -3115,14 +3045,6 @@ func (d *InternalDataplane) loopReportingStatus() {
 		}
 		time.Sleep(d.config.StatusReportingInterval)
 	}
-}
-
-// Table is a shim interface for generictables.Table.
-type Table interface {
-	UpdateChain(chain *generictables.Chain)
-	UpdateChains([]*generictables.Chain)
-	RemoveChains([]*generictables.Chain)
-	RemoveChainByName(name string)
 }
 
 func (d *InternalDataplane) reportHealth() {

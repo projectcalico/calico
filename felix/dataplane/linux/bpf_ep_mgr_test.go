@@ -57,6 +57,7 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdeps"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -520,8 +521,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		rrConfigNormal       rules.Config
 		ruleRenderer         rules.RuleRenderer
 		lookupsCache         *calc.LookupsCache
-		filterTableV4        Table
-		filterTableV6        Table
+		filterTableV4        dataplanedefs.Table
+		filterTableV6        dataplanedefs.Table
 		ifStateMap           *mock.Map
 		countersMap          *mock.Map
 		jumpMapIng           *mock.Map
@@ -694,7 +695,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	genIfaceUpdate := func(name string, state ifacemonitor.State, index int) func() {
 		return func() {
-			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: name, State: state, Index: index})
+			bpfEpMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: name, State: state, Index: index})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			if state == ifacemonitor.StateUp && (bpfEpMgr.isDataIface(name) || bpfEpMgr.isWorkloadIface(name)) {
@@ -943,7 +944,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genIfaceUpdate("eth0", ifacemonitor.StateUp, 3)()
 			genWLUpdate("cali12345")()
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
-			genHEPUpdate(allInterfaces, hostEpNorm)()
+			genHEPUpdate(dataplanedefs.AllInterfaces, hostEpNorm)()
 		})
 
 		It("should handle removing the HEP", func() {
@@ -1586,7 +1587,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			}
 			return nil
 		}
-		bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345", State: ifacemonitor.StateUp, Index: 15})
+		bpfEpMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "cali12345", State: ifacemonitor.StateUp, Index: 15})
 		_ = bpfEpMgr.CompleteDeferredWork()
 		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
 		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(1))
@@ -1613,7 +1614,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
 
 			lose()
-			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345", State: ifacemonitor.StateUp, Index: 15})
+			bpfEpMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "cali12345", State: ifacemonitor.StateUp, Index: 15})
 			Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
 			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(2))
 			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(2))
@@ -1880,7 +1881,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	})
 
 	It("should ignore the netkit probe device", func() {
-		bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: tc.NetkitProbeIface, State: ifacemonitor.StateUp, Index: 20})
+		bpfEpMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: tc.NetkitProbeIface, State: ifacemonitor.StateUp, Index: 20})
 		Expect(bpfEpMgr.CompleteDeferredWork()).NotTo(HaveOccurred())
 		Expect(dp.rpFilterLevel(tc.NetkitProbeIface)).To(Equal(-1))
 		Expect(dp.programAttached(tc.NetkitProbeIface + ":ingress")).To(BeFalse())
@@ -2335,7 +2336,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 
 		Context("with host-* endpoint", func() {
-			JustBeforeEach(genHEPUpdate(allInterfaces, hostEp))
+			JustBeforeEach(genHEPUpdate(dataplanedefs.AllInterfaces, hostEp))
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
@@ -2369,7 +2370,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	Context("with host-* endpoint", func() {
 		JustBeforeEach(func() {
 			genPolicy("default", "default.mypolicy")()
-			genHEPUpdate(allInterfaces, hostEp)()
+			genHEPUpdate(dataplanedefs.AllInterfaces, hostEp)()
 		})
 
 		Context("with eth0 up", func() {
@@ -4040,7 +4041,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 
 		It("should program the interface and report failed optional programs", func() {
-			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: "eth0", State: ifacemonitor.StateUp, Index: 3})
+			bpfEpMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "eth0", State: ifacemonitor.StateUp, Index: 3})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -4074,7 +4075,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 
 		It("should stop retrying and set permanentBPFErr on data interface", func() {
-			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: "eth0", State: ifacemonitor.StateUp, Index: 3})
+			bpfEpMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "eth0", State: ifacemonitor.StateUp, Index: 3})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -4097,7 +4098,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				},
 				Endpoint: &proto.WorkloadEndpoint{Name: "cali12345"},
 			})
-			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345", State: ifacemonitor.StateUp, Index: 15})
+			bpfEpMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "cali12345", State: ifacemonitor.StateUp, Index: 15})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 

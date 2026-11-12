@@ -391,6 +391,7 @@ local:felix/dataplane/inactive
 local:felix/dataplane/ipsets
 local:felix/dataplane/linux
 local:felix/dataplane/linux/bpfepdeps
+local:felix/dataplane/linux/dataplanedefs
 local:felix/dataplane/linux/flowtabledeps
 local:felix/dataplane/linux/ipipdeps
 local:felix/dataplane/linux/qos

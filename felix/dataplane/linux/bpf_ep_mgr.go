@@ -73,6 +73,7 @@ import (
 	"github.com/projectcalico/calico/felix/cachingmap"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/dataplane/linux/bpfepdeps"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdeps"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandeps"
 	"github.com/projectcalico/calico/felix/environment"
@@ -508,7 +509,7 @@ type bpfEndpointManagerDataplane struct {
 
 	// IP of the tunnel / overlay device
 	tunnelIP            net.IP
-	iptablesFilterTable Table
+	iptablesFilterTable dataplanedefs.Table
 	ipSetIDAlloc        *idalloc.IDAllocator
 
 	allowedSourcesPerWorkload map[types.WorkloadEndpointID]set.Set[string]
@@ -525,7 +526,7 @@ type bpfAllowChainRenderer interface {
 }
 
 type ManagerWithHEPUpdate interface {
-	Manager
+	dataplanedefs.Manager
 	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
 }
 
@@ -576,8 +577,8 @@ func NewBPFEndpointManager(
 	ipSetIDAllocV4 *idalloc.IDAllocator,
 	ipSetIDAllocV6 *idalloc.IDAllocator,
 	iptablesRuleRenderer bpfAllowChainRenderer,
-	iptablesFilterTableV4 Table,
-	iptablesFilterTableV6 Table,
+	iptablesFilterTableV4 dataplanedefs.Table,
+	iptablesFilterTableV6 dataplanedefs.Table,
 	livenessCallback func(),
 	opReporter logrusr.OpRecorder,
 	mainRouteTableV4 routetable.Interface,
@@ -893,7 +894,7 @@ func bpfOverlayTunnelID(rc *rules.Config) uint32 {
 func newBPFEndpointManagerDataplane(
 	ipFamily proto.IPVersion,
 	ipMaps *bpfmap.IPMaps,
-	iptablesFilterTable Table,
+	iptablesFilterTable dataplanedefs.Table,
 	ipSetIDAlloc *idalloc.IDAllocator,
 	workloadRemoveChan chan string,
 	epMgr *bpfEndpointManager,
@@ -1081,9 +1082,9 @@ func (m *bpfEndpointManager) OnUpdate(msg any) {
 	// Updates from the dataplane:
 
 	// Interface updates.
-	case *ifaceStateUpdate:
+	case *dataplanedefs.IfaceStateUpdate:
 		m.onInterfaceUpdate(msg)
-	case *ifaceAddrsUpdate:
+	case *dataplanedefs.IfaceAddrsUpdate:
 		m.onInterfaceAddrsUpdate(msg)
 	// Updates from the datamodel:
 
@@ -1179,7 +1180,7 @@ func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
 	}
 }
 
-func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
+func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *dataplanedefs.IfaceAddrsUpdate) {
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 
@@ -1195,7 +1196,7 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 	}
 }
 
-func (d *bpfEndpointManagerDataplane) updateIfaceIP(update *ifaceAddrsUpdate) bool {
+func (d *bpfEndpointManagerDataplane) updateIfaceIP(update *dataplanedefs.IfaceAddrsUpdate) bool {
 	var ipAddrs []net.IP
 	isDirty := false
 	if update.Addrs != nil && update.Addrs.Len() > 0 {
@@ -1441,7 +1442,7 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 	return nil
 }
 
-func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
+func (m *bpfEndpointManager) onInterfaceUpdate(update *dataplanedefs.IfaceStateUpdate) {
 	logrus.Debugf("Interface update for %v, state %v", update.Name, update.State)
 
 	if update.Name == tc.NetkitProbeIface {
@@ -1777,7 +1778,7 @@ func (m *bpfEndpointManager) markEndpointsDirty(ids set.Set[any], kind string) {
 		case types.WorkloadEndpointID:
 			m.markExistingWEPDirty(id, kind)
 		case string:
-			if id == allInterfaces {
+			if id == dataplanedefs.AllInterfaces {
 				for ifaceName := range m.nameToIface {
 					if m.isWorkloadIface(ifaceName) {
 						logrus.Debugf("Mark WEP iface dirty, for host-* endpoint %v change", kind)
@@ -4139,7 +4140,7 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.Host
 
 	// Pre-process the map for the host-* endpoint: if there is a host-* endpoint, any host
 	// interface without its own HEP should use the host-* endpoint's policy.
-	wildcardHostEndpoint, wildcardExists := hostIfaceToEpMap[allInterfaces]
+	wildcardHostEndpoint, wildcardExists := hostIfaceToEpMap[dataplanedefs.AllInterfaces]
 	if wildcardExists {
 		logrus.Info("Host-* endpoint is configured")
 		for ifaceName := range m.nameToIface {
@@ -4148,7 +4149,7 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.Host
 				hostIfaceToEpMap[ifaceName] = wildcardHostEndpoint
 			}
 		}
-		delete(hostIfaceToEpMap, allInterfaces)
+		delete(hostIfaceToEpMap, dataplanedefs.AllInterfaces)
 	}
 
 	// If there are parts of proto.HostEndpoint that do not affect us, we could mask those out
@@ -4160,10 +4161,10 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.Host
 	// If the host-* endpoint is changing, mark all workload interfaces as dirty.
 	if (wildcardExists != m.wildcardExists) || !googleproto.Equal(wildcardHostEndpoint, m.wildcardHostEndpoint) {
 		logrus.Infof("Host-* endpoint is changing; was %v, now %v", m.wildcardHostEndpoint, wildcardHostEndpoint)
-		m.removeHEPFromIndexes(allInterfaces, m.wildcardHostEndpoint)
+		m.removeHEPFromIndexes(dataplanedefs.AllInterfaces, m.wildcardHostEndpoint)
 		m.wildcardHostEndpoint = wildcardHostEndpoint
 		m.wildcardExists = wildcardExists
-		m.addHEPToIndexes(allInterfaces, wildcardHostEndpoint)
+		m.addHEPToIndexes(dataplanedefs.AllInterfaces, wildcardHostEndpoint)
 		for ifaceName := range m.nameToIface {
 			if m.isWorkloadIface(ifaceName) {
 				logrus.Info("Mark WEP iface dirty, for host-* endpoint change")

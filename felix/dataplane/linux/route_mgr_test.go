@@ -22,6 +22,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdeps"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandeps"
 	"github.com/projectcalico/calico/felix/ip"
@@ -84,7 +85,7 @@ var _ = Describe("Route manager", func() {
 	Describe("with VXLAN, IPIP and no-encap managers sharing one route table", func() {
 		// This mirrors the way int_dataplane wires the managers up: they all
 		// program the same main route table, and they all see every route update.
-		var managers []Manager
+		var managers []dataplanedefs.Manager
 
 		localBlock := func(poolType proto.IPPoolType, dst string) *proto.RouteUpdate {
 			return &proto.RouteUpdate{
@@ -123,7 +124,7 @@ var _ = Describe("Route manager", func() {
 				logrusr.NewSummarizer("test"),
 				dataplane,
 			)
-			managers = []Manager{vxlanMgr, ipipMgr, noEncapMgr}
+			managers = []dataplanedefs.Manager{vxlanMgr, ipipMgr, noEncapMgr}
 
 			// Each manager gets a local IPAM block from each type of pool; it
 			// should only program a blackhole route for the block that belongs

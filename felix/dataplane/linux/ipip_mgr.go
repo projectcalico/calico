@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdeps"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim"
@@ -221,10 +222,10 @@ func cleanUpIPIPAddrs() {
 	var errFound bool
 
 cleanupRetry:
-	for i := 0; i <= maxCleanupRetries; i++ {
+	for i := 0; i <= dataplanedefs.MaxCleanupRetries; i++ {
 		errFound = false
 		if i > 0 {
-			logrus.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
+			logrus.Debugf("Retrying %v/%v times", i, dataplanedefs.MaxCleanupRetries)
 		}
 		link, err := netlink.LinkByName(ipipdeps.IPIPIfaceName)
 		if err != nil {
@@ -261,6 +262,6 @@ cleanupRetry:
 		}
 	}
 	if errFound {
-		logrus.Warnf("Giving up trying to clean up IPIP addresses after retrying %v times", maxCleanupRetries)
+		logrus.Warnf("Giving up trying to clean up IPIP addresses after retrying %v times", dataplanedefs.MaxCleanupRetries)
 	}
 }
