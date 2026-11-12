@@ -161,7 +161,7 @@ EOF
             rpmrel=0.1.${qual}
         else
             rpmver=${ver}
-            rpmrel=1
+            rpmrel=${RPM_RELEASE:-1}
         fi
 
         # Update the Version: and Release: lines.
@@ -192,7 +192,7 @@ EOF
         } | sed -i '/^%changelog/ r /dev/stdin' "${rpm_spec}"
         fi
 
-        elversions=7
+        elversions=8
         for elversion in ${elversions}; do
         # Skip the rpm build if we are missing the matching build image.
         imageid=$(docker images -q "calico-build/centos${elversion}:latest")
