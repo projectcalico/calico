@@ -29,7 +29,7 @@ variable "UBUNTU_REPO_OVERRIDE" {
 # everything.
 
 group "default" {
-    targets = ["centos"]
+    targets = ["ubuntu", "centos"]
 }
 
 # All centos images

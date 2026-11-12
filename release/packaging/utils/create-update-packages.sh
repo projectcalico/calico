@@ -32,7 +32,7 @@ rm -rf ${outputDir} && mkdir -p ${outputDir}
 
 pub_steps=
 if "${PUBLISH:-false}"; then
-    pub_steps="pub_rpms"
+    pub_steps="pub_debs pub_rpms"
 fi
 
 # We used to have some Semaphore environment-dependent logic here, but we now
@@ -211,7 +211,7 @@ function do_net_cal {
     PKG_NAME=networking-calico \
             NAME=networking-calico \
             DEB_EPOCH=3: \
-            "${rootdir}/release/packaging/utils/make-packages.sh" rpm
+            "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'networking-calico_*-*' -exec mv '{}' "$outputDir" \;
     # Revert the changes made to networking-calico as part of the package build.
@@ -248,7 +248,7 @@ function do_felix {
             RPM_TAR_ARGS='--exclude=bin/calico-felix-* --exclude=.gitignore --exclude=*.d --exclude=*.ll --exclude=.go-pkg-cache --exclude=vendor --exclude=report' \
             DPKG_EXCL="-I'bin/calico-felix-*' -I.git -I.gitignore -I'*.d' -I'*.ll' -I.go-pkg-cache -I.git -Ivendor -Ireport" \
             DEB_EPOCH=3: \
-            "${rootdir}/release/packaging/utils/make-packages.sh" rpm
+            "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
 
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'felix_*-*' -exec mv '{}' "$outputDir" \;
@@ -277,7 +277,7 @@ function do_calicoctl {
             NAME=calicoctl \
             RPM_TAR_ARGS='--exclude=bin/calicoctl-* --exclude=.gitignore --exclude=.go-pkg-cache --exclude=report --exclude=test-data --exclude=tests' \
             DPKG_EXCL="-I'bin/calicoctl-*' -I.git -I.gitignore -I.go-pkg-cache -Ireport -Itest-data -Itests" \
-            "${rootdir}/release/packaging/utils/make-packages.sh" rpm
+            "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
 
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'calicoctl_*-*' -exec mv '{}' "$outputDir" \;
