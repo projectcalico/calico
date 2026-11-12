@@ -17,6 +17,7 @@ package outputs
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"testing"
 
@@ -56,6 +57,52 @@ func TestOutputReleaseNotes(t *testing.T) {
 	dateRegex := regexp.MustCompile(`\b\d{2} [A-Za-z]{3} \d{4}\b`)
 	approvals.VerifyString(t, string(relNotes),
 		approvals.Options().AddScrubber(approvals.CreateRegexScrubber(dateRegex, "[Date]")))
+}
+
+func TestExtractReleaseNoteFromIssue(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want []string
+	}{
+		{
+			name: "single line",
+			body: "```release-note\nFixed a thing.\n```",
+			want: []string{"Fixed a thing."},
+		},
+		{
+			name: "word-wrapped note is joined",
+			body: "```release-note\nFixed a thing that\nwraps onto two lines.\n```",
+			want: []string{"Fixed a thing that wraps onto two lines."},
+		},
+		{
+			name: "bulleted notes with CRLF are split",
+			body: "```release-note\r\n* First fix.\r\n* Second fix.\r\n- Third fix.\r\n+ Fourth fix.\r\n```\r\n",
+			want: []string{"First fix.", "Second fix.", "Third fix.", "Fourth fix."},
+		},
+		{
+			name: "wrapped bullet continuation is joined",
+			body: "```release-note\n- First fix that\n  wraps.\n\n- Second fix.\n```",
+			want: []string{"First fix that wraps.", "Second fix."},
+		},
+		{
+			name: "multiple blocks",
+			body: "```release-note\nOne.\n```\ntext\n```release-note\nTwo.\n```",
+			want: []string{"One.", "Two."},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body := tc.body
+			got, err := extractReleaseNoteFromIssue(&github.Issue{Body: &body})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
 }
 
 func TestExtractReleaseNoteDetectsBugLabel(t *testing.T) {

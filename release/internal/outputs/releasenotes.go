@@ -49,6 +49,7 @@ var (
 	repos               = []string{utils.CalicoRepoName, utils.BirdRepoName}
 	newlinePattern      = regexp.MustCompile(`\r\n|[\r\n\v\f\x{0085}\x{2028}\x{2029}]`)
 	releaseNotePattern  = regexp.MustCompile("(?s)```release-note\\s(.*?)\\s```")
+	bulletPattern       = regexp.MustCompile(`^[-*+]\s+`)
 )
 
 type issueState string
@@ -113,9 +114,8 @@ func prIssuesByRepo(client *github.Client, owner, repo string, opts *github.Issu
 
 // extractReleaseNoteFromIssue extracts release notes from an issue.
 // It looks for the release note block in the issue body and returns the content
-// between the start and end markers. To make RNs more readable, replace newlines
-// with spaces rather than breaking it into multiple RNs (in case someone word-wraps
-// their RNs).
+// between the start and end markers. Each block may hold several notes as a
+// bulleted list (lines starting with "-", "*" or "+"); see splitReleaseNoteBlock.
 func extractReleaseNoteFromIssue(issue *github.Issue) ([]string, error) {
 	body := issue.GetBody()
 	matches := releaseNotePattern.FindAllStringSubmatch(body, -1)
@@ -125,12 +125,39 @@ func extractReleaseNoteFromIssue(issue *github.Issue) ([]string, error) {
 	var notes []string
 	for _, match := range matches {
 		if len(match) > 1 {
-			releaseNoteText := strings.TrimSpace(match[1])
-			releaseNoteText = newlinePattern.ReplaceAllString(releaseNoteText, " ")
-			notes = append(notes, releaseNoteText)
+			notes = append(notes, splitReleaseNoteBlock(match[1])...)
 		}
 	}
 	return notes, nil
+}
+
+// splitReleaseNoteBlock splits the content of one release-note block into
+// individual notes. A line starting with a bullet marker begins a new note.
+// Any other line is joined with a space onto the note before it, so a note
+// that someone word-wraps stays a single note. A block without bullets is
+// one note.
+func splitReleaseNoteBlock(text string) []string {
+	var notes []string
+	var current []string
+	flush := func() {
+		if len(current) > 0 {
+			notes = append(notes, strings.Join(current, " "))
+			current = nil
+		}
+	}
+	for _, line := range newlinePattern.Split(strings.TrimSpace(text), -1) {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if bulletPattern.MatchString(line) {
+			flush()
+			line = bulletPattern.ReplaceAllString(line, "")
+		}
+		current = append(current, line)
+	}
+	flush()
+	return notes
 }
 
 // extractReleaseNote extracts release notes from a list of issues
