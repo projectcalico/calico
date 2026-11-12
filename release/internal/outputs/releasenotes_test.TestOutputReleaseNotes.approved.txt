@@ -1,9 +1,5 @@
 [Date]
 
-#### Headline feature 1
-
-#### Headline feature 2
-
 #### Bug fixes
 
 - A test bug fix release note. [calico 456](https://github.com/projectcalico/calico/pull/456) (@)
