@@ -153,6 +153,7 @@
 .argoci/cron/tmp-ip-family-validate.yaml | bpf-run-matrix-kops-w-calico-cni-ipv4 [calicobpf-ipv4] | cron/tmp-ip-family-validate/bpf-run-matrix-kops-w-calico-cni-ipv4-calicobpf-ipv4 | 214
 .argoci/cron/tmp-ip-family-validate.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 [calicobpf-ipv6] | cron/tmp-ip-family-validate/bpf-run-matrix-kops-w-calico-cni-ipv6-calicobpf-ipv6 | 214
 .argoci/cron/tmp-ip-family-validate.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 [calicoiptables-ipv6] | cron/tmp-ip-family-validate/bpf-run-matrix-kops-w-calico-cni-ipv6-calicoiptables-ipv6 | 218
+.argoci/cron/tmp-ip-family-validate.yaml | build-e2e-binary | (build) | -
 .argoci/modules/20-e2e.yaml | e2e-kind [conformance-bird] | modules/20-e2e/e2e-kind-conformance-bird | 77
 .argoci/modules/20-e2e.yaml | e2e-kind [conformance-felix] | modules/20-e2e/e2e-kind-conformance-felix | 78
 .argoci/modules/20-e2e.yaml | e2e-kind [sig-calico-bpf] | modules/20-e2e/e2e-kind-sig-calico-bpf | 126
