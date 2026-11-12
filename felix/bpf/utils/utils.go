@@ -36,7 +36,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/bpfepdeps"
 )
 
 var memLockOnce sync.Once
@@ -186,18 +186,18 @@ var FVLogPrefix = sync.OnceValue(func() string {
 })
 
 func RemoveBPFSpecialDevices() {
-	bpfin, err := netlink.LinkByName(dataplanedefs.BPFInDev)
+	bpfin, err := netlink.LinkByName(bpfepdeps.BPFInDev)
 	if err != nil {
 		var lnf netlink.LinkNotFoundError
 		if errors.As(err, &lnf) {
 			return
 		}
-		log.WithError(err).Warnf("Failed to make sure that %s/%s device is (not) present.", dataplanedefs.BPFInDev, dataplanedefs.BPFOutDev)
+		log.WithError(err).Warnf("Failed to make sure that %s/%s device is (not) present.", bpfepdeps.BPFInDev, bpfepdeps.BPFOutDev)
 		return
 	}
 
 	err = netlink.LinkDel(bpfin)
 	if err != nil {
-		log.WithError(err).Warnf("Failed to remove %s/%s device.", dataplanedefs.BPFInDev, dataplanedefs.BPFOutDev)
+		log.WithError(err).Warnf("Failed to remove %s/%s device.", bpfepdeps.BPFInDev, bpfepdeps.BPFOutDev)
 	}
 }

@@ -21,7 +21,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdeps"
+	"github.com/projectcalico/calico/felix/dataplane/linux/routedeps"
+	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandeps"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
@@ -66,7 +68,7 @@ var _ = Describe("NoEncap Manager", func() {
 			Config{
 				Hostname:                    "node1",
 				ProgramNoEncapClusterRoutes: true,
-				DeviceRouteProtocol:         dataplanedefs.DefaultRouteProto,
+				DeviceRouteProtocol:         routedeps.DefaultRouteProto,
 			},
 			opRecorder,
 			dataplane,
@@ -77,7 +79,7 @@ var _ = Describe("NoEncap Manager", func() {
 			Config{
 				Hostname:                    "node1",
 				ProgramNoEncapClusterRoutes: true,
-				DeviceRouteProtocol:         dataplanedefs.DefaultRouteProto,
+				DeviceRouteProtocol:         routedeps.DefaultRouteProto,
 			},
 			opRecorder,
 			dataplaneV6,
@@ -138,15 +140,15 @@ var _ = Describe("NoEncap Manager", func() {
 			SameSubnet:  true,
 		})
 
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
-		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4]).To(HaveLen(0))
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.currentRoutes[vxlandeps.VXLANIfaceNameV4]).To(HaveLen(0))
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
 		err = noencapMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
-		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4]).To(HaveLen(0))
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.currentRoutes[vxlandeps.VXLANIfaceNameV4]).To(HaveLen(0))
 
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
 		Expect(rt.currentRoutes[routetable.InterfaceNone][0]).To(Equal(
@@ -224,16 +226,16 @@ var _ = Describe("NoEncap Manager", func() {
 			SameSubnet:  true,
 		})
 
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
-		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(0))
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.currentRoutes[vxlandeps.VXLANIfaceNameV6]).To(HaveLen(0))
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 
 		err = noencapMgrV6.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
-		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(0))
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.currentRoutes[vxlandeps.VXLANIfaceNameV6]).To(HaveLen(0))
 
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
 		Expect(rt.currentRoutes[routetable.InterfaceNone][0]).To(Equal(

@@ -25,7 +25,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"sigs.k8s.io/knftables"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/flowtabledeps"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
@@ -1356,7 +1356,7 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		table.SetOverlayDevices(nil)
 		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
 
-		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(flowtabledeps.FlowtableName))
 	})
 
 	It("should leave the counter flag off when the kernel doesn't support it", func() {
@@ -1399,7 +1399,7 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		table.SetWorkloadInterfaces([]string{"cali1234"})
 		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
 
-		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(flowtabledeps.FlowtableName))
 
 		// Devices are combined and sorted, so the workload interface sorts ahead of the tunnel.
 		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, vxlan.calico }"))
@@ -1427,18 +1427,18 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 	It("should re-assert the flowtable on a resync with no devices", func() {
 		table.SetOverlayDevices(nil)
 		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
-		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(flowtabledeps.FlowtableName))
 
 		// Simulate another process removing the flowtable behind our back.
 		tx := f.Fake().NewTransaction()
-		tx.Delete(&knftables.Flowtable{Name: dataplanedefs.FlowtableName})
+		tx.Delete(&knftables.Flowtable{Name: flowtabledeps.FlowtableName})
 		Expect(f.Fake().Run(context.TODO(), tx)).NotTo(HaveOccurred())
 		Expect(f.List(context.TODO(), "flowtable")).To(BeEmpty())
 
 		// A resync should put it back, despite the empty device set.
 		table.InvalidateDataplaneCache("test")
 		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
-		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(flowtabledeps.FlowtableName))
 	})
 
 	// When offload is turned off, Felix restarts and comes up without ever enabling the flowtable.
@@ -1450,9 +1450,9 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		// Simulate a flowtable left behind by a previous run that had offload enabled.
 		prio := knftables.FilterIngressPriority
 		tx := f.Fake().NewTransaction()
-		tx.Add(&knftables.Flowtable{Name: dataplanedefs.FlowtableName, Priority: &prio})
+		tx.Add(&knftables.Flowtable{Name: flowtabledeps.FlowtableName, Priority: &prio})
 		Expect(f.Fake().Run(context.TODO(), tx)).NotTo(HaveOccurred())
-		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(flowtabledeps.FlowtableName))
 
 		// The next resync should spot the stale flowtable and remove it.
 		table.InvalidateDataplaneCache("test")

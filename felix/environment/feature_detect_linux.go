@@ -31,7 +31,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandeps"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 )
@@ -359,7 +359,7 @@ func (d *FeatureDetector) probeVXLANVNIFilter() (bool, error) {
 	defer h.Delete()
 
 	// A filtering vxlan.calico proves support, so a failed probe never downgrades it.
-	if link, err := h.LinkByName(dataplanedefs.VXLANIfaceNameV4); err == nil {
+	if link, err := h.LinkByName(vxlandeps.VXLANIfaceNameV4); err == nil {
 		if vx, ok := link.(*netlink.Vxlan); ok && vx.VniFilter {
 			log.Debug("Existing VXLAN device already filters VNIs")
 			return true, nil
