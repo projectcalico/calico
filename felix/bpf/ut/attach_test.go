@@ -47,6 +47,7 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/calc"
 	linux "github.com/projectcalico/calico/felix/dataplane/linux"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -154,11 +155,11 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	var hostep1State ifstate.Value
 
 	t.Run("create first host endpoint with untracked (xdp) policy", func(t *testing.T) {
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep1", ifacemonitor.StateUp, host1.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("hostep1", ifacemonitor.StateUp, host1.Attrs().Index))
 		if ipv6Enabled {
-			bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+			bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 		}
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1.2.3.4"))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("hostep1", "1.2.3.4"))
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
@@ -233,7 +234,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		if ipv6Enabled {
 			// IPv6 address update
-			bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1::4"))
+			bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("hostep1", "1::4"))
 			bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
@@ -378,8 +379,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	defer deleteLink(host2)
 
 	t.Run("create another host interface without a host endpoint (no policy)", func(t *testing.T) {
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -404,8 +405,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	defer deleteLink(workload1)
 
 	t.Run("create a workload", func(t *testing.T) {
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, workload1.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, workload1.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -477,8 +478,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	t.Run("create another workload, should not load more than the preable", func(t *testing.T) {
 		programsIngCount := programsIng.Count()
 		programsEgCount := programsEg.Count()
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -497,7 +498,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	})
 
 	t.Run("bring first host ep down, should clean up its policies", func(t *testing.T) {
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep1", ifacemonitor.StateDown, host1.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("hostep1", ifacemonitor.StateDown, host1.Attrs().Index))
 
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
@@ -570,7 +571,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	})
 
 	t.Run("bring first workload iface down, should clean up its policies", func(t *testing.T) {
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateDown, host1.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateDown, host1.Attrs().Index))
 
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
@@ -586,8 +587,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		// First create wl3 and remove the device before restart
 
 		workload3 := createVethName("workloadep3")
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep3", ifacemonitor.StateUp, workload3.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep3", "1.6.6.8"))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep3", ifacemonitor.StateUp, workload3.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep3", "1.6.6.8"))
 		err = bpfEpMgr.CompleteDeferredWork()
 		if err != nil {
 			deleteLink(workload3)
@@ -699,10 +700,10 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		}
 
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -743,8 +744,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		// First create wl3 and remove the device before restart
 
 		workload3 := createVethName("workloadep3")
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep3", ifacemonitor.StateUp, workload3.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep3", "1.6.6.8"))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep3", ifacemonitor.StateUp, workload3.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep3", "1.6.6.8"))
 		err = bpfEpMgr.CompleteDeferredWork()
 		if err != nil {
 			deleteLink(workload3)
@@ -787,10 +788,10 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(pmEgr).To(HaveLen(0))
 
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -848,8 +849,8 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	defer deleteLink(workload1)
 
 	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
-	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, workload1.Attrs().Index))
-	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, workload1.Attrs().Index))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 		Id: &proto.WorkloadEndpointID{
 			OrchestratorId: "k8s",
@@ -1029,8 +1030,8 @@ func TestRepeatedAttach(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
-	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, iface.Attrs().Index))
-	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, iface.Attrs().Index))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 		Id: &proto.WorkloadEndpointID{
 			OrchestratorId: "k8s",
@@ -1179,8 +1180,8 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 	}()
 
 	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
-	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
-	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 		Id: &proto.WorkloadEndpointID{
 			OrchestratorId: "k8s",
@@ -1200,7 +1201,7 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 	// This can happen if the interface is deleted and recreated quickly.
 	// The BPF endpoint manager gets the update that interface is gone but
 	// the interface is still there. The pinned programs must remain.
-	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateNotPresent, workload0.Attrs().Index))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateNotPresent, workload0.Attrs().Index))
 	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
 	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
@@ -1217,8 +1218,8 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 			deleteLink(workload0_new)
 		}
 	}()
-	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0_new.Attrs().Index))
-	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0_new.Attrs().Index))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
 	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
@@ -1231,7 +1232,7 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 	deleteLink(workload0_new)
 	workload0_new = nil
 
-	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateNotPresent, 0))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateNotPresent, 0))
 	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
 	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
@@ -1273,8 +1274,8 @@ func TestAttachTcx(t *testing.T) {
 	defer deleteLink(workload0)
 
 	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
-	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
-	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 		Id: &proto.WorkloadEndpointID{
 			OrchestratorId: "k8s",
@@ -1313,8 +1314,8 @@ func TestAttachTcx(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
-	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
-	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 		Id: &proto.WorkloadEndpointID{
 			OrchestratorId: "k8s",
@@ -1342,8 +1343,8 @@ func TestAttachTcx(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
-	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
-	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 		Id: &proto.WorkloadEndpointID{
 			OrchestratorId: "k8s",
@@ -1407,8 +1408,8 @@ func TestAttachNetkit(t *testing.T) {
 	defer deleteLink(workload0)
 
 	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
-	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
-	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+	bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 		Id: &proto.WorkloadEndpointID{
 			OrchestratorId: "k8s",
@@ -1495,8 +1496,8 @@ func TestReadyLinkAttachmentIsKept(t *testing.T) {
 			ifindex := workload0.Attrs().Index
 
 			bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
-			bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, ifindex))
-			bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+			bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, ifindex))
+			bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 			bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
 					OrchestratorId: "k8s",
@@ -1511,7 +1512,7 @@ func TestReadyLinkAttachmentIsKept(t *testing.T) {
 			Expect(before[1]).NotTo(BeZero())
 
 			// An interface update marks the workload dirty without changing it.
-			bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, ifindex))
+			bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, ifindex))
 			Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
 			Expect(attachedLinkProgIDs(ifindex, tcase.netkit)).To(Equal(before))
 
@@ -1527,7 +1528,7 @@ func TestReadyLinkAttachmentIsKept(t *testing.T) {
 				link.Close()
 				Expect(os.Remove(pin)).To(Succeed())
 
-				bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, ifindex))
+				bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, ifindex))
 				Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
 				after := attachedLinkProgIDs(ifindex, tcase.netkit)
 				Expect(after[i]).NotTo(Equal(before[i]), "%s preamble was not re-attached", h)
@@ -1592,9 +1593,9 @@ func TestLogFilters(t *testing.T) {
 	defer deleteLink(workload0)
 
 	t.Run("load filter", func(t *testing.T) {
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep1", ifacemonitor.StateUp, host1.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1.2.3.4"))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("hostep1", ifacemonitor.StateUp, host1.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("hostep1", "1.2.3.4"))
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
@@ -1622,9 +1623,9 @@ func TestLogFilters(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	t.Run("after restart, load filter", func(t *testing.T) {
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep1", ifacemonitor.StateUp, host1.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1.2.3.4"))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("hostep1", ifacemonitor.StateUp, host1.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+		bpfEpMgr.OnUpdate(dataplanedefs.NewIfaceAddrsUpdate("hostep1", "1.2.3.4"))
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
