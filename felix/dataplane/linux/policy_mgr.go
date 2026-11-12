@@ -21,6 +21,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
@@ -31,9 +32,9 @@ import (
 // policyManager simply renders policy/profile updates into generictables.Chain objects and sends
 // them to the dataplane layer.
 type policyManager struct {
-	rawTable         Table
-	mangleTable      Table
-	filterTable      Table
+	rawTable         dataplanedefs.Table
+	mangleTable      dataplanedefs.Table
+	filterTable      dataplanedefs.Table
 	ruleRenderer     policyRenderer
 	ipVersion        uint8
 	rawEgressOnly    bool
@@ -48,7 +49,7 @@ type policyRenderer interface {
 	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
 }
 
-func newPolicyManager(rawTable, mangleTable, filterTable Table, ruleRenderer policyRenderer, ipVersion uint8, nft bool) *policyManager {
+func newPolicyManager(rawTable, mangleTable, filterTable dataplanedefs.Table, ruleRenderer policyRenderer, ipVersion uint8, nft bool) *policyManager {
 	return &policyManager{
 		rawTable:        rawTable,
 		mangleTable:     mangleTable,
@@ -59,7 +60,7 @@ func newPolicyManager(rawTable, mangleTable, filterTable Table, ruleRenderer pol
 	}
 }
 
-func newRawEgressPolicyManager(rawTable Table, ruleRenderer policyRenderer, ipVersion uint8,
+func newRawEgressPolicyManager(rawTable dataplanedefs.Table, ruleRenderer policyRenderer, ipVersion uint8,
 	ipSetsCallback func(neededIPSets set.Set[string]),
 	nft bool,
 ) *policyManager {
