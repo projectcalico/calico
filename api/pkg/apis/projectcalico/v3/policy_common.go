@@ -255,6 +255,7 @@ type ServiceMatch struct {
 	// Namespace specifies the namespace of the given Service. If left empty, the rule
 	// will match within this policy's namespace.
 	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$`
 	Namespace string `json:"namespace,omitempty" validate:"omitempty,name"`
 }
 
