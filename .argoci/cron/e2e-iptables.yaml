@@ -18,6 +18,9 @@ globalEpilogue: |
 defaults:
   secretBundles:
     - banzai-secrets
+    - sandcat-upload
+    - sandcat-nightly
+    - sandcat-db
 steps:
   - name: openshift-ocp
     services:

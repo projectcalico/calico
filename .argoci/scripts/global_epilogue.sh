@@ -126,6 +126,25 @@ if [[ "${stopped}" == "false" && -n "${GITHUB_ACCESS_TOKEN:-}" ]]; then
     chmod +x /tmp/run-lens.sh && /tmp/run-lens.sh || true
 fi
 
+# For a job whose tests never reached sandcat; ahead of destroy, so calico-mcp
+# can still reach the cluster.
+if [[ "${stopped}" == "false" && ! -f "${HOME}/.sandcat-analyzed" ]]; then
+  _sandcat_sh="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/sandcat/sandcat.sh"
+  if [[ -f "${_junit}" ]]; then
+    _sandcat_kubeconfig=""
+    [[ -f "${BZ_LOCAL_DIR}/kubeconfig" ]] && _sandcat_kubeconfig="${BZ_LOCAL_DIR}/kubeconfig"
+    ("${_sandcat_sh}" analyze \
+      --report "${_junit}" \
+      --kubeconfig "${_sandcat_kubeconfig}" \
+      --spec-dir "${CI_HOME}/${CI_GIT_DIR}/report/sandcat" \
+      --source-dir "${CI_HOME}/${CI_GIT_DIR}") || true
+  elif [[ "${CI_EXIT_CODE}" != "0" ]]; then
+    ("${_sandcat_sh}" build-failure \
+      --logs-dir "${BZ_LOGS_DIR}" \
+      --source-dir "${CI_HOME}/${CI_GIT_DIR}") || true
+  fi
+fi
+
 # Last otherwise, so the logs above are pushed even when destroy hangs.
 if [[ "${stopped}" == "false" ]]; then
   destroy_cluster
