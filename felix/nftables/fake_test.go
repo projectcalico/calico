@@ -17,11 +17,14 @@ package nftables_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/knftables"
+
+	"github.com/projectcalico/calico/felix/ip"
 )
 
 func ptr[A any](v A) *A { return &v }
@@ -39,6 +42,9 @@ func NewFake(fam knftables.Family, name string) *fakeNFT {
 
 type fakeNFT struct {
 	lock sync.Mutex
+
+	// Serializes Run, so an interval-overlap rollback can't undo a concurrent transaction.
+	runLock sync.Mutex
 
 	// Wrap a knftables fake instance.
 	fake   *knftables.Fake
@@ -108,15 +114,43 @@ func (f *fakeNFT) NewTransaction() *knftables.Transaction {
 	return f.fake.NewTransaction()
 }
 
-// Run runs a Transaction and returns the result. The IsNotFound and
-// IsAlreadyExists methods can be used to test the result.
+// Run runs a Transaction and returns the result. IsNotFound and IsAlreadyExists work on
+// errors from the upstream fake. An interval-set overlap error only carries the "File
+// exists" text that nft prints, so match that instead.
 func (f *fakeNFT) Run(ctx context.Context, tx *knftables.Transaction) error {
 	f.preRun(tx)
 	if err := f.takeRunError(); err != nil {
 		logrus.WithError(err).Info("Returning test error from Run")
 		return err
 	}
-	return f.fake.Run(ctx, tx)
+	return f.runRejectingIntervalOverlaps(ctx, tx)
+}
+
+// runRejectingIntervalOverlaps runs tx on the upstream fake, then rolls it back with an
+// nft-style "File exists" error if tx leaves an interval set with overlapping members. Real
+// nftables rejects those, but the upstream fake matches elements by exact key. Only the
+// end state is checked, because knftables doesn't expose a transaction's operations, so
+// an add that comes before the delete it conflicts with is still accepted.
+func (f *fakeNFT) runRejectingIntervalOverlaps(ctx context.Context, tx *knftables.Transaction) error {
+	f.runLock.Lock()
+	defer f.runLock.Unlock()
+
+	// The upstream fake applies a transaction to copies of its tables and swaps them in
+	// on success, so these still hold the state from before tx.
+	f.fake.RLock()
+	tables, table, lastTx := f.fake.Tables, f.fake.Table, f.fake.LastTransaction
+	f.fake.RUnlock()
+
+	if err := f.fake.Run(ctx, tx); err != nil {
+		return err
+	}
+	if err := f.checkIntervalOverlaps(); err != nil {
+		f.fake.Lock()
+		f.fake.Tables, f.fake.Table, f.fake.LastTransaction = tables, table, lastTx
+		f.fake.Unlock()
+		return err
+	}
+	return nil
 }
 
 func (f *fakeNFT) takeRunError() error {
@@ -128,6 +162,71 @@ func (f *fakeNFT) takeRunError() error {
 	}
 	f.RunErrors--
 	return errors.New("injected nft failure")
+}
+
+// checkIntervalOverlaps returns an nft-style "File exists" error if any interval set in
+// the fake's table holds overlapping members.
+func (f *fakeNFT) checkIntervalOverlaps() error {
+	f.fake.RLock()
+	defer f.fake.RUnlock()
+
+	if f.fake.Table == nil {
+		return nil
+	}
+	for name, s := range f.fake.Table.Sets {
+		if !isIntervalSet(s) {
+			continue
+		}
+		if err := checkIntervalSetOverlap(name, s.Elements); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isIntervalSet(s *knftables.FakeSet) bool {
+	for _, flag := range s.Flags {
+		if flag == knftables.IntervalFlag {
+			return true
+		}
+	}
+	return false
+}
+
+// checkIntervalSetOverlap returns an nft-like EEXIST error if any two elements of an
+// interval set overlap or nest. Elements whose keys aren't plain CIDRs are ignored: Felix
+// only ever puts single CIDRs (hash:net members) in interval sets.
+func checkIntervalSetOverlap(setName string, elements []*knftables.Element) error {
+	cidrs := make([]ip.CIDR, 0, len(elements))
+	for _, element := range elements {
+		if len(element.Key) != 1 {
+			continue
+		}
+		cidr, err := ip.ParseCIDROrIP(element.Key[0])
+		if err != nil {
+			continue
+		}
+		cidrs = append(cidrs, cidr)
+	}
+
+	for i := range cidrs {
+		for j := i + 1; j < len(cidrs); j++ {
+			if cidrsOverlap(cidrs[i], cidrs[j]) {
+				return fmt.Errorf("add element to set %q: %s overlaps %s: File exists", setName, cidrs[i], cidrs[j])
+			}
+		}
+	}
+	return nil
+}
+
+// cidrsOverlap reports whether a and b overlap: the one with the shorter prefix contains
+// the other's network address (nesting in either direction, or an exact match). CIDRs of
+// different families never overlap.
+func cidrsOverlap(a, b ip.CIDR) bool {
+	if a.Prefix() <= b.Prefix() {
+		return a.Contains(b.Addr())
+	}
+	return b.Contains(a.Addr())
 }
 
 // Transactions returns a copy of the transactions Run has seen, for test assertions.
