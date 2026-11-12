@@ -41,6 +41,7 @@ const ReleaseNotesStep = "release-notes"
 
 const (
 	releaseNoteRequiredLabel = "release-note-required"
+	bugLabel                 = "kind/bug"
 	closedState              = issueState("closed")
 	openState                = issueState("open")
 	allState                 = issueState("all")
@@ -63,6 +64,7 @@ type ReleaseNoteIssueData struct {
 	Repo   string
 	URL    string
 	Author string
+	IsBug  bool
 }
 
 // ReleaseNoteData represents the data for release notes
@@ -145,6 +147,7 @@ func extractReleaseNote(repo string, issues []*github.Issue) ([]*ReleaseNoteIssu
 			logrus.WithError(err).Errorf("Failed to extract release notes for issue %d", issue.GetNumber())
 			return nil, err
 		}
+		isBug := hasLabel(issue, bugLabel)
 		for _, note := range notes {
 			note = strings.TrimSpace(note)
 			if note == "TBD" {
@@ -159,11 +162,22 @@ func extractReleaseNote(repo string, issues []*github.Issue) ([]*ReleaseNoteIssu
 				Repo:   repo,
 				URL:    issue.GetHTMLURL(),
 				Author: issue.GetUser().GetLogin(),
+				IsBug:  isBug,
 			}
 			issueDataList = append(issueDataList, issueData)
 		}
 	}
 	return issueDataList, nil
+}
+
+// hasLabel reports whether the issue carries the named label.
+func hasLabel(issue *github.Issue, name string) bool {
+	for _, label := range issue.Labels {
+		if label.GetName() == name {
+			return true
+		}
+	}
+	return false
 }
 
 // outputReleaseNotes outputs the release notes to a file
@@ -181,9 +195,13 @@ func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, outputFilePath st
 	}
 	logrus.Debug("Generating release notes from template")
 	date := time.Now().Format("02 Jan 2006")
-	data := &ReleaseNoteData{
-		Date:         date,
-		OtherChanges: issueDataList,
+	data := &ReleaseNoteData{Date: date}
+	for _, issueData := range issueDataList {
+		if issueData.IsBug {
+			data.BugFixes = append(data.BugFixes, issueData)
+		} else {
+			data.OtherChanges = append(data.OtherChanges, issueData)
+		}
 	}
 	releaseNotedFile, err := os.Create(outputFilePath)
 	if err != nil {
@@ -240,12 +258,8 @@ func ReleaseNotes(owner, repoRootDir, outputDir string, ver version.Version) (st
 		prIssues = append(prIssues, prIssuesByRepo...)
 		closedReleaseNoteIssues := []*github.Issue{}
 		for _, issue := range prIssuesByRepo {
-			if issue.GetState() == string(closedState) {
-				for _, label := range issue.Labels {
-					if label.GetName() == releaseNoteRequiredLabel {
-						closedReleaseNoteIssues = append(closedReleaseNoteIssues, issue)
-					}
-				}
+			if issue.GetState() == string(closedState) && hasLabel(issue, releaseNoteRequiredLabel) {
+				closedReleaseNoteIssues = append(closedReleaseNoteIssues, issue)
 			}
 		}
 		relNoteDataList, err := extractReleaseNote(repo, closedReleaseNoteIssues)
