@@ -1575,8 +1575,8 @@ func (s *xdpIPState) getMemberChanges() map[string]memberChanges {
 			toDrop: set.New[string](),
 		}
 		if pr, ok := s.ipsetIDsToMembers.pendingReplaces[setID]; ok {
-			mc.toAdd = setDifference[string](pr, oldMembers)
-			mc.toDrop = setDifference[string](oldMembers, pr)
+			mc.toAdd = set.Difference(pr, oldMembers)
+			mc.toDrop = set.Difference(oldMembers, pr)
 		} else {
 			if pa, ok := s.ipsetIDsToMembers.pendingAdds[setID]; ok {
 				mc.toAdd = pa
@@ -1594,16 +1594,6 @@ func (s *xdpIPState) getMemberChanges() map[string]memberChanges {
 	}
 
 	return changes
-}
-
-func setDifference[T comparable](a, b set.Set[T]) set.Set[T] {
-	result := set.New[T]()
-	for item := range a.All() {
-		if !b.Contains(item) {
-			result.Add(item)
-		}
-	}
-	return result
 }
 
 func (s *xdpIPState) getAffectedIfaces(setID string) map[string]uint32 {
