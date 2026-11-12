@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/flowtabledefs"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
@@ -100,7 +100,7 @@ var _ = infrastructure.DatastoreDescribe("nftables flowtable offload", []apiconf
 			out, _ := tc.Felixes[0].ExecOutput("nft", "list", "table", "ip", "calico")
 			return out
 		}, "20s", "1s").Should(And(
-			ContainSubstring(fmt.Sprintf("flowtable %s", dataplanedefs.FlowtableName)),
+			ContainSubstring(fmt.Sprintf("flowtable %s", flowtabledefs.FlowtableName)),
 			ContainSubstring(w[0].InterfaceName),
 			ContainSubstring(w[1].InterfaceName),
 		))
@@ -237,7 +237,7 @@ var _ = infrastructure.DatastoreDescribe("nftables flowtable offload", []apiconf
 		Eventually(func() string {
 			out, _ := tc.Felixes[0].ExecOutput("nft", "list", "table", "ip", "calico")
 			return out
-		}, "20s", "1s").Should(ContainSubstring(fmt.Sprintf("flowtable %s", dataplanedefs.FlowtableName)))
+		}, "20s", "1s").Should(ContainSubstring(fmt.Sprintf("flowtable %s", flowtabledefs.FlowtableName)))
 
 		// Disabling offload restarts Felix. The forward rule is reconciled away and the flowtable
 		// object itself should be cleaned up rather than left behind.
@@ -247,7 +247,7 @@ var _ = infrastructure.DatastoreDescribe("nftables flowtable offload", []apiconf
 		Eventually(func() string {
 			out, _ := tc.Felixes[0].ExecOutput("nft", "list", "table", "ip", "calico")
 			return out
-		}, "30s", "1s").ShouldNot(ContainSubstring(fmt.Sprintf("flowtable %s", dataplanedefs.FlowtableName)))
+		}, "30s", "1s").ShouldNot(ContainSubstring(fmt.Sprintf("flowtable %s", flowtabledefs.FlowtableName)))
 	})
 })
 
