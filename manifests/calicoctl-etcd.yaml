@@ -1,7 +1,7 @@
-# Calico Version v3.33.0
-# https://projectcalico.docs.tigera.io/releases#v3.33.0
+# Calico Version v3.33.1
+# https://projectcalico.docs.tigera.io/releases#v3.33.1
 # This manifest includes the following component versions:
-#   calico/calico:v3.33.0
+#   calico/calico:v3.33.1
 
 apiVersion: v1
 kind: Pod
@@ -14,7 +14,7 @@ spec:
   hostNetwork: true
   containers:
     - name: calicoctl
-      image: quay.io/calico/calico:v3.33.0
+      image: quay.io/calico/calico:v3.33.1
       command:
         - /usr/bin/calicoctl
       args:
