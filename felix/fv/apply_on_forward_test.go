@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -290,17 +291,55 @@ var _ = infrastructure.DatastoreDescribe(
 					if tunnel != "wireguard" {
 						// ensureRoutesProgrammed looks for the VXLAN iface
 						// name or the Felix/Bird default route proto, neither
-						// of which is present on the WG routing path. The
-						// baseline connectivity check below handles WG
-						// handshake convergence via its retry window.
+						// of which is present on the WG routing path, so the
+						// wireguard case waits for its own readiness below.
 						ensureRoutesProgrammed(tc.Felixes)
 					}
 
 					cc = &connectivity.Checker{}
 					if tunnel == "wireguard" {
-						// Avoid WireGuard handshake races when initial packets
-						// in opposite directions are sent simultaneously.
 						cc.StaggerStartBy = 100 * time.Millisecond
+
+						// Wait until each node has the other as a WireGuard
+						// peer with an endpoint.
+						for i, f := range tc.Felixes {
+							peerIP := tc.Felixes[1-i].IP
+							Eventually(func() string {
+								out, _ := f.ExecOutput("wg", "show", wireguardInterfaceNameDefault, "endpoints")
+								return out
+							}, "30s", "330ms").Should(ContainSubstring(peerIP+":"),
+								fmt.Sprintf("%s has no WireGuard peer with endpoint %s", f.Name, peerIP))
+						}
+
+						// Establish the WireGuard session from one side only
+						// before any bidirectional traffic. If w0->w1 and
+						// w1->w0 send their first packets at the same moment,
+						// both nodes initiate a handshake, the initiations
+						// cross and each side drops the response to its own
+						// initiation; the 5s retransmits can then cross again
+						// in lockstep. StaggerStartBy only delays the probe
+						// launch, not the first packet, so it cannot prevent
+						// this. A single initiator cannot collide with itself.
+						wgWarmup := &connectivity.Checker{}
+						wgWarmup.ExpectSome(w[0], w[1])
+						wgWarmup.CheckConnectivity()
+
+						// Both nodes must now report a completed handshake.
+						for _, f := range tc.Felixes {
+							Eventually(func() []int {
+								var handshakes []int
+								out, _ := f.ExecOutput("wg", "show", wireguardInterfaceNameDefault, "latest-handshakes")
+								for _, line := range strings.Split(out, "\n") {
+									parts := strings.Split(line, "\t")
+									if len(parts) == 2 {
+										h, _ := strconv.Atoi(strings.TrimSpace(parts[1]))
+										handshakes = append(handshakes, h)
+									}
+								}
+								return handshakes
+							}, "10s", "100ms").Should(ContainElement(BeNumerically(">", 0)),
+								fmt.Sprintf("%s has not completed a WireGuard handshake", f.Name))
+						}
 					}
 				})
 
