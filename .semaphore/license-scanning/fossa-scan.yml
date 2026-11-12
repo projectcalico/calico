@@ -24,6 +24,7 @@ blocks:
       jobs:
         - name: "FOSSA scan"
           commands:
-            - fossa analyze
+            # Default Go analysis only sees the Linux build graph, missing Windows-only deps.
+            - fossa analyze --static-only-analysis
       secrets:
         - name: foss-api-key
