@@ -519,8 +519,18 @@ var _ = describe.CalicoDescribe(
 
 			extNode := externalnode.MustNewClient()
 
-			extIPs := extNode.IPs()
-			Expect(extIPs).NotTo(BeEmpty(), "could not determine external node IP addresses")
+			extIPsByFamily := map[utils.IPFamily][]string{
+				utils.IPv4: extNode.IPs(),
+				utils.IPv6: extNode.IPv6s(),
+			}
+			var extIPs []string
+			for _, fam := range families {
+				// Without an address in the family, the CIDR allow rule can't
+				// match that family's probe and the spec would fail as a policy bug.
+				Expect(extIPsByFamily[fam]).NotTo(BeEmpty(),
+					"external node %s has no %s address, but the cluster's nodes do", extNode.SSHIP(), fam)
+				extIPs = append(extIPs, extIPsByFamily[fam]...)
+			}
 			logrus.Infof("External node IPs: %v", extIPs)
 
 			// Deploy the server on svcNode.
