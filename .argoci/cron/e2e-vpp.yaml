@@ -37,6 +37,9 @@ globalEpilogue: |
 defaults:
   secretBundles:
     - banzai-secrets
+    - sandcat-upload
+    - sandcat-nightly
+    - sandcat-db
 steps:
   - name: k8s-e2e-st-v3-28-regression-test
     services:

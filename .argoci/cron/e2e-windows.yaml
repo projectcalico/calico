@@ -20,6 +20,9 @@ globalEpilogue: |
 defaults:
   secretBundles:
     - banzai-secrets
+    - sandcat-upload
+    - sandcat-nightly
+    - sandcat-db
 steps:
   - name: calico-windows-azr-aso-2022-stable-nftables-vxlan
     services:

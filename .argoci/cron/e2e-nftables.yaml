@@ -21,6 +21,9 @@ globalEpilogue: |
 defaults:
   secretBundles:
     - banzai-secrets
+    - sandcat-upload
+    - sandcat-nightly
+    - sandcat-db
 steps:
   - name: nftables-mode-arm64-wg
     services:

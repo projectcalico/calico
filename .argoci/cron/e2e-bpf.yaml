@@ -18,6 +18,9 @@ globalEpilogue: |
 defaults:
   secretBundles:
     - banzai-secrets
+    - sandcat-upload
+    - sandcat-nightly
+    - sandcat-db
 steps:
   - name: arm64-smoke-tests-kubeadm-arm64
     services:
