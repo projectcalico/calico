@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/registry"
 )
 
@@ -72,14 +73,14 @@ func TestRepoValidate(t *testing.T) {
 
 // An invalid repo must fail the pin rather than pin an empty version.
 func TestRepoComponentsRejectsInvalid(t *testing.T) {
-	if _, err := repoComponents([]Repo{{Component: "first-repo"}}); err == nil {
+	if _, err := repoComponents(&command.Recorder{}, []Repo{{Component: "first-repo"}}); err == nil {
 		t.Error("want an error for a repo with no dir or branch, got none")
 	}
 }
 
 // Every repo's failure is reported, not just the first to finish.
 func TestRepoComponentsAggregatesErrors(t *testing.T) {
-	_, err := repoComponents([]Repo{
+	_, err := repoComponents(&command.Recorder{}, []Repo{
 		{Component: "first-repo"},
 		{Component: "second-repo"},
 	})
@@ -94,7 +95,7 @@ func TestRepoComponentsAggregatesErrors(t *testing.T) {
 }
 
 func TestRepoComponentsNoRepos(t *testing.T) {
-	got, err := repoComponents(nil)
+	got, err := repoComponents(&command.Recorder{}, nil)
 	if err != nil {
 		t.Fatalf("want no error for no repos, got %v", err)
 	}
@@ -203,7 +204,7 @@ func TestCalicoComponents(t *testing.T) {
 		{"release-v3.31-1", "release-v3.31-1"},
 	} {
 		t.Run("networking-calico on "+tc.branch, func(t *testing.T) {
-			got, err := calicoComponents(Config{ReleaseBranchPrefix: "release"}, tc.branch, "v3.31.0-0.dev-4-gfd40f1838223")
+			got, err := calicoComponents(fakeConfig(t, "", fakeRepo(fakeVersion)), tc.branch, "v3.31.0-0.dev-4-gfd40f1838223")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -216,6 +217,24 @@ func TestCalicoComponents(t *testing.T) {
 	t.Run("requires a release branch prefix", func(t *testing.T) {
 		if _, err := calicoComponents(Config{}, "master", "v3.31.0"); err == nil {
 			t.Error("want an error")
+		}
+	})
+
+	t.Run("requires a release image list", func(t *testing.T) {
+		cfg := fakeConfig(t, "", fakeRepo(fakeVersion))
+		cfg.ReleaseImages = nil
+		if _, err := calicoComponents(cfg, "master", "v3.31.0"); err == nil {
+			t.Error("want an error")
+		}
+	})
+
+	t.Run("pins each release image at the product version", func(t *testing.T) {
+		got, err := calicoComponents(fakeConfig(t, "", fakeRepo(fakeVersion)), "master", "v3.31.0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v := got[testImageComponent].Version; v != "v3.31.0" {
+			t.Errorf("%s version = %q, want v3.31.0", testImageComponent, v)
 		}
 	})
 }

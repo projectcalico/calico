@@ -14,10 +14,6 @@
 
 package command
 
-func runner() CommandRunner {
-	return &RealCommandRunner{}
-}
-
 type Option interface {
 	apply(*settings)
 }
@@ -27,10 +23,21 @@ type setting func(*settings)
 func (f setting) apply(s *settings) { f(s) }
 
 type settings struct {
-	name   string
-	dir    string
-	args   []string
-	runner CommandRunner
+	dir     string
+	env     []string
+	logFile string
+	stdin   string
+	stream  bool
+}
+
+func newSettings(opts []Option) *settings {
+	s := &settings{}
+	for _, o := range opts {
+		if o != nil {
+			o.apply(s)
+		}
+	}
+	return s
 }
 
 func WithDir(dir string) Option {
@@ -39,22 +46,30 @@ func WithDir(dir string) Option {
 	})
 }
 
-func WithRunner(runner CommandRunner) Option {
+// WithEnv adds to the parent's environment.
+func WithEnv(env ...string) Option {
 	return setting(func(s *settings) {
-		s.runner = runner
+		s.env = env
 	})
 }
 
-func run(s *settings) (string, error) {
-	return s.runner.RunInDir(s.dir, s.name, s.args, nil)
+func WithStdin(in string) Option {
+	return setting(func(s *settings) {
+		s.stdin = in
+	})
 }
 
-// Run runs a command with arguments.
-func Run(command string, args []string) (string, error) {
-	return runner().Run(command, args, nil)
+// WithStream shows the command's output as it runs, at any log level.
+func WithStream() Option {
+	return setting(func(s *settings) {
+		s.stream = true
+	})
 }
 
-// RunInDir runs a command with arguments in a specific directory.
-func RunInDir(dir, command string, args []string) (string, error) {
-	return runner().RunInDir(dir, command, args, nil)
+// WithLogFile also writes the command's stdout and stderr to path. An empty
+// path writes no file.
+func WithLogFile(path string) Option {
+	return setting(func(s *settings) {
+		s.logFile = path
+	})
 }

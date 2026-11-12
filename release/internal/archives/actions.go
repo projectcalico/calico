@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -79,9 +80,8 @@ func (s settings) tar(staging string) error {
 		return s.Errorf("creating %s: %w", s.OutputDir, err)
 	}
 	args := []string{"-czvf", Path(s.Archive), "-C", filepath.Dir(staging), filepath.Base(staging)}
-	out, err := s.Run("tar", args, nil, s.LogPath("tar"))
+	_, err := s.Run("tar", args, command.WithLogFile(s.LogPath("tar")))
 	if err != nil {
-		s.Logger().Error(out)
 		return s.Errorf("creating %s: %w", Path(s.Archive), err)
 	}
 	return nil
@@ -95,7 +95,7 @@ func BuildWindows(a Archive, opts ...WindowsOption) error {
 		return err
 	}
 
-	env := append(os.Environ(), utils.Env(utils.EnvVersion, s.Version))
+	env := []string{utils.Env(utils.EnvVersion, s.Version)}
 	dir := filepath.Join(s.RepoRoot, windowsComponent)
 	// The install script is a file target with no prerequisites, so make skips
 	// it when one is already there and the stale version's script survives.
@@ -103,9 +103,7 @@ func BuildWindows(a Archive, opts ...WindowsOption) error {
 		return s.Errorf("clearing stale %s: %w", windowsScriptTarget, err)
 	}
 	for _, target := range []string{windowsArchiveTarget, windowsScriptTarget} {
-		args := append([]string{"-C", dir}, target)
-		if out, err := s.Run("make", args, env, s.LogPath(target)); err != nil {
-			s.Logger().Error(out)
+		if _, err := command.Make(s.Runner(), dir).Run([]string{target}, command.WithEnv(env...), command.WithLogFile(s.LogPath(target))); err != nil {
 			return s.Errorf("building %s: %w", target, err)
 		}
 	}

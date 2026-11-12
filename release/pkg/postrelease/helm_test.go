@@ -73,7 +73,7 @@ func TestHelmChart(t *testing.T) {
 							"pull", fmt.Sprintf("oci://%s/%s", reg, chart),
 							"--version", releaseVersion,
 						}
-						out, err := command.RunInDir(dir, "helm", args)
+						out, err := command.Runner(commandRunner).Run("helm", args, command.WithDir(dir))
 						if err != nil {
 							t.Fatalf("pull %s %s helm chart from %s: %v\nOutput: %s", chart, releaseVersion, reg, err, out)
 						}
@@ -82,10 +82,8 @@ func TestHelmChart(t *testing.T) {
 							t.Fatalf("load helm chart from %s: %v", reg, err)
 						}
 						validateChart(t, chart)
-
 					})
 				}
-
 			})
 		}
 	})

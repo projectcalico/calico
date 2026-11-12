@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,37 @@
 
 package command
 
-// Make runs a make command.
-func Make(args []string, envs []string) (string, error) {
-	return runner().Run("make", args, envs)
+import (
+	"fmt"
+	"slices"
+	"strings"
+)
+
+// MakeRunner runs make in one directory.
+type MakeRunner struct {
+	r   CommandRunner
+	dir string
 }
 
-// MakeInDir runs a make command in a specific directory.
-func MakeInDir(dir string, args []string, envs []string) (string, error) {
-	args = append([]string{"-C", dir}, args...)
-	return Make(args, envs)
+// Make takes a dir because a make run from the wrong directory reads the
+// wrong Makefile, or none.
+func Make(r CommandRunner, dir string) MakeRunner {
+	return MakeRunner{r: r, dir: dir}
+}
+
+// Run runs make with args.
+func (m MakeRunner) Run(args []string, opts ...Option) (string, error) {
+	return m.run(args, opts)
+}
+
+// Print runs a target only for what it prints: make adds no output of its own.
+func (m MakeRunner) Print(target string, opts ...Option) (string, error) {
+	if len(strings.Fields(target)) > 1 {
+		return "", &Error{Err: fmt.Errorf("expected a single target, got %q", target)}
+	}
+	return m.run([]string{"-s", "--no-print-directory", target}, opts)
+}
+
+func (m MakeRunner) run(args []string, opts []Option) (string, error) {
+	return m.r.Run("make", args, append(slices.Clip(opts), WithDir(m.dir))...)
 }

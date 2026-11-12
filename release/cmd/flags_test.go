@@ -16,11 +16,15 @@ package main
 
 import (
 	"context"
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/github"
 )
@@ -351,6 +355,79 @@ func TestCIJobURLEmptyWithoutJobIdentity(t *testing.T) {
 	}
 }
 
+func TestGitFlags(t *testing.T) {
+	for _, tc := range []struct {
+		flag *cli.StringFlag
+		env  string
+		key  string
+	}{
+		{orgFlag, "ORGANIZATION", defaults.KeyOrganization},
+		{repoFlag, "GIT_REPO", defaults.KeyGitRepo},
+		{repoRemoteFlag, "GIT_REMOTE", defaults.KeyGitRemote},
+		{releaseBranchPrefixFlag, "RELEASE_BRANCH_PREFIX", defaults.KeyReleaseBranchPrefix},
+		{devTagSuffixFlag, "DEV_TAG_SUFFIX", defaults.KeyDevTagSuffix},
+	} {
+		t.Run(tc.flag.Name, func(t *testing.T) {
+			for _, c := range []struct {
+				name string
+				env  string
+				mk   string
+				want string
+			}{
+				{name: "the environment wins", env: "from-env", mk: "from-mk", want: "from-env"},
+				{name: "then metadata.mk", mk: "from-mk", want: "from-mk"},
+				{name: "then the fallback", want: defaults.Builtin(tc.key)},
+			} {
+				t.Run(c.name, func(t *testing.T) {
+					t.Setenv(tc.env, c.env)
+					if c.env == "" {
+						if err := os.Unsetenv(tc.env); err != nil {
+							t.Fatal(err)
+						}
+					}
+					useMetadata(t, tc.key, c.mk)
+
+					var got string
+					// A flag keeps its state after one run.
+					fresh := &cli.StringFlag{Name: tc.flag.Name, Sources: tc.flag.Sources, Value: tc.flag.Value}
+					cmd := &cli.Command{
+						Name:  "test",
+						Flags: []cli.Flag{fresh},
+						Action: func(_ context.Context, cmd *cli.Command) error {
+							got = cmd.String(tc.flag.Name)
+							return nil
+						},
+					}
+					if err := cmd.Run(context.Background(), []string{"test"}); err != nil {
+						t.Fatalf("run: %v", err)
+					}
+					if got != c.want {
+						t.Errorf("--%s = %q, want %q", tc.flag.Name, got, c.want)
+					}
+				})
+			}
+		})
+	}
+}
+
+func useMetadata(t *testing.T, key, value string) {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, defaults.MetadataFile), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defaults.UseRunner(&command.Recorder{Reply: func(c command.Call) (string, error) {
+		switch {
+		case c.Name == "git":
+			return root, nil
+		case value != "":
+			return key + " = " + value, nil
+		}
+		return "", nil
+	}})
+	t.Cleanup(func() { defaults.UseRunner(nil) })
+}
+
 func TestReleaseNotesFlag(t *testing.T) {
 	flags := []cli.Flag{releaseNotesFlag, orgFlag, repoFlag, validationFlag, branchCheckFlag}
 	calico := func(rest ...string) []string {
@@ -384,7 +461,11 @@ func TestReleaseNotesFlag(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("PATH", t.TempDir())
+			prev := commandRunner
+			commandRunner = &command.Recorder{Reply: func(command.Call) (string, error) {
+				return "", errors.New("not logged in")
+			}}
+			t.Cleanup(func() { commandRunner = prev })
 			for _, key := range github.TokenEnvVars {
 				t.Setenv(key, "")
 			}

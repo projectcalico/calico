@@ -38,7 +38,7 @@ func PubKey(runner command.CommandRunner, gpgKeyID string) (string, error) {
 
 	cmdArgs := []string{"--armor", "--export", gpgKeyID}
 	logrus.Debugf("Running gpg with args %s", strings.Join(cmdArgs, " "))
-	gpgOut, err := runner.Run("gpg", cmdArgs, nil)
+	gpgOut, err := runner.Run("gpg", cmdArgs)
 	if err != nil {
 		return "", fmt.Errorf("exporting gpg key: %w", err)
 	}
@@ -84,7 +84,7 @@ func ExportPubKeyFile(runner command.CommandRunner, gpgKeyID, dir, prefix string
 // machine-readable key listing.
 func KeyCreationDate(runner command.CommandRunner, gpgKeyID string) (time.Time, error) {
 	cmdArgs := []string{"--list-keys", "--with-colons", gpgKeyID}
-	gpgOut, err := runner.Run("gpg", cmdArgs, nil)
+	gpgOut, err := runner.Run("gpg", cmdArgs)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("unable to list GPG key %s: %w", gpgKeyID, err)
 	}
@@ -138,10 +138,10 @@ func DetachSign(runner command.CommandRunner, gpgKeyID, filePath string) (string
 		"--output", sigPath,
 		filePath,
 	}
-	if _, err := runner.Run("gpg", cmdArgs, nil); err != nil {
+	if _, err := runner.Run("gpg", cmdArgs); err != nil {
 		return "", fmt.Errorf("unable to sign %s with GPG key %s: %w", filePath, gpgKeyID, err)
 	}
-	if _, err := runner.Run("gpg", []string{"--batch", "--verify", sigPath, filePath}, nil); err != nil {
+	if _, err := runner.Run("gpg", []string{"--batch", "--verify", sigPath, filePath}); err != nil {
 		return "", fmt.Errorf("signed %s but its signature %s could not be verified: %w", filePath, sigPath, err)
 	}
 	return sigPath, nil
@@ -206,7 +206,7 @@ func (k *RPMKeyring) ImportGPGKey(gpgKeyID string) error {
 		return fmt.Errorf("unable to write public key for GPG key %s to %s: %w", gpgKeyID, keyFile, err)
 	}
 	logrus.Infof("Importing public key for GPG key %s into RPM database %s", gpgKeyID, k.dbPath)
-	if _, err := k.runner.Run("rpmkeys", k.rpmArgs("--import", keyFile), nil); err != nil {
+	if _, err := k.runner.Run("rpmkeys", k.rpmArgs("--import", keyFile)); err != nil {
 		return fmt.Errorf("unable to import public key for GPG key %s into RPM database %s: %w", gpgKeyID, k.dbPath, err)
 	}
 	return nil
@@ -231,7 +231,7 @@ func (k *RPMKeyring) SignRPMFiles(gpgKeyID string, rpmFiles []string) error {
 	logrus.Infof("Signing RPM files with GPG key %s", gpgKeyID)
 	cmdArgs := k.signArgs(gpgKeyID, filteredRpmFiles)
 	logrus.Debugf("Running rpmsign with args %s", strings.Join(cmdArgs, " "))
-	if _, err := k.runner.Run("rpmsign", cmdArgs, nil); err != nil {
+	if _, err := k.runner.Run("rpmsign", cmdArgs); err != nil {
 		return fmt.Errorf("unable to sign RPM files: %w", err)
 	}
 	return nil
@@ -267,7 +267,7 @@ func (k *RPMKeyring) signArgs(gpgKeyID string, rpmFiles []string) []string {
 // asks rpmsign rather than comparing versions, so a version that gains or loses
 // the option needs no change here.
 func (k *RPMKeyring) rpmsignSupportsRPMV4() bool {
-	out, err := k.runner.Run("rpmsign", []string{"--help"}, nil)
+	out, err := k.runner.Run("rpmsign", []string{"--help"})
 	if err != nil {
 		// Signing itself reports a usable error if rpmsign is missing or broken;
 		// here, assume the option is absent rather than fail the help probe.
@@ -338,7 +338,7 @@ func (k *RPMKeyring) CheckRPMSig(rpmFile string) error {
 	if _, err := os.Lstat(rpmFile); err != nil {
 		return fmt.Errorf("could not validate rpm file exists: %w", err)
 	}
-	rpmOut, runErr := k.runner.Run("rpmkeys", k.rpmArgs("--checksig", "--verbose", rpmFile), nil)
+	rpmOut, runErr := k.runner.Run("rpmkeys", k.rpmArgs("--checksig", "--verbose", rpmFile))
 	logrus.WithField("file", rpmFile).Debugf("rpmkeys --checksig -v output:\n%s", rpmOut)
 
 	checks := parseRPMSigChecks(rpmOut)
@@ -386,7 +386,13 @@ func rpmkeysExitDetail(runErr error) string {
 	if runErr == nil {
 		return "(rpmkeys exited successfully)"
 	}
-	return fmt.Sprintf("(rpmkeys: %s)", strings.Trim(strings.TrimSpace(runErr.Error()), ":"))
+	msg := runErr.Error()
+	// The stdout tail names the file, which would split identical failures.
+	var cmdErr *command.Error
+	if errors.As(runErr, &cmdErr) {
+		msg = fmt.Sprintf("%s: %s", cmdErr.Err, cmdErr.Stderr)
+	}
+	return fmt.Sprintf("(rpmkeys: %s)", strings.Trim(strings.TrimSpace(msg), ":"))
 }
 
 func problemStrings(problems []rpmSigProblem) []string {

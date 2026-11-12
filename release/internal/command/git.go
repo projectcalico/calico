@@ -14,33 +14,70 @@
 
 package command
 
-// GitInDir runs a git command in a specific directory.
-func GitInDir(dir string, args ...string) (string, error) {
-	return git(args, WithDir(dir))
+import "strings"
+
+// GitRunner runs git in the cwd, or in the dir In binds.
+type GitRunner struct {
+	r   CommandRunner
+	dir string
 }
 
-func git(args []string, opts ...Option) (string, error) {
-	s := &settings{
-		name:   "git",
-		args:   args,
-		runner: runner(),
-	}
-	for _, o := range opts {
-		o.apply(s)
-	}
-	return run(s)
+func Git(r CommandRunner) GitRunner {
+	return GitRunner{r: r}
 }
 
-func GitVersion(dir string, includeDirty bool, opts ...Option) (string, error) {
+func (g GitRunner) In(dir string) GitRunner {
+	g.dir = dir
+	return g
+}
+
+func (g GitRunner) RepoRoot() (string, error) {
+	return g.Run("rev-parse", "--show-toplevel")
+}
+
+func (g GitRunner) Branch() (string, error) {
+	return g.Run("rev-parse", "--abbrev-ref", "HEAD")
+}
+
+func (g GitRunner) Version(includeDirty bool) (string, error) {
 	args := []string{"describe", "--tags", "--always", "--long", "--abbrev=12"}
 	if includeDirty {
 		args = append(args, "--dirty")
 	}
-	return git(args, append(opts, WithDir(dir))...)
+	return g.Run(args...)
 }
 
-// GitDir returns the root directory of the git repository.
-func GitDir() (string, error) {
-	args := []string{"rev-parse", "--show-toplevel"}
-	return git(args)
+// Dirty reports tracked files with uncommitted changes. Porcelain also counts
+// untracked files.
+func (g GitRunner) Dirty() (bool, error) {
+	v, err := g.Version(true)
+	if err != nil {
+		return false, err
+	}
+	return strings.HasSuffix(v, "-dirty"), nil
+}
+
+func (g GitRunner) Porcelain() (bool, error) {
+	out, err := g.Run("status", "--porcelain")
+	if err != nil {
+		return false, err
+	}
+	return out != "", nil
+}
+
+// Resolve returns the commit a ref names. A missing ref fails like any other
+// error, so both report false.
+func (g GitRunner) Resolve(ref string) (string, bool) {
+	out, err := g.Run("rev-parse", "--verify", "--quiet", ref)
+	return out, err == nil && out != ""
+}
+
+// IsAncestor reports whether a is an ancestor of b. A missing ref reports false.
+func (g GitRunner) IsAncestor(a, b string) bool {
+	_, err := g.Run("merge-base", "--is-ancestor", a, b)
+	return err == nil
+}
+
+func (g GitRunner) Run(args ...string) (string, error) {
+	return g.r.Run("git", args, WithDir(g.dir))
 }
