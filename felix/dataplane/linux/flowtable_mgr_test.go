@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
@@ -34,12 +35,12 @@ var _ = Describe("flowtableManager", func() {
 		h := &recordingHandler{}
 		m := newFlowtableManager([]flowtableTarget{{handler: h}}, regexp.MustCompile("^eth"))
 
-		m.OnUpdate(&ifaceStateUpdate{Name: "eth0", State: ifacemonitor.StateUp})
-		m.OnUpdate(&ifaceStateUpdate{Name: "cali123", State: ifacemonitor.StateUp})
+		m.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "eth0", State: ifacemonitor.StateUp})
+		m.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "cali123", State: ifacemonitor.StateUp})
 		Expect(m.CompleteDeferredWork()).NotTo(HaveOccurred())
 		Expect(h.lastExternal).To(ConsistOf("eth0"))
 
-		m.OnUpdate(&ifaceStateUpdate{Name: "eth0", State: ifacemonitor.StateDown})
+		m.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "eth0", State: ifacemonitor.StateDown})
 		Expect(m.CompleteDeferredWork()).NotTo(HaveOccurred())
 		Expect(h.lastExternal).To(BeEmpty())
 	})
@@ -53,11 +54,11 @@ var _ = Describe("flowtableManager", func() {
 		Expect(m.CompleteDeferredWork()).NotTo(HaveOccurred())
 		Expect(h.lastOverlay).To(BeEmpty())
 
-		m.OnUpdate(&ifaceStateUpdate{Name: "vxlan.calico", State: ifacemonitor.StateUp})
+		m.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "vxlan.calico", State: ifacemonitor.StateUp})
 		Expect(m.CompleteDeferredWork()).NotTo(HaveOccurred())
 		Expect(h.lastOverlay).To(ConsistOf("vxlan.calico"))
 
-		m.OnUpdate(&ifaceStateUpdate{Name: "vxlan.calico", State: ifacemonitor.StateDown})
+		m.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "vxlan.calico", State: ifacemonitor.StateDown})
 		Expect(m.CompleteDeferredWork()).NotTo(HaveOccurred())
 		Expect(h.lastOverlay).To(BeEmpty())
 	})
@@ -70,9 +71,9 @@ var _ = Describe("flowtableManager", func() {
 			{handler: v6, overlayDevices: []string{"vxlan-v6.calico"}},
 		}, regexp.MustCompile("^eth"))
 
-		m.OnUpdate(&ifaceStateUpdate{Name: "vxlan.calico", State: ifacemonitor.StateUp})
-		m.OnUpdate(&ifaceStateUpdate{Name: "vxlan-v6.calico", State: ifacemonitor.StateUp})
-		m.OnUpdate(&ifaceStateUpdate{Name: "eth0", State: ifacemonitor.StateUp})
+		m.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "vxlan.calico", State: ifacemonitor.StateUp})
+		m.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "vxlan-v6.calico", State: ifacemonitor.StateUp})
+		m.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "eth0", State: ifacemonitor.StateUp})
 		Expect(m.CompleteDeferredWork()).NotTo(HaveOccurred())
 
 		Expect(v4.lastOverlay).To(ConsistOf("vxlan.calico"))
