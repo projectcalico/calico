@@ -1,0 +1,41 @@
+FROM almalinux:8
+LABEL org.opencontainers.image.authors="Daniel Fox <dan.fox@tigera.io>"
+ENV STREAM=el8
+
+ARG UID
+ARG GID
+ARG GO_VERSION
+
+RUN dnf install -y epel-release dnf-plugins-core && \
+	dnf config-manager --set-enabled powertools && \
+	dnf install -y \
+	dbus-devel \
+	elfutils-libelf-devel \
+	gcc \
+	git \
+	libidn-devel \
+	libpcap-devel \
+	make \
+	python3-devel \
+	python3-pbr \
+	python3-setuptools \
+	rpm-build \
+	zlib-devel \
+	&& dnf clean all
+
+# Install Go so we can rebuild calico-felix against EL8's older glibc (2.28);
+# the calico/go-build image links against a newer glibc than EL8 ships.
+RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" | tar -xz -C /usr/local && \
+	mkdir -p /go /go-cache && chmod 0777 /go /go-cache
+
+ENV PATH=/usr/local/go/bin:/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV GOROOT=/usr/local/go
+ENV GOPATH=/go
+
+# rpmbuild requires the current user to exist inside the container, copy in
+# some user/group entries calculated by the makefile.
+# use `--force` and `-o` since tests can run under root and command will fail with duplicate error
+RUN groupadd --force --gid=$GID user && useradd -o --home=/tmp --gid=$GID --uid=$UID user
+USER user
+
+WORKDIR /code
