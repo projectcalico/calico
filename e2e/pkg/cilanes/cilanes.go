@@ -270,6 +270,17 @@ type argoStep struct {
 	Env      []envVar     `yaml:"env"`
 	Matrix   []argoMatrix `yaml:"matrix"`
 	Commands string       `yaml:"commands"`
+	RunOnVM  struct {
+		Source string `yaml:"source"`
+	} `yaml:"runOnVM"`
+}
+
+// script is what the step runs: a VM step carries it in runOnVM.source.
+func (s argoStep) script() string {
+	if s.Commands != "" {
+		return s.Commands
+	}
+	return s.RunOnVM.Source
 }
 
 type argoMatrix struct {
@@ -293,14 +304,15 @@ func parseArgoModule(source string, data []byte) ([]Lane, error) {
 		if len(entries) == 0 {
 			entries = []argoMatrix{{}}
 		}
+		script := step.script()
 		for _, m := range entries {
 			e := base.apply(m.Env)
-			config, ok := moduleStepConfig(e, step.Commands)
+			config, ok := moduleStepConfig(e, script)
 			if !ok {
 				continue
 			}
 			e[envConfig] = config
-			lanes = append(lanes, e.lanes(source, matrixName(step.Name, m.Name), step.Commands)...)
+			lanes = append(lanes, e.lanes(source, matrixName(step.Name, m.Name), script)...)
 		}
 	}
 	return dedupe(lanes), nil
