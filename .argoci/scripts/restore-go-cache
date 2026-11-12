@@ -5,7 +5,7 @@
 set -euo pipefail
 
 step=${1:?usage: restore-go-cache <step> [cache-dir]}
-dir=${2:-/cache}
+dir=${2:-/cache/go}
 gunzip=gzip
 if command -v unpigz >/dev/null; then gunzip=unpigz; fi
 
