@@ -316,7 +316,7 @@ func TestErrorCodeIsWrittenByEveryResponseBuilder(t *testing.T) {
 	}
 
 	list := apiutil.NewJSONListHandler(func(ctx apicontext.Context, params Request) apiutil.ListResponse[Response] {
-		return apiutil.NewListResponse[Response]().SetStatus(http.StatusBadGateway).SetError("boom").SetErrorCode("QueryServerFailed")
+		return apiutil.NewListResponse[Response]().SetStatus(http.StatusBadGateway).SetError("boom").SetErrorCode("UpstreamFailed")
 	})
 	object := apiutil.NewJSONObjectHandler(func(ctx apicontext.Context, params Request) apiutil.ObjectResponse[Response] {
 		return apiutil.NewObjectResponse[Response]().SetStatus(http.StatusNotFound).SetError("boom").SetErrorCode("PoolNotFound")
@@ -329,7 +329,7 @@ func TestErrorCodeIsWrittenByEveryResponseBuilder(t *testing.T) {
 	})
 
 	for _, tc := range []errorCodeCase{
-		{"list", list.ServeHTTP, `{"error":"boom","code":"QueryServerFailed"}`},
+		{"list", list.ServeHTTP, `{"error":"boom","code":"UpstreamFailed"}`},
 		{"object", object.ServeHTTP, `{"error":"boom","code":"PoolNotFound"}`},
 		{"list or stream", stream.ServeHTTP, `{"error":"boom","code":"CacheNotSynced"}`},
 		{"no code set", uncoded.ServeHTTP, `{"error":"boom"}`},
