@@ -13,21 +13,3 @@
 // limitations under the License.
 
 package dataplanedefs
-
-import "github.com/vishvananda/netlink"
-
-const (
-	IPIPIfaceName    = "tunl0"
-	VXLANIfaceNameV4 = "vxlan.calico"
-	VXLANIfaceNameV6 = "vxlan-v6.calico"
-
-	DefaultRouteProto netlink.RouteProtocol = 80
-
-	BPFInDev  = "bpfin.cali"
-	BPFOutDev = "bpfout.cali"
-
-	// FlowtableName is the name of the nftables flowtable used for offloading established
-	// flows. The rule renderer references it via "flow offload @<name>" and the nftables
-	// table programs the flowtable object under the same name; the two must stay in lockstep.
-	FlowtableName = "calico"
-)
