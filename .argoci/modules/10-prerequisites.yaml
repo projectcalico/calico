@@ -43,7 +43,7 @@ steps:
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
     cache:
-      - {name: go, mode: write}
+      - {name: go, mode: write, dir: go}
     changes:
       in:
         - ^go\.mod$
@@ -69,11 +69,11 @@ steps:
       echo "CACHE-TEST go-cache compile $(( $(date +%s) - s ))s"
       du -sh .go-pkg-cache "$GO_MOD_ROOT/pkg/mod"
       s=$(date +%s)
-      tar -cf - .go-pkg-cache | pigz -1 > /cache/go-build.tar.gz &
-      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | pigz -1 > /cache/go-mod.tar.gz &
+      tar -cf - .go-pkg-cache | pigz -1 > /cache/go/go-build.tar.gz &
+      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | pigz -1 > /cache/go/go-mod.tar.gz &
       wait
       echo "CACHE-TEST go-cache pack $(( $(date +%s) - s ))s"
-      ls -l /cache
+      ls -l /cache/go
 
   # go vet fans out across every package, so it scales with the cores it gets.
   # Every module waits on this step, so it runs in the build image directly
@@ -305,13 +305,13 @@ steps:
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
     cache:
-      - {name: go, mode: read, path: /gocache}
-      - {name: image, mode: write}
+      - {name: go, mode: read}
+      - {name: image, mode: write, dir: calico-image}
     changes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     commands: |
-      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" calico-image-context /gocache
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" calico-image-context
       make -C cmd/calico image-context
       mkdir -p /cache/calico-image
       cp -a cmd/calico/bin/image-context-amd64/. /cache/calico-image/
@@ -335,14 +335,14 @@ steps:
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
     cache:
-      - {name: go, mode: read, path: /gocache}
+      - {name: go, mode: read}
     changes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     commands: |
       # TEMPORARY: the build image lacks the zstd CLI the libbpf tarball needs.
       dnf install -y -q zstd
-      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" calico-test-binaries /gocache
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" calico-test-binaries
       # Shipped for the Felix FVs, which would otherwise build them per lane.
       make -C cmd/calico build-cgo build-race
       artifact push workflow cmd/calico/bin/calico-cgo-amd64
@@ -363,11 +363,11 @@ steps:
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     cache:
       - {name: image, mode: read}
-      - {name: image, mode: write, path: /out}
+      - {name: image, mode: write, dir: calico-image-tar}
     buildkit:
       tag: calico/calico:latest-amd64
       context: /cache/calico-image
-      tar: /out/calico-image.tar
+      tar: /cache/calico-image-tar/calico-image.tar
 
   - name: build-calico-image
     depends: [calico-image-buildkit]
@@ -378,7 +378,7 @@ steps:
     cache:
       - {name: image, mode: read}
     commands: |
-      zstd -3 -T0 -o /tmp/calico-image.tar.zst /cache/calico-image.tar
+      zstd -3 -T0 -o /tmp/calico-image.tar.zst /cache/calico-image-tar/calico-image.tar
       artifact push workflow /tmp/calico-image.tar.zst
 
   # Tagged by a hash of the recipe, so an unchanged one is a pull rather than a

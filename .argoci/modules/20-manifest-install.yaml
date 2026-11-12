@@ -35,7 +35,7 @@ steps:
       - build-third-party-images
       - build-e2e-binaries
     cache:
-      - {name: kind-inputs, mode: write}
+      - {name: kind-inputs, mode: write, dir: kind-inputs}
     commands: |
       mkdir -p /cache/kind-inputs
       cd /cache/kind-inputs
@@ -58,7 +58,7 @@ steps:
     runOnVM:
       image: gcr.io/unique-caldron-775/scratch-utils:v0.6-test-190c538
       put:
-        - /cache/calico-image.tar:prefetched/calico-image.tar
+        - /cache/calico-image-tar/calico-image.tar:prefetched/calico-image.tar
         - /cache/kind-inputs/node-image.tar.zst:prefetched/node-image.tar.zst
         - /cache/kind-inputs/whisker-image.tar.zst:prefetched/whisker-image.tar.zst
         - /cache/kind-inputs/operator-image.tar.zst:prefetched/operator-image.tar.zst
