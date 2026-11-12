@@ -434,6 +434,8 @@ components:
       - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
       - ^felix/dataplane/linux/flowtabledeps/[^/]*\.go$
       - ^felix/dataplane/linux/ipipdeps/[^/]*\.go$
+      - ^felix/dataplane/linux/modprobe/[^/]*\.go$
+      - ^felix/dataplane/linux/procsys/[^/]*\.go$
       - ^felix/dataplane/linux/qos/[^/]*\.go$
       - ^felix/dataplane/linux/routedeps/[^/]*\.go$
       - ^felix/dataplane/linux/vxlandeps/[^/]*\.go$
@@ -1478,6 +1480,8 @@ components:
       - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
       - ^felix/dataplane/linux/flowtabledeps/[^/]*\.go$
       - ^felix/dataplane/linux/ipipdeps/[^/]*\.go$
+      - ^felix/dataplane/linux/modprobe/[^/]*\.go$
+      - ^felix/dataplane/linux/procsys/[^/]*\.go$
       - ^felix/dataplane/linux/qos/[^/]*\.go$
       - ^felix/dataplane/linux/routedeps/[^/]*\.go$
       - ^felix/dataplane/linux/vxlandeps/[^/]*\.go$

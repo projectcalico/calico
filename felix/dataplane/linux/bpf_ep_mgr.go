@@ -75,6 +75,7 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/bpfepdeps"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdeps"
+	"github.com/projectcalico/calico/felix/dataplane/linux/procsys"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandeps"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ethtool"
@@ -4252,7 +4253,7 @@ func (m *bpfEndpointManager) setAcceptLocal(iface string, val bool) error {
 	}
 
 	path := fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/accept_local", iface)
-	err := writeProcSys(path, numval)
+	err := procsys.Write(path, numval)
 	if err != nil {
 		if _, errif := net.InterfaceByName(iface); errif == nil {
 			logrus.WithField("err", err).Errorf("Failed to set %s to %s", path, numval)
@@ -4270,7 +4271,7 @@ func (m *bpfEndpointManager) setRPFilter(iface string, val int) error {
 	// We only support IPv4 for now.
 	path := fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", iface)
 	numval := strconv.Itoa(val)
-	if err := writeProcSys(path, numval); err != nil {
+	if err := procsys.Write(path, numval); err != nil {
 		return err
 	}
 
@@ -4282,7 +4283,7 @@ const jitHardenPath = "/proc/sys/net/core/bpf_jit_harden"
 
 func (m *bpfEndpointManager) setJITHardening(val int) error {
 	numval := strconv.Itoa(val)
-	err := writeProcSys(jitHardenPath, numval)
+	err := procsys.Write(jitHardenPath, numval)
 	if err != nil {
 		logrus.WithField("err", err).Errorf("Failed to set %s to %s", jitHardenPath, numval)
 		return err
@@ -4406,10 +4407,10 @@ func (m *bpfEndpointManager) configureBPFDevices() error {
 	logrus.Infof("Updated neigh for %s (arp %v)", bpfepdeps.BPFOutDev, arp)
 
 	if m.v4 != nil {
-		if err := configureProcSysForInterface(bpfepdeps.BPFInDev, 4, "0", writeProcSys); err != nil {
+		if err := procsys.ConfigureInterface(bpfepdeps.BPFInDev, 4, "0", procsys.Write); err != nil {
 			return fmt.Errorf("failed to configure %s parameters: %w", bpfepdeps.BPFOutDev, err)
 		}
-		if err := configureProcSysForInterface(bpfepdeps.BPFOutDev, 4, "0", writeProcSys); err != nil {
+		if err := procsys.ConfigureInterface(bpfepdeps.BPFOutDev, 4, "0", procsys.Write); err != nil {
 			return fmt.Errorf("failed to configure %s parameters: %w", bpfepdeps.BPFOutDev, err)
 		}
 	}

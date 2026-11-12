@@ -62,6 +62,8 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/bpfepdeps"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdeps"
+	"github.com/projectcalico/calico/felix/dataplane/linux/modprobe"
+	"github.com/projectcalico/calico/felix/dataplane/linux/procsys"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandeps"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
@@ -567,9 +569,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Best-effort load of the flowtable module before probing: on hosts where it ships as a
 		// module but isn't autoloaded, this lets detection succeed. Kernels that have it built in
 		// or genuinely lack it are unaffected and fall through to the probe result.
-		mp := newModProbe(moduleFlowTable, newRealCmd)
+		mp := modprobe.New(modprobe.ModuleFlowTable, modprobe.NewRealCmd)
 		out, err := mp.Exec()
-		log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", moduleFlowTable)
+		log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", modprobe.ModuleFlowTable)
 
 		supported, counterSupported := nftables.DetectFlowOffloadSupported(config.NewNftablesDataplane)
 		if !supported {
@@ -2717,20 +2719,20 @@ func (d *InternalDataplane) configureKernel() {
 	// conntrack without it being a kernel module, and so modprobe will fail.
 	// Log result at INFO level for troubleshooting, but otherwise ignore any
 	// failed modprobe calls.
-	mp := newModProbe(moduleConntrackSCTP, newRealCmd)
+	mp := modprobe.New(modprobe.ModuleConntrackSCTP, modprobe.NewRealCmd)
 	out, err := mp.Exec()
-	log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", moduleConntrackSCTP)
+	log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", modprobe.ModuleConntrackSCTP)
 
 	if d.config.IPForwarding == "Enabled" {
 		log.Info("Making sure IPv4 forwarding is enabled.")
-		err = writeProcSys("/proc/sys/net/ipv4/ip_forward", "1")
+		err = procsys.Write("/proc/sys/net/ipv4/ip_forward", "1")
 		if err != nil {
 			log.WithError(err).Error("Failed to set IPv4 forwarding sysctl")
 		}
 
 		if d.config.IPv6Enabled {
 			log.Info("Making sure IPv6 forwarding is enabled.")
-			err = writeProcSys("/proc/sys/net/ipv6/conf/all/forwarding", "1")
+			err = procsys.Write("/proc/sys/net/ipv6/conf/all/forwarding", "1")
 			if err != nil {
 				log.WithError(err).Error("Failed to set IPv6 forwarding sysctl")
 			}
@@ -2740,23 +2742,23 @@ func (d *InternalDataplane) configureKernel() {
 	}
 
 	// Enable conntrack packet and byte accounting.
-	err = writeProcSys("/proc/sys/net/netfilter/nf_conntrack_acct", "1")
+	err = procsys.Write("/proc/sys/net/netfilter/nf_conntrack_acct", "1")
 	if err != nil {
 		log.Warnf("failed to set enable conntrack packet and byte accounting: %v\n", err)
 	}
 
 	if d.config.BPFEnabled && d.config.BPFDisableUnprivileged {
 		log.Info("BPF enabled, disabling unprivileged BPF usage.")
-		err := writeProcSys("/proc/sys/kernel/unprivileged_bpf_disabled", "1")
+		err := procsys.Write("/proc/sys/kernel/unprivileged_bpf_disabled", "1")
 		if err != nil {
 			log.WithError(err).Error("Failed to set unprivileged_bpf_disabled sysctl")
 		}
 	}
 	if d.config.Wireguard.Enabled || d.config.Wireguard.EnabledV6 {
 		// wireguard module is available in linux kernel >= 5.6
-		mpwg := newModProbe(moduleWireguard, newRealCmd)
+		mpwg := modprobe.New(modprobe.ModuleWireguard, modprobe.NewRealCmd)
 		out, err = mpwg.Exec()
-		log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", moduleWireguard)
+		log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", modprobe.ModuleWireguard)
 	}
 }
 

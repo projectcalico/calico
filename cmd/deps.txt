@@ -394,6 +394,8 @@ local:felix/dataplane/linux/bpfepdeps
 local:felix/dataplane/linux/dataplanedefs
 local:felix/dataplane/linux/flowtabledeps
 local:felix/dataplane/linux/ipipdeps
+local:felix/dataplane/linux/modprobe
+local:felix/dataplane/linux/procsys
 local:felix/dataplane/linux/qos
 local:felix/dataplane/linux/routedeps
 local:felix/dataplane/linux/vxlandeps
