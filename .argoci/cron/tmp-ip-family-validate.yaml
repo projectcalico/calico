@@ -27,6 +27,8 @@ steps:
     env:
       - name: PROVISIONER
         value: aws-kubeadm
+      - name: TEST_TYPE
+        value: build
     commands: |
       make -C e2e bin/k8s/e2e-linux-amd64.test
       artifact push workflow e2e/bin/k8s/e2e-linux-amd64.test
