@@ -29,12 +29,12 @@ variable "UBUNTU_REPO_OVERRIDE" {
 # everything.
 
 group "default" {
-    targets = ["ubuntu", "centos"]
+    targets = ["centos"]
 }
 
 # All centos images
 group "centos" {
-    targets = ["centos7"]
+    targets = ["centos8"]
 }
 
 # All Ubuntu builds - in one big matrix, using one Dockerfile
@@ -54,11 +54,11 @@ target "ubuntu" {
 }
 
 # CentOS builds
-target "centos7" {
-  dockerfile = "centos7-build.Dockerfile.${ARCH}"
+target "centos8" {
+  dockerfile = "centos8-build.Dockerfile.${ARCH}"
   args = {
     UID = UID
     GID = GID
   }
-  tags = ["calico-build/centos7"]
+  tags = ["calico-build/centos8"]
 }
