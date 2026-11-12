@@ -102,7 +102,7 @@ func (l genericHandler[RequestParams, Body]) ServeHTTP(cfg RouterConfig, w http.
 	rsp := l.f(ctx, *params)
 	if err := rsp.ResponseWriter().WriteResponse(ctx, rsp.Status(), w); err != nil {
 		log.Error("failed to write response", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
+		WriteJSONError(w, http.StatusInternalServerError, CodeInternalError, "Internal Server Error")
 	}
 }
 
@@ -110,7 +110,7 @@ func parseRequestParams[RequestParams any](ctx apicontext.Context, cfg RouterCon
 	params, err := codec.DecodeAndValidateRequestParams[RequestParams](ctx, cfg.URLVars, req)
 	if err != nil {
 		ctx.Logger().Debug("Failed to decode request params.", "error", err)
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		WriteJSONError(w, http.StatusBadRequest, CodeInvalidParameter, err.Error())
 		return nil
 	}
 
@@ -129,6 +129,8 @@ func writeJSONResponse(w http.ResponseWriter, status int, src any) {
 	}
 }
 
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSONResponse(w, status, ErrorResponse{Error: message})
+// WriteJSONError writes an ErrorResponse body with the given status, code and
+// message, for adaptors that answer outside a response builder.
+func WriteJSONError(w http.ResponseWriter, status int, code, message string) {
+	writeJSONResponse(w, status, ErrorResponse{Error: message, Code: code})
 }

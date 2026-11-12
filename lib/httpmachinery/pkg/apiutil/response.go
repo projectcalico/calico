@@ -26,17 +26,35 @@ type ResponseWriter interface {
 	WriteResponse(apicontext.Context, int, http.ResponseWriter) error
 }
 
+// Error codes the apiutil handlers set on their own error bodies. Callers may
+// use any other UpperCamel code through SetErrorCode.
+const (
+	// CodeInvalidParameter is the code for a request that fails to decode or validate.
+	CodeInvalidParameter = "InvalidParameter"
+
+	// CodeMethodNotAllowed is the code for a request using an unsupported HTTP method.
+	CodeMethodNotAllowed = "MethodNotAllowed"
+
+	// CodeInternalError is the code for a failure that no other code names.
+	CodeInternalError = "InternalError"
+)
+
 type baseResponse struct {
-	status int
-	errMsg string
+	status  int
+	errMsg  string
+	errCode string
 }
 
 func (r baseResponse) Status() int {
 	return r.status
 }
 
+// ErrorResponse is the body of every error answer. Error is the human-readable
+// message; Code is a stable UpperCamel identifier clients can switch on, and is
+// omitted when the route sets none.
 type ErrorResponse struct {
 	Error string `json:"error"`
+	Code  string `json:"code,omitempty"`
 }
 
 // List represents a generic list response. It includes the total number of items that would have been returned if
@@ -75,6 +93,12 @@ func (l ListResponse[E]) SetError(err string) ListResponse[E] {
 	return l
 }
 
+// SetErrorCode sets the code written in the error body next to the message from SetError.
+func (l ListResponse[E]) SetErrorCode(code string) ListResponse[E] {
+	l.errCode = code
+	return l
+}
+
 func (l ListResponse[E]) SetMeta(meta ListMeta) ListResponse[E] {
 	l.rsp.Meta = meta
 	return l
@@ -89,7 +113,7 @@ func (l ListResponse[E]) SetItems(items []E) ListResponse[E] {
 // as a json list.
 func (l ListResponse[E]) ResponseWriter() ResponseWriter {
 	if l.errMsg != "" {
-		return &jsonErrorResponseWriter{l.errMsg}
+		return &jsonErrorResponseWriter{l.errMsg, l.errCode}
 	}
 
 	return &jsonListResponseWriter[E]{items: l.rsp}
@@ -116,6 +140,12 @@ func (o ObjectResponse[E]) SetError(err string) ObjectResponse[E] {
 	return o
 }
 
+// SetErrorCode sets the code written in the error body next to the message from SetError.
+func (o ObjectResponse[E]) SetErrorCode(code string) ObjectResponse[E] {
+	o.errCode = code
+	return o
+}
+
 func (o ObjectResponse[E]) SetObject(obj E) ObjectResponse[E] {
 	o.obj = obj
 	return o
@@ -123,7 +153,7 @@ func (o ObjectResponse[E]) SetObject(obj E) ObjectResponse[E] {
 
 func (o ObjectResponse[E]) ResponseWriter() ResponseWriter {
 	if o.errMsg != "" {
-		return &jsonErrorResponseWriter{o.errMsg}
+		return &jsonErrorResponseWriter{o.errMsg, o.errCode}
 	}
 
 	return &jsonObjectResponseWriter[E]{obj: o.obj}
@@ -147,6 +177,12 @@ func (rsp ListOrStreamResponse[E]) SetStatus(status int) ListOrStreamResponse[E]
 
 func (rsp ListOrStreamResponse[E]) SetError(err string) ListOrStreamResponse[E] {
 	rsp.errMsg = err
+	return rsp
+}
+
+// SetErrorCode sets the code written in the error body next to the message from SetError.
+func (rsp ListOrStreamResponse[E]) SetErrorCode(code string) ListOrStreamResponse[E] {
+	rsp.errCode = code
 	return rsp
 }
 
@@ -177,7 +213,7 @@ func (rsp ListOrStreamResponse[E]) SendStream(itr iter.Seq[E]) ListOrStreamRespo
 
 func (rsp ListOrStreamResponse[E]) ResponseWriter() ResponseWriter {
 	if err := rsp.errMsg; err != "" {
-		return &jsonErrorResponseWriter{err}
+		return &jsonErrorResponseWriter{err, rsp.errCode}
 	}
 
 	return rsp.responseWriter
@@ -230,9 +266,10 @@ func (rs *jsonObjectResponseWriter[Body]) WriteResponse(ctx apicontext.Context, 
 // jsonErrorResponseWriter is used to respond with a json error.
 type jsonErrorResponseWriter struct {
 	error string
+	code  string
 }
 
 func (rs *jsonErrorResponseWriter) WriteResponse(ctx apicontext.Context, status int, w http.ResponseWriter) error {
-	writeJSONResponse(w, status, ErrorResponse{Error: rs.error})
+	writeJSONResponse(w, status, ErrorResponse{Error: rs.error, Code: rs.code})
 	return nil
 }

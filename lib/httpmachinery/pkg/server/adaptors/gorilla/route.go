@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,6 +50,12 @@ func (g *registrar) RegisterAPIs(apis []apiutil.Endpoint, middlewares ...apiutil
 	return g.router
 }
 
+// NewRouter returns a router that answers an unsupported method with a JSON
+// error body carrying the MethodNotAllowed code rather than an empty 405.
 func NewRouter() server.Router {
-	return &registrar{router: mux.NewRouter()}
+	router := mux.NewRouter()
+	router.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiutil.WriteJSONError(w, http.StatusMethodNotAllowed, apiutil.CodeMethodNotAllowed, "method not allowed")
+	})
+	return &registrar{router: router}
 }
