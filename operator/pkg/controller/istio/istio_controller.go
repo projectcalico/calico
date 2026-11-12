@@ -19,11 +19,14 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
 	"github.com/go-logr/logr"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -35,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
@@ -97,6 +101,22 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		return fmt.Errorf("istio-controller failed to watch ClusterInformation resource: %w", err)
 	}
 
+	if err = utils.AddSecretsWatch(c, istio.OperatorCASecretName, common.OperatorNamespace()); err != nil {
+		return fmt.Errorf("istio-controller failed to watch Secret %s/%s: %w", common.OperatorNamespace(), istio.OperatorCASecretName, err)
+	}
+	for _, name := range []string{istio.CACertsSecretName, istio.IstioSelfSignedCASecretName} {
+		if err = utils.AddSecretsWatch(c, name, istio.IstioNamespace); err != nil {
+			return fmt.Errorf("istio-controller failed to watch Secret %s/%s: %w", istio.IstioNamespace, name, err)
+		}
+	}
+	if err = utils.AddConfigMapWatch(c, istio.TrustAnchorsConfigMapName, istio.IstioNamespace, &handler.EnqueueRequestForObject{}); err != nil {
+		return fmt.Errorf("istio-controller failed to watch ConfigMap %s/%s: %w", istio.IstioNamespace, istio.TrustAnchorsConfigMapName, err)
+	}
+	// The data plane and a CA signer transition wait for istiod to finish its rollout.
+	if err = utils.AddDeploymentWatch(c, istio.IstioIstiodDeploymentName, istio.IstioNamespace); err != nil {
+		return fmt.Errorf("istio-controller failed to watch Deployment %s/%s: %w", istio.IstioNamespace, istio.IstioIstiodDeploymentName, err)
+	}
+
 	if err = utils.AddPeriodicReconcile(c, utils.PeriodicReconcileTime, &handler.EnqueueRequestForObject{}); err != nil {
 		return fmt.Errorf("istio-controller failed to create periodic reconcile watch: %w", err)
 	}
@@ -135,6 +155,7 @@ func NewReconciler(o ReconcilerOptions) *ReconcileIstio {
 		status:   o.Status,
 		provider: o.Provider,
 		ext:      o.Ext,
+		now:      time.Now,
 	}
 }
 
@@ -145,6 +166,8 @@ type ReconcileIstio struct {
 	status   status.StatusManager
 	provider operatorv1.Provider
 	ext      extensions.Extensions
+	// now is the clock the CA signer transition runs on; nil means time.Now.
+	now func() time.Time
 }
 
 func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
@@ -253,6 +276,23 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		reqLogger.Info("Could not render all optional gateway API CRDs", "err", err)
 	}
 
+	live, err := r.liveWorkloads(ctx)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading the Istio workloads", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+
+	trust, err := r.resolveTrust(ctx)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading the Istio certificate authority", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+	if trust.notice != "" {
+		r.status.SetWarning(caWarningKey, trust.notice)
+	} else {
+		r.status.ClearWarning(caWarningKey)
+	}
+
 	// Render resources for Istio support
 	istioCfg := &istio.Configuration{
 		Installation:   installationSpec,
@@ -261,6 +301,12 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		IstioNamespace: istio.IstioNamespace,
 		Scheme:         r.scheme,
 		ClusterID:      clusterID,
+		Live:           live,
+		LocalCA:        trust.localCA,
+		CASource:       trust.source,
+		Transition:     trust.transition,
+		OwnRoots:       trust.ownRoots,
+		CurrentCACerts: trust.current,
 	}
 	istioComponentCRDs, istioComponent, err := istio.Istio(istioCfg)
 	if err != nil {
@@ -326,10 +372,58 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		r.status.ClearWarning(gatewayAPIWarningKey)
 	}
 
+	// A CA signer transition in progress sets when it next has to be looked at:
+	// to see istiod roll, or for a phase deadline.
+	result := reconcile.Result{RequeueAfter: trust.requeueAfter}
+
+	// An unusable CA is not fatal: the rest rendered, and the watches reconcile
+	// again once the Secret is fixed.
+	if len(trust.problems) > 0 {
+		r.status.SetDegraded(operatorv1.ResourceValidationError,
+			"Istio certificate authority needs attention: "+strings.Join(trust.problems, "; "), nil, reqLogger)
+		return result, nil
+	}
+
 	// Clear the degraded bit if we've reached this far.
 	r.status.ClearDegraded()
 
-	return reconcile.Result{}, nil
+	return result, nil
+}
+
+// liveWorkloads returns nil when there is no istiod to wait for. An istiod the
+// user told the operator to ignore never gets the new image, so waiting on it
+// would hold the data plane forever.
+func (r *ReconcileIstio) liveWorkloads(ctx context.Context) (*istio.LiveWorkloads, error) {
+	istiod := &appsv1.Deployment{}
+	if err := r.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, istiod); err != nil {
+		if errors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if utils.IgnoreObject(istiod) {
+		return nil, nil
+	}
+	live := &istio.LiveWorkloads{Istiod: istiod}
+	var err error
+	if live.CNI, err = r.getDaemonSet(ctx, istio.IstioCNIDaemonSetName); err != nil {
+		return nil, err
+	}
+	if live.ZTunnel, err = r.getDaemonSet(ctx, istio.IstioZTunnelDaemonSetName); err != nil {
+		return nil, err
+	}
+	return live, nil
+}
+
+func (r *ReconcileIstio) getDaemonSet(ctx context.Context, name string) (*appsv1.DaemonSet, error) {
+	ds := &appsv1.DaemonSet{}
+	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: istio.IstioNamespace}, ds); err != nil {
+		if errors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return ds, nil
 }
 
 func updateDefaults(istio *operatorv1.Istio) {

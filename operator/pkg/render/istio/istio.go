@@ -15,6 +15,7 @@
 package istio
 
 import (
+	"crypto/x509"
 	"fmt"
 	"strconv"
 	"strings"
@@ -44,6 +45,26 @@ type Configuration struct {
 	IstioNamespace string
 	Scheme         *runtime.Scheme
 	ClusterID      string
+
+	// Live is nil when nothing should wait for istiod, for example on a new
+	// install.
+	Live *LiveWorkloads
+
+	// LocalCA is the CA istiod signs with in this render. Nil renders no cacerts
+	// Secret, which leaves the one already in the cluster untouched.
+	LocalCA *CA
+	// CASource labels the rendered cacerts with where LocalCA came from.
+	CASource CASource
+	// Transition is the signer change in progress, nil outside one. Its roots
+	// join root-cert.pem and the published roots, and its phase is recorded on
+	// cacerts so the controller resumes it after a restart.
+	Transition *SignerTransition
+	// OwnRoots are the roots published for peers when LocalCA is nil; with a
+	// LocalCA its own roots are published.
+	OwnRoots []*x509.Certificate
+	// CurrentCACerts is the cacerts Secret already in the cluster. When LocalCA is
+	// nil it keeps the istiod roll hash stable.
+	CurrentCACerts *corev1.Secret
 }
 
 var _ render.Component = &IstioComponent{}
@@ -140,6 +161,9 @@ func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 					Type: corev1.SeccompProfileTypeRuntimeDefault,
 				},
 			},
+			// root-cert.pem carries two roots during a signer transition; istiod
+			// only accepts such a bundle as a multi-root mesh.
+			Pilot:                   &PilotConfig{Env: map[string]string{"ISTIO_MULTIROOT_MESH": "true"}},
 			Profile:                 "ambient",
 			TrustedZtunnelNamespace: IstioNamespace,
 			// Pods injected under the chart default cluster ID keep it until they
@@ -299,10 +323,7 @@ func (c *IstioComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Obj
 	for i := range res.ZTunnelDaemonSet.Spec.Template.Spec.Containers {
 		cont := &res.ZTunnelDaemonSet.Spec.Template.Spec.Containers[i]
 		if cont.Name == ztunnelContainerName {
-			cont.Env = append(cont.Env, corev1.EnvVar{
-				Name:  "TRANSPARENT_NETWORK_POLICIES",
-				Value: "true",
-			})
+			cont.Env = append(cont.Env, ztunnelEnv()...)
 			break
 		}
 	}
@@ -336,14 +357,118 @@ func (c *IstioComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Obj
 		secret.GetReferenceList(c.cfg.PullSecrets)...,
 	)
 
+	// cacerts is only ever replaced by a bundle that validated in full; without a
+	// local CA the cluster's current Secret stays, and the hash it carries keeps
+	// istiod from rolling.
+	cacerts := c.cfg.CurrentCACerts
+	if c.cfg.LocalCA != nil {
+		cacerts = c.cacertsSecret()
+		objs = append(objs, cacerts)
+	}
+	if cacerts != nil {
+		template := &res.IstiodDeployment.Spec.Template
+		if template.Annotations == nil {
+			template.Annotations = map[string]string{}
+		}
+		template.Annotations[CACertsHashAnnotation] = rmeta.SecretsAnnotationHash(cacerts)
+	}
+	if roots := c.ownRoots(); len(roots) > 0 {
+		objs = append(objs, c.trustAnchorsConfigMap(roots))
+	}
+
 	// Append Istio resources in order: Base, Istiod, CNI, ZTunnel
 	// This mimics the order from the documentation
 	objs = append(objs, res.Base...)
 	objs = append(objs, res.Istiod...)
-	objs = append(objs, res.CNI...)
-	objs = append(objs, res.ZTunnel...)
+	objs = append(objs, c.dataPlaneObjects()...)
 
 	return objs, toDelete
+}
+
+// ztunnelEnv is the environment the operator sets on ztunnel beyond the chart's.
+func ztunnelEnv() []corev1.EnvVar {
+	return []corev1.EnvVar{
+		{Name: "TRANSPARENT_NETWORK_POLICIES", Value: "true"},
+	}
+}
+
+// cacertsSecret renders the plug-in CA bundle istiod signs with. root-cert.pem
+// holds every root this cluster trusts, the two signers' during a transition;
+// the private key never leaves it. The transition annotations ride on the
+// Secret and not in its data, so a phase that only starts a clock leaves the
+// data hash, and with it istiod, alone.
+func (c *IstioComponent) cacertsSecret() *corev1.Secret {
+	ca := c.cfg.LocalCA
+	source := c.cfg.CASource
+	if source == "" {
+		source = CASourceOperatorManaged
+	}
+	return &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        CACertsSecretName,
+			Namespace:   c.cfg.IstioNamespace,
+			Labels:      map[string]string{CACertsLabel: string(source)},
+			Annotations: c.cfg.Transition.annotations(),
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			CACertKey:    ca.CertPEM,
+			CAKeyKey:     ca.KeyPEM,
+			CertChainKey: EncodeCertificates(ca.Chain...),
+			RootCertKey:  ComposeRootBundle(ca.Roots, c.cfg.Transition.roots()),
+		},
+	}
+}
+
+// IstiodRolledOut reports whether every istiod replica serves the given
+// cacerts: the pod template carries its hash, the Deployment controller has
+// observed that template, and the rollout is complete by the rule kubectl
+// rollout status applies, with at least one replica available to answer
+// ztunnel. A render is a request to roll; only this says the roll happened.
+func IstiodRolledOut(d *appsv1.Deployment, cacerts *corev1.Secret) bool {
+	if d == nil || cacerts == nil {
+		return false
+	}
+	if d.Spec.Template.Annotations[CACertsHashAnnotation] != rmeta.SecretsAnnotationHash(cacerts) {
+		return false
+	}
+	if d.Generation > d.Status.ObservedGeneration {
+		return false
+	}
+	replicas := int32(1)
+	if d.Spec.Replicas != nil {
+		replicas = *d.Spec.Replicas
+	}
+	s := d.Status
+	return s.UpdatedReplicas >= replicas &&
+		s.Replicas == s.UpdatedReplicas &&
+		s.AvailableReplicas >= s.UpdatedReplicas &&
+		s.AvailableReplicas > 0
+}
+
+// ownRoots are the roots this cluster publishes: those its signing CA chains
+// to and, during a transition, the other signer's, so other clusters accept
+// certificates from both.
+func (c *IstioComponent) ownRoots() []*x509.Certificate {
+	if c.cfg.LocalCA != nil {
+		return append(append([]*x509.Certificate{}, c.cfg.LocalCA.Roots...), c.cfg.Transition.roots()...)
+	}
+	return c.cfg.OwnRoots
+}
+
+func (c *IstioComponent) trustAnchorsConfigMap(roots []*x509.Certificate) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      TrustAnchorsConfigMapName,
+			Namespace: c.cfg.IstioNamespace,
+		},
+		Data: map[string]string{
+			RootCertKey:    string(ComposeRootBundle(roots)),
+			TrustDomainKey: DefaultTrustDomain,
+		},
+	}
 }
 
 // GetConfig implements ConfiguredComponent.
