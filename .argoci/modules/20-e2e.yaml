@@ -52,7 +52,7 @@ steps:
       - build-third-party-images
       - build-e2e-binaries
     cache:
-      - {name: e2e-kind-inputs, mode: write}
+      - {name: e2e-kind-inputs, mode: write, dir: e2e-kind-inputs}
     commands: |
       mkdir -p /cache/e2e-kind-inputs
       cd /cache/e2e-kind-inputs
@@ -112,7 +112,7 @@ steps:
       # An entry's unset ones are skipped.
       env: [E2E_TARGET, EXTRA_VALUES_FILES, KIND_CALICO_API_GROUP, E2E_TEST_CONFIG]
       put:
-        - /cache/calico-image.tar:prefetched/calico-image.tar
+        - /cache/calico-image-tar/calico-image.tar:prefetched/calico-image.tar
         - /cache/e2e-kind-inputs/node-image.tar.zst:prefetched/node-image.tar.zst
         - /cache/e2e-kind-inputs/whisker-image.tar.zst:prefetched/whisker-image.tar.zst
         - /cache/e2e-kind-inputs/operator-image.tar.zst:prefetched/operator-image.tar.zst
