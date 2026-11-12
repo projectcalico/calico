@@ -16,6 +16,7 @@ package config_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"time"
 
@@ -151,6 +152,17 @@ var _ = Describe("Config", func() {
 				Expect(rc.Migration).To(Equal(&config.MigrationControllerConfig{
 					PolicyNameMigrator: "Enabled",
 				}))
+			})
+
+			It("should preserve status through a JSON round trip", func() {
+				<-ctrl.ConfigChan()
+				status := m.update.Status
+				data, err := json.Marshal(status)
+				Expect(err).NotTo(HaveOccurred())
+
+				var stored v3.KubeControllersConfigurationStatus
+				Expect(json.Unmarshal(data, &stored)).To(Succeed())
+				Expect(stored).To(Equal(status))
 			})
 
 			It("should write status", func() {

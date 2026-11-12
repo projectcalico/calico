@@ -1186,16 +1186,6 @@ func (c *IPAMController) judgeAllocation(a *allocation, preferCache bool) alloca
 		return allocationOwnerGone
 	}
 
-	// The pod exists - check if it is still on the original node.
-	// TODO: Do we need this check?
-	if p.Spec.NodeName != "" && a.knode != "" && p.Spec.NodeName != a.knode {
-		// If the pod has been rescheduled to a new node, we can treat the old allocation as
-		// gone and clean it up.
-		fields := log.Fields{"old": a.knode, "new": p.Spec.NodeName}
-		logc.WithFields(fields).Info("Pod rescheduled on new node. Allocation no longer valid")
-		return allocationUnused
-	}
-
 	// Kubelet tears down every sandbox of a pod in a terminal phase, so none of its
 	// allocations can still be in use.
 	if p.Status.Phase == v1.PodSucceeded || p.Status.Phase == v1.PodFailed {
