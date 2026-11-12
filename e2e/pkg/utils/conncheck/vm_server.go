@@ -24,6 +24,8 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	kubevirtv1 "kubevirt.io/api/core/v1"
+
+	"github.com/projectcalico/calico/e2e/pkg/utils"
 )
 
 // VMServer wraps a KubeVirt VirtualMachineInstance as a Server. The test is
@@ -168,6 +170,10 @@ func (s *VMServer) ClusterIPv4(_ ...TargetOption) Target {
 
 func (s *VMServer) ClusterIPv6(_ ...TargetOption) Target {
 	return s.noService("ClusterIPv6")
+}
+
+func (s *VMServer) ClusterIPFor(f utils.IPFamily, _ ...TargetOption) Target {
+	return s.noService("ClusterIPFor(" + f.String() + ")")
 }
 
 func (s *VMServer) NodePortPort() int {

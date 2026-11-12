@@ -16,8 +16,9 @@ package utils
 
 import (
 	"context"
-	"net"
+	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/onsi/gomega"
@@ -31,6 +32,7 @@ import (
 const (
 	nodeBgpIpv4IPIPTunnelAddrAnnotation  = "projectcalico.org/IPv4IPIPTunnelAddr"
 	nodeBgpIpv4VXLANTunnelAddrAnnotation = "projectcalico.org/IPv4VXLANTunnelAddr"
+	nodeBgpIpv6VXLANTunnelAddrAnnotation = "projectcalico.org/IPv6VXLANTunnelAddr"
 )
 
 func RequireNodeCount(f *framework.Framework, count int) {
@@ -57,16 +59,22 @@ type NodesInfoGetter interface {
 	GetIPv4s() []string
 	GetIPv6s() []string
 	GetCalicoNames() []string
-	GetTunnelIPs() []string
+
+	// GetIPs and GetTunnelIPs are aligned with GetNames, with "" where a node has
+	// no address in the family. GetIPv4s/GetIPv6s drop those blanks, so their
+	// indices only line up with GetNames on clusters where every node has one.
+	GetIPs(f IPFamily) []string
+	GetTunnelIPs(f IPFamily) []string
+
+	Families() ([]IPFamily, error)
 }
 
-// nodesInfo implements the NodesInfoGetter interface
 type nodesInfo struct {
 	nodeNames       []string
-	nodeIPv4s       []string
-	nodeIPv6s       []string
 	calicoNodeNames []string
-	tunnelIPs       []string
+	internalIPs     [][]string
+	ips             map[IPFamily][]string
+	tunnelIPs       map[IPFamily][]string
 }
 
 func (n *nodesInfo) GetNames() []string {
@@ -74,27 +82,73 @@ func (n *nodesInfo) GetNames() []string {
 }
 
 func (n *nodesInfo) GetIPv4s() []string {
-	return n.nodeIPv4s
+	return nonEmpty(n.ips[IPv4])
 }
 
 func (n *nodesInfo) GetIPv6s() []string {
-	return n.nodeIPv6s
+	return nonEmpty(n.ips[IPv6])
 }
 
 func (n *nodesInfo) GetCalicoNames() []string {
 	return n.calicoNodeNames
 }
 
-func (n *nodesInfo) GetTunnelIPs() []string {
-	return n.tunnelIPs
+func (n *nodesInfo) GetIPs(f IPFamily) []string {
+	return n.ips[f]
+}
+
+func (n *nodesInfo) GetTunnelIPs(f IPFamily) []string {
+	return n.tunnelIPs[f]
+}
+
+// Families errors when only some nodes have a family: on a dual-stack lane that
+// is a broken node, and testing fewer families would hide it.
+func (n *nodesInfo) Families() ([]IPFamily, error) {
+	var families []IPFamily
+	var missing []string
+	for _, f := range allIPFamilies {
+		have := 0
+		for _, ip := range n.ips[f] {
+			if ip != "" {
+				have++
+			}
+		}
+		if have == 0 {
+			continue
+		}
+		families = append(families, f)
+		for i, ip := range n.ips[f] {
+			if ip == "" {
+				missing = append(missing, fmt.Sprintf("%s has no %s InternalIP (has %v)", n.nodeNames[i], f, n.internalIPs[i]))
+			}
+		}
+	}
+	if len(families) == 0 {
+		return nil, fmt.Errorf("no node has a parseable InternalIP: nodes %v, InternalIPs %v", n.nodeNames, n.internalIPs)
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("nodes disagree on IP families %v: %s", families, strings.Join(missing, "; "))
+	}
+	return families, nil
+}
+
+func nonEmpty(in []string) []string {
+	var out []string
+	for _, s := range in {
+		if s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // GetNodesInfo extracts node information from a Kubernetes NodeList and returns
 // a NodesInfoGetter interface that provides access to node details.
 func GetNodesInfo(f *framework.Framework, nodes *corev1.NodeList, masterOK bool) NodesInfoGetter {
-	// By default, Calico node name is host name, e.g. ip-10-0-0-108.
-	// Kubernetes node name could be different (ip-10-0-0-108.us-west-2.compute.internal) if cloud provider is aws.
-	var nodeNames, nodeIPv4s, nodeIPv6s, calicoNodeNames, tunnelIPs []string
+	info := &nodesInfo{
+		ips:       map[IPFamily][]string{},
+		tunnelIPs: map[IPFamily][]string{},
+	}
 	for _, node := range nodes.Items {
 		addrs := getNodeAddresses(&node, corev1.NodeInternalIP)
 		if len(addrs) == 0 {
@@ -106,32 +160,35 @@ func GetNodesInfo(f *framework.Framework, nodes *corev1.NodeList, masterOK bool)
 			continue
 		}
 
+		// By default, Calico node name is host name, e.g. ip-10-0-0-108.
+		// Kubernetes node name could be different (ip-10-0-0-108.us-west-2.compute.internal) if cloud provider is aws.
 		hostNames := getNodeAddresses(&node, corev1.NodeHostName)
 		if len(hostNames) == 0 {
 			framework.Failf("node %s failed to report a valid host name\n", node.Name)
 		}
 
-		nodeNames = append(nodeNames, node.Name)
+		info.addNode(node.Name, hostNames[0], addrs, node.Annotations)
+	}
+	return info
+}
 
-		// Separate IPv4 and IPv6 addresses
-		for _, addr := range addrs {
-			if net.ParseIP(addr).To4() == nil && net.ParseIP(addr) != nil {
-				nodeIPv6s = append(nodeIPv6s, addr)
-			} else {
-				nodeIPv4s = append(nodeIPv4s, addr)
-			}
+func (n *nodesInfo) addNode(name, calicoName string, internalIPs []string, annotations map[string]string) {
+	n.nodeNames = append(n.nodeNames, name)
+	n.calicoNodeNames = append(n.calicoNodeNames, calicoName)
+	n.internalIPs = append(n.internalIPs, internalIPs)
+	for _, f := range allIPFamilies {
+		n.ips[f] = append(n.ips[f], firstOfFamily(internalIPs, f))
+		n.tunnelIPs[f] = append(n.tunnelIPs[f], nodeTunnelIP(annotations, f))
+	}
+}
+
+func firstOfFamily(ips []string, f IPFamily) string {
+	for _, ip := range ips {
+		if fam, ok := FamilyOf(ip); ok && fam == f {
+			return ip
 		}
-
-		calicoNodeNames = append(calicoNodeNames, hostNames[0])
-		tunnelIPs = append(tunnelIPs, getNodeTunnelIP(&node))
 	}
-	return &nodesInfo{
-		nodeNames:       nodeNames,
-		nodeIPv4s:       nodeIPv4s,
-		nodeIPv6s:       nodeIPv6s,
-		calicoNodeNames: calicoNodeNames,
-		tunnelIPs:       tunnelIPs,
-	}
+	return ""
 }
 
 // AwaitReadySchedulableNodesInfo polls until at least minCount ready and
@@ -163,12 +220,16 @@ func AwaitReadySchedulableNodesInfo(f *framework.Framework, minCount int, master
 	return info
 }
 
-func getNodeTunnelIP(node *corev1.Node) string {
-	if ip, ok := node.Annotations[nodeBgpIpv4IPIPTunnelAddrAnnotation]; ok {
-		return ip
+// nodeTunnelIP prefers IPIP for IPv4; IPIP has no IPv6 form.
+func nodeTunnelIP(annotations map[string]string, f IPFamily) string {
+	keys := []string{nodeBgpIpv4IPIPTunnelAddrAnnotation, nodeBgpIpv4VXLANTunnelAddrAnnotation}
+	if f == IPv6 {
+		keys = []string{nodeBgpIpv6VXLANTunnelAddrAnnotation}
 	}
-	if ip, ok := node.Annotations[nodeBgpIpv4VXLANTunnelAddrAnnotation]; ok {
-		return ip
+	for _, k := range keys {
+		if ip, ok := annotations[k]; ok {
+			return ip
+		}
 	}
 	return ""
 }
