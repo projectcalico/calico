@@ -12,36 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package modprobe
 
 import "os/exec"
 
 const (
-	// Modprobe binary on the system
 	cmdModProbe = "modprobe"
 
 	// Kernel module needed for SCTP protocol support on some kernels
-	moduleConntrackSCTP = "nf_conntrack_proto_sctp"
+	ModuleConntrackSCTP = "nf_conntrack_proto_sctp"
 
 	// Kernel module to enable wireguard encryption.
-	moduleWireguard = "wireguard"
+	ModuleWireguard = "wireguard"
 
 	// Kernel module needed for nftables flowtable offload.
-	moduleFlowTable = "nf_flow_table"
+	ModuleFlowTable = "nf_flow_table"
 )
 
-type modProbe struct {
+type ModProbe struct {
 	module string
-	newCmd cmdFactory
+	newCmd CmdFactory
 }
 
-type cmdIface interface {
+type Cmd interface {
 	Output() ([]byte, error)
 }
 
-type cmdFactory func(name string, arg ...string) cmdIface
+type CmdFactory func(name string, arg ...string) Cmd
 
-func newRealCmd(name string, arg ...string) cmdIface {
+func NewRealCmd(name string, arg ...string) Cmd {
 	cmd := exec.Command(name, arg...)
 	return (*cmdAdapter)(cmd)
 }
@@ -52,11 +51,11 @@ func (c *cmdAdapter) Output() ([]byte, error) {
 	return (*exec.Cmd)(c).Output()
 }
 
-func newModProbe(module string, newCmd cmdFactory) modProbe {
-	return modProbe{module, newCmd}
+func New(module string, newCmd CmdFactory) ModProbe {
+	return ModProbe{module, newCmd}
 }
 
-func (m modProbe) Exec() (string, error) {
+func (m ModProbe) Exec() (string, error) {
 	cmd := m.newCmd(cmdModProbe, m.module)
 	out, err := cmd.Output()
 	return string(out), err
