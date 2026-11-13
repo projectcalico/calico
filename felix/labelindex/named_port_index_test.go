@@ -1350,6 +1350,117 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 			set, ok := recorder.ipsets["villains"]
 			Expect(ok).To(BeTrue())
 			Expect(set).To(HaveLen(1))
+			// Member must be the /16 CIDR, not a /32 single address —
+			// regression test for the network-set bug where the
+			// prefix was lost when the input was misclassified as a
+			// single-address V4 endpoint variant.
+			expected := ipsetmember.MakeCIDROrIPOnly(ip.MustParseCIDROrIP("192.168.0.0/16"))
+			Expect(set).To(HaveKey(expected))
+		})
+
+		It("should emit a single /24 v4 CIDR member intact", func() {
+			uut.OnUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key: model.NetworkSetKey{Name: "ns24"},
+					Value: &model.NetworkSet{
+						Nets: []calinet.IPNet{
+							{IPNet: net.IPNet{
+								IP:   net.IP{10, 0, 0, 0},
+								Mask: net.IPMask{255, 255, 255, 0},
+							}},
+						},
+						Labels: uniquelabels.Make(map[string]string{"team": "red"}),
+					},
+				},
+			})
+			s, err := selector.Parse("team == 'red'")
+			Expect(err).ToNot(HaveOccurred())
+			uut.UpdateIPSet("red", s, ipsetmember.ProtocolNone, "")
+			set := recorder.ipsets["red"]
+			Expect(set).To(HaveLen(1))
+			Expect(set).To(HaveKey(
+				ipsetmember.MakeCIDROrIPOnly(ip.MustParseCIDROrIP("10.0.0.0/24")),
+			))
+		})
+
+		It("should emit multiple distinct v4 CIDRs", func() {
+			uut.OnUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key: model.NetworkSetKey{Name: "multi"},
+					Value: &model.NetworkSet{
+						Nets: []calinet.IPNet{
+							{IPNet: net.IPNet{IP: net.IP{10, 1, 0, 0}, Mask: net.IPMask{255, 255, 255, 0}}},
+							{IPNet: net.IPNet{IP: net.IP{10, 2, 0, 0}, Mask: net.IPMask{255, 255, 0, 0}}},
+						},
+						Labels: uniquelabels.Make(map[string]string{"team": "red"}),
+					},
+				},
+			})
+			s, err := selector.Parse("team == 'red'")
+			Expect(err).ToNot(HaveOccurred())
+			uut.UpdateIPSet("red", s, ipsetmember.ProtocolNone, "")
+			set := recorder.ipsets["red"]
+			Expect(set).To(HaveLen(2))
+			Expect(set).To(HaveKey(
+				ipsetmember.MakeCIDROrIPOnly(ip.MustParseCIDROrIP("10.1.0.0/24")),
+			))
+			Expect(set).To(HaveKey(
+				ipsetmember.MakeCIDROrIPOnly(ip.MustParseCIDROrIP("10.2.0.0/16")),
+			))
+		})
+
+		It("should emit a v6 /64 CIDR member intact", func() {
+			uut.OnUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key: model.NetworkSetKey{Name: "v6ns"},
+					Value: &model.NetworkSet{
+						Nets: []calinet.IPNet{
+							{IPNet: net.IPNet{
+								IP:   net.ParseIP("fd00:1::"),
+								Mask: net.CIDRMask(64, 128),
+							}},
+						},
+						Labels: uniquelabels.Make(map[string]string{"team": "blue"}),
+					},
+				},
+			})
+			s, err := selector.Parse("team == 'blue'")
+			Expect(err).ToNot(HaveOccurred())
+			uut.UpdateIPSet("blue", s, ipsetmember.ProtocolNone, "")
+			set := recorder.ipsets["blue"]
+			Expect(set).To(HaveLen(1))
+			Expect(set).To(HaveKey(
+				ipsetmember.MakeCIDROrIPOnly(ip.MustParseCIDROrIP("fd00:1::/64")),
+			))
+		})
+
+		It("should handle a mixed v4+v6 network set with non-host prefixes", func() {
+			uut.OnUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key: model.NetworkSetKey{Name: "mixed"},
+					Value: &model.NetworkSet{
+						Nets: []calinet.IPNet{
+							{IPNet: net.IPNet{IP: net.IP{10, 0, 0, 0}, Mask: net.IPMask{255, 255, 255, 0}}},
+							{IPNet: net.IPNet{
+								IP:   net.ParseIP("fd00:2::"),
+								Mask: net.CIDRMask(48, 128),
+							}},
+						},
+						Labels: uniquelabels.Make(map[string]string{"team": "green"}),
+					},
+				},
+			})
+			s, err := selector.Parse("team == 'green'")
+			Expect(err).ToNot(HaveOccurred())
+			uut.UpdateIPSet("green", s, ipsetmember.ProtocolNone, "")
+			set := recorder.ipsets["green"]
+			Expect(set).To(HaveLen(2))
+			Expect(set).To(HaveKey(
+				ipsetmember.MakeCIDROrIPOnly(ip.MustParseCIDROrIP("10.0.0.0/24")),
+			))
+			Expect(set).To(HaveKey(
+				ipsetmember.MakeCIDROrIPOnly(ip.MustParseCIDROrIP("fd00:2::/48")),
+			))
 		})
 	})
 
