@@ -15,11 +15,67 @@
 package daemon
 
 import (
+	"os"
+	"runtime"
+	"syscall"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 )
+
+var _ = Describe("manageShutdown", func() {
+	var exitCodes chan int
+
+	BeforeEach(func() {
+		// Both stubs end the calling goroutine, as a real exit would end
+		// the process, so nothing after the exit call runs.
+		exitCodes = make(chan int, 1)
+		recordExit := func(rc int) {
+			exitCodes <- rc
+			runtime.Goexit()
+		}
+
+		oldExit := osExit
+		osExit = recordExit
+		DeferCleanup(func() { osExit = oldExit })
+
+		// Fatal logs exit through logrus rather than through osExit.
+		logger := log.StandardLogger()
+		oldLogExit := logger.ExitFunc
+		logger.ExitFunc = recordExit
+		DeferCleanup(func() { logger.ExitFunc = oldLogExit })
+	})
+
+	DescribeTable("exits zero when asked to stop",
+		func(sig os.Signal) {
+			signalChan := make(chan os.Signal, 1)
+			signalChan <- sig
+			go manageShutdown(signalChan, make(chan string), nil, nil)
+
+			Eventually(exitCodes, "5s").Should(Receive(Equal(0)))
+		},
+		Entry("by SIGTERM", syscall.SIGTERM),
+		Entry("by SIGINT", syscall.SIGINT),
+	)
+
+	It("exits non-zero on a fatal error", func() {
+		failureReportChan := make(chan string, 1)
+		failureReportChan <- reasonFatalError
+		go manageShutdown(make(chan os.Signal), failureReportChan, nil, nil)
+
+		Eventually(exitCodes, "10s").Should(Receive(Not(Equal(0))))
+	})
+
+	It("exits with the config-change code on SIGHUP", func() {
+		signalChan := make(chan os.Signal, 1)
+		signalChan <- syscall.SIGHUP
+		go manageShutdown(signalChan, make(chan string), nil, nil)
+
+		Eventually(exitCodes, "10s").Should(Receive(Equal(configChangedRC)))
+	})
+})
 
 var _ = Describe("shutDownProcess", func() {
 	// shutDownProcess never returns: it reports the reason to the shutdown
