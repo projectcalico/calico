@@ -45,9 +45,7 @@ clean-generated:
 protobuf: $(GENERATED_FILES)
 
 proto/healthz.pb.go: proto/healthz.proto
-	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
-		$(CALICO_BUILD) \
-			sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative healthz.proto'
+	$(DOCKER_GO_BUILD) sh -c 'protoc --proto_path=proto --go_out=proto --go-grpc_out=. --go_opt=paths=source_relative healthz.proto'
 	$(MAKE) fix-changed
 
 ###############################################################################
@@ -57,7 +55,7 @@ proto/healthz.pb.go: proto/healthz.proto
 ## Run the tests in a container. Useful for CI, Mac dev
 ut: protobuf
 	mkdir -p report
-	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "cd /go/src/$(PACKAGE_NAME) && gotestsum --junitfile report/app_policy_ut.xml -- -v -race ./..."
+	$(DOCKER_GO_BUILD) /bin/bash -c "gotestsum --junitfile report/app_policy_ut.xml -- -v -race ./..."
 
 ###############################################################################
 # CI
