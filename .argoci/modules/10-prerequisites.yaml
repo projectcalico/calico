@@ -31,7 +31,7 @@ steps:
   # TEMPORARY: builds this commit's Go caches once, for every step that compiles
   # with the same settings: the module cache for every module in the repo and the
   # upstream trees the third-party and Istio builds use, and the build cache from
-  # check-go's vet and the calico binary. Handed over the volume cache in place of a
+  # every package and the calico binary. Handed over the volume cache in place of a
   # GCS restore. VM steps take only the modules: a VM has no module proxy, and
   # without them each one downloads its own through the shared NAT.
   - name: go-cache
@@ -77,12 +77,12 @@ steps:
       done
       echo "CACHE-TEST go-cache download $(( $(date +%s) - s ))s"
       # Through make, so the settings are the ones the readers build with. Both at
-      # once: vet's tail leaves cores idle that the binary's build can use.
+      # once: the package build's tail leaves cores idle that the binary's can use.
       s=$(date +%s)
-      make go-vet &
-      vet=$!
+      make go-build-all &
+      pkgs=$!
       make -C cmd/calico build
-      wait "$vet"
+      wait "$pkgs"
       echo "CACHE-TEST go-cache compile $(( $(date +%s) - s ))s"
       du -sh .go-pkg-cache "$GO_MOD_ROOT/pkg/mod"
       s=$(date +%s)
