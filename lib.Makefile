@@ -209,14 +209,11 @@ define build_binary_dir
 		sh -c '$(GIT_CONFIG_SSH) mkdir -p $(1)/$(dir $(3)) && CGO_ENABLED=0 go build -C $(1) -o $(3) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(2)'
 endef
 
-# For windows builds that do not require cgo.
+# For windows builds that do not require cgo. The target is set inside the shell,
+# where it overrides the GOOS and GOARCH a native build exports.
 define build_windows_binary
-	$(DOCKER_RUN) \
-		-e CGO_ENABLED=0 \
-		-e GOARCH=amd64 \
-		-e GOOS=windows \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS) -s -w" $(1)'
+	$(DOCKER_GO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS) -s -w" $(1)'
 endef
 
 # Images used in build / test across multiple directories.
@@ -1988,7 +1985,9 @@ kind-reload:
 # Common functions for setting up a local envtest environment.
 ###############################################################################
 ENVTEST_DIR := $(REPO_ROOT)/hack/test/envtest
-ENVTEST_CONTAINER_DIR := /go/src/github.com/projectcalico/calico/hack/test/envtest
+# The same directory as the go-build recipes see it: the container's mount, or the
+# checkout itself natively.
+ENVTEST_CONTAINER_DIR := $(BUILD_REPO_ROOT)/hack/test/envtest
 # Derive major.minor from K8S_VERSION (e.g. v1.34.3 -> 1.34.x) for setup-envtest.
 # Envtest publishes binaries per minor version, not per patch, so we use a wildcard.
 # Skip on Windows: envtest is Linux-only test infra; bash sed/cut would error otherwise.

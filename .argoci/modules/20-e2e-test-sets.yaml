@@ -3,28 +3,31 @@ version: condensed-module
 
 defaults:
   timeout: 30m
-  secretBundles: [banzai-secrets]
 
 steps:
   # Compiles the same e2e.test as build-e2e-binaries, so it reads that step's
   # cache; Go, not the restored files, decides what is stale.
   - name: e2e-test-set-drift
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     env:
       - name: BUILD_CACHE_GROUP
         value: e2e
-    depends: [check-go, go-cache]
-    checkout: true
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    depends: [calico-test-binaries, check-go, go-cache]
     cache:
       - {name: go, mode: read, path: /cache/go}
-    runOnVM:
-      createVM:
-        machineType: e2-standard-8
-      env: [BUILD_CACHE_GROUP]
-      put:
-        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
-      source: |
-        set -e
-        .argoci/scripts/restore-go-cache e2e-test-set-drift ~/.go-mod
-        repo="$(pwd)"
-        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
-        make -C e2e check-test-set
+      - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
+    requests: {cpu: 5000m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    commands: |
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" e2e-test-set-drift
+      # The libbpf tarball ships zstd-compressed and the build image lacks the CLI.
+      dnf install -y -q zstd
+      tar --use-compress-program="zstd -d" -xf /cache/calico-test-binaries/libbpf-amd64.tar.zst -C felix/bpf-gpl
+      make -C e2e check-test-set

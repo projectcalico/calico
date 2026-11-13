@@ -309,33 +309,31 @@ steps:
       source felix/.semaphore/fv-prologue
       source felix/.semaphore/fv-epilogue
 
+  # Cross-compiles only, so it needs no daemon.
   - name: felix-build-windows
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
+      - name: NATIVE_GO_BUILD
+        value: "true"
     depends: [go-cache]
-    checkout: true
     cache:
       - {name: win-fv, mode: write, path: /cache/win-fv}
       - {name: go, mode: read, path: /cache/go}
-    secretBundles: [banzai-secrets]
-    runOnVM:
-      createVM:
-        machineType: e2-standard-8
-      env: [BUILD_CACHE_GROUP, NO_LIBBPF_CLONE]
-      put:
-        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
-      get:
-        - out:/cache/win-fv
-      source: |
-        set -e
-        .argoci/scripts/restore-go-cache felix-build-windows ~/.go-mod
-        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
-        cd felix
-        # The Windows binaries need neither the calico image nor its binary.
-        make REMOTE_DEPS= bin/calico-felix.exe fv/win-fv.exe
-        mkdir -p ~/out
-        cp fv/win-fv.exe ~/out/
+    requests: {cpu: 6000m, memory: 8Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    commands: |
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" felix-build-windows
+      cd felix
+      # The Windows binaries need neither the calico image nor its binary.
+      make REMOTE_DEPS= bin/calico-felix.exe fv/win-fv.exe
+      cp fv/win-fv.exe /cache/win-fv/
 
   # Kubeadm on Azure VMs, installed from this commit's images. On a machine of its
   # own: the Azure Service Operator that builds the cluster runs in a local kind

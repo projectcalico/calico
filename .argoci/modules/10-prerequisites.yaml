@@ -680,12 +680,17 @@ steps:
   # The sole writer of the e2e cache group, so its key never flips between two
   # steps' differing package sets.
   - name: build-e2e-binaries
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     env:
       - name: BUILD_CACHE_GROUP
         value: e2e
       - name: STORE_BUILD_CACHE
         value: "true"
-    checkout: true
+      - name: NATIVE_GO_BUILD
+        value: "true"
     timeout: 1h
     depends: [calico-test-binaries, go-cache]
     changes:
@@ -695,28 +700,20 @@ steps:
       - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
       - {name: e2e-binaries, mode: write, path: /cache/e2e-binaries}
       - {name: go, mode: read, path: /cache/go}
-    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
-    # VM steps alone, since a pod step would hand it to the code under test.
-    secretBundles: [banzai-secrets]
-    runOnVM:
-      createVM:
-        machineType: e2-standard-8
-      env: [BUILD_CACHE_GROUP, STORE_BUILD_CACHE]
-      put:
-        - /cache/calico-test-binaries/libbpf-amd64.tar.zst:prefetched/libbpf-amd64.tar.zst
-        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
-      get:
-        - out:/cache/e2e-binaries
-      source: |
-        set -eo pipefail
-        .argoci/scripts/restore-go-cache build-e2e-binaries ~/.go-mod
-        for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
-        tar --use-compress-program="zstd -d" -xf ~/prefetched/libbpf-amd64.tar.zst -C felix/bpf-gpl
-        make -C e2e build
-        make bin/ginkgo
-        make -C e2e/images/rapidclient build
-        mkdir -p ~/out
-        tar --use-compress-program="zstd -3" -cf ~/out/e2e-binaries.tar.zst e2e/bin bin/ginkgo e2e/images/rapidclient/bin
+    requests: {cpu: 6000m, memory: 8Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    commands: |
+      set -o pipefail
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" build-e2e-binaries
+      # The libbpf tarball ships zstd-compressed and the build image lacks the CLI.
+      dnf install -y -q zstd
+      tar --use-compress-program="zstd -d" -xf /cache/calico-test-binaries/libbpf-amd64.tar.zst -C felix/bpf-gpl
+      make -C e2e build
+      make bin/ginkgo
+      make -C e2e/images/rapidclient build
+      tar --use-compress-program="zstd -3" -cf /cache/e2e-binaries/e2e-binaries.tar.zst e2e/bin bin/ginkgo e2e/images/rapidclient/bin
 
   # The nightly repeats the CI module list; this catches the two drifting.
   - name: check-cron-coverage
