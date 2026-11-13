@@ -261,7 +261,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   sandcat_inline=()
   sandcat_xtrace=""
   [[ $- == *x* ]] && sandcat_xtrace=1 && set +x
-  if sandcat_env=$(SANDCAT_TOTAL_BUDGET="${SANDCAT_TOTAL_BUDGET:-10m}" "${sandcat_sh}" inline-env \
+  if sandcat_env=$("${sandcat_sh}" inline-env \
       --kubeconfig "${BZ_LOCAL_DIR}/kubeconfig" --source-dir "$(pwd)"); then
     eval "${sandcat_env}"
     export SANDCAT_GEMINI_KEY="${SANDCAT_INLINE_GEMINI_KEY}"
