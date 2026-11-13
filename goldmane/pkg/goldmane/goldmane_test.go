@@ -427,6 +427,9 @@ func TestManyFlows(t *testing.T) {
 		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
+
+	// Debug logs for 20k flows written to the test log take about 20s under -race.
+	utils.ConfigureLogging("INFO")
 	<-gm.Run(now)
 
 	// Create 20k flows and send them as fast as we can. See how Goldmane handles it.
