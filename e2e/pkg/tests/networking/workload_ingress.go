@@ -283,8 +283,9 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred())
 
 			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 3, false)
-			families, err = nodesInfo.Families()
-			Expect(err).NotTo(HaveOccurred(), "workload ingress tests need every node to have the cluster's IP families")
+			families, err = utils.PoolFamilies(cli)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(nodesInfo.CheckFamilies(families, 3)).To(Succeed())
 			nodeNames = nodesInfo.GetNames()[:3]
 			nodeIPs = map[utils.IPFamily][]string{}
 			tunnelIPs = map[utils.IPFamily][]string{}
@@ -519,18 +520,7 @@ var _ = describe.CalicoDescribe(
 
 			extNode := externalnode.MustNewClient()
 
-			extIPsByFamily := map[utils.IPFamily][]string{
-				utils.IPv4: extNode.IPs(),
-				utils.IPv6: extNode.IPv6s(),
-			}
-			var extIPs []string
-			for _, fam := range families {
-				// Without an address in the family, the CIDR allow rule can't
-				// match that family's probe and the spec would fail as a policy bug.
-				Expect(extIPsByFamily[fam]).NotTo(BeEmpty(),
-					"external node %s has no %s address, but the cluster's nodes do", extNode.SSHIP(), fam)
-				extIPs = append(extIPs, extIPsByFamily[fam]...)
-			}
+			extIPs := externalNodeIPs(extNode, families)
 			logrus.Infof("External node IPs: %v", extIPs)
 
 			// Deploy the server on svcNode.
@@ -735,6 +725,24 @@ func ingressDeletePolicy(f *framework.Framework, namespace, name string) {
 
 // ingressHostCIDRs returns a single-address CIDR for each IP, deduplicating and
 // skipping empty or unparseable values.
+// externalNodeIPs fails up front when the external node lacks a family: without
+// a source address in it, every check in that family would fail and read as a
+// policy or dataplane bug.
+func externalNodeIPs(ext *externalnode.Client, families []utils.IPFamily) []string {
+	var ips []string
+	for _, fam := range families {
+		got, err := ext.AddressesOf(fam)
+		if err != nil {
+			framework.Failf("could not read external node %s's %s addresses: %v", ext.SSHIP(), fam, err)
+		}
+		if len(got) == 0 {
+			framework.Failf("external node %s has no %s address, but the cluster's IP pools include %s", ext.SSHIP(), fam, fam)
+		}
+		ips = append(ips, got...)
+	}
+	return ips
+}
+
 func ingressHostCIDRs(ips []string) []string {
 	seen := map[string]bool{}
 	var cidrs []string

@@ -16,6 +16,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -56,17 +57,14 @@ func RequireNodeCount(f *framework.Framework, count int) {
 
 type NodesInfoGetter interface {
 	GetNames() []string
-	GetIPv4s() []string
-	GetIPv6s() []string
 	GetCalicoNames() []string
 
 	// GetIPs and GetTunnelIPs are aligned with GetNames, with "" where a node has
-	// no address in the family. GetIPv4s/GetIPv6s drop those blanks, so their
-	// indices only line up with GetNames on clusters where every node has one.
+	// no address in the family.
 	GetIPs(f IPFamily) []string
 	GetTunnelIPs(f IPFamily) []string
 
-	Families() ([]IPFamily, error)
+	CheckFamilies(families []IPFamily, n int) error
 }
 
 type nodesInfo struct {
@@ -81,14 +79,6 @@ func (n *nodesInfo) GetNames() []string {
 	return n.nodeNames
 }
 
-func (n *nodesInfo) GetIPv4s() []string {
-	return nonEmpty(n.ips[IPv4])
-}
-
-func (n *nodesInfo) GetIPv6s() []string {
-	return nonEmpty(n.ips[IPv6])
-}
-
 func (n *nodesInfo) GetCalicoNames() []string {
 	return n.calicoNodeNames
 }
@@ -101,45 +91,25 @@ func (n *nodesInfo) GetTunnelIPs(f IPFamily) []string {
 	return n.tunnelIPs[f]
 }
 
-// Families errors when only some nodes have a family: on a dual-stack lane that
-// is a broken node, and testing fewer families would hide it.
-func (n *nodesInfo) Families() ([]IPFamily, error) {
-	var families []IPFamily
-	var missing []string
-	for _, f := range allIPFamilies {
-		have := 0
-		for _, ip := range n.ips[f] {
-			if ip != "" {
-				have++
-			}
-		}
-		if have == 0 {
-			continue
-		}
-		families = append(families, f)
-		for i, ip := range n.ips[f] {
-			if ip == "" {
-				missing = append(missing, fmt.Sprintf("%s has no %s InternalIP (has %v)", n.nodeNames[i], f, n.internalIPs[i]))
-			}
-		}
+// CheckFamilies checks only the first count nodes, the ones a spec targets:
+// other nodes in the cluster don't affect the checks, so they shouldn't fail them.
+func (n *nodesInfo) CheckFamilies(families []IPFamily, count int) error {
+	if len(n.nodeNames) < count {
+		return fmt.Errorf("need %d nodes, have %d (%v)", count, len(n.nodeNames), n.nodeNames)
 	}
-	if len(families) == 0 {
-		return nil, fmt.Errorf("no node has a parseable InternalIP: nodes %v, InternalIPs %v", n.nodeNames, n.internalIPs)
+	var missing []string
+	for i := 0; i < count; i++ {
+		for _, f := range families {
+			if n.ips[f][i] == "" {
+				missing = append(missing, fmt.Sprintf("node %s has no %s InternalIP (has %v), but the cluster's IP pools include %s",
+					n.nodeNames[i], f, n.internalIPs[i], f))
+			}
+		}
 	}
 	if len(missing) > 0 {
-		return nil, fmt.Errorf("nodes disagree on IP families %v: %s", families, strings.Join(missing, "; "))
+		return errors.New(strings.Join(missing, "; "))
 	}
-	return families, nil
-}
-
-func nonEmpty(in []string) []string {
-	var out []string
-	for _, s := range in {
-		if s != "" {
-			out = append(out, s)
-		}
-	}
-	return out
+	return nil
 }
 
 // GetNodesInfo extracts node information from a Kubernetes NodeList and returns

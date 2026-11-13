@@ -30,6 +30,7 @@ import (
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
+	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
@@ -136,8 +137,11 @@ var _ = describe.CalicoDescribe(
 		runPacketTest := func(clientType, targetType int, sameNode bool) {
 			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
 			nodeNames := nodesInfo.GetNames()
-			families, err := nodesInfo.Families()
-			Expect(err).NotTo(HaveOccurred(), "packet size tests need every node to have the cluster's IP families")
+			cli, err := client.New(f.ClientConfig())
+			Expect(err).NotTo(HaveOccurred())
+			families, err := utils.PoolFamilies(cli)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(nodesInfo.CheckFamilies(families, 2)).To(Succeed())
 
 			// Sample packet sizes densely around the cluster's effective pod MTU, measured from
 			// a pod so the test tracks whatever encapsulation and WireGuard config is in use.
@@ -171,6 +175,7 @@ var _ = describe.CalicoDescribe(
 
 			if clientType == pktClientExt {
 				extClient := externalnode.MustNewClient()
+				externalNodeIPs(extClient, families)
 				ct.Deploy()
 				DeferCleanup(ct.Stop)
 
@@ -235,8 +240,6 @@ var _ = describe.CalicoDescribe(
 	},
 )
 
-// packetBaseTarget returns a base target for the given target type. Callers add
-// protocol-specific options (WithHTTP for GET/POST, WithUDP for UDP) on top.
 type packetTarget struct {
 	server   conncheck.Server
 	family   utils.IPFamily

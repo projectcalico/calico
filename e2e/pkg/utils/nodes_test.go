@@ -34,54 +34,63 @@ func buildNodesInfo(nodes ...testNode) *nodesInfo {
 	return n
 }
 
-func TestFamilies(t *testing.T) {
+func TestCheckFamilies(t *testing.T) {
+	dual := []IPFamily{IPv4, IPv6}
 	for _, tc := range []struct {
-		name    string
-		nodes   []testNode
-		want    []IPFamily
-		wantErr string
+		name     string
+		nodes    []testNode
+		families []IPFamily
+		n        int
+		wantErr  string
 	}{
 		{
-			name:  "IPv4-only",
-			nodes: []testNode{{name: "a", ips: []string{"10.0.0.1"}}, {name: "b", ips: []string{"10.0.0.2"}}},
-			want:  []IPFamily{IPv4},
+			name:     "every used node has each family",
+			nodes:    []testNode{{name: "a", ips: []string{"10.0.0.1", "fd00::1"}}, {name: "b", ips: []string{"fd00::2", "10.0.0.2"}}},
+			families: dual,
+			n:        2,
 		},
 		{
-			name:  "IPv6-only",
-			nodes: []testNode{{name: "a", ips: []string{"fd00::1"}}, {name: "b", ips: []string{"fd00::2"}}},
-			want:  []IPFamily{IPv6},
+			name:     "a node's extra family is ignored",
+			nodes:    []testNode{{name: "a", ips: []string{"10.0.0.1", "fd00::1"}}, {name: "b", ips: []string{"10.0.0.2"}}},
+			families: []IPFamily{IPv4},
+			n:        2,
 		},
 		{
-			name: "dual-stack lists IPv4 first whatever the address order",
-			nodes: []testNode{
-				{name: "a", ips: []string{"fd00::1", "10.0.0.1"}},
-				{name: "b", ips: []string{"10.0.0.2", "fd00::2"}},
-			},
-			want: []IPFamily{IPv4, IPv6},
+			name:     "a used node missing a family",
+			nodes:    []testNode{{name: "a", ips: []string{"10.0.0.1", "fd00::1"}}, {name: "b", ips: []string{"10.0.0.2"}}},
+			families: dual,
+			n:        2,
+			wantErr:  "node b has no IPv6 InternalIP (has [10.0.0.2]), but the cluster's IP pools include IPv6",
 		},
 		{
-			name: "a node missing a family other nodes have",
-			nodes: []testNode{
-				{name: "a", ips: []string{"10.0.0.1", "fd00::1"}},
-				{name: "b", ips: []string{"10.0.0.2"}},
-			},
-			wantErr: "b has no IPv6 InternalIP",
+			name:     "an unused node missing a family",
+			nodes:    []testNode{{name: "a", ips: []string{"10.0.0.1", "fd00::1"}}, {name: "b", ips: []string{"10.0.0.2", "fd00::2"}}, {name: "c", ips: []string{"10.0.0.3"}}},
+			families: dual,
+			n:        2,
 		},
 		{
-			name:    "no parseable addresses",
-			nodes:   []testNode{{name: "a", ips: []string{"not-an-ip"}}},
-			wantErr: "no node has a parseable InternalIP",
+			name:     "every gap is reported",
+			nodes:    []testNode{{name: "a", ips: []string{"fd00::1"}}, {name: "b", ips: []string{"10.0.0.2"}}},
+			families: dual,
+			n:        2,
+			wantErr:  "node a has no IPv4 InternalIP (has [fd00::1]), but the cluster's IP pools include IPv4; node b has no IPv6",
+		},
+		{
+			name:     "fewer nodes than used",
+			nodes:    []testNode{{name: "a", ips: []string{"10.0.0.1"}}},
+			families: []IPFamily{IPv4},
+			n:        2,
+			wantErr:  "need 2 nodes, have 1",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			g := gomega.NewWithT(t)
-			got, err := buildNodesInfo(tc.nodes...).Families()
+			err := buildNodesInfo(tc.nodes...).CheckFamilies(tc.families, tc.n)
 			if tc.wantErr != "" {
 				g.Expect(err).To(gomega.MatchError(gomega.ContainSubstring(tc.wantErr)))
 				return
 			}
 			g.Expect(err).NotTo(gomega.HaveOccurred())
-			g.Expect(got).To(gomega.Equal(tc.want))
 		})
 	}
 }
@@ -97,7 +106,6 @@ func TestGetIPsStaysAlignedWithNames(t *testing.T) {
 	g.Expect(n.GetNames()).To(gomega.Equal([]string{"a", "b"}))
 	g.Expect(n.GetIPs(IPv4)).To(gomega.Equal([]string{"10.0.0.1", "10.0.0.2"}))
 	g.Expect(n.GetIPs(IPv6)).To(gomega.Equal([]string{"", "fd00::2"}))
-	g.Expect(n.GetIPv6s()).To(gomega.Equal([]string{"fd00::2"}))
 }
 
 func TestGetTunnelIPs(t *testing.T) {

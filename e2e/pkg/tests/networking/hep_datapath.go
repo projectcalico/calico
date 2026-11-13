@@ -216,8 +216,9 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred())
 
 			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
-			families, err = nodesInfo.Families()
-			Expect(err).NotTo(HaveOccurred(), "HEP datapath tests need every node to have the cluster's IP families")
+			families, err = utils.PoolFamilies(cli)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(nodesInfo.CheckFamilies(families, 2)).To(Succeed())
 			nodeNames = nodesInfo.GetNames()[:2]
 			nodeIPs = map[utils.IPFamily][]string{}
 			for _, fam := range families {
@@ -383,8 +384,9 @@ var _ = describe.CalicoDescribe(
 					},
 				}
 				hepCtx, hepCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer hepCancel()
-				Expect(cli.Create(hepCtx, hep)).To(Succeed())
+				err := cli.Create(hepCtx, hep)
+				hepCancel()
+				Expect(err).NotTo(HaveOccurred())
 				DeferCleanup(func() {
 					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cleanupCancel()

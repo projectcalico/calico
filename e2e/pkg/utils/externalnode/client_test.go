@@ -57,6 +57,16 @@ func TestIPReturnsFirstDiscoveredAddress(t *testing.T) {
 	}
 }
 
+func TestParseInet4(t *testing.T) {
+	out := `    inet 172.16.101.163/24 brd 172.16.101.255 scope global dynamic eth0
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0`
+	got := parseInet4(out)
+	want := []string{"172.16.101.163", "172.17.0.1"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("parseInet4() = %v, want %v", got, want)
+	}
+}
+
 func TestParseInet6(t *testing.T) {
 	out := `2: eth0    inet6 2600:1f18:abcd::5/128 scope global dynamic noprefixroute \       valid_lft 400sec preferred_lft 300sec
 3: docker0    inet6 fd00:dead::1/64 scope global \       valid_lft forever preferred_lft forever`

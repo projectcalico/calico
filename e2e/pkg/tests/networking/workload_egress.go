@@ -35,10 +35,10 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 )
 
-// The IPv6 address is documentation space; the IPv4 one is public, so a dataplane
-// that fails to intercept may send the connection out of the cluster.
+// Documentation ranges (RFC 5737, RFC 3849) are never routed, so a dataplane that
+// fails to intercept fails here instead of sending probes to a real host.
 var defaultExternalIPs = map[utils.IPFamily]string{
-	utils.IPv4: "60.70.80.90",
+	utils.IPv4: "198.51.100.90",
 	utils.IPv6: "2001:db8:60:70::90",
 }
 
@@ -92,8 +92,9 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred())
 
 			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
-			families, err = nodesInfo.Families()
-			Expect(err).NotTo(HaveOccurred(), "workload egress tests need every node to have the cluster's IP families")
+			families, err = utils.PoolFamilies(cli)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(nodesInfo.CheckFamilies(families, 2)).To(Succeed())
 			nodeNames = nodesInfo.GetNames()[:2]
 			nodeIPs = map[utils.IPFamily][]string{}
 			for _, fam := range families {
