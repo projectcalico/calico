@@ -57,6 +57,19 @@ func TestIPReturnsFirstDiscoveredAddress(t *testing.T) {
 	}
 }
 
+func TestParseInet6(t *testing.T) {
+	out := `2: eth0    inet6 2600:1f18:abcd::5/128 scope global dynamic noprefixroute \       valid_lft 400sec preferred_lft 300sec
+3: docker0    inet6 fd00:dead::1/64 scope global \       valid_lft forever preferred_lft forever`
+	got := parseInet6(out)
+	want := []string{"2600:1f18:abcd::5", "fd00:dead::1"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("parseInet6() = %v, want %v", got, want)
+	}
+	if got := parseInet6(""); got == nil || len(got) != 0 {
+		t.Errorf("parseInet6(\"\") = %#v, want empty non-nil slice", got)
+	}
+}
+
 // NewClient returns nil on a cluster with no external node, leaving each caller to
 // decide what that means. MustNewClient fails with the label a lane should exclude.
 func TestTestsUseMustNewClient(t *testing.T) {

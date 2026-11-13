@@ -38,6 +38,7 @@ type Client struct {
 	extKey  string
 	extUser string
 	intIPs  []string
+	intIPv6 []string
 }
 
 // NewClient reads external node details from e2ecfg first. When configs are not available,
@@ -128,6 +129,46 @@ func (e *Client) IPs() []string {
 	return e.intIPs
 }
 
+// IPv6s returns the external node's global IPv6 addresses. Link-local ones are
+// left out because they never leave the link, so policy can't see them as a source.
+func (e *Client) IPv6s() []string {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+
+	if e.intIPv6 == nil {
+		dest := fmt.Sprintf("%s@%s", e.extUser, e.extIP)
+		command := exec.Command("ssh",
+			"-o", "ConnectTimeout=2",
+			"-o", "UserKnownHostsFile=/dev/null",
+			"-o", "StrictHostKeyChecking=no",
+			"-i", e.extKey,
+			dest, "--",
+			"ip", "-6", "-o", "addr", "show", "scope", "global",
+		)
+		logrus.Infof("Running '%s %s'", command.Path, strings.Join(command.Args[1:], " "))
+		out, err := command.Output()
+		if err != nil {
+			logrus.WithError(err).Info("Setting external node IPv6 addresses failed")
+			return nil
+		}
+		e.intIPv6 = parseInet6(string(out))
+		logrus.Infof("Setting external node intIPv6=%v", e.intIPv6)
+	}
+	return e.intIPv6
+}
+
+var inet6Re = regexp.MustCompile(`inet6 ([0-9a-fA-F:]+)/`)
+
+// parseInet6 never returns nil, so a node with no global IPv6 caches as empty
+// instead of re-probing over ssh on every call.
+func parseInet6(out string) []string {
+	ips := []string{}
+	for _, m := range inet6Re.FindAllStringSubmatch(out, -1) {
+		ips = append(ips, m[1])
+	}
+	return ips
+}
+
 func (e *Client) MustExec(shell, opt, cmd string) string {
 	out, err := e.Exec(shell, opt, cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf(
@@ -170,11 +211,12 @@ func (e *Client) Get(target string, length int) string {
 	// - This whole string gets run in Exec() like this:
 	//   `ssh .... -- /bin/sh -c "<this string>"`
 	//   so we need to escape the double quotes here too.
-	return fmt.Sprintf(`curl -m2 -w \"\n%%{time_total}\" http://%v/length/%v`, target, length)
+	// -g stops curl reading the brackets of an IPv6 literal as a URL glob.
+	return fmt.Sprintf(`curl -g -m2 -w \"\n%%{time_total}\" http://%v/length/%v`, target, length)
 }
 
 func (e *Client) Post(target string, postdata string) string {
-	return fmt.Sprintf(`curl -m2 -w \"\n%%{time_total}\" -d "%v" -X POST http://%v/post`, postdata, target)
+	return fmt.Sprintf(`curl -g -m2 -w \"\n%%{time_total}\" -d "%v" -X POST http://%v/post`, postdata, target)
 }
 
 func (e *Client) UDP(target string, postdata string) string {
