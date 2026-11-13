@@ -330,6 +330,7 @@ cmd_analyze() {
   [[ -s "${SANDCAT_PR_CONTEXT_FILE}" ]] && extra_args+=(--pr-context "${SANDCAT_PR_CONTEXT_FILE}")
 
   echo "[INFO] sandcat: analyzing (sha=${SANDCAT_SHA:-unknown})..."
+  local ok=true
   "${SANDCAT_BIN}" analyze \
     --ginkgo-report "${report}" \
     --sha "${SANDCAT_SHA}" \
@@ -338,10 +339,11 @@ cmd_analyze() {
     --upload "${SANDCAT_UPLOAD_URL}" \
     --timeout 10m \
     ${extra_args[@]+"${extra_args[@]}"} \
-    || echo "[WARN] sandcat: analysis failed (non-fatal)"
+    || { ok=false; echo "[WARN] sandcat: analysis failed (non-fatal)"; }
 
   _sandcat_push_artifact
-  touch "${HOME}/.sandcat-analyzed"
+  [[ "${ok}" == "true" ]] && touch "${HOME}/.sandcat-analyzed"
+  return 0
 }
 
 # Cap on what expanding a gzipped log may write to disk.
