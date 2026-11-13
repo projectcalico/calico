@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"runtime"
@@ -33,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -1069,164 +1071,211 @@ func TestVMINameTracking(t *testing.T) {
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		g.Expect(m.vmiNames).NotTo(HaveKey(wepID1))
 	})
+}
 
-	t.Run("IPAM swap skipped when no VMI name", func(t *testing.T) {
-		m := newTestMonitor(testConvergenceTime)
-		m.ensureActiveVMOwnerAttrs = func(
-			ctx context.Context,
-			ipamClient ipam.Interface,
-			networkName string,
-			namespace string,
-			vmiName string,
-			targetPodName string,
-		) error {
-			t.Error("ensureActiveVMOwnerAttrs should not have been called")
-			return nil
-		}
+// fakeVMOwners models the IPAM owners of one VM handle, with the semantics of the vmipam
+// promotion functions.
+type fakeVMOwners struct {
+	lock         sync.Mutex
+	active       string
+	alternate    string
+	noHandle     bool
+	failures     int
+	ensureCalls  int
+	promoteCalls int
+}
 
-		// WEP with namespace/pod format and UID but no VMI name.
-		wepIDWithNS := types.WorkloadEndpointID{
-			OrchestratorId: "k8s",
-			WorkloadId:     "test-ns/virt-launcher-vm1-abc",
-			EndpointId:     "ep-1",
-		}
-		m.OnUpdate(wepUpdateWithUID(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1"))
-		drainUpdates(m)
+func (f *fakeVMOwners) ensure(_ context.Context, _ ipam.Interface, _, _, _, pod string) error {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	f.ensureCalls++
+	return f.promoteLocked(pod, false)
+}
 
-		// Trigger Target→Live.  Swap should be skipped due to missing VMI name.
-		m.OnGARPDetected(wepIDWithNS)
-		drainUpdates(m)
+func (f *fakeVMOwners) promoteIfActiveEmpty(_ context.Context, _ ipam.Interface, _, _, _, pod string) (bool, error) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	f.promoteCalls++
+	before := f.active
+	err := f.promoteLocked(pod, true)
+	return f.active != before, err
+}
+
+func (f *fakeVMOwners) promoteLocked(pod string, requireActiveEmpty bool) error {
+	switch {
+	case f.noHandle:
+		return vmipam.ErrNoVMAddresses
+	case f.failures > 0:
+		f.failures--
+		return errors.New("transient datastore error")
+	case f.active == pod:
+		return nil
+	case f.alternate == "":
+		return vmipam.ErrAlternateOwnerEmpty
+	case f.alternate != pod:
+		return vmipam.ErrAlternateOwnerMismatch
+	case f.active != "" && requireActiveEmpty:
+		return vmipam.ErrActiveOwnerPresent
+	}
+	f.active, f.alternate = pod, f.active
+	return nil
+}
+
+func (f *fakeVMOwners) set(active, alternate string) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	f.active, f.alternate = active, alternate
+}
+
+func (f *fakeVMOwners) owners() [2]string {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	return [2]string{f.active, f.alternate}
+}
+
+func (f *fakeVMOwners) calls() (ensure, promote int) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	return f.ensureCalls, f.promoteCalls
+}
+
+func newVMOwnerTestMonitor(owners *fakeVMOwners) *liveMigrationMonitor {
+	m := newTestMonitor(testConvergenceTime)
+	m.vmOwners.ensureActiveVMOwnerAttrs = owners.ensure
+	m.vmOwners.promoteIfActiveEmpty = owners.promoteIfActiveEmpty
+	m.vmOwners.initialBackoff = 5 * time.Millisecond
+	m.vmOwners.maxBackoff = 20 * time.Millisecond
+	return m
+}
+
+var vmPodID = types.WorkloadEndpointID{
+	OrchestratorId: "k8s",
+	WorkloadId:     "test-ns/virt-launcher-vm1-tgt",
+	EndpointId:     "eth0",
+}
+
+// sendVMPodUpdate delivers a WEP update for vmPodID as one dataplane batch.
+func sendVMPodUpdate(m *liveMigrationMonitor, role proto.LiveMigrationRole) {
+	m.OnUpdate(wepUpdateWithVMIName(vmPodID, role, "", "vm1"))
+	drainUpdates(m)
+	Expect(m.CompleteDeferredWork()).To(Succeed())
+}
+
+func TestVMOwnerReconciler(t *testing.T) {
+	const tgt = "virt-launcher-vm1-tgt"
+	const src = "virt-launcher-vm1-src"
+
+	t.Run("promotes a VM pod left as the only claimant, with no FSM", func(t *testing.T) {
+		// Felix on the target restarted while the migration completed, and the source's CNI
+		// DEL has cleared the active owner.
+		RegisterTestingT(t)
+		owners := &fakeVMOwners{alternate: tgt}
+		m := newVMOwnerTestMonitor(owners)
+
+		sendVMPodUpdate(m, proto.LiveMigrationRole_NO_ROLE)
+
+		Eventually(owners.owners).Should(Equal([2]string{tgt, ""}))
+		Expect(m.fsms).To(BeEmpty())
 	})
 
-	t.Run("IPAM swap executed on Target to Live transition", func(t *testing.T) {
-		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+	t.Run("waits for the source's CNI DEL before promoting", func(t *testing.T) {
+		RegisterTestingT(t)
+		owners := &fakeVMOwners{active: src, alternate: tgt}
+		m := newVMOwnerTestMonitor(owners)
 
-		// Use a workload ID with namespace/pod format so the parser succeeds.
-		wepIDWithNS := types.WorkloadEndpointID{
-			OrchestratorId: "k8s",
-			WorkloadId:     "test-ns/virt-launcher-vm1-abc",
-			EndpointId:     "ep-1",
-		}
+		sendVMPodUpdate(m, proto.LiveMigrationRole_NO_ROLE)
+		Consistently(owners.owners, "100ms").Should(Equal([2]string{src, tgt}))
 
-		called := make(chan struct{}, 1)
-		m.ensureActiveVMOwnerAttrs = func(
-			ctx context.Context,
-			ipamClient ipam.Interface,
-			networkName string,
-			namespace string,
-			vmiName string,
-			targetPodName string,
-		) error {
-			g.Expect(namespace).To(Equal("test-ns"))
-			g.Expect(vmiName).To(Equal("my-vmi"))
-			g.Expect(targetPodName).To(Equal("virt-launcher-vm1-abc"))
-			called <- struct{}{}
-			return nil
-		}
-
-		m.OnUpdate(wepUpdateWithVMIName(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
-		drainUpdates(m)
-
-		// Trigger Target→Live via GARP.
-		m.OnGARPDetected(wepIDWithNS)
-		drainUpdates(m)
-
-		select {
-		case <-called:
-			// Success — IPAM swap was invoked.
-		case <-time.After(2 * time.Second):
-			t.Fatal("timed out waiting for ensureActiveVMOwnerAttrs to be called")
-		}
+		owners.set("", tgt)
+		Eventually(owners.owners).Should(Equal([2]string{tgt, ""}))
 	})
 
-	t.Run("IPAM swap executed on missed GARP path (Target to TimeWait)", func(t *testing.T) {
-		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+	t.Run("does not promote a migration target", func(t *testing.T) {
+		RegisterTestingT(t)
+		owners := &fakeVMOwners{alternate: tgt}
+		m := newVMOwnerTestMonitor(owners)
 
-		wepIDWithNS := types.WorkloadEndpointID{
-			OrchestratorId: "k8s",
-			WorkloadId:     "test-ns/virt-launcher-vm1-abc",
-			EndpointId:     "ep-1",
-		}
+		sendVMPodUpdate(m, proto.LiveMigrationRole_TARGET)
 
-		called := make(chan struct{}, 1)
-		m.ensureActiveVMOwnerAttrs = func(
-			ctx context.Context,
-			ipamClient ipam.Interface,
-			networkName string,
-			namespace string,
-			vmiName string,
-			targetPodName string,
-		) error {
-			g.Expect(namespace).To(Equal("test-ns"))
-			g.Expect(vmiName).To(Equal("my-vmi"))
-			g.Expect(targetPodName).To(Equal("virt-launcher-vm1-abc"))
-			called <- struct{}{}
-			return nil
-		}
-
-		m.OnUpdate(wepUpdateWithVMIName(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
-		drainUpdates(m)
-
-		// Trigger Target→TimeWait (missed GARP path) via NoRole.
-		m.OnUpdate(wepUpdate(wepIDWithNS, proto.LiveMigrationRole_NO_ROLE))
-		drainUpdates(m)
-
-		select {
-		case <-called:
-			// Success — IPAM swap was invoked on missed GARP path.
-		case <-time.After(2 * time.Second):
-			t.Fatal("timed out waiting for ensureActiveVMOwnerAttrs on missed GARP path")
-		}
+		Consistently(owners.owners, "100ms").Should(Equal([2]string{"", tgt}))
+		ensure, promote := owners.calls()
+		Expect(ensure).To(BeZero())
+		Expect(promote).To(BeZero())
 	})
 
-	t.Run("IPAM swap only called once when going Live then TimeWait", func(t *testing.T) {
-		m := newTestMonitor(testConvergenceTime)
+	t.Run("leaves the source active when a migration is cancelled", func(t *testing.T) {
+		// Cancelling the migration deletes the LiveMigration, so the FSM goes Target ->
+		// TimeWait just as for a completion with a missed GARP.
+		RegisterTestingT(t)
+		owners := &fakeVMOwners{active: src, alternate: tgt}
+		m := newVMOwnerTestMonitor(owners)
 
-		wepIDWithNS := types.WorkloadEndpointID{
-			OrchestratorId: "k8s",
-			WorkloadId:     "test-ns/virt-launcher-vm1-abc",
-			EndpointId:     "ep-1",
-		}
+		sendVMPodUpdate(m, proto.LiveMigrationRole_TARGET)
+		sendVMPodUpdate(m, proto.LiveMigrationRole_NO_ROLE)
+		Expect(m.fsms[vmPodID].currentState).To(Equal(liveMigrationStateTimeWait))
 
-		called := make(chan struct{}, 2)
-		m.ensureActiveVMOwnerAttrs = func(
-			ctx context.Context,
-			ipamClient ipam.Interface,
-			networkName string,
-			namespace string,
-			vmiName string,
-			targetPodName string,
-		) error {
-			called <- struct{}{}
-			return nil
-		}
+		Consistently(owners.owners, "100ms").Should(Equal([2]string{src, tgt}))
+		ensure, _ := owners.calls()
+		Expect(ensure).To(BeZero())
 
-		m.OnUpdate(wepUpdateWithVMIName(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
+		// The target pod's CNI DEL clears it, and its WEP goes.
+		owners.set(src, "")
+		m.OnUpdate(wepRemove(vmPodID))
+		drainUpdates(m)
+		Expect(m.CompleteDeferredWork()).To(Succeed())
+		Expect(owners.owners()).To(Equal([2]string{src, ""}))
+	})
+
+	t.Run("promotes straight away when the GARP is detected", func(t *testing.T) {
+		RegisterTestingT(t)
+		owners := &fakeVMOwners{active: src, alternate: tgt}
+		m := newVMOwnerTestMonitor(owners)
+
+		sendVMPodUpdate(m, proto.LiveMigrationRole_TARGET)
+		m.OnGARPDetected(vmPodID)
 		drainUpdates(m)
 
-		// Target→Live via GARP (first IPAM swap).
-		m.OnGARPDetected(wepIDWithNS)
+		Eventually(owners.owners).Should(Equal([2]string{tgt, src}))
+	})
+
+	t.Run("keeps retrying a promotion after transient errors", func(t *testing.T) {
+		RegisterTestingT(t)
+		owners := &fakeVMOwners{active: src, alternate: tgt, failures: 8}
+		m := newVMOwnerTestMonitor(owners)
+
+		sendVMPodUpdate(m, proto.LiveMigrationRole_TARGET)
+		m.OnGARPDetected(vmPodID)
 		drainUpdates(m)
 
-		select {
-		case <-called:
-		case <-time.After(2 * time.Second):
-			t.Fatal("timed out waiting for first IPAM swap call")
-		}
+		Eventually(owners.owners).Should(Equal([2]string{tgt, src}))
+		ensure, _ := owners.calls()
+		Expect(ensure).To(Equal(9))
+	})
 
-		// Live→TimeWait via NoRole (should NOT trigger second swap).
-		m.OnUpdate(wepUpdate(wepIDWithNS, proto.LiveMigrationRole_NO_ROLE))
+	t.Run("checks a VM without address persistence only once", func(t *testing.T) {
+		RegisterTestingT(t)
+		owners := &fakeVMOwners{noHandle: true}
+		m := newVMOwnerTestMonitor(owners)
+
+		sendVMPodUpdate(m, proto.LiveMigrationRole_NO_ROLE)
+
+		Eventually(func() int { _, p := owners.calls(); return p }).Should(Equal(1))
+		Consistently(func() int { _, p := owners.calls(); return p }, "100ms").Should(Equal(1))
+	})
+
+	t.Run("ignores workloads that are not VM pods", func(t *testing.T) {
+		RegisterTestingT(t)
+		owners := &fakeVMOwners{alternate: tgt}
+		m := newVMOwnerTestMonitor(owners)
+
+		m.OnUpdate(wepUpdateWithUID(vmPodID, proto.LiveMigrationRole_TARGET, "uid-1"))
 		drainUpdates(m)
+		m.OnGARPDetected(vmPodID)
+		m.OnUpdate(wepUpdate(vmPodID, proto.LiveMigrationRole_NO_ROLE))
+		drainUpdates(m)
+		Expect(m.CompleteDeferredWork()).To(Succeed())
 
-		// Verify no second call arrives.
-		select {
-		case <-called:
-			t.Fatal("IPAM swap should only be called once, got second call")
-		case <-time.After(200 * time.Millisecond):
-			// Expected: no second call.
-		}
+		Consistently(owners.calls, "100ms").Should(BeZero())
 	})
 }
 

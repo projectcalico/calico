@@ -63,14 +63,16 @@ tunnel is disabled), uses `IntendedUse = Tunnel` so pool selection respects `all
 Felix doesn't allocate IPs. It holds an IPAM client for one purpose: the KubeVirt live-migration owner-swap monitor in
 [`felix/dataplane/linux/live_migration.go`](../../felix/dataplane/linux/live_migration.go).
 
-When a workload endpoint transitions to "active" live-migration state, the monitor calls `vmipam.EnsureActiveVMOwnerAttrs` to promote the alternate owner to active under a
-`CompareAndSwap` precondition. This is the dataplane half of the KubeVirt IP persistence handshake described in [`./ipam-cni.md`](./ipam-cni.md). Felix swaps ownership; it never
-assigns.
+When the monitor detects a migrated VM's GARP, it calls `vmipam.EnsureActiveVMOwnerAttrs` to promote the alternate owner to active under a `CompareAndSwap` precondition.
+Without that proof of success, a local VM pod that isn't a migration target is promoted only once no owner is active, and rechecked until then: losing the `LiveMigration`
+looks the same after a cancel as after a completion, and only a completion's source CNI DEL leaves the target as the sole claimant. This is the dataplane half of the KubeVirt
+IP persistence handshake described in [`./ipam-cni.md`](./ipam-cni.md). Felix swaps ownership; it never assigns.
 
 **Review notes**
 
 - Don't introduce a path that mutates owner attrs without going through `vmipam`, or the `CompareAndSwap` precondition protecting against the CNI racing the swap goes away.
 - Trigger-path refactors have regressed live-migration more than once; exercise the GARP and syncer paths whenever touching the monitor.
+- Only a confirmed migration success may promote over an active owner, and the owner reconciliation must not depend on FSM state, which a Felix restart loses.
 
 ## LoadBalancer controller
 
