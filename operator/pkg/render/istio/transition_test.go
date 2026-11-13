@@ -198,6 +198,28 @@ var _ = Describe("Istio CA signer transition", func() {
 			Expect(s.Transition.Kept).To(Equal(certsOf(newRoot)))
 		})
 
+		It("keeps the kept roots one more lifetime when the change is cancelled before the switch", func() {
+			x := newTestCert("x", nil, true).cert
+			in := istio.TransitionInput{
+				Current: current, CurrentSource: istio.CASourceUnmanaged, CurrentTrust: append(certsOf(oldRoot, newRoot), x),
+				Desired: current, DesiredSource: istio.CASourceUnmanaged,
+				Recorded: istio.TransitionState{Phase: istio.TransitionAwaitDistribution, Deadline: now.Add(time.Hour), Retiring: current.Roots, Incoming: desired.Roots, Kept: []*x509.Certificate{x}},
+				Rolled:   true, Now: now, Wait: wait,
+			}
+			s := istio.StepSignerTransition(in)
+			Expect(s.Signer).To(BeIdenticalTo(current))
+			Expect(s.Transition).NotTo(BeNil())
+			Expect(s.Transition.Phase).To(Equal(istio.TransitionAwaitExpiry))
+			Expect(s.Transition.Deadline).To(Equal(now.Add(wait)))
+			Expect(s.Transition.Retiring).To(BeEmpty())
+			Expect(s.Transition.Kept).To(Equal([]*x509.Certificate{x}))
+
+			in.Recorded = istio.TransitionState{Phase: istio.TransitionAwaitExpiry, Deadline: now.Add(wait), Incoming: current.Roots, Kept: []*x509.Certificate{x}}
+			Expect(istio.StepSignerTransition(in).Transition.Kept).To(Equal([]*x509.Certificate{x}))
+			in.Now = now.Add(wait)
+			Expect(istio.StepSignerTransition(in).Transition).To(BeNil())
+		})
+
 		Context("after the switch, when cacerts already signs with the desired CA", func() {
 			var retiring []*x509.Certificate
 

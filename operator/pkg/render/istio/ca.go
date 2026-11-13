@@ -184,23 +184,17 @@ func LoadCA(data map[string][]byte) (*CA, error) {
 	for _, r := range roots {
 		rootPool.AddCert(r)
 	}
-	// A workload certificate is both a TLS client and a TLS server, and an
-	// extended key usage on the CA or an issuer limits what it may sign. One
-	// verification per usage, because Verify accepts a chain that allows any one.
-	var chains [][]*x509.Certificate
-	for _, usage := range []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth} {
-		chains, err = cert.Verify(x509.VerifyOptions{
-			Roots:         rootPool,
-			Intermediates: intermediates,
-			KeyUsages:     []x509.ExtKeyUsage{usage},
-		})
-		var invalid x509.CertificateInvalidError
-		if errors.As(err, &invalid) && invalid.Reason == x509.IncompatibleUsage {
-			return nil, fmt.Errorf("%s: the extended key usage of the chain does not allow TLS client and server authentication", certKey)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("%s does not chain to a root in %s: %w", certKey, rootKey, err)
-		}
+	chains, err := cert.Verify(x509.VerifyOptions{
+		Roots:         rootPool,
+		Intermediates: intermediates,
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%s does not chain to a root in %s: %w", certKey, rootKey, err)
+	}
+	chains = mutualTLSChains(chains)
+	if len(chains) == 0 {
+		return nil, fmt.Errorf("%s: the extended key usage of the chain does not allow TLS client and server authentication", certKey)
 	}
 
 	ca := &CA{CertPEM: EncodeCertificates(cert), KeyPEM: keyPEM, Chain: chains[0]}
@@ -213,6 +207,42 @@ func LoadCA(data map[string][]byte) (*CA, error) {
 		}
 	}
 	return ca, nil
+}
+
+// mutualTLSChains keeps the chains on which a workload certificate, a TLS
+// client and a TLS server at once, verifies. An extended key usage on the CA or
+// an issuer limits what it may sign, and each chain is checked whole because
+// one path may allow only server and another only client authentication.
+func mutualTLSChains(chains [][]*x509.Certificate) [][]*x509.Certificate {
+	var out [][]*x509.Certificate
+	for _, chain := range chains {
+		ok := true
+		for _, c := range chain {
+			ok = ok && allowsMutualTLS(c)
+		}
+		if ok {
+			out = append(out, chain)
+		}
+	}
+	return out
+}
+
+func allowsMutualTLS(c *x509.Certificate) bool {
+	if len(c.ExtKeyUsage) == 0 && len(c.UnknownExtKeyUsage) == 0 {
+		return true
+	}
+	server, client := false, false
+	for _, u := range c.ExtKeyUsage {
+		switch u {
+		case x509.ExtKeyUsageAny:
+			return true
+		case x509.ExtKeyUsageServerAuth:
+			server = true
+		case x509.ExtKeyUsageClientAuth:
+			client = true
+		}
+	}
+	return server && client
 }
 
 // ParseCertificates decodes every PEM block, each of which must be a CERTIFICATE.

@@ -318,6 +318,11 @@ func stepSignerTransition(in TransitionInput) TransitionStep {
 	switch rec.Phase {
 	case TransitionDistributeRoot, TransitionAwaitDistribution:
 		if same {
+			if len(rec.Kept) > 0 {
+				// Cancelled before the switch. Nothing new signed, but the kept
+				// roots may still back certificates, so they get one lifetime.
+				return awaitExpiry(in, in.Desired, in.DesiredSource, nil, in.Now.Add(in.Wait))
+			}
 			return steady
 		}
 		if !sameRoots(rec.Incoming, in.Desired.Roots) {
@@ -335,7 +340,7 @@ func stepSignerTransition(in TransitionInput) TransitionStep {
 		return distributeRoot(in)
 
 	case TransitionSwitchSigner, TransitionAwaitExpiry:
-		if len(rec.Retiring) == 0 {
+		if len(rec.Retiring) == 0 && len(rec.Kept) == 0 {
 			break
 		}
 		signer, source := in.Current, in.CurrentSource

@@ -67,6 +67,27 @@ func newTestCertWithUsage(cn string, parent *testCert, isCA bool, usage x509.Key
 	}
 }
 
+// reissue signs another certificate for tc's subject and key under parent.
+func reissue(tc *testCert, parent *testCert) *testCert {
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 64))
+	Expect(err).NotTo(HaveOccurred())
+	template := *tc.cert
+	template.SerialNumber = serial
+	der, err := x509.CreateCertificate(rand.Reader, &template, parent.cert, &tc.key.PublicKey, parent.key)
+	Expect(err).NotTo(HaveOccurred())
+	cert, err := x509.ParseCertificate(der)
+	Expect(err).NotTo(HaveOccurred())
+	return &testCert{cert: cert, key: tc.key, certPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), keyPEM: tc.keyPEM}
+}
+
+func concatPEM(parts ...[]byte) []byte {
+	var out []byte
+	for _, p := range parts {
+		out = append(out, p...)
+	}
+	return out
+}
+
 func pemBlockCount(data []byte) int {
 	n := 0
 	for rest := data; ; n++ {
@@ -222,6 +243,23 @@ var _ = Describe("Istio CA", func() {
 				istio.RootCertKey: both.certPEM,
 			})
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("rejects a CA whose only server and client paths are different chains", func() {
+			usage := x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature
+			serverRoot := newTestCertWithUsage("server-root", nil, true, usage, x509.ExtKeyUsageServerAuth)
+			clientRoot := newTestCertWithUsage("client-root", nil, true, usage, x509.ExtKeyUsageClientAuth)
+			// One intermediate key, cross-signed under both roots.
+			viaServer := newTestCertWithUsage("intermediate", serverRoot, true, usage)
+			viaClient := reissue(viaServer, clientRoot)
+			ca := newTestCert("ca", viaServer, true)
+			_, err := istio.LoadCA(map[string][]byte{
+				istio.CACertKey:    ca.certPEM,
+				istio.CAKeyKey:     ca.keyPEM,
+				istio.CertChainKey: concatPEM(viaServer.certPEM, viaClient.certPEM),
+				istio.RootCertKey:  concatPEM(serverRoot.certPEM, clientRoot.certPEM),
+			})
+			Expect(err).To(MatchError(ContainSubstring("the extended key usage of the chain does not allow")))
 		})
 
 		It("rejects a certificate that does not chain to a root in root-cert.pem", func() {
