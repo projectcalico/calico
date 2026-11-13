@@ -29,22 +29,36 @@ bin/release: $(shell find . -name "*.go" -or -name "*.gotmpl") internal/defaults
 		$(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) go build -o bin/release -v -buildvcs=false -tags with_embed -ldflags "$(LDFLAGS)" ./cmd'
 
-POSTRELEASE_TEST_PACKAGE	:= $(PACKAGE_NAME)/pkg/postrelease
-UNIT_TEST_PACKAGES				:= $(shell go list ./... | grep -v $(POSTRELEASE_TEST_PACKAGE))
-FV_TEST_PACKAGES					:= $(patsubst %/,%,$(sort $(dir $(shell find . -name '*_fv_test.go'))))
-FV_IMAGE_PACKAGES 				:= git-core gnupg2 make rpm rpm-build rpm-sign tar
-FV_IMAGE    							:= calico/release-fv:$(GO_BUILD_VER)
-FV_TOOLS    							:= git gpg make rpmkeys rpmbuild rpmsign tar
+###############################################################################
+# Tests
+###############################################################################
+GOTESTSUM          := $(if $(DOCKER_GO_BUILD),gotestsum,bin/gotestsum)
+# An empty DOCKER_GO_BUILD runs the tests on the host.
+UT_RUN             := $(DOCKER_GO_BUILD) $(GOTESTSUM)
+FV_RUN             = $(if $(DOCKER_GO_BUILD),$(DOCKER_RUN) $(FV_IMAGE)) $(GOTESTSUM)
 
-.PHONY: ut fv fv/deps
-ut:
+# Each test layer runs only the relevant tests for that layer.
+UNIT_TEST_PACKAGES := $(patsubst %/,%,$(sort $(dir $(shell find . -name '*.go' -not -path './pkg/postrelease/*'))))
+FV_TEST_PACKAGES   := $(patsubst %/,%,$(sort $(dir $(shell find . -name '*_fv_test.go'))))
+
+# FV Images and required tools for functional verification tests
+FV_IMAGE_PACKAGES  := git-core gnupg2 make rpm rpm-build rpm-sign tar
+FV_IMAGE           := calico/release-fv:$(GO_BUILD_VER)
+FV_TOOLS           := git gpg make rpmkeys rpmbuild rpmsign tar
+
+bin/gotestsum:
+	@GOBIN=$(CURDIR)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
+
+.PHONY: ut
+ut: $(filter bin/%,$(GOTESTSUM))
 	@mkdir -p report
-	@$(DOCKER_GO_BUILD) gotestsum --junitfile report/unit-tests.xml \
+	@$(UT_RUN) --junitfile report/unit-tests.xml \
 		-- -coverprofile=report/coverage.out $(UNIT_TEST_PACKAGES)
 
-fv: fv/deps
+.PHONY: fv
+fv: fv/deps $(filter bin/%,$(GOTESTSUM))
 	@mkdir -p report
-	@$(if $(DOCKER_GO_BUILD),$(DOCKER_RUN) $(FV_IMAGE)) gotestsum --junitfile report/fv-tests.xml \
+	@$(FV_RUN) --junitfile report/fv-tests.xml \
 		-- -tags fv $(FV_TEST_PACKAGES)
 
 fv/deps:
