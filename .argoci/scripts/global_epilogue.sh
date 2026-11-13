@@ -129,7 +129,7 @@ fi
 _sandcat_sh="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/sandcat/sandcat.sh"
 _sandcat_src="${CI_HOME}/${CI_GIT_DIR}"
 _sandcat_report="${_sandcat_src}/report/report.json"
-[[ -f "${_sandcat_report}" ]] || _sandcat_report="${_junit}"
+[[ -f "${_sandcat_report}" ]] || _sandcat_report="${REPORT_DIR}/junit.xml"
 _sandcat_fallback=false
 if [[ "${stopped}" == "false" && "${CI_EXIT_CODE}" != "0" && ! -f "${HOME}/.sandcat-analyzed" ]]; then
   _sandcat_fallback=true
