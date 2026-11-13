@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -334,4 +335,21 @@ func FilterRegularFiles(filePathList []string) ([]string, error) {
 		return []string{}, fmt.Errorf("caught errors while attempting to validate files: %w", err)
 	}
 	return filteredFilesList, nil
+}
+
+// TopLevelFiles lists the files directly in dir, leaving out subdirectories
+// and the names in exclude.
+func TopLevelFiles(dir string, exclude ...string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", dir, err)
+	}
+	var out []string
+	for _, e := range entries {
+		if e.IsDir() || slices.Contains(exclude, e.Name()) {
+			continue
+		}
+		out = append(out, filepath.Join(dir, e.Name()))
+	}
+	return out, nil
 }

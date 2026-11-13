@@ -31,6 +31,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const (
@@ -319,4 +320,22 @@ func DescribeArtifacts(files []ArtifactFile) ([]Artifact, error) {
 		out = append(out, Artifact{Name: name, Size: size, SHA256: hex.EncodeToString(h.Sum(nil)), URL: file.URL})
 	}
 	return out, nil
+}
+
+// ArtifactsAt lists the files directly in dir as artifacts served under baseURL,
+// leaving out the names in exclude.
+func ArtifactsAt(dir, baseURL string, exclude ...string) ([]ArtifactFile, error) {
+	paths, err := utils.TopLevelFiles(dir, exclude...)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]ArtifactFile, len(paths))
+	for i, path := range paths {
+		u, err := url.JoinPath(baseURL, filepath.Base(path))
+		if err != nil {
+			return nil, fmt.Errorf("url for %s: %w", path, err)
+		}
+		files[i] = ArtifactFile{Name: filepath.Base(path), Path: path, URL: u}
+	}
+	return files, nil
 }

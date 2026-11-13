@@ -40,11 +40,10 @@ in [`RELEASING.md`](RELEASING.md).
 
 ## Model: steps, verbs, and the flow
 
-A **step** is a package under `internal/` that owns one kind of output:
-`images`, `charts`, `operator`, `binaries`, `archives`, `manifests`,
-`distribution`. Its **verbs** are package functions, and each step has only the
-verbs it needs. For example, `images` has `Build`, `Publish` and `Resolve`,
-while `archives` only builds.
+A **step** is a package under `internal/` that owns one kind of output, such as
+`images` or `charts`. Its **verbs** are package functions, and each step has
+only the verbs it needs. For example, `images` has `Build`, `Publish` and
+`Resolve`, while `archives` only builds.
 
 - A verb takes a value that describes the output (an `Archive`, a `Chart`, an
   `Operator`) and options. It checks the value before it runs any command, and
@@ -186,9 +185,9 @@ root at run time. `internal/defaults` must not import `internal/utils`: an
 `init()` that sets its vars may import `utils`, and the cycle would break that
 build, not this one.
 
-Org, repo, registries, image dirs, make targets and validation funcs live in
-package-level vars, so a fork or a test can change them without editing the code
-that reads them. The rules:
+Registries, image dirs, make targets and validation funcs live in package-level
+vars, so a fork or a test can change them without editing the code that reads
+them. The rules:
 
 - Declare the var in the file that uses it, with this repo's value. Code reads
   the var. Never inline the literal.
@@ -200,6 +199,8 @@ that reads them. The rules:
   shared backing array.
 - Removing, renaming or re-typing one changes behaviour for whatever sets it.
   Find those first and decide the change on purpose.
+- Behaviour meant only for projectcalico/calico compares against that repo, not
+  the defaults: in a fork the defaults name the fork.
 
 ## Concurrency and retries
 

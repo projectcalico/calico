@@ -25,6 +25,7 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
@@ -74,7 +75,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				}
 
 				// Generate the release notes.
-				filePath, err := outputs.ReleaseNotes(commandRunner, c.String(orgFlag.Name), cfg.RepoRootDir, "", ver)
+				filePath, err := outputs.ReleaseNotes(github.Client(commandRunner), c.String(orgFlag.Name), cfg.RepoRootDir, "", ver)
 				if err != nil {
 					return fmt.Errorf("failed to generate release notes: %w", err)
 				}
@@ -110,8 +111,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithRecordsDir(outputs.RecordsDir(cfg.OutputDir, o.ProductVersion)),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithLogsDir(filepath.Join(cfg.LogsDir, o.ProductVersion)),
-					calico.WithGithubOrg(c.String(orgFlag.Name)),
-					calico.WithRepoName(c.String(repoFlag.Name)),
+					calico.WithGithubRepo(c.String(orgFlag.Name), c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithImages(c.Bool(imagesFlagName)),
 					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
@@ -168,8 +168,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithRecordsDir(outputs.RecordsDir(cfg.OutputDir, o.ProductVersion)),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithLogsDir(filepath.Join(cfg.LogsDir, o.ProductVersion)),
-					calico.WithGithubOrg(c.String(orgFlag.Name)),
-					calico.WithRepoName(c.String(repoFlag.Name)),
+					calico.WithGithubRepo(c.String(orgFlag.Name), c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithImages(c.Bool(imagesFlagName)),
 					calico.WithImageReleaseDirs(c.StringSlice(imageReleaseDirsFlag.Name)),
@@ -248,7 +247,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			outs["operator"] = operatorVer
 
 			// Generate release notes
-			if _, err := outputs.ReleaseNotes(commandRunner, c.String(orgFlag.Name), cfg.RepoRootDir, "", ver); err != nil {
+			if _, err := outputs.ReleaseNotes(github.Client(commandRunner), c.String(orgFlag.Name), cfg.RepoRootDir, "", ver); err != nil {
 				return ver.String(), outs, fmt.Errorf("generate release notes: %w", err)
 			}
 
@@ -258,8 +257,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 				calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 				calico.WithVersion(ver.String()),
 				calico.WithOperatorVersion(operatorVer),
-				calico.WithGithubOrg(c.String(orgFlag.Name)),
-				calico.WithRepoName(c.String(repoFlag.Name)),
+				calico.WithGithubRepo(c.String(orgFlag.Name), c.String(repoFlag.Name)),
 				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 				calico.WithTmpDir(cfg.TmpDir),
 				calico.WithValidation(c.Bool(validationFlag.Name)),
