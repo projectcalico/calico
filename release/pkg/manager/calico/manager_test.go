@@ -988,6 +988,73 @@ func TestBuildBinariesBuildsFelixWhateverTheImagesFlagIs(t *testing.T) {
 	}
 }
 
+type e2eConfigCase struct {
+	name          string
+	isHashRelease bool
+	e2eBinaries   bool
+	wantArchive   bool
+}
+
+// Scheduled lanes read configs from the same upload as the e2e binary, so a
+// hashrelease that builds the binary must also publish the config archive.
+func TestBuildBinariesPublishesE2EConfigWithTheBinary(t *testing.T) {
+	for _, tc := range []e2eConfigCase{
+		{"hashrelease with e2e binaries", true, true, true},
+		{"hashrelease without e2e binaries", true, false, false},
+		{"release with e2e binaries", false, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeRunner()
+			mgr, root := imageManager(t, f, "")
+			mgr.isHashRelease = tc.isHashRelease
+			mgr.e2eBinaries = tc.e2eBinaries
+			mgr.binaries = false
+			bin := filepath.Join(root, binaries.E2EComponent, binDir, "k8s")
+			cfg := filepath.Join(root, binaries.E2EComponent, "config", "iptables")
+			for path, content := range map[string]string{
+				filepath.Join(bin, "e2e-linux-amd64.test"): "x",
+				filepath.Join(bin, "e2e-linux-arm64.test"): "x",
+				filepath.Join(cfg, "xtables.yaml"):         "y",
+			} {
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := mgr.buildBinaries(); err != nil {
+				t.Fatalf("buildBinaries: %v", err)
+			}
+			_, err := os.Stat(binaries.E2EConfigPath(mgr.uploadDir()))
+			if tc.wantArchive && err != nil {
+				t.Errorf("config archive not published: %v", err)
+			}
+			if !tc.wantArchive && err == nil {
+				t.Error("published a config archive without the e2e binaries")
+			}
+		})
+	}
+
+	t.Run("fails when the configs are missing", func(t *testing.T) {
+		f := newFakeRunner()
+		m, root := imageManager(t, f, "")
+		m.isHashRelease = true
+		m.e2eBinaries = true
+		m.binaries = false
+		bin := filepath.Join(root, binaries.E2EComponent, binDir, "k8s")
+		if err := os.MkdirAll(bin, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(bin, "e2e-linux-amd64.test"), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.buildBinaries(); err == nil {
+			t.Fatal("buildBinaries succeeded without e2e/config, want an error")
+		}
+	})
+}
+
 // felix/bin is build output: only calico-bpf ships, and the bpf/ subdirectory
 // must not reach the archive by matching on a base name.
 func TestFelixContentShipsOnlyTheBPFTool(t *testing.T) {
