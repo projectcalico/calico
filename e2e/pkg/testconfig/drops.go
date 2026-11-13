@@ -28,7 +28,7 @@ import (
 // Reason prefixes. A drop reason names its category up front so that a list of
 // them can be grepped, counted and compared line by line.
 const (
-	UpstreamReasonPrefix   = "upstream: "
+	upstreamReasonPrefix   = "upstream: "
 	QuarantineReasonPrefix = "quarantine: "
 	labelReasonPrefix      = "label "
 	patternReasonPrefix    = "excluded: "
@@ -77,6 +77,7 @@ type dropRule struct {
 func NewDropper(cfg *Config) (*Dropper, error) {
 	dropper := &Dropper{}
 
+	// Capabilities: a spec requiring one the lane does not provide is dropped.
 	if cfg.Provides != nil {
 		filter, err := types.ParseLabelFilter(requiresClause(cfg))
 		if err != nil {
@@ -89,14 +90,16 @@ func NewDropper(cfg *Config) (*Dropper, error) {
 		}
 	}
 
+	// Upstream gaps.
 	for _, e := range cfg.Upstream {
-		rule, err := patternRule(UpstreamReasonPrefix+reasonOf(e), e)
+		rule, err := patternRule(upstreamReasonPrefix+reasonOf(e), e)
 		if err != nil {
 			return nil, fmt.Errorf("upstream: %w", err)
 		}
 		dropper.rules = append(dropper.rules, rule)
 	}
 
+	// Label exclusions.
 	for _, e := range cfg.Exclude.Labels {
 		filter, err := types.ParseLabelFilter(e.Label)
 		if err != nil {
@@ -108,6 +111,7 @@ func NewDropper(cfg *Config) (*Dropper, error) {
 		})
 	}
 
+	// Name patterns, plain exclusions first and quarantines after them.
 	for _, quarantined := range []bool{false, true} {
 		for _, e := range cfg.Exclude.NamePatterns {
 			if (e.Ticket != "") != quarantined {
@@ -115,7 +119,7 @@ func NewDropper(cfg *Config) (*Dropper, error) {
 			}
 			reason := patternReasonPrefix + reasonOf(e)
 			if quarantined {
-				reason = QuarantineReasonPrefix + TicketKey(e.Ticket)
+				reason = QuarantineReasonPrefix + ticketKey(e.Ticket)
 			}
 			rule, err := patternRule(reason, e)
 			if err != nil {
@@ -201,10 +205,10 @@ func oneLine(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-// TicketKey returns the issue key a quarantine ticket names: the last path
+// ticketKey returns the issue key a quarantine ticket names: the last path
 // segment of a URL such as https://tigera.atlassian.net/browse/CORE-13670, or
 // the value itself when it is not a URL.
-func TicketKey(ticket string) string {
+func ticketKey(ticket string) string {
 	if u, err := url.Parse(ticket); err == nil && u.Path != "" {
 		ticket = u.Path
 	}

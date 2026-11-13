@@ -112,11 +112,13 @@ func cutLast(s, sep string) (string, string, bool) {
 // a spec the binary skips that no rule explains, or one the binary runs that
 // no suite selected.
 func AuditSelection(selected []testconfig.Spec, runs []testconfig.Spec, dropper *testconfig.Dropper) (Audit, error) {
+	// Count by text because a spec text can repeat.
 	numRunning := map[string]int{}
 	for _, r := range runs {
 		numRunning[r.Text]++
 	}
 
+	// Each selected spec either runs or has a rule that explains its drop.
 	var audit Audit
 	for _, s := range selected {
 		if numRunning[s.Text] > 0 {
@@ -130,6 +132,8 @@ func AuditSelection(selected []testconfig.Spec, runs []testconfig.Spec, dropper 
 		}
 		audit.Drops = append(audit.Drops, Drop{Spec: s.Text, Reason: reason})
 	}
+
+	// Anything still unmatched ran without being selected.
 	for text, n := range numRunning {
 		if n > 0 {
 			return Audit{}, fmt.Errorf("the binary runs %q but no suite of the lane selects it", text)

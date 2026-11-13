@@ -141,8 +141,8 @@ func TestTicketKey(t *testing.T) {
 		"https://tigera.atlassian.net/browse/CORE-13670/": "CORE-13670",
 		"CORE-13670": "CORE-13670",
 	} {
-		if got := TicketKey(in); got != want {
-			t.Errorf("TicketKey(%q) = %q, want %q", in, got, want)
+		if got := ticketKey(in); got != want {
+			t.Errorf("ticketKey(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
