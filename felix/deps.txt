@@ -265,8 +265,13 @@ local:felix/dataplane/external
 local:felix/dataplane/inactive
 local:felix/dataplane/ipsets
 local:felix/dataplane/linux
+local:felix/dataplane/linux/bpfepdefs
 local:felix/dataplane/linux/dataplanedefs
+local:felix/dataplane/linux/flowtabledefs
+local:felix/dataplane/linux/ipipdefs
 local:felix/dataplane/linux/qos
+local:felix/dataplane/linux/routedefs
+local:felix/dataplane/linux/vxlandefs
 local:felix/deltatracker
 local:felix/dispatcher
 local:felix/environment
