@@ -3,26 +3,56 @@ version: condensed-module
 
 defaults:
   timeout: 30m
-  services:
-    - docker
 
 steps:
   - name: api-ci
-    depends: [check-manifests]
-    requests: {cpu: 2750m, memory: 2.25Gi}
-    commands: |
-      cd api
-      make ci
-    epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}/api"
-      artifact push job report --destination test-results || true
+    depends: [check-manifests, go-cache]
+    checkout: true
+    # The compute SA createVM, runOnVM and the teardown authenticate with.
+    secretBundles: [banzai-secrets]
+    cache:
+      - {name: go, mode: read, path: /cache/go}
+    runOnVM:
+      createVM:
+        machineType: e2-standard-4
+      put:
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      source: |
+        set -e
+        .argoci/scripts/restore-go-cache api-ci ~/.go-mod
+        repo="$(pwd)"
+        # There is no epilogue on a machine; results go up on the way out.
+        finish() {
+          rc=$?
+          artifact push job "$repo/api/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd api
+        make ci
 
+  # The CRD validation tests run against envtest's binaries, so a pod will do.
   - name: api-validation
-    depends: [check-manifests]
-    requests: {cpu: 3000m, memory: 2.25Gi}
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    depends: [check-manifests, go-cache]
+    cache:
+      - {name: go, mode: read, path: /cache/go}
+    requests: {cpu: 3000m, memory: 3Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     commands: |
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" api-validation
       cd test
       make ci
     epilogue: |
+      # Epilogues don't inherit the commands' `cd` or exports.
       cd "${CI_HOME}/${CI_GIT_DIR}/test"
       artifact push job report --destination test-results || true

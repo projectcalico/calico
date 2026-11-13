@@ -29,14 +29,13 @@ build: bin/rapidclient-$(ARCH)
 # doesn't force a binary rebuild.
 bin/rapidclient-%: $(filter-out %_test.go,$(wildcard *.go))
 	mkdir -p bin
-	$(DOCKER_RUN) -e CGO_ENABLED=0 -e GOARCH=$* $(CALICO_BUILD) \
-		go build -o $@ -ldflags "-s -w" .
+	$(DOCKER_GO_BUILD) sh -c 'CGO_ENABLED=0 GOARCH=$* go build -o $@ -ldflags "-s -w" .'
 
 # ut is the repo-wide unit-test convention; lib.Makefile's `test: ut fv st`
 # aggregates it. This image has no fv/st layer, so those are no-ops (defining them
 # is what makes `make test` work rather than erroring on a missing `ut`/`fv`/`st`).
 ut:
-	$(DOCKER_RUN) $(CALICO_BUILD) go test ./...
+	$(DOCKER_GO_BUILD) go test ./...
 
 fv st:
 	@:

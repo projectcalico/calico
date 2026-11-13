@@ -7,10 +7,9 @@ defaults:
   timeout: 1h
 
 steps:
+  # On a VM: yaml-lint runs the linter's own image, which needs docker.
   - name: check-yaml
-    jobSize: medium
-    requests: {cpu: 3500m, memory: 1Gi}
-    services: [docker]
+    checkout: true
     changes:
       in:
         - ^.*\.ya?ml$
@@ -18,19 +17,106 @@ steps:
         - ^lib\.Makefile$
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$
-    commands: |
-      make yaml-lint
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
+    runOnVM:
+      createVM:
+        machineType: e2-standard-4
+      source: |
+        set -e
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        make yaml-lint
 
-  # go vet fans out across every package, so it scales with the cores it gets.
-  - name: check-go
+  # TEMPORARY: builds this commit's Go caches once, for every step that compiles
+  # with the same settings: the module cache for every module in the repo and the
+  # upstream trees the third-party and Istio builds use, and the build cache from
+  # every package and the calico binary. Handed over the volume cache in place of a
+  # GCS restore. VM steps take only the modules: a VM has no module proxy, and
+  # without them each one downloads its own through the shared NAT.
+  - name: go-cache
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     env:
-      - name: BUILD_CACHE_GROUP
-        value: preflight-go-checks
-      - name: STORE_BUILD_CACHE
+      - name: NATIVE_GO_BUILD
         value: "true"
     jobSize: large
-    requests: {cpu: 14000m, memory: 16Gi}
-    services: [docker]
+    # Nearly every Go step waits on this one, and the compile scales with cores.
+    requests: {cpu: 9000m, memory: 10Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    cache:
+      - {name: go, mode: write, path: /cache/go}
+    changes:
+      in:
+        - ^go\.mod$
+        - ^go\.sum$
+        - ^.*\.go$
+        - ^.*deps\.txt$
+        - ^istio/
+        - ^third_party/
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/depstree\.yaml$
+        - ^\.argoci/config\.yaml$
+        - ^\.argoci/scripts/restore-go-cache$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      s=$(date +%s)
+      for mod in $(git ls-files '*go.mod' | grep -v -e '^third_party/' -e '/vendor/'); do
+        ( cd "$(dirname "$mod")" && go mod download )
+      done
+      make -C istio init-istio-source
+      for d in envoy-gateway envoy-ratelimit cni-plugins; do make -C "third_party/$d" init-source; done
+      for mod in istio/istio third_party/envoy-gateway/envoy-gateway third_party/envoy-ratelimit/envoy-ratelimit \
+          third_party/cni-plugins/containernetworking-plugins third_party/cni-plugins/flannel-cni-plugin; do
+        ( cd "$mod" && go mod download )
+      done
+      echo "CACHE-TEST go-cache download $(( $(date +%s) - s ))s"
+      # Through make, so the settings are the ones the readers build with. Both at
+      # once: the package build's tail leaves cores idle that the binary's can use.
+      s=$(date +%s)
+      make go-compile-all &
+      pkgs=$!
+      make -C cmd/calico build
+      wait "$pkgs"
+      echo "CACHE-TEST go-cache compile $(( $(date +%s) - s ))s"
+      du -sh .go-pkg-cache "$GO_MOD_ROOT/pkg/mod"
+      s=$(date +%s)
+      tar -cf - .go-pkg-cache | pigz -1 > /cache/go/go-build.tar.gz &
+      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | pigz -1 > /cache/go/go-mod.tar.gz &
+      wait
+      echo "CACHE-TEST go-cache pack $(( $(date +%s) - s ))s"
+      ls -l /cache/go
+
+  # go vet fans out across every package, so it scales with the cores it gets.
+  # Every module waits on this step, so it runs in the build image directly
+  # rather than paying dind's start-up and image pull.
+  - name: check-go
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    # TEMPORARY: compiles against the caches go-cache built.
+    depends: [go-cache]
+    cache:
+      - {name: go, mode: read, path: /cache/go}
+    env:
+      # TEMPORARY: the thread pool the old 7000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "7"
+      # Runs the Makefiles' go-build recipes here rather than in a nested container.
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    jobSize: large
+    requests: {cpu: 4500m, memory: 4Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     changes:
       in:
         - ^go\.mod$
@@ -44,6 +130,7 @@ steps:
         - ^\.argoci/config\.yaml$
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" check-go
       # `useGoBuild` steps take their image tag from config.yaml rather than from
       # the toolchain the Makefiles build with.
       want=$(make --no-print-directory -s -f metadata.mk --eval 'print: ; @echo $(GO_BUILD_VER)' print)
@@ -61,25 +148,41 @@ steps:
       if [ "${CI_GIT_REF_TYPE}" = PR ] || [ "${CI_GIT_REF_TYPE}" = MERGE ]; then make fix-changed; else make fix-all; fi
       make check-dirty
 
+  # On a VM: the Python checks build and run their own tox image.
   - name: check-python
-    jobSize: small
-    requests: {cpu: 2000m, memory: 0.75Gi}
-    services: [docker]
+    checkout: true
     changes:
       in:
         - ^networking-calico/
         - ^lib\.Makefile$
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$
-    commands: |
-      make -C networking-calico fmtpy
-      make -C networking-calico flake8
-      make check-dirty
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
+    runOnVM:
+      createVM:
+        machineType: e2-standard-2
+      source: |
+        set -e
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        make -C networking-calico fmtpy
+        make -C networking-calico flake8
+        make check-dirty
 
   # Grep-speed checks, so one step rather than three.
   - name: check-language-dockerfiles
+    env:
+      # TEMPORARY: the thread pool the old 2250m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "2"
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     jobSize: small
-    requests: {cpu: 2250m, memory: 548Mi}
+    requests: {cpu: 2000m, memory: 548Mi}
     useGoBuild: true
     workspaceVolumes: none
     changes:
@@ -95,9 +198,9 @@ steps:
       make check-dockerfiles
       make check-mockery-config
 
+  # On a VM: several components' protobuf rules still run go-build through docker.
   - name: check-protobufs
-    requests: {cpu: 1500m, memory: 1Gi}
-    services: [docker]
+    checkout: true
     changes:
       in:
         - ^.*\.pb\.go$
@@ -106,13 +209,21 @@ steps:
         - ^lib\.Makefile$
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$
-    commands: |
-      make protobuf fix-changed
-      make check-dirty
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
+    runOnVM:
+      createVM:
+        machineType: e2-standard-4
+      source: |
+        set -e
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        make protobuf fix-changed
+        make check-dirty
 
+  # On a VM: gen-files runs go-build and prettier through docker.
   - name: check-manifests
-    requests: {cpu: 2750m, memory: 2.5Gi}
-    services: [docker]
+    checkout: true
     changes:
       in:
         - ^api/
@@ -133,25 +244,47 @@ steps:
         - ^lib\.Makefile$
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$
-    commands: |
-      make -C lib gen-files
-      make -C api gen-files
-      make -C libcalico-go gen-files
-      make -C felix gen-files
-      make -C goldmane gen-files
-      make -C kube-controllers gen-files
-      make -C operator gen-files
-      make gen-manifests
-      make fix-changed
-      make check-ocp-no-crds
-      make check-dirty
+    depends: [go-cache]
+    cache:
+      - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
+    runOnVM:
+      createVM:
+        machineType: e2-standard-4
+      put:
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      source: |
+        set -e
+        .argoci/scripts/restore-go-cache check-manifests ~/.go-mod
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        make -C lib gen-files
+        make -C api gen-files
+        make -C libcalico-go gen-files
+        make -C felix gen-files
+        make -C goldmane gen-files
+        make -C kube-controllers gen-files
+        make -C operator gen-files
+        make gen-manifests
+        make fix-changed
+        make check-ocp-no-crds
+        make check-dirty
 
   # A chart can change what it renders without any committed manifest changing,
   # which a diff of the tree cannot see.
   - name: check-helm-charts
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     jobSize: small
-    requests: {cpu: 2000m, memory: 1Gi}
-    services: [docker]
+    requests: {cpu: 3000m, memory: 5.5Gi}
+    useGoBuild: true
+    workspaceVolumes: none
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     changes:
       in:
         - ^charts/
@@ -165,8 +298,16 @@ steps:
   # Regenerating the patches must be a no-op. metadata.mk is in the trigger
   # because `go mod tidy`'s output depends on the toolchain.
   - name: check-thirdparty-dep-patches
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     requests: {cpu: 2000m, memory: 2Gi}
-    services: [docker]
+    useGoBuild: true
+    workspaceVolumes: none
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     changes:
       in:
         - ^hack/thirdparty/
@@ -185,43 +326,106 @@ steps:
       make check-thirdparty-dep-patches
       make check-dirty
 
-  - name: build-calico-image
+  # The calico/calico image is built without Docker: calico-image compiles and
+  # stages everything the Dockerfile reads, calico-image-buildkit builds it with
+  # rootless buildkit, and build-calico-image publishes the tar the image loaders
+  # pull. The last keeps the name every consumer depends on.
+  - name: calico-image
+    depends: [go-cache]
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-      - name: STORE_BUILD_CACHE
+      - name: NATIVE_GO_BUILD
         value: "true"
-    services: [docker]
     timeout: 1h
     jobSize: large
-    requests: {cpu: 7000m, memory: 8Gi}
+    requests: {cpu: 7000m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    cache:
+      - {name: go, mode: read, path: /cache/go}
+      - {name: calico-image, mode: write, path: /cache/calico-image}
     changes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     commands: |
-      make -C cmd/calico image
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" calico-image
+      make -C cmd/calico image-context
+      mkdir -p /cache/calico-image
+      cp -a cmd/calico/bin/image-context-amd64/. /cache/calico-image/
+
+  # The cgo and race calico binaries and the libbpf tree, for the Felix steps.
+  # Apart from the image so the image build doesn't wait on them; -race recompiles
+  # every package, so it gains nothing from a shared build cache either.
+  - name: calico-test-binaries
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    depends: [go-cache]
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    timeout: 1h
+    jobSize: large
+    requests: {cpu: 7000m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    cache:
+      - {name: go, mode: read, path: /cache/go}
+      - {name: calico-test-binaries, mode: write, path: /cache/calico-test-binaries}
+    changes:
+      dependsOn: [cmd]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    commands: |
+      # TEMPORARY: the build image lacks the zstd CLI the libbpf tarball needs.
+      dnf install -y -q zstd
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" calico-test-binaries
       # Shipped for the Felix FVs, which would otherwise build them per lane.
       make -C cmd/calico build-cgo build-race
-      docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
-      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/calico-image.tar
-      artifact push workflow /tmp/calico-image.tar.zst
-      artifact push workflow cmd/calico/bin/calico-cgo-amd64
-      artifact push workflow cmd/calico/bin/calico-race-amd64
+      cp cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64 /cache/calico-test-binaries/
       # Shipped so no Felix lane clones libbpf; the cgo build has usually made it.
       test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || make -C felix libbpf
       LIBBPF_VERSION=$(grep -E '^LIBBPF_VERSION[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
       # tar only warns on a missing path.
       test -d felix/bpf-gpl/libbpf || { echo "libbpf clone missing at felix/bpf-gpl/libbpf" >&2; exit 1; }
       test -f "felix/bpf-gpl/.libbpf-${LIBBPF_VERSION}" || { echo "libbpf version marker felix/bpf-gpl/.libbpf-${LIBBPF_VERSION} missing" >&2; exit 1; }
-      tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
-      artifact push workflow /tmp/libbpf-amd64.tar.zst
+      tar --use-compress-program="zstd -3" -cf /cache/calico-test-binaries/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
+
+  - name: calico-image-buildkit
+    depends: [calico-image]
+    changes:
+      dependsOn: [cmd]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    cache:
+      - {name: calico-image, mode: read, path: /cache/calico-image}
+      - {name: calico-image-tar, mode: write, path: /cache/calico-image-tar}
+    buildkit:
+      tag: calico/calico:latest-amd64
+      context: /cache/calico-image
+      tar: /cache/calico-image-tar/calico-image.tar
+
+  - name: build-calico-image
+    depends: [calico-image-buildkit]
+    jobSize: small
+    changes:
+      dependsOn: [cmd]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    cache:
+      - {name: calico-image-tar, mode: read, path: /cache/calico-image-tar}
+      - {name: calico-image-zst, mode: write, path: /cache/calico-image-zst}
+    commands: |
+      zstd -3 -T0 -o /cache/calico-image-zst/calico-image.tar.zst /cache/calico-image-tar/calico-image.tar
 
   # Tagged by a hash of the recipe, so an unchanged one is a pull rather than a
   # ~20 minute emulated build.
   - name: build-nft-rpms
-    services: [docker]
+    checkout: true
     timeout: 1h
-    requests: {cpu: 2000m, memory: 1Gi}
     matrix:
       - name: amd64
         env: [{name: ARCH, value: amd64}]
@@ -235,20 +439,33 @@ steps:
       in:
         - '^hack/rpms/nftables/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
-    commands: |
-      mkdir -p logs
-      export BUILD_LOG="logs/build-nft-rpms-${ARCH}.log"
-      .argoci/scripts/build-nft-rpms.sh "${ARCH}"
-    epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}"
-      artifact push job logs --destination logs || true
+    # Matrixed, so it stays on the artifact store: a shared cache has one writer.
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
+    runOnVM:
+      createVM:
+        machineType: e2-standard-2
+      env: [ARCH]
+      source: |
+        set -e
+        repo="$(pwd)"
+        finish() {
+          rc=$?
+          artifact push job "$repo/logs" --destination logs || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        mkdir -p logs
+        export BUILD_LOG="logs/build-nft-rpms-${ARCH}.log"
+        .argoci/scripts/build-nft-rpms.sh "${ARCH}"
 
   # Published on merge because later builds pull it. A step here rather than a
   # workflow of its own because it reads this workflow's cached build.
   - name: push-nft-rpms
-    services: [docker]
+    checkout: true
     timeout: 1h
-    requests: {cpu: 1500m, memory: 1.5Gi}
     depends: [build-nft-rpms]
     when: GIT_REF_TYPE == 'MERGE' && (GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-')
     matrix:
@@ -264,49 +481,86 @@ steps:
       in:
         - '^hack/rpms/nftables/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
-    commands: |
-      export DOCKER_USER="$DOCKERHUB_USERNAME"
-      export DOCKER_TOKEN="$DOCKERHUB_PASSWORD"
-      mkdir -p logs
-      export BUILD_LOG="logs/push-nft-rpms-${ARCH}.log"
-      .argoci/scripts/push-nft-rpms.sh "${ARCH}"
-    epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}"
-      artifact push job logs --destination logs || true
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
+    runOnVM:
+      createVM:
+        machineType: e2-standard-4
+      env: [ARCH, DOCKERHUB_USERNAME, DOCKERHUB_PASSWORD]
+      source: |
+        set -e
+        repo="$(pwd)"
+        finish() {
+          rc=$?
+          artifact push job "$repo/logs" --destination logs || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        export DOCKER_USER="$DOCKERHUB_USERNAME"
+        export DOCKER_TOKEN="$DOCKERHUB_PASSWORD"
+        mkdir -p logs
+        export BUILD_LOG="logs/push-nft-rpms-${ARCH}.log"
+        .argoci/scripts/push-nft-rpms.sh "${ARCH}"
 
   - name: build-node-image
-    services: [docker]
+    checkout: true
     timeout: 1h
-    requests: {cpu: 4000m, memory: 5Gi}
-    depends: [build-nft-rpms]
+    depends: [build-nft-rpms, go-cache]
     changes:
       dependsOn: [node]
       in:
         - '^node/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
-    commands: |
-      # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
-      # does not go back to the registry for it.
-      .argoci/scripts/load-nft-rpms.sh amd64
-      make -C node image
-      docker save calico/node:latest-amd64 -o /tmp/node-image.tar
-      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/node-image.tar
-      artifact push workflow /tmp/node-image.tar.zst
+    cache:
+      - {name: node-image, mode: write, path: /cache/node-image}
+      - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
+    runOnVM:
+      createVM:
+        machineType: e2-standard-4
+      put:
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      get:
+        - out:/cache/node-image
+      source: |
+        set -eo pipefail
+        .argoci/scripts/restore-go-cache build-node-image ~/.go-mod
+        for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
+        # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
+        # does not go back to the registry for it.
+        .argoci/scripts/load-nft-rpms.sh amd64
+        make -C node image
+        mkdir -p ~/out
+        docker save calico/node:latest-amd64 | zstd -3 -T0 -o ~/out/node-image.tar.zst
 
   # TypeScript, so there is no Go import graph to gate on.
   - name: build-whisker-image
-    services: [docker]
+    checkout: true
     timeout: 1h
-    requests: {cpu: 2000m, memory: 1.75Gi}
     changes:
       in:
         - '^whisker/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
-    commands: |
-      make -C whisker image
-      docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
-      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/whisker-image.tar
-      artifact push workflow /tmp/whisker-image.tar.zst
+    cache:
+      - {name: whisker-image, mode: write, path: /cache/whisker-image}
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
+    runOnVM:
+      createVM:
+        machineType: e2-standard-2
+      get:
+        - out:/cache/whisker-image
+      source: |
+        set -eo pipefail
+        for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
+        make -C whisker image
+        mkdir -p ~/out
+        docker save calico/whisker:latest-amd64 | zstd -3 -T0 -o ~/out/whisker-image.tar.zst
 
   # Built through the same target its consumers run, so the refs it bakes in
   # (localhost:5000/calico/<name>:test-build) are the ones they install.
@@ -314,68 +568,111 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    services: [docker]
+    checkout: true
     timeout: 1h
-    jobSize: large
-    requests: {cpu: 7000m, memory: 8Gi}
     changes:
       dependsOn: [operator]
       in:
         - '^operator/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
-    commands: |
-      make kind-operator-image
-      docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
-      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/operator-image.tar
-      artifact push workflow /tmp/operator-image.tar.zst
-      # Windows FV installs from docker.io refs rather than the kind registry.
-      DEV_IMAGE_REGISTRY=docker.io DEV_IMAGE_PATH=calico DEV_IMAGE_TAG=test-build \
-        hack/test/kind/infra/build-operator.sh
-      docker save calico/operator:test-build -o /tmp/operator-image-dockerio.tar
-      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/operator-image-dockerio.tar
-      artifact push workflow /tmp/operator-image-dockerio.tar.zst
+    depends: [go-cache]
+    cache:
+      - {name: operator-image, mode: write, path: /cache/operator-image}
+      - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP]
+      put:
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      get:
+        - out:/cache/operator-image
+      source: |
+        set -eo pipefail
+        .argoci/scripts/restore-go-cache build-operator-image ~/.go-mod
+        for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
+        mkdir -p ~/out
+        make kind-operator-image
+        docker save localhost:5000/calico/operator:test-build | zstd -3 -T0 -o ~/out/operator-image.tar.zst
+        # Windows FV installs from docker.io refs rather than the kind registry.
+        DEV_IMAGE_REGISTRY=docker.io DEV_IMAGE_PATH=calico DEV_IMAGE_TAG=test-build \
+          hack/test/kind/infra/build-operator.sh
+        docker save calico/operator:test-build | zstd -3 -T0 -o ~/out/operator-image-dockerio.tar.zst
 
   # Windows FV installs these rather than building its own. Nothing else builds
   # them, so this is also where a break in them shows up.
   - name: build-windows-images
-    services: [docker]
+    checkout: true
     timeout: 1h
-    jobSize: large
-    requests: {cpu: 7000m, memory: 8Gi}
     changes:
       dependsOn: [node, cni-plugin]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
-    commands: |
-      make -C node build-windows-archive
-      make -C node image-windows
-      make -C cni-plugin image-windows
-      tar --use-compress-program="zstd -3" -cf /tmp/windows-images.tar.zst \
-        node/dist/windows/*.tar cni-plugin/dist/windows/*.tar
-      artifact push workflow /tmp/windows-images.tar.zst
+    depends: [go-cache]
+    cache:
+      - {name: windows-images, mode: write, path: /cache/windows-images}
+      - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      put:
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      get:
+        - out:/cache/windows-images
+      source: |
+        set -eo pipefail
+        .argoci/scripts/restore-go-cache build-windows-images ~/.go-mod
+        for t in make zstd unzip zip; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
+        make -C node build-windows-archive
+        make -C node image-windows
+        make -C cni-plugin image-windows
+        mkdir -p ~/out
+        tar --use-compress-program="zstd -3" -cf ~/out/windows-images.tar.zst \
+          node/dist/windows/*.tar cni-plugin/dist/windows/*.tar
 
   # One tarball, since every kind lane wants all four.
   - name: build-third-party-images
-    services: [docker]
+    checkout: true
     timeout: 1h
-    requests: {cpu: 3500m, memory: 3.5Gi}
     changes:
       dependsOn: [third_party]
       in:
         - '^third_party/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
-    commands: |
-      make -C third_party/envoy-gateway image
-      make -C third_party/envoy-proxy image
-      make -C third_party/envoy-ratelimit image
-      make -C third_party/cni-plugins image
-      docker save \
-        calico/envoy-gateway:latest-amd64 \
-        calico/envoy-proxy:latest-amd64 \
-        calico/envoy-ratelimit:latest-amd64 \
-        calico/third-party-cni-plugins:latest-amd64 \
-        -o /tmp/third-party-images.tar
-      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/third-party-images.tar
-      artifact push workflow /tmp/third-party-images.tar.zst
+    depends: [go-cache]
+    cache:
+      - {name: third-party-images, mode: write, path: /cache/third-party-images}
+      - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
+    runOnVM:
+      createVM:
+        machineType: e2-standard-4
+      put:
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      get:
+        - out:/cache/third-party-images
+      source: |
+        set -eo pipefail
+        .argoci/scripts/restore-go-cache build-third-party-images ~/.go-mod
+        for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
+        make -C third_party/envoy-gateway image
+        make -C third_party/envoy-proxy image
+        make -C third_party/envoy-ratelimit image
+        make -C third_party/cni-plugins image
+        mkdir -p ~/out
+        docker save \
+          calico/envoy-gateway:latest-amd64 \
+          calico/envoy-proxy:latest-amd64 \
+          calico/envoy-ratelimit:latest-amd64 \
+          calico/third-party-cni-plugins:latest-amd64 \
+          | zstd -3 -T0 -o ~/out/third-party-images.tar.zst
 
   # Built here for the VM lanes, which have no module proxy: the binaries import
   # most of Kubernetes, and a VM downloads all of it from the public proxy. libbpf
@@ -383,27 +680,40 @@ steps:
   # The sole writer of the e2e cache group, so its key never flips between two
   # steps' differing package sets.
   - name: build-e2e-binaries
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     env:
       - name: BUILD_CACHE_GROUP
         value: e2e
       - name: STORE_BUILD_CACHE
         value: "true"
-    services: [docker]
+      - name: NATIVE_GO_BUILD
+        value: "true"
     timeout: 1h
-    jobSize: large
-    requests: {cpu: 7000m, memory: 8Gi}
-    depends: [build-calico-image]
+    depends: [calico-test-binaries, go-cache]
     changes:
       dependsOn: [e2e]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    cache:
+      - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
+      - {name: e2e-binaries, mode: write, path: /cache/e2e-binaries}
+      - {name: go, mode: read, path: /cache/go}
+    requests: {cpu: 6000m, memory: 8Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     commands: |
-      ( cd /tmp && artifact pull workflow libbpf-amd64.tar.zst )
-      tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
+      set -o pipefail
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" build-e2e-binaries
+      # The libbpf tarball ships zstd-compressed and the build image lacks the CLI.
+      dnf install -y -q zstd
+      tar --use-compress-program="zstd -d" -xf /cache/calico-test-binaries/libbpf-amd64.tar.zst -C felix/bpf-gpl
       make -C e2e build
       make bin/ginkgo
       make -C e2e/images/rapidclient build
-      tar --use-compress-program="zstd -3" -cf /tmp/e2e-binaries.tar.zst e2e/bin bin/ginkgo e2e/images/rapidclient/bin
-      artifact push workflow /tmp/e2e-binaries.tar.zst
+      tar --use-compress-program="zstd -3" -cf /cache/e2e-binaries/e2e-binaries.tar.zst e2e/bin bin/ginkgo e2e/images/rapidclient/bin
 
   # The nightly repeats the CI module list; this catches the two drifting.
   - name: check-cron-coverage
