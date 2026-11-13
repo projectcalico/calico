@@ -1,0 +1,1 @@
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:AutoHEPs] auto host endpoint tests should create host endpoints for each node [Conformance] [Serial]	label Feature:AutoHEPs: serial specs that provision host endpoints on every node; the autohep lanes enable this label
