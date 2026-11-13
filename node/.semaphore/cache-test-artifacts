@@ -32,6 +32,11 @@ cd ../..
 
 fetch_image() {
   local img=$1
+  # Staged from the volume cache by the caller, in place of the artifact store.
+  if [ -f "${PREFETCHED_ARTIFACTS:-/nonexistent}/${img}" ]; then
+    cp "${PREFETCHED_ARTIFACTS}/${img}" "/tmp/${img}"
+    return
+  fi
   if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
     ( cd /tmp && artifact pull workflow "${img}" ) 2>/dev/null
     return

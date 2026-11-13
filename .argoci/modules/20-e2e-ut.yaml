@@ -1,23 +1,37 @@
 # The e2e suite's own unit tests. Needs docker: building the test binary splices
-# its own flags into a nested `docker run`.
+# its own flags into a nested `docker run`, so the step runs on a VM.
 version: condensed-module
 
 defaults:
   timeout: 30m
-  services:
-    - docker
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: e2e-ut
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [check-go]
-    requests: {cpu: 4250m, memory: 4.75Gi}
-    commands: |
-      cd e2e
-      make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/e2e"
-      artifact push job report --destination test-results || true
+    depends: [check-go, go-cache]
+    checkout: true
+    cache:
+      - {name: go, mode: read, path: /cache/go}
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP]
+      put:
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      source: |
+        set -e
+        .argoci/scripts/restore-go-cache e2e-ut ~/.go-mod
+        repo="$(pwd)"
+        # There is no epilogue on a machine; results go up on the way out.
+        finish() {
+          rc=$?
+          artifact push job "$repo/e2e/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd e2e
+        make ci
