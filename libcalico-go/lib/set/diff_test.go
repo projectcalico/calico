@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,16 @@ import (
 )
 
 var _ = Describe("Set differences", func() {
+	It("should return the items in A but not in B from Difference", func() {
+		s1 := set.From("a", "b", "c", "d")
+		s2 := set.From("c", "d", "e", "1")
+
+		Expect(set.Difference(s1, s2)).To(Equal(set.From("a", "b")))
+		Expect(set.Difference(s2, s1)).To(Equal(set.From("e", "1")))
+		Expect(set.Difference(s1, s1).Len()).To(BeZero())
+		Expect(s1).To(Equal(set.From("a", "b", "c", "d")), "Difference should not modify its inputs")
+	})
+
 	It("should get appropriate callbacks for IterDifferences", func() {
 		By("Creating two sets with different contents")
 		s1 := set.From[string]("a", "b", "c", "d")

@@ -23,7 +23,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/flowtabledeps"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 )
@@ -514,9 +514,9 @@ func (a DSCPAction) String() string {
 type FlowOffloadAction struct{}
 
 func (c FlowOffloadAction) ToFragment(features *environment.Features) string {
-	return fmt.Sprintf("flow offload @%s", dataplanedefs.FlowtableName)
+	return fmt.Sprintf("flow offload @%s", flowtabledeps.FlowtableName)
 }
 
 func (c FlowOffloadAction) String() string {
-	return fmt.Sprintf("FlowOffload:%s", dataplanedefs.FlowtableName)
+	return fmt.Sprintf("FlowOffload:%s", flowtabledeps.FlowtableName)
 }

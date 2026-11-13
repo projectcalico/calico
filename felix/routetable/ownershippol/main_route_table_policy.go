@@ -21,7 +21,9 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/bpfepdeps"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdeps"
+	"github.com/projectcalico/calico/felix/dataplane/linux/routedeps"
 	"github.com/projectcalico/calico/felix/routetable"
 )
 
@@ -48,8 +50,8 @@ func NewMainTable(
 		// So, if we see RTPROTO_BOOT on a route, it's ours if it's also
 		// associated with one of our interfaces.  But, if we see a route with
 		// defaultVXLANProto, we know it's ours.
-		allRouteProtos = []netlink.RouteProtocol{unix.RTPROT_BOOT, dataplanedefs.DefaultRouteProto}
-		exclusiveRouteProtos = []netlink.RouteProtocol{dataplanedefs.DefaultRouteProto}
+		allRouteProtos = []netlink.RouteProtocol{unix.RTPROT_BOOT, routedeps.DefaultRouteProto}
+		exclusiveRouteProtos = []netlink.RouteProtocol{routedeps.DefaultRouteProto}
 	} else {
 		// If DeviceRouteProtocol is not RTPROTO_BOOT, then we use that value
 		// for all our routes and we don't need to worry about RTPROTO_BOOT.
@@ -63,7 +65,7 @@ func NewMainTable(
 			// Always including VXLAN device, even if not enabled.  That means
 			// we'll clean up the routes if VXLAN is disabled.
 			vxlanIfaceName,
-			dataplanedefs.BPFInDev,
+			bpfepdeps.BPFInDev,
 			// Not including routetable.InterfaceNone because MainTableOwnershipPolicy
 			// automatically handles it.
 			// Not including tunl0: unlike the devices above, BIRD may legitimately
@@ -204,7 +206,7 @@ func (d *MainTableOwnershipPolicy) RouteIsOurs(ifaceName string, route *netlink.
 	// protocol check above, so widening this further would only take in routes belonging to
 	// neither component.
 	if d.OwnBIRDIPIPRoutes &&
-		ifaceName == dataplanedefs.IPIPIfaceName &&
+		ifaceName == ipipdeps.IPIPIfaceName &&
 		route.Protocol == unix.RTPROT_BIRD {
 		return true
 	}
