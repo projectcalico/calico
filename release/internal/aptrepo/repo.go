@@ -105,9 +105,8 @@ func (repo *Repo) execWithOutput(args ...string) (string, error) {
 	}
 	cmdArgs = append(cmdArgs, args...)
 	logrus.Debugf("running reprepro command %s", strings.Join(cmdArgs, " "))
-	out, err := repo.runner.Run("reprepro", cmdArgs, nil)
+	out, err := repo.runner.Run("reprepro", cmdArgs)
 	if err != nil {
-		logrus.Error(out)
 		return "", fmt.Errorf("running 'reprepro %s': %w", strings.Join(args, " "), err)
 	}
 	return out, nil

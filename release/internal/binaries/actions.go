@@ -19,9 +19,9 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/projectcalico/calico/release/internal/archives"
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -58,9 +58,8 @@ func (s settings) build(b Builder) error {
 	dir := filepath.Join(s.RepoRoot, b.Component())
 	env := append(s.env(), b.Env()...)
 
-	args := append([]string{"-C", dir}, strings.Fields(b.Target())...)
 	for attempt := 0; ; attempt++ {
-		out, err := s.Run("make", args, env, s.LogPath(b.Component()))
+		out, err := command.Make(s.Runner(), dir).Run([]string{b.Target()}, command.WithEnv(env...), command.WithLogFile(s.LogPath(b.Component())))
 		if err == nil {
 			log.Debug(out)
 			return nil
@@ -69,8 +68,6 @@ func (s settings) build(b Builder) error {
 			log.WithError(err).WithField("attempt", attempt).Warn("Binary build failed, retrying")
 			continue
 		}
-		// Surface the captured output; the failure cause is usually only there.
-		log.Error(out)
 		return s.Errorf("building %s binaries: %w", b.Component(), err)
 	}
 }
@@ -136,8 +133,7 @@ func applyTo(opt any, s *settings) error {
 }
 
 func (s settings) env() []string {
-	env := append(os.Environ(), utils.Env(utils.EnvVersion, s.Version))
-	return append(env, s.extraEnv...)
+	return append(s.extraEnv, utils.Env(utils.EnvVersion, s.Version))
 }
 
 type unitDone struct{}

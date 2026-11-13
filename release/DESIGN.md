@@ -57,8 +57,12 @@ while `archives` only builds.
   directory, a registry, a URL), not as a hashrelease flag. Some verbs predate
   this rule and still take one, such as `operator.Build` and `operator.Publish`.
 - Every step embeds `steps.Step`, which carries the command runner, working dir,
-  step name and logs dir. The zero value runs real commands. Tests swap the
-  runner.
+  step name and logs dir.
+- git and make go through `command.Git(r)` and `command.Make(r, dir)`, not a
+  raw `Run("git", ...)`, so their shared logic stays in one place.
+- Unit tests use a fake runner and never call a real binary. A test that needs
+  the binary (e.g., git, make or gpg) is an fv test: a `_fv_test.go` file with
+  the `fv` build tag.
 - Log lines carry the step name. Each command a step runs logs to
   `<logsDir>/<step>/<slug>.log`, so a failed component's log can be found
   without reading the whole run.

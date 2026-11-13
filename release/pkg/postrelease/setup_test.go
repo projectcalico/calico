@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/registry"
 )
@@ -19,6 +20,8 @@ var (
 	githubOrg, githubRepo, githubRemote             string
 	images                                          string
 )
+
+var commandRunner = command.RealRunner
 
 func init() {
 	flag.StringVar(&releaseVersion, "release-version", "", "Version for the release")

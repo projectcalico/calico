@@ -155,7 +155,7 @@ var imagesCheckOperatorAction = func(cfg *Config) func(ctx context.Context, c *c
 		// The operator publishes to registries of its own, so it is named apart from the
 		// release directories rather than discovered with them.
 		dirs := append(images.ReleaseDirs(), operator.DirName)
-		built, err := releaseImageList(cfg.RepoRootDir, dirs...)
+		built, err := releaseImageList(commandRunner, cfg.RepoRootDir, dirs...)
 		if err != nil {
 			return err
 		}
@@ -181,7 +181,7 @@ func scanRequest(c *cli.Command, cfg *Config, dirs []string, stream, productCode
 	if !c.Bool(imageScanFlag.Name) {
 		return nil, nil
 	}
-	imgs, err := releaseImageList(cfg.RepoRootDir, dirs...)
+	imgs, err := releaseImageList(commandRunner, cfg.RepoRootDir, dirs...)
 	if err != nil {
 		return nil, err
 	}

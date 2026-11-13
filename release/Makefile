@@ -4,6 +4,8 @@ PACKAGE_NAME = github.com/projectcalico/calico/release
 
 include ../lib.Makefile
 
+LINT_ARGS += --build-tags fv
+
 .PHONY: build
 build: bin/release
 
@@ -27,36 +29,55 @@ bin/release: $(shell find . -name "*.go" -or -name "*.gotmpl") internal/defaults
 		$(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) go build -o bin/release -v -buildvcs=false -tags with_embed -ldflags "$(LDFLAGS)" ./cmd'
 
-POSTRELEASE_TEST_PACKAGE		:= $(PACKAGE_NAME)/pkg/postrelease
-UNIT_TEST_PACKAGES	:= $(shell go list ./... | grep -v $(POSTRELEASE_TEST_PACKAGE))
+###############################################################################
+# Tests
+###############################################################################
+GOTESTSUM          := $(if $(DOCKER_GO_BUILD),gotestsum,bin/gotestsum)
+# An empty DOCKER_GO_BUILD runs the tests on the host.
+UT_RUN             := $(DOCKER_GO_BUILD) $(GOTESTSUM)
+FV_RUN             = $(if $(DOCKER_GO_BUILD),$(DOCKER_RUN) $(FV_IMAGE)) $(GOTESTSUM)
 
-.PHONY: ut fv st
-ifdef TESTS_NO_DOCKER
-ut:
+# Each test layer runs only the relevant tests for that layer.
+UNIT_TEST_PACKAGES := $(patsubst %/,%,$(sort $(dir $(shell find . -name '*.go' -not -path './pkg/postrelease/*'))))
+FV_TEST_PACKAGES   := $(patsubst %/,%,$(sort $(dir $(shell find . -name '*_fv_test.go'))))
+
+# FV Images and required tools for functional verification tests
+FV_IMAGE_PACKAGES  := git-core gnupg2 make rpm rpm-build rpm-sign tar
+FV_IMAGE           := calico/release-fv:$(GO_BUILD_VER)
+FV_TOOLS           := git gpg make rpmkeys rpmbuild rpmsign tar
+
+bin/gotestsum:
+	@GOBIN=$(CURDIR)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
+
+.PHONY: ut
+ut: $(filter bin/%,$(GOTESTSUM))
 	@mkdir -p report
-	@gotestsum --junitfile report/unit-tests.xml \
+	@$(UT_RUN) --junitfile report/unit-tests.xml \
 		-- -coverprofile=report/coverage.out $(UNIT_TEST_PACKAGES)
+
+.PHONY: fv
+fv: fv/deps $(filter bin/%,$(GOTESTSUM))
+	@mkdir -p report
+	@$(FV_RUN) --junitfile report/fv-tests.xml \
+		-- -tags fv $(FV_TEST_PACKAGES)
+
+fv/deps:
+ifneq ($(DOCKER_GO_BUILD),)
+	@docker build -q -t $(FV_IMAGE) --build-arg CALICO_BUILD=$(CALICO_BUILD) \
+		--build-arg PACKAGES="$(FV_IMAGE_PACKAGES)" - < fv.Dockerfile >/dev/null
 else
-ut:
-	$(warning Running unit tests inside docker will skip some tests due to missing binaries.)
-	$(warning Run the tests without Docker to test this functionality as well.)
-	@mkdir -p report
-	@$(DOCKER_GO_BUILD) gotestsum --junitfile report/unit-tests.xml \
-		-- -coverprofile=report/coverage.out $(UNIT_TEST_PACKAGES)
+	$(eval missing := $(strip $(foreach t,$(FV_TOOLS),$(if $(shell command -v $(t)),,$(t)))))
+	$(if $(missing),$(warning fv tests needing $(missing) will skip; install with: dnf install -y $(FV_IMAGE_PACKAGES)))
 endif
 
-fv st:
-	$(info *** Release tool does not have $@ tests, skipping)
-	@true
+.PHONY: st st/hashrelease st/release
+st: st/hashrelease st/release
 
-.PHONY: e2e e2e/hashrelease e2e/release
-e2e: e2e/hashrelease e2e/release
-
-e2e/hashrelease: var-require-all-HASHRELEASE_SERVER_BUCKET
+st/hashrelease: var-require-all-HASHRELEASE_SERVER_BUCKET
 	PLAN=true $(MAKE) hashrelease
 	LOCAL=true BRANCH_CHECK=false $(MAKE) hashrelease
 
-e2e/release:
+st/release:
 	PLAN=true $(MAKE) -C ../ release release-publish
 
 ###############################################################################
@@ -74,7 +95,7 @@ check-operator-images:
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: static-checks ut
+ci: static-checks ut fv
 
 ###############################################################################
 # Hashrelease

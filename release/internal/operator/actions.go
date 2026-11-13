@@ -18,12 +18,12 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"os"
 	"slices"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
@@ -153,7 +153,7 @@ func (s settings) run(target string, v Variant, hashrelease bool, env []string) 
 	if err != nil {
 		return s.Errorf("%w", err)
 	}
-	full := append(os.Environ(), s.env(v, hashrelease)...)
+	full := s.env(v, hashrelease)
 	full = append(full, product...)
 	full = append(full, env...)
 	full = append(full, v.Env...)
@@ -165,10 +165,7 @@ func (s settings) run(target string, v Variant, hashrelease bool, env []string) 
 		"version":    s.Version,
 	}
 	s.Logger().WithFields(logFields).Infof("Running %s", target)
-	args := append([]string{"-C", Dir(s.Operator)}, strings.Fields(target)...)
-	out, err := s.Run("make", args, full, s.LogPath(v.Name+"-"+logSlug(target)))
-	if err != nil {
-		s.Logger().Error(out)
+	if _, err := s.Make().Run(strings.Fields(target), command.WithEnv(full...), command.WithLogFile(s.LogPath(v.Name+"-"+logSlug(target)))); err != nil {
 		return s.Errorf("%s for %s: %w", target, v.Name, err)
 	}
 	return nil
@@ -307,7 +304,7 @@ func (s settings) preBuildValidation() error {
 		s.Logger().Warn("Skipping pre-build validation")
 		return nil
 	}
-	dirty, err := utils.GitIsDirty(Dir(s.Operator))
+	dirty, err := command.Git(s.Runner()).In(Dir(s.Operator)).Dirty()
 	if err != nil {
 		return s.Errorf("checking if git is dirty: %w", err)
 	}
