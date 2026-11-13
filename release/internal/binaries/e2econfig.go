@@ -33,15 +33,15 @@ import (
 const (
 	e2eConfigDir = "config"
 
-	// E2EConfigArchive is the file name, under E2EDir, that scheduled lanes
+	// e2eConfigArchive is the file name, under E2EDir, that scheduled lanes
 	// download. The object store has no directory listing, so the tree ships as
 	// one archive whose paths all start with "config/".
-	E2EConfigArchive = e2eConfigDir + ".tar.gz"
+	e2eConfigArchive = e2eConfigDir + ".tar.gz"
 )
 
 // E2EConfigPath returns where the e2e config archive lives under outputDir.
 func E2EConfigPath(outputDir string) string {
-	return filepath.Join(E2EDir(outputDir), E2EConfigArchive)
+	return filepath.Join(E2EDir(outputDir), e2eConfigArchive)
 }
 
 // PackageE2EConfig archives the repository's e2e/config tree into the e2e
@@ -123,14 +123,14 @@ func addFile(tw *tar.Writer, src, rel string) error {
 	if err != nil {
 		return err
 	}
-	size, err := fileSize(file)
+	info, err := file.Stat()
 	if err != nil {
 		return errors.Join(err, file.Close())
 	}
 	hdr := &tar.Header{
 		Name:     e2eConfigDir + "/" + rel,
 		Mode:     0o644,
-		Size:     size,
+		Size:     info.Size(),
 		Typeflag: tar.TypeReg,
 	}
 	if err := tw.WriteHeader(hdr); err != nil {
@@ -138,12 +138,4 @@ func addFile(tw *tar.Writer, src, rel string) error {
 	}
 	_, err = io.Copy(tw, file)
 	return errors.Join(err, file.Close())
-}
-
-func fileSize(f *os.File) (int64, error) {
-	info, err := f.Stat()
-	if err != nil {
-		return 0, err
-	}
-	return info.Size(), nil
 }
