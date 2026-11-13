@@ -30,6 +30,7 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/logging"
 	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
@@ -63,10 +64,10 @@ func configureLogging(filename string) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	logrus.SetFormatter(&logrus.TextFormatter{
+	logrus.SetFormatter(&logging.MultilineErrorFormatter{Formatter: &logrus.TextFormatter{
 		DisableLevelTruncation: true,
 		CallerPrettyfier:       logPrettifier,
-	})
+	}})
 
 	rotateFileHook, err := rotatefilehook.NewRotateFileHook(rotatefilehook.RotateFileConfig{
 		Filename:   filename,
@@ -74,11 +75,11 @@ func configureLogging(filename string) {
 		MaxAge:     30,
 		MaxBackups: 10,
 		Level:      logrus.DebugLevel,
-		Formatter: &logrus.TextFormatter{
+		Formatter: &logging.MultilineErrorFormatter{Formatter: &logrus.TextFormatter{
 			DisableColors:          true,
 			DisableLevelTruncation: true,
 			CallerPrettyfier:       logPrettifier,
-		},
+		}},
 	})
 	if err != nil {
 		panic(err)
