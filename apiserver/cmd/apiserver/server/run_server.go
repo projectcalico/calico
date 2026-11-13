@@ -75,7 +75,7 @@ func PrepareServer(opts *CalicoServerOptions) (*apiserver.ProjectCalicoServer, e
 // the server's error so a failure exits non-zero. Changes to the client CA and request-header settings in
 // kube-system/extension-apiserver-authentication are reloaded by the upstream authenticator, so no restart is needed.
 func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer) error {
-	// Create a context rather than using the stop channel - it's a little more versatile.
+	// Derive a context from the stop channel so the server also stops when RunServer returns.
 	ctx, cancel := context.WithCancel(wait.ContextForChannel(opts.StopCh))
 	defer cancel()
 

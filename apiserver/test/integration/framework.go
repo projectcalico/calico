@@ -120,6 +120,7 @@ func startTestServer(t *testing.T, serverConfig *TestServerConfig, beforeRun fun
 		beforeRun(apiServer.server)
 	}
 
+	// Run the server in the background.
 	go func() {
 		defer close(apiServer.exited)
 		apiServer.runErr = server.RunServer(options, apiServer.server)
@@ -130,6 +131,7 @@ func startTestServer(t *testing.T, serverConfig *TestServerConfig, beforeRun fun
 		t.Fatalf("%v", err)
 	}
 
+	// Build a client that talks to the server.
 	apiServer.config = &restclient.Config{}
 	apiServer.config.Host = secureAddr
 	apiServer.config.Insecure = true
