@@ -98,7 +98,7 @@ func chartsCLIFirstChart(t *testing.T) string {
 
 // runCharts drives the real charts command with a recording runner. It returns
 // the runner and the config, so a test can assert on what reached disk.
-var runCharts = func(t *testing.T, args ...string) (*recordingRunner, *Config) {
+var runCharts = func(t *testing.T, args ...string) (*fakeRunner, *Config) {
 	t.Helper()
 	root := fakeRepo(t, chartsCLITestVersion)
 	cfg := &Config{
@@ -115,9 +115,9 @@ var runCharts = func(t *testing.T, args ...string) (*recordingRunner, *Config) {
 
 // runChartsIn drives the charts command against an existing config, so a test
 // can run twice over one output directory.
-func runChartsIn(t *testing.T, cfg *Config, args ...string) *recordingRunner {
+func runChartsIn(t *testing.T, cfg *Config, args ...string) *fakeRunner {
 	t.Helper()
-	r := &recordingRunner{}
+	r := newFakeRunner()
 	prev, prevResolve := commandRunner, registryDigestResolver
 	commandRunner = r
 	registryDigestResolver = func(string) (string, bool, error) { return chartsCLIDigest, true, nil }
@@ -197,7 +197,7 @@ func TestChartsBuildIndexPointsAtTheDownloadURL(t *testing.T) {
 	r, _ := runCharts(t, "build")
 
 	var urlArg string
-	for _, args := range r.args {
+	for _, args := range r.args() {
 		if i := slices.Index(args, "--url"); i >= 0 && i+1 < len(args) {
 			urlArg = args[i+1]
 		}
@@ -212,8 +212,8 @@ func TestChartsBuildLogsUnderItsOwnStep(t *testing.T) {
 	r, cfg := runCharts(t, "build", "--no-helm-index")
 
 	want := filepath.Join(cfg.LogsDir, "charts-build", "charts.log")
-	if !slices.Contains(r.logPaths, want) {
-		t.Errorf("expected a build log at %q, got %v", want, r.logPaths)
+	if !slices.Contains(r.logPaths(), want) {
+		t.Errorf("expected a build log at %q, got %v", want, r.logPaths())
 	}
 }
 
@@ -270,15 +270,15 @@ func TestChartsPublishLogsPerChart(t *testing.T) {
 	r, cfg := runCharts(t, "publish", "--helm-registry", chartsCLIRegistry)
 
 	dir := filepath.Join(cfg.LogsDir, "charts-publish")
-	if !slices.ContainsFunc(r.logPaths, func(p string) bool { return strings.HasPrefix(p, dir) }) {
-		t.Errorf("expected publish logs under %q, got %v", dir, r.logPaths)
+	if !slices.ContainsFunc(r.logPaths(), func(p string) bool { return strings.HasPrefix(p, dir) }) {
+		t.Errorf("expected publish logs under %q, got %v", dir, r.logPaths())
 	}
 	// A chart goes to several registries, so its log names both.
 	want := chartsCLIFirstChart(t) + "-"
-	if !slices.ContainsFunc(r.logPaths, func(p string) bool {
+	if !slices.ContainsFunc(r.logPaths(), func(p string) bool {
 		return strings.HasPrefix(filepath.Base(p), want)
 	}) {
-		t.Errorf("expected a log named for %q, got %v", want, r.logPaths)
+		t.Errorf("expected a log named for %q, got %v", want, r.logPaths())
 	}
 }
 
@@ -300,7 +300,7 @@ func TestChartsPublishForceRepublishesOverAMovedDigest(t *testing.T) {
 	_, cfg := runCharts(t, "publish", "--helm-registry", chartsCLIRegistry)
 
 	prev, prevResolve := commandRunner, registryDigestResolver
-	r := &recordingRunner{}
+	r := newFakeRunner()
 	commandRunner = r
 	registryDigestResolver = func(string) (string, bool, error) { return "sha256:moved", true, nil }
 	t.Cleanup(func() { commandRunner, registryDigestResolver = prev, prevResolve })
@@ -320,7 +320,7 @@ func TestChartsPublishFailsOnAMovedDigestWithoutForce(t *testing.T) {
 	_, cfg := runCharts(t, "publish", "--helm-registry", chartsCLIRegistry)
 
 	prev, prevResolve := commandRunner, registryDigestResolver
-	r := &recordingRunner{}
+	r := newFakeRunner()
 	commandRunner = r
 	registryDigestResolver = func(string) (string, bool, error) { return "sha256:moved", true, nil }
 	t.Cleanup(func() { commandRunner, registryDigestResolver = prev, prevResolve })

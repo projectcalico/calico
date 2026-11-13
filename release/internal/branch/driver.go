@@ -22,7 +22,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/command"
 )
 
 // Step names. --skip validates its values against stepNames.
@@ -55,6 +55,9 @@ func StepNames() []string {
 type Driver struct {
 	// RepoRoot is the absolute path to the repository root.
 	RepoRoot string
+
+	// Runner defaults to running real commands.
+	Runner command.CommandRunner
 
 	Remote              string
 	MainBranch          string
@@ -141,7 +144,7 @@ func (d *Driver) CutReleaseBranch(plan *CutPlan) error {
 	if t, ok := plan.mainTarget(); ok && strings.HasPrefix(plan.Source, tagRefPrefix) {
 		return fmt.Errorf("a cut from %s cannot advance %s", strings.TrimPrefix(plan.Source, tagRefPrefix), t.Branch)
 	}
-	g := gitIn(d.RepoRoot)
+	g := command.Git(d.runner()).In(d.RepoRoot)
 	if d.Plan {
 		logPlan(plan)
 	}
@@ -149,6 +152,10 @@ func (d *Driver) CutReleaseBranch(plan *CutPlan) error {
 		return err
 	}
 	return d.runSteps(d.steps(g, plan))
+}
+
+func (d *Driver) runner() command.CommandRunner {
+	return command.Runner(d.Runner)
 }
 
 // logPlan prints the resolved plan under --plan: the derived branch and each
@@ -166,15 +173,19 @@ func logPlan(p *CutPlan) {
 
 // validateFreshCut gates a fresh cut with the dirty-tree reject (off under
 // --no-validation) and the base check (always); a resume skips both.
-func (d *Driver) validateFreshCut(g git, p *CutPlan) error {
-	if localBranchExists(g, p.Derived) {
+func (d *Driver) validateFreshCut(g command.GitRunner, p *CutPlan) error {
+	exists, err := localBranchExists(g, p.Derived)
+	if err != nil {
+		return err
+	}
+	if exists {
 		logrus.WithField("branch", p.Derived).Info("derived branch already exists; skipping fresh-cut checks")
 		return nil // resuming an existing cut
 	}
 	// --no-validation turns off only the dirty-tree reject; the base check always
 	// runs. Plan mode previews both without acting.
 	if d.Validate && !d.Plan {
-		if dirty, err := utils.GitIsDirty(d.RepoRoot); err != nil {
+		if dirty, err := g.Dirty(); err != nil {
 			return err
 		} else if dirty {
 			return fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before creating a new release branch")
@@ -187,7 +198,7 @@ func (d *Driver) validateFreshCut(g git, p *CutPlan) error {
 
 // checkBases verifies each base is current with its remote. Main is always
 // required (its upstream is .git/config); the source only under BranchCheck.
-func (d *Driver) checkBases(g git, p *CutPlan) error {
+func (d *Driver) checkBases(g command.GitRunner, p *CutPlan) error {
 	// A cut from a tag never touches main; the tag just has to be the one the
 	// remote released.
 	if tagName, ok := strings.CutPrefix(p.Source, tagRefPrefix); ok {
@@ -239,7 +250,7 @@ type Step struct {
 
 // steps returns the ordered build+publish steps for the plan. g is the git
 // access the steps run against.
-func (d *Driver) steps(g git, p *CutPlan) []Step {
+func (d *Driver) steps(g command.GitRunner, p *CutPlan) []Step {
 	// update-main and tag-main both act on the main target's branch when main
 	// advances; the derived branch is tagged separately.
 	mainTgt, hasMainTgt := p.mainTarget()
@@ -247,7 +258,7 @@ func (d *Driver) steps(g git, p *CutPlan) []Step {
 	return []Step{
 		{
 			Name: stepCutBranch,
-			Done: func() (bool, error) { return localBranchExists(g, p.Derived), nil },
+			Done: func() (bool, error) { return localBranchExists(g, p.Derived) },
 			Do:   func() error { return createAndCheckoutBranch(g, p.Derived, p.Source) },
 		},
 		{
@@ -266,7 +277,7 @@ func (d *Driver) steps(g git, p *CutPlan) []Step {
 				if !ok {
 					return true, nil // no derived tag: the branch inherits main's tag
 				}
-				return localTagPointsAt(g, t.DevTag, t.Branch), nil
+				return localTagPointsAt(g, t.DevTag, t.Branch)
 			},
 			Do: func() error {
 				t, ok := p.derivedTarget()
@@ -296,7 +307,7 @@ func (d *Driver) steps(g git, p *CutPlan) []Step {
 				if !hasMainTgt {
 					return true, nil
 				}
-				return localTagPointsAt(g, mainTgt.DevTag, mainTgt.Branch), nil
+				return localTagPointsAt(g, mainTgt.DevTag, mainTgt.Branch)
 			},
 			Do: func() error {
 				if !hasMainTgt {
@@ -316,13 +327,15 @@ func (d *Driver) steps(g git, p *CutPlan) []Step {
 				// Done only when every ref is on the remote at the local sha. A stale
 				// remote ref reports not-done so it can be re-pushed.
 				for _, r := range d.pushRefs(p) {
-					out, err := g("rev-parse", "--verify", "--quiet", r)
-					if err != nil {
+					localSha, err := g.Resolve(r)
+					if errors.Is(err, command.ErrGitRefNotFound) {
 						// Ref not local yet, so not on the remote: not done. This is
 						// the state under --plan and before the earlier steps act.
 						return false, nil
 					}
-					localSha := strings.TrimSpace(out)
+					if err != nil {
+						return false, err
+					}
 					present, matches, err := remoteRefMatches(g, p.Remote, r, localSha)
 					if err != nil {
 						return false, err
@@ -363,10 +376,14 @@ func (d *Driver) steps(g git, p *CutPlan) []Step {
 
 // updateDerived runs PrepareDerived on the derived branch and commits the files
 // it changed.
-func (d *Driver) updateDerived(g git, p *CutPlan) error {
+func (d *Driver) updateDerived(g command.GitRunner, p *CutPlan) error {
 	// If source advanced past the derived branch, re-cut it from source so the
 	// resume picks up the new source commits; otherwise just check it out.
-	if sourceAheadOf(g, p.Source, p.Derived) {
+	ahead, err := sourceAheadOf(g, p.Source, p.Derived)
+	if err != nil {
+		return err
+	}
+	if ahead {
 		logrus.WithFields(logrus.Fields{"branch": p.Derived, "source": p.Source, "step": stepUpdateDerived}).
 			Info("source advanced; resetting derived branch to source")
 		if err := resetBranchToBase(g, p.Derived, p.Source); err != nil {
@@ -395,7 +412,7 @@ func (d *Driver) updateDerived(g git, p *CutPlan) error {
 
 // updateMain runs PrepareMain on the main branch and commits the changed files,
 // so a later checkout does not carry a staged main edit.
-func (d *Driver) updateMain(g git, mainBranch string) error {
+func (d *Driver) updateMain(g command.GitRunner, mainBranch string) error {
 	if err := checkoutBranch(g, mainBranch); err != nil {
 		return err
 	}

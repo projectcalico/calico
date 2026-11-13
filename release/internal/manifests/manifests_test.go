@@ -20,66 +20,26 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-type call struct {
-	name string
-	args []string
-	env  []string
+func failingOn(name string) *command.Recorder {
+	return &command.Recorder{Reply: func(c command.Call) (string, error) {
+		if c.Name == name {
+			return "boom", fmt.Errorf("%s failed", name)
+		}
+		return "", nil
+	}}
 }
 
-// fakeRunner records every invocation and can fail a named command.
-type fakeRunner struct {
-	mu    sync.Mutex
-	calls []call
-	// failOn fails any command whose name matches.
-	failOn string
-}
-
-func (f *fakeRunner) RunInDir(_, name string, args, env []string) (string, error) {
-	return f.record(name, args, env)
-}
-
-func (f *fakeRunner) RunInDirToFile(_, name string, args, env []string, _ string) (string, error) {
-	return f.record(name, args, env)
-}
-
-func (f *fakeRunner) Run(name string, args, env []string) (string, error) {
-	return f.record(name, args, env)
-}
-
-func (f *fakeRunner) RunToFile(name string, args, env []string, _ string) (string, error) {
-	return f.record(name, args, env)
-}
-
-func (f *fakeRunner) RunInDirNoCapture(_, name string, args, env []string) error {
-	_, err := f.record(name, args, env)
-	return err
-}
-
-func (f *fakeRunner) RunNoCapture(name string, args, env []string) error {
-	return f.RunInDirNoCapture("", name, args, env)
-}
-
-func (f *fakeRunner) record(name string, args, env []string) (string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.calls = append(f.calls, call{name: name, args: args, env: env})
-	if f.failOn != "" && name == f.failOn {
-		return "boom", fmt.Errorf("%s failed", name)
-	}
-	return "", nil
-}
-
-func (f *fakeRunner) named(name string) []call {
-	var out []call
-	for _, c := range f.calls {
-		if c.name == name {
+func named(r *command.Recorder, name string) []command.Call {
+	var out []command.Call
+	for _, c := range r.Calls() {
+		if c.Name == name {
 			out = append(out, c)
 		}
 	}
@@ -143,9 +103,9 @@ func writeManifest(t *testing.T, root, name string, images ...string) {
 	}
 }
 
-func madeTarget(r *fakeRunner, target string) bool {
-	for _, c := range r.named("make") {
-		if slices.Contains(c.args, target) {
+func madeTarget(r *command.Recorder, target string) bool {
+	for _, c := range named(r, "make") {
+		if slices.Contains(c.Args, target) {
 			return true
 		}
 	}
@@ -154,14 +114,14 @@ func madeTarget(r *fakeRunner, target string) bool {
 
 func TestBuild(t *testing.T) {
 	t.Run("generates and collects", func(t *testing.T) {
-		r := &fakeRunner{}
+		r := &command.Recorder{}
 		if err := Build(testManifests(t), true, false, WithRunner(r), WithCollect()); err != nil {
 			t.Fatalf("Build: %v", err)
 		}
 		if !madeTarget(r, generateTarget) {
 			t.Error("expected the manifests to be generated")
 		}
-		if got := len(r.named("rsync")); got != 1 {
+		if got := len(named(r, "rsync")); got != 1 {
 			t.Errorf("expected the manifests to be collected once, got %d", got)
 		}
 		if madeTarget(r, ocpBundleTarget) {
@@ -172,7 +132,7 @@ func TestBuild(t *testing.T) {
 	// A release ships the checked-in manifests: it must not regenerate, and it
 	// must still get a bundle.
 	t.Run("builds the bundle without generating", func(t *testing.T) {
-		r := &fakeRunner{}
+		r := &command.Recorder{}
 		m := testManifests(t)
 		writeBundle(t, m.RepoRoot)
 		if err := Build(m, false, true, WithRunner(r)); err != nil {
@@ -181,7 +141,7 @@ func TestBuild(t *testing.T) {
 		if madeTarget(r, generateTarget) {
 			t.Error("expected no manifest generation")
 		}
-		if len(r.named("rsync")) != 0 {
+		if len(named(r, "rsync")) != 0 {
 			t.Error("expected no manifests copy")
 		}
 		if !madeTarget(r, ocpBundleTarget) {
@@ -193,26 +153,30 @@ func TestBuild(t *testing.T) {
 	})
 
 	t.Run("resets the tree when generation fails", func(t *testing.T) {
-		r := &fakeRunner{failOn: "make"}
-		if err := Build(testManifests(t), true, false, WithRunner(r)); err == nil {
+		r := failingOn("make")
+		m := testManifests(t)
+		if err := Build(m, true, false, WithRunner(r)); err == nil {
 			t.Fatal("expected generation to fail")
 		}
-		reset := r.named("git")
+		reset := named(r, "git")
 		if len(reset) != 1 {
 			t.Fatalf("expected the tree to be reset once, got %d resets", len(reset))
 		}
-		if !slices.Contains(reset[0].args, "checkout") {
-			t.Errorf("expected a checkout, got %v", reset[0].args)
+		if reset[0].Dir != m.RepoRoot {
+			t.Errorf("expected the reset to run in %s, got %q", m.RepoRoot, reset[0].Dir)
+		}
+		if !slices.Contains(reset[0].Args, "checkout") {
+			t.Errorf("expected a checkout, got %v", reset[0].Args)
 		}
 		for _, tree := range generatedTrees {
-			if !slices.Contains(reset[0].args, tree) {
-				t.Errorf("expected %s to be restored, got %v", tree, reset[0].args)
+			if !slices.Contains(reset[0].Args, tree) {
+				t.Errorf("expected %s to be restored, got %v", tree, reset[0].Args)
 			}
 		}
 	})
 
 	t.Run("sends the versions the script reads", func(t *testing.T) {
-		r := &fakeRunner{}
+		r := &command.Recorder{}
 		m := testManifests(t)
 		m.Registry = productRegistry
 		if err := Build(m, true, false, WithRunner(r)); err != nil {
@@ -225,7 +189,7 @@ func TestBuild(t *testing.T) {
 			utils.EnvOperatorImageOverride:    operatorImage,
 			utils.EnvRegistry:                 productRegistry,
 		}
-		env := r.named("make")[0].env
+		env := named(r, "make")[0].Env
 		for k, v := range want {
 			if !slices.Contains(env, k+"="+v) {
 				t.Errorf("expected %s=%s in the environment", k, v)
@@ -236,24 +200,24 @@ func TestBuild(t *testing.T) {
 	// An empty registry leaves whatever the manifests already carry, so the
 	// variable must be absent rather than set to an empty string.
 	t.Run("always exports the registry", func(t *testing.T) {
-		r := &fakeRunner{}
+		r := &command.Recorder{}
 		m := testManifests(t)
 		m.Registry = productRegistry
 		if err := Build(m, true, false, WithRunner(r)); err != nil {
 			t.Fatalf("Build: %v", err)
 		}
-		if !slices.Contains(r.named("make")[0].env, utils.EnvRegistry+"="+productRegistry) {
+		if !slices.Contains(named(r, "make")[0].Env, utils.EnvRegistry+"="+productRegistry) {
 			t.Errorf("expected %s=%s in the environment", utils.EnvRegistry, productRegistry)
 		}
 	})
 
 	t.Run("excludes repo mechanics from the copy", func(t *testing.T) {
-		r := &fakeRunner{}
+		r := &command.Recorder{}
 		m := testManifests(t)
 		if err := Build(m, true, false, WithRunner(r), WithCollect()); err != nil {
 			t.Fatalf("Build: %v", err)
 		}
-		args := r.named("rsync")[0].args
+		args := named(r, "rsync")[0].Args
 		for _, name := range excluded {
 			if !slices.Contains(args, "--exclude="+name) {
 				t.Errorf("expected %s to be excluded, got %v", name, args)
@@ -270,11 +234,11 @@ func TestBuild(t *testing.T) {
 		Env = func(m Manifests) []string {
 			return append(original(m), "EXTRA=set")
 		}
-		r := &fakeRunner{}
+		r := &command.Recorder{}
 		if err := Build(testManifests(t), true, false, WithRunner(r)); err != nil {
 			t.Fatalf("Build: %v", err)
 		}
-		env := r.named("make")[0].env
+		env := named(r, "make")[0].Env
 		if !slices.Contains(env, "EXTRA=set") {
 			t.Error("expected the override's addition")
 		}
@@ -311,7 +275,7 @@ func TestBuild(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				m := testManifests(t)
 				tc.mutate(&m)
-				err := Build(m, tc.generate, false, WithRunner(&fakeRunner{}))
+				err := Build(m, tc.generate, false, WithRunner(&command.Recorder{}))
 				if err == nil {
 					t.Fatalf("expected an error containing %q", tc.wantErr)
 				}
@@ -358,7 +322,7 @@ func TestAssertVersions(t *testing.T) {
 				for _, name := range Files() {
 					writeManifest(t, m.RepoRoot, name, tc.images...)
 				}
-				err := AssertVersions(m, WithRunner(&fakeRunner{}))
+				err := AssertVersions(m, WithRunner(&command.Recorder{}))
 				if tc.wantErr == "" {
 					if err != nil {
 						t.Fatalf("AssertVersions: %v", err)
@@ -382,7 +346,7 @@ func TestAssertVersions(t *testing.T) {
 			writeManifest(t, m.RepoRoot, name, productRef(productVersion))
 		}
 		writeManifest(t, m.RepoRoot, "not-in-the-list.yaml", productRef("v0.0.1"))
-		if err := AssertVersions(m, WithRunner(&fakeRunner{})); err != nil {
+		if err := AssertVersions(m, WithRunner(&command.Recorder{})); err != nil {
 			t.Fatalf("AssertVersions: %v", err)
 		}
 	})
@@ -390,7 +354,7 @@ func TestAssertVersions(t *testing.T) {
 	t.Run("needs an operator image to check against", func(t *testing.T) {
 		m := testManifests(t)
 		m.Operator.Image = ""
-		err := AssertVersions(m, WithRunner(&fakeRunner{}))
+		err := AssertVersions(m, WithRunner(&command.Recorder{}))
 		if err == nil || !strings.Contains(err.Error(), "no operator image specified") {
 			t.Errorf("expected a missing operator image error, got %v", err)
 		}

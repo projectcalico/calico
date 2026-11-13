@@ -25,7 +25,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -57,7 +56,16 @@ const (
 
 const MetadataFile = "metadata.mk"
 
-var load = sync.OnceValue(readMetadata)
+var (
+	runner command.CommandRunner
+	load   = sync.OnceValue(readMetadata)
+)
+
+// UseRunner sets the runner that reads metadata.mk; nil reads it for real.
+func UseRunner(r command.CommandRunner) {
+	runner = r
+	load = sync.OnceValue(readMetadata)
+}
 
 func readMetadata() map[string]string {
 	if len(embeddedMetadata) > 0 {
@@ -68,7 +76,7 @@ func readMetadata() map[string]string {
 		}
 		return m
 	}
-	root, err := command.GitDir()
+	root, err := command.Git(command.Runner(runner)).RepoRoot()
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to locate git root for metadata.mk; release flag defaults will be empty")
 		return map[string]string{}
@@ -90,18 +98,11 @@ func readMetadata() map[string]string {
 // stdin, so make resolves $(...) references and ?= precedence naturally.
 // The driver prints only the variables introduced by the included data.
 func parseMetadata(data []byte) (map[string]string, error) {
-	var stdin bytes.Buffer
-	stdin.WriteString(driverPrefix)
-	stdin.Write(data)
-	stdin.WriteString(driverSuffix)
-
-	cmd := exec.Command("make", "--quiet", "-f", "-", "_defaults_print")
-	cmd.Stdin = &stdin
-	out, err := cmd.CombinedOutput()
+	out, err := command.Make(command.Runner(runner), "").Run([]string{"--quiet", "-f", "-", "_defaults_print"}, command.WithStdin(driverPrefix+string(data)+driverSuffix))
 	if err != nil {
-		return nil, fmt.Errorf("make: %w: %s", err, out)
+		return nil, fmt.Errorf("make: %w", err)
 	}
-	return parseDriverOutput(string(out))
+	return parseDriverOutput(out)
 }
 
 // parseDriverOutput reads the driver's $(info) output (one `KEY = VALUE` per
@@ -123,17 +124,32 @@ func parseDriverOutput(out string) (map[string]string, error) {
 	return m, nil
 }
 
-func get(key string) string { return load()[key] }
-
-func getOr(key, fallback string) string {
-	if v := get(key); v != "" {
-		return v
-	}
-	return fallback
+var builtin = map[string]*string{
+	KeyOrganization:        &organization,
+	KeyGitRepo:             &repo,
+	KeyGitRemote:           &remote,
+	KeyReleaseBranchPrefix: &releaseBranchPrefix,
+	KeyDevTagSuffix:        &devTagSuffix,
 }
 
-func Organization() string        { return getOr(KeyOrganization, organization) }
-func Repo() string                { return getOr(KeyGitRepo, repo) }
-func Remote() string              { return getOr(KeyGitRemote, remote) }
-func ReleaseBranchPrefix() string { return getOr(KeyReleaseBranchPrefix, releaseBranchPrefix) }
-func DevTagSuffix() string        { return getOr(KeyDevTagSuffix, devTagSuffix) }
+// Builtin is key's value when metadata.mk does not set it. It reads no
+// metadata, so it is safe to call at package init.
+func Builtin(key string) string {
+	if v, ok := builtin[key]; ok {
+		return *v
+	}
+	return ""
+}
+
+func value(key string) string {
+	if v := load()[key]; v != "" {
+		return v
+	}
+	return Builtin(key)
+}
+
+func Organization() string        { return value(KeyOrganization) }
+func Repo() string                { return value(KeyGitRepo) }
+func Remote() string              { return value(KeyGitRemote) }
+func ReleaseBranchPrefix() string { return value(KeyReleaseBranchPrefix) }
+func DevTagSuffix() string        { return value(KeyDevTagSuffix) }
