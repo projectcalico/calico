@@ -1711,7 +1711,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.Collector != nil {
 		if !config.BPFEnabled {
 			log.Debug("Stats collection is required, create nflog reader")
-			nflogrd := collector.NewNFLogReader(config.LookupsCache, 1, 2,
+			nflogrd := collector.NewNFLogReader(config.LookupsCache, config.HealthAggregator, 1, 2,
 				config.NfNetlinkBufSize, true)
 			collectorPacketInfoReader = nflogrd
 			log.Debug("Stats collection is required, create conntrack reader")

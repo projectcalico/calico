@@ -594,8 +594,7 @@ var _ = Describe("NFLOG Datasource", func() {
 			}
 
 			lm = newMockLookupsCache(epMap, nflogMap, nil, nil)
-			nflogReader = NewNFLogReader(lm, 0, 0, 0, false)
-			Expect(nflogReader.Start()).NotTo(HaveOccurred())
+			nflogReader = NewNFLogReader(lm, nil, 0, 0, 0, false)
 			c = newCollector(lm, conf).(*collector)
 			c.SetPacketInfoReader(nflogReader)
 			c.SetConntrackInfoReader(dummyConntrackInfoReader{})
@@ -649,8 +648,7 @@ var _ = Describe("NFLOG Datasource", func() {
 			}
 
 			lm = newMockLookupsCache(epMap, nflogMap, nil, nil)
-			nflogReader = NewNFLogReader(lm, 0, 0, 0, false)
-			Expect(nflogReader.Start()).NotTo(HaveOccurred())
+			nflogReader = NewNFLogReader(lm, nil, 0, 0, 0, false)
 			c = newCollector(lm, conf).(*collector)
 			c.SetPacketInfoReader(nflogReader)
 			c.SetConntrackInfoReader(dummyConntrackInfoReader{})
@@ -1184,7 +1182,7 @@ var _ = Describe("Conntrack Datasource", func() {
 		}
 
 		lm = newMockLookupsCache(epMap, nflogMap, nil, nil)
-		nflogReader = NewNFLogReader(lm, 0, 0, 0, false)
+		nflogReader = NewNFLogReader(lm, nil, 0, 0, 0, false)
 		c = newCollector(lm, conf).(*collector)
 
 		c.SetPacketInfoReader(nflogReader)
@@ -1834,8 +1832,7 @@ var _ = Describe("Reporting Metrics", func() {
 
 		lm = newMockLookupsCache(epMap, nflogMap, nil, nil)
 		mockReporter = newMockReporter()
-		nflogReader = NewNFLogReader(lm, 0, 0, 0, false)
-		Expect(nflogReader.Start()).NotTo(HaveOccurred())
+		nflogReader = NewNFLogReader(lm, nil, 0, 0, 0, false)
 		c = newCollector(lm, conf).(*collector)
 		c.RegisterMetricsReporter(mockReporter)
 		c.SetPacketInfoReader(nflogReader)
@@ -3335,7 +3332,7 @@ func BenchmarkNflogPktToStat(b *testing.B) {
 		DisplayDebugTraceLogs: true,
 	}
 	lm := newMockLookupsCache(epMap, nflogMap, nil, nil)
-	nflogReader := NewNFLogReader(lm, 0, 0, 0, false)
+	nflogReader := NewNFLogReader(lm, nil, 0, 0, 0, false)
 	c := newCollector(lm, conf).(*collector)
 	c.SetPacketInfoReader(nflogReader)
 	c.SetConntrackInfoReader(dummyConntrackInfoReader{})
@@ -3367,7 +3364,7 @@ func BenchmarkApplyStatUpdate(b *testing.B) {
 		DisplayDebugTraceLogs: true,
 	}
 	lm := newMockLookupsCache(epMap, nflogMap, nil, nil)
-	nflogReader := NewNFLogReader(lm, 0, 0, 0, false)
+	nflogReader := NewNFLogReader(lm, nil, 0, 0, 0, false)
 	c := newCollector(lm, conf).(*collector)
 	c.SetPacketInfoReader(nflogReader)
 	c.SetConntrackInfoReader(dummyConntrackInfoReader{})

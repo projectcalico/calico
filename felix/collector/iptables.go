@@ -17,8 +17,10 @@
 package collector
 
 import (
+	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -30,19 +32,32 @@ import (
 	"github.com/projectcalico/calico/felix/nfnetlink"
 	"github.com/projectcalico/calico/felix/nfnetlink/nfnl"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/logrusr"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
-// NFLogReader consumes NFLog data and converts them to a format used by collector.
+const defaultNFLOGRetryInterval = 5 * time.Second
+
+type nflogAggregates = map[nfnetlink.NflogPacketTuple]*nfnetlink.NflogPacketAggregate
+
+// nflogSubscribeFunc has the signature of nfnetlink.NflogSubscribe.
+type nflogSubscribeFunc func(
+	groupNum int, bufSize int, ch chan<- nflogAggregates, done <-chan struct{}, includeConnTrack bool,
+) (<-chan error, error)
+
+// NFLogReader consumes NFLog data and converts them to a format used by collector.  It keeps an
+// NFLOG subscription running for each direction, resubscribing whenever one fails, and reports
+// each as ready only while it is subscribed.
 type NFLogReader struct {
+	started  atomic.Bool
 	stopOnce sync.Once
 	wg       sync.WaitGroup
 	stopC    chan struct{}
 
-	luc            *calc.LookupsCache
-	IngressC       chan map[nfnetlink.NflogPacketTuple]*nfnetlink.NflogPacketAggregate
-	EgressC        chan map[nfnetlink.NflogPacketTuple]*nfnetlink.NflogPacketAggregate
-	nfIngressDoneC chan struct{}
-	nfEgressDoneC  chan struct{}
+	luc              *calc.LookupsCache
+	healthAggregator *health.HealthAggregator
+	IngressC         chan nflogAggregates
+	EgressC          chan nflogAggregates
 
 	packetInfoC chan types.PacketInfo
 
@@ -50,16 +65,24 @@ type NFLogReader struct {
 	netlinkEgressGroup  int
 	bufSize             int
 	servicesEnabled     bool
+
+	subscribe     nflogSubscribeFunc
+	retryInterval time.Duration
 }
 
-func NewNFLogReader(lookupsCache *calc.LookupsCache, inGrp, eGrp, bufSize int, services bool) *NFLogReader {
+// NewNFLogReader creates an NFLogReader.  healthAggregator may be nil.
+func NewNFLogReader(
+	lookupsCache *calc.LookupsCache,
+	healthAggregator *health.HealthAggregator,
+	inGrp, eGrp, bufSize int,
+	services bool,
+) *NFLogReader {
 	return &NFLogReader{
-		stopC:          make(chan struct{}),
-		luc:            lookupsCache,
-		IngressC:       make(chan map[nfnetlink.NflogPacketTuple]*nfnetlink.NflogPacketAggregate, 1000),
-		EgressC:        make(chan map[nfnetlink.NflogPacketTuple]*nfnetlink.NflogPacketAggregate, 1000),
-		nfIngressDoneC: make(chan struct{}),
-		nfEgressDoneC:  make(chan struct{}),
+		stopC:            make(chan struct{}),
+		luc:              lookupsCache,
+		healthAggregator: healthAggregator,
+		IngressC:         make(chan nflogAggregates, 1000),
+		EgressC:          make(chan nflogAggregates, 1000),
 
 		packetInfoC: make(chan types.PacketInfo, 1000),
 
@@ -67,14 +90,30 @@ func NewNFLogReader(lookupsCache *calc.LookupsCache, inGrp, eGrp, bufSize int, s
 		netlinkEgressGroup:  eGrp,
 		bufSize:             bufSize,
 		servicesEnabled:     services,
+
+		subscribe:     nfnetlink.NflogSubscribe,
+		retryInterval: defaultNFLOGRetryInterval,
 	}
 }
 
+// Start starts the NFLOG subscriptions in the background.  An NFLogReader can only be started once.
 func (r *NFLogReader) Start() error {
-	if err := r.subscribe(); err != nil {
-		return nil
+	if !r.started.CompareAndSwap(false, true) {
+		return errors.New("NFLogReader can only be started once")
 	}
 
+	for _, sub := range []nflogSubscription{
+		{direction: "ingress", healthName: "NFLOGIngressReader", groupNum: r.netlinkIngressGroup, ch: r.IngressC},
+		{direction: "egress", healthName: "NFLOGEgressReader", groupNum: r.netlinkEgressGroup, ch: r.EgressC},
+	} {
+		if r.healthAggregator != nil {
+			// Reporters start out not ready.
+			r.healthAggregator.RegisterReporter(sub.healthName, &health.HealthReport{Ready: true}, 0)
+		}
+		r.wg.Go(func() {
+			r.maintainSubscription(sub)
+		})
+	}
 	r.wg.Go(func() {
 		r.run()
 	})
@@ -82,10 +121,12 @@ func (r *NFLogReader) Start() error {
 	return nil
 }
 
+// Stop stops the NFLOG subscriptions and waits for the reader's goroutines to exit.
 func (r *NFLogReader) Stop() {
 	r.stopOnce.Do(func() {
 		close(r.stopC)
 	})
+	r.wg.Wait()
 }
 
 // Chan returns the channel with converted data structures
@@ -93,22 +134,53 @@ func (r *NFLogReader) PacketInfoChan() <-chan types.PacketInfo {
 	return r.packetInfoC
 }
 
-func subscribeToNflog(gn int, nlBufSiz int, nflogChan chan map[nfnetlink.NflogPacketTuple]*nfnetlink.NflogPacketAggregate, nflogDoneChan chan struct{}, enableServices bool) error {
-	return nfnetlink.NflogSubscribe(gn, nlBufSiz, nflogChan, nflogDoneChan, enableServices)
+type nflogSubscription struct {
+	direction  string
+	healthName string
+	groupNum   int
+	ch         chan nflogAggregates
 }
 
-func (r *NFLogReader) subscribe() error {
-	err := subscribeToNflog(r.netlinkIngressGroup, r.bufSize, r.IngressC, r.nfIngressDoneC, r.servicesEnabled)
-	if err != nil {
-		return fmt.Errorf("error when subscribing to NFLOG (ingress): %w", err)
-	}
+// maintainSubscription subscribes to NFLOG until Stop, resubscribing retryInterval after each
+// failure.
+func (r *NFLogReader) maintainSubscription(sub nflogSubscription) {
+	logCtx := log.WithFields(log.Fields{"direction": sub.direction, "groupNum": sub.groupNum})
+	failureLog := logrusr.NewRateLimitedLogger(logrusr.OptInterval(time.Minute)).WithFields(logCtx.Data)
+	for {
+		err := r.runSubscription(sub, logCtx)
+		r.reportReady(sub, false)
+		if err == nil {
+			// Stopped.
+			return
+		}
+		failureLog.WithError(err).Error("NFLOG subscription failed, flow logs will lack policy " +
+			"verdicts and rule hits until it recovers.  Will retry.")
 
-	err = subscribeToNflog(r.netlinkEgressGroup, r.bufSize, r.EgressC, r.nfEgressDoneC, r.servicesEnabled)
-	if err != nil {
-		return fmt.Errorf("error when subscribing to NFLOG (egress): %w", err)
+		select {
+		case <-r.stopC:
+			return
+		case <-time.After(r.retryInterval):
+		}
 	}
+}
 
-	return nil
+// runSubscription subscribes to NFLOG and blocks until the subscription ends.  It returns nil if it
+// ended because of Stop.
+func (r *NFLogReader) runSubscription(sub nflogSubscription, logCtx *log.Entry) error {
+	endC, err := r.subscribe(sub.groupNum, r.bufSize, sub.ch, r.stopC, r.servicesEnabled)
+	if err != nil {
+		return fmt.Errorf("subscribing to NFLOG: %w", err)
+	}
+	logCtx.Info("Subscribed to NFLOG.")
+	r.reportReady(sub, true)
+	return <-endC
+}
+
+func (r *NFLogReader) reportReady(sub nflogSubscription, ready bool) {
+	if r.healthAggregator == nil {
+		return
+	}
+	r.healthAggregator.Report(sub.healthName, &health.HealthReport{Ready: ready})
 }
 
 func (r *NFLogReader) run() {
@@ -117,17 +189,28 @@ func (r *NFLogReader) run() {
 		case <-r.stopC:
 			return
 		case nflogPacketAggrMap := <-r.IngressC:
-			for _, nflogPacketAggr := range nflogPacketAggrMap {
-				info := r.ConvertNflogPkt(rules.RuleDirIngress, nflogPacketAggr)
-				r.packetInfoC <- info
+			if !r.sendPacketInfos(rules.RuleDirIngress, nflogPacketAggrMap) {
+				return
 			}
 		case nflogPacketAggrMap := <-r.EgressC:
-			for _, nflogPacketAggr := range nflogPacketAggrMap {
-				info := r.ConvertNflogPkt(rules.RuleDirEgress, nflogPacketAggr)
-				r.packetInfoC <- info
+			if !r.sendPacketInfos(rules.RuleDirEgress, nflogPacketAggrMap) {
+				return
 			}
 		}
 	}
+}
+
+// sendPacketInfos converts the aggregates and sends them to packetInfoC.  It returns false if the
+// reader was stopped first.
+func (r *NFLogReader) sendPacketInfos(dir rules.RuleDir, aggrs nflogAggregates) bool {
+	for _, nflogPacketAggr := range aggrs {
+		select {
+		case r.packetInfoC <- r.ConvertNflogPkt(dir, nflogPacketAggr):
+		case <-r.stopC:
+			return false
+		}
+	}
+	return true
 }
 
 func (r *NFLogReader) ConvertNflogPkt(dir rules.RuleDir, nPktAggr *nfnetlink.NflogPacketAggregate) types.PacketInfo {
