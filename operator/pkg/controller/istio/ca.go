@@ -114,8 +114,46 @@ func (r *ReconcileIstio) resolveSigner(ctx context.Context, in *trustInputs, sel
 	}
 	if step.Transition != nil {
 		in.notice = transitionNotice(step, current.source, desiredSource)
+		return nil
+	}
+	if in.current != nil && current.source != istio.CASourceSelfSigned {
+		return r.retireSelfSigned(ctx, selfSigned)
 	}
 	return nil
+}
+
+// retireSelfSigned marks istio-ca-secret once a cacerts signs and no
+// transition still trusts its root. Without the mark, a deleted cacerts would
+// bring the old self-signed CA back as the signer, and ztunnels no longer
+// trust its root.
+func (r *ReconcileIstio) retireSelfSigned(ctx context.Context, secret *corev1.Secret) error {
+	if secret == nil || selfSignedRetired(secret) {
+		return nil
+	}
+	fingerprints := selfSignedFingerprints(secret)
+	if fingerprints == "" {
+		return nil
+	}
+	secret = secret.DeepCopy()
+	if secret.Annotations == nil {
+		secret.Annotations = map[string]string{}
+	}
+	secret.Annotations[istio.SelfSignedCARetiredAnnotation] = fingerprints
+	log.Info("Retired Istio's self-signed CA", "secret", istio.IstioNamespace+"/"+istio.IstioSelfSignedCASecretName)
+	return r.Update(ctx, secret)
+}
+
+func selfSignedRetired(secret *corev1.Secret) bool {
+	fingerprints := selfSignedFingerprints(secret)
+	return fingerprints != "" && secret.Annotations[istio.SelfSignedCARetiredAnnotation] == fingerprints
+}
+
+func selfSignedFingerprints(secret *corev1.Secret) string {
+	roots, err := istio.ParseCACertificates(secret.Data[istio.RootCertKey])
+	if err != nil {
+		return ""
+	}
+	return istio.Fingerprints(roots)
 }
 
 // signer is the CA istiod signs with now.
@@ -131,8 +169,8 @@ type signer struct {
 
 // currentSigner reads the CA istiod signs with: the one in cacerts when it
 // exists, since a complete cacerts puts istiod on the plugged-CA path whoever
-// made it, else the self-signed CA istiod persisted in istio-ca-secret. An
-// install with neither has no signer yet.
+// made it, else the self-signed CA istiod persisted in istio-ca-secret, unless
+// the operator retired it. An install with neither has no signer yet.
 func currentSigner(cacerts, selfSigned *corev1.Secret) signer {
 	var s signer
 	var secret *corev1.Secret
@@ -143,7 +181,7 @@ func currentSigner(cacerts, selfSigned *corev1.Secret) signer {
 		if s.source == "" {
 			s.source = istio.CASourceUnmanaged
 		}
-	case selfSigned != nil:
+	case selfSigned != nil && !selfSignedRetired(selfSigned):
 		secret, s.source = selfSigned, istio.CASourceSelfSigned
 	default:
 		return s

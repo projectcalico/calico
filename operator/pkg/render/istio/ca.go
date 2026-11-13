@@ -25,6 +25,10 @@ const (
 	OperatorCASecretName = "tigera-istio-ca"
 	// IstioSelfSignedCASecretName is where istiod persists the CA it generates itself.
 	IstioSelfSignedCASecretName = "istio-ca-secret"
+	// SelfSignedCARetiredAnnotation marks istio-ca-secret once the mesh no
+	// longer trusts its root, with the fingerprints of that root, so a Secret
+	// istiod writes again with a new root does not read as retired.
+	SelfSignedCARetiredAnnotation = "operator.tigera.io/istio-ca-retired"
 	// TrustAnchorsConfigMapName publishes this cluster's own roots and trust domain
 	// for its peers to read.
 	TrustAnchorsConfigMapName = "istio-trust-anchors"

@@ -716,6 +716,39 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectDegradedMentioning(istio.IstioNamespace+"/"+istio.CACertsSecretName, "does not match")
 		})
 
+		It("retires istio-ca-secret after the migration, so a deleted cacerts comes back with the operator-managed CA", func() {
+			createIstioCASecret()
+			reconcileIstio()
+			advanceTo(istio.TransitionAwaitExpiry)
+			Expect(getSecret(istioCAKey).Annotations).NotTo(HaveKey(istio.SelfSignedCARetiredAnnotation))
+			now = transitionOf().Deadline
+			reconcileIstio()
+			Expect(transitionOf().Phase).To(Equal(istio.TransitionNone))
+			Expect(getSecret(istioCAKey).Annotations).To(HaveKeyWithValue(istio.SelfSignedCARetiredAnnotation, istio.Fingerprint(selfSigned.cert)))
+
+			Expect(cli.Delete(ctx, getSecret(cacertsKey))).NotTo(HaveOccurred())
+			reconcileIstio()
+
+			cacerts := getSecret(cacertsKey)
+			Expect(cacerts.Annotations).To(BeEmpty())
+			Expect(cacerts.Data).To(Equal(getSecret(operatorCAKey).Data))
+			expectPublished(operatorCA().Roots[0])
+			expectNotDegraded()
+		})
+
+		It("falls back to istio-ca-secret for a cacerts deleted before the migration ends, while its root is still trusted", func() {
+			createIstioCASecret()
+			reconcileIstio()
+			advanceTo(istio.TransitionSwitchSigner)
+
+			Expect(cli.Delete(ctx, getSecret(cacertsKey))).NotTo(HaveOccurred())
+			reconcileIstio()
+
+			expectPhase(istio.TransitionDistributeRoot, time.Time{})
+			expectSigner(selfSigned)
+			Expect(getSecret(istioCAKey).Annotations).NotTo(HaveKey(istio.SelfSignedCARetiredAnnotation))
+		})
+
 		It("ignores istio-ca-secret once an operator-rendered cacerts exists", func() {
 			reconcileIstio()
 			cacerts := getSecret(cacertsKey)
