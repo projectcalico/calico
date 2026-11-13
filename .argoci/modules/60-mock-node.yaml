@@ -1,10 +1,10 @@
-# Mock node test tool `make ci`.
+# Mock node test tool `make ci`, on a VM for docker.
 version: condensed-module
 
 defaults:
   timeout: 1h
-  services:
-    - docker
+  # The compute SA createVM, runOnVM and the teardown authenticate with.
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: mock-node-ci
@@ -12,7 +12,14 @@ steps:
       - name: BUILD_CACHE_GROUP
         value: calico
     depends: [check-go]
-    requests: {cpu: 4000m, memory: 2Gi}
-    commands: |
-      cd test-tools/mocknode
-      make ci
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP]
+      source: |
+        set -e
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd test-tools/mocknode
+        make ci
