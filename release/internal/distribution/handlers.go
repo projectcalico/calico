@@ -16,23 +16,19 @@ package distribution
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"cloud.google.com/go/storage"
-	"github.com/Masterminds/semver/v3"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/outputs"
-	"github.com/projectcalico/calico/release/internal/steps"
+	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const MutableCachePolicy = "max-age=60, s-maxage=300, stale-while-revalidate=60"
@@ -40,16 +36,14 @@ const MutableCachePolicy = "max-age=60, s-maxage=300, stale-while-revalidate=60"
 var (
 	_ Handler = S3{}
 	_ Handler = GCS{}
-	_ Handler = GithubRelease{}
 	_ Handler = HashreleaseServer{}
 	_ Handler = Preparer{}
 	_ Handler = Publisher{}
 
-	_ validator = S3{}
-	_ validator = GCS{}
-	_ validator = GithubRelease{}
-	_ validator = HashreleaseServer{}
-	_ validator = Preparer{}
+	_ Validator = S3{}
+	_ Validator = GCS{}
+	_ Validator = HashreleaseServer{}
+	_ Validator = Preparer{}
 )
 
 type S3 struct {
@@ -187,170 +181,13 @@ func (d GCS) Validate(u Upload) error {
 	return validSource(u)
 }
 
-type GithubRelease struct {
-	Repo  github.Repo
-	Tag   string
-	Title string
-	Body  string
-
-	Draft  bool
-	DryRun bool
-
-	Log    *logrus.Entry
-	Runner command.CommandRunner
-
-	releases *github.Releases
-}
-
-func (d GithubRelease) Name() string { return fmt.Sprintf("%s github release", d.Tag) }
-
-func (d GithubRelease) github() (*github.Releases, error) {
-	if d.releases != nil {
-		return d.releases, nil
-	}
-	return github.NewReleases(d.Repo, github.Client(d.Runner).Repositories)
-}
-
-func (d GithubRelease) Publish(ctx context.Context, src string) error {
-	files, err := topLevelFiles(src)
-	if err != nil {
-		return fmt.Errorf("get files: %w", err)
-	}
-	if len(files) == 0 {
-		return fmt.Errorf("no release files %s", d.Tag)
-	}
-	if d.DryRun {
-		d.log().WithField("files", files).Infof("Dry run, not creating %s", d.Name())
-		return nil
-	}
-	// Written by an earlier step, and excluded from the listing so a re-run
-	// does not checksum it into itself.
-	sums := filepath.Join(src, sumsFileName)
-	if _, err := os.Stat(sums); err != nil {
-		return fmt.Errorf("%s: %w", sumsFileName, err)
-	}
-	files = append(files, sums)
-	gh, err := d.github()
-	if err != nil {
-		return fmt.Errorf("github client: %w", err)
-	}
-	rel, err := gh.CreateDraft(ctx, d.Tag, d.releaseName(), d.Body)
-	if err != nil {
-		return fmt.Errorf("create draft: %w", err)
-	}
-
-	assets, err := steps.Go(files, github.NewAsset)
-	if err != nil {
-		return fmt.Errorf("release assets: %w", err)
-	}
-	missing, err := gh.SyncAssets(ctx, rel.GetID(), assets)
-	if err != nil {
-		return fmt.Errorf("check existing assets: %w", err)
-	}
-	d.log().WithFields(logrus.Fields{"upload": len(missing), "attached": len(files) - len(missing)}).Info("Release assets")
-
-	_, err = steps.GoLimit(missing, steps.MaxConcurrency, func(a github.Asset) (struct{}, error) {
-		return struct{}{}, d.upload(ctx, gh, rel.GetID(), a)
-	})
-	if err != nil {
-		return fmt.Errorf("upload assets: %w", err)
-	}
-	if d.Draft {
-		return nil
-	}
-	latest, err := d.makeLatest(ctx)
-	if err != nil {
-		return fmt.Errorf("make latest: %w", err)
-	}
-	return gh.Publish(ctx, d.Tag, latest)
-}
-
-func (d GithubRelease) artifacts(src string) ([]outputs.ArtifactFile, error) {
-	base, err := github.DownloadURL(d.Repo.Org, d.Repo.Name, d.Tag)
-	if err != nil {
-		return nil, fmt.Errorf("download URL: %w", err)
-	}
-	return filesAt(src, base)
-}
-
-func (d GithubRelease) makeLatest(ctx context.Context) (bool, error) {
-	gh, err := d.github()
-	if err != nil {
-		return false, fmt.Errorf("github client: %w", err)
-	}
-	latestTag, err := gh.LatestTag(ctx)
-	if err != nil {
-		return false, fmt.Errorf("get latest tag: %w", err)
-	}
-	// Nothing published yet, so this release is the latest by default.
-	if latestTag == "" {
-		return true, nil
-	}
-	latest, err := d.semver(latestTag)
-	if err != nil {
-		return false, fmt.Errorf("parse latest tag %q: %w", latestTag, err)
-	}
-	this, err := d.semver(d.Tag)
-	if err != nil {
-		return false, fmt.Errorf("parse release tag %q: %w", d.Tag, err)
-	}
-	return this.GreaterThan(latest), nil
-}
-
-func (d GithubRelease) semver(tag string) (*semver.Version, error) {
-	return semver.NewVersion(strings.TrimPrefix(tag, "v"))
-}
-
-func (d GithubRelease) upload(ctx context.Context, gh *github.Releases, releaseID int64, a github.Asset) error {
-	log := d.log().WithField("asset", a.Name())
-	for attempt := 0; ; attempt++ {
-		err := gh.UploadAsset(ctx, releaseID, a.Path)
-		if err == nil {
-			log.Debug("Attached release asset")
-			return nil
-		}
-		if attempt >= steps.MaxRetries {
-			return fmt.Errorf("upload %s: %w", a.Path, err)
-		}
-		log.WithError(err).WithField("attempt", attempt).Warn("Asset upload failed, retrying")
-		// The failure may have been a lost response rather than a lost
-		// upload, which would leave the name taken and reject the retry.
-		complete, stateErr := gh.AssetState(ctx, releaseID, a)
-		if stateErr != nil {
-			return fmt.Errorf("upload %s: %w", a.Path, errors.Join(err, stateErr))
-		}
-		if complete {
-			log.Debug("Asset already landed")
-			return nil
-		}
-	}
-}
-
-func (d GithubRelease) releaseName() string {
-	if d.Title == "" {
-		return d.Tag
-	}
-	return d.Title
-}
-
-func (d GithubRelease) log() *logrus.Entry {
-	if d.Log == nil {
-		return logrus.NewEntry(logrus.StandardLogger())
-	}
-	return d.Log
-}
-
-func (d GithubRelease) Validate(u Upload) error {
-	return validSource(u)
-}
-
 // Create a SHA256 checksum file for all files and write it to the specified directory.
 // Returns the release assets: the files checksummed, plus the sums file.
 // SHA256Sums writes a checksum file covering everything at the top level of
 // dir, and returns dir's files plus that file. Any existing sums file is
 // replaced rather than checksummed into itself.
 func SHA256Sums(dir string, opts ...Option) error {
-	files, err := topLevelFiles(dir)
+	files, err := utils.TopLevelFiles(dir, SumsFileName)
 	if err != nil {
 		return err
 	}
@@ -366,7 +203,7 @@ func sha256Sums(dir string, files []string, opts ...Option) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	path := filepath.Join(dir, sumsFileName)
+	path := filepath.Join(dir, SumsFileName)
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return nil, s.Errorf("removing %s: %w", path, err)
 	}
@@ -387,39 +224,6 @@ func sha256Sums(dir string, files []string, opts ...Option) ([]string, error) {
 	}
 	s.Logger().WithField("files", len(files)).Info("Wrote checksums")
 	return append(files, path), nil
-}
-
-func filesAt(dir, baseURL string) ([]outputs.ArtifactFile, error) {
-	paths, err := topLevelFiles(dir)
-	if err != nil {
-		return nil, err
-	}
-	files := make([]outputs.ArtifactFile, len(paths))
-	for i, path := range paths {
-		u, err := url.JoinPath(baseURL, filepath.Base(path))
-		if err != nil {
-			return nil, fmt.Errorf("url for %s: %w", path, err)
-		}
-		files[i] = outputs.ArtifactFile{Name: filepath.Base(path), Path: path, URL: u}
-	}
-	return files, nil
-}
-
-func topLevelFiles(dir string) ([]string, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", dir, err)
-	}
-	var out []string
-	for _, e := range entries {
-		// The sums file is not a release artifact in its own right: it must
-		// never be checksummed into itself, and its caller adds it back.
-		if e.IsDir() || e.Name() == sumsFileName {
-			continue
-		}
-		out = append(out, filepath.Join(dir, e.Name()))
-	}
-	return out, nil
 }
 
 // Hashrelease uploads the whole output tree, then records the hashrelease in
@@ -452,8 +256,8 @@ func (d HashreleaseServer) Publish(ctx context.Context, src string) error {
 	return hashreleaseserver.Record(d.ProductCode, d.Release, d.Config)
 }
 
-func (d HashreleaseServer) artifacts(src string) ([]outputs.ArtifactFile, error) {
-	return filesAt(src, d.Release.URL())
+func (d HashreleaseServer) Artifacts(src string) ([]outputs.ArtifactFile, error) {
+	return outputs.ArtifactsAt(src, d.Release.URL(), SumsFileName)
 }
 
 func (d HashreleaseServer) Validate(u Upload) error {

@@ -16,6 +16,7 @@
 package github
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -26,7 +27,9 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 )
 
-const baseURL = "https://github.com"
+const host = "github.com"
+
+var baseURL = url.URL{Scheme: "https", Host: host}
 
 var TokenEnvVars = []string{"GITHUB_TOKEN", "GH_TOKEN"}
 
@@ -35,10 +38,43 @@ func Authenticated(r command.CommandRunner) bool {
 	return resolveToken(r) != ""
 }
 
+type Repo struct {
+	Org  string
+	Name string
+}
+
+func (r Repo) Validate() error {
+	var errs []error
+	if r.Org == "" {
+		errs = append(errs, fmt.Errorf("no github organization specified"))
+	}
+	if r.Name == "" {
+		errs = append(errs, fmt.Errorf("no github repository specified"))
+	}
+	return errors.Join(errs...)
+}
+
+func (r Repo) String() string {
+	return r.Org + "/" + r.Name
+}
+
+// URL is the repository's page, or a page under it.
+func (r Repo) URL(path ...string) string {
+	return baseURL.JoinPath(append([]string{r.Org, r.Name}, path...)...).String()
+}
+
 // DownloadURL is where a release's artifacts are downloaded from.
-func DownloadURL(org, repo, version string, file ...string) (string, error) {
-	parts := append([]string{org, repo, "releases", "download", version}, file...)
-	return url.JoinPath(baseURL, parts...)
+func (r Repo) DownloadURL(tag string, file ...string) string {
+	return r.URL(append([]string{"releases", "download", tag}, file...)...)
+}
+
+func (r Repo) BlobURL(ref, path string) string {
+	return r.URL("blob", ref, path)
+}
+
+// OpenPRsURL lists the open pull requests from a head branch.
+func (r Repo) OpenPRsURL(head string) string {
+	return r.URL("pulls") + "?q=" + url.QueryEscape("is:open head:"+head)
 }
 
 type authTransport struct {
@@ -51,7 +87,7 @@ type authTransport struct {
 
 func (g *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Only intercept requests destined for GitHub API endpoints
-	if req.URL.Host == "github.com" || strings.HasSuffix(req.URL.Host, ".github.com") {
+	if req.URL.Host == host || strings.HasSuffix(req.URL.Host, "."+host) {
 		g.once.Do(func() { g.token = resolveToken(command.Runner(g.runner)) })
 		token := g.token
 

@@ -1,0 +1,12 @@
+
+Release notes can be found [on GitHub](https://example.test/notes.md)
+
+Attached to this release are the following artifacts:
+
+- `a.tgz`: the a.
+- `b.zip`: the b.
+
+Additional links:
+
+- [More](https://example.test/more)
+

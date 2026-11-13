@@ -17,6 +17,7 @@ package utils
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"testing"
 )
@@ -691,4 +692,30 @@ func assertTree(t *testing.T, root string, want map[string]string) {
 			return
 		}
 	}
+}
+
+func TestTopLevelFiles(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{"a.tgz": "a", "SUMS": "s", "sub/b.tgz": "b"})
+
+	t.Run("lists files but not subdirectories", func(t *testing.T) {
+		got, err := TopLevelFiles(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{filepath.Join(dir, "SUMS"), filepath.Join(dir, "a.tgz")}
+		if !slices.Equal(got, want) {
+			t.Errorf("TopLevelFiles() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("leaves out excluded names", func(t *testing.T) {
+		got, err := TopLevelFiles(dir, "SUMS")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := []string{filepath.Join(dir, "a.tgz")}; !slices.Equal(got, want) {
+			t.Errorf("TopLevelFiles() = %v, want %v", got, want)
+		}
+	})
 }
