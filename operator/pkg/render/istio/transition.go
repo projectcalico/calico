@@ -291,8 +291,10 @@ func keptRoots(in TransitionInput) []*x509.Certificate {
 	if in.CurrentSource != CASourceUnmanaged {
 		return nil
 	}
+	// The desired roots are kept too: the destination can change before the
+	// transition ends, and the bundle trusted them before it started.
 	signers := map[string]bool{}
-	for _, c := range append(append([]*x509.Certificate{}, in.Current.Roots...), in.Desired.Roots...) {
+	for _, c := range in.Current.Roots {
 		signers[string(c.Raw)] = true
 	}
 	var kept []*x509.Certificate

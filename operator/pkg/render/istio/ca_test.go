@@ -34,7 +34,7 @@ func newTestCert(cn string, parent *testCert, isCA bool) *testCert {
 	return newTestCertWithUsage(cn, parent, isCA, x509.KeyUsageCertSign|x509.KeyUsageDigitalSignature)
 }
 
-func newTestCertWithUsage(cn string, parent *testCert, isCA bool, usage x509.KeyUsage) *testCert {
+func newTestCertWithUsage(cn string, parent *testCert, isCA bool, usage x509.KeyUsage, ext ...x509.ExtKeyUsage) *testCert {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	Expect(err).NotTo(HaveOccurred())
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 64))
@@ -45,6 +45,7 @@ func newTestCertWithUsage(cn string, parent *testCert, isCA bool, usage x509.Key
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().Add(24 * time.Hour),
 		KeyUsage:              usage,
+		ExtKeyUsage:           ext,
 		IsCA:                  isCA,
 		BasicConstraintsValid: true,
 	}
@@ -193,6 +194,34 @@ var _ = Describe("Istio CA", func() {
 				istio.RootCertKey: restricted.certPEM,
 			})
 			Expect(err).To(MatchError(ContainSubstring("ca-cert.pem: the key usage does not allow certificate signing")))
+		})
+
+		It("rejects a CA, or an issuer of it, whose extended key usage leaves out TLS client or server authentication", func() {
+			usage := x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature
+			serverOnly := newTestCertWithUsage("server-only", nil, true, usage, x509.ExtKeyUsageServerAuth)
+			_, err := istio.LoadCA(map[string][]byte{
+				istio.CACertKey:   serverOnly.certPEM,
+				istio.CAKeyKey:    serverOnly.keyPEM,
+				istio.RootCertKey: serverOnly.certPEM,
+			})
+			Expect(err).To(MatchError(ContainSubstring("ca-cert.pem: the extended key usage of the chain does not allow TLS client and server authentication")))
+
+			clientOnlyRoot := newTestCertWithUsage("client-only-root", nil, true, usage, x509.ExtKeyUsageClientAuth)
+			under := newTestCert("under-client-only", clientOnlyRoot, true)
+			_, err = istio.LoadCA(map[string][]byte{
+				istio.CACertKey:   under.certPEM,
+				istio.CAKeyKey:    under.keyPEM,
+				istio.RootCertKey: clientOnlyRoot.certPEM,
+			})
+			Expect(err).To(MatchError(ContainSubstring("the extended key usage of the chain does not allow")))
+
+			both := newTestCertWithUsage("both", nil, true, usage, x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth)
+			_, err = istio.LoadCA(map[string][]byte{
+				istio.CACertKey:   both.certPEM,
+				istio.CAKeyKey:    both.keyPEM,
+				istio.RootCertKey: both.certPEM,
+			})
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("rejects a certificate that does not chain to a root in root-cert.pem", func() {

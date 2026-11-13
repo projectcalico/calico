@@ -180,13 +180,23 @@ func LoadCA(data map[string][]byte) (*CA, error) {
 	for _, r := range roots {
 		rootPool.AddCert(r)
 	}
-	chains, err := cert.Verify(x509.VerifyOptions{
-		Roots:         rootPool,
-		Intermediates: intermediates,
-		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("%s does not chain to a root in %s: %w", certKey, rootKey, err)
+	// A workload certificate is both a TLS client and a TLS server, and an
+	// extended key usage on the CA or an issuer limits what it may sign. One
+	// verification per usage, because Verify accepts a chain that allows any one.
+	var chains [][]*x509.Certificate
+	for _, usage := range []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth} {
+		chains, err = cert.Verify(x509.VerifyOptions{
+			Roots:         rootPool,
+			Intermediates: intermediates,
+			KeyUsages:     []x509.ExtKeyUsage{usage},
+		})
+		var invalid x509.CertificateInvalidError
+		if errors.As(err, &invalid) && invalid.Reason == x509.IncompatibleUsage {
+			return nil, fmt.Errorf("%s: the extended key usage of the chain does not allow TLS client and server authentication", certKey)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%s does not chain to a root in %s: %w", certKey, rootKey, err)
+		}
 	}
 
 	ca := &CA{CertPEM: EncodeCertificates(cert), KeyPEM: keyPEM, Chain: chains[0]}

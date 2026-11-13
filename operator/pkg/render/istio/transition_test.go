@@ -181,6 +181,23 @@ var _ = Describe("Istio CA signer transition", func() {
 			Expect(istio.StepSignerTransition(in).Transition).To(BeNil())
 		})
 
+		It("keeps a root the bundle trusted before the transition, even the destination's, when the destination changes", func() {
+			in := istio.TransitionInput{
+				Current: current, CurrentSource: istio.CASourceUnmanaged, CurrentTrust: certsOf(oldRoot, newRoot),
+				Desired: desired, DesiredSource: istio.CASourceOperatorManaged,
+				Rolled: true, Now: now, Wait: wait,
+			}
+			s := istio.StepSignerTransition(in)
+			Expect(s.Transition.Kept).To(Equal(certsOf(newRoot)))
+
+			third := rootCA(newTestCert("third", nil, true))
+			in.Desired = third
+			in.Recorded = istio.TransitionState{Phase: istio.TransitionDistributeRoot, Retiring: current.Roots, Incoming: desired.Roots, Kept: certsOf(newRoot)}
+			s = istio.StepSignerTransition(in)
+			Expect(s.Transition.Incoming).To(Equal(third.Roots))
+			Expect(s.Transition.Kept).To(Equal(certsOf(newRoot)))
+		})
+
 		Context("after the switch, when cacerts already signs with the desired CA", func() {
 			var retiring []*x509.Certificate
 
