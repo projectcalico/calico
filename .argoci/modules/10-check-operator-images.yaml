@@ -1,15 +1,22 @@
 # Fails when an image is built but missing from the operator's component list.
-# BUILD_IMAGES lives in the component Makefiles, hence those triggers.
+# BUILD_IMAGES lives in the component Makefiles, hence those triggers. On a VM
+# for docker.
 version: condensed-module
 
 defaults:
   timeout: 1h
-  services:
-    - docker
+  # The compute SA createVM, runOnVM and the teardown authenticate with.
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: check-operator-images
-    requests: {cpu: 2250m, memory: 2Gi}
-    commands: |
-      cd release
-      make check-operator-images
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      source: |
+        set -e
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd release
+        make check-operator-images

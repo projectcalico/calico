@@ -61,15 +61,20 @@ $(BINDIR)/calico-cgo-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 # Race-enabled combined binary for Felix FV runs. The race detector requires
 # CGO so we always build with CGO_ENABLED=1 and pull in libbpf the same way
 # the cgo variant does.
+ifeq ($(NATIVE_GO_BUILD),true)
+RACE_BUILD_RUN = env CGO_ENABLED=1 $(if $(CROSS_CC),CC="$(CROSS_CC)") CGO_CFLAGS=$(CGO_CFLAGS) CGO_LDFLAGS=$(CGO_LDFLAGS)
+else
+RACE_BUILD_RUN = $(DOCKER_RUN) \
+	-e CGO_ENABLED=1 \
+	$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
+	-e CGO_CFLAGS=$(CGO_CFLAGS) \
+	-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
+	$(CALICO_BUILD)
+endif
+
 $(BINDIR)/calico-race-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 	mkdir -p $(BINDIR)
-	$(DOCKER_RUN) \
-		-e CGO_ENABLED=1 \
-		$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
-		-e CGO_CFLAGS=$(CGO_CFLAGS) \
-		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -race -o $@ -v -buildvcs=false -ldflags "$(LDFLAGS)" ./'
+	$(RACE_BUILD_RUN) sh -c '$(GIT_CONFIG_SSH) go build -race -o $@ -v -buildvcs=false -ldflags "$(LDFLAGS)" ./'
 
 $(BINDIR)/LICENSE: $(REPO_ROOT)/LICENSE.md
 	mkdir -p $(BINDIR)
@@ -79,11 +84,33 @@ REGISTRAR_BIN = $(REPO_ROOT)/pod2daemon/bin/node-driver-registrar-$(ARCH)
 $(REGISTRAR_BIN):
 	$(MAKE) -C $(REPO_ROOT)/pod2daemon bin/node-driver-registrar-$(ARCH)
 
+# Everything docker/calico/Dockerfile reads, at the paths it reads them from, with
+# the build args baked in as defaults. A builder given only this directory, such as
+# CI's rootless buildkit with no checkout or Makefile, produces the same image as
+# `make image`.
+IMAGE_CONTEXT = $(BINDIR)/image-context-$(ARCH)
+
+.PHONY: image-context
+image-context: $(IMAGE_CONTEXT)/Dockerfile
+
+$(IMAGE_CONTEXT)/Dockerfile: $(REPO_ROOT)/docker/calico/Dockerfile $(REPO_ROOT)/docker/calico/typha.cfg $(BINDIR)/calico-$(ARCH) $(BINDIR)/LICENSE $(REGISTRAR_BIN)
+	rm -rf $(IMAGE_CONTEXT)
+	mkdir -p $(IMAGE_CONTEXT)/cmd/calico/$(BINDIR) $(IMAGE_CONTEXT)/pod2daemon/bin $(IMAGE_CONTEXT)/docker/calico
+	cp $(BINDIR)/calico-$(ARCH) $(BINDIR)/LICENSE $(IMAGE_CONTEXT)/cmd/calico/$(BINDIR)/
+	cp $(REGISTRAR_BIN) $(IMAGE_CONTEXT)/pod2daemon/bin/
+	cp $(REPO_ROOT)/docker/calico/typha.cfg $(IMAGE_CONTEXT)/docker/calico/
+	# A global ARG with a default is what a stage's bare `ARG X` inherits.
+	sed -e '1i ARG BIN_DIR=cmd/calico/$(BINDIR)' \
+		-e '1i ARG GIT_VERSION=$(GIT_VERSION)' \
+		-e 's|^ARG CALICO_BASE$$|ARG CALICO_BASE=$(CALICO_BASE)|' \
+		-e 's|^ARG UBI_IMAGE$$|ARG UBI_IMAGE=$(UBI_IMAGE)|' \
+		$(REPO_ROOT)/docker/calico/Dockerfile > $(IMAGE_CONTEXT)/Dockerfile
+
 .PHONY: image image-all
 image: $(CONTAINER_MARKER)
 
-$(CONTAINER_MARKER): $(REPO_ROOT)/docker/calico/Dockerfile $(BINDIR)/calico-$(ARCH) $(BINDIR)/LICENSE $(REGISTRAR_BIN) | register
-	$(DOCKER_BUILD) --build-arg BIN_DIR=cmd/calico/$(BINDIR) --build-arg TARGETARCH=$(ARCH) -t $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) -f $(REPO_ROOT)/docker/calico/Dockerfile $(REPO_ROOT)
+$(CONTAINER_MARKER): $(IMAGE_CONTEXT)/Dockerfile | register
+	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) $(IMAGE_CONTEXT)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=$(IMAGE_TAG) LATEST_IMAGE_TAG=$(IMAGE_TAG)
 	touch $@
 

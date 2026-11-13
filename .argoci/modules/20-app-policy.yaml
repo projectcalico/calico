@@ -3,8 +3,7 @@ version: condensed-module
 
 defaults:
   timeout: 1h
-  services:
-    - docker
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: app-policy-ci
@@ -12,11 +11,21 @@ steps:
       - name: BUILD_CACHE_GROUP
         value: calico
     depends: [check-go]
-    requests: {cpu: 4500m, memory: 3.5Gi}
-    commands: |
-      cd app-policy
-      make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/app-policy"
-      artifact push job report --destination test-results || true
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP]
+      source: |
+        set -e
+        repo="$(pwd)"
+        # There is no epilogue on a machine; results go up on the way out.
+        finish() {
+          rc=$?
+          artifact push job "$repo/app-policy/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd app-policy
+        make ci
