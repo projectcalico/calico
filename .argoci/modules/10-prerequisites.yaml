@@ -79,7 +79,7 @@ steps:
       # Through make, so the settings are the ones the readers build with. Both at
       # once: the package build's tail leaves cores idle that the binary's can use.
       s=$(date +%s)
-      make go-build-all &
+      make go-compile-all &
       pkgs=$!
       make -C cmd/calico build
       wait "$pkgs"
