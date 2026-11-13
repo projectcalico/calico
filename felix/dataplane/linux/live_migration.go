@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const etherTypeRARP = layers.EthernetType(0x8035)
@@ -72,17 +73,11 @@ type liveMigrationMonitor struct {
 	newGARPHandle   func(string) (garpHandle, error)
 	convergenceTime time.Duration
 
-	// ipamClient is the Calico IPAM client used to swap owner attributes
-	// when live migration completes.
-	ipamClient               ipam.Interface
-	ensureActiveVMOwnerAttrs func(
-		ctx context.Context,
-		ipamClient ipam.Interface,
-		networkName string,
-		namespace string,
-		vmiName string,
-		targetPodName string,
-	) error
+	// vmOwners keeps each VM's IPAM owner attributes naming the pod that the VM runs in.  It is
+	// fed from roles and vmiNames, never from the FSMs, so that it still converges when an FSM is
+	// lost or interrupted - for example by a Felix restart at the end of a migration.
+	vmOwners      *vmOwnerReconciler
+	vmOwnersDirty set.Set[types.WorkloadEndpointID]
 }
 
 func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Interface) *liveMigrationMonitor {
@@ -97,9 +92,9 @@ func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Inte
 		newGARPHandle: func(ifaceName string) (garpHandle, error) {
 			return pcapgo.NewEthernetHandle(ifaceName)
 		},
-		convergenceTime:          convergenceTime,
-		ipamClient:               ipamClient,
-		ensureActiveVMOwnerAttrs: vmipam.EnsureActiveVMOwnerAttrs,
+		convergenceTime: convergenceTime,
+		vmOwners:        newVMOwnerReconciler(ipamClient),
+		vmOwnersDirty:   set.New[types.WorkloadEndpointID](),
 	}
 }
 
@@ -141,6 +136,7 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 		oldRole := m.roles[id]
 		newRole := msg.Endpoint.LiveMigrationRole
 		m.roles[id] = newRole
+		m.vmOwnersDirty.Add(id)
 		if oldRole != newRole {
 			switch newRole {
 			case proto.LiveMigrationRole_NO_ROLE:
@@ -158,6 +154,7 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 		delete(m.migrationUIDs, id)
 		delete(m.vmiNames, id)
 		m.executeFSM(id, liveMigrationInputDeleted)
+		m.vmOwnersDirty.Add(id)
 	}
 }
 
@@ -260,7 +257,6 @@ type liveMigrationFSM struct {
 	pcapHandle   garpHandle
 	garpStopC    chan struct{}
 	garpWG       sync.WaitGroup
-	ipamSwapOnce sync.Once
 }
 
 func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
@@ -333,9 +329,14 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 		case liveMigrationStateTarget:
 			f.startGARPDetection()
 		case liveMigrationStateLive:
-			f.startIPAMOwnerSwap()
+			// The GARP shows that the VM is now running here, so promote this pod in IPAM
+			// straight away, without waiting for the source pod to be torn down.  There is no
+			// such promotion for Target -> TimeWait: NoRole can also mean the migration was
+			// cancelled, and promoting this pod then would take the address away from the VM
+			// still running on the source.  If the migration did succeed, the reconciler
+			// promotes this pod once the source's CNI DEL has cleared the active owner.
+			f.monitor.requestVMOwnerPromotion(f.id)
 		case liveMigrationStateTimeWait:
-			f.startIPAMOwnerSwap()
 			f.startElevatedRoutingTimer()
 		}
 
@@ -520,78 +521,327 @@ func isGARPOrRARP(packet gopacket.Packet) bool {
 	return false
 }
 
-// startIPAMOwnerSwap begins an asynchronous IPAM owner attribute swap when a
-// live migration completes.  It is called when entering both the Live state
-// (happy path: GARP detected) and the TimeWait state (missed GARP path:
-// Target→TimeWait).  sync.Once ensures the swap is initiated at most once per
-// FSM lifecycle, so the Live→TimeWait transition does not trigger a duplicate.
-func (f *liveMigrationFSM) startIPAMOwnerSwap() {
-	f.ipamSwapOnce.Do(f.doIPAMOwnerSwap)
-}
-
-// doIPAMOwnerSwap performs the actual IPAM owner attribute swap.  It uses the
-// VMI name from the proto.WorkloadEndpoint (extracted from the pod's labels by
-// the calc graph) and calls vmipam.EnsureActiveVMOwnerAttrs to atomically
-// promote the alternate (target) owner attributes to active.  Transient errors
-// are retried with backoff.  This runs in a goroutine to avoid blocking the
-// dataplane main loop.
-func (f *liveMigrationFSM) doIPAMOwnerSwap() {
-	vmiName := f.monitor.vmiNames[f.id]
-	if vmiName == "" {
-		f.logCtx.Debug("No VMI name available, skipping IPAM owner swap")
-		return
-	}
-
-	// Parse namespace and pod name from the workload ID (format: "namespace/podName").
-	parts := strings.SplitN(f.id.WorkloadId, "/", 2)
-	if len(parts) != 2 {
-		f.logCtx.WithField("workloadID", f.id.WorkloadId).Warn(
-			"Cannot parse workload ID for IPAM owner swap")
-		return
-	}
-	namespace := parts[0]
-	podName := parts[1]
-
-	logCtx := f.logCtx.WithFields(logrus.Fields{
-		"namespace": namespace,
-		"pod":       podName,
-		"vmiName":   vmiName,
-	})
-	logCtx.Info("Starting IPAM owner attribute swap for live migration")
-
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		const maxRetries = 5
-		backoff := 100 * time.Millisecond
-		for attempt := 1; attempt <= maxRetries; attempt++ {
-			err := f.monitor.ensureActiveVMOwnerAttrs(ctx, f.monitor.ipamClient, "", namespace, vmiName, podName)
-			if err == nil {
-				logCtx.Info("Successfully swapped IPAM owner attributes")
-				return
-			}
-			if errors.Is(err, vmipam.ErrAlternateOwnerEmpty) || errors.Is(err, vmipam.ErrAlternateOwnerMismatch) {
-				logCtx.WithError(err).Warn("Non-retryable error swapping IPAM owner attributes")
-				return
-			}
-			logCtx.WithError(err).WithField("attempt", attempt).Warn(
-				"Transient error swapping IPAM owner attributes, will retry")
-			if attempt < maxRetries {
-				select {
-				case <-time.After(backoff):
-					backoff *= 2
-				case <-ctx.Done():
-					logCtx.Warn("Context cancelled while retrying IPAM owner swap")
-					return
-				}
-			}
-		}
-		logCtx.Warn("Exhausted retries for IPAM owner attribute swap")
-	}()
-}
-
+// CompleteDeferredWork passes workload changes on to the VM owner reconciler.  This only runs once
+// the datastore is in sync, so the reconciler never acts on a partial set of workloads.
 func (m *liveMigrationMonitor) CompleteDeferredWork() error {
-	// Nothing to do; state changes are forwarded in ResolveUpdateBatch.
+	for id := range m.vmOwnersDirty.All() {
+		owner, ok := m.vmOwnerFor(id)
+		if !ok {
+			m.vmOwners.remove(id)
+			continue
+		}
+
+		// A migration target must not take the address over until the migration is known to
+		// have succeeded, and the FSM handles that case with requestVMOwnerPromotion.
+		m.vmOwners.set(id, owner, m.roles[id] != proto.LiveMigrationRole_TARGET)
+	}
+	m.vmOwnersDirty.Clear()
 	return nil
+}
+
+func (m *liveMigrationMonitor) requestVMOwnerPromotion(id types.WorkloadEndpointID) {
+	owner, ok := m.vmOwnerFor(id)
+	if !ok {
+		logrus.WithField("id", id).Debug("Not a VM with a known VMI name, skipping IPAM owner promotion")
+		return
+	}
+	m.vmOwners.requestPromotion(id, owner)
+}
+
+// vmOwnerFor returns the IPAM owner identity of a workload that is a KubeVirt VM pod, or false for
+// any other workload.
+func (m *liveMigrationMonitor) vmOwnerFor(id types.WorkloadEndpointID) (vmOwner, bool) {
+	vmiName := m.vmiNames[id]
+	if vmiName == "" {
+		return vmOwner{}, false
+	}
+	namespace, podName, ok := strings.Cut(id.WorkloadId, "/")
+	if !ok {
+		logrus.WithField("workloadID", id.WorkloadId).Warn("Cannot parse workload ID of VM pod")
+		return vmOwner{}, false
+	}
+	return vmOwner{namespace: namespace, podName: podName, vmiName: vmiName}, true
+}
+
+// vmOwner identifies a KubeVirt VM pod as an IPAM owner of its VM's addresses.
+type vmOwner struct {
+	namespace string
+	podName   string
+	vmiName   string
+}
+
+// vmOwnerReconciler makes the pod that a VM is running in the active IPAM owner of the VM's
+// addresses.  Nothing else does that when a migration's completion is missed, and without an active
+// owner, no node is recorded for the address and any routes that Felix derives from IPAM disappear.
+//
+// It works on the IPAM owner attributes and never on FSM state: a pod that isn't a migration target
+// and is the alternate owner, with no active owner, is the only claimant left, and it is promoted
+// however it got there.  Any other state is left alone, and rechecked with backoff while the pod is
+// the alternate owner of an address with an active owner, which is how it looks until the source
+// pod's CNI DEL has run.
+//
+// IPAM calls block, so they run on a worker goroutine.  The main loop only updates entries under
+// the lock and kicks the worker.
+type vmOwnerReconciler struct {
+	ipamClient ipam.Interface
+
+	// Promotes the pod whatever the active owner is.  Only for a migration known to have
+	// succeeded.
+	ensureActiveVMOwnerAttrs func(ctx context.Context, ipamClient ipam.Interface,
+		networkName, namespace, vmiName, podName string) error
+
+	// Promotes the pod only where there is no active owner.
+	promoteIfActiveEmpty func(ctx context.Context, ipamClient ipam.Interface,
+		networkName, namespace, vmiName, podName string) (bool, error)
+
+	initialBackoff time.Duration
+	maxBackoff     time.Duration
+	callTimeout    time.Duration
+
+	lock    sync.Mutex
+	entries map[types.WorkloadEndpointID]*vmOwnerEntry
+
+	kickC     chan struct{}
+	startOnce sync.Once
+}
+
+type vmOwnerEntry struct {
+	owner vmOwner
+
+	// reconcile is set while the pod isn't a migration target, so may be promoted if it's the
+	// only claimant.
+	reconcile bool
+
+	// promotionRequested is set when the migration to this pod is known to have succeeded.
+	promotionRequested bool
+
+	// generation changes whenever the main loop changes the entry, so that the worker can discard
+	// the result of a call that started before the change.
+	generation uint64
+
+	// Owned by the worker.  idle means there is nothing to do until the main loop changes the
+	// entry.
+	idle    bool
+	due     time.Time
+	backoff time.Duration
+}
+
+func newVMOwnerReconciler(ipamClient ipam.Interface) *vmOwnerReconciler {
+	return &vmOwnerReconciler{
+		ipamClient:               ipamClient,
+		ensureActiveVMOwnerAttrs: vmipam.EnsureActiveVMOwnerAttrs,
+		promoteIfActiveEmpty:     vmipam.PromoteAlternateVMOwnerIfActiveEmpty,
+		initialBackoff:           100 * time.Millisecond,
+		maxBackoff:               30 * time.Second,
+		callTimeout:              30 * time.Second,
+		entries:                  map[types.WorkloadEndpointID]*vmOwnerEntry{},
+		kickC:                    make(chan struct{}, 1),
+	}
+}
+
+// set records a VM pod and whether it may be promoted as the only claimant.  An unchanged
+// workload doesn't trigger a recheck.
+func (r *vmOwnerReconciler) set(id types.WorkloadEndpointID, owner vmOwner, reconcile bool) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	e := r.entries[id]
+	if e == nil {
+		if !reconcile {
+			return
+		}
+		e = &vmOwnerEntry{}
+		r.entries[id] = e
+	} else if e.owner == owner && e.reconcile == reconcile {
+		return
+	}
+	e.owner = owner
+	e.reconcile = reconcile
+	if !e.reconcile && !e.promotionRequested {
+		delete(r.entries, id)
+		return
+	}
+	r.resetLocked(e)
+}
+
+// requestPromotion promotes the pod even if another owner is still active.
+func (r *vmOwnerReconciler) requestPromotion(id types.WorkloadEndpointID, owner vmOwner) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	e := r.entries[id]
+	if e == nil {
+		e = &vmOwnerEntry{}
+		r.entries[id] = e
+	}
+	e.owner = owner
+	e.promotionRequested = true
+	r.resetLocked(e)
+}
+
+func (r *vmOwnerReconciler) remove(id types.WorkloadEndpointID) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	delete(r.entries, id)
+}
+
+func (r *vmOwnerReconciler) resetLocked(e *vmOwnerEntry) {
+	e.generation++
+	e.idle = false
+	e.due = time.Time{}
+	e.backoff = 0
+	r.startOnce.Do(func() { go r.loop() })
+	select {
+	case r.kickC <- struct{}{}:
+	default:
+	}
+}
+
+func (r *vmOwnerReconciler) loop() {
+	for {
+		var timerC <-chan time.Time
+		if wait, ok := r.reconcileDueEntries(); ok {
+			timer := time.NewTimer(wait)
+			timerC = timer.C
+			select {
+			case <-r.kickC:
+			case <-timerC:
+			}
+			timer.Stop()
+		} else {
+			<-r.kickC
+		}
+	}
+}
+
+type vmOwnerWork struct {
+	id         types.WorkloadEndpointID
+	entry      *vmOwnerEntry
+	generation uint64
+	owner      vmOwner
+	promote    bool
+}
+
+// reconcileDueEntries does the IPAM work for every entry that is due, and returns how long until
+// the next one is due, or false if none is pending.
+func (r *vmOwnerReconciler) reconcileDueEntries() (time.Duration, bool) {
+	now := time.Now()
+	var work []vmOwnerWork
+	r.lock.Lock()
+	for id, e := range r.entries {
+		if e.idle || e.due.After(now) {
+			continue
+		}
+		work = append(work, vmOwnerWork{
+			id:         id,
+			entry:      e,
+			generation: e.generation,
+			owner:      e.owner,
+			promote:    e.promotionRequested,
+		})
+	}
+	r.lock.Unlock()
+
+	for _, w := range work {
+		r.reconcileOne(w)
+	}
+
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	var next time.Time
+	for _, e := range r.entries {
+		if e.idle {
+			continue
+		}
+		if next.IsZero() || e.due.Before(next) {
+			next = e.due
+		}
+	}
+	if next.IsZero() {
+		return 0, false
+	}
+	return max(time.Until(next), 0), true
+}
+
+func (r *vmOwnerReconciler) reconcileOne(w vmOwnerWork) {
+	logCtx := logrus.WithFields(logrus.Fields{
+		"id":        w.id,
+		"namespace": w.owner.namespace,
+		"pod":       w.owner.podName,
+		"vmiName":   w.owner.vmiName,
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), r.callTimeout)
+	defer cancel()
+
+	var err error
+	promoted := false
+	if w.promote {
+		err = r.ensureActiveVMOwnerAttrs(ctx, r.ipamClient, "", w.owner.namespace, w.owner.vmiName, w.owner.podName)
+		promoted = err == nil
+	} else {
+		promoted, err = r.promoteIfActiveEmpty(ctx, r.ipamClient, "", w.owner.namespace, w.owner.vmiName, w.owner.podName)
+	}
+
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	if r.entries[w.id] != w.entry || w.entry.generation != w.generation {
+		logCtx.Debug("VM pod changed during IPAM owner update, discarding result")
+		return
+	}
+	e := w.entry
+
+	switch {
+	case err == nil:
+		if promoted && w.promote {
+			logCtx.Info("Promoted live-migrated VM pod to active IPAM owner")
+		} else if promoted {
+			logCtx.Info("Promoted VM pod to active IPAM owner after a missed live migration completion")
+		} else {
+			logCtx.Debug("VM pod is already the active IPAM owner")
+		}
+		r.doneLocked(w.id, e)
+	case errors.Is(err, vmipam.ErrActiveOwnerPresent):
+		// Expected until the source pod's CNI DEL has cleared the active owner.
+		logCtx.WithError(err).Debug("VM pod is waiting for the active IPAM owner to be cleared")
+		r.backoffLocked(e)
+	case errors.Is(err, vmipam.ErrAlternateOwnerEmpty),
+		errors.Is(err, vmipam.ErrAlternateOwnerMismatch),
+		errors.Is(err, vmipam.ErrNoVMAddresses):
+		if w.promote {
+			logCtx.WithError(err).Warn("Cannot promote live-migrated VM pod to active IPAM owner")
+		} else {
+			logCtx.WithError(err).Debug("VM pod is not an IPAM owner to promote")
+		}
+		r.doneLocked(w.id, e)
+	default:
+		r.backoffLocked(e)
+		logCtx.WithError(err).WithField("retryIn", e.backoff).Warn(
+			"Failed to update IPAM owner of VM pod, will retry")
+	}
+}
+
+// doneLocked finishes a promotion request, if there was one.  An entry that may still be promoted
+// as the only claimant goes on to be checked for that straight away, and otherwise is finished
+// with.
+func (r *vmOwnerReconciler) doneLocked(id types.WorkloadEndpointID, e *vmOwnerEntry) {
+	if e.promotionRequested {
+		e.promotionRequested = false
+		if !e.reconcile {
+			delete(r.entries, id)
+			return
+		}
+		e.due = time.Time{}
+		e.backoff = 0
+		return
+	}
+	e.idle = true
+}
+
+func (r *vmOwnerReconciler) backoffLocked(e *vmOwnerEntry) {
+	if e.backoff == 0 {
+		e.backoff = r.initialBackoff
+	} else {
+		e.backoff = min(2*e.backoff, r.maxBackoff)
+	}
+	e.due = time.Now().Add(e.backoff)
 }
