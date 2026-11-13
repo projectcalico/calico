@@ -3,31 +3,33 @@ version: condensed-module
 
 defaults:
   timeout: 30m
-  useGoBuild: true
   # The compute SA createVM, runOnVM and the teardowns authenticate with.
   secretBundles:
     - banzai-secrets
 
 steps:
+  # On a machine of its own for docker: release commands run through docker.
   - name: release-ci
-    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
-    override:
-      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
-      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     depends: [check-go]
-    requests: {cpu: 4000m, memory: 2Gi}
-    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
-    services:
-      - docker
-    commands: |
-      # A fork carries no tags, and the tests parse a version from them.
-      git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
-      cd release
-      make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/release"
-      artifact push job report --destination test-results || true
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [CI_GIT_REPO_SLUG]
+      source: |
+        set -e
+        repo="$(pwd)"
+        finish() {
+          rc=$?
+          artifact push job "$repo/release/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        # A fork carries no tags, and the tests parse a version from them.
+        git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
+        cd release
+        make ci
 
   # On a machine of its own for docker: `bin/release` splices its own flags into
   # a nested `docker run`.
