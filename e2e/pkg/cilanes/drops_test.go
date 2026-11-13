@@ -109,24 +109,15 @@ func TestAuditSelectionAttributesEveryDrop(t *testing.T) {
 		{Spec: "[sig-calico] slow upgrade", Reason: "label Slow: too slow for CI"},
 	}))
 	Expect(audit.QuarantineCount()).To(Equal(1))
-	Expect(audit.CountBeforeQuarantine()).To(Equal(2))
 }
 
-// The count floor must not move when a quarantine is added or lifted: the
-// quarantined spec counts as run either way.
-func TestCountBeforeQuarantineIgnoresQuarantine(t *testing.T) {
+// The same pattern without a ticket is a plain exclusion, not a quarantine.
+func TestQuarantineCountNeedsATicket(t *testing.T) {
 	RegisterTestingT(t)
 
-	quarantined, err := auditFixture(t, []string{"[sig-calico] pod to pod"}, laneSuiteYAML, laneClusterYAML, laneQuarantineYAML)
-	Expect(err).NotTo(HaveOccurred())
-	lifted, err := auditFixture(t, []string{"[sig-calico] host endpoint allows traffic", "[sig-calico] pod to pod"}, laneSuiteYAML, laneClusterYAML)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(quarantined.CountBeforeQuarantine()).To(Equal(lifted.CountBeforeQuarantine()))
-
-	// A plain exclusion is not a quarantine, so it does lower the count.
 	excluded, err := auditFixture(t, []string{"[sig-calico] pod to pod"}, laneSuiteYAML, laneClusterYAML, laneUnticketedYAML)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(excluded.CountBeforeQuarantine()).To(Equal(1))
+	Expect(excluded.QuarantineCount()).To(Equal(0))
 }
 
 // The binary decides what runs. A spec it skips that no rule explains means
@@ -141,28 +132,17 @@ func TestAuditSelectionFailsWhenTheDropperDiverges(t *testing.T) {
 	Expect(err).To(MatchError(ContainSubstring(`the binary runs "[sig-network] other"`)))
 }
 
-func TestDropsRoundTrip(t *testing.T) {
+func TestFormatDrops(t *testing.T) {
 	RegisterTestingT(t)
 
 	drops := []Drop{
 		{Spec: "[sig-calico] BGP peering", Reason: "Requires:BGP not provided"},
 		{Spec: "[sig-calico] host endpoint", Reason: "quarantine: CORE-13670"},
 	}
-	text := FormatDrops(drops)
-	Expect(text).To(Equal("[sig-calico] BGP peering\tRequires:BGP not provided\n[sig-calico] host endpoint\tquarantine: CORE-13670\n"))
-
-	parsed, err := ParseDrops(text)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(parsed).To(Equal(drops))
-	Expect(parsed[1].Quarantined()).To(BeTrue())
-	Expect(parsed[0].Quarantined()).To(BeFalse())
-
-	parsed, err = ParseDrops("")
-	Expect(err).NotTo(HaveOccurred())
-	Expect(parsed).To(BeEmpty())
-
-	_, err = ParseDrops("a spec with no reason\n")
-	Expect(err).To(MatchError(ContainSubstring("line 1")))
+	Expect(FormatDrops(drops)).To(Equal("[sig-calico] BGP peering\tRequires:BGP not provided\n[sig-calico] host endpoint\tquarantine: CORE-13670\n"))
+	Expect(drops[1].Quarantined()).To(BeTrue())
+	Expect(drops[0].Quarantined()).To(BeFalse())
+	Expect(FormatDrops(nil)).To(BeEmpty())
 }
 
 // A drop list is a committed file, so a changed reason has to change its text.

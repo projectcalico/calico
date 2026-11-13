@@ -104,7 +104,6 @@ type specReport struct {
 // dryRun returns the specs a selection would run, sorted by text. A dry run
 // passes selected specs and skips filtered ones.
 func dryRun(binary, workDir string, args []string) ([]testconfig.Spec, error) {
-	// Run the binary in dry-run mode, which writes a JSON report of every spec.
 	report, err := os.CreateTemp("", "gen-test-set-*.json")
 	if err != nil {
 		return nil, err

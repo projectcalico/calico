@@ -77,7 +77,6 @@ type dropRule struct {
 func NewDropper(cfg *Config) (*Dropper, error) {
 	dropper := &Dropper{}
 
-	// Capabilities: a spec requiring one the lane does not provide is dropped.
 	if cfg.Provides != nil {
 		filter, err := types.ParseLabelFilter(requiresClause(cfg))
 		if err != nil {
@@ -90,7 +89,6 @@ func NewDropper(cfg *Config) (*Dropper, error) {
 		}
 	}
 
-	// Upstream gaps.
 	for _, e := range cfg.Upstream {
 		rule, err := patternRule(upstreamReasonPrefix+reasonOf(e), e)
 		if err != nil {
@@ -99,7 +97,6 @@ func NewDropper(cfg *Config) (*Dropper, error) {
 		dropper.rules = append(dropper.rules, rule)
 	}
 
-	// Label exclusions.
 	for _, e := range cfg.Exclude.Labels {
 		filter, err := types.ParseLabelFilter(e.Label)
 		if err != nil {
@@ -111,22 +108,24 @@ func NewDropper(cfg *Config) (*Dropper, error) {
 		})
 	}
 
-	// Name patterns, plain exclusions first and quarantines after them.
-	for _, quarantined := range []bool{false, true} {
-		for _, e := range cfg.Exclude.NamePatterns {
-			if (e.Ticket != "") != quarantined {
-				continue
-			}
-			reason := patternReasonPrefix + reasonOf(e)
-			if quarantined {
-				reason = QuarantineReasonPrefix + ticketKey(e.Ticket)
-			}
-			rule, err := patternRule(reason, e)
-			if err != nil {
-				return nil, fmt.Errorf("exclude.namePatterns: %w", err)
-			}
-			dropper.rules = append(dropper.rules, rule)
+	var quarantines []NamePatternEntry
+	for _, e := range cfg.Exclude.NamePatterns {
+		if e.Ticket != "" {
+			quarantines = append(quarantines, e)
+			continue
 		}
+		rule, err := patternRule(patternReasonPrefix+reasonOf(e), e)
+		if err != nil {
+			return nil, fmt.Errorf("exclude.namePatterns: %w", err)
+		}
+		dropper.rules = append(dropper.rules, rule)
+	}
+	for _, e := range quarantines {
+		rule, err := patternRule(QuarantineReasonPrefix+ticketKey(e.Ticket), e)
+		if err != nil {
+			return nil, fmt.Errorf("exclude.namePatterns: %w", err)
+		}
+		dropper.rules = append(dropper.rules, rule)
 	}
 	return dropper, nil
 }

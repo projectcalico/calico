@@ -22,8 +22,8 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/testconfig"
 )
 
-// dropSeparator splits a spec from its reason on a drop list line. A tab can
-// not appear in a spec name, so the last one on a line is always the split.
+// dropSeparator splits a spec from its reason on a drop list line. A spec name
+// never holds a tab, so the split is unambiguous.
 const dropSeparator = "\t"
 
 // Drop is a spec a suite selected and the lane then dropped.
@@ -36,8 +36,7 @@ type Drop struct {
 	Reason string
 }
 
-// Quarantined reports whether the spec is dropped for a quarantine. The
-// per-lane count floor counts these as specs the lane runs.
+// Quarantined reports whether the spec is dropped for a quarantine.
 func (d Drop) Quarantined() bool {
 	return strings.HasPrefix(d.Reason, testconfig.QuarantineReasonPrefix)
 }
@@ -64,12 +63,6 @@ func (a Audit) QuarantineCount() int {
 	return n
 }
 
-// CountBeforeQuarantine returns the specs the lane runs plus those it drops
-// only for a quarantine, which is the number the lane's count floor tracks.
-func (a Audit) CountBeforeQuarantine() int {
-	return len(a.Runs) + a.QuarantineCount()
-}
-
 // FormatDrops renders a drop list as the committed file holds it: one line per
 // drop, the spec then a tab then the reason.
 func FormatDrops(drops []Drop) string {
@@ -78,31 +71,6 @@ func FormatDrops(drops []Drop) string {
 		b.WriteString(d.Spec + dropSeparator + d.Reason + "\n")
 	}
 	return b.String()
-}
-
-// ParseDrops reads the format FormatDrops writes.
-func ParseDrops(data string) ([]Drop, error) {
-	if data == "" {
-		return nil, nil
-	}
-	var drops []Drop
-	for i, line := range strings.Split(strings.TrimSuffix(data, "\n"), "\n") {
-		spec, reason, ok := cutLast(line, dropSeparator)
-		if !ok || spec == "" || reason == "" {
-			return nil, fmt.Errorf("line %d: want a spec, a tab and a reason, got %q", i+1, line)
-		}
-		drops = append(drops, Drop{Spec: spec, Reason: reason})
-	}
-	return drops, nil
-}
-
-// cutLast splits s around the last occurrence of sep.
-func cutLast(s, sep string) (string, string, bool) {
-	i := strings.LastIndex(s, sep)
-	if i < 0 {
-		return s, "", false
-	}
-	return s[:i], s[i+len(sep):], true
 }
 
 // AuditSelection splits the specs the suites selected into those the lane runs
