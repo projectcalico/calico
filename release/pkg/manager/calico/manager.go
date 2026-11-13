@@ -1211,6 +1211,11 @@ func (r *CalicoManager) buildBinaries() error {
 	); err != nil {
 		return fmt.Errorf("build binaries: %w", err)
 	}
+	if r.e2eBinaries && r.isHashRelease {
+		if err := binaries.PackageE2EConfig(r.repoRoot, r.uploadDir()); err != nil {
+			return fmt.Errorf("package e2e config: %w", err)
+		}
+	}
 	return nil
 }
 
