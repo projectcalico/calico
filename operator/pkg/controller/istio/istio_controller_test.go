@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
@@ -395,6 +396,109 @@ var _ = Describe("Istio controller tests", func() {
 			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
 			// The reconciliation should be successful
 			Expect(err).ShouldNot(HaveOccurred())
+		})
+	})
+
+	Context("Upgrade order", func() {
+		const oldImage = "registry.example/old:1"
+
+		var r *ReconcileIstio
+
+		reconcileOnce := func() {
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).NotTo(HaveOccurred())
+		}
+		key := func(name string) types.NamespacedName {
+			return types.NamespacedName{Name: name, Namespace: istio.IstioNamespace}
+		}
+		getIstiod := func() *appsv1.Deployment {
+			d := &appsv1.Deployment{}
+			Expect(cli.Get(ctx, key(istio.IstioIstiodDeploymentName), d)).To(Succeed())
+			return d
+		}
+		getZTunnel := func() *appsv1.DaemonSet {
+			ds := &appsv1.DaemonSet{}
+			Expect(cli.Get(ctx, key(istio.IstioZTunnelDaemonSetName), ds)).To(Succeed())
+			return ds
+		}
+		markRolledOut := func() {
+			d := getIstiod()
+			n := ptr.Deref(d.Spec.Replicas, 1)
+			d.Status = appsv1.DeploymentStatus{ObservedGeneration: d.Generation, Replicas: n, UpdatedReplicas: n, AvailableReplicas: n}
+			Expect(cli.Status().Update(ctx, d)).To(Succeed())
+		}
+		// downgradeTo makes the cluster look like an install of an older Istio
+		// that has finished rolling out.
+		downgradeTo := func(image string, annotations map[string]string) {
+			d := getIstiod()
+			d.Spec.Template.Spec.Containers[0].Image = image
+			d.Annotations = annotations
+			Expect(cli.Update(ctx, d)).To(Succeed())
+			markRolledOut()
+			ds := getZTunnel()
+			ds.Spec.Template.Spec.Containers[0].Image = image
+			Expect(cli.Update(ctx, ds)).To(Succeed())
+		}
+
+		BeforeEach(func() {
+			createResources()
+			r = &ReconcileIstio{
+				Client:   cli,
+				scheme:   scheme,
+				provider: operatorv1.ProviderNone,
+				status:   mockStatus,
+			}
+			reconcileOnce()
+		})
+
+		It("upgrades ztunnel only after istiod has rolled out the new image", func() {
+			newZTunnel := getZTunnel().Spec.Template.Spec.Containers[0].Image
+			downgradeTo(oldImage, nil)
+
+			reconcileOnce()
+			Expect(getIstiod().Spec.Template.Spec.Containers[0].Image).NotTo(Equal(oldImage))
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(oldImage))
+
+			markRolledOut()
+			reconcileOnce()
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(newZTunnel))
+		})
+
+		It("does not wait for an istiod the operator ignores", func() {
+			newZTunnel := getZTunnel().Spec.Template.Spec.Containers[0].Image
+			downgradeTo(oldImage, map[string]string{"unsupported.operator.tigera.io/ignore": "true"})
+
+			reconcileOnce()
+			Expect(getIstiod().Spec.Template.Spec.Containers[0].Image).To(Equal(oldImage))
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(newZTunnel))
+		})
+
+		It("holds ztunnel while a deleted istiod is created again", func() {
+			newZTunnel := getZTunnel().Spec.Template.Spec.Containers[0].Image
+			downgradeTo(oldImage, nil)
+			Expect(cli.Delete(ctx, getIstiod())).To(Succeed())
+
+			reconcileOnce()
+			Expect(getIstiod().Spec.Template.Spec.Containers[0].Image).NotTo(Equal(oldImage))
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(oldImage))
+
+			markRolledOut()
+			reconcileOnce()
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(newZTunnel))
+		})
+
+		It("reconciles on an istiod status update that keeps the generation", func() {
+			pred := istiodRolloutPredicate()
+			deployment := func(name, rv string, available int32) *appsv1.Deployment {
+				return &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: istio.IstioNamespace, Generation: 2, ResourceVersion: rv},
+					Status:     appsv1.DeploymentStatus{ObservedGeneration: 2, AvailableReplicas: available},
+				}
+			}
+			name := istio.IstioIstiodDeploymentName
+			Expect(pred.Update(event.UpdateEvent{ObjectOld: deployment(name, "1", 0), ObjectNew: deployment(name, "2", 1)})).To(BeTrue())
+			Expect(pred.Update(event.UpdateEvent{ObjectOld: deployment(name, "2", 1), ObjectNew: deployment(name, "2", 1)})).To(BeFalse())
+			Expect(pred.Update(event.UpdateEvent{ObjectOld: deployment("other", "1", 0), ObjectNew: deployment("other", "2", 1)})).To(BeFalse())
 		})
 	})
 
