@@ -29,6 +29,11 @@ set -x
 S3_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.semaphore/s3-cmd"
 
 fetch_calico_image() {
+  # Staged from the volume cache by the caller, in place of the artifact store.
+  if [ -f "${PREFETCHED_ARTIFACTS:-/nonexistent}/calico-image.tar.zst" ]; then
+    cp "${PREFETCHED_ARTIFACTS}/calico-image.tar.zst" /tmp/calico-image.tar.zst
+    return
+  fi
   if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
     ( cd /tmp && artifact pull workflow calico-image.tar.zst )
     return

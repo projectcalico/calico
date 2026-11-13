@@ -4,6 +4,9 @@ version: condensed-module
 
 defaults:
   timeout: 1h
+  # The compute SA createVM, runOnVM and the teardowns authenticate with.
+  secretBundles:
+    - banzai-secrets
   env:
     # libbpf comes with the cached image; cloning it flakes on GitHub 500s.
     - name: NO_LIBBPF_CLONE
@@ -14,14 +17,22 @@ steps:
   # inputs; felix-build and the lanes skip what it
   # says passed.  FELIX_FV_MEMO=off runs everything.
   - name: felix-fv-plan
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     useGoBuild: true
     env:
+      # TEMPORARY: the thread pool the old 4000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "4"
       - name: BUILD_CACHE_GROUP
         value: calico
       - name: FELIX_FV_MEMO
         value: "on"
     timeout: 20m
-    requests: {cpu: 4000m, memory: 4Gi}
+    requests: {cpu: 1250m, memory: 2Gi}
     commands: |
       .argoci/scripts/felix-fv-plan
 
@@ -31,76 +42,122 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [build-calico-image, check-go, felix-fv-plan]
+    depends: [build-calico-image, calico-test-binaries, check-go, felix-fv-plan, go-cache]
     timeout: 40m
-    jobSize: large
-    requests: {cpu: 7000m, memory: 10Gi}
-    services:
-      - docker
+    # On a VM: it builds the felix and FV images with docker.
+    checkout: true
     secretBundles:
       - name: google-service-account-for-gce
         keys:
           - name: google-service-account-for-gce-key.json
             as: GCE_SERVICE_ACCOUNT_KEY
-    commands: |
-      artifact pull workflow felix-fv-plan
-      if [ "$(cat felix-fv-plan/build)" = skip ]; then
-        echo "Every FV lane passed on an earlier run of this PR with the same inputs; nothing to build."
-      else
-        source .argoci/scripts/vm-fleet-setup.sh
-        .argoci/scripts/load-cached-images calico
-        .semaphore/scripts/load-felix-prereqs.sh
-        cd felix
-        # REMOTE_DEPS= reuses the cached image. Not `make build`, which also
-        # cross-compiles the Windows binary.
-        make REMOTE_DEPS= bin/calico-felix image ut-bpf-prereqs fv-prereqs
-        ./.semaphore/cache-test-artifacts
-      fi
+    cache:
+      - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
+      - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
+      - {name: go, mode: read, path: /cache/go}
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP, NO_LIBBPF_CLONE, GCE_SERVICE_ACCOUNT_KEY]
+      put:
+        - /cache/calico-image-zst:prefetched
+        - /cache/calico-test-binaries:prefetched
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      source: |
+        set -e
+        .argoci/scripts/restore-go-cache felix-build ~/.go-mod
+        for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
+        artifact pull workflow felix-fv-plan
+        if [ "$(cat felix-fv-plan/build)" = skip ]; then
+          echo "Every FV lane passed on an earlier run of this PR with the same inputs; nothing to build."
+        else
+          export PREFETCHED_ARTIFACTS="${HOME}/prefetched"
+          source .argoci/scripts/vm-fleet-setup.sh
+          .argoci/scripts/load-cached-images calico
+          .semaphore/scripts/load-felix-prereqs.sh
+          cd felix
+          # REMOTE_DEPS= reuses the cached image. Not `make build`, which also
+          # cross-compiles the Windows binary.
+          make REMOTE_DEPS= bin/calico-felix image ut-bpf-prereqs fv-prereqs
+          ./.semaphore/cache-test-artifacts
+        fi
 
+  # Native in the go-build image: under NATIVE_GO_BUILD the checks call no docker.
   - name: felix-static-checks
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-    depends: [build-calico-image, check-go]
+      # TEMPORARY: the thread pool the old 4000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "4"
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    depends: [build-calico-image, calico-test-binaries, check-go, go-cache]
+    cache:
+      - {name: go, mode: read, path: /cache/go}
+      - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
     timeout: 30m
-    requests: {cpu: 4000m, memory: 6Gi}
-    services:
-      - docker
+    requests: {cpu: 3750m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     commands: |
-      .argoci/scripts/load-cached-images calico
-      .semaphore/scripts/load-felix-prereqs.sh
+      # The prereqs ship zstd-compressed and the build image lacks the CLI.
+      dnf install -y -q zstd
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" felix-static-checks
+      PREFETCHED_ARTIFACTS=/cache/calico-test-binaries .semaphore/scripts/load-felix-prereqs.sh
       cd felix
       make static-checks
 
-  # Non-root because two suites branch on geteuid() and take the wrong branch as
-  # root. The volume and HOME match the image's non-root user, since OpenSSH
-  # reads the home from passwd rather than the environment.
+  # The tests run non-root because two suites branch on geteuid() and take the
+  # wrong branch as root. The pod itself stays root: the build image has a passwd
+  # entry only for root, and the ssh checkout refuses to run without one. HOME is
+  # set because OpenSSH and Go read it. calico-test-binaries supplies the cgo and
+  # race binaries and libbpf.
   - name: felix-ut
-    depends: [build-calico-image, check-go]
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    depends: [calico-test-binaries, check-go]
     timeout: 45m
-    runAsNonRoot: true
     scratchVolumes: [/home/ci]
+    cache:
+      - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
     env:
+      # TEMPORARY: the thread pool the old 7000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "7"
       - name: BUILD_CACHE_GROUP
         value: calico
       - name: HOME
         value: /home/ci
+      - name: NATIVE_GO_BUILD
+        value: "true"
     jobSize: large
-    requests: {cpu: 7000m, memory: 10Gi}
-    services:
-      - docker
+    requests: {cpu: 2000m, memory: 10Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     secretBundles:
       - fv-tests-guru-github-token
       - gemini-api-key
       - fv-guru-db
     commands: |
-      .argoci/scripts/load-cached-images calico
-      .semaphore/scripts/load-felix-prereqs.sh
-      cd felix
+      # The prereqs ship zstd-compressed and the build image lacks the CLI.
+      dnf install -y -q zstd
+      PREFETCHED_ARTIFACTS=/cache/calico-test-binaries .semaphore/scripts/load-felix-prereqs.sh
       # The failure analysis reads the log from here.
-      mkdir -p ../artifacts
+      mkdir -p artifacts
+      useradd -u 1000 -U -M -d /home/ci ci
+      chown -R ci:ci . /home/ci /go
+      cd felix
       set -o pipefail
-      make ut 2>&1 | tee ../artifacts/ut.log
+      su-exec ci make ut 2>&1 | tee ../artifacts/ut.log
     epilogue: |
       cd "${CI_HOME}/${CI_GIT_DIR}/felix"
       # Before the push: it annotates the reports.
@@ -113,25 +170,38 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [build-calico-image, check-go]
+    depends: [build-calico-image, calico-test-binaries, check-go, go-cache]
     timeout: 45m
-    runOn: vm
-    vm:
-      machineType: e2-standard-4
-    services:
-      - docker
-    commands: |
-      sudo apt-get update -y && sudo apt-get install -y make
-      .argoci/scripts/load-cached-images calico
-      .semaphore/scripts/load-felix-prereqs.sh
-      cd felix
-      make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
-      make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
-    epilogue: |
-      # Absolute: scp resolves a relative remote path against the SSH user's
-      # home, not the checkout.
-      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/felix/report" report || true
-      artifact push job report --destination test-results || true
+    checkout: true
+    cache:
+      - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
+      - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
+      - {name: go, mode: read, path: /cache/go}
+    runOnVM:
+      createVM:
+        machineType: e2-standard-4
+      env: [BUILD_CACHE_GROUP, NO_LIBBPF_CLONE]
+      put:
+        - /cache/calico-image-zst:prefetched
+        - /cache/calico-test-binaries:prefetched
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      source: |
+        set -e
+        .argoci/scripts/restore-go-cache felix-k8sfv ~/.go-mod
+        repo="$(pwd)"
+        finish() {
+          rc=$?
+          artifact push job "$repo/felix/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
+        export PREFETCHED_ARTIFACTS="${HOME}/prefetched"
+        .argoci/scripts/load-cached-images calico
+        .semaphore/scripts/load-felix-prereqs.sh
+        cd felix
+        make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+        make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
 
   # FELIX_TEST_GROUP is parsed for the Ubuntu release, dataplane and UTs, not
   # just a label.
@@ -143,7 +213,7 @@ steps:
     tiers: []
     depends: [felix-build]
     timeout: 1h30m
-    requests: {cpu: 2000m, memory: 4Gi}
+    requests: {cpu: 1000m, memory: 4Gi}
     secretBundles:
       - name: google-service-account-for-gce
         keys:
@@ -153,6 +223,10 @@ steps:
       - gemini-api-key
       - fv-guru-db
     env:
+      # TEMPORARY: the thread pool the old 2000m request gave, while the
+      # request drops to the measured average.
+      - name: GOMAXPROCS
+        value: "2"
       - name: JOB_TIMEOUT_MINUTES
         value: "60"
     matrix:
@@ -238,25 +312,35 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    jobSize: large
-    requests: {cpu: 7000m, memory: 8Gi}
-    services:
-      - docker
-    commands: |
-      cd felix
-      make bin/calico-felix.exe fv/win-fv.exe
-      artifact push workflow fv/win-fv.exe
+    depends: [go-cache]
+    checkout: true
+    cache:
+      - {name: win-fv, mode: write, path: /cache/win-fv}
+      - {name: go, mode: read, path: /cache/go}
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP, NO_LIBBPF_CLONE]
+      put:
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      get:
+        - out:/cache/win-fv
+      source: |
+        set -e
+        .argoci/scripts/restore-go-cache felix-build-windows ~/.go-mod
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd felix
+        make bin/calico-felix.exe fv/win-fv.exe
+        mkdir -p ~/out
+        cp fv/win-fv.exe ~/out/
 
-  # Kubeadm on Azure VMs, installed from this commit's images.
+  # Kubeadm on Azure VMs, installed from this commit's images. On a machine of its
+  # own: the Azure Service Operator that builds the cluster runs in a local kind
+  # cluster.
   - name: felix-windows-fv
     tiers: []
     depends: [felix-build-windows, build-calico-image, build-node-image, build-operator-image, build-windows-images]
     timeout: 1h30m
-    requests: {cpu: 3000m, memory: 6Gi}
-    services:
-      - docker
-    secretBundles:
-      - banzai-secrets
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
@@ -271,55 +355,69 @@ steps:
       # Hardcoded by the FV script; this only tells the epilogue where to look.
       - name: LOGS_DIR
         value: /home/semaphore/fv.log
-    commands: |
-      export AZURE_SUBSCRIPTION_ID="$AZ_SUBSCRIPTION_ID"
-      export AZURE_TENANT_ID="$AZ_TENANT_ID"
-      export AZURE_CLIENT_ID="$AZ_SP_ID"
-      export AZURE_CLIENT_SECRET="$AZ_SP_PASSWORD"
-      # The ASO scripts default SUFFIX to $USER, which a pod leaves unset.
-      export SUFFIX="${ARGOCI_RESOURCE_PREFIX}-win-felix-${CI_WORKFLOW_NAME}"
-      export AZURE_RESOURCE_GROUP="${SUFFIX}-rg"
-      export REPORT_DIR="${CI_HOME}/${CI_GIT_DIR}/process/testing/winfv-felix/report"
-      az login --service-principal -u "$AZ_SP_ID" -p "$AZ_SP_PASSWORD" --tenant "$AZ_TENANT_ID" --output none
-      .argoci/scripts/load-cached-images calico node
-      # Touched: make would rebuild anything older than the checkout.
-      artifact pull workflow win-fv.exe --destination felix/fv/win-fv.exe
-      touch felix/fv/win-fv.exe
-      ( cd /tmp && artifact pull workflow operator-image-dockerio.tar.zst )
-      zstd -dc /tmp/operator-image-dockerio.tar.zst | docker load
-      export OPERATOR_PREBUILT=true
-      ( cd /tmp && artifact pull workflow windows-images.tar.zst )
-      tar --use-compress-program="zstd -d" -m -xf /tmp/windows-images.tar.zst
-      rm -f /tmp/operator-image-dockerio.tar.zst /tmp/windows-images.tar.zst
-      # The driver can die before writing its own logs.
-      set -o pipefail
-      ./process/testing/winfv-felix/run-win-fv.sh 2>&1 | tee /tmp/winfv-console.log
-    epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}"
-      # Skipped specs are reported as failures otherwise.
-      python3 hack/strip-skipped-tests.py process/testing/winfv-felix/report/*.xml 2>/dev/null || true
-      artifact push job process/testing/winfv-felix/report --destination test-results || true
-      artifact push job "${LOGS_DIR}" --destination logs || true
-
-      # Before the teardown, which deletes the cluster these come from.
-      mkdir -p /tmp/winfv-debug
-      cp /tmp/winfv-console.log /tmp/winfv-debug/ 2>/dev/null || true
-      cp process/testing/winfv-felix/setupfv.log /tmp/winfv-debug/ 2>/dev/null || true
-      cp -r "${LOGS_DIR}" /tmp/winfv-debug/fv.log 2>/dev/null || true
-      ls -lR process/testing/winfv-felix > /tmp/winfv-debug/winfv-tree.txt 2>&1 || true
-      KUBECTL="process/testing/aso/bin/kubectl --kubeconfig=process/testing/aso/kubeconfig"
-      ${KUBECTL} get nodes -o wide      > /tmp/winfv-debug/nodes.txt 2>&1 || true
-      ${KUBECTL} get pods -A -o wide    > /tmp/winfv-debug/pods.txt 2>&1 || true
-      ${KUBECTL} describe nodes         > /tmp/winfv-debug/nodes-describe.txt 2>&1 || true
-      ${KUBECTL} get events -A --sort-by=.lastTimestamp > /tmp/winfv-debug/events.txt 2>&1 || true
-      artifact push job /tmp/winfv-debug --destination winfv-debug || true
-
-      # The commands' login and exports don't reach the epilogue.
-      export AZURE_SUBSCRIPTION_ID="$AZ_SUBSCRIPTION_ID"
-      export AZURE_TENANT_ID="$AZ_TENANT_ID"
-      export AZURE_CLIENT_ID="$AZ_SP_ID"
-      export AZURE_CLIENT_SECRET="$AZ_SP_PASSWORD"
-      export SUFFIX="${ARGOCI_RESOURCE_PREFIX}-win-felix-${CI_WORKFLOW_NAME}"
-      export AZURE_RESOURCE_GROUP="${SUFFIX}-rg"
-      az login --service-principal -u "$AZ_SP_ID" -p "$AZ_SP_PASSWORD" --tenant "$AZ_TENANT_ID" --output none || true
-      cd process/testing/aso && make dist-clean || true
+    checkout: true
+    cache:
+      - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
+      - {name: node-image, mode: read, path: /cache/node-image}
+      - {name: operator-image, mode: read, path: /cache/operator-image}
+      - {name: windows-images, mode: read, path: /cache/windows-images}
+      - {name: win-fv, mode: read, path: /cache/win-fv}
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+        maxRunDuration: 2h
+      env: [BUILD_CACHE_GROUP, NO_LIBBPF_CLONE, FV_TYPE, RELEASE_STREAM, HASH_RELEASE, CONTAINERD_VERSION, LOGS_DIR,
+            ARGOCI_RESOURCE_PREFIX, CI_WORKFLOW_NAME, AZ_SUBSCRIPTION_ID, AZ_TENANT_ID, AZ_SP_ID, AZ_SP_PASSWORD]
+      put:
+        - /cache/calico-image-zst:prefetched
+        - /cache/node-image:prefetched
+        - /cache/operator-image:prefetched
+        - /cache/windows-images:prefetched
+        - /cache/win-fv:prefetched
+      source: |
+        set -eo pipefail
+        repo="$(pwd)"
+        for t in make zstd python3; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
+        command -v az >/dev/null || curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+        export AZURE_SUBSCRIPTION_ID="$AZ_SUBSCRIPTION_ID"
+        export AZURE_TENANT_ID="$AZ_TENANT_ID"
+        export AZURE_CLIENT_ID="$AZ_SP_ID"
+        export AZURE_CLIENT_SECRET="$AZ_SP_PASSWORD"
+        # The ASO scripts default SUFFIX to $USER, which may be unset.
+        export SUFFIX="${ARGOCI_RESOURCE_PREFIX}-win-felix-${CI_WORKFLOW_NAME}"
+        export AZURE_RESOURCE_GROUP="${SUFFIX}-rg"
+        export REPORT_DIR="$repo/process/testing/winfv-felix/report"
+        az login --service-principal -u "$AZ_SP_ID" -p "$AZ_SP_PASSWORD" --tenant "$AZ_TENANT_ID" --output none
+        # There is no epilogue on a machine: results and debug output go up, and the
+        # cluster comes down, on the way out. cleanup-cloud-resources sweeps whatever
+        # a killed machine leaves.
+        finish() {
+          rc=$?
+          cd "$repo"
+          # Skipped specs are reported as failures otherwise.
+          python3 hack/strip-skipped-tests.py process/testing/winfv-felix/report/*.xml 2>/dev/null || true
+          artifact push job "$repo/process/testing/winfv-felix/report" --destination test-results || true
+          artifact push job "${LOGS_DIR}" --destination logs || true
+          mkdir -p /tmp/winfv-debug
+          cp /tmp/winfv-console.log /tmp/winfv-debug/ 2>/dev/null || true
+          cp process/testing/winfv-felix/setupfv.log /tmp/winfv-debug/ 2>/dev/null || true
+          ls -lR process/testing/winfv-felix > /tmp/winfv-debug/winfv-tree.txt 2>&1 || true
+          KUBECTL="process/testing/aso/bin/kubectl --kubeconfig=process/testing/aso/kubeconfig"
+          ${KUBECTL} get nodes -o wide      > /tmp/winfv-debug/nodes.txt 2>&1 || true
+          ${KUBECTL} get pods -A -o wide    > /tmp/winfv-debug/pods.txt 2>&1 || true
+          ${KUBECTL} describe nodes         > /tmp/winfv-debug/nodes-describe.txt 2>&1 || true
+          ${KUBECTL} get events -A --sort-by=.lastTimestamp > /tmp/winfv-debug/events.txt 2>&1 || true
+          artifact push job /tmp/winfv-debug --destination winfv-debug || true
+          ( cd process/testing/aso && make dist-clean ) || true
+          exit $rc
+        }
+        trap finish EXIT
+        export PREFETCHED_ARTIFACTS="${HOME}/prefetched"
+        .argoci/scripts/load-cached-images calico node
+        # Touched: make would rebuild anything older than the checkout.
+        cp "${PREFETCHED_ARTIFACTS}/win-fv.exe" felix/fv/win-fv.exe
+        touch felix/fv/win-fv.exe
+        zstd -dc "${PREFETCHED_ARTIFACTS}/operator-image-dockerio.tar.zst" | docker load
+        export OPERATOR_PREBUILT=true
+        tar --use-compress-program="zstd -d" -m -xf "${PREFETCHED_ARTIFACTS}/windows-images.tar.zst"
+        ./process/testing/winfv-felix/run-win-fv.sh 2>&1 | tee /tmp/winfv-console.log

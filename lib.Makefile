@@ -897,7 +897,7 @@ LINT_ARGS ?= --max-issues-per-linter 0 --max-same-issues 0 --timeout 8m
 
 .PHONY: golangci-lint
 golangci-lint: $(GENERATED_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) golangci-lint run $(LINT_ARGS)'
+	$(DOCKER_GO_BUILD_RECURSIVE) sh -c '$(GIT_CONFIG_SSH) golangci-lint run $(LINT_ARGS)'
 
 REPO_REL_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else echo '..'; fi )
 
@@ -910,12 +910,16 @@ fix-changed go-fmt-changed goimports-changed:
 	  if [ -z "$(CI_GIT_COMMIT_RANGE)" ]; then \
 	    parent_branch=`release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) $(REPO_REL_DIR)/hack/find-parent-release-branch.sh`; \
 	  fi; \
-	  $(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
-	                -e git_repo_slug=$(GIT_REPO_SLUG) \
-	                -e parent_branch=$$parent_branch \
-	                -e CI_GIT_COMMIT_RANGE=$(CI_GIT_COMMIT_RANGE) \
-	                $(CALICO_BUILD) $(REPO_REL_DIR)/hack/format-changed-files.sh; \
+	  $(call run_with_env,release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) parent_branch=$$parent_branch CI_GIT_COMMIT_RANGE=$(CI_GIT_COMMIT_RANGE),$(REPO_REL_DIR)/hack/format-changed-files.sh); \
 	fi
+
+# $(call run_with_env,VAR=val ...,command): in the go-build container, or directly
+# under NATIVE_GO_BUILD. Values must not contain spaces.
+ifeq ($(NATIVE_GO_BUILD),true)
+run_with_env = env $(1) $(2)
+else
+run_with_env = $(DOCKER_RUN) $(addprefix -e ,$(1)) $(CALICO_BUILD) $(2)
+endif
 
 .PHONY: fix-all go-fmt-all goimports-all
 # $(DOCKER_GO_BUILD) is empty under NATIVE_GO_BUILD, so this runs the formatter directly.
@@ -926,7 +930,7 @@ GOMODDER=$(REPO_REL_DIR)/hack/cmd/gomodder/main.go
 
 .PHONY: verify-go-mods
 verify-go-mods:
-	$(DOCKER_RUN) $(CALICO_BUILD) go run $(GOMODDER)
+	$(DOCKER_GO_BUILD_RECURSIVE) go run $(GOMODDER)
 
 .PHONY: pre-commit
 pre-commit:
@@ -972,7 +976,7 @@ check-module-path-projectcalico-api:
 # go mod helpers
 ###############################################################################
 mod-download:
-	-$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go mod download'
+	-$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) go mod download'
 
 mod-tidy:
 	-$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go mod tidy'
