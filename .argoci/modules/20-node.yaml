@@ -31,18 +31,18 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [check-go, go-mod-cache]
+    depends: [check-go, go-cache]
     # The compute SA createVM, runOnVM and the teardown authenticate with.
     secretBundles: [banzai-secrets]
     checkout: true
     cache:
-      - {name: go-mod, mode: read, path: /cache/go-mod}
+      - {name: go, mode: read, path: /cache/go}
     runOnVM:
       createVM:
         machineType: e2-standard-8
       env: [BUILD_CACHE_GROUP]
       put:
-        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       source: |
         set -e
         .argoci/scripts/restore-go-cache node-ut ~/.go-mod
@@ -60,11 +60,11 @@ steps:
 
   # Emulated, so each of these is closer to twenty minutes than two.
   - name: node-build
-    depends: [build-nft-rpms, check-go, go-mod-cache]
+    depends: [build-nft-rpms, check-go, go-cache]
     secretBundles: [banzai-secrets]
     checkout: true
     cache:
-      - {name: go-mod, mode: read, path: /cache/go-mod}
+      - {name: go, mode: read, path: /cache/go}
     matrix:
       - name: arm64
         env: [{name: ARCH, value: arm64}]
@@ -77,7 +77,7 @@ steps:
         machineType: e2-standard-4
       env: [ARCH]
       put:
-        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       source: |
         set -e
         .argoci/scripts/restore-go-cache node-build ~/.go-mod

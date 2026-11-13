@@ -10,7 +10,7 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [build-calico-image, check-go, go-mod-cache]
+    depends: [build-calico-image, check-go, go-cache]
     matrix:
       - name: crd-v1
         env:
@@ -27,14 +27,14 @@ steps:
     checkout: true
     cache:
       - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
-      - {name: go-mod, mode: read, path: /cache/go-mod}
+      - {name: go, mode: read, path: /cache/go}
     runOnVM:
       createVM:
         machineType: e2-standard-8
       env: [BUILD_CACHE_GROUP, KC_TARGET, CALICO_API_GROUP]
       put:
         - /cache/calico-image-zst:prefetched
-        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       source: |
         set -e
         .argoci/scripts/restore-go-cache kube-controllers-ci ~/.go-mod

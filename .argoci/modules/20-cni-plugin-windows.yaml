@@ -13,9 +13,9 @@ defaults:
 
 steps:
   - name: cni-plugin-windows-fv
-    depends: [check-go, go-mod-cache]
+    depends: [check-go, go-cache]
     cache:
-      - {name: go-mod, mode: read, path: /cache/go-mod}
+      - {name: go, mode: read, path: /cache/go}
     matrix:
       - name: overlay
         env:
@@ -43,7 +43,7 @@ steps:
       env: [BACKEND, BUILD_CACHE_GROUP, AZURE_LOCATION, KUBE_VERSION, LOGS_DIR, ARGOCI_RESOURCE_PREFIX, CI_WORKFLOW_NAME,
             AZ_SUBSCRIPTION_ID, AZ_TENANT_ID, AZ_SP_ID, AZ_SP_PASSWORD]
       put:
-        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       source: |
         set -e
         .argoci/scripts/restore-go-cache cni-plugin-windows-fv ~/.go-mod

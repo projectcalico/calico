@@ -1,6 +1,6 @@
 #!/bin/bash
-# TEMPORARY: unpacks the Go build and module caches go-cache or go-mod-cache left
-# on the volume cache, in place of restoring them from GCS. A VM step is handed
+# TEMPORARY: unpacks the Go build and module caches go-cache left on the volume
+# cache, in place of restoring them from GCS. A VM step is handed
 # only the module archive, so whichever archives the directory holds are
 # restored. The go-build image has unpigz and ci-base only gzip; either way the
 # disk, not decompression, is the limit.

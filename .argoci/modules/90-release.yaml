@@ -10,16 +10,16 @@ defaults:
 steps:
   # On a machine of its own for docker: release commands run through docker.
   - name: release-ci
-    depends: [check-go, go-mod-cache]
+    depends: [check-go, go-cache]
     checkout: true
     cache:
-      - {name: go-mod, mode: read, path: /cache/go-mod}
+      - {name: go, mode: read, path: /cache/go}
     runOnVM:
       createVM:
         machineType: e2-standard-8
       env: [CI_GIT_REPO_SLUG]
       put:
-        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       source: |
         set -e
         .argoci/scripts/restore-go-cache release-ci ~/.go-mod
@@ -39,15 +39,15 @@ steps:
   # On a machine of its own for docker: `bin/release` splices its own flags into
   # a nested `docker run`.
   - name: release-build
-    depends: [check-go, go-mod-cache]
+    depends: [check-go, go-cache]
     checkout: true
     cache:
-      - {name: go-mod, mode: read, path: /cache/go-mod}
+      - {name: go, mode: read, path: /cache/go}
     runOnVM:
       createVM:
         machineType: e2-standard-4
       put:
-        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       source: |
         set -e
         .argoci/scripts/restore-go-cache release-build ~/.go-mod
@@ -59,11 +59,11 @@ steps:
         artifact cache store "release-${CI_GIT_SHA}" bin
 
   - name: release-st
-    depends: [check-go, release-build, go-mod-cache]
+    depends: [check-go, release-build, go-cache]
     timeout: 2h
     checkout: true
     cache:
-      - {name: go-mod, mode: read, path: /cache/go-mod}
+      - {name: go, mode: read, path: /cache/go}
     secretBundles:
       - iss-image-scanning
       - releasebot-slack
@@ -82,7 +82,7 @@ steps:
       env: [HASHRELEASE_SERVER_BUCKET, CI_GIT_REPO_SLUG, SLACK_API_TOKEN, SLACK_CHANNEL,
             IMAGE_SCANNER_API, IMAGE_SCANNING_TOKEN, IMAGE_SCANNER_SELECT, RELEASE_IMAGE_SCAN]
       put:
-        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       putEnv:
         - HASHRELEASE_PUBLISHER_KEY:secrets/hashrelease-publisher.json
       source: |

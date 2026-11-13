@@ -10,16 +10,16 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [check-go, go-mod-cache]
+    depends: [check-go, go-cache]
     checkout: true
     cache:
-      - {name: go-mod, mode: read, path: /cache/go-mod}
+      - {name: go, mode: read, path: /cache/go}
     runOnVM:
       createVM:
         machineType: e2-standard-8
       env: [BUILD_CACHE_GROUP]
       put:
-        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       source: |
         set -e
         .argoci/scripts/restore-go-cache confd-ci ~/.go-mod
