@@ -74,9 +74,11 @@ func PrepareServer(opts *CalicoServerOptions) (*apiserver.ProjectCalicoServer, e
 // the server's error so a failure exits non-zero. Changes to the client CA and request-header settings in
 // kube-system/extension-apiserver-authentication are reloaded by the upstream authenticator, so no restart is needed.
 func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer) error {
+	// Create a context rather than using the stop channel - it's a little more versatile.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
+		// Wait for the stop channel and cancel.
 		select {
 		case <-opts.StopCh:
 			cancel()
@@ -97,6 +99,8 @@ func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer)
 	if opts.PrintSwagger {
 		printSwagger := func(genericapiserver.PostStartHookContext) error {
 			WriteSwaggerJSON(server.GenericAPIServer.Handler, opts.SwaggerFilePath)
+
+			// PrintSwagger option prints and exit.
 			os.Exit(0)
 			return nil
 		}
@@ -104,6 +108,8 @@ func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer)
 			logrus.WithError(err).Error("Failed to add post start hook swagger-printer")
 		}
 	}
+
+	// Block until the context is canceled or the server fails.
 	if err := server.GenericAPIServer.PrepareRun().RunWithContext(ctx); err != nil {
 		return fmt.Errorf("running API server: %w", err)
 	}
