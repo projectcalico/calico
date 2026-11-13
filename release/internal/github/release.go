@@ -16,7 +16,6 @@ package github
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -45,26 +44,6 @@ type Asset struct {
 
 func (a Asset) Name() string { return filepath.Base(a.Path) }
 
-type Repo struct {
-	Org  string
-	Name string
-}
-
-func (r Repo) validate() error {
-	var errs []error
-	if r.Org == "" {
-		errs = append(errs, fmt.Errorf("no github organization specified"))
-	}
-	if r.Name == "" {
-		errs = append(errs, fmt.Errorf("no github repository specified"))
-	}
-	return errors.Join(errs...)
-}
-
-func (r Repo) String() string {
-	return r.Org + "/" + r.Name
-}
-
 // Releases reads and writes a repository's GitHub releases.
 type Releases struct {
 	repo Repo
@@ -84,8 +63,8 @@ type ReleaseService interface {
 }
 
 func NewReleases(repo Repo, svc ReleaseService) (*Releases, error) {
-	if err := repo.validate(); err != nil {
-		return nil, err
+	if err := repo.Validate(); err != nil {
+		return nil, fmt.Errorf("new releases: %w", err)
 	}
 	return &Releases{repo: repo, svc: svc}, nil
 }
@@ -107,27 +86,36 @@ func (r *Releases) Get(ctx context.Context, tag string) (*github.RepositoryRelea
 	return rel, true, nil
 }
 
-// CreateDraft creates a draft release for a tag, returning the existing one if
-// a draft already carries it. A published release is an error: a release
+type CreateOptions struct {
+	Tag        string
+	Name       string
+	Body       string
+	Draft      bool
+	Prerelease bool
+}
+
+// Create creates a release for a tag, returning the existing one if a draft
+// already carries it. A published release is an error: a release
 // nobody can unpublish must not be modified.
-func (r *Releases) CreateDraft(ctx context.Context, tag, name, body string) (*github.RepositoryRelease, error) {
-	switch existing, found, err := r.forTag(ctx, tag); {
+func (r *Releases) Create(ctx context.Context, o CreateOptions) (*github.RepositoryRelease, error) {
+	switch existing, found, err := r.forTag(ctx, o.Tag); {
 	case err != nil:
 		return nil, err
 	case found && !existing.GetDraft():
-		return nil, fmt.Errorf("%s release %s is already published; refusing to modify it", r.repo, tag)
+		return nil, fmt.Errorf("%s release %s is already published; refusing to modify it", r.repo, o.Tag)
 	case found:
 		return existing, nil
 	}
 
 	rel, _, err := r.svc.CreateRelease(ctx, r.repo.Org, r.repo.Name, &github.RepositoryRelease{
-		TagName: github.String(tag),
-		Name:    github.String(name),
-		Body:    github.String(body),
-		Draft:   github.Bool(true),
+		TagName:    github.String(o.Tag),
+		Name:       github.String(o.Name),
+		Body:       github.String(o.Body),
+		Draft:      github.Bool(o.Draft),
+		Prerelease: github.Bool(o.Prerelease),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("creating %s release %s: %w", r.repo, tag, err)
+		return nil, fmt.Errorf("creating %s release %s: %w", r.repo, o.Tag, err)
 	}
 	return rel, nil
 }

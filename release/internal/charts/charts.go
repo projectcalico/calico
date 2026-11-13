@@ -72,12 +72,8 @@ func RepoURLAt(base string) (string, error) {
 	return url, nil
 }
 
-var ChartsURL = func(c Chart) (string, error) {
-	url, err := github.DownloadURL(defaults.Organization(), defaults.Repo(), c.ProductVersion)
-	if err != nil {
-		return "", fmt.Errorf("charts download URL: %w", err)
-	}
-	return url, nil
+var ChartsURL = func(c Chart) string {
+	return github.Repo{Org: defaults.Organization(), Name: defaults.Repo()}.DownloadURL(c.ProductVersion)
 }
 
 // All is the set a release ships. It is a var so a product shipping a

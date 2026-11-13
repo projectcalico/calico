@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/go-github/v53/github"
@@ -41,6 +42,8 @@ type fakeReleases struct {
 	listed   []*github.RepositoryRelease
 
 	assetLists int
+
+	mu sync.Mutex
 }
 
 func (f *fakeReleases) GetReleaseByTag(_ context.Context, _, _, tag string) (*github.RepositoryRelease, *github.Response, error) {
@@ -57,6 +60,7 @@ func (f *fakeReleases) GetReleaseByTag(_ context.Context, _, _, tag string) (*gi
 func (f *fakeReleases) CreateRelease(_ context.Context, _, _ string, rel *github.RepositoryRelease) (*github.RepositoryRelease, *github.Response, error) {
 	f.created = rel
 	rel.ID = github.Int64(1)
+	f.listed = append(f.listed, rel)
 	return rel, nil, nil
 }
 
@@ -86,8 +90,10 @@ func (f *fakeReleases) draft(tag string, rel *github.RepositoryRelease) {
 }
 
 func (f *fakeReleases) ListReleaseAssets(_ context.Context, _, _ string, _ int64, _ *github.ListOptions) ([]*github.ReleaseAsset, *github.Response, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.assetLists++
-	return f.assets, nil, nil
+	return slices.Clone(f.assets), nil, nil
 }
 
 func (f *fakeReleases) DeleteReleaseAsset(_ context.Context, _, _ string, id int64) (*github.Response, error) {
@@ -95,8 +101,22 @@ func (f *fakeReleases) DeleteReleaseAsset(_ context.Context, _, _ string, id int
 	return nil, nil
 }
 
-func (f *fakeReleases) UploadReleaseAsset(_ context.Context, _, _ string, _ int64, opts *github.UploadOptions, _ *os.File) (*github.ReleaseAsset, *github.Response, error) {
+// Attaches what it received the way GitHub would, so a second publish sees
+// the assets the first one attached.
+func (f *fakeReleases) UploadReleaseAsset(_ context.Context, _, _ string, _ int64, opts *github.UploadOptions, file *os.File) (*github.ReleaseAsset, *github.Response, error) {
+	info, err := file.Stat()
+	if err != nil {
+		return nil, nil, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.uploaded = append(f.uploaded, opts.Name)
+	f.assets = append(f.assets, &github.ReleaseAsset{
+		ID:    github.Int64(int64(len(f.assets) + 100)),
+		Name:  github.String(opts.Name),
+		State: github.String("uploaded"),
+		Size:  github.Int(int(info.Size())),
+	})
 	return nil, nil, nil
 }
 
@@ -109,7 +129,7 @@ func testReleases(t *testing.T, f *fakeReleases) *Releases {
 	return r
 }
 
-func TestNewReleasesRequiresRepo(t *testing.T) {
+func TestNewReleases(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		repo Repo
@@ -126,35 +146,41 @@ func TestNewReleasesRequiresRepo(t *testing.T) {
 	}
 }
 
-// A missing tag is not an error: the caller decides whether absence is a
-// problem, and a create has to be able to ask.
-func TestGetAbsentTagIsNotAnError(t *testing.T) {
-	got, found, err := testReleases(t, &fakeReleases{}).Get(context.Background(), "v3.30.0")
-	if err != nil || found || got != nil {
-		t.Errorf("got (%v, %v, %v), want (nil, false, nil)", got, found, err)
-	}
+func TestGet(t *testing.T) {
+	// A missing tag is not an error: the caller decides whether absence is a
+	// problem, and a create has to be able to ask.
+	t.Run("an absent tag is not an error", func(t *testing.T) {
+		got, found, err := testReleases(t, &fakeReleases{}).Get(context.Background(), "v3.30.0")
+		if err != nil || found || got != nil {
+			t.Errorf("got (%v, %v, %v), want (nil, false, nil)", got, found, err)
+		}
+	})
+
+	// An auth or network failure must not read as "no such release", which would
+	// send the caller on to create one.
+	t.Run("a failure is not read as absence", func(t *testing.T) {
+		f := &fakeReleases{
+			getErr:  errors.New("bad credentials"),
+			getResp: &github.Response{Response: &http.Response{StatusCode: http.StatusUnauthorized}},
+		}
+		if _, found, err := testReleases(t, f).Get(context.Background(), "v3.30.0"); err == nil || found {
+			t.Errorf("expected the failure reported, got found=%v err=%v", found, err)
+		}
+	})
 }
 
-// An auth or network failure must not read as "no such release", which would
-// send the caller on to create one.
-func TestGetDistinguishesFailureFromAbsence(t *testing.T) {
-	f := &fakeReleases{
-		getErr:  errors.New("bad credentials"),
-		getResp: &github.Response{Response: &http.Response{StatusCode: http.StatusUnauthorized}},
-	}
-	if _, found, err := testReleases(t, f).Get(context.Background(), "v3.30.0"); err == nil || found {
-		t.Errorf("expected the failure reported, got found=%v err=%v", found, err)
-	}
-}
-
-func TestCreateDraft(t *testing.T) {
+func TestCreate(t *testing.T) {
 	for _, tc := range []struct {
-		name     string
-		existing *github.RepositoryRelease
-		wantErr  string
-		wantNew  bool
+		name       string
+		existing   *github.RepositoryRelease
+		prerelease bool
+		published  bool
+		wantErr    string
+		wantNew    bool
 	}{
 		{name: "creates when absent", wantNew: true},
+		{name: "creates a pre-release when asked", prerelease: true, wantNew: true},
+		{name: "creates a published release when not a draft", published: true, wantNew: true},
 		{
 			name:     "reuses an existing draft",
 			existing: &github.RepositoryRelease{ID: github.Int64(7), Draft: github.Bool(true)},
@@ -170,7 +196,7 @@ func TestCreateDraft(t *testing.T) {
 			if tc.existing != nil {
 				f.byTag = map[string]*github.RepositoryRelease{"v3.30.0": tc.existing}
 			}
-			rel, err := testReleases(t, f).CreateDraft(context.Background(), "v3.30.0", "v3.30.0", "notes")
+			rel, err := testReleases(t, f).Create(context.Background(), CreateOptions{Draft: !tc.published, Tag: "v3.30.0", Name: "v3.30.0", Body: "notes", Prerelease: tc.prerelease})
 
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
@@ -182,14 +208,17 @@ func TestCreateDraft(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Fatalf("CreateDraft: %v", err)
+				t.Fatalf("Create: %v", err)
 			}
 			if tc.wantNew {
 				if f.created == nil {
 					t.Fatal("expected a release created")
 				}
-				if !f.created.GetDraft() {
-					t.Error("expected the new release to be a draft")
+				if got := f.created.GetDraft(); got == tc.published {
+					t.Errorf("Draft = %v, want %v", got, !tc.published)
+				}
+				if got := f.created.GetPrerelease(); got != tc.prerelease {
+					t.Errorf("Prerelease = %v, want %v", got, tc.prerelease)
 				}
 				return
 			}
@@ -201,6 +230,34 @@ func TestCreateDraft(t *testing.T) {
 			}
 		})
 	}
+
+	// A draft carries no git tag, so the by-tag lookup 404s on one. Without the
+	// listing fallback every run would create another draft for the same tag.
+	t.Run("reuses a draft the tag lookup cannot see", func(t *testing.T) {
+		f := &fakeReleases{}
+		f.draft("v3.30.0", &github.RepositoryRelease{ID: github.Int64(9), Draft: github.Bool(true)})
+
+		rel, err := testReleases(t, f).Create(context.Background(), CreateOptions{Draft: true, Tag: "v3.30.0", Name: "v3.30.0", Body: "notes"})
+		if err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		if f.created != nil {
+			t.Error("expected the existing draft reused, not a second one created")
+		}
+		if rel.GetID() != 9 {
+			t.Errorf("got release %d, want the existing draft 9", rel.GetID())
+		}
+	})
+
+	t.Run("refuses a published release found by listing", func(t *testing.T) {
+		f := &fakeReleases{}
+		f.draft("v3.30.0", &github.RepositoryRelease{ID: github.Int64(9), Draft: github.Bool(false)})
+
+		if _, err := testReleases(t, f).Create(context.Background(), CreateOptions{Draft: true, Tag: "v3.30.0", Name: "v3.30.0", Body: "notes"}); err == nil ||
+			!strings.Contains(err.Error(), "already published") {
+			t.Errorf("expected a refusal to modify a published release, got %v", err)
+		}
+	})
 }
 
 // A re-run must resend only what is missing or arrived incomplete: resending
@@ -334,18 +391,20 @@ func TestAssetState(t *testing.T) {
 	}
 }
 
-func TestUploadAssetAttachesTheFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "SHA256SUMS")
-	if err := os.WriteFile(path, []byte("sums"), 0o644); err != nil {
-		t.Fatalf("writing fixture: %v", err)
-	}
-	f := &fakeReleases{}
-	if err := testReleases(t, f).UploadAsset(context.Background(), 1, path); err != nil {
-		t.Fatalf("UploadAsset: %v", err)
-	}
-	if len(f.uploaded) != 1 || f.uploaded[0] != "SHA256SUMS" {
-		t.Errorf("uploaded = %v, want [SHA256SUMS]", f.uploaded)
-	}
+func TestUploadAsset(t *testing.T) {
+	t.Run("attaches the file", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "SHA256SUMS")
+		if err := os.WriteFile(path, []byte("sums"), 0o644); err != nil {
+			t.Fatalf("writing fixture: %v", err)
+		}
+		f := &fakeReleases{}
+		if err := testReleases(t, f).UploadAsset(context.Background(), 1, path); err != nil {
+			t.Fatalf("UploadAsset: %v", err)
+		}
+		if len(f.uploaded) != 1 || f.uploaded[0] != "SHA256SUMS" {
+			t.Errorf("uploaded = %v, want [SHA256SUMS]", f.uploaded)
+		}
+	})
 }
 
 func TestPublish(t *testing.T) {
@@ -372,78 +431,52 @@ func TestPublish(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("a missing release fails", func(t *testing.T) {
+		if err := testReleases(t, &fakeReleases{}).Publish(context.Background(), "v3.30.0", false); err == nil {
+			t.Error("expected publishing a release that does not exist to fail")
+		}
+	})
+
+	// Publishing takes a draft live, and a draft is the one thing the by-tag
+	// endpoint cannot see. Looking it up that way strands every release.
+	t.Run("finds a draft the tag lookup cannot see", func(t *testing.T) {
+		f := &fakeReleases{}
+		f.draft("v3.30.0", &github.RepositoryRelease{ID: github.Int64(9), Draft: github.Bool(true)})
+
+		if err := testReleases(t, f).Publish(context.Background(), "v3.30.0", false); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+		if f.edited == nil {
+			t.Fatal("expected the draft edited")
+		}
+		if f.edited.GetDraft() {
+			t.Error("expected the release undrafted")
+		}
+	})
 }
 
-func TestPublishAbsentReleaseFails(t *testing.T) {
-	if err := testReleases(t, &fakeReleases{}).Publish(context.Background(), "v3.30.0", false); err == nil {
-		t.Error("expected publishing a release that does not exist to fail")
-	}
-}
+func TestLatestTag(t *testing.T) {
+	// GitHub serves the latest release itself, so ours is whatever it reports.
+	t.Run("is what GitHub serves", func(t *testing.T) {
+		f := &fakeReleases{listed: []*github.RepositoryRelease{
+			{TagName: github.String("v3.31.0-rc1"), Prerelease: github.Bool(true)},
+			{TagName: github.String("v3.30.1"), Draft: github.Bool(true)},
+			{TagName: github.String("v3.30.0")},
+		}}
+		got, err := testReleases(t, f).LatestTag(context.Background())
+		if err != nil {
+			t.Fatalf("LatestTag: %v", err)
+		}
+		if got != "v3.30.0" {
+			t.Errorf("LatestTag() = %q, want v3.30.0", got)
+		}
+	})
 
-// GitHub serves the latest release itself, so ours is whatever it reports.
-func TestLatestTagIsWhatGithubServes(t *testing.T) {
-	f := &fakeReleases{listed: []*github.RepositoryRelease{
-		{TagName: github.String("v3.31.0-rc1"), Prerelease: github.Bool(true)},
-		{TagName: github.String("v3.30.1"), Draft: github.Bool(true)},
-		{TagName: github.String("v3.30.0")},
-	}}
-	got, err := testReleases(t, f).LatestTag(context.Background())
-	if err != nil {
-		t.Fatalf("LatestTag: %v", err)
-	}
-	if got != "v3.30.0" {
-		t.Errorf("LatestTag() = %q, want v3.30.0", got)
-	}
-}
-
-func TestLatestTagNoReleases(t *testing.T) {
-	got, err := testReleases(t, &fakeReleases{}).LatestTag(context.Background())
-	if err != nil || got != "" {
-		t.Errorf("got (%q, %v), want (\"\", nil)", got, err)
-	}
-}
-
-// A draft carries no git tag, so the by-tag lookup 404s on one. Without the
-// listing fallback every run would create another draft for the same tag.
-func TestCreateDraftReusesADraftTheTagLookupCannotSee(t *testing.T) {
-	f := &fakeReleases{}
-	f.draft("v3.30.0", &github.RepositoryRelease{ID: github.Int64(9), Draft: github.Bool(true)})
-
-	rel, err := testReleases(t, f).CreateDraft(context.Background(), "v3.30.0", "v3.30.0", "notes")
-	if err != nil {
-		t.Fatalf("CreateDraft: %v", err)
-	}
-	if f.created != nil {
-		t.Error("expected the existing draft reused, not a second one created")
-	}
-	if rel.GetID() != 9 {
-		t.Errorf("got release %d, want the existing draft 9", rel.GetID())
-	}
-}
-
-func TestCreateDraftRefusesAPublishedReleaseFoundByListing(t *testing.T) {
-	f := &fakeReleases{}
-	f.draft("v3.30.0", &github.RepositoryRelease{ID: github.Int64(9), Draft: github.Bool(false)})
-
-	if _, err := testReleases(t, f).CreateDraft(context.Background(), "v3.30.0", "v3.30.0", "notes"); err == nil ||
-		!strings.Contains(err.Error(), "already published") {
-		t.Errorf("expected a refusal to modify a published release, got %v", err)
-	}
-}
-
-// Publishing takes a draft live, and a draft is the one thing the by-tag
-// endpoint cannot see. Looking it up that way strands every release.
-func TestPublishFindsADraftTheTagLookupCannotSee(t *testing.T) {
-	f := &fakeReleases{}
-	f.draft("v3.30.0", &github.RepositoryRelease{ID: github.Int64(9), Draft: github.Bool(true)})
-
-	if err := testReleases(t, f).Publish(context.Background(), "v3.30.0", false); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-	if f.edited == nil {
-		t.Fatal("expected the draft edited")
-	}
-	if f.edited.GetDraft() {
-		t.Error("expected the release undrafted")
-	}
+	t.Run("is empty with no releases", func(t *testing.T) {
+		got, err := testReleases(t, &fakeReleases{}).LatestTag(context.Background())
+		if err != nil || got != "" {
+			t.Errorf("got (%q, %v), want (\"\", nil)", got, err)
+		}
+	})
 }
