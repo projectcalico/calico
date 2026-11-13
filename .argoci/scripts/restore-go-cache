@@ -25,6 +25,12 @@ if [ -f "${dir}/go-build.tar.gz" ]; then
   pids+=($!)
 fi
 if [ -f "${dir}/go-mod.tar.gz" ]; then
+  # A rerun finds the last unpack, possibly cut short, in directories Go made
+  # read-only, which tar can neither overwrite nor trust; start clean.
+  if [ -d "${mod_root}/pkg/mod" ]; then
+    chmod -R u+w "${mod_root}/pkg/mod"
+    rm -rf "${mod_root}/pkg/mod"
+  fi
   mkdir -p "${mod_root}"
   "${gunzip}" -dc "${dir}/go-mod.tar.gz" | tar -C "${mod_root}" -xf - &
   pids+=($!)
