@@ -49,7 +49,7 @@ func WithDir(dir string) Option {
 // WithEnv adds to the parent's environment.
 func WithEnv(env ...string) Option {
 	return setting(func(s *settings) {
-		s.env = env
+		s.env = append(s.env, env...)
 	})
 }
 

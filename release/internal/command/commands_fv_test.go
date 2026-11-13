@@ -70,6 +70,16 @@ func TestRealRunner(t *testing.T) {
 		}
 	})
 
+	t.Run("a later env option wins on the same key", func(t *testing.T) {
+		out, err := r.Run("sh", []string{"-c", "echo $A"}, WithEnv("A=1"), WithEnv("A=4"))
+		if err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		if out != "4" {
+			t.Errorf("got %q, want 4", out)
+		}
+	})
+
 	t.Run("failure keeps stdout and stderr", func(t *testing.T) {
 		_, err := r.Run("sh", []string{"-c", "echo the real reason; echo on stderr >&2; exit 3"})
 		var cmdErr *Error

@@ -59,6 +59,16 @@ func TestRecorder(t *testing.T) {
 		}
 	})
 
+	t.Run("env options add up", func(t *testing.T) {
+		var r Recorder
+		if _, err := r.Run("make", nil, WithEnv("A=1"), WithEnv("B=2", "A=4")); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		if diff := cmp.Diff([]string{"A=1", "B=2", "A=4"}, r.Calls()[0].Env); diff != "" {
+			t.Errorf("env (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("reply gives the output and error", func(t *testing.T) {
 		boom := errors.New("boom")
 		r := Recorder{Reply: func(c Call) (string, error) {
