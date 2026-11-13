@@ -36,6 +36,9 @@ const (
 	authConfigMapName      = "extension-apiserver-authentication"
 	authConfigMapTestKey   = "calico-integration-test"
 	serverExitTimeout      = 60 * time.Second
+
+	// watchShutdownTimeout is well under kubelet's default 30s termination grace period.
+	watchShutdownTimeout = 15 * time.Second
 )
 
 // TestServerSurvivesExtensionAuthConfigMapChange checks that a data change to the extension-apiserver-authentication
@@ -101,6 +104,27 @@ func TestRunServerReturnsNilOnStop(t *testing.T) {
 	if err := apiServer.waitForExit(t, serverExitTimeout); err != nil {
 		t.Fatalf("RunServer returned %v after a clean stop, want nil", err)
 	}
+}
+
+// TestRunServerEndsOpenWatchesOnStop checks that stopping the server ends open watches. Without that, shutdown
+// waits out the HTTP server's shutdown timeout, which is longer than the pod's termination grace period, so kubelet
+// kills the pod on every rollout.
+func TestRunServerEndsOpenWatchesOnStop(t *testing.T) {
+	apiServer := startTestServer(t, NewTestServerConfig(), nil)
+
+	w, err := apiServer.client.ProjectcalicoV3().Tiers().Watch(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		apiServer.stop()
+		t.Fatalf("Watching tiers: %v", err)
+	}
+	defer w.Stop()
+
+	start := time.Now()
+	apiServer.stop()
+	if err := apiServer.waitForExit(t, watchShutdownTimeout); err != nil {
+		t.Fatalf("RunServer returned %v after a clean stop with an open watch, want nil", err)
+	}
+	t.Logf("RunServer returned %v after the stop with a watch open", time.Since(start))
 }
 
 func failingPreShutdownHook() error {
