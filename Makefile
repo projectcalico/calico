@@ -65,6 +65,12 @@ go-vet: operator-charts
 	$(MAKE) -C felix clone-libbpf
 	$(DOCKER_GO_BUILD) go vet --tags fvtests ./...
 
+# Compiles what go-vet does without running its checks, to fill a build cache:
+# every package, plus those only tests import. Test binaries are not linked.
+go-build-all: operator-charts
+	$(MAKE) -C felix clone-libbpf
+	$(DOCKER_GO_BUILD) sh -c 'go build --tags fvtests $$(go list --tags fvtests -test -deps -f "{{if not .Standard}}{{if not .ForTest}}{{.ImportPath}}{{end}}{{end}}" ./... | grep -v "[.]test$$")'
+
 update-x-libraries:
 	$(DOCKER_GO_BUILD) sh -c "go get golang.org/x/... && go mod tidy"
 
