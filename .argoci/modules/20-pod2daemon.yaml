@@ -17,7 +17,7 @@ steps:
       - {name: go, mode: read, path: /cache/go}
     runOnVM:
       createVM:
-        machineType: e2-standard-8
+        machineType: e2-standard-4
       env: [BUILD_CACHE_GROUP]
       put:
         - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz

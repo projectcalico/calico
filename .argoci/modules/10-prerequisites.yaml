@@ -159,7 +159,7 @@ steps:
         - ^\.argoci/modules/10-prerequisites\.yaml$
     runOnVM:
       createVM:
-        machineType: e2-standard-4
+        machineType: e2-standard-2
       source: |
         set -e
         command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
@@ -433,7 +433,7 @@ steps:
     # Matrixed, so it stays on the artifact store: a shared cache has one writer.
     runOnVM:
       createVM:
-        machineType: e2-standard-4
+        machineType: e2-standard-2
       env: [ARCH]
       source: |
         set -e
@@ -503,7 +503,7 @@ steps:
       - {name: go, mode: read, path: /cache/go}
     runOnVM:
       createVM:
-        machineType: e2-standard-8
+        machineType: e2-standard-4
       put:
         - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       get:
@@ -531,7 +531,7 @@ steps:
       - {name: whisker-image, mode: write, path: /cache/whisker-image}
     runOnVM:
       createVM:
-        machineType: e2-standard-4
+        machineType: e2-standard-2
       get:
         - out:/cache/whisker-image
       source: |
@@ -623,7 +623,7 @@ steps:
       - {name: go, mode: read, path: /cache/go}
     runOnVM:
       createVM:
-        machineType: e2-standard-8
+        machineType: e2-standard-4
       put:
         - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       get:

@@ -330,7 +330,8 @@ steps:
         .argoci/scripts/restore-go-cache felix-build-windows ~/.go-mod
         command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
         cd felix
-        make bin/calico-felix.exe fv/win-fv.exe
+        # The Windows binaries need neither the calico image nor its binary.
+        make REMOTE_DEPS= bin/calico-felix.exe fv/win-fv.exe
         mkdir -p ~/out
         cp fv/win-fv.exe ~/out/
 
@@ -364,7 +365,7 @@ steps:
       - {name: win-fv, mode: read, path: /cache/win-fv}
     runOnVM:
       createVM:
-        machineType: e2-standard-8
+        machineType: e2-standard-4
         maxRunDuration: 2h
       env: [BUILD_CACHE_GROUP, NO_LIBBPF_CLONE, FV_TYPE, RELEASE_STREAM, HASH_RELEASE, CONTAINERD_VERSION, LOGS_DIR,
             ARGOCI_RESOURCE_PREFIX, CI_WORKFLOW_NAME, AZ_SUBSCRIPTION_ID, AZ_TENANT_ID, AZ_SP_ID, AZ_SP_PASSWORD]
