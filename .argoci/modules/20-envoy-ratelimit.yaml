@@ -3,7 +3,6 @@ version: condensed-module
 
 defaults:
   timeout: 30m
-  secretBundles: [banzai-secrets]
 
 steps:
   - name: envoy-ratelimit-ci
@@ -11,6 +10,8 @@ steps:
     checkout: true
     cache:
       - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-2

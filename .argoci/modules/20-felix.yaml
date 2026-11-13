@@ -4,9 +4,6 @@ version: condensed-module
 
 defaults:
   timeout: 1h
-  # The compute SA createVM, runOnVM and the teardowns authenticate with.
-  secretBundles:
-    - banzai-secrets
   env:
     # libbpf comes with the cached image; cloning it flakes on GitHub 500s.
     - name: NO_LIBBPF_CLONE
@@ -47,6 +44,7 @@ steps:
     # On a VM: it builds the felix and FV images with docker.
     checkout: true
     secretBundles:
+      - banzai-secrets
       - name: google-service-account-for-gce
         keys:
           - name: google-service-account-for-gce-key.json
@@ -173,6 +171,9 @@ steps:
     depends: [build-calico-image, calico-test-binaries, check-go, go-cache]
     timeout: 45m
     checkout: true
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
     cache:
       - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
       - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
@@ -317,6 +318,7 @@ steps:
     cache:
       - {name: win-fv, mode: write, path: /cache/win-fv}
       - {name: go, mode: read, path: /cache/go}
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-8
@@ -363,6 +365,7 @@ steps:
       - {name: operator-image, mode: read, path: /cache/operator-image}
       - {name: windows-images, mode: read, path: /cache/windows-images}
       - {name: win-fv, mode: read, path: /cache/win-fv}
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-4

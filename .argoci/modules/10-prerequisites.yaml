@@ -5,9 +5,6 @@ version: condensed-module
 
 defaults:
   timeout: 1h
-  # The compute SA createVM, runOnVM and the teardowns authenticate with.
-  secretBundles:
-    - banzai-secrets
 
 steps:
   # On a VM: yaml-lint runs the linter's own image, which needs docker.
@@ -20,6 +17,9 @@ steps:
         - ^lib\.Makefile$
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-4
@@ -157,6 +157,9 @@ steps:
         - ^lib\.Makefile$
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-2
@@ -206,6 +209,9 @@ steps:
         - ^lib\.Makefile$
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-4
@@ -241,6 +247,9 @@ steps:
     depends: [go-cache]
     cache:
       - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-4
@@ -431,6 +440,9 @@ steps:
         - '^hack/rpms/nftables/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     # Matrixed, so it stays on the artifact store: a shared cache has one writer.
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-2
@@ -469,6 +481,9 @@ steps:
       in:
         - '^hack/rpms/nftables/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-4
@@ -501,6 +516,9 @@ steps:
     cache:
       - {name: node-image, mode: write, path: /cache/node-image}
       - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-4
@@ -529,6 +547,9 @@ steps:
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     cache:
       - {name: whisker-image, mode: write, path: /cache/whisker-image}
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-2
@@ -558,6 +579,9 @@ steps:
     cache:
       - {name: operator-image, mode: write, path: /cache/operator-image}
       - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-8
@@ -590,6 +614,9 @@ steps:
     cache:
       - {name: windows-images, mode: write, path: /cache/windows-images}
       - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-8
@@ -621,6 +648,9 @@ steps:
     cache:
       - {name: third-party-images, mode: write, path: /cache/third-party-images}
       - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-4
@@ -665,6 +695,9 @@ steps:
       - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
       - {name: e2e-binaries, mode: write, path: /cache/e2e-binaries}
       - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-8

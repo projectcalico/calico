@@ -3,9 +3,6 @@ version: condensed-module
 
 defaults:
   timeout: 1h
-  # The compute SA createVM, runOnVM and the teardowns authenticate with.
-  secretBundles:
-    - banzai-secrets
 
 steps:
   - name: operator-ci
@@ -16,6 +13,8 @@ steps:
     checkout: true
     cache:
       - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-8
@@ -74,6 +73,8 @@ steps:
       - {name: node-image, mode: read, path: /cache/node-image}
       - {name: whisker-image, mode: read, path: /cache/whisker-image}
       - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         machineType: e2-standard-4
