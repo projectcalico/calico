@@ -4,38 +4,47 @@ version: condensed-module
 
 defaults:
   tiers: []
+  # The compute SA createVM, runOnVM and the teardown authenticate with.
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: nft-bench
-    runOn: vm
     timeout: 30m
-    # Two vCPUs, matching what this has always been measured on. Any fixed size
-    # works; changing it puts a step in the trend that is not a code change.
-    vm:
-      machineType: e2-standard-2
-    services:
-      - docker
-    secretBundles:
-      - name: banzai-secrets
-        keys:
-          - name: LENS_ELASTICSEARCH_USER
-          - name: LENS_ELASTICSEARCH_TOKEN
-    commands: |
-      sudo apt-get update -y && sudo apt-get install -y nftables make
-      make -C felix bin/nft.test
-      make bin/send-perf-results
-      mkdir -p artifacts/perf
-      # A few iterations is enough for a stable steady-state number.
-      sudo env NFT_BENCH_PERF_ARTIFACTS_DIR="$(pwd)/artifacts/perf" \
-        felix/bin/nft.test -test.run='^$' -test.bench=. -test.benchmem -test.benchtime=6x
-      # The user comes from the secret too, so rotating to another account keeps
-      # publishing.
-      export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
-      export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
-      export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
-      # No-ops if the credentials are unset.
-      ./bin/send-perf-results --dir artifacts/perf
-    epilogue: |
-      # The results are on the VM, which is still up until this returns.
-      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/artifacts/perf" artifacts/perf || true
-      artifact push job artifacts/perf || true
+    depends: [go-mod-cache]
+    checkout: true
+    cache:
+      - {name: go-mod, mode: read, path: /cache/go-mod}
+    runOnVM:
+      # Two vCPUs, matching what this has always been measured on. Any fixed size
+      # works; changing it puts a step in the trend that is not a code change.
+      createVM:
+        machineType: e2-standard-2
+      env: [LENS_ELASTICSEARCH_USER, LENS_ELASTICSEARCH_TOKEN]
+      put:
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      source: |
+        set -e
+        .argoci/scripts/restore-go-cache nft-bench ~/.go-mod
+        repo="$(pwd)"
+        # There is no epilogue on a machine; results go up on the way out.
+        finish() {
+          rc=$?
+          artifact push job "$repo/artifacts/perf" --destination artifacts/perf || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        command -v nft >/dev/null || { sudo apt-get update -y && sudo apt-get install -y nftables; }
+        make -C felix bin/nft.test
+        make bin/send-perf-results
+        mkdir -p artifacts/perf
+        # A few iterations is enough for a stable steady-state number.
+        sudo env NFT_BENCH_PERF_ARTIFACTS_DIR="$(pwd)/artifacts/perf" \
+          felix/bin/nft.test -test.run='^$' -test.bench=. -test.benchmem -test.benchtime=6x
+        # The user comes from the secret too, so rotating to another account keeps
+        # publishing.
+        export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+        export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
+        export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
+        # No-ops if the credentials are unset.
+        ./bin/send-perf-results --dir artifacts/perf

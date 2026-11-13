@@ -1,18 +1,30 @@
-# Mock node test tool `make ci`.
+# Mock node test tool `make ci`, on a VM for docker.
 version: condensed-module
 
 defaults:
   timeout: 1h
-  services:
-    - docker
+  # The compute SA createVM, runOnVM and the teardown authenticate with.
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: mock-node-ci
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [check-go]
-    requests: {cpu: 4000m, memory: 2Gi}
-    commands: |
-      cd test-tools/mocknode
-      make ci
+    depends: [check-go, go-mod-cache]
+    checkout: true
+    cache:
+      - {name: go-mod, mode: read, path: /cache/go-mod}
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP]
+      put:
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      source: |
+        set -e
+        .argoci/scripts/restore-go-cache mock-node-ci ~/.go-mod
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd test-tools/mocknode
+        make ci

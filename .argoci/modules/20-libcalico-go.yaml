@@ -1,20 +1,21 @@
 # libcalico-go `make ci`, once per API group: a change can work through one and
-# break the other.
+# break the other. On VMs for docker.
 version: condensed-module
 
 defaults:
   timeout: 1h
-  services:
-    - docker
+  # The compute SA createVM, runOnVM and the teardown authenticate with.
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: libcalico-go-ci
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [check-go]
-    # A kind control plane shares this pod's cores with the tests.
-    requests: {cpu: 5000m, memory: 9.5Gi}
+    depends: [check-go, go-mod-cache]
+    checkout: true
+    cache:
+      - {name: go-mod, mode: read, path: /cache/go-mod}
     matrix:
       - name: crd-v1
       - name: v3
@@ -23,12 +24,25 @@ steps:
             value: projectcalico.org/v3
           - name: GINKGO_SKIP
             value: etcdv3 backend
-    commands: |
-      cd libcalico-go
-      make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/libcalico-go"
-      # Skipped specs would otherwise be reported as cases.
-      python3 ../hack/strip-skipped-tests.py ./report/*.xml 2>/dev/null || true
-      artifact push job report --destination test-results || true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP, CALICO_API_GROUP, GINKGO_SKIP]
+      put:
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      source: |
+        set -e
+        .argoci/scripts/restore-go-cache libcalico-go-ci ~/.go-mod
+        repo="$(pwd)"
+        # There is no epilogue on a machine; results go up on the way out.
+        finish() {
+          rc=$?
+          # Skipped specs would otherwise be reported as cases.
+          python3 "$repo/hack/strip-skipped-tests.py" "$repo"/libcalico-go/report/*.xml 2>/dev/null || true
+          artifact push job "$repo/libcalico-go/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd libcalico-go
+        make ci
