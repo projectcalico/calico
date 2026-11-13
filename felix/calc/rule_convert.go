@@ -24,6 +24,7 @@ import (
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/intervals"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -263,21 +264,22 @@ func ipNetsToProtoStrings(in []*net.IPNet) (out []string) {
 	return
 }
 
-func portsToProtoPorts(in []numorstring.Port) (out []*proto.PortRange) {
+// portsToProtoPorts coalesces the ports into a minimal sorted list of ranges,
+// so that the dataplane renders fewer port matches.
+func portsToProtoPorts(in []numorstring.Port) []*proto.PortRange {
 	if len(in) == 0 {
-		return
+		return nil
 	}
-	out = make([]*proto.PortRange, len(in))
-	for ii, port := range in {
-		out[ii] = portToProtoPort(port)
+	var ports intervals.Set[uint16]
+	ports.Grow(len(in))
+	for _, p := range in {
+		// Add panics if MinPort > MaxPort, but ports are built with the
+		// numorstring constructors, which reject that.
+		ports.Add(p.MinPort, p.MaxPort)
 	}
-	return
-}
-
-func portToProtoPort(in numorstring.Port) (out *proto.PortRange) {
-	out = &proto.PortRange{
-		First: int32(in.MinPort),
-		Last:  int32(in.MaxPort),
+	out := make([]*proto.PortRange, 0, ports.NumIntervals())
+	for first, last := range ports.Coalesced() {
+		out = append(out, &proto.PortRange{First: int32(first), Last: int32(last)})
 	}
-	return
+	return out
 }
