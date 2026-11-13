@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	ocsv1 "github.com/openshift/api/security/v1"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	admissionregv1 "k8s.io/api/admissionregistration/v1"
 	apps "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -1951,6 +1952,51 @@ var _ = Describe("Component handler tests", func() {
 			Expect(c.Get(ctx, client.ObjectKey{Name: "a", Namespace: "a"}, sa)).NotTo(HaveOccurred())
 			Expect(sa.Secrets).To(HaveLen(1))
 			Expect(sa.ImagePullSecrets).To(HaveLen(1))
+		})
+	})
+	Context("mutating webhook configuration updates", func() {
+		const injectedCA = "injected-ca"
+
+		// renderWebhooks returns a MutatingWebhookConfiguration with one webhook per name, each
+		// with the given caBundle.
+		renderWebhooks := func(caBundle []byte, names ...string) *admissionregv1.MutatingWebhookConfiguration {
+			mwc := &admissionregv1.MutatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "topology-injector"},
+			}
+			for _, n := range names {
+				mwc.Webhooks = append(mwc.Webhooks, admissionregv1.MutatingWebhook{
+					Name:         n,
+					ClientConfig: admissionregv1.WebhookClientConfig{CABundle: caBundle},
+				})
+			}
+			return mwc
+		}
+
+		// reconcile renders desired through the component handler and returns the webhooks
+		// stored on the cluster afterwards.
+		reconcile := func(desired *admissionregv1.MutatingWebhookConfiguration) []admissionregv1.MutatingWebhook {
+			fc := &fakeComponent{supportedOSType: rmeta.OSTypeLinux, objs: []client.Object{desired}}
+			Expect(handler.CreateOrUpdateOrDelete(ctx, fc, sm)).NotTo(HaveOccurred())
+			stored := &admissionregv1.MutatingWebhookConfiguration{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: desired.Name}, stored)).NotTo(HaveOccurred())
+			return stored.Webhooks
+		}
+
+		BeforeEach(func() {
+			Expect(c.Create(ctx, renderWebhooks([]byte(injectedCA), "a.webhook"))).NotTo(HaveOccurred())
+		})
+
+		It("keeps a caBundle injected by another controller when the rendered webhook has none", func() {
+			webhooks := reconcile(renderWebhooks(nil, "a.webhook", "b.webhook"))
+			Expect(webhooks).To(HaveLen(2))
+			Expect(webhooks[0].ClientConfig.CABundle).To(Equal([]byte(injectedCA)))
+			Expect(webhooks[1].ClientConfig.CABundle).To(BeEmpty())
+		})
+
+		It("writes the rendered caBundle when the operator sets one", func() {
+			webhooks := reconcile(renderWebhooks([]byte("operator-ca"), "a.webhook"))
+			Expect(webhooks).To(HaveLen(1))
+			Expect(webhooks[0].ClientConfig.CABundle).To(Equal([]byte("operator-ca")))
 		})
 	})
 	Context("volumes and volume mounts", func() {
