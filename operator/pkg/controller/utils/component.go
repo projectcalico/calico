@@ -33,11 +33,13 @@ import (
 	netv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextenv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -800,12 +802,22 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 		}
 		return dsa
 	case *admissionregv1.MutatingWebhookConfiguration:
-		dw, dok := desired.(*admissionregv1.MutatingWebhookConfiguration)
-		cw, cok := current.(*admissionregv1.MutatingWebhookConfiguration)
-		if dok && cok {
-			preserveWebhookCABundles(dw, cw)
+		dw := desired.(*admissionregv1.MutatingWebhookConfiguration)
+		cw := current.(*admissionregv1.MutatingWebhookConfiguration)
+		preserveWebhookServerPatches(dw.Webhooks, cw.Webhooks, func(w *admissionregv1.MutatingWebhook) (string, *admissionregv1.WebhookClientConfig, **admissionregv1.FailurePolicyType) {
+			return w.Name, &w.ClientConfig, &w.FailurePolicy
+		})
+		return dw
+	case *admissionregv1.ValidatingWebhookConfiguration:
+		dw := desired.(*admissionregv1.ValidatingWebhookConfiguration)
+		cw := current.(*admissionregv1.ValidatingWebhookConfiguration)
+		preserveWebhookServerPatches(dw.Webhooks, cw.Webhooks, func(w *admissionregv1.ValidatingWebhook) (string, *admissionregv1.WebhookClientConfig, **admissionregv1.FailurePolicyType) {
+			return w.Name, &w.ClientConfig, &w.FailurePolicy
+		})
+		if validatingWebhooksUnchanged(dw, cw) {
+			return nil
 		}
-		return desired
+		return dw
 	case *v3.NetworkPolicy:
 		cnp := current.(*v3.NetworkPolicy)
 		dnp := desired.(*v3.NetworkPolicy)
@@ -833,18 +845,76 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 	}
 }
 
-// preserveWebhookCABundles copies each webhook's caBundle from the cluster when the operator
-// renders that webhook without one. Another controller, such as the Envoy Gateway certgen Job,
-// owns the bundle in that case, and a full Update without it would clear the field until that
-// controller writes it again.
-func preserveWebhookCABundles(desired, current *admissionregv1.MutatingWebhookConfiguration) {
-	bundles := map[string][]byte{}
-	for _, w := range current.Webhooks {
-		bundles[w.Name] = w.ClientConfig.CABundle
+// preserveWebhookServerPatches keeps what a webhook server patched in when the
+// operator renders a webhook without a caBundle. In that case another
+// controller owns the bundle, such as istiod or the Envoy Gateway certgen Job,
+// and a full Update without it would clear the field until that controller
+// writes it again. istiod also raises failurePolicy from Ignore to Fail once it
+// serves the webhook, so writing the rendered Ignore back would turn
+// validation off.
+func preserveWebhookServerPatches[W any](desired, current []W, fields func(*W) (string, *admissionregv1.WebhookClientConfig, **admissionregv1.FailurePolicyType)) {
+	live := make(map[string]*W, len(current))
+	for i := range current {
+		name, _, _ := fields(&current[i])
+		live[name] = &current[i]
 	}
-	for i := range desired.Webhooks {
-		if len(desired.Webhooks[i].ClientConfig.CABundle) == 0 {
-			desired.Webhooks[i].ClientConfig.CABundle = bundles[desired.Webhooks[i].Name]
+	for i := range desired {
+		name, dc, dp := fields(&desired[i])
+		c, ok := live[name]
+		if !ok {
+			continue
+		}
+		_, cc, cp := fields(c)
+		if len(dc.CABundle) != 0 || len(cc.CABundle) == 0 {
+			continue
+		}
+		dc.CABundle = cc.CABundle
+		if *dp != nil && **dp == admissionregv1.Ignore && *cp != nil && **cp == admissionregv1.Fail {
+			*dp = *cp
+		}
+	}
+}
+
+// validatingWebhooksUnchanged compares with the API server's defaults applied,
+// because the live object always carries them. While istiod patches the
+// caBundle, every Update conflicts, so a no-op Update must not be sent.
+func validatingWebhooksUnchanged(desired, current *admissionregv1.ValidatingWebhookConfiguration) bool {
+	d := desired.DeepCopy()
+	for i := range d.Webhooks {
+		defaultValidatingWebhook(&d.Webhooks[i])
+	}
+	return equality.Semantic.DeepEqual(d.Webhooks, current.Webhooks) &&
+		equality.Semantic.DeepEqual(d.Labels, current.Labels) &&
+		equality.Semantic.DeepEqual(d.Annotations, current.Annotations) &&
+		equality.Semantic.DeepEqual(d.OwnerReferences, current.OwnerReferences) &&
+		equality.Semantic.DeepEqual(d.Finalizers, current.Finalizers)
+}
+
+// defaultValidatingWebhook applies the admissionregistration/v1 defaults. If a
+// later API version adds one, the comparison fails and the operator sends an
+// Update, which is safe.
+func defaultValidatingWebhook(w *admissionregv1.ValidatingWebhook) {
+	if w.FailurePolicy == nil {
+		w.FailurePolicy = ptr.To(admissionregv1.Fail)
+	}
+	if w.MatchPolicy == nil {
+		w.MatchPolicy = ptr.To(admissionregv1.Equivalent)
+	}
+	if w.NamespaceSelector == nil {
+		w.NamespaceSelector = &metav1.LabelSelector{}
+	}
+	if w.ObjectSelector == nil {
+		w.ObjectSelector = &metav1.LabelSelector{}
+	}
+	if w.TimeoutSeconds == nil {
+		w.TimeoutSeconds = ptr.To[int32](10)
+	}
+	if s := w.ClientConfig.Service; s != nil && s.Port == nil {
+		s.Port = ptr.To[int32](443)
+	}
+	for i := range w.Rules {
+		if w.Rules[i].Scope == nil {
+			w.Rules[i].Scope = ptr.To(admissionregv1.AllScopes)
 		}
 	}
 }
