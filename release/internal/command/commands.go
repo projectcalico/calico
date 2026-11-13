@@ -16,6 +16,7 @@ package command
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -95,7 +96,11 @@ func (r *realCommandRunner) Run(name string, args []string, opts ...Option) (str
 	err := cmd.Run()
 	out := strings.TrimSpace(outb.String())
 	if err != nil {
-		return out, &Error{Stdout: out, Stderr: strings.TrimSpace(errb.String()), Err: err, streamed: streamed}
+		code := -1
+		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
+			code = exit.ExitCode()
+		}
+		return out, &Error{Stdout: out, Stderr: strings.TrimSpace(errb.String()), Err: err, ExitCode: code, streamed: streamed}
 	}
 	return out, nil
 }
@@ -117,6 +122,8 @@ type Error struct {
 	Stdout string
 	Stderr string
 	Err    error
+	// ExitCode is -1 when the command did not exit normally.
+	ExitCode int
 
 	// streamed means stdout already reached the terminal, so Error leaves it out.
 	streamed bool

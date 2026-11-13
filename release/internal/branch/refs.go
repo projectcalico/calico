@@ -15,6 +15,7 @@
 package branch
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -23,9 +24,12 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 )
 
-func localBranchExists(g command.GitRunner, name string) bool {
-	_, ok := g.Resolve("refs/heads/" + name)
-	return ok
+func localBranchExists(g command.GitRunner, name string) (bool, error) {
+	_, err := g.Resolve("refs/heads/" + name)
+	if err != nil {
+		return false, ignoreMissingRef(err)
+	}
+	return true, nil
 }
 
 // createBranch creates a local branch at base without switching HEAD.
@@ -55,9 +59,10 @@ func resetBranchToBase(g command.GitRunner, name, base string) error {
 }
 
 // sourceAheadOf reports whether source has commits the branch lacks (source is
-// not an ancestor of branch). A missing branch counts as behind.
-func sourceAheadOf(g command.GitRunner, source, branch string) bool {
-	return !g.IsAncestor(source, branch)
+// not an ancestor of branch).
+func sourceAheadOf(g command.GitRunner, source, branch string) (bool, error) {
+	isAncestor, err := g.IsAncestor(source, branch)
+	return !isAncestor, err
 }
 
 // checkoutBranch switches HEAD to name. It is idempotent: checking out the
@@ -79,9 +84,13 @@ func stageAndCommit(g command.GitRunner, msg string, paths []string) (bool, erro
 		return false, fmt.Errorf("git add: %w", err)
 	}
 	diff := append([]string{"diff", "--cached", "--quiet", "--"}, paths...)
-	if _, err := g.Run(diff...); err == nil {
+	_, err := g.Run(diff...)
+	if err == nil {
 		// exit 0 = our paths are unchanged; skip the commit so re-runs don't fail.
 		return false, nil
+	}
+	if cerr, ok := errors.AsType[*command.Error](err); !ok || cerr.ExitCode != 1 {
+		return false, fmt.Errorf("git diff: %w", err)
 	}
 	commit := append([]string{"commit", "-m", msg, "--"}, paths...)
 	if _, err := g.Run(commit...); err != nil {
@@ -91,17 +100,24 @@ func stageAndCommit(g command.GitRunner, msg string, paths []string) (bool, erro
 }
 
 // localTagPointsAt reports whether the local tag is on branch's head. A missing
-// tag reports false, so a resume knows to create it.
-func localTagPointsAt(g command.GitRunner, tagName, branch string) bool {
-	tagSha, err := g.Run("rev-parse", "refs/tags/"+tagName)
+// tag or branch reports false, so a resume knows to create it.
+func localTagPointsAt(g command.GitRunner, tagName, branch string) (bool, error) {
+	tagSha, err := g.Resolve("refs/tags/" + tagName)
 	if err != nil {
-		return false
+		return false, ignoreMissingRef(err)
 	}
-	branchSha, err := g.Run("rev-parse", "refs/heads/"+branch)
+	branchSha, err := g.Resolve("refs/heads/" + branch)
 	if err != nil {
-		return false
+		return false, ignoreMissingRef(err)
 	}
-	return strings.TrimSpace(tagSha) == strings.TrimSpace(branchSha)
+	return tagSha == branchSha, nil
+}
+
+func ignoreMissingRef(err error) error {
+	if errors.Is(err, command.ErrGitRefNotFound) {
+		return nil
+	}
+	return err
 }
 
 // tag force-creates tagName. -f is safe: a remote collision is advanced past
@@ -186,9 +202,15 @@ func checkBranchCurrent(g command.GitRunner, branch, remote string, requireCurre
 	if _, err := g.Run("fetch", remote); err != nil {
 		return fmt.Errorf("fetching %s to check %s is current: %w", remote, branch, err)
 	}
-	local, _ := g.Run("rev-parse", branch)
-	up, _ := g.Resolve(upstream)
-	if strings.TrimSpace(up) != "" && strings.TrimSpace(local) == strings.TrimSpace(up) {
+	local, err := g.Resolve(branch)
+	if err := ignoreMissingRef(err); err != nil {
+		return err
+	}
+	up, err := g.Resolve(upstream)
+	if err := ignoreMissingRef(err); err != nil {
+		return err
+	}
+	if up != "" && local == up {
 		return nil // current
 	}
 

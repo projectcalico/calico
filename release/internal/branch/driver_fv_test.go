@@ -39,6 +39,15 @@ func realGit(root string) command.GitRunner {
 	return command.Git(command.RealRunner).In(root)
 }
 
+func branchExists(t *testing.T, g command.GitRunner, name string) bool {
+	t.Helper()
+	exists, err := localBranchExists(g, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return exists
+}
+
 // initGitRepo makes a temp repo with one commit on "master" and returns its root.
 func initGitRepo(t *testing.T) string {
 	t.Helper()
@@ -109,7 +118,7 @@ func TestCutReleaseBranchFlow(t *testing.T) {
 		if err := planD.runSteps(localCutSteps(t, planD, planG, newPlan())); err != nil {
 			t.Fatal(err)
 		}
-		if localBranchExists(planG, testPrefix+"-v3.33") {
+		if branchExists(t, planG, testPrefix+"-v3.33") {
 			t.Fatalf("plan mode must not create the branch")
 		}
 
@@ -120,7 +129,7 @@ func TestCutReleaseBranchFlow(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if !localBranchExists(applyG, testPrefix+"-v3.33") {
+		if !branchExists(t, applyG, testPrefix+"-v3.33") {
 			t.Fatal("localBranchExists(applyG, testPrefix+\"-v3.33\") = false")
 		}
 
@@ -165,7 +174,7 @@ func TestCutReleaseBranchFlow(t *testing.T) {
 		}
 
 		// The derived branch exists with its edits commit but no dev tag.
-		if !localBranchExists(g, testPrefix+"-v3.33") {
+		if !branchExists(t, g, testPrefix+"-v3.33") {
 			t.Fatal("localBranchExists(g, testPrefix+\"-v3.33\") = false")
 		}
 		// pushRefs pushes the derived branch and main's tag, but no derived tag.

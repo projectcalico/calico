@@ -27,6 +27,9 @@ import (
 
 var errFake = fmt.Errorf("fake")
 
+// errNoRef is git's exit status for a ref that names nothing.
+var errNoRef = &command.Error{Err: errFake, ExitCode: 1}
+
 // fakeRunner answers each git call from out and errs by key(args). An
 // unscripted call returns "" with no error.
 func fakeRunner(key func([]string) string, out map[string]string, errs map[string]error) *command.Recorder {
@@ -59,30 +62,87 @@ func ran(r *command.Recorder, prefix string) bool {
 }
 
 func TestLocalBranchExists(t *testing.T) {
-	// rev-parse succeeds -> exists
-	g := fakeRunner(firstTwo, map[string]string{"rev-parse --verify": "abc\n"}, nil)
-	require.True(t, localBranchExists(command.Git(g), testPrefix+"-v3.33-2"))
+	for _, tc := range []struct {
+		name    string
+		out     string
+		err     error
+		want    bool
+		wantErr bool
+	}{
+		{name: "a resolved branch exists", out: "abc", want: true},
+		{name: "a missing branch does not", err: errNoRef},
+		{name: "a git failure is an error", err: &command.Error{Err: errFake, ExitCode: 128}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := fakeRunner(firstTwo, map[string]string{"rev-parse --verify": tc.out}, map[string]error{"rev-parse --verify": tc.err})
+			got, err := localBranchExists(command.Git(g), "release-v3.33")
+			if (err != nil) != tc.wantErr {
+				t.Errorf("err = %v, want error %v", err, tc.wantErr)
+			}
+			if got != tc.want {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
 
-	// rev-parse errors -> not exists
-	g2 := fakeRunner(firstTwo, nil, map[string]error{"rev-parse --verify": errFake})
-	require.False(t, localBranchExists(command.Git(g2), "nope"))
+func TestStageAndCommit(t *testing.T) {
+	const diff = "diff --cached --quiet -- a.txt"
+	for _, tc := range []struct {
+		name    string
+		diffErr error
+		want    bool
+		wantErr bool
+	}{
+		{name: "unchanged paths skip the commit"},
+		{name: "changed paths commit", diffErr: &command.Error{Err: errFake, ExitCode: 1}, want: true},
+		{name: "a failed diff is an error", diffErr: &command.Error{Err: errFake, ExitCode: 128}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := fakeRunner(allArgs, nil, map[string]error{diff: tc.diffErr})
+			got, err := stageAndCommit(command.Git(g), "msg", []string{"a.txt"})
+			if (err != nil) != tc.wantErr {
+				t.Errorf("err = %v, want error %v", err, tc.wantErr)
+			}
+			if got != tc.want {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+			if committed := ran(g, "commit"); committed != tc.want {
+				t.Errorf("ran commit = %v, want %v", committed, tc.want)
+			}
+		})
+	}
 }
 
 func TestLocalTagPointsAt(t *testing.T) {
-	tagRef := "rev-parse refs/tags/v3.33.0-" + testSuffix
-	branchRef := "rev-parse refs/heads/" + testPrefix + "-v3.33"
-
-	// tag and branch resolve to the same sha -> points at.
-	g := fakeRunner(firstTwo, map[string]string{tagRef: "abc\n", branchRef: "abc\n"}, nil)
-	require.True(t, localTagPointsAt(command.Git(g), "v3.33.0-"+testSuffix, testPrefix+"-v3.33"))
-
-	// tag resolves to a different sha than the branch head -> not.
-	g2 := fakeRunner(firstTwo, map[string]string{tagRef: "abc\n", branchRef: "def\n"}, nil)
-	require.False(t, localTagPointsAt(command.Git(g2), "v3.33.0-"+testSuffix, testPrefix+"-v3.33"))
-
-	// tag does not exist -> not pointing at.
-	g3 := fakeRunner(firstTwo, nil, map[string]error{tagRef: errFake})
-	require.False(t, localTagPointsAt(command.Git(g3), "v3.33.0-"+testSuffix, testPrefix+"-v3.33"))
+	const (
+		tagRef    = "rev-parse --verify --quiet refs/tags/v3.33.0"
+		branchRef = "rev-parse --verify --quiet refs/heads/release-v3.33"
+	)
+	for _, tc := range []struct {
+		name    string
+		out     map[string]string
+		errs    map[string]error
+		want    bool
+		wantErr bool
+	}{
+		{name: "tag on the branch head", out: map[string]string{tagRef: "abc", branchRef: "abc"}, want: true},
+		{name: "tag elsewhere", out: map[string]string{tagRef: "abc", branchRef: "def"}},
+		{name: "missing tag", errs: map[string]error{tagRef: errNoRef}},
+		{name: "missing branch", out: map[string]string{tagRef: "abc"}, errs: map[string]error{branchRef: errNoRef}},
+		{name: "git failure", errs: map[string]error{tagRef: &command.Error{Err: errFake, ExitCode: 128}}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := fakeRunner(allArgs, tc.out, tc.errs)
+			got, err := localTagPointsAt(command.Git(g), "v3.33.0", "release-v3.33")
+			if (err != nil) != tc.wantErr {
+				t.Errorf("err = %v, want error %v", err, tc.wantErr)
+			}
+			if got != tc.want {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
 }
 
 func TestRemoteRefMatches(t *testing.T) {
@@ -148,7 +208,7 @@ func TestCheckBranchCurrent(t *testing.T) {
 	// equalTips scripts local and remote tips for the explicit-remote path.
 	equalTips := func(local, remote string) map[string]string {
 		return map[string]string{
-			"rev-parse " + src:                                              local,
+			"rev-parse --verify --quiet " + src:                             local,
 			"rev-parse --verify --quiet " + up:                              remote,
 			"rev-parse --abbrev-ref --symbolic-full-name master@{upstream}": "upstream/master",
 		}
@@ -187,7 +247,7 @@ func TestCheckBranchCurrent(t *testing.T) {
 
 	t.Run("absent on remote + branch-check: error", func(t *testing.T) {
 		// remote tip resolves empty -> not current.
-		g := fakeGit(map[string]string{"rev-parse " + src: sha}, nil)
+		g := fakeGit(map[string]string{"rev-parse --verify --quiet " + src: sha}, nil)
 		err := checkBranchCurrent(g, src, "origin", true, false, fix)
 		require.ErrorContains(t, err, "not in sync")
 	})
@@ -204,8 +264,8 @@ func TestCheckBranchCurrent(t *testing.T) {
 	t.Run("empty remote reads configured upstream", func(t *testing.T) {
 		g := fakeGit(map[string]string{
 			"rev-parse --abbrev-ref --symbolic-full-name master@{upstream}": "upstream/master",
-			"rev-parse master":                           sha,
-			"rev-parse --verify --quiet upstream/master": sha,
+			"rev-parse --verify --quiet master":                             sha,
+			"rev-parse --verify --quiet upstream/master":                    sha,
 		}, nil)
 		require.NoError(t, checkBranchCurrent(g, "master", "", true, false, fix))
 	})

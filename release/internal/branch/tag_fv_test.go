@@ -130,7 +130,7 @@ func TestCutFromTag(t *testing.T) {
 			t.Fatalf("error = %v, want one containing %q", err, "a cut from v3.23.1 cannot advance master")
 		}
 
-		if localBranchExists(realGit(root), "release-v3.23.1-hotfix") {
+		if branchExists(t, realGit(root), "release-v3.23.1-hotfix") {
 			t.Fatal("localBranchExists(realGit(root), \"release-v3.23.1-hotfix\") = true")
 		}
 		mainAfter, err := realGit(root).Run("rev-parse", "master")
@@ -152,7 +152,7 @@ func TestCutFromTag(t *testing.T) {
 		if err := d.CutReleaseBranch(&CutPlan{Derived: "release-v3.23.2-hotfix", Source: TagSource("v3.23.2"), Remote: "origin"}); err != nil {
 			t.Fatal(err)
 		}
-		if localBranchExists(realGit(root), "release-v3.23.2-hotfix") {
+		if branchExists(t, realGit(root), "release-v3.23.2-hotfix") {
 			t.Fatal("localBranchExists(realGit(root), \"release-v3.23.2-hotfix\") = true")
 		}
 	})

@@ -87,7 +87,7 @@ func TestCutBranchStepIdempotent(t *testing.T) {
 	exists := false
 	r := &command.Recorder{Reply: func(c command.Call) (string, error) {
 		if c.Args[0] == "rev-parse" && !exists {
-			return "", errFake
+			return "", errNoRef
 		}
 		return "abc123\n", nil
 	}}
@@ -230,7 +230,7 @@ func TestPushRefsCheckMissingLocalRefIsNotDone(t *testing.T) {
 		Remote:     "origin",
 		TagTargets: []TagTarget{{Branch: testPrefix + "-v3.33", DevTag: "v3.33.0-" + testSuffix}},
 	}
-	g := fakeRunner(firstTwo, nil, map[string]error{"rev-parse --verify": errFake})
+	g := fakeRunner(firstTwo, nil, map[string]error{"rev-parse --verify": errNoRef})
 	d := &Driver{Remote: "origin", Publish: true}
 	done, err := findStep(t, d.steps(command.Git(g), p), "push-refs").Done()
 	require.NoError(t, err, "a missing local ref must not error the check")

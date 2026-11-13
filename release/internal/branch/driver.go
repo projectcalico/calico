@@ -174,7 +174,11 @@ func logPlan(p *CutPlan) {
 // validateFreshCut gates a fresh cut with the dirty-tree reject (off under
 // --no-validation) and the base check (always); a resume skips both.
 func (d *Driver) validateFreshCut(g command.GitRunner, p *CutPlan) error {
-	if localBranchExists(g, p.Derived) {
+	exists, err := localBranchExists(g, p.Derived)
+	if err != nil {
+		return err
+	}
+	if exists {
 		logrus.WithField("branch", p.Derived).Info("derived branch already exists; skipping fresh-cut checks")
 		return nil // resuming an existing cut
 	}
@@ -254,7 +258,7 @@ func (d *Driver) steps(g command.GitRunner, p *CutPlan) []Step {
 	return []Step{
 		{
 			Name: stepCutBranch,
-			Done: func() (bool, error) { return localBranchExists(g, p.Derived), nil },
+			Done: func() (bool, error) { return localBranchExists(g, p.Derived) },
 			Do:   func() error { return createAndCheckoutBranch(g, p.Derived, p.Source) },
 		},
 		{
@@ -273,7 +277,7 @@ func (d *Driver) steps(g command.GitRunner, p *CutPlan) []Step {
 				if !ok {
 					return true, nil // no derived tag: the branch inherits main's tag
 				}
-				return localTagPointsAt(g, t.DevTag, t.Branch), nil
+				return localTagPointsAt(g, t.DevTag, t.Branch)
 			},
 			Do: func() error {
 				t, ok := p.derivedTarget()
@@ -303,7 +307,7 @@ func (d *Driver) steps(g command.GitRunner, p *CutPlan) []Step {
 				if !hasMainTgt {
 					return true, nil
 				}
-				return localTagPointsAt(g, mainTgt.DevTag, mainTgt.Branch), nil
+				return localTagPointsAt(g, mainTgt.DevTag, mainTgt.Branch)
 			},
 			Do: func() error {
 				if !hasMainTgt {
@@ -323,11 +327,14 @@ func (d *Driver) steps(g command.GitRunner, p *CutPlan) []Step {
 				// Done only when every ref is on the remote at the local sha. A stale
 				// remote ref reports not-done so it can be re-pushed.
 				for _, r := range d.pushRefs(p) {
-					localSha, ok := g.Resolve(r)
-					if !ok {
+					localSha, err := g.Resolve(r)
+					if errors.Is(err, command.ErrGitRefNotFound) {
 						// Ref not local yet, so not on the remote: not done. This is
 						// the state under --plan and before the earlier steps act.
 						return false, nil
+					}
+					if err != nil {
+						return false, err
 					}
 					present, matches, err := remoteRefMatches(g, p.Remote, r, localSha)
 					if err != nil {
@@ -372,7 +379,11 @@ func (d *Driver) steps(g command.GitRunner, p *CutPlan) []Step {
 func (d *Driver) updateDerived(g command.GitRunner, p *CutPlan) error {
 	// If source advanced past the derived branch, re-cut it from source so the
 	// resume picks up the new source commits; otherwise just check it out.
-	if sourceAheadOf(g, p.Source, p.Derived) {
+	ahead, err := sourceAheadOf(g, p.Source, p.Derived)
+	if err != nil {
+		return err
+	}
+	if ahead {
 		logrus.WithFields(logrus.Fields{"branch": p.Derived, "source": p.Source, "step": stepUpdateDerived}).
 			Info("source advanced; resetting derived branch to source")
 		if err := resetBranchToBase(g, p.Derived, p.Source); err != nil {

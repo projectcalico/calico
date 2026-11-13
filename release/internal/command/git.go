@@ -14,7 +14,14 @@
 
 package command
 
-import "strings"
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
+
+// ErrGitRefNotFound is what Resolve returns for a ref that names no commit.
+var ErrGitRefNotFound = errors.New("ref not found")
 
 // GitRunner runs git in the cwd, or in the dir In binds.
 type GitRunner struct {
@@ -65,17 +72,35 @@ func (g GitRunner) Porcelain() (bool, error) {
 	return out != "", nil
 }
 
-// Resolve returns the commit a ref names. A missing ref fails like any other
-// error, so both report false.
-func (g GitRunner) Resolve(ref string) (string, bool) {
+// Resolve returns the commit a ref names.
+func (g GitRunner) Resolve(ref string) (string, error) {
 	out, err := g.Run("rev-parse", "--verify", "--quiet", ref)
-	return out, err == nil && out != ""
+	if exitCode(err) == 1 {
+		return "", fmt.Errorf("resolve %s: %w", ref, ErrGitRefNotFound)
+	}
+	if err != nil {
+		return "", fmt.Errorf("resolve %s: %w", ref, err)
+	}
+	return out, nil
 }
 
-// IsAncestor reports whether a is an ancestor of b. A missing ref reports false.
-func (g GitRunner) IsAncestor(a, b string) bool {
+// IsAncestor reports whether a is an ancestor of b. A missing ref is an error.
+func (g GitRunner) IsAncestor(a, b string) (bool, error) {
 	_, err := g.Run("merge-base", "--is-ancestor", a, b)
-	return err == nil
+	switch {
+	case err == nil:
+		return true, nil
+	case exitCode(err) == 1:
+		return false, nil
+	}
+	return false, fmt.Errorf("check %s is an ancestor of %s: %w", a, b, err)
+}
+
+func exitCode(err error) int {
+	if cerr, ok := errors.AsType[*Error](err); ok {
+		return cerr.ExitCode
+	}
+	return 0
 }
 
 func (g GitRunner) Run(args ...string) (string, error) {

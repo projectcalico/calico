@@ -79,6 +79,9 @@ func newFakeRunner() *fakeRunner {
 	return f
 }
 
+// errNoGitRef is git's exit status for a ref that names nothing.
+var errNoGitRef = &command.Error{Err: errors.New("exit status 1"), ExitCode: 1}
+
 // on registers a canned result for a command key.
 func (f *fakeRunner) on(key, stdout string, err error) *fakeRunner {
 	f.responses[key] = fakeResult{stdout: stdout, err: err}
@@ -174,7 +177,7 @@ func TestTagRelease(t *testing.T) {
 		{
 			name:      "tag does not exist creates it",
 			tagCommit: "",
-			tagErr:    fmt.Errorf("exit status 1"),
+			tagErr:    errNoGitRef,
 			wantTag:   true,
 		},
 		{
@@ -257,7 +260,7 @@ func TestBuild(t *testing.T) {
 			m.binaries = true
 			f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30", nil)
 			f.on("git rev-parse HEAD", headSHA, nil)
-			f.on(fmt.Sprintf("git rev-parse --verify --quiet refs/tags/%s^{commit}", ver), "", fmt.Errorf("exit status 1"))
+			f.on(fmt.Sprintf("git rev-parse --verify --quiet refs/tags/%s^{commit}", ver), "", errNoGitRef)
 			// Fail a binaries target so Build returns after the tag is taken.
 			f.on(root+"/felix $ make release-build", "", fmt.Errorf("boom"))
 
@@ -383,7 +386,7 @@ func TestBuild(t *testing.T) {
 func TestTagStateMemoized(t *testing.T) {
 	const ver = "v3.30.0"
 	f := newFakeRunner()
-	f.on(fmt.Sprintf("git rev-parse --verify --quiet refs/tags/%s^{commit}", ver), "", fmt.Errorf("exit status 1"))
+	f.on(fmt.Sprintf("git rev-parse --verify --quiet refs/tags/%s^{commit}", ver), "", errNoGitRef)
 
 	r := &CalicoManager{runner: f, calicoVersion: testVersion(t, ver)}
 	if tc := r.tagState(); tc.err != nil {
@@ -896,7 +899,7 @@ func TestRequireOnMainBranch(t *testing.T) {
 			if tc.derived != "" {
 				f.on(verify, tc.derived, nil)
 			} else {
-				f.on(verify, "", errors.New("exit status 1"))
+				f.on(verify, "", errNoGitRef)
 			}
 			m := &CalicoManager{runner: f, repoRoot: "/repo", mainBranch: "master", validate: true}
 			err := m.requireOnMainBranch("release-v3.33")
@@ -2339,7 +2342,7 @@ func TestPublishRelease(t *testing.T) {
 
 	t.Run("a missing local tag fails before anything publishes", func(t *testing.T) {
 		published := false
-		f := newFakeRunner().on("git rev-parse --verify --quiet refs/tags/v3.30.0", "", errors.New("needed a single revision"))
+		f := newFakeRunner().on("git rev-parse --verify --quiet refs/tags/v3.30.0", "", errNoGitRef)
 		r := &CalicoManager{
 			runner:        f,
 			calicoVersion: testVersion(t, "v3.30.0"),

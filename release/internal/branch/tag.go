@@ -16,6 +16,7 @@ package branch
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -56,9 +57,12 @@ func checkTagOnRemote(g command.GitRunner, tagName, remote string, report bool) 
 // tagMismatch compares the local tag with the remote's, given its ls-remote output.
 func tagMismatch(g command.GitRunner, tagName, remote, lsRemote string) error {
 	ref := tagRefPrefix + tagName
-	want, ok := g.Resolve(ref + "^{commit}")
-	if !ok {
-		return fmt.Errorf("tag %s does not exist locally; fetch it with `git fetch %s tag %s`", tagName, remote, tagName)
+	want, err := g.Resolve(ref + "^{commit}")
+	if errors.Is(err, command.ErrGitRefNotFound) {
+		return fmt.Errorf("tag mismatch: %s does not exist locally; fetch it with `git fetch %s tag %s`", tagName, remote, tagName)
+	}
+	if err != nil {
+		return fmt.Errorf("tag mismatch: %w", err)
 	}
 	commits := map[string]string{}
 	for _, line := range strings.Split(strings.TrimSpace(lsRemote), "\n") {
@@ -68,10 +72,10 @@ func tagMismatch(g command.GitRunner, tagName, remote, lsRemote string) error {
 	}
 	got := cmp.Or(commits[ref+"^{}"], commits[ref])
 	if got == "" {
-		return fmt.Errorf("tag %s is not on %s; only a released tag can be cut from", tagName, remote)
+		return fmt.Errorf("tag mismatch: %s is not on %s; only a released tag can be cut from", tagName, remote)
 	}
 	if got != want {
-		return fmt.Errorf("local tag %s (%s) does not match %s (%s)", tagName, want, remote, got)
+		return fmt.Errorf("tag mismatch: local tag %s (%s) does not match %s (%s)", tagName, want, remote, got)
 	}
 	return nil
 }

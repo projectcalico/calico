@@ -16,6 +16,7 @@ package command
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -95,31 +96,57 @@ func TestGit(t *testing.T) {
 	}
 	t.Run("resolve returns the commit a ref names", func(t *testing.T) {
 		r := &Recorder{Reply: func(Call) (string, error) { return "abc123", nil }}
-		got, ok := Git(r).In("/repo").Resolve("refs/tags/v1")
-		if !ok || got != "abc123" {
-			t.Errorf("got (%q, %v), want (abc123, true)", got, ok)
+		got, err := Git(r).In("/repo").Resolve("refs/tags/v1")
+		if err != nil {
+			t.Fatalf("resolve: %v", err)
+		}
+		if got != "abc123" {
+			t.Errorf("got %q, want abc123", got)
 		}
 		want := []Call{{Name: "git", Args: []string{"rev-parse", "--verify", "--quiet", "refs/tags/v1"}, Dir: "/repo"}}
 		if diff := cmp.Diff(want, r.Calls()); diff != "" {
 			t.Errorf("calls (-want +got):\n%s", diff)
 		}
 	})
-	t.Run("resolve reports a missing ref as not found", func(t *testing.T) {
-		r := &Recorder{Reply: func(Call) (string, error) { return "", errors.New("exit status 1") }}
-		if _, ok := Git(r).Resolve("refs/tags/v1"); ok {
-			t.Error("ok = true, want false")
+	t.Run("resolve tells a missing ref from a git failure", func(t *testing.T) {
+		for _, tc := range []struct {
+			code     int
+			notFound bool
+		}{{code: 1, notFound: true}, {code: 128}} {
+			r := &Recorder{Reply: func(Call) (string, error) { return "", exitErr(tc.code) }}
+			_, err := Git(r).Resolve("refs/tags/v1")
+			if err == nil {
+				t.Fatalf("exit %d: got nil, want an error", tc.code)
+			}
+			if got := errors.Is(err, ErrGitRefNotFound); got != tc.notFound {
+				t.Errorf("exit %d: errors.Is(err, ErrRefNotFound) = %v, want %v", tc.code, got, tc.notFound)
+			}
 		}
 	})
 	t.Run("is-ancestor reads git's exit status", func(t *testing.T) {
-		yes := &Recorder{}
-		no := &Recorder{Reply: func(Call) (string, error) { return "", errors.New("exit status 1") }}
-		if !Git(yes).IsAncestor("a", "b") {
-			t.Error("exit 0: got false, want true")
-		}
-		if Git(no).IsAncestor("a", "b") {
-			t.Error("exit 1: got true, want false")
+		for _, tc := range []struct {
+			err     error
+			want    bool
+			wantErr bool
+		}{
+			{want: true},
+			{err: exitErr(1)},
+			{err: exitErr(128), wantErr: true},
+		} {
+			r := &Recorder{Reply: func(Call) (string, error) { return "", tc.err }}
+			got, err := Git(r).IsAncestor("a", "b")
+			if (err != nil) != tc.wantErr {
+				t.Errorf("reply %v: err = %v, want error %v", tc.err, err, tc.wantErr)
+			}
+			if got != tc.want {
+				t.Errorf("reply %v: got %v, want %v", tc.err, got, tc.want)
+			}
 		}
 	})
+}
+
+func exitErr(code int) error {
+	return &Error{Err: fmt.Errorf("exit status %d", code), ExitCode: code}
 }
 
 func TestMake(t *testing.T) {

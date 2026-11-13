@@ -757,8 +757,11 @@ func (r *CalicoManager) tagState() *tagCheck {
 		return r.tagAtHEAD
 	}
 	tc := &tagCheck{}
-	tagCommit, ok := command.Git(r.runner).In(r.repoRoot).Resolve("refs/tags/" + r.calicoVersion.String() + "^{commit}")
-	if !ok {
+	tagCommit, err := command.Git(r.runner).In(r.repoRoot).Resolve("refs/tags/" + r.calicoVersion.String() + "^{commit}")
+	if err != nil {
+		if !errors.Is(err, command.ErrGitRefNotFound) {
+			tc.err = err
+		}
 		r.tagAtHEAD = tc
 		return tc
 	}
@@ -1284,10 +1287,11 @@ func (r *CalicoManager) githubTagUpload() distribution.Upload {
 		Kind:   "git tag",
 		Action: r.publishGitTag,
 		Check: func() error {
-			if _, ok := command.Git(r.runner).In(r.repoRoot).Resolve("refs/tags/" + r.calicoVersion.String()); !ok {
+			_, err := command.Git(r.runner).In(r.repoRoot).Resolve("refs/tags/" + r.calicoVersion.String())
+			if errors.Is(err, command.ErrGitRefNotFound) {
 				return fmt.Errorf("no local tag %s", r.calicoVersion.String())
 			}
-			return nil
+			return err
 		},
 	}}
 }
@@ -1768,8 +1772,12 @@ func (r *CalicoManager) requireOnMainBranch(derived string) error {
 		logrus.Warn("Skipping main branch validation")
 		return nil
 	}
-	if _, ok := command.Git(r.runner).In(r.repoRoot).Resolve("refs/heads/" + derived); ok {
+	_, err := command.Git(r.runner).In(r.repoRoot).Resolve("refs/heads/" + derived)
+	if err == nil {
 		return nil // resume: the derived branch already exists
+	}
+	if !errors.Is(err, command.ErrGitRefNotFound) {
+		return err
 	}
 	cur, err := command.Git(r.runner).In(r.repoRoot).Branch()
 	if err != nil {

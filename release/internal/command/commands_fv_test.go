@@ -89,6 +89,9 @@ func TestRealRunner(t *testing.T) {
 		if cmdErr.Stdout != "the real reason" || cmdErr.Stderr != "on stderr" {
 			t.Errorf("got stdout %q stderr %q", cmdErr.Stdout, cmdErr.Stderr)
 		}
+		if cmdErr.ExitCode != 3 {
+			t.Errorf("code = %d, want 3", cmdErr.ExitCode)
+		}
 		for _, want := range []string{"exit status 3", "on stderr", "the real reason"} {
 			if !strings.Contains(err.Error(), want) {
 				t.Errorf("error %q does not contain %q", err, want)
