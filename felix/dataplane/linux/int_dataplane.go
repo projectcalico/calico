@@ -59,7 +59,9 @@ import (
 	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/bpfepdeps"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdeps"
+	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandeps"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -788,7 +790,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if !config.RouteSyncDisabled {
 		log.Debug("Route management is enabled.")
 		mainTablePolV4 = ownershippol.NewMainTable(
-			dataplanedefs.VXLANIfaceNameV4,
+			vxlandeps.VXLANIfaceNameV4,
 			config.DeviceRouteProtocol,
 			config.RulesConfig.WorkloadIfacePrefixes,
 			config.RemoveExternalRoutes,
@@ -810,7 +812,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		if config.IPv6Enabled {
 			mainTablePolV6 = ownershippol.NewMainTable(
-				dataplanedefs.VXLANIfaceNameV6,
+				vxlandeps.VXLANIfaceNameV6,
 				config.DeviceRouteProtocol,
 				config.RulesConfig.WorkloadIfacePrefixes,
 				config.RemoveExternalRoutes,
@@ -906,14 +908,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if config.BPFEnabled {
 			fdbOpts = append(fdbOpts, vxlanfdb.WithNeighUpdatesOnly())
 		}
-		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, dataplanedefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout, fdbOpts...)
+		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, vxlandeps.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout, fdbOpts...)
 		dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
 
 		dp.vxlanManager = newVXLANManager(
 			ipSetsV4,
 			routeTableV4,
 			vxlanFDB,
-			dataplanedefs.VXLANIfaceNameV4,
+			vxlandeps.VXLANIfaceNameV4,
 			4,
 			config.VXLANMTU,
 			config,
@@ -935,7 +937,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(dp.vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
-		go cleanUpVXLANDevice(dataplanedefs.VXLANIfaceNameV4)
+		go cleanUpVXLANDevice(vxlandeps.VXLANIfaceNameV4)
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -1301,10 +1303,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			// them up front.
 			var overlayDevicesV4 []string
 			if config.RulesConfig.VXLANEnabled {
-				overlayDevicesV4 = append(overlayDevicesV4, dataplanedefs.VXLANIfaceNameV4)
+				overlayDevicesV4 = append(overlayDevicesV4, vxlandeps.VXLANIfaceNameV4)
 			}
 			if config.RulesConfig.IPIPEnabled {
-				overlayDevicesV4 = append(overlayDevicesV4, dataplanedefs.IPIPIfaceName)
+				overlayDevicesV4 = append(overlayDevicesV4, ipipdeps.IPIPIfaceName)
 			}
 			if config.RulesConfig.WireguardEnabled && len(config.RulesConfig.WireguardInterfaceName) > 0 {
 				overlayDevicesV4 = append(overlayDevicesV4, config.RulesConfig.WireguardInterfaceName)
@@ -1416,7 +1418,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Add a manager to keep the all-hosts IP set up to date.
 		dp.ipipManager = newIPIPManager(
 			routeTableV4,
-			dataplanedefs.IPIPIfaceName,
+			ipipdeps.IPIPIfaceName,
 			4,
 			config.IPIPMTU,
 			config,
@@ -1506,7 +1508,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.filterTables = append(dp.filterTables, filterTableV6)
 
 		if config.RulesConfig.VXLANEnabledV6 {
-			vxlanName := dataplanedefs.VXLANIfaceNameV6
+			vxlanName := vxlandeps.VXLANIfaceNameV6
 
 			var (
 				fdbOpts     []vxlanfdb.Option
@@ -1514,13 +1516,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			)
 			if config.BPFEnabled {
 				// BPF mode uses the same device for both V4 and V6
-				vxlanName = dataplanedefs.VXLANIfaceNameV4
+				vxlanName = vxlandeps.VXLANIfaceNameV4
 				vxlanMgrOps = append(vxlanMgrOps, bpfVXLANOpts...)
 				if dp.vxlanManager != nil {
 					vxlanMgrOps = append(vxlanMgrOps, vxlanMgrWithDualStack())
 				}
 				fdbOpts = append(fdbOpts, vxlanfdb.WithNeighUpdatesOnly())
-				go cleanUpVXLANDevice(dataplanedefs.VXLANIfaceNameV6)
+				go cleanUpVXLANDevice(vxlandeps.VXLANIfaceNameV6)
 			}
 			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, vxlanName, featureDetector, config.NetlinkTimeout, fdbOpts...)
 			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDBV6)
@@ -1551,7 +1553,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.RegisterManager(dp.vxlanManagerV6)
 		} else {
 			// Start a cleanup goroutine not to block felix if it needs to retry
-			go cleanUpVXLANDevice(dataplanedefs.VXLANIfaceNameV6)
+			go cleanUpVXLANDevice(vxlandeps.VXLANIfaceNameV6)
 		}
 
 		ipsetsManagerV6.AddDataplane(ipSetsV6)
@@ -1577,7 +1579,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 				var overlayDevicesV6 []string
 				if config.RulesConfig.VXLANEnabledV6 {
-					overlayDevicesV6 = append(overlayDevicesV6, dataplanedefs.VXLANIfaceNameV6)
+					overlayDevicesV6 = append(overlayDevicesV6, vxlandeps.VXLANIfaceNameV6)
 				}
 				if config.RulesConfig.WireguardEnabledV6 && len(config.RulesConfig.WireguardInterfaceNameV6) > 0 {
 					overlayDevicesV6 = append(overlayDevicesV6, config.RulesConfig.WireguardInterfaceNameV6)
@@ -2249,9 +2251,9 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			}
 			fwdRules = append(fwdRules,
 				generictables.Rule{
-					Match:   d.newMatch().InInterface(dataplanedefs.BPFOutDev),
+					Match:   d.newMatch().InInterface(bpfepdeps.BPFOutDev),
 					Action:  d.actions.Allow(),
-					Comment: []string{"From ", dataplanedefs.BPFOutDev, " device, mark verified, accept."},
+					Comment: []string{"From ", bpfepdeps.BPFOutDev, " device, mark verified, accept."},
 				},
 			)
 

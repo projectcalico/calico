@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/knftables"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/flowtabledeps"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -897,7 +897,7 @@ func (t *NftablesTable) loadDataplaneState() {
 
 	// If the flowtable's presence in the dataplane doesn't match whether offload is enabled, it
 	// needs reconciling: created when enabled but missing, or deleted when disabled but present.
-	hasFlowtable := slices.Contains(allObjects[objectTypeFlowtable], dataplanedefs.FlowtableName)
+	hasFlowtable := slices.Contains(allObjects[objectTypeFlowtable], flowtabledeps.FlowtableName)
 	if t.flowtableEnabled != hasFlowtable {
 		t.flowtableDirty = true
 	}
@@ -1342,7 +1342,7 @@ func (t *NftablesTable) applyUpdates() error {
 		devices, dropped := t.pruneToExistingDevices(t.flowtableDevices)
 		prio := knftables.FilterIngressPriority
 		tx.Add(&knftables.Flowtable{
-			Name:     dataplanedefs.FlowtableName,
+			Name:     flowtabledeps.FlowtableName,
 			Priority: &prio,
 			Devices:  devices,
 			Counter:  knftables.PtrTo(t.flowtableCounter),
@@ -1495,7 +1495,7 @@ func (t *NftablesTable) applyUpdates() error {
 	// FORWARD rule that references it ("flow offload @calico") still exists, so the delete only
 	// succeeds once that rule has been flushed.
 	if t.flowtableDirty && !t.flowtableEnabled {
-		tx.Delete(&knftables.Flowtable{Name: dataplanedefs.FlowtableName})
+		tx.Delete(&knftables.Flowtable{Name: flowtabledeps.FlowtableName})
 		t.gaugeNumFlowtableDevices.Set(0)
 		t.gaugeNumFlowtableMissingDevices.Set(0)
 	}

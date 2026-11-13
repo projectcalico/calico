@@ -28,7 +28,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/routedeps"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim"
@@ -150,7 +150,7 @@ func calculateRouteProtocol(dpConfig Config) netlink.RouteProtocol {
 	//
 	// Routes to the VXLAN tunnel device itself are identified by their target
 	// interface.  We don't need to worry about their protocol.
-	routeProtocol := dataplanedefs.DefaultRouteProto
+	routeProtocol := routedeps.DefaultRouteProto
 	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
 		routeProtocol = dpConfig.DeviceRouteProtocol
 	}

@@ -57,7 +57,7 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdeps"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -1873,7 +1873,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 
 		It("should flag the tunnel and wireguard devices by their configured names", func() {
-			Expect(bpfEpMgr.ifaceEncaps(dataplanedefs.IPIPIfaceName)).To(BeTrue())
+			Expect(bpfEpMgr.ifaceEncaps(ipipdeps.IPIPIfaceName)).To(BeTrue())
 			Expect(bpfEpMgr.ifaceEncaps("wireguard.cali")).To(BeTrue())
 			Expect(bpfEpMgr.ifaceEncaps("eth0")).To(BeFalse())
 		})

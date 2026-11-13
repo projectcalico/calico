@@ -22,7 +22,8 @@ import (
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdeps"
+	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandeps"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
@@ -64,7 +65,7 @@ var _ = Describe("Route manager", func() {
 			routetable.RouteClassVXLANTunnel,
 			routetable.RouteClassVXLANSameSubnet,
 			proto.IPPoolType_VXLAN,
-			dataplanedefs.VXLANIfaceNameV4,
+			vxlandeps.VXLANIfaceNameV4,
 			4,
 			1400,
 			dpConfig,
@@ -99,7 +100,7 @@ var _ = Describe("Route manager", func() {
 				dpsets.NewMockIPSets(),
 				rt,
 				&mockVXLANFDB{},
-				dataplanedefs.VXLANIfaceNameV4,
+				vxlandeps.VXLANIfaceNameV4,
 				4,
 				1400,
 				dpConfig,
@@ -108,7 +109,7 @@ var _ = Describe("Route manager", func() {
 			)
 			ipipMgr := newIPIPManagerWithShims(
 				rt,
-				dataplanedefs.IPIPIfaceName,
+				ipipdeps.IPIPIfaceName,
 				4,
 				1400,
 				dpConfig,

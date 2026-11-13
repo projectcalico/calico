@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdeps"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -78,7 +78,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 		// tunl0Routes returns felixes[0]'s routes via the IPIP device.
 		tunl0Routes := func() string {
-			out, err := felixes[0].ExecOutput("ip", "route", "show", "dev", dataplanedefs.IPIPIfaceName)
+			out, err := felixes[0].ExecOutput("ip", "route", "show", "dev", ipipdeps.IPIPIfaceName)
 			if err != nil {
 				return fmt.Sprintf("ERROR: %v", err)
 			}
@@ -133,7 +133,7 @@ var _ = infrastructure.DatastoreDescribe(
 			// rejects this, which is the only check available: Felix can reclaim the route
 			// within milliseconds, so nothing here can reliably observe it in place first.
 			felixes[0].Exec("ip", "route", "replace", dest, "via", gw,
-				"dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", birdRouteProto)
+				"dev", ipipdeps.IPIPIfaceName, "onlink", "proto", birdRouteProto)
 
 			// Felix owns it, so it takes it back.  It must end up replaced rather than simply
 			// removed: this is a destination the cluster needs a route to.
@@ -147,7 +147,7 @@ var _ = infrastructure.DatastoreDescribe(
 			// A block BIRD had a route to, since released, so Felix has no route of its own to
 			// replace it with.  Without the ownership rule nothing would ever clean this up.
 			felixes[0].Exec("ip", "route", "add", birdStrayCIDR, "via", felixes[1].IP,
-				"dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", birdRouteProto)
+				"dev", ipipdeps.IPIPIfaceName, "onlink", "proto", birdRouteProto)
 
 			// Nothing asserts the route landed first: Felix's resync can remove it before a
 			// check could read it back, and Exec fails the test if the add does.
@@ -159,7 +159,7 @@ var _ = infrastructure.DatastoreDescribe(
 			// The rule claims BIRD's protocol only.  Felix owns the IPIP device itself, but a
 			// route through it from some other source is not Felix's to delete.
 			felixes[0].Exec("ip", "route", "add", birdThirdPartyCIDR, "via", felixes[1].IP,
-				"dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", "static")
+				"dev", ipipdeps.IPIPIfaceName, "onlink", "proto", "static")
 
 			Consistently(tunl0Routes, "10s", "1s").Should(ContainSubstring(birdThirdPartyCIDR),
 				"Felix removed a route belonging to neither Felix nor BIRD")
@@ -198,10 +198,10 @@ var _ = infrastructure.DatastoreDescribe(
 			// covers the wiring from the configuration parameter through to the policy, which
 			// the unit tests cannot reach.
 			felixes[0].Exec("ip", "route", "add", birdStrayCIDR, "via", felixes[1].IP,
-				"dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", birdRouteProto)
+				"dev", ipipdeps.IPIPIfaceName, "onlink", "proto", birdRouteProto)
 
 			routes := func() string {
-				out, err := felixes[0].ExecOutput("ip", "route", "show", "dev", dataplanedefs.IPIPIfaceName)
+				out, err := felixes[0].ExecOutput("ip", "route", "show", "dev", ipipdeps.IPIPIfaceName)
 				if err != nil {
 					return fmt.Sprintf("ERROR: %v", err)
 				}
