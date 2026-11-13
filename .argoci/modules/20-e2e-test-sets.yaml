@@ -3,21 +3,23 @@ version: condensed-module
 
 defaults:
   timeout: 30m
-  services:
-    - docker
+  secretBundles: [banzai-secrets]
 
 steps:
   # Compiles the same e2e.test as build-e2e-binaries, so it reads that step's
   # cache; Go, not the restored files, decides what is stale.
   - name: e2e-test-set-drift
     env:
-      # TEMPORARY: the thread pool the old 5500m request gave, while the
-      # request drops to the measured average.
-      - name: GOMAXPROCS
-        value: "5"
       - name: BUILD_CACHE_GROUP
         value: e2e
     depends: [check-go]
-    requests: {cpu: 2250m, memory: 5.5Gi}
-    commands: |
-      make -C e2e check-test-set
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP]
+      source: |
+        set -e
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        make -C e2e check-test-set

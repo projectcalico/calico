@@ -2,7 +2,7 @@
 # On a VM because the suites exercise SCTP, which the pod nodes' image lacks.
 #
 # TEMPORARY: on createVM machines, booted while the images build, and fed from
-# the volume cache rather than the artifact store.
+# the producers' caches rather than the artifact store.
 version: condensed-module
 
 defaults:
@@ -40,39 +40,28 @@ steps:
       - name: clusternetworkpolicy-felix
       - name: sig-calico-bpf
 
-  # The machines have no artifact-store credentials, so what the runs need from
-  # other steps is staged into the cache here and shipped across with `put`.
-  - name: e2e-kind-inputs
-    jobSize: small
-    requests: {cpu: 500m, memory: 1Gi}
-    depends:
-      - build-node-image
-      - build-whisker-image
-      - build-operator-image
-      - build-third-party-images
-      - build-e2e-binaries
-    cache:
-      - {name: e2e-kind-inputs, mode: write, dir: e2e-kind-inputs}
-    commands: |
-      mkdir -p /cache/e2e-kind-inputs
-      cd /cache/e2e-kind-inputs
-      for f in node-image.tar.zst whisker-image.tar.zst operator-image.tar.zst third-party-images.tar.zst e2e-binaries.tar.zst; do
-        artifact pull workflow "$f" &
-      done
-      wait
-      ls -la
-
   - name: e2e-kind
     # Longer than the default hour: a cluster plus a conformance suite.
     timeout: 1h30m
     depends:
       - e2e-kind-vm
-      - e2e-kind-inputs
+      - build-node-image
+      - build-whisker-image
+      - build-operator-image
+      - build-third-party-images
+      - build-e2e-binaries
       - calico-image-buildkit
       - check-go
     checkout: true
+    # What the run needs from other steps comes from their caches, shipped across
+    # with `put`.
     cache:
-      - {name: e2e-kind-inputs, mode: read}
+      - {name: calico-image-tar, mode: read, path: /cache/calico-image-tar}
+      - {name: node-image, mode: read, path: /cache/node-image}
+      - {name: whisker-image, mode: read, path: /cache/whisker-image}
+      - {name: operator-image, mode: read, path: /cache/operator-image}
+      - {name: third-party-images, mode: read, path: /cache/third-party-images}
+      - {name: e2e-binaries, mode: read, path: /cache/e2e-binaries}
     matrix:
       # Pinned rather than defaulted: from v3.33 the default gives Felix the
       # IPIP routes, and these tests need BGP to be the only routing mechanism.
@@ -113,11 +102,11 @@ steps:
       env: [E2E_TARGET, EXTRA_VALUES_FILES, KIND_CALICO_API_GROUP, E2E_TEST_CONFIG]
       put:
         - /cache/calico-image-tar/calico-image.tar:prefetched/calico-image.tar
-        - /cache/e2e-kind-inputs/node-image.tar.zst:prefetched/node-image.tar.zst
-        - /cache/e2e-kind-inputs/whisker-image.tar.zst:prefetched/whisker-image.tar.zst
-        - /cache/e2e-kind-inputs/operator-image.tar.zst:prefetched/operator-image.tar.zst
-        - /cache/e2e-kind-inputs/third-party-images.tar.zst:prefetched/third-party-images.tar.zst
-        - /cache/e2e-kind-inputs/e2e-binaries.tar.zst:prefetched/e2e-binaries.tar.zst
+        - /cache/node-image/node-image.tar.zst:prefetched/node-image.tar.zst
+        - /cache/whisker-image/whisker-image.tar.zst:prefetched/whisker-image.tar.zst
+        - /cache/operator-image/operator-image.tar.zst:prefetched/operator-image.tar.zst
+        - /cache/third-party-images/third-party-images.tar.zst:prefetched/third-party-images.tar.zst
+        - /cache/e2e-binaries/e2e-binaries.tar.zst:prefetched/e2e-binaries.tar.zst
       get:
         - e2e-kind:/tmp/e2e-kind
       source: |

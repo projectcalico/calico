@@ -1,10 +1,10 @@
-# pod2daemon `make ci`.
+# pod2daemon `make ci`, on a VM for docker.
 version: condensed-module
 
 defaults:
   timeout: 1h
-  services:
-    - docker
+  # The compute SA createVM, runOnVM and the teardown authenticate with.
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: pod2daemon-ci
@@ -12,11 +12,21 @@ steps:
       - name: BUILD_CACHE_GROUP
         value: calico
     depends: [check-go]
-    requests: {cpu: 2750m, memory: 2Gi}
-    commands: |
-      cd pod2daemon
-      make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/pod2daemon"
-      artifact push job report --destination test-results || true
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP]
+      source: |
+        set -e
+        repo="$(pwd)"
+        # There is no epilogue on a machine; results go up on the way out.
+        finish() {
+          rc=$?
+          artifact push job "$repo/pod2daemon/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd pod2daemon
+        make ci

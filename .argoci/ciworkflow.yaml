@@ -9,9 +9,10 @@ generateName: calico-
 # Catches a hang outside any step's own timeout.
 timeout: 4h
 
-# TEMPORARY: sizes the volume-cache test's disks, one per writer and per reader.
-# The caches are a few GB compressed.
+# TEMPORARY: each cache name is one writer's disk, which its readers mount
+# read-only. The caches are a few GB compressed.
 cache:
+  strategy: shared
   size: 50Gi
   storageClass: premium-rwo
 

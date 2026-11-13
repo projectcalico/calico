@@ -3,15 +3,20 @@ version: condensed-module
 
 defaults:
   timeout: 30m
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: envoy-gateway-ci
-    requests: {cpu: 3750m, memory: 3.5Gi}
-    services:
-      - docker
-    commands: |
-      cd third_party/envoy-gateway
-      make ci
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      source: |
+        set -e
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd third_party/envoy-gateway
+        make ci
 
   # Cross-compiles only, so it needs no daemon.
   - name: envoy-gateway-build

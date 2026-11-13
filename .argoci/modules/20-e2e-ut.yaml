@@ -1,27 +1,32 @@
 # The e2e suite's own unit tests. Needs docker: building the test binary splices
-# its own flags into a nested `docker run`.
+# its own flags into a nested `docker run`, so the step runs on a VM.
 version: condensed-module
 
 defaults:
   timeout: 30m
-  services:
-    - docker
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: e2e-ut
     env:
-      # TEMPORARY: the thread pool the old 4250m request gave, while the
-      # request drops to the measured average.
-      - name: GOMAXPROCS
-        value: "4"
       - name: BUILD_CACHE_GROUP
         value: calico
     depends: [check-go]
-    requests: {cpu: 3000m, memory: 4.75Gi}
-    commands: |
-      cd e2e
-      make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/e2e"
-      artifact push job report --destination test-results || true
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP]
+      source: |
+        set -e
+        repo="$(pwd)"
+        # There is no epilogue on a machine; results go up on the way out.
+        finish() {
+          rc=$?
+          artifact push job "$repo/e2e/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd e2e
+        make ci

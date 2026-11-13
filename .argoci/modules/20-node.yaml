@@ -17,7 +17,7 @@ steps:
       tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     depends: [check-go, go-cache]
     cache:
-      - {name: go, mode: read}
+      - {name: go, mode: read, path: /cache/go}
     requests: {cpu: 5500m, memory: 3.75Gi}
     useGoBuild: true
     # The image ships tools under /go/bin, which the default /go volume hides.
@@ -26,32 +26,38 @@ steps:
       "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" node-static-checks
       make -C node static-checks DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
 
+  # On VMs for docker.
   - name: node-ut
     env:
-      # TEMPORARY: the thread pool the old 4250m request gave, while the
-      # request drops to the measured average.
-      - name: GOMAXPROCS
-        value: "4"
       - name: BUILD_CACHE_GROUP
         value: calico
     depends: [check-go]
-    requests: {cpu: 2750m, memory: 3Gi}
-    services:
-      - docker
-    commands: |
-      cd node
-      make ut
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/node"
-      artifact push job report --destination test-results || true
+    # The compute SA createVM, runOnVM and the teardown authenticate with.
+    secretBundles: [banzai-secrets]
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP]
+      source: |
+        set -e
+        repo="$(pwd)"
+        # There is no epilogue on a machine; results go up on the way out.
+        finish() {
+          rc=$?
+          artifact push job "$repo/node/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd node
+        make ut
 
   # Emulated, so each of these is closer to twenty minutes than two.
   - name: node-build
     depends: [build-nft-rpms, check-go]
-    requests: {cpu: 2000m, memory: 4Gi}
-    services:
-      - docker
+    secretBundles: [banzai-secrets]
+    checkout: true
     matrix:
       - name: arm64
         env: [{name: ARCH, value: arm64}]
@@ -59,9 +65,17 @@ steps:
         env: [{name: ARCH, value: ppc64le}]
       - name: s390x
         env: [{name: ARCH, value: s390x}]
-    commands: |
-      # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
-      # does not go back to the registry for it.
-      .argoci/scripts/load-nft-rpms.sh "${ARCH}"
-      cd node
-      make image ARCH=$ARCH
+    runOnVM:
+      createVM:
+        machineType: e2-standard-4
+      env: [ARCH]
+      source: |
+        set -e
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        command -v zstd >/dev/null || { sudo apt-get update -y && sudo apt-get install -y zstd; }
+        # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
+        # does not go back to the registry for it.
+        .argoci/scripts/load-nft-rpms.sh "${ARCH}"
+        cd node
+        make image ARCH=$ARCH

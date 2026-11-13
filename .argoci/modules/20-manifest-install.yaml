@@ -23,47 +23,34 @@ steps:
       diskSize: 200GB
       maxRunDuration: 2h
 
-  # The machine has no artifact-store credentials, so what the run needs from
-  # other steps is staged into the cache here and shipped across with `put`.
-  - name: manifest-install-kind-inputs
-    jobSize: small
-    requests: {cpu: 500m, memory: 1Gi}
+  - name: manifest-install-kind
+    timeout: 1h30m
     depends:
+      - manifest-install-kind-vm
       - build-node-image
       - build-whisker-image
       - build-operator-image
       - build-third-party-images
       - build-e2e-binaries
-    cache:
-      - {name: kind-inputs, mode: write, dir: kind-inputs}
-    commands: |
-      mkdir -p /cache/kind-inputs
-      cd /cache/kind-inputs
-      for f in node-image.tar.zst whisker-image.tar.zst operator-image.tar.zst third-party-images.tar.zst e2e-binaries.tar.zst; do
-        artifact pull workflow "$f" &
-      done
-      wait
-      ls -la
-
-  - name: manifest-install-kind
-    timeout: 1h30m
-    depends:
-      - manifest-install-kind-vm
-      - manifest-install-kind-inputs
       - calico-image-buildkit
       - check-go
     checkout: true
     cache:
-      - {name: kind-inputs, mode: read}
+      - {name: calico-image-tar, mode: read, path: /cache/calico-image-tar}
+      - {name: node-image, mode: read, path: /cache/node-image}
+      - {name: whisker-image, mode: read, path: /cache/whisker-image}
+      - {name: operator-image, mode: read, path: /cache/operator-image}
+      - {name: third-party-images, mode: read, path: /cache/third-party-images}
+      - {name: e2e-binaries, mode: read, path: /cache/e2e-binaries}
     runOnVM:
       image: gcr.io/unique-caldron-775/scratch-utils:v0.6-test-190c538
       put:
         - /cache/calico-image-tar/calico-image.tar:prefetched/calico-image.tar
-        - /cache/kind-inputs/node-image.tar.zst:prefetched/node-image.tar.zst
-        - /cache/kind-inputs/whisker-image.tar.zst:prefetched/whisker-image.tar.zst
-        - /cache/kind-inputs/operator-image.tar.zst:prefetched/operator-image.tar.zst
-        - /cache/kind-inputs/third-party-images.tar.zst:prefetched/third-party-images.tar.zst
-        - /cache/kind-inputs/e2e-binaries.tar.zst:prefetched/e2e-binaries.tar.zst
+        - /cache/node-image/node-image.tar.zst:prefetched/node-image.tar.zst
+        - /cache/whisker-image/whisker-image.tar.zst:prefetched/whisker-image.tar.zst
+        - /cache/operator-image/operator-image.tar.zst:prefetched/operator-image.tar.zst
+        - /cache/third-party-images/third-party-images.tar.zst:prefetched/third-party-images.tar.zst
+        - /cache/e2e-binaries/e2e-binaries.tar.zst:prefetched/e2e-binaries.tar.zst
       get:
         - manifest-install:/tmp/manifest-install
       source: |

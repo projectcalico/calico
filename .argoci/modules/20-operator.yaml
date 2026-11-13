@@ -3,26 +3,33 @@ version: condensed-module
 
 defaults:
   timeout: 1h
+  # The compute SA createVM, runOnVM and the teardowns authenticate with.
+  secretBundles:
+    - banzai-secrets
 
 steps:
   - name: operator-ci
     env:
-      # TEMPORARY: the thread pool the old 5000m request gave, while the
-      # request drops to the measured average.
-      - name: GOMAXPROCS
-        value: "5"
       - name: BUILD_CACHE_GROUP
         value: calico
     depends: [check-go]
-    requests: {cpu: 4250m, memory: 6Gi}
-    services: [docker]
-    commands: |
-      cd operator
-      make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/operator"
-      artifact push job report --destination test-results || true
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP]
+      source: |
+        set -e
+        repo="$(pwd)"
+        finish() {
+          rc=$?
+          artifact push job "$repo/operator/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd operator
+        make ci
 
   # Pure Go, so cross-compiling is all the per-architecture coverage it needs,
   # and the build image can do it without docker.
@@ -56,16 +63,33 @@ steps:
       - name: BUILD_CACHE_GROUP
         value: calico
     depends: [build-calico-image, build-node-image, build-whisker-image, check-go]
-    timeout: 1h
-    requests: {cpu: 3500m, memory: 7Gi}
-    services: [docker]
-    commands: |
-      # The Makefiles call the kubectl they download by full path; the scripts
-      # underneath call it by name.
-      export PATH="$(pwd)/hack/test/kind:${PATH}"
-      .argoci/scripts/load-cached-images calico node whisker
-      cd operator
-      make fv
-    epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}/operator"
-      artifact push job report --destination test-results || true
+    checkout: true
+    cache:
+      - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
+      - {name: node-image, mode: read, path: /cache/node-image}
+      - {name: whisker-image, mode: read, path: /cache/whisker-image}
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP]
+      put:
+        - /cache/calico-image-zst:prefetched
+        - /cache/node-image:prefetched
+        - /cache/whisker-image:prefetched
+      source: |
+        set -e
+        repo="$(pwd)"
+        finish() {
+          rc=$?
+          artifact push job "$repo/operator/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
+        # The Makefiles call the kubectl they download by full path; the scripts
+        # underneath call it by name.
+        export PATH="$(pwd)/hack/test/kind:${PATH}"
+        export PREFETCHED_ARTIFACTS="${HOME}/prefetched"
+        .argoci/scripts/load-cached-images calico node whisker
+        cd operator
+        make fv
