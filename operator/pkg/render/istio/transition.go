@@ -35,6 +35,11 @@ const (
 	// SHA-256 fingerprints of their DER encodings; both are in root-cert.pem.
 	TransitionFromAnnotation = "operator.tigera.io/istio-ca-transition-from"
 	TransitionToAnnotation   = "operator.tigera.io/istio-ca-transition-to"
+	// TransitionKeepAnnotation names, in the same form, the roots root-cert.pem
+	// held beside the signer's when the transition started. A cacerts the
+	// operator did not create may trust roots that still back certificates in
+	// use, so they stay in the bundle until the transition ends.
+	TransitionKeepAnnotation = "operator.tigera.io/istio-ca-transition-keep"
 
 	// ztunnelSecretTTLEnv is ztunnel's name for its workload certificate TTL and
 	// ztunnelDefaultSecretTTL its built-in default (ztunnel src/config.rs).
@@ -86,12 +91,15 @@ func (p TransitionPhase) Describe(deadline time.Time) string {
 // Configuration.LocalCA is the signer of the phase: the retiring CA in phases 1
 // and 2, the desired one in 3 and 4. Retiring and Incoming are the roots of the
 // two signers; both stay in root-cert.pem and both are published for peers
-// until the transition ends.
+// until the transition ends. Kept stays in root-cert.pem too, but is not
+// published: this cluster never signed with it, and it may be another
+// cluster's root.
 type SignerTransition struct {
 	Phase    TransitionPhase
 	Deadline time.Time
 	Retiring []*x509.Certificate
 	Incoming []*x509.Certificate
+	Kept     []*x509.Certificate
 }
 
 // annotations records the transition on cacerts.
@@ -107,6 +115,9 @@ func (t *SignerTransition) annotations() map[string]string {
 	if !t.Deadline.IsZero() {
 		a[TransitionDeadlineAnnotation] = t.Deadline.UTC().Format(time.RFC3339)
 	}
+	if len(t.Kept) > 0 {
+		a[TransitionKeepAnnotation] = Fingerprints(t.Kept)
+	}
 	return a
 }
 
@@ -118,6 +129,14 @@ func (t *SignerTransition) roots() []*x509.Certificate {
 	return append(append([]*x509.Certificate{}, t.Retiring...), t.Incoming...)
 }
 
+// bundleRoots are the roots the transition adds to root-cert.pem.
+func (t *SignerTransition) bundleRoots() []*x509.Certificate {
+	if t == nil {
+		return nil
+	}
+	return append(t.roots(), t.Kept...)
+}
+
 // TransitionState is what the cacerts Secret records of a transition: the
 // phase, its deadline once the clock runs, and the retiring and incoming roots
 // resolved against root-cert.pem. A root the annotations name that is not in
@@ -127,6 +146,7 @@ type TransitionState struct {
 	Deadline time.Time
 	Retiring []*x509.Certificate
 	Incoming []*x509.Certificate
+	Kept     []*x509.Certificate
 }
 
 // ReadTransition decodes the transition recorded on cacerts. Anything that does
@@ -149,10 +169,11 @@ func ReadTransition(cacerts *corev1.Secret) TransitionState {
 	roots, _ := ParseCertificates(cacerts.Data[RootCertKey])
 	s.Retiring = selectByFingerprint(roots, a[TransitionFromAnnotation])
 	s.Incoming = selectByFingerprint(roots, a[TransitionToAnnotation])
+	s.Kept = selectByFingerprint(roots, a[TransitionKeepAnnotation])
 	return s
 }
 
-// Roots are the roots a recorded transition keeps beside the signer's.
+// Roots are the roots a recorded transition publishes beside the signer's.
 func (s TransitionState) Roots() []*x509.Certificate {
 	return append(append([]*x509.Certificate{}, s.Retiring...), s.Incoming...)
 }
@@ -212,6 +233,8 @@ type TransitionInput struct {
 	// from. Nil on an install that has no CA yet.
 	Current       *CA
 	CurrentSource CASource
+	// CurrentTrust is every root in the root-cert.pem istiod serves now.
+	CurrentTrust []*x509.Certificate
 	// Desired is the CA istiod is to sign with, validated, and DesiredSource
 	// where it came from.
 	Desired       *CA
@@ -249,6 +272,40 @@ type TransitionStep struct {
 // retiring root may still back certificates in use, so a changed desired signer
 // waits for the retirement to finish and its own transition starts right after.
 func StepSignerTransition(in TransitionInput) TransitionStep {
+	step := stepSignerTransition(in)
+	if step.Transition != nil {
+		step.Transition.Kept = keptRoots(in)
+	}
+	return step
+}
+
+// keptRoots are the roots root-cert.pem held beside the two signers' when the
+// transition started. Once a transition is recorded, only the record counts:
+// the bundle then holds the transition's own roots as well. A cacerts the
+// operator renders holds no roots but those it is asked for, so only one it
+// did not create has roots to keep.
+func keptRoots(in TransitionInput) []*x509.Certificate {
+	if in.Recorded.Phase != TransitionNone {
+		return in.Recorded.Kept
+	}
+	if in.CurrentSource != CASourceUnmanaged {
+		return nil
+	}
+	signers := map[string]bool{}
+	for _, c := range append(append([]*x509.Certificate{}, in.Current.Roots...), in.Desired.Roots...) {
+		signers[string(c.Raw)] = true
+	}
+	var kept []*x509.Certificate
+	for _, c := range in.CurrentTrust {
+		if !signers[string(c.Raw)] {
+			signers[string(c.Raw)] = true
+			kept = append(kept, c)
+		}
+	}
+	return kept
+}
+
+func stepSignerTransition(in TransitionInput) TransitionStep {
 	steady := TransitionStep{Signer: in.Desired, Source: in.DesiredSource}
 	if in.Current == nil {
 		return steady

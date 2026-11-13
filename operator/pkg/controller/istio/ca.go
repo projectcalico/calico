@@ -98,6 +98,7 @@ func (r *ReconcileIstio) resolveSigner(ctx context.Context, in *trustInputs, sel
 	step := istio.StepSignerTransition(istio.TransitionInput{
 		Current:       current.ca,
 		CurrentSource: current.source,
+		CurrentTrust:  current.trust,
 		Desired:       desired,
 		DesiredSource: desiredSource,
 		Recorded:      recorded,
@@ -122,7 +123,9 @@ type signer struct {
 	ca     *istio.CA
 	source istio.CASource
 	// roots are the roots to publish; they are known even when ca did not validate.
-	roots   []*x509.Certificate
+	roots []*x509.Certificate
+	// trust is every root in the bundle istiod serves, signer's or not.
+	trust   []*x509.Certificate
 	problem string
 }
 
@@ -159,6 +162,8 @@ func currentSigner(cacerts, selfSigned *corev1.Secret) signer {
 		return s
 	}
 	s.ca, s.roots = ca, ca.Roots
+	// LoadCA has parsed this bundle already.
+	s.trust, _ = istio.ParseCACertificates(secret.Data[istio.RootCertKey])
 	return s
 }
 

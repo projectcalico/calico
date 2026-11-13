@@ -155,6 +155,32 @@ var _ = Describe("Istio CA signer transition", func() {
 			expectSteady(s)
 		})
 
+		It("keeps the other roots of a cacerts the operator did not create until the transition ends, and records them", func() {
+			extra := newTestCert("extra", nil, true).cert
+			in := istio.TransitionInput{
+				Current: current, CurrentSource: istio.CASourceUnmanaged, CurrentTrust: append(certsOf(oldRoot), extra),
+				Desired: desired, DesiredSource: istio.CASourceOperatorManaged,
+				Rolled: true, Now: now, Wait: wait,
+			}
+			s := istio.StepSignerTransition(in)
+			Expect(s.Transition.Phase).To(Equal(istio.TransitionDistributeRoot))
+			Expect(s.Transition.Kept).To(Equal([]*x509.Certificate{extra}))
+
+			rendered := in
+			rendered.CurrentSource = istio.CASourceOperatorManaged
+			Expect(istio.StepSignerTransition(rendered).Transition.Kept).To(BeEmpty())
+
+			// The bundle now holds the transition's roots too; only the record counts.
+			in.Current, in.CurrentTrust = desired, append(certsOf(oldRoot, newRoot), extra)
+			in.Recorded = istio.TransitionState{Phase: istio.TransitionAwaitExpiry, Deadline: now.Add(time.Hour), Retiring: current.Roots, Incoming: desired.Roots, Kept: []*x509.Certificate{extra}}
+			s = istio.StepSignerTransition(in)
+			Expect(s.Transition.Phase).To(Equal(istio.TransitionAwaitExpiry))
+			Expect(s.Transition.Kept).To(Equal([]*x509.Certificate{extra}))
+
+			in.Recorded.Deadline = now.Add(-time.Second)
+			Expect(istio.StepSignerTransition(in).Transition).To(BeNil())
+		})
+
 		Context("after the switch, when cacerts already signs with the desired CA", func() {
 			var retiring []*x509.Certificate
 
@@ -243,9 +269,10 @@ var _ = Describe("Istio CA signer transition", func() {
 
 	Describe("ReadTransition", func() {
 		var cacerts *corev1.Secret
+		var extra *testCert
 
 		BeforeEach(func() {
-			extra := newTestCert("extra", nil, true)
+			extra = newTestCert("extra", nil, true)
 			cacerts = &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
 					istio.TransitionPhaseAnnotation:    "2",
@@ -265,6 +292,15 @@ var _ = Describe("Istio CA signer transition", func() {
 			Expect(s.Retiring[0].Raw).To(Equal(oldRoot.cert.Raw))
 			Expect(s.Incoming).To(HaveLen(1))
 			Expect(s.Incoming[0].Raw).To(Equal(newRoot.cert.Raw))
+			Expect(s.Roots()).To(HaveLen(2))
+			Expect(s.Kept).To(BeEmpty())
+		})
+
+		It("decodes the kept roots, which are not among the roots it publishes", func() {
+			cacerts.Annotations[istio.TransitionKeepAnnotation] = istio.Fingerprint(extra.cert)
+			s := istio.ReadTransition(cacerts)
+			Expect(s.Kept).To(HaveLen(1))
+			Expect(s.Kept[0].Raw).To(Equal(extra.cert.Raw))
 			Expect(s.Roots()).To(HaveLen(2))
 		})
 

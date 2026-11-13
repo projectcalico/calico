@@ -429,7 +429,7 @@ func (c *IstioComponent) cacertsSecret() *corev1.Secret {
 			CACertKey:    ca.CertPEM,
 			CAKeyKey:     ca.KeyPEM,
 			CertChainKey: EncodeCertificates(ca.Chain...),
-			RootCertKey:  ComposeRootBundle(ca.Roots, c.cfg.Transition.roots()),
+			RootCertKey:  ComposeRootBundle(ca.Roots, c.cfg.Transition.bundleRoots()),
 		},
 	}
 }
