@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
@@ -31,7 +32,7 @@ import (
 type dscpManager struct {
 	ipVersion    uint8
 	ruleRenderer rules.RuleRenderer
-	mangleTable  Table
+	mangleTable  dataplanedefs.Table
 
 	// QoS policies.
 	wepPolicies map[types.WorkloadEndpointID]*rules.DSCPRule
@@ -47,7 +48,7 @@ type dscpManager struct {
 
 func newDSCPManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
-	mangleTable Table,
+	mangleTable dataplanedefs.Table,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
 	dpConfig Config,
