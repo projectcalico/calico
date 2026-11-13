@@ -1,30 +1,49 @@
 # The upstream Gateway API conformance suite, run against Calico with Envoy
-# Gateway on a kind cluster.
+# Gateway on a kind cluster, on a machine of its own.
 version: condensed-module
 
 defaults:
   tiers: []
   timeout: 1h
-  services:
-    - docker
+  # The compute SA createVM, runOnVM and the teardown authenticate with.
+  secretBundles:
+    - banzai-secrets
 
 steps:
   - name: gateway-conformance
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    jobSize: large
-    requests: {cpu: 7000m, memory: 12Gi}
     depends:
       - build-calico-image
       - build-node-image
       - build-whisker-image
       - build-operator-image
       - build-third-party-images
-    commands: |
-      # Marker files come with them, so make treats the images as already built.
-      .argoci/scripts/load-cached-images calico node whisker
-      make e2e-test-gateway-conformance
-    epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}"
-      artifact push job ./report/ --destination gateway-conformance-reports || true
+    checkout: true
+    cache:
+      - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
+      - {name: node-image, mode: read, path: /cache/node-image}
+      - {name: whisker-image, mode: read, path: /cache/whisker-image}
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP]
+      put:
+        - /cache/calico-image-zst:prefetched
+        - /cache/node-image:prefetched
+        - /cache/whisker-image:prefetched
+      source: |
+        set -e
+        repo="$(pwd)"
+        finish() {
+          rc=$?
+          artifact push job "$repo/report" --destination gateway-conformance-reports || true
+          exit $rc
+        }
+        trap finish EXIT
+        for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
+        export PREFETCHED_ARTIFACTS="${HOME}/prefetched"
+        # Marker files come with them, so make treats the images as already built.
+        .argoci/scripts/load-cached-images calico node whisker
+        make e2e-test-gateway-conformance

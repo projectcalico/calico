@@ -1,20 +1,26 @@
-# Upstream CNI plugins CI and cross-architecture builds.
+# Upstream CNI plugins CI and cross-architecture builds, on VMs for docker.
 version: condensed-module
 
 defaults:
   timeout: 30m
-  services:
-    - docker
+  # The compute SA createVM, runOnVM and the teardowns authenticate with.
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: third-party-cni-plugins-ci
-    requests: {cpu: 2000m, memory: 1.25Gi}
-    commands: |
-      cd third_party/cni-plugins
-      make ci
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-4
+      source: |
+        set -e
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd third_party/cni-plugins
+        make ci
 
   - name: third-party-cni-plugins-build
-    requests: {cpu: 2750m, memory: 2Gi}
+    checkout: true
     matrix:
       - name: arm64
         env: [{name: ARCH, value: arm64}]
@@ -22,6 +28,13 @@ steps:
         env: [{name: ARCH, value: ppc64le}]
       - name: s390x
         env: [{name: ARCH, value: s390x}]
-    commands: |
-      cd third_party/cni-plugins
-      make build ARCH=$ARCH
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [ARCH]
+      source: |
+        set -e
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd third_party/cni-plugins
+        make build ARCH=$ARCH
