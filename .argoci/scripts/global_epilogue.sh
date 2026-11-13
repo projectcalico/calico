@@ -137,12 +137,13 @@ fi
 if [[ "${_sandcat_fallback}" == "true" && -f "${_sandcat_report}" ]]; then
   _sandcat_kubeconfig=""
   [[ -f "${BZ_LOCAL_DIR}/kubeconfig" ]] && _sandcat_kubeconfig="${BZ_LOCAL_DIR}/kubeconfig"
-  ("${_sandcat_sh}" push-specs --spec-dir "${_sandcat_src}/report/sandcat") || true
-  ("${_sandcat_sh}" analyze \
+  timeout --kill-after=30s 2m \
+    "${_sandcat_sh}" push-specs --spec-dir "${_sandcat_src}/report/sandcat" || true
+  timeout --kill-after=30s "${SANDCAT_EPILOGUE_TIMEOUT:-12m}" "${_sandcat_sh}" analyze \
     --report "${_sandcat_report}" \
     --kubeconfig "${_sandcat_kubeconfig}" \
     --spec-dir "${_sandcat_src}/report/sandcat" \
-    --source-dir "${_sandcat_src}") || true
+    --source-dir "${_sandcat_src}" || true
 fi
 
 # Last otherwise, so the logs above are pushed even when destroy hangs.
