@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
@@ -99,7 +100,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	}
 
 	// The data plane rolls only after istiod finishes its rollout.
-	if err = utils.AddDeploymentWatch(c, istio.IstioIstiodDeploymentName, istio.IstioNamespace); err != nil {
+	if err = c.WatchObject(&appsv1.Deployment{}, &handler.EnqueueRequestForObject{}, istiodRolloutPredicate()); err != nil {
 		return fmt.Errorf("istio-controller failed to watch Deployment %s/%s: %w", istio.IstioNamespace, istio.IstioIstiodDeploymentName, err)
 	}
 
@@ -345,21 +346,32 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 	return reconcile.Result{}, nil
 }
 
+// istiodRolloutPredicate passes status updates too, because an istiod rollout
+// completes without a change to the Deployment's generation.
+func istiodRolloutPredicate() predicate.Predicate {
+	return predicate.And(
+		predicate.NewPredicateFuncs(func(o client.Object) bool {
+			return o.GetName() == istio.IstioIstiodDeploymentName && o.GetNamespace() == istio.IstioNamespace
+		}),
+		predicate.ResourceVersionChangedPredicate{},
+	)
+}
+
 // liveWorkloads returns nil when there is no istiod to wait for. An istiod the
 // user told the operator to ignore never gets the new image, so waiting on it
-// would hold the data plane forever.
+// would hold the data plane forever. A missing istiod is not ignored: the
+// operator creates it, and the data plane waits for its rollout.
 func (r *ReconcileIstio) liveWorkloads(ctx context.Context) (*istio.LiveWorkloads, error) {
+	live := &istio.LiveWorkloads{}
 	istiod := &appsv1.Deployment{}
-	if err := r.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, istiod); err != nil {
-		if errors.IsNotFound(err) {
+	if err := r.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, istiod); err == nil {
+		if utils.IgnoreObject(istiod) {
 			return nil, nil
 		}
+		live.Istiod = istiod
+	} else if !errors.IsNotFound(err) {
 		return nil, err
 	}
-	if utils.IgnoreObject(istiod) {
-		return nil, nil
-	}
-	live := &istio.LiveWorkloads{Istiod: istiod}
 	var err error
 	if live.CNI, err = r.getDaemonSet(ctx, istio.IstioCNIDaemonSetName); err != nil {
 		return nil, err
