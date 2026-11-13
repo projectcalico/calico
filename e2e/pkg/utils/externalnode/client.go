@@ -16,6 +16,7 @@ package externalnode
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -28,6 +29,7 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework"
 
 	"github.com/projectcalico/calico/e2e/pkg/config"
+	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 )
 
@@ -38,6 +40,7 @@ type Client struct {
 	extKey  string
 	extUser string
 	intIPs  []string
+	intIPv6 []string
 }
 
 // NewClient reads external node details from e2ecfg first. When configs are not available,
@@ -88,44 +91,85 @@ func (e *Client) SSHUser() string { return e.extUser }
 // SSHKeyPath returns the path to the private key used for ssh.
 func (e *Client) SSHKeyPath() string { return e.extKey }
 
+// IPs returns the external node's IPv4 addresses, or nil if the ssh probe fails.
 func (e *Client) IPs() []string {
+	ips, err := e.AddressesOf(utils.IPv4)
+	if err != nil {
+		logrus.WithError(err).Info("Setting external node intIPs failed")
+		return nil
+	}
+	return ips
+}
+
+// AddressesOf returns the external node's addresses in one family. They can
+// differ from the address used for ssh (e.g. AWS VMs), and they are what the
+// cluster sees as the source. A failed probe isn't cached, so its error reaches
+// the caller instead of looking like a node without the family.
+func (e *Client) AddressesOf(f utils.IPFamily) ([]string, error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
-	// Internal IP of external node may not be the same as the IP we use to ssh to it (e.g. AWS VMs)
-	// This function returns the external node internal IP (and caches it) so that it can be used to check for NAT.
-	if e.intIPs == nil {
-		dest := fmt.Sprintf("%s@%s", e.extUser, e.extIP)
-		command := exec.Command("ssh",
-			"-o", "ConnectTimeout=2",
-			"-o", "UserKnownHostsFile=/dev/null",
-			"-o", "StrictHostKeyChecking=no",
-			"-i", e.extKey,
-			dest, "--",
-			"ip", "addr", "show",
-			"|", "grep", "inet", // grab the lines with inet interfaces
-			"|", "grep", "-v", "inet6", // throw out the ipv6 ones
-			"|", "grep", "-v", "127.0.0.1", // throw out the loopback
-		)
-		logrus.Infof("Running '%s %s'", command.Path, strings.Join(command.Args[1:], " "))
-		out, err := command.Output()
-		if err != nil {
-			logrus.WithError(err).Info("Setting external node intIPs failed")
-			return nil
-		}
-		outstr := strings.TrimSpace(string(out))
-		logrus.Infof("Output: %q", outstr)
-		// outstr will look something like:
-		// inet 172.16.101.163/24 brd 172.16.101.255 scope global dynamic eth0
-		re := regexp.MustCompile("inet ([0-9.]+)")
-		var ips []string
-		for _, i := range re.FindAllStringSubmatch(outstr, -1) {
-			ips = append(ips, i[1])
-		}
-		logrus.Infof("Setting external node intIPs=%v", ips)
-		e.intIPs = ips
+	cache, probe, parse := &e.intIPs, ipv4Probe, parseInet4
+	if f == utils.IPv6 {
+		// Link-local addresses never leave the link, so policy can't see them as a source.
+		cache, probe, parse = &e.intIPv6, []string{"ip", "-6", "-o", "addr", "show", "scope", "global"}, parseInet6
 	}
-	return e.intIPs
+	if *cache != nil {
+		return *cache, nil
+	}
+
+	dest := fmt.Sprintf("%s@%s", e.extUser, e.extIP)
+	args := append([]string{
+		"-o", "ConnectTimeout=2",
+		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "StrictHostKeyChecking=no",
+		"-i", e.extKey,
+		dest, "--",
+	}, probe...)
+	command := exec.Command("ssh", args...)
+	logrus.Infof("Running '%s %s'", command.Path, strings.Join(command.Args[1:], " "))
+	out, err := command.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			return nil, fmt.Errorf("%w: %s", err, strings.Join(strings.Fields(string(exitErr.Stderr)), " "))
+		}
+		return nil, err
+	}
+	*cache = parse(string(out))
+	logrus.Infof("External node %s addresses: %v", f, *cache)
+	return *cache, nil
+}
+
+// ipv4Probe's last grep exits non-zero when nothing matches, so a node with no
+// IPv4 address reports a probe error rather than an empty list.
+var ipv4Probe = []string{
+	"ip", "addr", "show",
+	"|", "grep", "inet",
+	"|", "grep", "-v", "inet6",
+	"|", "grep", "-v", "127.0.0.1",
+}
+
+var inet4Re = regexp.MustCompile("inet ([0-9.]+)")
+
+func parseInet4(out string) []string {
+	ips := []string{}
+	for _, m := range inet4Re.FindAllStringSubmatch(out, -1) {
+		ips = append(ips, m[1])
+	}
+	return ips
+}
+
+var inet6Re = regexp.MustCompile(`inet6 ([0-9a-fA-F:]+)/`)
+
+// parseInet6 never returns nil, so a node with no global IPv6 caches as empty
+// instead of re-probing over ssh on every call.
+func parseInet6(out string) []string {
+	ips := []string{}
+	for _, m := range inet6Re.FindAllStringSubmatch(out, -1) {
+		ips = append(ips, m[1])
+	}
+	return ips
 }
 
 func (e *Client) MustExec(shell, opt, cmd string) string {
@@ -170,11 +214,12 @@ func (e *Client) Get(target string, length int) string {
 	// - This whole string gets run in Exec() like this:
 	//   `ssh .... -- /bin/sh -c "<this string>"`
 	//   so we need to escape the double quotes here too.
-	return fmt.Sprintf(`curl -m2 -w \"\n%%{time_total}\" http://%v/length/%v`, target, length)
+	// -g stops curl reading the brackets of an IPv6 literal as a URL glob.
+	return fmt.Sprintf(`curl -g -m2 -w \"\n%%{time_total}\" http://%v/length/%v`, target, length)
 }
 
 func (e *Client) Post(target string, postdata string) string {
-	return fmt.Sprintf(`curl -m2 -w \"\n%%{time_total}\" -d "%v" -X POST http://%v/post`, postdata, target)
+	return fmt.Sprintf(`curl -g -m2 -w \"\n%%{time_total}\" -d "%v" -X POST http://%v/post`, postdata, target)
 }
 
 func (e *Client) UDP(target string, postdata string) string {

@@ -16,6 +16,7 @@ package networking
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
+	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
@@ -61,18 +63,20 @@ const (
 //   - 30 = how far above the boundary to continue sampling (TCP)
 //   - 60 = narrower upper range for UDP (doesn't fragment the same way)
 //   - 5 = step size for dense sampling
-func generatePacketLengths(mtu int) (getLengths, postLengths, udpLengths []int) {
+func generatePacketLengths(mtu, ipHeader int) (getLengths, postLengths, udpLengths []int) {
+	// The overheads below assume a 20-byte IPv4 header; IPv6's is 40.
+	extra := ipHeader - 20
 	// GET: HTTP response headers (~190 bytes) reduce the payload that fits in a
 	// single MTU-sized frame. Sample densely around the fragmentation boundary.
 	getLengths = []int{10}
-	for i := mtu - 190 - 80; i <= mtu-190+30; i += 5 { // 80 below to 30 above boundary
+	for i := mtu - 190 - extra - 80; i <= mtu-190-extra+30; i += 5 { // 80 below to 30 above boundary
 		getLengths = append(getLengths, i)
 	}
 	getLengths = append(getLengths, 10000)
 
 	// POST: request body plus IP/TCP headers (52 bytes) determines on-wire size.
 	postLengths = []int{10}
-	for i := mtu - 52 - 80; i <= mtu-52+30; i += 5 { // 80 below to 30 above boundary
+	for i := mtu - 52 - extra - 80; i <= mtu-52-extra+30; i += 5 { // 80 below to 30 above boundary
 		postLengths = append(postLengths, i)
 	}
 	postLengths = append(postLengths, 10000)
@@ -80,7 +84,7 @@ func generatePacketLengths(mtu int) (getLengths, postLengths, udpLengths []int) 
 	// UDP: only IP header (20 bytes) overhead. Narrower upper range (60 below
 	// boundary only) since UDP doesn't fragment the same way as TCP.
 	udpLengths = []int{10}
-	for i := mtu - 20 - 80; i <= mtu-20-60; i += 5 { // 80 below to 60 below boundary
+	for i := mtu - 20 - extra - 80; i <= mtu-20-extra-60; i += 5 { // 80 below to 60 below boundary
 		udpLengths = append(udpLengths, i)
 	}
 
@@ -133,13 +137,15 @@ var _ = describe.CalicoDescribe(
 		runPacketTest := func(clientType, targetType int, sameNode bool) {
 			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
 			nodeNames := nodesInfo.GetNames()
-			nodeIPs := nodesInfo.GetIPv4s()
-			Expect(nodeIPs).NotTo(BeEmpty(),
-				"packet size tests require a node with an IPv4 address")
+			cli, err := client.New(f.ClientConfig())
+			Expect(err).NotTo(HaveOccurred())
+			families, err := utils.PoolFamilies(cli)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(nodesInfo.CheckFamilies(families, 2)).To(Succeed())
 
 			// Sample packet sizes densely around the cluster's effective pod MTU, measured from
 			// a pod so the test tracks whatever encapsulation and WireGuard config is in use.
-			getLengths, postLengths, udpLengths := generatePacketLengths(measurePodMTU(f, nodeNames[0]))
+			podMTU := measurePodMTU(f, nodeNames[0])
 
 			var serverNode string
 			if sameNode {
@@ -169,12 +175,18 @@ var _ = describe.CalicoDescribe(
 
 			if clientType == pktClientExt {
 				extClient := externalnode.MustNewClient()
+				externalNodeIPs(extClient, families)
 				ct.Deploy()
 				DeferCleanup(ct.Stop)
 
 				// External client uses SSH — build targets and test via ext client helpers.
-				target := packetBaseTarget(server, nodeIPs, targetType)
-				packetTestExternal(extClient, target, getLengths, postLengths, udpLengths)
+				for _, fam := range families {
+					By(fam.String(), func() {
+						getLengths, postLengths, udpLengths := generatePacketLengths(podMTU, fam.HeaderBytes())
+						target := packetBaseTarget(server, nodesInfo.GetIPs(fam)[0], fam, targetType)
+						packetTestExternal(extClient, target, getLengths, postLengths, udpLengths)
+					})
+				}
 			} else {
 				clientName := utils.GenerateRandomName("pkt-client")
 				clientOpts := []conncheck.ClientOption{
@@ -191,8 +203,13 @@ var _ = describe.CalicoDescribe(
 				ct.Deploy()
 				DeferCleanup(ct.Stop)
 
-				baseTarget := packetBaseTarget(server, nodeIPs, targetType)
-				packetTestViaConncheck(ct, client, baseTarget, getLengths, postLengths, udpLengths)
+				for _, fam := range families {
+					By(fam.String(), func() {
+						getLengths, postLengths, udpLengths := generatePacketLengths(podMTU, fam.HeaderBytes())
+						baseTarget := packetBaseTarget(server, nodesInfo.GetIPs(fam)[0], fam, targetType)
+						packetTestViaConncheck(ct, client, baseTarget, getLengths, postLengths, udpLengths)
+					})
+				}
 			}
 		}
 
@@ -223,27 +240,26 @@ var _ = describe.CalicoDescribe(
 	},
 )
 
-// packetBaseTarget returns a base target for the given target type. Callers add
-// protocol-specific options (WithHTTP for GET/POST, WithUDP for UDP) on top.
 type packetTarget struct {
-	server    conncheck.Server
-	nodeIPs   []string
-	typ       int
-	podIP     string
-	port      int
-	nodePort  int
-	clusterIP string
+	server   conncheck.Server
+	family   utils.IPFamily
+	nodeIP   string
+	typ      int
+	podIP    string
+	port     int
+	nodePort int
 }
 
-func packetBaseTarget(server conncheck.Server, nodeIPs []string, targetType int) packetTarget {
+// packetBaseTarget targets one family; nodeIP is node0's address in it.
+func packetBaseTarget(server conncheck.Server, nodeIP string, fam utils.IPFamily, targetType int) packetTarget {
 	return packetTarget{
-		server:    server,
-		nodeIPs:   nodeIPs,
-		typ:       targetType,
-		podIP:     server.Pod().Status.PodIP,
-		port:      packetServerPort,
-		nodePort:  server.NodePortPort(),
-		clusterIP: server.Service().Spec.ClusterIP,
+		server:   server,
+		family:   fam,
+		nodeIP:   nodeIP,
+		typ:      targetType,
+		podIP:    utils.PodIPFor(server.Pod(), fam),
+		port:     packetServerPort,
+		nodePort: server.NodePortPort(),
 	}
 }
 
@@ -272,9 +288,9 @@ func (t packetTarget) makeTargetMultiOpt(opts ...conncheck.TargetOption) connche
 	case pktTargetPod:
 		return conncheck.NewTarget(t.podIP, conncheck.TypePodIP, conncheck.TCP, opts...).Port(t.port)
 	case pktTargetService:
-		return t.server.ClusterIPv4(opts...).Port(t.port)
+		return t.server.ClusterIPFor(t.family, opts...).Port(t.port)
 	case pktTargetNodePort:
-		return t.server.NodePort(t.nodeIPs[0], opts...)
+		return t.server.NodePort(t.nodeIP, opts...)
 	default:
 		Fail(fmt.Sprintf("unrecognized target type: %d", t.typ))
 		return nil
@@ -343,7 +359,7 @@ func packetTestViaConncheck(ct conncheck.ConnectionTester, client conncheck.Clie
 // packetTestExternal runs packet tests via an external node SSH client.
 // Uses the external node's own curl/nc commands.
 func packetTestExternal(ext *externalnode.Client, base packetTarget, getLengths, postLengths, udpLengths []int) {
-	target := base.nodeIPs[0] + ":" + strconv.Itoa(base.nodePort)
+	target := net.JoinHostPort(base.nodeIP, strconv.Itoa(base.nodePort))
 
 	for _, length := range getLengths {
 		By(fmt.Sprintf("Testing GET with payload length %d (external)", length), func() {
