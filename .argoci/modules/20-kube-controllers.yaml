@@ -1,17 +1,15 @@
-# kube-controllers CI, per API group.
+# kube-controllers CI, per API group. On VMs for docker.
 version: condensed-module
 
 defaults:
   timeout: 1h
-  services:
-    - docker
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: kube-controllers-ci
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    requests: {cpu: 5750m, memory: 5.5Gi}
     depends: [build-calico-image, check-go]
     matrix:
       - name: crd-v1
@@ -26,10 +24,28 @@ steps:
             value: ut-no-prereqs
           - name: CALICO_API_GROUP
             value: projectcalico.org/v3
-    commands: |
-      .argoci/scripts/load-cached-images calico
-      cd kube-controllers
-      make ${KC_TARGET}
-    epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}/kube-controllers"
-      artifact push job report --destination test-results || true
+    checkout: true
+    cache:
+      - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [BUILD_CACHE_GROUP, KC_TARGET, CALICO_API_GROUP]
+      put:
+        - /cache/calico-image-zst:prefetched
+      source: |
+        set -e
+        repo="$(pwd)"
+        # There is no epilogue on a machine; results go up on the way out.
+        finish() {
+          rc=$?
+          artifact push job "$repo/kube-controllers/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        command -v zstd >/dev/null || { sudo apt-get update -y && sudo apt-get install -y zstd; }
+        export PREFETCHED_ARTIFACTS="${HOME}/prefetched"
+        .argoci/scripts/load-cached-images calico
+        cd kube-controllers
+        make ${KC_TARGET}

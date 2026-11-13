@@ -1,30 +1,44 @@
-# Calico's Istio integration images, built from upstream Istio sources.
+# Calico's Istio integration images, built from upstream Istio sources. On VMs
+# for docker.
 version: condensed-module
 
 defaults:
   timeout: 1h
-  services:
-    - docker
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: istio-ci
-    requests: {cpu: 3250m, memory: 5.25Gi}
     depends: [build-nft-rpms]
-    commands: |
-      # Resolves the install-cni Dockerfile's nft-rpms base locally.
-      .argoci/scripts/load-nft-rpms.sh amd64
-      cd istio
-      make ci
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      source: |
+        set -e
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        command -v zstd >/dev/null || { sudo apt-get update -y && sudo apt-get install -y zstd; }
+        # Resolves the install-cni Dockerfile's nft-rpms base locally.
+        .argoci/scripts/load-nft-rpms.sh amd64
+        cd istio
+        make ci
 
   # Binaries only, so no nft-rpms dependency. ztunnel cross-compiles, so no
   # arm64 runner either.
   - name: istio-build
-    requests: {cpu: 5000m, memory: 6Gi}
     matrix:
       - name: arm64
         env:
           - name: ARCH
             value: arm64
-    commands: |
-      cd istio
-      make build ARCH=$ARCH
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [ARCH]
+      source: |
+        set -e
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd istio
+        make build ARCH=$ARCH
