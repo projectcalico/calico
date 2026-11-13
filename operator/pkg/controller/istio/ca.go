@@ -73,6 +73,11 @@ func (r *ReconcileIstio) resolveSigner(ctx context.Context, in *trustInputs, sel
 	if err != nil {
 		return err
 	}
+	if in.current == nil && current.ca == nil && current.problem == "" && desired != nil {
+		if err := r.checkLostSigner(ctx, &current, desired); err != nil {
+			return err
+		}
+	}
 	if current.problem != "" {
 		in.problems = append(in.problems, current.problem)
 	}
@@ -154,6 +159,39 @@ func selfSignedFingerprints(secret *corev1.Secret) string {
 		return ""
 	}
 	return istio.Fingerprints(roots)
+}
+
+// checkLostSigner tells a fresh install from a mesh whose cacerts was deleted.
+// Roots that this cluster publishes and the desired CA does not hold can still
+// be all that some workloads trust. Rendering the desired CA alone would cut
+// them off, so the signer is reported lost and nothing is rendered; istiod
+// keeps the CA it loaded until a human restores cacerts or accepts the jump.
+func (r *ReconcileIstio) checkLostSigner(ctx context.Context, current *signer, desired *istio.CA) error {
+	cm := &corev1.ConfigMap{}
+	if err := r.Get(ctx, types.NamespacedName{Name: istio.TrustAnchorsConfigMapName, Namespace: istio.IstioNamespace}, cm); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	published, err := istio.ParseCACertificates([]byte(cm.Data[istio.RootCertKey]))
+	if err != nil {
+		return nil
+	}
+	desiredRoots := map[string]bool{}
+	for _, c := range desired.Roots {
+		desiredRoots[string(c.Raw)] = true
+	}
+	for _, c := range published {
+		if !desiredRoots[string(c.Raw)] {
+			current.roots = published
+			current.problem = fmt.Sprintf("Secret %s/%s is missing, and ConfigMap %s/%s publishes roots the desired CA does not hold. "+
+				"Restore the Secret, or delete the ConfigMap to move to the new root at once, which interrupts mTLS until workload certificates renew",
+				istio.IstioNamespace, istio.CACertsSecretName, istio.IstioNamespace, istio.TrustAnchorsConfigMapName)
+			return nil
+		}
+	}
+	return nil
 }
 
 // signer is the CA istiod signs with now.
