@@ -235,7 +235,7 @@ func (r *ReconcileIstio) ensureOperatorCA(ctx context.Context, trustDomain strin
 	if err != nil && !errors.IsNotFound(err) {
 		return nil, err
 	}
-	if err == nil && len(secret.Data) > 0 {
+	if err == nil {
 		ca, err := istio.LoadCA(secret.Data)
 		if err != nil {
 			return nil, invalidCAError{fmt.Errorf("%w (delete the Secret to generate a new CA; this changes the mesh root)", err)}

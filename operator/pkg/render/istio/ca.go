@@ -146,6 +146,11 @@ func LoadCA(data map[string][]byte) (*CA, error) {
 	if !cert.BasicConstraintsValid || !cert.IsCA {
 		return nil, fmt.Errorf("%s: the certificate is not a CA", certKey)
 	}
+	// Go's chain verification ignores key usage, but ztunnel does not accept a
+	// certificate from a CA that may not sign certificates.
+	if cert.KeyUsage != 0 && cert.KeyUsage&x509.KeyUsageCertSign == 0 {
+		return nil, fmt.Errorf("%s: the key usage does not allow certificate signing", certKey)
+	}
 	key, err := parsePrivateKey(keyPEM)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", keyKey, err)

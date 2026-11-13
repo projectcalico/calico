@@ -357,20 +357,15 @@ func (c *IstioComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Obj
 		secret.GetReferenceList(c.cfg.PullSecrets)...,
 	)
 
-	// cacerts is only ever replaced by a bundle that validated in full; without a
-	// local CA the cluster's current Secret stays, and the hash it carries keeps
-	// istiod from rolling.
-	cacerts := c.cfg.CurrentCACerts
-	if c.cfg.LocalCA != nil {
-		cacerts = c.cacertsSecret()
-		objs = append(objs, cacerts)
-	}
-	if cacerts != nil {
+	if hash := c.cacertsHash(); hash != "" {
 		template := &res.IstiodDeployment.Spec.Template
 		if template.Annotations == nil {
 			template.Annotations = map[string]string{}
 		}
-		template.Annotations[CACertsHashAnnotation] = rmeta.SecretsAnnotationHash(cacerts)
+		template.Annotations[CACertsHashAnnotation] = hash
+	}
+	if c.cfg.LocalCA != nil {
+		objs = append(objs, c.cacertsSecret())
 	}
 	if roots := c.ownRoots(); len(roots) > 0 {
 		objs = append(objs, c.trustAnchorsConfigMap(roots))
@@ -383,6 +378,24 @@ func (c *IstioComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Obj
 	objs = append(objs, c.dataPlaneObjects()...)
 
 	return objs, toDelete
+}
+
+// cacertsHash is the cacerts hash for istiod's pod template. cacerts is only
+// ever replaced by a bundle that validated in full. Without a local CA, the
+// cacerts in the cluster did not validate or the desired CA did not, so istiod
+// keeps the hash it has: a changed hash would roll it onto a CA that does not
+// work.
+func (c *IstioComponent) cacertsHash() string {
+	if c.cfg.LocalCA != nil {
+		return rmeta.SecretsAnnotationHash(c.cacertsSecret())
+	}
+	if live := c.cfg.Live; live != nil && live.Istiod != nil {
+		return live.Istiod.Spec.Template.Annotations[CACertsHashAnnotation]
+	}
+	if c.cfg.CurrentCACerts != nil {
+		return rmeta.SecretsAnnotationHash(c.cfg.CurrentCACerts)
+	}
+	return ""
 }
 
 // ztunnelEnv is the environment the operator sets on ztunnel beyond the chart's.

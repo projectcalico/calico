@@ -31,6 +31,10 @@ type testCert struct {
 // newTestCert signs a certificate for cn with parent, or self-signs it when
 // parent is nil.
 func newTestCert(cn string, parent *testCert, isCA bool) *testCert {
+	return newTestCertWithUsage(cn, parent, isCA, x509.KeyUsageCertSign|x509.KeyUsageDigitalSignature)
+}
+
+func newTestCertWithUsage(cn string, parent *testCert, isCA bool, usage x509.KeyUsage) *testCert {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	Expect(err).NotTo(HaveOccurred())
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 64))
@@ -40,7 +44,7 @@ func newTestCert(cn string, parent *testCert, isCA bool) *testCert {
 		Subject:               pkix.Name{CommonName: cn},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().Add(24 * time.Hour),
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		KeyUsage:              usage,
 		IsCA:                  isCA,
 		BasicConstraintsValid: true,
 	}
@@ -179,6 +183,16 @@ var _ = Describe("Istio CA", func() {
 				istio.RootCertKey: root.certPEM,
 			})
 			Expect(err).To(MatchError(ContainSubstring("ca-cert.pem: the certificate is not a CA")))
+		})
+
+		It("rejects a CA whose key usage does not allow certificate signing", func() {
+			restricted := newTestCertWithUsage("restricted", nil, true, x509.KeyUsageDigitalSignature)
+			_, err := istio.LoadCA(map[string][]byte{
+				istio.CACertKey:   restricted.certPEM,
+				istio.CAKeyKey:    restricted.keyPEM,
+				istio.RootCertKey: restricted.certPEM,
+			})
+			Expect(err).To(MatchError(ContainSubstring("ca-cert.pem: the key usage does not allow certificate signing")))
 		})
 
 		It("rejects a certificate that does not chain to a root in root-cert.pem", func() {

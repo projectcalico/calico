@@ -259,6 +259,16 @@ var _ = Describe("Istio controller certificate authority", func() {
 			Expect(getSecret(cacertsKey).Data).To(Equal(cacerts.Data))
 			expectDegradedMentioning(operatorNS+"/"+istio.OperatorCASecretName, "does not match")
 		})
+
+		It("reports a CA Secret with no data instead of generating a CA over it", func() {
+			Expect(cli.Create(ctx, &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: istio.OperatorCASecretName, Namespace: operatorNS},
+			})).NotTo(HaveOccurred())
+			reconcileIstio()
+
+			Expect(getSecret(operatorCAKey).Data).To(BeEmpty())
+			expectDegradedMentioning(operatorNS+"/"+istio.OperatorCASecretName, "expected keys")
+		})
 	})
 
 	Context("signer transitions", func() {
@@ -677,6 +687,20 @@ var _ = Describe("Istio controller certificate authority", func() {
 			Expect(getSecret(cacertsKey).Data).To(Equal(handMade.Data))
 			Expect(errors.IsNotFound(cli.Get(ctx, anchorsKey, &corev1.ConfigMap{}))).To(BeTrue())
 			expectDegradedMentioning(istio.IstioNamespace+"/"+istio.CACertsSecretName, "not a usable CA")
+		})
+
+		It("does not roll istiod onto a cacerts that stops validating", func() {
+			reconcileIstio()
+			markIstiodRolled()
+			hash := istiodHash()
+
+			cacerts := getSecret(cacertsKey)
+			cacerts.Data[istio.CAKeyKey] = newTestCert("other", nil, true).keyPEM
+			Expect(cli.Update(ctx, cacerts)).NotTo(HaveOccurred())
+			reconcileIstio()
+
+			Expect(istiodHash()).To(Equal(hash))
+			expectDegradedMentioning(istio.IstioNamespace+"/"+istio.CACertsSecretName, "does not match")
 		})
 
 		It("ignores istio-ca-secret once an operator-rendered cacerts exists", func() {
