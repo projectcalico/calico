@@ -126,10 +126,50 @@ if [[ "${stopped}" == "false" && -n "${GITHUB_ACCESS_TOKEN:-}" ]]; then
     chmod +x /tmp/run-lens.sh && /tmp/run-lens.sh || true
 fi
 
+_sandcat_sh="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/sandcat/sandcat.sh"
+_sandcat_src="${CI_HOME}/${CI_GIT_DIR}"
+_sandcat_report="${_sandcat_src}/report/report.json"
+[[ -f "${_sandcat_report}" ]] || _sandcat_report="${REPORT_DIR}/junit.xml"
+_sandcat_fallback=false
+_sandcat_cut_off=false
+if [[ "${stopped}" == "false" && "${CI_EXIT_CODE}" != "0" && ! -f "${HOME}/.sandcat-analyzed" ]]; then
+  _sandcat_fallback=true
+fi
+if [[ "${_sandcat_fallback}" == "true" && -f "${_sandcat_report}" ]]; then
+  _sandcat_kubeconfig=""
+  [[ -f "${BZ_LOCAL_DIR}/kubeconfig" ]] && _sandcat_kubeconfig="${BZ_LOCAL_DIR}/kubeconfig"
+  timeout --kill-after=30s 2m \
+    "${_sandcat_sh}" push-specs --spec-dir "${_sandcat_src}/report/sandcat" || true
+  _sandcat_limit="${SANDCAT_EPILOGUE_TIMEOUT:-12m}"
+  _sandcat_rc=0
+  timeout --kill-after=30s "${_sandcat_limit}" "${_sandcat_sh}" analyze \
+    --report "${_sandcat_report}" \
+    --kubeconfig "${_sandcat_kubeconfig}" \
+    --spec-dir "${_sandcat_src}/report/sandcat" \
+    --source-dir "${_sandcat_src}" || _sandcat_rc=$?
+  if [[ "${_sandcat_rc}" == 124 || "${_sandcat_rc}" == 137 ]]; then
+    echo "[WARN] sandcat: analysis stopped after ${_sandcat_limit}"
+    _sandcat_cut_off=true
+  fi
+fi
+
 # Last otherwise, so the logs above are pushed even when destroy hangs.
 if [[ "${stopped}" == "false" ]]; then
   destroy_cluster
 fi
 publish_vpp_logs
+
+if [[ "${_sandcat_fallback}" == "true" && ! -f "${_sandcat_report}" ]]; then
+  _sandcat_log=(--logs-dir "${BZ_LOGS_DIR}")
+  [[ -s "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" ]] && _sandcat_log=(--log-file "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log")
+  ("${_sandcat_sh}" build-failure \
+    "${_sandcat_log[@]}" \
+    --source-dir "${_sandcat_src}") || true
+fi
+
+if [[ "${_sandcat_cut_off}" == "true" ]]; then
+  timeout --kill-after=30s 3m "${_sandcat_sh}" cut-off \
+    --after "${_sandcat_limit}" --source-dir "${_sandcat_src}" || true
+fi
 
 echo "[INFO] exiting global_epilogue (CI_EXIT_CODE=${CI_EXIT_CODE})"
