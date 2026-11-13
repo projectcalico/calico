@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
@@ -470,6 +471,34 @@ var _ = Describe("Istio controller tests", func() {
 			reconcileOnce()
 			Expect(getIstiod().Spec.Template.Spec.Containers[0].Image).To(Equal(oldImage))
 			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(newZTunnel))
+		})
+
+		It("holds ztunnel while a deleted istiod is created again", func() {
+			newZTunnel := getZTunnel().Spec.Template.Spec.Containers[0].Image
+			downgradeTo(oldImage, nil)
+			Expect(cli.Delete(ctx, getIstiod())).To(Succeed())
+
+			reconcileOnce()
+			Expect(getIstiod().Spec.Template.Spec.Containers[0].Image).NotTo(Equal(oldImage))
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(oldImage))
+
+			markRolledOut()
+			reconcileOnce()
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(newZTunnel))
+		})
+
+		It("reconciles on an istiod status update that keeps the generation", func() {
+			pred := istiodRolloutPredicate()
+			deployment := func(name, rv string, available int32) *appsv1.Deployment {
+				return &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: istio.IstioNamespace, Generation: 2, ResourceVersion: rv},
+					Status:     appsv1.DeploymentStatus{ObservedGeneration: 2, AvailableReplicas: available},
+				}
+			}
+			name := istio.IstioIstiodDeploymentName
+			Expect(pred.Update(event.UpdateEvent{ObjectOld: deployment(name, "1", 0), ObjectNew: deployment(name, "2", 1)})).To(BeTrue())
+			Expect(pred.Update(event.UpdateEvent{ObjectOld: deployment(name, "2", 1), ObjectNew: deployment(name, "2", 1)})).To(BeFalse())
+			Expect(pred.Update(event.UpdateEvent{ObjectOld: deployment("other", "1", 0), ObjectNew: deployment("other", "2", 1)})).To(BeFalse())
 		})
 	})
 
