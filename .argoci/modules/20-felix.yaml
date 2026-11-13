@@ -32,7 +32,7 @@ steps:
       - name: FELIX_FV_MEMO
         value: "on"
     timeout: 20m
-    requests: {cpu: 1750m, memory: 4Gi}
+    requests: {cpu: 1250m, memory: 2Gi}
     commands: |
       .argoci/scripts/felix-fv-plan
 
@@ -139,7 +139,7 @@ steps:
       - name: NATIVE_GO_BUILD
         value: "true"
     jobSize: large
-    requests: {cpu: 2000m, memory: 7Gi}
+    requests: {cpu: 2000m, memory: 10Gi}
     useGoBuild: true
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none

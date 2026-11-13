@@ -20,7 +20,7 @@ steps:
       - name: NATIVE_GO_BUILD
         value: "true"
     depends: [check-go]
-    requests: {cpu: 3000m, memory: 2Gi}
+    requests: {cpu: 3000m, memory: 3Gi}
     commands: |
       cd guardian
       make ci

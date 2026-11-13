@@ -16,7 +16,7 @@ steps:
       - name: BUILD_CACHE_GROUP
         value: calico
     jobSize: small
-    requests: {cpu: 2750m, memory: 548Mi}
+    requests: {cpu: 1500m, memory: 2Gi}
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
     commands: |

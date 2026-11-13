@@ -20,7 +20,7 @@ steps:
       - name: NATIVE_GO_BUILD
         value: "true"
     depends: [check-go]
-    requests: {cpu: 4000m, memory: 2.75Gi}
+    requests: {cpu: 4000m, memory: 3.5Gi}
     commands: |
       # The protobuf recipe can wrongly judge this stale; the pre-flight checks
       # already prove it is not.

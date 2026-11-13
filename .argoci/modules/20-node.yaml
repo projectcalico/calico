@@ -18,7 +18,7 @@ steps:
     depends: [check-go, go-cache]
     cache:
       - {name: go, mode: read, path: /cache/go}
-    requests: {cpu: 5500m, memory: 3.75Gi}
+    requests: {cpu: 5500m, memory: 5.5Gi}
     useGoBuild: true
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none

@@ -24,7 +24,7 @@ steps:
       - name: NATIVE_GO_BUILD
         value: "true"
     depends: [check-go]
-    requests: {cpu: 2500m, memory: 2Gi}
+    requests: {cpu: 2500m, memory: 3Gi}
     commands: |
       cd hack
       make ci
