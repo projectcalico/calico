@@ -47,16 +47,19 @@ _sandcat_download() {
   echo "[INFO] sandcat: downloading ${SANDCAT_VERSION}..." >&2
   mkdir -p "$(dirname "${SANDCAT_BIN}")"
   local asset_url
-  asset_url=$(curl -fsSL \
-    -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
+  asset_url=$(_github_curl \
     -H "Accept: application/vnd.github+json" \
     "https://api.github.com/repos/tigera/sandcat/releases/${release_path}" \
     | jq -r '.assets[] | select(.name == "sandcat-linux-amd64") | .url') || return 1
-  curl -fsSL \
-    -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
+  _github_curl \
     -H "Accept: application/octet-stream" \
     "${asset_url}" \
     -o "${SANDCAT_BIN}" && chmod +x "${SANDCAT_BIN}"
+}
+
+# The token reaches curl on stdin, so it never shows in the process list.
+_github_curl() {
+  curl -fsSL -K - "$@" <<<"header = \"Authorization: token ${GITHUB_ACCESS_TOKEN}\""
 }
 
 # The --version call proves the binary runs here (wrong arch, missing libc).
@@ -132,7 +135,7 @@ cmd_inline_env() {
   [[ -n "${SANDCAT_DB_URL:-}" ]] || db_missing+=("SANDCAT_DB_URL")
   [[ -n "${SANDCAT_DB_TOKEN:-}" ]] || db_missing+=("SANDCAT_DB_TOKEN")
   if [[ ${#db_missing[@]} -eq 0 ]]; then
-    echo "[INFO] sandcat: metrics enabled (${SANDCAT_DB_URL})"
+    echo "[INFO] sandcat: metrics enabled"
   else
     echo "[INFO] sandcat: metrics off - the sandcat-db secret did not provide ${db_missing[*]}; check it is enabled in this project's secret settings"
   fi

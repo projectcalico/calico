@@ -203,7 +203,7 @@ fi
 
 newhome
 export SANDCAT_GEMINI_KEY=key-a SANDCAT_DB_URL=postgres://broker SANDCAT_DB_TOKEN=t
-check "metrics reported as enabled" 0 "metrics enabled (postgres://broker)"
+check "metrics reported as enabled, without the DB URL" 0 "metrics enabled" "!postgres://broker"
 unset SANDCAT_DB_URL SANDCAT_DB_TOKEN
 
 newhome
@@ -216,7 +216,7 @@ unset SANDCAT_DB_URL
 newhome
 export SANDCAT_GEMINI_KEY=key-a STUB_MCP_RC=3 SANDCAT_DB_URL=postgres://broker SANDCAT_DB_TOKEN=t
 check "metrics still reported when calico-mcp is refused" 1 \
-  "metrics enabled (postgres://broker)" "calico-mcp unavailable"
+  "metrics enabled" "!postgres://broker" "calico-mcp unavailable"
 unset SANDCAT_DB_URL SANDCAT_DB_TOKEN
 
 # A calico-mcp that outlives check-mcp must not hold the caller's $( ) open.
