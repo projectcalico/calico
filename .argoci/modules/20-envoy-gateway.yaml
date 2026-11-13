@@ -3,18 +3,33 @@ version: condensed-module
 
 defaults:
   timeout: 30m
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: envoy-gateway-ci
-    requests: {cpu: 3750m, memory: 3.5Gi}
-    services:
-      - docker
-    commands: |
-      cd third_party/envoy-gateway
-      make ci
+    depends: [go-cache]
+    checkout: true
+    cache:
+      - {name: go, mode: read, path: /cache/go}
+    runOnVM:
+      createVM:
+        machineType: e2-standard-4
+      put:
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      source: |
+        set -e
+        .argoci/scripts/restore-go-cache envoy-gateway-ci ~/.go-mod
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd third_party/envoy-gateway
+        make ci
 
   # Cross-compiles only, so it needs no daemon.
   - name: envoy-gateway-build
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     requests: {cpu: 5250m, memory: 4.5Gi}
     useGoBuild: true
     workspaceVolumes: none
