@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,6 +50,19 @@ func NewTestServerConfig() *TestServerConfig {
 	}
 }
 
+// testServer is a Calico API server started for one test, with a client for it and the outcome of its RunServer call.
+type testServer struct {
+	server *apiserver.ProjectCalicoServer
+	client calicoclient.Interface
+	config *restclient.Config
+	port   int
+	stopCh chan struct{}
+
+	// exited closes when RunServer returns, and runErr holds what it returned once exited is closed.
+	exited chan struct{}
+	runErr error
+}
+
 func withConfigGetFreshAPIServerServerAndClient(
 	t *testing.T,
 	serverConfig *TestServerConfig,
@@ -58,6 +71,13 @@ func withConfigGetFreshAPIServerServerAndClient(
 	*restclient.Config,
 	func(),
 ) {
+	apiServer := startTestServer(t, serverConfig, nil)
+	return apiServer.server, apiServer.client, apiServer.config, apiServer.stop
+}
+
+// startTestServer prepares and runs a Calico API server against the test etcd and KUBECONFIG, and waits for it to
+// serve. beforeRun, if not nil, gets the prepared server before RunServer starts, so a test can register hooks.
+func startTestServer(t *testing.T, serverConfig *TestServerConfig, beforeRun func(*apiserver.ProjectCalicoServer)) *testServer {
 	// A port the kernel picks cannot be one something else already holds, such as
 	// the etcd the tests run against, and handing over the open listener leaves
 	// no gap for anything to take it.
@@ -65,58 +85,76 @@ func withConfigGetFreshAPIServerServerAndClient(
 	if err != nil {
 		t.Fatalf("Error opening a listener for the server: %v", err)
 	}
-	securePort := listener.Addr().(*net.TCPAddr).Port
-	secureAddr := fmt.Sprintf("https://localhost:%d", securePort)
-	stopCh := make(chan struct{})
-	serverFailed := make(chan struct{})
-	shutdownServer := func() {
-		t.Logf("Shutting down server on port: %d", securePort)
-		close(stopCh)
+	addr, ok := listener.Addr().(*net.TCPAddr)
+	if !ok {
+		if err := listener.Close(); err != nil {
+			t.Logf("Closing the listener: %v", err)
+		}
+		t.Fatalf("Listener address %v is not a TCP address", listener.Addr())
 	}
+	apiServer := &testServer{
+		port:   addr.Port,
+		stopCh: make(chan struct{}),
+		exited: make(chan struct{}),
+	}
+	secureAddr := fmt.Sprintf("https://localhost:%d", apiServer.port)
 
-	t.Logf("Starting server on port: %d", securePort)
+	t.Logf("Starting server on port: %d", apiServer.port)
 	ro := genericoptions.NewRecommendedOptions(defaultEtcdPathPrefix, apiserver.Codecs.LegacyCodec(v3.SchemeGroupVersion))
 	ro.Etcd.StorageConfig.Transport.ServerList = serverConfig.etcdServerList
 	ro.Features.EnablePriorityAndFairness = false
 	options := &server.CalicoServerOptions{
 		RecommendedOptions: ro,
 		DisableAuth:        true,
-		StopCh:             stopCh,
+		StopCh:             apiServer.stopCh,
 	}
 	options.RecommendedOptions.SecureServing.Listener = listener
 	options.RecommendedOptions.CoreAPI.CoreAPIKubeconfigPath = os.Getenv("KUBECONFIG")
 
-	pcs, err := server.PrepareServer(options)
+	apiServer.server, err = server.PrepareServer(options)
 	if err != nil {
 		_ = listener.Close()
-		close(serverFailed)
 		t.Fatalf("Error preparing the server: %v", err)
 	}
+	if beforeRun != nil {
+		beforeRun(apiServer.server)
+	}
 
-	// Run the server in the background
 	go func() {
-		err := server.RunServer(options, pcs)
-		if err != nil {
-			close(serverFailed)
-		}
+		defer close(apiServer.exited)
+		apiServer.runErr = server.RunServer(options, apiServer.server)
+		logrus.WithError(apiServer.runErr).Infof("Server on port %d exited", apiServer.port)
 	}()
 
-	if err := waitForAPIServerUp(secureAddr, serverFailed); err != nil {
+	if err := waitForAPIServerUp(secureAddr, apiServer.exited); err != nil {
 		t.Fatalf("%v", err)
 	}
-	if pcs == nil {
-		t.Fatal("Calico server is nil")
-	}
 
-	cfg := &restclient.Config{}
-	cfg.Host = secureAddr
-	cfg.Insecure = true
-	clientset, err := calicoclient.NewForConfig(cfg)
+	apiServer.config = &restclient.Config{}
+	apiServer.config.Host = secureAddr
+	apiServer.config.Insecure = true
+	apiServer.client, err = calicoclient.NewForConfig(apiServer.config)
 	if nil != err {
 		t.Fatal("can't make the client from the config", err)
 	}
+	return apiServer
+}
 
-	return pcs, clientset, cfg, shutdownServer
+// stop closes the server's stop channel, which starts its graceful shutdown. Call it once.
+func (s *testServer) stop() {
+	logrus.Infof("Shutting down server on port: %d", s.port)
+	close(s.stopCh)
+}
+
+// waitForExit waits for RunServer to return and gives its error, failing the test if that takes longer than timeout.
+func (s *testServer) waitForExit(t *testing.T, timeout time.Duration) error {
+	select {
+	case <-s.exited:
+		return s.runErr
+	case <-time.After(timeout):
+		t.Fatalf("Server on port %d did not exit within %v", s.port, timeout)
+		return nil
+	}
 }
 
 func getFreshAPIServerAndClient(t *testing.T, newEmptyObj func() runtime.Object) (calicoclient.Interface, func()) {
@@ -128,7 +166,7 @@ func getFreshAPIServerAndClient(t *testing.T, newEmptyObj func() runtime.Object)
 	return client, shutdownFunc
 }
 
-func waitForAPIServerUp(serverURL string, stopCh <-chan struct{}) error {
+func waitForAPIServerUp(serverURL string, exited <-chan struct{}) error {
 	interval := 1 * time.Second
 	timeout := 30 * time.Second
 	startWaiting := time.Now()
@@ -136,9 +174,8 @@ func waitForAPIServerUp(serverURL string, stopCh <-chan struct{}) error {
 	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, true,
 		func(ctx context.Context) (bool, error) {
 			select {
-			// we've been told to stop, so no reason to keep going
-			case <-stopCh:
-				return true, fmt.Errorf("apiserver failed")
+			case <-exited:
+				return true, fmt.Errorf("apiserver exited before it was up")
 			default:
 				logrus.Infof("Waiting for : %#v", serverURL)
 				tr := &http.Transport{

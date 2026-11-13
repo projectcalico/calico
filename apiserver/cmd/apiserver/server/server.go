@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 /*
 Copyright 2016 The Kubernetes Authors.
@@ -21,6 +21,7 @@ package server
 import (
 	"flag"
 	"io"
+	"os"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -59,7 +60,9 @@ func NewCommandStartCalicoServer(out io.Writer) (*cobra.Command, *CalicoServerOp
 	cmd.Run = func(c *cobra.Command, args []string) {
 		configureLogging()
 
-		h := interrupt.New(nil, func() {
+		// A nil final handler calls os.Exit(1) as soon as stopCh closes. The no-op lets Run return only after
+		// RunServer finishes its graceful shutdown.
+		h := interrupt.New(func(os.Signal) {}, func() {
 			close(stopCh)
 		})
 		if err := h.Run(func() error {

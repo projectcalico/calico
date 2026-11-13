@@ -27,6 +27,7 @@ import (
 	gpath "path"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/admission/plugin/policy/mutating"
 	"k8s.io/apiserver/pkg/admission/plugin/policy/validating"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -75,16 +76,8 @@ func PrepareServer(opts *CalicoServerOptions) (*apiserver.ProjectCalicoServer, e
 // kube-system/extension-apiserver-authentication are reloaded by the upstream authenticator, so no restart is needed.
 func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer) error {
 	// Create a context rather than using the stop channel - it's a little more versatile.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(wait.ContextForChannel(opts.StopCh))
 	defer cancel()
-	go func() {
-		// Wait for the stop channel and cancel.
-		select {
-		case <-opts.StopCh:
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
 
 	logrus.Info("Running the API server")
 
