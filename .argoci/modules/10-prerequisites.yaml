@@ -565,7 +565,7 @@ steps:
         - out:/cache/windows-images
       source: |
         set -eo pipefail
-        for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
+        for t in make zstd unzip zip; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
         make -C node build-windows-archive
         make -C node image-windows
         make -C cni-plugin image-windows

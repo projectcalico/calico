@@ -51,6 +51,9 @@ steps:
         provisionedIops: 6000
         provisionedThroughput: 200
         maxRunDuration: 2h30m
+        # This DevStack release needs Ubuntu 22.04's Python; the CI base image is newer.
+        vmFamily: ubuntu-2204-lts
+        vmImageProject: ubuntu-os-cloud
       env: [LENS_ELASTICSEARCH_USER, LENS_ELASTICSEARCH_TOKEN]
       source: |
         set -e
@@ -71,6 +74,8 @@ steps:
         echo 'Acquire::Retries "10";' | sudo tee /etc/apt/apt.conf.d/80-ci-retries >/dev/null
         sudo apt-get remove -y python3-wrapt || true
         command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        # The stock image has no docker, which the perf results uploader builds with.
+        command -v docker >/dev/null || { curl -fsSL https://get.docker.com | sudo sh && sudo chmod 666 /var/run/docker.sock; }
         # The default is not where this checkout lands.
         export CALICO_REPO_DIR="$repo"
         cd networking-calico
