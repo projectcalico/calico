@@ -20,73 +20,75 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 )
 
-// recordingRunner runs nothing and records what it was asked to run. Units run
-// concurrently, so recording is locked.
-type recordingRunner struct {
-	mu       sync.Mutex
-	args     [][]string
-	envs     [][]string
-	logPaths []string
+// fakeRunner runs nothing and records what it was asked to run.
+type fakeRunner struct {
+	*command.Recorder
 }
 
-func (r *recordingRunner) record(args, env []string, logPath string) (string, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	// Stand in for helm: `repo index <dir>` writes the index into that dir.
-	if len(args) > 2 && args[0] == "repo" && args[1] == "index" {
-		_ = os.WriteFile(filepath.Join(args[2], "index.yaml"), []byte("entries:"), 0o644)
-	}
-	r.args = append(r.args, slices.Clone(args))
-	r.envs = append(r.envs, slices.Clone(env))
-	r.logPaths = append(r.logPaths, logPath)
-	return "", nil
-}
-
-func (r *recordingRunner) Run(_ string, args, env []string) (string, error) {
-	return r.record(args, env, "")
-}
-
-func (r *recordingRunner) RunNoCapture(_ string, args, env []string) error {
-	_, err := r.record(args, env, "")
-	return err
-}
-
-func (r *recordingRunner) RunInDir(_, _ string, args, env []string) (string, error) {
-	if slices.Contains(args, "build-images") {
-		// The publish asks each directory for its image names before recording.
-		if _, err := r.record(args, env, ""); err != nil {
-			return "", err
+func newFakeRunner() *fakeRunner {
+	return &fakeRunner{&command.Recorder{Reply: func(c command.Call) (string, error) {
+		// Stand in for helm: `repo index <dir>` writes the index into that dir.
+		if len(c.Args) > 2 && c.Args[0] == "repo" && c.Args[1] == "index" {
+			_ = os.WriteFile(filepath.Join(c.Args[2], "index.yaml"), []byte("entries:"), 0o644)
 		}
-		return "calico calico-windows", nil
+		if slices.Contains(c.Args, "build-images") {
+			// The publish asks each directory for its image names.
+			return "calico calico-windows", nil
+		}
+		return "", nil
+	}}}
+}
+
+// dirAndArgs lets a match name the dir a command ran in as if it were an arg.
+func (r *fakeRunner) dirAndArgs() [][]string {
+	var out [][]string
+	for _, c := range r.Calls() {
+		out = append(out, append([]string{c.Dir}, c.Args...))
 	}
-	return r.record(args, env, "")
+	return out
 }
 
-func (r *recordingRunner) RunInDirNoCapture(_, _ string, args, env []string) error {
-	_, err := r.record(args, env, "")
-	return err
+func (r *fakeRunner) args() [][]string {
+	var out [][]string
+	for _, c := range r.Calls() {
+		out = append(out, c.Args)
+	}
+	return out
 }
 
-func (r *recordingRunner) RunInDirToFile(_, _ string, args, env []string, logPath string) (string, error) {
-	return r.record(args, env, logPath)
+func (r *fakeRunner) envs() [][]string {
+	var out [][]string
+	for _, c := range r.Calls() {
+		out = append(out, c.Env)
+	}
+	return out
 }
 
-// envFor returns the environment of the first recorded make call whose args
+func (r *fakeRunner) logPaths() []string {
+	var out []string
+	for _, c := range r.Calls() {
+		out = append(out, c.LogFile)
+	}
+	return out
+}
+
+// envFor returns the environment of the first recorded call whose dir or args
 // contain every one of want.
-func (r *recordingRunner) envFor(want ...string) []string {
-	for i, args := range r.args {
-		if containsAll(args, want) {
-			return r.envs[i]
+func (r *fakeRunner) envFor(want ...string) []string {
+	for _, c := range r.Calls() {
+		if containsAll(append([]string{c.Dir}, c.Args...), want) {
+			return c.Env
 		}
 	}
 	return nil
@@ -94,8 +96,8 @@ func (r *recordingRunner) envFor(want ...string) []string {
 
 // ranExactly is ran for callers that pass whole arguments: a target name is a
 // prefix of a longer one, so a substring match cannot tell them apart.
-func (r *recordingRunner) ranExactly(want ...string) bool {
-	return slices.ContainsFunc(r.args, func(args []string) bool {
+func (r *fakeRunner) ranExactly(want ...string) bool {
+	return slices.ContainsFunc(r.dirAndArgs(), func(args []string) bool {
 		for _, w := range want {
 			if !slices.Contains(args, w) {
 				return false
@@ -105,9 +107,9 @@ func (r *recordingRunner) ranExactly(want ...string) bool {
 	})
 }
 
-// ran reports whether any recorded call's args contain every one of want.
-func (r *recordingRunner) ran(want ...string) bool {
-	return slices.ContainsFunc(r.args, func(args []string) bool {
+// ran reports whether any recorded call's dir or args contain every one of want.
+func (r *fakeRunner) ran(want ...string) bool {
+	return slices.ContainsFunc(r.dirAndArgs(), func(args []string) bool {
 		return containsAll(args, want)
 	})
 }
@@ -227,6 +229,32 @@ func TestHashreleaseBuilds(t *testing.T) {
 					t.Errorf("ReleaseBranchPrefix = %q, want %q", got.ReleaseBranchPrefix, releaseBranchPrefixFlag.Value)
 				}
 			})
+		}
+	})
+}
+
+func TestConfigReleaseImages(t *testing.T) {
+	t.Run("sweeps once however often it is asked", func(t *testing.T) {
+		r := newFakeRunner()
+		prev := commandRunner
+		commandRunner = r
+		t.Cleanup(func() { commandRunner = prev })
+
+		cfg := &Config{RepoRootDir: "/repo"}
+		first, err := cfg.ReleaseImages()
+		if err != nil {
+			t.Fatalf("first: %v", err)
+		}
+		sweep := len(r.Calls())
+		second, err := cfg.ReleaseImages()
+		if err != nil {
+			t.Fatalf("second: %v", err)
+		}
+		if diff := cmp.Diff(first, second); diff != "" {
+			t.Errorf("lists differ (-first +second):\n%s", diff)
+		}
+		if got := len(r.Calls()); got != sweep {
+			t.Errorf("second call ran %d more commands, want 0", got-sweep)
 		}
 	})
 }

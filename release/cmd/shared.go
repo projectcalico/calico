@@ -47,7 +47,7 @@ var (
 	// relative to the repo root
 	releaseOutputPath = []string{utils.ReleaseFolderName, "_output"}
 
-	commandRunner          command.CommandRunner = &command.RealCommandRunner{}
+	commandRunner          command.CommandRunner = command.RealRunner
 	registryDigestResolver                       = registry.ResolveDigest
 )
 
@@ -165,7 +165,7 @@ var (
 	}
 	pinForBuild        = loadPin
 	builtPin    pinned = func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
-		pin, err := pinnedversion.Load(pinnedversion.FileLoader{Dir: cfg.TmpDir, RootDir: cfg.RepoRootDir})
+		pin, err := pinnedversion.Load(pinnedversion.FileLoader{Dir: cfg.TmpDir, RootDir: cfg.RepoRootDir, Runner: commandRunner})
 		// A planned build writes no pin, so a plan of build then publish has none to load.
 		if errors.Is(err, fs.ErrNotExist) && c != nil && c.Bool(planFlag.Name) {
 			logrus.WithError(err).Warn("No built pin, planning against the pin a build would write")
@@ -205,7 +205,7 @@ func pinForRelease(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
 // releaseVersion is the version being released. A hashrelease is versioned from git.
 var releaseVersion = func(cfg *Config, c *cli.Command) (*version.Version, error) {
 	if c.Bool(hashreleaseFlag.Name) {
-		v, err := command.GitVersion(cfg.RepoRootDir, true)
+		v, err := command.Git(commandRunner).In(cfg.RepoRootDir).Version(true)
 		if err != nil {
 			return nil, fmt.Errorf("git version: %w", err)
 		}

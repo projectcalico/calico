@@ -104,7 +104,7 @@ func (asd *aptSourcesData) writeAptSourcesFile(rootPath string) error {
 
 func getVersionFromDebfile(runner command.CommandRunner, debfilePath string) (string, error) {
 	logrus.WithField("debfile", debfilePath).Debug("Getting version information from debian package")
-	out, err := runner.Run("dpkg-deb", []string{"--show", "--showformat", "${Version}", "--", debfilePath}, nil)
+	out, err := runner.Run("dpkg-deb", []string{"--show", "--showformat", "${Version}", "--", debfilePath})
 	if err != nil {
 		return "", fmt.Errorf("getting version for %s: %w", debfilePath, err)
 	}
