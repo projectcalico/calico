@@ -9,6 +9,12 @@ generateName: calico-
 # Catches a hang outside any step's own timeout.
 timeout: 4h
 
+# TEMPORARY: sizes the volume-cache test's disks, one per writer and per reader.
+# The caches are a few GB compressed.
+cache:
+  size: 50Gi
+  storageClass: premium-rwo
+
 notifications:
   slack:
     channel: ci-notifications-os
