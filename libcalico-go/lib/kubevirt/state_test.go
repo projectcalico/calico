@@ -15,12 +15,18 @@
 package kubevirt_test
 
 import (
+	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
@@ -133,5 +139,196 @@ var _ = Describe("NewDeferredInformers", func() {
 
 		Eventually(func() cache.Indexer { return di.VMIndexer() }, 5*time.Second).ShouldNot(BeNil())
 		Expect(di.VMInstanceIndexer()).NotTo(BeNil())
+	})
+
+	It("publishes the VMIM indexer once its informer syncs", func() {
+		migrations := func() (cache.SharedIndexInformer, error) {
+			return informers.NewSharedInformerFactory(fake.NewClientset(), 0).Core().V1().Services().Informer(), nil
+		}
+		di := kubevirt.NewDeferredInformersWithMigrations(newFakeInformerFactory(0, stop), migrations, 10*time.Millisecond, stop)
+
+		Eventually(func() cache.Indexer { return di.MigrationIndexer() }, 5*time.Second).ShouldNot(BeNil())
+		Expect(di.VMInstanceIndexer()).NotTo(BeNil())
+	})
+
+	It("does not create the VMIM informer before KubeVirt is found", func() {
+		var created atomic.Int32
+		migrations := func() (cache.SharedIndexInformer, error) {
+			created.Add(1)
+			return informers.NewSharedInformerFactory(fake.NewClientset(), 0).Core().V1().Services().Informer(), nil
+		}
+		di := kubevirt.NewDeferredInformersWithMigrations(newFakeInformerFactory(3, stop), migrations, 10*time.Millisecond, stop)
+
+		Eventually(func() cache.Indexer { return di.MigrationIndexer() }, 5*time.Second).ShouldNot(BeNil())
+		Expect(created.Load()).To(Equal(int32(1)))
+	})
+
+	It("publishes VM and VMI indexers when the VMIM informer never syncs", func() {
+		migrations := func() (cache.SharedIndexInformer, error) {
+			// A list that always fails, as when the caller may not list VMIMs.
+			forbidden := &cache.ListWatch{
+				ListWithContextFunc: func(context.Context, metav1.ListOptions) (runtime.Object, error) {
+					return nil, fmt.Errorf("forbidden")
+				},
+				WatchFuncWithContext: func(context.Context, metav1.ListOptions) (watch.Interface, error) {
+					return nil, fmt.Errorf("forbidden")
+				},
+			}
+			return cache.NewSharedIndexInformer(forbidden, &corev1.Service{}, 0, cache.Indexers{}), nil
+		}
+		di := kubevirt.NewDeferredInformersWithMigrations(newFakeInformerFactory(0, stop), migrations, 10*time.Millisecond, stop)
+
+		Eventually(func() cache.Indexer { return di.VMInstanceIndexer() }, 5*time.Second).ShouldNot(BeNil())
+		Expect(di.VMIndexer()).NotTo(BeNil())
+		Consistently(func() cache.Indexer { return di.MigrationIndexer() }, 200*time.Millisecond).Should(BeNil())
+	})
+
+	It("publishes VM and VMI indexers when the VMIM informer cannot be created", func() {
+		migrations := func() (cache.SharedIndexInformer, error) { return nil, fmt.Errorf("bad config") }
+		di := kubevirt.NewDeferredInformersWithMigrations(newFakeInformerFactory(0, stop), migrations, 10*time.Millisecond, stop)
+
+		Eventually(func() cache.Indexer { return di.VMInstanceIndexer() }, 5*time.Second).ShouldNot(BeNil())
+		Consistently(func() cache.Indexer { return di.MigrationIndexer() }, 200*time.Millisecond).Should(BeNil())
+	})
+})
+
+var _ = Describe("DeferredInformers.AddEventHandlers", func() {
+	var stop chan struct{}
+
+	BeforeEach(func() {
+		stop = make(chan struct{})
+	})
+
+	AfterEach(func() {
+		close(stop)
+	})
+
+	// seededFactory returns informers over a clientset holding one ConfigMap
+	// (VM) and two Secrets (VMI). It blocks until release is closed.
+	seededFactory := func(release <-chan struct{}) kubevirt.GetIndexInformerFunc {
+		cs := fake.NewClientset(
+			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "vm1", Namespace: "default"}},
+			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "vmi1", Namespace: "default"}},
+			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "vmi2", Namespace: "default"}},
+		)
+		factory := informers.NewSharedInformerFactory(cs, 0)
+		return func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error) {
+			<-release
+			return factory.Core().V1().ConfigMaps().Informer(), factory.Core().V1().Secrets().Informer(), nil
+		}
+	}
+
+	type counts struct {
+		mu     sync.Mutex
+		vm     int
+		vmi    int
+		synced int
+	}
+	newHandlers := func(c *counts) kubevirt.EventHandlers {
+		return kubevirt.EventHandlers{
+			VM: cache.ResourceEventHandlerFuncs{AddFunc: func(any) {
+				c.mu.Lock()
+				defer c.mu.Unlock()
+				c.vm++
+			}},
+			VMI: cache.ResourceEventHandlerFuncs{AddFunc: func(any) {
+				c.mu.Lock()
+				defer c.mu.Unlock()
+				c.vmi++
+			}},
+			Synced: func() {
+				c.mu.Lock()
+				defer c.mu.Unlock()
+				c.synced++
+			}}
+	}
+	get := func(c *counts) (int, int, int) {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return c.vm, c.vmi, c.synced
+	}
+
+	It("attaches handlers registered before the informers start", func() {
+		release := make(chan struct{})
+		di := kubevirt.NewDeferredInformers(seededFactory(release), 10*time.Millisecond, stop)
+		c := &counts{}
+		di.AddEventHandlers(newHandlers(c))
+
+		close(release)
+
+		Eventually(func() []int {
+			vm, vmi, synced := get(c)
+			return []int{vm, vmi, synced}
+		}, 5*time.Second).Should(Equal([]int{1, 2, 1}))
+		Consistently(func() int { _, _, s := get(c); return s }, 100*time.Millisecond).Should(Equal(1))
+	})
+
+	It("attaches handlers registered after the informers start", func() {
+		release := make(chan struct{})
+		close(release)
+		di := kubevirt.NewDeferredInformers(seededFactory(release), 10*time.Millisecond, stop)
+		Eventually(di.VMIndexer, 5*time.Second).ShouldNot(BeNil())
+
+		c := &counts{}
+		di.AddEventHandlers(newHandlers(c))
+
+		Eventually(func() []int {
+			vm, vmi, synced := get(c)
+			return []int{vm, vmi, synced}
+		}, 5*time.Second).Should(Equal([]int{1, 2, 1}))
+		Consistently(func() int { _, _, s := get(c); return s }, 100*time.Millisecond).Should(Equal(1))
+	})
+
+	It("calls MigrationsSynced once the VMIM indexer is published, before or after registering", func() {
+		cs := fake.NewClientset(&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "vmim1", Namespace: "default"}})
+		migrations := func() (cache.SharedIndexInformer, error) {
+			return informers.NewSharedInformerFactory(cs, 0).Core().V1().Services().Informer(), nil
+		}
+		var vmims, early, late atomic.Int32
+		var sawIndexer atomic.Bool
+		var di *kubevirt.DeferredInformers
+		di = kubevirt.NewDeferredInformersWithMigrations(newFakeInformerFactory(0, stop), migrations, 10*time.Millisecond, stop)
+		di.AddEventHandlers(kubevirt.EventHandlers{
+			VMIM: cache.ResourceEventHandlerFuncs{AddFunc: func(any) { vmims.Add(1) }},
+			MigrationsSynced: func() {
+				sawIndexer.Store(di.MigrationIndexer() != nil)
+				early.Add(1)
+			},
+		})
+		Eventually(early.Load, 5*time.Second).Should(Equal(int32(1)))
+		Expect(sawIndexer.Load()).To(BeTrue(), "the indexer is published before the callback")
+		Eventually(vmims.Load, 5*time.Second).Should(Equal(int32(1)))
+
+		di.AddEventHandlers(kubevirt.EventHandlers{MigrationsSynced: func() { late.Add(1) }})
+		Expect(late.Load()).To(Equal(int32(1)), "a late registration is told at once")
+		Consistently(early.Load, 100*time.Millisecond).Should(Equal(int32(1)))
+	})
+
+	It("never calls MigrationsSynced without a VMIM informer", func() {
+		di := kubevirt.NewDeferredInformers(newFakeInformerFactory(0, stop), 10*time.Millisecond, stop)
+		var called atomic.Int32
+		synced := make(chan struct{})
+		di.AddEventHandlers(kubevirt.EventHandlers{
+			Synced:           func() { close(synced) },
+			MigrationsSynced: func() { called.Add(1) },
+		})
+		Eventually(synced, 5*time.Second).Should(BeClosed())
+		Consistently(called.Load, 200*time.Millisecond).Should(BeZero())
+	})
+
+	It("never calls Synced when KubeVirt is absent", func() {
+		localStop := make(chan struct{})
+		var polls atomic.Int32
+		factory := func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error) {
+			polls.Add(1)
+			return nil, nil, nil
+		}
+		di := kubevirt.NewDeferredInformers(factory, 10*time.Millisecond, localStop)
+		c := &counts{}
+		di.AddEventHandlers(newHandlers(c))
+
+		Eventually(polls.Load, 5*time.Second).Should(BeNumerically(">=", 2))
+		close(localStop)
+		Consistently(func() int { _, _, s := get(c); return s }, 100*time.Millisecond).Should(Equal(0))
 	})
 })
