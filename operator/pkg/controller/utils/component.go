@@ -26,6 +26,7 @@ import (
 
 	"github.com/go-logr/logr"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	admissionregv1 "k8s.io/api/admissionregistration/v1"
 	apps "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -798,6 +799,13 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 			dsa.ImagePullSecrets = csa.ImagePullSecrets
 		}
 		return dsa
+	case *admissionregv1.MutatingWebhookConfiguration:
+		dw, dok := desired.(*admissionregv1.MutatingWebhookConfiguration)
+		cw, cok := current.(*admissionregv1.MutatingWebhookConfiguration)
+		if dok && cok {
+			preserveWebhookCABundles(dw, cw)
+		}
+		return desired
 	case *v3.NetworkPolicy:
 		cnp := current.(*v3.NetworkPolicy)
 		dnp := desired.(*v3.NetworkPolicy)
@@ -822,6 +830,22 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 
 		// Default to just using the desired state, with an updated RV.
 		return desired
+	}
+}
+
+// preserveWebhookCABundles copies each webhook's caBundle from the cluster when the operator
+// renders that webhook without one. Another controller, such as the Envoy Gateway certgen Job,
+// owns the bundle in that case, and a full Update without it would clear the field until that
+// controller writes it again.
+func preserveWebhookCABundles(desired, current *admissionregv1.MutatingWebhookConfiguration) {
+	bundles := map[string][]byte{}
+	for _, w := range current.Webhooks {
+		bundles[w.Name] = w.ClientConfig.CABundle
+	}
+	for i := range desired.Webhooks {
+		if len(desired.Webhooks[i].ClientConfig.CABundle) == 0 {
+			desired.Webhooks[i].ClientConfig.CABundle = bundles[desired.Webhooks[i].Name]
+		}
 	}
 }
 
