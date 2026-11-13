@@ -200,10 +200,11 @@ var _ = describe.CalicoDescribe(
 		var (
 			cli         ctrlclient.Client
 			dp          utils.ClusterDataplane
-			encapIface  string
+			encapIfaces map[utils.IPFamily]string
 			nodeNames   []string
-			nodeIPs     []string
+			nodeIPs     map[utils.IPFamily][]string
 			calicoNames []string
+			families    []utils.IPFamily
 		)
 
 		// Pod index → node index mapping.
@@ -214,25 +215,22 @@ var _ = describe.CalicoDescribe(
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
-			allNames := nodesInfo.GetNames()
-			allIPs := nodesInfo.GetIPv4s()
-			Expect(len(allIPs)).To(BeNumerically(">=", 2),
-				"HEP datapath tests require at least 2 nodes with IPv4 addresses, found %d", len(allIPs))
-			nodeNames = allNames[:2]
-			nodeIPs = allIPs[:2]
-			calicoNames = nodesInfo.GetCalicoNames()[:2]
-			logrus.Infof("HEP nodes: %v IPs: %v calico: %v", nodeNames, nodeIPs, calicoNames)
+			nodes := utils.AwaitFamilyNodes(f, cli, 2)
+			families, nodeNames, nodeIPs, calicoNames = nodes.Families, nodes.Names, nodes.IPs, nodes.CalicoNames
+			logrus.Infof("HEP nodes: %v families: %v IPs: %v calico: %v", nodeNames, families, nodeIPs, calicoNames)
 
 			dp = utils.DetectDataplane(cli, f.ClientSet)
-			encapIface = detectEncapInterface(cli)
-			logrus.Infof("Encap interface: %q", encapIface)
+			podNet, err := utils.ReadPodNetwork(cli)
+			Expect(err).NotTo(HaveOccurred(), "reading the IP pools")
+			encapIfaces = podNet.EncapDevices
+			logrus.Infof("Encap interfaces: %v", encapIfaces)
 		})
 
 		// hepInterfaceName returns the interface name to use for the HEP based on
 		// the scenario and encapsulation mode. On tunnel-based dataplanes, forwarded
 		// traffic traverses the tunnel device rather than eth0.
-		hepInterfaceName := func(s hepScenario) string {
+		hepInterfaceName := func(s hepScenario, fam utils.IPFamily) string {
+			encapIface := encapIfaces[fam]
 			if s.dstHostNetworked {
 				// Traffic to a host-networked pod goes directly to the host — use default.
 				return ""
@@ -314,22 +312,24 @@ var _ = describe.CalicoDescribe(
 			// Build the target based on access type. Use HTTP with /clientip
 			// so checkConnection can parse the source IP for SNAT detection.
 			clientIPOpt := conncheck.WithHTTP("GET", "/clientip", nil)
-			var target conncheck.Target
+			targets := map[utils.IPFamily]conncheck.Target{}
 			expectSNAT := false
-			switch s.accessType {
-			case "podIP":
-				target = conncheck.NewTarget(server.Pod().Status.PodIP, conncheck.TypePodIP, conncheck.TCP, clientIPOpt).Port(80)
-			case "clusterIP":
-				// TODO: Also test IPv6 ClusterIP on dual-stack clusters.
-				target = server.ClusterIPv4(clientIPOpt).Port(80)
-				if s.dstHostNetworked {
+			for _, fam := range families {
+				switch s.accessType {
+				case "podIP":
+					targets[fam] = conncheck.NewTarget(utils.PodIPFor(server.Pod(), fam), conncheck.TypePodIP, conncheck.TCP, clientIPOpt).Port(80)
+				case "clusterIP":
+					targets[fam] = server.ClusterIPFor(fam, clientIPOpt).Port(80)
+					if s.dstHostNetworked {
+						expectSNAT = true
+					}
+				case "nodePort":
 					expectSNAT = true
+					// The HEP is on node0.
+					targets[fam] = server.NodePort(nodeIPs[fam][0], clientIPOpt)
+				default:
+					Fail(fmt.Sprintf("unhandled accessType: %s", s.accessType))
 				}
-			case "nodePort":
-				expectSNAT = true
-				target = server.NodePort(nodeIPs[0], clientIPOpt) // HEP is on node0
-			default:
-				Fail(fmt.Sprintf("unhandled accessType: %s", s.accessType))
 			}
 
 			baseline := reachableNoSNAT
@@ -338,7 +338,7 @@ var _ = describe.CalicoDescribe(
 			}
 
 			By("Verifying connectivity with no HEP")
-			checkConnection(ct, clientPod, target, baseline)
+			checkFamilies(ct, clientPod, targets, baseline)
 
 			// Create a GNP allowing kubectl exec to port 10250 on the HEP node.
 			// This must exist before the HEP to avoid breaking kubectl exec.
@@ -354,42 +354,52 @@ var _ = describe.CalicoDescribe(
 				}
 			})
 
-			// Create the HostEndpoint on node0.
-			By("Creating HostEndpoint on node0")
-			hep := &v3.HostEndpoint{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   utils.GenerateRandomName("hep"),
-					Labels: map[string]string{"hep": "node0"},
-				},
-				Spec: v3.HostEndpointSpec{
-					Node:        calicoNames[0],
-					ExpectedIPs: []string{nodeIPs[0]},
-				},
-			}
-			ifaceName := hepInterfaceName(s)
-			if ifaceName != "" {
-				hep.Spec.InterfaceName = ifaceName
-			}
-			hepCtx, hepCancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer hepCancel()
-			Expect(cli.Create(hepCtx, hep)).To(Succeed())
-			DeferCleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cleanupCancel()
-				if err := cli.Delete(cleanupCtx, hep); err != nil && !apierrors.IsNotFound(err) {
-					framework.Logf("WARNING: failed to delete HEP: %v", err)
+			// Each family's traffic may cross a different device (vxlan.calico vs
+			// vxlan-v6.calico), so families sharing an interface share one HEP.
+			hepIPsByIface := map[string][]string{}
+			var ifaces []string
+			for _, fam := range families {
+				iface := hepInterfaceName(s, fam)
+				if _, ok := hepIPsByIface[iface]; !ok {
+					ifaces = append(ifaces, iface)
 				}
-			})
+				hepIPsByIface[iface] = append(hepIPsByIface[iface], nodeIPs[fam][0])
+			}
+			for _, iface := range ifaces {
+				By(fmt.Sprintf("Creating HostEndpoint on node0 (interface %q, expectedIPs %v)", iface, hepIPsByIface[iface]))
+				hep := &v3.HostEndpoint{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   utils.GenerateRandomName("hep"),
+						Labels: map[string]string{"hep": "node0"},
+					},
+					Spec: v3.HostEndpointSpec{
+						Node:          calicoNames[0],
+						InterfaceName: iface,
+						ExpectedIPs:   hepIPsByIface[iface],
+					},
+				}
+				hepCtx, hepCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				err := cli.Create(hepCtx, hep)
+				hepCancel()
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(func() {
+					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cleanupCancel()
+					if err := cli.Delete(cleanupCtx, hep); err != nil && !apierrors.IsNotFound(err) {
+						framework.Logf("WARNING: failed to delete HEP: %v", err)
+					}
+				})
+			}
 
 			// Check whether the HEP causes default deny.
 			isDefaultDeny := (s.dstHostNetworked && s.policyDirection == "ingress") ||
 				(s.srcHostNetworked && s.policyDirection == "egress")
 			if isDefaultDeny {
 				By("Verifying HEP default-denies traffic to/from host-networked pod")
-				checkConnection(ct, clientPod, target, unreachable)
+				checkFamilies(ct, clientPod, targets, unreachable)
 			} else {
 				By("Verifying HEP does not block forwarded traffic without AOF policy")
-				checkConnection(ct, clientPod, target, baseline)
+				checkFamilies(ct, clientPod, targets, baseline)
 			}
 
 			if applyOnForward {
@@ -430,7 +440,7 @@ var _ = describe.CalicoDescribe(
 			})
 
 			By("Verifying traffic is allowed after allow policy")
-			checkConnection(ct, clientPod, target, baseline)
+			checkFamilies(ct, clientPod, targets, baseline)
 
 			// Create the deny GNP with higher priority (order 200).
 			By("Creating deny GNP with lower order (higher priority)")
@@ -454,10 +464,10 @@ var _ = describe.CalicoDescribe(
 
 			if policyApplies {
 				By("Verifying deny policy blocks traffic (policy applies)")
-				checkConnection(ct, clientPod, target, unreachable)
+				checkFamilies(ct, clientPod, targets, unreachable)
 			} else {
 				By("Verifying deny policy does NOT block traffic (policy does not apply to forwarded traffic)")
-				checkConnection(ct, clientPod, target, baseline)
+				checkFamilies(ct, clientPod, targets, baseline)
 			}
 		}
 
