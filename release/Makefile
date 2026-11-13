@@ -29,24 +29,32 @@ bin/release: $(shell find . -name "*.go" -or -name "*.gotmpl") internal/defaults
 		$(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) go build -o bin/release -v -buildvcs=false -tags with_embed -ldflags "$(LDFLAGS)" ./cmd'
 
-POSTRELEASE_TEST_PACKAGE		:= $(PACKAGE_NAME)/pkg/postrelease
-UNIT_TEST_PACKAGES	:= $(shell go list ./... | grep -v $(POSTRELEASE_TEST_PACKAGE))
-FV_TEST_PACKAGES	:= $(patsubst %/,%,$(sort $(dir $(shell find . -name '*_fv_test.go'))))
+POSTRELEASE_TEST_PACKAGE	:= $(PACKAGE_NAME)/pkg/postrelease
+UNIT_TEST_PACKAGES				:= $(shell go list ./... | grep -v $(POSTRELEASE_TEST_PACKAGE))
+FV_TEST_PACKAGES					:= $(patsubst %/,%,$(sort $(dir $(shell find . -name '*_fv_test.go'))))
+FV_IMAGE_PACKAGES 				:= git-core gnupg2 make rpm rpm-build rpm-sign tar
+FV_IMAGE    							:= calico/release-fv:$(GO_BUILD_VER)
+FV_TOOLS    							:= git gpg make rpmkeys rpmbuild rpmsign tar
 
-.PHONY: ut fv
+.PHONY: ut fv fv/deps
 ut:
 	@mkdir -p report
 	@$(DOCKER_GO_BUILD) gotestsum --junitfile report/unit-tests.xml \
 		-- -coverprofile=report/coverage.out $(UNIT_TEST_PACKAGES)
 
-fv:
-ifneq ($(DOCKER_GO_BUILD),)
-	$(warning Running fv tests inside docker will skip some tests due to missing binaries.)
-	$(warning Run the tests without Docker (DOCKER_GO_BUILD=) to test this functionality as well.)
-endif
+fv: fv/deps
 	@mkdir -p report
-	@$(DOCKER_GO_BUILD) gotestsum --junitfile report/fv-tests.xml \
+	@$(if $(DOCKER_GO_BUILD),$(DOCKER_RUN) $(FV_IMAGE)) gotestsum --junitfile report/fv-tests.xml \
 		-- -tags fv $(FV_TEST_PACKAGES)
+
+fv/deps:
+ifneq ($(DOCKER_GO_BUILD),)
+	@docker build -q -t $(FV_IMAGE) --build-arg CALICO_BUILD=$(CALICO_BUILD) \
+		--build-arg PACKAGES="$(FV_IMAGE_PACKAGES)" - < fv.Dockerfile >/dev/null
+else
+	$(eval missing := $(strip $(foreach t,$(FV_TOOLS),$(if $(shell command -v $(t)),,$(t)))))
+	$(if $(missing),$(warning fv tests needing $(missing) will skip; install with: dnf install -y $(FV_IMAGE_PACKAGES)))
+endif
 
 .PHONY: st st/hashrelease st/release
 st: st/hashrelease st/release

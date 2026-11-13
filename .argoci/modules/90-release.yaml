@@ -9,13 +9,14 @@ steps:
   - name: release-ci
     depends: [check-go]
     requests: {cpu: 4000m, memory: 2Gi}
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
+    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
+    services:
+      - docker
     commands: |
       # A fork carries no tags, and the tests parse a version from them.
       git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
       cd release
-      make ci DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
+      make ci
     epilogue: |
       # Epilogues don't inherit the commands' `cd` or exports.
       cd "${CI_HOME}/${CI_GIT_DIR}/release"
