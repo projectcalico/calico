@@ -33,11 +33,13 @@ import (
 	netv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextenv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -820,6 +822,9 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 				dw.Webhooks[d].FailurePolicy = cp
 			}
 		}
+		if validatingWebhooksUnchanged(dw, cw) {
+			return nil
+		}
 		return dw
 	case *v3.NetworkPolicy:
 		cnp := current.(*v3.NetworkPolicy)
@@ -874,6 +879,50 @@ func preserveWebhookCABundles[W any](desired, current []W, clientConfig func(*W)
 		preserved[i] = c
 	}
 	return preserved
+}
+
+// validatingWebhooksUnchanged compares with the API server's defaults applied,
+// because the live object always carries them. While istiod patches the
+// caBundle, every Update conflicts, so a no-op Update must not be sent.
+func validatingWebhooksUnchanged(desired, current *admissionregv1.ValidatingWebhookConfiguration) bool {
+	d := desired.DeepCopy()
+	for i := range d.Webhooks {
+		defaultValidatingWebhook(&d.Webhooks[i])
+	}
+	return equality.Semantic.DeepEqual(d.Webhooks, current.Webhooks) &&
+		equality.Semantic.DeepEqual(d.Labels, current.Labels) &&
+		equality.Semantic.DeepEqual(d.Annotations, current.Annotations) &&
+		equality.Semantic.DeepEqual(d.OwnerReferences, current.OwnerReferences) &&
+		equality.Semantic.DeepEqual(d.Finalizers, current.Finalizers)
+}
+
+// defaultValidatingWebhook applies the admissionregistration/v1 defaults. If a
+// later API version adds one, the comparison fails and the operator sends an
+// Update, which is safe.
+func defaultValidatingWebhook(w *admissionregv1.ValidatingWebhook) {
+	if w.FailurePolicy == nil {
+		w.FailurePolicy = ptr.To(admissionregv1.Fail)
+	}
+	if w.MatchPolicy == nil {
+		w.MatchPolicy = ptr.To(admissionregv1.Equivalent)
+	}
+	if w.NamespaceSelector == nil {
+		w.NamespaceSelector = &metav1.LabelSelector{}
+	}
+	if w.ObjectSelector == nil {
+		w.ObjectSelector = &metav1.LabelSelector{}
+	}
+	if w.TimeoutSeconds == nil {
+		w.TimeoutSeconds = ptr.To[int32](10)
+	}
+	if s := w.ClientConfig.Service; s != nil && s.Port == nil {
+		s.Port = ptr.To[int32](443)
+	}
+	for i := range w.Rules {
+		if w.Rules[i].Scope == nil {
+			w.Rules[i].Scope = ptr.To(admissionregv1.AllScopes)
+		}
+	}
 }
 
 // modifyPodSpec is a helper for pulling out pod specifications from an arbitrary object.

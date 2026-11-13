@@ -2051,6 +2051,55 @@ var _ = Describe("Component handler tests", func() {
 				webhook("unpatched", "", admissionregv1.Ignore),
 			}))
 		})
+
+		It("does not update when only the API defaults and the patched fields differ", func() {
+			rule := func(scope *admissionregv1.ScopeType) admissionregv1.RuleWithOperations {
+				return admissionregv1.RuleWithOperations{
+					Operations: []admissionregv1.OperationType{admissionregv1.Create},
+					Rule:       admissionregv1.Rule{APIGroups: []string{"*"}, APIVersions: []string{"*"}, Resources: []string{"*"}, Scope: scope},
+				}
+			}
+			rendered := func(r admissionregv1.RuleWithOperations) *admissionregv1.ValidatingWebhookConfiguration {
+				w := webhook("patched", "", admissionregv1.Ignore)
+				w.ClientConfig.Service = &admissionregv1.ServiceReference{Name: "istiod", Namespace: "calico-system"}
+				w.Rules = []admissionregv1.RuleWithOperations{r}
+				return &admissionregv1.ValidatingWebhookConfiguration{
+					ObjectMeta: metav1.ObjectMeta{Name: "validator"},
+					Webhooks:   []admissionregv1.ValidatingWebhook{w},
+				}
+			}
+
+			fc := &fakeComponent{supportedOSType: rmeta.OSTypeLinux, objs: []client.Object{rendered(rule(nil))}}
+			Expect(handler.CreateOrUpdateOrDelete(ctx, fc, sm)).NotTo(HaveOccurred())
+
+			// Act as the API server's defaulting and istiod's patch.
+			live := &admissionregv1.ValidatingWebhookConfiguration{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: "validator"}, live)).NotTo(HaveOccurred())
+			w := &live.Webhooks[0]
+			w.Rules[0].Scope = ptr.To(admissionregv1.AllScopes)
+			w.ClientConfig.CABundle = []byte("live-ca")
+			w.ClientConfig.Service.Port = ptr.To[int32](443)
+			w.FailurePolicy = ptr.To(admissionregv1.Fail)
+			w.MatchPolicy = ptr.To(admissionregv1.Equivalent)
+			w.NamespaceSelector = &metav1.LabelSelector{}
+			w.ObjectSelector = &metav1.LabelSelector{}
+			w.TimeoutSeconds = ptr.To[int32](10)
+			Expect(c.Update(ctx, live)).NotTo(HaveOccurred())
+
+			Expect(handler.CreateOrUpdateOrDelete(ctx, fc, sm)).NotTo(HaveOccurred())
+			got := &admissionregv1.ValidatingWebhookConfiguration{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: "validator"}, got)).NotTo(HaveOccurred())
+			Expect(got.ResourceVersion).To(Equal(live.ResourceVersion))
+
+			changed := rule(nil)
+			changed.Operations = append(changed.Operations, admissionregv1.Update)
+			fc = &fakeComponent{supportedOSType: rmeta.OSTypeLinux, objs: []client.Object{rendered(changed)}}
+			Expect(handler.CreateOrUpdateOrDelete(ctx, fc, sm)).NotTo(HaveOccurred())
+			Expect(c.Get(ctx, client.ObjectKey{Name: "validator"}, got)).NotTo(HaveOccurred())
+			Expect(got.ResourceVersion).NotTo(Equal(live.ResourceVersion))
+			Expect(got.Webhooks[0].Rules[0].Operations).To(ContainElement(admissionregv1.Update))
+			Expect(got.Webhooks[0].ClientConfig.CABundle).To(Equal([]byte("live-ca")))
+		})
 	})
 	Context("volumes and volume mounts", func() {
 		It("orders by name alphabetically", func() {
