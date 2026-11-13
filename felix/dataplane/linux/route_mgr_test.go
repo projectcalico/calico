@@ -23,6 +23,8 @@ import (
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandefs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
@@ -64,7 +66,7 @@ var _ = Describe("Route manager", func() {
 			routetable.RouteClassVXLANTunnel,
 			routetable.RouteClassVXLANSameSubnet,
 			proto.IPPoolType_VXLAN,
-			dataplanedefs.VXLANIfaceNameV4,
+			vxlandefs.VXLANIfaceNameV4,
 			4,
 			1400,
 			dpConfig,
@@ -83,7 +85,7 @@ var _ = Describe("Route manager", func() {
 	Describe("with VXLAN, IPIP and no-encap managers sharing one route table", func() {
 		// This mirrors the way int_dataplane wires the managers up: they all
 		// program the same main route table, and they all see every route update.
-		var managers []Manager
+		var managers []dataplanedefs.Manager
 
 		localBlock := func(poolType proto.IPPoolType, dst string) *proto.RouteUpdate {
 			return &proto.RouteUpdate{
@@ -99,7 +101,7 @@ var _ = Describe("Route manager", func() {
 				dpsets.NewMockIPSets(),
 				rt,
 				&mockVXLANFDB{},
-				dataplanedefs.VXLANIfaceNameV4,
+				vxlandefs.VXLANIfaceNameV4,
 				4,
 				1400,
 				dpConfig,
@@ -108,7 +110,7 @@ var _ = Describe("Route manager", func() {
 			)
 			ipipMgr := newIPIPManagerWithShims(
 				rt,
-				dataplanedefs.IPIPIfaceName,
+				ipipdefs.IPIPIfaceName,
 				4,
 				1400,
 				dpConfig,
@@ -122,7 +124,7 @@ var _ = Describe("Route manager", func() {
 				logrusr.NewSummarizer("test"),
 				dataplane,
 			)
-			managers = []Manager{vxlanMgr, ipipMgr, noEncapMgr}
+			managers = []dataplanedefs.Manager{vxlanMgr, ipipMgr, noEncapMgr}
 
 			// Each manager gets a local IPAM block from each type of pool; it
 			// should only program a blackhole route for the block that belongs

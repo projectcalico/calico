@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,17 @@
 // limitations under the License.
 
 package set
+
+// Difference returns a new set containing the items that are in a but not in b.
+func Difference[T comparable](a, b Set[T]) Set[T] {
+	result := New[T]()
+	for item := range a.All() {
+		if !b.Contains(item) {
+			result.Add(item)
+		}
+	}
+	return result
+}
 
 // IterDifferences iterates through the set of items that are in A but not in B, and the set that are in B but not in A.
 func IterDifferences[T comparable](a, b Set[T], aNotB, bNotA func(item T) error) {

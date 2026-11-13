@@ -93,8 +93,8 @@ func (s *sockmapState) processWorkloadUpdates(desired set.Set[string]) error {
 		current.Add(ipnet.String())
 	}
 
-	toAdd := setDifference[string](desired, current)
-	toDrop := setDifference[string](current, desired)
+	toAdd := set.Difference(desired, current)
+	toDrop := set.Difference(current, desired)
 
 	for cidr := range toDrop.All() {
 		logCxt := log.WithField("cidr", cidr)
