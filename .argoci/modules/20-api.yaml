@@ -3,26 +3,45 @@ version: condensed-module
 
 defaults:
   timeout: 30m
-  services:
-    - docker
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: api-ci
     depends: [check-manifests]
-    requests: {cpu: 2750m, memory: 2.25Gi}
-    commands: |
-      cd api
-      make ci
-    epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}/api"
-      artifact push job report --destination test-results || true
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      source: |
+        set -e
+        repo="$(pwd)"
+        # There is no epilogue on a machine; results go up on the way out.
+        finish() {
+          rc=$?
+          artifact push job "$repo/api/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd api
+        make ci
 
   - name: api-validation
     depends: [check-manifests]
-    requests: {cpu: 3000m, memory: 2.25Gi}
-    commands: |
-      cd test
-      make ci
-    epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}/test"
-      artifact push job report --destination test-results || true
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      source: |
+        set -e
+        repo="$(pwd)"
+        # There is no epilogue on a machine; results go up on the way out.
+        finish() {
+          rc=$?
+          artifact push job "$repo/test/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd test
+        make ci
