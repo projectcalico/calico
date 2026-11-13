@@ -23,7 +23,8 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdeps"
+	"github.com/projectcalico/calico/felix/dataplane/linux/routedeps"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
@@ -55,7 +56,7 @@ var _ = Describe("IPIPManager", func() {
 		dataplane.ResetDeltas()
 
 		ipipMgr = newIPIPManagerWithShims(
-			rt, dataplanedefs.IPIPIfaceName,
+			rt, ipipdeps.IPIPIfaceName,
 			4,
 			1400,
 			Config{
@@ -66,7 +67,7 @@ var _ = Describe("IPIPManager", func() {
 					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
 				},
 				ProgramIPIPClusterRoutes: true,
-				DeviceRouteProtocol:      dataplanedefs.DefaultRouteProto,
+				DeviceRouteProtocol:      routedeps.DefaultRouteProto,
 			},
 			opRecorder,
 			dataplane,
@@ -121,7 +122,7 @@ var _ = Describe("IPIPManager", func() {
 		Expect(noEncapDev).NotTo(BeNil())
 		Expect(err).NotTo(HaveOccurred())
 
-		tunnelLink := dataplane.NameToLink[dataplanedefs.IPIPIfaceName]
+		tunnelLink := dataplane.NameToLink[ipipdeps.IPIPIfaceName]
 		Expect(tunnelLink).ToNot(BeNil())
 		Expect(tunnelLink.LinkAttrs.MTU).To(Equal(1400))
 		Expect(tunnelLink.LinkAttrs.Flags).To(Equal(net.FlagUp))
@@ -160,7 +161,7 @@ var _ = Describe("IPIPManager", func() {
 		dataplane.ResetDeltas()
 		err = ipipMgr.routeMgr.configureTunnelDevice(link, "", 1500, false)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(dataplane.NameToLink[dataplanedefs.IPIPIfaceName]).ToNot(BeNil())
+		Expect(dataplane.NameToLink[ipipdeps.IPIPIfaceName]).ToNot(BeNil())
 		Expect(dataplane.NumLinkAddCalls).To(BeZero())
 		Expect(dataplane.NumLinkSetUpCalls).To(BeZero())
 		Expect(tunnelLink.LinkAttrs.MTU).To(Equal(1500))
@@ -241,13 +242,13 @@ var _ = Describe("IPIPManager", func() {
 			SameSubnet:  true,
 		})
 
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(HaveLen(0))
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
 		err = ipipMgr.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(HaveLen(1))
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
 		Expect(rt.currentRoutes["eth0"]).NotTo(BeNil())
 	})
@@ -276,7 +277,7 @@ var _ = Describe("IPIPManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ipipMgr.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(HaveLen(1))
 
 		By("Sending another local node update.")
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
@@ -299,7 +300,7 @@ var _ = Describe("IPIPManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ipipMgr.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(HaveLen(0))
 	})
 
 	It("should program routes for remote endpoints with borrowed IP addresses", func() {
@@ -327,8 +328,8 @@ var _ = Describe("IPIPManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect a directly connected route to the borrowed IP.
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName][0]).To(Equal(
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(HaveLen(1))
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName][0]).To(Equal(
 			routetable.Target{
 				Type: "onlink",
 				RouteKey: routetable.RouteKey{
@@ -347,7 +348,7 @@ var _ = Describe("IPIPManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect no routes.
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(HaveLen(0))
 	})
 
 	It("should program no tunnel route for a local workload that borrowed a remote block's IP", func() {
@@ -378,7 +379,7 @@ var _ = Describe("IPIPManager", func() {
 
 		// Treating it as remote yields an onlink route via our own address, which
 		// the kernel rejects forever.
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(BeEmpty())
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(BeEmpty())
 	})
 
 	It("should only program black hole routes for local endpoints", func() {
@@ -429,14 +430,14 @@ var _ = Describe("IPIPManager", func() {
 			SameSubnet:  true,
 		})
 
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(HaveLen(0))
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 
 		err = ipipMgr.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(HaveLen(0))
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1)) // Black hole route
 	})
@@ -466,8 +467,8 @@ var _ = Describe("IPIPManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect one exact route.
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName][0]).To(Equal(
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(HaveLen(1))
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName][0]).To(Equal(
 			routetable.Target{
 				Type: "onlink",
 				RouteKey: routetable.RouteKey{
@@ -486,7 +487,7 @@ var _ = Describe("IPIPManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect no routes.
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(HaveLen(0))
 	})
 })
 
@@ -513,7 +514,7 @@ var _ = Describe("IPIPManager with the IPIP cluster routes left to BIRD", func()
 		dataplane.ResetDeltas()
 
 		ipipMgr = newIPIPManagerWithShims(
-			rt, dataplanedefs.IPIPIfaceName,
+			rt, ipipdeps.IPIPIfaceName,
 			4,
 			1400,
 			Config{
@@ -524,7 +525,7 @@ var _ = Describe("IPIPManager with the IPIP cluster routes left to BIRD", func()
 					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
 				},
 				ProgramIPIPClusterRoutes: false,
-				DeviceRouteProtocol:      dataplanedefs.DefaultRouteProto,
+				DeviceRouteProtocol:      routedeps.DefaultRouteProto,
 			},
 			logrusr.NewSummarizer("test"),
 			dataplane,
@@ -563,7 +564,7 @@ var _ = Describe("IPIPManager with the IPIP cluster routes left to BIRD", func()
 
 		Expect(ipipMgr.CompleteDeferredWork()).To(Succeed())
 
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(BeEmpty())
+		Expect(rt.currentRoutes[ipipdeps.IPIPIfaceName]).To(BeEmpty())
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(BeEmpty())
 		Expect(rt.currentRoutes["eth0"]).To(BeEmpty())
 	})
@@ -584,6 +585,6 @@ var _ = Describe("IPIPManager with the IPIP cluster routes left to BIRD", func()
 		Expect(link).NotTo(BeNil())
 		Expect(ipipMgr.routeMgr.configureTunnelDevice(link, addr, 1400, false)).To(Succeed())
 
-		Expect(dataplane.NameToLink).To(HaveKey(dataplanedefs.IPIPIfaceName))
+		Expect(dataplane.NameToLink).To(HaveKey(ipipdeps.IPIPIfaceName))
 	})
 })

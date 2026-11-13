@@ -27,6 +27,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -41,10 +42,6 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
-
-type hepListener interface {
-	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
-}
 
 type liveMigrationListener interface {
 	OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState)
@@ -145,9 +142,9 @@ type endpointManager struct {
 	wlIfacesRegexp *regexp.Regexp
 
 	// Our dependencies.
-	rawTable     Table
-	mangleTable  Table
-	filterTable  Table
+	rawTable     dataplanedefs.Table
+	mangleTable  dataplanedefs.Table
+	filterTable  dataplanedefs.Table
 	ruleRenderer rules.RuleRenderer
 	routeTable   *routetable.ClassView
 	writeProcSys procSysWriter
@@ -158,7 +155,7 @@ type endpointManager struct {
 	filterMaps   nftables.MapsDataplane
 
 	// ARP proxy suppression table (nftables ARP family). nil for IPv6.
-	arpTable Table
+	arpTable dataplanedefs.Table
 	arpMaps  nftables.MapsDataplane
 
 	flowtableHandler nftables.FlowTableHandler
@@ -245,7 +242,7 @@ type endpointManager struct {
 	// Callbacks
 	OnEndpointStatusUpdate EndpointStatusUpdateCallback
 	callbacks              endpointManagerCallbacks
-	bpfEndpointManager     hepListener
+	bpfEndpointManager     dataplanedefs.HEPListener
 }
 
 type EndpointStatusUpdateCallback func(ipVersion uint8, id any, status string, extraInfo any)
@@ -254,9 +251,9 @@ type procSysWriter func(path, value string) error
 
 func newEndpointManager(
 	cfg *endpointManagerConfig,
-	rawTable Table,
-	mangleTable Table,
-	filterTable Table,
+	rawTable dataplanedefs.Table,
+	mangleTable dataplanedefs.Table,
+	filterTable dataplanedefs.Table,
 	ruleRenderer rules.RuleRenderer,
 	routeTable routetable.Interface,
 	ipVersion uint8,
@@ -265,10 +262,10 @@ func newEndpointManager(
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
 	flowtableHandler nftables.FlowTableHandler,
-	bpfEndpointManager hepListener,
+	bpfEndpointManager dataplanedefs.HEPListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr linkaddrs.Interface,
-	arpTable Table,
+	arpTable dataplanedefs.Table,
 	arpMaps nftables.MapsDataplane,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
@@ -296,9 +293,9 @@ func newEndpointManager(
 
 func newEndpointManagerWithShims(
 	cfg *endpointManagerConfig,
-	rawTable Table,
-	mangleTable Table,
-	filterTable Table,
+	rawTable dataplanedefs.Table,
+	mangleTable dataplanedefs.Table,
+	filterTable dataplanedefs.Table,
 	ruleRenderer rules.RuleRenderer,
 	routeTable routetable.Interface,
 	ipVersion uint8,
@@ -309,10 +306,10 @@ func newEndpointManagerWithShims(
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
 	flowtableHandler nftables.FlowTableHandler,
-	bpfEndpointManager hepListener,
+	bpfEndpointManager dataplanedefs.HEPListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr linkaddrs.Interface,
-	arpTable Table,
+	arpTable dataplanedefs.Table,
 	arpMaps nftables.MapsDataplane,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(cfg.wlInterfacePrefixes, "|") + ").*"
@@ -432,10 +429,10 @@ func (m *endpointManager) OnUpdate(protoBufMsg any) {
 		delete(m.rawHostEndpoints, id)
 		m.hostEndpointsDirty = true
 		m.epIDsToUpdateStatus.Add(id)
-	case *ifaceStateUpdate:
+	case *dataplanedefs.IfaceStateUpdate:
 		log.WithField("update", msg).Debug("Interface state changed.")
 		m.pendingIfaceUpdates[msg.Name] = msg.State
-	case *ifaceAddrsUpdate:
+	case *dataplanedefs.IfaceAddrsUpdate:
 		log.WithField("update", msg).Debug("Interface addrs changed.")
 		if m.wlIfacesRegexp.MatchString(msg.Name) {
 			log.WithField("update", msg).Debug("Workload interface, ignoring.")
@@ -712,7 +709,7 @@ func (m *endpointManager) calculateHostEndpointStatus(id types.HostEndpointID) (
 			resolved = true
 			operUp = true
 			for _, ifaceName := range ifaceNames {
-				if ifaceName == allInterfaces {
+				if ifaceName == dataplanedefs.AllInterfaces {
 					// For * host endpoints we don't let particular interfaces
 					// impact their reported status, because it's unclear what
 					// the semantics would be, and we'd potentially have to look
@@ -1329,7 +1326,7 @@ func (m *endpointManager) resolveHostEndpoints() map[string]types.HostEndpointID
 
 	if bestHostEpId.EndpointId != "" {
 		log.WithField("bestHostEpId", bestHostEpId).Debug("Got all interfaces HostEp")
-		newIfaceNameToHostEpID[allInterfaces] = bestHostEpId
+		newIfaceNameToHostEpID[dataplanedefs.AllInterfaces] = bestHostEpId
 	}
 
 	if m.bpfEndpointManager != nil {
@@ -1358,7 +1355,7 @@ func (m *endpointManager) updateHostEndpoints() {
 		logCxt := log.WithField("id", id).WithField("ifaceName", ifaceName)
 		ep := m.rawHostEndpoints[id]
 		if len(ep.UntrackedTiers) > 0 {
-			if ifaceName == allInterfaces {
+			if ifaceName == dataplanedefs.AllInterfaces {
 				// GlobalNetworkPolicy with `doNotTrack: True` has been configured
 				// to apply to a host-* endpoint, which is not currently supported.
 				// Log and warning and ignore it.
@@ -1571,12 +1568,12 @@ func (m *endpointManager) updateHostEndpoints() {
 	// Rewrite the filter dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newIfaceNameToHostEpID).Debug("Rewrite filter dispatch chains?")
 	defaultIfaceName := ""
-	if _, ok := newIfaceNameToHostEpID[allInterfaces]; ok {
+	if _, ok := newIfaceNameToHostEpID[dataplanedefs.AllInterfaces]; ok {
 		// All-interfaces host endpoint is active.  Arrange for it to be the default,
 		// instead of trying to dispatch to it directly based on the nonexistent interface
 		// name *.
-		defaultIfaceName = allInterfaces
-		delete(newIfaceNameToHostEpID, allInterfaces)
+		defaultIfaceName = dataplanedefs.AllInterfaces
+		delete(newIfaceNameToHostEpID, dataplanedefs.AllInterfaces)
 	}
 	newFilterDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID, defaultIfaceName, true)
 	newMangleEgressDispatchChains := m.ruleRenderer.ToHostDispatchChains(newIfaceNameToHostEpID, defaultIfaceName)
@@ -1587,11 +1584,11 @@ func (m *endpointManager) updateHostEndpoints() {
 	// Rewrite the mangle dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newPreDNATIfaceNameToHostEpID).Debug("Rewrite mangle dispatch chains?")
 	defaultIfaceName = ""
-	if _, ok := newPreDNATIfaceNameToHostEpID[allInterfaces]; ok {
+	if _, ok := newPreDNATIfaceNameToHostEpID[dataplanedefs.AllInterfaces]; ok {
 		// All-interfaces host endpoint is active.  Arrange for it to be the
 		// default. This is handled the same as the filter dispatch chains above.
-		defaultIfaceName = allInterfaces
-		delete(newPreDNATIfaceNameToHostEpID, allInterfaces)
+		defaultIfaceName = dataplanedefs.AllInterfaces
+		delete(newPreDNATIfaceNameToHostEpID, dataplanedefs.AllInterfaces)
 	}
 	newMangleIngressDispatchChains := m.ruleRenderer.FromHostDispatchChains(newPreDNATIfaceNameToHostEpID, defaultIfaceName)
 	newMangleDispatchChains := append(newMangleIngressDispatchChains, newMangleEgressDispatchChains...)
@@ -1607,7 +1604,7 @@ func (m *endpointManager) updateHostEndpoints() {
 func (m *endpointManager) updateDispatchChains(
 	activeChains map[string]*generictables.Chain,
 	newChains []*generictables.Chain,
-	table Table,
+	table dataplanedefs.Table,
 ) {
 	seenChains := set.New[string]()
 	for _, newChain := range newChains {
@@ -1769,10 +1766,6 @@ func writeProcSys(path, value string) error {
 	}
 	return err
 }
-
-// The interface name that we use to mean "all interfaces".  This is intentionally longer than
-// IFNAMSIZ (16) characters, so that it can't possibly match a real interface name.
-var allInterfaces = "any-interface-at-all"
 
 // True if the given host endpoint is for all interfaces, as opposed to for a specific interface.
 func forAllInterfaces(hep *proto.HostEndpoint) bool {

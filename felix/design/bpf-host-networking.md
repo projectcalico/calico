@@ -51,7 +51,7 @@ namespace:
 - `bpfin.cali` (C-side identifier: `natin_idx` / `NATIN_IFACE`)
 - `bpfout.cali` (C-side identifier: `natout_idx`)
 
-See `felix/dataplane/linux/dataplanedefs/dataplane_defs.go` for the
+See `felix/dataplane/linux/bpfepdeps/bpfepdeps.go` for the
 Go-side constants, and `felix/bpf-gpl/globals.h` / `cali_bpf.h` for the
 C-side configurables. (The reference design document refers to these
 as `bpfnatin`/`bpfnatout`; the implementation names are slightly
