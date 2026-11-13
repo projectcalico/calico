@@ -215,20 +215,14 @@ var _ = describe.CalicoDescribe(
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
-			families, err = utils.PoolFamilies(cli)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(nodesInfo.CheckFamilies(families, 2)).To(Succeed())
-			nodeNames = nodesInfo.GetNames()[:2]
-			nodeIPs = map[utils.IPFamily][]string{}
-			for _, fam := range families {
-				nodeIPs[fam] = nodesInfo.GetIPs(fam)[:2]
-			}
-			calicoNames = nodesInfo.GetCalicoNames()[:2]
+			nodes := utils.AwaitFamilyNodes(f, cli, 2)
+			families, nodeNames, nodeIPs, calicoNames = nodes.Families, nodes.Names, nodes.IPs, nodes.CalicoNames
 			logrus.Infof("HEP nodes: %v families: %v IPs: %v calico: %v", nodeNames, families, nodeIPs, calicoNames)
 
 			dp = utils.DetectDataplane(cli, f.ClientSet)
-			encapIfaces = detectEncapInterfaces(cli)
+			podNet, err := utils.ReadPodNetwork(cli)
+			Expect(err).NotTo(HaveOccurred(), "reading the IP pools")
+			encapIfaces = podNet.EncapDevices
 			logrus.Infof("Encap interfaces: %v", encapIfaces)
 		})
 
@@ -331,7 +325,8 @@ var _ = describe.CalicoDescribe(
 					}
 				case "nodePort":
 					expectSNAT = true
-					targets[fam] = server.NodePort(nodeIPs[fam][0], clientIPOpt) // HEP is on node0
+					// The HEP is on node0.
+					targets[fam] = server.NodePort(nodeIPs[fam][0], clientIPOpt)
 				default:
 					Fail(fmt.Sprintf("unhandled accessType: %s", s.accessType))
 				}
@@ -343,7 +338,7 @@ var _ = describe.CalicoDescribe(
 			}
 
 			By("Verifying connectivity with no HEP")
-			checkFamilies(ct, clientPod, families, targets, baseline)
+			checkFamilies(ct, clientPod, targets, baseline)
 
 			// Create a GNP allowing kubectl exec to port 10250 on the HEP node.
 			// This must exist before the HEP to avoid breaking kubectl exec.
@@ -401,10 +396,10 @@ var _ = describe.CalicoDescribe(
 				(s.srcHostNetworked && s.policyDirection == "egress")
 			if isDefaultDeny {
 				By("Verifying HEP default-denies traffic to/from host-networked pod")
-				checkFamilies(ct, clientPod, families, targets, unreachable)
+				checkFamilies(ct, clientPod, targets, unreachable)
 			} else {
 				By("Verifying HEP does not block forwarded traffic without AOF policy")
-				checkFamilies(ct, clientPod, families, targets, baseline)
+				checkFamilies(ct, clientPod, targets, baseline)
 			}
 
 			if applyOnForward {
@@ -445,7 +440,7 @@ var _ = describe.CalicoDescribe(
 			})
 
 			By("Verifying traffic is allowed after allow policy")
-			checkFamilies(ct, clientPod, families, targets, baseline)
+			checkFamilies(ct, clientPod, targets, baseline)
 
 			// Create the deny GNP with higher priority (order 200).
 			By("Creating deny GNP with lower order (higher priority)")
@@ -469,10 +464,10 @@ var _ = describe.CalicoDescribe(
 
 			if policyApplies {
 				By("Verifying deny policy blocks traffic (policy applies)")
-				checkFamilies(ct, clientPod, families, targets, unreachable)
+				checkFamilies(ct, clientPod, targets, unreachable)
 			} else {
 				By("Verifying deny policy does NOT block traffic (policy does not apply to forwarded traffic)")
-				checkFamilies(ct, clientPod, families, targets, baseline)
+				checkFamilies(ct, clientPod, targets, baseline)
 			}
 		}
 

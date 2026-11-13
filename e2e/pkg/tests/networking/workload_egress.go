@@ -91,15 +91,8 @@ var _ = describe.CalicoDescribe(
 			cli, err := client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
-			families, err = utils.PoolFamilies(cli)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(nodesInfo.CheckFamilies(families, 2)).To(Succeed())
-			nodeNames = nodesInfo.GetNames()[:2]
-			nodeIPs = map[utils.IPFamily][]string{}
-			for _, fam := range families {
-				nodeIPs[fam] = nodesInfo.GetIPs(fam)[:2]
-			}
+			nodes := utils.AwaitFamilyNodes(f, cli, 2)
+			families, nodeNames, nodeIPs = nodes.Families, nodes.Names, nodes.IPs
 			logrus.Infof("Nodes: %v families: %v IPs: %v", nodeNames, families, nodeIPs)
 
 			// Detect BPF dataplane mode.
@@ -121,7 +114,7 @@ var _ = describe.CalicoDescribe(
 			}
 
 			By("Allowing connection with no NetworkPolicy")
-			checkFamilies(ct, clientPod, families, targets, expected)
+			checkFamilies(ct, clientPod, targets, expected)
 
 			if scenario.expectPolicyBypass {
 				By("Skipping policy tests — BPF bypasses policy for self-connections")
@@ -153,7 +146,7 @@ var _ = describe.CalicoDescribe(
 				_ = f.ClientSet.NetworkingV1().NetworkPolicies(f.Namespace.Name).Delete(ctx, denyPolicy.Name, metav1.DeleteOptions{})
 			})
 
-			checkFamilies(ct, clientPod, families, targets, unreachable)
+			checkFamilies(ct, clientPod, targets, unreachable)
 
 			if scenario.dstHostNetworked {
 				By("Skipping further policy tests — host-networked destination not implemented")
@@ -190,7 +183,7 @@ var _ = describe.CalicoDescribe(
 			allowPolicy, err = f.ClientSet.NetworkingV1().NetworkPolicies(f.Namespace.Name).Create(ctx, allowPolicy, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			checkFamilies(ct, clientPod, families, targets, expected)
+			checkFamilies(ct, clientPod, targets, expected)
 
 			By("Denying traffic after removing the target-specific policy")
 			ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
@@ -198,7 +191,7 @@ var _ = describe.CalicoDescribe(
 			err = f.ClientSet.NetworkingV1().NetworkPolicies(f.Namespace.Name).Delete(ctx, allowPolicy.Name, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			checkFamilies(ct, clientPod, families, targets, unreachable)
+			checkFamilies(ct, clientPod, targets, unreachable)
 
 			By("Allowing traffic after removing the default-deny policy")
 			ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
@@ -206,7 +199,7 @@ var _ = describe.CalicoDescribe(
 			err = f.ClientSet.NetworkingV1().NetworkPolicies(f.Namespace.Name).Delete(ctx, denyPolicy.Name, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			checkFamilies(ct, clientPod, families, targets, expected)
+			checkFamilies(ct, clientPod, targets, expected)
 		}
 
 		// setupAndRun creates the topology for a scenario and runs the test.

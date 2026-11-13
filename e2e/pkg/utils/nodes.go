@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -63,8 +64,6 @@ type NodesInfoGetter interface {
 	// no address in the family.
 	GetIPs(f IPFamily) []string
 	GetTunnelIPs(f IPFamily) []string
-
-	CheckFamilies(families []IPFamily, n int) error
 }
 
 type nodesInfo struct {
@@ -91,9 +90,9 @@ func (n *nodesInfo) GetTunnelIPs(f IPFamily) []string {
 	return n.tunnelIPs[f]
 }
 
-// CheckFamilies checks only the first count nodes, the ones a spec targets:
+// checkFamilies checks only the first count nodes, the ones a spec targets:
 // other nodes in the cluster don't affect the checks, so they shouldn't fail them.
-func (n *nodesInfo) CheckFamilies(families []IPFamily, count int) error {
+func (n *nodesInfo) checkFamilies(families []IPFamily, count int) error {
 	if len(n.nodeNames) < count {
 		return fmt.Errorf("need %d nodes, have %d (%v)", count, len(n.nodeNames), n.nodeNames)
 	}
@@ -101,8 +100,7 @@ func (n *nodesInfo) CheckFamilies(families []IPFamily, count int) error {
 	for i := 0; i < count; i++ {
 		for _, f := range families {
 			if n.ips[f][i] == "" {
-				missing = append(missing, fmt.Sprintf("node %s has no %s InternalIP (has %v), but the cluster's IP pools include %s",
-					n.nodeNames[i], f, n.internalIPs[i], f))
+				missing = append(missing, fmt.Sprintf("node %s has no %s InternalIP (has %v), but the cluster's IP pools include %s", n.nodeNames[i], f, n.internalIPs[i], f))
 			}
 		}
 	}
@@ -115,6 +113,10 @@ func (n *nodesInfo) CheckFamilies(families []IPFamily, count int) error {
 // GetNodesInfo extracts node information from a Kubernetes NodeList and returns
 // a NodesInfoGetter interface that provides access to node details.
 func GetNodesInfo(f *framework.Framework, nodes *corev1.NodeList, masterOK bool) NodesInfoGetter {
+	return getNodesInfo(f, nodes, masterOK)
+}
+
+func getNodesInfo(f *framework.Framework, nodes *corev1.NodeList, masterOK bool) *nodesInfo {
 	info := &nodesInfo{
 		ips:       map[IPFamily][]string{},
 		tunnelIPs: map[IPFamily][]string{},
@@ -173,8 +175,12 @@ func firstOfFamily(ips []string, f IPFamily) string {
 // few nodes. A one-shot node-count precondition races that recovery and fails
 // spuriously — use this helper for any multi-node requirement instead.
 func AwaitReadySchedulableNodesInfo(f *framework.Framework, minCount int, masterOK bool) NodesInfoGetter {
-	var info NodesInfoGetter
-	gomega.EventuallyWithOffset(1, func(g gomega.Gomega) {
+	return awaitReadySchedulableNodes(f, minCount, masterOK, 2)
+}
+
+func awaitReadySchedulableNodes(f *framework.Framework, minCount int, masterOK bool, offset int) *nodesInfo {
+	var info *nodesInfo
+	gomega.EventuallyWithOffset(offset, func(g gomega.Gomega) {
 		// Keep the per-attempt timeout well under the polling interval so a slow
 		// or erroring List doesn't eat the whole Eventually budget in one attempt.
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -183,11 +189,42 @@ func AwaitReadySchedulableNodesInfo(f *framework.Framework, minCount int, master
 		// filtered out.
 		nodes, err := e2enode.GetBoundedReadySchedulableNodes(ctx, f.ClientSet, minCount+4)
 		g.Expect(err).NotTo(gomega.HaveOccurred(), "failed to list schedulable nodes")
-		info = GetNodesInfo(f, nodes, masterOK)
+		info = getNodesInfo(f, nodes, masterOK)
 		g.Expect(len(info.GetNames())).To(gomega.BeNumerically(">=", minCount),
 			"require at least %d ready schedulable nodes, found %d", minCount, len(info.GetNames()))
 	}).WithTimeout(60 * time.Second).WithPolling(5 * time.Second).Should(gomega.Succeed())
 	return info
+}
+
+// FamilyNodes is the first n ready, schedulable nodes, each with an address in
+// every IP family the cluster's IP pools give pods. Slices are indexed by node.
+type FamilyNodes struct {
+	Families    []IPFamily
+	Names       []string
+	CalicoNames []string
+	IPs         map[IPFamily][]string
+	TunnelIPs   map[IPFamily][]string
+}
+
+// AwaitFamilyNodes fails the spec if the IP pools can't be read or one of the n
+// nodes has no address in a pool family.
+func AwaitFamilyNodes(f *framework.Framework, cli ctrlclient.Client, n int) FamilyNodes {
+	info := awaitReadySchedulableNodes(f, n, false, 2)
+	families, err := PoolFamilies(cli)
+	framework.ExpectNoError(err)
+	framework.ExpectNoError(info.checkFamilies(families, n))
+	nodes := FamilyNodes{
+		Families:    families,
+		Names:       info.GetNames()[:n],
+		CalicoNames: info.GetCalicoNames()[:n],
+		IPs:         map[IPFamily][]string{},
+		TunnelIPs:   map[IPFamily][]string{},
+	}
+	for _, fam := range families {
+		nodes.IPs[fam] = info.GetIPs(fam)[:n]
+		nodes.TunnelIPs[fam] = info.GetTunnelIPs(fam)[:n]
+	}
+	return nodes
 }
 
 // nodeTunnelIP prefers IPIP for IPv4; IPIP has no IPv6 form.

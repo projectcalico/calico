@@ -282,17 +282,8 @@ var _ = describe.CalicoDescribe(
 			cli, err := client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 3, false)
-			families, err = utils.PoolFamilies(cli)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(nodesInfo.CheckFamilies(families, 3)).To(Succeed())
-			nodeNames = nodesInfo.GetNames()[:3]
-			nodeIPs = map[utils.IPFamily][]string{}
-			tunnelIPs = map[utils.IPFamily][]string{}
-			for _, fam := range families {
-				nodeIPs[fam] = nodesInfo.GetIPs(fam)[:3]
-				tunnelIPs[fam] = nodesInfo.GetTunnelIPs(fam)[:3]
-			}
+			nodes := utils.AwaitFamilyNodes(f, cli, 3)
+			families, nodeNames, nodeIPs, tunnelIPs = nodes.Families, nodes.Names, nodes.IPs, nodes.TunnelIPs
 			logrus.Infof("Nodes: %v families: %v IPs: %v tunnelIPs: %v", nodeNames, families, nodeIPs, tunnelIPs)
 
 			dp = utils.DetectDataplane(cli, f.ClientSet)
@@ -431,8 +422,8 @@ var _ = describe.CalicoDescribe(
 			if expect != noSNAT {
 				baselineResult = reachableSNAT
 			}
-			checkFamilies(ct, clientA, families, targets, baselineResult)
-			checkFamilies(ct, clientB, families, targets, baselineResult)
+			checkFamilies(ct, clientA, targets, baselineResult)
+			checkFamilies(ct, clientB, targets, baselineResult)
 
 			// alwaysAllowed: host-networked clients on the same node share an IP, so a
 			// pod-selector policy cannot distinguish them. Install a deny-all to confirm
@@ -442,8 +433,8 @@ var _ = describe.CalicoDescribe(
 				denyAll := ingressCreateDenyAllPolicy(f)
 				DeferCleanup(ingressDeletePolicy, f, denyAll.Namespace, denyAll.Name)
 				By("Verifying both clients are still reachable (shared host IP, policy has no effect)")
-				checkFamilies(ct, clientA, families, targets, reachableNoSNAT)
-				checkFamilies(ct, clientB, families, targets, reachableNoSNAT)
+				checkFamilies(ct, clientA, targets, reachableNoSNAT)
+				checkFamilies(ct, clientB, targets, reachableNoSNAT)
 				return
 			}
 
@@ -452,8 +443,8 @@ var _ = describe.CalicoDescribe(
 			DeferCleanup(ingressDeletePolicy, f, denyAll.Namespace, denyAll.Name)
 
 			By("Verifying both clients are blocked after deny-all")
-			checkFamilies(ct, clientA, families, targets, unreachable)
-			checkFamilies(ct, clientB, families, targets, unreachable)
+			checkFamilies(ct, clientA, targets, unreachable)
+			checkFamilies(ct, clientB, targets, unreachable)
 
 			if s.hostNetworked {
 				// Host-networked pods share the node IP, so we allow by source CIDR
@@ -467,16 +458,16 @@ var _ = describe.CalicoDescribe(
 				switch expect {
 				case noSNAT:
 					By("Verifying both clients are allowed (CIDR policy, source IP preserved)")
-					checkFamilies(ct, clientA, families, targets, reachableNoSNAT)
-					checkFamilies(ct, clientB, families, targets, reachableNoSNAT)
+					checkFamilies(ct, clientA, targets, reachableNoSNAT)
+					checkFamilies(ct, clientB, targets, reachableNoSNAT)
 				case snatWorkingPolicy:
 					By("Verifying both clients are allowed (CIDR policy works despite SNAT)")
-					checkFamilies(ct, clientA, families, targets, reachableSNAT)
-					checkFamilies(ct, clientB, families, targets, reachableSNAT)
+					checkFamilies(ct, clientA, targets, reachableSNAT)
+					checkFamilies(ct, clientB, targets, reachableSNAT)
 				case snatNoWorkingPolicy:
 					By("Verifying both clients are still blocked (SNAT changes source IP, CIDR policy has no effect)")
-					checkFamilies(ct, clientA, families, targets, unreachable)
-					checkFamilies(ct, clientB, families, targets, unreachable)
+					checkFamilies(ct, clientA, targets, unreachable)
+					checkFamilies(ct, clientB, targets, unreachable)
 				}
 				return
 			}
@@ -491,23 +482,23 @@ var _ = describe.CalicoDescribe(
 				// Source IP is preserved; the pod-selector policy correctly distinguishes
 				// client-a from client-b.
 				By("Verifying client-a is blocked (not selected by policy)")
-				checkFamilies(ct, clientA, families, targets, unreachable)
+				checkFamilies(ct, clientA, targets, unreachable)
 				By("Verifying client-b is allowed (selected by policy)")
-				checkFamilies(ct, clientB, families, targets, reachableNoSNAT)
+				checkFamilies(ct, clientB, targets, reachableNoSNAT)
 
 			case snatWorkingPolicy:
 				// SNAT occurs but policy still works via host IP or equivalent mechanism.
 				By("Verifying client-a is blocked")
-				checkFamilies(ct, clientA, families, targets, unreachable)
+				checkFamilies(ct, clientA, targets, unreachable)
 				By("Verifying client-b is allowed (policy works despite SNAT)")
-				checkFamilies(ct, clientB, families, targets, reachableSNAT)
+				checkFamilies(ct, clientB, targets, reachableSNAT)
 
 			case snatNoWorkingPolicy:
 				// SNAT makes both clients appear as the same source IP. The policy
 				// cannot distinguish them, so both are blocked.
 				By("Verifying both clients are blocked (SNAT prevents policy from distinguishing source IPs)")
-				checkFamilies(ct, clientA, families, targets, unreachable)
-				checkFamilies(ct, clientB, families, targets, unreachable)
+				checkFamilies(ct, clientA, targets, unreachable)
+				checkFamilies(ct, clientB, targets, unreachable)
 			}
 		}
 
@@ -520,7 +511,7 @@ var _ = describe.CalicoDescribe(
 
 			extNode := externalnode.MustNewClient()
 
-			extIPs := externalNodeIPs(extNode, families)
+			extIPs := requireExternalNodeIPs(extNode, families)
 			logrus.Infof("External node IPs: %v", extIPs)
 
 			// Deploy the server on svcNode.
@@ -723,12 +714,10 @@ func ingressDeletePolicy(f *framework.Framework, namespace, name string) {
 	}
 }
 
-// ingressHostCIDRs returns a single-address CIDR for each IP, deduplicating and
-// skipping empty or unparseable values.
-// externalNodeIPs fails up front when the external node lacks a family: without
+// requireExternalNodeIPs fails up front when the external node lacks a family: without
 // a source address in it, every check in that family would fail and read as a
 // policy or dataplane bug.
-func externalNodeIPs(ext *externalnode.Client, families []utils.IPFamily) []string {
+func requireExternalNodeIPs(ext *externalnode.Client, families []utils.IPFamily) []string {
 	var ips []string
 	for _, fam := range families {
 		got, err := ext.AddressesOf(fam)
@@ -743,6 +732,8 @@ func externalNodeIPs(ext *externalnode.Client, families []utils.IPFamily) []stri
 	return ips
 }
 
+// ingressHostCIDRs returns a single-address CIDR for each IP, deduplicating and
+// skipping empty or unparseable values.
 func ingressHostCIDRs(ips []string) []string {
 	seen := map[string]bool{}
 	var cidrs []string

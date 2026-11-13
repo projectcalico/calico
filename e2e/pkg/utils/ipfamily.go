@@ -21,6 +21,7 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
+// IPFamily is an IP address family. Its zero value is IPv4.
 type IPFamily int
 
 const (

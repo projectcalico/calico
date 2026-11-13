@@ -172,6 +172,7 @@ func (s *VMServer) ClusterIPv6(_ ...TargetOption) Target {
 	return s.noService("ClusterIPv6")
 }
 
+// ClusterIPFor always fails the spec: a VMServer has no Service.
 func (s *VMServer) ClusterIPFor(f utils.IPFamily, _ ...TargetOption) Target {
 	return s.noService("ClusterIPFor(" + f.String() + ")")
 }

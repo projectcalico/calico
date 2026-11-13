@@ -30,6 +30,13 @@ func testPool(name, cidr string, mutate ...func(*v3.IPPoolSpec)) v3.IPPool {
 	return p
 }
 
+type poolFamiliesTestCase struct {
+	name    string
+	pools   []v3.IPPool
+	want    []IPFamily
+	wantErr string
+}
+
 func TestPoolFamilies(t *testing.T) {
 	disabled := func(s *v3.IPPoolSpec) { s.Disabled = true }
 	tunnelOnly := func(s *v3.IPPoolSpec) { s.AllowedUses = []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel} }
@@ -39,12 +46,7 @@ func TestPoolFamilies(t *testing.T) {
 	manual := func(s *v3.IPPoolSpec) { m := v3.Manual; s.AssignmentMode = &m }
 	automatic := func(s *v3.IPPoolSpec) { a := v3.Automatic; s.AssignmentMode = &a }
 
-	for _, tc := range []struct {
-		name    string
-		pools   []v3.IPPool
-		want    []IPFamily
-		wantErr string
-	}{
+	for _, tc := range []poolFamiliesTestCase{
 		{
 			name:  "IPv4-only",
 			pools: []v3.IPPool{testPool("v4", "192.168.0.0/16")},
@@ -104,6 +106,57 @@ func TestPoolFamilies(t *testing.T) {
 			}
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			g.Expect(got).To(gomega.Equal(tc.want))
+		})
+	}
+}
+
+type encapTestCase struct {
+	name  string
+	pools []v3.IPPool
+	want  map[IPFamily]string
+}
+
+func TestEncapDevices(t *testing.T) {
+	ipip := func(s *v3.IPPoolSpec) { s.IPIPMode = v3.IPIPModeAlways }
+	vxlan := func(s *v3.IPPoolSpec) { s.VXLANMode = v3.VXLANModeAlways }
+	vxlanCrossSubnet := func(s *v3.IPPoolSpec) { s.VXLANMode = v3.VXLANModeCrossSubnet }
+	disabled := func(s *v3.IPPoolSpec) { s.Disabled = true }
+
+	for _, tc := range []encapTestCase{
+		{
+			name:  "dual-stack VXLAN uses a device per family",
+			pools: []v3.IPPool{testPool("v4", "192.168.0.0/16", vxlan), testPool("v6", "fd00:10:244::/64", vxlan)},
+			want:  map[IPFamily]string{IPv4: "vxlan.calico", IPv6: "vxlan-v6.calico"},
+		},
+		{
+			name:  "IPv6-only VXLAN",
+			pools: []v3.IPPool{testPool("v6", "fd00:10:244::/64", vxlanCrossSubnet)},
+			want:  map[IPFamily]string{IPv6: "vxlan-v6.calico"},
+		},
+		{
+			name:  "IPIP on IPv4, unencapsulated IPv6",
+			pools: []v3.IPPool{testPool("v4", "192.168.0.0/16", ipip), testPool("v6", "fd00:10:244::/64")},
+			want:  map[IPFamily]string{IPv4: "tunl0"},
+		},
+		{
+			name:  "no encapsulation",
+			pools: []v3.IPPool{testPool("v4", "192.168.0.0/16")},
+			want:  map[IPFamily]string{},
+		},
+		{
+			name:  "a disabled pool listed first doesn't pick the device",
+			pools: []v3.IPPool{testPool("old", "10.0.0.0/16", ipip, disabled), testPool("v4", "192.168.0.0/16", vxlan)},
+			want:  map[IPFamily]string{IPv4: "vxlan.calico"},
+		},
+		{
+			name:  "mixed encapsulation keeps the first pool's device",
+			pools: []v3.IPPool{testPool("a", "192.168.0.0/16", ipip), testPool("b", "10.10.0.0/16", vxlan)},
+			want:  map[IPFamily]string{IPv4: "tunl0"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := gomega.NewWithT(t)
+			g.Expect(encapDevices(tc.pools)).To(gomega.Equal(tc.want))
 		})
 	}
 }

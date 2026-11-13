@@ -63,28 +63,30 @@ const (
 //   - 30 = how far above the boundary to continue sampling (TCP)
 //   - 60 = narrower upper range for UDP (doesn't fragment the same way)
 //   - 5 = step size for dense sampling
-func generatePacketLengths(mtu, ipHeader int) (getLengths, postLengths, udpLengths []int) {
+func generatePacketLengths(mtu, ipHeader int) ([]int, []int, []int) {
 	// The overheads below assume a 20-byte IPv4 header; IPv6's is 40.
 	extra := ipHeader - 20
 	// GET: HTTP response headers (~190 bytes) reduce the payload that fits in a
-	// single MTU-sized frame. Sample densely around the fragmentation boundary.
-	getLengths = []int{10}
-	for i := mtu - 190 - extra - 80; i <= mtu-190-extra+30; i += 5 { // 80 below to 30 above boundary
+	// single MTU-sized frame. Sample densely from 80 below to 30 above the
+	// fragmentation boundary.
+	getLengths := []int{10}
+	for i := mtu - 190 - extra - 80; i <= mtu-190-extra+30; i += 5 {
 		getLengths = append(getLengths, i)
 	}
 	getLengths = append(getLengths, 10000)
 
 	// POST: request body plus IP/TCP headers (52 bytes) determines on-wire size.
-	postLengths = []int{10}
-	for i := mtu - 52 - extra - 80; i <= mtu-52-extra+30; i += 5 { // 80 below to 30 above boundary
+	// Sample from 80 below to 30 above the boundary.
+	postLengths := []int{10}
+	for i := mtu - 52 - extra - 80; i <= mtu-52-extra+30; i += 5 {
 		postLengths = append(postLengths, i)
 	}
 	postLengths = append(postLengths, 10000)
 
-	// UDP: only IP header (20 bytes) overhead. Narrower upper range (60 below
-	// boundary only) since UDP doesn't fragment the same way as TCP.
-	udpLengths = []int{10}
-	for i := mtu - 20 - extra - 80; i <= mtu-20-extra-60; i += 5 { // 80 below to 60 below boundary
+	// UDP: only IP header (20 bytes) overhead. Sample from 80 below to 60 below
+	// the boundary, since UDP doesn't fragment the same way as TCP.
+	udpLengths := []int{10}
+	for i := mtu - 20 - extra - 80; i <= mtu-20-extra-60; i += 5 {
 		udpLengths = append(udpLengths, i)
 	}
 
@@ -135,13 +137,10 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("packet-size")
 
 		runPacketTest := func(clientType, targetType int, sameNode bool) {
-			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
-			nodeNames := nodesInfo.GetNames()
 			cli, err := client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
-			families, err := utils.PoolFamilies(cli)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(nodesInfo.CheckFamilies(families, 2)).To(Succeed())
+			nodes := utils.AwaitFamilyNodes(f, cli, 2)
+			nodeNames, families := nodes.Names, nodes.Families
 
 			// Sample packet sizes densely around the cluster's effective pod MTU, measured from
 			// a pod so the test tracks whatever encapsulation and WireGuard config is in use.
@@ -175,7 +174,7 @@ var _ = describe.CalicoDescribe(
 
 			if clientType == pktClientExt {
 				extClient := externalnode.MustNewClient()
-				externalNodeIPs(extClient, families)
+				requireExternalNodeIPs(extClient, families)
 				ct.Deploy()
 				DeferCleanup(ct.Stop)
 
@@ -183,7 +182,7 @@ var _ = describe.CalicoDescribe(
 				for _, fam := range families {
 					By(fam.String(), func() {
 						getLengths, postLengths, udpLengths := generatePacketLengths(podMTU, fam.HeaderBytes())
-						target := packetBaseTarget(server, nodesInfo.GetIPs(fam)[0], fam, targetType)
+						target := packetBaseTarget(server, nodes.IPs[fam][0], fam, targetType)
 						packetTestExternal(extClient, target, getLengths, postLengths, udpLengths)
 					})
 				}
@@ -206,7 +205,7 @@ var _ = describe.CalicoDescribe(
 				for _, fam := range families {
 					By(fam.String(), func() {
 						getLengths, postLengths, udpLengths := generatePacketLengths(podMTU, fam.HeaderBytes())
-						baseTarget := packetBaseTarget(server, nodesInfo.GetIPs(fam)[0], fam, targetType)
+						baseTarget := packetBaseTarget(server, nodes.IPs[fam][0], fam, targetType)
 						packetTestViaConncheck(ct, client, baseTarget, getLengths, postLengths, udpLengths)
 					})
 				}

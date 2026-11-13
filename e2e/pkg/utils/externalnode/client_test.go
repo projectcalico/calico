@@ -57,26 +57,22 @@ func TestIPReturnsFirstDiscoveredAddress(t *testing.T) {
 	}
 }
 
-func TestParseInet4(t *testing.T) {
-	out := `    inet 172.16.101.163/24 brd 172.16.101.255 scope global dynamic eth0
-    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0`
-	got := parseInet4(out)
-	want := []string{"172.16.101.163", "172.17.0.1"}
-	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("parseInet4() = %v, want %v", got, want)
-	}
-}
-
-func TestParseInet6(t *testing.T) {
-	out := `2: eth0    inet6 2600:1f18:abcd::5/128 scope global dynamic noprefixroute \       valid_lft 400sec preferred_lft 300sec
+func TestParseAddrs(t *testing.T) {
+	out := `2: eth0    inet 172.16.101.163/24 brd 172.16.101.255 scope global dynamic eth0\       valid_lft 3000sec preferred_lft 3000sec
+2: eth0    inet6 2600:1f18:abcd::5/128 scope global dynamic noprefixroute \       valid_lft 400sec preferred_lft 300sec
+3: docker0    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0\       valid_lft forever preferred_lft forever
 3: docker0    inet6 fd00:dead::1/64 scope global \       valid_lft forever preferred_lft forever`
-	got := parseInet6(out)
-	want := []string{"2600:1f18:abcd::5", "fd00:dead::1"}
-	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("parseInet6() = %v, want %v", got, want)
+	v4, v6 := parseAddrs(out)
+	if want := []string{"172.16.101.163", "172.17.0.1"}; strings.Join(v4, ",") != strings.Join(want, ",") {
+		t.Errorf("parseAddrs() IPv4 = %v, want %v", v4, want)
 	}
-	if got := parseInet6(""); got == nil || len(got) != 0 {
-		t.Errorf("parseInet6(\"\") = %#v, want empty non-nil slice", got)
+	if want := []string{"2600:1f18:abcd::5", "fd00:dead::1"}; strings.Join(v6, ",") != strings.Join(want, ",") {
+		t.Errorf("parseAddrs() IPv6 = %v, want %v", v6, want)
+	}
+
+	v4, v6 = parseAddrs("")
+	if v4 == nil || len(v4) != 0 || v6 == nil || len(v6) != 0 {
+		t.Errorf(`parseAddrs("") = %#v, %#v, want empty non-nil slices`, v4, v6)
 	}
 }
 

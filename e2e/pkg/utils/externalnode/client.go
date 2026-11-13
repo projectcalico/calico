@@ -101,75 +101,64 @@ func (e *Client) IPs() []string {
 	return ips
 }
 
-// AddressesOf returns the external node's addresses in one family. They can
-// differ from the address used for ssh (e.g. AWS VMs), and they are what the
-// cluster sees as the source. A failed probe isn't cached, so its error reaches
-// the caller instead of looking like a node without the family.
+// AddressesOf returns the external node's global addresses in one family. They
+// can differ from the address used for ssh (e.g. AWS VMs), and they are what
+// the cluster sees as the source. An empty result means the node has none in
+// the family; an error means the probe failed, and a failed probe isn't cached.
 func (e *Client) AddressesOf(f utils.IPFamily) ([]string, error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
-	cache, probe, parse := &e.intIPs, ipv4Probe, parseInet4
-	if f == utils.IPv6 {
-		// Link-local addresses never leave the link, so policy can't see them as a source.
-		cache, probe, parse = &e.intIPv6, []string{"ip", "-6", "-o", "addr", "show", "scope", "global"}, parseInet6
-	}
-	if *cache != nil {
-		return *cache, nil
-	}
-
-	dest := fmt.Sprintf("%s@%s", e.extUser, e.extIP)
-	args := append([]string{
-		"-o", "ConnectTimeout=2",
-		"-o", "UserKnownHostsFile=/dev/null",
-		"-o", "StrictHostKeyChecking=no",
-		"-i", e.extKey,
-		dest, "--",
-	}, probe...)
-	command := exec.Command("ssh", args...)
-	logrus.Infof("Running '%s %s'", command.Path, strings.Join(command.Args[1:], " "))
-	out, err := command.Output()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
-			return nil, fmt.Errorf("%w: %s", err, strings.Join(strings.Fields(string(exitErr.Stderr)), " "))
+	if e.intIPs == nil {
+		dest := fmt.Sprintf("%s@%s", e.extUser, e.extIP)
+		args := append([]string{
+			"-o", "ConnectTimeout=2",
+			"-o", "UserKnownHostsFile=/dev/null",
+			"-o", "StrictHostKeyChecking=no",
+			"-i", e.extKey,
+			dest, "--",
+		}, addrProbe...)
+		command := exec.Command("ssh", args...)
+		logrus.Infof("Running '%s %s'", command.Path, strings.Join(command.Args[1:], " "))
+		out, err := command.Output()
+		if err != nil {
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+				return nil, fmt.Errorf("%w: %s", err, strings.Join(strings.Fields(string(exitErr.Stderr)), " "))
+			}
+			return nil, err
 		}
-		return nil, err
+		e.intIPs, e.intIPv6 = parseAddrs(string(out))
+		logrus.Infof("External node addresses: IPv4 %v, IPv6 %v", e.intIPs, e.intIPv6)
 	}
-	*cache = parse(string(out))
-	logrus.Infof("External node %s addresses: %v", f, *cache)
-	return *cache, nil
+	if f == utils.IPv6 {
+		return e.intIPv6, nil
+	}
+	return e.intIPs, nil
 }
 
-// ipv4Probe's last grep exits non-zero when nothing matches, so a node with no
-// IPv4 address reports a probe error rather than an empty list.
-var ipv4Probe = []string{
-	"ip", "addr", "show",
-	"|", "grep", "inet",
-	"|", "grep", "-v", "inet6",
-	"|", "grep", "-v", "127.0.0.1",
-}
+// addrProbe lists global addresses only: loopback and link-local addresses never
+// leave the node, so policy can't see them as a source.
+var addrProbe = []string{"ip", "-o", "addr", "show", "scope", "global"}
 
-var inet4Re = regexp.MustCompile("inet ([0-9.]+)")
+var inetRe = regexp.MustCompile(`\binet6? ([0-9a-fA-F.:]+)/`)
 
-func parseInet4(out string) []string {
-	ips := []string{}
-	for _, m := range inet4Re.FindAllStringSubmatch(out, -1) {
-		ips = append(ips, m[1])
+// parseAddrs splits the probe output by family. Both slices are non-nil, so a
+// node without a family caches as empty instead of re-probing on every call.
+func parseAddrs(out string) ([]string, []string) {
+	v4, v6 := []string{}, []string{}
+	for _, m := range inetRe.FindAllStringSubmatch(out, -1) {
+		fam, ok := utils.FamilyOf(m[1])
+		if !ok {
+			continue
+		}
+		if fam == utils.IPv6 {
+			v6 = append(v6, m[1])
+		} else {
+			v4 = append(v4, m[1])
+		}
 	}
-	return ips
-}
-
-var inet6Re = regexp.MustCompile(`inet6 ([0-9a-fA-F:]+)/`)
-
-// parseInet6 never returns nil, so a node with no global IPv6 caches as empty
-// instead of re-probing over ssh on every call.
-func parseInet6(out string) []string {
-	ips := []string{}
-	for _, m := range inet6Re.FindAllStringSubmatch(out, -1) {
-		ips = append(ips, m[1])
-	}
-	return ips
+	return v4, v6
 }
 
 func (e *Client) MustExec(shell, opt, cmd string) string {

@@ -236,6 +236,8 @@ func (s *PodServer) ClusterIPv6(opts ...TargetOption) Target {
 	return s.ClusterIPFor(utils.IPv6, opts...)
 }
 
+// ClusterIPFor targets the Service's ClusterIP in family f, failing the spec if
+// the Service has none in it.
 func (s *PodServer) ClusterIPFor(f utils.IPFamily, opts ...TargetOption) Target {
 	for _, ip := range s.Service().Spec.ClusterIPs {
 		if fam, ok := utils.FamilyOf(ip); !ok || fam != f {
@@ -254,8 +256,7 @@ func (s *PodServer) ClusterIPFor(f utils.IPFamily, opts ...TargetOption) Target 
 		}
 		return t
 	}
-	framework.Fail(fmt.Sprintf("No %s ClusterIP found for server %s/%s (ClusterIPs %v)",
-		f, s.namespace.Name, s.name, s.Service().Spec.ClusterIPs), 1)
+	framework.Fail(fmt.Sprintf("No %s ClusterIP found for server %s/%s (ClusterIPs %v)", f, s.namespace.Name, s.name, s.Service().Spec.ClusterIPs), 1)
 	return nil
 }
 

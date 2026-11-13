@@ -45,7 +45,7 @@ const (
 // checkConnection verifies connectivity from client to target and checks SNAT
 // behavior. The target must be an HTTP target pointing to an agnhost netexec
 // /clientip endpoint (created via WithHTTP("GET", "/clientip", nil)).
-// Uses ct.Connect() for all connectivity — never bypasses conncheck. family is
+// Uses ct.Connect() for all connectivity and never bypasses conncheck. family is
 // the target's family, which picks the client address the no-SNAT check expects.
 func checkConnection(ct conncheck.ConnectionTester, client conncheck.Client, target conncheck.Target, family utils.IPFamily, expected connectionResult) {
 	logrus.WithFields(logrus.Fields{
@@ -100,11 +100,16 @@ func checkConnection(ct conncheck.ConnectionTester, client conncheck.Client, tar
 }
 
 // checkFamilies holds a dual-stack cluster to passing on both families: the
-// first family to fail fails the spec, and the By step names it.
-func checkFamilies(ct conncheck.ConnectionTester, client conncheck.Client, families []utils.IPFamily, targets map[utils.IPFamily]conncheck.Target, expected connectionResult) {
-	for _, f := range families {
-		ginkgo.By(fmt.Sprintf("%s: %s -> %s expecting %s", f, client.Name(), targets[f].String(), expected), func() {
-			checkConnection(ct, client, targets[f], f, expected)
+// first family to fail fails the spec, and the By step names it. targets has
+// an entry for each family the spec covers.
+func checkFamilies(ct conncheck.ConnectionTester, client conncheck.Client, targets map[utils.IPFamily]conncheck.Target, expected connectionResult) {
+	for _, f := range []utils.IPFamily{utils.IPv4, utils.IPv6} {
+		target, ok := targets[f]
+		if !ok {
+			continue
+		}
+		ginkgo.By(fmt.Sprintf("%s: %s -> %s expecting %s", f, client.Name(), target.String(), expected), func() {
+			checkConnection(ct, client, target, f, expected)
 		})
 	}
 }

@@ -34,15 +34,17 @@ func buildNodesInfo(nodes ...testNode) *nodesInfo {
 	return n
 }
 
+type checkFamiliesTestCase struct {
+	name     string
+	nodes    []testNode
+	families []IPFamily
+	n        int
+	wantErr  string
+}
+
 func TestCheckFamilies(t *testing.T) {
 	dual := []IPFamily{IPv4, IPv6}
-	for _, tc := range []struct {
-		name     string
-		nodes    []testNode
-		families []IPFamily
-		n        int
-		wantErr  string
-	}{
+	for _, tc := range []checkFamiliesTestCase{
 		{
 			name:     "every used node has each family",
 			nodes:    []testNode{{name: "a", ips: []string{"10.0.0.1", "fd00::1"}}, {name: "b", ips: []string{"fd00::2", "10.0.0.2"}}},
@@ -85,7 +87,7 @@ func TestCheckFamilies(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			g := gomega.NewWithT(t)
-			err := buildNodesInfo(tc.nodes...).CheckFamilies(tc.families, tc.n)
+			err := buildNodesInfo(tc.nodes...).checkFamilies(tc.families, tc.n)
 			if tc.wantErr != "" {
 				g.Expect(err).To(gomega.MatchError(gomega.ContainSubstring(tc.wantErr)))
 				return
@@ -99,10 +101,7 @@ func TestCheckFamilies(t *testing.T) {
 // would be attributed to the wrong node.
 func TestGetIPsStaysAlignedWithNames(t *testing.T) {
 	g := gomega.NewWithT(t)
-	n := buildNodesInfo(
-		testNode{name: "a", ips: []string{"10.0.0.1"}},
-		testNode{name: "b", ips: []string{"10.0.0.2", "fd00::2"}},
-	)
+	n := buildNodesInfo(testNode{name: "a", ips: []string{"10.0.0.1"}}, testNode{name: "b", ips: []string{"10.0.0.2", "fd00::2"}})
 	g.Expect(n.GetNames()).To(gomega.Equal([]string{"a", "b"}))
 	g.Expect(n.GetIPs(IPv4)).To(gomega.Equal([]string{"10.0.0.1", "10.0.0.2"}))
 	g.Expect(n.GetIPs(IPv6)).To(gomega.Equal([]string{"", "fd00::2"}))
