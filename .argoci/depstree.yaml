@@ -853,6 +853,7 @@ components:
       - ^felix/labelindex/ipsetmember/[^/]*\.go$
       - ^felix/netlinkshim/[^/]*\.go$
       - ^felix/proto/[^/]*\.go$
+      - ^felix/timeshim/[^/]*\.go$
       - ^felix/types/[^/]*\.go$
       - ^goldmane/proto/[^/]*\.go$
       - ^hack/test/certs/
