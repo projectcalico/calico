@@ -22,6 +22,9 @@ CN_FILES := host-local portmap loopback tuning
 CONTAINERNETWORKING_PLUGINS_CLONED = .containernetworking-plugins-$(CNI_VERSION).cloned
 FLANNEL_CNI_PLUGIN_CLONED          = .flannel-cni-plugin-$(FLANNEL_VERSION).cloned
 
+.PHONY: init-source
+init-source: $(CONTAINERNETWORKING_PLUGINS_CLONED) $(FLANNEL_CNI_PLUGIN_CLONED)
+
 $(CONTAINERNETWORKING_PLUGINS_CLONED):
 	rm -rf containernetworking-plugins .containernetworking-plugins-*.cloned
 	$(call fetch_repo,$(CONTAINERNETWORKING_PLUGINS_REPO),$(CNI_VERSION),containernetworking-plugins)
