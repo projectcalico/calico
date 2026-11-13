@@ -2,10 +2,19 @@
 # .argoci/publish/e2e-openstack-image.yaml's job.
 version: condensed-module
 
+defaults:
+  secretBundles: [banzai-secrets]
+
 steps:
   # Only on PRs, because a merge to master builds the image again to publish it.
   - name: e2e-openstack-image
     when: "GIT_REF_TYPE == 'PR'"
-    services: [docker]
-    commands: |
-      make -C networking-calico/e2e e2e-image
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      source: |
+        set -e
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        make -C networking-calico/e2e e2e-image

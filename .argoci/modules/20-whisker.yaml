@@ -3,24 +3,34 @@ version: condensed-module
 
 defaults:
   timeout: 30m
-  services:
-    - docker
 
 steps:
   # Jest sizes its pool from the node's cores, not the pod's, and a worker short
   # of CPU trips the 5s per-test timeout. Two leaves each about two cores.
+  # On a VM for docker.
   - name: whisker-ci
-    requests: {cpu: 4000m, memory: 4.25Gi}
     env:
       - name: JEST_MAX_WORKERS
         value: "2"
-    commands: |
-      cd whisker
-      make ci
+    # The compute SA createVM, runOnVM and the teardown authenticate with.
+    secretBundles: [banzai-secrets]
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+      env: [JEST_MAX_WORKERS]
+      source: |
+        set -e
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd whisker
+        make ci
 
   # The CI step already builds amd64.
   - name: whisker-image
     requests: {cpu: 1750m, memory: 2.5Gi}
+    services:
+      - docker
     # Native, because the Dockerfile's dnf install would be emulated on amd64.
     runOn: arm
     timeout: 1h
