@@ -1,0 +1,10 @@
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:AutoHEPs] auto host endpoint tests should create host endpoints for each node [Conformance] [Serial]	label Feature:AutoHEPs: serial specs that provision host endpoints on every node; the autohep lanes enable this label
+[sig-network] DNS should provide /etc/hosts entries for the cluster [Conformance]	excluded: EKS pod networking limits, see CORE-6725
+[sig-network] DNS should provide DNS for ExternalName services [Conformance]	excluded: EKS control plane cannot reach the pod network
+[sig-network] DNS should provide DNS for pods for Hostname [Conformance]	excluded: EKS control plane cannot reach the pod network
+[sig-network] DNS should provide DNS for pods for Subdomain [Conformance]	excluded: EKS control plane cannot reach the pod network
+[sig-network] DNS should provide DNS for services [Conformance]	excluded: EKS control plane cannot reach the pod network
+[sig-network] DNS should provide DNS for the cluster [Conformance]	excluded: EKS control plane cannot reach the pod network
+[sig-network] DNS should resolve DNS of partial qualified names for services [LinuxOnly] [Conformance]	excluded: EKS control plane cannot reach the pod network
+[sig-network] Proxy version v1 A set of valid responses are returned for both pod and service Proxy [Conformance]	excluded: EKS control plane cannot reach the pod network
+[sig-network] Proxy version v1 should proxy through a service and a pod [Conformance]	excluded: EKS control plane cannot reach the pod network

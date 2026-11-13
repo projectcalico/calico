@@ -107,16 +107,15 @@ func (l Lane) RunsE2EBinary() bool {
 	return l.TestType == "k8s-e2e" && len(l.Configs()) > 0
 }
 
-// SelectionArgs returns the spec-selecting arguments make e2e-run would pass
-// to the binary, one --calico.test-config per config in the cell's order.
-// Each path resolves the way e2e-run resolves it, and repoRoot absolutizes it,
-// as the binary requires.
-func (l Lane) SelectionArgs(repoRoot string) ([]string, error) {
+// ConfigPaths returns the absolute path of each config the lane selects with,
+// in the cell's order. Each resolves the way e2e-run resolves it, and repoRoot
+// absolutizes it, as the binary requires.
+func (l Lane) ConfigPaths(repoRoot string) ([]string, error) {
 	configs := l.Configs()
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("lane %q selects nothing", l.Name)
 	}
-	args := make([]string, 0, len(configs))
+	paths := make([]string, 0, len(configs))
 	for _, c := range configs {
 		rel, err := configPath(c)
 		if err != nil {
@@ -126,7 +125,21 @@ func (l Lane) SelectionArgs(repoRoot string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		args = append(args, "--calico.test-config="+abs)
+		paths = append(paths, abs)
+	}
+	return paths, nil
+}
+
+// SelectionArgs returns the spec-selecting arguments make e2e-run would pass
+// to the binary, one --calico.test-config per config in the cell's order.
+func (l Lane) SelectionArgs(repoRoot string) ([]string, error) {
+	paths, err := l.ConfigPaths(repoRoot)
+	if err != nil {
+		return nil, err
+	}
+	args := make([]string, 0, len(paths))
+	for _, p := range paths {
+		args = append(args, "--calico.test-config="+p)
 	}
 	return args, nil
 }

@@ -94,6 +94,14 @@ check-test-set: gen-test-set
 	@test -z "$$(git status --porcelain testsets)" || \
 		( echo "e2e/testsets is out of date; run 'make -C e2e gen-test-set' and commit the result" && false )
 
+# explain-lane prints which specs a lane runs and why it drops the rest, without
+# writing anything. LANE is a set name from testsets/index.txt, and SPEC is an
+# optional substring of a spec name.
+.PHONY: explain-lane
+explain-lane: bin/k8s/e2e.test
+	@test -n "$(LANE)" || ( echo "usage: make -C e2e explain-lane LANE=<set name> [SPEC=<spec text>]" && false )
+	$(DOCKER_RUN) $(CALICO_BUILD) go run ./cmd/cilanes explain -repo-root .. -binary e2e/bin/k8s/e2e.test "$(LANE)" "$(SPEC)"
+
 ###############################################################################
 # test images
 ###############################################################################
