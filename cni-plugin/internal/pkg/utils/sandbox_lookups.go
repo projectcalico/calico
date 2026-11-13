@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 )
 
 // SandboxLookups holds the clients and API objects the calico plugin has already built or
@@ -32,6 +33,7 @@ type SandboxLookups struct {
 	K8sClient    kubernetes.Interface
 	Pod          *corev1.Pod
 	Namespace    *corev1.Namespace
+	VirtClient   kubevirt.VirtClientInterface
 }
 
 type sandboxLookupsKey struct{}
