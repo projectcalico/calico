@@ -2,7 +2,7 @@
 
 # publish-rpms.sh
 #
-# Publish RPMs under dist/rpms-el7, to an RPM repo on
+# Publish RPMs under dist/rpms-el8, to an RPM repo on
 # binaries.projectcalico.org.  (We also build el6 RPMs but do not
 # publish these.)
 
