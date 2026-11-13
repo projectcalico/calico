@@ -8,13 +8,18 @@ defaults:
 
 steps:
   - name: istio-ci
-    depends: [build-nft-rpms]
+    depends: [build-nft-rpms, go-mod-cache]
     checkout: true
+    cache:
+      - {name: go-mod, mode: read, path: /cache/go-mod}
     runOnVM:
       createVM:
         machineType: e2-standard-8
+      put:
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       source: |
         set -e
+        .argoci/scripts/restore-go-cache istio-ci ~/.go-mod
         repo="$(pwd)"
         command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
         command -v zstd >/dev/null || { sudo apt-get update -y && sudo apt-get install -y zstd; }
@@ -31,13 +36,19 @@ steps:
         env:
           - name: ARCH
             value: arm64
+    depends: [go-mod-cache]
     checkout: true
+    cache:
+      - {name: go-mod, mode: read, path: /cache/go-mod}
     runOnVM:
       createVM:
         machineType: e2-standard-8
       env: [ARCH]
+      put:
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       source: |
         set -e
+        .argoci/scripts/restore-go-cache istio-build ~/.go-mod
         repo="$(pwd)"
         command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
         cd istio

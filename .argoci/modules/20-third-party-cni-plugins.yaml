@@ -8,19 +8,28 @@ defaults:
 
 steps:
   - name: third-party-cni-plugins-ci
+    depends: [go-mod-cache]
     checkout: true
+    cache:
+      - {name: go-mod, mode: read, path: /cache/go-mod}
     runOnVM:
       createVM:
         machineType: e2-standard-4
+      put:
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       source: |
         set -e
+        .argoci/scripts/restore-go-cache third-party-cni-plugins-ci ~/.go-mod
         repo="$(pwd)"
         command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
         cd third_party/cni-plugins
         make ci
 
   - name: third-party-cni-plugins-build
+    depends: [go-mod-cache]
     checkout: true
+    cache:
+      - {name: go-mod, mode: read, path: /cache/go-mod}
     matrix:
       - name: arm64
         env: [{name: ARCH, value: arm64}]
@@ -32,8 +41,11 @@ steps:
       createVM:
         machineType: e2-standard-8
       env: [ARCH]
+      put:
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       source: |
         set -e
+        .argoci/scripts/restore-go-cache third-party-cni-plugins-build ~/.go-mod
         repo="$(pwd)"
         command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
         cd third_party/cni-plugins

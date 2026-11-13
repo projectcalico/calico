@@ -77,6 +77,50 @@ steps:
       echo "CACHE-TEST go-cache pack $(( $(date +%s) - s ))s"
       ls -l /cache/go
 
+  # TEMPORARY: the module cache alone, for the VM steps. A VM has no module proxy,
+  # so without it every machine downloads its modules from the internet through
+  # the shared NAT. Apart from go-cache so they wait on a download, not its
+  # compile, and with the upstream trees the third-party and Istio builds use.
+  - name: go-mod-cache
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    requests: {cpu: 2000m, memory: 4Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    cache:
+      - {name: go-mod, mode: write, path: /cache/go-mod}
+    changes:
+      in:
+        - ^go\.mod$
+        - ^go\.sum$
+        - ^.*deps\.txt$
+        - ^istio/
+        - ^third_party/
+        - ^\.argoci/scripts/restore-go-cache$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      s=$(date +%s)
+      for mod in $(git ls-files '*go.mod' | grep -v -e '^third_party/' -e '/vendor/'); do
+        ( cd "$(dirname "$mod")" && go mod download )
+      done
+      make -C istio init-istio-source
+      for d in envoy-gateway envoy-ratelimit cni-plugins; do make -C "third_party/$d" init-source; done
+      for mod in istio/istio third_party/envoy-gateway/envoy-gateway third_party/envoy-ratelimit/envoy-ratelimit \
+          third_party/cni-plugins/containernetworking-plugins third_party/cni-plugins/flannel-cni-plugin; do
+        ( cd "$mod" && go mod download )
+      done
+      echo "CACHE-TEST go-mod-cache download $(( $(date +%s) - s ))s"
+      du -sh "$GO_MOD_ROOT/pkg/mod"
+      s=$(date +%s)
+      tar -C "$GO_MOD_ROOT" -cf - pkg/mod | pigz -1 > /cache/go-mod/go-mod.tar.gz
+      echo "CACHE-TEST go-mod-cache pack $(( $(date +%s) - s ))s"
+      ls -l /cache/go-mod
+
   # go vet fans out across every package, so it scales with the cores it gets.
   # Every module waits on this step, so it runs in the build image directly
   # rather than paying dind's start-up and image pull.
@@ -223,11 +267,17 @@ steps:
         - ^lib\.Makefile$
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$
+    depends: [go-mod-cache]
+    cache:
+      - {name: go-mod, mode: read, path: /cache/go-mod}
     runOnVM:
       createVM:
         machineType: e2-standard-4
+      put:
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       source: |
         set -e
+        .argoci/scripts/restore-go-cache check-manifests ~/.go-mod
         command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
         make -C lib gen-files
         make -C api gen-files
@@ -471,7 +521,7 @@ steps:
   - name: build-node-image
     checkout: true
     timeout: 1h
-    depends: [build-nft-rpms]
+    depends: [build-nft-rpms, go-mod-cache]
     changes:
       dependsOn: [node]
       in:
@@ -479,13 +529,17 @@ steps:
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     cache:
       - {name: node-image, mode: write, path: /cache/node-image}
+      - {name: go-mod, mode: read, path: /cache/go-mod}
     runOnVM:
       createVM:
         machineType: e2-standard-8
+      put:
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       get:
         - out:/cache/node-image
       source: |
         set -eo pipefail
+        .argoci/scripts/restore-go-cache build-node-image ~/.go-mod
         for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
         # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
         # does not go back to the registry for it.
@@ -529,16 +583,21 @@ steps:
       in:
         - '^operator/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
+    depends: [go-mod-cache]
     cache:
       - {name: operator-image, mode: write, path: /cache/operator-image}
+      - {name: go-mod, mode: read, path: /cache/go-mod}
     runOnVM:
       createVM:
         machineType: e2-standard-8
       env: [BUILD_CACHE_GROUP]
+      put:
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       get:
         - out:/cache/operator-image
       source: |
         set -eo pipefail
+        .argoci/scripts/restore-go-cache build-operator-image ~/.go-mod
         for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
         mkdir -p ~/out
         make kind-operator-image
@@ -556,15 +615,20 @@ steps:
     changes:
       dependsOn: [node, cni-plugin]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    depends: [go-mod-cache]
     cache:
       - {name: windows-images, mode: write, path: /cache/windows-images}
+      - {name: go-mod, mode: read, path: /cache/go-mod}
     runOnVM:
       createVM:
         machineType: e2-standard-8
+      put:
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       get:
         - out:/cache/windows-images
       source: |
         set -eo pipefail
+        .argoci/scripts/restore-go-cache build-windows-images ~/.go-mod
         for t in make zstd unzip zip; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
         make -C node build-windows-archive
         make -C node image-windows
@@ -582,15 +646,20 @@ steps:
       in:
         - '^third_party/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
+    depends: [go-mod-cache]
     cache:
       - {name: third-party-images, mode: write, path: /cache/third-party-images}
+      - {name: go-mod, mode: read, path: /cache/go-mod}
     runOnVM:
       createVM:
         machineType: e2-standard-8
+      put:
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       get:
         - out:/cache/third-party-images
       source: |
         set -eo pipefail
+        .argoci/scripts/restore-go-cache build-third-party-images ~/.go-mod
         for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
         make -C third_party/envoy-gateway image
         make -C third_party/envoy-proxy image
@@ -617,23 +686,26 @@ steps:
         value: "true"
     checkout: true
     timeout: 1h
-    depends: [calico-test-binaries]
+    depends: [calico-test-binaries, go-mod-cache]
     changes:
       dependsOn: [e2e]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     cache:
       - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
       - {name: e2e-binaries, mode: write, path: /cache/e2e-binaries}
+      - {name: go-mod, mode: read, path: /cache/go-mod}
     runOnVM:
       createVM:
         machineType: e2-standard-8
       env: [BUILD_CACHE_GROUP, STORE_BUILD_CACHE]
       put:
         - /cache/calico-test-binaries/libbpf-amd64.tar.zst:prefetched/libbpf-amd64.tar.zst
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       get:
         - out:/cache/e2e-binaries
       source: |
         set -eo pipefail
+        .argoci/scripts/restore-go-cache build-e2e-binaries ~/.go-mod
         for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
         tar --use-compress-program="zstd -d" -xf ~/prefetched/libbpf-amd64.tar.zst -C felix/bpf-gpl
         make -C e2e build

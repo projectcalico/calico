@@ -42,7 +42,7 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [build-calico-image, calico-test-binaries, check-go, felix-fv-plan]
+    depends: [build-calico-image, calico-test-binaries, check-go, felix-fv-plan, go-mod-cache]
     timeout: 40m
     # On a VM: it builds the felix and FV images with docker.
     checkout: true
@@ -54,6 +54,7 @@ steps:
     cache:
       - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
       - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
+      - {name: go-mod, mode: read, path: /cache/go-mod}
     runOnVM:
       createVM:
         machineType: e2-standard-8
@@ -61,8 +62,10 @@ steps:
       put:
         - /cache/calico-image-zst:prefetched
         - /cache/calico-test-binaries:prefetched
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       source: |
         set -e
+        .argoci/scripts/restore-go-cache felix-build ~/.go-mod
         for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
         artifact pull workflow felix-fv-plan
         if [ "$(cat felix-fv-plan/build)" = skip ]; then
@@ -167,12 +170,13 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [build-calico-image, calico-test-binaries, check-go]
+    depends: [build-calico-image, calico-test-binaries, check-go, go-mod-cache]
     timeout: 45m
     checkout: true
     cache:
       - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
       - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
+      - {name: go-mod, mode: read, path: /cache/go-mod}
     runOnVM:
       createVM:
         machineType: e2-standard-4
@@ -180,8 +184,10 @@ steps:
       put:
         - /cache/calico-image-zst:prefetched
         - /cache/calico-test-binaries:prefetched
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       source: |
         set -e
+        .argoci/scripts/restore-go-cache felix-k8sfv ~/.go-mod
         repo="$(pwd)"
         finish() {
           rc=$?
@@ -306,17 +312,22 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
+    depends: [go-mod-cache]
     checkout: true
     cache:
       - {name: win-fv, mode: write, path: /cache/win-fv}
+      - {name: go-mod, mode: read, path: /cache/go-mod}
     runOnVM:
       createVM:
         machineType: e2-standard-8
       env: [BUILD_CACHE_GROUP, NO_LIBBPF_CLONE]
+      put:
+        - /cache/go-mod/go-mod.tar.gz:.go-mod/go-mod.tar.gz
       get:
         - out:/cache/win-fv
       source: |
         set -e
+        .argoci/scripts/restore-go-cache felix-build-windows ~/.go-mod
         command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
         cd felix
         make bin/calico-felix.exe fv/win-fv.exe

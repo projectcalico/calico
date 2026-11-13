@@ -976,7 +976,7 @@ check-module-path-projectcalico-api:
 # go mod helpers
 ###############################################################################
 mod-download:
-	-$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go mod download'
+	-$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) go mod download'
 
 mod-tidy:
 	-$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go mod tidy'
