@@ -5,7 +5,9 @@
 #   - TEST_TYPE == k8s-e2e → run the monorepo e2e binary via `make e2e-run`.
 #     The binary is acquired first: built from local source when RUN_LOCAL_TESTS
 #     is set (per-PR CI), otherwise downloaded from the hashrelease (scheduled
-#     CI). E2E_TEST_CONFIG names the YAML config that selects the specs.
+#     CI). E2E_TEST_CONFIG lists the YAML configs that select the specs. Per-PR
+#     runs read them from the checkout; scheduled runs unpack e2e/config from the
+#     same hashrelease over the checkout's, with no fallback.
 #   - Else (non-e2e test types: benchmarks, certification, etc.) → `bz tests`.
 #
 # Required env:
@@ -177,6 +179,35 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   chmod +x "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s/e2e.test"
   echo "[INFO] downloaded e2e binary to ${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s/e2e.test"
   E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
+
+  # The configs come from the same hashrelease as the binary, never from this
+  # checkout: the binary's labels and the configs' exclusions must match.
+  E2E_CONFIG_URL="${HASHREL_URL}/files/e2e/config.tar.gz"
+  E2E_CONFIG_DIR="${CI_HOME}/${CI_GIT_DIR}/e2e/config"
+  E2E_CONFIG_TAR="$(mktemp)"
+  echo "[INFO] downloading e2e config from hashrelease: ${E2E_CONFIG_URL}"
+  if ! curl --retry 9 --retry-all-errors -fsSL "${E2E_CONFIG_URL}" -o "${E2E_CONFIG_TAR}"; then
+    echo "[ERROR] hashrelease has no e2e config at ${E2E_CONFIG_URL}; not falling back to the branch checkout"
+    exit 1
+  fi
+  rm -rf "${E2E_CONFIG_DIR}"
+  tar -xzf "${E2E_CONFIG_TAR}" -C "${CI_HOME}/${CI_GIT_DIR}/e2e" || { echo "[ERROR] could not unpack ${E2E_CONFIG_URL}"; exit 1; }
+  rm -f "${E2E_CONFIG_TAR}"
+  echo "[INFO] e2e config path: ${E2E_CONFIG_URL} unpacked to ${E2E_CONFIG_DIR}"
+
+  # Mirror how `make e2e-run` resolves each entry, so a name the hashrelease
+  # lacks fails here, naming the file, rather than as a loader error.
+  for _entry in ${E2E_TEST_CONFIG:-}; do
+    case "${_entry}" in
+      /*) _cfg="${_entry}" ;;
+      e2e/config/*) _cfg="${CI_HOME}/${CI_GIT_DIR}/${_entry}" ;;
+      *) _cfg="${E2E_CONFIG_DIR}/${_entry}" ;;
+    esac
+    if [[ ! -f "${_cfg}" ]]; then
+      echo "[ERROR] e2e config ${_entry} is not in the hashrelease config ${E2E_CONFIG_URL} (looked for ${_cfg})"
+      exit 1
+    fi
+  done
 fi
 
 # E2E_BINARY is a set/unset sentinel (its value is not used here -- make
