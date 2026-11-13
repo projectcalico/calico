@@ -7,6 +7,8 @@
 #     --spec-dir DIR               inline diagnoses dir, when not beside the report
 #   sandcat.sh build-failure       analyze the job log, or record the failure without one
 #     --log-file FILE | --logs-dir DIR
+#   sandcat.sh cut-off             record a job whose analysis was stopped at its limit
+#     --after DURATION
 #   sandcat.sh push-specs          push the inline diagnoses as one artifact
 #     --spec-dir DIR | --report FILE
 #   sandcat.sh download            fetch the binary, print its path
@@ -484,6 +486,27 @@ cmd_build_failure() {
   fi
 }
 
+cmd_cut_off() {
+  local source_dir="." after=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --source-dir) source_dir="$2"; shift 2 ;;
+      --after)      after="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  SOURCE_DIR="${source_dir}"
+  _sandcat_common_vars
+
+  _sandcat_download || { echo "[WARN] sandcat: download failed; cut-off analysis not recorded"; return 0; }
+  echo "[INFO] sandcat: recording that the analysis was stopped after ${after} (sha=${SANDCAT_SHA:-unknown})"
+  "${SANDCAT_BIN}" analyze --cut-off-after "${after}" \
+    --sha "${SANDCAT_SHA}" \
+    --source-dir "${source_dir}" \
+    --timeout 2m \
+    || echo "[WARN] sandcat: cut-off analysis not recorded (non-fatal)"
+}
+
 # --- entry point ---
 subcmd="${1:-}"
 shift || true
@@ -528,5 +551,6 @@ fi
 case "${subcmd}" in
   analyze)       cmd_analyze "$@" ;;
   build-failure) cmd_build_failure "$@" ;;
+  cut-off)       cmd_cut_off "$@" ;;
   *)             echo "[ERROR] sandcat.sh: unknown subcommand '${subcmd}'" >&2; exit 1 ;;
 esac

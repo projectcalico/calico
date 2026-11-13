@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Behaviour test for `sandcat.sh analyze`: the analyzed marker, which stops the
-# epilogue from analyzing again, is written only when the analysis succeeded.
-# sandcat is stubbed, so no binary, network or cluster is needed.
+# Behaviour test for `sandcat.sh analyze` and `cut-off`. The analyzed marker,
+# which stops the epilogue from analyzing again, is written only when the
+# analysis succeeded, and cut-off records a job without analyzing it. sandcat
+# is stubbed, so no binary, network or cluster is needed.
 
 set -uo pipefail
 
@@ -20,6 +21,7 @@ newhome() {
   mkdir -p "${HOME}/.local/bin"
   cat > "${HOME}/.local/bin/sandcat" <<'STUB'
 #!/usr/bin/env bash
+printf '%s\n' "$*" >> "${HOME}/argv"
 exit "${STUB_RC:-0}"
 STUB
   chmod +x "${HOME}/.local/bin/sandcat"
@@ -46,6 +48,16 @@ STUB_RC=0 check "a successful analysis writes the marker" yes
 
 newhome
 STUB_RC=1 check "a failed analysis leaves no marker, so the epilogue retries" no
+
+newhome
+(cd "${HOME}" && "${SCRIPT}" cut-off --after 12m --source-dir "${HOME}") >/dev/null 2>&1
+if grep -q -- '^analyze --cut-off-after 12m ' "${HOME}/argv" && ! grep -q -- '--ginkgo-report' "${HOME}/argv"; then
+  echo "PASS cut-off records the stopped analysis without analyzing"
+  pass=$((pass + 1))
+else
+  echo "FAIL cut-off records the stopped analysis without analyzing: $(cat "${HOME}/argv" 2>/dev/null)"
+  fail=$((fail + 1))
+fi
 
 echo "${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

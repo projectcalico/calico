@@ -71,6 +71,13 @@ check "a hung analysis is cut off at its limit" test "${elapsed}" -lt 60
 check "the cluster is destroyed after the hung analysis" \
   test -n "$(line_of 'bz destroy')" -a "$(line_of 'sandcat analyze')" -lt "$(line_of 'bz destroy' || echo 0)"
 check "the hung analysis left no process behind" bash -c "! kill -0 \$(cat '${ROOT}/analyze.pid') 2>/dev/null"
+check "the cut-off is recorded in sandcat, after the destroy" \
+  test -n "$(line_of 'sandcat cut-off --after 2s')" -a "$(line_of 'bz destroy')" -lt "$(line_of 'sandcat cut-off' || echo 0)"
+
+newroot
+echo '<testsuite name="e2e" tests="1" failures="1"/>' > "${ROOT}/report/junit.xml"
+run_epilogue
+check "an analysis that finishes records no cut-off" bash -c "! grep -q 'sandcat cut-off' '${ROOT}/calls.log'"
 
 newroot
 echo '<testsuite name="stern" tests="1"/>' > "${ROOT}/report/junit-stern.xml"
