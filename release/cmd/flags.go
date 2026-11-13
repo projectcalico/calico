@@ -26,6 +26,8 @@ import (
 	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/version"
 )
 
 var globalFlags = append([]cli.Flag{debugFlag}, append(ciFlags, slackFlags...)...)
@@ -106,6 +108,18 @@ var (
 		Usage:    "The suffix used to denote development tags",
 		Sources:  cli.NewValueSourceChain(cli.EnvVar("DEV_TAG_SUFFIX"), defaults.MK(defaults.KeyDevTagSuffix)),
 		Value:    defaults.DevTagSuffix(),
+	}
+	versionFlag = &cli.StringFlag{
+		Name:     "version",
+		Category: gitCategory,
+		Usage:    "The Calico version to use (e.g. v3.32.5). If not set, it is determined from git",
+		Sources:  cli.EnvVars(utils.EnvVersion),
+		Action: func(_ context.Context, c *cli.Command, s string) error {
+			if _, err := version.New(s); err != nil {
+				return fmt.Errorf("invalid --version: %w", err)
+			}
+			return nil
+		},
 	}
 	mainBranchFlag = &cli.StringFlag{
 		Name:     "main-branch",

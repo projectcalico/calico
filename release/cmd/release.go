@@ -61,17 +61,12 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 		// Build release notes prior to a release.
 		{
 			Name:  "generate-release-notes",
-			Usage: "Generate release notes for the next release",
-			Flags: []cli.Flag{orgFlag, devTagSuffixFlag},
+			Usage: "Generate release notes for the next release, or for the release given by --version",
+			Flags: []cli.Flag{orgFlag, devTagSuffixFlag, versionFlag},
 			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("release-notes.log")
 
-				// Determine the versions to use for the release.
-				gitVer, err := version.GitVersion()
-				if err != nil {
-					return err
-				}
-				ver, err := version.DetermineReleaseVersion(gitVer, c.String(devTagSuffixFlag.Name))
+				ver, err := releaseNotesVersion(c)
 				if err != nil {
 					return err
 				}
@@ -221,6 +216,19 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 		// Post-release validation.
 		releaseValidationSubCommand(cfg),
 	}
+}
+
+// releaseNotesVersion lets --version target a past or future release instead
+// of the next one inferred from git.
+func releaseNotesVersion(c *cli.Command) (version.Version, error) {
+	if v := c.String(versionFlag.Name); v != "" {
+		return version.New(v)
+	}
+	gitVer, err := version.GitVersion()
+	if err != nil {
+		return version.Version{}, err
+	}
+	return version.DetermineReleaseVersion(gitVer, c.String(devTagSuffixFlag.Name))
 }
 
 func releasePrepCommand(cfg *Config) *cli.Command {
