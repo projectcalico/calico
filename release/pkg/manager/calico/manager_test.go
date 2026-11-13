@@ -403,6 +403,45 @@ func TestTagStateMemoized(t *testing.T) {
 
 // releasePrereqs fails fast when the tag points at a different commit, before
 // the build runs.
+func TestReleasePrereqs(t *testing.T) {
+	newManager := func(t *testing.T, repo github.Repo) *CalicoManager {
+		f := newFakeRunner()
+		f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30", nil)
+		return &CalicoManager{
+			runner: f, calicoVersion: testVersion(t, "v3.30.0"), githubRepo: repo,
+			imageRegistries: []string{"example.test/calico"}, tagAtHEAD: &tagCheck{},
+		}
+	}
+
+	t.Run("projectcalico/calico must use the default registries", func(t *testing.T) {
+		if err := newManager(t, calicoRepo).releasePrereqs(); err == nil {
+			t.Error("releasePrereqs() = nil, want a registries error")
+		}
+	})
+
+	// A product's own defaults pick its repo, not projectcalico/calico.
+	t.Run("the defaults' repo may use other registries", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, defaults.MetadataFile), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		defaults.UseRunner(&command.Recorder{Reply: func(c command.Call) (string, error) {
+			if c.Name == "git" {
+				return root, nil
+			}
+			return "ORGANIZATION = example\nGIT_REPO = fork", nil
+		}})
+		t.Cleanup(func() { defaults.UseRunner(nil) })
+		repo := github.Repo{Org: "example", Name: "fork"}
+		if repo != defaultRepo() {
+			t.Fatalf("defaultRepo() = %v, want %v", defaultRepo(), repo)
+		}
+		if err := newManager(t, repo).releasePrereqs(); err != nil {
+			t.Errorf("releasePrereqs() = %v, want nil", err)
+		}
+	})
+}
+
 func TestReleasePrereqsTagConflict(t *testing.T) {
 	const (
 		ver      = "v3.30.0"
@@ -664,6 +703,20 @@ func TestPrepPrereqs(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("a missing GitHub repo fails with validation off", func(t *testing.T) {
+		r := &CalicoManager{runner: newFakeRunner(), repoRoot: "/repo", remote: "origin"}
+		if err := r.prepPrereqs(); err == nil {
+			t.Error("prepPrereqs() = nil, want an error")
+		}
+	})
+
+	t.Run("a missing git remote fails with validation off", func(t *testing.T) {
+		r := &CalicoManager{runner: newFakeRunner(), repoRoot: "/repo", githubRepo: github.Repo{Org: "projectcalico", Name: "calico"}}
+		if err := r.prepPrereqs(); err == nil {
+			t.Error("prepPrereqs() = nil, want an error")
+		}
+	})
 }
 
 func TestPushPrepBranch(t *testing.T) {
@@ -1810,6 +1863,31 @@ func TestOutputDirRequiredEvenWithoutValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPublishPrereqs(t *testing.T) {
+	t.Run("a missing GitHub repo fails with validation off", func(t *testing.T) {
+		r := &CalicoManager{runner: newFakeRunner(), repoRoot: "/repo", remote: "origin", outputDir: t.TempDir(), recordsDir: t.TempDir()}
+		if err := r.publishPrereqs(); err == nil {
+			t.Error("publishPrereqs() = nil, want an error")
+		}
+	})
+
+	t.Run("a missing git remote fails with validation off", func(t *testing.T) {
+		r := &CalicoManager{runner: newFakeRunner(), repoRoot: "/repo", githubRepo: github.Repo{Org: "projectcalico", Name: "calico"}, outputDir: t.TempDir(), recordsDir: t.TempDir()}
+		if err := r.publishPrereqs(); err == nil {
+			t.Error("publishPrereqs() = nil, want an error")
+		}
+	})
+}
+
+func TestReleaseBranchPrereqs(t *testing.T) {
+	t.Run("a missing git remote fails with validation off", func(t *testing.T) {
+		r := &CalicoManager{cutOptions: &CutOptions{}}
+		if err := r.releaseBranchPrereqs(); err == nil {
+			t.Error("releaseBranchPrereqs() = nil, want an error")
+		}
+	})
 }
 
 func TestChartsAndIndexLocation(t *testing.T) {

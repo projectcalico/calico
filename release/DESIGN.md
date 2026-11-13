@@ -199,6 +199,8 @@ them. The rules:
   shared backing array.
 - Removing, renaming or re-typing one changes behaviour for whatever sets it.
   Find those first and decide the change on purpose.
+- Behaviour meant only for projectcalico/calico compares against that repo, not
+  the defaults: in a fork the defaults name the fork.
 
 ## Concurrency and retries
 

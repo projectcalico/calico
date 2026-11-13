@@ -145,6 +145,14 @@ func NewManager(opts ...Option) (*CalicoManager, error) {
 			return nil, fmt.Errorf("applying option: %w", err)
 		}
 	}
+	if b.repoRoot == "" {
+		return nil, fmt.Errorf("no repo root specified")
+	}
+	logrus.WithField("repoRoot", b.repoRoot).Info("Using repo root")
+	if b.logsDir != "" {
+		logrus.WithField("logsDir", b.logsDir).Info("Per-step logs enabled")
+	}
+
 	if b.planOptions.Skip[operator.Step] {
 		b.operator = nil
 	}
@@ -154,30 +162,6 @@ func NewManager(opts ...Option) (*CalicoManager, error) {
 		b.planOptions.Skip = maps.Clone(b.planOptions.Skip)
 		delete(b.planOptions.Skip, images.Step)
 	}
-
-	var errs []error
-	if b.repoRoot == "" {
-		errs = append(errs, fmt.Errorf("no repo root specified"))
-	}
-	if err := b.githubRepo.Validate(); err != nil {
-		errs = append(errs, err)
-	}
-	if b.remote == "" {
-		errs = append(errs, fmt.Errorf("no git remote specified"))
-	}
-	if err := errors.Join(errs...); err != nil {
-		return nil, err
-	}
-
-	logrus.WithField("repoRoot", b.repoRoot).Info("Using repo root")
-	if b.logsDir != "" {
-		logrus.WithField("logsDir", b.logsDir).Info("Per-step logs enabled")
-	}
-	logrus.WithFields(logrus.Fields{
-		"repo":   b.githubRepo,
-		"remote": b.remote,
-	}).Info("Using GitHub configuration")
-
 	return b, nil
 }
 
@@ -919,7 +903,7 @@ func (r *CalicoManager) releasePrereqs() error {
 	}
 
 	// If we are releasing to projectcalico/calico, make sure we are releasing to the default registries.
-	if r.githubRepo == defaultRepo() {
+	if r.githubRepo == calicoRepo {
 		if !reflect.DeepEqual(r.imageRegistries, defaultRegistries) {
 			return fmt.Errorf("image registries cannot be different from default registries for a release")
 		}
@@ -1035,13 +1019,8 @@ func (r *CalicoManager) assertOperatorImageVersion() error {
 
 // Prerequisites specific to publishing a release.
 func (r *CalicoManager) publishPrereqs() error {
-	// Checked whatever validation is set to: without it the release would write
-	// its artifacts somewhere nobody asked for.
-	if r.outputDir == "" {
-		return fmt.Errorf("no output directory specified")
-	}
-	if r.recordsDir == "" {
-		return fmt.Errorf("no records directory specified")
+	if err := r.mustPublishValidation(); err != nil {
+		return err
 	}
 	if !r.validate {
 		logrus.Warn("Skipping pre-publish validation")
@@ -1050,9 +1029,6 @@ func (r *CalicoManager) publishPrereqs() error {
 	var errStack error
 	if r.calicoVersion.String() == "" {
 		errStack = errors.Join(errStack, fmt.Errorf("no calico version specified"))
-	}
-	if r.outputDir == "" {
-		errStack = errors.Join(errStack, fmt.Errorf("no output directory specified"))
 	}
 	if r.images && len(r.imageRegistries) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no image registries specified"))
@@ -1081,6 +1057,20 @@ func (r *CalicoManager) publishPrereqs() error {
 		return err
 	}
 	return r.assertImageVersions()
+}
+
+func (r *CalicoManager) mustPublishValidation() error {
+	var errs error
+	if r.outputDir == "" {
+		errs = errors.Join(errs, fmt.Errorf("no output directory specified"))
+	}
+	if r.recordsDir == "" {
+		errs = errors.Join(errs, fmt.Errorf("no records directory specified"))
+	}
+	if err := r.validateGitHub(); err != nil {
+		errs = errors.Join(errs, err)
+	}
+	return errs
 }
 
 func (r *CalicoManager) archive() archives.Archive {
@@ -1608,16 +1598,34 @@ func (r *CalicoManager) git(args ...string) (string, error) {
 	return command.Git(r.runner).In(r.repoRoot).Run(args...)
 }
 
+func (r *CalicoManager) validateGitHub() error {
+	var errs error
+	if r.remote == "" {
+		errs = errors.Join(errs, fmt.Errorf("no git remote specified"))
+	}
+	if err := r.githubRepo.Validate(); err != nil {
+		errs = errors.Join(errs, err)
+	}
+	if errs != nil {
+		return errs
+	}
+	logrus.WithFields(logrus.Fields{
+		"remote": r.remote,
+		"repo":   r.githubRepo,
+	}).Info("Using GitHub configuration")
+	return nil
+}
+
 func (r *CalicoManager) releaseBranchPrereqs() error {
+	var err error
 	// cutOptions is required for the branch cut flow
 	if r.cutOptions == nil {
-		return fmt.Errorf("cut options not specified")
+		err = errors.Join(err, fmt.Errorf("cut options not specified"))
 	}
-	if !r.validate {
-		logrus.Warn("Skipping pre-release branch validation")
-		return nil
+	if e := r.validateGitHub(); e != nil {
+		err = errors.Join(err, e)
 	}
-	return nil
+	return err
 }
 
 // branchChangedPaths are the trees the prepareDerived hook rewrites; it reports
@@ -1921,6 +1929,9 @@ func (r *CalicoManager) switchToBaseBranch(baseBranch string) error {
 }
 
 func (r *CalicoManager) prepPrereqs() error {
+	if err := r.validateGitHub(); err != nil {
+		return err
+	}
 	if !r.validate {
 		logrus.Warn("Skipping release preparation validation")
 		return nil
