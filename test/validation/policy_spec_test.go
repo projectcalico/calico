@@ -45,6 +45,67 @@ func policyKinds(ingress, egress []v3.Rule) map[string]client.Object {
 	}
 }
 
+// A global policy has no namespace of its own to resolve a service name in.
+func TestGlobalPolicy_ServicesNamespace(t *testing.T) {
+	const wantErr = "services in a global policy must specify a namespace"
+	withNamespace := &v3.ServiceMatch{Name: "my-svc", Namespace: "default"}
+	withoutNamespace := &v3.ServiceMatch{Name: "my-svc"}
+
+	for _, tt := range []struct {
+		name    string
+		ingress []v3.Rule
+		egress  []v3.Rule
+		wantErr string
+	}{
+		{
+			name:    "namespace set",
+			ingress: []v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: withNamespace}}},
+			egress:  []v3.Rule{{Action: v3.Allow, Destination: v3.EntityRule{Services: withNamespace}}},
+		},
+		{
+			name:    "egress destination without namespace",
+			egress:  []v3.Rule{{Action: v3.Allow, Destination: v3.EntityRule{Services: withoutNamespace}}},
+			wantErr: wantErr,
+		},
+		{
+			name:    "ingress source without namespace",
+			ingress: []v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: withoutNamespace}}},
+			wantErr: wantErr,
+		},
+	} {
+		objs := policyKinds(tt.ingress, tt.egress)
+		for _, kind := range []string{"GlobalNetworkPolicy", "StagedGlobalNetworkPolicy"} {
+			t.Run(tt.name+" "+kind, func(t *testing.T) {
+				if tt.wantErr != "" {
+					expectCreateFails(t, objs[kind], tt.wantErr)
+				} else {
+					expectCreateSucceeds(t, objs[kind])
+				}
+			})
+		}
+	}
+
+	// The CRD only requires the namespace in global policies.
+	expectCreateSucceeds(t, policyKinds([]v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: withoutNamespace}}}, nil)["NetworkPolicy"])
+}
+
+// The CRD checks a service namespace against the resource name format, as the Go validator does.
+func TestPolicy_ServicesNamespaceFormat(t *testing.T) {
+	valid := []v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: &v3.ServiceMatch{Name: "my-svc", Namespace: "kube-system"}}}}
+	invalid := []v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: &v3.ServiceMatch{Name: "my-svc", Namespace: "Not_Valid"}}}}
+
+	for kind, obj := range policyKinds(valid, nil) {
+		t.Run("valid namespace "+kind, func(t *testing.T) {
+			expectCreateSucceeds(t, obj)
+		})
+	}
+	for kind, obj := range policyKinds(invalid, nil) {
+		t.Run("invalid namespace "+kind, func(t *testing.T) {
+			expectCreateFails(t, obj, "source.services.namespace: Invalid value")
+		})
+	}
+}
+
 // A service match names the far end of the connection, so it only makes sense
 // as an egress destination or an ingress source.
 func TestPolicy_ServicesDirection(t *testing.T) {
