@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 /*
 Copyright 2017 The Kubernetes Authors.
@@ -38,6 +38,10 @@ import (
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 )
+
+// watchTerminationGracePeriod is how long graceful shutdown gives open watches to end. Without it, watches are never
+// told to end, and shutdown waits out the 60s HTTP server shutdown timeout, past kubelet's 30s grace.
+const watchTerminationGracePeriod = 5 * time.Second
 
 // CalicoServerOptions contains the aggregation of configuration structs for
 // the calico server. It contains everything needed to configure a basic API server.
@@ -203,6 +207,8 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	serverConfig.EnableContentionProfiling = false
 	serverConfig.EnableMetrics = false
 	serverConfig.EnableProfiling = false
+
+	serverConfig.ShutdownWatchTerminationGracePeriod = watchTerminationGracePeriod
 
 	minResourceRefreshInterval := 5 * time.Second
 	if env := os.Getenv("MIN_RESOURCE_REFRESH_INTERVAL"); env != "" {
