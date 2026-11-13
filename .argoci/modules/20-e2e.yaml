@@ -112,7 +112,8 @@ steps:
       SANDCAT_REPORT=report/report.json
       [ -f "${SANDCAT_REPORT}" ] || SANDCAT_REPORT=$(ls -t report/*.xml 2>/dev/null | head -1) || true
       if [ -n "${SANDCAT_REPORT}" ]; then
-        .argoci/scripts/sandcat/sandcat.sh analyze --report "${SANDCAT_REPORT}" --source-dir "$(pwd)" || true
+        .argoci/scripts/sandcat/sandcat.sh analyze --report "${SANDCAT_REPORT}" --source-dir "$(pwd)" \
+          --kubeconfig hack/test/kind/kind-kubeconfig.yaml --log-file artifacts/e2e.log || true
       elif [ "${rc}" != 0 ]; then
         .argoci/scripts/sandcat/sandcat.sh build-failure --logs-dir artifacts --source-dir "$(pwd)" || true
       fi
