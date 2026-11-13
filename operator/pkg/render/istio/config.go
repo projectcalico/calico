@@ -59,9 +59,16 @@ type IstiodOpts struct {
 	Image                   string          `json:"image,omitempty"`
 	Global                  *GlobalConfig   `json:"global,omitempty"`
 	Gateways                *GatewaysConfig `json:"gateways,omitempty"`
+	Pilot                   *PilotConfig    `json:"pilot,omitempty"`
 	Profile                 string          `json:"profile,omitempty"`
 	TrustedZtunnelNamespace string          `json:"trustedZtunnelNamespace,omitempty"`
 	ExtraContainerArgs      []string        `json:"extraContainerArgs,omitempty"`
+}
+
+// PilotConfig is the istiod chart's pilot block, which the chart copies to the
+// top level of its values.
+type PilotConfig struct {
+	Env map[string]string `json:"env,omitempty"`
 }
 
 type CNIConfig struct {
