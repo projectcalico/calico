@@ -152,3 +152,23 @@ func TestPackageE2EConfigFailsWithoutConfigs(t *testing.T) {
 		t.Error("PackageE2EConfig with no repo root succeeded, want an error")
 	}
 }
+
+func TestPackageE2EConfigRejectsSymlinks(t *testing.T) {
+	repoRoot, out := t.TempDir(), t.TempDir()
+	writeE2EConfig(t, repoRoot, map[string]string{"base.yaml": "base"})
+	link := filepath.Join(repoRoot, E2EComponent, "config", "linked.yaml")
+	if err := os.Symlink("base.yaml", link); err != nil {
+		t.Fatal(err)
+	}
+
+	err := PackageE2EConfig(repoRoot, out)
+	if err == nil {
+		t.Fatal("PackageE2EConfig succeeded, want an error for the symlink")
+	}
+	if !strings.Contains(err.Error(), "linked.yaml") {
+		t.Errorf("error %q does not name the symlink", err)
+	}
+	if _, statErr := os.Stat(E2EConfigPath(out)); statErr == nil {
+		t.Error("left an archive behind after failing")
+	}
+}

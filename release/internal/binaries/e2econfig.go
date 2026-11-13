@@ -75,15 +75,20 @@ func PackageE2EConfig(repoRoot, outputDir string) error {
 }
 
 // regularFiles lists the regular files under dir as slash-separated relative
-// paths in sorted order, so the archive is the same for the same tree.
+// paths in sorted order, so the archive is the same for the same tree. Any
+// other entry, such as a symlink, is an error rather than a file silently
+// missing from the archive.
 func regularFiles(dir string) ([]string, error) {
 	var out []string
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if !d.Type().IsRegular() {
+		if d.IsDir() {
 			return nil
+		}
+		if !d.Type().IsRegular() {
+			return fmt.Errorf("%s is not a regular file", path)
 		}
 		rel, err := filepath.Rel(dir, path)
 		if err != nil {
