@@ -346,5 +346,79 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 				Expect(allocAttr.ActiveOwnerAttrs[ipam.AttributePod]).To(Equal("virt-launcher-target"))
 			}
 		})
+
+		Context("PromoteAlternateVMOwnerIfActiveEmpty", func() {
+			clearActiveOwner := func() {
+				for _, ip := range allocatedIPs {
+					err := ic.SetOwnerAttributes(context.Background(), ip, handle, &ipam.OwnerAttributeUpdates{
+						ClearActiveOwner: true,
+					}, nil)
+					Expect(err).NotTo(HaveOccurred())
+				}
+			}
+
+			It("should leave both owners alone while the source is still active", func() {
+				ctx := context.Background()
+
+				promoted, err := PromoteAlternateVMOwnerIfActiveEmpty(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				Expect(errors.Is(err, ErrActiveOwnerPresent)).To(BeTrue(),
+					fmt.Sprintf("Expected ErrActiveOwnerPresent, got: %v", err))
+				Expect(promoted).To(BeFalse())
+
+				for _, ip := range allocatedIPs {
+					allocAttr, err := ic.GetAssignmentAttributes(ctx, ip)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(allocAttr.ActiveOwnerAttrs[ipam.AttributePod]).To(Equal("virt-launcher-source"))
+					Expect(allocAttr.AlternateOwnerAttrs[ipam.AttributePod]).To(Equal("virt-launcher-target"))
+				}
+			})
+
+			It("should promote the alternate owner on all IPs once the active owner is cleared", func() {
+				ctx := context.Background()
+				clearActiveOwner()
+
+				promoted, err := PromoteAlternateVMOwnerIfActiveEmpty(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(promoted).To(BeTrue())
+
+				for _, ip := range allocatedIPs {
+					allocAttr, err := ic.GetAssignmentAttributes(ctx, ip)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(allocAttr.ActiveOwnerAttrs[ipam.AttributePod]).To(Equal("virt-launcher-target"))
+					Expect(allocAttr.AlternateOwnerAttrs).To(BeNil())
+				}
+			})
+
+			It("should report no promotion when the pod is already the active owner", func() {
+				ctx := context.Background()
+				clearActiveOwner()
+
+				_, err := PromoteAlternateVMOwnerIfActiveEmpty(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				Expect(err).NotTo(HaveOccurred())
+
+				promoted, err := PromoteAlternateVMOwnerIfActiveEmpty(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(promoted).To(BeFalse())
+			})
+
+			It("should return ErrAlternateOwnerMismatch when another pod is the alternate owner", func() {
+				ctx := context.Background()
+				clearActiveOwner()
+
+				promoted, err := PromoteAlternateVMOwnerIfActiveEmpty(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-other")
+				Expect(errors.Is(err, ErrAlternateOwnerMismatch)).To(BeTrue(),
+					fmt.Sprintf("Expected ErrAlternateOwnerMismatch, got: %v", err))
+				Expect(promoted).To(BeFalse())
+			})
+
+			It("should return ErrNoVMAddresses when the handle has been released", func() {
+				ctx := context.Background()
+				Expect(ic.ReleaseByHandle(ctx, handle)).To(Succeed())
+
+				_, err := PromoteAlternateVMOwnerIfActiveEmpty(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				Expect(errors.Is(err, ErrNoVMAddresses)).To(BeTrue(),
+					fmt.Sprintf("Expected ErrNoVMAddresses, got: %v", err))
+			})
+		})
 	})
 })
