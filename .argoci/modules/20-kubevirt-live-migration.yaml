@@ -5,16 +5,11 @@ version: condensed-module
 defaults:
   tiers: []
   timeout: 1h30m
-  runOn: vm
-  services:
-    - docker
+  # The compute SA createVM, runOnVM and the teardown authenticate with.
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: kubevirt-live-migration
-    vm:
-      machineType: e2-standard-8
-      diskType: pd-ssd
-      diskSize: 200GB
     depends:
       - build-calico-image
       - build-node-image
@@ -36,35 +31,63 @@ steps:
         value: https://github.com/tigera/kubevirt/releases/download/mockvirt-v1.8.1
       - name: BIRD_BGPPEER_CONTAINER_NAME
         value: bird-bgp-peer
-    commands: |
-      sudo apt-get update -y && sudo apt-get install -y make
-      sudo modprobe sctp
-      # The Makefiles call the kubectl they download by full path; the deploy
-      # script and the tests' connection tester call it by name.
-      export PATH="$(pwd)/hack/test/kind:${PATH}"
-      .argoci/scripts/load-cached-images calico node
-      .argoci/scripts/load-e2e-binaries
-      make kind-up
-      for f in ci-deploy-kind.sh kubevirt-operator.yaml kubevirt-cr.yaml; do
-        hack/fetch-file "${KUBEVIRT_RELEASE_URL}/${f}" "/tmp/kubevirt-manifests/${f}"
-      done
-      chmod +x /tmp/kubevirt-manifests/ci-deploy-kind.sh
-      MOCKVIRT_KUBECONFIG="$(pwd)/hack/test/kind/kind-kubeconfig.yaml" \
-        MOCKVIRT_MANIFESTS_DIR=/tmp/kubevirt-manifests \
-        /tmp/kubevirt-manifests/ci-deploy-kind.sh
-      # The tests find this peer by name on the kind network.
-      docker run -d --name "${BIRD_BGPPEER_CONTAINER_NAME}" --privileged --network kind calico/bird:v0.3.3-211-g9111ec3c
-      make e2e-run KUBECONFIG="$(pwd)/hack/test/kind/kind-kubeconfig.yaml"
-    epilogue: |
-      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/report" report || true
-      artifact push job report --destination test-results || true
-      if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
-        # Collected where the cluster is; the script pushes its own bundle.
-        sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && .semaphore/collect-kind-diags' || true
-        # The snapshot tool is only in the CI image, and the VM has no registry
-        # credentials of its own.
-        sshOnVirtualMachine 'docker login -u _json_key --password-stdin https://gcr.io < "${CI_ARTIFACT_SA_KEY_FILE}"' || true
-        sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && docker run --rm --network host -v "$PWD:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4 kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz' || true
-        copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/kind-snapshot.tar.gz" kind-snapshot.tar.gz || true
-        artifact push job kind-snapshot.tar.gz --destination kind-snapshot.tar.gz || true
-      fi
+    checkout: true
+    cache:
+      - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
+      - {name: node-image, mode: read, path: /cache/node-image}
+      - {name: e2e-binaries, mode: read, path: /cache/e2e-binaries}
+    runOnVM:
+      createVM:
+        machineType: e2-standard-8
+        diskType: pd-ssd
+        diskSize: 200GB
+        maxRunDuration: 2h
+      env:
+        - BUILD_CACHE_GROUP
+        - E2E_TEST_CONFIG
+        - EXTRA_VALUES_FILES
+        - KUBEVIRT_RELEASE_URL
+        - BIRD_BGPPEER_CONTAINER_NAME
+      put:
+        - /cache/calico-image-zst:prefetched
+        - /cache/node-image:prefetched
+        - /cache/e2e-binaries/e2e-binaries.tar.zst:prefetched/e2e-binaries.tar.zst
+      source: |
+        set -e
+        repo="$(pwd)"
+        # There is no epilogue on a machine; results go up on the way out.
+        finish() {
+          rc=$?
+          cd "$repo"
+          artifact push job "$repo/report" --destination test-results || true
+          if [ "$rc" != 0 ]; then
+            # The script pushes its own bundle.
+            .semaphore/collect-kind-diags || true
+            # The snapshot tool is only in the CI image; the shipped artifact key
+            # pulls it.
+            docker login -u _json_key --password-stdin https://gcr.io < "$HOME/.argoci/artifacts-sa.json" || true
+            docker run --rm --network host -v "$repo:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4 kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz || true
+            artifact push job "$repo/kind-snapshot.tar.gz" --destination kind-snapshot.tar.gz || true
+          fi
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        sudo modprobe sctp
+        # The Makefiles call the kubectl they download by full path; the deploy
+        # script and the tests' connection tester call it by name.
+        export PATH="$(pwd)/hack/test/kind:${PATH}"
+        export PREFETCHED_ARTIFACTS="${HOME}/prefetched"
+        .argoci/scripts/load-cached-images calico node
+        .argoci/scripts/load-e2e-binaries
+        make kind-up
+        for f in ci-deploy-kind.sh kubevirt-operator.yaml kubevirt-cr.yaml; do
+          hack/fetch-file "${KUBEVIRT_RELEASE_URL}/${f}" "/tmp/kubevirt-manifests/${f}"
+        done
+        chmod +x /tmp/kubevirt-manifests/ci-deploy-kind.sh
+        MOCKVIRT_KUBECONFIG="$(pwd)/hack/test/kind/kind-kubeconfig.yaml" \
+          MOCKVIRT_MANIFESTS_DIR=/tmp/kubevirt-manifests \
+          /tmp/kubevirt-manifests/ci-deploy-kind.sh
+        # The tests find this peer by name on the kind network.
+        docker run -d --name "${BIRD_BGPPEER_CONTAINER_NAME}" --privileged --network kind calico/bird:v0.3.3-211-g9111ec3c
+        make e2e-run KUBECONFIG="$(pwd)/hack/test/kind/kind-kubeconfig.yaml"

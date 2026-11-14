@@ -209,14 +209,11 @@ define build_binary_dir
 		sh -c '$(GIT_CONFIG_SSH) mkdir -p $(1)/$(dir $(3)) && CGO_ENABLED=0 go build -C $(1) -o $(3) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(2)'
 endef
 
-# For windows builds that do not require cgo.
+# For windows builds that do not require cgo. The target is set inside the shell,
+# where it overrides the GOOS and GOARCH a native build exports.
 define build_windows_binary
-	$(DOCKER_RUN) \
-		-e CGO_ENABLED=0 \
-		-e GOARCH=amd64 \
-		-e GOOS=windows \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS) -s -w" $(1)'
+	$(DOCKER_GO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS) -s -w" $(1)'
 endef
 
 # Images used in build / test across multiple directories.
@@ -897,7 +894,7 @@ LINT_ARGS ?= --max-issues-per-linter 0 --max-same-issues 0 --timeout 8m
 
 .PHONY: golangci-lint
 golangci-lint: $(GENERATED_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) golangci-lint run $(LINT_ARGS)'
+	$(DOCKER_GO_BUILD_RECURSIVE) sh -c '$(GIT_CONFIG_SSH) golangci-lint run $(LINT_ARGS)'
 
 REPO_REL_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else echo '..'; fi )
 
@@ -910,12 +907,16 @@ fix-changed go-fmt-changed goimports-changed:
 	  if [ -z "$(CI_GIT_COMMIT_RANGE)" ]; then \
 	    parent_branch=`release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) $(REPO_REL_DIR)/hack/find-parent-release-branch.sh`; \
 	  fi; \
-	  $(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
-	                -e git_repo_slug=$(GIT_REPO_SLUG) \
-	                -e parent_branch=$$parent_branch \
-	                -e CI_GIT_COMMIT_RANGE=$(CI_GIT_COMMIT_RANGE) \
-	                $(CALICO_BUILD) $(REPO_REL_DIR)/hack/format-changed-files.sh; \
+	  $(call run_with_env,release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) parent_branch=$$parent_branch CI_GIT_COMMIT_RANGE=$(CI_GIT_COMMIT_RANGE),$(REPO_REL_DIR)/hack/format-changed-files.sh); \
 	fi
+
+# $(call run_with_env,VAR=val ...,command): in the go-build container, or directly
+# under NATIVE_GO_BUILD. Values must not contain spaces.
+ifeq ($(NATIVE_GO_BUILD),true)
+run_with_env = env $(1) $(2)
+else
+run_with_env = $(DOCKER_RUN) $(addprefix -e ,$(1)) $(CALICO_BUILD) $(2)
+endif
 
 .PHONY: fix-all go-fmt-all goimports-all
 # $(DOCKER_GO_BUILD) is empty under NATIVE_GO_BUILD, so this runs the formatter directly.
@@ -926,7 +927,7 @@ GOMODDER=$(REPO_REL_DIR)/hack/cmd/gomodder/main.go
 
 .PHONY: verify-go-mods
 verify-go-mods:
-	$(DOCKER_RUN) $(CALICO_BUILD) go run $(GOMODDER)
+	$(DOCKER_GO_BUILD_RECURSIVE) go run $(GOMODDER)
 
 .PHONY: pre-commit
 pre-commit:
@@ -972,7 +973,7 @@ check-module-path-projectcalico-api:
 # go mod helpers
 ###############################################################################
 mod-download:
-	-$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go mod download'
+	-$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) go mod download'
 
 mod-tidy:
 	-$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go mod tidy'
@@ -1984,7 +1985,9 @@ kind-reload:
 # Common functions for setting up a local envtest environment.
 ###############################################################################
 ENVTEST_DIR := $(REPO_ROOT)/hack/test/envtest
-ENVTEST_CONTAINER_DIR := /go/src/github.com/projectcalico/calico/hack/test/envtest
+# The same directory as the go-build recipes see it: the container's mount, or the
+# checkout itself natively.
+ENVTEST_CONTAINER_DIR := $(BUILD_REPO_ROOT)/hack/test/envtest
 # Derive major.minor from K8S_VERSION (e.g. v1.34.3 -> 1.34.x) for setup-envtest.
 # Envtest publishes binaries per minor version, not per patch, so we use a wildcard.
 # Skip on Windows: envtest is Linux-only test infra; bash sed/cut would error otherwise.
