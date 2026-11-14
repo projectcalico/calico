@@ -435,7 +435,9 @@ release-windows-archive: release-prereqs
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
 .PHONY: release-publish release-publish-linux release-publish-windows
-release-publish: release-publish-linux release-publish-windows
+# Windows images are left to release-publish-windows: the release tool already publishes them as their own unit, and
+# running both pushes the same Windows images twice.
+release-publish: release-publish-linux
 
 release-publish-linux: release-prereqs bin/crane
 	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
