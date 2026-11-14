@@ -23,6 +23,10 @@ Param(
 
 $ErrorActionPreference = 'SilentlyContinue'
 
+. "$env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/config.ps1"
+ipmo "$env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/libs/calico/calico.psm1" -Force
+ipmo "$env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/libs/hns/hns.psm1" -Force -DisableNameChecking
+
 function Remove-CalicoService($ServiceName)
 {
     $svc = Get-Service | where Name -EQ "$ServiceName"
@@ -38,7 +42,7 @@ function Remove-CalicoService($ServiceName)
     }
 }
 
-# Only clean up CNI dirs if using Calico CNI
+# Only clean up CNI artifacts if using Calico CNI
 if ("$env:CNI_PLUGIN_TYPE" -eq "Calico") {
     if ("$env:CNI_NET_DIR" -eq $null)
     {
@@ -77,6 +81,58 @@ if ("$env:CNI_PLUGIN_TYPE" -eq "Calico") {
                 Write-Host "Removing Calico CNI binaries at $cniBinPath ..."
                     rm $cniBinPath
             }
+    }
+
+    # Clean up HNS networks if node has rebooted. Must occur before CNI re-install.
+    if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp" -OR $env:CALICO_NETWORKING_BACKEND -EQ "vxlan")
+    {
+        Write-Host "Calico $env:CALICO_NETWORKING_BACKEND networking enabled."
+
+        # Check if the node has been rebooted.  If so, the HNS networks will be in unknown state so we need to
+        # clean them up and recreate them.
+        $lastBootTime = Get-LastBootTime
+        $prevLastBootTime = Get-StoredLastBootTime
+        Write-Output "calico-install: StoredLastBootTime $prevLastBootTime, CurrentLastBootTime $lastBootTime"
+        if ($prevLastBootTime -NE $lastBootTime)
+        {
+            if ((Get-HNSNetwork | ? Type -NE nat))
+            {
+                Write-Host "First time Calico has run since boot up, cleaning out any old network state."
+                Get-HNSNetwork | ? Type -NE nat | Remove-HNSNetwork
+                do
+                {
+                    Write-Host "Waiting for network deletion to complete."
+                    Start-Sleep 1
+                } while ((Get-HNSNetwork | ? Type -NE nat))
+            }
+
+            # After deletion of all hns networks, wait for an interface to have an IP that is not a 169.254.0.0/16 (or 127.0.0.0/8) address,
+            # before creation of External network.
+            $isValidIP = $false
+            $timeout = $env:STARTUP_VALID_IP_TIMEOUT
+            $IPRegEx1='(^127\.0\.0\.)'
+            $IPRegEx2='(^169\.254\.)'
+            while(!($isValidIP) -AND ($timeout -gt 0))
+            {
+                $IPAddress = (Get-NetIPAddress -AddressFamily IPv4).IPAddress
+                Write-Host "`nTimeout Remaining: $timeout sec"
+                Write-Host "List of IP Address before initialising Calico: $IPAddress"
+                Foreach ($ip in $IPAddress)
+                {
+                    if (($ip -NotMatch $IPRegEx1) -AND ($ip -NotMatch $IPRegEx2))
+                    {
+                        $isValidIP = $true
+                        Write-Host "`nFound valid IP: $ip"
+                        break
+                    }
+                }
+                if (!($isValidIP))
+                {
+                    Start-Sleep -s 5
+                    $timeout = $timeout - 5
+                }
+            }
+        }
     }
 }
 
