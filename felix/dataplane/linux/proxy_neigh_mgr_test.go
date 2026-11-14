@@ -29,6 +29,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/ipv6"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
@@ -376,7 +377,7 @@ func sendNoEncapPool(mgr *proxyNeighManager, poolID, cidr string) {
 }
 
 func sendIfaceAddrsUpdate(mgr *proxyNeighManager, name string, addrs ...string) {
-	mgr.OnUpdate(&ifaceAddrsUpdate{
+	mgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 		Name:  name,
 		Addrs: set.FromArray(addrs),
 	})
@@ -610,7 +611,7 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 			Expect(mgr.listeners).To(HaveKey("eth0"))
 
 			// Interface removed.
-			mgr.OnUpdate(&ifaceAddrsUpdate{Name: "eth0", Addrs: nil})
+			mgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{Name: "eth0", Addrs: nil})
 			Expect(mgr.CompleteDeferredWork()).To(Succeed())
 		})
 

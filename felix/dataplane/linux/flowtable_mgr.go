@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/nftables"
@@ -58,7 +59,7 @@ func newFlowtableManager(targets []flowtableTarget, devicePattern *regexp.Regexp
 }
 
 func (m *flowtableManager) OnUpdate(protoBufMsg any) {
-	update, ok := protoBufMsg.(*ifaceStateUpdate)
+	update, ok := protoBufMsg.(*dataplanedefs.IfaceStateUpdate)
 	if !ok {
 		return
 	}

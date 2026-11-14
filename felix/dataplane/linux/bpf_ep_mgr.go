@@ -72,7 +72,10 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/cachingmap"
 	"github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/felix/dataplane/linux/bpfepdefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/generictables"
@@ -506,7 +509,7 @@ type bpfEndpointManagerDataplane struct {
 
 	// IP of the tunnel / overlay device
 	tunnelIP            net.IP
-	iptablesFilterTable Table
+	iptablesFilterTable dataplanedefs.Table
 	ipSetIDAlloc        *idalloc.IDAllocator
 
 	allowedSourcesPerWorkload map[types.WorkloadEndpointID]set.Set[string]
@@ -523,7 +526,7 @@ type bpfAllowChainRenderer interface {
 }
 
 type ManagerWithHEPUpdate interface {
-	Manager
+	dataplanedefs.Manager
 	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
 }
 
@@ -574,8 +577,8 @@ func NewBPFEndpointManager(
 	ipSetIDAllocV4 *idalloc.IDAllocator,
 	ipSetIDAllocV6 *idalloc.IDAllocator,
 	iptablesRuleRenderer bpfAllowChainRenderer,
-	iptablesFilterTableV4 Table,
-	iptablesFilterTableV6 Table,
+	iptablesFilterTableV4 dataplanedefs.Table,
+	iptablesFilterTableV6 dataplanedefs.Table,
 	livenessCallback func(),
 	opReporter logrusr.OpRecorder,
 	mainRouteTableV4 routetable.Interface,
@@ -699,16 +702,16 @@ func NewBPFEndpointManager(
 
 	specialInterfaces := []string{"egress.calico"}
 	if config.RulesConfig.IPIPEnabled {
-		specialInterfaces = append(specialInterfaces, dataplanedefs.IPIPIfaceName)
-		m.encapIfaces.Add(dataplanedefs.IPIPIfaceName)
+		specialInterfaces = append(specialInterfaces, ipipdefs.IPIPIfaceName)
+		m.encapIfaces.Add(ipipdefs.IPIPIfaceName)
 	}
 	if config.RulesConfig.VXLANEnabled {
-		specialInterfaces = append(specialInterfaces, dataplanedefs.VXLANIfaceNameV4)
-		m.encapIfaces.Add(dataplanedefs.VXLANIfaceNameV4)
+		specialInterfaces = append(specialInterfaces, vxlandefs.VXLANIfaceNameV4)
+		m.encapIfaces.Add(vxlandefs.VXLANIfaceNameV4)
 	}
 	if config.RulesConfig.VXLANEnabledV6 {
-		specialInterfaces = append(specialInterfaces, dataplanedefs.VXLANIfaceNameV6)
-		m.encapIfaces.Add(dataplanedefs.VXLANIfaceNameV6)
+		specialInterfaces = append(specialInterfaces, vxlandefs.VXLANIfaceNameV6)
+		m.encapIfaces.Add(vxlandefs.VXLANIfaceNameV6)
 	}
 	if config.RulesConfig.WireguardEnabled {
 		specialInterfaces = append(specialInterfaces, config.RulesConfig.WireguardInterfaceName)
@@ -827,7 +830,7 @@ func NewBPFEndpointManager(
 		if err := m.dp.ensureBPFDevices(); err != nil {
 			return nil, fmt.Errorf("ensure BPF devices: %w", err)
 		} else {
-			logrus.Infof("Created %s:%s veth pair.", dataplanedefs.BPFInDev, dataplanedefs.BPFOutDev)
+			logrus.Infof("Created %s:%s veth pair.", bpfepdefs.BPFInDev, bpfepdefs.BPFOutDev)
 		}
 	}
 
@@ -891,7 +894,7 @@ func bpfOverlayTunnelID(rc *rules.Config) uint32 {
 func newBPFEndpointManagerDataplane(
 	ipFamily proto.IPVersion,
 	ipMaps *bpfmap.IPMaps,
-	iptablesFilterTable Table,
+	iptablesFilterTable dataplanedefs.Table,
 	ipSetIDAlloc *idalloc.IDAllocator,
 	workloadRemoveChan chan string,
 	epMgr *bpfEndpointManager,
@@ -1079,9 +1082,9 @@ func (m *bpfEndpointManager) OnUpdate(msg any) {
 	// Updates from the dataplane:
 
 	// Interface updates.
-	case *ifaceStateUpdate:
+	case *dataplanedefs.IfaceStateUpdate:
 		m.onInterfaceUpdate(msg)
-	case *ifaceAddrsUpdate:
+	case *dataplanedefs.IfaceAddrsUpdate:
 		m.onInterfaceAddrsUpdate(msg)
 	// Updates from the datamodel:
 
@@ -1173,11 +1176,11 @@ func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
 			}
 		}
 		logrus.WithField("ip", update.Dst).Info("host tunnel")
-		m.dirtyIfaceNames.Add(dataplanedefs.BPFOutDev)
+		m.dirtyIfaceNames.Add(bpfepdefs.BPFOutDev)
 	}
 }
 
-func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
+func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *dataplanedefs.IfaceAddrsUpdate) {
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 
@@ -1193,7 +1196,7 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 	}
 }
 
-func (d *bpfEndpointManagerDataplane) updateIfaceIP(update *ifaceAddrsUpdate) bool {
+func (d *bpfEndpointManagerDataplane) updateIfaceIP(update *dataplanedefs.IfaceAddrsUpdate) bool {
 	var ipAddrs []net.IP
 	isDirty := false
 	if update.Addrs != nil && update.Addrs.Len() > 0 {
@@ -1439,7 +1442,7 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 	return nil
 }
 
-func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
+func (m *bpfEndpointManager) onInterfaceUpdate(update *dataplanedefs.IfaceStateUpdate) {
 	logrus.Debugf("Interface update for %v, state %v", update.Name, update.State)
 
 	if update.Name == tc.NetkitProbeIface {
@@ -1456,9 +1459,9 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 					delete(m.initAttaches, update.Name)
 				}
 			}
-			if update.Name == dataplanedefs.BPFInDev {
+			if update.Name == bpfepdefs.BPFInDev {
 				m.ifacesLock.Lock()
-				if err := m.reconcileBPFDevices(dataplanedefs.BPFInDev); err != nil {
+				if err := m.reconcileBPFDevices(bpfepdefs.BPFInDev); err != nil {
 					logrus.WithError(err).Fatal("Failed to configure BPF devices")
 				}
 				m.ifacesLock.Unlock()
@@ -1467,7 +1470,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 
 		// Add host interface not managed by calico to the ifstate map,
 		// so that packets from workload are not dropped.
-		if update.Name != dataplanedefs.BPFInDev {
+		if update.Name != bpfepdefs.BPFInDev {
 			if update.State == ifacemonitor.StateNotPresent {
 				m.deleteIgnoredHostIfaceFromIfState(update.Index)
 			} else {
@@ -1556,7 +1559,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			// We require host interfaces to be in non-strict RPF mode so that
 			// packets can return straight to host for services bypassing CTLB.
 			switch update.Name {
-			case dataplanedefs.BPFOutDev:
+			case bpfepdefs.BPFOutDev:
 				if err := m.reconcileBPFDevices(update.Name); err != nil {
 					logrus.WithError(err).Fatal("Failed to configure BPF devices")
 				}
@@ -1775,7 +1778,7 @@ func (m *bpfEndpointManager) markEndpointsDirty(ids set.Set[any], kind string) {
 		case types.WorkloadEndpointID:
 			m.markExistingWEPDirty(id, kind)
 		case string:
-			if id == allInterfaces {
+			if id == dataplanedefs.AllInterfaces {
 				for ifaceName := range m.nameToIface {
 					if m.isWorkloadIface(ifaceName) {
 						logrus.Debugf("Mark WEP iface dirty, for host-* endpoint %v change", kind)
@@ -3762,7 +3765,7 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 		if ifaceName == "lo" {
 			return tcdefs.EpTypeLO
 		}
-		if ifaceName == dataplanedefs.BPFInDev || ifaceName == dataplanedefs.BPFOutDev {
+		if ifaceName == bpfepdefs.BPFInDev || ifaceName == bpfepdefs.BPFOutDev {
 			return tcdefs.EpTypeNAT
 		}
 		return tcdefs.EpTypeHost
@@ -4036,7 +4039,7 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
 	return m.dataIfaceRegex.MatchString(iface) ||
-		(m.hostNetworkedNATMode != hostNetworkedNATDisabled && (iface == dataplanedefs.BPFOutDev || iface == "lo"))
+		(m.hostNetworkedNATMode != hostNetworkedNATDisabled && (iface == bpfepdefs.BPFOutDev || iface == "lo"))
 }
 
 func (m *bpfEndpointManager) FlowLogsEnabled() bool {
@@ -4137,7 +4140,7 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.Host
 
 	// Pre-process the map for the host-* endpoint: if there is a host-* endpoint, any host
 	// interface without its own HEP should use the host-* endpoint's policy.
-	wildcardHostEndpoint, wildcardExists := hostIfaceToEpMap[allInterfaces]
+	wildcardHostEndpoint, wildcardExists := hostIfaceToEpMap[dataplanedefs.AllInterfaces]
 	if wildcardExists {
 		logrus.Info("Host-* endpoint is configured")
 		for ifaceName := range m.nameToIface {
@@ -4146,7 +4149,7 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.Host
 				hostIfaceToEpMap[ifaceName] = wildcardHostEndpoint
 			}
 		}
-		delete(hostIfaceToEpMap, allInterfaces)
+		delete(hostIfaceToEpMap, dataplanedefs.AllInterfaces)
 	}
 
 	// If there are parts of proto.HostEndpoint that do not affect us, we could mask those out
@@ -4158,10 +4161,10 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.Host
 	// If the host-* endpoint is changing, mark all workload interfaces as dirty.
 	if (wildcardExists != m.wildcardExists) || !googleproto.Equal(wildcardHostEndpoint, m.wildcardHostEndpoint) {
 		logrus.Infof("Host-* endpoint is changing; was %v, now %v", m.wildcardHostEndpoint, wildcardHostEndpoint)
-		m.removeHEPFromIndexes(allInterfaces, m.wildcardHostEndpoint)
+		m.removeHEPFromIndexes(dataplanedefs.AllInterfaces, m.wildcardHostEndpoint)
 		m.wildcardHostEndpoint = wildcardHostEndpoint
 		m.wildcardExists = wildcardExists
-		m.addHEPToIndexes(allInterfaces, wildcardHostEndpoint)
+		m.addHEPToIndexes(dataplanedefs.AllInterfaces, wildcardHostEndpoint)
 		for ifaceName := range m.nameToIface {
 			if m.isWorkloadIface(ifaceName) {
 				logrus.Info("Mark WEP iface dirty, for host-* endpoint change")
@@ -4317,9 +4320,9 @@ func (m *bpfEndpointManager) reconcileBPFDevices(iface string) error {
 		return nil
 	}
 
-	vethPeer := dataplanedefs.BPFInDev
-	if iface == dataplanedefs.BPFInDev {
-		vethPeer = dataplanedefs.BPFOutDev
+	vethPeer := bpfepdefs.BPFInDev
+	if iface == bpfepdefs.BPFInDev {
+		vethPeer = bpfepdefs.BPFOutDev
 	}
 
 	// Wait for both bpfin.cali and bpfout.cali to become oper UP
@@ -4332,14 +4335,14 @@ func (m *bpfEndpointManager) reconcileBPFDevices(iface string) error {
 }
 
 func (m *bpfEndpointManager) configureBPFDevices() error {
-	bpfin, err := netlink.LinkByName(dataplanedefs.BPFInDev)
+	bpfin, err := netlink.LinkByName(bpfepdefs.BPFInDev)
 	if err != nil {
-		return fmt.Errorf("missing %s after add: %w", dataplanedefs.BPFInDev, err)
+		return fmt.Errorf("missing %s after add: %w", bpfepdefs.BPFInDev, err)
 	}
 
-	bpfout, err := netlink.LinkByName(dataplanedefs.BPFOutDev)
+	bpfout, err := netlink.LinkByName(bpfepdefs.BPFOutDev)
 	if err != nil {
-		return fmt.Errorf("missing %s after add: %w", dataplanedefs.BPFOutDev, err)
+		return fmt.Errorf("missing %s after add: %w", bpfepdefs.BPFOutDev, err)
 	}
 
 	if m.v6 != nil {
@@ -4387,27 +4390,27 @@ func (m *bpfEndpointManager) configureBPFDevices() error {
 		i := retries
 		for {
 			if err := netlink.NeighAdd(arp); err != nil && err != syscall.EEXIST {
-				logrus.WithError(err).Warnf("Failed to update neigh for %s (arp %#v), retrying.", dataplanedefs.BPFOutDev, arp)
+				logrus.WithError(err).Warnf("Failed to update neigh for %s (arp %#v), retrying.", bpfepdefs.BPFOutDev, arp)
 				i--
 				if i > 0 {
 					time.Sleep(250 * time.Millisecond)
 					continue
 				} else {
 					return fmt.Errorf("failed to update neigh for %s (arp %#v) after %d tries: %w",
-						dataplanedefs.BPFOutDev, arp, retries, err)
+						bpfepdefs.BPFOutDev, arp, retries, err)
 				}
 			}
 			break
 		}
 	}
-	logrus.Infof("Updated neigh for %s (arp %v)", dataplanedefs.BPFOutDev, arp)
+	logrus.Infof("Updated neigh for %s (arp %v)", bpfepdefs.BPFOutDev, arp)
 
 	if m.v4 != nil {
-		if err := configureProcSysForInterface(dataplanedefs.BPFInDev, 4, "0", writeProcSys); err != nil {
-			return fmt.Errorf("failed to configure %s parameters: %w", dataplanedefs.BPFOutDev, err)
+		if err := configureProcSysForInterface(bpfepdefs.BPFInDev, 4, "0", writeProcSys); err != nil {
+			return fmt.Errorf("failed to configure %s parameters: %w", bpfepdefs.BPFOutDev, err)
 		}
-		if err := configureProcSysForInterface(dataplanedefs.BPFOutDev, 4, "0", writeProcSys); err != nil {
-			return fmt.Errorf("failed to configure %s parameters: %w", dataplanedefs.BPFOutDev, err)
+		if err := configureProcSysForInterface(bpfepdefs.BPFOutDev, 4, "0", writeProcSys); err != nil {
+			return fmt.Errorf("failed to configure %s parameters: %w", bpfepdefs.BPFOutDev, err)
 		}
 	}
 
@@ -4421,58 +4424,58 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 
 	var bpfout, bpfin netlink.Link
 
-	bpfin, err := netlink.LinkByName(dataplanedefs.BPFInDev)
+	bpfin, err := netlink.LinkByName(bpfepdefs.BPFInDev)
 	if err != nil {
 		la := netlink.NewLinkAttrs()
-		la.Name = dataplanedefs.BPFInDev
+		la.Name = bpfepdefs.BPFInDev
 		la.MTU = m.bpfIfaceMTU
 		nat := &netlink.Veth{
 			LinkAttrs: la,
-			PeerName:  dataplanedefs.BPFOutDev,
+			PeerName:  bpfepdefs.BPFOutDev,
 		}
 		if err := netlink.LinkAdd(nat); err != nil {
-			return fmt.Errorf("failed to add %s: %w", dataplanedefs.BPFInDev, err)
+			return fmt.Errorf("failed to add %s: %w", bpfepdefs.BPFInDev, err)
 		}
-		bpfin, err = netlink.LinkByName(dataplanedefs.BPFInDev)
+		bpfin, err = netlink.LinkByName(bpfepdefs.BPFInDev)
 		if err != nil {
-			return fmt.Errorf("missing %s after add: %w", dataplanedefs.BPFInDev, err)
+			return fmt.Errorf("missing %s after add: %w", bpfepdefs.BPFInDev, err)
 		}
 	}
 
 	if state := bpfin.Attrs().OperState; state != netlink.OperUp {
-		logrus.WithField("state", state).Info(dataplanedefs.BPFInDev)
+		logrus.WithField("state", state).Info(bpfepdefs.BPFInDev)
 		if err := netlink.LinkSetUp(bpfin); err != nil {
-			return fmt.Errorf("failed to set %s up: %w", dataplanedefs.BPFInDev, err)
+			return fmt.Errorf("failed to set %s up: %w", bpfepdefs.BPFInDev, err)
 		}
 	}
 
-	bpfout, err = netlink.LinkByName(dataplanedefs.BPFOutDev)
+	bpfout, err = netlink.LinkByName(bpfepdefs.BPFOutDev)
 	if err != nil {
-		return fmt.Errorf("missing %s after add: %w", dataplanedefs.BPFOutDev, err)
+		return fmt.Errorf("missing %s after add: %w", bpfepdefs.BPFOutDev, err)
 	}
 	if state := bpfout.Attrs().OperState; state != netlink.OperUp {
-		logrus.WithField("state", state).Info(dataplanedefs.BPFOutDev)
+		logrus.WithField("state", state).Info(bpfepdefs.BPFOutDev)
 		if err := netlink.LinkSetUp(bpfout); err != nil {
-			return fmt.Errorf("failed to set %s up: %w", dataplanedefs.BPFOutDev, err)
+			return fmt.Errorf("failed to set %s up: %w", bpfepdefs.BPFOutDev, err)
 		}
 	}
 
 	err = netlink.LinkSetMTU(bpfin, m.bpfIfaceMTU)
 	if err != nil {
-		return fmt.Errorf("failed to set MTU to %d on %s: %w", m.bpfIfaceMTU, dataplanedefs.BPFInDev, err)
+		return fmt.Errorf("failed to set MTU to %d on %s: %w", m.bpfIfaceMTU, bpfepdefs.BPFInDev, err)
 	}
 
 	err = netlink.LinkSetMTU(bpfout, m.bpfIfaceMTU)
 	if err != nil {
-		return fmt.Errorf("failed to set MTU to %d on %s: %w", m.bpfIfaceMTU, dataplanedefs.BPFOutDev, err)
+		return fmt.Errorf("failed to set MTU to %d on %s: %w", m.bpfIfaceMTU, bpfepdefs.BPFOutDev, err)
 	}
 
 	m.natInIdx = bpfin.Attrs().Index
 	m.natOutIdx = bpfout.Attrs().Index
 
-	_, err = m.ensureQdisc(dataplanedefs.BPFInDev)
+	_, err = m.ensureQdisc(bpfepdefs.BPFInDev)
 	if err != nil {
-		return fmt.Errorf("failed to set qdisc on %s: %w", dataplanedefs.BPFOutDev, err)
+		return fmt.Errorf("failed to set qdisc on %s: %w", bpfepdefs.BPFOutDev, err)
 	}
 
 	_, err = m.ensureQdisc("lo")
@@ -4484,7 +4487,7 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	// serve as a gateway to route services via bpfnat veth rather than having
 	// link local routes for each service that would trigger ARP queries.
 	if m.v4 != nil {
-		m.routeTableV4.RouteUpdate(dataplanedefs.BPFInDev, routetable.Target{
+		m.routeTableV4.RouteUpdate(bpfepdefs.BPFInDev, routetable.Target{
 			Type: routetable.TargetTypeLinkLocalUnicast,
 			RouteKey: routetable.RouteKey{
 				CIDR: bpfnatGWCIDR,
@@ -4492,7 +4495,7 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 		})
 	}
 	if m.v6 != nil {
-		m.routeTableV6.RouteUpdate(dataplanedefs.BPFInDev, routetable.Target{
+		m.routeTableV6.RouteUpdate(bpfepdefs.BPFInDev, routetable.Target{
 			Type: routetable.TargetTypeLinkLocalUnicast,
 			RouteKey: routetable.RouteKey{
 				CIDR: bpfnatGWCIDRv6,
@@ -5319,12 +5322,12 @@ func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
 		if m.v6 != nil && m.v6.lastSeenHostIP != nil {
 			target.GW = bpfnatGWIPv6
 			target.Src = ip.FromNetIP(m.v6.lastSeenHostIP)
-			m.routeTableV6.RouteUpdate(dataplanedefs.BPFInDev, target)
+			m.routeTableV6.RouteUpdate(bpfepdefs.BPFInDev, target)
 		}
 	} else if m.v4 != nil && m.v4.lastSeenHostIP != nil {
 		target.GW = bpfnatGWIP
 		target.Src = ip.FromNetIP(m.v4.lastSeenHostIP)
-		m.routeTableV4.RouteUpdate(dataplanedefs.BPFInDev, target)
+		m.routeTableV4.RouteUpdate(bpfepdefs.BPFInDev, target)
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -5334,10 +5337,10 @@ func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
 
 func (m *bpfEndpointManager) delRoute(cidr ip.CIDR) {
 	if m.v6 != nil && cidr.Version() == 6 {
-		m.routeTableV6.RouteRemove(dataplanedefs.BPFInDev, routetable.RouteKey{CIDR: cidr})
+		m.routeTableV6.RouteRemove(bpfepdefs.BPFInDev, routetable.RouteKey{CIDR: cidr})
 	}
 	if m.v4 != nil && cidr.Version() == 4 {
-		m.routeTableV4.RouteRemove(dataplanedefs.BPFInDev, routetable.RouteKey{CIDR: cidr})
+		m.routeTableV4.RouteRemove(bpfepdefs.BPFInDev, routetable.RouteKey{CIDR: cidr})
 	}
 	logrus.WithFields(logrus.Fields{
 		"cidr": cidr,

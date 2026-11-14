@@ -27,6 +27,7 @@ import (
 
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/netlinkshim"
@@ -448,10 +449,10 @@ func cleanUpVXLANDevice(deviceName string) {
 	logrus.Debug("Checking if we need to clean up the VXLAN device")
 
 	var errFound bool
-	for i := 0; i <= maxCleanupRetries; i++ {
+	for i := 0; i <= dataplanedefs.MaxCleanupRetries; i++ {
 		errFound = false
 		if i > 0 {
-			logrus.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
+			logrus.Debugf("Retrying %v/%v times", i, dataplanedefs.MaxCleanupRetries)
 		}
 		link, err := netlink.LinkByName(deviceName)
 		if err != nil {
@@ -476,6 +477,6 @@ func cleanUpVXLANDevice(deviceName string) {
 		}
 	}
 	if errFound {
-		logrus.Warnf("Giving up trying to clean up VXLAN device after retrying %v times", maxCleanupRetries)
+		logrus.Warnf("Giving up trying to clean up VXLAN device after retrying %v times", dataplanedefs.MaxCleanupRetries)
 	}
 }
