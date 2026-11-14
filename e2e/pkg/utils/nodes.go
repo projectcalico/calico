@@ -16,8 +16,10 @@ package utils
 
 import (
 	"context"
-	"net"
+	"errors"
+	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/onsi/gomega"
@@ -26,11 +28,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
 	nodeBgpIpv4IPIPTunnelAddrAnnotation  = "projectcalico.org/IPv4IPIPTunnelAddr"
 	nodeBgpIpv4VXLANTunnelAddrAnnotation = "projectcalico.org/IPv4VXLANTunnelAddr"
+	nodeBgpIpv6VXLANTunnelAddrAnnotation = "projectcalico.org/IPv6VXLANTunnelAddr"
 )
 
 func RequireNodeCount(f *framework.Framework, count int) {
@@ -54,47 +58,69 @@ func RequireNodeCount(f *framework.Framework, count int) {
 
 type NodesInfoGetter interface {
 	GetNames() []string
-	GetIPv4s() []string
-	GetIPv6s() []string
 	GetCalicoNames() []string
-	GetTunnelIPs() []string
+
+	// GetIPs and GetTunnelIPs are aligned with GetNames, with "" where a node has
+	// no address in the family.
+	GetIPs(f IPFamily) []string
+	GetTunnelIPs(f IPFamily) []string
 }
 
-// nodesInfo implements the NodesInfoGetter interface
 type nodesInfo struct {
 	nodeNames       []string
-	nodeIPv4s       []string
-	nodeIPv6s       []string
 	calicoNodeNames []string
-	tunnelIPs       []string
+	internalIPs     [][]string
+	ips             map[IPFamily][]string
+	tunnelIPs       map[IPFamily][]string
 }
 
 func (n *nodesInfo) GetNames() []string {
 	return n.nodeNames
 }
 
-func (n *nodesInfo) GetIPv4s() []string {
-	return n.nodeIPv4s
-}
-
-func (n *nodesInfo) GetIPv6s() []string {
-	return n.nodeIPv6s
-}
-
 func (n *nodesInfo) GetCalicoNames() []string {
 	return n.calicoNodeNames
 }
 
-func (n *nodesInfo) GetTunnelIPs() []string {
-	return n.tunnelIPs
+func (n *nodesInfo) GetIPs(f IPFamily) []string {
+	return n.ips[f]
+}
+
+func (n *nodesInfo) GetTunnelIPs(f IPFamily) []string {
+	return n.tunnelIPs[f]
+}
+
+// checkFamilies checks only the first count nodes, the ones a spec targets:
+// other nodes in the cluster don't affect the checks, so they shouldn't fail them.
+func (n *nodesInfo) checkFamilies(families []IPFamily, count int) error {
+	if len(n.nodeNames) < count {
+		return fmt.Errorf("need %d nodes, have %d (%v)", count, len(n.nodeNames), n.nodeNames)
+	}
+	var missing []string
+	for i := 0; i < count; i++ {
+		for _, f := range families {
+			if n.ips[f][i] == "" {
+				missing = append(missing, fmt.Sprintf("node %s has no %s InternalIP (has %v), but the cluster's IP pools include %s", n.nodeNames[i], f, n.internalIPs[i], f))
+			}
+		}
+	}
+	if len(missing) > 0 {
+		return errors.New(strings.Join(missing, "; "))
+	}
+	return nil
 }
 
 // GetNodesInfo extracts node information from a Kubernetes NodeList and returns
 // a NodesInfoGetter interface that provides access to node details.
 func GetNodesInfo(f *framework.Framework, nodes *corev1.NodeList, masterOK bool) NodesInfoGetter {
-	// By default, Calico node name is host name, e.g. ip-10-0-0-108.
-	// Kubernetes node name could be different (ip-10-0-0-108.us-west-2.compute.internal) if cloud provider is aws.
-	var nodeNames, nodeIPv4s, nodeIPv6s, calicoNodeNames, tunnelIPs []string
+	return getNodesInfo(f, nodes, masterOK)
+}
+
+func getNodesInfo(f *framework.Framework, nodes *corev1.NodeList, masterOK bool) *nodesInfo {
+	info := &nodesInfo{
+		ips:       map[IPFamily][]string{},
+		tunnelIPs: map[IPFamily][]string{},
+	}
 	for _, node := range nodes.Items {
 		addrs := getNodeAddresses(&node, corev1.NodeInternalIP)
 		if len(addrs) == 0 {
@@ -106,32 +132,35 @@ func GetNodesInfo(f *framework.Framework, nodes *corev1.NodeList, masterOK bool)
 			continue
 		}
 
+		// By default, Calico node name is host name, e.g. ip-10-0-0-108.
+		// Kubernetes node name could be different (ip-10-0-0-108.us-west-2.compute.internal) if cloud provider is aws.
 		hostNames := getNodeAddresses(&node, corev1.NodeHostName)
 		if len(hostNames) == 0 {
 			framework.Failf("node %s failed to report a valid host name\n", node.Name)
 		}
 
-		nodeNames = append(nodeNames, node.Name)
+		info.addNode(node.Name, hostNames[0], addrs, node.Annotations)
+	}
+	return info
+}
 
-		// Separate IPv4 and IPv6 addresses
-		for _, addr := range addrs {
-			if net.ParseIP(addr).To4() == nil && net.ParseIP(addr) != nil {
-				nodeIPv6s = append(nodeIPv6s, addr)
-			} else {
-				nodeIPv4s = append(nodeIPv4s, addr)
-			}
+func (n *nodesInfo) addNode(name, calicoName string, internalIPs []string, annotations map[string]string) {
+	n.nodeNames = append(n.nodeNames, name)
+	n.calicoNodeNames = append(n.calicoNodeNames, calicoName)
+	n.internalIPs = append(n.internalIPs, internalIPs)
+	for _, f := range allIPFamilies {
+		n.ips[f] = append(n.ips[f], firstOfFamily(internalIPs, f))
+		n.tunnelIPs[f] = append(n.tunnelIPs[f], nodeTunnelIP(annotations, f))
+	}
+}
+
+func firstOfFamily(ips []string, f IPFamily) string {
+	for _, ip := range ips {
+		if fam, ok := FamilyOf(ip); ok && fam == f {
+			return ip
 		}
-
-		calicoNodeNames = append(calicoNodeNames, hostNames[0])
-		tunnelIPs = append(tunnelIPs, getNodeTunnelIP(&node))
 	}
-	return &nodesInfo{
-		nodeNames:       nodeNames,
-		nodeIPv4s:       nodeIPv4s,
-		nodeIPv6s:       nodeIPv6s,
-		calicoNodeNames: calicoNodeNames,
-		tunnelIPs:       tunnelIPs,
-	}
+	return ""
 }
 
 // AwaitReadySchedulableNodesInfo polls until at least minCount ready and
@@ -146,8 +175,12 @@ func GetNodesInfo(f *framework.Framework, nodes *corev1.NodeList, masterOK bool)
 // few nodes. A one-shot node-count precondition races that recovery and fails
 // spuriously — use this helper for any multi-node requirement instead.
 func AwaitReadySchedulableNodesInfo(f *framework.Framework, minCount int, masterOK bool) NodesInfoGetter {
-	var info NodesInfoGetter
-	gomega.EventuallyWithOffset(1, func(g gomega.Gomega) {
+	return awaitReadySchedulableNodes(f, minCount, masterOK, 2)
+}
+
+func awaitReadySchedulableNodes(f *framework.Framework, minCount int, masterOK bool, offset int) *nodesInfo {
+	var info *nodesInfo
+	gomega.EventuallyWithOffset(offset, func(g gomega.Gomega) {
 		// Keep the per-attempt timeout well under the polling interval so a slow
 		// or erroring List doesn't eat the whole Eventually budget in one attempt.
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -156,19 +189,54 @@ func AwaitReadySchedulableNodesInfo(f *framework.Framework, minCount int, master
 		// filtered out.
 		nodes, err := e2enode.GetBoundedReadySchedulableNodes(ctx, f.ClientSet, minCount+4)
 		g.Expect(err).NotTo(gomega.HaveOccurred(), "failed to list schedulable nodes")
-		info = GetNodesInfo(f, nodes, masterOK)
+		info = getNodesInfo(f, nodes, masterOK)
 		g.Expect(len(info.GetNames())).To(gomega.BeNumerically(">=", minCount),
 			"require at least %d ready schedulable nodes, found %d", minCount, len(info.GetNames()))
 	}).WithTimeout(60 * time.Second).WithPolling(5 * time.Second).Should(gomega.Succeed())
 	return info
 }
 
-func getNodeTunnelIP(node *corev1.Node) string {
-	if ip, ok := node.Annotations[nodeBgpIpv4IPIPTunnelAddrAnnotation]; ok {
-		return ip
+// FamilyNodes is the first n ready, schedulable nodes, each with an address in
+// every IP family the cluster's IP pools give pods. Slices are indexed by node.
+type FamilyNodes struct {
+	Families    []IPFamily
+	Names       []string
+	CalicoNames []string
+	IPs         map[IPFamily][]string
+	TunnelIPs   map[IPFamily][]string
+}
+
+// AwaitFamilyNodes fails the spec if the IP pools can't be read or one of the n
+// nodes has no address in a pool family.
+func AwaitFamilyNodes(f *framework.Framework, cli ctrlclient.Client, n int) FamilyNodes {
+	info := awaitReadySchedulableNodes(f, n, false, 2)
+	families, err := PoolFamilies(cli)
+	framework.ExpectNoError(err)
+	framework.ExpectNoError(info.checkFamilies(families, n))
+	nodes := FamilyNodes{
+		Families:    families,
+		Names:       info.GetNames()[:n],
+		CalicoNames: info.GetCalicoNames()[:n],
+		IPs:         map[IPFamily][]string{},
+		TunnelIPs:   map[IPFamily][]string{},
 	}
-	if ip, ok := node.Annotations[nodeBgpIpv4VXLANTunnelAddrAnnotation]; ok {
-		return ip
+	for _, fam := range families {
+		nodes.IPs[fam] = info.GetIPs(fam)[:n]
+		nodes.TunnelIPs[fam] = info.GetTunnelIPs(fam)[:n]
+	}
+	return nodes
+}
+
+// nodeTunnelIP prefers IPIP for IPv4; IPIP has no IPv6 form.
+func nodeTunnelIP(annotations map[string]string, f IPFamily) string {
+	keys := []string{nodeBgpIpv4IPIPTunnelAddrAnnotation, nodeBgpIpv4VXLANTunnelAddrAnnotation}
+	if f == IPv6 {
+		keys = []string{nodeBgpIpv6VXLANTunnelAddrAnnotation}
+	}
+	for _, k := range keys {
+		if ip, ok := annotations[k]; ok {
+			return ip
+		}
 	}
 	return ""
 }
