@@ -20,7 +20,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandefs"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
@@ -979,13 +980,13 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 		// selection are handled by BPF programs directly, so these masquerade
 		// rules for IPIP/VXLAN tunnels are not needed.
 		if ipVersion == 4 && r.IPIPEnabled && len(r.IPIPTunnelAddress) > 0 {
-			tunnelIfaces = append(tunnelIfaces, dataplanedefs.IPIPIfaceName)
+			tunnelIfaces = append(tunnelIfaces, ipipdefs.IPIPIfaceName)
 		}
 		if ipVersion == 4 && r.VXLANEnabled && len(r.VXLANTunnelAddress) > 0 {
-			tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV4)
+			tunnelIfaces = append(tunnelIfaces, vxlandefs.VXLANIfaceNameV4)
 		}
 		if ipVersion == 6 && r.VXLANEnabledV6 && len(r.VXLANTunnelAddressV6) > 0 {
-			tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV6)
+			tunnelIfaces = append(tunnelIfaces, vxlandefs.VXLANIfaceNameV6)
 		}
 	}
 	if ipVersion == 4 && r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 {

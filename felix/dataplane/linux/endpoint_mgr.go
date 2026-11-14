@@ -16,7 +16,6 @@ package intdataplane
 
 import (
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"reflect"
@@ -27,6 +26,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/procsys"
 	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -41,10 +42,6 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
-
-type hepListener interface {
-	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
-}
 
 type liveMigrationListener interface {
 	OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState)
@@ -145,12 +142,12 @@ type endpointManager struct {
 	wlIfacesRegexp *regexp.Regexp
 
 	// Our dependencies.
-	rawTable     Table
-	mangleTable  Table
-	filterTable  Table
+	rawTable     dataplanedefs.Table
+	mangleTable  dataplanedefs.Table
+	filterTable  dataplanedefs.Table
 	ruleRenderer rules.RuleRenderer
 	routeTable   *routetable.ClassView
-	writeProcSys procSysWriter
+	writeProcSys procsys.Writer
 	osStat       func(path string) (os.FileInfo, error)
 	epMarkMapper rules.EndpointMarkMapper
 	newMatch     func() generictables.MatchCriteria
@@ -158,7 +155,7 @@ type endpointManager struct {
 	filterMaps   nftables.MapsDataplane
 
 	// ARP proxy suppression table (nftables ARP family). nil for IPv6.
-	arpTable Table
+	arpTable dataplanedefs.Table
 	arpMaps  nftables.MapsDataplane
 
 	flowtableHandler nftables.FlowTableHandler
@@ -245,18 +242,16 @@ type endpointManager struct {
 	// Callbacks
 	OnEndpointStatusUpdate EndpointStatusUpdateCallback
 	callbacks              endpointManagerCallbacks
-	bpfEndpointManager     hepListener
+	bpfEndpointManager     dataplanedefs.HEPListener
 }
 
 type EndpointStatusUpdateCallback func(ipVersion uint8, id any, status string, extraInfo any)
 
-type procSysWriter func(path, value string) error
-
 func newEndpointManager(
 	cfg *endpointManagerConfig,
-	rawTable Table,
-	mangleTable Table,
-	filterTable Table,
+	rawTable dataplanedefs.Table,
+	mangleTable dataplanedefs.Table,
+	filterTable dataplanedefs.Table,
 	ruleRenderer rules.RuleRenderer,
 	routeTable routetable.Interface,
 	ipVersion uint8,
@@ -265,10 +260,10 @@ func newEndpointManager(
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
 	flowtableHandler nftables.FlowTableHandler,
-	bpfEndpointManager hepListener,
+	bpfEndpointManager dataplanedefs.HEPListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr linkaddrs.Interface,
-	arpTable Table,
+	arpTable dataplanedefs.Table,
 	arpMaps nftables.MapsDataplane,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
@@ -281,7 +276,7 @@ func newEndpointManager(
 		ipVersion,
 		epMarkMapper,
 		onWorkloadEndpointStatusUpdate,
-		writeProcSys,
+		procsys.Write,
 		os.Stat,
 		defaultRPFilter,
 		filterMaps,
@@ -296,23 +291,23 @@ func newEndpointManager(
 
 func newEndpointManagerWithShims(
 	cfg *endpointManagerConfig,
-	rawTable Table,
-	mangleTable Table,
-	filterTable Table,
+	rawTable dataplanedefs.Table,
+	mangleTable dataplanedefs.Table,
+	filterTable dataplanedefs.Table,
 	ruleRenderer rules.RuleRenderer,
 	routeTable routetable.Interface,
 	ipVersion uint8,
 	epMarkMapper rules.EndpointMarkMapper,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
-	procSysWriter procSysWriter,
+	procSysWriter procsys.Writer,
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
 	flowtableHandler nftables.FlowTableHandler,
-	bpfEndpointManager hepListener,
+	bpfEndpointManager dataplanedefs.HEPListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr linkaddrs.Interface,
-	arpTable Table,
+	arpTable dataplanedefs.Table,
 	arpMaps nftables.MapsDataplane,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(cfg.wlInterfacePrefixes, "|") + ").*"
@@ -432,10 +427,10 @@ func (m *endpointManager) OnUpdate(protoBufMsg any) {
 		delete(m.rawHostEndpoints, id)
 		m.hostEndpointsDirty = true
 		m.epIDsToUpdateStatus.Add(id)
-	case *ifaceStateUpdate:
+	case *dataplanedefs.IfaceStateUpdate:
 		log.WithField("update", msg).Debug("Interface state changed.")
 		m.pendingIfaceUpdates[msg.Name] = msg.State
-	case *ifaceAddrsUpdate:
+	case *dataplanedefs.IfaceAddrsUpdate:
 		log.WithField("update", msg).Debug("Interface addrs changed.")
 		if m.wlIfacesRegexp.MatchString(msg.Name) {
 			log.WithField("update", msg).Debug("Workload interface, ignoring.")
@@ -712,7 +707,7 @@ func (m *endpointManager) calculateHostEndpointStatus(id types.HostEndpointID) (
 			resolved = true
 			operUp = true
 			for _, ifaceName := range ifaceNames {
-				if ifaceName == allInterfaces {
+				if ifaceName == dataplanedefs.AllInterfaces {
 					// For * host endpoints we don't let particular interfaces
 					// impact their reported status, because it's unclear what
 					// the semantics would be, and we'd potentially have to look
@@ -1329,7 +1324,7 @@ func (m *endpointManager) resolveHostEndpoints() map[string]types.HostEndpointID
 
 	if bestHostEpId.EndpointId != "" {
 		log.WithField("bestHostEpId", bestHostEpId).Debug("Got all interfaces HostEp")
-		newIfaceNameToHostEpID[allInterfaces] = bestHostEpId
+		newIfaceNameToHostEpID[dataplanedefs.AllInterfaces] = bestHostEpId
 	}
 
 	if m.bpfEndpointManager != nil {
@@ -1358,7 +1353,7 @@ func (m *endpointManager) updateHostEndpoints() {
 		logCxt := log.WithField("id", id).WithField("ifaceName", ifaceName)
 		ep := m.rawHostEndpoints[id]
 		if len(ep.UntrackedTiers) > 0 {
-			if ifaceName == allInterfaces {
+			if ifaceName == dataplanedefs.AllInterfaces {
 				// GlobalNetworkPolicy with `doNotTrack: True` has been configured
 				// to apply to a host-* endpoint, which is not currently supported.
 				// Log and warning and ignore it.
@@ -1571,12 +1566,12 @@ func (m *endpointManager) updateHostEndpoints() {
 	// Rewrite the filter dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newIfaceNameToHostEpID).Debug("Rewrite filter dispatch chains?")
 	defaultIfaceName := ""
-	if _, ok := newIfaceNameToHostEpID[allInterfaces]; ok {
+	if _, ok := newIfaceNameToHostEpID[dataplanedefs.AllInterfaces]; ok {
 		// All-interfaces host endpoint is active.  Arrange for it to be the default,
 		// instead of trying to dispatch to it directly based on the nonexistent interface
 		// name *.
-		defaultIfaceName = allInterfaces
-		delete(newIfaceNameToHostEpID, allInterfaces)
+		defaultIfaceName = dataplanedefs.AllInterfaces
+		delete(newIfaceNameToHostEpID, dataplanedefs.AllInterfaces)
 	}
 	newFilterDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID, defaultIfaceName, true)
 	newMangleEgressDispatchChains := m.ruleRenderer.ToHostDispatchChains(newIfaceNameToHostEpID, defaultIfaceName)
@@ -1587,11 +1582,11 @@ func (m *endpointManager) updateHostEndpoints() {
 	// Rewrite the mangle dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newPreDNATIfaceNameToHostEpID).Debug("Rewrite mangle dispatch chains?")
 	defaultIfaceName = ""
-	if _, ok := newPreDNATIfaceNameToHostEpID[allInterfaces]; ok {
+	if _, ok := newPreDNATIfaceNameToHostEpID[dataplanedefs.AllInterfaces]; ok {
 		// All-interfaces host endpoint is active.  Arrange for it to be the
 		// default. This is handled the same as the filter dispatch chains above.
-		defaultIfaceName = allInterfaces
-		delete(newPreDNATIfaceNameToHostEpID, allInterfaces)
+		defaultIfaceName = dataplanedefs.AllInterfaces
+		delete(newPreDNATIfaceNameToHostEpID, dataplanedefs.AllInterfaces)
 	}
 	newMangleIngressDispatchChains := m.ruleRenderer.FromHostDispatchChains(newPreDNATIfaceNameToHostEpID, defaultIfaceName)
 	newMangleDispatchChains := append(newMangleIngressDispatchChains, newMangleEgressDispatchChains...)
@@ -1607,7 +1602,7 @@ func (m *endpointManager) updateHostEndpoints() {
 func (m *endpointManager) updateDispatchChains(
 	activeChains map[string]*generictables.Chain,
 	newChains []*generictables.Chain,
-	table Table,
+	table dataplanedefs.Table,
 ) {
 	seenChains := set.New[string]()
 	for _, newChain := range newChains {
@@ -1643,79 +1638,6 @@ func (m *endpointManager) interfaceExistsInProcSys(name string) (bool, error) {
 	return true, nil
 }
 
-func configureProcSysForInterface(name string, ipVersion int, rpFilter string, writeProcSys procSysWriter) error {
-	log.WithField("ifaceName", name).Info(
-		"Applying /proc/sys configuration to interface.")
-
-	if ipVersion == 4 {
-		// Enable routing to localhost.  This is required to allow for NAT to the local
-		// host.
-		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
-		if err != nil {
-			return err
-		}
-		// Normally, the kernel has a delay before responding to proxy ARP but we know
-		// that's not needed in a Calico network so we disable it.
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
-		if err != nil {
-			log.Warnf("failed to set net.ipv4.neigh.%s.proxy_delay=0: %s", name, err)
-		}
-		// Enable proxy ARP, this makes the host respond to all ARP requests with its own
-		// MAC.  This has a couple of advantages:
-		//
-		// - In OpenStack, we're forced to configure the guest's networking using DHCP.
-		//   Since DHCP requires a subnet and gateway, representing the Calico network
-		//   in the natural way would lose a lot of IP addresses.  For IPv4, we'd have to
-		//   advertise a distinct /30 to each guest, which would use up 4 IPs per guest.
-		//   Using proxy ARP, we can advertise the whole pool to each guest as its subnet
-		//   but have the host respond to all ARP requests and route all the traffic whether
-		//   it is on or off subnet.
-		//
-		// - For containers, we install explicit routes into the containers network
-		//   namespace and we use a link-local address for the gateway.  ARP and proxy ARP
-		//   are needed for that link-local address in the same way as for the gateway and
-		//   subnet IPs in the OpenStack case.
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
-		if err != nil {
-			return err
-		}
-		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
-		// be forwarded in both directions we need this flag to be set on the fabric-facing
-		// interface too (or for the global default to be set).
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/forwarding", name), "1")
-		if err != nil {
-			return err
-		}
-		// Disable kernel rpf check for interfaces that have rpf filtering explicitly disabled
-		// This is set only in IPv4 mode as there's no equivalent sysctl in IPv6
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), rpFilter)
-		if err != nil {
-			return err
-		}
-	} else {
-		// Note: deliberately no proxy_ndp counterpart to the proxy_arp above.
-		// Despite the name, proxy_ndp is not the IPv6 equivalent: it does no
-		// route-based proxying, and the kernel answers a Neighbor Solicitation
-		// only for addresses with an explicit NUD_PROXY neighbour entry, which
-		// Calico does not program.  IPv6 needs no proxying anyway, because Linux
-		// auto-provisions a link-local address on this (host) side of every
-		// workload interface, so the workload routes via a real address of ours
-		// and we answer NDP for it as our own.  IPv4 has no such automatic
-		// provisioning, hence the dummy 169.254.1.1 gateway and proxy ARP above.
-		// See felix/design/neighbour-discovery.md.
-
-		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
-		// be forwarded in both directions we need this flag to be set on the fabric-facing
-		// interface too (or for the global default to be set).
-		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", name), "1")
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (m *endpointManager) configureInterface(name string) error {
 	if !m.activeUpIfaces.Contains(name) {
 		log.WithField("ifaceName", name).Info(
@@ -1747,32 +1669,13 @@ func (m *endpointManager) configureInterface(name string) error {
 		rpFilter = "0"
 	}
 
-	err = configureProcSysForInterface(name, int(m.ipVersion), rpFilter, m.writeProcSys)
+	err = procsys.ConfigureInterface(name, int(m.ipVersion), rpFilter, m.writeProcSys)
 	if err != nil {
 		return err
 	}
 
 	return m.ensureLocalBGPPeerIPOnInterface(name)
 }
-
-func writeProcSys(path, value string) error {
-	f, err := os.OpenFile(path, os.O_WRONLY, 0)
-	if err != nil {
-		return err
-	}
-	n, err := f.Write([]byte(value))
-	if err == nil && n < len(value) {
-		err = io.ErrShortWrite
-	}
-	if err1 := f.Close(); err == nil {
-		err = err1
-	}
-	return err
-}
-
-// The interface name that we use to mean "all interfaces".  This is intentionally longer than
-// IFNAMSIZ (16) characters, so that it can't possibly match a real interface name.
-var allInterfaces = "any-interface-at-all"
 
 // True if the given host endpoint is for all interfaces, as opposed to for a specific interface.
 func forAllInterfaces(hep *proto.HostEndpoint) bool {
