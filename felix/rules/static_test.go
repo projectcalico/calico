@@ -503,9 +503,9 @@ var _ = Describe("Static", func() {
 					})
 					It("should return only the expected filter chains", func() {
 						if kubeIPVSEnabled {
-							Expect(len(rr.StaticFilterTableChains(ipVersion))).To(Equal(8))
+							Expect(len(rr.StaticFilterTableChains(ipVersion))).To(Equal(9))
 						} else {
-							Expect(len(rr.StaticFilterTableChains(ipVersion))).To(Equal(6))
+							Expect(len(rr.StaticFilterTableChains(ipVersion))).To(Equal(7))
 						}
 					})
 
@@ -532,7 +532,36 @@ var _ = Describe("Static", func() {
 						Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-failsafe-out")).To(Equal(expRawFailsafeOut))
 					})
 					It("should return only the expected raw chains", func() {
-						Expect(len(rr.StaticRawTableChains(ipVersion))).To(Equal(5))
+						Expect(len(rr.StaticRawTableChains(ipVersion))).To(Equal(6))
+					})
+					It("should reject in the filter table reject chain", func() {
+						Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-reject")).To(Equal(&generictables.Chain{
+							Name: "cali-reject",
+							Rules: []generictables.Rule{
+								{
+									Match:   iptables.Match().Protocol("tcp"),
+									Action:  iptables.RejectAction{With: generictables.RejectWithTCPReset},
+									Comment: []string{"Reject TCP with a reset"},
+								},
+								{
+									Match:   iptables.Match(),
+									Action:  iptables.RejectAction{},
+									Comment: []string{"Reject with ICMP unreachable"},
+								},
+							},
+						}))
+					})
+					It("should drop in the raw and mangle table reject chains", func() {
+						expDropChain := &generictables.Chain{
+							Name: "cali-reject",
+							Rules: []generictables.Rule{{
+								Match:   iptables.Match(),
+								Action:  iptables.DropAction{},
+								Comment: []string{"Reject is not supported in this table, drop instead"},
+							}},
+						}
+						Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-reject")).To(Equal(expDropChain))
+						Expect(findChain(rr.StaticMangleTableChains(ipVersion), "cali-reject")).To(Equal(expDropChain))
 					})
 				})
 			}

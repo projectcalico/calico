@@ -3880,6 +3880,7 @@ spec:
                           - Deny
                           - Log
                           - Pass
+                          - Reject
                         type: string
                       destination:
                         description:
@@ -4531,6 +4532,7 @@ spec:
                           - Deny
                           - Log
                           - Pass
+                          - Reject
                         type: string
                       destination:
                         description:
@@ -5287,6 +5289,13 @@ spec:
                   rule:
                     (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
                     || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
+                - message: Reject rules are not supported in doNotTrack or preDNAT policy
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.doNotTrack) || !self.doNotTrack) && (!has(self.preDNAT)
+                    || !self.preDNAT) || ((!has(self.ingress) || self.ingress.all(r, r.action
+                    != 'Reject')) && (!has(self.egress) || self.egress.all(r, r.action
+                    != 'Reject')))
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.selector) || !self.selector.contains('global(')"
@@ -6720,6 +6729,7 @@ spec:
                           - Deny
                           - Log
                           - Pass
+                          - Reject
                         type: string
                       destination:
                         description:
@@ -7371,6 +7381,7 @@ spec:
                           - Deny
                           - Log
                           - Pass
+                          - Reject
                         type: string
                       destination:
                         description:
@@ -8236,6 +8247,7 @@ spec:
                           - Deny
                           - Log
                           - Pass
+                          - Reject
                         type: string
                       destination:
                         description:
@@ -8887,6 +8899,7 @@ spec:
                           - Deny
                           - Log
                           - Pass
+                          - Reject
                         type: string
                       destination:
                         description:
@@ -9653,6 +9666,13 @@ spec:
                   rule:
                     (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
                     || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
+                - message: Reject rules are not supported in doNotTrack or preDNAT policy
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.doNotTrack) || !self.doNotTrack) && (!has(self.preDNAT)
+                    || !self.preDNAT) || ((!has(self.ingress) || self.ingress.all(r, r.action
+                    != 'Reject')) && (!has(self.egress) || self.egress.all(r, r.action
+                    != 'Reject')))
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.selector) || !self.selector.contains('global(')"
@@ -10256,6 +10276,7 @@ spec:
                           - Deny
                           - Log
                           - Pass
+                          - Reject
                         type: string
                       destination:
                         description:
@@ -10907,6 +10928,7 @@ spec:
                           - Deny
                           - Log
                           - Pass
+                          - Reject
                         type: string
                       destination:
                         description:
@@ -11699,6 +11721,7 @@ spec:
                         - Deny
                         - Log
                         - Pass
+                        - Reject
                     - enum:
                         - Pass
                         - Deny

@@ -913,6 +913,66 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	)
 
 	DescribeTable(
+		"Reject rules should be correctly rendered",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal, false)
+			rejectRule := in
+			rejectRule.Action = "reject"
+			rules := renderer.ProtoRuleToIptablesRules(rejectRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
+			// Like deny, set the drop mark, then jump to the reject chain instead of dropping.
+			Expect(len(rules)).To(Equal(2))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
+			Expect(rules[1]).To(Equal(generictables.Rule{
+				Match:  iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.JumpAction{Target: "cali-reject"},
+			}))
+		},
+		ruleTestData,
+	)
+
+	DescribeTable(
+		"Reject rules should be correctly rendered with flowlogs enabled",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = true
+			renderer := NewRenderer(rrConfigNormal, false)
+			rejectRule := in
+			rejectRule.Action = "reject"
+			rules := renderer.ProtoRuleToIptablesRules(rejectRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
+			// The reject is logged with the deny prefix, so flow logs report it as a deny.
+			Expect(len(rules)).To(Equal(3))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
+			Expect(rules[1]).To(Equal(generictables.Rule{
+				Match: iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.NflogAction{
+					Group:  1,
+					Prefix: "DPI0|gnp/default.foo",
+				},
+			}))
+			Expect(rules[2]).To(Equal(generictables.Rule{
+				Match:  iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.JumpAction{Target: "cali-reject"},
+			}))
+		},
+		ruleTestData,
+	)
+
+	It("should jump to the reject chain for a reject rule even when FilterDenyAction is REJECT", func() {
+		rrConfigReject := rrConfigNormal
+		rrConfigReject.FilterDenyAction = "REJECT"
+		rrConfigReject.FlowLogsEnabled = false
+		renderer := NewRenderer(rrConfigReject, false)
+		rules := renderer.ProtoRuleToIptablesRules(&proto.Rule{Action: "reject"}, 4,
+			RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
+		Expect(rules).To(HaveLen(2))
+		Expect(rules[1].Action).To(Equal(iptables.JumpAction{Target: "cali-reject"}))
+	})
+
+	DescribeTable(
 		"Deny (REJECT) rules should be correctly rendered",
 		func(ipVer int, in *proto.Rule, expMatch string) {
 			rrConfigReject := rrConfigNormal
