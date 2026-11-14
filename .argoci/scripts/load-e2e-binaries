@@ -10,7 +10,11 @@ if ! command -v zstd >/dev/null 2>&1; then
   $(command -v sudo) apt-get update -qq
   $(command -v sudo) apt-get install -y -qq --no-install-recommends zstd
 fi
-( cd /tmp && artifact pull workflow e2e-binaries.tar.zst )
+if [ -f "${PREFETCHED_ARTIFACTS:-/nonexistent}/e2e-binaries.tar.zst" ]; then
+  mv "${PREFETCHED_ARTIFACTS}/e2e-binaries.tar.zst" /tmp/
+else
+  ( cd /tmp && artifact pull workflow e2e-binaries.tar.zst )
+fi
 # -m: the checkout is newer than the binaries' build, and make would rebuild
 # whatever looks older than its sources.
 tar --use-compress-program="zstd -d" -m -xf /tmp/e2e-binaries.tar.zst

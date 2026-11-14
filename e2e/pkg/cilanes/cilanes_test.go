@@ -333,8 +333,9 @@ steps:
     commands: |
       make ${E2E_TARGET}
   - name: manifest-install
-    commands: |
-      make kind-manifest-install-test
+    runOnVM:
+      source: |
+        make kind-manifest-install-test
 `
 
 // A kind step's make target picks its config, even when a matrix entry names
