@@ -3,32 +3,52 @@ version: condensed-module
 
 defaults:
   timeout: 30m
-  useGoBuild: true
 
 steps:
+  # On a machine of its own for docker: release commands run through docker.
   - name: release-ci
-    depends: [check-go]
-    requests: {cpu: 4000m, memory: 2Gi}
-    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
-    services:
-      - docker
-    commands: |
-      # A fork carries no tags, and the tests parse a version from them.
-      git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
-      cd release
-      make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/release"
-      artifact push job report --destination test-results || true
+    depends: [check-go, go-cache]
+    checkout: true
+    cache:
+      - {name: go, mode: read, path: /cache/go}
+    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
+    # VM steps alone, since a pod step would hand it to the code under test.
+    secretBundles: [banzai-secrets]
+    runOnVM:
+      createVM:
+        machineType: e2-standard-4
+      env: [CI_GIT_REPO_SLUG]
+      put:
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      source: |
+        set -e
+        .argoci/scripts/restore-go-cache release-ci ~/.go-mod
+        repo="$(pwd)"
+        finish() {
+          rc=$?
+          artifact push job "$repo/release/report" --destination test-results || true
+          exit $rc
+        }
+        trap finish EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        # A fork carries no tags, and the tests parse a version from them.
+        git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
+        cd release
+        make ci
 
-  # Needs docker: `bin/release` splices its own flags into a nested `docker run`.
   - name: release-build
     depends: [check-go]
-    requests: {cpu: 2750m, memory: 2Gi}
-    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
-    services:
-      - docker
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    requests: {cpu: 3000m, memory: 3Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     commands: |
       cd release
       make build
@@ -37,32 +57,53 @@ steps:
       artifact cache store "release-${CI_GIT_SHA}" bin
 
   - name: release-st
-    depends: [check-go, release-build]
+    depends: [check-go, release-build, go-cache]
     timeout: 2h
-    requests: {cpu: 3500m, memory: 8Gi}
-    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
-    services:
-      - docker
+    checkout: true
+    cache:
+      - {name: go, mode: read, path: /cache/go}
     secretBundles:
+      - banzai-secrets
       - iss-image-scanning
       - releasebot-slack
       - name: argoci-hashrelease-publisher
         keys:
           - name: argoci-hashrelease-publisher.json
             as: HASHRELEASE_PUBLISHER_KEY
-            localFile: /root/secrets/hashrelease-publisher.json
     env:
       - name: HASHRELEASE_SERVER_BUCKET
         value: hashreleaseserver-static
-    commands: |
-      # A fork carries no tags, and the version comes from them.
-      git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
-      $(command -v sudo) apt-get update -qq && $(command -v sudo) apt-get install -y -qq --no-install-recommends rsync
-      # Kept out of the epilogue, whose artifact push needs the CI account.
-      export CLOUDSDK_CONFIG="$(mktemp -d)"
-      export GOOGLE_APPLICATION_CREDENTIALS=/root/secrets/hashrelease-publisher.json
-      gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
-      cd release
-      make st
-    epilogue: |
-      artifact push job "${CI_HOME}/${CI_GIT_DIR}/release/_logs" --destination release-st-logs || true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-4
+        maxRunDuration: 2h30m
+      # What release/cmd/flags.go reads from the two bundles; unset ones are skipped.
+      env: [HASHRELEASE_SERVER_BUCKET, CI_GIT_REPO_SLUG, SLACK_API_TOKEN, SLACK_CHANNEL,
+            IMAGE_SCANNER_API, IMAGE_SCANNING_TOKEN, IMAGE_SCANNER_SELECT, RELEASE_IMAGE_SCAN]
+      put:
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      putEnv:
+        - HASHRELEASE_PUBLISHER_KEY:secrets/hashrelease-publisher.json
+      source: |
+        set -e
+        .argoci/scripts/restore-go-cache release-st ~/.go-mod
+        repo="$(pwd)"
+        finish() {
+          rc=$?
+          # Under the CI account: the publisher key below cannot list the store.
+          env -u CLOUDSDK_CONFIG -u GOOGLE_APPLICATION_CREDENTIALS \
+            artifact push job "$repo/release/_logs" --destination release-st-logs || true
+          exit $rc
+        }
+        trap finish EXIT
+        # A fork carries no tags, and the version comes from them.
+        git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
+        # The Windows archive packs with zip.
+        for t in make rsync zip unzip; do command -v $t >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends $t; }; done
+        # Its own gcloud config, so the publisher key never becomes the account
+        # `artifact` uses.
+        export CLOUDSDK_CONFIG="$(mktemp -d)"
+        export GOOGLE_APPLICATION_CREDENTIALS="${HOME}/secrets/hashrelease-publisher.json"
+        gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
+        cd release
+        make st

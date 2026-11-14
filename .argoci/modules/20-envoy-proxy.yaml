@@ -4,22 +4,34 @@ version: condensed-module
 
 defaults:
   timeout: 30m
-  services:
-    - docker
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: envoy-proxy-ci
-    requests: {cpu: 1750m, memory: 1Gi}
-    commands: |
-      cd third_party/envoy-proxy
-      make ci
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-2
+      source: |
+        set -e
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd third_party/envoy-proxy
+        make ci
 
   # The CI step already builds amd64.
   - name: envoy-proxy-image
-    requests: {cpu: 1000m, memory: 1.5Gi}
     matrix:
       - name: arm64
         env: [{name: ARCH, value: arm64}]
-    commands: |
-      cd third_party/envoy-proxy
-      make image ARCH=$ARCH
+    checkout: true
+    runOnVM:
+      createVM:
+        machineType: e2-standard-2
+      env: [ARCH]
+      source: |
+        set -e
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd third_party/envoy-proxy
+        make image ARCH=$ARCH
