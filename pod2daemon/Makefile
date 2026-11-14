@@ -101,6 +101,15 @@ clean-registrar:
 ut: $(SRC_FILES)
 	mkdir -p report
 	$(DOCKER_RUN) --privileged $(CALICO_BUILD) sh -c 'set -o pipefail && cd /go/src/$(PACKAGE_NAME) && go test -v ./... | go-junit-report > ./report/tests.xml'
+	$(MAKE) ut-csidriver-mount
+
+# The CSI driver's mount tests skip unless they run as root. Build the test binary as the
+# caller and run only the binary as root, so root never writes to the shared Go cache.
+.PHONY: ut-csidriver-mount
+ut-csidriver-mount:
+	mkdir -p report bin
+	$(DOCKER_RUN) $(CALICO_BUILD) go test -c -o bin/csidriver-driver.test ./csidriver/driver
+	$(DOCKER_RUN) --privileged -e RUN_AS_ROOT=true $(CALICO_BUILD) sh -c 'set -o pipefail && cd csidriver/driver && ../../bin/csidriver-driver.test -test.v -test.run "Publish|Unpublish" | go-junit-report > ../../report/csidriver-mount.xml'
 
 fv st:
 	@echo "No FVs or STs available"
