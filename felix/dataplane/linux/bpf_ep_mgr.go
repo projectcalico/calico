@@ -4404,7 +4404,7 @@ func (m *bpfEndpointManager) configureBPFDevices() error {
 
 	if m.v4 != nil {
 		if err := configureProcSysForInterface(dataplanedefs.BPFInDev, 4, "0", writeProcSys); err != nil {
-			return fmt.Errorf("failed to configure %s parameters: %w", dataplanedefs.BPFOutDev, err)
+			return fmt.Errorf("failed to configure %s parameters: %w", dataplanedefs.BPFInDev, err)
 		}
 		if err := configureProcSysForInterface(dataplanedefs.BPFOutDev, 4, "0", writeProcSys); err != nil {
 			return fmt.Errorf("failed to configure %s parameters: %w", dataplanedefs.BPFOutDev, err)
