@@ -22,7 +22,7 @@ bin/flowgen: $(shell find . -name '*.go')
 
 # Update protobuf generation.
 protobuf proto/api.pb.go: proto/api.proto
-	$(DOCKER_RUN) -v $(CURDIR):/code $(CALICO_BUILD) sh -c 'protoc --proto_path=/code/proto --go_out=/code/proto --go-grpc_out=. --go_opt=paths=source_relative /code/proto/api.proto'
+	$(DOCKER_GO_BUILD) sh -c 'protoc --proto_path=proto --go_out=proto --go-grpc_out=. --go_opt=paths=source_relative api.proto'
 	$(MAKE) fix-changed
 
 ###############################################################################

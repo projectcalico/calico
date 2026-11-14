@@ -8,9 +8,12 @@ defaults:
 steps:
   - name: node-kind-cluster-tests
     depends: [build-calico-image, build-node-image, build-whisker-image, check-go]
+    # No docker here: the pod only ships tarballs to GCS and drives the VM fleet.
     requests: {cpu: 2000m, memory: 4Gi}
-    services:
-      - docker
+    cache:
+      - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
+      - {name: node-image, mode: read, path: /cache/node-image}
+      - {name: whisker-image, mode: read, path: /cache/whisker-image}
     secretBundles:
       - name: google-service-account-for-gce
         keys:
@@ -40,6 +43,10 @@ steps:
       export REGION="${ARGOCI_GCP_REGION}"
       export VM_PREFIX="argoci-${CI_GIT_REPO_NAME}-${SHORT_WORKFLOW_ID}-kind-"
       mkdir -p artifacts
+      # The images come from their producers' caches, gathered in one place.
+      export PREFETCHED_ARTIFACTS=/tmp/prefetched
+      mkdir -p "$PREFETCHED_ARTIFACTS"
+      ln -sf /cache/calico-image-zst/* /cache/node-image/* /cache/whisker-image/* "$PREFETCHED_ARTIFACTS"/
       cd node
       ./.semaphore/cache-test-artifacts
       cd ..
