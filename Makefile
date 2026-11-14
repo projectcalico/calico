@@ -65,6 +65,14 @@ go-vet: operator-charts
 	$(MAKE) -C felix clone-libbpf
 	$(DOCKER_GO_BUILD) go vet --tags fvtests ./...
 
+# Compiles what go-vet does without running its checks, to fill a build cache:
+# every package and its tests, and what only tests import. `go list -export`
+# compiles for export data and never links, which go build would for every main
+# package, against a libbpf this only has the headers of.
+go-compile-all: operator-charts
+	$(MAKE) -C felix clone-libbpf
+	$(DOCKER_GO_BUILD) go list --tags fvtests -export -test -deps ./... >/dev/null
+
 update-x-libraries:
 	$(DOCKER_GO_BUILD) sh -c "go get golang.org/x/... && go mod tidy"
 
@@ -99,10 +107,27 @@ test-charts: bin/helm
 	
 # yamllint is single-threaded, so the files are split across cores. Parsable
 # output keeps each problem on one line, so parallel runs can't garble it.
+YAML_LINT_CMD = find . -name .git -prune -o -type f \( -name "*.yaml" -o -name "*.yml" -o -name .yamllint \) -print0 | \
+	xargs -0 -r -P $(or $(GOMAXPROCS),$$(nproc)) -n 50 $(1) -f parsable
+
+# NATIVE_PYTHON=true runs the linter on this machine rather than in its image.
+ifeq ($(NATIVE_PYTHON),true)
+yaml-lint: bin/uv
+	@bin/uv tool install -q yamllint==$(YAMLLINT_VERSION)
+	@$(call YAML_LINT_CMD,"$$(bin/uv tool dir --bin)/yamllint")
+else
 yaml-lint:
 	@docker run --rm -v $(PWD):/data -w /data --entrypoint sh cytopia/yamllint:latest -c \
-	  'find . -name .git -prune -o -type f \( -name "*.yaml" -o -name "*.yml" -o -name .yamllint \) -print0 | \
-	   xargs -0 -r -P $(or $(GOMAXPROCS),$$(nproc)) -n 50 yamllint -f parsable'
+	  '$(call YAML_LINT_CMD,yamllint)'
+endif
+
+# Written under a temporary name: a half-extracted binary looks complete to make.
+bin/uv:
+	$(call fetch_file,https://github.com/astral-sh/uv/releases/download/$(UV_VERSION)/uv-x86_64-unknown-linux-gnu.tar.gz,bin/.uv.tar.gz)
+	tar -xzf bin/.uv.tar.gz -O uv-x86_64-unknown-linux-gnu/uv > $@.tmp
+	chmod +x $@.tmp
+	mv $@.tmp $@
+	rm -f bin/.uv.tar.gz
 
 protobuf:
 	$(MAKE) -C app-policy protobuf

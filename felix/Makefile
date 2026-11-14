@@ -174,7 +174,11 @@ else
 LIBBPF_BUILD = $(DOCKER_RUN) $(if $(GITHUB_TOKEN),-e GITHUB_TOKEN) $(CALICO_BUILD)
 endif
 
+ifeq ($(NATIVE_GO_BUILD),true)
+DOCKER_GO_BUILD_CGO=env CGO_ENABLED=1 $(if $(CROSS_CC),CC="$(CROSS_CC)") CGO_LDFLAGS=$(CGO_LDFLAGS) CGO_CFLAGS=$(CGO_CFLAGS)
+else
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=1 $(if $(CROSS_CC),-e CC="$(CROSS_CC)") -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
+endif
 
 bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
@@ -190,8 +194,7 @@ bin/calico-felix-race-$(ARCH):  $(LIBBPF_A) $(SRC_FILES) ../go.mod
 
 # Generate the protobuf bindings for go. The proto/felixbackend.pb.go file is included in SRC_FILES
 protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
-	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
-		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative felixbackend.proto'
+	$(DOCKER_GO_BUILD) sh -c 'protoc --proto_path=proto --go_out=proto --go-grpc_out=. --go_opt=paths=source_relative felixbackend.proto'
 	# Make sure the generated code won't cause a static-checks failure.
 	$(MAKE) fix-changed
 
