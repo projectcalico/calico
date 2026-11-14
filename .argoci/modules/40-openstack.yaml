@@ -4,26 +4,28 @@ version: condensed-module
 
 defaults:
   timeout: 1h
-  # The compute SA createVM, runOnVM and the teardowns authenticate with.
-  secretBundles: [banzai-secrets]
 
 steps:
-  # On a VM for docker.
   - name: openstack-tox
     depends: [check-python]
-    checkout: true
-    runOnVM:
-      createVM:
-        machineType: e2-standard-2
-      source: |
-        set -e
-        repo="$(pwd)"
-        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
-        cd networking-calico
-        # Separate invocations: named as two targets, a parallel make would run
-        # them at once and have both tox runs share one .tox/ tree.
-        make tox-caracal
-        make tox-fv-caracal
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    env:
+      - name: NATIVE_PYTHON
+        value: "true"
+    jobSize: small
+    requests: {cpu: 2000m, memory: 3Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    commands: |
+      cd networking-calico
+      # Separate invocations: named as two targets, a parallel make would run
+      # them at once and have both tox runs share one .tox/ tree.
+      make tox-caracal
+      make tox-fv-caracal
 
   # DevStack installs OpenStack over the machine it runs on — uninstalling
   # system packages as it goes — so it gets one of its own.
@@ -33,6 +35,8 @@ steps:
     # Longer than the default hour: DevStack installs the whole control plane.
     timeout: 2h
     checkout: true
+    # The compute SA createVM, runOnVM and the teardown authenticate with.
+    secretBundles: [banzai-secrets]
     runOnVM:
       createVM:
         # Not e2: the resync benchmark compares latencies under load, and shared
