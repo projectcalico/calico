@@ -26,6 +26,7 @@ import (
 	"syscall"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/moby/sys/mountinfo"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -206,6 +207,18 @@ func (ns *nodeService) mount(destinationDir, volumeID string) error {
 		return err
 	}
 
+	// The kubelet publishes the volume again for running pods after it restarts, and
+	// mounting again would stack a second layer on the target.
+	mounted, err := mountinfo.Mounted(destinationDir)
+	if err != nil {
+		log.Errorf("Mount error: failed to check whether %s is mounted: %v", destinationDir, err)
+		return err
+	}
+	if mounted {
+		log.Infof("%s is already mounted", destinationDir)
+		return nil
+	}
+
 	// Not really needed but attempt to workaround writing to volume mounts that k8s has created:
 	// https://github.com/kubernetes/kubernetes/blob/61ac9d46382884a8bd9e228da22bca5817f6d226/pkg/util/mount/mount_linux.go
 	// TODO: Test if this is really needed now with CSI as opposed to flexvolume which was run on the host.
@@ -304,21 +317,39 @@ func (ns *nodeService) retrievePodInfoFromFile(volumeID string) (*creds.Credenti
 }
 
 func (ns *nodeService) unmount(dir, volumeID string) error {
-	// Unmount the bind mount.
-	err := syscall.Unmount(dir+"/nodeagent", 0)
-	if err != nil {
-		log.WithError(err).WithField("directory", fmt.Sprintf("%s/nodeagent", dir)).Error("Failed to unmount csidriver directory. Ignoring...")
-	}
+	// Loop until the target is no longer a mount point. The kubelet never deletes the pod
+	// while a layer remains, and a node that ran a driver without the publish check can
+	// hold one layer per kubelet restart.
+	for {
+		mounted, err := mountinfo.Mounted(dir)
+		if errors.Is(err, fs.ErrNotExist) {
+			break
+		}
+		if err != nil {
+			log.WithError(err).WithField("directory", dir).Error("Failed to check whether csidriver directory is mounted")
+			return err
+		}
+		if !mounted {
+			break
+		}
 
-	// Unmount the tmpfs.
-	err = syscall.Unmount(dir, 0)
-	if err != nil {
-		log.WithError(err).WithField("directory", dir).Error("Failed to unmount csidriver directory. Ignoring...")
+		// Unmount the bind mount.
+		err = syscall.Unmount(dir+"/nodeagent", 0)
+		if err != nil {
+			log.WithError(err).WithField("directory", fmt.Sprintf("%s/nodeagent", dir)).Error("Failed to unmount csidriver directory. Ignoring...")
+		}
+
+		// Unmount the tmpfs.
+		err = syscall.Unmount(dir, 0)
+		if err != nil {
+			log.WithError(err).WithField("directory", dir).Error("Failed to unmount csidriver directory")
+			return err
+		}
 	}
 
 	// Delete the directory that was created.
 	delDir := strings.Join([]string{ns.config.NodeAgentWorkloadHomeDir, volumeID}, "/")
-	err = os.RemoveAll(delDir)
+	err := os.RemoveAll(delDir)
 	if err != nil {
 		log.Errorf("Unmount error: unable to remove mount directory %s: %v", delDir, err)
 		if !errors.Is(err, fs.ErrNotExist) {
