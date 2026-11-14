@@ -20,7 +20,8 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/routedefs"
 )
 
 func TestRouteIsOurs_BIRDRoutesOnBGPPeerIfaces(t *testing.T) {
@@ -28,7 +29,7 @@ func TestRouteIsOurs_BIRDRoutesOnBGPPeerIfaces(t *testing.T) {
 		wlIface    = "cali12345"
 		nonWlIface = "eth0"
 	)
-	exclusiveProto := dataplanedefs.DefaultRouteProto
+	exclusiveProto := routedefs.DefaultRouteProto
 
 	peerTrue := func(string) bool { return true }
 	peerFalse := func(string) bool { return false }
@@ -125,7 +126,7 @@ func TestRouteIsOurs_BIRDRoutesOnBGPPeerIfaces(t *testing.T) {
 // the ones BIRD left behind on exit (its kernel protocol runs with `persist`) are reconciled away.
 // Only BIRD's protocol is claimed, and only on the IPIP device.
 func TestRouteIsOurs_BIRDRoutesOnIPIPDevice(t *testing.T) {
-	exclusiveProto := dataplanedefs.DefaultRouteProto
+	exclusiveProto := routedefs.DefaultRouteProto
 
 	tests := []struct {
 		name                string
@@ -137,14 +138,14 @@ func TestRouteIsOurs_BIRDRoutesOnIPIPDevice(t *testing.T) {
 		{
 			name:                "IPIP device, RTPROT_BIRD, Felix owns IPIP routes => ours",
 			ownBIRDIPIPRoutes:   true,
-			ifaceName:           dataplanedefs.IPIPIfaceName,
+			ifaceName:           ipipdefs.IPIPIfaceName,
 			protocol:            unix.RTPROT_BIRD,
 			expectedRouteIsOurs: true,
 		},
 		{
 			name:                "IPIP device, RTPROT_BIRD, BIRD owns IPIP routes => not ours",
 			ownBIRDIPIPRoutes:   false,
-			ifaceName:           dataplanedefs.IPIPIfaceName,
+			ifaceName:           ipipdefs.IPIPIfaceName,
 			protocol:            unix.RTPROT_BIRD,
 			expectedRouteIsOurs: false,
 		},
@@ -153,7 +154,7 @@ func TestRouteIsOurs_BIRDRoutesOnIPIPDevice(t *testing.T) {
 			// it is the configured owner, so they do not depend on this flag.
 			name:                "IPIP device, exclusive proto, BIRD owns IPIP routes => ours",
 			ownBIRDIPIPRoutes:   false,
-			ifaceName:           dataplanedefs.IPIPIfaceName,
+			ifaceName:           ipipdefs.IPIPIfaceName,
 			protocol:            exclusiveProto,
 			expectedRouteIsOurs: true,
 		},
@@ -162,7 +163,7 @@ func TestRouteIsOurs_BIRDRoutesOnIPIPDevice(t *testing.T) {
 			// the device itself.
 			name:                "IPIP device, unrelated proto, Felix owns IPIP routes => not ours",
 			ownBIRDIPIPRoutes:   true,
-			ifaceName:           dataplanedefs.IPIPIfaceName,
+			ifaceName:           ipipdefs.IPIPIfaceName,
 			protocol:            unix.RTPROT_STATIC,
 			expectedRouteIsOurs: false,
 		},

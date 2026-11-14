@@ -23,7 +23,8 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/config"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandefs"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
@@ -1052,7 +1053,7 @@ var _ = Describe("Static", func() {
 							{Action: iptables.JumpAction{Target: "cali-nat-outgoing"}},
 							{
 								Match: iptables.Match().
-									OutInterface(dataplanedefs.IPIPIfaceName).
+									OutInterface(ipipdefs.IPIPIfaceName).
 									NotSrcAddrType(generictables.AddrTypeLocal, true).
 									SrcAddrType(generictables.AddrTypeLocal, false),
 								Action: iptables.MasqAction{},
@@ -1080,14 +1081,14 @@ var _ = Describe("Static", func() {
 								{
 									Match: iptables.Match().
 										ProtocolNum(ProtoUDP).
-										OutInterface(dataplanedefs.IPIPIfaceName).
+										OutInterface(ipipdefs.IPIPIfaceName).
 										NotSrcAddrType(generictables.AddrTypeLocal, true).
 										SrcAddrType(generictables.AddrTypeLocal, false),
 									Action: iptables.MasqAction{ToPorts: "4790-65535"},
 								},
 								{
 									Match: iptables.Match().
-										OutInterface(dataplanedefs.IPIPIfaceName).
+										OutInterface(ipipdefs.IPIPIfaceName).
 										NotSrcAddrType(generictables.AddrTypeLocal, true).
 										SrcAddrType(generictables.AddrTypeLocal, false),
 									Action: iptables.MasqAction{},
@@ -1177,14 +1178,14 @@ var _ = Describe("Static", func() {
 									{
 										Match: iptables.Match().
 											ProtocolNum(ProtoUDP).
-											OutInterface(dataplanedefs.IPIPIfaceName).
+											OutInterface(ipipdefs.IPIPIfaceName).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
 										Action: iptables.MasqAction{ToPorts: "4790-65535"},
 									},
 									{
 										Match: iptables.Match().
-											OutInterface(dataplanedefs.IPIPIfaceName).
+											OutInterface(ipipdefs.IPIPIfaceName).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
 										Action: iptables.MasqAction{},
@@ -1192,14 +1193,14 @@ var _ = Describe("Static", func() {
 									{
 										Match: iptables.Match().
 											ProtocolNum(ProtoUDP).
-											OutInterface(dataplanedefs.VXLANIfaceNameV4).
+											OutInterface(vxlandefs.VXLANIfaceNameV4).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
 										Action: iptables.MasqAction{ToPorts: "4790-65535"},
 									},
 									{
 										Match: iptables.Match().
-											OutInterface(dataplanedefs.VXLANIfaceNameV4).
+											OutInterface(vxlandefs.VXLANIfaceNameV4).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
 										Action: iptables.MasqAction{},
@@ -1302,14 +1303,14 @@ var _ = Describe("Static", func() {
 									{
 										Match: iptables.Match().
 											ProtocolNum(ProtoUDP).
-											OutInterface(dataplanedefs.VXLANIfaceNameV6).
+											OutInterface(vxlandefs.VXLANIfaceNameV6).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
 										Action: iptables.MasqAction{ToPorts: "4790-65535"},
 									},
 									{
 										Match: iptables.Match().
-											OutInterface(dataplanedefs.VXLANIfaceNameV6).
+											OutInterface(vxlandefs.VXLANIfaceNameV6).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
 										Action: iptables.MasqAction{},
