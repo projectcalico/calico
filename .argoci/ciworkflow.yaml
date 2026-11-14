@@ -67,8 +67,10 @@ promotions:
 # uses the public one — falling back to the source repositories on any error,
 # since go does not retry a download that breaks mid-stream.
 globalPrologue: |
-  mkdir -p /go/src/github.com/projectcalico
-  ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+  # A VM's user cannot write /, and its builds run in docker anyway.
+  if mkdir -p /go/src/github.com/projectcalico 2>/dev/null; then
+    ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+  fi
   export GOPROXY="${GOPROXY:-https://proxy.golang.org|direct}"
   # Anonymous Docker Hub pulls are rate limited. The daemon is up by now on any
   # step that has one. A VM step never gets the credentials: the bundle is loaded
@@ -91,11 +93,19 @@ globalPrologue: |
   # VMs, and it must be the directory the docker builds mount modules from.
   GO_MOD_ROOT="${GOPATH:-${HOME}/go}"
   export GO_MOD_ROOT="${GO_MOD_ROOT%%:*}"
+  #
+  # TEMPORARY: skipped for whichever archive this commit's go-cache handed the
+  # step, which restore-go-cache unpacks over it anyway.
   if [ -n "${BUILD_CACHE_GROUP:-}" ]; then
     mkdir -p "${GO_MOD_ROOT}"
-    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache restore "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) & build=$!
-    ( cd "${GO_MOD_ROOT}" && artifact cache restore "go-mod-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) & mods=$!
-    wait "$build" "$mods" || true
+    pids=()
+    if [ ! -f /cache/go/go-build.tar.gz ]; then
+      ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache restore "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) & pids+=($!)
+    fi
+    if [ ! -f /cache/go/go-mod.tar.gz ] && [ ! -f "${HOME}/.go-mod/go-mod.tar.gz" ]; then
+      ( cd "${GO_MOD_ROOT}" && artifact cache restore "go-mod-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) & pids+=($!)
+    fi
+    for __pid in "${pids[@]}"; do wait "${__pid}" || true; done
   fi
 
 # Only a passing branch build is worth handing to the next run; a PR's cache

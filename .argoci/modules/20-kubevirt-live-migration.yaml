@@ -35,6 +35,7 @@ steps:
     cache:
       - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
       - {name: node-image, mode: read, path: /cache/node-image}
+      - {name: e2e-binaries, mode: read, path: /cache/e2e-binaries}
     runOnVM:
       createVM:
         machineType: e2-standard-8
@@ -50,6 +51,7 @@ steps:
       put:
         - /cache/calico-image-zst:prefetched
         - /cache/node-image:prefetched
+        - /cache/e2e-binaries/e2e-binaries.tar.zst:prefetched/e2e-binaries.tar.zst
       source: |
         set -e
         repo="$(pwd)"

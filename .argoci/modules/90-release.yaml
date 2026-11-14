@@ -90,13 +90,16 @@ steps:
         repo="$(pwd)"
         finish() {
           rc=$?
-          artifact push job "$repo/release/_logs" --destination release-st-logs || true
+          # Under the CI account: the publisher key below cannot list the store.
+          env -u CLOUDSDK_CONFIG -u GOOGLE_APPLICATION_CREDENTIALS \
+            artifact push job "$repo/release/_logs" --destination release-st-logs || true
           exit $rc
         }
         trap finish EXIT
         # A fork carries no tags, and the version comes from them.
         git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
-        for t in make rsync; do command -v $t >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends $t; }; done
+        # The Windows archive packs with zip.
+        for t in make rsync zip unzip; do command -v $t >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends $t; }; done
         # Its own gcloud config, so the publisher key never becomes the account
         # `artifact` uses.
         export CLOUDSDK_CONFIG="$(mktemp -d)"

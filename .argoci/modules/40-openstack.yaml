@@ -35,9 +35,11 @@ steps:
     checkout: true
     runOnVM:
       createVM:
-        # e2, like the other machines, because the hyperdisk families ran out of
-        # capacity across the whole region.
-        machineType: e2-standard-8
+        # Not e2: the resync benchmark compares latencies under load, and shared
+        # cores push its ratio past the limit. Not a hyperdisk family either, which
+        # ran out of capacity across the whole region.
+        machineType: n2-standard-8
+        diskType: pd-ssd
         diskSize: 100GB
         maxRunDuration: 2h30m
         # This DevStack release needs Ubuntu 22.04's Python; the CI base image is newer.

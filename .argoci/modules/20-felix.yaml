@@ -56,7 +56,17 @@ steps:
     runOnVM:
       createVM:
         machineType: e2-standard-8
-      env: [BUILD_CACHE_GROUP, NO_LIBBPF_CLONE, GCE_SERVICE_ACCOUNT_KEY]
+      # The fleet setup names its bucket and labels from the workflow's variables.
+      env:
+        - BUILD_CACHE_GROUP
+        - NO_LIBBPF_CLONE
+        - GCE_SERVICE_ACCOUNT_KEY
+        - ARGOCI_GCP_REGION
+        - ARGOCI_RESOURCE_PREFIX
+        - CI_WORKFLOW_NAME
+        - CI_STEP_NAME
+        - CI_GIT_REPO_NAME
+        - CI_GIT_PR_NUMBER
       put:
         - /cache/calico-image-zst:prefetched
         - /cache/calico-test-binaries:prefetched
@@ -422,4 +432,7 @@ steps:
         zstd -dc "${PREFETCHED_ARTIFACTS}/operator-image-dockerio.tar.zst" | docker load
         export OPERATOR_PREBUILT=true
         tar --use-compress-program="zstd -d" -m -xf "${PREFETCHED_ARTIFACTS}/windows-images.tar.zst"
+        # The script writes its logs under a fixed root-owned path.
+        sudo mkdir -p "${LOGS_DIR}"
+        sudo chown -R "$(id -u):$(id -g)" /home/semaphore
         ./process/testing/winfv-felix/run-win-fv.sh 2>&1 | tee /tmp/winfv-console.log
