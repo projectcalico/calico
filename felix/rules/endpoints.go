@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -227,7 +227,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 		// Chain for output traffic _to_ the endpoint.  Note, we use RETURN here rather than
 		// ACCEPT because the mangle table is typically used, if at all, for packet
 		// manipulations that might need to apply to our allowed traffic.
-		r.endpointIptablesChain(
+		r.nonFilterTableRenderer.endpointIptablesChain(
 			tiers,
 			profileIDs,
 			ifaceName,
@@ -253,7 +253,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 	untrackedTiers []TierPolicyGroups,
 ) *generictables.Chain {
 	logrus.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint egress chain.")
-	return r.endpointIptablesChain(
+	return r.nonFilterTableRenderer.endpointIptablesChain(
 		untrackedTiers,
 		nil, // We don't render profiles into the raw table.
 		ifaceName,
@@ -282,7 +282,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 		// Chain for traffic _to_ the endpoint.
 		r.HostEndpointToRawEgressChain(ifaceName, untrackedTiers),
 		// Chain for traffic _from_ the endpoint.
-		r.endpointIptablesChain(
+		r.nonFilterTableRenderer.endpointIptablesChain(
 			untrackedTiers,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
@@ -311,7 +311,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 	return []*generictables.Chain{
 		// Chain for traffic _from_ the endpoint.  Pre-DNAT policy does not apply to
 		// outgoing traffic through a host endpoint.
-		r.endpointIptablesChain(
+		r.nonFilterTableRenderer.endpointIptablesChain(
 			preDNATTiers,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
