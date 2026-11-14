@@ -37,8 +37,7 @@ BINDIR=bin
 build: $(BINDIR)/node-driver-registrar-$(ARCH)
 
 protobuf proto/udsver.pb.go: proto/udsver.proto
-	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
-		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative udsver.proto'
+	$(DOCKER_GO_BUILD) sh -c 'protoc --proto_path=proto --go_out=proto --go-grpc_out=. --go_opt=paths=source_relative udsver.proto'
 	# Make sure the generated code won't cause a static-checks failure.
 	$(MAKE) fix-changed
 
