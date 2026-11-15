@@ -298,8 +298,6 @@ var _ = infrastructure.DatastoreDescribe(
 
 					cc = &connectivity.Checker{}
 					if tunnel == "wireguard" {
-						cc.StaggerStartBy = 100 * time.Millisecond
-
 						// Wait until each node has the other as a WireGuard
 						// peer with an endpoint.
 						for i, f := range tc.Felixes {
@@ -317,9 +315,10 @@ var _ = infrastructure.DatastoreDescribe(
 						// both nodes initiate a handshake, the initiations
 						// cross and each side drops the response to its own
 						// initiation; the 5s retransmits can then cross again
-						// in lockstep. StaggerStartBy only delays the probe
-						// launch, not the first packet, so it cannot prevent
-						// this. A single initiator cannot collide with itself.
+						// in lockstep. A probe launch stagger (StaggerStartBy)
+						// does not control when the first packet is sent, so
+						// it cannot prevent this and is not used here. A
+						// single initiator cannot collide with itself.
 						wgWarmup := &connectivity.Checker{}
 						wgWarmup.ExpectSome(w[0], w[1])
 						wgWarmup.CheckConnectivity()
