@@ -23,6 +23,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdefs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
@@ -221,12 +222,12 @@ func cleanUpIPIPAddrs() {
 	var errFound bool
 
 cleanupRetry:
-	for i := 0; i <= maxCleanupRetries; i++ {
+	for i := 0; i <= dataplanedefs.MaxCleanupRetries; i++ {
 		errFound = false
 		if i > 0 {
-			logrus.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
+			logrus.Debugf("Retrying %v/%v times", i, dataplanedefs.MaxCleanupRetries)
 		}
-		link, err := netlink.LinkByName(dataplanedefs.IPIPIfaceName)
+		link, err := netlink.LinkByName(ipipdefs.IPIPIfaceName)
 		if err != nil {
 			if _, ok := err.(netlink.LinkNotFoundError); ok {
 				logrus.Debug("IPIP disabled and no IPIP device found")
@@ -261,6 +262,6 @@ cleanupRetry:
 		}
 	}
 	if errFound {
-		logrus.Warnf("Giving up trying to clean up IPIP addresses after retrying %v times", maxCleanupRetries)
+		logrus.Warnf("Giving up trying to clean up IPIP addresses after retrying %v times", dataplanedefs.MaxCleanupRetries)
 	}
 }

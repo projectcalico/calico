@@ -20,6 +20,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
@@ -70,7 +71,7 @@ type floatingIPManager struct {
 	ipVersion uint8
 
 	// Our dependencies.
-	natTable     Table
+	natTable     dataplanedefs.Table
 	ruleRenderer rules.RuleRenderer
 
 	// Internal state.
@@ -82,7 +83,7 @@ type floatingIPManager struct {
 }
 
 func newFloatingIPManager(
-	natTable Table,
+	natTable dataplanedefs.Table,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
 	enabled bool,
