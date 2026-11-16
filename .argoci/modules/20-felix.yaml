@@ -10,33 +10,12 @@ defaults:
       value: "true"
 
 steps:
-  # On a PR, decides which FV lanes an earlier run already passed with the same
-  # inputs; felix-build and the lanes skip what it
-  # says passed.  FELIX_FV_MEMO=off runs everything.
-  - name: felix-fv-plan
-    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
-    override:
-      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
-      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
-    useGoBuild: true
-    env:
-      # TEMPORARY: the thread pool the old 4000m request gave, while the
-      # request drops to the measured average.
-      - name: GOMAXPROCS
-        value: "4"
-      - name: BUILD_CACHE_GROUP
-        value: calico
-      - name: FELIX_FV_MEMO
-        value: "on"
-    timeout: 20m
-    requests: {cpu: 1250m, memory: 2Gi}
-    commands: |
-      .argoci/scripts/felix-fv-plan
-
-  # Every FV VM unpacks the felix-build-* steps' output, so a lane whose batches
-  # all fail to configure usually broke there. Native, with the felix-test image
-  # left to rootless buildkit, so no step needs docker.
-  - name: felix-build-prep
+  # Builds what every FV VM runs, so a lane whose batches all fail to configure
+  # usually broke here. Alongside, it publishes the FV memo plan: on a PR, which
+  # lanes an earlier run already passed with the same inputs, so they skip
+  # (FELIX_FV_MEMO=off runs everything). Native: the felix-test image it stages
+  # is built by felix-test-image.
+  - name: felix-build
     # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
     override:
       nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
@@ -46,7 +25,9 @@ steps:
         value: calico
       - name: NATIVE_GO_BUILD
         value: "true"
-    depends: [calico-test-binaries, felix-fv-plan, go-cache]
+      - name: FELIX_FV_MEMO
+        value: "on"
+    depends: [build-calico-image, calico-test-binaries, go-cache]
     timeout: 40m
     jobSize: large
     requests: {cpu: 7000m, memory: 6Gi}
@@ -59,33 +40,31 @@ steps:
           - name: google-service-account-for-gce-key.json
             as: GCE_SERVICE_ACCOUNT_KEY
     cache:
+      - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
       - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
       - {name: go, mode: read, path: /cache/go}
       - {name: felix-image-context, mode: write, path: /cache/felix-image-context}
     commands: |
       # The prereqs ship zstd-compressed and the build image lacks the CLI.
       dnf install -y -q zstd
-      # Staged even when the plan skips the build, since the buildkit step runs regardless.
-      make -C felix image-context
-      mkdir -p /cache/felix-image-context
-      cp -a felix/bin/image-context-amd64/. /cache/felix-image-context/
-      artifact pull workflow felix-fv-plan
-      if [ "$(cat felix-fv-plan/build)" = skip ]; then
-        echo "Every FV lane passed on an earlier run of this PR with the same inputs; nothing to build."
-        exit 0
-      fi
       "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" felix-build
-      export PREFETCHED_ARTIFACTS=/cache/calico-test-binaries
-      .semaphore/scripts/load-felix-prereqs.sh
-      source .argoci/scripts/vm-fleet-setup.sh
-      cd felix
+      .argoci/scripts/felix-fv-plan > /tmp/felix-fv-plan.log 2>&1 &
+      plan=$!
+      make -C felix image-context
+      cp -a felix/bin/image-context-amd64/. /cache/felix-image-context/
+      PREFETCHED_ARTIFACTS=/cache/calico-test-binaries .semaphore/scripts/load-felix-prereqs.sh
       # REMOTE_DEPS= reuses the cached image. Not `make build`, which also
       # cross-compiles the Windows binary.
-      make REMOTE_DEPS= bin/calico-felix ut-bpf-prereqs fv-prereqs-no-image
-      FV_IMAGES=separate ./.semaphore/cache-test-artifacts
+      make -C felix REMOTE_DEPS= bin/calico-felix ut-bpf-prereqs fv-prereqs-no-image
+      wait "$plan" || { cat /tmp/felix-fv-plan.log; exit 1; }
+      cat /tmp/felix-fv-plan.log
+      source .argoci/scripts/vm-fleet-setup.sh
+      cd felix
+      PREFETCHED_ARTIFACTS=/cache/calico-image-zst FV_IMAGES=separate ./.semaphore/cache-test-artifacts
 
-  - name: felix-test-buildkit
-    depends: [felix-build-prep]
+  # Each FV lane uploads the tar for its VMs, so no step waits on an upload.
+  - name: felix-test-image
+    depends: [felix-build]
     cache:
       - {name: felix-image-context, mode: read, path: /cache/felix-image-context}
       - {name: felix-test-tar, mode: write, path: /cache/felix-test-tar}
@@ -93,25 +72,6 @@ steps:
       tag: calico/felix-test:latest-amd64
       context: /cache/felix-image-context
       tar: /cache/felix-test-tar/calico-felix-test.tar
-
-  # The images go up here rather than from felix-build-prep, so its build need
-  # not wait for the calico image.
-  - name: felix-build
-    depends: [felix-test-buildkit, build-calico-image]
-    jobSize: small
-    useGoBuild: true
-    secretBundles:
-      - name: google-service-account-for-gce
-        keys:
-          - name: google-service-account-for-gce-key.json
-            as: GCE_SERVICE_ACCOUNT_KEY
-    cache:
-      - {name: felix-test-tar, mode: read, path: /cache/felix-test-tar}
-      - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
-    commands: |
-      source .argoci/scripts/vm-fleet-setup.sh
-      gcloud storage cp /cache/felix-test-tar/calico-felix-test.tar /cache/calico-image-zst/calico-image.tar.zst \
-        "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/"
 
   # Native in the go-build image: under NATIVE_GO_BUILD the checks call no docker.
   - name: felix-static-checks
@@ -245,7 +205,7 @@ steps:
   # console first.
   - name: felix-fv
     tiers: []
-    depends: [felix-build]
+    depends: [felix-test-image]
     timeout: 1h30m
     requests: {cpu: 1000m, memory: 4Gi}
     secretBundles:
@@ -256,6 +216,8 @@ steps:
       - fv-tests-guru-github-token
       - gemini-api-key
       - fv-guru-db
+    cache:
+      - {name: felix-test-tar, mode: read, path: /cache/felix-test-tar}
     env:
       # TEMPORARY: the thread pool the old 2000m request gave, while the
       # request drops to the measured average.
@@ -333,6 +295,8 @@ steps:
       if [ "${BATCH_MEMO_LANE_HIT}" = true ]; then
         batch_memo_restore_lane artifacts || exit 1
       else
+        # -n: the first lane to get here uploads it, and the rest find it there.
+        gcloud storage cp -n /cache/felix-test-tar/calico-felix-test.tar "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/"
         .semaphore/vms/run-tests-on-vms "${VM_PREFIX}"
       fi
     epilogue: |
