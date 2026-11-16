@@ -52,7 +52,7 @@ STUB_RC=1 check "a failed analysis writes the marker, so the epilogue does not r
 
 newhome
 rm "${HOME}/.local/bin/sandcat"
-GITHUB_ACCESS_TOKEN='' check "an analysis that never started leaves no marker, so the epilogue runs it" no
+SANDCAT_BIN_DOWNLOAD_TOKEN='' check "an analysis that never started leaves no marker, so the epilogue runs it" no
 
 newhome
 (cd "${HOME}" && "${SCRIPT}" cut-off --after 12m --source-dir "${HOME}") >/dev/null 2>&1
