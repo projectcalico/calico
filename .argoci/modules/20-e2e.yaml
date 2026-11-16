@@ -27,10 +27,9 @@ steps:
       - name: sandcat-nightly
         keys:
           - name: SANDCAT_GEMINI_KEY
-      # sandcat.sh downloads its binary from the private tigera/sandcat releases.
-      - name: banzai-secrets
+      - name: sandcat-download
         keys:
-          - name: GITHUB_ACCESS_TOKEN
+          - name: SANDCAT_BIN_DOWNLOAD_TOKEN
       - name: sandcat-db
         keys:
           - name: SANDCAT_DB_URL

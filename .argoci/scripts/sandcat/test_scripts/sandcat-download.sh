@@ -30,7 +30,7 @@ fi
 STUB
 chmod +x "${HOME}/bin/curl"
 export PATH="${HOME}/bin:${PATH}"
-export GITHUB_ACCESS_TOKEN=secret-token-value
+export SANDCAT_BIN_DOWNLOAD_TOKEN=secret-token-value
 
 check() {
   local name="$1"
