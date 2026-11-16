@@ -20,10 +20,6 @@ steps:
       - name: SANDCAT_TOTAL_BUDGET
         value: 10m
     secretBundles:
-      - name: sandcat-upload
-        keys:
-          - name: SANDCAT_UPLOAD_URL
-          - name: SANDCAT_INGEST_TOKEN
       - name: sandcat-nightly
         keys:
           - name: SANDCAT_GEMINI_KEY
@@ -116,7 +112,7 @@ steps:
         [ -f "${SANDCAT_REPORT}" ] || SANDCAT_REPORT=$(ls -t report/*.xml 2>/dev/null | head -1) || true
         if [ -n "${SANDCAT_REPORT}" ]; then
           .argoci/scripts/sandcat/sandcat.sh analyze --report "${SANDCAT_REPORT}" --source-dir "$(pwd)" \
-            --kubeconfig hack/test/kind/kind-kubeconfig.yaml --log-file artifacts/e2e.log || true
+            --log-file artifacts/e2e.log || true
         elif [ "${rc}" != 0 ]; then
           .argoci/scripts/sandcat/sandcat.sh build-failure --logs-dir artifacts --source-dir "$(pwd)" || true
         fi

@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Behaviour test for `sandcat.sh analyze`: the analyzed marker, which stops the
-# epilogue from analyzing again, is written only when the analysis succeeded.
-# sandcat is stubbed, so no binary, network or cluster is needed.
+# Tests `sandcat.sh analyze` against a stubbed sandcat: the database gate, its flags, and the analyzed marker.
 
 set -uo pipefail
 
@@ -11,7 +9,9 @@ fail=0
 homes=()
 trap 'rm -rf ${homes[@]+"${homes[@]}"}' EXIT
 
-export SANDCAT_INGEST_TOKEN=t SANDCAT_UPLOAD_URL=https://sandcat.invalid SANDCAT_CALICO_MCP=0
+export SANDCAT_DB_URL=postgres://broker.invalid SANDCAT_DB_TOKEN=t
+# analyze needs no calico-mcp, so no download is attempted even with it on.
+unset SANDCAT_CALICO_MCP SANDCAT_UPLOAD_URL SANDCAT_INGEST_TOKEN
 
 newhome() {
   HOME=$(mktemp -d)
@@ -20,6 +20,7 @@ newhome() {
   mkdir -p "${HOME}/.local/bin"
   cat > "${HOME}/.local/bin/sandcat" <<'STUB'
 #!/usr/bin/env bash
+echo "$*" > "${HOME}/args"
 exit "${STUB_RC:-0}"
 STUB
   chmod +x "${HOME}/.local/bin/sandcat"
@@ -43,9 +44,26 @@ check() {
 
 newhome
 STUB_RC=0 check "a successful analysis writes the marker" yes
+if [[ ! -f "${HOME}/args" ]] || grep -qE -- '--upload|--agent' "${HOME}/args"; then
+  echo "FAIL analyze passes no ingest or agent flags ($(cat "${HOME}/args" 2>/dev/null || echo 'sandcat not run'))"
+  fail=$((fail + 1))
+else
+  echo "PASS analyze passes no ingest or agent flags"
+  pass=$((pass + 1))
+fi
 
 newhome
 STUB_RC=1 check "a failed analysis leaves no marker, so the epilogue retries" no
+
+newhome
+out=$(cd "${HOME}" && env -u SANDCAT_DB_TOKEN "${SCRIPT}" analyze --report "${HOME}/report.json" --source-dir "${HOME}" 2>&1)
+if [[ ! -f "${HOME}/args" && "${out}" == *"unset: SANDCAT_DB_TOKEN"* ]]; then
+  echo "PASS a missing database secret skips analyze and names it"
+  pass=$((pass + 1))
+else
+  echo "FAIL a missing database secret skips analyze and names it (${out})"
+  fail=$((fail + 1))
+fi
 
 echo "${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]
