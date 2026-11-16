@@ -86,5 +86,9 @@ steps:
         # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
         # does not go back to the registry for it.
         .argoci/scripts/load-nft-rpms.sh "${ARCH}"
+        # TEMPORARY: the go-build under test (LLVM 22), which a machine's docker
+        # builds otherwise take from metadata.mk. Built for amd64 only, which is
+        # all a cross-build runs.
+        gcloud auth configure-docker gcr.io --quiet
         cd node
-        make image ARCH=$ARCH
+        make image ARCH=$ARCH CALICO_BUILD=gcr.io/unique-caldron-775/go-build:1.27.4-llvm22.1.8-k8s1.37.2-test-fa3c062
