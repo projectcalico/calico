@@ -27,7 +27,7 @@ steps:
         value: "true"
       - name: FELIX_FV_MEMO
         value: "on"
-    depends: [build-calico-image, calico-test-binaries, go-cache]
+    depends: [calico-test-binaries, go-cache]
     timeout: 40m
     jobSize: large
     requests: {cpu: 7000m, memory: 6Gi}
@@ -40,7 +40,6 @@ steps:
           - name: google-service-account-for-gce-key.json
             as: GCE_SERVICE_ACCOUNT_KEY
     cache:
-      - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
       - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
       - {name: go, mode: read, path: /cache/go}
       - {name: felix-image-context, mode: write, path: /cache/felix-image-context}
@@ -60,7 +59,7 @@ steps:
       cat /tmp/felix-fv-plan.log
       source .argoci/scripts/vm-fleet-setup.sh
       cd felix
-      PREFETCHED_ARTIFACTS=/cache/calico-image-zst FV_IMAGES=separate ./.semaphore/cache-test-artifacts
+      FV_IMAGES=separate ./.semaphore/cache-test-artifacts
 
   # Each FV lane uploads the tar for its VMs, so no step waits on an upload.
   - name: felix-test-image
@@ -205,7 +204,7 @@ steps:
   # console first.
   - name: felix-fv
     tiers: []
-    depends: [felix-test-image]
+    depends: [felix-test-image, build-calico-image]
     timeout: 1h30m
     requests: {cpu: 1000m, memory: 4Gi}
     secretBundles:
@@ -218,6 +217,7 @@ steps:
       - fv-guru-db
     cache:
       - {name: felix-test-tar, mode: read, path: /cache/felix-test-tar}
+      - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
     env:
       # TEMPORARY: the thread pool the old 2000m request gave, while the
       # request drops to the measured average.
@@ -295,8 +295,8 @@ steps:
       if [ "${BATCH_MEMO_LANE_HIT}" = true ]; then
         batch_memo_restore_lane artifacts || exit 1
       else
-        # -n: the first lane to get here uploads it, and the rest find it there.
-        gcloud storage cp -n /cache/felix-test-tar/calico-felix-test.tar "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/"
+        # -n: the first lane to get here uploads them, and the rest find them there.
+        gcloud storage cp -n /cache/felix-test-tar/calico-felix-test.tar /cache/calico-image-zst/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/"
         .semaphore/vms/run-tests-on-vms "${VM_PREFIX}"
       fi
     epilogue: |

@@ -43,7 +43,8 @@ fetch_calico_image() {
 
 artifact push job bin &
 # FV_IMAGES=separate is for a caller with no docker daemon, which builds the
-# felix-test image elsewhere and uploads it itself.
+# felix-test image elsewhere and leaves both images for the test-VM launcher to
+# upload, so the build need not wait for either.
 felix_test_tar=/tmp/calico-felix-test.tar
 if [ "${FV_IMAGES:-}" = separate ]; then
   felix_test_tar=
@@ -62,12 +63,14 @@ fi
 # the daemon. load-test-artifacts on the VM needs this tarball unconditionally,
 # so `docker save` failing here (no cached copy and no local image) is the right
 # loud failure.
-if ! fetch_calico_image; then
-  echo "No calico image in the workflow cache; saving the local image instead"
-  docker save -o /tmp/calico-image.tar calico/calico:latest-amd64
-  zstd -3 --rm /tmp/calico-image.tar
+if [ "${FV_IMAGES:-}" != separate ]; then
+  if ! fetch_calico_image; then
+    echo "No calico image in the workflow cache; saving the local image instead"
+    docker save -o /tmp/calico-image.tar calico/calico:latest-amd64
+    zstd -3 --rm /tmp/calico-image.tar
+  fi
+  gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/calico-image.tar.zst"
 fi
-gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/calico-image.tar.zst"
 
 cd ../..
 

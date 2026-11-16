@@ -97,6 +97,14 @@ check "cache hit uploads to GCS" grep -q "^gcloud storage cp /tmp/calico-image.t
 # 3. The felix-test image is saved either way — it is this job's own output.
 check "felix-test image always saved" grep -q "^docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64" "$stub_log"
 
+# 4. FV_IMAGES=separate: neither image is touched; the caller uploads both.
+FV_IMAGES=separate run
+rc=$?
+check "separate RC=0" [ "$rc" = 0 ]
+check "separate does not upload the calico image" test "$(grep -c 'calico-image' "$stub_log")" = 0
+check "separate does not save the felix-test image" test "$(grep -c 'calico-felix-test' "$stub_log")" = 0
+check "separate still uploads the working copy" grep -q "^gcloud storage cp /tmp/working-copy.tgz gs://" "$stub_log"
+
 rm -f /tmp/calico-image.tar /tmp/calico-image.tar.zst
 echo "FAILURES: $fails"
 exit $fails
