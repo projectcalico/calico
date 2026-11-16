@@ -1,5 +1,5 @@
-# envoy-proxy CI. It repackages an upstream image, so there is no binary to
-# cross-build.
+# envoy-proxy's other-architecture image; envoy-proxy-image-buildkit builds
+# amd64. It repackages an upstream image, so there is no binary to cross-build.
 version: condensed-module
 
 defaults:
@@ -7,19 +7,7 @@ defaults:
   secretBundles: [banzai-secrets]
 
 steps:
-  - name: envoy-proxy-ci
-    checkout: true
-    runOnVM:
-      createVM:
-        machineType: e2-standard-2
-      source: |
-        set -e
-        repo="$(pwd)"
-        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
-        cd third_party/envoy-proxy
-        make ci
-
-  # The CI step already builds amd64.
+  # envoy-proxy-image-buildkit builds amd64.
   - name: envoy-proxy-image
     matrix:
       - name: arm64
