@@ -4062,6 +4062,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -4402,6 +4403,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -4528,6 +4530,13 @@ spec:
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.destination) || !has(r.destination.services)
+                        || (has(r.destination.services.namespace) && size(r.destination.services.namespace)
+                        > 0))
                 ingress:
                   description: |-
                     The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
@@ -4719,6 +4728,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -5059,6 +5069,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -5185,6 +5196,12 @@ spec:
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.source) || !has(r.source.services) || (has(r.source.services.namespace)
+                        && size(r.source.services.namespace) > 0))
                 namespaceSelector:
                   description:
                     NamespaceSelector is an optional field for an expression
@@ -6922,6 +6939,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -7262,6 +7280,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -7579,6 +7598,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -7919,6 +7939,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -8458,6 +8479,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -8798,6 +8820,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -8924,6 +8947,13 @@ spec:
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.destination) || !has(r.destination.services)
+                        || (has(r.destination.services.namespace) && size(r.destination.services.namespace)
+                        > 0))
                 ingress:
                   description: |-
                     The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
@@ -9115,6 +9145,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -9455,6 +9486,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -9581,6 +9613,12 @@ spec:
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.source) || !has(r.source.services) || (has(r.source.services.namespace)
+                        && size(r.source.services.namespace) > 0))
                 namespaceSelector:
                   description:
                     NamespaceSelector is an optional field for an expression
@@ -10498,6 +10536,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -10838,6 +10877,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -11155,6 +11195,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -11495,6 +11536,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object

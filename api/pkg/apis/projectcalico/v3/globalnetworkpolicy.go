@@ -78,11 +78,13 @@ type GlobalNetworkPolicySpec struct {
 	// a corresponding action to apply. Limited to 1024 rules per policy.
 	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
+	// +kubebuilder:validation:XValidation:rule="self.all(r, !has(r.source) || !has(r.source.services) || (has(r.source.services.namespace) && size(r.source.services.namespace) > 0))",message="services in a global policy must specify a namespace",reason=FieldValueRequired
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply. Limited to 1024 rules per policy.
 	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
+	// +kubebuilder:validation:XValidation:rule="self.all(r, !has(r.destination) || !has(r.destination.services) || (has(r.destination.services.namespace) && size(r.destination.services.namespace) > 0))",message="services in a global policy must specify a namespace",reason=FieldValueRequired
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
 	// The selector is an expression used to pick out the endpoints that the policy should
 	// be applied to.
