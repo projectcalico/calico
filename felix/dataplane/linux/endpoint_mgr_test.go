@@ -32,6 +32,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -961,7 +962,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 			It("should sweep again only when a workload interface disappears", func() {
 				applyUpdates(epMgr)
-				for _, update := range []*ifaceStateUpdate{
+				for _, update := range []*dataplanedefs.IfaceStateUpdate{
 					{Name: "cali1234", State: ifacemonitor.StateUp},
 					{Name: "cali1234", State: ifacemonitor.StateDown},
 					{Name: "eth0", State: ifacemonitor.StateNotPresent},
@@ -971,7 +972,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				}
 				Expect(ifbCleanups).To(Equal(1))
 
-				epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali1234", State: ifacemonitor.StateNotPresent})
+				epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "cali1234", State: ifacemonitor.StateNotPresent})
 				applyUpdates(epMgr)
 				Expect(ifbCleanups).To(Equal(2))
 			})
@@ -1158,19 +1159,19 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 		Context("with host interfaces eth0, lo", func() {
 			JustBeforeEach(func() {
-				epMgr.OnUpdate(&ifaceStateUpdate{
+				epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 					Name:  "eth0",
 					State: "up",
 				})
-				epMgr.OnUpdate(&ifaceAddrsUpdate{
+				epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 					Name:  "eth0",
 					Addrs: eth0Addrs,
 				})
-				epMgr.OnUpdate(&ifaceStateUpdate{
+				epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 					Name:  "lo",
 					State: "up",
 				})
-				epMgr.OnUpdate(&ifaceAddrsUpdate{
+				epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 					Name:  "lo",
 					Addrs: loAddrs,
 				})
@@ -1555,11 +1556,11 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 				Context("with another host interface eth1", func() {
 					JustBeforeEach(func() {
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "eth1",
 							State: "up",
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "eth1",
 							Addrs: eth1Addrs,
 						})
@@ -1757,11 +1758,11 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 			Context("with interface signaled", func() {
 				JustBeforeEach(func() {
-					epMgr.OnUpdate(&ifaceStateUpdate{
+					epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 						Name:  "eth0",
 						State: "up",
 					})
-					epMgr.OnUpdate(&ifaceAddrsUpdate{
+					epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 						Name:  "eth0",
 						Addrs: eth0Addrs,
 					})
@@ -1976,11 +1977,11 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				Context("with updates for the workload's iface and proc/sys failure", func() {
 					JustBeforeEach(func() {
 						mockProcSys.Fail = true
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "cali12345-ab",
 							State: "up",
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "cali12345-ab",
 							Addrs: set.New[string](),
 						})
@@ -1995,11 +1996,11 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 				Context("with updates for the workload's iface", func() {
 					JustBeforeEach(func() {
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "cali12345-ab",
 							State: "up",
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "cali12345-ab",
 							Addrs: set.New[string](),
 						})
@@ -2187,11 +2188,11 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 					Context("changing the endpoint to another up interface", func() {
 						JustBeforeEach(func() {
-							epMgr.OnUpdate(&ifaceStateUpdate{
+							epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 								Name:  "cali12345-cd",
 								State: "up",
 							})
-							epMgr.OnUpdate(&ifaceAddrsUpdate{
+							epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 								Name:  "cali12345-cd",
 								Addrs: set.New[string](),
 							})
@@ -2246,7 +2247,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				var (
 					wlEPID1        proto.WorkloadEndpointID
 					workloadUpdate *proto.WorkloadEndpointUpdate
-					interfaceUp    *ifaceStateUpdate
+					interfaceUp    *dataplanedefs.IfaceStateUpdate
 				)
 
 				BeforeEach(func() {
@@ -2268,7 +2269,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							AllowSpoofedSourcePrefixes: []string{"8.8.8.8/32", "2001:feed::1/64"},
 						},
 					}
-					interfaceUp = &ifaceStateUpdate{
+					interfaceUp = &dataplanedefs.IfaceStateUpdate{
 						Name:  "cali23456-cd",
 						State: "up",
 					}
@@ -2455,7 +2456,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			Context("with endpoint already active", func() {
 				JustBeforeEach(func() {
 					epMgr.OnUpdate(wlEPUpdate)
-					epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345-ab", State: "up"})
+					epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "cali12345-ab", State: "up"})
 					applyUpdates(epMgr)
 				})
 
@@ -2546,7 +2547,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					)
 					// Now the WEP arrives.
 					epMgr.OnUpdate(wlEPUpdate)
-					epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345-ab", State: "up"})
+					epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "cali12345-ab", State: "up"})
 					applyUpdates(epMgr)
 				})
 
@@ -2603,22 +2604,22 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				Context("with local bgp peer role and iface up", func() {
 					JustBeforeEach(func() {
 						linkCali1 = nlDataplane.AddIface(5, "cali1", true, true)
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "cali1",
 							State: "up",
 							Index: 5,
 						})
 						linkCali2 = nlDataplane.AddIface(6, "cali2", true, true)
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "cali2",
 							State: "up",
 							Index: 6,
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "cali1",
 							Addrs: set.New[string](),
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "cali2",
 							Addrs: set.New[string](),
 						})
@@ -3217,11 +3218,11 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						ep2IngressChain = "cali-fh-eth1"
 						ep2EgressChain = "cali-th-eth1"
 
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "eth1",
 							State: "up",
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "eth1",
 							Addrs: eth1Addrs,
 						})
@@ -3359,11 +3360,11 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						ep2IngressChain = "cali-tw-cali12345-ac"
 						ep2EgressChain = "cali-fw-cali12345-ac"
 
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "eth0",
 							State: "up",
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "eth0",
 							Addrs: eth1Addrs,
 						})
@@ -3499,19 +3500,19 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						ep2IngressChain = "cali-fh-eth1"
 						ep2EgressChain = "cali-th-eth1"
 
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "eth0",
 							State: "up",
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "eth0",
 							Addrs: eth0Addrs,
 						})
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "eth1",
 							State: "up",
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "eth1",
 							Addrs: eth1Addrs,
 						})
@@ -3647,19 +3648,19 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						ep2IngressChain = "cali-fh-eth1"
 						ep2EgressChain = "cali-th-eth1"
 
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "eth0",
 							State: "up",
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "eth0",
 							Addrs: eth0Addrs,
 						})
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "eth1",
 							State: "up",
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "eth1",
 							Addrs: eth1Addrs,
 						})
@@ -3795,19 +3796,19 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						ep2IngressChain = "cali-fhfw-eth1"
 						ep2EgressChain = "cali-thfw-eth1"
 
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "eth0",
 							State: "up",
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "eth0",
 							Addrs: eth0Addrs,
 						})
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "eth1",
 							State: "up",
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "eth1",
 							Addrs: eth1Addrs,
 						})
@@ -3943,19 +3944,19 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						ep2IngressChain = "cali-fh-eth1"
 						ep2EgressChain = "cali-th-eth1"
 
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "eth0",
 							State: "up",
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "eth0",
 							Addrs: eth0Addrs,
 						})
-						epMgr.OnUpdate(&ifaceStateUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{
 							Name:  "eth1",
 							State: "up",
 						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
+						epMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 							Name:  "eth1",
 							Addrs: eth1Addrs,
 						})
@@ -4235,7 +4236,7 @@ var _ = Describe("EndpointManager flowtable", func() {
 
 	It("should only pass up interfaces to the flowtable", func() {
 		// Two workload endpoints, but only cali11111-aa is up.
-		epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali11111-aa", State: ifacemonitor.StateUp})
+		epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "cali11111-aa", State: ifacemonitor.StateUp})
 		epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 			Id:       &proto.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "wl1", EndpointId: "ep1"},
 			Endpoint: &proto.WorkloadEndpoint{Name: "cali11111-aa", Mac: "01:02:03:04:05:06"},
@@ -4252,7 +4253,7 @@ var _ = Describe("EndpointManager flowtable", func() {
 
 	It("should recompute the flowtable when a workload interface goes down, without an endpoint change", func() {
 		// One up workload endpoint.
-		epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali11111-aa", State: ifacemonitor.StateUp})
+		epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "cali11111-aa", State: ifacemonitor.StateUp})
 		epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 			Id:       &proto.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "wl1", EndpointId: "ep1"},
 			Endpoint: &proto.WorkloadEndpoint{Name: "cali11111-aa", Mac: "01:02:03:04:05:06"},
@@ -4263,7 +4264,7 @@ var _ = Describe("EndpointManager flowtable", func() {
 		callsBefore := ftHandler.callCount
 
 		// Interface goes away. No WorkloadEndpoint update yet.
-		epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali11111-aa", State: ifacemonitor.StateNotPresent})
+		epMgr.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "cali11111-aa", State: ifacemonitor.StateNotPresent})
 		Expect(epMgr.ResolveUpdateBatch()).NotTo(HaveOccurred())
 		Expect(epMgr.CompleteDeferredWork()).NotTo(HaveOccurred())
 

@@ -98,7 +98,9 @@ components:
       - ^felix/bpf/tc/defs/[^/]*\.go$
       - ^felix/calc/[^/]*\.go$
       - ^felix/config/[^/]*\.go$
-      - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/flowtabledefs/[^/]*\.go$
+      - ^felix/dataplane/linux/ipipdefs/[^/]*\.go$
+      - ^felix/dataplane/linux/vxlandefs/[^/]*\.go$
       - ^felix/deltatracker/[^/]*\.go$
       - ^felix/dispatcher/[^/]*\.go$
       - ^felix/environment/[^/]*\.go$
@@ -428,8 +430,13 @@ components:
       - ^felix/dataplane/inactive/[^/]*\.go$
       - ^felix/dataplane/ipsets/[^/]*\.go$
       - ^felix/dataplane/linux/[^/]*\.go$
+      - ^felix/dataplane/linux/bpfepdefs/[^/]*\.go$
       - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/flowtabledefs/[^/]*\.go$
+      - ^felix/dataplane/linux/ipipdefs/[^/]*\.go$
       - ^felix/dataplane/linux/qos/[^/]*\.go$
+      - ^felix/dataplane/linux/routedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/vxlandefs/[^/]*\.go$
       - ^felix/deltatracker/[^/]*\.go$
       - ^felix/dispatcher/[^/]*\.go$
       - ^felix/environment/[^/]*\.go$
@@ -846,7 +853,8 @@ components:
       - ^felix/bpf/nat/[^/]*\.go$
       - ^felix/bpf/tc/defs/[^/]*\.go$
       - ^felix/bpf/utils/[^/]*\.go$
-      - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/bpfepdefs/[^/]*\.go$
+      - ^felix/dataplane/linux/vxlandefs/[^/]*\.go$
       - ^felix/environment/[^/]*\.go$
       - ^felix/ip/[^/]*\.go$
       - ^felix/iptables/cmdshim/[^/]*\.go$
@@ -1031,7 +1039,8 @@ components:
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
       - ^felix/dataplane/ipsets/[^/]*\.go$
-      - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/flowtabledefs/[^/]*\.go$
+      - ^felix/dataplane/linux/vxlandefs/[^/]*\.go$
       - ^felix/deltatracker/[^/]*\.go$
       - ^felix/environment/[^/]*\.go$
       - ^felix/generictables/[^/]*\.go$
@@ -1230,7 +1239,9 @@ components:
       - ^felix/bpf/tc/defs/[^/]*\.go$
       - ^felix/calc/[^/]*\.go$
       - ^felix/config/[^/]*\.go$
-      - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/flowtabledefs/[^/]*\.go$
+      - ^felix/dataplane/linux/ipipdefs/[^/]*\.go$
+      - ^felix/dataplane/linux/vxlandefs/[^/]*\.go$
       - ^felix/deltatracker/[^/]*\.go$
       - ^felix/dispatcher/[^/]*\.go$
       - ^felix/environment/[^/]*\.go$
@@ -1463,8 +1474,13 @@ components:
       - ^felix/dataplane/inactive/[^/]*\.go$
       - ^felix/dataplane/ipsets/[^/]*\.go$
       - ^felix/dataplane/linux/[^/]*\.go$
+      - ^felix/dataplane/linux/bpfepdefs/[^/]*\.go$
       - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/flowtabledefs/[^/]*\.go$
+      - ^felix/dataplane/linux/ipipdefs/[^/]*\.go$
       - ^felix/dataplane/linux/qos/[^/]*\.go$
+      - ^felix/dataplane/linux/routedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/vxlandefs/[^/]*\.go$
       - ^felix/deltatracker/[^/]*\.go$
       - ^felix/dispatcher/[^/]*\.go$
       - ^felix/environment/[^/]*\.go$
