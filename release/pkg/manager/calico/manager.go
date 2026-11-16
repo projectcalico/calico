@@ -1174,7 +1174,7 @@ func (r *CalicoManager) archiveSources() ([]archives.Contributor, error) {
 		if err != nil {
 			return nil, fmt.Errorf("archive images: %w", err)
 		}
-		sources = append(sources, imgs)
+		sources = append(sources, imgs...)
 	}
 	if r.binaries {
 		sources = append(sources, binaries.Archive(r.repoRoot)...)

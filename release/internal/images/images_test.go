@@ -761,12 +761,14 @@ func TestPrefixedVariantRecordsPrefixedRefs(t *testing.T) {
 func TestArchiveSavesStandardImagesOnly(t *testing.T) {
 	f := imageNameRunner{images: "node node-windows"}.runner()
 	dir := t.TempDir()
-	a, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...)
+	sources, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...)
 	if err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
-	if err := a.Contribute(dir); err != nil {
-		t.Fatalf("Archive: %v", err)
+	for _, a := range sources {
+		if err := a.Contribute(dir); err != nil {
+			t.Fatalf("Contribute(%s): %v", a.Name(), err)
+		}
 	}
 	var saved []string
 	for _, c := range f.Calls() {
@@ -785,12 +787,14 @@ func TestArchiveSavesStandardImagesOnly(t *testing.T) {
 func TestArchivePullsWhenAsked(t *testing.T) {
 	f := imageNameRunner{images: "node"}.runner()
 	f.failures = map[string]int{"inspect": 9}
-	a, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f, WithPull(true))...)
+	sources, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f, WithPull(true))...)
 	if err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
-	if err := a.Contribute(t.TempDir()); err != nil {
-		t.Fatalf("Archive: %v", err)
+	for _, a := range sources {
+		if err := a.Contribute(t.TempDir()); err != nil {
+			t.Fatalf("Contribute(%s): %v", a.Name(), err)
+		}
 	}
 	var pulled bool
 	for _, c := range f.Calls() {
@@ -805,12 +809,14 @@ func TestArchivePullsWhenAsked(t *testing.T) {
 
 func TestArchiveRejectsNoDir(t *testing.T) {
 	f := imageNameRunner{images: "node"}.runner()
-	a, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...)
+	sources, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...)
 	if err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
-	if err := a.Contribute(""); err == nil {
-		t.Fatal("expected an error when no archive directory is given")
+	for _, a := range sources {
+		if err := a.Contribute(""); err == nil {
+			t.Fatalf("%s: expected an error when no archive directory is given", a.Name())
+		}
 	}
 }
 
