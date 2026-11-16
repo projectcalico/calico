@@ -22,8 +22,9 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/env"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 func Build(repoRoot, version string, builders []Builder, opts ...BuildOption) error {
@@ -73,11 +74,11 @@ func (s settings) build(b Builder) error {
 }
 
 func (s settings) collect(b Builder) error {
-	dest, include := b.Output()
+	dest, filters := b.Output()
 	if dest == "" {
 		return nil
 	}
-	n, err := s.linkFrom(b.SourceDir(s.RepoRoot), dest, include)
+	n, err := s.linkFrom(b.SourceDir(s.RepoRoot), dest, filters)
 	if err != nil {
 		return s.Errorf("collecting %s binaries: %w", b.Component(), err)
 	}
@@ -86,18 +87,18 @@ func (s settings) collect(b Builder) error {
 	return nil
 }
 
-func (s settings) linkFrom(src, dest string, include utils.IncludeFunc) (int, error) {
-	found, err := utils.FindRecursiveFiles(src, include)
+func (s settings) linkFrom(src, dest string, filters []fsutil.FileFilter) (int, error) {
+	found, err := fsutil.ListFiles(src, filters...)
 	if err != nil {
 		return 0, fmt.Errorf("reading %s: %w", src, err)
 	}
 	if len(found) == 0 {
 		return 0, fmt.Errorf("no binaries found in %s", src)
 	}
-	if err := os.MkdirAll(dest, utils.DirPerms); err != nil {
+	if err := os.MkdirAll(dest, fsutil.DirPerms); err != nil {
 		return 0, fmt.Errorf("creating %s: %w", dest, err)
 	}
-	return len(found), utils.LinkOrCopyDir(src, dest, include)
+	return len(found), fsutil.LinkOrCopyFiles(src, dest, found)
 }
 
 func Archive(repoRoot string) []archives.Contributor {
@@ -133,7 +134,7 @@ func applyTo(opt any, s *settings) error {
 }
 
 func (s settings) env() []string {
-	return append(s.extraEnv, utils.Env(utils.EnvVersion, s.Version))
+	return append(s.extraEnv, env.Var(env.Version, s.Version))
 }
 
 type unitDone struct{}

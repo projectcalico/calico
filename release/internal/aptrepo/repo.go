@@ -13,8 +13,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/gpg"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // Reprepro is a terrible name but it's what we have
@@ -75,7 +75,7 @@ func NewRepo(tempDir, outputDir string, repoConfig RepoConfig, url string, runne
 // a repo database; we need this to update existing remote repositories.
 func (repo *Repo) RepositoryDBExists() (bool, error) {
 	dbPath := filepath.Join(repo.BaseDirectory, "db")
-	exist, err := utils.DirExists(dbPath)
+	exist, err := fsutil.DirExists(dbPath)
 	if err != nil || !exist {
 		return exist, err
 	}
@@ -162,7 +162,7 @@ func (repo *Repo) PrepareForBuild() error {
 
 // WriteRepoConfig generates and writes the config file for the repo software to the appropriate path
 func (repo *Repo) WriteRepoConfig() error {
-	if err := os.MkdirAll(repo.configDirPath(), utils.DirPerms); err != nil {
+	if err := os.MkdirAll(repo.configDirPath(), fsutil.DirPerms); err != nil {
 		return fmt.Errorf("failed to create config dir: %w", err)
 	}
 	repoConfigFile, err := os.OpenFile(repo.configFilePath(), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
