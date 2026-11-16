@@ -10,6 +10,12 @@ requireApproval: true
 # metadata.mk resolves to, and CI fails when the two differ.
 goBuildVersion: 1.27.3-llvm21.1.8-k8s1.37.1-1
 
+# TEMPORARY: unreleased builds under test. go-build adds zstd and scratch-utils
+# (projectcalico/toolchain#958); scratch-utils adds machine-type fallback and
+# zstd transfers (#954, #959). Remove both once those are released.
+goBuildImage: gcr.io/unique-caldron-775/go-build:1.27.3-llvm21.1.8-k8s1.37.1-1-test-1e81cd2
+vmToolImage: gcr.io/unique-caldron-775/scratch-utils:v0.6-test-1e81cd2
+
 # New PRs start on `basic-ci`, which skips the costly VM suites. The label holds
 # a pending status, so removing it to run the full suite is what unblocks merge.
 tiers:
