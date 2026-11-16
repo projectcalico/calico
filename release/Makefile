@@ -73,6 +73,8 @@ endif
 .PHONY: st st/hashrelease st/release
 st: st/hashrelease st/release
 
+# st tests the release flow, not the build, and one arch exercises every step.
+st/hashrelease: export ARCHS ?= $(ARCH)
 st/hashrelease: var-require-all-HASHRELEASE_SERVER_BUCKET
 	PLAN=true $(MAKE) hashrelease
 	LOCAL=true BRANCH_CHECK=false $(MAKE) hashrelease
