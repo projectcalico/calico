@@ -8,33 +8,29 @@ steps:
   # On a machine of its own for docker: release commands run through docker.
   - name: release-ci
     depends: [check-go, go-cache]
-    checkout: true
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: medium, go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-medium, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    requests: {cpu: 3000m, memory: 3Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     cache:
       - {name: go, mode: read, path: /cache/go}
-    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
-    # VM steps alone, since a pod step would hand it to the code under test.
-    secretBundles: [banzai-secrets]
-    runOnVM:
-      createVM:
-        machineType: e2-standard-4
-      env: [CI_GIT_REPO_SLUG]
-      put:
-        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
-      source: |
-        set -e
-        .argoci/scripts/restore-go-cache release-ci ~/.go-mod
-        repo="$(pwd)"
-        finish() {
-          rc=$?
-          artifact push job "$repo/release/report" --destination test-results || true
-          exit $rc
-        }
-        trap finish EXIT
-        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
-        # A fork carries no tags, and the tests parse a version from them.
-        git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
-        cd release
-        make ci
+    commands: |
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" release-ci
+      # What the FV tests drive; without them they skip rather than fail.
+      dnf install -y -q git-core gnupg2 make rpm rpm-build rpm-sign tar
+      # A fork carries no tags, and the tests parse a version from them.
+      git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
+      cd release
+      make ci
+    epilogue: |
+      artifact push job "${CI_HOME}/${CI_GIT_DIR}/release/report" --destination test-results || true
 
   - name: release-build
     depends: [check-go]
