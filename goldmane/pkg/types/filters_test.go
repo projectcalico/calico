@@ -26,6 +26,125 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
+func TestMatchesEndpoints(t *testing.T) {
+	key := func(srcNs, src, dstNs, dst string) *types.FlowKey {
+		return types.NewFlowKey(
+			&types.FlowKeySource{SourceNamespace: srcNs, SourceName: src},
+			&types.FlowKeyDestination{DestNamespace: dstNs, DestName: dst, DestPort: 443},
+			&types.FlowKeyMeta{Proto: "tcp"},
+			&proto.PolicyTrace{},
+		)
+	}
+	exact := func(v string) *proto.StringMatch { return &proto.StringMatch{Value: v} }
+	fuzzy := func(v string) *proto.StringMatch { return &proto.StringMatch{Value: v, Type: proto.MatchType_Fuzzy} }
+	endpointOf := func(ns, name string) *proto.EndpointMatch {
+		m := &proto.EndpointMatch{}
+		if ns != "" {
+			m.Namespace = exact(ns)
+		}
+		if name != "" {
+			m.Name = exact(name)
+		}
+		return m
+	}
+	endpoints := func(entries ...*proto.FlowEndpointsMatch) *proto.Filter {
+		return &proto.Filter{Endpoints: entries}
+	}
+
+	flow := key("acme", "x", "other", "y")
+	vmToPublic := key("default", "vmToPublic", "-", "pub")
+
+	type endpointFilterCase struct {
+		name   string
+		filter *proto.Filter
+		key    *types.FlowKey
+		want   bool
+	}
+	tests := []endpointFilterCase{
+		{"no endpoints", &proto.Filter{}, flow, true},
+		{"either matches the source", endpoints(&proto.FlowEndpointsMatch{Either: endpointOf("acme", "x")}), flow, true},
+		{"either pairs namespace and name per side", endpoints(&proto.FlowEndpointsMatch{Either: endpointOf("acme", "y")}), flow, false},
+		{"either matches the dest namespace", endpoints(&proto.FlowEndpointsMatch{Either: endpointOf("other", "")}), flow, true},
+		{"source namespace", endpoints(&proto.FlowEndpointsMatch{Source: endpointOf("acme", "")}), flow, true},
+		{"source does not match the dest namespace", endpoints(&proto.FlowEndpointsMatch{Source: endpointOf("other", "")}), flow, false},
+		{"dest namespace and name", endpoints(&proto.FlowEndpointsMatch{Dest: endpointOf("other", "y")}), flow, true},
+		{
+			"source and dest both match",
+			endpoints(&proto.FlowEndpointsMatch{Source: endpointOf("acme", ""), Dest: endpointOf("other", "")}),
+			flow, true,
+		},
+		{
+			"source matches but dest does not",
+			endpoints(&proto.FlowEndpointsMatch{Source: endpointOf("acme", ""), Dest: endpointOf("acme", "")}),
+			flow, false,
+		},
+		{
+			"source name only with dest namespace",
+			endpoints(&proto.FlowEndpointsMatch{Source: endpointOf("", "x"), Dest: endpointOf("other", "")}),
+			flow, true,
+		},
+		{
+			"entries are ORed",
+			endpoints(&proto.FlowEndpointsMatch{Source: endpointOf("zzz", "")}, &proto.FlowEndpointsMatch{Dest: endpointOf("other", "")}),
+			flow, true,
+		},
+		{
+			"no entry matches",
+			endpoints(&proto.FlowEndpointsMatch{Source: endpointOf("zzz", "")}, &proto.FlowEndpointsMatch{Dest: endpointOf("zzz", "")}),
+			flow, false,
+		},
+		{
+			"either takes precedence over per-side ends",
+			endpoints(&proto.FlowEndpointsMatch{Either: endpointOf("other", ""), Source: endpointOf("zzz", "")}),
+			flow, true,
+		},
+		{
+			"ANDs with the other filters",
+			&proto.Filter{
+				Endpoints: []*proto.FlowEndpointsMatch{{Source: endpointOf("acme", "x")}},
+				DestPorts: []*proto.PortMatch{{Port: 80}},
+			},
+			flow, false,
+		},
+		{
+			"fuzzy name",
+			endpoints(&proto.FlowEndpointsMatch{Dest: &proto.EndpointMatch{Namespace: exact("other"), Name: fuzzy("y")}}),
+			flow, true,
+		},
+		{
+			"fuzzy name that matches neither side",
+			endpoints(&proto.FlowEndpointsMatch{Either: &proto.EndpointMatch{Namespace: exact("other"), Name: fuzzy("nope")}}),
+			flow, false,
+		},
+		{
+			"public network display value on dest",
+			endpoints(&proto.FlowEndpointsMatch{Dest: endpointOf("Global", "PUBLIC NETWORK")}),
+			vmToPublic, true,
+		},
+		{
+			"global display value does not match the source",
+			endpoints(&proto.FlowEndpointsMatch{Source: endpointOf("Global", "")}),
+			vmToPublic, false,
+		},
+		{
+			"fuzzy global namespace display value",
+			endpoints(&proto.FlowEndpointsMatch{Dest: &proto.EndpointMatch{Namespace: fuzzy("Glob")}}),
+			vmToPublic, true,
+		},
+		{
+			"fuzzy global namespace display value on a per-side filter",
+			&proto.Filter{DestNamespaces: []*proto.StringMatch{fuzzy("Glob")}},
+			vmToPublic, true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, types.Matches(tc.filter, tc.key))
+		})
+	}
+}
+
 // TestMatchesAgainstReference compares Matches with the closure-based implementation it
 // replaced, over generated keys and filters that exercise every filter field, the UI aliases,
 // and the empty-but-non-nil policy filter.
@@ -65,7 +184,7 @@ func TestMatchesEmptyPolicyFilter(t *testing.T) {
 
 var (
 	filterKeyNames      = []string{"pub", "pvt", "client-1", "server-*", ""}
-	filterKeyNamespaces = []string{"Global", "ns-1", "ns-2", ""}
+	filterKeyNamespaces = []string{"-", "ns-1", "ns-2", ""}
 	filterKeyPolicies   = []string{"allow-dns", "deny-all", "staged-allow"}
 	filterKeyTiers      = []string{"default", "security"}
 	filterValues        = []string{"pub", "PUBLIC NETWORK", "PRIVATE", "NET", "-", "Global", "ns", "ns-1", "client", "server-*", "allow", "staged-allow", "default", ""}
@@ -152,6 +271,21 @@ func randomFilter(rng *rand.Rand) *proto.Filter {
 		filter.Reporter = pick(rng, []proto.Reporter{proto.Reporter_Src, proto.Reporter_Dst})
 	}
 	if set() {
+		for range 1 + rng.IntN(2) {
+			entry := &proto.FlowEndpointsMatch{}
+			if rng.IntN(2) == 0 {
+				entry.Either = &proto.EndpointMatch{Namespace: optStr(), Name: optStr()}
+			}
+			if rng.IntN(2) == 0 {
+				entry.Source = &proto.EndpointMatch{Namespace: optStr(), Name: optStr()}
+			}
+			if rng.IntN(2) == 0 {
+				entry.Dest = &proto.EndpointMatch{Namespace: optStr(), Name: optStr()}
+			}
+			filter.Endpoints = append(filter.Endpoints, entry)
+		}
+	}
+	if set() {
 		filter.DestPorts = []*proto.PortMatch{{Port: pick(rng, []int64{0, 80, 8080})}}
 	}
 	switch rng.IntN(6) {
@@ -187,7 +321,7 @@ func referenceMatches(filter *proto.Filter, key *types.FlowKey) bool {
 		return []string{n}
 	}
 	namespaces := func(n string) []string {
-		if n == "Global" {
+		if n == "-" {
 			return []string{"-", "Global"}
 		}
 		return []string{n}
@@ -228,6 +362,21 @@ func referenceMatches(filter *proto.Filter, key *types.FlowKey) bool {
 	}) {
 		return false
 	}
+	if len(filter.Endpoints) > 0 && !slices.ContainsFunc(filter.Endpoints, func(e *proto.FlowEndpointsMatch) bool {
+		side := func(m *proto.EndpointMatch, ns, name string) bool {
+			field := func(sm *proto.StringMatch, vals []string) bool {
+				return slices.ContainsFunc(vals, func(v string) bool { return types.StringMatchMatches(sm, v) })
+			}
+			return field(m.Namespace, namespaces(ns)) && field(m.Name, names(name))
+		}
+		if e.Either != nil {
+			return side(e.Either, key.SourceNamespace(), key.SourceName()) || side(e.Either, key.DestNamespace(), key.DestName())
+		}
+		return (e.Source == nil || side(e.Source, key.SourceNamespace(), key.SourceName())) &&
+			(e.Dest == nil || side(e.Dest, key.DestNamespace(), key.DestName()))
+	}) {
+		return false
+	}
 	if filter.Policies == nil {
 		return true
 	}
@@ -241,4 +390,58 @@ func referenceMatches(filter *proto.Filter, key *types.FlowKey) bool {
 		})
 	}
 	return slices.ContainsFunc(trace.EnforcedPolicies, hitMatches) || slices.ContainsFunc(trace.PendingPolicies, hitMatches)
+}
+
+func TestMatchingSides(t *testing.T) {
+	key := types.NewFlowKey(
+		&types.FlowKeySource{SourceNamespace: "calico-system", SourceName: "calico-manager"},
+		&types.FlowKeyDestination{DestNamespace: "kube-system", DestName: "coredns", DestPort: 53},
+		&types.FlowKeyMeta{Proto: "udp"},
+		&proto.PolicyTrace{},
+	)
+	either := func(e *proto.EndpointMatch) *proto.Filter {
+		return &proto.Filter{Endpoints: []*proto.FlowEndpointsMatch{{Either: e}}}
+	}
+
+	tests := []matchingSidesCase{
+		{"no endpoints", &proto.Filter{}, true, true},
+		{"nil filter", nil, true, true},
+		{
+			"either name matches the dest only",
+			either(&proto.EndpointMatch{Name: &proto.StringMatch{Value: "core", Type: proto.MatchType_Fuzzy}}),
+			false, true,
+		},
+		{
+			"either namespace matches the source only",
+			either(&proto.EndpointMatch{Namespace: &proto.StringMatch{Value: "calico-system"}}),
+			true, false,
+		},
+		{
+			"either entry that matches neither side",
+			either(&proto.EndpointMatch{Namespace: &proto.StringMatch{Value: "default"}}),
+			false, false,
+		},
+		{
+			"source-only entry is ignored",
+			&proto.Filter{Endpoints: []*proto.FlowEndpointsMatch{{
+				Source: &proto.EndpointMatch{Namespace: &proto.StringMatch{Value: "default"}},
+			}}},
+			true, true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			source, dest := types.MatchingSides(tc.filter, key)
+			require.Equal(t, tc.wantSource, source, "source")
+			require.Equal(t, tc.wantDest, dest, "dest")
+		})
+	}
+}
+
+type matchingSidesCase struct {
+	name       string
+	filter     *proto.Filter
+	wantSource bool
+	wantDest   bool
 }
