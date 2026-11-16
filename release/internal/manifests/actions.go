@@ -24,9 +24,9 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/internal/yamledit"
 )
@@ -79,7 +79,7 @@ func (s settings) reset() error {
 }
 
 func (s settings) collectInto(dest string) error {
-	if err := os.MkdirAll(dest, utils.DirPerms); err != nil {
+	if err := os.MkdirAll(dest, fsutil.DirPerms); err != nil {
 		return s.Errorf("creating %s: %w", dest, err)
 	}
 	// Trailing separators stop rsync nesting the directory inside itself.
@@ -112,11 +112,11 @@ func (s settings) buildOCPBundle() error {
 	if _, err := s.Make().Run([]string{ocpBundleTarget}, command.WithEnv(env...), command.WithLogFile(s.LogPath(ocpBundleTarget))); err != nil {
 		return s.Errorf("building OCP bundle: %w", err)
 	}
-	if err := os.MkdirAll(s.OutputDir, utils.DirPerms); err != nil {
+	if err := os.MkdirAll(s.OutputDir, fsutil.DirPerms); err != nil {
 		return s.Errorf("creating %s: %w", s.OutputDir, err)
 	}
 	src := filepath.Join(s.RepoRoot, ocpBundleTarget)
-	if err := utils.LinkOrCopyFile(src, BundlePath(s.OutputDir)); err != nil {
+	if err := fsutil.LinkOrCopyFile(src, BundlePath(s.OutputDir)); err != nil {
 		return s.Errorf("collecting OCP bundle: %w", err)
 	}
 	return nil
