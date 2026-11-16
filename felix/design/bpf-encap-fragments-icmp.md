@@ -99,7 +99,7 @@ dualstack:
 
 Constants: `VXLANIfaceNameV4 = "vxlan.calico"`,
 `VXLANIfaceNameV6 = "vxlan-v6.calico"` in
-`felix/dataplane/linux/dataplanedefs/dataplane_defs.go`.
+`felix/dataplane/linux/vxlandefs/vxlandefs.go`.
 
 ### MTU and routing
 
