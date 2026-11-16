@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -35,7 +36,7 @@ var _ = Describe("Host ip manager", func() {
 
 	Describe("after sending a replace", func() {
 		BeforeEach(func() {
-			hostIPMgr.OnUpdate(&ifaceAddrsUpdate{
+			hostIPMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 				Name:  "eth0",
 				Addrs: set.From("10.0.0.1", "10.0.0.2"),
 			})
@@ -53,7 +54,7 @@ var _ = Describe("Host ip manager", func() {
 
 		Describe("after sending a delete", func() {
 			BeforeEach(func() {
-				hostIPMgr.OnUpdate(&ifaceAddrsUpdate{
+				hostIPMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 					Name: "eth0",
 				})
 				err := hostIPMgr.CompleteDeferredWork()
@@ -67,7 +68,7 @@ var _ = Describe("Host ip manager", func() {
 		Describe("after sending a workload interface update", func() {
 			BeforeEach(func() {
 				ipSets.AddOrReplaceCalled = false
-				hostIPMgr.OnUpdate(&ifaceAddrsUpdate{
+				hostIPMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 					Name:  "cali1234",
 					Addrs: set.From("10.0.0.8", "10.0.0.9"),
 				})
@@ -87,7 +88,7 @@ var _ = Describe("Host ip manager", func() {
 		Describe("after sending update for new interface", func() {
 			BeforeEach(func() {
 				ipSets.AddOrReplaceCalled = false
-				hostIPMgr.OnUpdate(&ifaceAddrsUpdate{
+				hostIPMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 					Name:  "eth1",
 					Addrs: set.From("10.0.0.8", "10.0.0.9"),
 				})
@@ -107,7 +108,7 @@ var _ = Describe("Host ip manager", func() {
 		Describe("after sending another replace", func() {
 			BeforeEach(func() {
 				ipSets.AddOrReplaceCalled = false
-				hostIPMgr.OnUpdate(&ifaceAddrsUpdate{
+				hostIPMgr.OnUpdate(&dataplanedefs.IfaceAddrsUpdate{
 					Name:  "eth0",
 					Addrs: set.From("10.0.0.2", "10.0.0.3"),
 				})

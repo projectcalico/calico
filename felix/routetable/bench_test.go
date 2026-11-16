@@ -27,7 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandefs"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/ip"
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
@@ -70,7 +70,7 @@ func benchResyncNumRoutes(b *testing.B, numRoutes int) {
 	mockDP := mocknetlink.New()
 	rt := New(
 		ownershippol.NewMainTable(
-			dataplanedefs.VXLANIfaceNameV4,
+			vxlandefs.VXLANIfaceNameV4,
 			88,
 			[]string{"testcali"},
 			false,
