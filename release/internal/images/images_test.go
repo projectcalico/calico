@@ -296,6 +296,54 @@ func TestPublishConfirmLatch(t *testing.T) {
 	}
 }
 
+func TestBuild(t *testing.T) {
+	pruned := func(f *fakeRunner) bool {
+		for _, c := range f.Calls() {
+			if c.Name == "docker" && slices.Equal(c.Args, []string{"builder", "prune", "--all", "--force"}) {
+				return true
+			}
+		}
+		return false
+	}
+
+	t.Run("keeps the build cache by default", func(t *testing.T) {
+		f := newFakeRunner(nil)
+		if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f)...); err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		if pruned(f) {
+			t.Error("build cache was pruned without being asked")
+		}
+	})
+
+	t.Run("prunes the build cache when asked", func(t *testing.T) {
+		f := newFakeRunner(nil)
+		if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f, WithPruneCache(true))...); err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		if !pruned(f) {
+			t.Error("build cache was not pruned")
+		}
+	})
+
+	t.Run("a failed prune does not fail the build", func(t *testing.T) {
+		f := newFakeRunner(map[string]int{"prune": 1})
+		if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f, WithPruneCache(true))...); err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+	})
+
+	t.Run("a failed build skips the prune", func(t *testing.T) {
+		f := newFakeRunner(map[string]int{"/repo/node": 9})
+		if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f, WithPruneCache(true))...); err == nil {
+			t.Fatal("Build succeeded with a failing component")
+		}
+		if pruned(f) {
+			t.Error("build cache was pruned after a failed build")
+		}
+	})
+}
+
 func TestLogPaths(t *testing.T) {
 	t.Run("no logs dir captures in memory", func(t *testing.T) {
 		f := newFakeRunner(nil)

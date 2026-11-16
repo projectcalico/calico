@@ -43,6 +43,11 @@ func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) er
 		return err
 	}
 	s.Logger().Info("Finished building container images")
+	if s.pruneCache {
+		if _, err := s.docker("builder", "prune", "--all", "--force"); err != nil {
+			s.Logger().WithError(err).Warn("Failed to prune the build cache")
+		}
+	}
 	return nil
 }
 
