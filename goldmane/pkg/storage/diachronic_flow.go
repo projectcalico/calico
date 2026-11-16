@@ -526,8 +526,7 @@ func (a ipRecency) compare(b ipRecency) int {
 
 // evictLeastRecent makes room in m for fresh, a set of distinct IPs absent from m and all seen at
 // start. It ranks m's entries and fresh together, removes the lowest-ranked until the rest fit in
-// MaxIPsPerFlow, and returns the IPs from fresh that survived. Ranking the whole update at once
-// replaces a scan of m for every incoming IP.
+// MaxIPsPerFlow, and returns the IPs from fresh that survived.
 func evictLeastRecent(m map[string]*ipEntry, fresh []string, start int64) []string {
 	overflow := len(m) + len(fresh) - MaxIPsPerFlow
 	if overflow <= 0 {

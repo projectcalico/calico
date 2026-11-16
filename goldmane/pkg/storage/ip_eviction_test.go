@@ -15,6 +15,7 @@
 package storage_test
 
 import (
+	"cmp"
 	"fmt"
 	"math/rand/v2"
 	"slices"
@@ -56,7 +57,7 @@ func (m *ipSetModel) add(ips []string, start int64) {
 	}
 	slices.SortFunc(ranked, func(a, b string) int {
 		if m.lastSeen[a] != m.lastSeen[b] {
-			return int(m.lastSeen[a] - m.lastSeen[b])
+			return cmp.Compare(m.lastSeen[a], m.lastSeen[b])
 		}
 		return strings.Compare(a, b)
 	})
@@ -79,6 +80,7 @@ func (m *ipSetModel) rollover(limiter int64) {
 	}
 }
 
+// forget removes ip and all its recorded windows.
 func (m *ipSetModel) forget(ip string) {
 	delete(m.windows, ip)
 	delete(m.lastSeen, ip)
