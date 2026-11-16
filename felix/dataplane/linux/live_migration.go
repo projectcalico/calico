@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 const etherTypeRARP = layers.EthernetType(0x8035)
@@ -69,6 +71,7 @@ type liveMigrationMonitor struct {
 	ifaceNames      map[types.WorkloadEndpointID]string
 	migrationUIDs   map[types.WorkloadEndpointID]string
 	vmiNames        map[types.WorkloadEndpointID]string
+	wepIPs          map[types.WorkloadEndpointID][]cnet.IP
 	newGARPHandle   func(string) (garpHandle, error)
 	convergenceTime time.Duration
 
@@ -78,7 +81,7 @@ type liveMigrationMonitor struct {
 	ensureActiveVMOwnerAttrs func(
 		ctx context.Context,
 		ipamClient ipam.Interface,
-		networkName string,
+		ips []cnet.IP,
 		namespace string,
 		vmiName string,
 		targetPodName string,
@@ -94,6 +97,7 @@ func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Inte
 		ifaceNames:    make(map[types.WorkloadEndpointID]string),
 		migrationUIDs: make(map[types.WorkloadEndpointID]string),
 		vmiNames:      make(map[types.WorkloadEndpointID]string),
+		wepIPs:        make(map[types.WorkloadEndpointID][]cnet.IP),
 		newGARPHandle: func(ifaceName string) (garpHandle, error) {
 			return pcapgo.NewEthernetHandle(ifaceName)
 		},
@@ -123,6 +127,25 @@ func (m *liveMigrationMonitor) ResolveUpdateBatch() error {
 	return nil
 }
 
+// parseWEPIPs returns the endpoint's /32 and /128 addresses without their prefix lengths.
+func parseWEPIPs(ep *proto.WorkloadEndpoint) []cnet.IP {
+	var ips []cnet.IP
+	for _, s := range append(append([]string{}, ep.Ipv4Nets...), ep.Ipv6Nets...) {
+		ip, ipNet, err := net.ParseCIDR(s)
+		if err != nil {
+			continue
+		}
+		if ones, bits := ipNet.Mask.Size(); ones != bits {
+			continue
+		}
+		if ip4 := ip.To4(); ip4 != nil {
+			ip = ip4
+		}
+		ips = append(ips, cnet.IP{IP: ip})
+	}
+	return ips
+}
+
 func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.WorkloadEndpointUpdate:
@@ -137,6 +160,9 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 		}
 		if vmiName := msg.Endpoint.LiveMigrationVmiName; vmiName != "" {
 			m.vmiNames[id] = vmiName
+		}
+		if ips := parseWEPIPs(msg.Endpoint); len(ips) > 0 {
+			m.wepIPs[id] = ips
 		}
 		oldRole := m.roles[id]
 		newRole := msg.Endpoint.LiveMigrationRole
@@ -157,6 +183,7 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 		delete(m.ifaceNames, id)
 		delete(m.migrationUIDs, id)
 		delete(m.vmiNames, id)
+		delete(m.wepIPs, id)
 		m.executeFSM(id, liveMigrationInputDeleted)
 	}
 }
@@ -541,6 +568,11 @@ func (f *liveMigrationFSM) doIPAMOwnerSwap() {
 		f.logCtx.Debug("No VMI name available, skipping IPAM owner swap")
 		return
 	}
+	ips := f.monitor.wepIPs[f.id]
+	if len(ips) == 0 {
+		f.logCtx.Info("No IPs recorded for workload endpoint, skipping IPAM owner swap")
+		return
+	}
 
 	// Parse namespace and pod name from the workload ID (format: "namespace/podName").
 	parts := strings.SplitN(f.id.WorkloadId, "/", 2)
@@ -556,6 +588,7 @@ func (f *liveMigrationFSM) doIPAMOwnerSwap() {
 		"namespace": namespace,
 		"pod":       podName,
 		"vmiName":   vmiName,
+		"ips":       ips,
 	})
 	logCtx.Info("Starting IPAM owner attribute swap for live migration")
 
@@ -566,7 +599,7 @@ func (f *liveMigrationFSM) doIPAMOwnerSwap() {
 		const maxRetries = 5
 		backoff := 100 * time.Millisecond
 		for attempt := 1; attempt <= maxRetries; attempt++ {
-			err := f.monitor.ensureActiveVMOwnerAttrs(ctx, f.monitor.ipamClient, "", namespace, vmiName, podName)
+			err := f.monitor.ensureActiveVMOwnerAttrs(ctx, f.monitor.ipamClient, ips, namespace, vmiName, podName)
 			if err == nil {
 				logCtx.Info("Successfully swapped IPAM owner attributes")
 				return
