@@ -109,3 +109,15 @@ var _ = Describe("Ticker constructor", func() {
 		Expect(func() { NewTicker(1*time.Second, -1*time.Second) }).To(Panic())
 	})
 })
+
+var _ = Describe("Zero jitter delay calculation", func() {
+	// The constructor accepts a zero MaxJitter (only negative values are
+	// rejected), so calculateDelay must handle it without feeding zero to
+	// rand.Int63n, which panics on a non-positive argument.
+	It("should not panic and should return MinDuration", func() {
+		ticker := &Ticker{MinDuration: 20 * time.Millisecond, MaxJitter: 0}
+		var duration time.Duration
+		Expect(func() { duration = ticker.calculateDelay() }).NotTo(Panic())
+		Expect(duration).To(Equal(20 * time.Millisecond))
+	})
+})
