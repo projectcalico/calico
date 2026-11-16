@@ -1181,9 +1181,17 @@ func TestArchiveSourcesIsGatedPerSource(t *testing.T) {
 			if err != nil {
 				t.Fatalf("archiveSources: %v", err)
 			}
+			// Images contribute once per directory, and the directories differ
+			// by product.
 			var got []string
 			for _, c := range sources {
-				got = append(got, c.Name())
+				name := c.Name()
+				if strings.HasPrefix(name, "images/") {
+					name = "images"
+				}
+				if len(got) == 0 || got[len(got)-1] != name {
+					got = append(got, name)
+				}
 			}
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("archiveSources() = %v, want %v", got, tc.want)
