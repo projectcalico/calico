@@ -153,7 +153,9 @@ func expectedCells(lanes []cilanes.Lane) map[string]string {
 
 // addModuleCells adds the cells of an included module whose step or matrix
 // entry sets E2E_TEST_CONFIG. A kind step that leaves it to the make target
-// carries no value in the live cron, so it is not expected to.
+// carries no value in the live cron, so it is not expected to. A config set in
+// a defaults.env block, or a cron's globalPrologue default reaching module
+// steps, is not modeled and would show up as an extra live cell.
 func addModuleCells(cells map[string]string, repoRoot, path string) error {
 	data, err := os.ReadFile(filepath.Join(repoRoot, path))
 	if err != nil {
