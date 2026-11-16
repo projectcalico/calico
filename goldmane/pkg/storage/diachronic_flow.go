@@ -15,7 +15,7 @@
 package storage
 
 import (
-	"math"
+	"cmp"
 	"slices"
 	"sort"
 	"strings"
@@ -467,49 +467,96 @@ func (d *DiachronicFlow) recordIPs(flow *types.Flow, start, end int64) {
 	d.destIPs = recordIPSet(d.destIPs, flow.DestIps, slot, start)
 }
 
-// recordIPSet adds ips to m against the given window slot, lazily allocating m. When m is full, the
-// least-recently-seen entry is evicted to make room, unless the incoming window is older than every
-// retained entry (e.g. a late-arriving flow for an old window), in which case the new IP is dropped.
-// Entries seen in the same window are equally recent; the lowest address, including incoming IPs, is dropped.
+// recordIPSet adds ips to m against the given window slot, lazily allocating m. When m would grow
+// past MaxIPsPerFlow, it keeps the most recently seen IPs, dropping the lowest address among
+// equally recent ones; see evictLeastRecent. So an IP arriving late, for a window older than every
+// retained entry, is dropped rather than evicting newer data.
 func recordIPSet(m map[string]*ipEntry, ips []string, slot int, start int64) map[string]*ipEntry {
-	// Refresh already-tracked IPs first, so a new IP earlier in ips can't evict one that this flow
-	// has just seen again (which would discard its history from earlier windows).
-	for _, ip := range ips {
-		if e, ok := m[ip]; ok {
-			e.windows.set(slot)
-			e.lastSeen = max(e.lastSeen, start)
-		}
-	}
+	// New IPs go straight in while there is room. Once m is full they wait in fresh, so every
+	// already-tracked IP is refreshed before anything is evicted and can keep its earlier history.
+	var fresh []string
 	for _, ip := range ips {
 		if ip == "" {
 			continue
 		}
 		if e, ok := m[ip]; ok {
-			// Refreshed above, or a duplicate within ips.
 			e.windows.set(slot)
+			e.lastSeen = max(e.lastSeen, start)
+			continue
+		}
+		if len(m) >= MaxIPsPerFlow {
+			fresh = append(fresh, ip)
 			continue
 		}
 		if m == nil {
 			m = make(map[string]*ipEntry, min(len(ips), MaxIPsPerFlow))
 		}
-		if len(m) >= MaxIPsPerFlow {
-			oldestIP, oldest := "", int64(math.MaxInt64)
-			for k, e := range m {
-				// Break ties on the address so eviction is deterministic.
-				if e.lastSeen < oldest || (e.lastSeen == oldest && k < oldestIP) {
-					oldestIP, oldest = k, e.lastSeen
-				}
-			}
-			if oldest > start || (oldest == start && ip < oldestIP) {
-				continue
-			}
-			delete(m, oldestIP)
-		}
-		e := &ipEntry{lastSeen: start}
-		e.windows.set(slot)
-		m[ip] = e
+		addIPEntry(m, ip, slot, start)
+	}
+	if len(fresh) == 0 {
+		return m
+	}
+	slices.Sort(fresh)
+	for _, ip := range evictLeastRecent(m, slices.Compact(fresh), start) {
+		addIPEntry(m, ip, slot, start)
 	}
 	return m
+}
+
+// addIPEntry records a new IP in m as seen only in the given window slot.
+func addIPEntry(m map[string]*ipEntry, ip string, slot int, start int64) {
+	e := &ipEntry{lastSeen: start}
+	e.windows.set(slot)
+	m[ip] = e
+}
+
+// ipRecency is an IP and the start of the newest window it was seen in, ranked for eviction.
+type ipRecency struct {
+	lastSeen int64
+	ip       string
+}
+
+// compare orders the least recently seen first, then the lowest address.
+func (a ipRecency) compare(b ipRecency) int {
+	if a.lastSeen != b.lastSeen {
+		return cmp.Compare(a.lastSeen, b.lastSeen)
+	}
+	return strings.Compare(a.ip, b.ip)
+}
+
+// evictLeastRecent makes room in m for fresh, a set of distinct IPs absent from m and all seen at
+// start. It ranks m's entries and fresh together, removes the lowest-ranked until the rest fit in
+// MaxIPsPerFlow, and returns the IPs from fresh that survived. Ranking the whole update at once
+// replaces a scan of m for every incoming IP.
+func evictLeastRecent(m map[string]*ipEntry, fresh []string, start int64) []string {
+	overflow := len(m) + len(fresh) - MaxIPsPerFlow
+	if overflow <= 0 {
+		return fresh
+	}
+
+	// Entries seen after start outrank every fresh IP, so only the rest compete for eviction.
+	candidates := make([]ipRecency, 0, len(m)+len(fresh))
+	for ip, e := range m {
+		if e.lastSeen <= start {
+			candidates = append(candidates, ipRecency{lastSeen: e.lastSeen, ip: ip})
+		}
+	}
+	for _, ip := range fresh {
+		candidates = append(candidates, ipRecency{lastSeen: start, ip: ip})
+	}
+	slices.SortFunc(candidates, ipRecency.compare)
+
+	survivors := fresh[:0]
+	for i, c := range candidates {
+		_, retained := m[c.ip]
+		switch {
+		case i < overflow && retained:
+			delete(m, c.ip)
+		case i >= overflow && !retained:
+			survivors = append(survivors, c.ip)
+		}
+	}
+	return survivors
 }
 
 // windowIPs returns the sorted source and destination IPs seen in the given window.
