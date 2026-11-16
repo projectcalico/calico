@@ -126,7 +126,10 @@ func TestEncapDevices(t *testing.T) {
 		{
 			name:  "dual-stack VXLAN uses a device per family",
 			pools: []v3.IPPool{testPool("v4", "192.168.0.0/16", vxlan), testPool("v6", "fd00:10:244::/64", vxlan)},
-			want:  map[IPFamily]string{IPv4: "vxlan.calico", IPv6: "vxlan-v6.calico"},
+			want: map[IPFamily]string{
+				IPv4: "vxlan.calico",
+				IPv6: "vxlan-v6.calico",
+			},
 		},
 		{
 			name:  "IPv6-only VXLAN",

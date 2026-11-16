@@ -26,17 +26,6 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// PoolFamilies returns the IP families pods get addresses in. It reads the
-// IPPools rather than node addresses because an IPv4-only Calico cluster can run
-// on dual-stack hosts, whose nodes report an IPv6 InternalIP Calico never uses.
-func PoolFamilies(cli ctrlclient.Client) ([]IPFamily, error) {
-	podNet, err := ReadPodNetwork(cli)
-	if err != nil {
-		return nil, err
-	}
-	return podNet.Families, nil
-}
-
 // PodNetwork is what the cluster's IP pools say about pod traffic: the IP
 // families pods get, and the tunnel device each family's traffic uses.
 type PodNetwork struct {
@@ -46,6 +35,9 @@ type PodNetwork struct {
 
 // ReadPodNetwork reads the IP pools once, so every answer comes from the same
 // pools: disabled, tunnel-only and manual-assignment pools count for neither.
+// Families come from the pools rather than node addresses because an IPv4-only
+// Calico cluster can run on dual-stack hosts, whose nodes report an IPv6
+// InternalIP Calico never uses.
 func ReadPodNetwork(cli ctrlclient.Client) (PodNetwork, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

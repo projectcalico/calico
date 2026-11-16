@@ -220,9 +220,7 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("HEP nodes: %v families: %v IPs: %v calico: %v", nodeNames, families, nodeIPs, calicoNames)
 
 			dp = utils.DetectDataplane(cli, f.ClientSet)
-			podNet, err := utils.ReadPodNetwork(cli)
-			Expect(err).NotTo(HaveOccurred(), "reading the IP pools")
-			encapIfaces = podNet.EncapDevices
+			encapIfaces = nodes.EncapDevices
 			logrus.Infof("Encap interfaces: %v", encapIfaces)
 		})
 
@@ -325,6 +323,7 @@ var _ = describe.CalicoDescribe(
 					}
 				case "nodePort":
 					expectSNAT = true
+
 					// The HEP is on node0.
 					targets[fam] = server.NodePort(nodeIPs[fam][0], clientIPOpt)
 				default:

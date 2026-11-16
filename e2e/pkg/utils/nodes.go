@@ -175,12 +175,15 @@ func firstOfFamily(ips []string, f IPFamily) string {
 // few nodes. A one-shot node-count precondition races that recovery and fails
 // spuriously — use this helper for any multi-node requirement instead.
 func AwaitReadySchedulableNodesInfo(f *framework.Framework, minCount int, masterOK bool) NodesInfoGetter {
-	return awaitReadySchedulableNodes(f, minCount, masterOK, 2)
+	return awaitReadySchedulableNodes(f, minCount, masterOK)
 }
 
-func awaitReadySchedulableNodes(f *framework.Framework, minCount int, masterOK bool, offset int) *nodesInfo {
+// awaitReadySchedulableNodes is AwaitReadySchedulableNodesInfo returning the
+// concrete type. Failures are reported at the caller of the exported function
+// that wraps it.
+func awaitReadySchedulableNodes(f *framework.Framework, minCount int, masterOK bool) *nodesInfo {
 	var info *nodesInfo
-	gomega.EventuallyWithOffset(offset, func(g gomega.Gomega) {
+	gomega.EventuallyWithOffset(2, func(g gomega.Gomega) {
 		// Keep the per-attempt timeout well under the polling interval so a slow
 		// or erroring List doesn't eat the whole Eventually budget in one attempt.
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -199,7 +202,7 @@ func awaitReadySchedulableNodes(f *framework.Framework, minCount int, masterOK b
 // FamilyNodes is the first n ready, schedulable nodes, each with an address in
 // every IP family the cluster's IP pools give pods. Slices are indexed by node.
 type FamilyNodes struct {
-	Families    []IPFamily
+	PodNetwork
 	Names       []string
 	CalicoNames []string
 	IPs         map[IPFamily][]string
@@ -209,18 +212,18 @@ type FamilyNodes struct {
 // AwaitFamilyNodes fails the spec if the IP pools can't be read or one of the n
 // nodes has no address in a pool family.
 func AwaitFamilyNodes(f *framework.Framework, cli ctrlclient.Client, n int) FamilyNodes {
-	info := awaitReadySchedulableNodes(f, n, false, 2)
-	families, err := PoolFamilies(cli)
-	framework.ExpectNoError(err)
-	framework.ExpectNoError(info.checkFamilies(families, n))
+	info := awaitReadySchedulableNodes(f, n, false)
+	podNet, err := ReadPodNetwork(cli)
+	framework.ExpectNoErrorWithOffset(1, err)
+	framework.ExpectNoErrorWithOffset(1, info.checkFamilies(podNet.Families, n))
 	nodes := FamilyNodes{
-		Families:    families,
+		PodNetwork:  podNet,
 		Names:       info.GetNames()[:n],
 		CalicoNames: info.GetCalicoNames()[:n],
 		IPs:         map[IPFamily][]string{},
 		TunnelIPs:   map[IPFamily][]string{},
 	}
-	for _, fam := range families {
+	for _, fam := range podNet.Families {
 		nodes.IPs[fam] = info.GetIPs(fam)[:n]
 		nodes.TunnelIPs[fam] = info.GetTunnelIPs(fam)[:n]
 	}
