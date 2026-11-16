@@ -13292,7 +13292,7 @@ spec:
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
-          image: quay.io/calico/calico:v3.33.0
+          image: quay.io/calico/calico:v3.33.1
           imagePullPolicy: IfNotPresent
           command: ["/usr/bin/calico-ipam", "-upgrade"]
           envFrom:
@@ -13322,7 +13322,7 @@ spec:
         # references (portmap, host-local, loopback, tuning, flannel) for
         # install-cni to copy onto the host.
         - name: cni-plugins
-          image: quay.io/calico/third-party-cni-plugins:v3.33.0
+          image: quay.io/calico/third-party-cni-plugins:v3.33.1
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - mountPath: /stage
@@ -13332,7 +13332,7 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/calico/calico:v3.33.0
+          image: quay.io/calico/calico:v3.33.1
           imagePullPolicy: IfNotPresent
           args: ["component", "cni", "install"]
           envFrom:
@@ -13379,7 +13379,7 @@ spec:
         # networking to allow communication with the API Server. Calico-node initialization is executed
         # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptables mode.
         - name: "ebpf-bootstrap"
-          image: quay.io/calico/node:v3.33.0
+          image: quay.io/calico/node:v3.33.1
           imagePullPolicy: IfNotPresent
           command: ["calico", "component", "node", "init", "--best-effort"]
           volumeMounts:
@@ -13405,7 +13405,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: quay.io/calico/node:v3.33.0
+          image: quay.io/calico/node:v3.33.1
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
@@ -13640,7 +13640,7 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
-          image: quay.io/calico/calico:v3.33.0
+          image: quay.io/calico/calico:v3.33.1
           imagePullPolicy: IfNotPresent
           args: ["component", "kube-controllers", "--health-port=9440"]
           env:
@@ -13704,7 +13704,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: calico-webhooks
-          image: quay.io/calico/calico:v3.33.0
+          image: quay.io/calico/calico:v3.33.1
           imagePullPolicy: IfNotPresent
           args:
             - component
