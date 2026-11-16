@@ -45,3 +45,36 @@ func TestNetConfDeviceTypeParsing(t *testing.T) {
 		})
 	}
 }
+
+// assignedFamiliesCase is one row of TestIPAMConfigAssignedFamilies.
+type assignedFamiliesCase struct {
+	name   string
+	ipam   string
+	wantV4 bool
+	wantV6 bool
+}
+
+func TestIPAMConfigAssignedFamilies(t *testing.T) {
+	for _, tc := range []assignedFamiliesCase{
+		{name: "defaults", ipam: `{}`, wantV4: true},
+		{name: "ipv4 off", ipam: `{"assign_ipv4":"false"}`},
+		{name: "ipv4 on", ipam: `{"assign_ipv4":"true"}`, wantV4: true},
+		{name: "ipv6 on", ipam: `{"assign_ipv6":"true"}`, wantV4: true, wantV6: true},
+		{name: "ipv6 off", ipam: `{"assign_ipv6":"false"}`, wantV4: true},
+		{name: "ipv6 only", ipam: `{"assign_ipv4":"false","assign_ipv6":"true"}`, wantV6: true},
+		{name: "other values keep the defaults", ipam: `{"assign_ipv4":"no","assign_ipv6":"yes"}`, wantV4: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var c NetConf
+			if err := json.Unmarshal([]byte(`{"ipam":`+tc.ipam+`}`), &c); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := c.IPAM.AssignsIPv4(); got != tc.wantV4 {
+				t.Errorf("AssignsIPv4() = %v, want %v", got, tc.wantV4)
+			}
+			if got := c.IPAM.AssignsIPv6(); got != tc.wantV6 {
+				t.Errorf("AssignsIPv6() = %v, want %v", got, tc.wantV6)
+			}
+		})
+	}
+}
