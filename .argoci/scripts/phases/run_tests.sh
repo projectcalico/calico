@@ -186,7 +186,10 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   E2E_CONFIG_DIR="${CI_HOME}/${CI_GIT_DIR}/e2e/config"
   E2E_CONFIG_TAR="$(mktemp)"
   echo "[INFO] downloading e2e config from hashrelease: ${E2E_CONFIG_URL}"
-  if ! curl --retry 9 --retry-all-errors -fsSL "${E2E_CONFIG_URL}" -o "${E2E_CONFIG_TAR}"; then
+
+  # No --retry-all-errors: a hashrelease built before the archive existed
+  # answers 404, which should fail now rather than after minutes of backoff.
+  if ! curl --retry 9 -fsSL "${E2E_CONFIG_URL}" -o "${E2E_CONFIG_TAR}"; then
     echo "[ERROR] hashrelease has no e2e config at ${E2E_CONFIG_URL}; not falling back to the branch checkout"
     exit 1
   fi
