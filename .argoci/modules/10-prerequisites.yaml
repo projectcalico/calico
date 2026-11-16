@@ -365,15 +365,17 @@ steps:
       cp -a cmd/calico/bin/image-context-amd64/. /cache/calico-image/
 
   # The cgo and race calico binaries and the libbpf tree, for the Felix steps.
-  # Apart from the image so the image build doesn't wait on them; -race recompiles
-  # every package, so it gains nothing from a shared build cache either.
+  # Apart from the image so the image build doesn't wait on them. -race recompiles
+  # every package, so rather than wait for go-cache it starts at once on the
+  # last master build's cache, which the prologue restores.
   - name: calico-test-binaries
     # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
     override:
       nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
       tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
-    depends: [go-cache]
     env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
       - name: NATIVE_GO_BUILD
         value: "true"
     timeout: 1h
@@ -383,7 +385,6 @@ steps:
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
     cache:
-      - {name: go, mode: read, path: /cache/go}
       - {name: calico-test-binaries, mode: write, path: /cache/calico-test-binaries}
     changes:
       dependsOn: [cmd]
@@ -391,7 +392,6 @@ steps:
     commands: |
       # TEMPORARY: the build image lacks the zstd CLI the libbpf tarball needs.
       dnf install -y -q zstd
-      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" calico-test-binaries
       # Shipped for the Felix FVs, which would otherwise build them per lane.
       make -C cmd/calico build-cgo build-race
       cp cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64 /cache/calico-test-binaries/

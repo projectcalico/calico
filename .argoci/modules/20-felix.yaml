@@ -46,7 +46,7 @@ steps:
         value: calico
       - name: NATIVE_GO_BUILD
         value: "true"
-    depends: [build-calico-image, calico-test-binaries, check-go, felix-fv-plan, go-cache]
+    depends: [calico-test-binaries, felix-fv-plan, go-cache]
     timeout: 40m
     jobSize: large
     requests: {cpu: 7000m, memory: 6Gi}
@@ -59,7 +59,6 @@ steps:
           - name: google-service-account-for-gce-key.json
             as: GCE_SERVICE_ACCOUNT_KEY
     cache:
-      - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
       - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
       - {name: go, mode: read, path: /cache/go}
       - {name: felix-image-context, mode: write, path: /cache/felix-image-context}
@@ -83,7 +82,7 @@ steps:
       # REMOTE_DEPS= reuses the cached image. Not `make build`, which also
       # cross-compiles the Windows binary.
       make REMOTE_DEPS= bin/calico-felix ut-bpf-prereqs fv-prereqs-no-image
-      PREFETCHED_ARTIFACTS=/cache/calico-image-zst FELIX_TEST_IMAGE_TAR=none ./.semaphore/cache-test-artifacts
+      FV_IMAGES=separate ./.semaphore/cache-test-artifacts
 
   - name: felix-test-buildkit
     depends: [felix-build-prep]
@@ -95,8 +94,10 @@ steps:
       context: /cache/felix-image-context
       tar: /cache/felix-test-tar/calico-felix-test.tar
 
+  # The images go up here rather than from felix-build-prep, so its build need
+  # not wait for the calico image.
   - name: felix-build
-    depends: [felix-test-buildkit]
+    depends: [felix-test-buildkit, build-calico-image]
     jobSize: small
     useGoBuild: true
     secretBundles:
@@ -106,9 +107,11 @@ steps:
             as: GCE_SERVICE_ACCOUNT_KEY
     cache:
       - {name: felix-test-tar, mode: read, path: /cache/felix-test-tar}
+      - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
     commands: |
       source .argoci/scripts/vm-fleet-setup.sh
-      gcloud storage cp /cache/felix-test-tar/calico-felix-test.tar "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/"
+      gcloud storage cp /cache/felix-test-tar/calico-felix-test.tar /cache/calico-image-zst/calico-image.tar.zst \
+        "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/"
 
   # Native in the go-build image: under NATIVE_GO_BUILD the checks call no docker.
   - name: felix-static-checks
