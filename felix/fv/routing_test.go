@@ -29,7 +29,9 @@ import (
 	"github.com/vishvananda/netlink"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipipdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/routedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/vxlandefs"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -105,7 +107,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				if brokenXSum {
 					It("should disable checksum offload", func() {
 						Eventually(func() string {
-							out, err := felixes[0].ExecOutput("ethtool", "-k", dataplanedefs.IPIPIfaceName)
+							out, err := felixes[0].ExecOutput("ethtool", "-k", ipipdefs.IPIPIfaceName)
 							if err != nil {
 								return fmt.Sprintf("ERROR: %v", err)
 							}
@@ -115,7 +117,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				} else {
 					It("should not disable checksum offload", func() {
 						Eventually(func() string {
-							out, err := felixes[0].ExecOutput("ethtool", "-k", dataplanedefs.IPIPIfaceName)
+							out, err := felixes[0].ExecOutput("ethtool", "-k", ipipdefs.IPIPIfaceName)
 							if err != nil {
 								return fmt.Sprintf("ERROR: %v", err)
 							}
@@ -146,7 +148,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					mtuStr := "mtu 1480"
 					for _, felix := range felixes {
 						Eventually(func() string {
-							out, _ := felix.ExecOutput("ip", "-d", "link", "show", dataplanedefs.IPIPIfaceName)
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", ipipdefs.IPIPIfaceName)
 							return out
 						}, "60s", "500ms").Should(ContainSubstring(mtuStr))
 					}
@@ -165,7 +167,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					for _, felix := range felixes {
 						// Felix checks host MTU every 30s
 						Eventually(func() string {
-							out, _ := felix.ExecOutput("ip", "-d", "link", "show", dataplanedefs.IPIPIfaceName)
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", ipipdefs.IPIPIfaceName)
 							return out
 						}, "60s", "500ms").Should(ContainSubstring(mtuStr))
 
@@ -188,7 +190,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					for _, felix := range felixes {
 						// Felix checks host MTU every 30s
 						Eventually(func() string {
-							out, _ := felix.ExecOutput("ip", "-d", "link", "show", dataplanedefs.IPIPIfaceName)
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", ipipdefs.IPIPIfaceName)
 							return out
 						}, "60s", "500ms").Should(ContainSubstring("mtu 1300"))
 					}
@@ -206,7 +208,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						Expect(felix.ExpectedIPIPTunnelAddr).NotTo(BeEmpty(),
 							"test precondition: every node should have an IPIP tunnel address")
 						Eventually(func() string {
-							out, _ := felix.ExecOutput("ip", "addr", "show", dataplanedefs.IPIPIfaceName)
+							out, _ := felix.ExecOutput("ip", "addr", "show", ipipdefs.IPIPIfaceName)
 							return out
 						}, "60s", "500ms").Should(ContainSubstring(felix.ExpectedIPIPTunnelAddr),
 							"IPIP tunnel address should be programmed onto tunl0 while IPIP is enabled")
@@ -227,7 +229,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					for _, felix := range felixes {
 						// Felix should strip the tunnel address off tunl0...
 						Eventually(func() string {
-							out, _ := felix.ExecOutput("ip", "addr", "show", dataplanedefs.IPIPIfaceName)
+							out, _ := felix.ExecOutput("ip", "addr", "show", ipipdefs.IPIPIfaceName)
 							return out
 						}, "60s", "500ms").ShouldNot(ContainSubstring(felix.ExpectedIPIPTunnelAddr),
 							"IPIP tunnel address should be removed from tunl0 once IPIP is disabled")
@@ -235,7 +237,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						// ...but, unlike VXLAN (which deletes vxlan.calico entirely), it should
 						// leave the kernel-owned tunl0 device in place.
 						Consistently(func() error {
-							_, err := felix.ExecOutput("ip", "link", "show", dataplanedefs.IPIPIfaceName)
+							_, err := felix.ExecOutput("ip", "link", "show", ipipdefs.IPIPIfaceName)
 							return err
 						}, "5s", "500ms").ShouldNot(HaveOccurred(),
 							"tunl0 device should not be deleted when IPIP is disabled, only its address removed")
@@ -331,7 +333,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						felixes[0].Exec("kill", "-STOP", fmt.Sprint(pid))
 
 						tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
-							externalClient.IP, "dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", "90")
+							externalClient.IP, "dev", ipipdefs.IPIPIfaceName, "onlink", "proto", "90")
 
 						if BPFMode() {
 							tc.Felixes[0].Exec("calico-bpf", "routes", "add", "10.65.222.1", "--nexthop", externalClient.IP, "--workload", "remote", "--tunneled")
@@ -1227,8 +1229,8 @@ func ensureFelixRoutesProgrammed(felix *infrastructure.Felix) {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Check for the default route protocol used in Felix or Calico vxlan devices.
-		if strings.Contains(outv4, fmt.Sprintf("proto %v", dataplanedefs.DefaultRouteProto)) ||
-			strings.Contains(outv4, dataplanedefs.VXLANIfaceNameV4) {
+		if strings.Contains(outv4, fmt.Sprintf("proto %v", routedefs.DefaultRouteProto)) ||
+			strings.Contains(outv4, vxlandefs.VXLANIfaceNameV4) {
 			return true
 		}
 
@@ -1236,8 +1238,8 @@ func ensureFelixRoutesProgrammed(felix *infrastructure.Felix) {
 		outv6, err := felix.ExecOutput(cmdv6...)
 		Expect(err).NotTo(HaveOccurred())
 		// Check for the default route protocol used in Felix or Calico vxlan devices.
-		return strings.Contains(outv6, fmt.Sprintf("proto %v", dataplanedefs.DefaultRouteProto)) ||
-			strings.Contains(outv6, dataplanedefs.VXLANIfaceNameV6)
+		return strings.Contains(outv6, fmt.Sprintf("proto %v", routedefs.DefaultRouteProto)) ||
+			strings.Contains(outv6, vxlandefs.VXLANIfaceNameV6)
 	}
 	EventuallyWithOffset(2, routesExist, "1m", "1s").Should(BeTrue())
 	ConsistentlyWithOffset(2, routesExist, "3s", "1s").Should(BeTrue())
