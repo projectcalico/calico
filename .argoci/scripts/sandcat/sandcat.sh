@@ -16,7 +16,7 @@
 #     --kubeconfig PATH --source-dir DIR   non-zero means do not run the hook
 #
 # Env: SANDCAT_INGEST_TOKEN and SANDCAT_UPLOAD_URL gate analyze and build-failure
-# (skipped when unset). GITHUB_ACCESS_TOKEN downloads the binary.
+# (skipped when unset). SANDCAT_BIN_DOWNLOAD_TOKEN downloads the binary.
 # SANDCAT_CALICO_MCP=0 disables calico-mcp; CALICO_MCP_VERSION pins it.
 
 set -uo pipefail
@@ -38,8 +38,8 @@ _sandcat_download() {
   if [[ -x "${SANDCAT_BIN}" ]]; then
     return 0
   fi
-  if [[ -z "${GITHUB_ACCESS_TOKEN:-}" ]]; then
-    echo "[WARN] sandcat: GITHUB_ACCESS_TOKEN not set; cannot download binary" >&2
+  if [[ -z "${SANDCAT_BIN_DOWNLOAD_TOKEN:-}" ]]; then
+    echo "[WARN] sandcat: SANDCAT_BIN_DOWNLOAD_TOKEN not set; cannot download binary" >&2
     return 1
   fi
   local release_path="tags/${SANDCAT_VERSION}"
@@ -59,7 +59,7 @@ _sandcat_download() {
 
 # The token reaches curl on stdin, so it never shows in the process list.
 _github_curl() {
-  curl -fsSL -K - "$@" <<<"header = \"Authorization: token ${GITHUB_ACCESS_TOKEN}\""
+  curl -fsSL -K - "$@" <<<"header = \"Authorization: token ${SANDCAT_BIN_DOWNLOAD_TOKEN}\""
 }
 
 # The --version call proves the binary runs here (wrong arch, missing libc).
