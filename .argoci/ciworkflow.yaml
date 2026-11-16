@@ -72,6 +72,11 @@ globalPrologue: |
     ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
   fi
   export GOPROXY="${GOPROXY:-https://proxy.golang.org|direct}"
+  # A fresh VM's unattended-upgrades holds the dpkg lock for its first minutes,
+  # and apt fails at once rather than waiting for it.
+  if command -v apt-get >/dev/null && sudo -n true 2>/dev/null; then
+    echo 'DPkg::Lock::Timeout "600";' | sudo tee /etc/apt/apt.conf.d/90-ci-lock-timeout >/dev/null
+  fi
   # Anonymous Docker Hub pulls are rate limited. The daemon is up by now on any
   # step that has one. A VM step never gets the credentials: the bundle is loaded
   # whole, so there is no key list to send to the machine.
