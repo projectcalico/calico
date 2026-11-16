@@ -37,6 +37,9 @@ globalEpilogue: |
 defaults:
   secretBundles:
     - banzai-secrets
+    - {name: sandcat-upload, keys: [{name: SANDCAT_UPLOAD_URL}, {name: SANDCAT_INGEST_TOKEN}]}
+    - {name: sandcat-nightly, keys: [{name: SANDCAT_GEMINI_KEY}]}
+    - {name: sandcat-db, keys: [{name: SANDCAT_DB_URL}, {name: SANDCAT_DB_TOKEN}]}
 steps:
   - name: k8s-e2e-st-v3-28-regression-test
     services:
