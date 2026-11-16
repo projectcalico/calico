@@ -1,15 +1,28 @@
 # Builds and validates the OpenShift operator bundle, which otherwise first runs
 # at release time, when a broken CSV or a staged manifest that moved is costly.
+# On a VM for docker.
 version: condensed-module
 
 defaults:
   timeout: 30m
-  services:
-    - docker
+  # The compute SA createVM, runOnVM and the teardown authenticate with.
+  secretBundles: [banzai-secrets]
 
 steps:
   - name: operator-bundle
-    requests: {cpu: 2250m, memory: 2Gi}
-    commands: |
-      cd operator
-      make bundle-check
+    depends: [go-cache]
+    checkout: true
+    cache:
+      - {name: go, mode: read, path: /cache/go}
+    runOnVM:
+      createVM:
+        machineType: e2-standard-4
+      put:
+        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
+      source: |
+        set -e
+        .argoci/scripts/restore-go-cache operator-bundle ~/.go-mod
+        repo="$(pwd)"
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        cd operator
+        make bundle-check
