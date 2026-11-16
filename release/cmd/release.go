@@ -30,7 +30,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/plan"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
 )
@@ -361,7 +360,7 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 				return err
 			}
 
-			postreleaseDir := filepath.Join(cfg.RepoRootDir, utils.ReleaseFolderName, "pkg", "postrelease")
+			postreleaseDir := filepath.Join(cfg.RepoRootDir, releaseDirName, "pkg", "postrelease")
 			args := []string{
 				"--format=testname",
 				"--", "-v", "./...",

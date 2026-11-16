@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/distribution"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/images"
@@ -44,7 +45,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/plan"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -364,11 +364,11 @@ func (r *CalicoManager) Build() error {
 
 func (r *CalicoManager) createDirs() error {
 	var errStack []error
-	if err := os.MkdirAll(r.uploadDir(), utils.DirPerms); err != nil {
+	if err := os.MkdirAll(r.uploadDir(), fsutil.DirPerms); err != nil {
 		errStack = append(errStack, fmt.Errorf("failed to create output dir: %s", err))
 	}
 	if r.tmpDir != "" {
-		if err := os.MkdirAll(r.tmpDir, utils.DirPerms); err != nil {
+		if err := os.MkdirAll(r.tmpDir, fsutil.DirPerms); err != nil {
 			errStack = append(errStack, fmt.Errorf("failed to create temp dir: %s", err))
 		}
 	}
@@ -1186,7 +1186,7 @@ func (r *CalicoManager) archiveSources() ([]archives.Contributor, error) {
 			Label:  manifests.DirName,
 			To:     manifests.DirName,
 			From:   manifests.Dir(root),
-			Filter: manifests.Include,
+			Filter: manifests.Shipped,
 		})
 	}
 	return sources, nil

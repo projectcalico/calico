@@ -20,8 +20,9 @@ import (
 	"path/filepath"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/env"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 func beforeBuild(a Archive) (cleanupFn func() error, err error) {
@@ -76,7 +77,7 @@ func (s settings) stage(staging string) error {
 }
 
 func (s settings) tar(staging string) error {
-	if err := os.MkdirAll(s.OutputDir, utils.DirPerms); err != nil {
+	if err := os.MkdirAll(s.OutputDir, fsutil.DirPerms); err != nil {
 		return s.Errorf("creating %s: %w", s.OutputDir, err)
 	}
 	args := []string{"-czvf", Path(s.Archive), "-C", filepath.Dir(staging), filepath.Base(staging)}
@@ -95,7 +96,7 @@ func BuildWindows(a Archive, opts ...WindowsOption) error {
 		return err
 	}
 
-	env := []string{utils.Env(utils.EnvVersion, s.Version)}
+	vars := []string{env.Var(env.Version, s.Version)}
 	dir := filepath.Join(s.RepoRoot, windowsComponent)
 	// The install script is a file target with no prerequisites, so make skips
 	// it when one is already there and the stale version's script survives.
@@ -103,7 +104,7 @@ func BuildWindows(a Archive, opts ...WindowsOption) error {
 		return s.Errorf("clearing stale %s: %w", windowsScriptTarget, err)
 	}
 	for _, target := range []string{windowsArchiveTarget, windowsScriptTarget} {
-		if _, err := command.Make(s.Runner(), dir).Run([]string{target}, command.WithEnv(env...), command.WithLogFile(s.LogPath(target))); err != nil {
+		if _, err := command.Make(s.Runner(), dir).Run([]string{target}, command.WithEnv(vars...), command.WithLogFile(s.LogPath(target))); err != nil {
 			return s.Errorf("building %s: %w", target, err)
 		}
 	}
@@ -113,10 +114,10 @@ func BuildWindows(a Archive, opts ...WindowsOption) error {
 		windowsScript:              WindowsScriptDir(s.OutputDir),
 	}
 	for name, dst := range collect {
-		if err := os.MkdirAll(dst, utils.DirPerms); err != nil {
+		if err := os.MkdirAll(dst, fsutil.DirPerms); err != nil {
 			return s.Errorf("creating %s: %w", dst, err)
 		}
-		if err := utils.LinkOrCopyFile(filepath.Join(dir, windowsDistDir, name), filepath.Join(dst, name)); err != nil {
+		if err := fsutil.LinkOrCopyFile(filepath.Join(dir, windowsDistDir, name), filepath.Join(dst, name)); err != nil {
 			return s.Errorf("collecting %s: %w", name, err)
 		}
 	}

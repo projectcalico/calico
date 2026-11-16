@@ -29,10 +29,10 @@ import (
 	logtest "github.com/sirupsen/logrus/hooks/test"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/env"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 func failingRunner(err error) *command.Recorder {
@@ -283,7 +283,7 @@ func TestProductEnv(t *testing.T) {
 		restore := productEnv
 		t.Cleanup(func() { productEnv = restore })
 		productEnv = func(o Operator) ([]string, error) {
-			return []string{utils.Env("REPLACED_VERSION", o.ProductVersion)}, nil
+			return []string{env.Var("REPLACED_VERSION", o.ProductVersion)}, nil
 		}
 
 		for _, tc := range verbs() {
@@ -860,7 +860,7 @@ func TestPublishBranchTag(t *testing.T) {
 				if len(f.Calls()) != 1 {
 					t.Fatalf("len = %d, want 1", len(f.Calls()))
 				}
-				got, ok := envValue(f.Calls()[0].Env, utils.EnvImageTag)
+				got, ok := envValue(f.Calls()[0].Env, env.ImageTag)
 				if !(ok) {
 					t.Errorf("expected true")
 				}
