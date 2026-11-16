@@ -72,13 +72,9 @@ steps:
           - name: E2E_TARGET
             value: e2e-test-bpf
     runOnVM:
-      image: gcr.io/unique-caldron-775/scratch-utils:v0.6-test-1e81cd2
       # Booted once the images are ready rather than alongside their builds, so the
       # machine lives only as long as the lane.
       createVM:
-        # TEMPORARY: a test build of scratch-utils v0.6, for the machine-type list
-        # and the provisioned hyperdisk.
-        image: gcr.io/unique-caldron-775/scratch-utils:v0.6-test-1e81cd2
         # Cheapest first, all families that can attach a hyperdisk. A region can
         # run short of any one of them.
         machineTypes:
