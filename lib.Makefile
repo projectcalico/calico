@@ -2310,6 +2310,14 @@ image-windows: setup-windows-builder var-require-all-WINDOWS_VERSIONS
 		$(MAKE) windows-sub-image-$${version}; \
 	done;
 
+# Stage the Windows image's build context, one per WINDOWS_VERSION, for a builder
+# other than docker. WINDOWS_IMAGE_CONTEXT_PATHS lists what Dockerfile.windows
+# copies; add WINDOWS_IMAGE_REQS as prereqs of windows-image-contexts in the
+# component's Makefile, as for image-windows.
+.PHONY: windows-image-contexts
+windows-image-contexts: var-require-all-WINDOWS_VERSIONS-WINDOWS_IMAGE_CONTEXT_PATHS
+	$(foreach v,$(WINDOWS_VERSIONS),$(call stage_image_context,.,Dockerfile.windows,$(WINDOWS_DIST)/image-context-$(v),WINDOWS_VERSION=$(v),$(WINDOWS_IMAGE_CONTEXT_PATHS)) &&) true
+
 release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES image-windows bin/crane
 	for registry in $(DEV_REGISTRIES); do \
 		echo Pushing Windows images to $${registry}; \

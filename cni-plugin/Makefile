@@ -67,6 +67,9 @@ protobuf pkg/dataplane/grpc/proto/cnibackend.pb.go: pkg/dataplane/grpc/proto/cni
 WINDOWS_IMAGE_REQS := Dockerfile.windows build build-win-cni-bins bin/LICENSE
 image-windows: $(WINDOWS_IMAGE_REQS)
 
+WINDOWS_IMAGE_CONTEXT_PATHS = bin/LICENSE bin/windows
+windows-image-contexts: $(WINDOWS_IMAGE_REQS)
+
 bin/LICENSE: ../LICENSE.md
 	cp ../LICENSE.md bin/LICENSE
 
@@ -101,12 +104,16 @@ $(FLANNEL_CNI_PLUGIN_CLONED):
 # EXTRA_DOCKER_ARGS carries RUN_AS_ROOT when the caller is root, without which
 # the build image tries to useradd uid 0 and cannot.
 $(WINDOWS_BIN)/flannel.exe: $(FLANNEL_CNI_PLUGIN_CLONED)
+ifeq ($(NATIVE_GO_BUILD),true)
+	ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) $(MAKE) -C flannel-cni-plugin build_windows
+else
 	docker run \
 		-v $(CURDIR)/flannel-cni-plugin:/go/src/github.com/flannel-io/cni-plugin:z \
 		$(EXTRA_DOCKER_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/flannel-io/cni-plugin --rm $(CALICO_BUILD) \
 		/bin/sh -xe -c ' \
 			ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) make build_windows'
+endif
 	-mkdir -p $(WINDOWS_BIN)
 	cp flannel-cni-plugin/dist/flannel-$(ARCH).exe $(WINDOWS_BIN)/flannel.exe
 

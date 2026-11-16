@@ -337,7 +337,7 @@ steps:
   # cluster.
   - name: felix-windows-fv
     tiers: []
-    depends: [felix-build-windows, build-calico-image, build-node-image, operator-image-dockerio-buildkit, build-windows-images]
+    depends: [felix-build-windows, build-calico-image, build-node-image, operator-image-dockerio-buildkit, node-windows-image, cni-windows-image]
     timeout: 1h30m
     env:
       - name: BUILD_CACHE_GROUP
@@ -358,7 +358,8 @@ steps:
       - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
       - {name: node-image, mode: read, path: /cache/node-image}
       - {name: operator-image-dockerio, mode: read, path: /cache/operator-image-dockerio}
-      - {name: windows-images, mode: read, path: /cache/windows-images}
+      - {name: node-windows-image, mode: read, path: /cache/node-windows-image}
+      - {name: cni-windows-image, mode: read, path: /cache/cni-windows-image}
       - {name: win-fv, mode: read, path: /cache/win-fv}
     secretBundles: [banzai-secrets]
     runOnVM:
@@ -371,7 +372,8 @@ steps:
         - /cache/calico-image-zst:prefetched
         - /cache/node-image:prefetched
         - /cache/operator-image-dockerio:prefetched
-        - /cache/windows-images:prefetched
+        - /cache/node-windows-image:prefetched
+        - /cache/cni-windows-image:prefetched
         - /cache/win-fv:prefetched
       source: |
         set -eo pipefail
@@ -418,7 +420,11 @@ steps:
         touch felix/fv/win-fv.exe
         docker load -i "${PREFETCHED_ARTIFACTS}/operator-image-dockerio.tar"
         export OPERATOR_PREBUILT=true
-        tar --use-compress-program="zstd -d" -m -xf "${PREFETCHED_ARTIFACTS}/windows-images.tar.zst"
+        # Named as the import script looks for them, which skips building its own.
+        win_version="$(git describe --tags --dirty --long --always --abbrev=12)"
+        mkdir -p node/dist/windows cni-plugin/dist/windows
+        mv "${PREFETCHED_ARTIFACTS}/node-windows.tar" "node/dist/windows/node-windows-${win_version}-ltsc2025.tar"
+        mv "${PREFETCHED_ARTIFACTS}/cni-windows.tar" "cni-plugin/dist/windows/cni-windows-${win_version}-ltsc2025.tar"
         # The script writes its logs under a fixed root-owned path.
         sudo mkdir -p "${LOGS_DIR}"
         sudo chown -R "$(id -u):$(id -g)" /home/semaphore

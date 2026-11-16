@@ -99,7 +99,7 @@ steps:
       env: [E2E_TARGET, EXTRA_VALUES_FILES, KIND_CALICO_API_GROUP, E2E_TEST_CONFIG]
       put:
         - /cache/calico-image-tar/calico-image.tar:prefetched/calico-image.tar
-        - /cache/node-image/node-image.tar.zst:prefetched/node-image.tar.zst
+        - /cache/node-image/node-image.tar:prefetched/node-image.tar
         - /cache/whisker-image/whisker-image.tar.zst:prefetched/whisker-image.tar.zst
         - /cache/operator-image/operator-image.tar:prefetched/operator-image.tar
         - /cache/envoy-gateway-image/envoy-gateway-image.tar:prefetched/envoy-gateway-image.tar

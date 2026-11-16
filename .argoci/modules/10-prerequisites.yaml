@@ -511,38 +511,61 @@ steps:
         export BUILD_LOG="logs/push-nft-rpms-${ARCH}.log"
         .argoci/scripts/push-nft-rpms.sh "${ARCH}"
 
-  - name: build-node-image
-    checkout: true
+  # Native: its calico binary is the cgo build calico-test-binaries ships, and the
+  # nft-rpms image comes from build-nft-rpms' tarball, else the registry.
+  - name: node-image-context
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+      - name: NATIVE_GO_BUILD
+        value: "true"
     timeout: 1h
-    depends: [build-nft-rpms, go-cache]
+    jobSize: large
+    requests: {cpu: 7000m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    depends: [build-nft-rpms, calico-test-binaries, go-cache]
     changes:
       dependsOn: [node]
       in:
         - '^node/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     cache:
-      - {name: node-image, mode: write, path: /cache/node-image}
+      - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
       - {name: go, mode: read, path: /cache/go}
-    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
-    # VM steps alone, since a pod step would hand it to the code under test.
-    secretBundles: [banzai-secrets]
-    runOnVM:
-      createVM:
-        machineType: e2-standard-4
-      put:
-        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
-      get:
-        - out:/cache/node-image
-      source: |
-        set -eo pipefail
-        .argoci/scripts/restore-go-cache build-node-image ~/.go-mod
-        for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
-        # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
-        # does not go back to the registry for it.
-        .argoci/scripts/load-nft-rpms.sh amd64
-        make -C node image
-        mkdir -p ~/out
-        docker save calico/node:latest-amd64 | zstd -3 -T0 -o ~/out/node-image.tar.zst
+      - {name: node-image-context, mode: write, path: /cache/node-image-context}
+    commands: |
+      # The prereqs ship zstd-compressed and the build image lacks the CLI.
+      dnf install -y -q zstd
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" node-image-context
+      PREFETCHED_ARTIFACTS=/cache/calico-test-binaries .semaphore/scripts/load-felix-prereqs.sh
+      nft_rpms=""
+      if ( cd /tmp && artifact pull workflow nft-rpms-amd64.tar.zst ); then
+        zstd -d --rm /tmp/nft-rpms-amd64.tar.zst
+        nft_rpms=/tmp/nft-rpms-amd64.tar
+      fi
+      make -C node image-context ${nft_rpms:+NFT_RPMS_TAR=$nft_rpms}
+      cp -a node/dist/image-context-amd64/. /cache/node-image-context/
+
+  - name: build-node-image
+    depends: [node-image-context]
+    changes:
+      dependsOn: [node]
+      in:
+        - '^node/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    cache:
+      - {name: node-image-context, mode: read, path: /cache/node-image-context}
+      - {name: node-image, mode: write, path: /cache/node-image}
+    buildkit:
+      tag: calico/node:latest-amd64
+      context: /cache/node-image-context
+      tar: /cache/node-image/node-image.tar
 
   # TypeScript, so there is no Go import graph to gate on.
   - name: build-whisker-image
@@ -634,38 +657,66 @@ steps:
       context: /cache/operator-image-context/dockerio
       tar: /cache/operator-image-dockerio/operator-image-dockerio.tar
 
-  # Windows FV installs these rather than building its own. Nothing else builds
-  # them, so this is also where a break in them shows up.
-  - name: build-windows-images
-    checkout: true
+  # Windows FV installs these rather than building its own, on Windows Server 2025.
+  # The images only COPY onto a nanoserver base, so buildkit builds them here.
+  - name: windows-image-contexts
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     timeout: 1h
+    jobSize: large
+    requests: {cpu: 7000m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     changes:
       dependsOn: [node, cni-plugin]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     depends: [go-cache]
     cache:
-      - {name: windows-images, mode: write, path: /cache/windows-images}
       - {name: go, mode: read, path: /cache/go}
-    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
-    # VM steps alone, since a pod step would hand it to the code under test.
-    secretBundles: [banzai-secrets]
-    runOnVM:
-      createVM:
-        machineType: e2-standard-8
-      put:
-        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
-      get:
-        - out:/cache/windows-images
-      source: |
-        set -eo pipefail
-        .argoci/scripts/restore-go-cache build-windows-images ~/.go-mod
-        for t in make zstd unzip zip; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
-        make -C node build-windows-archive
-        make -C node image-windows
-        make -C cni-plugin image-windows
-        mkdir -p ~/out
-        tar --use-compress-program="zstd -3" -cf ~/out/windows-images.tar.zst \
-          node/dist/windows/*.tar cni-plugin/dist/windows/*.tar
+      - {name: windows-image-context, mode: write, path: /cache/windows-image-context}
+    commands: |
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" windows-image-contexts
+      # The Windows archive packs with zip.
+      dnf install -y -q zip unzip
+      make -C node build-windows-archive windows-image-contexts WINDOWS_VERSIONS=ltsc2025
+      make -C cni-plugin windows-image-contexts WINDOWS_VERSIONS=ltsc2025
+      mkdir -p /cache/windows-image-context/node /cache/windows-image-context/cni
+      cp -a node/dist/windows/image-context-ltsc2025/. /cache/windows-image-context/node/
+      cp -a cni-plugin/dist/windows/image-context-ltsc2025/. /cache/windows-image-context/cni/
+
+  - name: node-windows-image
+    depends: [windows-image-contexts]
+    changes:
+      dependsOn: [node, cni-plugin]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    cache:
+      - {name: windows-image-context, mode: read, path: /cache/windows-image-context}
+      - {name: node-windows-image, mode: write, path: /cache/node-windows-image}
+    buildkit:
+      tag: node-windows:latest
+      platform: windows/amd64
+      context: /cache/windows-image-context/node
+      tar: /cache/node-windows-image/node-windows.tar
+
+  - name: cni-windows-image
+    depends: [windows-image-contexts]
+    changes:
+      dependsOn: [node, cni-plugin]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    cache:
+      - {name: windows-image-context, mode: read, path: /cache/windows-image-context}
+      - {name: cni-windows-image, mode: write, path: /cache/cni-windows-image}
+    buildkit:
+      tag: cni-windows:latest
+      platform: windows/amd64
+      context: /cache/windows-image-context/cni
+      tar: /cache/cni-windows-image/cni-windows.tar
 
   - name: third-party-image-contexts
     # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
