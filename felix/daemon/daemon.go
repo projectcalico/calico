@@ -840,7 +840,7 @@ func manageShutdown(signalChan <-chan os.Signal, failureReportChan <-chan string
 
 	// Wait for one of the channels to give us a reason to shut down.
 	driverAlreadyStopped := driverCmd == nil
-	receivedFatalSignal := false
+	var stopSignal os.Signal
 	var reason string
 	select {
 	case <-driverStoppedC:
@@ -852,7 +852,7 @@ func manageShutdown(signalChan <-chan os.Signal, failureReportChan <-chan string
 			reason = reasonConfigChanged
 		} else {
 			reason = fmt.Sprintf("Received OS signal %v", sig)
-			receivedFatalSignal = true
+			stopSignal = sig
 		}
 	case reason = <-failureReportChan:
 	}
@@ -907,7 +907,7 @@ func manageShutdown(signalChan <-chan os.Signal, failureReportChan <-chan string
 		}
 	}
 
-	if !receivedFatalSignal {
+	if stopSignal == nil {
 		// We're exiting due to a failure or a config change, wait
 		// a couple of seconds to ensure that we don't go into a tight
 		// restart loop (which would make the init daemon in calico/node give
@@ -934,14 +934,30 @@ func manageShutdown(signalChan <-chan os.Signal, failureReportChan <-chan string
 				logCxt.Warning("Ignoring SIGHUP because we're already shutting down")
 				continue
 			}
+			if reason == reasonConfigChanged || reason == reasonEncapChanged {
+				// Felix was healthy, so the stop request wins over the restart.
+				exitWithCustomRC(stopSignalRC(sig), "Signal received while shutting down, exiting immediately")
+				return
+			}
 			logCxt.WithField("signal", sig).Fatal(
 				"Signal received while shutting down, exiting immediately")
 		}
 	}
 
-	// A requested stop is not a failure.  An init system that reads the exit
-	// code, such as systemd, would record anything else as a crash.
-	exitWithCustomRC(0, "Exiting after shutdown signal")
+	exitWithCustomRC(stopSignalRC(stopSignal), "Exiting after shutdown signal")
+}
+
+// stopSignalRC returns the exit code for a stop requested by the given signal.
+//
+// It is 128 plus the signal number, the code a shell reports for a process
+// that the signal killed.  That keeps it apart from a failure, so an init
+// system can be told to treat it as a clean stop, and non-zero, so one that
+// restarts on failure still restarts Felix.
+func stopSignalRC(sig os.Signal) int {
+	if s, ok := sig.(syscall.Signal); ok {
+		return 128 + int(s)
+	}
+	return 1
 }
 
 func exitWithCustomRC(rc int, message string) {
