@@ -26,11 +26,11 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/env"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const (
@@ -135,11 +135,11 @@ func BuildImages(r command.CommandRunner, rootDir string, dirs ...string) ([]str
 	return all, nil
 }
 
-func buildImages(r command.CommandRunner, dir string, env []string) ([]string, error) {
+func buildImages(r command.CommandRunner, dir string, vars []string) ([]string, error) {
 	// RELEASE selects the released image names, set here so they cannot
 	// depend on the caller's environment.
-	env = append(slices.Clone(env), utils.EnvTrue(utils.EnvRelease))
-	out, err := command.Make(r, dir).Print("build-images", command.WithEnv(env...))
+	vars = append(slices.Clone(vars), env.True(env.Release))
+	out, err := command.Make(r, dir).Print("build-images", command.WithEnv(vars...))
 	if err != nil {
 		return nil, fmt.Errorf("reading images in %s: %w", dir, err)
 	}
@@ -474,17 +474,17 @@ func (c Image) validate() error {
 }
 
 func (c Image) env() []string {
-	env := []string{
-		utils.Env(utils.EnvVersion, c.Version),
-		utils.Env(utils.EnvImageTag, c.Version),
+	vars := []string{
+		env.Var(env.Version, c.Version),
+		env.Var(env.ImageTag, c.Version),
 	}
 	if len(c.Registries) > 0 {
-		env = append(env, utils.Env(utils.EnvDevRegistries, strings.Join(c.Registries, " ")))
+		vars = append(vars, env.Var(env.DevRegistries, strings.Join(c.Registries, " ")))
 	}
 	if len(c.Arches) > 0 {
-		env = append(env, utils.Env(utils.EnvArches, strings.Join(c.Arches, " ")))
+		vars = append(vars, env.Var(env.Arches, strings.Join(c.Arches, " ")))
 	}
-	return env
+	return vars
 }
 
 func (s settings) runUnits(units []unit) error {
@@ -547,11 +547,11 @@ func (c Image) units(baseEnv []string) []unit {
 	var out []unit
 	for _, v := range c.Variants {
 		for _, dir := range v.ReleaseDirs {
-			env := make([]string, 0, len(baseEnv)+len(v.Env))
-			env = append(env, baseEnv...)
-			env = append(env, v.Env...)
+			vars := make([]string, 0, len(baseEnv)+len(v.Env))
+			vars = append(vars, baseEnv...)
+			vars = append(vars, v.Env...)
 			out = append(out, unit{
-				variant: v.Name, dir: dir, target: v.Target, env: env,
+				variant: v.Name, dir: dir, target: v.Target, env: vars,
 				images: v.Images,
 			})
 		}

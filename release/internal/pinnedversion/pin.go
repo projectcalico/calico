@@ -29,9 +29,9 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -481,7 +481,7 @@ func write(p *Pin, dirs ...string) error {
 func makeDirs(dirs []string) error {
 	var errs error
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, utils.DirPerms); err != nil {
+		if err := os.MkdirAll(dir, fsutil.DirPerms); err != nil {
 			errs = errors.Join(errs, fmt.Errorf("%s: %w", dir, err))
 		}
 	}

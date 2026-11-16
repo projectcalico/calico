@@ -29,7 +29,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 )
 
 // PubKey takes a GPG key ID and fetches the ascii-armored GPG public key
@@ -169,7 +169,7 @@ type RPMKeyring struct {
 // than the host's RPM database. The database files themselves are created by
 // the first rpm command that writes to it, so there is no initdb step.
 func NewRPMKeyring(runner command.CommandRunner, dbPath string) (*RPMKeyring, error) {
-	if err := os.MkdirAll(dbPath, utils.DirPerms); err != nil {
+	if err := os.MkdirAll(dbPath, fsutil.DirPerms); err != nil {
 		return nil, fmt.Errorf("unable to create RPM database directory %s: %w", dbPath, err)
 	}
 	logrus.Debugf("Using private RPM database at %s", dbPath)
@@ -218,7 +218,7 @@ func (k *RPMKeyring) SignRPMFiles(gpgKeyID string, rpmFiles []string) error {
 	if len(rpmFiles) == 0 {
 		return fmt.Errorf("list of RPM files to sign is empty")
 	}
-	filteredRpmFiles, err := utils.FilterRegularFiles(rpmFiles)
+	filteredRpmFiles, err := fsutil.IsRegular(rpmFiles...)
 	if err != nil {
 		logrus.Error("Sanitizing RPM files list failed")
 		return fmt.Errorf("unable to sanitize RPM file list: %w", err)

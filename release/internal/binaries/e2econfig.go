@@ -27,7 +27,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 )
 
 const (
@@ -61,7 +61,7 @@ func PackageE2EConfig(repoRoot, outputDir string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("no e2e config files found in %s", src)
 	}
-	if err := os.MkdirAll(E2EDir(outputDir), utils.DirPerms); err != nil {
+	if err := os.MkdirAll(E2EDir(outputDir), fsutil.DirPerms); err != nil {
 		return fmt.Errorf("creating %s: %w", E2EDir(outputDir), err)
 	}
 	dest := E2EConfigPath(outputDir)

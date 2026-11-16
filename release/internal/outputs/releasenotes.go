@@ -31,8 +31,8 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	igithub "github.com/projectcalico/calico/release/internal/github"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -170,7 +170,7 @@ func extractReleaseNote(repo string, issues []*github.Issue) ([]*ReleaseNoteIssu
 // outputReleaseNotes outputs the release notes to a file
 func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, outputFilePath string) error {
 	dir := filepath.Dir(outputFilePath)
-	if err := os.MkdirAll(dir, utils.DirPerms); err != nil {
+	if err := os.MkdirAll(dir, fsutil.DirPerms); err != nil {
 		logrus.WithError(err).Errorf("Failed to create release notes folder %s", dir)
 		return err
 	}

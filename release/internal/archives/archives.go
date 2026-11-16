@@ -22,9 +22,9 @@ import (
 	"path/filepath"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const (
@@ -149,9 +149,8 @@ type DirSource struct {
 	// From is the source directory containing the files to include in the archive.
 	From string
 
-	// Filter determines which files in the source directory are included in the archive.
-	// If no filter is provided, all files are included.
-	Filter utils.IncludeFunc
+	// Filter picks the files from From; nil takes every file at any depth.
+	Filter []fsutil.FileFilter
 }
 
 func (d DirSource) Name() string { return d.Label }
@@ -159,11 +158,11 @@ func (d DirSource) Name() string { return d.Label }
 // Hard-linked to keep staging disk usage flat. Linking nothing is an error:
 // the copy skips non-regular files, so empty means a missing component.
 func (d DirSource) Contribute(dir string) error {
-	include := d.Filter
-	if include == nil {
-		include = func(_, _, _ string) bool { return true }
+	filters := d.Filter
+	if filters == nil {
+		filters = []fsutil.FileFilter{fsutil.Recursive}
 	}
-	found, err := utils.FindRecursiveFiles(d.From, include)
+	found, err := fsutil.ListFiles(d.From, filters...)
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", d.From, err)
 	}
@@ -171,10 +170,10 @@ func (d DirSource) Contribute(dir string) error {
 		return fmt.Errorf("no files found in %s", d.From)
 	}
 	dest := filepath.Join(dir, d.To)
-	if err := os.MkdirAll(dest, utils.DirPerms); err != nil {
+	if err := os.MkdirAll(dest, fsutil.DirPerms); err != nil {
 		return fmt.Errorf("creating destination(%s) for %s: %w", dest, d.Name(), err)
 	}
-	return utils.LinkOrCopyDir(d.From, dest, include)
+	return fsutil.LinkOrCopyFiles(d.From, dest, found)
 }
 
 type settings struct {
