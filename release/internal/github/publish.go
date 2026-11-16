@@ -59,13 +59,17 @@ var (
 	_ distribution.Validator      = Release{}
 )
 
+var AssetsFilter = []fsutil.FileFilter{fsutil.DirFiles, fsutil.Exclude(outputs.SumsFileName)}
+
 // ReleaseOptions describes a GitHub release. An empty Source makes a release
 // with only a body.
 type ReleaseOptions struct {
 	Repo    Repo
 	Version version.Version
 	Source  string
-	Notes   ReleaseNotes
+	// Filter picks the files in Source to attach; nil attaches all top-level files.
+	Filter []fsutil.FileFilter
+	Notes  ReleaseNotes
 
 	Skip   bool
 	Draft  bool
@@ -92,12 +96,11 @@ type Link struct {
 	URL  string
 }
 
-func ReleaseUpload(o ReleaseOptions) distribution.Upload {
+// ReleaseUpload creates a distribution.Upload for a GitHub release, including the required steps.
+// Default required steps are the checksums, the metadata, and the tag.
+func ReleaseUpload(o ReleaseOptions, requires ...string) distribution.Upload {
 	ver := o.Version.String()
-	requires := []string{TagStep}
-	if o.Source != "" {
-		requires = []string{outputs.MetadataStep, distribution.ChecksumStep, TagStep}
-	}
+	requires = append(requires, outputs.ChecksumStep, outputs.MetadataStep, TagStep)
 	return distribution.Upload{
 		Name:     ReleaseStep,
 		Source:   o.Source,
@@ -106,6 +109,7 @@ func ReleaseUpload(o ReleaseOptions) distribution.Upload {
 		Handler: Release{
 			Repo:   o.Repo,
 			Tag:    ver,
+			Filter: o.Filter,
 			Notes:  o.Notes,
 			Draft:  o.Draft,
 			DryRun: o.DryRun,
@@ -115,9 +119,10 @@ func ReleaseUpload(o ReleaseOptions) distribution.Upload {
 }
 
 type Release struct {
-	Repo  Repo
-	Tag   string
-	Title string
+	Repo   Repo
+	Tag    string
+	Title  string
+	Filter []fsutil.FileFilter
 
 	Notes ReleaseNotes
 
@@ -177,7 +182,7 @@ func (d Release) Publish(ctx context.Context, src string) error {
 	}
 	var files []string
 	if src != "" {
-		if files, err = fsutil.ListFiles(src, fsutil.DirFiles, fsutil.Exclude(distribution.SumsFileName)); err != nil {
+		if files, err = fsutil.ListFiles(src, d.filter()...); err != nil {
 			return fmt.Errorf("get files: %w", err)
 		}
 		if len(files) == 0 {
@@ -191,9 +196,9 @@ func (d Release) Publish(ctx context.Context, src string) error {
 	if src != "" {
 		// Written by an earlier step, and excluded from the listing so a re-run
 		// does not checksum it into itself.
-		sums := filepath.Join(src, distribution.SumsFileName)
+		sums := filepath.Join(src, outputs.SumsFileName)
 		if _, err := os.Stat(sums); err != nil {
-			return fmt.Errorf("%s: %w", distribution.SumsFileName, err)
+			return fmt.Errorf("%s: %w", outputs.SumsFileName, err)
 		}
 		files = append(files, sums)
 	}
@@ -247,7 +252,15 @@ func (d Release) Artifacts(src string) ([]outputs.ArtifactFile, error) {
 	if src == "" {
 		return nil, nil
 	}
-	return outputs.ArtifactsAt(src, d.Repo.DownloadURL(d.Tag), distribution.SumsFileName)
+	return outputs.ArtifactsAt(src, d.Repo.DownloadURL(d.Tag), d.filter()...)
+}
+
+// The sums file is left out here; Publish attaches it last.
+func (d Release) filter() []fsutil.FileFilter {
+	if d.Filter == nil {
+		return AssetsFilter
+	}
+	return d.Filter
 }
 
 func (d Release) makeLatest(ctx context.Context) (bool, error) {

@@ -25,7 +25,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/outputs"
 )
@@ -148,30 +147,9 @@ func TestGCSPublish(t *testing.T) {
 	})
 }
 
-func TestSHA256Sums(t *testing.T) {
-	t.Run("checksums through the given runner", func(t *testing.T) {
-		dir := dirWith(t, "a.tgz", "b.tgz")
-		r := &command.Recorder{Reply: func(command.Call) (string, error) { return "abc  a.tgz\ndef  b.tgz", nil }}
-		if err := SHA256Sums(dir, WithRunner(r)); err != nil {
-			t.Fatalf("SHA256Sums: %v", err)
-		}
-		want := []command.Call{{Name: "sha256sum", Args: []string{"a.tgz", "b.tgz"}, Dir: dir}}
-		if diff := cmp.Diff(want, r.Calls()); diff != "" {
-			t.Errorf("calls (-want +got):\n%s", diff)
-		}
-		got, err := os.ReadFile(filepath.Join(dir, SumsFileName))
-		if err != nil {
-			t.Fatalf("reading sums: %v", err)
-		}
-		if string(got) != "abc  a.tgz\ndef  b.tgz" {
-			t.Errorf("sums file = %q, want the runner's output", got)
-		}
-	})
-}
-
 func TestArtifactFiles(t *testing.T) {
 	dir := t.TempDir()
-	for _, n := range []string{"release.tgz", SumsFileName, "charts/index.yaml"} {
+	for _, n := range []string{"release.tgz", outputs.SumsFileName, "charts/index.yaml"} {
 		path := filepath.Join(dir, n)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)

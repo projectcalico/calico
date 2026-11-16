@@ -17,15 +17,12 @@ package distribution
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"cloud.google.com/go/storage"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/outputs"
@@ -181,51 +178,6 @@ func (d GCS) Validate(u Upload) error {
 	return validSource(u)
 }
 
-// Create a SHA256 checksum file for all files and write it to the specified directory.
-// Returns the release assets: the files checksummed, plus the sums file.
-// SHA256Sums writes a checksum file covering everything at the top level of
-// dir, and returns dir's files plus that file. Any existing sums file is
-// replaced rather than checksummed into itself.
-func SHA256Sums(dir string, opts ...Option) error {
-	files, err := fsutil.ListFiles(dir, fsutil.DirFiles, fsutil.Exclude(SumsFileName))
-	if err != nil {
-		return err
-	}
-	if len(files) == 0 {
-		return fmt.Errorf("no files to checksum in %s", dir)
-	}
-	_, err = sha256Sums(dir, files, opts...)
-	return err
-}
-
-func sha256Sums(dir string, files []string, opts ...Option) ([]string, error) {
-	s, err := newSettings(sumsStep, opts)
-	if err != nil {
-		return nil, err
-	}
-	path := filepath.Join(dir, SumsFileName)
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return nil, s.Errorf("removing %s: %w", path, err)
-	}
-	if len(files) == 0 {
-		return nil, s.Errorf("no files to checksum")
-	}
-	// names are relative to dir so the file verifies wherever the assets land.
-	names := make([]string, len(files))
-	for i, f := range files {
-		names[i] = filepath.Base(f)
-	}
-	out, err := s.Runner().Run("sha256sum", names, command.WithDir(dir))
-	if err != nil {
-		return nil, s.Errorf("checksumming files: %w", err)
-	}
-	if err := os.WriteFile(path, []byte(out), filePerms); err != nil {
-		return nil, s.Errorf("writing %s: %w", path, err)
-	}
-	s.Logger().WithField("files", len(files)).Info("Wrote checksums")
-	return append(files, path), nil
-}
-
 // Hashrelease uploads the whole output tree, then records the hashrelease in
 // the server's library.
 type HashreleaseServer struct {
@@ -257,7 +209,7 @@ func (d HashreleaseServer) Publish(ctx context.Context, src string) error {
 }
 
 func (d HashreleaseServer) Artifacts(src string) ([]outputs.ArtifactFile, error) {
-	return outputs.ArtifactsAt(src, d.Release.URL(), SumsFileName)
+	return outputs.ArtifactsAt(src, d.Release.URL(), fsutil.DirFiles, fsutil.Exclude(outputs.SumsFileName))
 }
 
 func (d HashreleaseServer) Validate(u Upload) error {

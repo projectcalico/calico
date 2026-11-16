@@ -24,7 +24,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectcalico/calico/release/internal/distribution"
+	"github.com/projectcalico/calico/release/internal/fsutil"
+	"github.com/projectcalico/calico/release/internal/outputs"
 )
 
 func TestReleasePublishRerun(t *testing.T) {
@@ -43,7 +44,11 @@ func TestReleasePublishRerun(t *testing.T) {
 
 		var first string
 		for run := range 2 {
-			if err := distribution.SHA256Sums(dir); err != nil {
+			files, err := fsutil.ListFiles(dir, AssetsFilter...)
+			if err != nil {
+				t.Fatalf("run %d: ListFiles: %v", run, err)
+			}
+			if err := outputs.SHA256Sums(nil, files, dir); err != nil {
 				t.Fatalf("run %d: SHA256Sums: %v", run, err)
 			}
 			svc.uploaded = nil
@@ -59,16 +64,16 @@ func TestReleasePublishRerun(t *testing.T) {
 			// and complete, so it resends nothing.
 			var want []string
 			if run == 0 {
-				want = []string{distribution.SumsFileName, "metadata.yaml", "release.tgz"}
+				want = []string{outputs.SumsFileName, "metadata.yaml", "release.tgz"}
 			}
 			if !slices.Equal(svc.uploaded, want) {
 				t.Errorf("run %d: uploaded %v, want %v", run, svc.uploaded, want)
 			}
-			bs, err := os.ReadFile(filepath.Join(dir, distribution.SumsFileName))
+			bs, err := os.ReadFile(filepath.Join(dir, outputs.SumsFileName))
 			if err != nil {
 				t.Fatal(err)
 			}
-			if strings.Contains(string(bs), distribution.SumsFileName) {
+			if strings.Contains(string(bs), outputs.SumsFileName) {
 				t.Errorf("run %d: the sums file checksums itself:\n%s", run, bs)
 			}
 			if run == 0 {

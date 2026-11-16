@@ -14,7 +14,7 @@
 
 //go:build fv
 
-package distribution
+package outputs
 
 import (
 	"os"
@@ -25,7 +25,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/fsutil"
 )
 
-func TestPublishFlow(t *testing.T) {
+func TestSHA256SumsOnHost(t *testing.T) {
 	// A sums file holding absolute paths verifies nowhere but the machine that
 	// built it, so the names must stay relative to the release directory.
 	t.Run("writes names relative to the directory", func(t *testing.T) {
@@ -40,10 +40,10 @@ func TestPublishFlow(t *testing.T) {
 		}
 		files, err := fsutil.ListFiles(dir, fsutil.DirFiles, fsutil.Exclude(SumsFileName))
 		if err != nil {
-			t.Fatalf("topLevelFiles: %v", err)
+			t.Fatalf("ListFiles: %v", err)
 		}
-		if _, err := sha256Sums(dir, files); err != nil {
-			t.Fatalf("sha256Sums: %v", err)
+		if err := SHA256Sums(nil, files, dir); err != nil {
+			t.Fatalf("SHA256Sums: %v", err)
 		}
 		bs, err := os.ReadFile(filepath.Join(dir, SumsFileName))
 		if err != nil {

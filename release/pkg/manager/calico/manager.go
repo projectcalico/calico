@@ -69,7 +69,7 @@ var (
 		operator.Step, images.Step, binaries.Step, charts.Step, manifests.Step,
 		archives.WindowsStep, archives.Step,
 	}
-	sharedPublishSteps      = []string{operator.Step, images.Step, charts.Step, outputs.MetadataStep, distribution.ChecksumStep}
+	sharedPublishSteps      = []string{operator.Step, images.Step, charts.Step, outputs.MetadataStep, outputs.ChecksumStep}
 	releasePublishSteps     = []string{github.TagStep, github.ReleaseStep, helmIndexStep}
 	hashreleasePublishSteps = []string{distribution.HashreleasePublishStep}
 
@@ -840,7 +840,7 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 		distribution.Upload{Handler: distribution.Preparer{Kind: outputs.MetadataStep, Action: r.buildMetadata}},
 		// After metadata, so the sums cover it. Both destinations ship the
 		// same directory, so neither can own this.
-		distribution.Upload{Handler: distribution.Preparer{Kind: distribution.ChecksumStep, Action: r.writeChecksums}},
+		distribution.Upload{Handler: distribution.Preparer{Kind: outputs.ChecksumStep, Action: r.writeChecksums}},
 	)
 
 	if r.isHashRelease {
@@ -873,7 +873,11 @@ func (r *CalicoManager) buildMetadata() error {
 
 // Users verify a download with: sha256sum -c --ignore-missing SHA256SUMS
 func (r *CalicoManager) writeChecksums() error {
-	return distribution.SHA256Sums(r.uploadDir(), distribution.WithRunner(r.runner))
+	files, err := fsutil.ListFiles(r.uploadDir(), github.AssetsFilter...)
+	if err != nil {
+		return fmt.Errorf("write checksum: %w", err)
+	}
+	return outputs.SHA256Sums(r.runner, files, r.uploadDir())
 }
 
 // Check general prerequisites for cutting and publishing a release.

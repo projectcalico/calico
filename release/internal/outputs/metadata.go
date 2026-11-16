@@ -322,10 +322,9 @@ func DescribeArtifacts(files []ArtifactFile) ([]Artifact, error) {
 	return out, nil
 }
 
-// ArtifactsAt lists the files directly in dir as artifacts served under baseURL,
-// leaving out the names in exclude.
-func ArtifactsAt(dir, baseURL string, exclude ...string) ([]ArtifactFile, error) {
-	paths, err := fsutil.ListFiles(dir, fsutil.DirFiles, fsutil.Exclude(exclude...))
+// ArtifactsAt lists the files the filters pick in dir as artifacts served under baseURL.
+func ArtifactsAt(dir, baseURL string, filters ...fsutil.FileFilter) ([]ArtifactFile, error) {
+	paths, err := fsutil.ListFiles(dir, filters...)
 	if err != nil {
 		return nil, err
 	}

@@ -27,6 +27,7 @@ import (
 	"github.com/google/go-github/v53/github"
 
 	"github.com/projectcalico/calico/release/internal/distribution"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/version"
 )
@@ -92,10 +93,9 @@ func TestReleaseUpload(t *testing.T) {
 		}
 	})
 
-	t.Run("a release with files waits for the files and the tag", func(t *testing.T) {
+	t.Run("waits for the required steps", func(t *testing.T) {
 		u := ReleaseUpload(opts)
-		want := []string{outputs.MetadataStep, distribution.ChecksumStep, TagStep}
-		if diff := cmp.Diff(want, u.Requires); diff != "" {
+		if diff := cmp.Diff([]string{outputs.ChecksumStep, outputs.MetadataStep, TagStep}, u.Requires); diff != "" {
 			t.Errorf("Requires (-want +got):\n%s", diff)
 		}
 		if u.Name != ReleaseStep || u.Source != opts.Source {
@@ -103,10 +103,9 @@ func TestReleaseUpload(t *testing.T) {
 		}
 	})
 
-	t.Run("a body-only release waits only for the tag", func(t *testing.T) {
-		o := opts
-		o.Source = ""
-		if diff := cmp.Diff([]string{TagStep}, ReleaseUpload(o).Requires); diff != "" {
+	t.Run("also waits for the steps the caller names", func(t *testing.T) {
+		want := []string{"extra", outputs.ChecksumStep, outputs.MetadataStep, TagStep}
+		if diff := cmp.Diff(want, ReleaseUpload(opts, "extra").Requires); diff != "" {
 			t.Errorf("Requires (-want +got):\n%s", diff)
 		}
 	})
@@ -138,15 +137,50 @@ func TestReleasePublish(t *testing.T) {
 
 	t.Run("attaches the files and the sums file", func(t *testing.T) {
 		dir := t.TempDir()
-		for _, n := range []string{"release.tgz", distribution.SumsFileName} {
+		for _, n := range []string{"release.tgz", outputs.SumsFileName} {
 			if err := os.WriteFile(filepath.Join(dir, n), []byte(n), 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}
 		f := publish(t, "v3.30.0", dir)
 		slices.Sort(f.uploaded)
-		if diff := cmp.Diff([]string{distribution.SumsFileName, "release.tgz"}, f.uploaded); diff != "" {
+		if diff := cmp.Diff([]string{outputs.SumsFileName, "release.tgz"}, f.uploaded); diff != "" {
 			t.Errorf("uploaded (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("attaches only the included files and the sums file", func(t *testing.T) {
+		dir := t.TempDir()
+		for _, name := range []string{"metadata.yaml", "release.tgz", outputs.SumsFileName} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(name), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		f := &fakeReleases{listed: []*github.RepositoryRelease{{TagName: github.String("v3.29.0")}}}
+		d := Release{releases: testReleases(t, f), Tag: "v3.30.0", Filter: []fsutil.FileFilter{fsutil.DirFiles, fsutil.Include("metadata.yaml")}, Notes: ReleaseNotes{Link: Link{Text: "on GitHub", URL: "https://example.test/notes.md"}}}
+		if err := d.Publish(context.Background(), dir); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+		slices.Sort(f.uploaded)
+		if diff := cmp.Diff([]string{outputs.SumsFileName, "metadata.yaml"}, f.uploaded); diff != "" {
+			t.Errorf("uploaded (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("fails when an included file is missing", func(t *testing.T) {
+		dir := t.TempDir()
+		for _, name := range []string{"release.tgz", outputs.SumsFileName} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(name), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		f := &fakeReleases{}
+		d := Release{releases: testReleases(t, f), Tag: "v3.30.0", Filter: []fsutil.FileFilter{fsutil.DirFiles, fsutil.Include("metadata.yaml")}, Notes: ReleaseNotes{Link: Link{Text: "on GitHub", URL: "https://example.test/notes.md"}}}
+		if err := d.Publish(context.Background(), dir); err == nil || !strings.Contains(err.Error(), "metadata.yaml") {
+			t.Errorf("Publish() = %v, want an error naming metadata.yaml", err)
+		}
+		if f.created != nil {
+			t.Error("created a release with a file missing")
 		}
 	})
 
@@ -218,6 +252,26 @@ func TestReleaseArtifacts(t *testing.T) {
 		}
 		url := "https://github.com/projectcalico/calico/releases/download/v3.30.0/release.tgz"
 		if diff := cmp.Diff([]outputs.ArtifactFile{{Name: "release.tgz", Path: release, URL: url}}, got); diff != "" {
+			t.Errorf("files (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("lists only the included files", func(t *testing.T) {
+		dir := t.TempDir()
+		for _, name := range []string{"metadata.yaml", "release.tgz"} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		included := d
+		included.Filter = []fsutil.FileFilter{fsutil.DirFiles, fsutil.Include("metadata.yaml")}
+		got, err := included.Artifacts(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		url := "https://github.com/projectcalico/calico/releases/download/v3.30.0/metadata.yaml"
+		want := []outputs.ArtifactFile{{Name: "metadata.yaml", Path: filepath.Join(dir, "metadata.yaml"), URL: url}}
+		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("files (-want +got):\n%s", diff)
 		}
 	})

@@ -2214,7 +2214,7 @@ func TestPublishNodes(t *testing.T) {
 	t.Run("a release tags, then releases, then indexes the charts", func(t *testing.T) {
 		r := &CalicoManager{calicoVersion: testVersion(t, "v3.30.0"), githubRepo: github.Repo{Org: "projectcalico", Name: "calico"}, outputDir: t.TempDir()}
 		want := []string{
-			prepPublishStep, operator.Step, images.Step, charts.Step, outputs.MetadataStep, distribution.ChecksumStep,
+			prepPublishStep, operator.Step, images.Step, charts.Step, outputs.MetadataStep, outputs.ChecksumStep,
 			github.TagStep, github.ReleaseStep, helmIndexStep,
 		}
 		if diff := cmp.Diff(want, names(r)); diff != "" {
@@ -2224,7 +2224,7 @@ func TestPublishNodes(t *testing.T) {
 
 	t.Run("a hashrelease ends with the hashrelease upload", func(t *testing.T) {
 		r := &CalicoManager{isHashRelease: true, calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir()}
-		want := []string{prepPublishStep, operator.Step, images.Step, charts.Step, outputs.MetadataStep, distribution.ChecksumStep, distribution.HashreleasePublishStep}
+		want := []string{prepPublishStep, operator.Step, images.Step, charts.Step, outputs.MetadataStep, outputs.ChecksumStep, distribution.HashreleasePublishStep}
 		if diff := cmp.Diff(want, names(r)); diff != "" {
 			t.Errorf("nodes (-want +got):\n%s", diff)
 		}
@@ -2340,7 +2340,7 @@ func TestPublishRelease(t *testing.T) {
 		}
 	})
 
-	for _, step := range []string{outputs.MetadataStep, distribution.ChecksumStep, github.TagStep} {
+	for _, step := range []string{outputs.MetadataStep, outputs.ChecksumStep, github.TagStep} {
 		t.Run("skipping "+step+" fails before anything publishes", func(t *testing.T) {
 			published := false
 			r := &CalicoManager{
@@ -2397,7 +2397,7 @@ func TestChecksumsAreWrittenOnBothPaths(t *testing.T) {
 			for _, u := range r.uploads() {
 				kinds = append(kinds, u.Handler.Name())
 			}
-			if !slices.Contains(kinds, "checksums") {
+			if !slices.Contains(kinds, outputs.ChecksumStep) {
 				t.Errorf("no checksums step in the pipeline: %v", kinds)
 			}
 		})

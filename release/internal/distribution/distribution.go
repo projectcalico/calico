@@ -27,11 +27,8 @@ import (
 // The name becomes the log directory, so it is qualified: a bare "publish"
 // would collide with another group's.
 const (
-	sumsStep      = "distribution-sha256sums"
 	artifactsStep = "distribution-publish-artifacts"
-	SumsFileName  = "SHA256SUMS"
 
-	ChecksumStep           = "checksums"
 	HashreleasePublishStep = "hashrelease"
 )
 
