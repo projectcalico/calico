@@ -57,10 +57,10 @@ func Build(repoRoot, version string, builders []Builder, opts ...BuildOption) er
 func (s settings) build(b Builder) error {
 	log := s.Logger().WithFields(map[string]any{"component": b.Component(), "target": b.Target()})
 	dir := filepath.Join(s.RepoRoot, b.Component())
-	env := append(s.env(), b.Env()...)
+	vars := append(s.env(), b.Env()...)
 
 	for attempt := 0; ; attempt++ {
-		out, err := command.Make(s.Runner(), dir).Run([]string{b.Target()}, command.WithEnv(env...), command.WithLogFile(s.LogPath(b.Component())))
+		out, err := command.Make(s.Runner(), dir).Run([]string{b.Target()}, command.WithEnv(vars...), command.WithLogFile(s.LogPath(b.Component())))
 		if err == nil {
 			log.Debug(out)
 			return nil
