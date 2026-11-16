@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 )
 
 const testVersion = "v1.2.3"
@@ -157,37 +158,10 @@ func TestDirSourceFailsWhenItStagesNothing(t *testing.T) {
 	d := DirSource{
 		To:     binDir,
 		From:   from,
-		Filter: func(_, _, relPath string) bool { return relPath == "calico-bpf" },
+		Filter: []fsutil.FileFilter{fsutil.Recursive, fsutil.Exclude("calico-felix")},
 	}
 	if err := d.Contribute(t.TempDir()); err == nil {
 		t.Error("Contribute() = nil, want an error when nothing is staged")
-	}
-}
-
-// A filter matching a base name would pull a whole subdirectory in with it.
-func TestDirSourceFilterMatchesTheWholeRelativePath(t *testing.T) {
-	from := t.TempDir()
-	for _, name := range []string{"calico-bpf", "bpf/calico-bpf"} {
-		path := filepath.Join(from, name)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(name), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	dest := t.TempDir()
-	d := DirSource{
-		To:     binDir,
-		From:   from,
-		Filter: func(_, _, relPath string) bool { return relPath == "calico-bpf" },
-	}
-	if err := d.Contribute(dest); err != nil {
-		t.Fatalf("Contribute: %v", err)
-	}
-	if want := []string{"bin/calico-bpf"}; !slices.Equal(stagedFiles(t, dest), want) {
-		t.Errorf("staged %v, want %v", stagedFiles(t, dest), want)
 	}
 }
 
