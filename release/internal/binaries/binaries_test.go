@@ -23,6 +23,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/outputs"
@@ -134,6 +136,86 @@ func TestBuildPassesABuildersEnv(t *testing.T) {
 			t.Errorf("%s built with %q = %v", componentOf(c), want, got)
 		}
 	}
+}
+
+func TestRelease(t *testing.T) {
+	t.Run("every builder takes the requested arches", func(t *testing.T) {
+		want := []string{"amd64", "arm64"}
+		for _, b := range Release("", "amd64", "arm64") {
+			if diff := cmp.Diff(want, b.Arches()); diff != "" {
+				t.Errorf("%s arches (-want +got):\n%s", b.Component(), diff)
+			}
+		}
+	})
+
+	t.Run("no arches leaves the make default", func(t *testing.T) {
+		f := &command.Recorder{}
+		if err := Build("/repo", "v1.2.3", Release(""), WithRunner(f)); err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		for _, c := range f.Calls() {
+			for _, e := range c.Env {
+				if strings.HasPrefix(e, utils.EnvArches+"=") {
+					t.Errorf("%s built with %q, want the make default", componentOf(c), e)
+				}
+			}
+		}
+	})
+}
+
+func TestBuildPrereqs(t *testing.T) {
+	stubPrereqs := func(t *testing.T, m map[string]prereq) {
+		t.Helper()
+		orig := sharedPrereqs
+		sharedPrereqs = func() map[string]prereq { return m }
+		t.Cleanup(func() { sharedPrereqs = orig })
+	}
+
+	t.Run("a shared prereq runs once, before any builder", func(t *testing.T) {
+		shared := prereq{component: "gamma", target: "shared"}
+		stubPrereqs(t, map[string]prereq{"alpha": shared, "beta": shared})
+		f := &command.Recorder{}
+		if err := Build("/repo", "v1.2.3", testBuilders(""), WithRunner(f)); err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		calls := f.Calls()
+		if len(calls) == 0 || componentOf(calls[0]) != "gamma" {
+			t.Fatalf("first call %v, want the gamma prereq", calls)
+		}
+		var n int
+		for _, c := range calls {
+			if componentOf(c) == "gamma" {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Errorf("prereq ran %d times, want 1", n)
+		}
+	})
+
+	t.Run("a failed prereq stops the builders", func(t *testing.T) {
+		stubPrereqs(t, map[string]prereq{"alpha": {component: "gamma", target: "shared"}})
+		f := failingRunner(map[string]int{"gamma": 99})
+		if err := Build("/repo", "v1.2.3", testBuilders(""), WithRunner(f)); err == nil {
+			t.Fatal("Build succeeded, want the prereq failure")
+		}
+		for _, c := range f.Calls() {
+			if componentOf(c) != "gamma" {
+				t.Errorf("ran %s after the prereq failed", componentOf(c))
+			}
+		}
+	})
+
+	t.Run("release and e2e builders share one libbpf build", func(t *testing.T) {
+		f := &command.Recorder{}
+		builders := append(Release(""), E2E([]string{"amd64"}, ""))
+		if err := Build("/repo", "v1.2.3", builders, WithRunner(f)); err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		if got := invocations(f); !slices.Contains(got, FelixComponent+" libbpf") {
+			t.Errorf("ran %v, want felix libbpf", got)
+		}
+	})
 }
 
 // One builder failing must not hide the rest.
@@ -298,7 +380,7 @@ func TestE2EBuildsAndCollectsTheShippedBinaries(t *testing.T) {
 	if err := Build(repoRoot, "v1.2.3", builders, WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if got := invocations(f); !slices.Equal(got, []string{E2EComponent + " " + e2eTarget}) {
+	if got := invocations(f); !slices.Contains(got, E2EComponent+" "+e2eTarget) {
 		t.Errorf("ran %v, want the e2e build target", got)
 	}
 	for _, want := range []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"} {
@@ -323,6 +405,9 @@ func TestE2ENarrowsToSupportedArches(t *testing.T) {
 	}
 	want := utils.Env(utils.EnvArches, "amd64")
 	for _, c := range f.Calls() {
+		if componentOf(c) != E2EComponent {
+			continue
+		}
 		if !slices.Contains(c.Env, want) {
 			t.Errorf("built without %q, env: %v", want, c.Env)
 		}

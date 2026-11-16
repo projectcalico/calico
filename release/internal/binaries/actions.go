@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/command"
@@ -39,8 +40,19 @@ func Build(repoRoot, version string, builders []Builder, opts ...BuildOption) er
 	}
 
 	s.Logger().WithField("builders", len(builders)).Info("Building binaries")
+	var done []prereq
+	for _, b := range builders {
+		p, ok := sharedPrereqs()[b.Component()]
+		if !ok || slices.Contains(done, p) {
+			continue
+		}
+		done = append(done, p)
+		if err := s.run(p.component, p.target, nil, p.component+"-"+p.target); err != nil {
+			return err
+		}
+	}
 	if _, err := steps.Go(builders, func(b Builder) (unitDone, error) {
-		return unitDone{}, s.build(b)
+		return unitDone{}, s.run(b.Component(), b.Target(), b.Arches(), b.Component())
 	}); err != nil {
 		return err
 	}
@@ -53,13 +65,18 @@ func Build(repoRoot, version string, builders []Builder, opts ...BuildOption) er
 	return nil
 }
 
-func (s settings) build(b Builder) error {
-	log := s.Logger().WithFields(map[string]any{"component": b.Component(), "target": b.Target()})
-	dir := filepath.Join(s.RepoRoot, b.Component())
-	env := append(s.env(), b.Env()...)
+// No arches leaves the make default, the host arch.
+func (s settings) run(component, target string, arches []string, logName string) error {
+	log := s.Logger().WithFields(map[string]any{"component": component, "target": target, "arches": arches})
+	dir := filepath.Join(s.RepoRoot, component)
+	env := s.env()
+	if len(arches) > 0 {
+		env = append(env, utils.Env(utils.EnvArches, strings.Join(arches, " ")))
+	}
 
+	log.Info("Building")
 	for attempt := 0; ; attempt++ {
-		out, err := command.Make(s.Runner(), dir).Run([]string{b.Target()}, command.WithEnv(env...), command.WithLogFile(s.LogPath(b.Component())))
+		out, err := command.Make(s.Runner(), dir).Run([]string{target}, command.WithEnv(env...), command.WithLogFile(s.LogPath(logName)))
 		if err == nil {
 			log.Debug(out)
 			return nil
@@ -68,7 +85,7 @@ func (s settings) build(b Builder) error {
 			log.WithError(err).WithField("attempt", attempt).Warn("Binary build failed, retrying")
 			continue
 		}
-		return s.Errorf("building %s binaries: %w", b.Component(), err)
+		return s.Errorf("building %s %s: %w", component, target, err)
 	}
 }
 
