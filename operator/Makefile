@@ -159,6 +159,19 @@ dev-image:
 	rm -f $(BINDIR)/$(BINARY_NAME)-$(ARCH) $(IMAGE_BUILD_MARKER)
 	$(MAKE) image
 
+IMAGE_CONTEXT ?= $(BUILD_DIR)/image-context-$(ARCH)
+
+## Stage the image's build context, for a builder other than docker.
+.PHONY: image-context
+image-context: $(BINDIR)/$(BINARY_NAME)-$(ARCH) $(BUILD_DIR)/LICENSE
+	$(call stage_image_context,.,build/Dockerfile,$(IMAGE_CONTEXT),BINARY_NAME=$(BINARY_NAME),$(BUILD_DIR)/LICENSE $(BINDIR)/$(BINARY_NAME)-$(ARCH))
+
+# dev-image's relink, for image-context.
+.PHONY: dev-image-context
+dev-image-context:
+	rm -f $(BINDIR)/$(BINARY_NAME)-$(ARCH)
+	$(MAKE) image-context
+
 .PHONY: image-all
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:

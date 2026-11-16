@@ -1,6 +1,6 @@
 # Batch memoization for the VM fleets: a batch that passed on an earlier run
 # with the same cache key is skipped, and its reports are restored in place of
-# a re-run.  The keys come from the plan that the felix-fv-plan step publishes.
+# a re-run.  The keys come from the felix-fv-plan artifact felix-build publishes.
 #
 # Source it.  batch_memo_init sets BATCH_MEMO_PREFIX, which run-tests-on-vms
 # keys on; with it unset, every batch runs and nothing is recorded.
@@ -21,8 +21,8 @@
 BATCH_MEMO_CACHED=()
 
 # batch_memo_init <lane id> reads this lane's entry from the published plan.
-# Fails if the plan can't be pulled: felix-build may have skipped the build on
-# the strength of it, so running the lane in full would fail confusingly.
+# Fails if the plan can't be pulled, rather than running a lane the plan may
+# have marked as already passed.
 #
 # Sets and exports: BATCH_MEMO_LANE, BATCH_MEMO_KEY, BATCH_MEMO_PREFIX (empty
 # when the memo is off), BATCH_MEMO_LANE_HIT (true/false) and
@@ -72,12 +72,12 @@ batch_memo_restore_lane() {
     restored="$(batch_memo_dirs_with_reports "$artifacts_dir" | wc -l)"
   fi
   if [ "$restored" -eq 0 ]; then
-    echo "Batch memo: could not restore the cached lane.  felix-build may have been skipped, so this lane can't run here." >&2
+    echo "Batch memo: could not restore the cached lane." >&2
     # Succeeds if the entry is already gone, as when it expired.
     if artifact cache delete "$BATCH_MEMO_PREFIX/lane" >/dev/null; then
       echo "Batch memo: deleted the cached lane; resubmit the workflow, or push, to run the lane." >&2
     else
-      echo "Batch memo: could not delete the cached lane either; set FELIX_FV_MEMO=off on the felix-fv-plan step to run without the memo." >&2
+      echo "Batch memo: could not delete the cached lane either; set FELIX_FV_MEMO=off on the felix-build step to run without the memo." >&2
     fi
     batch_memo_log_lane lane 0 0 fail reason=restore-failed
     return 1

@@ -274,6 +274,23 @@ $(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOU
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
+NODE_IMAGE_BUILD_ARGS = BIN_DIR=$(NODE_CONTAINER_BIN_DIR) BIRD_IMAGE=$(BIRD_IMAGE) BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
+NODE_IMAGE_CONTEXT = dist/image-context-$(ARCH)
+
+## Stage the image's build context, for a builder other than docker.
+# A builder that takes no build contexts gets nft-rpms as a stage of the staged
+# Dockerfile instead, unpacked from NFT_RPMS_TAR (a saved image) when set and from
+# the published image otherwise. The stage goes before the first FROM, after the
+# global ARGs the other stages' FROM lines read.
+.PHONY: image-context
+image-context: $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE $(REPO_ROOT)/bin/crane
+	$(call stage_image_context,.,Dockerfile,$(NODE_IMAGE_CONTEXT),$(NODE_IMAGE_BUILD_ARGS),patches filesystem clean-up-filesystem.sh dist/LICENSE $(NODE_CONTAINER_BINARY) $(TOOLS_MOUNTNS_BINARY))
+	mkdir -p $(NODE_IMAGE_CONTEXT)/nft-rpms
+	$(CRANE_CMD) export $(if $(NFT_RPMS_TAR),- - < $(NFT_RPMS_TAR),$(NFT_RPMS_IMAGE) -) | tar -x -C $(NODE_IMAGE_CONTEXT)/nft-rpms rpms src
+	awk '!done && /^FROM /{print "FROM scratch AS nft-rpms"; print "COPY nft-rpms/ /"; print ""; done=1} {print}' \
+		$(NODE_IMAGE_CONTEXT)/Dockerfile > $(NODE_IMAGE_CONTEXT)/Dockerfile.staged
+	mv $(NODE_IMAGE_CONTEXT)/Dockerfile.staged $(NODE_IMAGE_CONTEXT)/Dockerfile
+
 # download BIRD source to include in image.
 $(BIRD_SOURCE): .bird-source.created
 .bird-source.created:
@@ -308,12 +325,9 @@ UT_PACKAGES_TO_SKIP?=tests/k8st
 ## Run the ginkgo tests.
 ut fv: $(LIBBPF_A) run-k8s-apiserver
 	mkdir -p report
-	$(DOCKER_RUN) \
-	-v $(CERTS_PATH):/home/user/certs \
-	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
-	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
-	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
-	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --skip-package $(UT_PACKAGES_TO_SKIP) --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
+	$(DOCKER_GO_BUILD_WITH_CERTS) sh -c 'cd $(BUILD_REPO_ROOT)/node && \
+		KUBECONFIG=$(TEST_KUBECONFIG) ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 CALICO_API_GROUP=$(CALICO_API_GROUP) \
+		ginkgo -r --skip-package $(UT_PACKAGES_TO_SKIP) --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
 
 ###############################################################################
 # System tests
@@ -466,22 +480,16 @@ release-publish-latest:
 $(WINDOWS_MOD_CACHED_FILES):
 
 $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp%: windows-packaging/config-bgp%
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-        $(GIT_CONFIG_SSH) \
-        cp -r ../confd/$< $@'; \
-        chmod +w $@
+	cp -r ../confd/$< $@
+	chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/%: windows-packaging/conf.d/%
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-        $(GIT_CONFIG_SSH) \
-        cp -r ../confd/$< $@'; \
-        chmod +w $@
+	cp -r ../confd/$< $@
+	chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/confd/templates/%: windows-packaging/templates/%
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-        $(GIT_CONFIG_SSH) \
-        cp -r ../confd/$< $@'; \
-        chmod +w $@
+	cp -r ../confd/$< $@
+	chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1:
 	$(call fetch_file,$(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1,$@)
@@ -551,3 +559,6 @@ WINDOWS_IMAGE_REQS := \
 	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template \
 	windows-packaging/nssm.exe
 image-windows: $(WINDOWS_IMAGE_REQS)
+
+WINDOWS_IMAGE_CONTEXT_PATHS = dist/LICENSE $(WINDOWS_BINARY) windows-packaging
+windows-image-contexts: $(WINDOWS_IMAGE_REQS)
