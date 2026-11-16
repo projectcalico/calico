@@ -1,46 +1,43 @@
 # Kubernetes e2e suites on a kind cluster, one lane per routing mode and suite.
 # On a VM because the suites exercise SCTP, which the pod nodes' image lacks.
+#
+# TEMPORARY: fed from the producers' caches rather than the artifact store.
 version: condensed-module
 
 defaults:
   tiers: []
-  # Longer than the default hour: a cluster plus a conformance suite.
-  timeout: 1h30m
-  runOn: vm
-  services:
-    - docker
+  # The compute SA createVM, runOnVM and the teardowns authenticate with.
+  secretBundles:
+    - banzai-secrets
 
 steps:
   - name: e2e-kind
-    env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-    vm:
-      # Cheapest first, all families that can attach a hyperdisk. A region can run
-      # short of any one of them.
-      machineTypes:
-        - n4d-standard-8
-        - n4-standard-8
-        - c3d-standard-8
-        - c4d-standard-8
-        - c4-standard-8
-        - c3-standard-8
-      # The artifact store's region, in any zone: capacity runs out zone by zone.
-      zone: us-central1
-      # kind wants tens of thousands of IOPS, which pd-ssd only reaches at about
-      # a terabyte.
-      diskType: hyperdisk-balanced
-      diskSize: 200GB
-      provisionedIops: 10000
-      provisionedThroughput: 200
+    # Longer than the default hour: a cluster plus a conformance suite.
+    timeout: 1h30m
     depends:
-      - build-calico-image
       - build-node-image
       - build-whisker-image
-      - build-operator-image
-      - build-third-party-images
+      - operator-image-buildkit
+      - envoy-gateway-image-buildkit
+      - envoy-proxy-image-buildkit
+      - envoy-ratelimit-image-buildkit
+      - cni-plugins-image-buildkit
       - build-e2e-binaries
+      - calico-image-buildkit
       - check-go
+    checkout: true
+    # What the run needs from other steps comes from their caches, shipped across
+    # with `put`.
+    cache:
+      - {name: calico-image-tar, mode: read, path: /cache/calico-image-tar}
+      - {name: node-image, mode: read, path: /cache/node-image}
+      - {name: whisker-image, mode: read, path: /cache/whisker-image}
+      - {name: operator-image, mode: read, path: /cache/operator-image}
+      - {name: envoy-gateway-image, mode: read, path: /cache/envoy-gateway-image}
+      - {name: envoy-proxy-image, mode: read, path: /cache/envoy-proxy-image}
+      - {name: envoy-ratelimit-image, mode: read, path: /cache/envoy-ratelimit-image}
+      - {name: cni-plugins-image, mode: read, path: /cache/cni-plugins-image}
+      - {name: e2e-binaries, mode: read, path: /cache/e2e-binaries}
     matrix:
       # Pinned rather than defaulted: from v3.33 the default gives Felix the
       # IPIP routes, and these tests need BGP to be the only routing mechanism.
@@ -74,26 +71,66 @@ steps:
         env:
           - name: E2E_TARGET
             value: e2e-test-bpf
-    commands: |
-      sudo apt-get update -y && sudo apt-get install -y make
-      sudo modprobe sctp
-      # The Makefiles call the kubectl they download by full path; the deploy
-      # script and the tests' connection tester call it by name.
-      export PATH="$(pwd)/hack/test/kind:${PATH}"
-      .argoci/scripts/load-cached-images calico node whisker
-      .argoci/scripts/load-e2e-binaries
-      export E2E_PREBUILT=true
-      make ${E2E_TARGET}
-    epilogue: |
-      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/report" report || true
-      artifact push job report --destination test-results || true
-      if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
-        # Collected where the cluster is; the script pushes its own bundle.
-        sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && .semaphore/collect-kind-diags' || true
-        # The snapshot tool is only in the CI image, and the VM has no registry
-        # credentials of its own.
-        sshOnVirtualMachine 'docker login -u _json_key --password-stdin https://gcr.io < "${CI_ARTIFACT_SA_KEY_FILE}"' || true
-        sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && docker run --rm --network host -v "$PWD:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4 kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz' || true
-        copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/kind-snapshot.tar.gz" kind-snapshot.tar.gz || true
-        artifact push job kind-snapshot.tar.gz --destination kind-snapshot.tar.gz || true
-      fi
+    runOnVM:
+      image: gcr.io/unique-caldron-775/scratch-utils:v0.6-test-1e81cd2
+      # Booted once the images are ready rather than alongside their builds, so the
+      # machine lives only as long as the lane.
+      createVM:
+        # TEMPORARY: a test build of scratch-utils v0.6, for the machine-type list
+        # and the provisioned hyperdisk.
+        image: gcr.io/unique-caldron-775/scratch-utils:v0.6-test-1e81cd2
+        # Cheapest first, all families that can attach a hyperdisk. A region can
+        # run short of any one of them.
+        machineTypes:
+          - n4d-standard-8
+          - n4-standard-8
+          - c3d-standard-8
+          - c4d-standard-8
+          - c4-standard-8
+          - c3-standard-8
+        # kind wants tens of thousands of IOPS, which pd-ssd only reaches at about
+        # a terabyte.
+        diskType: hyperdisk-balanced
+        diskSize: 200GB
+        provisionedIops: 10000
+        provisionedThroughput: 200
+        maxRunDuration: 2h
+      # An entry's unset ones are skipped.
+      env: [E2E_TARGET, EXTRA_VALUES_FILES, KIND_CALICO_API_GROUP, E2E_TEST_CONFIG]
+      put:
+        - /cache/calico-image-tar/calico-image.tar:prefetched/calico-image.tar
+        - /cache/node-image/node-image.tar.zst:prefetched/node-image.tar.zst
+        - /cache/whisker-image/whisker-image.tar.zst:prefetched/whisker-image.tar.zst
+        - /cache/operator-image/operator-image.tar:prefetched/operator-image.tar
+        - /cache/envoy-gateway-image/envoy-gateway-image.tar:prefetched/envoy-gateway-image.tar
+        - /cache/envoy-proxy-image/envoy-proxy-image.tar:prefetched/envoy-proxy-image.tar
+        - /cache/envoy-ratelimit-image/envoy-ratelimit-image.tar:prefetched/envoy-ratelimit-image.tar
+        - /cache/cni-plugins-image/cni-plugins-image.tar:prefetched/cni-plugins-image.tar
+        - /cache/e2e-binaries/e2e-binaries.tar.zst:prefetched/e2e-binaries.tar.zst
+      get:
+        - e2e-kind:/tmp/e2e-kind
+      source: |
+        set -euo pipefail
+        out="${HOME}/e2e-kind"
+        mkdir -p "$out"
+        # There is no epilogue on a machine, so the report and, on a failure, the
+        # cluster's diagnostics are gathered on the way out for `get` to fetch.
+        collect() {
+          rc=$?
+          [ "$rc" = 0 ] || .semaphore/collect-kind-diags || true
+          tar -czf "$out/e2e-kind.tgz" report artifacts 2>/dev/null || true
+        }
+        trap collect EXIT
+        command -v make >/dev/null || { sudo apt-get update -y && sudo apt-get install -y make; }
+        command -v zstd >/dev/null || { sudo apt-get update -y && sudo apt-get install -y zstd; }
+        sudo modprobe sctp
+        # The Makefiles call the kubectl they download by full path; the deploy
+        # script and the tests' connection tester call it by name.
+        export PATH="$(pwd)/hack/test/kind:${PATH}"
+        export PREFETCHED_ARTIFACTS="${HOME}/prefetched"
+        .argoci/scripts/load-cached-images calico node whisker
+        .argoci/scripts/load-e2e-binaries
+        export E2E_PREBUILT=true
+        make ${E2E_TARGET}
+    outputs:
+      - {name: e2e-kind, path: /tmp/e2e-kind/e2e-kind.tgz, optional: true}
