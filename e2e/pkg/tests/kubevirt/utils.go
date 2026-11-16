@@ -16,6 +16,7 @@ package kubevirt
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"math/big"
@@ -294,6 +295,52 @@ func (v *kubeVirtVM) FindVirtLauncherPod(ctx context.Context, f *framework.Frame
 		}
 	}
 	return nil, fmt.Errorf("no running virt-launcher pod found for VM %s (total pods: %d)", v.name, len(pods.Items))
+}
+
+// randomLocalMAC returns a random unicast, locally-administered MAC, so it
+// can't collide with a vendor-assigned address.
+func randomLocalMAC() string {
+	mac := make(net.HardwareAddr, 6)
+	_, err := rand.Read(mac)
+	Expect(err).NotTo(HaveOccurred())
+	mac[0] = (mac[0] | 0x02) &^ 0x01
+	return mac.String()
+}
+
+// expectWorkloadEndpointMAC asserts that the WorkloadEndpoint of the VM's
+// virt-launcher pod on node records mac. The CNI writes the MAC it actually
+// set on the pod interface, so this proves cni.projectcalico.org/hwAddr was
+// applied to that pod. Matching on node, not phase, picks the right pod
+// while a migration source is still shutting down.
+func (v *kubeVirtVM) expectWorkloadEndpointMAC(ctx context.Context, f *framework.Framework, c clientv3.Interface, node, mac string) {
+	EventuallyWithOffset(1, func() (string, error) {
+		pods, err := f.ClientSet.CoreV1().Pods(v.namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("kubevirt.io=virt-launcher,vm.kubevirt.io/name=%s", v.name),
+		})
+		if err != nil {
+			return "", err
+		}
+		podName := ""
+		for _, pod := range pods.Items {
+			if pod.Spec.NodeName == node && pod.DeletionTimestamp == nil {
+				podName = pod.Name
+			}
+		}
+		if podName == "" {
+			return "", fmt.Errorf("no virt-launcher pod for VM %s on node %s", v.name, node)
+		}
+		weps, err := c.WorkloadEndpoints().List(ctx, options.ListOptions{Namespace: v.namespace})
+		if err != nil {
+			return "", err
+		}
+		for _, wep := range weps.Items {
+			if wep.Spec.Pod == podName {
+				return wep.Spec.MAC, nil
+			}
+		}
+		return "", fmt.Errorf("no WorkloadEndpoint for pod %s/%s", v.namespace, podName)
+	}, 1*time.Minute, 2*time.Second).Should(Equal(mac),
+		"WorkloadEndpoint MAC on node %s should match the cni.projectcalico.org/hwAddr annotation", node)
 }
 
 // setupAntiAffinityPod creates a long-running pod scheduled away from the
