@@ -50,10 +50,37 @@ type ExpectedCron struct {
 	Cells map[string]string
 }
 
-// cronHeader holds the one top-level field of a cron file that cilanes does not
+// cronHeader holds the top-level fields of a cron file that cilanes does not
 // resolve.
 type cronHeader struct {
-	GenerateName string `yaml:"generateName"`
+	GenerateName string        `yaml:"generateName"`
+	Includes     []cronInclude `yaml:"includes"`
+}
+
+// cronInclude is a module file a cron pulls its steps from.
+type cronInclude struct {
+	Path string `yaml:"path"`
+}
+
+// moduleFile is the part of a module file that sets a step's environment.
+type moduleFile struct {
+	Steps []moduleStep `yaml:"steps"`
+}
+
+type moduleStep struct {
+	Name   string         `yaml:"name"`
+	Env    []moduleEnvVar `yaml:"env"`
+	Matrix []moduleMatrix `yaml:"matrix"`
+}
+
+type moduleMatrix struct {
+	Name string         `yaml:"name"`
+	Env  []moduleEnvVar `yaml:"env"`
+}
+
+type moduleEnvVar struct {
+	Name  string `yaml:"name"`
+	Value string `yaml:"value"`
 }
 
 // LoadExpected resolves every cron file under repoRoot to the live cron it
@@ -95,10 +122,16 @@ func LoadExpected(repoRoot, branch string) ([]ExpectedCron, error) {
 		if header.GenerateName == "" {
 			return nil, fmt.Errorf("%s: no generateName, so no live cron name", rel)
 		}
+		cells := expectedCells(bySource[rel])
+		for _, inc := range header.Includes {
+			if err := addModuleCells(cells, repoRoot, inc.Path); err != nil {
+				return nil, fmt.Errorf("%s: %w", rel, err)
+			}
+		}
 		crons = append(crons, ExpectedCron{
 			Name:  liveName(header.GenerateName, branch),
 			File:  rel,
-			Cells: expectedCells(bySource[rel]),
+			Cells: cells,
 		})
 	}
 	sort.Slice(crons, func(i, j int) bool { return crons[i].Name < crons[j].Name })
@@ -116,6 +149,49 @@ func expectedCells(lanes []cilanes.Lane) map[string]string {
 		cells[cellKey(l.Name)] = l.Config
 	}
 	return cells
+}
+
+// addModuleCells adds the cells of an included module whose step or matrix
+// entry sets E2E_TEST_CONFIG. A kind step that leaves it to the make target
+// carries no value in the live cron, so it is not expected to.
+func addModuleCells(cells map[string]string, repoRoot, path string) error {
+	data, err := os.ReadFile(filepath.Join(repoRoot, path))
+	if err != nil {
+		return fmt.Errorf("include %s: %w", path, err)
+	}
+	var mod moduleFile
+	if err := yaml.Unmarshal(data, &mod); err != nil {
+		return fmt.Errorf("include %s: %w", path, err)
+	}
+	for _, step := range mod.Steps {
+		stepConfig := configIn(step.Env)
+		if len(step.Matrix) == 0 {
+			if stepConfig != "" {
+				cells[normalizeName(step.Name)] = stepConfig
+			}
+			continue
+		}
+		for _, m := range step.Matrix {
+			config := stepConfig
+			if c := configIn(m.Env); c != "" {
+				config = c
+			}
+			if config != "" {
+				cells[cellKey(step.Name+" ["+m.Name+"]")] = config
+			}
+		}
+	}
+	return nil
+}
+
+// configIn returns the E2E_TEST_CONFIG value an env list sets, or "".
+func configIn(vars []moduleEnvVar) string {
+	for _, v := range vars {
+		if v.Name == "E2E_TEST_CONFIG" {
+			return v.Value
+		}
+	}
+	return ""
 }
 
 // cellKey converts a cilanes lane name, "step [entry]", to the name Argo gives

@@ -116,6 +116,83 @@ func TestLoadExpectedExcludesPreMigrationRun(t *testing.T) {
 	Expect(crons[0].Cells).NotTo(HaveKey("migration-pre-migration"))
 }
 
+const includingCronFixture = `
+generateName: nightly-
+includes:
+  - path: .argoci/modules/20-kind.yaml
+steps:
+  - name: own
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/own.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
+`
+
+const kindModuleFixture = `
+steps:
+  - name: e2e-kind
+    matrix:
+      - name: from-target
+        env:
+          - name: MAKE_TARGET
+            value: e2e-test
+      - name: explicit
+        env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/explicit.yaml
+    commands: |
+      make -C e2e ${MAKE_TARGET:-e2e-test}
+  - name: kubevirt
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/kind/kubevirt.yaml
+    commands: |
+      make -C e2e e2e-test
+  - name: build
+    commands: |
+      make build
+`
+
+const notIncludedModuleFixture = `
+steps:
+  - name: elsewhere
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/kind/elsewhere.yaml
+    commands: |
+      make -C e2e e2e-test
+`
+
+// A cron expects the cells an included module sets E2E_TEST_CONFIG on, and
+// nothing from a module it does not include.
+func TestLoadExpectedAddsIncludedModuleCells(t *testing.T) {
+	RegisterTestingT(t)
+
+	root := writeRepo(t, map[string]string{
+		".argoci/cron/nightly.yaml":         includingCronFixture,
+		".argoci/modules/20-kind.yaml":      kindModuleFixture,
+		".argoci/modules/20-elsewhere.yaml": notIncludedModuleFixture,
+	})
+
+	crons, err := LoadExpected(root, "master")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(crons[0].Cells).To(Equal(map[string]string{
+		"own":               "e2e/config/own.yaml",
+		"e2e-kind-explicit": "e2e/config/kind/explicit.yaml",
+		"kubevirt":          "e2e/config/kind/kubevirt.yaml",
+	}))
+}
+
+func TestLoadExpectedFailsOnAMissingInclude(t *testing.T) {
+	RegisterTestingT(t)
+
+	root := writeRepo(t, map[string]string{".argoci/cron/nightly.yaml": includingCronFixture})
+
+	_, err := LoadExpected(root, "master")
+	Expect(err).To(MatchError(ContainSubstring("include .argoci/modules/20-kind.yaml")))
+}
+
 func TestLoadExpectedRequiresGenerateName(t *testing.T) {
 	RegisterTestingT(t)
 
