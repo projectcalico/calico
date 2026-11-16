@@ -29,6 +29,11 @@ set -x
 S3_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.semaphore/s3-cmd"
 
 fetch_calico_image() {
+  # Staged from the volume cache by the caller, in place of the artifact store.
+  if [ -f "${PREFETCHED_ARTIFACTS:-/nonexistent}/calico-image.tar.zst" ]; then
+    cp "${PREFETCHED_ARTIFACTS}/calico-image.tar.zst" /tmp/calico-image.tar.zst
+    return
+  fi
   if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
     ( cd /tmp && artifact pull workflow calico-image.tar.zst )
     return
@@ -37,7 +42,14 @@ fetch_calico_image() {
 }
 
 artifact push job bin &
-docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
+# FELIX_TEST_IMAGE_TAR=none is for a caller with no docker daemon, which builds
+# the image elsewhere and uploads it itself.
+felix_test_tar=/tmp/calico-felix-test.tar
+if [ "${FELIX_TEST_IMAGE_TAR:-}" = none ]; then
+  felix_test_tar=
+else
+  docker save -o "${felix_test_tar}" calico/felix-test:latest-amd64
+fi
 
 # The combined calico image (which provides Typha and other components used by
 # the FVs) is published by the block that builds it. Fetch it and re-upload it
@@ -67,5 +79,5 @@ tar -czf /tmp/working-copy.tgz \
   --exclude=${CALICO_DIR_NAME}/typha/docker-image/bin \
   --exclude=${CALICO_DIR_NAME}/artifacts \
   ${CALICO_DIR_NAME}
-gcloud storage cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/"
+gcloud storage cp /tmp/working-copy.tgz ${felix_test_tar} "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/"
 wait

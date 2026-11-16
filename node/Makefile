@@ -308,12 +308,9 @@ UT_PACKAGES_TO_SKIP?=tests/k8st
 ## Run the ginkgo tests.
 ut fv: $(LIBBPF_A) run-k8s-apiserver
 	mkdir -p report
-	$(DOCKER_RUN) \
-	-v $(CERTS_PATH):/home/user/certs \
-	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
-	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
-	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
-	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --skip-package $(UT_PACKAGES_TO_SKIP) --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
+	$(DOCKER_GO_BUILD_WITH_CERTS) sh -c 'cd $(BUILD_REPO_ROOT)/node && \
+		KUBECONFIG=$(TEST_KUBECONFIG) ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 CALICO_API_GROUP=$(CALICO_API_GROUP) \
+		ginkgo -r --skip-package $(UT_PACKAGES_TO_SKIP) --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
 
 ###############################################################################
 # System tests
