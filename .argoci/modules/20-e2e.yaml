@@ -83,6 +83,9 @@ steps:
         env:
           - name: E2E_TARGET
             value: e2e-test-clusternetworkpolicy
+          # A go test binary with no ginkgo report, so sandcat would record every failure as a build failure.
+          - name: SANDCAT_SKIP
+            value: "true"
           - name: EXTRA_VALUES_FILES
             value: hack/test/kind/infra/values-felix-routing.yaml
           - name: KIND_CALICO_API_GROUP
@@ -107,14 +110,16 @@ steps:
       rc=0
       make ${E2E_TARGET} 2>&1 | tee artifacts/e2e.log || rc=$?
       # Here rather than in the epilogue: the cluster and the report are on the VM.
-      .argoci/scripts/sandcat/sandcat.sh push-specs --spec-dir report/sandcat || true
-      SANDCAT_REPORT=report/report.json
-      [ -f "${SANDCAT_REPORT}" ] || SANDCAT_REPORT=$(ls -t report/*.xml 2>/dev/null | head -1) || true
-      if [ -n "${SANDCAT_REPORT}" ]; then
-        .argoci/scripts/sandcat/sandcat.sh analyze --report "${SANDCAT_REPORT}" --source-dir "$(pwd)" \
-          --kubeconfig hack/test/kind/kind-kubeconfig.yaml --log-file artifacts/e2e.log || true
-      elif [ "${rc}" != 0 ]; then
-        .argoci/scripts/sandcat/sandcat.sh build-failure --logs-dir artifacts --source-dir "$(pwd)" || true
+      if [ "${SANDCAT_SKIP:-}" != true ]; then
+        .argoci/scripts/sandcat/sandcat.sh push-specs --spec-dir report/sandcat || true
+        SANDCAT_REPORT=report/report.json
+        [ -f "${SANDCAT_REPORT}" ] || SANDCAT_REPORT=$(ls -t report/*.xml 2>/dev/null | head -1) || true
+        if [ -n "${SANDCAT_REPORT}" ]; then
+          .argoci/scripts/sandcat/sandcat.sh analyze --report "${SANDCAT_REPORT}" --source-dir "$(pwd)" \
+            --kubeconfig hack/test/kind/kind-kubeconfig.yaml --log-file artifacts/e2e.log || true
+        elif [ "${rc}" != 0 ]; then
+          .argoci/scripts/sandcat/sandcat.sh build-failure --logs-dir artifacts --source-dir "$(pwd)" || true
+        fi
       fi
       exit "${rc}"
     epilogue: |
