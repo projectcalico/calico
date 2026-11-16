@@ -151,3 +151,41 @@ func TestProtoToNamespace(t *testing.T) {
 	Expect(protoToNamespace("-")).To(Equal(global))
 	Expect(protoToNamespace("team-a")).To(Equal("team-a"))
 }
+
+func TestToProtoFilter_Endpoints(t *testing.T) {
+	RegisterTestingT(t)
+
+	exact := func(v string) whiskerv1.FilterMatch[string] {
+		return whiskerv1.NewFilterMatch(v, whiskerv1.MatchTypeExact)
+	}
+	fuzzy := func(v string) whiskerv1.FilterMatch[string] {
+		return whiskerv1.NewFilterMatch(v, whiskerv1.MatchTypeFuzzy)
+	}
+
+	filter := toProtoFilter(whiskerv1.Filters{Endpoints: []whiskerv1.FlowEndpointsMatch{
+		{Source: &whiskerv1.EndpointMatch{Namespace: exact("acme"), Name: exact("x-*")}},
+		{Dest: &whiskerv1.EndpointMatch{Namespace: exact(global)}},
+		{
+			Source: &whiskerv1.EndpointMatch{Namespace: exact("kube-system")},
+			Dest:   &whiskerv1.EndpointMatch{Name: exact(publicNetwork)},
+		},
+		{Either: &whiskerv1.EndpointMatch{Namespace: exact("acme"), Name: fuzzy("debug")}},
+		{Either: &whiskerv1.EndpointMatch{Namespace: fuzzy(global), Name: fuzzy(publicNetwork)}},
+	}})
+
+	// Display sentinels go back to the stored forms on exact matches only.
+	Expect(filter.Endpoints).To(Equal([]*proto.FlowEndpointsMatch{
+		{Source: &proto.EndpointMatch{Namespace: &proto.StringMatch{Value: "acme"}, Name: &proto.StringMatch{Value: "x-*"}}},
+		{Dest: &proto.EndpointMatch{Namespace: &proto.StringMatch{Value: "-"}, Name: &proto.StringMatch{}}},
+		{
+			Source: &proto.EndpointMatch{Namespace: &proto.StringMatch{Value: "kube-system"}, Name: &proto.StringMatch{}},
+			Dest:   &proto.EndpointMatch{Namespace: &proto.StringMatch{}, Name: &proto.StringMatch{Value: pub}},
+		},
+		{Either: &proto.EndpointMatch{Namespace: &proto.StringMatch{Value: "acme"}, Name: &proto.StringMatch{Value: "debug", Type: proto.MatchType_Fuzzy}}},
+		{Either: &proto.EndpointMatch{
+			Namespace: &proto.StringMatch{Value: global, Type: proto.MatchType_Fuzzy},
+			Name:      &proto.StringMatch{Value: publicNetwork, Type: proto.MatchType_Fuzzy},
+		}},
+	}))
+	Expect(toProtoFilter(whiskerv1.Filters{}).Endpoints).To(BeNil())
+}

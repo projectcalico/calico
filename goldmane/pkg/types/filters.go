@@ -42,8 +42,8 @@ func nameAlias(n string) string {
 }
 
 func namespaceAlias(n string) string {
-	if n == global {
-		return "-"
+	if n == "-" {
+		return global
 	}
 	return ""
 }
@@ -95,6 +95,10 @@ func Matches(filter *proto.Filter, key *FlowKey) bool {
 		return false
 	}
 
+	if len(filter.Endpoints) > 0 && !endpointMatches(filter.Endpoints, key) {
+		return false
+	}
+
 	// A non-nil but empty policy filter matches no flows, since no hit can satisfy it.
 	if filter.Policies != nil && !policyMatches(filter.Policies, key) {
 		return false
@@ -129,6 +133,58 @@ func portMatches(filters []*proto.PortMatch, port int64) bool {
 		}
 	}
 	return false
+}
+
+// endpointMatches reports whether any entry matches the flow. An entry with Either set matches when the
+// flow's source or destination matches it. Otherwise every set end must match its own side. The namespace and
+// name are checked on the same side, so a flow from acme/x to other/y does not match {acme, y}.
+func endpointMatches(filters []*proto.FlowEndpointsMatch, key *FlowKey) bool {
+	for _, f := range filters {
+		if f.Either != nil {
+			if endpointSideMatches(f.Either, key.SourceNamespace(), key.SourceName()) ||
+				endpointSideMatches(f.Either, key.DestNamespace(), key.DestName()) {
+				return true
+			}
+			continue
+		}
+		if (f.Source == nil || endpointSideMatches(f.Source, key.SourceNamespace(), key.SourceName())) &&
+			(f.Dest == nil || endpointSideMatches(f.Dest, key.DestNamespace(), key.DestName())) {
+			return true
+		}
+	}
+	return false
+}
+
+// MatchingSides reports which sides of the flow key satisfy the filter's either entries. A hint
+// built from either side of a flow uses it to emit only the sides the request asked about. With no
+// either entries both sides are reported, since nothing narrows them.
+func MatchingSides(filter *proto.Filter, key *FlowKey) (bool, bool) {
+	if filter == nil {
+		return true, true
+	}
+	var source, dest, constrained bool
+	for _, f := range filter.Endpoints {
+		if f.Either == nil {
+			continue
+		}
+		constrained = true
+		source = source || endpointSideMatches(f.Either, key.SourceNamespace(), key.SourceName())
+		dest = dest || endpointSideMatches(f.Either, key.DestNamespace(), key.DestName())
+	}
+	if !constrained {
+		return true, true
+	}
+	return source, dest
+}
+
+func endpointSideMatches(e *proto.EndpointMatch, namespace, name string) bool {
+	return endpointFieldMatches(e.Namespace, namespace, namespaceAlias(namespace)) &&
+		endpointFieldMatches(e.Name, name, nameAlias(name))
+}
+
+// endpointFieldMatches treats a nil or empty field as matching any value, as StringMatchMatches does.
+func endpointFieldMatches(sm *proto.StringMatch, val, alias string) bool {
+	return StringMatchMatches(sm, val) || (alias != "" && StringMatchMatches(sm, alias))
 }
 
 func pendingActionMatches(actions []proto.Action, key *FlowKey) bool {
