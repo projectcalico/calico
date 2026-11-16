@@ -208,7 +208,9 @@ sigs.k8s.io/structured-merge-diff/v6 v6.4.2
 sigs.k8s.io/yaml v1.6.0
 tags.cncf.io/container-device-interface/specs-go v1.1.0
 
+local:e2e/cmd/cron-readback
 local:e2e/cmd/gen-test-set
 local:e2e/cmd/k8s
 local:e2e/images/rapidclient
 local:e2e/pkg/cilanes
+local:e2e/pkg/cronreadback
