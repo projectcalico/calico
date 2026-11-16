@@ -23,6 +23,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/outputs"
@@ -134,6 +136,25 @@ func TestBuildPassesABuildersEnv(t *testing.T) {
 			t.Errorf("%s built with %q = %v", componentOf(c), want, got)
 		}
 	}
+}
+
+func TestRelease(t *testing.T) {
+	t.Run("every builder passes the requested arches", func(t *testing.T) {
+		want := []string{utils.Env(utils.EnvArches, "amd64 arm64")}
+		for _, b := range Release("", "amd64", "arm64") {
+			if diff := cmp.Diff(want, b.Env()); diff != "" {
+				t.Errorf("%s env (-want +got):\n%s", b.Component(), diff)
+			}
+		}
+	})
+
+	t.Run("no arches leaves the make default", func(t *testing.T) {
+		for _, b := range Release("") {
+			if env := b.Env(); len(env) != 0 {
+				t.Errorf("%s env = %v, want none", b.Component(), env)
+			}
+		}
+	})
 }
 
 // One builder failing must not hide the rest.

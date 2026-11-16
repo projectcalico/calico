@@ -118,12 +118,12 @@ var outDir = func(name, outputDir string) string {
 	return ""
 }
 
-func Release(outputDir string) []Builder {
+func Release(outputDir string, arches ...string) []Builder {
 	targets := all()
 	out := make([]Builder, 0, len(targets))
 	for _, name := range slices.Sorted(maps.Keys(targets)) {
 		dir := outDir(name, outputDir)
-		out = append(out, releaseBinaries{name: name, target: targets[name], outputDir: dir})
+		out = append(out, releaseBinaries{name: name, target: targets[name], outputDir: dir, arches: arches})
 	}
 	return out
 }
@@ -132,12 +132,19 @@ type releaseBinaries struct {
 	name      string
 	target    string
 	outputDir string
+	arches    []string
 }
 
 func (c releaseBinaries) Component() string                { return c.name }
 func (c releaseBinaries) Target() string                   { return c.target }
-func (c releaseBinaries) Env() []string                    { return nil }
 func (c releaseBinaries) SourceDir(repoRoot string) string { return sourceDir(repoRoot, c.name) }
+func (c releaseBinaries) Env() []string {
+	if len(c.arches) == 0 {
+		return nil
+	}
+	return []string{utils.Env(utils.EnvArches, strings.Join(c.arches, " "))}
+}
+
 func (c releaseBinaries) Output() (string, utils.IncludeFunc) {
 	if c.outputDir == "" {
 		return "", nil
