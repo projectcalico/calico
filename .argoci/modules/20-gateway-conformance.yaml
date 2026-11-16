@@ -18,8 +18,11 @@ steps:
       - build-calico-image
       - build-node-image
       - build-whisker-image
-      - build-operator-image
-      - build-third-party-images
+      - operator-image-buildkit
+      - envoy-gateway-image-buildkit
+      - envoy-proxy-image-buildkit
+      - envoy-ratelimit-image-buildkit
+      - cni-plugins-image-buildkit
     checkout: true
     cache:
       - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}

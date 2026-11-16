@@ -130,6 +130,11 @@ $(CNI_PLUGINS_IMAGE_CREATED): Dockerfile build | register
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
+## Stage the image's build context, for a builder other than docker.
+.PHONY: image-context
+image-context: Dockerfile build
+	$(call stage_image_context,.,Dockerfile,bin/image-context-$(ARCH),,bin/$(ARCH))
+
 # image-content-addressed probes the cache registry for the content-hash tag
 # and either pulls + retags it (fast path) or falls through to a real build
 # followed by a push of the hash tag (slow path, after a content change).

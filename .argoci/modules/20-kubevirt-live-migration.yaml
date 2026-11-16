@@ -13,8 +13,11 @@ steps:
     depends:
       - build-calico-image
       - build-node-image
-      - build-operator-image
-      - build-third-party-images
+      - operator-image-buildkit
+      - envoy-gateway-image-buildkit
+      - envoy-proxy-image-buildkit
+      - envoy-ratelimit-image-buildkit
+      - cni-plugins-image-buildkit
       - build-e2e-binaries
       - check-go
     env:

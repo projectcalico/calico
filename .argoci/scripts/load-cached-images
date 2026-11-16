@@ -126,9 +126,17 @@ load_image whisker "calico/whisker" "whisker-image.tar.zst" "${REPO_ROOT}/whiske
 # build it.
 load_image ""      "calico/operator" "operator-image.tar.zst" "${REPO_ROOT}/operator/.image.created-${ARCH}"
 
-# The third-party images ship as one tarball because no kind lane wants a
-# subset. Like the operator they are never built from source here; a miss leaves
-# that to the lane's own `make image`.
+# Like the operator, the third-party images are never built from source here; a
+# miss leaves that to the lane's own `make image`. ArgoCI builds one tar per
+# image, Semaphore one tarball of all four, and each finds only its own.
+load_image ""      "calico/envoy-gateway"   "envoy-gateway-image.tar.zst" \
+    "${REPO_ROOT}/third_party/envoy-gateway/.envoy-gateway.created-${ARCH}"
+load_image ""      "calico/envoy-proxy"     "envoy-proxy-image.tar.zst" \
+    "${REPO_ROOT}/third_party/envoy-proxy/.envoy-proxy.created-${ARCH}"
+load_image ""      "calico/envoy-ratelimit" "envoy-ratelimit-image.tar.zst" \
+    "${REPO_ROOT}/third_party/envoy-ratelimit/.envoy-ratelimit.created-${ARCH}"
+load_image ""      "calico/third-party-cni-plugins" "cni-plugins-image.tar.zst" \
+    "${REPO_ROOT}/third_party/cni-plugins/.cni-plugins.created-${ARCH}"
 load_image ""      "third-party"     "third-party-images.tar.zst" \
     "${REPO_ROOT}/third_party/envoy-gateway/.envoy-gateway.created-${ARCH}" \
     "${REPO_ROOT}/third_party/envoy-proxy/.envoy-proxy.created-${ARCH}" \

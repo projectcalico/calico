@@ -17,8 +17,11 @@ steps:
     depends:
       - build-node-image
       - build-whisker-image
-      - build-operator-image
-      - build-third-party-images
+      - operator-image-buildkit
+      - envoy-gateway-image-buildkit
+      - envoy-proxy-image-buildkit
+      - envoy-ratelimit-image-buildkit
+      - cni-plugins-image-buildkit
       - build-e2e-binaries
       - calico-image-buildkit
       - check-go
@@ -30,7 +33,10 @@ steps:
       - {name: node-image, mode: read, path: /cache/node-image}
       - {name: whisker-image, mode: read, path: /cache/whisker-image}
       - {name: operator-image, mode: read, path: /cache/operator-image}
-      - {name: third-party-images, mode: read, path: /cache/third-party-images}
+      - {name: envoy-gateway-image, mode: read, path: /cache/envoy-gateway-image}
+      - {name: envoy-proxy-image, mode: read, path: /cache/envoy-proxy-image}
+      - {name: envoy-ratelimit-image, mode: read, path: /cache/envoy-ratelimit-image}
+      - {name: cni-plugins-image, mode: read, path: /cache/cni-plugins-image}
       - {name: e2e-binaries, mode: read, path: /cache/e2e-binaries}
     matrix:
       # Pinned rather than defaulted: from v3.33 the default gives Felix the
@@ -95,8 +101,11 @@ steps:
         - /cache/calico-image-tar/calico-image.tar:prefetched/calico-image.tar
         - /cache/node-image/node-image.tar.zst:prefetched/node-image.tar.zst
         - /cache/whisker-image/whisker-image.tar.zst:prefetched/whisker-image.tar.zst
-        - /cache/operator-image/operator-image.tar.zst:prefetched/operator-image.tar.zst
-        - /cache/third-party-images/third-party-images.tar.zst:prefetched/third-party-images.tar.zst
+        - /cache/operator-image/operator-image.tar:prefetched/operator-image.tar
+        - /cache/envoy-gateway-image/envoy-gateway-image.tar:prefetched/envoy-gateway-image.tar
+        - /cache/envoy-proxy-image/envoy-proxy-image.tar:prefetched/envoy-proxy-image.tar
+        - /cache/envoy-ratelimit-image/envoy-ratelimit-image.tar:prefetched/envoy-ratelimit-image.tar
+        - /cache/cni-plugins-image/cni-plugins-image.tar:prefetched/cni-plugins-image.tar
         - /cache/e2e-binaries/e2e-binaries.tar.zst:prefetched/e2e-binaries.tar.zst
       get:
         - e2e-kind:/tmp/e2e-kind

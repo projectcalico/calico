@@ -124,6 +124,24 @@ for marker in "${tp_markers[@]}"; do
   [ -f "$marker" ] || tp_missing=$((tp_missing + 1))
 done
 check "cache hit touches every third-party marker" test "$tp_missing" = 0
+
+# 3c. ArgoCI ships one uncompressed tar per third-party image instead, each
+#     covering its own marker.
+rm -f "${tp_markers[@]}"
+prefetched=$(mktemp -d)
+for name in calico-image envoy-gateway-image envoy-proxy-image envoy-ratelimit-image cni-plugins-image; do
+  : >"$prefetched/${name}.tar"
+done
+out=$(PREFETCHED_ARTIFACTS="$prefetched" run "$repo_root/.argoci/scripts/load-cached-images" calico 2>&1)
+rc=$?
+check "per-image tars RC=0" [ "$rc" = 0 ]
+check "per-image tars load each one" test "$(grep -c '^docker load .*-image\.tar$' "$stub_log")" = 5
+tp_missing=0
+for marker in "${tp_markers[@]}"; do
+  [ -f "$marker" ] || tp_missing=$((tp_missing + 1))
+done
+check "per-image tars touch every third-party marker" test "$tp_missing" = 0
+rm -rf "$prefetched"
 [ ${#tp_stale[@]} -eq 0 ] || rm -f "${tp_stale[@]}"
 
 # 4. With credentials, a miss is tolerated and nothing is built — unchanged

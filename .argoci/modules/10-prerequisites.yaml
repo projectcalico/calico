@@ -569,14 +569,25 @@ steps:
         mkdir -p ~/out
         docker save calico/whisker:latest-amd64 | zstd -3 -T0 -o ~/out/whisker-image.tar.zst
 
-  # Built through the same target its consumers run, so the refs it bakes in
-  # (localhost:5000/calico/<name>:test-build) are the ones they install.
-  - name: build-operator-image
+  # One binary per set of component refs it bakes in: the kind lanes install
+  # localhost:5000/calico/<name>:test-build, Windows FV the docker.io ones. The
+  # values match what `make kind-operator-image` and build-operator.sh pass.
+  - name: operator-image-contexts
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    checkout: true
+      - name: NATIVE_GO_BUILD
+        value: "true"
     timeout: 1h
+    jobSize: large
+    requests: {cpu: 7000m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     changes:
       dependsOn: [operator]
       in:
@@ -584,30 +595,44 @@ steps:
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     depends: [go-cache]
     cache:
-      - {name: operator-image, mode: write, path: /cache/operator-image}
       - {name: go, mode: read, path: /cache/go}
-    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
-    # VM steps alone, since a pod step would hand it to the code under test.
-    secretBundles: [banzai-secrets]
-    runOnVM:
-      createVM:
-        machineType: e2-standard-8
-      env: [BUILD_CACHE_GROUP]
-      put:
-        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
-      get:
-        - out:/cache/operator-image
-      source: |
-        set -eo pipefail
-        .argoci/scripts/restore-go-cache build-operator-image ~/.go-mod
-        for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
-        mkdir -p ~/out
-        make kind-operator-image
-        docker save localhost:5000/calico/operator:test-build | zstd -3 -T0 -o ~/out/operator-image.tar.zst
-        # Windows FV installs from docker.io refs rather than the kind registry.
-        DEV_IMAGE_REGISTRY=docker.io DEV_IMAGE_PATH=calico DEV_IMAGE_TAG=test-build \
-          hack/test/kind/infra/build-operator.sh
-        docker save calico/operator:test-build | zstd -3 -T0 -o ~/out/operator-image-dockerio.tar.zst
+      - {name: operator-image-context, mode: write, path: /cache/operator-image-context}
+    commands: |
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" operator-image-contexts
+      make -C operator dev-image-context CALICO_VERSION=test-build CALICO_REGISTRY=localhost:5000 \
+        CALICO_IMAGE_PATH=calico IMAGE_CONTEXT=/cache/operator-image-context/kind
+      make -C operator dev-image-context CALICO_VERSION=test-build CALICO_REGISTRY=docker.io \
+        CALICO_IMAGE_PATH=calico IMAGE_CONTEXT=/cache/operator-image-context/dockerio
+
+  - name: operator-image-buildkit
+    depends: [operator-image-contexts]
+    changes:
+      dependsOn: [operator]
+      in:
+        - '^operator/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    cache:
+      - {name: operator-image-context, mode: read, path: /cache/operator-image-context}
+      - {name: operator-image, mode: write, path: /cache/operator-image}
+    buildkit:
+      tag: localhost:5000/calico/operator:test-build
+      context: /cache/operator-image-context/kind
+      tar: /cache/operator-image/operator-image.tar
+
+  - name: operator-image-dockerio-buildkit
+    depends: [operator-image-contexts]
+    changes:
+      dependsOn: [operator]
+      in:
+        - '^operator/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    cache:
+      - {name: operator-image-context, mode: read, path: /cache/operator-image-context}
+      - {name: operator-image-dockerio, mode: write, path: /cache/operator-image-dockerio}
+    buildkit:
+      tag: calico/operator:test-build
+      context: /cache/operator-image-context/dockerio
+      tar: /cache/operator-image-dockerio/operator-image-dockerio.tar
 
   # Windows FV installs these rather than building its own. Nothing else builds
   # them, so this is also where a break in them shows up.
@@ -642,10 +667,20 @@ steps:
         tar --use-compress-program="zstd -3" -cf ~/out/windows-images.tar.zst \
           node/dist/windows/*.tar cni-plugin/dist/windows/*.tar
 
-  # One tarball, since every kind lane wants all four.
-  - name: build-third-party-images
-    checkout: true
+  - name: third-party-image-contexts
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     timeout: 1h
+    jobSize: large
+    requests: {cpu: 7000m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     changes:
       dependsOn: [third_party]
       in:
@@ -653,33 +688,75 @@ steps:
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     depends: [go-cache]
     cache:
-      - {name: third-party-images, mode: write, path: /cache/third-party-images}
       - {name: go, mode: read, path: /cache/go}
-    # The compute SA createVM, runOnVM and the teardown authenticate with; on the
-    # VM steps alone, since a pod step would hand it to the code under test.
-    secretBundles: [banzai-secrets]
-    runOnVM:
-      createVM:
-        machineType: e2-standard-4
-      put:
-        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
-      get:
-        - out:/cache/third-party-images
-      source: |
-        set -eo pipefail
-        .argoci/scripts/restore-go-cache build-third-party-images ~/.go-mod
-        for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
-        make -C third_party/envoy-gateway image
-        make -C third_party/envoy-proxy image
-        make -C third_party/envoy-ratelimit image
-        make -C third_party/cni-plugins image
-        mkdir -p ~/out
-        docker save \
-          calico/envoy-gateway:latest-amd64 \
-          calico/envoy-proxy:latest-amd64 \
-          calico/envoy-ratelimit:latest-amd64 \
-          calico/third-party-cni-plugins:latest-amd64 \
-          | zstd -3 -T0 -o ~/out/third-party-images.tar.zst
+      - {name: third-party-image-context, mode: write, path: /cache/third-party-image-context}
+    commands: |
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" third-party-image-contexts
+      for c in envoy-gateway envoy-proxy envoy-ratelimit cni-plugins; do
+        make -C "third_party/${c}" image-context
+        mkdir -p "/cache/third-party-image-context/${c}"
+        cp -a "third_party/${c}/bin/image-context-amd64/." "/cache/third-party-image-context/${c}/"
+      done
+
+  - name: envoy-gateway-image-buildkit
+    depends: [third-party-image-contexts]
+    changes:
+      dependsOn: [third_party]
+      in:
+        - '^third_party/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    cache:
+      - {name: third-party-image-context, mode: read, path: /cache/third-party-image-context}
+      - {name: envoy-gateway-image, mode: write, path: /cache/envoy-gateway-image}
+    buildkit:
+      tag: calico/envoy-gateway:latest-amd64
+      context: /cache/third-party-image-context/envoy-gateway
+      tar: /cache/envoy-gateway-image/envoy-gateway-image.tar
+
+  - name: envoy-proxy-image-buildkit
+    depends: [third-party-image-contexts]
+    changes:
+      dependsOn: [third_party]
+      in:
+        - '^third_party/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    cache:
+      - {name: third-party-image-context, mode: read, path: /cache/third-party-image-context}
+      - {name: envoy-proxy-image, mode: write, path: /cache/envoy-proxy-image}
+    buildkit:
+      tag: calico/envoy-proxy:latest-amd64
+      context: /cache/third-party-image-context/envoy-proxy
+      tar: /cache/envoy-proxy-image/envoy-proxy-image.tar
+
+  - name: envoy-ratelimit-image-buildkit
+    depends: [third-party-image-contexts]
+    changes:
+      dependsOn: [third_party]
+      in:
+        - '^third_party/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    cache:
+      - {name: third-party-image-context, mode: read, path: /cache/third-party-image-context}
+      - {name: envoy-ratelimit-image, mode: write, path: /cache/envoy-ratelimit-image}
+    buildkit:
+      tag: calico/envoy-ratelimit:latest-amd64
+      context: /cache/third-party-image-context/envoy-ratelimit
+      tar: /cache/envoy-ratelimit-image/envoy-ratelimit-image.tar
+
+  - name: cni-plugins-image-buildkit
+    depends: [third-party-image-contexts]
+    changes:
+      dependsOn: [third_party]
+      in:
+        - '^third_party/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    cache:
+      - {name: third-party-image-context, mode: read, path: /cache/third-party-image-context}
+      - {name: cni-plugins-image, mode: write, path: /cache/cni-plugins-image}
+    buildkit:
+      tag: calico/third-party-cni-plugins:latest-amd64
+      context: /cache/third-party-image-context/cni-plugins
+      tar: /cache/cni-plugins-image/cni-plugins-image.tar
 
   # Built here for the VM lanes, which have no module proxy: the binaries import
   # most of Kubernetes, and a VM downloads all of it from the public proxy. libbpf

@@ -370,7 +370,7 @@ steps:
   # cluster.
   - name: felix-windows-fv
     tiers: []
-    depends: [felix-build-windows, build-calico-image, build-node-image, build-operator-image, build-windows-images]
+    depends: [felix-build-windows, build-calico-image, build-node-image, operator-image-dockerio-buildkit, build-windows-images]
     timeout: 1h30m
     env:
       - name: BUILD_CACHE_GROUP
@@ -390,7 +390,7 @@ steps:
     cache:
       - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
       - {name: node-image, mode: read, path: /cache/node-image}
-      - {name: operator-image, mode: read, path: /cache/operator-image}
+      - {name: operator-image-dockerio, mode: read, path: /cache/operator-image-dockerio}
       - {name: windows-images, mode: read, path: /cache/windows-images}
       - {name: win-fv, mode: read, path: /cache/win-fv}
     secretBundles: [banzai-secrets]
@@ -403,7 +403,7 @@ steps:
       put:
         - /cache/calico-image-zst:prefetched
         - /cache/node-image:prefetched
-        - /cache/operator-image:prefetched
+        - /cache/operator-image-dockerio:prefetched
         - /cache/windows-images:prefetched
         - /cache/win-fv:prefetched
       source: |
@@ -449,7 +449,7 @@ steps:
         # Touched: make would rebuild anything older than the checkout.
         cp "${PREFETCHED_ARTIFACTS}/win-fv.exe" felix/fv/win-fv.exe
         touch felix/fv/win-fv.exe
-        zstd -dc "${PREFETCHED_ARTIFACTS}/operator-image-dockerio.tar.zst" | docker load
+        docker load -i "${PREFETCHED_ARTIFACTS}/operator-image-dockerio.tar"
         export OPERATOR_PREBUILT=true
         tar --use-compress-program="zstd -d" -m -xf "${PREFETCHED_ARTIFACTS}/windows-images.tar.zst"
         # The script writes its logs under a fixed root-owned path.
