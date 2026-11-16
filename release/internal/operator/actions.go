@@ -163,6 +163,7 @@ func (s settings) run(target string, v Variant, hashrelease bool, env []string) 
 		"image":      image(s.Operator, v),
 		"registries": s.Registries,
 		"version":    s.Version,
+		"arches":     s.arches,
 	}
 	s.Logger().WithFields(logFields).Infof("Running %s", target)
 	if _, err := s.Make().Run(strings.Fields(target), command.WithEnv(full...), command.WithLogFile(s.LogPath(v.Name+"-"+logSlug(target)))); err != nil {

@@ -60,6 +60,15 @@ var all = func() map[string]string {
 	}
 }
 
+type prereq struct{ component, target string }
+
+// Builders run in parallel, so output two of them share is built once up
+// front. Otherwise each make cleans and rebuilds it while the other reads it.
+var sharedPrereqs = func() map[string]prereq {
+	libbpf := prereq{component: FelixComponent, target: "libbpf"}
+	return map[string]prereq{FelixComponent: libbpf, E2EComponent: libbpf}
+}
+
 // ppc64le and s390x have no e2e runners, so building them costs time and disk
 // for nothing.
 var e2eArches = func() []string {
@@ -101,7 +110,7 @@ func includeAll(_, _, _ string) bool { return true }
 type Builder interface {
 	Component() string
 	Target() string
-	Env() []string
+	Arches() []string
 	SourceDir(repoRoot string) string
 	Output() (dir string, include utils.IncludeFunc)
 }
@@ -138,13 +147,7 @@ type releaseBinaries struct {
 func (c releaseBinaries) Component() string                { return c.name }
 func (c releaseBinaries) Target() string                   { return c.target }
 func (c releaseBinaries) SourceDir(repoRoot string) string { return sourceDir(repoRoot, c.name) }
-func (c releaseBinaries) Env() []string {
-	if len(c.arches) == 0 {
-		return nil
-	}
-	return []string{utils.Env(utils.EnvArches, strings.Join(c.arches, " "))}
-}
-
+func (c releaseBinaries) Arches() []string                 { return c.arches }
 func (c releaseBinaries) Output() (string, utils.IncludeFunc) {
 	if c.outputDir == "" {
 		return "", nil
@@ -170,11 +173,9 @@ type e2eBinaries struct {
 	outputDir string
 }
 
-func (e e2eBinaries) Component() string { return E2EComponent }
-func (e e2eBinaries) Target() string    { return e2eTarget }
-func (e e2eBinaries) Env() []string {
-	return []string{utils.Env(utils.EnvArches, strings.Join(e.arches, " "))}
-}
+func (e e2eBinaries) Component() string                   { return E2EComponent }
+func (e e2eBinaries) Target() string                      { return e2eTarget }
+func (e e2eBinaries) Arches() []string                    { return e.arches }
 func (e e2eBinaries) SourceDir(repoRoot string) string    { return e2eSourceDir(repoRoot) }
 func (e e2eBinaries) Output() (string, utils.IncludeFunc) { return e.outputDir, e2eShipped }
 
