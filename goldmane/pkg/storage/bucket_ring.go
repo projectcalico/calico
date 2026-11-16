@@ -846,9 +846,11 @@ func (r *BucketRing) NumFlows(start, end int64) int {
 }
 
 // Backfill sends recv the buckets from start up to BackfillEndTime, tagged with the stream ID.
-// A start at or after BackfillEndTime has nothing to backfill, because the following rollovers
-// stream those buckets as they complete.
+// A start older than the ring backfills from its oldest bucket. A start at or after
+// BackfillEndTime has nothing to backfill, because the following rollovers stream those buckets
+// as they complete.
 func (r *BucketRing) Backfill(recv Receiver, id string, start int64) {
+	start = max(start, r.BeginningOfHistory())
 	end := r.BackfillEndTime()
 	if start >= end {
 		// Otherwise iterBuckets would wrap the whole ring from start round to end.
