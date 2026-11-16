@@ -21,25 +21,26 @@ defaults:
   secretBundles:
     - banzai-secrets
 steps:
-  - name: calico-windows-azr-aso-2022-stable-nftables-vxlan
-    services:
-      - docker
-      - http-cache-proxy
-    env:
-      - name: DATAPLANE
-        value: CalicoNftables
-      - name: E2E_TEST_CONFIG
-        value: e2e/config/windows/xtables-encap.yaml
-      - name: ENCAPSULATION_TYPE
-        value: VXLAN
-      - name: K8S_VERSION
-        value: stable
-      - name: PROVISIONER
-        value: azr-aso
-      - name: WINDOWS_OS
-        value: "2022"
-    commands: |
-      .argoci/scripts/body_standard.sh
+  # TEMP: only the 2025 lane runs while validating it on this PR; restore before merge.
+#   - name: calico-windows-azr-aso-2022-stable-nftables-vxlan
+#     services:
+#       - docker
+#       - http-cache-proxy
+#     env:
+#       - name: DATAPLANE
+#         value: CalicoNftables
+#       - name: E2E_TEST_CONFIG
+#         value: e2e/config/windows/xtables-encap.yaml
+#       - name: ENCAPSULATION_TYPE
+#         value: VXLAN
+#       - name: K8S_VERSION
+#         value: stable
+#       - name: PROVISIONER
+#         value: azr-aso
+#       - name: WINDOWS_OS
+#         value: "2022"
+#     commands: |
+#       .argoci/scripts/body_standard.sh
   - name: calico-windows-azr-aso-2025-stable-nftables-vxlan
     services:
       - docker
@@ -65,24 +66,24 @@ steps:
         value: "2025"
     commands: |
       .argoci/scripts/body_standard.sh
-  - name: calico-windows-azr-aks-2022-stable-1-iptables-no-encap-azure-cni
-    services:
-      - docker
-      - http-cache-proxy
-    env:
-      - name: DATAPLANE
-        value: CalicoIptables
-      - name: E2E_TEST_CONFIG
-        value: e2e/config/windows/aks-xtables-nobgp.yaml
-      - name: ENCAPSULATION_TYPE
-        value: None
-      - name: K8S_VERSION
-        value: stable-1
-      - name: PROVISIONER
-        value: azr-aks
-      - name: USE_VENDORED_CNI
-        value: "true"
-      - name: WINDOWS_OS
-        value: "2022"
-    commands: |
-      .argoci/scripts/body_standard.sh
+#   - name: calico-windows-azr-aks-2022-stable-1-iptables-no-encap-azure-cni
+#     services:
+#       - docker
+#       - http-cache-proxy
+#     env:
+#       - name: DATAPLANE
+#         value: CalicoIptables
+#       - name: E2E_TEST_CONFIG
+#         value: e2e/config/windows/aks-xtables-nobgp.yaml
+#       - name: ENCAPSULATION_TYPE
+#         value: None
+#       - name: K8S_VERSION
+#         value: stable-1
+#       - name: PROVISIONER
+#         value: azr-aks
+#       - name: USE_VENDORED_CNI
+#         value: "true"
+#       - name: WINDOWS_OS
+#         value: "2022"
+#     commands: |
+#       .argoci/scripts/body_standard.sh
