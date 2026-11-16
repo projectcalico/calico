@@ -256,6 +256,8 @@ type settings struct {
 	// did not build its own images needs.
 	pull bool
 
+	pruneCache bool
+
 	retag *retag
 	scan  *ScanRequest
 	deps  []Dependency
@@ -297,6 +299,7 @@ type (
 // missing apply method fails here rather than at a call site.
 var (
 	_ Option               = setting(nil)
+	_ BuildOption          = buildSetting(nil)
 	_ ArchiveOption        = archiveSetting(nil)
 	_ PublishOption        = publishSetting(nil)
 	_ PublishResolveOption = publishResolveSetting(nil)
@@ -308,6 +311,10 @@ func (f setting) applyBuild(s *settings) error   { return f(s) }
 func (f setting) applyArchive(s *settings) error { return f(s) }
 func (f setting) applyPublish(s *settings) error { return f(s) }
 func (f setting) applyResolve(s *settings) error { return f(s) }
+
+type buildSetting func(*settings) error
+
+func (f buildSetting) applyBuild(s *settings) error { return f(s) }
 
 type archiveSetting func(*settings) error
 
@@ -362,6 +369,14 @@ func WithStepName(name string) Option {
 			return fmt.Errorf("no step name given")
 		}
 		s.Apply([]steps.Option{steps.WithName(name)})
+		return nil
+	})
+}
+
+// WithPruneCache drops the build cache after the build; the built images stay.
+func WithPruneCache(prune bool) BuildOption {
+	return buildSetting(func(s *settings) error {
+		s.pruneCache = prune
 		return nil
 	})
 }
