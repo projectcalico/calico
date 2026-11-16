@@ -43,6 +43,11 @@ const (
 // errNotFound is returned when the Argo server has no such CronWorkflow.
 var errNotFound = errors.New("cron workflow not found")
 
+// errListMatchedNone is returned when the namespace list matches none of the
+// crons found by name. The repo label or source-url annotation has then changed
+// form, and extra crons would go unreported.
+var errListMatchedNone = errors.New("cron list filter matched none of the live crons")
+
 // ErrUnauthorized is returned when the Argo server rejects the token.
 var ErrUnauthorized = errors.New("argo server rejected the token")
 
@@ -171,7 +176,8 @@ func (c *Client) fetch(ctx context.Context, path string) ([]byte, error) {
 }
 
 // ReadLive fetches every expected cron and the names of the repo's live crons
-// on branch.
+// on branch. It fails when the list matches none of the crons the per-name
+// reads found, since a clean report would then hide any extra crons.
 func ReadLive(ctx context.Context, c *Client, expected []ExpectedCron, repo, branch string) (LiveSet, error) {
 	live := LiveSet{Crons: map[string]LiveCron{}}
 	for _, want := range expected {
@@ -189,6 +195,19 @@ func ReadLive(ctx context.Context, c *Client, expected []ExpectedCron, repo, bra
 	if err != nil {
 		return LiveSet{}, err
 	}
+	if len(live.Crons) > 0 && !listsAny(names, live.Crons) {
+		return LiveSet{}, fmt.Errorf("%w: %d crons read by name, none matched repo %q on %s", errListMatchedNone, len(live.Crons), repo, branch)
+	}
 	live.Names = names
 	return live, nil
+}
+
+// listsAny reports whether names includes any of the crons.
+func listsAny(names []string, crons map[string]LiveCron) bool {
+	for _, n := range names {
+		if _, ok := crons[n]; ok {
+			return true
+		}
+	}
+	return false
 }

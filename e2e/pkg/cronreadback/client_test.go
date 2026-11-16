@@ -47,8 +47,17 @@ const listFixture = `{"items": [
    "spec": {"workflowMetadata": {"labels": {"CI_GIT_REF_TYPE": "NIGHTLY", "CI_GIT_REPO_NAME": "calico"}}}}
 ]}`
 
-// argoStub serves one cron and a list, and records what it was asked.
+// shaSourceListFixture lists e2e-bpf-master with a commit SHA in its source
+// annotation where the branch would be.
+const shaSourceListFixture = `{"items": [
+  {"metadata": {"name": "e2e-bpf-master", "annotations": {"argoci-viewer/source-url": "https://github.com/projectcalico/calico/blob/5502535058/.argoci/cron/e2e-bpf.yaml"}},
+   "spec": {"workflowMetadata": {"labels": {"CI_GIT_REF_TYPE": "NIGHTLY", "CI_GIT_REPO_NAME": "calico"}}}}
+]}`
+
+// argoStub serves one cron and a list, and records what it was asked. It serves
+// list in place of listFixture when set.
 type argoStub struct {
+	list   string
 	auth   string
 	method string
 	paths  []string
@@ -62,6 +71,10 @@ func (s *argoStub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/api/v1/cron-workflows/argoci/e2e-bpf-master":
 		reply(w, liveFixture)
 	case "/api/v1/cron-workflows/argoci":
+		if s.list != "" {
+			reply(w, s.list)
+			return
+		}
 		reply(w, listFixture)
 	case "/api/v1/cron-workflows/argoci/expired":
 		http.Error(w, `{"message": "token is expired"}`, http.StatusUnauthorized)
@@ -146,6 +159,30 @@ func TestReadLive(t *testing.T) {
 	// The repo is not a label of the CronWorkflow, so no selector may ask the
 	// server for it.
 	Expect(stub.paths).NotTo(ContainElement(ContainSubstring("labelSelector")))
+}
+
+func TestReadLiveFailsWhenTheListMatchesNoFoundCron(t *testing.T) {
+	RegisterTestingT(t)
+	srv := httptest.NewServer(&argoStub{list: shaSourceListFixture})
+	defer srv.Close()
+	expected := []ExpectedCron{{Name: "e2e-bpf-master"}}
+
+	_, err := ReadLive(context.Background(), NewClient(srv.URL, "argoci", "abc"), expected, "calico", "master")
+
+	Expect(err).To(MatchError(errListMatchedNone))
+}
+
+func TestReadLiveAllowsAnEmptyListWhenNoCronIsFound(t *testing.T) {
+	RegisterTestingT(t)
+	srv := httptest.NewServer(&argoStub{list: shaSourceListFixture})
+	defer srv.Close()
+	expected := []ExpectedCron{{Name: "e2e-gone-master"}}
+
+	live, err := ReadLive(context.Background(), NewClient(srv.URL, "argoci", "abc"), expected, "calico", "master")
+
+	Expect(err).NotTo(HaveOccurred())
+	Expect(live.Crons).To(BeEmpty())
+	Expect(live.Names).To(BeEmpty())
 }
 
 func TestListCronNamesOtherRepoAndBranch(t *testing.T) {
