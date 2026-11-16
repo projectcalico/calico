@@ -332,7 +332,7 @@ cmd_analyze() {
   [[ -s "${SANDCAT_PR_CONTEXT_FILE}" ]] && extra_args+=(--pr-context "${SANDCAT_PR_CONTEXT_FILE}")
 
   echo "[INFO] sandcat: analyzing (sha=${SANDCAT_SHA:-unknown})..."
-  local ok=true
+  touch "${HOME}/.sandcat-analyzed"
   "${SANDCAT_BIN}" analyze \
     --ginkgo-report "${report}" \
     --sha "${SANDCAT_SHA}" \
@@ -341,10 +341,9 @@ cmd_analyze() {
     --upload "${SANDCAT_UPLOAD_URL}" \
     --timeout 10m \
     ${extra_args[@]+"${extra_args[@]}"} \
-    || { ok=false; echo "[WARN] sandcat: analysis failed (non-fatal)"; }
+    || echo "[WARN] sandcat: analysis failed (non-fatal)"
 
   _sandcat_push_artifact
-  [[ "${ok}" == "true" ]] && touch "${HOME}/.sandcat-analyzed"
   return 0
 }
 

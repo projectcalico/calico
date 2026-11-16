@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Behaviour test for `sandcat.sh analyze` and `cut-off`. The analyzed marker,
-# which stops the epilogue from analyzing again, is written only when the
-# analysis succeeded, and cut-off records a job without analyzing it. sandcat
-# is stubbed, so no binary, network or cluster is needed.
+# which stops the epilogue from analyzing again, is written once sandcat has
+# been started, whether or not the analysis succeeded, and cut-off records a
+# job without analyzing it. sandcat is stubbed, so no binary, network or
+# cluster is needed.
 
 set -uo pipefail
 
@@ -47,7 +48,11 @@ newhome
 STUB_RC=0 check "a successful analysis writes the marker" yes
 
 newhome
-STUB_RC=1 check "a failed analysis leaves no marker, so the epilogue retries" no
+STUB_RC=1 check "a failed analysis writes the marker, so the epilogue does not run it again" yes
+
+newhome
+rm "${HOME}/.local/bin/sandcat"
+GITHUB_ACCESS_TOKEN='' check "an analysis that never started leaves no marker, so the epilogue runs it" no
 
 newhome
 (cd "${HOME}" && "${SCRIPT}" cut-off --after 12m --source-dir "${HOME}") >/dev/null 2>&1
