@@ -71,12 +71,12 @@ func oneRegistryOperator() Operator {
 	return o
 }
 
-func envValue(env []string, name string) (string, bool) {
+func envValue(vars []string, name string) (string, bool) {
 	prefix := name + "="
 	// Last wins, as it does for the process the env is handed to.
-	for i := len(env) - 1; i >= 0; i-- {
-		if strings.HasPrefix(env[i], prefix) {
-			return strings.TrimPrefix(env[i], prefix), true
+	for i := len(vars) - 1; i >= 0; i-- {
+		if strings.HasPrefix(vars[i], prefix) {
+			return strings.TrimPrefix(vars[i], prefix), true
 		}
 	}
 	return "", false
@@ -370,11 +370,11 @@ func TestProductEnv(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		env, err := productEnv(testOperator())
+		vars, err := productEnv(testOperator())
 		if err != nil {
 			t.Fatalf("productEnv: %v", err)
 		}
-		for _, e := range env {
+		for _, e := range vars {
 			name, _, ok := strings.Cut(e, "=")
 			if !ok {
 				t.Errorf("%q is not a name=value pair", e)
