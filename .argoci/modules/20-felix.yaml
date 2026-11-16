@@ -33,18 +33,27 @@ steps:
     commands: |
       .argoci/scripts/felix-fv-plan
 
-  # Every FV VM unpacks this step's output, so a lane whose batches all fail to
-  # configure usually broke here.
-  - name: felix-build
+  # Every FV VM unpacks the felix-build-* steps' output, so a lane whose batches
+  # all fail to configure usually broke there. Native, with the felix-test image
+  # left to rootless buildkit, so no step needs docker.
+  - name: felix-build-prep
+    # TEMPORARY: pins the step to the go-build cache pool until the handler does it.
+    override:
+      nodeSelector: {role: argoci, size: large, spot: "false", go-build-version: 1.27.3-llvm21.1.8-k8s1.37.1-1}
+      tolerations: [{key: argoci, operator: Exists}, {key: argoci-nonspot, operator: Exists}, {key: argoci-large, operator: Exists}, {key: argoci-cached-images, operator: Exists}]
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
+      - name: NATIVE_GO_BUILD
+        value: "true"
     depends: [build-calico-image, calico-test-binaries, check-go, felix-fv-plan, go-cache]
     timeout: 40m
-    # On a VM: it builds the felix and FV images with docker.
-    checkout: true
+    jobSize: large
+    requests: {cpu: 7000m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     secretBundles:
-      - banzai-secrets
       - name: google-service-account-for-gce
         keys:
           - name: google-service-account-for-gce-key.json
@@ -53,42 +62,53 @@ steps:
       - {name: calico-image-zst, mode: read, path: /cache/calico-image-zst}
       - {name: calico-test-binaries, mode: read, path: /cache/calico-test-binaries}
       - {name: go, mode: read, path: /cache/go}
-    runOnVM:
-      createVM:
-        machineType: e2-standard-8
-      # The fleet setup names its bucket and labels from the workflow's variables.
-      env:
-        - BUILD_CACHE_GROUP
-        - NO_LIBBPF_CLONE
-        - GCE_SERVICE_ACCOUNT_KEY
-        - ARGOCI_GCP_REGION
-        - ARGOCI_RESOURCE_PREFIX
-        - CI_WORKFLOW_NAME
-        - CI_STEP_NAME
-        - CI_GIT_REPO_NAME
-        - CI_GIT_PR_NUMBER
-      put:
-        - /cache/calico-image-zst:prefetched
-        - /cache/calico-test-binaries:prefetched
-        - /cache/go/go-mod.tar.gz:.go-mod/go-mod.tar.gz
-      source: |
-        set -e
-        .argoci/scripts/restore-go-cache felix-build ~/.go-mod
-        for t in make zstd; do command -v $t >/dev/null || { sudo apt-get update -y && sudo apt-get install -y $t; }; done
-        artifact pull workflow felix-fv-plan
-        if [ "$(cat felix-fv-plan/build)" = skip ]; then
-          echo "Every FV lane passed on an earlier run of this PR with the same inputs; nothing to build."
-        else
-          export PREFETCHED_ARTIFACTS="${HOME}/prefetched"
-          source .argoci/scripts/vm-fleet-setup.sh
-          .argoci/scripts/load-cached-images calico
-          .semaphore/scripts/load-felix-prereqs.sh
-          cd felix
-          # REMOTE_DEPS= reuses the cached image. Not `make build`, which also
-          # cross-compiles the Windows binary.
-          make REMOTE_DEPS= bin/calico-felix image ut-bpf-prereqs fv-prereqs
-          ./.semaphore/cache-test-artifacts
-        fi
+      - {name: felix-image-context, mode: write, path: /cache/felix-image-context}
+    commands: |
+      # The prereqs ship zstd-compressed and the build image lacks the CLI.
+      dnf install -y -q zstd
+      # Staged even when the plan skips the build, since the buildkit step runs regardless.
+      make -C felix image-context
+      mkdir -p /cache/felix-image-context
+      cp -a felix/bin/image-context-amd64/. /cache/felix-image-context/
+      artifact pull workflow felix-fv-plan
+      if [ "$(cat felix-fv-plan/build)" = skip ]; then
+        echo "Every FV lane passed on an earlier run of this PR with the same inputs; nothing to build."
+        exit 0
+      fi
+      "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" felix-build
+      export PREFETCHED_ARTIFACTS=/cache/calico-test-binaries
+      .semaphore/scripts/load-felix-prereqs.sh
+      source .argoci/scripts/vm-fleet-setup.sh
+      cd felix
+      # REMOTE_DEPS= reuses the cached image. Not `make build`, which also
+      # cross-compiles the Windows binary.
+      make REMOTE_DEPS= bin/calico-felix ut-bpf-prereqs fv-prereqs-no-image
+      PREFETCHED_ARTIFACTS=/cache/calico-image-zst FELIX_TEST_IMAGE_TAR=none ./.semaphore/cache-test-artifacts
+
+  - name: felix-test-buildkit
+    depends: [felix-build-prep]
+    cache:
+      - {name: felix-image-context, mode: read, path: /cache/felix-image-context}
+      - {name: felix-test-tar, mode: write, path: /cache/felix-test-tar}
+    buildkit:
+      tag: calico/felix-test:latest-amd64
+      context: /cache/felix-image-context
+      tar: /cache/felix-test-tar/calico-felix-test.tar
+
+  - name: felix-build
+    depends: [felix-test-buildkit]
+    jobSize: small
+    useGoBuild: true
+    secretBundles:
+      - name: google-service-account-for-gce
+        keys:
+          - name: google-service-account-for-gce-key.json
+            as: GCE_SERVICE_ACCOUNT_KEY
+    cache:
+      - {name: felix-test-tar, mode: read, path: /cache/felix-test-tar}
+    commands: |
+      source .argoci/scripts/vm-fleet-setup.sh
+      gcloud storage cp /cache/felix-test-tar/calico-felix-test.tar "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/"
 
   # Native in the go-build image: under NATIVE_GO_BUILD the checks call no docker.
   - name: felix-static-checks

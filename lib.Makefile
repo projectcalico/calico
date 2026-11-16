@@ -419,10 +419,18 @@ DOCKER_PULL =
 endif
 
 # DOCKER_BUILD is the base build command used for building all images.
+DOCKER_BUILD_COMMON_ARGS = CALICO_BASE=$(CALICO_BASE) GIT_VERSION=$(GIT_VERSION) UBI_IMAGE=$(UBI_IMAGE)
 DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) \
-	--build-arg CALICO_BASE=$(CALICO_BASE) \
-	--build-arg GIT_VERSION=$(GIT_VERSION) \
-	--build-arg UBI_IMAGE=$(UBI_IMAGE)
+	$(addprefix --build-arg ,$(DOCKER_BUILD_COMMON_ARGS))
+
+# $(call stage_image_context,<context>,<dockerfile>,<dest>,<NAME=value ...>): copies a
+# build context to <dest> with the build args DOCKER_BUILD would pass baked into its
+# Dockerfile as ARG defaults, for a builder that takes no build args (CI's rootless
+# buildkit step). Only an ARG the Dockerfile declares can take a build arg, so
+# rewriting the declarations covers every one it reads.
+stage_image_context = rm -rf $(3) && mkdir -p $(3) && cp -a $(1)/. $(3)/ && \
+	sed $(foreach a,$(DOCKER_BUILD_COMMON_ARGS) $(4),-e 's|^ARG $(firstword $(subst =, ,$(a)))\(=.*\)\{0,1\}$$|ARG $(a)|') \
+		$(2) > $(3)/Dockerfile.staged && mv $(3)/Dockerfile.staged $(3)/Dockerfile
 
 # Fail a clone that needs credentials instead of blocking on git's terminal
 # prompt, which hangs a CI job until the pipeline timeout.
