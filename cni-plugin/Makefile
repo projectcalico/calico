@@ -57,8 +57,7 @@ $(WINDOWS_BIN)/calico.exe: $(SRC_FILES)
 	$(call build_windows_binary, github.com/projectcalico/calico/cmd/calico-windows, $@)
 
 protobuf pkg/dataplane/grpc/proto/cnibackend.pb.go: pkg/dataplane/grpc/proto/cnibackend.proto
-	$(DOCKER_RUN) -v $(CURDIR)/pkg/dataplane/grpc/proto:/proto:rw \
-		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=/ --go_opt=paths=source_relative cnibackend.proto'
+	$(DOCKER_GO_BUILD) sh -c 'cd pkg/dataplane/grpc && protoc --proto_path=proto --go_out=proto --go-grpc_out=. --go_opt=paths=source_relative cnibackend.proto'
 	$(MAKE) fix-changed
 
 # NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
