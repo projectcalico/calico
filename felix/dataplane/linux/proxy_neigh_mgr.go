@@ -36,6 +36,7 @@ import (
 	"golang.org/x/sys/unix"
 	v1 "k8s.io/api/core/v1"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
@@ -263,7 +264,7 @@ func newProxyNeighManagerWithShims(
 
 func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
-	case *ifaceAddrsUpdate:
+	case *dataplanedefs.IfaceAddrsUpdate:
 		if m.wlIfacesRegexp.MatchString(msg.Name) {
 			logrus.WithFields(logrus.Fields{
 				"ifaceName": msg.Name,
