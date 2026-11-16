@@ -49,8 +49,7 @@ import (
 
 // Global configuration for releases.
 const (
-	binDir    = "bin"
-	chartsDir = "charts"
+	binDir = "bin"
 
 	gitTrailerReleaseBranch = "Release-branch"
 )
@@ -135,6 +134,7 @@ func NewManager(opts ...Option) (*CalicoManager, error) {
 		gitRef:           true,
 		githubRelease:    true,
 		imageRegistries:  defaultRegistries,
+		helmRepoURL:      charts.RepoURL,
 		helmRegistries:   registry.DefaultHelmRegistries,
 		operatorRegistry: registry.DefaultOperatorRegistry,
 		operatorImage:    registry.OperatorImage,
@@ -542,17 +542,12 @@ func (r *CalicoManager) chartsMetadata(d outputs.Digests) (*outputs.Charts, erro
 		return nil, fmt.Errorf("no helm chart registries specified")
 	}
 	at := charts.Published{Registry: r.helmRegistries[0], DownloadURL: r.chartsURL()}
-	var err error
 	switch {
 	case !r.helmIndex:
 	case r.isHashRelease:
-		if at.Index, err = charts.RepoURLAt(r.hashrelease.URL()); err != nil {
-			return nil, err
-		}
+		at.Index = r.hashrelease.URL(charts.DirName)
 	default:
-		if at.Index, err = r.helmRepo(); err != nil {
-			return nil, fmt.Errorf("helm repo URL: %w", err)
-		}
+		at.Index = r.helmRepoURL
 	}
 	return charts.Metadata(r.recordsDir, r.chart(), at, d)
 }
@@ -764,11 +759,7 @@ func (r *CalicoManager) BuildHelm() error {
 	chart := r.chart()
 	opts := []charts.BuildOption{charts.WithRunner(r.runner)}
 	if r.helmIndex {
-		repoURL, err := r.helmRepo()
-		if err != nil {
-			return fmt.Errorf("helm repo URL: %w", err)
-		}
-		opts = append(opts, charts.WithIndex(repoURL, r.chartsURL(), charts.IndexDir(r.uploadDir()), r.tmpDir))
+		opts = append(opts, charts.WithIndex(r.helmRepoURL, r.chartsURL(), charts.IndexDir(r.uploadDir()), r.tmpDir))
 	}
 	if r.isHashRelease {
 		opts = append(opts, charts.WithModifiedValues(charts.ValueEditsFor(r.calicoVersion.String(), r.imageRegistries[0], r.operatorImage, r.operatorVersion, r.operatorRegistry)))
@@ -800,14 +791,6 @@ func (r *CalicoManager) modifyHelmChartsValues(calicoVersion, operatorVersion st
 		RepoRoot: r.repoRoot,
 		Edits:    charts.ValueEditsFor(calicoVersion, r.imageRegistries[0], r.operatorImage, operatorVersion, r.operatorRegistry),
 	}, charts.WithRunner(r.runner))
-}
-
-// helmRepo is the repository whose index a build merges with.
-func (r *CalicoManager) helmRepo() (string, error) {
-	if r.helmRepoURL != "" {
-		return r.helmRepoURL, nil
-	}
-	return charts.RepoURL()
 }
 
 func (r *CalicoManager) hashreleaseUpload() distribution.Upload {
@@ -851,7 +834,7 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 	// The registries go first: metadata records the digests they produce
 	uploads := []distribution.Upload{
 		{Handler: distribution.Publisher{Kind: images.Step, Action: r.imagesAction()}, Requires: r.beforeImagesPublish()},
-		{Handler: distribution.Publisher{Kind: chartsDir, Action: r.publishHelmCharts}},
+		{Handler: distribution.Publisher{Kind: charts.Step, Action: r.publishHelmCharts}},
 	}
 	uploads = append(uploads,
 		distribution.Upload{Handler: distribution.Preparer{Kind: outputs.MetadataStep, Action: r.buildMetadata}},
@@ -1545,7 +1528,7 @@ func (r *CalicoManager) helmIndexUpload() distribution.Upload {
 		Source: charts.IndexFilePath(charts.IndexDir(r.uploadDir())),
 		Skip:   !r.helmCharts || !r.helmIndex,
 		Handler: distribution.S3{
-			URI:         r.s3URI(chartsDir),
+			URI:         r.s3URI(charts.DirName),
 			Profile:     r.awsProfile,
 			CachePolicy: distribution.MutableCachePolicy,
 			DryRun:      r.dryRun,
@@ -1636,7 +1619,7 @@ func (r *CalicoManager) releaseBranchPrereqs() error {
 // branchChangedPaths are the trees the prepareDerived hook rewrites; it reports
 // them so the branch flow stages them into the cut commit.
 var branchChangedPaths = []string{
-	chartsDir,
+	charts.DirName,
 	manifests.DirName,
 	".semaphore",
 	"test-tools",
@@ -1840,7 +1823,7 @@ func (r *CalicoManager) switchToPrepBranch(prepBranch string) error {
 
 var prepStagedPaths = func(repoRoot string) []string {
 	return []string{
-		filepath.Join(repoRoot, chartsDir),
+		filepath.Join(repoRoot, charts.DirName),
 		manifests.Dir(repoRoot),
 		filepath.Join(repoRoot, outputs.ReleaseNotesDir),
 	}

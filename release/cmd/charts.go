@@ -163,11 +163,7 @@ var chartsBuildOptions = func(cfg *Config, c *cli.Command, chart charts.Chart, p
 		chartURL = hashreleaseserver.HashreleaseURL(p.ReleaseName)
 	}
 	if withIndex {
-		repoURL, err := charts.RepoURL()
-		if err != nil {
-			return nil, err
-		}
-		opts = append(opts, charts.WithIndex(repoURL, chartURL, charts.IndexDir(outputDir), cfg.TmpDir))
+		opts = append(opts, charts.WithIndex(charts.RepoURL, chartURL, charts.IndexDir(outputDir), cfg.TmpDir))
 	}
 	return opts, nil
 }

@@ -175,7 +175,7 @@ func (s settings) verify() error {
 }
 
 func (s settings) resetTree() {
-	if _, err := command.Git(s.Runner()).In(s.RepoRoot).Run("checkout", chartsDirName); err != nil {
+	if _, err := command.Git(s.Runner()).In(s.RepoRoot).Run("checkout", DirName); err != nil {
 		s.Logger().WithError(err).Error("Failed to reset changes to charts")
 	}
 }
@@ -437,7 +437,7 @@ func ModifyValues(v Values, opts ...Option) error {
 		byChart[e.Chart] = append(byChart[e.Chart], e.Edit)
 	}
 	for _, chart := range order {
-		path := filepath.Join(v.RepoRoot, chartsDirName, chart, valuesFileName)
+		path := filepath.Join(v.RepoRoot, DirName, chart, valuesFileName)
 		if err := yamledit.ApplyToFile(path, byChart[chart]...); err != nil {
 			return s.Errorf("%w", err)
 		}
