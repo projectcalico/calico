@@ -174,7 +174,11 @@ else
 LIBBPF_BUILD = $(DOCKER_RUN) $(if $(GITHUB_TOKEN),-e GITHUB_TOKEN) $(CALICO_BUILD)
 endif
 
+ifeq ($(NATIVE_GO_BUILD),true)
+DOCKER_GO_BUILD_CGO=env CGO_ENABLED=1 $(if $(CROSS_CC),CC="$(CROSS_CC)") CGO_LDFLAGS=$(CGO_LDFLAGS) CGO_CFLAGS=$(CGO_CFLAGS)
+else
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=1 $(if $(CROSS_CC),-e CC="$(CROSS_CC)") -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
+endif
 
 bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
@@ -190,8 +194,7 @@ bin/calico-felix-race-$(ARCH):  $(LIBBPF_A) $(SRC_FILES) ../go.mod
 
 # Generate the protobuf bindings for go. The proto/felixbackend.pb.go file is included in SRC_FILES
 protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
-	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
-		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative felixbackend.proto'
+	$(DOCKER_GO_BUILD) sh -c 'protoc --proto_path=proto --go_out=proto --go-grpc_out=. --go_opt=paths=source_relative felixbackend.proto'
 	# Make sure the generated code won't cause a static-checks failure.
 	$(MAKE) fix-changed
 
@@ -293,11 +296,18 @@ $(FELIX_CONTAINER_CREATED): $(IMAGE_DEPS) \
                             ../metadata.mk \
                             $(shell test "$(FELIX_IMAGE_ID)" || echo force-rebuild) \
                             | register
-	$(DOCKER_BUILD) \
-		--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
+	$(DOCKER_BUILD) $(addprefix --build-arg ,$(FELIX_IMAGE_BUILD_ARGS)) \
 		-t $(FELIX_IMAGE_WITH_TAG) -f ./docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(FELIX_CONTAINER_CREATED)
+
+FELIX_IMAGE_BUILD_ARGS = BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
+FELIX_IMAGE_CONTEXT = bin/image-context-$(ARCH)
+
+## Stage the felix-test image's build context, for a builder other than docker.
+.PHONY: image-context
+image-context: $(IMAGE_DEPS) ../metadata.mk
+	$(call stage_image_context,docker-image,docker-image/Dockerfile,$(FELIX_IMAGE_CONTEXT),$(FELIX_IMAGE_BUILD_ARGS))
 
 ###############################################################################
 # Unit Tests
@@ -352,12 +362,14 @@ build-calico-cgo:
 build-calico-race:
 	$(MAKE) -C ../cmd/calico build-race
 
-.PHONY: fv fv-prereqs fv-no-build build-calico-cgo build-calico-race
+.PHONY: fv fv-prereqs fv-prereqs-no-image fv-no-build build-calico-cgo build-calico-race
 
 # Build everything needed to run the FVs but don't actually run them.  The semaphore job runs
 # this target to build everything so that it can be cached and shared between downstream jobs.
-fv-prereqs: $(REMOTE_DEPS) \
-            $(FELIX_CONTAINER_CREATED) \
+fv-prereqs: fv-prereqs-no-image $(FELIX_CONTAINER_CREATED)
+
+# The FV prerequisites other than the felix-test image, none of which needs docker.
+fv-prereqs-no-image: $(REMOTE_DEPS) \
             $(FV_BINARY) \
             bin/test-workload \
             bin/test-connection \

@@ -44,7 +44,7 @@ st:
 ## Run the fast set of unit tests in a container.
 ut:
 	mkdir -p report
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -race --junit-report=confd_ut.xml --output-dir=report/ --skip-package=tests .'
+	$(DOCKER_GO_BUILD) sh -c 'ginkgo -r -race --junit-report=confd_ut.xml --output-dir=report/ --skip-package=tests .'
 
 UPDATE_EXPECTED_DATA?=false
 
@@ -52,12 +52,9 @@ UPDATE_EXPECTED_DATA?=false
 ## Run confd functional verification tests (envtest-based, replaces bash test suite).
 fv: setup-envtest
 	mkdir -p report
-	$(DOCKER_RUN) \
-		-v $$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
-		-e KUBEBUILDER_ASSETS=/envtest \
-		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
-		$(CALICO_BUILD) \
-		gotestsum --junitfile report/confd_fv.xml -- -count=1 -v -timeout 600s ./tests/...
+	$(DOCKER_GO_BUILD) sh -c 'KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_CONTAINER_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1) \
+		UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
+		gotestsum --junitfile report/confd_fv.xml -- -count=1 -v -timeout 600s ./tests/...'
 # -count=1 disables test caching; envtest-based tests should always run fresh.
 
 
