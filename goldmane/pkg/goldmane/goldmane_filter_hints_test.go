@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ import (
 
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
@@ -27,6 +29,30 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/time"
 )
+
+// TestNegativePagingRejected checks that list and hint requests with a negative page or page
+// size are refused as invalid before they reach the flow store.
+func TestNegativePagingRejected(t *testing.T) {
+	c := newClock(initialNow)
+	defer setupTest(t, goldmane.WithRolloverTime(time.Second), goldmane.WithNowFunc(c.Now))()
+	<-gm.Run(c.Now().Unix())
+
+	for _, page := range []pageRequest{{page: -1, pageSize: 20}, {page: 0, pageSize: -1}} {
+		_, err := gm.List(&proto.FlowListRequest{Page: page.page, PageSize: page.pageSize})
+		require.Equal(t, codes.InvalidArgument, status.Code(err), "list %+v: %v", page, err)
+
+		_, err = gm.Hints(&proto.FilterHintsRequest{Type: proto.FilterType_FilterTypePolicyName, Page: page.page, PageSize: page.pageSize})
+		require.Equal(t, codes.InvalidArgument, status.Code(err), "hints %+v: %v", page, err)
+	}
+
+	_, err := gm.List(&proto.FlowListRequest{Page: 0, PageSize: 20})
+	require.NoError(t, err)
+}
+
+type pageRequest struct {
+	page     int64
+	pageSize int64
+}
 
 func TestFilterHints(t *testing.T) {
 	type tc struct {

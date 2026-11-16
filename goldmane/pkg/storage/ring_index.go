@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,10 +15,15 @@
 package storage
 
 import (
+	"cmp"
+	"iter"
+	"math"
 	"sort"
+	"unique"
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/goldmane/pkg/internal/topk"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -27,7 +32,9 @@ import (
 // swapping out the implementation possible, which is particularly useful for unit testing (but in general is a useful
 // property).
 type logAggregator interface {
-	FlowSet(startGt, startLt int64) set.Set[*DiachronicFlow]
+	// Flows yields every flow with data in the range exactly once, plus a size hint. It may also
+	// yield flows with no data in the range.
+	Flows(startGt, startLt int64) (iter.Seq[*DiachronicFlow], int)
 }
 
 func NewRingIndex(a logAggregator) *RingIndex {
@@ -41,73 +48,72 @@ type RingIndex struct {
 	agg logAggregator
 }
 
+// rankedFlow pairs a DiachronicFlow with the start time its aggregated flow sorts on.
+type rankedFlow struct {
+	start int64
+	flow  *DiachronicFlow
+}
+
+// compareRanked orders newer flows first. Start times are bucket-aligned, so ties are common, and
+// breaking them on ID keeps the order, and so the pages, stable across requests.
+func compareRanked(x, y rankedFlow) int {
+	if c := cmp.Compare(y.start, x.start); c != 0 {
+		return c
+	}
+	return cmp.Compare(y.flow.ID, x.flow.ID)
+}
+
+// policyValueFunc returns the filter hint values for a flow key's policy trace. Taking only the
+// trace lets FilterValueSet compute the values once per distinct trace.
+type policyValueFunc func(policies unique.Handle[string]) []string
+
+// List returns one page of the flows in the time range, newest first, and how many match. It runs
+// on the main loop, which also ingests flows, so its time is time ingest waits. Sorting every match
+// to cut one page out would mostly order flows nobody asked for, so a topk.Keeper holds only those
+// up to the page's end. With 200,000 flows, all history and 20 per page, that is 65ms instead of
+// 103ms, and 8.4KiB instead of 3.0MiB.
 func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
 	}).Debug("Listing flows from time sorted index")
 
-	// Default to time-sorted flow data.
-	// Collect all the flow keys across all buckets that match the request. We will then
-	// use DiachronicFlow data to combine statistics together for each key across the time range.
-	keys := a.agg.FlowSet(opts.startTimeGt, opts.startTimeLt)
+	candidates, sizeHint := a.agg.Flows(opts.startTimeGt, opts.startTimeLt)
+	if opts.filter != nil {
+		// The hint counts flows before filtering, which a selective filter makes far too large.
+		sizeHint = 0
+	}
 
-	// Aggregate the relevant DiachronicFlows across the time range.
-	flowsByKey := map[types.FlowKey]*types.Flow{}
-	for d := range keys.All() {
-		logCtx := logrus.WithField("id", d.ID)
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			// Unpacking the key is a bit expensive, so only do it in debug mode.
-			logCtx = logrus.WithFields(d.Key.Fields())
+	pageStart, pageEnd, pageOK := pageWindow(opts.page, opts.pageSize)
+	limit := 0
+	if pageOK {
+		limit = int(min(pageEnd, int64(math.MaxInt)))
+	}
+	topFlows := topk.New(limit, compareRanked, sizeHint)
+	totalFlows := 0
+	for d := range candidates {
+		if opts.filter != nil && !types.Matches(opts.filter, &d.Key) {
+			continue
 		}
-		logCtx.WithFields(logrus.Fields{"filter": opts.filter}).Debug("Checking if flow matches filter")
-		if d.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
-			logCtx.Debug("Flow matches filter")
-			flow := d.Aggregate(opts.startTimeGt, opts.startTimeLt)
-			if flow != nil {
-				logCtx.Debug("Aggregated flow")
-				flowsByKey[*flow.Key] = flow
-			}
+		if start, ok := d.Within(opts.startTimeGt, opts.startTimeLt); ok {
+			totalFlows++
+			topFlows.Offer(rankedFlow{start: start, flow: d})
 		}
 	}
 
-	// Convert the map to a slice.
-	flows := []*types.Flow{}
-	for _, flow := range flowsByKey {
-		flows = append(flows, flow)
+	ranked := topFlows.Sorted()
+	meta := calculateListMeta(totalFlows, int(opts.pageSize))
+	if pageStart >= int64(len(ranked)) {
+		return nil, meta
 	}
+	ranked = ranked[pageStart:]
 
-	// Sort the flows by start time, sorting newer flows first.
-	sort.Slice(flows, func(i, j int) bool {
-		return flows[i].StartTime > flows[j].StartTime
-	})
-
-	// Assign the total before the result is trimmed to match the page size and start page.
-	totalFlows := len(flows)
-
-	// If pagination was requested, apply it now after sorting.
-	// This is a bit inneficient - we collect more data than we need to return -
-	// but it's a simple way to implement basic pagination.
-	if opts.pageSize > 0 {
-		startIdx := (opts.page) * opts.pageSize
-		endIdx := startIdx + opts.pageSize
-		if startIdx >= int64(len(flows)) {
-			return nil, types.ListMeta{}
+	flows := make([]*types.Flow, 0, len(ranked))
+	for _, r := range ranked {
+		if f := r.flow.Aggregate(opts.startTimeGt, opts.startTimeLt); f != nil {
+			flows = append(flows, f)
 		}
-		if endIdx > int64(len(flows)) {
-			endIdx = int64(len(flows))
-		}
-		logrus.WithFields(logrus.Fields{
-			"pageSize":   opts.pageSize,
-			"pageNumber": opts.page,
-			"startIdx":   startIdx,
-			"endIdx":     endIdx,
-			"total":      len(flows),
-		}).Debug("Returning paginated flows")
-
-		flows = flows[startIdx:endIdx]
 	}
-
-	return flows, calculateListMeta(totalFlows, int(opts.pageSize))
+	return flows, meta
 }
 
 func (r *RingIndex) Add(d *DiachronicFlow) {
@@ -120,39 +126,30 @@ func (a *RingIndex) SortValueSet(opts IndexFindOpts) ([]int64, types.ListMeta) {
 	panic("SortValueSet is not supported by the ring index")
 }
 
-func (a *RingIndex) FilterValueSet(valueFunc func(*types.FlowKey) []string, opts IndexFindOpts) ([]string, types.ListMeta) {
+// FilterValueSet returns the distinct policy values (names, namespaces or tiers, per valueFunc)
+// of flows in the time range that match the filter.
+func (a *RingIndex) FilterValueSet(valueFunc policyValueFunc, opts IndexFindOpts) ([]string, types.ListMeta) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
 	}).Debug("Listing flows from time sorted index")
 
-	// Default to time-sorted flow data.
-	// Collect all the flow keys across all buckets that match the request. We will then
-	// use DiachronicFlow data to combine statistics together for each key across the time range.
-	keys := a.agg.FlowSet(opts.startTimeGt, opts.startTimeLt)
+	candidates, _ := a.agg.Flows(opts.startTimeGt, opts.startTimeLt)
 
-	// Aggregate the relevant DiachronicFlows across the time range.
+	// Flows that share a policy trace share their values, so once one of them has matched the
+	// rest can be skipped without checking.
 	var values []string
 	seen := set.New[string]()
-	for d := range keys.All() {
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.WithFields(d.Key.Fields()).
-				WithFields(logrus.Fields{"filter": opts.filter}).
-				Debug("Checking if flow matches filter")
+	seenPolicies := set.New[unique.Handle[string]]()
+	for d := range candidates {
+		policies := d.Key.Policies()
+		if seenPolicies.Contains(policies) || !d.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
+			continue
 		}
-		if d.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
-			logrus.Debug("Flow matches filter")
-			flow := d.Aggregate(opts.startTimeGt, opts.startTimeLt)
-			if flow != nil {
-				if logrus.IsLevelEnabled(logrus.DebugLevel) {
-					logrus.WithFields(flow.Key.Fields()).Debug("Aggregated flow")
-				}
-				vals := valueFunc(flow.Key)
-				for _, val := range vals {
-					if !seen.Contains(val) {
-						seen.Add(val)
-						values = append(values, val)
-					}
-				}
+		seenPolicies.Add(policies)
+		for _, val := range valueFunc(policies) {
+			if !seen.Contains(val) {
+				seen.Add(val)
+				values = append(values, val)
 			}
 		}
 	}
@@ -160,31 +157,10 @@ func (a *RingIndex) FilterValueSet(valueFunc func(*types.FlowKey) []string, opts
 	// Sort the values alphanumerically.
 	sort.Strings(values)
 
-	// Assign the total before the result is trimmed to match the page size and start page.
-	totalFlows := len(values)
-
-	// If pagination was requested, apply it now after sorting.
-	// This is a bit inneficient - we collect more data than we need to return -
-	// but it's a simple way to implement basic pagination.
-	if opts.pageSize > 0 {
-		startIdx := (opts.page) * opts.pageSize
-		endIdx := startIdx + opts.pageSize
-		if startIdx >= int64(len(values)) {
-			return nil, types.ListMeta{}
-		}
-		if endIdx > int64(len(values)) {
-			endIdx = int64(len(values))
-		}
-		logrus.WithFields(logrus.Fields{
-			"pageSize":   opts.pageSize,
-			"pageNumber": opts.page,
-			"startIdx":   startIdx,
-			"endIdx":     endIdx,
-			"total":      len(values),
-		}).Debug("Returning paginated flows")
-
-		values = values[startIdx:endIdx]
+	meta := calculateListMeta(len(values), int(opts.pageSize))
+	start, end, ok := pageWindow(opts.page, opts.pageSize)
+	if !ok || start >= int64(len(values)) {
+		return nil, meta
 	}
-
-	return values, calculateListMeta(totalFlows, int(opts.pageSize))
+	return values[start:min(end, int64(len(values)))], meta
 }

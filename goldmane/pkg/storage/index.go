@@ -73,8 +73,8 @@ type IndexFindOpts struct {
 // List returns a list of flows and metadata about the list that's returned.
 func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	var matchedFlows []*types.Flow
-	var totalMatchedCount int
-	pageStart := int(opts.page * opts.pageSize)
+	var totalMatchedCount int64
+	pageStart, pageEnd, pageOK := pageWindow(opts.page, opts.pageSize)
 
 	idx.diachronics.Ascend(func(diachronic *DiachronicFlow) bool {
 		if !diachronic.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
@@ -83,21 +83,21 @@ func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 
 		// Every match counts toward the total, but only the page's flows are worth aggregating.
 		// A match is within the time range, so Aggregate never returns nil.
-		totalMatchedCount++
-		if totalMatchedCount > pageStart && (opts.pageSize == 0 || int64(len(matchedFlows)) < opts.pageSize) {
+		if pageOK && totalMatchedCount >= pageStart && totalMatchedCount < pageEnd {
 			matchedFlows = append(matchedFlows, diachronic.Aggregate(opts.startTimeGt, opts.startTimeLt))
 		}
+		totalMatchedCount++
 		return true
 	})
 
-	return matchedFlows, calculateListMeta(totalMatchedCount, int(opts.pageSize))
+	return matchedFlows, calculateListMeta(int(totalMatchedCount), int(opts.pageSize))
 }
 
 // SortValueSet retrieves the unique values that this index is sorted by, in their sorted order.
 func (idx *index[E]) SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta) {
 	var matchedValues []E
-	var totalMatchedCount int
-	pageStart := int(opts.page * opts.pageSize)
+	var totalMatchedCount int64
+	pageStart, pageEnd, pageOK := pageWindow(opts.page, opts.pageSize)
 	var previousSortValue E
 	var seenAny bool
 
@@ -112,14 +112,31 @@ func (idx *index[E]) SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta) {
 			return true
 		}
 		previousSortValue, seenAny = sortValue, true
-		totalMatchedCount++
-		if totalMatchedCount > pageStart && (opts.pageSize == 0 || int64(len(matchedValues)) < opts.pageSize) {
+		if pageOK && totalMatchedCount >= pageStart && totalMatchedCount < pageEnd {
 			matchedValues = append(matchedValues, sortValue)
 		}
+		totalMatchedCount++
 		return true
 	})
 
-	return matchedValues, calculateListMeta(totalMatchedCount, int(opts.pageSize))
+	return matchedValues, calculateListMeta(int(totalMatchedCount), int(opts.pageSize))
+}
+
+// pageWindow returns the [start, end) offsets of the requested page, a zero pageSize meaning one
+// page holding every result. It reports false when no offset can be on the page: a negative page
+// or pageSize, or a page whose offsets overflow. Callers clamp end to their result count.
+func pageWindow(page, pageSize int64) (int64, int64, bool) {
+	if page < 0 || pageSize < 0 {
+		return 0, 0, false
+	}
+	if pageSize == 0 {
+		return 0, math.MaxInt64, true
+	}
+	if page >= math.MaxInt64/pageSize {
+		return 0, 0, false
+	}
+	start := page * pageSize
+	return start, start + pageSize, true
 }
 
 func calculateListMeta(total, pageSize int) types.ListMeta {
