@@ -75,7 +75,9 @@ steps:
         value: hashreleaseserver-static
     runOnVM:
       createVM:
-        machineType: e2-standard-4
+        # The cross-compiles for every architecture are CPU-bound, and on 4 vCPUs
+        # this step took about twice as long as the rest of the run.
+        machineType: e2-standard-8
         maxRunDuration: 2h30m
       # What release/cmd/flags.go reads from the two bundles; unset ones are skipped.
       env: [HASHRELEASE_SERVER_BUCKET, CI_GIT_REPO_SLUG, SLACK_API_TOKEN, SLACK_CHANNEL,
