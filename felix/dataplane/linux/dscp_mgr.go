@@ -51,7 +51,7 @@ func newDSCPManager(
 	mangleTable dataplanedefs.Table,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
-	dpConfig Config,
+	dpConfig dataplanedefs.Config,
 ) *dscpManager {
 	return &dscpManager{
 		mangleTable:     mangleTable,

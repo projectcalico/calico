@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"reflect"
 	"regexp"
@@ -28,18 +27,15 @@ import (
 	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack"
-	bpftimeouts "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/events"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfifstate "github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -53,7 +49,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
-	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector"
 	collectortypes "github.com/projectcalico/calico/felix/collector/types"
 	felixconfig "github.com/projectcalico/calico/felix/config"
@@ -89,7 +84,6 @@ import (
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -155,187 +149,6 @@ func init() {
 	prometheus.MustRegister(summaryIfaceBatchSize)
 	prometheus.MustRegister(summaryAddrBatchSize)
 	processStartTime = time.Now()
-}
-
-type Config struct {
-	Hostname             string
-	NodeZone             string
-	IPv6Enabled          bool
-	RuleRendererOverride rules.RuleRenderer
-	IPIPMTU              int
-	VXLANMTU             int
-	VXLANMTUV6           int
-	VXLANPort            int
-	VXLANSrcPortMin      int
-	VXLANSrcPortMax      int
-
-	MaxIPSetSize int
-
-	RouteSyncDisabled            bool
-	IptablesBackend              string
-	IPSetsRefreshInterval        time.Duration
-	RouteRefreshInterval         time.Duration
-	DeviceRouteSourceAddress     net.IP
-	DeviceRouteSourceAddressIPv6 net.IP
-	DeviceRouteProtocol          netlink.RouteProtocol
-	RemoveExternalRoutes         bool
-
-	// ProgramIPIPClusterRoutes and ProgramNoEncapClusterRoutes record whether Felix, as opposed
-	// to confd and BIRD, is responsible for the cluster routes of IPIP and of unencapsulated IP
-	// Pools respectively.  NoEncapNeeded already incorporates ProgramNoEncapClusterRoutes (see
-	// calc.EncapsulationCalculator.NoEncapNeeded).
-	ProgramIPIPClusterRoutes    bool
-	ProgramNoEncapClusterRoutes bool
-	NoEncapNeeded               bool
-
-	IPForwarding                   string
-	TableRefreshInterval           time.Duration
-	IptablesPostWriteCheckInterval time.Duration
-	IptablesInsertMode             string
-	IptablesLockTimeout            time.Duration
-	IptablesLockProbeInterval      time.Duration
-	XDPRefreshInterval             time.Duration
-
-	FloatingIPsEnabled bool
-
-	LocalSubnetL2Reachability                string
-	LocalSubnetL2ReachabilityRefreshInterval time.Duration
-
-	Wireguard wireguard.Config
-
-	NetlinkTimeout time.Duration
-
-	RulesConfig rules.Config
-
-	IfaceMonitorConfig ifacemonitor.Config
-
-	StatusReportingInterval time.Duration
-
-	ConfigChangedRestartCallback func()
-	FatalErrorRestartCallback    func(error)
-
-	PostInSyncCallback  func()
-	HealthAggregator    *health.HealthAggregator
-	WatchdogTimeout     time.Duration
-	RouteTableManager   *idalloc.IndexAllocator
-	bpfProxyHealthCheck bpfproxy.Healthcheck
-
-	DebugSimulateDataplaneHangAfter  time.Duration
-	DebugSimulateDataplaneApplyDelay time.Duration
-
-	ExternalNodesCidrs []string
-
-	BPFEnabled                         bool
-	BPFOverlayIPOnDevice               bool
-	BPFPolicyDebugEnabled              bool
-	BPFDisableUnprivileged             bool
-	BPFJITHardening                    string
-	BPFKubeProxyIptablesCleanupEnabled bool
-	BPFLogLevel                        string
-	BPFConntrackLogLevel               string
-	BPFLogFilters                      map[string]string
-	BPFCTLBLogFilter                   string
-	BPFExtToServiceConnmark            int
-	BPFDataIfacePattern                *regexp.Regexp
-	NFTablesFlowTableDataIfacePattern  *regexp.Regexp
-	BPFL3IfacePattern                  *regexp.Regexp
-	XDPEnabled                         bool
-	XDPAllowGeneric                    bool
-	BPFConntrackCleanupMode            apiv3.BPFConntrackMode
-	BPFConntrackTimeouts               bpftimeouts.Timeouts
-	BPFCgroupV2                        string
-	BPFConnTimeLBEnabled               bool
-	BPFConnTimeLB                      string
-	BPFHostNetworkedNAT                string
-	BPFNodePortDSREnabled              bool
-	BPFDSROptoutCIDRs                  []string
-	BPFPSNATPorts                      numorstring.Port
-	BPFMapSizeRoute                    int
-	BPFMapSizeConntrack                int
-	BPFMapSizePerCPUConntrack          int
-	BPFMapSizeConntrackScaling         string
-	BPFMapSizeConntrackCleanupQueue    int
-	BPFMapSizeNATFrontend              int
-	BPFMapSizeNATBackend               int
-	BPFMapSizeNATAffinity              int
-	BPFMapSizeIPSets                   int
-	BPFMapSizeIfState                  int
-	BPFMapSizeMaglev                   int
-	BPFMaglevLUTSize                   int
-	BPFIpv6Enabled                     bool
-	BPFHostConntrackBypass             bool
-	BPFIPFragmentReassemblyEnabled     bool
-	BPFEnforceRPF                      string
-	BPFDisableGROForIfaces             *regexp.Regexp
-	BPFExcludeCIDRsFromNAT             []string
-	BPFExportBufferSizeMB              int
-	BPFRedirectToPeer                  string
-	BPFAttachType                      apiv3.BPFAttachOption
-	BPFIPFragTimeout                   time.Duration
-
-	BPFProfiling               string
-	KubeProxyMinSyncPeriod     time.Duration
-	KubeProxyHealtzPort        int
-	SidecarAccelerationEnabled bool
-	WorkloadSourceSpoofing     bool
-
-	// Flow logs related fields.
-	NfNetlinkBufSize int
-	Collector        collector.Collector
-	LookupsCache     *calc.LookupsCache
-	FlowLogsEnabled  bool
-
-	ServiceLoopPrevention string
-
-	LookPathOverride func(file string) (string, error)
-
-	KubeClientSet kubernetes.Interface
-
-	FeatureDetectOverrides map[string]string
-	FeatureGates           map[string]string
-
-	// Populated with the smallest host MTU based on auto-detection.
-	hostMTU         int
-	MTUIfacePattern *regexp.Regexp
-	RequireMTUFile  bool
-
-	RouteSource string
-
-	IPv4NormalRoutePriority   int
-	IPv4ElevatedRoutePriority int
-	IPv6NormalRoutePriority   int
-	IPv6ElevatedRoutePriority int
-
-	LiveMigrationRouteConvergenceTime time.Duration
-
-	// IPAMClient is the Calico IPAM client used to swap owner attributes
-	// when a KubeVirt live migration completes.
-	IPAMClient ipam.Interface
-
-	KubernetesProvider felixconfig.Provider
-
-	// For testing purposes - allows unit tests to mock out the creation of the nftables dataplane.
-	NewNftablesDataplane nftables.NewNftablesDataplaneFn
-}
-
-// ctlbExcludesUDP returns whether the connect-time load balancer leaves UDP to
-// the TC programs.
-func (config *Config) ctlbExcludesUDP() bool {
-	return config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBTCP) &&
-		config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled)
-}
-
-// ctlbUDPAffinityTimeout returns how long the connect-time load balancer holds a
-// backend affine to an unconnected UDP socket, or 0 if the CTLB does not handle
-// UDP on this node. The CTLB uses this so that consecutive datagrams from one
-// socket reach one backend; the BPF kube-proxy needs the same value so that its
-// affinity map cleanup leaves those entries alone until they really have expired.
-func (config *Config) ctlbUDPAffinityTimeout() time.Duration {
-	if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBDisabled) || config.ctlbExcludesUDP() {
-		return 0
-	}
-	// The BPF programs are given the timeout in whole seconds.
-	return config.BPFConntrackTimeouts.UDPTimeout.Truncate(time.Second)
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
@@ -441,7 +254,7 @@ type InternalDataplane struct {
 
 	applyThrottle *throttle.Throttle
 
-	config Config
+	config dataplanedefs.Config
 
 	debugHangC <-chan time.Time
 
@@ -540,7 +353,7 @@ func legacyIPTablesCleanupTables(
 	return tables
 }
 
-func NewIntDataplaneDriver(config Config) *InternalDataplane {
+func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 	if config.BPFLogLevel == "info" {
 		config.BPFLogLevel = "off"
 	}
@@ -1194,7 +1007,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		if config.BPFConnTimeLB != string(apiv3.BPFConnectTimeLBDisabled) {
-			excludeUDP := config.ctlbExcludesUDP()
+			excludeUDP := config.CTLBExcludesUDP()
 			logLevel := strings.ToLower(config.BPFLogLevel)
 			if config.BPFLogFilters != nil {
 				if logLevel != "off" && config.BPFCTLBLogFilter != "all" {
@@ -1798,7 +1611,7 @@ func writeMTUFile(mtu int) error {
 
 // determinePodMTU looks at the configured MTUs and enabled encapsulations to determine which
 // value for MTU should be used for pod interfaces.
-func determinePodMTU(config Config) int {
+func determinePodMTU(config dataplanedefs.Config) int {
 	// Determine the smallest MTU among enabled encap methods. If none of the encap methods are
 	// enabled, we'll just use the host's MTU.
 	mtu := 0
@@ -1820,9 +1633,9 @@ func determinePodMTU(config Config) int {
 
 	if mtu == 0 {
 		// No enabled encapsulation. Just use the host MTU.
-		mtu = config.hostMTU
-	} else if mtu > config.hostMTU {
-		fields := log.Fields{"mtu": mtu, "hostMTU": config.hostMTU}
+		mtu = config.HostMTU
+	} else if mtu > config.HostMTU {
+		fields := log.Fields{"mtu": mtu, "hostMTU": config.HostMTU}
 		log.WithFields(fields).Warn("Configured MTU is larger than detected host interface MTU")
 	}
 	log.WithField("mtu", mtu).Info("Determined pod MTU")
@@ -1832,8 +1645,8 @@ func determinePodMTU(config Config) int {
 // ConfigureDefaultMTUs defaults any MTU configurations that have not been set.
 // We default the values even if the encap is not enabled, in order to match behavior from earlier versions of Calico.
 // However, they MTU will only be considered for allocation to pod interfaces if the encap is enabled.
-func ConfigureDefaultMTUs(hostMTU int, c *Config) {
-	c.hostMTU = hostMTU
+func ConfigureDefaultMTUs(hostMTU int, c *dataplanedefs.Config) {
+	c.HostMTU = hostMTU
 	if c.IPIPMTU == 0 {
 		log.Debug("Defaulting IPIP MTU based on host")
 		c.IPIPMTU = hostMTU - ipipMTUOverhead
@@ -2015,7 +1828,7 @@ func (d *InternalDataplane) monitorHostMTU() {
 		mtu, err := findHostMTU(d.config.MTUIfacePattern)
 		if err != nil {
 			log.WithError(err).Error("Error detecting host MTU")
-		} else if d.config.hostMTU != mtu {
+		} else if d.config.HostMTU != mtu {
 			// Since log writing is done a background thread, we set the force-flush flag on this log to ensure that
 			// all the in-flight logs get written before we exit.
 			log.WithFields(log.Fields{logrusr.FieldForceFlush: true}).Info("Host MTU changed")
@@ -3062,7 +2875,7 @@ func startBPFDataplaneComponents(
 	ipFamily proto.IPVersion,
 	maps *bpfmap.IPMaps,
 	ipSetIDAllocator *idalloc.IDAllocator,
-	config *Config,
+	config *dataplanedefs.Config,
 	ipSetsMgr *dpsets.IPSetsManager,
 	dp *InternalDataplane,
 	kernelLockdownConfidentiality bool,
@@ -3077,9 +2890,9 @@ func startBPFDataplaneComponents(
 	ctKey := bpfconntrack.KeyFromBytes
 	ctVal := bpfconntrack.ValueFromBytes
 
-	if config.bpfProxyHealthCheck == nil && config.KubeProxyHealtzPort != 0 {
+	if config.BPFProxyHealthCheck == nil && config.KubeProxyHealtzPort != 0 {
 		var err error
-		config.bpfProxyHealthCheck, err = bpfproxy.NewHealthCheck(
+		config.BPFProxyHealthCheck, err = bpfproxy.NewHealthCheck(
 			config.KubeClientSet,
 			config.Hostname,
 			config.KubeProxyHealtzPort,
@@ -3093,11 +2906,11 @@ func startBPFDataplaneComponents(
 	bpfproxyOpts := []bpfproxy.Option{
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
 		bpfproxy.WithMaglevLUTSize(config.BPFMaglevLUTSize),
-		bpfproxy.WithCTLBUDPAffinityTimeout(config.ctlbUDPAffinityTimeout()),
+		bpfproxy.WithCTLBUDPAffinityTimeout(config.CTLBUDPAffinityTimeout()),
 	}
 
-	if config.bpfProxyHealthCheck != nil {
-		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithHealthCheck(config.bpfProxyHealthCheck))
+	if config.BPFProxyHealthCheck != nil {
+		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithHealthCheck(config.BPFProxyHealthCheck))
 	} else {
 		log.Info("No healthz server configured for BPF kube-proxy.")
 	}

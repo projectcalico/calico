@@ -21,6 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
@@ -42,7 +43,7 @@ type noEncapManager struct {
 func newNoEncapManager(
 	mainRouteTable routetable.Interface,
 	ipVersion uint8,
-	dpConfig Config,
+	dpConfig dataplanedefs.Config,
 	opRecorder logrusr.OpRecorder,
 ) *noEncapManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
@@ -58,7 +59,7 @@ func newNoEncapManager(
 func newNoEncapManagerWithSims(
 	mainRouteTable routetable.Interface,
 	ipVersion uint8,
-	dpConfig Config,
+	dpConfig dataplanedefs.Config,
 	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 ) *noEncapManager {

@@ -151,7 +151,7 @@ type proxyNeighManager struct {
 	cancel context.CancelFunc
 }
 
-func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
+func newProxyNeighManager(dpConfig dataplanedefs.Config, ipVersion uint8) *proxyNeighManager {
 	nl, err := netlinkshim.NewRealNetlink()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create netlink handle for proxy neighbor manager")
@@ -229,7 +229,7 @@ func setIgnoreOutgoing(conn *packet.Conn) error {
 }
 
 func newProxyNeighManagerWithShims(
-	dpConfig Config,
+	dpConfig dataplanedefs.Config,
 	ipVersion uint8,
 	nl netlinkshim.Interface,
 	af arpClientFactory,

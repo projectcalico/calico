@@ -67,7 +67,7 @@ type vxlanManager struct {
 	// Indicates if configuration has changed since the last apply.
 	vtepsDirty        bool
 	externalNodeCIDRs []string
-	dpConfig          Config
+	dpConfig          dataplanedefs.Config
 
 	// Log context
 	logCtx     *logrus.Entry
@@ -104,7 +104,7 @@ func newVXLANManager(
 	deviceName string,
 	ipVersion uint8,
 	mtu int,
-	dpConfig Config,
+	dpConfig dataplanedefs.Config,
 	opRecorder logrusr.OpRecorder,
 	opts ...vxlanMgrOption,
 ) *vxlanManager {
@@ -130,7 +130,7 @@ func newVXLANManagerWithShims(
 	deviceName string,
 	ipVersion uint8,
 	mtu int,
-	dpConfig Config,
+	dpConfig dataplanedefs.Config,
 	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 	opts ...vxlanMgrOption,
