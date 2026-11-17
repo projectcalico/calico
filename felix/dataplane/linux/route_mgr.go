@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -236,6 +237,27 @@ func (m *routeManager) OnUpdate(protoBufMsg any) {
 		}
 		m.deleteRoute(msg.Dst)
 	}
+}
+
+// SetMaintainIPOnly makes the manager only assign its address to a tunnel device
+// that another manager creates and maintains.
+func (m *routeManager) SetMaintainIPOnly() {
+	m.maintainIPOnly = true
+}
+
+// SetVNIFilter makes the tunnel device a VNI-filtering VXLAN device that accepts
+// exactly the given VNIs.
+func (m *routeManager) SetVNIFilter(vnis []uint32) {
+	m.vniFilterSupported = true
+	m.tunnelVNIs = vnis
+}
+
+func (m *routeManager) ParentDevice() string {
+	return m.parentDevice
+}
+
+func (m *routeManager) RoutesDirty() bool {
+	return m.routesDirty
 }
 
 func (m *routeManager) triggerRouteUpdate() {
@@ -841,4 +863,70 @@ func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 		}
 	}
 	return nil
+}
+
+// vlanLinksIncompat takes two vxlan devices and compares them to make sure they match. If they do not match,
+// this function will return a message indicating which configuration is mismatched.
+func vxlanLinksIncompat(l1, l2 netlink.Link) string {
+	if l1.Type() != l2.Type() {
+		return fmt.Sprintf("link type: %v vs %v", l1.Type(), l2.Type())
+	}
+
+	v1 := l1.(*netlink.Vxlan)
+	v2 := l2.(*netlink.Vxlan)
+
+	// FlowBased is the most fundamental mode difference — a flow-based device
+	// (used by the BPF dataplane with BTF) has no VNI, VtepDevIndex, or SrcAddr
+	// set on the device; the BPF program sets the tunnel key per-packet.
+	// Switching between iptables and eBPF dataplanes requires recreating the device.
+	if v1.FlowBased != v2.FlowBased {
+		return fmt.Sprintf("flow-based mode: %v vs %v", v1.FlowBased, v2.FlowBased)
+	}
+
+	// The kernel cannot toggle VNI filtering on an existing device.
+	if v1.VniFilter != v2.VniFilter {
+		return fmt.Sprintf("vni filter: %v vs %v", v1.VniFilter, v2.VniFilter)
+	}
+
+	if v1.VxlanId != v2.VxlanId {
+		return fmt.Sprintf("vni: %v vs %v", v1.VxlanId, v2.VxlanId)
+	}
+
+	if v1.VtepDevIndex != v2.VtepDevIndex {
+		return fmt.Sprintf("vtep (external) interface: %v vs %v", v1.VtepDevIndex, v2.VtepDevIndex)
+	}
+
+	if len(v1.SrcAddr) > 0 && len(v2.SrcAddr) > 0 && !v1.SrcAddr.Equal(v2.SrcAddr) {
+		return fmt.Sprintf("vtep (external) IP: %v vs %v", v1.SrcAddr, v2.SrcAddr)
+	}
+
+	if len(v1.Group) > 0 && len(v2.Group) > 0 && !v1.Group.Equal(v2.Group) {
+		return fmt.Sprintf("group address: %v vs %v", v1.Group, v2.Group)
+	}
+
+	if v1.L2miss != v2.L2miss {
+		return fmt.Sprintf("l2miss: %v vs %v", v1.L2miss, v2.L2miss)
+	}
+
+	if v1.Port > 0 && v2.Port > 0 && v1.Port != v2.Port {
+		return fmt.Sprintf("port: %v vs %v", v1.Port, v2.Port)
+	}
+
+	// Only the desired range is don't-care when unset; an existing 0/0 range is the kernel default.
+	if v1.PortLow != 0 || v1.PortHigh != 0 {
+		if v1.PortLow != v2.PortLow || v1.PortHigh != v2.PortHigh {
+			return fmt.Sprintf("source port range: [%d,%d] vs [%d,%d]",
+				v1.PortLow, v1.PortHigh, v2.PortLow, v2.PortHigh)
+		}
+	}
+
+	if v1.GBP != v2.GBP {
+		return fmt.Sprintf("gbp: %v vs %v", v1.GBP, v2.GBP)
+	}
+
+	if len(v1.Attrs().HardwareAddr) > 0 && len(v2.Attrs().HardwareAddr) > 0 && !bytes.Equal(v1.Attrs().HardwareAddr, v2.Attrs().HardwareAddr) {
+		return fmt.Sprintf("vtep mac addr: %v vs %v", v1.Attrs().HardwareAddr, v2.Attrs().HardwareAddr)
+	}
+
+	return ""
 }

@@ -98,8 +98,8 @@ var _ = Describe("NoEncap Manager", func() {
 
 		noencapMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(noencapMgr.routeMgr.parentDeviceAddr).NotTo(BeZero())
-		Expect(noencapMgr.routeMgr.parentDevice).NotTo(BeEmpty())
+		Expect(noencapMgr.routeMgr.parentIfaceAddr()).NotTo(BeZero())
+		Expect(noencapMgr.routeMgr.ParentDevice()).NotTo(BeEmpty())
 		noEncapDev, err := noencapMgr.routeMgr.detectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(noEncapDev).NotTo(BeNil())
@@ -184,8 +184,8 @@ var _ = Describe("NoEncap Manager", func() {
 
 		noencapMgrV6.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(noencapMgrV6.routeMgr.parentDeviceAddr).NotTo(BeZero())
-		Expect(noencapMgrV6.routeMgr.parentDevice).NotTo(BeEmpty())
+		Expect(noencapMgrV6.routeMgr.parentIfaceAddr()).NotTo(BeZero())
+		Expect(noencapMgrV6.routeMgr.ParentDevice()).NotTo(BeEmpty())
 		noEncapDev, err := noencapMgrV6.routeMgr.detectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(noEncapDev).NotTo(BeNil())
