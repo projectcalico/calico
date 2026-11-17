@@ -95,7 +95,7 @@ dualstack:
   v6 local IP on the existing v4 device and programs v6 ARP/neigh
   entries, but does not create or manage its own device.
 - The legacy `vxlan-v6.calico` device is torn down if it exists
-  (`cleanUpVXLANDevice(VXLANIfaceNameV6)` in `int_dataplane.go`).
+  (`vxlan.CleanUpDevice(VXLANIfaceNameV6)` in `int_dataplane.go`).
 
 Constants: `VXLANIfaceNameV4 = "vxlan.calico"`,
 `VXLANIfaceNameV6 = "vxlan-v6.calico"` in
@@ -182,7 +182,7 @@ than pinned to a specific device.
   existing device is detected and recreated; otherwise the BPF
   programs and the device disagree on how tunnel keys are set.
 - A new VNI that BPF must receive on `vxlan.calico` must be added to
-  the VNI filter (`vxlanMgrWithVNIFilter`), or the kernel drops it.
+  the VNI filter (`vxlan.WithVNIFilter`), or the kernel drops it.
 - Dualstack work on the VXLAN device must respect the "only one
   device" invariant — setting up a second `vxlan-v6.calico` device
   in BPF mode breaks tunnel-key resolution.

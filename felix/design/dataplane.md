@@ -743,8 +743,7 @@ dataplane, and a change to *either* alone breaks it:
 [`felix/routetable/`](../routetable/),
 [`felix/routerule/`](../routerule/) and
 [`felix/vxlanfdb/`](../vxlanfdb/) are drivers in the sense above:
-managers (`vxlanManager`, `ipipManager`, `wireguardManager`,
-`noEncapManager`, …) compute desired routes/rules/FDB entries and
+managers (`vxlan`, `ipip`, `wireguardmgr`, `noencap`, …) compute desired routes/rules/FDB entries and
 hand them off; these drivers reconcile against netlink.
 
 They follow the same doctrine as the rest of the dataplane —

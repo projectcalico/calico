@@ -269,6 +269,7 @@ local:felix/dataplane/linux/bpfep
 local:felix/dataplane/linux/bpfep/bpfepdefs
 local:felix/dataplane/linux/bpfroute
 local:felix/dataplane/linux/dataplanedefs
+local:felix/dataplane/linux/dpconfig
 local:felix/dataplane/linux/dscp
 local:felix/dataplane/linux/endpoint
 local:felix/dataplane/linux/floatingip

@@ -2441,12 +2441,12 @@ func (d *InternalDataplane) processMsgFromCalcGraph(msg any) {
 	}
 }
 
-// onParentDeviceUpdate marks the dataplane dirty when a tunnel's parent device moves, since the
-// goroutine that spots the move may be the only thing happening at the time.
 type parentDeviceListener interface {
 	OnParentDeviceUpdate(name string) bool
 }
 
+// onParentDeviceUpdate marks the dataplane dirty when a tunnel's parent device moves, since the
+// goroutine that spots the move may be the only thing happening at the time.
 func (d *InternalDataplane) onParentDeviceUpdate(mgr parentDeviceListener, name string) {
 	if mgr.OnParentDeviceUpdate(name) {
 		d.dataplaneNeedsSync = true

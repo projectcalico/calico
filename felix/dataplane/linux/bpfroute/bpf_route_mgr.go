@@ -124,7 +124,7 @@ func NewManager(config *dpconfig.Config, maps *bpfmap.IPMaps, ipFamily proto.IPV
 		}
 
 		extCIDRs.Add(cidr)
-		log.WithField("cidr", cidr).Debugf("newBPFRouteManager 1")
+		log.WithField("cidr", cidr).Debug("External node CIDR")
 		dirtyCIDRs.Add(cidr)
 	}
 	noDsrCIDRs := ip.NewCIDRTrie()
@@ -141,7 +141,7 @@ func NewManager(config *dpconfig.Config, maps *bpfmap.IPMaps, ipFamily proto.IPV
 		}
 
 		noDsrCIDRs.Update(cidr, something) // We need to store something
-		log.WithField("cidr", cidr).Debugf("newBPFRouteManager 2")
+		log.WithField("cidr", cidr).Debug("DSR opt-out CIDR")
 		dirtyCIDRs.Add(cidr)
 	}
 
