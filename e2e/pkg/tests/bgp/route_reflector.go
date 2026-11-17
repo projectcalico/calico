@@ -38,11 +38,11 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("BGPPeer"),
-	describe.RequiresBGP(),
-	describe.RequiresOperator(),
-	describe.RequiresV3CRDs(),
-	describe.WithCategory(describe.Networking),
+	describe.Covers("BGPPeer"),
+	describe.Requires(describe.BGPRouting),
+	describe.Requires(describe.BGP),
+	describe.Requires(describe.Operator),
+	describe.Requires(describe.V3CRDs),
 	describe.WithDisruptive(),
 	describe.WithSerial(),
 	"Route reflectors",

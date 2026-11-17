@@ -40,7 +40,26 @@
           - name: KIND_CALICO_API_GROUP
             value: "crd.projectcalico.org/v1"
           - name: E2E_TEST_CONFIG
-            value: "e2e/config/kind/felix-routing.yaml"
+            value: >-
+              ci-base.yaml
+              suite/calico-conformance.yaml
+              suite/network-conformance.yaml
+              suite/aggregated-api.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/aggregated.yaml
+              cluster/dataplane/iptables.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp-felix-routes.yaml
+              cluster/platform/kind.yaml
+              cluster/ip-family/dual-stack.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
       - name: "E2E tests: ClusterNetworkPolicy (cluster routing: Felix)"
         commands:
           - .semaphore/run-and-monitor e2e-test-cnp.log make e2e-test-clusternetworkpolicy
@@ -50,7 +69,26 @@
           - name: KIND_CALICO_API_GROUP
             value: "projectcalico.org/v3"
           - name: E2E_TEST_CONFIG
-            value: "e2e/config/kind/felix-routing.yaml"
+            value: >-
+              ci-base.yaml
+              suite/calico-conformance.yaml
+              suite/network-conformance.yaml
+              suite/aggregated-api.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/iptables.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp-felix-routes.yaml
+              cluster/platform/kind.yaml
+              cluster/ip-family/dual-stack.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
       - name: "E2E tests: sig-calico (dataplane: BPF)"
         commands:
           - .semaphore/run-and-monitor e2e-test-bpf.log make e2e-test-bpf

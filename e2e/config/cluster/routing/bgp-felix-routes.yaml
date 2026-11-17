@@ -1,0 +1,11 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# BIRD runs, but Felix programs the cluster's pod routes (CLUSTER_ROUTING_MODE=Felix).
+
+kind: cluster
+
+needs:
+  - cni/calico.yaml
+
+provides:
+  - BGP

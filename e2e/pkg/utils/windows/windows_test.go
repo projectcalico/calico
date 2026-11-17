@@ -17,8 +17,8 @@ package windows
 import "testing"
 
 func TestSelectsWindows(t *testing.T) {
-	windowsSpec := []string{"sig-calico", "Feature:NetworkPolicy", "RunsOnWindows"}
-	linuxSpec := []string{"sig-calico", "Feature:NetworkPolicy"}
+	windowsSpec := []string{"sig-calico", "Covers:NetworkPolicy", "Covers:Windows"}
+	linuxSpec := []string{"sig-calico", "Covers:NetworkPolicy"}
 
 	tests := []struct {
 		name        string
@@ -27,13 +27,13 @@ func TestSelectsWindows(t *testing.T) {
 		specLabels  []string
 		want        bool
 	}{
-		{name: "focus on RunsOnWindows", focus: []string{"RunsOnWindows"}, specLabels: windowsSpec, want: true},
+		{name: "focus on Covers:Windows", focus: []string{"Covers:Windows"}, specLabels: windowsSpec, want: true},
 		{name: "no selection", specLabels: windowsSpec, want: false},
-		{name: "windows lane label filter", labelFilter: "(sig-calico && RunsOnWindows) && !Feature:KubeVirt", specLabels: windowsSpec, want: true},
-		{name: "linux lane runs a windows-capable spec", labelFilter: "sig-calico && !Feature:KubeVirt", specLabels: windowsSpec, want: false},
-		{name: "negated windows label", labelFilter: "sig-calico && !RunsOnWindows", specLabels: linuxSpec, want: false},
-		{name: "windows label is one alternative", labelFilter: "RunsOnWindows || Feature:NetworkPolicy", specLabels: windowsSpec, want: false},
-		{name: "outside a spec", labelFilter: "sig-calico && RunsOnWindows", want: false},
+		{name: "windows lane label filter", labelFilter: "(sig-calico && Covers:Windows) && !Requires:KubeVirt", specLabels: windowsSpec, want: true},
+		{name: "linux lane runs a windows-capable spec", labelFilter: "sig-calico && !Requires:KubeVirt", specLabels: windowsSpec, want: false},
+		{name: "negated windows label", labelFilter: "sig-calico && !Covers:Windows", specLabels: linuxSpec, want: false},
+		{name: "windows label is one alternative", labelFilter: "Covers:Windows || Covers:NetworkPolicy", specLabels: windowsSpec, want: false},
+		{name: "outside a spec", labelFilter: "sig-calico && Covers:Windows", want: false},
 		{name: "unparseable filter", labelFilter: "sig-calico &&", specLabels: windowsSpec, want: false},
 	}
 	for _, tc := range tests {

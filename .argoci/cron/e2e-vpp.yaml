@@ -46,7 +46,26 @@ steps:
       - name: gcp-kubeadm-calico-vpp-nohuge-yaml-v3-28-v3-28-0
         env:
           - name: E2E_TEST_CONFIG
-            value: e2e/config/vpp/vpp-encap-extnode.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/vpp.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/routing/bgp-mesh.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
           - name: PROVISIONER
             value: gcp-kubeadm
           - name: VPP_MANIFEST_FILE
@@ -65,7 +84,26 @@ steps:
       - name: gcp-kubeadm-calico-vpp-nohuge-yaml
         env:
           - name: E2E_TEST_CONFIG
-            value: e2e/config/vpp/vpp-encap-extnode.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/vpp.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/routing/bgp-mesh.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
           - name: PROVISIONER
             value: gcp-kubeadm
           - name: VPP_MANIFEST_FILE
@@ -73,7 +111,27 @@ steps:
       - name: aws-kubeadm-calico-vpp-nohuge-yaml
         env:
           - name: E2E_TEST_CONFIG
-            value: e2e/config/vpp/vpp-encap-extnode-aws.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/vpp.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/routing/bgp-mesh.yaml
+              cluster/cloud/aws.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
           - name: PROVISIONER
             value: aws-kubeadm
           - name: VPP_MANIFEST_FILE
@@ -91,7 +149,26 @@ steps:
       - name: gcp-kubeadm-calico-vpp-dpdk-yaml
         env:
           - name: E2E_TEST_CONFIG
-            value: e2e/config/vpp/vpp-encap-extnode.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/vpp.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/routing/bgp-mesh.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
           - name: PROVISIONER
             value: gcp-kubeadm
           - name: VPP_MANIFEST_FILE
@@ -99,7 +176,27 @@ steps:
       - name: aws-kubeadm-calico-vpp-dpdk-yaml
         env:
           - name: E2E_TEST_CONFIG
-            value: e2e/config/vpp/vpp-encap-extnode-aws.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/vpp.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/routing/bgp-mesh.yaml
+              cluster/cloud/aws.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
           - name: PROVISIONER
             value: aws-kubeadm
           - name: VPP_MANIFEST_FILE
@@ -121,7 +218,25 @@ steps:
       - name: gcp-kubeadm-calico-vpp-dpdk-yaml
         env:
           - name: E2E_TEST_CONFIG
-            value: e2e/config/vpp/vpp-encap-extnode.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/vpp.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
           - name: PROVISIONER
             value: gcp-kubeadm
           - name: VPP_MANIFEST_FILE
@@ -141,7 +256,27 @@ steps:
       - name: gcp-kubeadm-calico-vpp-dpdk-yaml
         env:
           - name: E2E_TEST_CONFIG
-            value: e2e/config/vpp/vpp-encap-extnode.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/vpp.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/routing/bgp-mesh.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/wireguard.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
           - name: PROVISIONER
             value: gcp-kubeadm
           - name: VPP_MANIFEST_FILE
@@ -154,7 +289,27 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/vpp/eks-vpp-encap-extnode-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/vpp.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/external-node.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: FAILSAFE_443
         value: "true"
       - name: IPV4_POD_CIDR
@@ -176,7 +331,27 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/vpp/eks-vpp-encap-extnode-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/vpp.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/external-node.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENABLE_HUGEPAGES
         value: "true"
       - name: FAILSAFE_443
@@ -207,7 +382,27 @@ steps:
       - name: aws-kubeadm-calico-vpp-dpdk-yaml
         env:
           - name: E2E_TEST_CONFIG
-            value: e2e/config/vpp/vpp-encap-extnode-aws.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/vpp.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/routing/bgp-mesh.yaml
+              cluster/cloud/aws.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
           - name: PROVISIONER
             value: aws-kubeadm
           - name: VPP_MANIFEST_FILE
@@ -222,7 +417,26 @@ steps:
       - name: AWS_INSTANCE_TYPE
         value: m5.xlarge
       - name: E2E_TEST_CONFIG
-        value: e2e/config/vpp/vpp-encap-extnode-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/dataplane/vpp.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/openshift.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/external-node.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
     matrix:
       - name: aws-openshift
         env:
@@ -240,7 +454,28 @@ steps:
       - name: DATAPLANE
         value: CalicoIptables
       - name: E2E_TEST_CONFIG
-        value: e2e/config/vpp/xtables-encap-extnode-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/openshift.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/external-node.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
+          cluster/capability/ambient-policy.yaml
     matrix:
       - name: aws-openshift
         env:

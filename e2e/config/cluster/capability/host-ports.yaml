@@ -1,0 +1,8 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# The Calico CNI's portmap plugin serves hostPort, and the node network lets it through.
+
+kind: cluster
+
+provides:
+  - HostPorts
