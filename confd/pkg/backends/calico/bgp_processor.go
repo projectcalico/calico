@@ -1125,8 +1125,8 @@ func (c *client) processIPPool(
 	if policy.programsPool(ippool) {
 		var extraStatement string
 		if forProgrammingKernel && ipVersion == 4 {
-			// For IPv4 IPIP routes, we need to set `krt_tunnel` variable which is needed by
-			// our fork of BIRD.
+			// For IPv4 IPIP routes, set the `krt_tunnel` variable, which a Calico patch
+			// adds to BIRD.
 			extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
 		}
 		return emitFilterStatementForIPPools(cidr, extraStatement, "accept", filterAction, "")

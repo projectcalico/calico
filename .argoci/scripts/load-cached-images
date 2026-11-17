@@ -92,10 +92,12 @@ build_image() {
     local component=$1
     shift
 
-    # node's Dockerfile takes the patched nftables RPMs from a local image. Its
-    # build would produce that image from scratch (~20 min); pulling the
-    # published one first is much cheaper when it exists.
+    # node's Dockerfile takes the patched BIRD and nftables RPMs from local
+    # images. Its build would produce those images from scratch (~20 min for
+    # nftables); pulling the published ones first is much cheaper when they
+    # exist.
     if [ "$component" = node ]; then
+        "${REPO_ROOT}/.argoci/scripts/load-rpms-image.sh" bird "$ARCH"
         "${REPO_ROOT}/.argoci/scripts/load-nft-rpms.sh" "$ARCH"
     fi
 

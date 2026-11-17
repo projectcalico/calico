@@ -198,6 +198,41 @@
         commands:
           - .argoci/scripts/build-nft-rpms.sh "${ARCH}"
 
+- name: "Build: BIRD image"
+  # Producer for the calico/bird image, which carries the patched BIRD RPM for
+  # calico/node and runs as a BGP router in tests. It works as "Build:
+  # nftables RPMs" above does: a content-addressed tag, a tarball in the
+  # workflow cache for the blocks that list this one in their `dependencies:`,
+  # and a separate promotion (push-images/bird.yml) that publishes it.
+  # Consumers load it with `.argoci/scripts/load-rpms-image.sh bird`.
+  run:
+    when: "${CHANGE_IN_WITH_DEPENDENTS(non-go:/hack/rpms/bird/)}"
+  dependencies: []
+  task:
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
+    prologue:
+      commands:
+        - mkdir logs
+        - export BUILD_LOG="logs/build-bird-image-${ARCH}.log"
+    epilogue:
+      always:
+        commands:
+          - artifact push job logs --destination semaphore/logs || true
+    jobs:
+      - name: "Build/cache BIRD image"
+        matrix:
+          - env_var: ARCH
+            values:
+              - amd64
+              - arm64
+              - ppc64le
+              - s390x
+        commands:
+          - .argoci/scripts/build-rpms-image.sh bird "${ARCH}"
+
 - name: "Pull: go-build image"
   # Populate the GCS cache of calico/go-build so it can serve as a fallback when
   # a Docker Hub pull fails (which we still see occasionally even with an
@@ -313,6 +348,7 @@
   run:
     when: "${CHANGE_IN_WITH_DEPENDENTS(node,non-go:/node/)}"
   dependencies:
+    - "Build: BIRD image"
     - "Build: nftables RPMs"
   task:
     agent:
@@ -322,6 +358,9 @@
     jobs:
       - name: "Build and cache node image"
         commands:
+          # Load the calico/bird image (built/cached by "Build: BIRD image") so
+          # the node Dockerfile's bird build context resolves locally.
+          - .argoci/scripts/load-rpms-image.sh bird amd64
           # Load the patched nftables RPMs producer image (built/cached by
           # "Build: nftables RPMs") so the node Dockerfile's FROM ${NFT_RPMS_IMAGE}
           # resolves locally without re-pulling from Docker Hub.

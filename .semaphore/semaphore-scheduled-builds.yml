@@ -273,9 +273,13 @@ promotions:
         branch =~ 'master|release-.*' and change_in('/e2e/images/', {pipeline_file: 'ignore', default_branch: 'master', exclude: ['/**/README.md', '/**/DESIGN.md']})
   - name: Push istio images
     pipeline_file: push-images/istio.yml
-  # Auto-fires (unlike the component pushes above) because this is a build-time
-  # prerequisite node/istio pull before building, not a release artifact. No-op
-  # when the tag is already published.
+  # These two auto-fire (unlike the component pushes above) because each is a
+  # build-time prerequisite that node, istio or the tests pull before building,
+  # not a release artifact. No-op when the tag is already published.
+  - name: Push BIRD image
+    pipeline_file: push-images/bird.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*'"
   - name: Push nftables RPM images
     pipeline_file: push-images/nft-rpms.yml
     auto_promote:
@@ -531,6 +535,40 @@ blocks:
                 - s390x
           commands:
             - .argoci/scripts/build-nft-rpms.sh "${ARCH}"
+  - name: "Build: BIRD image"
+    # Producer for the calico/bird image, which carries the patched BIRD RPM for
+    # calico/node and runs as a BGP router in tests. It works as "Build:
+    # nftables RPMs" above does: a content-addressed tag, a tarball in the
+    # workflow cache for the blocks that list this one in their `dependencies:`,
+    # and a separate promotion (push-images/bird.yml) that publishes it.
+    # Consumers load it with `.argoci/scripts/load-rpms-image.sh bird`.
+    run:
+      when: "true"
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      prologue:
+        commands:
+          - mkdir logs
+          - export BUILD_LOG="logs/build-bird-image-${ARCH}.log"
+      epilogue:
+        always:
+          commands:
+            - artifact push job logs --destination semaphore/logs || true
+      jobs:
+        - name: "Build/cache BIRD image"
+          matrix:
+            - env_var: ARCH
+              values:
+                - amd64
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - .argoci/scripts/build-rpms-image.sh bird "${ARCH}"
   - name: "Pull: go-build image"
     # Populate the GCS cache of calico/go-build so it can serve as a fallback when
     # a Docker Hub pull fails (which we still see occasionally even with an
@@ -646,6 +684,7 @@ blocks:
     run:
       when: "true"
     dependencies:
+      - "Build: BIRD image"
       - "Build: nftables RPMs"
     task:
       agent:
@@ -655,6 +694,9 @@ blocks:
       jobs:
         - name: "Build and cache node image"
           commands:
+            # Load the calico/bird image (built/cached by "Build: BIRD image") so
+            # the node Dockerfile's bird build context resolves locally.
+            - .argoci/scripts/load-rpms-image.sh bird amd64
             # Load the patched nftables RPMs producer image (built/cached by
             # "Build: nftables RPMs") so the node Dockerfile's FROM ${NFT_RPMS_IMAGE}
             # resolves locally without re-pulling from Docker Hub.
@@ -953,12 +995,15 @@ blocks:
       when: "true"
     dependencies:
       - Prerequisites
+      - "Build: BIRD image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
           value: "calico"
       prologue:
         commands:
+          # The FV tests check rendered configs with the BIRD in this image.
+          - .argoci/scripts/load-rpms-image.sh bird amd64
           - cd confd
       jobs:
         - name: "confd: CI"
@@ -1027,6 +1072,7 @@ blocks:
       when: "true"
     dependencies:
       - Prerequisites
+      - "Build: BIRD image"
       - "Build: calico image"
       - "Build: node image"
       - "Build: whisker image"
@@ -1045,6 +1091,8 @@ blocks:
           # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
           - docker system prune -af
           - .argoci/scripts/load-cached-images calico node whisker
+          # The external node runs this image as a BGP router.
+          - .argoci/scripts/load-rpms-image.sh bird amd64
       jobs:
         - name: "E2E tests: Conformance (cluster routing: BIRD)"
           commands:
@@ -1615,6 +1663,7 @@ blocks:
       when: "true"
     dependencies:
       - Prerequisites
+      - "Build: BIRD image"
       - "Build: calico image"
       - "Build: node image"
       - "Build: operator image"
@@ -1639,6 +1688,7 @@ blocks:
         commands:
           - docker system prune -af
           - .argoci/scripts/load-cached-images calico node
+          - .argoci/scripts/load-rpms-image.sh bird amd64
       jobs:
         - name: "KubeVirt live migration (KIND)"
           commands:
@@ -1657,7 +1707,7 @@ blocks:
             # Start external BIRD BGP peer container on the KIND Docker network.
             # Tests discover this container via the BIRD_BGPPEER_CONTAINER_NAME env var.
             - export BIRD_BGPPEER_CONTAINER_NAME=bird-bgp-peer
-            - docker run -d --name ${BIRD_BGPPEER_CONTAINER_NAME} --privileged --network kind calico/bird:v0.3.3-211-g9111ec3c
+            - docker run -d --name ${BIRD_BGPPEER_CONTAINER_NAME} --privileged --network kind $(make --no-print-directory -C hack/rpms/bird print-image)
             # Run KubeVirt e2e tests
             - .semaphore/run-and-monitor e2e-kubevirt-kind.log make e2e-run KUBECONFIG=$(pwd)/hack/test/kind/kind-kubeconfig.yaml
       epilogue:
@@ -1798,6 +1848,7 @@ blocks:
       when: "true"
     dependencies:
       - Prerequisites
+      - "Build: BIRD image"
       - "Build: nftables RPMs"
     task:
       prologue:
@@ -1812,6 +1863,9 @@ blocks:
                 - ppc64le
                 - s390x
           commands:
+            # Load the per-arch calico/bird image (built/cached by "Build: BIRD
+            # image") so Dockerfile's bird build context resolves locally.
+            - ../.argoci/scripts/load-rpms-image.sh bird "${ARCH}"
             # Load the per-arch patched nftables RPMs producer image (built/cached
             # by "Build: nftables RPMs") so Dockerfile's FROM ${NFT_RPMS_IMAGE}
             # resolves locally without re-pulling from Docker Hub.
@@ -1831,6 +1885,7 @@ blocks:
       - "Prerequisites"
       # cache-test-artifacts ships these images to the test VMs. Without the
       # dependency the VMs build from source instead, which fails on the VM.
+      - "Build: BIRD image"
       - "Build: calico image"
       - "Build: node image"
       - "Build: whisker image"
