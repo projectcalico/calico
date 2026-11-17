@@ -122,7 +122,7 @@ kubectl get po -A -owide
 # job's own config selects the post-migration run, so override it here. Calico
 # is not installed yet, so its component-log check has nothing to read.
 # run_tests.sh exits when it finishes, hence a child shell.
-E2E_TEST_CONFIG='e2e/config/pre-migration-smoke.yaml' STERN_CHECK=DISABLED bash "${PHASES}/run_tests.sh"
+E2E_TEST_CONFIG='ci-base.yaml suite/pre-migration-smoke.yaml cluster/ip-family/ipv4.yaml' STERN_CHECK=DISABLED bash "${PHASES}/run_tests.sh"
 
 # A post-migration run that never reaches Ginkgo must not publish these passes.
 rm -rf "${REPORT_DIR}/junit.xml" "${CI_HOME}/${CI_GIT_DIR}/report/junit.xml" \

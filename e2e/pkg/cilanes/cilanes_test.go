@@ -16,6 +16,7 @@ package cilanes
 
 import (
 	"os"
+	"regexp"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -229,14 +230,14 @@ func TestParseSemaphoreBlocks(t *testing.T) {
 	}
 
 	// No config in the environment, so the target's Makefile default applies.
-	Expect(byName["E2E tests (KinD) / Conformance"].Config).To(Equal("e2e/config/kind/conformance.yaml"))
+	Expect(byName["E2E tests (KinD) / Conformance"].Config).To(Equal(kindConfigs["KIND_CONFORMANCE_E2E_CONFIG"]))
 	Expect(byName["E2E tests (KinD) / Conformance"].RunsE2EBinary()).To(BeTrue())
 
 	// A config in the environment beats that default.
 	Expect(byName["E2E tests (KinD) / Felix routing"].Config).To(Equal("e2e/config/kind/felix-routing.yaml"))
 
 	// e2e-test-bpf hardcodes its config, so the environment's is ignored.
-	Expect(byName["E2E tests (KinD) / BPF"].Config).To(Equal("e2e/config/kind/bpf.yaml"))
+	Expect(byName["E2E tests (KinD) / BPF"].Config).To(Equal(kindConfigs["KIND_BPF_E2E_CONFIG"]))
 
 	// The ClusterNetworkPolicy job runs a different binary that takes no config,
 	// so it is not a lane even though it sets one.
@@ -264,20 +265,24 @@ func TestKindTargetsMatchTheMakefile(t *testing.T) {
 
 	makefile, err := os.ReadFile("../../../Makefile")
 	Expect(err).NotTo(HaveOccurred())
-	text := string(makefile)
+	text := continuation.ReplaceAllString(string(makefile), " ")
 
 	for target, want := range kindTargets {
 		Expect(text).To(ContainSubstring("\n"+target+":"), "target %s is gone from the Makefile", target)
 		if want.fixed != "" {
-			Expect(text).To(ContainSubstring("E2E_TEST_CONFIG=$(REPO_ROOT)/"+want.fixed),
-				"target %s no longer hardcodes %s", target, want.fixed)
+			Expect(text).To(ContainSubstring(`E2E_TEST_CONFIG="$(`+want.fixed+`)"`), "target %s no longer hardcodes %s", target, want.fixed)
 		}
 		if want.fallback != "" {
-			Expect(text).To(ContainSubstring("E2E_TEST_CONFIG ?= "+want.fallback),
-				"the Makefile default is no longer %s", want.fallback)
+			Expect(text).To(ContainSubstring("E2E_TEST_CONFIG ?= $("+want.fallback+")"), "the Makefile default is no longer %s", want.fallback)
 		}
 	}
+	for variable, list := range kindConfigs {
+		Expect(text).To(ContainSubstring("\n"+variable+" = "+list+"\n"), "the Makefile's %s differs", variable)
+	}
 }
+
+// continuation matches a Makefile line break inside a variable's value.
+var continuation = regexp.MustCompile(` *\\\n\t*`)
 
 const moduleFixture = `
 version: condensed-module
@@ -350,9 +355,9 @@ func TestParseArgoModuleResolvesKindTargets(t *testing.T) {
 		configs[l.Name] = l.Config
 	}
 	Expect(configs).To(Equal(map[string]string{
-		"e2e-kind [defaulted]": "e2e/config/kind/conformance.yaml",
+		"e2e-kind [defaulted]": kindConfigs["KIND_CONFORMANCE_E2E_CONFIG"],
 		"e2e-kind [from-env]":  "e2e/config/kind/felix-routing.yaml",
-		"e2e-kind [hardcoded]": "e2e/config/kind/bpf.yaml",
-		"manifest-install":     "e2e/config/kind/manifest-install.yaml",
+		"e2e-kind [hardcoded]": kindConfigs["KIND_BPF_E2E_CONFIG"],
+		"manifest-install":     kindConfigs["KIND_MANIFEST_E2E_CONFIG"],
 	}))
 }

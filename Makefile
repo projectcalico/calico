@@ -287,10 +287,68 @@ push-chart: bin/helm
 ###############################################################################
 E2E_PROCS ?= 4
 E2E_TIMEOUT ?= 90m
+# Each kind lane's E2E_TEST_CONFIG. cilanes keeps a copy of every list.
+KIND_CONFORMANCE_E2E_CONFIG = \
+	ci-base.yaml \
+	suite/calico-conformance.yaml \
+	suite/network-conformance.yaml \
+	suite/bgp-peering.yaml \
+	cluster/install/operator.yaml \
+	cluster/capability/goldmane.yaml \
+	cluster/api/v3-crds.yaml \
+	cluster/dataplane/iptables.yaml \
+	cluster/cni/calico.yaml \
+	cluster/routing/bgp.yaml \
+	cluster/routing/bgp-mesh.yaml \
+	cluster/platform/kind.yaml \
+	cluster/ip-family/dual-stack.yaml \
+	cluster/capability/host-ports.yaml \
+	cluster/capability/calico-mtu.yaml \
+	cluster/capability/node-port-across-nodes.yaml \
+	cluster/capability/rapidclient-image.yaml \
+	cluster/capability/host-network-services.yaml \
+	cluster/capability/host-endpoint-cross-node.yaml \
+	cluster/capability/connection-limits.yaml
+KIND_BPF_E2E_CONFIG = \
+	ci-base.yaml \
+	suite/calico.yaml \
+	cluster/install/operator.yaml \
+	cluster/capability/goldmane.yaml \
+	cluster/api/v3-crds.yaml \
+	cluster/dataplane/bpf.yaml \
+	cluster/cni/calico.yaml \
+	cluster/routing/bgp.yaml \
+	cluster/platform/kind.yaml \
+	cluster/ip-family/dual-stack.yaml \
+	cluster/capability/host-ports.yaml \
+	cluster/capability/calico-mtu.yaml \
+	cluster/capability/external-node.yaml \
+	cluster/capability/node-port-across-nodes.yaml \
+	cluster/capability/rapidclient-image.yaml \
+	cluster/capability/host-network-services.yaml \
+	cluster/capability/host-endpoint-cross-node.yaml \
+	cluster/capability/connection-limits.yaml
+KIND_MANIFEST_E2E_CONFIG = \
+	ci-base.yaml \
+	suite/manifest-install.yaml \
+	cluster/install/manifest.yaml \
+	cluster/api/v3-crds.yaml \
+	cluster/dataplane/iptables.yaml \
+	cluster/cni/calico.yaml \
+	cluster/routing/bgp.yaml \
+	cluster/routing/bgp-mesh.yaml \
+	cluster/platform/kind.yaml \
+	cluster/ip-family/ipv4.yaml \
+	cluster/capability/host-ports.yaml \
+	cluster/capability/node-port-across-nodes.yaml \
+	cluster/capability/rapidclient-image.yaml \
+	cluster/capability/host-network-services.yaml \
+	cluster/capability/host-endpoint-cross-node.yaml \
+	cluster/capability/connection-limits.yaml
 # The conformance kind lane relies on this default. The provisioned lanes never
 # reach it: run_tests.sh always passes E2E_TEST_CONFIG on make's command line,
 # and a command-line assignment overrides ?= even when its value is empty.
-E2E_TEST_CONFIG ?= e2e/config/kind/conformance.yaml
+E2E_TEST_CONFIG ?= $(KIND_CONFORMANCE_E2E_CONFIG)
 # E2E_TEST_CONFIG is a list, one --calico.test-config per entry. An entry is
 # relative to e2e/config, unless it is absolute or already starts with e2e/config/.
 e2e_config_path = $(abspath $(if $(filter /% e2e/config/%,$(1)),$(1),e2e/config/$(1)))
@@ -346,7 +404,7 @@ kind-manifest-install-test:
 	$(MAKE) e2e-run \
 		KIND_NAME=kind-manifests \
 		KUBECONFIG=$(KIND_DIR)/kind-manifests-kubeconfig.yaml \
-		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/manifest-install.yaml \
+		E2E_TEST_CONFIG="$(KIND_MANIFEST_E2E_CONFIG)" \
 		E2E_JUNIT_REPORT=e2e_manifest_install.xml
 	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=projectcalico.org/v3
 	REPO_ROOT=$(REPO_ROOT) GIT_VERSION=$(GIT_VERSION) \
@@ -355,7 +413,7 @@ kind-manifest-install-test:
 	$(MAKE) e2e-run \
 		KIND_NAME=kind-manifests \
 		KUBECONFIG=$(KIND_DIR)/kind-manifests-kubeconfig.yaml \
-		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/manifest-install.yaml \
+		E2E_TEST_CONFIG="$(KIND_MANIFEST_E2E_CONFIG)" \
 		E2E_JUNIT_REPORT=e2e_operator_upgrade.xml
 
 ## Create a kind cluster and run the conformance e2e tests.
@@ -390,7 +448,7 @@ e2e-test-bpf:
 	$(MAKE) e2e-run \
 		KIND_NAME=kind \
 		KUBECONFIG=$(KIND_KUBECONFIG) \
-		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/bpf.yaml
+		E2E_TEST_CONFIG="$(KIND_BPF_E2E_CONFIG)"
 
 ## Build the rapidclient helper image from PR source and load it into the kind
 ## nodes, so the packet-size server pods use the PR build rather than pulling
@@ -421,6 +479,7 @@ e2e-test-clusternetworkpolicy:
 ## an ad-hoc local run; it expands in the shell so its regex metacharacters survive.
 ## --fail-on-empty fails a run that selects no specs instead of passing it.
 ## OpenShift keeps the legacy master taint on control-plane nodes, which otherwise blocks startup.
+## The capability check runs once before Ginkgo, since each Ginkgo process would repeat it.
 #
 # In CI, keep a failed suite's namespaces for the diagnostics collected after;
 # locally they would just be left behind.
@@ -432,6 +491,7 @@ endif
 e2e-run: bin/ginkgo
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
+	KUBECONFIG=$(KUBECONFIG) ./e2e/bin/k8s/e2e.test -test.run=TestE2E --calico.capability-check=$(abspath $(E2E_OUTPUT_DIR))/junit-capability.xml $(E2E_TEST_CONFIG_FLAGS)
 	KUBECONFIG=$(KUBECONFIG) E2E_TEST_CONFIG="$(E2E_TEST_CONFIG_REL)" ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --json-report=report.json --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --non-blocking-taints=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(E2E_TEST_CONFIG_FLAGS)
 
 # Version from go.mod. Built with whichever of Go and docker the host has: the

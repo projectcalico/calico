@@ -37,9 +37,9 @@ import (
 // DOCS_URL: https://docs.tigera.io/calico/latest/network-policy/policy-tiers/
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithCategory(describe.Policy),
-	describe.WithFeature("Tiered-Policy"),
-	describe.WithWindows(),
+	describe.Covers("Tiered-Policy"),
+	describe.Requires(describe.PolicyTiers),
+	describe.Covers("Windows"),
 	"Tiered policy tests",
 	func() {
 		var cli ctrlclient.Client

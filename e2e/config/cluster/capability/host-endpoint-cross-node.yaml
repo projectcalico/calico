@@ -1,0 +1,8 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Host endpoint policy sees pod traffic between nodes on the host's interface.
+
+kind: cluster
+
+provides:
+  - HostEndpointCrossNode

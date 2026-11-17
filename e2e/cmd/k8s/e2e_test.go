@@ -15,17 +15,21 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/test/e2e"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/config"
 
+	"github.com/projectcalico/calico/e2e/pkg/capability"
 	caliconfig "github.com/projectcalico/calico/e2e/pkg/config"
 	"github.com/projectcalico/calico/e2e/pkg/testconfig"
 
@@ -65,7 +69,22 @@ func init() {
 	caliconfig.AfterReadingAllFlags()
 }
 
+// capabilityReport, when set, makes this run the capability check and write its
+// JUnit report there instead of running specs.
+var capabilityReport = flag.String(
+	"calico.capability-check",
+	"",
+	"Check the cluster has every capability the test configs provide, write a JUnit report to this path, and run no specs.",
+)
+
 func TestE2E(t *testing.T) {
+	if *capabilityReport != "" {
+		if err := runCapabilityCheck(*capabilityReport, caliconfig.TestConfigPaths()); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+
 	if paths := caliconfig.TestConfigPaths(); len(paths) > 0 {
 		if err := applyTestConfig(paths); err != nil {
 			t.Fatalf("Failed to apply test config %q: %v", paths, err)
@@ -73,6 +92,47 @@ func TestE2E(t *testing.T) {
 	}
 	e2e.RunE2ETests(t)
 }
+
+// runCapabilityCheck probes the cluster against what the configs declare and
+// writes the report even when the check can't start, so the lane always
+// uploads one visible result. It returns an error when the lane must stop.
+func runCapabilityCheck(reportPath string, configPaths []string) error {
+	start := time.Now()
+	result := checkCapabilities(configPaths)
+	fmt.Print(result.Summary())
+
+	if err := capability.WriteJUnit(reportPath, result, time.Since(start)); err != nil {
+		return err
+	}
+	if result.Failed() {
+		return fmt.Errorf("capability check failed, so no specs ran:\n%s", result.Summary())
+	}
+	return nil
+}
+
+// checkCapabilities runs the check, folding a setup error into the result.
+func checkCapabilities(configPaths []string) *capability.Result {
+	decls, err := capability.DeclarationsFrom(configPaths)
+	if err != nil {
+		return capability.CouldNotRun(fmt.Errorf("load test configs: %w", err))
+	}
+	restConfig, err := clientcmd.BuildConfigFromFlags("", framework.TestContext.KubeConfig)
+	if err != nil {
+		return capability.CouldNotRun(fmt.Errorf("load kubeconfig: %w", err))
+	}
+	cluster, err := capability.NewCluster(restConfig, caliconfig.ExtNodeIP())
+	if err != nil {
+		return capability.CouldNotRun(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), capabilityCheckTimeout)
+	defer cancel()
+	return capability.Check(ctx, cluster, decls)
+}
+
+// capabilityCheckTimeout bounds every probe together. They only read API state,
+// so a slower check means an unreachable API server.
+const capabilityCheckTimeout = 2 * time.Minute
 
 // applyTestConfig loads the YAML test selection configs, merged into one, and
 // injects the label filter and skip patterns into Ginkgo's suite config via the

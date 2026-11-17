@@ -68,9 +68,9 @@ const (
 // as a provisioning precondition.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("KubeVirt"),
-	describe.RequiresRealKubeVirt(),
-	describe.WithCategory(describe.Networking),
+	describe.Covers("KubeVirt"),
+	describe.Requires(describe.KubeVirt),
+	describe.Requires(describe.RealKubeVirt),
 	"KubeVirt live migration",
 	func() {
 		f := utils.NewDefaultFramework("calico-kubevirt")
@@ -227,7 +227,7 @@ var _ = describe.CalicoDescribe(
 		// flip the TOR's kernel next-hop without dropping the TCP stream, and that
 		// priority correctly reverts and re-elevates across two consecutive migrations.
 		// Requires EXT_IP, EXT_KEY, EXT_USER.
-		framework.Context("eBGP external client", describe.WithExternalNode(), func() {
+		framework.Context("eBGP external client", describe.Requires(describe.ExternalNode), func() {
 			It("should maintain TCP connection from eBGP external client across two consecutive migrations", func() {
 				if isMockVirtDeployed(f) {
 					Fail("This test requires real KubeVirt with QEMU-backed VMs for TCP connectivity; MockVirt does not run a guest OS")
