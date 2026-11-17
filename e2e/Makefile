@@ -26,7 +26,11 @@ CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -lelf
 CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
 # CROSS_CC points the C compiler at the target arch. Without it the host
 # compiler would try to assemble the target's runtime/cgo assembly and fail.
-DOCKER_RUN_CGO=$(DOCKER_RUN) -e CGO_ENABLED=1 $(if $(CROSS_CC),-e CC="$(CROSS_CC)") -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS)
+ifeq ($(NATIVE_GO_BUILD),true)
+DOCKER_GO_BUILD_CGO=env CGO_ENABLED=1 $(if $(CROSS_CC),CC="$(CROSS_CC)") CGO_LDFLAGS=$(CGO_LDFLAGS) CGO_CFLAGS=$(CGO_CFLAGS)
+else
+DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=1 $(if $(CROSS_CC),-e CC="$(CROSS_CC)") -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
+endif
 
 $(LIBBPF_A): $(shell find ../felix/bpf-gpl/libbpf -type f -name '*.[ch]')
 	$(MAKE) -C ../felix libbpf ARCH=$(ARCH)
@@ -44,11 +48,11 @@ bin/k8s/e2e.test: bin/k8s/e2e-linux-$(ARCH).test
 
 bin/clusternetworkpolicy/e2e.test: $(LIBBPF_A) $(SRC_FILES)
 	mkdir -p bin
-	$(DOCKER_RUN_CGO) $(CALICO_BUILD) go test ./cmd/clusternetworkpolicy -c -o $@
+	$(DOCKER_GO_BUILD_CGO) go test ./cmd/clusternetworkpolicy -c -o $@
 
 bin/gateway/e2e.test: $(SRC_FILES)
 	mkdir -p bin/gateway
-	$(DOCKER_RUN) $(CALICO_BUILD) go test ./cmd/gateway -c -o $@
+	$(DOCKER_GO_BUILD) go test ./cmd/gateway -c -o $@
 
 # Per-arch e2e binary, cross-compiled inside the calico/go-build container. CGO
 # stays on for every arch: the tests pull in felix/bpf, which falls back to stubs
@@ -56,7 +60,7 @@ bin/gateway/e2e.test: $(SRC_FILES)
 # libbpf-backed code and behaves the same.
 bin/k8s/e2e-linux-$(ARCH).test: $(LIBBPF_A) $(SRC_FILES)
 	mkdir -p bin/k8s
-	$(DOCKER_RUN_CGO) $(CALICO_BUILD) go test ./cmd/k8s -c -o $@
+	$(DOCKER_GO_BUILD_CGO) go test ./cmd/k8s -c -o $@
 
 .PHONY: build-all
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
@@ -75,7 +79,7 @@ ci: ut
 # Only pkg carries unit tests; cmd holds the Ginkgo suites that need a cluster.
 ut: $(LIBBPF_A)
 	mkdir -p report
-	$(DOCKER_RUN_CGO) $(CALICO_BUILD) gotestsum --junitfile report/e2e_ut.xml -- ./pkg/... -race -count 1
+	$(DOCKER_GO_BUILD_CGO) gotestsum --junitfile report/e2e_ut.xml -- ./pkg/... -race -count 1
 
 fv st:
 	@:
@@ -87,7 +91,7 @@ fv st:
 # up as a reviewable diff.
 .PHONY: gen-test-set
 gen-test-set: bin/k8s/e2e.test
-	$(DOCKER_RUN) $(CALICO_BUILD) go run ./cmd/gen-test-set -repo-root .. -binary e2e/bin/k8s/e2e.test -out e2e/testsets
+	$(DOCKER_GO_BUILD) go run ./cmd/gen-test-set -repo-root .. -binary e2e/bin/k8s/e2e.test -out e2e/testsets
 
 .PHONY: check-test-set
 check-test-set: gen-test-set

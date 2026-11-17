@@ -24,10 +24,8 @@ internal/defaults/metadata.mk: ../metadata.mk
 
 bin/release: $(shell find . -name "*.go" -or -name "*.gotmpl") internal/defaults/metadata.mk
 	@mkdir -p bin
-	@$(DOCKER_RUN) \
-		-e CGO_ENABLED=0 \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -o bin/release -v -buildvcs=false -tags with_embed -ldflags "$(LDFLAGS)" ./cmd'
+	@$(DOCKER_GO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) CGO_ENABLED=0 go build -o bin/release -v -buildvcs=false -tags with_embed -ldflags "$(LDFLAGS)" ./cmd'
 
 ###############################################################################
 # Tests

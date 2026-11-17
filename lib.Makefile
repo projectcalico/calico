@@ -209,14 +209,11 @@ define build_binary_dir
 		sh -c '$(GIT_CONFIG_SSH) mkdir -p $(1)/$(dir $(3)) && CGO_ENABLED=0 go build -C $(1) -o $(3) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(2)'
 endef
 
-# For windows builds that do not require cgo.
+# For windows builds that do not require cgo. The target is set inside the shell,
+# where it overrides the GOOS and GOARCH a native build exports.
 define build_windows_binary
-	$(DOCKER_RUN) \
-		-e CGO_ENABLED=0 \
-		-e GOARCH=amd64 \
-		-e GOOS=windows \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS) -s -w" $(1)'
+	$(DOCKER_GO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS) -s -w" $(1)'
 endef
 
 # Images used in build / test across multiple directories.
@@ -354,6 +351,20 @@ endif
 # Location of certificates used in UTs.
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
+
+# The test apiserver's certs and admin kubeconfig as the tests see them, and the
+# go-build prefix that makes them visible there. The kubeconfig names its certs
+# by the path the containers mount them at.
+ifeq ($(NATIVE_GO_BUILD),true)
+LOCAL_SERVICES_DIR := /tmp/calico-local-services
+TEST_CERTS_DIR := $(CERTS_PATH)
+TEST_KUBECONFIG := $(LOCAL_SERVICES_DIR)/kubeconfig
+DOCKER_GO_BUILD_WITH_CERTS :=
+else
+TEST_CERTS_DIR := /home/user/certs
+TEST_KUBECONFIG := /home/user/certs/kubeconfig
+DOCKER_GO_BUILD_WITH_CERTS = $(DOCKER_RUN) -v $(CERTS_PATH):/home/user/certs $(CALICO_BUILD)
+endif
 
 # Support for git worktrees.  In a worktree, .git is a file pointing to
 # <main-repo>/.git/worktrees/<name>.  When Docker containers need git access,
@@ -897,7 +908,7 @@ LINT_ARGS ?= --max-issues-per-linter 0 --max-same-issues 0 --timeout 8m
 
 .PHONY: golangci-lint
 golangci-lint: $(GENERATED_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) golangci-lint run $(LINT_ARGS)'
+	$(DOCKER_GO_BUILD_RECURSIVE) sh -c '$(GIT_CONFIG_SSH) golangci-lint run $(LINT_ARGS)'
 
 REPO_REL_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else echo '..'; fi )
 
@@ -910,12 +921,16 @@ fix-changed go-fmt-changed goimports-changed:
 	  if [ -z "$(CI_GIT_COMMIT_RANGE)" ]; then \
 	    parent_branch=`release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) $(REPO_REL_DIR)/hack/find-parent-release-branch.sh`; \
 	  fi; \
-	  $(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
-	                -e git_repo_slug=$(GIT_REPO_SLUG) \
-	                -e parent_branch=$$parent_branch \
-	                -e CI_GIT_COMMIT_RANGE=$(CI_GIT_COMMIT_RANGE) \
-	                $(CALICO_BUILD) $(REPO_REL_DIR)/hack/format-changed-files.sh; \
+	  $(call run_with_env,release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) parent_branch=$$parent_branch CI_GIT_COMMIT_RANGE=$(CI_GIT_COMMIT_RANGE),$(REPO_REL_DIR)/hack/format-changed-files.sh); \
 	fi
+
+# $(call run_with_env,VAR=val ...,command): in the go-build container, or directly
+# under NATIVE_GO_BUILD. Values must not contain spaces.
+ifeq ($(NATIVE_GO_BUILD),true)
+run_with_env = env $(1) $(2)
+else
+run_with_env = $(DOCKER_RUN) $(addprefix -e ,$(1)) $(CALICO_BUILD) $(2)
+endif
 
 .PHONY: fix-all go-fmt-all goimports-all
 # $(DOCKER_GO_BUILD) is empty under NATIVE_GO_BUILD, so this runs the formatter directly.
@@ -926,7 +941,7 @@ GOMODDER=$(REPO_REL_DIR)/hack/cmd/gomodder/main.go
 
 .PHONY: verify-go-mods
 verify-go-mods:
-	$(DOCKER_RUN) $(CALICO_BUILD) go run $(GOMODDER)
+	$(DOCKER_GO_BUILD_RECURSIVE) go run $(GOMODDER)
 
 .PHONY: pre-commit
 pre-commit:
@@ -972,7 +987,7 @@ check-module-path-projectcalico-api:
 # go mod helpers
 ###############################################################################
 mod-download:
-	-$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go mod download'
+	-$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) go mod download'
 
 mod-tidy:
 	-$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go mod tidy'
@@ -1583,6 +1598,78 @@ container_running = [ "$$(docker inspect -f '{{.State.Running}}' $(1) 2>/dev/nul
 
 ## Kubernetes apiserver used for tests
 APISERVER_NAME := calico-local-apiserver
+K8S_APISERVER_ARGS = \
+	--etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+	--service-cluster-ip-range=10.101.0.0/16,fd00:96::/112 \
+	--authorization-mode=RBAC \
+	--service-account-key-file=$(TEST_CERTS_DIR)/service-account.pem \
+	--service-account-signing-key-file=$(TEST_CERTS_DIR)/service-account-key.pem \
+	--service-account-issuer=https://localhost:443 \
+	--api-audiences=kubernetes.default \
+	--client-ca-file=$(TEST_CERTS_DIR)/ca.pem \
+	--tls-cert-file=$(TEST_CERTS_DIR)/kubernetes.pem \
+	--tls-private-key-file=$(TEST_CERTS_DIR)/kubernetes-key.pem \
+	--enable-priority-and-fairness=false \
+	--max-mutating-requests-inflight=0 \
+	--max-requests-inflight=0 \
+	--enable-aggregator-routing \
+	--requestheader-client-ca-file=$(TEST_CERTS_DIR)/ca.pem \
+	--requestheader-allowed-names=kubernetes \
+	--requestheader-username-headers=X-Remote-User \
+	--requestheader-group-headers=X-Remote-Group \
+	--requestheader-extra-headers-prefix=X-Remote-Extra- \
+	--proxy-client-cert-file=$(TEST_CERTS_DIR)/kubernetes.pem \
+	--proxy-client-key-file=$(TEST_CERTS_DIR)/kubernetes-key.pem
+K8S_CONTROLLER_MANAGER_ARGS = \
+	--master=https://127.0.0.1:6443 \
+	--kubeconfig=$(TEST_CERTS_DIR)/kube-controller-manager.kubeconfig \
+	--min-resync-period=3m \
+	--allocate-node-cidrs=true \
+	--cluster-cidr=192.168.0.0/16 \
+	--v=5 \
+	--service-account-private-key-file=$(TEST_CERTS_DIR)/service-account-key.pem \
+	--root-ca-file=$(TEST_CERTS_DIR)/ca.pem
+
+ifeq ($(NATIVE_GO_BUILD),true)
+# Natively the test services are processes on this machine, each with a pidfile
+# where a container would have its name.
+
+# $(call start_service,name,command): starts command in the background unless the
+# last one started under that name is still running.
+start_service = if [ -f $(LOCAL_SERVICES_DIR)/$(1).pid ] && kill -0 $$(cat $(LOCAL_SERVICES_DIR)/$(1).pid) 2>/dev/null; then \
+		echo "$(1) already running"; \
+	else \
+		mkdir -p $(LOCAL_SERVICES_DIR); \
+		nohup $(2) > $(LOCAL_SERVICES_DIR)/$(1).log 2>&1 & echo $$! > $(LOCAL_SERVICES_DIR)/$(1).pid; \
+	fi
+stop_service = if [ -f $(LOCAL_SERVICES_DIR)/$(1).pid ]; then \
+		kill $$(cat $(LOCAL_SERVICES_DIR)/$(1).pid) 2>/dev/null || true; \
+		rm -f $(LOCAL_SERVICES_DIR)/$(1).pid; \
+	fi
+test_kubectl = kubectl --kubeconfig=$(TEST_KUBECONFIG)
+
+$(TEST_KUBECONFIG): $(CERTS_PATH)/kubeconfig
+	mkdir -p $(@D)
+	sed 's#/home/user/certs#$(CERTS_PATH)#g' $< > $@
+
+run-k8s-apiserver: run-etcd $(TEST_KUBECONFIG)
+	@$(call start_service,kube-apiserver,kube-apiserver $(K8S_APISERVER_ARGS))
+	@while ! $(test_kubectl) get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
+	@while ! $(test_kubectl) get clusterrolebinding anonymous-admin >/dev/null 2>&1 && \
+		! $(test_kubectl) create clusterrolebinding anonymous-admin \
+		--clusterrole=cluster-admin --user=system:anonymous 2>/dev/null; \
+		do echo "Waiting for kube-apiserver to come up"; sleep 1; done
+	@while ! $(test_kubectl) apply -f $(REPO_ROOT)/$(CALICO_CRD_PATH); do echo "Trying to create CRDs"; sleep 1; done
+
+stop-k8s-apiserver:
+	@$(call stop_service,kube-apiserver)
+
+run-k8s-controller-manager: run-k8s-apiserver
+	@$(call start_service,kube-controller-manager,kube-controller-manager $(K8S_CONTROLLER_MANAGER_ARGS))
+
+stop-k8s-controller-manager:
+	@$(call stop_service,kube-controller-manager)
+else
 run-k8s-apiserver: run-etcd
 	@if $(call container_running,$(APISERVER_NAME)); then \
 		echo "$(APISERVER_NAME) already running"; \
@@ -1593,28 +1680,7 @@ run-k8s-apiserver: run-etcd
 			-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico \
 			-v $(CERTS_PATH):/home/user/certs \
 			-e KUBECONFIG=/home/user/certs/kubeconfig \
-			$(CALICO_BUILD) kube-apiserver \
-			--etcd-servers=http://$(LOCAL_IP_ENV):2379 \
-			--service-cluster-ip-range=10.101.0.0/16,fd00:96::/112 \
-			--authorization-mode=RBAC \
-			--service-account-key-file=/home/user/certs/service-account.pem \
-			--service-account-signing-key-file=/home/user/certs/service-account-key.pem \
-			--service-account-issuer=https://localhost:443 \
-			--api-audiences=kubernetes.default \
-			--client-ca-file=/home/user/certs/ca.pem \
-			--tls-cert-file=/home/user/certs/kubernetes.pem \
-			--tls-private-key-file=/home/user/certs/kubernetes-key.pem \
-			--enable-priority-and-fairness=false \
-			--max-mutating-requests-inflight=0 \
-			--max-requests-inflight=0 \
-			--enable-aggregator-routing \
-			--requestheader-client-ca-file=/home/user/certs/ca.pem \
-			--requestheader-allowed-names=kubernetes \
-			--requestheader-username-headers=X-Remote-User \
-			--requestheader-group-headers=X-Remote-Group \
-			--requestheader-extra-headers-prefix=X-Remote-Extra- \
-			--proxy-client-cert-file=/home/user/certs/kubernetes.pem \
-			--proxy-client-key-file=/home/user/certs/kubernetes-key.pem; \
+			$(CALICO_BUILD) kube-apiserver $(K8S_APISERVER_ARGS); \
 		while ! docker exec $(APISERVER_NAME) kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done; \
 		while ! docker exec $(APISERVER_NAME) kubectl get clusterrolebinding anonymous-admin >/dev/null 2>&1 && \
 			! docker exec $(APISERVER_NAME) kubectl create \
@@ -1645,20 +1711,13 @@ run-k8s-controller-manager: run-k8s-apiserver
 		docker run --detach --net=host \
 			--name $(CONTROLLER_MANAGER_NAME) \
 			-v $(CERTS_PATH):/home/user/certs \
-			$(CALICO_BUILD) kube-controller-manager \
-			--master=https://127.0.0.1:6443 \
-			--kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
-			--min-resync-period=3m \
-			--allocate-node-cidrs=true \
-			--cluster-cidr=192.168.0.0/16 \
-			--v=5 \
-			--service-account-private-key-file=/home/user/certs/service-account-key.pem \
-			--root-ca-file=/home/user/certs/ca.pem; \
+			$(CALICO_BUILD) kube-controller-manager $(K8S_CONTROLLER_MANAGER_ARGS); \
 	fi
 
 ## Stop Kubernetes controller manager
 stop-k8s-controller-manager:
 	@-docker rm -f $(CONTROLLER_MANAGER_NAME)
+endif
 
 ###############################################################################
 # Common functions for create a local kind cluster.
@@ -1984,7 +2043,9 @@ kind-reload:
 # Common functions for setting up a local envtest environment.
 ###############################################################################
 ENVTEST_DIR := $(REPO_ROOT)/hack/test/envtest
-ENVTEST_CONTAINER_DIR := /go/src/github.com/projectcalico/calico/hack/test/envtest
+# The same directory as the go-build recipes see it: the container's mount, or the
+# checkout itself natively.
+ENVTEST_CONTAINER_DIR := $(BUILD_REPO_ROOT)/hack/test/envtest
 # Derive major.minor from K8S_VERSION (e.g. v1.34.3 -> 1.34.x) for setup-envtest.
 # Envtest publishes binaries per minor version, not per patch, so we use a wildcard.
 # Skip on Windows: envtest is Linux-only test infra; bash sed/cut would error otherwise.
@@ -2065,6 +2126,33 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 ## Run etcd as a container (calico-etcd)
 # TODO: We shouldn't need to enable the v2 API, but some of our test code still relies on it.
 .PHONY: run-etcd stop-etcd
+ETCD_ARGS = \
+	--enable-v2 \
+	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
+	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+
+ifeq ($(NATIVE_GO_BUILD),true)
+# The release ETCD_IMAGE is built from.
+ETCD_BIN := $(REPO_ROOT)/bin/etcd-$(ETCD_VERSION)
+
+# A container started with an empty data dir, so a fresh start does too.
+run-etcd: $(ETCD_BIN)
+	@if ! { [ -f $(LOCAL_SERVICES_DIR)/etcd.pid ] && kill -0 $$(cat $(LOCAL_SERVICES_DIR)/etcd.pid) 2>/dev/null; }; then \
+		rm -rf $(LOCAL_SERVICES_DIR)/etcd-data; \
+	fi
+	@$(call start_service,etcd,$(ETCD_BIN) --data-dir $(LOCAL_SERVICES_DIR)/etcd-data $(ETCD_ARGS))
+
+stop-etcd:
+	@$(call stop_service,etcd)
+
+# Written under a temporary name: a half-extracted binary looks complete to make.
+$(ETCD_BIN):
+	$(call fetch_file,https://github.com/etcd-io/etcd/releases/download/$(ETCD_VERSION)/etcd-$(ETCD_VERSION)-linux-$(ARCH).tar.gz,$@.tar.gz)
+	tar -xzf $@.tar.gz -O etcd-$(ETCD_VERSION)-linux-$(ARCH)/etcd > $@.tmp
+	chmod +x $@.tmp
+	mv $@.tmp $@
+	rm -f $@.tar.gz
+else
 run-etcd:
 	@if ! $(call container_running,calico-etcd); then \
 		docker rm -f calico-etcd >/dev/null 2>&1 || true; \
@@ -2072,14 +2160,12 @@ run-etcd:
 		docker run --detach \
 			--net=host \
 			--entrypoint=/usr/local/bin/etcd \
-			--name calico-etcd $(ETCD_IMAGE) \
-			--enable-v2 \
-			--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-			--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"; \
+			--name calico-etcd $(ETCD_IMAGE) $(ETCD_ARGS); \
 	fi
 
 stop-etcd:
 	@-docker rm -f calico-etcd
+endif
 
 ###############################################################################
 # Helpers
