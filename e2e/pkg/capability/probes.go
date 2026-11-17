@@ -152,6 +152,7 @@ func installation(ctx context.Context, c *Cluster) (*operatorv1.Installation, er
 	return inst, nil
 }
 
+// cniIs passes when the computed Installation uses the want CNI plugin.
 func cniIs(want operatorv1.CNIPluginType) installationCheck {
 	return func(inst *operatorv1.Installation) finding {
 		cni := inst.Status.Computed.CNI
@@ -169,6 +170,7 @@ func cniType(inst *operatorv1.Installation) string {
 	return "unset"
 }
 
+// ipamIs passes when the computed Installation uses the want IPAM plugin.
 func ipamIs(want operatorv1.IPAMPluginType) installationCheck {
 	return func(inst *operatorv1.Installation) finding {
 		cni := inst.Status.Computed.CNI
@@ -183,6 +185,7 @@ func ipamIs(want operatorv1.IPAMPluginType) installationCheck {
 	}
 }
 
+// bgpEnabled passes when the computed Installation turns BGP on.
 func bgpEnabled(inst *operatorv1.Installation) finding {
 	network := inst.Status.Computed.CalicoNetwork
 	if network != nil && network.BGP != nil && *network.BGP == operatorv1.BGPEnabled {
@@ -246,8 +249,8 @@ const calicoAPIServiceName = "v3.projectcalico.org"
 // apart. Discovery can't, since the group is served in both modes.
 func probeCalicoAPIService(aggregated bool) probe {
 	return func(ctx context.Context, c *Cluster) (finding, error) {
-		svc := &apiregistrationv1.APIService{}
-		err := c.client.Get(ctx, ctrlclient.ObjectKey{Name: calicoAPIServiceName}, svc)
+		apiService := &apiregistrationv1.APIService{}
+		err := c.client.Get(ctx, ctrlclient.ObjectKey{Name: calicoAPIServiceName}, apiService)
 		if notServedOrNotFound(err) {
 			return absent("projectcalico.org/v3 isn't served"), nil
 		}
@@ -255,7 +258,7 @@ func probeCalicoAPIService(aggregated bool) probe {
 			return finding{}, fmt.Errorf("read APIService %s: %w", calicoAPIServiceName, err)
 		}
 
-		served := svc.Spec.Service != nil
+		served := apiService.Spec.Service != nil
 		mode := "kube-apiserver from CRDs"
 		if served {
 			mode = "calico-apiserver"
@@ -274,11 +277,11 @@ func probeBGPRouting(ctx context.Context, c *Cluster) (finding, error) {
 	if err != nil || !f.present {
 		return f, err
 	}
-	fc, f, err := felixConfiguration(ctx, c)
-	if fc == nil {
+	felixConfig, f, err := felixConfiguration(ctx, c)
+	if felixConfig == nil {
 		return f, err
 	}
-	if fc.Spec.ProgramClusterRoutes != nil && *fc.Spec.ProgramClusterRoutes == v3.Enabled {
+	if felixConfig.Spec.ProgramClusterRoutes != nil && *felixConfig.Spec.ProgramClusterRoutes == v3.Enabled {
 		return absent("Felix programs cluster routes"), nil
 	}
 	return present("BGP programs cluster routes"), nil
@@ -356,23 +359,23 @@ func probeBPFDSR(ctx context.Context, c *Cluster) (finding, error) {
 	if err != nil || !f.present {
 		return f, err
 	}
-	fc, f, err := felixConfiguration(ctx, c)
-	if fc == nil {
+	felixConfig, f, err := felixConfiguration(ctx, c)
+	if felixConfig == nil {
 		return f, err
 	}
-	if strings.EqualFold(fc.Spec.BPFExternalServiceMode, "DSR") {
+	if strings.EqualFold(felixConfig.Spec.BPFExternalServiceMode, "DSR") {
 		return present("BPF external service mode is DSR"), nil
 	}
-	return absent("BPF external service mode is %q", fc.Spec.BPFExternalServiceMode), nil
+	return absent("BPF external service mode is %q", felixConfig.Spec.BPFExternalServiceMode), nil
 }
 
 // probeWireGuard passes when Felix has WireGuard on for either IP family.
 func probeWireGuard(ctx context.Context, c *Cluster) (finding, error) {
-	fc, f, err := felixConfiguration(ctx, c)
-	if fc == nil {
+	felixConfig, f, err := felixConfiguration(ctx, c)
+	if felixConfig == nil {
 		return f, err
 	}
-	spec := fc.Spec
+	spec := felixConfig.Spec
 	if (spec.WireguardEnabled != nil && *spec.WireguardEnabled) || (spec.WireguardEnabledV6 != nil && *spec.WireguardEnabledV6) {
 		return present("FelixConfiguration has WireGuard enabled"), nil
 	}
@@ -382,15 +385,15 @@ func probeWireGuard(ctx context.Context, c *Cluster) (finding, error) {
 // felixConfiguration reads the default FelixConfiguration. When it can't, it
 // returns nil and the finding the caller should report instead.
 func felixConfiguration(ctx context.Context, c *Cluster) (*v3.FelixConfiguration, finding, error) {
-	fc := &v3.FelixConfiguration{}
-	err := c.client.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, fc)
+	felixConfig := &v3.FelixConfiguration{}
+	err := c.client.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, felixConfig)
 	if notServedOrNotFound(err) {
 		return nil, unchecked("no FelixConfiguration named default to read"), nil
 	}
 	if err != nil {
 		return nil, finding{}, fmt.Errorf("read FelixConfiguration: %w", err)
 	}
-	return fc, finding{}, nil
+	return felixConfig, finding{}, nil
 }
 
 // probeGoldmane passes when the operator reports Goldmane available. The
@@ -461,6 +464,8 @@ func runsRHEL(n corev1.Node) bool {
 	return strings.HasPrefix(n.Status.NodeInfo.OSImage, "Red Hat Enterprise Linux")
 }
 
+// hasInternalIP passes for a node with an internal address in the IPv6 family
+// when v6 is set, and in the IPv4 family otherwise.
 func hasInternalIP(v6 bool) nodeTest {
 	return func(n corev1.Node) bool {
 		for _, a := range n.Status.Addresses {
@@ -477,6 +482,7 @@ func hasInternalIP(v6 bool) nodeTest {
 
 const openShiftConfigGroup = "config.openshift.io"
 
+// probeOpenShift passes when the cluster serves OpenShift's config API group.
 func probeOpenShift(ctx context.Context, c *Cluster) (finding, error) {
 	served, err := groupServed(c, openShiftConfigGroup)
 	if err != nil || !served {
@@ -488,6 +494,7 @@ func probeOpenShift(ctx context.Context, c *Cluster) (finding, error) {
 // kubeVirtGroup is served by real KubeVirt and by its simulated MockVirt alike.
 const kubeVirtGroup = "kubevirt.io"
 
+// probeKubeVirt passes when the cluster serves the KubeVirt API group.
 func probeKubeVirt(ctx context.Context, c *Cluster) (finding, error) {
 	served, err := groupServed(c, kubeVirtGroup)
 	if err != nil || !served {
@@ -500,9 +507,9 @@ func probeKubeVirt(ctx context.Context, c *Cluster) (finding, error) {
 // resource's simulation mode, the switch MockVirt turns on.
 func kubeVirtSimulated(want bool) probe {
 	return func(ctx context.Context, c *Cluster) (finding, error) {
-		kv := &unstructured.Unstructured{}
-		kv.SetGroupVersionKind(schema.GroupVersionKind{Group: kubeVirtGroup, Version: "v1", Kind: "KubeVirt"})
-		err := c.client.Get(ctx, ctrlclient.ObjectKey{Namespace: "kubevirt", Name: "kubevirt"}, kv)
+		kubeVirt := &unstructured.Unstructured{}
+		kubeVirt.SetGroupVersionKind(schema.GroupVersionKind{Group: kubeVirtGroup, Version: "v1", Kind: "KubeVirt"})
+		err := c.client.Get(ctx, ctrlclient.ObjectKey{Namespace: "kubevirt", Name: "kubevirt"}, kubeVirt)
 		if notServedOrNotFound(err) {
 			return absent("no KubeVirt resource kubevirt/kubevirt"), nil
 		}
@@ -510,7 +517,7 @@ func kubeVirtSimulated(want bool) probe {
 			return finding{}, fmt.Errorf("read KubeVirt: %w", err)
 		}
 
-		simulated, _, err := unstructured.NestedBool(kv.Object, "spec", "configuration", "developerConfiguration", "simulationMode")
+		simulated, _, err := unstructured.NestedBool(kubeVirt.Object, "spec", "configuration", "developerConfiguration", "simulationMode")
 		if err != nil {
 			return finding{}, fmt.Errorf("read KubeVirt simulation mode: %w", err)
 		}
@@ -539,6 +546,7 @@ func probeIstio(ctx context.Context, c *Cluster) (finding, error) {
 	})(ctx, c)
 }
 
+// probeExternalNode passes when the lane supplied the external node's address.
 func probeExternalNode(_ context.Context, c *Cluster) (finding, error) {
 	if c.extNodeIP == "" {
 		return absent("EXT_IP is unset"), nil
