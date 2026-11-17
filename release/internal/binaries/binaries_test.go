@@ -27,8 +27,9 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/env"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/outputs"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // failingRunner fails a component's build a set number of times before it
@@ -112,7 +113,7 @@ func TestBuildPassesTheVersion(t *testing.T) {
 	if err := Build("/repo", "v1.2.3", testBuilders(""), WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	want := utils.Env(utils.EnvVersion, "v1.2.3")
+	want := env.Var(env.Version, "v1.2.3")
 	for _, c := range f.Calls() {
 		if !slices.Contains(c.Env, want) {
 			t.Errorf("call %v missing %q", c.Args, want)
@@ -130,7 +131,7 @@ func TestBuildPassesABuildersEnv(t *testing.T) {
 	if err := Build("/repo", "v1.2.3", builders, WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	want := utils.Env(utils.EnvArches, "amd64")
+	want := env.Var(env.Arches, "amd64")
 	for _, c := range f.Calls() {
 		if got := slices.Contains(c.Env, want); got != (componentOf(c) == E2EComponent) {
 			t.Errorf("%s built with %q = %v", componentOf(c), want, got)
@@ -155,7 +156,7 @@ func TestRelease(t *testing.T) {
 		}
 		for _, c := range f.Calls() {
 			for _, e := range c.Env {
-				if strings.HasPrefix(e, utils.EnvArches+"=") {
+				if strings.HasPrefix(e, env.Arches+"=") {
 					t.Errorf("%s built with %q, want the make default", componentOf(c), e)
 				}
 			}
@@ -403,7 +404,7 @@ func TestE2ENarrowsToSupportedArches(t *testing.T) {
 	if err := Build(repoRoot, "v1.2.3", builders, WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	want := utils.Env(utils.EnvArches, "amd64")
+	want := env.Var(env.Arches, "amd64")
 	for _, c := range f.Calls() {
 		if componentOf(c) != E2EComponent {
 			continue
@@ -460,7 +461,7 @@ func testArchived(repoRoot string) []archives.DirSource {
 			Label:  "beta tool binary",
 			To:     binDirName,
 			From:   sourceDir(repoRoot, "beta"),
-			Filter: func(_, _, relPath string) bool { return relPath == "tool" },
+			Filter: []fsutil.FileFilter{fsutil.DirFiles, fsutil.Include("tool")},
 		},
 	}
 }
@@ -623,13 +624,32 @@ func TestArchivedIsTheOSSArchiveLayout(t *testing.T) {
 		if got.To != w.to {
 			t.Errorf("%s lands at %q, want %q", got.Label, got.To, w.to)
 		}
+		dir := t.TempDir()
+		for _, name := range append(slices.Clone(w.ships), w.rejects...) {
+			path := filepath.Join(dir, name)
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		filters := got.Filter
+		if filters == nil {
+			filters = []fsutil.FileFilter{fsutil.Recursive}
+		}
+		listed, err := fsutil.ListFiles(dir, filters...)
+		if err != nil {
+			t.Errorf("%s: %v", got.Label, err)
+			continue
+		}
 		for _, name := range w.ships {
-			if got.Filter != nil && !got.Filter("", "", name) {
+			if !slices.Contains(listed, filepath.Join(dir, name)) {
 				t.Errorf("%s does not ship %s", got.Label, name)
 			}
 		}
 		for _, name := range w.rejects {
-			if got.Filter == nil || got.Filter("", "", name) {
+			if slices.Contains(listed, filepath.Join(dir, name)) {
 				t.Errorf("%s ships %s, want it excluded", got.Label, name)
 			}
 		}

@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/env"
 )
 
 const binariesCLITestVersion = "v3.30.0"
@@ -97,11 +97,11 @@ func TestBinariesBuildTakesTheVersionFromTheManifests(t *testing.T) {
 	root := fakeRepo(t, binariesCLITestVersion)
 	r := runBinaries(t, root, "build")
 
-	want := utils.Env(utils.EnvVersion, binariesCLITestVersion)
+	want := env.Var(env.Version, binariesCLITestVersion)
 	for component := range binariesCLIComponents {
-		env := r.envFor(filepath.Join(root, component))
-		if !slices.Contains(env, want) {
-			t.Errorf("%s built without %q, env: %v", component, want, env)
+		vars := r.envFor(filepath.Join(root, component))
+		if !slices.Contains(vars, want) {
+			t.Errorf("%s built without %q, env: %v", component, want, vars)
 		}
 	}
 }

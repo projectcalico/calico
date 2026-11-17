@@ -23,10 +23,10 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/charts"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // HashreleasePublished checks if the hashrelease has already been published.
@@ -83,13 +83,13 @@ func ReformatHashrelease(pin *pinnedversion.Pin, hashreleaseOutputDir string, he
 
 // A chart the build was asked to produce is not optional
 func unversionedCharts(pin *pinnedversion.Pin, srcDir, dstDir string) error {
-	if err := os.MkdirAll(dstDir, utils.DirPerms); err != nil {
+	if err := os.MkdirAll(dstDir, fsutil.DirPerms); err != nil {
 		return err
 	}
 	for _, chart := range charts.All() {
 		src := filepath.Join(srcDir, charts.FileName(chart, pin.HelmChartVersion()))
 		dst := filepath.Join(dstDir, charts.FileName(chart, ""))
-		if err := utils.CopyFile(src, dst); err != nil {
+		if err := fsutil.CopyFile(src, dst); err != nil {
 			return fmt.Errorf("copying %s chart: %w", chart, err)
 		}
 	}
@@ -107,5 +107,5 @@ func copyIfExists(src, dst string) error {
 		}
 		return fmt.Errorf("stat %s: %w", src, err)
 	}
-	return utils.CopyFile(src, dst)
+	return fsutil.CopyFile(src, dst)
 }

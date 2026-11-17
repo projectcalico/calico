@@ -182,9 +182,7 @@ A setting resolves in this order: flag, then environment variable, then
 `metadata.mk`, then a fallback var in `internal/defaults`. `make build` embeds
 the repo's `metadata.mk` in the binary (build tag `with_embed`). Without the
 tag, as in `go test` or `go run`, the binary reads `metadata.mk` from the git
-root at run time. `internal/defaults` must not import `internal/utils`: an
-`init()` that sets its vars may import `utils`, and the cycle would break that
-build, not this one.
+root at run time.
 
 Org, repo, registries, image dirs, make targets and validation funcs live in
 package-level vars, so a fork or a test can change them without editing the code
@@ -234,3 +232,5 @@ changing the steps.
   re-type a swap-point var before finding who sets it (Defaults and swap
   points).
 - Don't add a retry around a step, or a per-step dry-run flag, without a reason.
+- Don't add a catch-all `util` or `utils` package. A shared helper goes in a
+  package named for its domain, like `internal/env` or `internal/fsutil`.

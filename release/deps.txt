@@ -151,6 +151,8 @@ local:release/internal/command
 local:release/internal/defaults
 local:release/internal/distribution
 local:release/internal/docs
+local:release/internal/env
+local:release/internal/fsutil
 local:release/internal/github
 local:release/internal/hashreleaseserver
 local:release/internal/images
@@ -164,7 +166,6 @@ local:release/internal/plan
 local:release/internal/registry
 local:release/internal/slack
 local:release/internal/steps
-local:release/internal/utils
 local:release/internal/version
 local:release/internal/yamledit
 local:release/pkg/manager/calico

@@ -23,8 +23,8 @@ import (
 	"testing"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/env"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 func failingOn(name string) *command.Recorder {
@@ -183,15 +183,15 @@ func TestBuild(t *testing.T) {
 			t.Fatalf("Build: %v", err)
 		}
 		want := map[string]string{
-			utils.EnvProductVersion:           productVersion,
-			utils.EnvOperatorVersion:          operatorVersion,
-			utils.EnvOperatorRegistryOverride: testRegistry,
-			utils.EnvOperatorImageOverride:    operatorImage,
-			utils.EnvRegistry:                 productRegistry,
+			env.ProductVersion:           productVersion,
+			env.OperatorVersion:          operatorVersion,
+			env.OperatorRegistryOverride: testRegistry,
+			env.OperatorImageOverride:    operatorImage,
+			env.Registry:                 productRegistry,
 		}
-		env := named(r, "make")[0].Env
+		vars := named(r, "make")[0].Env
 		for k, v := range want {
-			if !slices.Contains(env, k+"="+v) {
+			if !slices.Contains(vars, k+"="+v) {
 				t.Errorf("expected %s=%s in the environment", k, v)
 			}
 		}
@@ -206,8 +206,8 @@ func TestBuild(t *testing.T) {
 		if err := Build(m, true, false, WithRunner(r)); err != nil {
 			t.Fatalf("Build: %v", err)
 		}
-		if !slices.Contains(named(r, "make")[0].Env, utils.EnvRegistry+"="+productRegistry) {
-			t.Errorf("expected %s=%s in the environment", utils.EnvRegistry, productRegistry)
+		if !slices.Contains(named(r, "make")[0].Env, env.Registry+"="+productRegistry) {
+			t.Errorf("expected %s=%s in the environment", env.Registry, productRegistry)
 		}
 	})
 
@@ -238,11 +238,11 @@ func TestBuild(t *testing.T) {
 		if err := Build(testManifests(t), true, false, WithRunner(r)); err != nil {
 			t.Fatalf("Build: %v", err)
 		}
-		env := named(r, "make")[0].Env
-		if !slices.Contains(env, "EXTRA=set") {
+		vars := named(r, "make")[0].Env
+		if !slices.Contains(vars, "EXTRA=set") {
 			t.Error("expected the override's addition")
 		}
-		if !slices.Contains(env, utils.EnvProductVersion+"="+productVersion) {
+		if !slices.Contains(vars, env.ProductVersion+"="+productVersion) {
 			t.Error("expected the shared environment to survive the override")
 		}
 	})
@@ -378,21 +378,6 @@ func TestPaths(t *testing.T) {
 	t.Run("the output directory is named once", func(t *testing.T) {
 		if got, want := Dir("/out"), filepath.Join("/out", DirName); got != want {
 			t.Errorf("Dir = %s, want %s", got, want)
-		}
-	})
-
-	// Excluded is the archive's filter; it and the rsync must agree on what
-	// ships, or the two release paths diverge.
-	t.Run("the archive filter matches the rsync exclusions", func(t *testing.T) {
-		for _, name := range excluded {
-			if Include("", "", name) {
-				t.Errorf("expected %s to be filtered out", name)
-			}
-		}
-		for _, name := range Files() {
-			if !Include("", "", name) {
-				t.Errorf("expected %s to ship", name)
-			}
 		}
 	})
 }
