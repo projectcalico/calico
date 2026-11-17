@@ -31,8 +31,7 @@ import (
 func requiredOpts() []Option {
 	return []Option{
 		WithRepoRoot("/tmp"),
-		WithGithubOrg("projectcalico"),
-		WithRepoName("calico"),
+		WithGithubRepo("projectcalico", "calico"),
 		WithRepoRemote("origin"),
 	}
 }
@@ -243,6 +242,20 @@ func TestCanBuildValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIsHashRelease(t *testing.T) {
+	t.Run("defaults to a hashrelease's steps", func(t *testing.T) {
+		m := &CalicoManager{gitRef: true, githubRelease: true}
+		if err := IsHashRelease()(m); err != nil {
+			t.Fatalf("IsHashRelease: %v", err)
+		}
+		want := map[string]bool{"isHashRelease": true, "gitRef": false, "githubRelease": false, "releaseNotes": true}
+		got := map[string]bool{"isHashRelease": m.isHashRelease, "gitRef": m.gitRef, "githubRelease": m.githubRelease, "releaseNotes": m.releaseNotes}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("steps (-want +got):\n%s", diff)
+		}
+	})
 }
 
 func TestWithVersion(t *testing.T) {

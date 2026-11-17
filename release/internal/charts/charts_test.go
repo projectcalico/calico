@@ -936,7 +936,7 @@ func TestModifyValuesFailsWhenAKeyIsMissing(t *testing.T) {
 // the chart's default registry during a release, while everything else came
 // from the release registry.
 func TestCalicoChartEditsRewriteEveryImageRegistry(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "..", chartsDirName, CalicoChart, valuesFileName))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", DirName, CalicoChart, valuesFileName))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -966,7 +966,7 @@ func TestCalicoChartEditsRewriteEveryImageRegistry(t *testing.T) {
 
 func writeChartValues(t *testing.T, root, chart, content string) string {
 	t.Helper()
-	dir := filepath.Join(root, chartsDirName, chart)
+	dir := filepath.Join(root, DirName, chart)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

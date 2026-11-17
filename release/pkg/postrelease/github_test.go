@@ -43,7 +43,7 @@ func TestGitHubRelease(t *testing.T) {
 
 	checkVersion(t, releaseVersion)
 
-	release, resp, err := githubClient().Repositories.GetReleaseByTag(context.Background(), githubOrg, githubRepo, releaseVersion)
+	release, resp, err := githubClient().Repositories.GetReleaseByTag(context.Background(), githubRepo.Org, githubRepo.Name, releaseVersion)
 	if err != nil {
 		t.Fatalf("failed to get release %s: %v", releaseVersion, err)
 	}
@@ -84,7 +84,7 @@ func TestGitHubReleaseNotes(t *testing.T) {
 
 	checkVersion(t, releaseVersion)
 
-	_, _, resp, err := githubClient().Repositories.GetContents(context.Background(), githubOrg, githubRepo, fmt.Sprintf("%s/%s-release-notes.md", outputs.ReleaseNotesDir, releaseVersion), &github.RepositoryContentGetOptions{
+	_, _, resp, err := githubClient().Repositories.GetContents(context.Background(), githubRepo.Org, githubRepo.Name, fmt.Sprintf("%s/%s-release-notes.md", outputs.ReleaseNotesDir, releaseVersion), &github.RepositoryContentGetOptions{
 		Ref: releaseVersion,
 	})
 	if err != nil || resp.StatusCode != http.StatusOK {
@@ -113,7 +113,7 @@ func TestGitHubMilestone(t *testing.T) {
 		{milestone: fmt.Sprintf("%s %s", defaults.ProductName, nextVer.String()), expectedStated: "open"},
 	} {
 		t.Run(tt.milestone, func(t *testing.T) {
-			milestones, resp, err := githubClient().Issues.ListMilestones(context.Background(), githubOrg, githubRepo, &github.MilestoneListOptions{
+			milestones, resp, err := githubClient().Issues.ListMilestones(context.Background(), githubRepo.Org, githubRepo.Name, &github.MilestoneListOptions{
 				State:     tt.expectedStated,
 				Direction: "desc",
 				ListOptions: github.ListOptions{

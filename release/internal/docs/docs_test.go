@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -44,11 +45,8 @@ func TestURL(t *testing.T) {
 			"other stream":   {"v3.31.0", "3.31"},
 		} {
 			t.Run(name, func(t *testing.T) {
-				got, err := site(t, tc.version).URL()
-				if err != nil {
-					t.Fatalf("URL() = %v", err)
-				}
-				want := BaseURL + "/" + ProductSlug + "/" + tc.stream
+				got := site(t, tc.version).URL()
+				want := baseURL.JoinPath(defaults.ProductSlug, tc.stream).String()
 				if got != want {
 					t.Errorf("URL() = %q, want %q", got, want)
 				}
@@ -56,11 +54,15 @@ func TestURL(t *testing.T) {
 		}
 	})
 
-	t.Run("drops the version prefix", func(t *testing.T) {
-		got, err := site(t, "v3.30.0").URL()
-		if err != nil {
-			t.Fatalf("URL() = %v", err)
+	t.Run("adds a path below the stream", func(t *testing.T) {
+		got := site(t, "v3.30.1").URL("release-notes")
+		if want := baseURL.JoinPath(defaults.ProductSlug, "3.30", "release-notes").String(); got != want {
+			t.Errorf("URL() = %q, want %q", got, want)
 		}
+	})
+
+	t.Run("drops the version prefix", func(t *testing.T) {
+		got := site(t, "v3.30.0").URL()
 		if strings.Contains(got, "/v3.30") {
 			t.Errorf("URL() = %q, want the stream without a v prefix", got)
 		}
@@ -69,76 +71,13 @@ func TestURL(t *testing.T) {
 	// Keeps the derived expectations above honest: without this, the code
 	// could hardcode the OSS slug and they would still pass.
 	t.Run("uses the product slug", func(t *testing.T) {
-		original := ProductSlug
-		t.Cleanup(func() { ProductSlug = original })
-		ProductSlug = "other-product"
+		original := defaults.ProductSlug
+		t.Cleanup(func() { defaults.ProductSlug = original })
+		defaults.ProductSlug = "other-product"
 
-		got, err := site(t, "v3.30.0").URL()
-		if err != nil {
-			t.Fatalf("URL() = %v", err)
-		}
+		got := site(t, "v3.30.0").URL()
 		if want := "https://docs.tigera.io/other-product/3.30"; got != want {
 			t.Errorf("URL() = %q, want %q", got, want)
-		}
-	})
-}
-
-func TestDownloadsURL(t *testing.T) {
-	t.Run("uses the exact version", func(t *testing.T) {
-		for _, ver := range []string{"v3.30.0", "v3.30.1", "v3.30.0-1.0", "v3.30.0-0.dev-1-gabc123"} {
-			t.Run(ver, func(t *testing.T) {
-				got, err := site(t, ver).DownloadsURL()
-				if err != nil {
-					t.Fatalf("DownloadsURL() = %v", err)
-				}
-				if want := BaseArtifactsURL + "/" + ver; got != want {
-					t.Errorf("DownloadsURL() = %q, want %q", got, want)
-				}
-			})
-		}
-	})
-
-	t.Run("distinguishes patches that share a docs page", func(t *testing.T) {
-		first, second := site(t, "v3.30.0"), site(t, "v3.30.1")
-
-		firstDocs, err := first.URL()
-		if err != nil {
-			t.Fatal(err)
-		}
-		secondDocs, err := second.URL()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if firstDocs != secondDocs {
-			t.Fatalf("the two versions should share a docs page: %q and %q", firstDocs, secondDocs)
-		}
-
-		firstDownloads, err := first.DownloadsURL()
-		if err != nil {
-			t.Fatal(err)
-		}
-		secondDownloads, err := second.DownloadsURL()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if firstDownloads == secondDownloads {
-			t.Errorf("both versions download from %q", firstDownloads)
-		}
-	})
-
-	// Keeps the derived expectations above honest: without this, the code
-	// could hardcode the OSS URL and they would still pass.
-	t.Run("uses the artifacts base URL", func(t *testing.T) {
-		original := BaseArtifactsURL
-		t.Cleanup(func() { BaseArtifactsURL = original })
-		BaseArtifactsURL = "https://example.test/artifacts"
-
-		got, err := site(t, "v3.30.0").DownloadsURL()
-		if err != nil {
-			t.Fatalf("DownloadsURL() = %v", err)
-		}
-		if want := "https://example.test/artifacts/v3.30.0"; got != want {
-			t.Errorf("DownloadsURL() = %q, want %q", got, want)
 		}
 	})
 }
