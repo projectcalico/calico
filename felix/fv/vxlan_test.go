@@ -826,10 +826,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// Wait for the VXLAN device to be created.
 				mtuStr := "mtu 1450"
 				mtuStrV6 := "mtu 1430"
-				if BPFMode() {
-					mtuStr = "mtu 1500"
-					mtuStrV6 = "mtu 1500"
-				}
 				for _, felix := range felixes {
 					Eventually(func() string {
 						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
@@ -867,6 +863,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 								return out
 							}, "60s", "500ms").Should(ContainSubstring(mtuStrV6))
 						}
+					}
+				} else {
+					// With IPv4 VXLAN off, the shared device serves IPv6 only and takes its MTU.
+					for _, felix := range felixes {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
+							return out
+						}, "60s", "500ms").Should(ContainSubstring(mtuStrV6))
 					}
 				}
 
