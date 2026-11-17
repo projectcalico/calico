@@ -13,7 +13,7 @@ function git_current_branch {
 
 # Get the last tag.
 function git_last_tag {
-    git describe --tags --abbrev=0
+    git describe --tags --match 'v*' --abbrev=0
 }
 
 # Autogenerate PEP 440 version based on current Git state.
