@@ -17,6 +17,7 @@ package networking
 import (
 	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -173,13 +174,26 @@ var _ = describe.CalicoDescribe(
 			ct.AddServer(server)
 
 			if clientType == pktClientExt {
+				extFamilies := families
+				if utils.DetectDataplane(cli, f.ClientSet).IsBPF() {
+					// CORE-13982: eBPF drops IPv6 NodePort replies from a backend on another
+					// node when they are just under the pod MTU. Remove once that's fixed.
+					extFamilies = slices.DeleteFunc(slices.Clone(families), func(fam utils.IPFamily) bool { return fam == utils.IPv6 })
+					if len(extFamilies) == 0 {
+						Skip("IPv6 external-to-NodePort packet sizes fail on eBPF (CORE-13982)")
+					}
+					if len(extFamilies) < len(families) {
+						framework.Logf("Not testing IPv6 external-to-NodePort packet sizes on eBPF (CORE-13982)")
+					}
+				}
+
 				extClient := externalnode.MustNewClient()
-				requireExternalNodeIPs(extClient, families)
+				requireExternalNodeIPs(extClient, extFamilies)
 				ct.Deploy()
 				DeferCleanup(ct.Stop)
 
 				// External client uses SSH — build targets and test via ext client helpers.
-				for _, fam := range families {
+				for _, fam := range extFamilies {
 					By(fam.String(), func() {
 						getLengths, postLengths, udpLengths := generatePacketLengths(podMTU, fam.HeaderBytes())
 						target := packetBaseTarget(server, nodes.IPs[fam][0], fam, targetType)
