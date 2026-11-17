@@ -692,6 +692,29 @@ rules:
       - envoyproxies.gateway.envoyproxy.io
       - httproutefilters.gateway.envoyproxy.io
       - securitypolicies.gateway.envoyproxy.io
+  # The operator upgrades the Istio CRDs with the Istio it bundles.
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - update
+    resourceNames:
+      - wasmplugins.extensions.istio.io
+      - trafficextensions.extensions.istio.io
+      - destinationrules.networking.istio.io
+      - envoyfilters.networking.istio.io
+      - gateways.networking.istio.io
+      - proxyconfigs.networking.istio.io
+      - serviceentries.networking.istio.io
+      - sidecars.networking.istio.io
+      - virtualservices.networking.istio.io
+      - workloadentries.networking.istio.io
+      - workloadgroups.networking.istio.io
+      - authorizationpolicies.security.istio.io
+      - peerauthentications.security.istio.io
+      - requestauthentications.security.istio.io
+      - telemetries.telemetry.istio.io
   # 2. GatewayClasses and EnvoyProxy configurations.
   - apiGroups:
       - gateway.networking.k8s.io

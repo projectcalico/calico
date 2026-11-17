@@ -30,7 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
+	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1beta1"
 
 	"github.com/projectcalico/calico/lib/std/intervals"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"

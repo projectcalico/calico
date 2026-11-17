@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -647,6 +648,87 @@ func TestAuthorize(t *testing.T) {
 				assert.Equal(t, tc.expectedReason, resp.Result.Reason)
 			}
 			mockAuthz.AssertExpectations(t)
+		})
+	}
+}
+
+func TestAuthorizeValidatesPolicy(t *testing.T) {
+	validNP := &v3.NetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: v3.KindNetworkPolicy, APIVersion: "projectcalico.org/v3"},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-np", Namespace: "test-ns"},
+		Spec: v3.NetworkPolicySpec{
+			Tier:     "default",
+			Selector: "app == 'web'",
+			Ingress: []v3.Rule{{
+				Action: v3.Allow,
+				Source: v3.EntityRule{
+					ServiceAccounts: &v3.ServiceAccountMatch{Names: []string{"sa-1"}},
+				},
+			}},
+		},
+	}
+	withSelector := func(sel string) *v3.NetworkPolicy {
+		np := validNP.DeepCopy()
+		np.Spec.Selector = sel
+		return np
+	}
+	withSAName := func(name string) *v3.NetworkPolicy {
+		np := validNP.DeepCopy()
+		np.Spec.Ingress[0].Source.ServiceAccounts.Names = []string{name}
+		return np
+	}
+	deleting := func(np *v3.NetworkPolicy) *v3.NetworkPolicy {
+		np = np.DeepCopy()
+		np.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+		np.Finalizers = []string{"test-finalizer"}
+		return np
+	}
+	invalidNP := withSelector("a == 'b' &&")
+
+	testCases := []struct {
+		name          string
+		op            v1.Operation
+		obj, oldObj   *v3.NetworkPolicy
+		expectedAllow bool
+	}{
+		{name: "valid CREATE", op: v1.Create, obj: validNP, expectedAllow: true},
+		{name: "CREATE with invalid selector", op: v1.Create, obj: invalidNP},
+		{name: "CREATE with selector over the nesting limit", op: v1.Create, obj: withSelector(strings.Repeat("(", 101) + "all()" + strings.Repeat(")", 101))},
+		{name: "CREATE with invalid service account name", op: v1.Create, obj: withSAName("a'b")},
+		{name: "UPDATE to invalid selector", op: v1.Update, obj: invalidNP, oldObj: validNP},
+		{name: "UPDATE removing finalizer from invalid policy", op: v1.Update, obj: deleting(invalidNP), oldObj: deleting(invalidNP), expectedAllow: true},
+		{name: "DELETE of invalid policy", op: v1.Delete, oldObj: invalidNP, expectedAllow: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &v1.AdmissionRequest{
+				UID:       "123",
+				Kind:      metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+				Operation: tc.op,
+				UserInfo:  authv1.UserInfo{Username: "test-user"},
+			}
+			if tc.obj != nil {
+				raw, err := json.Marshal(tc.obj)
+				assert.NoError(t, err)
+				req.Object = runtime.RawExtension{Raw: raw}
+			}
+			if tc.oldObj != nil {
+				raw, err := json.Marshal(tc.oldObj)
+				assert.NoError(t, err)
+				req.OldObject = runtime.RawExtension{Raw: raw}
+			}
+			mockAuthz := &MockTierAuthorizer{}
+			mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "default").Return(nil)
+			fakeCS := fakecalicoclient.NewClientset(&v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}})
+			h := &tieredRBACHook{authz: mockAuthz, tierGetter: fakeCS.ProjectcalicoV3().Tiers()}
+
+			resp := h.authorize(v1.AdmissionReview{Request: req})
+
+			assert.Equal(t, tc.expectedAllow, resp.Allowed, "response: %+v", resp.Result)
+			if !tc.expectedAllow {
+				assert.Equal(t, metav1.StatusReasonInvalid, resp.Result.Reason)
+			}
 		})
 	}
 }

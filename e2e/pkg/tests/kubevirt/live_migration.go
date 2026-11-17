@@ -16,6 +16,7 @@ package kubevirt
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -36,6 +37,16 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
+)
+
+const (
+	// handoverMigrationTimeout covers VM boot (up to 5m), one migration (up to
+	// 5m) and the checks either side.
+	handoverMigrationTimeout = 15 * time.Minute
+	// sourceCleanTimeout covers the source virt-launcher teardown (~9s on real
+	// KubeVirt) plus BIRD withdrawing the route, with headroom for a slow node.
+	sourceCleanTimeout = 1 * time.Minute
 )
 
 // KubeVirt live migration e2e tests validate Calico's seamless migration support for
@@ -43,6 +54,8 @@ import (
 //   - Zero-downtime TCP connectivity through iBGP during migration (Test 1)
 //   - Target-node BIRD route preference during migration (Test 2)
 //   - Zero-downtime TCP connectivity from an eBGP external client (Test 3)
+//   - One IPAM owner through the handover, and no stale route or BGP export
+//     left on the source node (N1, N3)
 //
 // Prerequisites:
 //   - KubeVirt installed with live migration support
@@ -419,5 +432,216 @@ var _ = describe.CalicoDescribe(
 					fmt.Sprintf("TCP seq count (%d) too low for elapsed time (%.0fs)", lastSeq, elapsed))
 			})
 		})
+
+		// N1, N3: once the VM has left, the source node must neither route to it
+		// locally nor advertise it, or traffic can be drawn back to a node that no
+		// longer hosts it. Through the handover IPAM must keep one allocation with
+		// one active owner, handed over once: two owners, or an owner flapping
+		// back, is what lets GC free an address still in use. Sampling at 1s can
+		// miss a sub-second window: passing means none was seen. Felix answers
+		// proxy ARP from userspace, which no node-side check here can observe.
+		It("should hand IPAM ownership over once and leave no route or BGP export on the source node", func() {
+			if isMockVirtDeployed(f) {
+				Fail("This test requires real KubeVirt: MockVirt doesn't tear down a source pod")
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), handoverMigrationTimeout)
+			defer cancel()
+			ns := f.Namespace.Name
+			vmName := "e2e-handover"
+			vm := &kubeVirtVM{name: vmName, namespace: ns}
+
+			vm.Create(ctx, cli)
+			DeferCleanup(func() { vm.Delete(cli) })
+			vmIP, sourceNode := vm.WaitForRunningWithIP(ctx, cli)
+			sourcePod, err := vm.FindVirtLauncherPod(ctx, f)
+			Expect(err).NotTo(HaveOccurred(), "find source virt-launcher pod")
+			logrus.Infof("VM %s on %s (pod %s) with IP %s", vmName, sourceNode, sourcePod.Name, vmIP)
+
+			lcgc := newLibcalicoClient(f)
+			handleID := vmipam.CreateVMHandleID("k8s-pod-network", ns, vmName)
+
+			// Without this baseline the "gone afterwards" checks below would pass on
+			// a node that never had the state.
+			By("Verifying the source node routes the VM locally, in the kernel and in BIRD, before migration")
+			Eventually(func() error {
+				routes, err := kernelRoutes(f, sourceNode, vmIP)
+				if err != nil {
+					return err
+				}
+				if len(localRoutes(routes)) != 1 {
+					return fmt.Errorf("want one local route for %s on %s, got %q", vmIP, sourceNode, routes)
+				}
+				birdRoutes, err := queryWorkerBIRDRoute(f, sourceNode, vmIP)
+				if err != nil {
+					return err
+				}
+				for _, r := range birdRoutes {
+					if r.Device {
+						return nil
+					}
+				}
+				return fmt.Errorf("BIRD on %s has no local route for %s/32 yet: %+v", sourceNode, vmIP, birdRoutes)
+			}, 1*time.Minute, 2*time.Second).Should(Succeed())
+
+			By("Waiting for the source pod to be the active IPAM owner")
+			Eventually(func() error {
+				owner, err := sampleIPAMOwner(ctx, lcgc, handleID, vmIP)
+				if err != nil {
+					return err
+				}
+				if owner != sourcePod.Name {
+					return fmt.Errorf("active owner is %q, want source pod %q", owner, sourcePod.Name)
+				}
+				return nil
+			}, 30*time.Second, 2*time.Second).Should(Succeed())
+
+			By("Migrating the VM while sampling IPAM ownership every second")
+			vmim := newVMIMigration(vmName+"-migration", ns, vmName)
+			Expect(cli.Create(ctx, vmim)).To(Succeed(), "create VMIM")
+			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
+
+			// Owner promotion can trail the VMIM's Succeeded phase, so sampling
+			// carries on until the target owns the address, for at most this long.
+			const promotionGrace = 1 * time.Minute
+			owners := []string{sourcePod.Name}
+			var targetPod, targetNode string
+			var succeededAt time.Time
+			samples, apiErrors := 0, 0
+			ticker := time.NewTicker(1 * time.Second)
+			defer ticker.Stop()
+			for {
+				owner, err := sampleIPAMOwner(ctx, lcgc, handleID, vmIP)
+				samples++
+				if err != nil {
+					// An ownership violation fails at once; an API blip only if it persists.
+					Expect(errors.Is(err, errOwnership)).To(BeFalse(),
+						"sample %d during the handover: %v (owners so far %v)", samples, err, owners)
+					apiErrors++
+					Expect(apiErrors).To(BeNumerically("<", 3),
+						"IPAM unreadable for %d samples in a row during the handover: %v", apiErrors, err)
+					select {
+					case <-ctx.Done():
+						Fail(fmt.Sprintf("timed out sampling the handover; owners seen: %v", owners))
+					case <-ticker.C:
+					}
+					continue
+				}
+				apiErrors = 0
+				if owner != owners[len(owners)-1] {
+					owners = append(owners, owner)
+					logrus.Infof("IPAM active owner of %s changed to %s after %d samples", vmIP, owner, samples)
+				}
+
+				// Get errors here are retried on the next tick; the deadlines below
+				// bound how long that can go on.
+				if targetPod == "" || targetNode == "" {
+					vmi := &kubevirtv1.VirtualMachineInstance{}
+					if err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: vmName}, vmi); err == nil && vmi.Status.MigrationState != nil {
+						targetPod = vmi.Status.MigrationState.TargetPod
+						targetNode = vmi.Status.MigrationState.TargetNode
+					}
+				}
+				if succeededAt.IsZero() {
+					got := &kubevirtv1.VirtualMachineInstanceMigration{}
+					if err := cli.Get(ctx, ctrlclient.ObjectKeyFromObject(vmim), got); err == nil {
+						Expect(got.Status.Phase).NotTo(Equal(kubevirtv1.MigrationFailed), "migration failed; IPAM owners seen: %v", owners)
+						if got.Status.Phase == kubevirtv1.MigrationSucceeded {
+							succeededAt = time.Now()
+						}
+					}
+				}
+				if !succeededAt.IsZero() && targetPod != "" && owner == targetPod {
+					break
+				}
+				if !succeededAt.IsZero() && time.Since(succeededAt) > promotionGrace {
+					Fail(fmt.Sprintf("target pod %q not the active IPAM owner %v after the migration succeeded; owners seen: %v",
+						targetPod, promotionGrace, owners))
+				}
+				select {
+				case <-ctx.Done():
+					Fail(fmt.Sprintf("timed out sampling the handover; owners seen: %v", owners))
+				case <-ticker.C:
+				}
+			}
+
+			logrus.Infof("IPAM owners of %s across %d samples: %v", vmIP, samples, owners)
+			Expect(owners).To(Equal([]string{sourcePod.Name, targetPod}),
+				"the active owner should switch from the source pod to the target pod exactly once")
+			Expect(targetNode).NotTo(Equal(sourceNode), "VM didn't migrate off the source node")
+
+			// The source pod's teardown (~9s after cutover) runs CNI DEL against the
+			// same handle; ownership must not move back or lapse when it does.
+			By("Verifying the target keeps ownership through the source pod's teardown")
+			Consistently(func() error {
+				owner, err := sampleIPAMOwner(ctx, lcgc, handleID, vmIP)
+				if err != nil && !errors.Is(err, errOwnership) {
+					logrus.Warnf("ignoring unreadable IPAM sample: %v", err)
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if owner != targetPod {
+					return fmt.Errorf("active owner moved from target %q to %q", targetPod, owner)
+				}
+				return nil
+			}, 30*time.Second, 1*time.Second).Should(Succeed())
+
+			// Then held, so a late re-add by a lingering source pod is caught too.
+			By(fmt.Sprintf("Verifying source node %s has no route or BIRD export for %s", sourceNode, vmIP))
+			Eventually(func() error { return sourceNodeState(f, sourceNode, vmIP) },
+				sourceCleanTimeout, 2*time.Second).Should(Succeed())
+			Consistently(func() error {
+				err := sourceNodeState(f, sourceNode, vmIP)
+				if err != nil && !errors.Is(err, errStaleState) {
+					logrus.Warnf("ignoring unreadable source node state: %v", err)
+					return nil
+				}
+				return err
+			}, 15*time.Second, 3*time.Second).Should(Succeed())
+
+			// Two kernel routes to the same /32 at different metrics would let a
+			// stale one win as soon as the elevated metric reverts.
+			By(fmt.Sprintf("Verifying target node %s has exactly one route for %s", targetNode, vmIP))
+			Eventually(func() error {
+				routes, err := kernelRoutes(f, targetNode, vmIP)
+				if err != nil {
+					return err
+				}
+				if len(routes) != 1 || len(localRoutes(routes)) != 1 {
+					return fmt.Errorf("want exactly one route, via a local veth, for %s on %s; got %q", vmIP, targetNode, routes)
+				}
+				return nil
+			}, metricRevertTimeout, 2*time.Second).Should(Succeed())
+		})
 	},
 )
+
+// errStaleState marks state the source node still holds, as opposed to a
+// failure to read it.
+var errStaleState = errors.New("stale state on source node")
+
+// sourceNodeState returns an error describing any state the source node still
+// holds for the VM: a local kernel route, or a BIRD route it would export (BIRD
+// exports the device routes it learns from the kernel).
+func sourceNodeState(f *framework.Framework, nodeName, vmIP string) error {
+	ip := strings.Split(vmIP, "/")[0]
+	routes, err := kernelRoutes(f, nodeName, vmIP)
+	if err != nil {
+		return err
+	}
+	if local := localRoutes(routes); len(local) != 0 {
+		return fmt.Errorf("%w: kernel still routes %s locally on %s: %q", errStaleState, ip, nodeName, local)
+	}
+
+	birdRoutes, err := queryWorkerBIRDRoute(f, nodeName, vmIP)
+	if err != nil {
+		return err
+	}
+	for _, r := range birdRoutes {
+		if r.Device {
+			return fmt.Errorf("%w: BIRD on %s still has a local route for %s/32 to export: %+v", errStaleState, nodeName, ip, r)
+		}
+	}
+	return nil
+}

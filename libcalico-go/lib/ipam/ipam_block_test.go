@@ -15,6 +15,7 @@
 package ipam
 
 import (
+	"errors"
 	"slices"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -226,6 +228,49 @@ var _ = Describe("Getting summary information about a block", func() {
 			HaveField("ActiveOwnerAttrs", ConsistOf("active")),
 			HaveField("AlternateOwnerAttrs", ConsistOf("alternate")),
 		))
+	})
+})
+
+var _ = Describe("Assigning a specific IP", func() {
+	const owner, other = "owner-host", "other-host"
+	address := cnet.MustParseIP("100.64.0.7")
+
+	blockAffineTo := func(host string) *testBlock {
+		block := makeTestBlock()
+		if host != "" {
+			block.Affinity = new(string(AffinityTypeHost) + ":" + host)
+		}
+		return block
+	}
+
+	assignOn := func(block *testBlock, strict bool, host string) error {
+		handle := "handle"
+		return block.assign(strict, address, &handle, nil, AffinityConfig{AffinityType: AffinityTypeHost, Host: host})
+	}
+
+	It("reports another host's block under strict affinity as ErrAffinityMismatch", func() {
+		err := assignOn(blockAffineTo(owner), true, other)
+		Expect(errors.Is(err, ErrAffinityMismatch)).To(BeTrue(), "got: %v", err)
+		Expect(err.Error()).To(Equal("Block host affinity does not match"))
+	})
+
+	It("reports a block with no affinity under strict affinity as ErrAffinityMismatch", func() {
+		err := assignOn(blockAffineTo(""), true, owner)
+		Expect(errors.Is(err, ErrAffinityMismatch)).To(BeTrue(), "got: %v", err)
+		Expect(err.Error()).To(Equal("Attempt to assign from block 100.64.0.0/24 with no affinity"))
+	})
+
+	It("borrows from another host's block without strict affinity", func() {
+		Expect(assignOn(blockAffineTo(owner), false, other)).To(Succeed())
+	})
+
+	It("doesn't report an address already in use as ErrAffinityMismatch", func() {
+		block := blockAffineTo(owner)
+		Expect(assignOn(block, true, owner)).To(Succeed())
+
+		err := assignOn(block, true, owner)
+		Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceAlreadyExists{}))
+		Expect(errors.Is(err, ErrAffinityMismatch)).To(BeFalse())
 	})
 })
 

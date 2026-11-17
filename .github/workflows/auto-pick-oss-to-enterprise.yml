@@ -367,6 +367,23 @@ jobs:
             echo "escalated=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # 2c. Deterministically regenerate generated files (deps + api codegen)
+      #     from the picked sources, so the pick never ships hand-merged
+      #     generated content. Amends the single pick commit. Read-only token:
+      #     go mod uses it over https to reach private modules.
+      - name: Regenerate generated files
+        id: generate
+        if: >
+          steps.resolve.outputs.proceed == 'true' &&
+          steps.escalation.outputs.escalated != 'true' &&
+          (steps.pick.outputs.outcome == 'clean' ||
+           steps.pick.outputs.outcome == 'conflict')
+        env:
+          GENERATE_TOKEN: ${{ secrets.TIGERA_BOT_PAT_READONLY }}
+          PR_NUMBER: ${{ steps.resolve.outputs.pr }}
+          MERGE_SHA: ${{ steps.resolve.outputs.sha }}
+        run: bash "$RUNNER_TEMP/oss-pick.sh" generate
+
       # 3. Turn the resolved commit into a portable git-format-patch plus the
       #    report/severity/meta, so Job B can rebuild it on a clean runner. The
       #    script refuses to export an unfinished pick or leftover markers.

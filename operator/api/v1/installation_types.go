@@ -151,8 +151,8 @@ type InstallationSpec struct {
 	TyphaMetricsPort *int32 `json:"typhaMetricsPort,omitempty"`
 
 	// FlexVolumePath optionally specifies a custom path for FlexVolume. If not specified, FlexVolume will be
-	// enabled by default. If set to 'None', FlexVolume will be disabled. The default is based on the
-	// kubernetesProvider.
+	// enabled by default. If set to 'None', FlexVolume will not be installed, but a driver already installed in
+	// the default path is updated. The default is based on the kubernetesProvider.
 	// +optional
 	FlexVolumePath string `json:"flexVolumePath,omitempty"`
 

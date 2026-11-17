@@ -23,16 +23,20 @@ package flexvol
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/syslog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	creds "github.com/projectcalico/calico/pod2daemon/flexvol/creds"
 )
 
@@ -88,19 +92,26 @@ type ConfigurationOptions struct {
 	LogLevel string `json:"log_level,omitempty"`
 }
 
-// FlexVolumeInputs is the structure used by kubelet to notify it of
-// volume mounts/unmounts.
-type FlexVolumeInputs struct {
-	Uid            string `json:"kubernetes.io/pod.uid"`
-	Name           string `json:"kubernetes.io/pod.name"`
-	Namespace      string `json:"kubernetes.io/pod.namespace"`
-	ServiceAccount string `json:"kubernetes.io/serviceAccount.name"`
+// Option keys used by kubelet to notify it of volume mounts/unmounts.
+const (
+	optPodUID         = "kubernetes.io/pod.uid"
+	optPodName        = "kubernetes.io/pod.name"
+	optPodNamespace   = "kubernetes.io/pod.namespace"
+	optServiceAccount = "kubernetes.io/serviceAccount.name"
+)
+
+var (
+	podUIDUUIDRegexp = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	podUIDHashRegexp = regexp.MustCompile(`^[0-9a-f]{32}$`)
+)
+
+func validPodUID(uid string) bool {
+	return podUIDUUIDRegexp.MatchString(uid) || podUIDHashRegexp.MatchString(uid)
 }
 
 const (
 	SYSLOGTAG       string = "FlexVolNodeAgent"
 	VER_K8S         string = "1.8"
-	VER             string = "0.1"
 	CONFIG_FILE     string = "/etc/flexvolume/nodeagent.json"
 	NODEAGENT_HOME  string = "/var/run/nodeagent"
 	MOUNT_DIR       string = "/mount"
@@ -189,12 +200,13 @@ func NewCommand() *cobra.Command {
 		Short: "Print version",
 		Long:  "Flex volume driver version",
 		RunE: func(c *cobra.Command, args []string) error {
-			fmt.Printf("Version is %s\n", VER)
+			fmt.Printf("Version is %s\n", buildinfo.Version)
 			return nil
 		},
 	}
 
 	var installTarget string
+	var installIfPresent bool
 	installCmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install the flex volume driver onto the host filesystem.",
@@ -203,10 +215,14 @@ func NewCommand() *cobra.Command {
 			"<plugin-dir>/uds and the argv[0] dispatch only matches that name. " +
 			"Must run as root - the target dir is typically owned by root.",
 		RunE: func(c *cobra.Command, args []string) error {
+			if installIfPresent {
+				return installDriverIfPresent(installTarget)
+			}
 			return installDriver(installTarget)
 		},
 	}
 	installCmd.Flags().StringVar(&installTarget, "target", "", "Path on the host where the driver binary is installed (e.g. /host/driver/uds).")
+	installCmd.Flags().BoolVar(&installIfPresent, "if-present", false, "Only replace a driver that is already installed.")
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(initCmd)
@@ -277,6 +293,15 @@ func installDriver(target string) error {
 	return nil
 }
 
+func installDriverIfPresent(target string) error {
+	if _, err := os.Lstat(target); errors.Is(err, fs.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	return installDriver(target)
+}
+
 // initCommand handles the init command for the driver.
 func initCommand() error {
 	if configuration.K8sVersion == "1.8" {
@@ -292,19 +317,46 @@ func initCommand() error {
 
 // checkValidMountOpts checks if there are sufficient inputs to
 // call node agent.
-func checkValidMountOpts(opts string) (*creds.Credentials, string, bool) {
-	ninputs := FlexVolumeInputs{}
-	err := json.Unmarshal([]byte(opts), &ninputs)
-	if err != nil {
+func checkValidMountOpts(dir, opts string) (*creds.Credentials, string, bool) {
+	var inputs map[string]string
+	if err := json.Unmarshal([]byte(opts), &inputs); err != nil {
+		return nil, "", false
+	}
+
+	uid, err := podUIDFromDir(dir)
+	if err != nil || inputs[optPodUID] != uid {
 		return nil, "", false
 	}
 
 	return &creds.Credentials{
-		UID:            ninputs.Uid,
-		Workload:       ninputs.Name,
-		Namespace:      ninputs.Namespace,
-		ServiceAccount: ninputs.ServiceAccount,
-	}, ninputs.Uid, true
+		UID:            uid,
+		Workload:       inputs[optPodName],
+		Namespace:      inputs[optPodNamespace],
+		ServiceAccount: inputs[optServiceAccount],
+	}, uid, true
+}
+
+func podUIDFromDir(dir string) (string, error) {
+	comps := strings.Split(filepath.Clean(dir), "/")
+	n := len(comps)
+	if n < 5 || comps[n-2] != "nodeagent~uds" || comps[n-3] != "volumes" || comps[n-5] != "pods" {
+		return "", fmt.Errorf("unexpected volume dir %q", dir)
+	}
+	if uid := comps[n-4]; validPodUID(uid) {
+		return uid, nil
+	}
+	return "", fmt.Errorf("invalid pod uid in volume dir %q", dir)
+}
+
+func pathUnder(base, elem string) (string, error) {
+	if elem == "" || elem == "." || elem == ".." || strings.ContainsRune(elem, '/') {
+		return "", fmt.Errorf("invalid path element %q", elem)
+	}
+	p := filepath.Join(base, elem)
+	if rel, err := filepath.Rel(base, p); err != nil || rel != elem {
+		return "", fmt.Errorf("path %q escapes %q", p, base)
+	}
+	return p, nil
 }
 
 // doMount handles a new workload mounting the flex volume drive. It will:
@@ -313,8 +365,11 @@ func checkValidMountOpts(opts string) (*creds.Credentials, string, bool) {
 // * do a bind mount of the nodeagent's directory on the node to the destinationDir/nodeagent.
 func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath string) error {
 	inp := strings.Join([]string{destinationDir, workloadPath}, "|")
-	newDir := configuration.NodeAgentWorkloadHomeDir + "/" + workloadPath
-	err := os.MkdirAll(newDir, 0o777)
+	newDir, err := pathUnder(configuration.NodeAgentWorkloadHomeDir, workloadPath)
+	if err != nil {
+		return err
+	}
+	err = os.MkdirAll(newDir, 0o777)
 	if err != nil {
 		logError("doMount", inp, fmt.Sprintf("failed to create directory %s\n", newDir), syslogOnlyTrue)
 		return err
@@ -378,7 +433,7 @@ func doUnmount(dir string) error {
 func mount(dir, opts string) error {
 	inp := strings.Join([]string{dir, opts}, "|")
 
-	ninputs, workloadPath, s := checkValidMountOpts(opts)
+	ninputs, workloadPath, s := checkValidMountOpts(dir, opts)
 	if !s {
 		logError("mount", inp, "Incomplete inputs", syslogOnlyFalse)
 		return fmt.Errorf("invalid mount options")
@@ -402,20 +457,10 @@ func mount(dir, opts string) error {
 // unmount handles the unmount command to the driver.
 func unmount(dir string) error {
 	var emsgs []string
-	// Stop the listener.
-	// /var/lib/kubelet/pods/20154c76-bf4e-11e7-8a7e-080027631ab3/volumes/nodeagent~uds/test-volume/
-	// /var/lib/kubelet/pods/2dc75e9a-cbec-11e7-b158-0800270da466/volumes/nodeagent~uds/test-volume
-	comps := strings.Split(dir, "/")
-	if len(comps) < 6 {
-		sErr := fmt.Sprintf("Failure to notify nodeagent dir %v", dir)
-		logError("unmount", dir, sErr, syslogOnlyFalse)
-		return fmt.Errorf("invalid path to unmount")
-	}
-
-	uid := comps[5]
-	// TBD: Check if uid is the correct format.
-	naInp := &creds.Credentials{UID: uid}
-	if err := removeCredentialFile(naInp); err != nil {
+	uid, uidErr := podUIDFromDir(dir)
+	if uidErr != nil {
+		emsgs = append(emsgs, "Skipping credentials and directory cleanup: "+uidErr.Error())
+	} else if err := removeCredentialFile(&creds.Credentials{UID: uid}); err != nil {
 		// Go ahead and finish the unmount; no need to hold up kubelet.
 		emsgs = append(emsgs, "Failure to delete credentials file: "+err.Error())
 	}
@@ -431,11 +476,15 @@ func unmount(dir string) error {
 		logError("unmount", dir, fmt.Sprintf("failed to unmount %s\n", dir), syslogOnlyTrue)
 	}
 	// delete the directory that was created.
-	delDir := strings.Join([]string{configuration.NodeAgentWorkloadHomeDir, uid}, "/")
-	err = os.Remove(delDir)
-	if err != nil {
-		emsgs = append(emsgs, fmt.Sprintf("unmount del failure %s: %s", delDir, err.Error()))
-		// go ahead and return indicating success
+	if uidErr == nil {
+		delDir, err := pathUnder(configuration.NodeAgentWorkloadHomeDir, uid)
+		if err == nil {
+			err = os.Remove(delDir)
+		}
+		if err != nil {
+			emsgs = append(emsgs, fmt.Sprintf("unmount del failure %s: %s", delDir, err.Error()))
+			// go ahead and return indicating success
+		}
 	}
 
 	if len(emsgs) == 0 {
@@ -500,19 +549,27 @@ func addCredentialFile(ninputs *creds.Credentials) error {
 		return err
 	}
 
-	credsFileTmp := strings.Join([]string{configuration.NodeAgentManagementHomeDir, ninputs.UID + ".json"}, "/")
+	credsFileTmp, err := pathUnder(configuration.NodeAgentManagementHomeDir, ninputs.UID+".json")
+	if err != nil {
+		return err
+	}
 	_ = os.WriteFile(credsFileTmp, attrs, 0o644)
 
 	// Move it to the right location now.
-	credsFile := strings.Join([]string{configuration.NodeAgentCredentialsHomeDir, ninputs.UID + ".json"}, "/")
+	credsFile, err := pathUnder(configuration.NodeAgentCredentialsHomeDir, ninputs.UID+".json")
+	if err != nil {
+		return err
+	}
 	return os.Rename(credsFileTmp, credsFile)
 }
 
 // removeCredentialFile is used to delete a credential file when a workload with the flex-volume volume mounted is deleted.
 func removeCredentialFile(ninputs *creds.Credentials) error {
-	credsFile := strings.Join([]string{configuration.NodeAgentCredentialsHomeDir, ninputs.UID + ".json"}, "/")
-	err := os.Remove(credsFile)
-	return err
+	credsFile, err := pathUnder(configuration.NodeAgentCredentialsHomeDir, ninputs.UID+".json")
+	if err != nil {
+		return err
+	}
+	return os.Remove(credsFile)
 }
 
 // initConfiguration reads the configuration file if available and initializes the

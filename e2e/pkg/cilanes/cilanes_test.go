@@ -37,6 +37,14 @@ steps:
         value: e2e/config/vpp/eks.yaml
     commands: |
       .argoci/scripts/body_standard.sh
+  - name: config-list
+    env:
+      - name: E2E_TEST_CONFIG
+        value: >-
+          e2e/config/ci-base.yaml
+          e2e/config/suite/policy.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
   - name: openstack
     env:
       - name: PROVISIONER
@@ -81,6 +89,10 @@ func TestParseArgo(t *testing.T) {
 	// resolve to a value the parser can use.
 	Expect(byName["overrides-config"].Config).To(Equal("e2e/config/vpp/eks.yaml"))
 
+	// A cell can list several configs, folded onto one line by the YAML.
+	Expect(byName["config-list"].Configs()).To(Equal([]string{"e2e/config/ci-base.yaml", "e2e/config/suite/policy.yaml"}))
+	Expect(byName["overrides-config"].Configs()).To(Equal([]string{"e2e/config/vpp/eks.yaml"}))
+
 	openstack := byName["openstack"]
 	Expect(openstack.TestType).To(Equal("openstack-e2e"))
 	Expect(openstack.RunsE2EBinary()).To(BeFalse())
@@ -89,10 +101,10 @@ func TestParseArgo(t *testing.T) {
 	Expect(byName["migration"].Config).To(Equal("e2e/config/iptables/xtables.yaml"))
 	Expect(byName["migration [pre-migration]"].Config).To(Equal(flannelMigrationPreConfig))
 
-	// The CNI axis leaves the selection alone, so its entries collapse into the
-	// unsuffixed step.
-	Expect(byName).To(HaveKey("matrix-step"))
-	Expect(byName["matrix-step"].Config).To(Equal("e2e/config/iptables/xtables.yaml"))
+	// Every matrix entry is its own lane, including one that selects like the
+	// step's default, so a lane keeps its name when an entry's config changes.
+	Expect(byName).NotTo(HaveKey("matrix-step"))
+	Expect(byName["matrix-step [calico-cni]"].Config).To(Equal("e2e/config/iptables/xtables.yaml"))
 	Expect(byName["matrix-step [encap]"].Config).To(Equal("e2e/config/iptables/xtables-encap-nobgp.yaml"))
 }
 
@@ -123,8 +135,28 @@ func TestSelectionArgs(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(args).To(Equal([]string{"--calico.test-config=/repo/e2e/config/vpp/eks.yaml"}))
 
+	// A lane listing several configs passes each, in order. An entry is relative
+	// to e2e/config unless it already starts with e2e/config/, as in e2e-run.
+	args, err = Lane{Name: "list", Config: "ci-base.yaml\n  e2e/config/suite/policy.yaml"}.SelectionArgs("/repo")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(args).To(Equal([]string{
+		"--calico.test-config=/repo/e2e/config/ci-base.yaml",
+		"--calico.test-config=/repo/e2e/config/suite/policy.yaml",
+	}))
+
+	// An entry that can't name a file under e2e/config is caught here rather
+	// than surfacing as an opaque binary failure.
+	for _, bad := range []string{"/tmp/x.yaml", "${CFG}", "../x.yaml", "e2e/config/../../x.yaml"} {
+		_, err = Lane{Name: "bad", Config: bad}.SelectionArgs("/repo")
+		Expect(err).To(MatchError(ContainSubstring("is not under e2e/config/")), bad)
+	}
+
 	_, err = Lane{Name: "empty"}.SelectionArgs("/repo")
-	Expect(err).To(HaveOccurred())
+	Expect(err).To(MatchError(ContainSubstring("selects nothing")))
+
+	// Whitespace alone is no selection, so the lane does not run the binary.
+	Expect(Lane{TestType: "k8s-e2e", Config: "  "}.RunsE2EBinary()).To(BeFalse())
+	Expect(Lane{TestType: "k8s-e2e", Config: "e2e/config/a.yaml"}.RunsE2EBinary()).To(BeTrue())
 }
 
 const blocksFixture = `

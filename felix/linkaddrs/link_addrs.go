@@ -15,6 +15,7 @@
 package linkaddrs
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -236,7 +237,7 @@ func (la *LinkAddrsManager) resync(nl netlinkshim.Interface) error {
 			continue // Skip interfaces that don't match the prefix
 		}
 
-		addrs, err := netlink.AddrList(link, la.netlinkFamily())
+		addrs, err := nl.AddrList(link, la.netlinkFamily())
 		if err != nil {
 			la.logCtx.WithError(err).WithField("link", name).Error("Failed to get address on link")
 			return err
@@ -245,28 +246,31 @@ func (la *LinkAddrsManager) resync(nl netlinkshim.Interface) error {
 	}
 
 	return la.ifaceNameToAddrs.Dataplane().ReplaceAllIter(func(f func(k string, v ip.CIDR)) error {
-		var ipCIDR ip.CIDR
 		for name, addrs := range linkAddrMap {
+			var ipCIDR ip.CIDR
 			for _, addr := range addrs {
 				if programmedByOS(addr) {
 					// ignore address which is programmed by OS.
 					continue
 				}
 
-				ipCIDR, err = netlinkAddrToipCIDR(addr)
+				cidr, err := netlinkAddrToipCIDR(addr)
 				if err != nil {
 					la.logCtx.WithError(err).WithField("link", name).Error("link has wrong ip format")
 					continue
 				}
-				if ipCIDR.Version() != (uint8)(la.ipVersion) {
+				if cidr.Version() != (uint8)(la.ipVersion) {
 					// ignore address which is not in the same ipVersion.
 					continue
 				}
 
 				// This should be a valid address in the dataplane.
+				ipCIDR = cidr
 				break
 			}
-			f(name, ipCIDR)
+			if ipCIDR != nil {
+				f(name, ipCIDR)
+			}
 		}
 		return nil
 	})
@@ -284,6 +288,12 @@ func (la *LinkAddrsManager) netlinkFamily() int {
 // If newipCIDR is nil, it deletes all valid addresses.
 func (la *LinkAddrsManager) ensureLinkLocalAddress(nl netlinkshim.Interface, name string, newipCIDR ip.CIDR) error {
 	link, err := nl.LinkByName(name)
+	var lnf netlink.LinkNotFoundError
+	if newipCIDR == nil && errors.As(err, &lnf) {
+		// Nothing to remove: the interface is gone and its addresses went with it.
+		la.logCtx.WithField("iface", name).Debug("Interface already gone, no link local address to remove")
+		return nil
+	}
 	if err != nil {
 		// Presumably the link is not up yet.  We will be called again when it is.
 		la.logCtx.WithError(err).Warning("Failed to look up device link")

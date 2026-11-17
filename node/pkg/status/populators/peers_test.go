@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -257,4 +257,38 @@ BGP state:          Established
 			},
 		),
 	)
+})
+
+var _ = Describe("BIRD BGP peers populator with no BIRD socket", func() {
+	var status *v3.CalicoNodeStatus
+
+	BeforeEach(func() {
+		for _, ipv := range []IPFamily{IPFamilyV4, IPFamilyV6} {
+			_, err := getBirdConn(ipv)
+			Expect(err).To(BeAssignableToTypeOf(ErrorSocketConnection{}), "test needs BIRD sockets to be absent")
+		}
+		status = &v3.CalicoNodeStatus{}
+		status.Status.BGP = v3.CalicoNodeBGPStatus{
+			NumberEstablishedV4: 1,
+			PeersV4:             []v3.CalicoNodePeer{{PeerIP: "172.17.0.5", State: v3.BGPSessionStateEstablished}},
+			NumberEstablishedV6: 1,
+			PeersV6:             []v3.CalicoNodePeer{{PeerIP: "fd00::5", State: v3.BGPSessionStateEstablished}},
+		}
+	})
+
+	It("clears only the IPv6 peers when the IPv6 socket is unreachable", func() {
+		Expect(NewBirdBGPPeers(IPFamilyV6).Populate(status)).To(Succeed())
+		Expect(status.Status.BGP.PeersV6).To(BeEmpty())
+		Expect(status.Status.BGP.NumberEstablishedV6).To(BeZero())
+		Expect(status.Status.BGP.PeersV4).To(HaveLen(1))
+		Expect(status.Status.BGP.NumberEstablishedV4).To(Equal(1))
+	})
+
+	It("clears only the IPv4 peers when the IPv4 socket is unreachable", func() {
+		Expect(NewBirdBGPPeers(IPFamilyV4).Populate(status)).To(Succeed())
+		Expect(status.Status.BGP.PeersV4).To(BeEmpty())
+		Expect(status.Status.BGP.NumberEstablishedV4).To(BeZero())
+		Expect(status.Status.BGP.PeersV6).To(HaveLen(1))
+		Expect(status.Status.BGP.NumberEstablishedV6).To(Equal(1))
+	})
 })

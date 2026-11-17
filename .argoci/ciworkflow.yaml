@@ -130,6 +130,11 @@ defaults:
   secretBundles:
     - docker-hub
 
+  # Every step is in the `basic-ci` tier new PRs start on. A step that needs VMs
+  # or a cluster opts out with `tiers: []` in its module; `tiers: []` on an
+  # include below is a no-op, since include tiers only add.
+  tiers: [basic]
+
 includes:
   # Each check inside carries its own gate.
   - path: .argoci/modules/10-prerequisites.yaml
@@ -229,6 +234,15 @@ includes:
     changes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/20-cmd-calico\.yaml$']
+
+  - path: .argoci/modules/20-e2e-openstack.yaml
+    changes:
+      in:
+        - ^networking-calico/e2e/
+        - ^\.argoci/modules/20-e2e-openstack\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
 
   - path: .argoci/modules/20-e2e-ut.yaml
     changes:
@@ -408,13 +422,25 @@ includes:
         - (^|/)README\.md$
         - (^|/)LICENSE$
 
-  # The FV lanes run Typha alongside Felix, and the fleet scripts drive them all.
+  # The FV lanes run Typha alongside Felix, both from the calico image, and the
+  # fleet scripts drive them all.  The FV cache keys hash what this matches, and
+  # felix-fv-memo fails if it misses part of the FV build.
   - path: .argoci/modules/20-felix.yaml
     changes:
       dependsOn: [felix, typha]
       in:
+        - ^cmd/calico/
+        - ^docker/calico/
+        - ^node/pkg/node/[^/]*\.go$
+        # Imported by the FV tests, which the generated component leaves out.
+        - ^libcalico-go/lib/testutils/[^/]*\.go$
         - ^\.semaphore/vms/
+        - ^\.semaphore/collect-artifacts$
+        - ^\.semaphore/scripts/load-felix-prereqs\.sh$
+        - ^\.argoci/scripts/load-cached-images$
         - ^\.argoci/scripts/vm-fleet-setup\.sh$
+        - ^\.argoci/scripts/felix-fv-plan$
+        - ^hack/cmd/felix-fv-memo/
         - ^process/testing/aso/
         - ^process/testing/util/
         - ^process/testing/winfv-felix/
@@ -427,6 +453,10 @@ includes:
         - ^metadata\.mk$
         - ^lib\.Makefile$
         - ^\.argoci/modules/40-openstack\.yaml$
+
+      # The OpenStack e2e suite, which 20-e2e-openstack.yaml builds.
+      exclude:
+        - ^networking-calico/e2e/
 
   - path: .argoci/modules/20-kube-controllers.yaml
     changes:

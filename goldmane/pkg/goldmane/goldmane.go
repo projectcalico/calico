@@ -106,6 +106,18 @@ var (
 		Name: "goldmane_aggr_duplicate_flows_total",
 		Help: "Total number of already-seen flows skipped by the aggregator.",
 	})
+
+	// The trace cache lives in the types package, which Felix also imports, so its metrics are
+	// registered here rather than there.
+	policyTraceCacheSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "goldmane_policy_trace_cache_size",
+		Help: "Number of decoded policy trace entries across both cache generations.",
+	}, func() float64 { return float64(types.PolicyTraceCacheSize()) })
+
+	policyTraceCacheRotations = prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "goldmane_policy_trace_cache_rotations_total",
+		Help: "Total number of times the policy trace cache started a new generation.",
+	}, func() float64 { return float64(types.PolicyTraceCacheRotations()) })
 )
 
 func init() {
@@ -119,6 +131,8 @@ func init() {
 	prometheus.MustRegister(numUniqueFlows)
 	prometheus.MustRegister(numDroppedFlows)
 	prometheus.MustRegister(numDuplicateFlows)
+	prometheus.MustRegister(policyTraceCacheSize)
+	prometheus.MustRegister(policyTraceCacheRotations)
 }
 
 // sinkRequest is an internal helper used to set the sink for the aggregator, which can by modified at runtime.
@@ -180,6 +194,7 @@ type Goldmane struct {
 	listRequests        chan listRequest
 	filterHintsRequests chan filterHintsRequest
 	statisticsRequests  chan statisticsRequest
+	streamRequests      chan streamRequest
 	sinkChan            chan *sinkRequest
 	recvChan            chan storage.FlowFromNode
 }
@@ -192,6 +207,7 @@ func NewGoldmane(opts ...Option) *Goldmane {
 		listRequests:        make(chan listRequest),
 		filterHintsRequests: make(chan filterHintsRequest),
 		statisticsRequests:  make(chan statisticsRequest),
+		streamRequests:      make(chan streamRequest),
 		sinkChan:            make(chan *sinkRequest, 10),
 		recvChan:            make(chan storage.FlowFromNode, channelDepth),
 		rolloverFunc:        time.After,
@@ -268,12 +284,6 @@ func (a *Goldmane) run(startTime int64, ready chan<- struct{}) {
 		a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 	}
 
-	// Start the stream manager on its own goroutine so we can process stream creation and closure
-	// requests asynchronously from the main loop.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go a.streams.Run(ctx)
-
 	// Schedule the first rollover one aggregation period from now.
 	rolloverCh := a.rolloverFunc(a.bucketDuration)
 
@@ -292,8 +302,8 @@ func (a *Goldmane) run(startTime int64, ready chan<- struct{}) {
 			req.respCh <- a.queryFilterHints(req.req)
 		case req := <-a.statisticsRequests:
 			req.respCh <- a.queryStatistics(req.req)
-		case stream := <-a.streams.Backfills():
-			a.backfill(stream)
+		case req := <-a.streamRequests:
+			req.respCh <- a.openStream(req.req)
 		case req := <-a.sinkChan:
 			logrus.WithField("sink", req.sink).Info("Setting aggregator sink")
 			a.sink = req.sink
@@ -323,27 +333,42 @@ func (a *Goldmane) Receive(f *types.Flow, node string) {
 	}
 }
 
-// Stream returns a new Stream from the stream manager.
+// streamRequest carries a Stream call onto the main loop, which opens the stream and replies on
+// respCh with it, or with nil when the stream limit has been reached.
+type streamRequest struct {
+	respCh chan stream.Stream
+	req    *proto.FlowStreamRequest
+}
+
+// Stream opens a new Stream. The main loop backfills it and subscribes it to rollovers in one
+// step, so the stream sees every bucket exactly once.
 func (a *Goldmane) Stream(req *proto.FlowStreamRequest) (stream.Stream, error) {
 	logrus.WithField("req", req).Debug("Received stream request")
 
-	if req.StartTimeGte != 0 {
-		// Sanitize the time range, resolving any relative time values.
-		// Note that for stream requests, 0 means "now" instead of "beginning of history". As such,
-		// we only resolve relative times for StartTimeGt.
-		req.StartTimeGte, _ = a.normalizeTimeRange(req.StartTimeGte, 0)
-	}
-
-	// Register the stream with the stream manager. This will return a new Stream object.
-	respCh := a.streams.Register(req, 2*numBuckets)
+	respCh := make(chan stream.Stream)
 	defer close(respCh)
-
-	// Wait for a response.
+	a.streamRequests <- streamRequest{respCh, req}
 	s := <-respCh
 	if s == nil {
 		return nil, status.Error(codes.ResourceExhausted, "max number of streams reached, try again later")
 	}
 	return s, nil
+}
+
+// openStream runs on the main loop. It registers the stream and queues its backfill before any
+// later rollover can reach it, and returns nil when the stream limit has been reached.
+func (a *Goldmane) openStream(req *proto.FlowStreamRequest) stream.Stream {
+	if req.StartTimeGte != 0 {
+		// For stream requests, 0 means the current time rather than the beginning of history, so
+		// only non-zero start times are resolved.
+		req.StartTimeGte, _ = a.normalizeTimeRange(req.StartTimeGte, 0)
+	}
+	s := a.streams.Register(req, 2*numBuckets)
+	if s == nil {
+		return nil
+	}
+	a.backfill(s)
+	return s
 }
 
 func (a *Goldmane) validateTimeRange(startTimeGt, startTimeLt int64) error {

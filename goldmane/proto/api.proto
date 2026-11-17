@@ -157,6 +157,10 @@ enum FilterType {
   FilterTypePolicyName = 6;
   FilterTypePolicyKind = 7;
   FilterTypePolicyNamespace = 8;
+  // Namespace and Name collect values from either side of a flow, limited to the sides that match the
+  // filter's either entries.
+  FilterTypeNamespace = 9;
+  FilterTypeName = 10;
 }
 
 // FlowResult wraps a Flow object with additional metadata.
@@ -208,6 +212,25 @@ message Filter {
 
   // Pending/Staged Actions filters on the action field. Combined using logical OR.
   repeated Action pending_actions = 10;
+
+  // Endpoints matches flows by the endpoints on each side. Combined using logical OR.
+  repeated FlowEndpointsMatch endpoints = 11;
+}
+
+// FlowEndpointsMatch matches a flow by its source and destination endpoints. If the either field is set, the flow
+// matches when its source or its destination matches it, and source and dest are ignored. Otherwise every
+// set end must match its own side of the flow.
+message FlowEndpointsMatch {
+  EndpointMatch source = 1;
+  EndpointMatch dest = 2;
+  EndpointMatch either = 3;
+}
+
+// EndpointMatch matches one endpoint by its namespace and name together, against the aggregated values in the
+// flow key, so a pod matches by its workload. An empty field matches any value.
+message EndpointMatch {
+  StringMatch namespace = 1;
+  StringMatch name = 2;
 }
 
 enum MatchType {

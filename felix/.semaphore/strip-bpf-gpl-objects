@@ -1,0 +1,31 @@
+#!/bin/bash
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Deletes the bpf-gpl programs from the objects the FVs mount into Felix,
+# keeping the bpf-apache ones that the iptables and nftables dataplanes load.
+# The non-BPF lanes' cache keys leave out the bpf-gpl programs,
+# so a test that needs one must fail rather than pass on a stale entry.
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+removed=0
+for obj in bin/bpf/*.o; do
+  if [ ! -e "bpf-apache/$(basename "${obj%.o}").c" ]; then
+    rm -f "$obj"
+    removed=$((removed + 1))
+  fi
+done
+echo "Removed $removed bpf-gpl objects; kept: $(cd bin/bpf && echo *.o)"

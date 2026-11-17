@@ -1,6 +1,6 @@
 # Use PrepareNode.ps1 from sig-windows-tools to set up Kubernetes binaries
 param(
-    [string]$K8sVersion = "v1.33.0"
+    [string]$K8sVersion = "v1.34.13"
 )
 
 $KUBE_BIN_DIR = "C:\k"

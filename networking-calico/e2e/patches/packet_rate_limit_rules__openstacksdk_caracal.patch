@@ -1,0 +1,99 @@
+From 09227335fdc054508ef807045370f70b89f0eda3 Mon Sep 17 00:00:00 2001
+From: Nell Jerram <nell@tigera.io>
+Date: Mon, 24 Feb 2025 12:12:35 +0000
+Subject: [PATCH] Add support for packet-rate-limit rules
+
+---
+ openstack/network/v2/_proxy.py                | 23 +++++++++++
+ .../network/v2/qos_packet_rate_limit_rule.py  | 38 +++++++++++++++++++
+ 2 files changed, 61 insertions(+)
+ create mode 100644 openstack/network/v2/qos_packet_rate_limit_rule.py
+
+diff --git a/openstack/network/v2/_proxy.py b/openstack/network/v2/_proxy.py
+index 70ed80193..1450fcaf6 100644
+--- a/openstack/network/v2/_proxy.py
++++ b/openstack/network/v2/_proxy.py
+@@ -71,6 +71,9 @@ from openstack.network.v2 import (
+ from openstack.network.v2 import (
+     qos_minimum_packet_rate_rule as _qos_minimum_packet_rate_rule,
+ )
++from openstack.network.v2 import (
++    qos_packet_rate_limit_rule as _qos_packet_rate_limit_rule,
++)
+ from openstack.network.v2 import qos_policy as _qos_policy
+ from openstack.network.v2 import qos_rule_type as _qos_rule_type
+ from openstack.network.v2 import quota as _quota
+@@ -3595,6 +3598,26 @@ class Proxy(proxy.Proxy):
+             **attrs,
+         )
+ 
++    def create_qos_packet_rate_limit_rule(self, qos_policy, **attrs):
++        """Create a new bandwidth limit rule
++
++        :param dict attrs: Keyword arguments which will be used to create
++                           a :class:`~openstack.network.v2.
++                           qos_bandwidth_limit_rule.QoSBandwidthLimitRule`,
++                           comprised of the properties on the
++                           QoSBandwidthLimitRule class.
++        :param qos_policy: The value can be the ID of the QoS policy that the
++                           rule belongs or a :class:`~openstack.network.v2.
++                           qos_policy.QoSPolicy` instance.
++
++        :returns: The results of resource creation
++        :rtype: :class:`~openstack.network.v2.qos_bandwidth_limit_rule.
++                    QoSBandwidthLimitRule`
++        """
++        policy = self._get_resource(_qos_policy.QoSPolicy, qos_policy)
++        return self._create(_qos_packet_rate_limit_rule.QoSPacketRateLimitRule,
++                            qos_policy_id=policy.id, **attrs)
++
+     def create_qos_policy(self, **attrs):
+         """Create a new QoS policy from attributes
+ 
+diff --git a/openstack/network/v2/qos_packet_rate_limit_rule.py b/openstack/network/v2/qos_packet_rate_limit_rule.py
+new file mode 100644
+index 000000000..16d532069
+--- /dev/null
++++ b/openstack/network/v2/qos_packet_rate_limit_rule.py
+@@ -0,0 +1,38 @@
++# Licensed under the Apache License, Version 2.0 (the "License"); you may
++# not use this file except in compliance with the License. You may obtain
++# a copy of the License at
++#
++#      http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++# License for the specific language governing permissions and limitations
++# under the License.
++
++from openstack import resource
++
++
++class QoSPacketRateLimitRule(resource.Resource):
++    resource_key = 'packet_rate_limit_rule'
++    resources_key = 'packet_rate_limit_rules'
++    base_path = '/qos/policies/%(qos_policy_id)s/packet_rate_limit_rules'
++
++    _allow_unknown_attrs_in_body = True
++
++    # capabilities
++    allow_create = True
++    allow_fetch = True
++    allow_commit = True
++    allow_delete = True
++    allow_list = True
++
++    # Properties
++    #: The ID of the QoS policy who owns rule.
++    qos_policy_id = resource.URI('qos_policy_id')
++    #: Maximum bandwidth in kbps.
++    max_kpps = resource.Body('max_kpps')
++    #: Maximum burst bandwidth in kbps.
++    max_burst_kpps = resource.Body('max_burst_kpps')
++    #: Traffic direction from the tenant point of view ('egress', 'ingress').
++    direction = resource.Body('direction')
+-- 
+2.34.1
+

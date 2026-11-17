@@ -25,14 +25,14 @@ import (
 // ships; bump with the kind release. Exported so callers can detect
 // "what would the default be" without re-invoking Up.
 //
-// Currently kindest/node:v1.33.7 — the highest 1.33.x release published by
+// Currently kindest/node:v1.34.3 — the highest 1.34.x release published by
 // kind v0.31.0. localregistry now emits the containerd 2.x-compatible
 // config_path + hosts.toml setup, so newer kindest/node images that ship
 // containerd 2.x (kind v0.27+) work too.
 // To bump, look up the digest from the kind release notes — they pin
 // per-k8s digests there and require @sha256 to guarantee the release-built
 // image.
-const DefaultNodeImage = "kindest/node:v1.33.7@sha256:d26ef333bdb2cbe9862a0f7c3803ecc7b4303d8cea8e814b481b09949d353040"
+const DefaultNodeImage = "kindest/node:v1.34.3@sha256:08497ee19eace7b4b5348db5c6a1591d7752b164530a36f855cb0f2bdcbadd48"
 
 // DefaultNetworking is the Calico-friendly networking config applied when
 // Config.Networking is a zero-valued struct: IPv4-only, default CNI off so

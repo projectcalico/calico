@@ -50,6 +50,38 @@ A flow-based device is incompatible with a fixed-VNI device. If Felix
 detects a mismatched existing device on startup, it recreates it
 (`vxlanLinksIncompat` in `vxlan_mgr.go`).
 
+### VNI filter
+
+An unfiltered flow-based device takes every VNI, so no other VXLAN
+device can use its UDP port. Where the kernel supports it, Felix adds
+`vnifilter` and admits only:
+
+- the overlay VNI: BPF's overlay tunnel ID, `VXLANVNI`, or 1 when IPIP
+  or WireGuard is also enabled (all overlay devices share one ID);
+- the NodePort VNI `NodePortVXLANTunnelVNI` (`CALI_VXLAN_VNI`,
+  `0xca11c0`). BPF decaps it on host endpoints, so it never reaches the
+  device; the filter only reserves it, so the kernel refuses another
+  device that claims it.
+
+Other `vnifilter` devices (e.g. EVPN) can then share the port with
+disjoint VNIs. Sending is not filtered.
+
+- **Probe:** distros backport `vnifilter` (upstream 5.18, RHEL 9 on
+  5.14), so Felix probes instead of checking the kernel version. A
+  `vxlan.calico` that already filters proves support, so a failed probe
+  never downgrades it. Otherwise Felix creates `cali-vnif-probe` (never
+  up) and checks the flag stuck; old kernels ignore it silently. Runs
+  only in eBPF VXLAN mode; `FeatureDetectOverride` skips it.
+- **Forced on, unsupported:** the kernel creates the device without the
+  filter; Felix logs an error and keeps it unfiltered.
+- **Upgrade:** the flag can't be toggled on a live device, so
+  `vxlanLinksIncompat` recreates `vxlan.calico` once.
+- **Reconcile:** `ensureVNIFilter` (`route_mgr.go`) sets the exact VNI
+  set on every sync pass, repairing VNIs that other programs remove.
+- **Classic devices:** a fixed-VNI device can never share a port with a
+  flow-based one; the kernel shares a socket only between devices with
+  identical receive flags.
+
 ### Single device for dualstack
 
 Kernel VXLAN in flow-based mode ties a device to an IP family
@@ -149,6 +181,8 @@ than pinned to a specific device.
   a matching entry in `vxlanLinksIncompat` so that a mismatched
   existing device is detected and recreated; otherwise the BPF
   programs and the device disagree on how tunnel keys are set.
+- A new VNI that BPF must receive on `vxlan.calico` must be added to
+  the VNI filter (`vxlanMgrWithVNIFilter`), or the kernel drops it.
 - Dualstack work on the VXLAN device must respect the "only one
   device" invariant — setting up a second `vxlan-v6.calico` device
   in BPF mode breaks tunnel-key resolution.

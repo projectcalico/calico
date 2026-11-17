@@ -72,7 +72,8 @@ jobs:
         github.event.state == 'failure' ||
         github.event.state == 'error'))
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # ArgoCI's triage comment can take ~5 minutes; see the poll below.
+    timeout-minutes: 8
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
@@ -278,8 +279,8 @@ jobs:
       # its LLM backend responds, so the comment usually isn't there yet.
       # Poll briefly for it so the DM can deep-link to the analysis. A pass
       # and an approval never get a triage comment, so the poll is skipped
-      # on every state but failure/error. sem-ai-triage comments on Semaphore
-      # failures only.
+      # on every state but failure/error. sem-ai-triage comments on ArgoCI and
+      # Semaphore failures alike.
       - name: Wait for sem-ai-triage comment
         id: triage
         if: >-
@@ -287,7 +288,8 @@ jobs:
           steps.resolve.outputs.skip != 'true' &&
           steps.lookup.outputs.skip != 'true' &&
           steps.claim.outputs.claimed != 'false' &&
-          env.CONTEXT == 'ci/semaphoreci/pr: Calico' &&
+          (env.CONTEXT == 'ci/semaphoreci/pr: Calico' ||
+           env.CONTEXT == 'continuous-integration/calico') &&
           (env.STATE == 'failure' || env.STATE == 'error')
         env:
           PR: ${{ steps.resolve.outputs.pr }}
@@ -320,12 +322,13 @@ jobs:
           # ~1 page instead of walking every comment 12 times — avoids the
           # API churn/rate-limit risk of an unbounded --paginate in a loop.
           SINCE=$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ)
-          # ~120s budget (12 x 10s). Triage typically comments well within
-          # this; if not, we just omit the analysis link from the DM.
+          # Semaphore's triage comments within ~120s; argo-triage reads a whole run, so ArgoCI waits ~5 min.
+          POLLS=12
+          [[ "$CONTEXT" == "continuous-integration/calico" ]] && POLLS=30
           # Filter flat and take the last line rather than indexing into an
           # array: --paginate applies --jq per page, so [-1] would emit one URL
           # per page and a busy PR would yield a multi-line value.
-          for _ in $(seq 1 12); do
+          for _ in $(seq 1 "$POLLS"); do
             COMMENT_URL=$(gh api "repos/$REPO/issues/$PR/comments?since=$SINCE&per_page=100" --paginate \
               --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")) $FRESH) | .html_url" \
               | tail -n1)

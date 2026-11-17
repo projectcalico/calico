@@ -414,6 +414,11 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 		rc.Namespace.NumberOfWorkers = envCfg.ProfileWorkers
 	}
 
+	// JSON omits empty maps, so normalize this before comparing with stored status.
+	if len(status.EnvironmentVars) == 0 {
+		status.EnvironmentVars = nil
+	}
+
 	return rCfg, status
 }
 

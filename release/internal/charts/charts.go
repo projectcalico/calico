@@ -33,13 +33,10 @@ import (
 	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
-// The name becomes the log directory, so it is qualified: a bare "build"
-// would collide with another group's.
 const (
-	buildStep = "charts-build"
-
-	// PublishStep names the step, and so the record a resume reads back.
-	PublishStep = "charts-publish"
+	Step        = "charts"
+	buildStep   = Step + "-build"
+	PublishStep = Step + "-publish"
 )
 
 const (
@@ -223,7 +220,7 @@ type settings struct {
 }
 
 func (s *settings) Helm(args []string, env []string, logPath string) (string, error) {
-	return s.Run(helmBinary, args, env, logPath)
+	return s.Run(helmBinary, args, command.WithEnv(env...), command.WithLogFile(logPath))
 }
 
 // index is where a build writes its repository index.

@@ -24,6 +24,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/projectcalico/calico/release/internal/steps"
 )
 
 type fakeDest struct {
@@ -244,4 +246,58 @@ func TestPublishSkipsValidationOfASkippedUpload(t *testing.T) {
 	if got := d.got(); len(got) != 1 {
 		t.Errorf("expected the unskipped upload to run, got %v", got)
 	}
+}
+
+func TestNode(t *testing.T) {
+	t.Run("is named after the upload and publishes its source", func(t *testing.T) {
+		dir := dirWith(t, "x")
+		d := &fakeDest{name: "s3://bucket/"}
+		n := Node(Upload{Name: "archives", Source: dir, Handler: d})
+		if n.Name != "archives" {
+			t.Errorf("Name = %q, want archives", n.Name)
+		}
+		if err := n.Do(); err != nil {
+			t.Fatalf("Do: %v", err)
+		}
+		if got := d.got(); len(got) != 1 || got[0] != dir {
+			t.Errorf("published %v, want [%s]", got, dir)
+		}
+	})
+
+	t.Run("a skipped upload is off", func(t *testing.T) {
+		if Node(Upload{Name: "x", Handler: &fakeDest{}, Skip: true}).When() {
+			t.Error("When() = true, want false")
+		}
+	})
+
+	t.Run("requires what the upload requires", func(t *testing.T) {
+		want := []string{"checksums"}
+		if got := Node(Upload{Name: "x", Handler: &fakeDest{}, Requires: want}).Requires; !slices.Equal(got, want) {
+			t.Errorf("Requires = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("validates the destination", func(t *testing.T) {
+		n := Node(Upload{Name: "x", Handler: S3{URI: "s3://bucket/"}})
+		if err := n.Validate(); err == nil {
+			t.Error("Validate() = nil, want an error for an upload with no source")
+		}
+	})
+
+	t.Run("validates with a preparer's check", func(t *testing.T) {
+		n := Node(Upload{Name: "x", Handler: Preparer{Kind: "x", Check: func() error { return errors.New("boom") }}})
+		if err := n.Validate(); err == nil {
+			t.Error("Validate() = nil, want the check's error")
+		}
+	})
+
+	t.Run("retries a failed publish", func(t *testing.T) {
+		d := &fakeDest{name: "s3://bucket/", err: errors.New("boom")}
+		if err := Node(Upload{Name: "x", Source: dirWith(t, "x"), Handler: d}).Do(); err == nil {
+			t.Fatal("Do() = nil, want error")
+		}
+		if got := len(d.got()); got != steps.MaxRetries+1 {
+			t.Errorf("tried %d times, want %d", got, steps.MaxRetries+1)
+		}
+	})
 }
