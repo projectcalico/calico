@@ -69,6 +69,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 	storageInterface, dFunc, err := opts.GetStorage(
 		prefix,
 		keyFunc,
+		registry.NoNamespaceReverseKeyFunc(prefix),
 		strategy,
 		func() runtime.Object { return &calico.BlockAffinity{} },
 		func() runtime.Object { return &calico.BlockAffinityList{} },
