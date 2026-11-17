@@ -39,6 +39,14 @@ var (
 	// ErrAlternateOwnerMismatch is returned when AlternateOwnerAttrs doesn't match
 	// the expected target owner, indicating an unexpected state.
 	ErrAlternateOwnerMismatch = errors.New("AlternateOwnerAttrs doesn't match expected target owner")
+
+	// ErrActiveOwnerPresent is returned by PromoteAlternateVMOwnerIfActiveEmpty when the pod is
+	// the alternate owner but another owner is still active.
+	ErrActiveOwnerPresent = errors.New("ActiveOwnerAttrs names another owner")
+
+	// ErrNoVMAddresses is returned when the VM handle has no addresses, or doesn't exist.  That
+	// is the normal state for a VM without address persistence.
+	ErrNoVMAddresses = errors.New("no addresses allocated to VM handle")
 )
 
 // VMHandleInfix separates a VM handle's network name from its namespace and VM name.
@@ -139,7 +147,8 @@ func VMHandleNetworks(handle string) iter.Seq[string] {
 //   - nil: Success, target is active owner for all IPs (already was or just swapped)
 //   - ErrAlternateOwnerEmpty: AlternateOwnerAttrs is empty and target is not active (target pod deleted)
 //   - ErrAlternateOwnerMismatch: AlternateOwnerAttrs contains a different pod than expected
-//   - other error: Transient failure (network, CAS conflict, no IPs found, etc.) - caller should retry
+//   - ErrNoVMAddresses: the handle has no IPs, or doesn't exist
+//   - other error: Transient failure (network, CAS conflict, etc.) - caller should retry
 //
 // After a successful operation, the L3 route resolver will automatically update
 // IPIP/VXLAN routes based on the new ActiveOwnerAttrs, directing traffic to the
@@ -152,17 +161,54 @@ func EnsureActiveVMOwnerAttrs(
 	vmiName string,
 	targetPodName string,
 ) error {
+	_, err := promoteVMOwner(ctx, ipamClient, networkName, namespace, vmiName, targetPodName, false)
+	return err
+}
+
+// PromoteAlternateVMOwnerIfActiveEmpty is EnsureActiveVMOwnerAttrs for an address with no active
+// owner: it promotes the pod from alternate to active owner only where ActiveOwnerAttrs is empty,
+// and returns ErrActiveOwnerPresent where another owner is still active.  The check is part of the
+// CAS, so it never demotes an owner that appears concurrently.
+//
+// That is safe to call without knowing whether a live migration succeeded.  After a success, the
+// source pod's CNI DEL clears the active owner and leaves the target as the only claimant.  After
+// a cancel, the source is still active.
+//
+// promoted is true if any address changed.
+func PromoteAlternateVMOwnerIfActiveEmpty(
+	ctx context.Context,
+	ipamClient ipam.Interface,
+	networkName string,
+	namespace string,
+	vmiName string,
+	podName string,
+) (promoted bool, err error) {
+	return promoteVMOwner(ctx, ipamClient, networkName, namespace, vmiName, podName, true)
+}
+
+func promoteVMOwner(
+	ctx context.Context,
+	ipamClient ipam.Interface,
+	networkName string,
+	namespace string,
+	vmiName string,
+	targetPodName string,
+	requireActiveEmpty bool,
+) (promoted bool, err error) {
 	// Step 1: Generate handleID using the same logic as CNI plugin
 	handleID := CreateVMHandleID(networkName, namespace, vmiName)
 
 	// Step 2: Get all IPs allocated to this handle
 	ips, err := ipamClient.IPsByHandle(ctx, handleID)
 	if err != nil {
-		return fmt.Errorf("failed to get IPs for handle %s: %w", handleID, err)
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+			return false, fmt.Errorf("failed to get IPs for handle %s: %w: %w", handleID, ErrNoVMAddresses, err)
+		}
+		return false, fmt.Errorf("failed to get IPs for handle %s: %w", handleID, err)
 	}
 
 	if len(ips) == 0 {
-		return fmt.Errorf("no IPs found for handle %s", handleID)
+		return false, fmt.Errorf("%w: handle %s", ErrNoVMAddresses, handleID)
 	}
 
 	// Step 3: Build expected target owner
@@ -173,21 +219,26 @@ func EnsureActiveVMOwnerAttrs(
 
 	var lastErr error
 	for _, ip := range ips {
-		if err := verifyAndSwapSingleIP(ctx, ipamClient, ip, handleID, expectedTargetOwner); err != nil {
+		changed, err := verifyAndSwapSingleIP(ctx, ipamClient, ip, handleID, expectedTargetOwner, requireActiveEmpty)
+		promoted = promoted || changed
+		if err != nil {
 			lastErr = err
-			log.WithError(err).WithField("ip", ip).Warning("Failed to swap owner for IP")
 
 			// If this is a non-retryable error, return immediately
-			if errors.Is(err, ErrAlternateOwnerEmpty) || errors.Is(err, ErrAlternateOwnerMismatch) {
-				return err
+			if errors.Is(err, ErrAlternateOwnerEmpty) || errors.Is(err, ErrAlternateOwnerMismatch) ||
+				errors.Is(err, ErrActiveOwnerPresent) {
+				log.WithError(err).WithField("ip", ip).Debug("Not promoting owner for IP")
+				return promoted, err
 			}
+			log.WithError(err).WithField("ip", ip).Warning("Failed to swap owner for IP")
+
 			// For transient errors, continue to try other IPs
 		}
 	}
 
 	// If we had any transient errors, return the last one for retry
 	// On retry, already-swapped IPs will be detected as already correct and skipped
-	return lastErr
+	return promoted, lastErr
 }
 
 const swapRetries = 5
@@ -205,39 +256,48 @@ func verifyAndSwapSingleIP(
 	ip cnet.IP,
 	handleID string,
 	expectedTargetOwner *ipam.AttributeOwner,
-) error {
+	requireActiveEmpty bool,
+) (changed bool, err error) {
 	for attempt := 0; attempt < swapRetries; attempt++ {
 		allocAttr, err := ipamClient.GetAssignmentAttributes(ctx, ip)
 		if err != nil {
-			return fmt.Errorf("failed to get assignment attributes for IP %s: %w", ip, err)
+			return false, fmt.Errorf("failed to get assignment attributes for IP %s: %w", ip, err)
 		}
 		if allocAttr == nil {
-			return fmt.Errorf("IP %s is not assigned", ip)
+			return false, fmt.Errorf("IP %s is not assigned", ip)
 		}
 
 		// Verify handle ID matches
 		if allocAttr.HandleID == nil || *allocAttr.HandleID != handleID {
-			return fmt.Errorf("IP %s is not assigned to handle %s (current handle: %v)",
+			return false, fmt.Errorf("IP %s is not assigned to handle %s (current handle: %v)",
 				ip, handleID, allocAttr.HandleID)
 		}
 
 		// IDEMPOTENCY: If target is already the active owner, nothing to do
 		if expectedTargetOwner.Matches(allocAttr.ActiveOwnerAttrs) {
-			return nil
+			return false, nil
 		}
 
 		// Check if AlternateOwnerAttrs is empty
 		if len(allocAttr.AlternateOwnerAttrs) == 0 {
-			return fmt.Errorf("%w for IP %s", ErrAlternateOwnerEmpty, ip)
+			return false, fmt.Errorf("%w for IP %s", ErrAlternateOwnerEmpty, ip)
 		}
 
 		// Verify AlternateOwnerAttrs matches expected target owner
 		if !expectedTargetOwner.Matches(allocAttr.AlternateOwnerAttrs) {
-			return fmt.Errorf("%w: expected %v, got namespace=%s pod=%s for IP %s",
+			return false, fmt.Errorf("%w: expected %v, got namespace=%s pod=%s for IP %s",
 				ErrAlternateOwnerMismatch,
 				expectedTargetOwner,
 				allocAttr.AlternateOwnerAttrs[ipam.AttributeNamespace],
 				allocAttr.AlternateOwnerAttrs[ipam.AttributePod],
+				ip)
+		}
+
+		if requireActiveEmpty && len(allocAttr.ActiveOwnerAttrs) > 0 {
+			return false, fmt.Errorf("%w: namespace=%s pod=%s for IP %s",
+				ErrActiveOwnerPresent,
+				allocAttr.ActiveOwnerAttrs[ipam.AttributeNamespace],
+				allocAttr.ActiveOwnerAttrs[ipam.AttributePod],
 				ip)
 		}
 
@@ -269,9 +329,9 @@ func verifyAndSwapSingleIP(
 				log.WithField("ip", ip).Debug("Precondition conflict during swap, retrying")
 				continue
 			}
-			return fmt.Errorf("failed to promote target to active owner for IP %s: %w", ip, err)
+			return false, fmt.Errorf("failed to promote target to active owner for IP %s: %w", ip, err)
 		}
-		return nil
+		return true, nil
 	}
-	return fmt.Errorf("max retries (%d) exceeded for IP %s", swapRetries, ip)
+	return false, fmt.Errorf("max retries (%d) exceeded for IP %s", swapRetries, ip)
 }
