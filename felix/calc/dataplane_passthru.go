@@ -218,7 +218,7 @@ func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
 		Namespace:      s.Namespace,
 		Type:           string(s.Spec.Type),
 		ClusterIps:     s.Spec.ClusterIPs,
-		LoadbalancerIp: s.Spec.LoadBalancerIP,
+		LoadbalancerIp: s.Spec.LoadBalancerIP, //nolint:staticcheck // Ignore SA1019: Calico still supports spec.loadBalancerIP.
 		ExternalIps:    s.Spec.ExternalIPs,
 	}
 

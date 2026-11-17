@@ -125,6 +125,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v3 v3.21.4
 	k8s.io/api v0.38.0-beta.0
+	k8s.io/apiextensions-api v0.38.0-beta.0
 	k8s.io/apiextensions-apiserver v0.38.0-beta.0
 	k8s.io/apimachinery v0.38.0-beta.0
 	k8s.io/apiserver v0.38.0-beta.0
@@ -401,7 +402,6 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	howett.net/plist v1.0.1 // indirect
-	k8s.io/apiextensions-api v0.38.0-beta.0 // indirect
 	k8s.io/cli-runtime v0.38.0-beta.0 // indirect
 	k8s.io/cloud-provider v0.38.0-beta.0 // indirect
 	k8s.io/component-helpers v0.38.0-beta.0 // indirect

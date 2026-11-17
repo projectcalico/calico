@@ -155,8 +155,8 @@ func (c *component) ObjectsBeforeOverrides() ([]client.Object, []client.Object) 
 				// blocking all matching API requests.
 				Type: appsv1.RollingUpdateDeploymentStrategyType,
 				RollingUpdate: &appsv1.RollingUpdateDeployment{
-					MaxSurge:       ptr.To(intstr.FromInt(1)),
-					MaxUnavailable: ptr.To(intstr.FromInt(0)),
+					MaxSurge:       ptr.To(intstr.FromInt32(1)),
+					MaxUnavailable: ptr.To(intstr.FromInt32(0)),
 				},
 			},
 			Template: corev1.PodTemplateSpec{

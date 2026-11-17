@@ -446,7 +446,7 @@ func (e *bgpAdvertEnv) testSingleIPLBRRV6(t *testing.T) {
 		s.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv6Protocol}
 		s.Spec.Type = corev1.ServiceTypeLoadBalancer
 		s.Spec.LoadBalancerClass = new("calico")
-		s.Spec.LoadBalancerIP = "fdff::96"
+		s.Spec.LoadBalancerIP = "fdff::96" //nolint:staticcheck // Ignore SA1019: Calico still supports spec.loadBalancerIP.
 		s.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyLocal
 	})
 
@@ -464,7 +464,7 @@ func (e *bgpAdvertEnv) testSingleIPLBRRV6(t *testing.T) {
 	e.createRRPeer(t)
 
 	clusterIP := svc.Spec.ClusterIP
-	loadBalancerIP := svc.Spec.LoadBalancerIP
+	loadBalancerIP := svc.Spec.LoadBalancerIP //nolint:staticcheck // Ignore SA1019: Calico still supports spec.loadBalancerIP.
 	e.assertRouteContains(t, clusterIP)
 	e.assertRouteContains(t, loadBalancerIP)
 }

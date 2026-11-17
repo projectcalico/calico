@@ -28,9 +28,9 @@ func awsCNIPolicyOnlyConfig() []runtime.Object {
 	fileOrCreate := corev1.HostPathFileOrCreate
 	isPrivileged := true
 	var terminationGracePeriod int64 = 0
-	maxUnav := intstr.FromInt(1)
+	maxUnav := intstr.FromInt32(1)
 	updateStrat := appsv1.RollingUpdateDaemonSet{MaxUnavailable: &maxUnav}
-	_intStr9098 := intstr.FromInt(9098)
+	_intStr9098 := intstr.FromInt32(9098)
 	var _65534 int64 = 65534
 	var _2 int32 = 2
 	return []runtime.Object{
