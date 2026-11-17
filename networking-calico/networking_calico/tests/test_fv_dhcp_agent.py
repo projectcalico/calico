@@ -182,7 +182,7 @@ class TestFVDhcpAgent(unittest.TestCase):
         shutil.rmtree("default.etcd", ignore_errors=True)
         self.etcd = subprocess.Popen(
             [
-                "/usr/local/bin/etcd",
+                shutil.which("etcd") or "/usr/local/bin/etcd",
                 "--advertise-client-urls",
                 "http://127.0.0.1:2379",
                 "--listen-client-urls",
