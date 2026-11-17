@@ -20,7 +20,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/routes"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/wireguard"
@@ -31,7 +31,7 @@ var _ = Describe("BPF route manager", func() {
 	// remoteWorkloadFlags programs a remote-workload route in a no-encap pool and
 	// returns the flags the manager computed for it.
 	remoteWorkloadFlags := func(ipFamily proto.IPVersion, wgV4, wgV6 bool) routes.Flags {
-		config := &dataplanedefs.Config{
+		config := &dpconfig.Config{
 			Hostname: "node-local",
 			Wireguard: wireguard.Config{
 				Enabled:   wgV4,

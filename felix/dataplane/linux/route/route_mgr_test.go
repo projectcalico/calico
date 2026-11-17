@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlan/vxlandefs"
 	"github.com/projectcalico/calico/felix/ip"
@@ -35,7 +35,7 @@ var _ = Describe("Route manager", func() {
 	var (
 		rt        *dptest.MockRouteTable
 		dataplane *mocknetlink.MockNetlinkDataplane
-		dpConfig  dataplanedefs.Config
+		dpConfig  dpconfig.Config
 		routeMgr  *Manager
 	)
 
@@ -49,7 +49,7 @@ var _ = Describe("Route manager", func() {
 		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
 		dataplane.ResetDeltas()
 
-		dpConfig = dataplanedefs.Config{
+		dpConfig = dpconfig.Config{
 			Hostname:     "node1",
 			MaxIPSetSize: 5,
 			// The IPIP and no-encap managers only program routes when Felix, rather than

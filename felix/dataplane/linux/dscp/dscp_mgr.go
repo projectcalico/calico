@@ -23,6 +23,7 @@ import (
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
@@ -51,7 +52,7 @@ func NewManager(
 	mangleTable dataplanedefs.Table,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
-	dpConfig dataplanedefs.Config,
+	dpConfig dpconfig.Config,
 ) *dscpManager {
 	return &dscpManager{
 		mangleTable:     mangleTable,

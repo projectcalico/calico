@@ -48,6 +48,7 @@ import (
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/dataplane/linux/bpfep"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -60,7 +61,7 @@ import (
 )
 
 func newBPFTestEpMgr(
-	config *dataplanedefs.Config,
+	config *dpconfig.Config,
 	bpfmaps *bpfmap.Maps,
 	workloadIfaceRegex *regexp.Regexp,
 ) (bpfep.ManagerWithHEPUpdate, error) {
@@ -125,7 +126,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	loglevel := "off"
 
 	bpfEpMgr, err := newBPFTestEpMgr(
-		&dataplanedefs.Config{
+		&dpconfig.Config{
 			Hostname:              "uthost",
 			BPFLogLevel:           loglevel,
 			BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
@@ -616,7 +617,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		programsEg.ResetForTesting()  // Because we recycle it, restarted Felix would get a fresh copy.
 
 		bpfEpMgr, err = newBPFTestEpMgr(
-			&dataplanedefs.Config{
+			&dpconfig.Config{
 				Hostname:              "uthost",
 				BPFLogLevel:           loglevel,
 				BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
@@ -762,7 +763,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		programsEg.ResetForTesting()  // Because we recycle it, restarted Felix would get a fresh copy.
 
 		bpfEpMgr, err = newBPFTestEpMgr(
-			&dataplanedefs.Config{
+			&dpconfig.Config{
 				Hostname:              "uthost",
 				BPFLogLevel:           loglevel,
 				BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
@@ -826,7 +827,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	loglevel := "off"
 
 	bpfEpMgr, err := newBPFTestEpMgr(
-		&dataplanedefs.Config{
+		&dpconfig.Config{
 			Hostname:              "uthost",
 			BPFLogLevel:           loglevel,
 			BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
@@ -1011,7 +1012,7 @@ func TestRepeatedAttach(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	bpfEpMgr, err := newBPFTestEpMgr(
-		&dataplanedefs.Config{
+		&dpconfig.Config{
 			Hostname:              "uthost",
 			BPFLogLevel:           "off",
 			BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
@@ -1152,7 +1153,7 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 
 	loglevel := "off"
 	bpfEpMgr, err := newBPFTestEpMgr(
-		&dataplanedefs.Config{
+		&dpconfig.Config{
 			Hostname:              "uthost",
 			BPFLogLevel:           loglevel,
 			BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
@@ -1247,7 +1248,7 @@ func TestAttachTcx(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	loglevel := "off"
-	bpfConfig := &dataplanedefs.Config{
+	bpfConfig := &dpconfig.Config{
 		Hostname:              "uthost",
 		BPFLogLevel:           loglevel,
 		BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
@@ -1378,7 +1379,7 @@ func TestAttachNetkit(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	loglevel := "off"
-	bpfConfig := &dataplanedefs.Config{
+	bpfConfig := &dpconfig.Config{
 		Hostname:              "uthost",
 		BPFLogLevel:           loglevel,
 		BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
@@ -1469,7 +1470,7 @@ func TestReadyLinkAttachmentIsKept(t *testing.T) {
 			bpfmaps, err := bpfmap.CreateBPFMaps(false)
 			Expect(err).NotTo(HaveOccurred())
 			bpfEpMgr, err := newBPFTestEpMgr(
-				&dataplanedefs.Config{
+				&dpconfig.Config{
 					Hostname:            "uthost",
 					BPFLogLevel:         "off",
 					BPFDataIfacePattern: regexp.MustCompile("^hostep[12]"),
@@ -1563,7 +1564,7 @@ func TestLogFilters(t *testing.T) {
 
 	commonMaps := bpfmaps.CommonMaps
 
-	cfg := dataplanedefs.Config{
+	cfg := dpconfig.Config{
 		Hostname:              "uthost",
 		BPFLogLevel:           "debug",
 		BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),

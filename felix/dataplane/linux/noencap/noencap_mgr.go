@@ -21,7 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/dataplane/linux/route"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim"
@@ -44,7 +44,7 @@ type Manager struct {
 func NewManager(
 	mainRouteTable routetable.Interface,
 	ipVersion uint8,
-	dpConfig dataplanedefs.Config,
+	dpConfig dpconfig.Config,
 	opRecorder logrusr.OpRecorder,
 ) *Manager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
@@ -60,7 +60,7 @@ func NewManager(
 func NewManagerWithShims(
 	mainRouteTable routetable.Interface,
 	ipVersion uint8,
-	dpConfig dataplanedefs.Config,
+	dpConfig dpconfig.Config,
 	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 ) *Manager {

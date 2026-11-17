@@ -18,7 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -39,7 +39,7 @@ import (
 type Manager struct {
 	// Our dependencies.
 	wireguardRouteTable *wireguard.Wireguard
-	dpConfig            dataplanedefs.Config
+	dpConfig            dpconfig.Config
 	ipVersion           uint8
 }
 
@@ -47,7 +47,7 @@ type WireguardStatusUpdateCallback func(ipVersion uint8, id any, status string)
 
 func NewManager(
 	wireguardRouteTable *wireguard.Wireguard,
-	dpConfig dataplanedefs.Config,
+	dpConfig dpconfig.Config,
 	ipVersion uint8,
 ) *Manager {
 	if ipVersion != 4 && ipVersion != 6 {
