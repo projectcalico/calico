@@ -63,8 +63,8 @@ func GRInProgress(ipv string) (bool, error) {
 
 	// The following is sample output from BIRD
 	//
-	// 0001 BIRD v0.3.2+birdv1.6.3 ready.
-	// 1000-BIRD v0.3.2+birdv1.6.3
+	// 0001 BIRD 1.6.8-1.tigera ready.
+	// 1000-BIRD 1.6.8-1.tigera
 	// 1011-Router ID is 172.18.0.4
 	// 	 Current server time is 2018-04-03 22:59:51
 	// 	 Last reboot on 2018-04-03 22:59:26

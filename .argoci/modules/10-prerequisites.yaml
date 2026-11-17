@@ -216,6 +216,56 @@ steps:
       tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
       artifact push workflow /tmp/libbpf-amd64.tar.zst
 
+  # The patched BIRD RPM for calico/node, in an image that tests also run as a
+  # BGP router. Tagged by a hash of the recipe, like the nftables RPMs below.
+  - name: build-bird-image
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 2000m, memory: 1Gi}
+    matrix:
+      - name: amd64
+        env: [{name: ARCH, value: amd64}]
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    changes:
+      in:
+        - '^hack/rpms/bird/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      mkdir -p logs
+      export BUILD_LOG="logs/build-bird-image-${ARCH}.log"
+      .argoci/scripts/build-rpms-image.sh bird "${ARCH}"
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job logs --destination logs || true
+
+  # Published on merge because later builds pull it. A step here rather than a
+  # workflow of its own because it reads this workflow's cached build. One step
+  # for every arch, so that the multi-arch manifest follows their pushes.
+  - name: push-bird-image
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 1500m, memory: 1.5Gi}
+    depends: [build-bird-image]
+    when: GIT_REF_TYPE == 'MERGE' && (GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-')
+    changes:
+      in:
+        - '^hack/rpms/bird/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      export DOCKER_USER="$DOCKERHUB_USERNAME"
+      export DOCKER_TOKEN="$DOCKERHUB_PASSWORD"
+      mkdir -p logs
+      export BUILD_LOG="logs/push-bird-image.log"
+      .argoci/scripts/push-rpms-image.sh bird
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job logs --destination logs || true
+
   # Tagged by a hash of the recipe, so an unchanged one is a pull rather than a
   # ~20 minute emulated build.
   - name: build-nft-rpms
@@ -244,22 +294,14 @@ steps:
       artifact push job logs --destination logs || true
 
   # Published on merge because later builds pull it. A step here rather than a
-  # workflow of its own because it reads this workflow's cached build.
+  # workflow of its own because it reads this workflow's cached build. One step
+  # for every arch, so that the multi-arch manifest follows their pushes.
   - name: push-nft-rpms
     services: [docker]
     timeout: 1h
     requests: {cpu: 1500m, memory: 1.5Gi}
     depends: [build-nft-rpms]
     when: GIT_REF_TYPE == 'MERGE' && (GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-')
-    matrix:
-      - name: amd64
-        env: [{name: ARCH, value: amd64}]
-      - name: arm64
-        env: [{name: ARCH, value: arm64}]
-      - name: ppc64le
-        env: [{name: ARCH, value: ppc64le}]
-      - name: s390x
-        env: [{name: ARCH, value: s390x}]
     changes:
       in:
         - '^hack/rpms/nftables/'
@@ -268,8 +310,8 @@ steps:
       export DOCKER_USER="$DOCKERHUB_USERNAME"
       export DOCKER_TOKEN="$DOCKERHUB_PASSWORD"
       mkdir -p logs
-      export BUILD_LOG="logs/push-nft-rpms-${ARCH}.log"
-      .argoci/scripts/push-nft-rpms.sh "${ARCH}"
+      export BUILD_LOG="logs/push-nft-rpms.log"
+      .argoci/scripts/push-rpms-image.sh nftables
     epilogue: |
       cd "${CI_HOME}/${CI_GIT_DIR}"
       artifact push job logs --destination logs || true
@@ -278,15 +320,16 @@ steps:
     services: [docker]
     timeout: 1h
     requests: {cpu: 4000m, memory: 5Gi}
-    depends: [build-nft-rpms]
+    depends: [build-bird-image, build-nft-rpms]
     changes:
       dependsOn: [node]
       in:
         - '^node/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     commands: |
-      # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
-      # does not go back to the registry for it.
+      # Resolves the Dockerfile's bird and nft-rpms build contexts locally, so
+      # BuildKit does not go back to the registry for them.
+      .argoci/scripts/load-rpms-image.sh bird amd64
       .argoci/scripts/load-nft-rpms.sh amd64
       make -C node image
       docker save calico/node:latest-amd64 -o /tmp/node-image.tar

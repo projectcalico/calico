@@ -19,6 +19,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -96,6 +97,23 @@ func TestRapidClientImageIsConsistent(t *testing.T) {
 				t.Errorf("%s does not contain %q, so its copy of the image no longer matches %s", path, expected, ref)
 			}
 		}
+	}
+}
+
+// TestCalicoBIRDImageIsCurrent fails when hack/rpms/bird changes without
+// CalicoBIRD following it, which would leave the tests on a stale BIRD.
+func TestCalicoBIRDImageIsCurrent(t *testing.T) {
+	ref, ok := declaredImages(t)["CalicoBIRD"]
+	if !ok {
+		t.Fatal("images.go no longer declares CalicoBIRD")
+	}
+
+	out, err := exec.Command("make", "--no-print-directory", "-C", "../../../../hack/rpms/bird", "print-tag").Output()
+	if err != nil {
+		t.Fatalf("make print-tag: %v", err)
+	}
+	if want := "calico/bird:" + strings.TrimSpace(string(out)); ref != want {
+		t.Errorf("CalicoBIRD is %q, but hack/rpms/bird now builds %q; update images.go", ref, want)
 	}
 }
 

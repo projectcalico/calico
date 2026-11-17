@@ -3,6 +3,7 @@
     when: "${CHANGE_IN(e2e,node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,cmd/calico,operator)}"
   dependencies:
     - Prerequisites
+    - "Build: BIRD image"
     - "Build: calico image"
     - "Build: node image"
     - "Build: whisker image"
@@ -21,6 +22,8 @@
         # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
         - docker system prune -af
         - .argoci/scripts/load-cached-images calico node whisker
+        # The external node runs this image as a BGP router.
+        - .argoci/scripts/load-rpms-image.sh bird amd64
     jobs:
       - name: "E2E tests: Conformance (cluster routing: BIRD)"
         commands:

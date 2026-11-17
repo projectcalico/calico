@@ -1,0 +1,54 @@
+Subject: Netlink: Treat kernel route gateways as on-link
+
+BIRD rejects a kernel route whose gateway is not on a subnet of the
+interface. Some clouds give a host a /32 address and a gateway outside it,
+so accept the gateway as on-link always.
+
+Squashed from these projectcalico/bird commits, oldest first. Each keeps
+its author and message.
+
+commit 6af4e30d3fccb0c6bd184e9168294c807e1e6d68
+Author: Shaun Crampton <shaun.crampton@metaswitch.com>
+Date:   2015-06-17
+
+    Disable recursive route check for GCE compatibility.
+
+    GCE uses a /32 for VM IPs with a default gateway that is, thus,
+    off-subnet.  This patch removes a check in BIRD that prevents
+    BIRD from accepting such a route as a valid next hop.
+
+    The following trail asserts that the check is not really needed
+    but that it is normally a useful sanity check:
+
+    https://www.mail-archive.com/bird-users@atrey.karlin.mff.cuni.cz/msg02600.html
+
+    Ideally GCE would set the online flag on the route or use a
+    link-local IP instead but that is unlikely to change.
+---
+ sysdep/linux/netlink.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/sysdep/linux/netlink.c b/sysdep/linux/netlink.c
+index a232421d..27cec042 100644
+--- a/sysdep/linux/netlink.c
++++ b/sysdep/linux/netlink.c
+@@ -549,8 +549,7 @@ nl_parse_multipath(struct krt_proto *p, struct rtattr *ra, int af)
+ 	  memcpy(&rv->gw, RTA_DATA(a[RTA_GATEWAY]), sizeof(rv->gw));
+ 	  ipa_ntoh(rv->gw);
+ 
+-	  neighbor *ng = neigh_find2(&p->p, &rv->gw, rv->iface,
+-				     (nh->rtnh_flags & RTNH_F_ONLINK) ? NEF_ONLINK : 0);
++	  neighbor *ng = neigh_find2(&p->p, &rv->gw, rv->iface, NEF_ONLINK);
+ 	  if (!ng || (ng->scope == SCOPE_HOST))
+ 	    return NULL;
+ 	}
+@@ -1332,8 +1331,7 @@ nl_parse_route(struct nl_parse_state *s, struct nlmsghdr *h)
+ 	    return;
+ #endif
+ 
+-	  ng = neigh_find2(&p->p, &ra->gw, ra->iface,
+-			   (i->rtm_flags & RTNH_F_ONLINK) ? NEF_ONLINK : 0);
++	  ng = neigh_find2(&p->p, &ra->gw, ra->iface, NEF_ONLINK);
+ 	  if (!ng || (ng->scope == SCOPE_HOST))
+ 	    {
+ 	      log(L_ERR "KRT: Received route %I/%d with strange next-hop %I",
