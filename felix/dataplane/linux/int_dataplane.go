@@ -729,7 +729,7 @@ func NewIntDataplaneDriver(config dpconfig.Config) *InternalDataplane {
 
 	var bpfVXLANOpts []vxlan.Option
 	if config.BPFEnabled && dataplaneFeatures.VXLANVNIFilter {
-		bpfVXLANOpts = append(bpfVXLANOpts, vxlan.WithVNIFilter(bpfep.OverlayTunnelID(&config.RulesConfig)))
+		bpfVXLANOpts = append(bpfVXLANOpts, vxlan.WithVNIFilter(config.RulesConfig.BPFOverlayTunnelID()))
 	}
 
 	if config.RulesConfig.VXLANEnabled {
