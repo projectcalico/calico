@@ -65,6 +65,22 @@ type hepScenario struct {
 
 	// Only applies to tables-based dataplanes (iptables/nftables).
 	tablesDataplaneOnly bool
+
+	// podCrossNode marks a deny that acts on pod traffic between nodes, which an
+	// encrypted overlay can carry past the host endpoint's interface.
+	podCrossNode bool
+}
+
+// requires names what the cluster needs for the deny to be observable.
+func (s hepScenario) requires(applyOnForward bool) []describe.Capability {
+	applies := s.aofFalsePolicyApplies
+	if applyOnForward {
+		applies = s.aofTruePolicyApplies
+	}
+	if s.podCrossNode && applies {
+		return []describe.Capability{describe.HostEndpointCrossNode}
+	}
+	return nil
 }
 
 // hepScenarioTable defines all HEP test scenarios.
@@ -90,6 +106,7 @@ var hepScenarioTable = []hepScenario{
 		name: "ingress-2-1", srcPod: 2, dstPod: 1,
 		accessType: "podIP", policyDirection: "ingress",
 		aofFalsePolicyApplies: false, aofTruePolicyApplies: true,
+		podCrossNode: true,
 	},
 	// pod2 → NodePort → pod1 (forwarded via NodePort)
 	{
@@ -112,18 +129,21 @@ var hepScenarioTable = []hepScenario{
 		name: "egress-1-2", srcPod: 1, dstPod: 2,
 		accessType: "podIP", policyDirection: "egress",
 		aofFalsePolicyApplies: false, aofTruePolicyApplies: true,
+		podCrossNode: true,
 	},
 	// pod1 → clusterIP → pod2 (forwarded)
 	{
 		name: "egress-1C2", srcPod: 1, dstPod: 2,
 		accessType: "clusterIP", policyDirection: "egress",
 		aofFalsePolicyApplies: false, aofTruePolicyApplies: true,
+		podCrossNode: true,
 	},
 	// pod1 → NodePort → pod2 (forwarded)
 	{
 		name: "egress-1N2", srcPod: 1, dstPod: 2,
 		accessType: "nodePort", policyDirection: "egress",
 		aofFalsePolicyApplies: false, aofTruePolicyApplies: true,
+		podCrossNode: true,
 	},
 	// pod0* → pod IP → pod2 (host egress)
 	{
@@ -131,6 +151,7 @@ var hepScenarioTable = []hepScenario{
 		srcHostNetworked: true,
 		accessType:       "podIP", policyDirection: "egress",
 		aofFalsePolicyApplies: true, aofTruePolicyApplies: true,
+		podCrossNode: true,
 	},
 	// pod0* → clusterIP → pod2 (host egress via service)
 	{
@@ -138,6 +159,7 @@ var hepScenarioTable = []hepScenario{
 		srcHostNetworked: true,
 		accessType:       "clusterIP", policyDirection: "egress",
 		aofFalsePolicyApplies: true, aofTruePolicyApplies: true,
+		podCrossNode: true,
 	},
 	// pod0* → NodePort → pod2 (host egress via NodePort)
 	{
@@ -145,6 +167,7 @@ var hepScenarioTable = []hepScenario{
 		srcHostNetworked: true,
 		accessType:       "nodePort", policyDirection: "egress",
 		aofFalsePolicyApplies: true, aofTruePolicyApplies: true,
+		podCrossNode: true,
 	},
 	// pod0* → clusterIP → pod3* (host-to-host via service)
 	{
@@ -166,6 +189,7 @@ var hepScenarioTable = []hepScenario{
 		accessType: "nodePort", policyDirection: "egress",
 		aofFalsePolicyApplies: false, aofTruePolicyApplies: true,
 		tablesDataplaneOnly: true,
+		podCrossNode:        true,
 	},
 	// pod2 → NodePort → pod1 (forwarded, policy never applies for egress)
 	{
@@ -177,9 +201,9 @@ var hepScenarioTable = []hepScenario{
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("Host-Protection"),
+	describe.Covers("Host-Protection"),
+	describe.RunsAnywhere(),
 	describe.WithSerial(), // Creates cluster-scoped HEPs and GNPs.
-	describe.WithCategory(describe.Networking),
 	"Host Endpoint Datapath",
 	func() {
 		// Topology:
@@ -476,37 +500,37 @@ var _ = describe.CalicoDescribe(
 			}
 			s := scenario // capture
 			Context(s.name, func() {
-				It(fmt.Sprintf("ApplyOnForward=false, %s", s.policyDirection), func() {
+				It(fmt.Sprintf("ApplyOnForward=false, %s", s.policyDirection), append(requirements(s.requires(false)), func() {
 					runHEPScenario(s, false)
-				})
+				})...)
 
-				It(fmt.Sprintf("ApplyOnForward=true, %s", s.policyDirection), func() {
+				It(fmt.Sprintf("ApplyOnForward=true, %s", s.policyDirection), append(requirements(s.requires(true)), func() {
 					runHEPScenario(s, true)
-				})
+				})...)
 			})
 		}
 
 		// Xtables-only scenarios — only valid on iptables/nftables dataplanes.
-		framework.Context("xtables-only", describe.RequiresXtables(), func() {
+		framework.Context("xtables-only", describe.Requires(describe.Xtables), func() {
 			for _, scenario := range hepScenarioTable {
 				if !scenario.tablesDataplaneOnly {
 					continue
 				}
 				s := scenario // capture
 				Context(s.name, func() {
-					It(fmt.Sprintf("ApplyOnForward=false, %s", s.policyDirection), func() {
+					It(fmt.Sprintf("ApplyOnForward=false, %s", s.policyDirection), append(requirements(s.requires(false)), func() {
 						if dp.IsBPF() || dp.IsVPP() {
 							Fail("This scenario only applies to xtables-based dataplanes (iptables/nftables)")
 						}
 						runHEPScenario(s, false)
-					})
+					})...)
 
-					It(fmt.Sprintf("ApplyOnForward=true, %s", s.policyDirection), func() {
+					It(fmt.Sprintf("ApplyOnForward=true, %s", s.policyDirection), append(requirements(s.requires(true)), func() {
 						if dp.IsBPF() || dp.IsVPP() {
 							Fail("This scenario only applies to xtables-based dataplanes (iptables/nftables)")
 						}
 						runHEPScenario(s, true)
-					})
+					})...)
 				})
 			}
 		})

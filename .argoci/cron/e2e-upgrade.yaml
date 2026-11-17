@@ -41,7 +41,27 @@ steps:
       - name: CLUSTER_IMAGE
         value: AzureLinux
       - name: E2E_TEST_CONFIG
-        value: e2e/config/upgrade/aks-xtables.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/routing/no-encap.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: PROVISIONER
         value: azr-aks
     matrix:
@@ -61,7 +81,26 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/upgrade/eks-bpf-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: PROVISIONER
         value: aws-eks
     matrix:
@@ -85,7 +124,28 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/upgrade/xtables-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
     matrix:
       - name: aws-kubeadm-stable-3-operator-calicoiptables
         env:
@@ -105,7 +165,27 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/upgrade/bpf.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
     matrix:
       - name: gcp-kubeadm-stable-operator-calicobpf
         env:
@@ -125,7 +205,26 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/upgrade/xtables.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: PROVISIONER
         value: gcp-rke2
     matrix:
@@ -147,7 +246,25 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/upgrade/xtables-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/openshift.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: PROVISIONER
         value: aws-openshift
     matrix:

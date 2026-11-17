@@ -1,47 +1,42 @@
-[sig-calico] [Team:CORE] [Category:Networking] [Feature:HostPorts] HostPorts tests with host port resources active on :8080 should support Pod HostPorts [Conformance] [Serial]
-[sig-calico] [Team:CORE] [Category:Networking] [Feature:Pods] Pod Termination Grace Period should allow client to reach server while client is terminating [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedGlobalNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedKubernetesNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests should allow connections using a named port [Conformance] [Serial]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-Policy] [RunsOnWindows] Tiered policy tests with a single tier taking precedence over the default tier can pass to the default tier, and allow traffic explicitly. [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] Tiered RBAC with tier-prefixed names should allow create and deny based on tier RBAC with prefixed names
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC GlobalNetworkPolicy should allow creation by a user with full tier RBAC
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC GlobalNetworkPolicy should deny creation by a user without tier access
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC NetworkPolicy should allow creation by a user with full tier RBAC [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC NetworkPolicy should allow deletion by a user with full tier RBAC
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC NetworkPolicy should allow update by a user with full tier RBAC
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC NetworkPolicy should deny creation by a user without tier GET access [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC NetworkPolicy should deny creation by a user without tier policy access
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC NetworkPolicy should deny update by a user without tier GET access
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC collection delete should allow a collection delete by a user with full tier RBAC
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC collection delete should deny a collection delete by a user without tier policy access [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC default tier should not allow deleting the default tier
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC default tier should not allow updating the default tier
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC list via tier RBAC [RequiresCalicoAPIServer] should allow listing policies in the permitted tier
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC list via tier RBAC [RequiresCalicoAPIServer] should deny listing when user lacks tier policy access
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC namespace-scoped tier access should confine a namespaced tier grant to its own namespace [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC old-style vs new-style name disambiguation [RequiresCalicoAPIServer] should independently authorize bare and tier-prefixed policy names
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC operator-rendered passthrough [RequiresOperator] should grant the tiered policy write verbs and no read verbs in v3 CRD mode
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC read-only access should allow reading but deny writing for a read-only user [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC resource-name exact match [RequiresCalicoAPIServer] should allow access to the named policy but deny access to others
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC staged policies should allow staged global policy writes by a user with full tier RBAC
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC staged policies should allow staged policy writes by a user with full tier RBAC [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC staged policies should deny staged global policy creation by a user without tier GET access
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC staged policies should deny staged policy creation by a user without tier GET access [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC tier isolation should restrict a user to only their permitted tier [Conformance]
-[sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Egress Datapath ClusterIP access scenario-0C2: pod0 -> clusterIP -> pod2 (cross node) [Conformance]
-[sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Egress Datapath ExternalIP access scenario-0EC2: pod0 -> externalIP Cluster -> pod2 (other node) [Conformance]
-[sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Egress Datapath NodePort access scenario-0N02: pod0 -> node0 NodePort -> pod2 (other node) [Conformance]
-[sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Ingress Datapath scenario-3: node1 hostNet=false -> clusterIP [Conformance]
-[sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should correctly isolate namespaces [Conformance]
-[sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should provide a default allow [Conformance]
-[sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should support a 'deny egress' policy [Conformance]
-[sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should support namespace selectors [Conformance]
-[sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should support service account selectors [Conformance]
-[sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] service network policy Calico service network policy test ServiceMatch policy client egress by pod-name, server ingress by service [Conformance]
-[sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] service network policy Calico service network policy test ServiceMatch policy client egress by service, server ingress by pod-name [Conformance]
-[sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] service network policy Calico service network policy test ServiceMatch policy client egress by service, server ingress by service [Conformance]
+[sig-calico] [Team:CORE] [Covers:Datapath] Workload Egress Datapath ClusterIP access scenario-0C2: pod0 -> clusterIP -> pod2 (cross node) [Conformance]
+[sig-calico] [Team:CORE] [Covers:Datapath] Workload Egress Datapath ExternalIP access scenario-0EC2: pod0 -> externalIP Cluster -> pod2 (other node) [Conformance]
+[sig-calico] [Team:CORE] [Covers:Datapath] Workload Egress Datapath NodePort access scenario-0N02: pod0 -> node0 NodePort -> pod2 (other node) [Conformance]
+[sig-calico] [Team:CORE] [Covers:Datapath] Workload Ingress Datapath scenario-3: node1 hostNet=false -> clusterIP [Conformance]
+[sig-calico] [Team:CORE] [Covers:Flow-Logs] [Requires:Goldmane] staged network policy Test presence in flow logs StagedGlobalNetworkPolicy Validate name, tier, action [Conformance]
+[sig-calico] [Team:CORE] [Covers:Flow-Logs] [Requires:Goldmane] staged network policy Test presence in flow logs StagedKubernetesNetworkPolicy Validate name, tier, action [Conformance]
+[sig-calico] [Team:CORE] [Covers:Flow-Logs] [Requires:Goldmane] staged network policy Test presence in flow logs StagedNetworkPolicy Validate name, tier, action [Conformance]
+[sig-calico] [Team:CORE] [Covers:Host-Protection] host endpoint tests should allow connections using a named port [Conformance] [Serial]
+[sig-calico] [Team:CORE] [Covers:NetworkPolicy] [Covers:Windows] Calico NetworkPolicy should correctly isolate namespaces [Conformance]
+[sig-calico] [Team:CORE] [Covers:NetworkPolicy] [Covers:Windows] Calico NetworkPolicy should provide a default allow [Conformance]
+[sig-calico] [Team:CORE] [Covers:NetworkPolicy] [Covers:Windows] Calico NetworkPolicy should support a 'deny egress' policy [Conformance]
+[sig-calico] [Team:CORE] [Covers:NetworkPolicy] [Covers:Windows] Calico NetworkPolicy should support namespace selectors [Conformance]
+[sig-calico] [Team:CORE] [Covers:NetworkPolicy] [Covers:Windows] Calico NetworkPolicy should support service account selectors [Conformance]
+[sig-calico] [Team:CORE] [Covers:NetworkPolicy] service network policy Calico service network policy test ServiceMatch policy client egress by pod-name, server ingress by service [Conformance]
+[sig-calico] [Team:CORE] [Covers:NetworkPolicy] service network policy Calico service network policy test ServiceMatch policy client egress by service, server ingress by pod-name [Conformance]
+[sig-calico] [Team:CORE] [Covers:NetworkPolicy] service network policy Calico service network policy test ServiceMatch policy client egress by service, server ingress by service [Conformance]
+[sig-calico] [Team:CORE] [Covers:Pods] Pod Termination Grace Period should allow client to reach server while client is terminating [Conformance]
+[sig-calico] [Team:CORE] [Covers:Tiered-Policy] [Requires:PolicyTiers] [Covers:Windows] Tiered policy tests with a single tier taking precedence over the default tier can pass to the default tier, and allow traffic explicitly. [Conformance]
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC GlobalNetworkPolicy should allow creation by a user with full tier RBAC
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC GlobalNetworkPolicy should deny creation by a user without tier access
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC NetworkPolicy should allow creation by a user with full tier RBAC [Conformance]
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC NetworkPolicy should allow deletion by a user with full tier RBAC
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC NetworkPolicy should allow update by a user with full tier RBAC
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC NetworkPolicy should deny creation by a user without tier GET access [Conformance]
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC NetworkPolicy should deny creation by a user without tier policy access
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC NetworkPolicy should deny update by a user without tier GET access
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC collection delete should allow a collection delete by a user with full tier RBAC
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC collection delete should deny a collection delete by a user without tier policy access [Conformance]
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC default tier should not allow deleting the default tier
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC default tier should not allow updating the default tier
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC namespace-scoped tier access should confine a namespaced tier grant to its own namespace [Conformance]
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC operator-rendered passthrough [Requires:Operator] should grant the tiered policy write verbs and no read verbs in v3 CRD mode
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC read-only access should allow reading but deny writing for a read-only user [Conformance]
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC staged policies should allow staged global policy writes by a user with full tier RBAC
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC staged policies should allow staged policy writes by a user with full tier RBAC [Conformance]
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC staged policies should deny staged global policy creation by a user without tier GET access
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC staged policies should deny staged policy creation by a user without tier GET access [Conformance]
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC tier isolation should restrict a user to only their permitted tier [Conformance]
+[sig-calico] [Team:CORE] [Covers:Tiered-RBAC] Tiered RBAC with tier-prefixed names should allow create and deny based on tier RBAC with prefixed names
 [sig-network] API Server should have Endpoints and EndpointSlices pointing to API Server [Conformance]
 [sig-network] API Server should provide secure master service [Conformance]
 [sig-network] DNS should provide /etc/hosts entries for the cluster [Conformance]

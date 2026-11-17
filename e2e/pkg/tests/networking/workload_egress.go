@@ -61,8 +61,8 @@ type egressScenario struct {
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("Datapath"),
-	describe.WithCategory(describe.Networking),
+	describe.Covers("Datapath"),
+	describe.RunsAnywhere(),
 	"Workload Egress Datapath",
 	func() {
 		//  We set up the following pods on two nodes:

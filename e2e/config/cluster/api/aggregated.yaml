@@ -1,0 +1,8 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# calico-apiserver serves projectcalico.org/v3.
+
+kind: cluster
+
+provides:
+  - AggregatedAPI

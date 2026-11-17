@@ -42,15 +42,15 @@ func TestNoHardcodedDefaultPoolNames(t *testing.T) {
 	})
 }
 
-// A suite that reads Calico IPAM state has to carry the label, so the lanes
-// running a provider's IPAM can exclude it.
+// A suite that reads Calico IPAM state has to require it, or it is selected on
+// the lanes running a provider's IPAM.
 func TestSuitesReadingCalicoIPAMCarryTheLabel(t *testing.T) {
 	forEachSuiteFile(t, func(t *testing.T, fset *token.FileSet, f *ast.File) {
 		for _, s := range calicoIPAMSuites(f) {
 			if s.labelled || !callsCalicoIPAMCheck(s.body) {
 				continue
 			}
-			t.Errorf("%s: suite reads Calico IPAM state, so it needs describe.RequiresCalicoIPAM", fset.Position(s.body.Pos()))
+			t.Errorf("%s: suite reads Calico IPAM state, so it needs describe.Requires(describe.CalicoIPAM)", fset.Position(s.body.Pos()))
 		}
 	})
 }
@@ -96,7 +96,7 @@ func calicoIPAMSuites(f *ast.File) []calicoIPAMSuite {
 		}
 		s := calicoIPAMSuite{}
 		for _, arg := range call.Args {
-			if inner, ok := arg.(*ast.CallExpr); ok && isSelector(inner.Fun, "describe", "RequiresCalicoIPAM") {
+			if inner, ok := arg.(*ast.CallExpr); ok && requiresCalicoIPAM(inner) {
 				s.labelled = true
 			}
 			if fn, ok := arg.(*ast.FuncLit); ok {
@@ -109,6 +109,12 @@ func calicoIPAMSuites(f *ast.File) []calicoIPAMSuite {
 		return true
 	})
 	return found
+}
+
+func requiresCalicoIPAM(call *ast.CallExpr) bool {
+	return isSelector(call.Fun, "describe", "Requires") &&
+		len(call.Args) == 1 &&
+		isSelector(call.Args[0], "describe", "CalicoIPAM")
 }
 
 func callsCalicoIPAMCheck(body ast.Node) bool {

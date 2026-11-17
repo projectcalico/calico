@@ -1,0 +1,9 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Every node has an IPv4 and an IPv6 internal address.
+
+kind: cluster
+
+provides:
+  - IPv4
+  - IPv6

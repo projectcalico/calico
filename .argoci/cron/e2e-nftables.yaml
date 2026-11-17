@@ -31,7 +31,31 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/xtables-autohep.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/nftables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/wireguard.yaml
+          cluster/capability/auto-heps.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
+          cluster/capability/ambient-policy.yaml
       - name: ENABLE_WIREGUARD
         value: "true"
       - name: GOOGLE_MACHINE_TYPE
@@ -65,7 +89,30 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/xtables-encap-aws-autohep.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/nftables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/auto-heps.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
+          cluster/capability/ambient-policy.yaml
       - name: ENCAPSULATION_TYPE
         value: VXLAN
       - name: PROVISIONER
@@ -85,7 +132,29 @@ steps:
       - name: CLUSTER_ROUTING_MODE
         value: Felix
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/xtables-encap-nobgp-v3crd-autohep.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/nftables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp-felix-routes.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/auto-heps.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
+          cluster/capability/ambient-policy.yaml
       # gcp-kubeadm uses the fixed semaphore-autotest VPC + reserved IPs, which
       # exist only in us-central1; pin region/zone (the load-spread randomisation
       # in the prologue can't apply to region-fixed jobs). See arm64-wg.
@@ -107,7 +176,31 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/xtables-v3crd-aws-autohep.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/nftables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/auto-heps.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
+          cluster/capability/ambient-policy.yaml
       - name: K8S_VERSION
         value: stable-3
       - name: PROVISIONER
@@ -122,7 +215,23 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/eks-xtables-nobgp-aws-autohep.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/nftables.yaml
+          cluster/cni/provider.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/auto-heps.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -140,7 +249,29 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/eks-xtables-aws-autohep.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/nftables.yaml
+          cluster/cni/calico.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/auto-heps.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
+          cluster/capability/ambient-policy.yaml
       - name: INSTALLER
         value: helmerator
       - name: IPAM_TEST_POOL_SUBNET
@@ -165,7 +296,29 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/xtables-encap-autohep.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/nftables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/platform/kind.yaml
+          cluster/ip-family/dual-stack.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/auto-heps.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
+          cluster/capability/ambient-policy.yaml
       - name: ENABLE_DUAL_STACK
         value: "true"
       - name: ENCAPSULATION_TYPE
@@ -191,7 +344,29 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/xtables-autohep.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/nftables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/platform/kind.yaml
+          cluster/ip-family/ipv6.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/auto-heps.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
+          cluster/capability/ambient-policy.yaml
       - name: ENABLE_DUAL_STACK
         value: "true"
       - name: ENCAPSULATION_TYPE_V6
@@ -212,7 +387,28 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/gcp/kubevirt.yaml
+        value: >-
+          ci-base.yaml
+          suite/kubevirt.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/nftables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/routing/no-encap.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/auto-heps.yaml
+          cluster/capability/kubevirt.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       # gcp-kubeadm uses the fixed semaphore-autotest VPC + reserved IPs, which
       # exist only in us-central1; pin region/zone (the load-spread randomisation
       # in the prologue can't apply to region-fixed jobs). See arm64-wg.
