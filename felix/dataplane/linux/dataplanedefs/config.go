@@ -25,7 +25,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	bpftimeouts "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
-	bpfproxy "github.com/projectcalico/calico/felix/bpf/proxy"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector"
 	felixconfig "github.com/projectcalico/calico/felix/config"
@@ -97,11 +96,10 @@ type Config struct {
 	ConfigChangedRestartCallback func()
 	FatalErrorRestartCallback    func(error)
 
-	PostInSyncCallback  func()
-	HealthAggregator    *health.HealthAggregator
-	WatchdogTimeout     time.Duration
-	RouteTableManager   *idalloc.IndexAllocator
-	BPFProxyHealthCheck bpfproxy.Healthcheck
+	PostInSyncCallback func()
+	HealthAggregator   *health.HealthAggregator
+	WatchdogTimeout    time.Duration
+	RouteTableManager  *idalloc.IndexAllocator
 
 	DebugSimulateDataplaneHangAfter  time.Duration
 	DebugSimulateDataplaneApplyDelay time.Duration
@@ -177,8 +175,6 @@ type Config struct {
 	FeatureDetectOverrides map[string]string
 	FeatureGates           map[string]string
 
-	// Populated with the smallest host MTU based on auto-detection.
-	HostMTU         int
 	MTUIfacePattern *regexp.Regexp
 	RequireMTUFile  bool
 
