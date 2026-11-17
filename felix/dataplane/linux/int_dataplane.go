@@ -2295,15 +2295,15 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onLiveMigrationGARPDetected(id)
 			drainChan(d.liveMigrationMonitor.garpC, d.onLiveMigrationGARPDetected)
 		case name := <-d.ipipParentIfaceC:
-			d.onParentDeviceUpdate(d.ipipManager.routeMgr, name)
+			d.onParentDeviceUpdate(d.ipipManager, name)
 		case name := <-d.noEncapParentIfaceC:
-			d.onParentDeviceUpdate(d.noEncapManager.routeMgr, name)
+			d.onParentDeviceUpdate(d.noEncapManager, name)
 		case name := <-d.noEncapParentIfaceCV6:
-			d.onParentDeviceUpdate(d.noEncapManagerV6.routeMgr, name)
+			d.onParentDeviceUpdate(d.noEncapManagerV6, name)
 		case name := <-d.vxlanParentIfaceC:
-			d.onParentDeviceUpdate(d.vxlanManager.routeMgr, name)
+			d.onParentDeviceUpdate(d.vxlanManager, name)
 		case name := <-d.vxlanParentIfaceCV6:
-			d.onParentDeviceUpdate(d.vxlanManagerV6.routeMgr, name)
+			d.onParentDeviceUpdate(d.vxlanManagerV6, name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
@@ -2432,7 +2432,11 @@ func (d *InternalDataplane) processMsgFromCalcGraph(msg any) {
 
 // onParentDeviceUpdate marks the dataplane dirty when a tunnel's parent device moves, since the
 // goroutine that spots the move may be the only thing happening at the time.
-func (d *InternalDataplane) onParentDeviceUpdate(mgr *routeManager, name string) {
+type parentDeviceListener interface {
+	OnParentDeviceUpdate(name string) bool
+}
+
+func (d *InternalDataplane) onParentDeviceUpdate(mgr parentDeviceListener, name string) {
 	if mgr.OnParentDeviceUpdate(name) {
 		d.dataplaneNeedsSync = true
 	}

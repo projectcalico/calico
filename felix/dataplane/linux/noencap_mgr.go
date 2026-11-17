@@ -137,3 +137,9 @@ func (m *noEncapManager) monitorParentDevice(ctx context.Context, wait time.Dura
 func (m *noEncapManager) device(_ netlink.Link) (netlink.Link, string, error) {
 	return nil, "", nil
 }
+
+// OnParentDeviceUpdate records the tunnel's parent device and reports whether it
+// changed.
+func (m *noEncapManager) OnParentDeviceUpdate(name string) bool {
+	return m.routeMgr.OnParentDeviceUpdate(name)
+}

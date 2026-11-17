@@ -99,7 +99,7 @@ var _ = Describe("Route manager", func() {
 			vxlanMgr := newVXLANManagerWithShims(
 				dpsets.NewMockIPSets(),
 				rt,
-				&mockVXLANFDB{},
+				&dptest.MockVXLANFDB{},
 				vxlandefs.VXLANIfaceNameV4,
 				4,
 				1400,
@@ -259,3 +259,84 @@ var _ = Describe("Route manager", func() {
 		})
 	})
 })
+
+var _ = DescribeTable("vxlanLinksIncompat",
+	func(l1, l2 *netlink.Vxlan, expected string) {
+		Expect(vxlanLinksIncompat(l1, l2)).To(Equal(expected))
+	},
+	Entry("identical legacy devices", &netlink.Vxlan{
+		VxlanId: 4096, VtepDevIndex: 2, Port: 4789,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, VtepDevIndex: 2, Port: 4789,
+	}, ""),
+	Entry("identical flow-based devices", &netlink.Vxlan{
+		FlowBased: true, Port: 4789,
+	}, &netlink.Vxlan{
+		FlowBased: true, Port: 4789,
+	}, ""),
+	Entry("legacy to flow-based (iptables to eBPF)", &netlink.Vxlan{
+		VxlanId: 4096, VtepDevIndex: 2, Port: 4789,
+	}, &netlink.Vxlan{
+		FlowBased: true, Port: 4789,
+	}, "flow-based mode: false vs true"),
+	Entry("flow-based to legacy (eBPF to iptables)", &netlink.Vxlan{
+		FlowBased: true, Port: 4789,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, VtepDevIndex: 2, Port: 4789,
+	}, "flow-based mode: true vs false"),
+	Entry("flow-based without to with VNI filter (upgrade)", &netlink.Vxlan{
+		FlowBased: true, Port: 4789,
+	}, &netlink.Vxlan{
+		FlowBased: true, VniFilter: true, Port: 4789,
+	}, "vni filter: false vs true"),
+	Entry("identical VNI-filtering devices", &netlink.Vxlan{
+		FlowBased: true, VniFilter: true, Port: 4789,
+	}, &netlink.Vxlan{
+		FlowBased: true, VniFilter: true, Port: 4789,
+	}, ""),
+	Entry("VNI mismatch", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789,
+	}, &netlink.Vxlan{
+		VxlanId: 4097, Port: 4789,
+	}, "vni: 4096 vs 4097"),
+	Entry("port mismatch", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4790,
+	}, "port: 4789 vs 4790"),
+	Entry("GBP mismatch", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, GBP: true,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, GBP: false,
+	}, "gbp: true vs false"),
+	Entry("L2miss mismatch", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, L2miss: true,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, L2miss: false,
+	}, "l2miss: true vs false"),
+	Entry("identical source-port range", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, ""),
+	Entry("source-port range mismatch (low)", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 32768, PortHigh: 65535,
+	}, "source port range: [49152,65535] vs [32768,65535]"),
+	Entry("source-port range mismatch (high)", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 60000,
+	}, "source port range: [49152,65535] vs [49152,60000]"),
+	Entry("configured source-port range replaces kernel defaults", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789,
+	}, "source port range: [49152,65535] vs [0,0]"),
+	Entry("unset desired source-port range leaves the existing range unchanged", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, ""),
+)
