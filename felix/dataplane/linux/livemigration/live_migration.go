@@ -44,12 +44,13 @@ type garpHandle interface {
 	gopacket.PacketDataSource
 }
 
+// Listener is told about every live migration FSM state change.
 type Listener interface {
 	OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state State)
 }
 
 // liveMigrationStateUpdate records a per-workload FSM state change that the
-// liveMigrationMonitor needs to forward to its listeners (the endpoint managers).
+// Monitor needs to forward to its listeners (the endpoint managers).
 type liveMigrationStateUpdate struct {
 	ID    types.WorkloadEndpointID
 	State State
@@ -58,7 +59,7 @@ type liveMigrationStateUpdate struct {
 // Monitor tracks per-workload live migration state that cannot be inferred
 // statelessly from the datastore.  It sees WorkloadEndpoint updates, extracts the live
 // migration role, and drives a per-workload FSM whose state changes are forwarded to the
-// endpoint managers via the liveMigrationListener interface during ResolveUpdateBatch.
+// endpoint managers via the Listener interface during ResolveUpdateBatch.
 //
 // There is one endpoint manager per IP version, and each keeps its own live migration state,
 // so every state change must be forwarded to all of them: a monitor with only the IPv4
@@ -130,7 +131,7 @@ func (m *Monitor) ListenerCount() int {
 }
 
 // ResolveUpdateBatch drains accumulated FSM state changes and forwards them to each
-// registered listener via the liveMigrationListener interface.  This runs before
+// registered listener via the Listener interface.  This runs before
 // CompleteDeferredWork, so the endpoint managers see the state changes before they
 // program the dataplane.
 func (m *Monitor) ResolveUpdateBatch() error {

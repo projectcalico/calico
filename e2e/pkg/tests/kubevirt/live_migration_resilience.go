@@ -54,7 +54,7 @@ const (
 //
 // SCOPE NOTES:
 //   - Felix's route elevation and proxy-ARP decisions are unit tested in
-//     felix/dataplane/linux/live_migration_test.go and proxy_neigh_mgr_test.go;
+//     felix/dataplane/linux/{livemigration,proxyneigh} tests;
 //     vmipam owner swaps in libcalico-go/lib/ipam/vmipam. This spec proves the
 //     components agree on a real cluster: KubeVirt, CNI, Felix, BIRD and IPAM.
 //   - A failed (timed-out) migration is covered on MockVirt by "should not

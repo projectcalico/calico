@@ -120,16 +120,16 @@ Each manager implements a two-method `Manager` interface — `OnUpdate`
 to receive desired state cheaply, `CompleteDeferredWork` to program
 the kernel during a throttled `apply()` cycle. Key managers:
 
-| Manager | Handles |
+| Manager package | Handles |
 |---|---|
-| `endpointManager` / `bpfEndpointManager` | Workload/host endpoint programming |
-| `policyManager` / `rawEgressPolicyManager` | Policy chain/rule generation |
-| `ipsetsManager` | IP-set synchronisation |
-| `noEncapManager` / `vxlanManager` | Route management for encap modes |
-| `ipipManager` | IPIP tunnel interfaces |
-| `wireguardManager` | WireGuard tunnel setup |
-| `masqManager` | IP masquerade rules |
-| `hostIPManager` | Host-IP tracking |
+| `endpoint` / `bpfep` | Workload/host endpoint programming |
+| `policy` (including the raw egress policy manager) | Policy chain/rule generation |
+| `dataplane/ipsets` | IP-set synchronisation |
+| `noencap` / `vxlan` | Route management for encap modes |
+| `ipip` | IPIP tunnel interfaces |
+| `wireguardmgr` | WireGuard tunnel setup |
+| `masq` | IP masquerade rules |
+| `hostip` | Host-IP tracking |
 | `floatingIPManager` | Floating-IP NAT |
 | `dscpManager` | DSCP marking |
 | `serviceLoopManager` | Service-loop prevention |
@@ -263,13 +263,13 @@ large enough to bloat AI-tool context.
 
 | Topic | Applies to | Status |
 |---|---|---|
-| [bpf-overview](./design/bpf-overview.md) | `felix/bpf/**`, `felix/bpf-gpl/**`, `felix/dataplane/linux/bpf_*.go`, `felix/dataplane/linux/bpfep/**`, `felix/dataplane/linux/bpfroute/**`, `felix/dataplane/linux/vxlan/**` (umbrella — pulled by every BPF change) | ✅ exists |
+| [bpf-overview](./design/bpf-overview.md) | `felix/bpf/**`, `felix/bpf-gpl/**`, `felix/dataplane/linux/bpf_*.go`, `felix/dataplane/linux/bpfep/**`, `felix/dataplane/linux/bpfroute/**`, `felix/dataplane/linux/vxlan/**`, `felix/dataplane/linux/route/route_mgr.go` (umbrella — pulled by every BPF change) | ✅ exists |
 | [bpf-tc-programs](./design/bpf-tc-programs.md) | `felix/bpf-gpl/tc.c`, `tc_preamble.c`, `xdp_preamble.c`, `jump.h`, `cali_bpf.h`, `globals.h`, `types.h`, `felix/bpf/hook/**`, `felix/bpf/tc/**`, `felix/bpf/jump/**`, `felix/bpf/ifstate/**` | ✅ exists |
 | [bpf-xdp](./design/bpf-xdp.md) | `felix/bpf-gpl/xdp.c`, `xdp_preamble.c`, `metadata.h`, `felix/bpf/xdp/**` | ✅ exists |
 | [bpf-services](./design/bpf-services.md) | `felix/bpf/proxy/**`, `felix/bpf/nat/**`, `felix/bpf/consistenthash/**`, `felix/bpf-gpl/connect*.{c,h}`, `nat*.h`, `nat_lookup.h`, `maglev.h`, `ctlb*.h`, `sendrecv.h`, `felix/dataplane/linux/bpfep/bpf_ep_mgr.go` | ✅ exists |
 | [bpf-host-networking](./design/bpf-host-networking.md) | `felix/dataplane/linux/bpfep/**`, `felix/bpf-gpl/fib_co_re.h` | ✅ exists |
 | [bpf-conntrack-flowstate](./design/bpf-conntrack-flowstate.md) | `felix/bpf/conntrack/**`, `felix/bpf-gpl/conntrack*.{c,h}`, `rpf.h`, `felix/bpf/allowsources/**`, `felix/rules/static.go` | ✅ exists |
-| [bpf-encap-fragments-icmp](./design/bpf-encap-fragments-icmp.md) | `felix/bpf/ipfrags/**`, `felix/bpf-gpl/ip_v4_fragment.h`, `tc_ip_frag.c`, `icmp*.h`, `fib*.h`, `felix/bpf/routes/**`, `felix/dataplane/linux/vxlan/**` | ✅ exists |
+| [bpf-encap-fragments-icmp](./design/bpf-encap-fragments-icmp.md) | `felix/bpf/ipfrags/**`, `felix/bpf-gpl/ip_v4_fragment.h`, `tc_ip_frag.c`, `icmp*.h`, `fib*.h`, `felix/bpf/routes/**`, `felix/dataplane/linux/vxlan/**`, `felix/dataplane/linux/route/route_mgr.go` | ✅ exists |
 | [bpf-observability](./design/bpf-observability.md) | `felix/bpf/filter/**`, `events/**`, `ringbuf/**`, `qos/**`, `felix/bpf-gpl/log.h`, `events*.h`, `qos.h`, `ringbuf.h` | ✅ exists |
 | [bpf-tests](./design/bpf-tests.md) | `felix/bpf/ut/**`, `felix/fv/bpf_*_test.go` | ✅ exists |
 | [dataplane](./design/dataplane.md) | `felix/dataplane/linux/**` (the shared loop/manager/resync architecture, all modes — BPF-specific files here are *also* matched by the `bpf-*` rows, intentionally), `felix/iptables/**`, `felix/nftables/**`, `felix/generictables/**`, `felix/ipsets/**`, `felix/markbits/**`, `felix/rules/**`; also the manager/driver architecture & resync doctrine for `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` | ✅ exists |

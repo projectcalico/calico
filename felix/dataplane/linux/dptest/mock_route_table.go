@@ -22,19 +22,22 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 )
 
+// MockRouteTable records the routes set on it.  Create with NewMockRouteTable.
 type MockRouteTable struct {
 	CurrentRoutes map[string][]routetable.Target
 
 	// currentRoutesByClass indexes the same routes the way the real RouteTable
 	// does, on (route class, interface name).  Managers that share a route table
 	// _and_ an interface - such as the blackhole routes that all hang off
-	// InterfaceNone - are only distinguishable by their class.  Lazily created,
-	// so that the plain currentRoutes-only struct literals still work.
+	// InterfaceNone - are only distinguishable by their class.
 	currentRoutesByClass map[routetable.RouteClass]map[string][]routetable.Target
 }
 
 func NewMockRouteTable() *MockRouteTable {
-	return &MockRouteTable{CurrentRoutes: map[string][]routetable.Target{}}
+	return &MockRouteTable{
+		CurrentRoutes:        map[string][]routetable.Target{},
+		currentRoutesByClass: map[routetable.RouteClass]map[string][]routetable.Target{},
+	}
 }
 
 func (t *MockRouteTable) SetRoutes(routeClass routetable.RouteClass, ifaceName string, targets []routetable.Target) {
@@ -45,9 +48,6 @@ func (t *MockRouteTable) SetRoutes(routeClass routetable.RouteClass, ifaceName s
 	}).Debug("SetRoutes")
 	t.CurrentRoutes[ifaceName] = targets
 
-	if t.currentRoutesByClass == nil {
-		t.currentRoutesByClass = map[routetable.RouteClass]map[string][]routetable.Target{}
-	}
 	if t.currentRoutesByClass[routeClass] == nil {
 		t.currentRoutesByClass[routeClass] = map[string][]routetable.Target{}
 	}
