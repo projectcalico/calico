@@ -635,7 +635,7 @@ func NewManager(
 		vxlanPort:               uint16(config.VXLANPort),
 		vxlanSrcPortMin:         uint16(config.VXLANSrcPortMin),
 		vxlanSrcPortMax:         uint16(config.VXLANSrcPortMax),
-		overlayTunnelID:         OverlayTunnelID(&config.RulesConfig),
+		overlayTunnelID:         config.RulesConfig.BPFOverlayTunnelID(),
 		wgPort:                  uint16(config.Wireguard.ListeningPort),
 		wg6Port:                 uint16(config.Wireguard.ListeningPortV6),
 		dsrEnabled:              config.BPFNodePortDSREnabled,
@@ -883,14 +883,6 @@ func NewManager(
 	}
 
 	return m, nil
-}
-
-// OverlayTunnelID is the tunnel key ID that BPF sets on all overlay devices, so also the VXLAN VNI.
-func OverlayTunnelID(rc *rules.Config) uint32 {
-	if rc.IPIPEnabled || rc.WireguardEnabled || rc.WireguardEnabledV6 {
-		return 1
-	}
-	return uint32(rc.VXLANVNI)
 }
 
 func newBPFEndpointManagerDataplane(
