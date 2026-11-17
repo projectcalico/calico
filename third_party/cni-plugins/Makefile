@@ -22,6 +22,9 @@ CN_FILES := host-local portmap loopback tuning
 CONTAINERNETWORKING_PLUGINS_CLONED = .containernetworking-plugins-$(CNI_VERSION).cloned
 FLANNEL_CNI_PLUGIN_CLONED          = .flannel-cni-plugin-$(FLANNEL_VERSION).cloned
 
+.PHONY: init-source
+init-source: $(CONTAINERNETWORKING_PLUGINS_CLONED) $(FLANNEL_CNI_PLUGIN_CLONED)
+
 $(CONTAINERNETWORKING_PLUGINS_CLONED):
 	rm -rf containernetworking-plugins .containernetworking-plugins-*.cloned
 	$(call fetch_repo,$(CONTAINERNETWORKING_PLUGINS_REPO),$(CNI_VERSION),containernetworking-plugins)
@@ -126,6 +129,11 @@ $(CNI_PLUGINS_IMAGE_CREATED): Dockerfile build | register
 	$(DOCKER_BUILD) -t $(CNI_PLUGINS_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
+
+## Stage the image's build context, for a builder other than docker.
+.PHONY: image-context
+image-context: Dockerfile build
+	$(call stage_image_context,.,Dockerfile,bin/image-context-$(ARCH),,bin/$(ARCH))
 
 # image-content-addressed probes the cache registry for the content-hash tag
 # and either pulls + retags it (fast path) or falls through to a real build
