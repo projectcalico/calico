@@ -54,6 +54,7 @@ import (
 	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/bpfep"
 	"github.com/projectcalico/calico/felix/dataplane/linux/bpfep/bpfepdefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/bpfroute"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
@@ -716,7 +717,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 
 	var bpfVXLANOpts []vxlanMgrOption
 	if config.BPFEnabled && dataplaneFeatures.VXLANVNIFilter {
-		bpfVXLANOpts = append(bpfVXLANOpts, vxlanMgrWithVNIFilter(bpfOverlayTunnelID(&config.RulesConfig)))
+		bpfVXLANOpts = append(bpfVXLANOpts, vxlanMgrWithVNIFilter(bpfep.OverlayTunnelID(&config.RulesConfig)))
 	}
 
 	if config.RulesConfig.VXLANEnabled {
@@ -890,7 +891,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 	bpfringbuf.SetMapSize(ringBufSize)
 
 	var (
-		bpfEndpointManager *bpfEndpointManager
+		bpfEndpointManager *bpfep.Manager
 		bpfEvnt            events.Events
 		bpfEventPoller     *bpfEventPoller
 
@@ -970,7 +971,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
 		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
-		bpfEndpointManager, err = NewBPFEndpointManager(
+		bpfEndpointManager, err = bpfep.NewManager(
 			nil,
 			&config,
 			bpfMaps,
