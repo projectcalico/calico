@@ -29,7 +29,11 @@ func TestGitIgnoresNonVersionTags(t *testing.T) {
 		{"-c", "user.email=ci@example.com", "-c", "user.name=ci", "commit", "-q", "--allow-empty", "-m", "one"},
 		{"tag", "v3.0.0"},
 		{"-c", "user.email=ci@example.com", "-c", "user.name=ci", "commit", "-q", "--allow-empty", "-m", "two"},
+		// None of these is a version: another component's release, a project
+		// whose name starts with "v", and a version with no patch.
 		{"tag", "cc-operator-v3.0.1"},
+		{"tag", "vpn-v1.2.0"},
+		{"tag", "v3.1"},
 	} {
 		if _, err := g.Run(args...); err != nil {
 			t.Fatalf("git %v: %v", args, err)
@@ -41,7 +45,7 @@ func TestGitIgnoresNonVersionTags(t *testing.T) {
 		t.Fatalf("Version: %v", err)
 	}
 	if !strings.HasPrefix(version, "v3.0.0-1-g") {
-		t.Errorf("Version = %q, want it described from v3.0.0, not the cc-operator tag on HEAD", version)
+		t.Errorf("Version = %q, want it described from v3.0.0, not a non-version tag on HEAD", version)
 	}
 
 	latest, err := g.LatestTag("master")

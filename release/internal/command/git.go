@@ -48,7 +48,7 @@ func (g GitRunner) Branch() (string, error) {
 
 // VersionTags is the pattern every git describe matches, so a non-version tag
 // near HEAD can never become the repo's version.
-const VersionTags = "v*"
+const VersionTags = "v[0-9]*.[0-9]*.[0-9]*"
 
 func (g GitRunner) Version(includeDirty bool) (string, error) {
 	args := []string{"describe", "--tags", "--match", VersionTags, "--always", "--long", "--abbrev=12"}
