@@ -325,7 +325,7 @@ func (s settings) pushUnit(u unit) error {
 	}
 
 	for attempt := 0; ; attempt++ {
-		_, err := s.Run(helmBinary, args, command.WithLogFile(s.LogPath(u.slug())))
+		_, err := s.Run(helmBinary, args, command.WithLogFile(s.LogPath(u.slug())), command.WithTiming(log))
 		if err == nil {
 			log.Info("Published helm chart")
 			return nil

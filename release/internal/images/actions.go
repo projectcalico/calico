@@ -39,7 +39,7 @@ func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) er
 	}
 
 	units := s.units(s.env())
-	s.Logger().WithField("images", len(units)).Info("Building container images")
+	s.Logger().WithFields(logrus.Fields{"images": len(units), "arches": s.Arches}).Info("Building container images")
 	if err := s.runUnits(units); err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (a archiver) Contribute(dir string) error {
 	}
 	dest := filepath.Join(dir, "images")
 	units := s.units(s.env())
-	s.Logger().WithField("images", len(units)).Info("Archiving container images")
+	s.Logger().WithFields(logrus.Fields{"images": len(units), "arches": s.Arches}).Info("Archiving container images")
 	if err := os.MkdirAll(dest, fsutil.DirPerms); err != nil {
 		return fmt.Errorf("creating images dir %s: %w", dest, err)
 	}
@@ -168,7 +168,7 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 		sendImagesToISS(s, unscanned)
 		return nil
 	}
-	s.Logger().WithField("images", len(units)).Info("Publishing container images")
+	s.Logger().WithFields(logrus.Fields{"images": len(units), "arches": s.Arches}).Info("Publishing container images")
 	publishErr := s.runUnits(units)
 
 	// Record before reporting a failure: a partial publish is exactly the run
@@ -203,7 +203,7 @@ func Resolve(repoRoot, version string, variants []Variant, resolve registry.Dige
 
 	unscanned, depErr := s.runDependencies()
 	units := s.units(s.env())
-	s.Logger().WithField("images", len(units)).Info("Resolving container images")
+	s.Logger().WithFields(logrus.Fields{"images": len(units), "arches": s.Arches}).Info("Resolving container images")
 	got, lookupErr := steps.GoLimit(units, lookupLimit, s.lookup)
 
 	errs := []error{depErr}

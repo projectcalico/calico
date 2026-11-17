@@ -64,14 +64,6 @@ func (g GitRunner) Dirty() (bool, error) {
 	return strings.HasSuffix(v, "-dirty"), nil
 }
 
-func (g GitRunner) Porcelain() (bool, error) {
-	out, err := g.Run("status", "--porcelain")
-	if err != nil {
-		return false, err
-	}
-	return out != "", nil
-}
-
 // Resolve returns the commit a ref names.
 func (g GitRunner) Resolve(ref string) (string, error) {
 	out, err := g.Run("rev-parse", "--verify", "--quiet", ref)
