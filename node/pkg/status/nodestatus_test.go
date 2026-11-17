@@ -68,14 +68,14 @@ var _ = Describe("Node status FV tests", func() {
 
 	v4Status := &apiv3.BGPDaemonStatus{
 		State:                   apiv3.BGPDaemonStateReady,
-		Version:                 "v0.3.3+birdv1.6.8",
+		Version:                 "1.6.8-1.tigera",
 		RouterID:                "172.17.0.0",
 		LastBootTime:            BootTimeFirst,
 		LastReconfigurationTime: "2021-09-19 20:48:56",
 	}
 	v6Status := &apiv3.BGPDaemonStatus{
 		State:                   apiv3.BGPDaemonStateReady,
-		Version:                 "v0.3.3+birdv1.6.8",
+		Version:                 "1.6.8-1.tigera",
 		RouterID:                "2001:20::8",
 		LastBootTime:            BootTimeFirst,
 		LastReconfigurationTime: "2021-09-19 20:48:56",

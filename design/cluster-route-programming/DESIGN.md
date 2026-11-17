@@ -155,10 +155,9 @@ programming the route to it.
 
 For an IPIP pool that BIRD owns, the filter statement also sets BIRD's
 `krt_tunnel` variable, which tells the kernel protocol to send the route out
-`tunl0`.  `krt_tunnel` does not exist in upstream BIRD — it is the reason
-Calico ships a BIRD fork (`projectcalico/bird`, pinned as `BIRD_VERSION` in
-`metadata.mk`).  Retiring BIRD-programmed IPIP cluster routes is therefore also
-what retires the fork.
+`tunl0`.  `krt_tunnel` does not exist in upstream BIRD — it is one of the
+patches that Calico builds BIRD with (`hack/rpms/bird/`).  Retiring
+BIRD-programmed IPIP cluster routes is therefore also what retires that patch.
 
 ### Review notes — §2
 
@@ -192,8 +191,8 @@ equivalently `FelixConfiguration.programClusterRoutes` = `Disabled` or
 
 The intent is to remove the ability entirely in **v3.35**, at which point:
 
-- `krt_tunnel` support can be dropped from the BIRD config templates, and the
-  `projectcalico/bird` fork can be retired in favour of upstream BIRD.
+- `krt_tunnel` support can be dropped from the BIRD config templates, and its
+  patch from `hack/rpms/bird/`.
 - The `EnabledIPIPOnly` value of `BGPConfiguration.programClusterRoutes`, and
   the `Disabled` / `EnabledNoEncapOnly` values' effect on IPIP, become
   no-ops or are removed.

@@ -50,7 +50,7 @@ UPDATE_EXPECTED_DATA?=false
 
 .PHONY: fv
 ## Run confd functional verification tests (envtest-based, replaces bash test suite).
-fv: setup-envtest
+fv: setup-envtest bin/bird bin/bird6
 	mkdir -p report
 	$(DOCKER_RUN) \
 		-v $$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
@@ -65,17 +65,21 @@ bin/kubectl:
 	curl -sSf -L --retry 5 https://dl.k8s.io/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $@
 
-bin/bird bin/bird6:
+# The BIRD binaries that calico/node ships, for checking rendered configs.
+# They come from the calico/bird image, which has its own RPM installed.
+include ../hack/rpms/bird/image.mk
+
+bin/bird bin/bird6: ../metadata.mk ../hack/rpms/bird/bird.spec $(wildcard ../hack/rpms/bird/patches/*.patch)
+	$(MAKE) -C ../hack/rpms/bird image ARCH=$(ARCH)
+	mkdir -p bin
 	-docker rm -f calico-bird
-	# Latest BIRD binaries are stored in automated builds of calico/bird.
-	# To get them, we create (but don't start) a container from that image.
-	docker pull calico/bird:$(BIRD_VERSION)-$(ARCH)
-	docker create --name calico-bird calico/bird:$(BIRD_VERSION)-$(ARCH) /bin/sh
+	# To get the binaries, we create (but don't start) a container from the image.
+	docker create --name calico-bird $(BIRD_IMAGE)
 	# Then we copy the files out of the container.  Since docker preserves
 	# mtimes on its copy, check the file really did appear, then touch it
 	# to make sure that downstream targets get rebuilt.
-	docker cp calico-bird:/bird bin/ && \
-	docker cp calico-bird:/bird6 bin/ && \
+	docker cp calico-bird:/usr/bin/bird bin/ && \
+	docker cp calico-bird:/usr/bin/bird6 bin/ && \
 	  test -e $@ && \
 	  touch $@
 	-docker rm -f calico-bird
