@@ -148,10 +148,7 @@ var pinnedChart = func(cfg *Config, c *cli.Command, pin pinned) (*charts.Chart, 
 var chartsBuildOptions = func(cfg *Config, c *cli.Command, chart charts.Chart, pin pinned, withIndex bool) ([]charts.BuildOption, error) {
 	var opts []charts.BuildOption
 	outputDir := releaseOutputDir(cfg.RepoRootDir, chart.ProductVersion)
-	chartURL, err := charts.ChartsURL(chart)
-	if err != nil {
-		return nil, err
-	}
+	chartURL := charts.ChartsURL(chart)
 	if c.Bool(hashreleaseFlag.Name) {
 		p, err := pin(cfg, c)
 		if err != nil {
@@ -166,11 +163,7 @@ var chartsBuildOptions = func(cfg *Config, c *cli.Command, chart charts.Chart, p
 		chartURL = hashreleaseserver.HashreleaseURL(p.ReleaseName)
 	}
 	if withIndex {
-		repoURL, err := charts.RepoURL()
-		if err != nil {
-			return nil, err
-		}
-		opts = append(opts, charts.WithIndex(repoURL, chartURL, charts.IndexDir(outputDir), cfg.TmpDir))
+		opts = append(opts, charts.WithIndex(charts.RepoURL, chartURL, charts.IndexDir(outputDir), cfg.TmpDir))
 	}
 	return opts, nil
 }
