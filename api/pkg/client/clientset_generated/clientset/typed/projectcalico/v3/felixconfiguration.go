@@ -27,6 +27,7 @@ type FelixConfigurationInterface interface {
 	Create(ctx context.Context, felixConfiguration *projectcalicov3.FelixConfiguration, opts v1.CreateOptions) (*projectcalicov3.FelixConfiguration, error)
 	Update(ctx context.Context, felixConfiguration *projectcalicov3.FelixConfiguration, opts v1.UpdateOptions) (*projectcalicov3.FelixConfiguration, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
+	DeleteWithResult(ctx context.Context, name string, opts v1.DeleteOptions) (v1.APIResult, error)
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.FelixConfiguration, error)
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.FelixConfigurationList, error)
