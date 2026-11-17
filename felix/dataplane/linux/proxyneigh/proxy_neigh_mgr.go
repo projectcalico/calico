@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package proxyneigh
 
 import (
 	"bytes"
@@ -151,7 +151,7 @@ type proxyNeighManager struct {
 	cancel context.CancelFunc
 }
 
-func newProxyNeighManager(dpConfig dataplanedefs.Config, ipVersion uint8) *proxyNeighManager {
+func NewManager(dpConfig dataplanedefs.Config, ipVersion uint8) *proxyNeighManager {
 	nl, err := netlinkshim.NewRealNetlink()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create netlink handle for proxy neighbor manager")

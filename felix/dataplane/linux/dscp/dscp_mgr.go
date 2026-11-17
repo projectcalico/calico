@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package dscp
 
 import (
 	"fmt"
@@ -46,7 +46,7 @@ type dscpManager struct {
 	logCtx *logrus.Entry
 }
 
-func newDSCPManager(
+func NewManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mangleTable dataplanedefs.Table,
 	ruleRenderer rules.RuleRenderer,

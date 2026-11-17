@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package masq
 
 import (
 	"slices"
@@ -58,7 +58,7 @@ type masqManager struct {
 	logCxt *logrus.Entry
 }
 
-func newMasqManager(
+func NewManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	natTable dataplanedefs.Table,
 	ruleRenderer rules.RuleRenderer,

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package hostsipset
 
 import (
 	"strings"
@@ -47,7 +47,7 @@ type hostsIPSetManager struct {
 	logCtx *logrus.Entry
 }
 
-func newHostsIPSetManager(
+func NewManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	ipVersion uint8,
 	dpConfig dataplanedefs.Config,
