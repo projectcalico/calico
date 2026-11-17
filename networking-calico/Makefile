@@ -35,10 +35,10 @@ $(NATIVE_BIN)/tox: $(UV)
 	$(UV) tool install --python $(TEST_PYTHON_VERSION) tox==$(TEST_TOX_VERSION)
 
 $(NATIVE_BIN)/etcd:
-	../hack/fetch-file https://github.com/etcd-io/etcd/releases/download/$(TEST_ETCD_VERSION)/etcd-$(TEST_ETCD_VERSION)-linux-amd64.tar.gz /tmp/etcd.tar.gz
 	mkdir -p $(NATIVE_BIN)
-	tar -xzf /tmp/etcd.tar.gz -C $(NATIVE_BIN) --strip-components=1 etcd-$(TEST_ETCD_VERSION)-linux-amd64/etcd
-	rm -f /tmp/etcd.tar.gz
+	../hack/fetch-file https://github.com/etcd-io/etcd/releases/download/$(TEST_ETCD_VERSION)/etcd-$(TEST_ETCD_VERSION)-linux-amd64.tar.gz $@.tar.gz
+	tar -xzf $@.tar.gz -C $(NATIVE_BIN) --strip-components=1 etcd-$(TEST_ETCD_VERSION)-linux-amd64/etcd
+	rm -f $@.tar.gz
 else
 TEST_CODE_DIR := /code
 

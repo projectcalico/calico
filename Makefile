@@ -122,9 +122,11 @@ yaml-lint:
 endif
 
 # Written under a temporary name: a half-extracted binary looks complete to make.
+# uv names its builds by the kernel's machine name.
+UV_PLATFORM := $(shell uname -m)-unknown-linux-gnu
 bin/uv:
-	$(call fetch_file,https://github.com/astral-sh/uv/releases/download/$(UV_VERSION)/uv-x86_64-unknown-linux-gnu.tar.gz,bin/.uv.tar.gz)
-	tar -xzf bin/.uv.tar.gz -O uv-x86_64-unknown-linux-gnu/uv > $@.tmp
+	$(call fetch_file,https://github.com/astral-sh/uv/releases/download/$(UV_VERSION)/uv-$(UV_PLATFORM).tar.gz,bin/.uv.tar.gz)
+	tar -xzf bin/.uv.tar.gz -O uv-$(UV_PLATFORM)/uv > $@.tmp
 	chmod +x $@.tmp
 	mv $@.tmp $@
 	rm -f bin/.uv.tar.gz

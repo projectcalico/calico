@@ -137,7 +137,7 @@ ut: kind-cluster-create
 ## Run CRD validation tests using envtest (no kind cluster required)
 .PHONY: ut-validation
 ut-validation: setup-envtest
-	$(DOCKER_GO_BUILD) sh -c 'KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_CONTAINER_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1) \
+	$(DOCKER_GO_BUILD) sh -c 'cd $(BUILD_REPO_ROOT)/api && KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_CONTAINER_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1) \
 		go test -count=1 ./...'
 
 ## Check if generated files are out of date
