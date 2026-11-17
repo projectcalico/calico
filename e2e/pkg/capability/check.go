@@ -95,6 +95,7 @@ func (r *Result) Failed() bool {
 func Check(ctx context.Context, cluster *Cluster, decls Declarations) *Result {
 	result := &Result{}
 
+	// A declaration no spec can require is a typo, so fail it.
 	for c, files := range decls {
 		if !slices.Contains(describe.Capabilities, c) {
 			result.Missing = append(result.Missing, Miss{
@@ -105,6 +106,7 @@ func Check(ctx context.Context, cluster *Cluster, decls Declarations) *Result {
 		}
 	}
 
+	// Probe every capability, declared or not, and sort each outcome.
 	for _, c := range describe.Capabilities {
 		files, declared := decls[c]
 		found, err := probes[c](ctx, cluster)
