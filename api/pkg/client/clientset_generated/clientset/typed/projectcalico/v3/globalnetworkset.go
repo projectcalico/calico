@@ -27,6 +27,7 @@ type GlobalNetworkSetInterface interface {
 	Create(ctx context.Context, globalNetworkSet *projectcalicov3.GlobalNetworkSet, opts v1.CreateOptions) (*projectcalicov3.GlobalNetworkSet, error)
 	Update(ctx context.Context, globalNetworkSet *projectcalicov3.GlobalNetworkSet, opts v1.UpdateOptions) (*projectcalicov3.GlobalNetworkSet, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
+	DeleteWithResult(ctx context.Context, name string, opts v1.DeleteOptions) (v1.APIResult, error)
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.GlobalNetworkSet, error)
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.GlobalNetworkSetList, error)

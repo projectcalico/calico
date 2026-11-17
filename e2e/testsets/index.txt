@@ -20,8 +20,8 @@
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-lb-bpf [vxlan] | cron/e2e-bpf/bpf-run-matrix-aws-lb-bpf-vxlan | 216
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-lb-iptables [ipip] | cron/e2e-bpf/bpf-run-matrix-aws-lb-iptables-ipip | 220
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-lb-iptables [vxlan] | cron/e2e-bpf/bpf-run-matrix-aws-lb-iptables-vxlan | 220
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-single-subnet-dual-ip-family [false] | cron/e2e-bpf/bpf-run-matrix-aws-single-subnet-dual-ip-family-false | 559
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-single-subnet-dual-ip-family [true] | cron/e2e-bpf/bpf-run-matrix-aws-single-subnet-dual-ip-family-true | 559
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-single-subnet-dual-ip-family [false] | cron/e2e-bpf/bpf-run-matrix-aws-single-subnet-dual-ip-family-false | 560
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-single-subnet-dual-ip-family [true] | cron/e2e-bpf/bpf-run-matrix-aws-single-subnet-dual-ip-family-true | 560
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-talos-no-encap-dsr | cron/e2e-bpf/bpf-run-matrix-aws-talos-no-encap-dsr | 223
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-bpf-aks-w-aks-cni-overlay | cron/e2e-bpf/bpf-run-matrix-bpf-aks-w-aks-cni-overlay | 216
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-eks-w-aws-cni [aws] | cron/e2e-bpf/bpf-run-matrix-eks-w-aws-cni-aws | 222
