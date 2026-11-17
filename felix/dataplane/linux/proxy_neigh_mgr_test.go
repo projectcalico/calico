@@ -327,7 +327,7 @@ func newTestProxyNeighManager(nl *mocknetlink.MockNetlinkDataplane, arpClients m
 }
 
 func newTestProxyNeighManagerWithHostname(nl *mocknetlink.MockNetlinkDataplane, arpClients map[string]*mockARPClient, hostname string) *proxyNeighManager {
-	config := Config{
+	config := dataplanedefs.Config{
 		Hostname: hostname,
 		RulesConfig: rules.Config{
 			WorkloadIfacePrefixes: []string{"cali"},
@@ -349,7 +349,7 @@ func newTestProxyNeighManagerWithHostname(nl *mocknetlink.MockNetlinkDataplane, 
 var ndpTestHWAddr = net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x06}
 
 func newTestProxyNDPManager(nl *mocknetlink.MockNetlinkDataplane, ndpConns map[string]*mockNDPConn) *proxyNeighManager {
-	config := Config{
+	config := dataplanedefs.Config{
 		RulesConfig: rules.Config{
 			WorkloadIfacePrefixes: []string{"cali"},
 		},
@@ -998,7 +998,7 @@ var _ = Describe("Proxy neighbor manager - listener recreation", func() {
 	BeforeEach(func() {
 		nl = newMockNetlinkForProxyNeigh()
 		created = nil
-		config := Config{
+		config := dataplanedefs.Config{
 			Hostname:    "test-node",
 			RulesConfig: rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
 		}
@@ -1057,7 +1057,7 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 		arpClients := map[string]*mockARPClient{
 			"eth0": newMockARPClient(net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x01}),
 		}
-		config := Config{
+		config := dataplanedefs.Config{
 			Hostname:    "test-node",
 			RulesConfig: rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
 		}
@@ -1099,7 +1099,7 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 	It("re-sends unsolicited NA without re-joining the multicast group (IPv6)", func() {
 		nl := newMockNetlinkForProxyNeigh()
 		ndpConns := map[string]*mockNDPConn{"eth0": newMockNDPConn()}
-		config := Config{
+		config := dataplanedefs.Config{
 			RulesConfig: rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
 		}
 		nf := func(ifaceName string) (ndpConn, net.HardwareAddr, error) {
@@ -1144,7 +1144,7 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 	})
 
 	It("takes the re-announce interval from the LocalSubnetL2ReachabilityRefreshInterval config", func() {
-		config := Config{
+		config := dataplanedefs.Config{
 			Hostname:                                 "test-node",
 			LocalSubnetL2ReachabilityRefreshInterval: 90 * time.Second,
 			RulesConfig:                              rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
@@ -1155,7 +1155,7 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 	})
 
 	It("disables periodic re-announcement when the config interval is zero", func() {
-		config := Config{
+		config := dataplanedefs.Config{
 			Hostname:    "test-node",
 			RulesConfig: rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
 		}

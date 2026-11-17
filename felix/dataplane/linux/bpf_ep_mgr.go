@@ -572,7 +572,7 @@ func getIPFragTimeout(configuredTimeout time.Duration) uint32 {
 
 func NewBPFEndpointManager(
 	dp bpfDataplane,
-	config *Config,
+	config *dataplanedefs.Config,
 	bpfmaps *bpfmap.Maps,
 	workloadIfaceRegex *regexp.Regexp,
 	ipSetIDAllocV4 *idalloc.IDAllocator,
