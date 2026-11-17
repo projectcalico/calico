@@ -61,7 +61,7 @@ tunnel is disabled), uses `IntendedUse = Tunnel` so pool selection respects `all
 ## Felix
 
 Felix doesn't allocate IPs. It holds an IPAM client for one purpose: the KubeVirt live-migration owner-swap monitor in
-[`felix/dataplane/linux/live_migration.go`](../../felix/dataplane/linux/live_migration.go).
+[`felix/dataplane/linux/livemigration/live_migration.go`](../../felix/dataplane/linux/livemigration/live_migration.go).
 
 When a workload endpoint transitions to "active" live-migration state, the monitor calls `vmipam.EnsureActiveVMOwnerAttrs` to promote the alternate owner to active under a
 `CompareAndSwap` precondition. This is the dataplane half of the KubeVirt IP persistence handshake described in [`./ipam-cni.md`](./ipam-cni.md). Felix swaps ownership; it never
