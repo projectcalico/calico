@@ -74,28 +74,12 @@ var _ = Describe("IPIPManager", func() {
 		)
 	})
 
-	It("should mark the dataplane dirty when the parent device changes", func() {
-		dp := &InternalDataplane{}
-
-		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
-		Expect(dp.dataplaneNeedsSync).To(BeTrue())
-
-		dp.dataplaneNeedsSync = false
-		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
-		Expect(dp.dataplaneNeedsSync).To(BeFalse())
-
-		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "bond0")
-		Expect(dp.dataplaneNeedsSync).To(BeTrue())
-	})
-
-	It("should leave the parent device alone when handed an empty name", func() {
-		dp := &InternalDataplane{}
-		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
-
-		dp.dataplaneNeedsSync = false
-		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "")
-		Expect(dp.dataplaneNeedsSync).To(BeFalse())
-		Expect(ipipMgr.routeMgr.parentDevice).To(Equal("eth0"))
+	It("should report parent device changes", func() {
+		Expect(ipipMgr.OnParentDeviceUpdate("eth0")).To(BeTrue())
+		Expect(ipipMgr.OnParentDeviceUpdate("eth0")).To(BeFalse())
+		Expect(ipipMgr.OnParentDeviceUpdate("")).To(BeFalse())
+		Expect(ipipMgr.routeMgr.ParentDevice()).To(Equal("eth0"))
+		Expect(ipipMgr.OnParentDeviceUpdate("bond0")).To(BeTrue())
 	})
 
 	It("should configure tunnel properly", func() {
@@ -105,8 +89,8 @@ var _ = Describe("IPIPManager", func() {
 		})
 		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(ipipMgr.routeMgr.parentDeviceAddr).NotTo(BeZero())
-		Expect(ipipMgr.routeMgr.parentDevice).NotTo(BeEmpty())
+		Expect(ipipMgr.routeMgr.parentIfaceAddr()).NotTo(BeZero())
+		Expect(ipipMgr.routeMgr.ParentDevice()).NotTo(BeEmpty())
 		noEncapDev, err := ipipMgr.routeMgr.detectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(noEncapDev).NotTo(BeNil())
@@ -189,8 +173,8 @@ var _ = Describe("IPIPManager", func() {
 
 		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(ipipMgr.routeMgr.parentDeviceAddr).NotTo(BeZero())
-		Expect(ipipMgr.routeMgr.parentDevice).NotTo(BeEmpty())
+		Expect(ipipMgr.routeMgr.parentIfaceAddr()).NotTo(BeZero())
+		Expect(ipipMgr.routeMgr.ParentDevice()).NotTo(BeEmpty())
 		noEncapDev, err := ipipMgr.routeMgr.detectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(noEncapDev).NotTo(BeNil())
@@ -275,7 +259,7 @@ var _ = Describe("IPIPManager", func() {
 
 		err := ipipMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(ipipMgr.routeMgr.routesDirty).To(BeFalse())
+		Expect(ipipMgr.routeMgr.RoutesDirty()).To(BeFalse())
 		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
 		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(1))
 
@@ -298,7 +282,7 @@ var _ = Describe("IPIPManager", func() {
 		err = ipipMgr.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(ipipMgr.routeMgr.routesDirty).To(BeFalse())
+		Expect(ipipMgr.routeMgr.RoutesDirty()).To(BeFalse())
 		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(1))
 		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
 	})
@@ -394,8 +378,8 @@ var _ = Describe("IPIPManager", func() {
 
 		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(ipipMgr.routeMgr.parentDeviceAddr).NotTo(BeZero())
-		Expect(ipipMgr.routeMgr.parentDevice).NotTo(BeEmpty())
+		Expect(ipipMgr.routeMgr.parentIfaceAddr()).NotTo(BeZero())
+		Expect(ipipMgr.routeMgr.ParentDevice()).NotTo(BeEmpty())
 		noEncapDev, err := ipipMgr.routeMgr.detectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(noEncapDev).NotTo(BeNil())

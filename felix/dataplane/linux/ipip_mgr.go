@@ -265,3 +265,9 @@ cleanupRetry:
 		logrus.Warnf("Giving up trying to clean up IPIP addresses after retrying %v times", dataplanedefs.MaxCleanupRetries)
 	}
 }
+
+// OnParentDeviceUpdate records the tunnel's parent device and reports whether it
+// changed.
+func (m *ipipManager) OnParentDeviceUpdate(name string) bool {
+	return m.routeMgr.OnParentDeviceUpdate(name)
+}
