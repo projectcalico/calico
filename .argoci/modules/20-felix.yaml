@@ -70,6 +70,7 @@ steps:
     buildkit:
       tag: calico/felix-test:latest-amd64
       context: /cache/felix-image-context
+      buildArgsFile: build-args
       tar: /cache/felix-test-tar/calico-felix-test.tar
 
   # Native in the go-build image: under NATIVE_GO_BUILD the checks call no docker.

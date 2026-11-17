@@ -36,4 +36,5 @@ steps:
     buildkit:
       tag: mock-node:latest-amd64
       context: /cache/mock-node-image-context
+      buildArgsFile: build-args
       tar: /cache/mock-node-image/mock-node-image.tar

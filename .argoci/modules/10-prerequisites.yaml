@@ -414,6 +414,7 @@ steps:
     buildkit:
       tag: calico/calico:latest-amd64
       context: /cache/calico-image
+      buildArgsFile: build-args
       tar: /cache/calico-image-tar/calico-image.tar
 
   - name: build-calico-image
@@ -565,6 +566,7 @@ steps:
     buildkit:
       tag: calico/node:latest-amd64
       context: /cache/node-image-context
+      buildArgsFile: build-args
       tar: /cache/node-image/node-image.tar
 
   # TypeScript, so there is no Go import graph to gate on.
@@ -640,6 +642,7 @@ steps:
     buildkit:
       tag: localhost:5000/calico/operator:test-build
       context: /cache/operator-image-context/kind
+      buildArgsFile: build-args
       tar: /cache/operator-image/operator-image.tar
 
   - name: operator-image-dockerio-buildkit
@@ -655,6 +658,7 @@ steps:
     buildkit:
       tag: calico/operator:test-build
       context: /cache/operator-image-context/dockerio
+      buildArgsFile: build-args
       tar: /cache/operator-image-dockerio/operator-image-dockerio.tar
 
   # Windows FV installs these rather than building its own, on Windows Server 2025.
@@ -702,6 +706,7 @@ steps:
       tag: node-windows:latest
       platform: windows/amd64
       context: /cache/windows-image-context/node
+      buildArgsFile: build-args
       tar: /cache/node-windows-image/node-windows.tar
 
   - name: cni-windows-image
@@ -716,6 +721,7 @@ steps:
       tag: cni-windows:latest
       platform: windows/amd64
       context: /cache/windows-image-context/cni
+      buildArgsFile: build-args
       tar: /cache/cni-windows-image/cni-windows.tar
 
   - name: third-party-image-contexts
@@ -762,6 +768,7 @@ steps:
     buildkit:
       tag: calico/envoy-gateway:latest-amd64
       context: /cache/third-party-image-context/envoy-gateway
+      buildArgsFile: build-args
       tar: /cache/envoy-gateway-image/envoy-gateway-image.tar
 
   - name: envoy-proxy-image-buildkit
@@ -777,6 +784,7 @@ steps:
     buildkit:
       tag: calico/envoy-proxy:latest-amd64
       context: /cache/third-party-image-context/envoy-proxy
+      buildArgsFile: build-args
       tar: /cache/envoy-proxy-image/envoy-proxy-image.tar
 
   - name: envoy-ratelimit-image-buildkit
@@ -792,6 +800,7 @@ steps:
     buildkit:
       tag: calico/envoy-ratelimit:latest-amd64
       context: /cache/third-party-image-context/envoy-ratelimit
+      buildArgsFile: build-args
       tar: /cache/envoy-ratelimit-image/envoy-ratelimit-image.tar
 
   - name: cni-plugins-image-buildkit
@@ -807,6 +816,7 @@ steps:
     buildkit:
       tag: calico/third-party-cni-plugins:latest-amd64
       context: /cache/third-party-image-context/cni-plugins
+      buildArgsFile: build-args
       tar: /cache/cni-plugins-image/cni-plugins-image.tar
 
   # Built here for the VM lanes, which have no module proxy: the binaries import
