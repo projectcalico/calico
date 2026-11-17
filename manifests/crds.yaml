@@ -3998,6 +3998,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -4339,6 +4346,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -4664,6 +4678,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -5005,6 +5026,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -5242,6 +5270,9 @@ spec:
                   rule:
                     "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
                     || !has(r.destination.services))"
+                - message: HTTP match is not allowed in egress rules
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.http))"
           type: object
       served: true
       storage: true
@@ -6875,6 +6906,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -7216,6 +7254,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -7534,6 +7579,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -7875,6 +7927,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -8069,6 +8128,9 @@ spec:
                   rule:
                     "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
                     || !has(r.destination.services))"
+                - message: HTTP match is not allowed in egress rules
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.http))"
           type: object
       served: true
       storage: true
@@ -8415,6 +8477,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -8756,6 +8825,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -9081,6 +9157,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -9422,6 +9505,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -9669,6 +9759,23 @@ spec:
                   rule:
                     "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
                     || !has(r.destination.services))"
+                - message: HTTP match is not allowed in egress rules
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.http))"
+                - message:
+                    spec fields other than tier must be empty when stagedAction
+                    is Delete
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.stagedAction) || self.stagedAction != 'Delete' ||
+                    (!has(self.order) && (!has(self.ingress) || size(self.ingress) ==
+                    0) && (!has(self.egress) || size(self.egress) == 0) && (!has(self.selector)
+                    || size(self.selector) == 0) && (!has(self.serviceAccountSelector)
+                    || size(self.serviceAccountSelector) == 0) && (!has(self.performanceHints)
+                    || size(self.performanceHints) == 0) && (!has(self.doNotTrack) ||
+                    !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT) && (!has(self.applyOnForward)
+                    || !self.applyOnForward) && (!has(self.namespaceSelector) || size(self.namespaceSelector)
+                    == 0))"
           type: object
       served: true
       storage: true
@@ -10200,6 +10307,15 @@ spec:
                     - Ignore
                   type: string
               type: object
+              x-kubernetes-validations:
+                - message: spec fields must be empty when stagedAction is Delete
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.stagedAction) || self.stagedAction != 'Delete' ||
+                    ((!has(self.ingress) || size(self.ingress) == 0) && (!has(self.egress)
+                    || size(self.egress) == 0) && (!has(self.podSelector) || ((!has(self.podSelector.matchLabels)
+                    || size(self.podSelector.matchLabels) == 0) && (!has(self.podSelector.matchExpressions)
+                    || size(self.podSelector.matchExpressions) == 0))))"
           type: object
       served: true
       storage: true
@@ -10472,6 +10588,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -10813,6 +10936,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -11131,6 +11261,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -11472,6 +11609,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -11677,6 +11821,20 @@ spec:
                   rule:
                     "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
                     || !has(r.destination.services))"
+                - message: HTTP match is not allowed in egress rules
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.http))"
+                - message:
+                    spec fields other than tier must be empty when stagedAction
+                    is Delete
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.stagedAction) || self.stagedAction != 'Delete' ||
+                    (!has(self.order) && (!has(self.ingress) || size(self.ingress) ==
+                    0) && (!has(self.egress) || size(self.egress) == 0) && (!has(self.selector)
+                    || size(self.selector) == 0) && (!has(self.serviceAccountSelector)
+                    || size(self.serviceAccountSelector) == 0) && (!has(self.performanceHints)
+                    || size(self.performanceHints) == 0))"
           type: object
       served: true
       storage: true

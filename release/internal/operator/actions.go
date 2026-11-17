@@ -24,10 +24,10 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/env"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 func Build(o Operator, variants []Variant, hashrelease bool, opts ...BuildOption) error {
@@ -55,7 +55,7 @@ func Publish(o Operator, variants []Variant, hashrelease bool, opts ...PublishOp
 		// A dry run pushes nothing, so there is nothing to record.
 		s.refs = nil
 	}
-	env := []string{s.latch()}
+	vars := []string{s.latch()}
 
 	var recorded registry.RecordedDigests
 	if s.resume != nil {
@@ -74,7 +74,7 @@ func Publish(o Operator, variants []Variant, hashrelease bool, opts ...PublishOp
 			s.Logger().WithField("variant", v.Name).Info("Dry run, not publishing operator images")
 		}
 		// Recorded even when the push failed, so a resume knows what landed.
-		return errors.Join(s.run(publishTarget, v, hashrelease, env), s.record(v))
+		return errors.Join(s.run(publishTarget, v, hashrelease, vars), s.record(v))
 	})
 }
 
@@ -123,10 +123,10 @@ func PublishBranchTag(o Operator, variants []Variant, branch string, opts ...Pub
 	}
 	// No manifest refers to another variant under a branch tag.
 	variants = Narrow(variants, []string{standardVariant})
-	env := []string{s.latch(), utils.Env(utils.EnvImageTag, branch)}
+	vars := []string{s.latch(), env.Var(env.ImageTag, branch)}
 
 	return eachVariant(variants, func(v Variant) error {
-		return s.run(branchTagTarget, v, false, env)
+		return s.run(branchTagTarget, v, false, vars)
 	})
 }
 
@@ -142,20 +142,20 @@ func eachVariant(variants []Variant, fn func(Variant) error) error {
 
 func (s settings) latch() string {
 	if s.dryRun {
-		return utils.EnvTrue(utils.EnvDryRun)
+		return env.True(env.DryRun)
 	}
-	return utils.EnvTrue(utils.EnvConfirm)
+	return env.True(env.Confirm)
 }
 
 // The variant's env goes last so an inherited value cannot pick the variant.
-func (s settings) run(target string, v Variant, hashrelease bool, env []string) error {
+func (s settings) run(target string, v Variant, hashrelease bool, vars []string) error {
 	product, err := productEnv(s.Operator)
 	if err != nil {
 		return s.Errorf("%w", err)
 	}
 	full := s.env(v, hashrelease)
 	full = append(full, product...)
-	full = append(full, env...)
+	full = append(full, vars...)
 	full = append(full, v.Env...)
 
 	logFields := logrus.Fields{
@@ -163,6 +163,7 @@ func (s settings) run(target string, v Variant, hashrelease bool, env []string) 
 		"image":      image(s.Operator, v),
 		"registries": s.Registries,
 		"version":    s.Version,
+		"arches":     s.arches,
 	}
 	s.Logger().WithFields(logFields).Infof("Running %s", target)
 	if _, err := s.Make().Run(strings.Fields(target), command.WithEnv(full...), command.WithLogFile(s.LogPath(v.Name+"-"+logSlug(target)))); err != nil {
@@ -177,45 +178,45 @@ func logSlug(target string) string {
 
 // A replacement, not an append hook: a product can drop or rewrite a variable.
 var productEnv = func(o Operator) ([]string, error) {
-	var env []string
+	var vars []string
 	if o.ProductRegistry != "" {
 		reg, imagePath, err := registryParts(o.ProductRegistry)
 		if err != nil {
 			return nil, err
 		}
-		env = append(env,
-			utils.Env(utils.EnvCalicoRegistry, reg),
-			utils.Env(utils.EnvCalicoImagePath, imagePath),
+		vars = append(vars,
+			env.Var(env.CalicoRegistry, reg),
+			env.Var(env.CalicoImagePath, imagePath),
 		)
 	}
 	if o.ProductVersion != "" {
-		env = append(env, utils.Env(utils.EnvCalicoVersion, o.ProductVersion))
+		vars = append(vars, env.Var(env.CalicoVersion, o.ProductVersion))
 	}
 	if opReg, opPath, err := registryParts(Registry(o)); err == nil {
-		env = append(env,
-			utils.Env(utils.EnvOperatorImageRegistry, opReg),
-			utils.Env(utils.EnvOperatorImagePath, opPath),
+		vars = append(vars,
+			env.Var(env.OperatorImageRegistry, opReg),
+			env.Var(env.OperatorImagePath, opPath),
 		)
 	}
-	return env, nil
+	return vars, nil
 }
 
 func (s settings) env(v Variant, hashrelease bool) []string {
-	env := []string{
-		utils.Env(utils.EnvRegistry, Registry(s.Operator)),
-		utils.Env(utils.EnvVersion, s.Version),
-		utils.Env(utils.EnvDevRegistries, strings.Join(s.Registries, " ")),
+	vars := []string{
+		env.Var(env.Registry, Registry(s.Operator)),
+		env.Var(env.Version, s.Version),
+		env.Var(env.DevRegistries, strings.Join(s.Registries, " ")),
 	}
 	if !hashrelease {
-		env = append(env, utils.EnvTrue(utils.EnvRelease))
+		vars = append(vars, env.True(env.Release))
 	}
 	if len(s.arches) > 0 {
-		env = append(env, utils.Env(utils.EnvArches, strings.Join(s.arches, " ")))
+		vars = append(vars, env.Var(env.Arches, strings.Join(s.arches, " ")))
 	}
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		env = append(env, utils.EnvTrue(utils.EnvDebug))
+		vars = append(vars, env.True(env.Debug))
 	}
-	return env
+	return vars
 }
 
 func (s settings) record(v Variant) error {

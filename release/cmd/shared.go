@@ -35,9 +35,10 @@ import (
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/slack"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
+
+const releaseDirName = "release"
 
 var (
 	// debug controls whether or not to emit debug level logging.
@@ -45,7 +46,7 @@ var (
 
 	// releaseOutputPath is the directory where all outputs are stored
 	// relative to the repo root
-	releaseOutputPath = []string{utils.ReleaseFolderName, "_output"}
+	releaseOutputPath = []string{releaseDirName, "_output"}
 
 	commandRunner          command.CommandRunner = command.RealRunner
 	registryDigestResolver                       = registry.ResolveDigest

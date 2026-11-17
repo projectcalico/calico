@@ -22,10 +22,38 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func TestRealRunner(t *testing.T) {
 	r := RealRunner
+
+	t.Run("timing logs each run's duration on the given logger", func(t *testing.T) {
+		logger, hook := logtest.NewNullLogger()
+		log := logger.WithField("component", "alpha")
+		if _, err := r.Run("true", nil, WithTiming(log)); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		_, _ = r.Run("false", nil, WithTiming(log))
+		entries := hook.AllEntries()
+		if len(entries) != 2 {
+			t.Fatalf("logged %d entries, want 2", len(entries))
+		}
+		for i, wantFailed := range []bool{false, true} {
+			e := entries[i]
+			if _, ok := e.Data["duration"]; !ok {
+				t.Errorf("entry %d has no duration: %v", i, e.Data)
+			}
+			if e.Data["component"] != "alpha" || e.Data["failed"] != wantFailed {
+				t.Errorf("entry %d = %v, want component alpha and failed %v", i, e.Data, wantFailed)
+			}
+			if e.Level != logrus.InfoLevel {
+				t.Errorf("entry %d level %v, want info", i, e.Level)
+			}
+		}
+	})
 
 	t.Run("log file gets stdout and stderr", func(t *testing.T) {
 		logPath := filepath.Join(t.TempDir(), "subdir", "out.log")

@@ -27,9 +27,10 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/env"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
@@ -146,16 +147,16 @@ func applyTo(opt any, s *settings) error {
 }
 
 func (s settings) build() error {
-	if err := os.MkdirAll(s.BaseDir, utils.DirPerms); err != nil {
+	if err := os.MkdirAll(s.BaseDir, fsutil.DirPerms); err != nil {
 		return s.Errorf("creating chart dir: %w", err)
 	}
-	env := []string{
-		utils.Env(utils.EnvGitVersion, s.Version()),
-		utils.Env(utils.EnvChartDestination, s.BaseDir),
+	vars := []string{
+		env.Var(env.GitVersion, s.Version()),
+		env.Var(env.ChartDestination, s.BaseDir),
 	}
-	env = append(env, s.env...)
+	vars = append(vars, s.env...)
 
-	_, err := s.Make().Run([]string{chartTarget}, command.WithEnv(env...), command.WithLogFile(s.LogPath("charts")))
+	_, err := s.Make().Run([]string{chartTarget}, command.WithEnv(vars...), command.WithLogFile(s.LogPath("charts")))
 	if err != nil {
 		return s.Errorf("building helm charts: %w", err)
 	}
@@ -195,7 +196,7 @@ func (s settings) buildIndex() error {
 	if err := os.RemoveAll(staging); err != nil {
 		return s.Errorf("clearing helm index staging dir: %w", err)
 	}
-	if err := os.MkdirAll(staging, utils.DirPerms); err != nil {
+	if err := os.MkdirAll(staging, fsutil.DirPerms); err != nil {
 		return s.Errorf("creating helm index staging dir: %w", err)
 	}
 	defer func() {
@@ -216,15 +217,15 @@ func (s settings) buildIndex() error {
 		"--merge", merged,
 	}
 	// helm stamps entries with the current time; UTC keeps the index stable.
-	env := []string{utils.Env(utils.EnvTZ, "UTC")}
-	if _, err := s.Helm(args, env, s.LogPath("index")); err != nil {
+	vars := []string{env.Var(env.TZ, "UTC")}
+	if _, err := s.Helm(args, vars, s.LogPath("index")); err != nil {
 		return s.Errorf("building helm index: %w", err)
 	}
 
-	if err := os.MkdirAll(s.indexDir, utils.DirPerms); err != nil {
+	if err := os.MkdirAll(s.indexDir, fsutil.DirPerms); err != nil {
 		return s.Errorf("creating helm index dir: %w", err)
 	}
-	if err := utils.CopyFile(IndexFilePath(staging), IndexFilePath(s.indexDir)); err != nil {
+	if err := fsutil.CopyFile(IndexFilePath(staging), IndexFilePath(s.indexDir)); err != nil {
 		return s.Errorf("writing the helm index: %w", err)
 	}
 	return nil
@@ -236,7 +237,7 @@ func (s settings) downloadIndex() (string, error) {
 		return "", s.Errorf("constructing helm index url: %w", err)
 	}
 	dest := IndexFilePath(s.tmpDir)
-	if err := os.MkdirAll(filepath.Dir(dest), utils.DirPerms); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dest), fsutil.DirPerms); err != nil {
 		return "", s.Errorf("creating dir for downloaded helm index: %w", err)
 	}
 	if _, err := s.Runner().Run("curl", []string{"-fsSL", "--retry", "3", indexURL, "-o", dest}); err != nil {
@@ -324,7 +325,7 @@ func (s settings) pushUnit(u unit) error {
 	}
 
 	for attempt := 0; ; attempt++ {
-		_, err := s.Run(helmBinary, args, command.WithLogFile(s.LogPath(u.slug())))
+		_, err := s.Run(helmBinary, args, command.WithLogFile(s.LogPath(u.slug())), command.WithTiming(log))
 		if err == nil {
 			log.Info("Published helm chart")
 			return nil

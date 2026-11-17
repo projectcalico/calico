@@ -80,8 +80,6 @@ func TestGit(t *testing.T) {
 	}{
 		{name: "dirty sees the -dirty suffix", check: func(g GitRunner) (bool, error) { return g.In("/repo").Dirty() }, out: "v3.30.0-0-gabc-dirty", want: true},
 		{name: "dirty on a clean tree", check: func(g GitRunner) (bool, error) { return g.In("/repo").Dirty() }, out: "v3.30.0-0-gabc"},
-		{name: "porcelain sees any status line", check: func(g GitRunner) (bool, error) { return g.In("/repo").Porcelain() }, out: "?? new.txt", want: true},
-		{name: "porcelain on a clean tree", check: func(g GitRunner) (bool, error) { return g.In("/repo").Porcelain() }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &Recorder{Reply: func(Call) (string, error) { return tc.out, nil }}
