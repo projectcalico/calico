@@ -65,11 +65,22 @@ hack-lib:
 	$(call fetch_file,$(GITHUB_TEST_INTEGRATION_URI)/etcd.sh,hack/lib/etcd.sh)
 
 ## Run a local kubernetes server with API in a container.
+ifeq ($(NATIVE_GO_BUILD),true)
+TEST_MANIFESTS := $(CURDIR)/test
+APPLY_TEST_MANIFESTS = kubectl --kubeconfig=$(TEST_KUBECONFIG) apply
+else
+TEST_MANIFESTS := /manifests/test
+APPLY_TEST_MANIFESTS = docker run --net=host --rm \
+	-v $(CURDIR):/manifests \
+	-v $(CERTS_PATH):/home/user/certs \
+	registry.k8s.io/kubectl:$(K8S_VERSION) \
+	--kubeconfig=/home/user/certs/kubeconfig apply
+endif
+
 run-kubernetes-server: run-k8s-controller-manager
 	# Create a Node in the API for the tests to use, and the Namespaces that
 	# namespaced Calico `NetworkPolicy` tests need.
-	$(DOCKER_GO_BUILD_WITH_CERTS) kubectl --kubeconfig=$(TEST_KUBECONFIG) \
-		apply -f $(BUILD_REPO_ROOT)/apiserver/test/mock-node.yaml -f $(BUILD_REPO_ROOT)/apiserver/test/namespaces.yaml
+	$(APPLY_TEST_MANIFESTS) -f $(TEST_MANIFESTS)/mock-node.yaml -f $(TEST_MANIFESTS)/namespaces.yaml
 
 ## Stop the local kubernetes server
 stop-kubernetes-server: stop-k8s-controller-manager
