@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package masq
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -85,7 +85,7 @@ var _ = Describe("Masquerade manager", func() {
 			MarkDrop:     0x10,
 			MarkEndpoint: 0x11110000,
 		}, false)
-		masqMgr = newMasqManager(ipSets, natTable, ruleRenderer, 1024, 4)
+		masqMgr = NewManager(ipSets, natTable, ruleRenderer, 1024, 4)
 	})
 
 	It("should create its IP sets on startup", func() {

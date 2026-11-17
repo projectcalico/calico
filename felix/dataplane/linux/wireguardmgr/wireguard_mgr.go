@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package wireguardmgr
 
 import (
 	"github.com/sirupsen/logrus"
@@ -25,7 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/wireguard"
 )
 
-// wireguardManager manages the dataplane resources that are used for wireguard encrypted traffic. This includes:
+// Manager manages the dataplane resources that are used for wireguard encrypted traffic. This includes:
 //   - Routing rule to route to the wireguard routing table
 //   - Route table and rules specifically to handle routing to the wireguard interface, or to return to default routing
 //     (depending on whether the remote node supports wireguard)
@@ -36,7 +36,7 @@ import (
 // to the Apply method, with periodic resyncs occurring after calls to QueueResync. Calls from the main OnUpdate method
 // call through to the various update methods on the wireguard module which simply record state without actually
 // programming.
-type wireguardManager struct {
+type Manager struct {
 	// Our dependencies.
 	wireguardRouteTable *wireguard.Wireguard
 	dpConfig            dataplanedefs.Config
@@ -45,22 +45,22 @@ type wireguardManager struct {
 
 type WireguardStatusUpdateCallback func(ipVersion uint8, id any, status string)
 
-func newWireguardManager(
+func NewManager(
 	wireguardRouteTable *wireguard.Wireguard,
 	dpConfig dataplanedefs.Config,
 	ipVersion uint8,
-) *wireguardManager {
+) *Manager {
 	if ipVersion != 4 && ipVersion != 6 {
 		logrus.Panicf("Unknown IP version: %d", ipVersion)
 	}
-	return &wireguardManager{
+	return &Manager{
 		wireguardRouteTable: wireguardRouteTable,
 		dpConfig:            dpConfig,
 		ipVersion:           ipVersion,
 	}
 }
 
-func (m *wireguardManager) OnUpdate(protoBufMsg any) {
+func (m *Manager) OnUpdate(protoBufMsg any) {
 	logCtx := logrus.WithField("ipVersion", m.ipVersion)
 	logCtx.WithField("msg", protoBufMsg).Debug("Received message")
 	switch msg := protoBufMsg.(type) {
@@ -198,11 +198,17 @@ func (m *wireguardManager) OnUpdate(protoBufMsg any) {
 	}
 }
 
-func (m *wireguardManager) CompleteDeferredWork() error {
+func (m *Manager) CompleteDeferredWork() error {
 	// Dataplane programming is handled through the routetable interface.
 	return nil
 }
 
-func (m *wireguardManager) GetRouteTableSyncers() []routetable.SyncerInterface {
+func (m *Manager) GetRouteTableSyncers() []routetable.SyncerInterface {
 	return []routetable.SyncerInterface{m.wireguardRouteTable}
+}
+
+// Enabled reports whether WireGuard is configured for programming, as opposed
+// to the manager only tidying up leftover state.
+func (m *Manager) Enabled() bool {
+	return m.wireguardRouteTable.Enabled()
 }

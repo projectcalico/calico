@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package proxyneigh
 
 import (
 	"fmt"
@@ -1149,7 +1149,7 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 			LocalSubnetL2ReachabilityRefreshInterval: 90 * time.Second,
 			RulesConfig:                              rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
 		}
-		mgr := newProxyNeighManager(config, 4)
+		mgr := NewManager(config, 4)
 		defer mgr.Stop()
 		Expect(mgr.announceInterval).To(Equal(90 * time.Second))
 	})
@@ -1159,7 +1159,7 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 			Hostname:    "test-node",
 			RulesConfig: rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
 		}
-		mgr := newProxyNeighManager(config, 4)
+		mgr := NewManager(config, 4)
 		defer mgr.Stop()
 		Expect(mgr.announceInterval).To(BeZero())
 	})

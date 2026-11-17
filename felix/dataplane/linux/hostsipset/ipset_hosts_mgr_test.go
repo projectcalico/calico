@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package hostsipset
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -37,7 +37,7 @@ var _ = Describe("IPSet all-hosts manager", func() {
 
 	BeforeEach(func() {
 		ipSets = dpsets.NewMockIPSets()
-		manager = newHostsIPSetManager(
+		manager = NewManager(
 			ipSets,
 			4,
 			dataplanedefs.Config{
@@ -146,7 +146,7 @@ var _ = Describe("IPSet all-hosts manager - IPv6", func() {
 
 	BeforeEach(func() {
 		ipSets = dpsets.NewMockIPSets()
-		manager = newHostsIPSetManager(
+		manager = NewManager(
 			ipSets,
 			6,
 			dataplanedefs.Config{

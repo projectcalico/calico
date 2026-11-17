@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package bpfroute
 
 import (
 	"net"
@@ -103,7 +103,7 @@ type bpfRouteManager struct {
 	svcLoopPrevention string
 }
 
-func newBPFRouteManager(config *dataplanedefs.Config, maps *bpfmap.IPMaps, ipFamily proto.IPVersion,
+func NewManager(config *dataplanedefs.Config, maps *bpfmap.IPMaps, ipFamily proto.IPVersion,
 	opReporter logrusr.OpRecorder,
 ) *bpfRouteManager {
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
@@ -752,14 +752,14 @@ func (m *bpfRouteManager) getWorkloadCIDRs(wep *proto.WorkloadEndpoint) (cidrs [
 	return
 }
 
-func (m *bpfRouteManager) setHostIPUpdatesCallBack(cb func([]net.IP)) {
+func (m *bpfRouteManager) SetHostIPUpdatesCallBack(cb func([]net.IP)) {
 	m.cbLck.Lock()
 	defer m.cbLck.Unlock()
 
 	m.hostIPsUpdateCB = cb
 }
 
-func (m *bpfRouteManager) setRoutesCallBacks(update func(routes.KeyInterface, routes.ValueInterface), del func(routes.KeyInterface)) {
+func (m *bpfRouteManager) SetRoutesCallBacks(update func(routes.KeyInterface, routes.ValueInterface), del func(routes.KeyInterface)) {
 	m.cbLck.Lock()
 	defer m.cbLck.Unlock()
 

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package floatingip
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -90,7 +90,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 		JustBeforeEach(func() {
 			renderer := rules.NewRenderer(rrConfigNormal, false)
 			natTable = dptest.NewMockTable("nat")
-			fipMgr = newFloatingIPManager(natTable, renderer, ipVersion, true)
+			fipMgr = NewManager(natTable, renderer, ipVersion, true)
 		})
 
 		It("should be constructable", func() {

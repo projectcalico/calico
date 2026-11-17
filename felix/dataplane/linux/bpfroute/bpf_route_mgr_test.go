@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package bpfroute
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -38,7 +38,7 @@ var _ = Describe("BPF route manager", func() {
 				EnabledV6: wgV6,
 			},
 		}
-		m := newBPFRouteManager(config, &bpfmap.IPMaps{}, ipFamily, logrusr.NewSummarizer("test"))
+		m := NewManager(config, &bpfmap.IPMaps{}, ipFamily, logrusr.NewSummarizer("test"))
 
 		dst := "10.0.1.0/26"
 		nodeIP := "172.16.0.2"

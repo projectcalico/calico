@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package floatingip
 
 import (
 	"reflect"
@@ -82,7 +82,7 @@ type floatingIPManager struct {
 	enabled          bool
 }
 
-func newFloatingIPManager(
+func NewManager(
 	natTable dataplanedefs.Table,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,

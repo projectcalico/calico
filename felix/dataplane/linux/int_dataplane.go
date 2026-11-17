@@ -55,11 +55,22 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/bpfep/bpfepdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/bpfroute"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dscp"
+	"github.com/projectcalico/calico/felix/dataplane/linux/floatingip"
+	"github.com/projectcalico/calico/felix/dataplane/linux/flowtable"
+	"github.com/projectcalico/calico/felix/dataplane/linux/hostip"
+	"github.com/projectcalico/calico/felix/dataplane/linux/hostsipset"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/masq"
 	"github.com/projectcalico/calico/felix/dataplane/linux/modprobe"
+	"github.com/projectcalico/calico/felix/dataplane/linux/policy"
 	"github.com/projectcalico/calico/felix/dataplane/linux/procsys"
+	"github.com/projectcalico/calico/felix/dataplane/linux/proxyneigh"
+	"github.com/projectcalico/calico/felix/dataplane/linux/serviceloop"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlan/vxlandefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/wireguardmgr"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -210,8 +221,8 @@ type InternalDataplane struct {
 
 	linkAddrsManagers []linkaddrs.Interface
 
-	wireguardManager   *wireguardManager
-	wireguardManagerV6 *wireguardManager
+	wireguardManager   *wireguardmgr.Manager
+	wireguardManagerV6 *wireguardmgr.Manager
 
 	ifaceMonitor *ifacemonitor.InterfaceMonitor
 	ifaceUpdates chan any
@@ -693,10 +704,10 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 	// and respond to ARP (IPv4) / NDP (IPv6) requests for pod and LB IPs that fall
 	// within the same subnet as a host physical interface.
 	if apiv3.LocalSubnetL2ReachabilityMode(config.LocalSubnetL2Reachability) != apiv3.LocalSubnetL2ReachabilityDisabled {
-		proxyNeighMgr4 := newProxyNeighManager(config, 4)
+		proxyNeighMgr4 := proxyneigh.NewManager(config, 4)
 		dp.RegisterManager(proxyNeighMgr4)
 		if config.IPv6Enabled {
-			proxyNeighMgr6 := newProxyNeighManager(config, 6)
+			proxyNeighMgr6 := proxyneigh.NewManager(config, 6)
 			dp.RegisterManager(proxyNeighMgr6)
 		}
 	}
@@ -829,12 +840,12 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 		// BPF mode disabled, create the iptables/nftables-only managers.
 		dp.ipsetsSourceV4 = ipsetsManager
 		// TODO Connect host IP manager to BPF
-		dp.RegisterManager(newHostIPManager(
+		dp.RegisterManager(hostip.NewManager(
 			config.RulesConfig.WorkloadIfacePrefixes,
 			rules.IPSetIDThisHostIPs,
 			ipSetsV4,
 			config.MaxIPSetSize))
-		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, nftablesEnabled))
+		dp.RegisterManager(policy.NewManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, nftablesEnabled))
 
 		// Clean up any leftover BPF state.
 		err := bpfnat.RemoveConnectTimeLoadBalancer(true, "")
@@ -845,7 +856,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 		bpfutils.RemoveBPFSpecialDevices()
 	} else {
 		// In BPF mode we still use iptables for raw egress policy.
-		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter, nftablesEnabled))
+		dp.RegisterManager(policy.NewRawEgressManager(rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter, nftablesEnabled))
 	}
 
 	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
@@ -1096,7 +1107,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 
 	var filterMaps nftables.MapsDataplane
 	var flowtableHandlerV4 nftables.FlowTableHandler
-	var flowtableTargets []flowtableTarget
+	var flowtableTargets []flowtable.Target
 	if nftablesEnabled {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
 
@@ -1116,9 +1127,9 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 			if config.RulesConfig.WireguardEnabled && len(config.RulesConfig.WireguardInterfaceName) > 0 {
 				overlayDevicesV4 = append(overlayDevicesV4, config.RulesConfig.WireguardInterfaceName)
 			}
-			flowtableTargets = append(flowtableTargets, flowtableTarget{
-				handler:        nftablesV4RootTable,
-				overlayDevices: overlayDevicesV4,
+			flowtableTargets = append(flowtableTargets, flowtable.Target{
+				Handler:        nftablesV4RootTable,
+				OverlayDevices: overlayDevicesV4,
 			})
 		}
 	}
@@ -1193,20 +1204,20 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 	if mainTablePolV4 != nil {
 		mainTablePolV4.IsWorkloadBGPPeerIface = epManager.ifaceIsForLocalBGPPeer
 	}
-	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
-	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
+	dp.RegisterManager(floatingip.NewManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
+	dp.RegisterManager(masq.NewManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 
 	if config.RulesConfig.IPIPEnabled ||
 		config.RulesConfig.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
-		dp.RegisterManager(newHostsIPSetManager(ipSetsV4, 4, config))
+		dp.RegisterManager(hostsipset.NewManager(ipSetsV4, 4, config))
 	}
 
 	if !config.BPFEnabled {
-		dp.RegisterManager(newDSCPManager(ipSetsV4, mangleTableV4, ruleRenderer, 4, config))
+		dp.RegisterManager(dscp.NewManager(ipSetsV4, mangleTableV4, ruleRenderer, 4, config))
 	}
 
 	if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload {
-		dp.RegisterManager(newFlowtableExclusionManager(ipSetsV4, 4, config.MaxIPSetSize))
+		dp.RegisterManager(flowtable.NewExclusionManager(ipSetsV4, 4, config.MaxIPSetSize))
 	}
 
 	if config.RulesConfig.IPIPEnabled {
@@ -1260,10 +1271,10 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 		dp.loopSummarizer,
 		featureDetector,
 	)
-	dp.wireguardManager = newWireguardManager(cryptoRouteTableWireguard, config, 4)
+	dp.wireguardManager = wireguardmgr.NewManager(cryptoRouteTableWireguard, config, 4)
 	dp.RegisterManager(dp.wireguardManager) // IPv4
 
-	dp.RegisterManager(newServiceLoopManager(filterTableV4, ruleRenderer, 4))
+	dp.RegisterManager(serviceloop.NewManager(filterTableV4, ruleRenderer, 4))
 
 	if config.IPv6Enabled {
 		// Build out both iptables and nftables implementations for IPv6.
@@ -1364,14 +1375,14 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 		ipsetsManagerV6.AddDataplane(ipSetsV6)
 		dp.RegisterManager(ipsetsManagerV6)
 		if !config.BPFEnabled {
-			dp.RegisterManager(newHostIPManager(
+			dp.RegisterManager(hostip.NewManager(
 				config.RulesConfig.WorkloadIfacePrefixes,
 				rules.IPSetIDThisHostIPs,
 				ipSetsV6,
 				config.MaxIPSetSize))
-			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, nftablesEnabled))
+			dp.RegisterManager(policy.NewManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, nftablesEnabled))
 		} else {
-			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, nftablesEnabled))
+			dp.RegisterManager(policy.NewRawEgressManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, nftablesEnabled))
 		}
 
 		var filterMapsV6 nftables.MapsDataplane
@@ -1389,9 +1400,9 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 				if config.RulesConfig.WireguardEnabledV6 && len(config.RulesConfig.WireguardInterfaceNameV6) > 0 {
 					overlayDevicesV6 = append(overlayDevicesV6, config.RulesConfig.WireguardInterfaceNameV6)
 				}
-				flowtableTargets = append(flowtableTargets, flowtableTarget{
-					handler:        nftablesV6RootTable,
-					overlayDevices: overlayDevicesV6,
+				flowtableTargets = append(flowtableTargets, flowtable.Target{
+					Handler:        nftablesV6RootTable,
+					OverlayDevices: overlayDevicesV6,
 				})
 			}
 		}
@@ -1439,20 +1450,20 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 		if mainTablePolV6 != nil {
 			mainTablePolV6.IsWorkloadBGPPeerIface = epManagerV6.ifaceIsForLocalBGPPeer
 		}
-		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
-		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
-		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
+		dp.RegisterManager(floatingip.NewManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
+		dp.RegisterManager(masq.NewManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
+		dp.RegisterManager(serviceloop.NewManager(filterTableV6, ruleRenderer, 6))
 
 		if config.RulesConfig.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
-			dp.RegisterManager(newHostsIPSetManager(ipSetsV6, 6, config))
+			dp.RegisterManager(hostsipset.NewManager(ipSetsV6, 6, config))
 		}
 
 		if !config.BPFEnabled {
-			dp.RegisterManager(newDSCPManager(ipSetsV6, mangleTableV6, ruleRenderer, 6, config))
+			dp.RegisterManager(dscp.NewManager(ipSetsV6, mangleTableV6, ruleRenderer, 6, config))
 		}
 
 		if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload {
-			dp.RegisterManager(newFlowtableExclusionManager(ipSetsV6, 6, config.MaxIPSetSize))
+			dp.RegisterManager(flowtable.NewExclusionManager(ipSetsV6, 6, config.MaxIPSetSize))
 		}
 
 		// Add a manager for IPv6 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
@@ -1468,7 +1479,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 			},
 			dp.loopSummarizer,
 			featureDetector)
-		dp.wireguardManagerV6 = newWireguardManager(cryptoRouteTableWireguardV6, config, 6)
+		dp.wireguardManagerV6 = wireguardmgr.NewManager(cryptoRouteTableWireguardV6, config, 6)
 		dp.RegisterManager(dp.wireguardManagerV6)
 	}
 
@@ -1487,7 +1498,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 	}
 
 	if config.RulesConfig.NFTablesFlowTableOffload && len(flowtableTargets) > 0 {
-		dp.RegisterManager(newFlowtableManager(flowtableTargets, config.NFTablesFlowTableDataIfacePattern))
+		dp.RegisterManager(flowtable.NewManager(flowtableTargets, config.NFTablesFlowTableDataIfacePattern))
 	}
 
 	dp.cleanupTables = append(dp.cleanupTables, cleanupTables...)
@@ -2963,7 +2974,7 @@ func startBPFDataplaneComponents(
 	)
 	dp.RegisterManager(failsafeMgr)
 
-	bpfRTMgr := newBPFRouteManager(config, maps, ipFamily, dp.loopSummarizer)
+	bpfRTMgr := bpfroute.NewManager(config, maps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
 	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled, int(ipFamily),
@@ -3011,8 +3022,8 @@ func startBPFDataplaneComponents(
 		// we might-as-well just funnel it directly from the calc-graph.
 		dp.RegisterManager(kp)
 
-		bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
-		bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
+		bpfRTMgr.SetHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
+		bpfRTMgr.SetRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
 		conntrackScanner.AddUnlocked(bpfconntrack.NewStaleNATScanner(kp, int(ipFamily)))
 	} else {
 		log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package hostip
 
 import (
 	"regexp"
@@ -37,7 +37,7 @@ type hostIPManager struct {
 	maxSize         int
 }
 
-func newHostIPManager(wlIfacesPrefixes []string,
+func NewManager(wlIfacesPrefixes []string,
 	ipSetID string,
 	ipsets dpsets.IPSetsDataplane,
 	maxIPSetSize int,
