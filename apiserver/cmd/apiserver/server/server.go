@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 /*
 Copyright 2016 The Kubernetes Authors.
@@ -25,8 +25,8 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
-	"k8s.io/kubernetes/pkg/util/interrupt"
 
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
 )
@@ -47,30 +47,25 @@ func NewCommandStartCalicoServer(out io.Writer) (*cobra.Command, *CalicoServerOp
 	flags := cmd.Flags()
 	flags.AddGoFlagSet(flag.CommandLine)
 
-	stopCh := make(chan struct{})
-
 	ro := genericoptions.NewRecommendedOptions(defaultEtcdPathPrefix, apiserver.Codecs.LegacyCodec(v3.SchemeGroupVersion))
 	opts := &CalicoServerOptions{
 		RecommendedOptions: ro,
-		StopCh:             stopCh,
 	}
 	opts.addFlags(flags)
 
 	cmd.Run = func(c *cobra.Command, args []string) {
 		configureLogging()
 
-		h := interrupt.New(nil, func() {
-			close(stopCh)
-		})
-		if err := h.Run(func() error {
-			server, err := PrepareServer(opts)
-			if err != nil {
-				return err
-			}
-			return RunServer(opts, server)
-		}); err != nil {
-			logrus.Fatalf("error running server (%s)", err)
-			return
+		// The first SIGINT or SIGTERM starts graceful shutdown and a second exits immediately. It panics if called
+		// twice, so it lives here rather than where the command is built.
+		opts.StopCh = genericapiserver.SetupSignalHandler()
+
+		server, err := PrepareServer(opts)
+		if err != nil {
+			logrus.WithError(err).Fatal("Error preparing the API server")
+		}
+		if err := RunServer(opts, server); err != nil {
+			logrus.WithError(err).Fatal("Error running the API server")
 		}
 	}
 

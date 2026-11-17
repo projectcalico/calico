@@ -225,6 +225,22 @@ func extractPolicyFieldsFromFlowKey(getField func(*proto.PolicyHit) string) func
 	}
 }
 
+// eitherSideValues returns a value function that emits the source value, the destination value, or
+// both, depending on which sides of the flow match the filter's either entries.
+func eitherSideValues(filter *proto.Filter, source, dest func(*types.FlowKey) string) func(*types.FlowKey) []string {
+	return func(key *types.FlowKey) []string {
+		var values []string
+		matchSource, matchDest := types.MatchingSides(filter, key)
+		if matchSource {
+			values = append(values, source(key))
+		}
+		if matchDest {
+			values = append(values, dest(key))
+		}
+		return values
+	}
+}
+
 func (r *BucketRing) FilterHints(req *proto.FilterHintsRequest) ([]string, *types.ListMeta, error) {
 	var sortBy proto.SortBy
 	var valueFunc func(*types.FlowKey) []string
@@ -261,6 +277,10 @@ func (r *BucketRing) FilterHints(req *proto.FilterHintsRequest) ([]string, *type
 				return p.Namespace
 			},
 		)
+	case proto.FilterType_FilterTypeNamespace:
+		valueFunc = eitherSideValues(req.Filter, (*types.FlowKey).SourceNamespace, (*types.FlowKey).DestNamespace)
+	case proto.FilterType_FilterTypeName:
+		valueFunc = eitherSideValues(req.Filter, (*types.FlowKey).SourceName, (*types.FlowKey).DestName)
 	default:
 		return nil, nil, fmt.Errorf("unsupported filter type '%s'", req.Type.String())
 	}

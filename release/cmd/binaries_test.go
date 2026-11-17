@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/env"
 )
 
 const binariesCLITestVersion = "v3.30.0"
@@ -61,10 +61,10 @@ func stageBuiltBinaries(t *testing.T, root string) {
 	}
 }
 
-func runBinaries(t *testing.T, root string, args ...string) *recordingRunner {
+func runBinaries(t *testing.T, root string, args ...string) *fakeRunner {
 	t.Helper()
 	stageBuiltBinaries(t, root)
-	r := &recordingRunner{}
+	r := newFakeRunner()
 	prev := commandRunner
 	commandRunner = r
 	t.Cleanup(func() { commandRunner = prev })
@@ -88,7 +88,7 @@ func TestBinariesBuildRunsEveryComponent(t *testing.T) {
 
 	for component, target := range binariesCLIComponents {
 		if !r.ranExactly(filepath.Join(root, component), target) {
-			t.Errorf("did not build %s with %s, ran: %v", component, target, r.args)
+			t.Errorf("did not build %s with %s, ran: %v", component, target, r.args())
 		}
 	}
 }
@@ -97,11 +97,11 @@ func TestBinariesBuildTakesTheVersionFromTheManifests(t *testing.T) {
 	root := fakeRepo(t, binariesCLITestVersion)
 	r := runBinaries(t, root, "build")
 
-	want := utils.Env(utils.EnvVersion, binariesCLITestVersion)
+	want := env.Var(env.Version, binariesCLITestVersion)
 	for component := range binariesCLIComponents {
-		env := r.envFor(filepath.Join(root, component))
-		if !slices.Contains(env, want) {
-			t.Errorf("%s built without %q, env: %v", component, want, env)
+		vars := r.envFor(filepath.Join(root, component))
+		if !slices.Contains(vars, want) {
+			t.Errorf("%s built without %q, env: %v", component, want, vars)
 		}
 	}
 }
@@ -111,12 +111,13 @@ func TestBinariesBuildMatchesTheManagerComponents(t *testing.T) {
 	r := runBinaries(t, root, "build")
 
 	var built []string
-	for _, args := range r.args {
-		if len(args) > 1 && args[0] == "-C" {
-			built = append(built, filepath.Base(args[1]))
+	for _, c := range r.Calls() {
+		if c.Name == "make" {
+			built = append(built, filepath.Base(c.Dir))
 		}
 	}
 	slices.Sort(built)
+	built = slices.Compact(built)
 	if want := slices.Sorted(maps.Keys(binariesCLIComponents)); !slices.Equal(built, want) {
 		t.Errorf("built %v, want %v", built, want)
 	}

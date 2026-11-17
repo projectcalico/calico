@@ -89,5 +89,4 @@ SCRIPTS_DIR = os.path.join(_MY_DIR, "scripts")
 SEND_PACKET_SCRIPT = os.path.join(SCRIPTS_DIR, "send_packet.py")
 
 # How to invoke etcdctl.
-ETCDCTL = "etcdctl"
 ETCDCTL_V3 = "ETCDCTL_API=3 etcdctl --user root:rootpasswd"

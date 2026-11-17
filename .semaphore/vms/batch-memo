@@ -149,13 +149,14 @@ batch_memo_report() {
 #
 # Reads: BATCH_MEMO_PREFIX, CI_WORKFLOW_NAME, CI_GIT_SHA.
 batch_memo_record() {
-  local artifacts_dir="$1" batch="$2"
+  local artifacts_dir="$1" batch="$2" paths
   if ! batch_memo_has_reports "$artifacts_dir/$batch"; then
     echo "Batch memo: not recording batch $batch, which has no reports."
     return 0
   fi
   batch_memo_source > "$artifacts_dir/$batch/batch-memo-source"
-  ( cd "$artifacts_dir" && artifact cache store "$BATCH_MEMO_PREFIX/batch-$batch" $(batch_memo_stored_paths "$artifacts_dir" "$batch") ) >/dev/null ||
+  paths="$(batch_memo_stored_paths "$artifacts_dir" "$batch")"
+  ( cd "$artifacts_dir" && artifact cache store "$BATCH_MEMO_PREFIX/batch-$batch" $paths ) >/dev/null ||
     echo "Batch memo: could not record batch $batch (not fatal)."
 }
 
@@ -165,7 +166,7 @@ batch_memo_record() {
 #
 # Reads: BATCH_MEMO_PREFIX.
 batch_memo_record_lane() {
-  local artifacts_dir="$1" batch
+  local artifacts_dir="$1" batch paths
   shift
   for batch in "$@"; do
     if ! batch_memo_has_reports "$artifacts_dir/$batch"; then
@@ -173,7 +174,8 @@ batch_memo_record_lane() {
       return 0
     fi
   done
-  ( cd "$artifacts_dir" && artifact cache store "$BATCH_MEMO_PREFIX/lane" $(batch_memo_stored_paths "$artifacts_dir" "$@") ) >/dev/null ||
+  paths="$(batch_memo_stored_paths "$artifacts_dir" "$@")"
+  ( cd "$artifacts_dir" && artifact cache store "$BATCH_MEMO_PREFIX/lane" $paths ) >/dev/null ||
     echo "Batch memo: could not record the lane (not fatal)."
 }
 

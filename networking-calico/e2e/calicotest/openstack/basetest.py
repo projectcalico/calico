@@ -395,11 +395,7 @@ class TestBase(TestWithHooks):
         """
         with node:
             results = node.execute(
-                "ETCDCTL='%s' ETCDCTL_V3='%s' sudo -E calico-diags"
-                % (
-                    settings.ETCDCTL,
-                    settings.ETCDCTL_V3,
-                )
+                "ETCDCTL_V3='%s' sudo -E calico-diags" % settings.ETCDCTL_V3
             )
             if results.return_code:
                 raise Exception(

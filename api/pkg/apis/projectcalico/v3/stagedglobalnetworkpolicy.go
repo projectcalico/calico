@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,6 +46,10 @@ type StagedGlobalNetworkPolicy struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.selector) || !self.selector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))",message="services are not allowed in an egress rule source",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.ingress) || self.ingress.all(r, !has(r.destination) || !has(r.destination.services))",message="services are not allowed in an ingress rule destination",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.egress) || self.egress.all(r, !has(r.http))",message="HTTP match is not allowed in egress rules",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.stagedAction) || self.stagedAction != 'Delete' || (!has(self.order) && (!has(self.ingress) || size(self.ingress) == 0) && (!has(self.egress) || size(self.egress) == 0) && (!has(self.selector) || size(self.selector) == 0) && (!has(self.serviceAccountSelector) || size(self.serviceAccountSelector) == 0) && (!has(self.performanceHints) || size(self.performanceHints) == 0) && (!has(self.doNotTrack) || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT) && (!has(self.applyOnForward) || !self.applyOnForward) && (!has(self.namespaceSelector) || size(self.namespaceSelector) == 0))",message="spec fields other than tier must be empty when stagedAction is Delete",reason=FieldValueForbidden
 type StagedGlobalNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
 	// +kubebuilder:default=Set
@@ -68,11 +72,13 @@ type StagedGlobalNetworkPolicySpec struct {
 	// a corresponding action to apply. Limited to 1024 rules per policy.
 	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
+	// +kubebuilder:validation:XValidation:rule="self.all(r, !has(r.source) || !has(r.source.services) || (has(r.source.services.namespace) && size(r.source.services.namespace) > 0))",message="services in a global policy must specify a namespace",reason=FieldValueRequired
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply. Limited to 1024 rules per policy.
 	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
+	// +kubebuilder:validation:XValidation:rule="self.all(r, !has(r.destination) || !has(r.destination.services) || (has(r.destination.services.namespace) && size(r.destination.services.namespace) > 0))",message="services in a global policy must specify a namespace",reason=FieldValueRequired
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
 	// The selector is an expression used to pick out the endpoints that the policy should
 	// be applied to.

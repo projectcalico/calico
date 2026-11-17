@@ -21,4 +21,5 @@ steps:
     commands: |
       hack/fetch-file https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh /tmp/install-fossa.sh
       bash /tmp/install-fossa.sh -b /usr/local/bin
-      fossa analyze
+      # Default Go analysis only sees the Linux build graph, missing Windows-only deps.
+      fossa analyze --static-only-analysis

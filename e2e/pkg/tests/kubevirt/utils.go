@@ -16,6 +16,7 @@ package kubevirt
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -49,6 +50,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -1004,4 +1006,92 @@ func expectMigrationFailed(ctx context.Context, cli ctrlclient.Client, vmim *kub
 		}
 		return nil
 	}, 5*time.Minute, 1*time.Second).Should(Succeed())
+}
+
+// kernelRoutes returns the kernel's routes for the VM's /32 on a node, one per
+// line, read from the node's calico-node pod.
+func kernelRoutes(f *framework.Framework, nodeName, vmIP string) ([]string, error) {
+	ip := strings.Split(vmIP, "/")[0]
+	pod := utils.GetCalicoNodePodOnNode(f.ClientSet, nodeName)
+	if pod == nil {
+		return nil, fmt.Errorf("no calico-node pod on %s", nodeName)
+	}
+	out, err := utils.ExecInCalicoNode(pod, fmt.Sprintf("ip route show %s/32", ip))
+	if err != nil {
+		return nil, fmt.Errorf("ip route show on %s: %w", nodeName, err)
+	}
+	var routes []string
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			routes = append(routes, l)
+		}
+	}
+	return routes, nil
+}
+
+// localRoutes filters to routes out of a workload veth. A /32 learned over BGP
+// from the node now hosting the VM is expected anywhere else and is excluded.
+func localRoutes(routes []string) []string {
+	var local []string
+	for _, r := range routes {
+		if strings.Contains(r, " dev cali") {
+			local = append(local, r)
+		}
+	}
+	return local
+}
+
+// errOwnership marks a sample that broke the ownership invariant, as opposed
+// to one that couldn't be read.
+var errOwnership = errors.New("IPAM ownership violated")
+
+// sampleIPAMOwner returns the pod named by the active owner attributes of the
+// VM's address. The VM's handle must hold that address and no other of its
+// family, and some pod must own it.
+func sampleIPAMOwner(ctx context.Context, lcgc clientv3.Interface, handleID, vmIP string) (string, error) {
+	queryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	ips, err := lcgc.IPAM().IPsByHandle(queryCtx, handleID)
+	if err != nil {
+		return "", fmt.Errorf("IPAM lookup of handle %s: %w", handleID, goneIsOwnership(err))
+	}
+	want := net.ParseIP(strings.Split(vmIP, "/")[0])
+	found, sameFamily := false, 0
+	for _, ip := range ips {
+		if (ip.To4() == nil) == (want.To4() == nil) {
+			sameFamily++
+		}
+		found = found || ip.Equal(want)
+	}
+	attrs, err := lcgc.IPAM().GetAssignmentAttributes(queryCtx, cnet.IP{IP: want})
+	if err != nil {
+		return "", fmt.Errorf("IPAM attributes of %s: %w", want, goneIsOwnership(err))
+	}
+	if attrs.HandleID == nil || *attrs.HandleID != handleID {
+		return "", fmt.Errorf("%w: %s is assigned to handle %v, not %s", errOwnership, want, attrs.HandleID, handleID)
+	}
+	// IPsByHandle skips blocks it fails to read, so a missing address the block
+	// still assigns to this handle is a read blip, not a broken invariant.
+	if !found {
+		return "", fmt.Errorf("handle %s listed %v without %s, which is still assigned to it", handleID, ips, want)
+	}
+	if sameFamily != 1 {
+		return "", fmt.Errorf("%w: handle %s should hold only %s of its family, holds %v", errOwnership, handleID, want, ips)
+	}
+	owner := attrs.ActiveOwnerAttrs[model.IPAMBlockAttributePod]
+	if owner == "" {
+		return "", fmt.Errorf("%w: %s has no active owner pod (attrs %v)", errOwnership, want, attrs.ActiveOwnerAttrs)
+	}
+	return owner, nil
+}
+
+// goneIsOwnership tags a lookup that found the VM's handle or address
+// released: while the VM is live that breaks ownership, it isn't a read blip.
+func goneIsOwnership(err error) error {
+	var gone cerrors.ErrorResourceDoesNotExist
+	var cooldown cerrors.ErrorIPInCooldown
+	if errors.As(err, &gone) || errors.As(err, &cooldown) {
+		return fmt.Errorf("%w: %w", errOwnership, err)
+	}
+	return err
 }

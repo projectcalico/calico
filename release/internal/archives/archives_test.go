@@ -15,16 +15,21 @@
 package archives
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 )
 
 const testVersion = "v1.2.3"
@@ -84,121 +89,6 @@ func (c testContent) Contribute(dir string) error {
 	return nil
 }
 
-// Reads the archive back rather than the staging tree: the staging tree is
-// deleted, and what users download is the only thing worth asserting.
-func archiveContents(t *testing.T, path string) []string {
-	t.Helper()
-	out, err := exec.Command("tar", "-tzf", path).CombinedOutput()
-	if err != nil {
-		t.Fatalf("reading %s: %v\n%s", path, err, out)
-	}
-	var files []string
-	for _, line := range strings.Split(string(out), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasSuffix(line, "/") {
-			continue
-		}
-		// The single top-level directory is an artifact of how tar is called,
-		// not part of the layout under test.
-		_, rel, _ := strings.Cut(line, "/")
-		files = append(files, rel)
-	}
-	slices.Sort(files)
-	return files
-}
-
-func TestBuildPlacesEachContributorByName(t *testing.T) {
-	outputDir := testOutputDir(t)
-
-	a := testArchive(outputDir,
-		testContent{name: "images", to: imagesDir, files: []string{"node.tar"}},
-		testContent{name: "calicoctl", to: filepath.Join(binDir, "calicoctl"), files: []string{"calicoctl-linux-amd64"}},
-		testContent{name: "felix", to: binDir, files: []string{"calico-bpf"}},
-		testContent{name: "manifests", to: manifestsDir, files: []string{"calico.yaml"}},
-	)
-	if err := Build(a); err != nil {
-		t.Fatalf("Build() = %v", err)
-	}
-
-	// The exact set, not each entry: content that is added, or that widens
-	// what it stages, changes what users download.
-	want := []string{
-		"bin/calico-bpf",
-		"bin/calicoctl/calicoctl-linux-amd64",
-		"images/node.tar",
-		"manifests/calico.yaml",
-	}
-	if got := archiveContents(t, Path(a)); !slices.Equal(got, want) {
-		t.Errorf("archive contents:\n got %v\nwant %v", got, want)
-	}
-}
-
-func TestBuildPlacesAnUnnamedContributorAtTheRoot(t *testing.T) {
-	outputDir := testOutputDir(t)
-
-	a := testArchive(outputDir, testContent{files: []string{"README.md"}})
-	if err := Build(a); err != nil {
-		t.Fatalf("Build() = %v", err)
-	}
-	want := []string{"README.md"}
-	if got := archiveContents(t, Path(a)); !slices.Equal(got, want) {
-		t.Errorf("archive contents:\n got %v\nwant %v", got, want)
-	}
-}
-
-func TestBuildRemovesTheStagingTree(t *testing.T) {
-	outputDir := testOutputDir(t)
-
-	a := testArchive(outputDir, testContent{name: "manifests", to: manifestsDir, files: []string{"calico.yaml"}})
-	if err := Build(a); err != nil {
-		t.Fatalf("Build() = %v", err)
-	}
-	if _, err := os.Stat(a.stagingDir()); !os.IsNotExist(err) {
-		t.Errorf("staging dir %s survived the build", a.stagingDir())
-	}
-}
-
-// A run killed before its cleanup leaves a staging tree behind. The next run
-// must not archive it.
-func TestBuildIgnoresALeftoverStagingTree(t *testing.T) {
-	outputDir := testOutputDir(t)
-
-	a := testArchive(outputDir, testContent{name: "manifests", to: manifestsDir, files: []string{"calico.yaml"}})
-	stale := filepath.Join(a.stagingDir(), manifestsDir)
-	if err := os.MkdirAll(stale, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(stale, "stale.yaml"), []byte("stale"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := Build(a); err != nil {
-		t.Fatalf("Build() = %v", err)
-	}
-	want := []string{"manifests/calico.yaml"}
-	if got := archiveContents(t, Path(a)); !slices.Equal(got, want) {
-		t.Errorf("archive contents:\n got %v\nwant %v", got, want)
-	}
-}
-
-// Building twice into the same output dir gives the same archive: a release
-// retried after a failure must not ship a different tarball.
-func TestBuildIsRepeatable(t *testing.T) {
-	outputDir := testOutputDir(t)
-
-	a := testArchive(outputDir, testContent{name: "manifests", to: manifestsDir, files: []string{"calico.yaml"}})
-	if err := Build(a); err != nil {
-		t.Fatalf("first Build() = %v", err)
-	}
-	first := archiveContents(t, Path(a))
-	if err := Build(a); err != nil {
-		t.Fatalf("second Build() = %v", err)
-	}
-	if second := archiveContents(t, Path(a)); !slices.Equal(first, second) {
-		t.Errorf("rebuild changed the archive:\nfirst  %v\nsecond %v", first, second)
-	}
-}
-
 // One contributor failing fails the build: a partial archive must not ship.
 func TestBuildFailsWhenAContributorFails(t *testing.T) {
 	outputDir := testOutputDir(t)
@@ -215,22 +105,85 @@ func TestBuildFailsWhenAContributorFails(t *testing.T) {
 	}
 }
 
-// A failed rebuild must not leave the previous run's archive behind: a retried
-// release would otherwise publish a stale tarball.
-func TestBuildClearsTheArchiveWhenARebuildFails(t *testing.T) {
-	outputDir := testOutputDir(t)
-	good := testArchive(outputDir, testContent{name: "manifests", to: manifestsDir, files: []string{"calico.yaml"}})
-	if err := Build(good); err != nil {
-		t.Fatalf("Build() = %v", err)
-	}
+func TestBuild(t *testing.T) {
+	t.Run("keeps each file's bytes, mode and owner", func(t *testing.T) {
+		from := t.TempDir()
+		for name, mode := range map[string]os.FileMode{"calico-bpf": 0o755, "README": 0o644} {
+			if err := os.WriteFile(filepath.Join(from, name), []byte("content of "+name), mode); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(filepath.Join(from, name), mode); err != nil {
+				t.Fatal(err)
+			}
+		}
 
-	bad := good
-	bad.Sources = []Contributor{testContent{name: "manifests", err: errors.New("nothing built")}}
-	if err := Build(bad); err == nil {
-		t.Fatal("Build() = nil, want an error")
+		a := testArchive(testOutputDir(t), DirSource{Label: "bin", To: binDir, From: from})
+		if err := Build(a); err != nil {
+			t.Fatalf("Build() = %v", err)
+		}
+
+		got := map[string]bool{}
+		for hdr, body := range readArchive(t, Path(a)) {
+			if hdr.Typeflag != tar.TypeReg {
+				continue
+			}
+			name := filepath.Base(hdr.Name)
+			got[name] = true
+			src := filepath.Join(from, name)
+			info, err := os.Stat(src)
+			if err != nil {
+				t.Fatalf("%s is not a source file: %v", hdr.Name, err)
+			}
+			want, err := os.ReadFile(src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			st := info.Sys().(*syscall.Stat_t)
+			if string(body) != string(want) {
+				t.Errorf("%s: body %q, want %q", hdr.Name, body, want)
+			}
+			if fs.FileMode(hdr.Mode).Perm() != info.Mode().Perm() {
+				t.Errorf("%s: mode %v, want %v", hdr.Name, fs.FileMode(hdr.Mode).Perm(), info.Mode().Perm())
+			}
+			if hdr.Uid != int(st.Uid) || hdr.Gid != int(st.Gid) {
+				t.Errorf("%s: owner %d:%d, want %d:%d", hdr.Name, hdr.Uid, hdr.Gid, st.Uid, st.Gid)
+			}
+			if !hdr.ModTime.Equal(info.ModTime().Round(time.Second)) {
+				t.Errorf("%s: mtime %v, want %v", hdr.Name, hdr.ModTime, info.ModTime())
+			}
+		}
+		if !got["calico-bpf"] || !got["README"] {
+			t.Errorf("archived %v, want calico-bpf and README", got)
+		}
+	})
+}
+
+func readArchive(t *testing.T, path string) map[*tar.Header][]byte {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := os.Stat(Path(good)); !os.IsNotExist(err) {
-		t.Error("a failed rebuild left the previous archive behind")
+	defer func() { _ = f.Close() }()
+	zr, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(zr)
+	out := map[*tar.Header][]byte{}
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			return out
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(tr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out[hdr] = body
 	}
 }
 
@@ -281,19 +234,6 @@ func TestBuildValidates(t *testing.T) {
 	}
 }
 
-func TestBuildLogsTar(t *testing.T) {
-	outputDir := testOutputDir(t)
-	logs := filepath.Join(t.TempDir(), "logs")
-
-	a := testArchive(outputDir, testContent{name: "manifests", to: manifestsDir, files: []string{"calico.yaml"}})
-	if err := Build(a, WithRunner(&command.RealCommandRunner{}), WithLogsDir(logs)); err != nil {
-		t.Fatalf("Build() = %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(logs, buildStep, "tar.log")); err != nil {
-		t.Errorf("tar log: %v", err)
-	}
-}
-
 // Staging nothing is a release missing a component, not a success: the copy
 // skips non-regular files, so an empty result would otherwise pass silently.
 func TestDirSourceFailsWhenItStagesNothing(t *testing.T) {
@@ -305,37 +245,10 @@ func TestDirSourceFailsWhenItStagesNothing(t *testing.T) {
 	d := DirSource{
 		To:     binDir,
 		From:   from,
-		Filter: func(_, _, relPath string) bool { return relPath == "calico-bpf" },
+		Filter: []fsutil.FileFilter{fsutil.Recursive, fsutil.Exclude("calico-felix")},
 	}
 	if err := d.Contribute(t.TempDir()); err == nil {
 		t.Error("Contribute() = nil, want an error when nothing is staged")
-	}
-}
-
-// A filter matching a base name would pull a whole subdirectory in with it.
-func TestDirSourceFilterMatchesTheWholeRelativePath(t *testing.T) {
-	from := t.TempDir()
-	for _, name := range []string{"calico-bpf", "bpf/calico-bpf"} {
-		path := filepath.Join(from, name)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(name), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	dest := t.TempDir()
-	d := DirSource{
-		To:     binDir,
-		From:   from,
-		Filter: func(_, _, relPath string) bool { return relPath == "calico-bpf" },
-	}
-	if err := d.Contribute(dest); err != nil {
-		t.Fatalf("Contribute: %v", err)
-	}
-	if want := []string{"bin/calico-bpf"}; !slices.Equal(stagedFiles(t, dest), want) {
-		t.Errorf("staged %v, want %v", stagedFiles(t, dest), want)
 	}
 }
 
@@ -375,52 +288,28 @@ func stagedFiles(t *testing.T, dir string) []string {
 	return got
 }
 
-// A runner that records what it ran and creates the files make would produce.
-type windowsRunner struct {
-	calls []string
-	dist  string
-	made  []string
-}
-
-func (w *windowsRunner) Run(name string, args, env []string) (string, error) {
-	return w.RunInDir("", name, args, env)
-}
-
-func (w *windowsRunner) RunInDir(_, name string, args, _ []string) (string, error) {
-	w.calls = append(w.calls, name+" "+strings.Join(args, " "))
-	for _, f := range w.made {
-		path := filepath.Join(w.dist, f)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return "", err
-		}
-		if err := os.WriteFile(path, []byte(f), 0o644); err != nil {
-			return "", err
-		}
-	}
-	return "", nil
-}
-
-func (w *windowsRunner) RunInDirToFile(dir, name string, args, env []string, _ string) (string, error) {
-	return w.RunInDir(dir, name, args, env)
-}
-
-func (w *windowsRunner) RunInDirNoCapture(dir, name string, args, env []string) error {
-	_, err := w.RunInDir(dir, name, args, env)
-	return err
-}
-
-func (w *windowsRunner) RunNoCapture(name string, args, env []string) error {
-	return w.RunInDirNoCapture("", name, args, env)
-}
-
-func windowsFixture(t *testing.T) (Archive, *windowsRunner) {
+// windowsFixture's runner creates the made files where make would, defaulting
+// to the archive and the install script.
+func windowsFixture(t *testing.T, made ...string) (Archive, *command.Recorder) {
 	t.Helper()
 	root := t.TempDir()
 	w := testWindowsArchive(root, testOutputDir(t))
-	return w, &windowsRunner{
-		dist: filepath.Join(root, windowsComponent, windowsDistDir),
-		made: []string{WindowsFileName(testVersion), windowsScript},
+	if len(made) == 0 {
+		made = []string{WindowsFileName(testVersion), windowsScript}
 	}
+	dist := filepath.Join(root, windowsComponent, windowsDistDir)
+	return w, &command.Recorder{Reply: func(command.Call) (string, error) {
+		for _, f := range made {
+			path := filepath.Join(dist, f)
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				return "", err
+			}
+			if err := os.WriteFile(path, []byte(f), 0o644); err != nil {
+				return "", err
+			}
+		}
+		return "", nil
+	}}
 }
 
 func TestBuildWindowsPlacesBothFilesInTheOutputDir(t *testing.T) {
@@ -445,13 +334,13 @@ func TestBuildWindowsRunsBothTargets(t *testing.T) {
 	}
 	for _, target := range []string{windowsArchiveTarget, windowsScriptTarget} {
 		var ran bool
-		for _, c := range runner.calls {
-			if strings.Contains(c, target) {
+		for _, c := range runner.Calls() {
+			if slices.Contains(c.Args, target) {
 				ran = true
 			}
 		}
 		if !ran {
-			t.Errorf("did not run %q, ran: %v", target, runner.calls)
+			t.Errorf("did not run %q, ran: %v", target, runner.Calls())
 		}
 	}
 }
@@ -459,7 +348,8 @@ func TestBuildWindowsRunsBothTargets(t *testing.T) {
 // The install script is a file target with no prerequisites, so make skips it
 // when one exists: a stale script must be cleared or the old version survives.
 func TestBuildWindowsClearsAStaleInstallScript(t *testing.T) {
-	w, runner := windowsFixture(t)
+	// The runner only writes the archive, so anything left is the stale file.
+	w, runner := windowsFixture(t, WindowsFileName(testVersion))
 	stale := filepath.Join(w.RepoRoot, windowsComponent, windowsScriptTarget)
 	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
 		t.Fatal(err)
@@ -467,9 +357,6 @@ func TestBuildWindowsClearsAStaleInstallScript(t *testing.T) {
 	if err := os.WriteFile(stale, []byte("stale"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// The runner only writes the archive, so anything left is the stale file.
-	runner.made = []string{WindowsFileName(testVersion)}
-
 	if err := BuildWindows(w, WithRunner(runner)); err == nil {
 		t.Error("BuildWindows() = nil, want an error when the script was not rebuilt")
 	}

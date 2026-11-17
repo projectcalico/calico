@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
+	migrationsv1alpha1 "kubevirt.io/api/migrations/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
@@ -132,6 +133,9 @@ func newScheme() (*runtime.Scheme, error) {
 	// KubeVirt VM/VMI/VMIM types: register so KubeVirt e2e tests share this
 	// client instead of a parallel typed clientset.
 	if err := kubevirtv1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	if err := migrationsv1alpha1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 	return scheme, nil
