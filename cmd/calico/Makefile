@@ -84,18 +84,11 @@ REGISTRAR_BIN = $(REPO_ROOT)/pod2daemon/bin/node-driver-registrar-$(ARCH)
 $(REGISTRAR_BIN):
 	$(MAKE) -C $(REPO_ROOT)/pod2daemon bin/node-driver-registrar-$(ARCH)
 
-CALICO_IMAGE_BUILD_ARGS = BIN_DIR=cmd/calico/$(BINDIR) TARGETARCH=$(ARCH)
-
-## Stage the image's build context, for a builder other than docker.
-.PHONY: image-context
-image-context: $(REPO_ROOT)/docker/calico/Dockerfile $(REPO_ROOT)/docker/calico/typha.cfg $(BINDIR)/calico-$(ARCH) $(BINDIR)/LICENSE $(REGISTRAR_BIN)
-	$(call stage_image_context,$(REPO_ROOT),$(REPO_ROOT)/docker/calico/Dockerfile,$(BINDIR)/image-context-$(ARCH),$(CALICO_IMAGE_BUILD_ARGS),cmd/calico/$(BINDIR)/calico-$(ARCH) cmd/calico/$(BINDIR)/LICENSE pod2daemon/bin/node-driver-registrar-$(ARCH) docker/calico/typha.cfg)
-
 .PHONY: image image-all
 image: $(CONTAINER_MARKER)
 
 $(CONTAINER_MARKER): $(REPO_ROOT)/docker/calico/Dockerfile $(BINDIR)/calico-$(ARCH) $(BINDIR)/LICENSE $(REGISTRAR_BIN) | register
-	$(DOCKER_BUILD) $(addprefix --build-arg ,$(CALICO_IMAGE_BUILD_ARGS)) -t $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) -f $(REPO_ROOT)/docker/calico/Dockerfile $(REPO_ROOT)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=cmd/calico/$(BINDIR) --build-arg TARGETARCH=$(ARCH) -t $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) -f $(REPO_ROOT)/docker/calico/Dockerfile $(REPO_ROOT)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=$(IMAGE_TAG) LATEST_IMAGE_TAG=$(IMAGE_TAG)
 	touch $@
 

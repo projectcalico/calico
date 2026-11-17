@@ -73,15 +73,10 @@ $(CONTAINER_CREATED): Dockerfile $(BINARY)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-## Stage the image's build context, for a builder other than docker.
-.PHONY: image-context
-image-context: Dockerfile $(BINARY)
-	$(call stage_image_context,.,Dockerfile,bin/image-context-$(ARCH),,$(BINARY))
-
 ## Run the tests in a container. Useful for CI, Mac dev
 ut:
 	mkdir -p report
-	$(DOCKER_GO_BUILD) go test -v $(GOTEST_ARGS) ./...
+	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "$(GIT_CONFIG_SSH) go test -v $(GOTEST_ARGS) ./..."
 
 fv:
 	echo "Currently has no FV tests."

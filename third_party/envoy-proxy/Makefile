@@ -53,11 +53,6 @@ $(ENVOY_PROXY_IMAGE_CREATED): Dockerfile | register
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-## Stage the image's build context, for a builder other than docker.
-.PHONY: image-context
-image-context: Dockerfile
-	$(call stage_image_context,.,Dockerfile,bin/image-context-$(ARCH),ENVOYBINARY_IMAGE=$(ENVOYBINARY_IMAGE),Dockerfile)
-
 ##############################################################################
 # CI/CD
 ##############################################################################

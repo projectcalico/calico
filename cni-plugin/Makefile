@@ -67,9 +67,6 @@ protobuf pkg/dataplane/grpc/proto/cnibackend.pb.go: pkg/dataplane/grpc/proto/cni
 WINDOWS_IMAGE_REQS := Dockerfile.windows build build-win-cni-bins bin/LICENSE
 image-windows: $(WINDOWS_IMAGE_REQS)
 
-WINDOWS_IMAGE_CONTEXT_PATHS = bin/LICENSE bin/windows
-windows-image-contexts: $(WINDOWS_IMAGE_REQS)
-
 bin/LICENSE: ../LICENSE.md
 	cp ../LICENSE.md bin/LICENSE
 

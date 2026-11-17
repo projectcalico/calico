@@ -114,11 +114,6 @@ $(ENVOY_RATELIMIT_IMAGE_CREATED): Dockerfile build
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-## Stage the image's build context, for a builder other than docker.
-.PHONY: image-context
-image-context: Dockerfile build
-	$(call stage_image_context,.,Dockerfile,bin/image-context-$(ARCH),,bin/envoy-ratelimit-$(ARCH))
-
 ##############################################################################
 # CI/CD
 ##############################################################################

@@ -419,19 +419,10 @@ DOCKER_PULL =
 endif
 
 # DOCKER_BUILD is the base build command used for building all images.
-DOCKER_BUILD_COMMON_ARGS = CALICO_BASE=$(CALICO_BASE) GIT_VERSION=$(GIT_VERSION) UBI_IMAGE=$(UBI_IMAGE)
 DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) \
-	$(addprefix --build-arg ,$(DOCKER_BUILD_COMMON_ARGS))
-
-# $(call stage_image_context,<context>,<dockerfile>,<dest>,<NAME=value ...>[,<paths>]):
-# copies a build context to <dest>, with the Dockerfile at its root and the build
-# args DOCKER_BUILD would pass in build-args beside it, for a builder given only
-# that directory (CI's rootless buildkit step). <paths> limits the copy to what the
-# Dockerfile COPYs, for a context that also holds sources or <dest>.
-stage_image_context = rm -rf $(3) && mkdir -p $(3) && \
-	$(if $(5),cd $(1) && cp -a --parents $(5) $(abspath $(3))/ && cd $(CURDIR),cp -a $(1)/. $(3)/) && \
-	cp $(2) $(3)/Dockerfile && \
-	printf '%s\n' $(DOCKER_BUILD_COMMON_ARGS) $(4) > $(3)/build-args
+	--build-arg CALICO_BASE=$(CALICO_BASE) \
+	--build-arg GIT_VERSION=$(GIT_VERSION) \
+	--build-arg UBI_IMAGE=$(UBI_IMAGE)
 
 # Fail a clone that needs credentials instead of blocking on git's terminal
 # prompt, which hangs a CI job until the pipeline timeout.
@@ -2308,14 +2299,6 @@ image-windows: setup-windows-builder var-require-all-WINDOWS_VERSIONS
 	for version in $(WINDOWS_VERSIONS); do \
 		$(MAKE) windows-sub-image-$${version}; \
 	done;
-
-# Stage the Windows image's build context, one per WINDOWS_VERSION, for a builder
-# other than docker. WINDOWS_IMAGE_CONTEXT_PATHS lists what Dockerfile.windows
-# copies; add WINDOWS_IMAGE_REQS as prereqs of windows-image-contexts in the
-# component's Makefile, as for image-windows.
-.PHONY: windows-image-contexts
-windows-image-contexts: var-require-all-WINDOWS_VERSIONS-WINDOWS_IMAGE_CONTEXT_PATHS
-	$(foreach v,$(WINDOWS_VERSIONS),$(call stage_image_context,.,Dockerfile.windows,$(WINDOWS_DIST)/image-context-$(v),WINDOWS_VERSION=$(v),$(WINDOWS_IMAGE_CONTEXT_PATHS)) &&) true
 
 release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES image-windows bin/crane
 	for registry in $(DEV_REGISTRIES); do \
