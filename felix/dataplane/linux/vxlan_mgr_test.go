@@ -27,6 +27,7 @@ import (
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlan/vxlandefs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
@@ -134,15 +135,13 @@ var _ = DescribeTable("vxlanLinksIncompat",
 var _ = Describe("VXLANManager", func() {
 	var (
 		vxlanMgr, vxlanMgrV6   *vxlanManager
-		rt                     *mockRouteTable
+		rt                     *dptest.MockRouteTable
 		fdb                    *mockVXLANFDB
 		dataplane, dataplaneV6 *mocknetlink.MockNetlinkDataplane
 	)
 
 	BeforeEach(func() {
-		rt = &mockRouteTable{
-			currentRoutes: map[string][]routetable.Target{},
-		}
+		rt = dptest.NewMockRouteTable()
 
 		fdb = &mockVXLANFDB{}
 
@@ -281,15 +280,15 @@ var _ = Describe("VXLANManager", func() {
 			SameSubnet:  true,
 		})
 
-		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["vxlan.calico"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
 		err = vxlanMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(1))
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
-		Expect(rt.currentRoutes["eth0"]).NotTo(BeNil())
+		Expect(rt.CurrentRoutes["vxlan.calico"]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes["eth0"]).NotTo(BeNil())
 
 		mac, err := net.ParseMAC("00:0a:95:9d:68:16")
 		Expect(err).NotTo(HaveOccurred())
@@ -378,15 +377,15 @@ var _ = Describe("VXLANManager", func() {
 			SameSubnet:  true,
 		})
 
-		Expect(rt.currentRoutes["vxlan-v6.calico"]).To(HaveLen(0))
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["vxlan-v6.calico"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
 		err = vxlanMgrV6.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(rt.currentRoutes["vxlan-v6.calico"]).To(HaveLen(1))
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
-		Expect(rt.currentRoutes["eth0"]).NotTo(BeNil())
+		Expect(rt.CurrentRoutes["vxlan-v6.calico"]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes["eth0"]).NotTo(BeNil())
 
 		mac, err := net.ParseMAC("00:0a:95:9d:68:16")
 		Expect(err).NotTo(HaveOccurred())
@@ -426,8 +425,8 @@ var _ = Describe("VXLANManager", func() {
 		err := vxlanMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(vxlanMgr.routeMgr.routesDirty).To(BeFalse())
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(1))
 
 		By("Sending another local VTEP.")
 		vxlanMgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
@@ -444,13 +443,13 @@ var _ = Describe("VXLANManager", func() {
 		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
 		vxlanMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
 		err = vxlanMgr.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(vxlanMgr.routeMgr.routesDirty).To(BeFalse())
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(0))
 	})
 
 	It("IPv6: should fall back to programming tunneled routes if the parent device is not known", func() {
@@ -478,8 +477,8 @@ var _ = Describe("VXLANManager", func() {
 		err := vxlanMgrV6.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(vxlanMgrV6.routeMgr.routesDirty).To(BeFalse())
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(1))
 
 		By("Sending another local VTEP.")
 		vxlanMgrV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
@@ -496,13 +495,13 @@ var _ = Describe("VXLANManager", func() {
 		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
 		vxlanMgrV6.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
 		err = vxlanMgrV6.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(vxlanMgrV6.routeMgr.routesDirty).To(BeFalse())
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(0))
 	})
 
 	It("should program directly connected routes for remote VTEPs with borrowed IP addresses", func() {
@@ -520,8 +519,8 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect a directly connected route to the borrowed IP.
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(1))
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV4][0]).To(Equal(
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV4][0]).To(Equal(
 			routetable.Target{
 				RouteKey: routetable.RouteKey{
 					CIDR: ip.MustParseCIDROrIP("10.0.1.1/32"),
@@ -538,7 +537,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect no routes.
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(0))
 	})
 
 	It("IPv6: should program directly connected routes for remote VTEPs with borrowed IP addresses", func() {
@@ -556,8 +555,8 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect a directly connected route to the borrowed IP.
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(1))
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV6][0]).To(Equal(
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV6][0]).To(Equal(
 			routetable.Target{
 				RouteKey: routetable.RouteKey{
 					CIDR: ip.MustParseCIDROrIP("fc00:10:244::1/112"),
@@ -574,7 +573,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect no routes.
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(0))
 	})
 
 	It("should only program black hole routes for local endpoints", func() {
@@ -634,16 +633,16 @@ var _ = Describe("VXLANManager", func() {
 			SameSubnet:  true,
 		})
 
-		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["vxlan.calico"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
 		err = vxlanMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1)) // Black hole route
+		Expect(rt.CurrentRoutes["vxlan.calico"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(1)) // Black hole route
 	})
 
 	It("IPv6: should only program black hole routes for local endpoints", func() {
@@ -703,16 +702,16 @@ var _ = Describe("VXLANManager", func() {
 			SameSubnet:  true,
 		})
 
-		Expect(rt.currentRoutes["vxlan-v6.calico"]).To(HaveLen(0))
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["vxlan-v6.calico"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
 		err = vxlanMgrV6.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(rt.currentRoutes["vxlan-v6.calico"]).To(HaveLen(0))
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1)) // Black hole route
+		Expect(rt.CurrentRoutes["vxlan-v6.calico"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(1)) // Black hole route
 	})
 
 	It("should program directly connected routes for remote VTEPs", func() {
@@ -730,8 +729,8 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect a directly connected route for the remote VTEP.
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(1))
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV4][0]).To(Equal(
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV4][0]).To(Equal(
 			routetable.Target{
 				RouteKey: routetable.RouteKey{
 					CIDR: ip.MustParseCIDROrIP("10.0.1.1/32"),
@@ -748,7 +747,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect no routes.
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(0))
 	})
 
 	It("IPv6: should program directly connected routes for remote VTEPs", func() {
@@ -766,8 +765,8 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect a directly connected route for the remote VTEP.
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(1))
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV6][0]).To(Equal(
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV6][0]).To(Equal(
 			routetable.Target{
 				RouteKey: routetable.RouteKey{
 					CIDR: ip.MustParseCIDROrIP("fc00:10:244::1/112"),
@@ -784,7 +783,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect no routes.
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(0))
 	})
 
 	DescribeTable("reconciles the VXLAN source-port range on an existing device",
@@ -933,7 +932,7 @@ var _ = Describe("VXLANManager in BPF mode", func() {
 	newMgr := func(opts ...vxlanMgrOption) *vxlanManager {
 		mgr := newVXLANManagerWithShims(
 			dpsets.NewMockIPSets(),
-			&mockRouteTable{currentRoutes: map[string][]routetable.Target{}},
+			dptest.NewMockRouteTable(),
 			&mockVXLANFDB{},
 			vxlandefs.VXLANIfaceNameV4,
 			4,

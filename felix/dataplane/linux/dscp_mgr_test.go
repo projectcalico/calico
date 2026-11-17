@@ -21,6 +21,7 @@ import (
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
@@ -38,13 +39,13 @@ func dscpManagerTests(ipVersion uint8) func() {
 		var (
 			manager      *dscpManager
 			ipSets       *dpsets.MockIPSets
-			mangleTable  *mockTable
+			mangleTable  *dptest.MockTable
 			ruleRenderer rules.RuleRenderer
 		)
 
 		BeforeEach(func() {
 			ipSets = dpsets.NewMockIPSets()
-			mangleTable = newMockTable("mangle")
+			mangleTable = dptest.NewMockTable("mangle")
 			ruleRenderer = rules.NewRenderer(rules.Config{
 				MarkPass:     0x1,
 				MarkAccept:   0x2,
@@ -74,7 +75,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
 
-			mangleTable.checkChains([][]*generictables.Chain{{{
+			mangleTable.CheckChains([][]*generictables.Chain{{{
 				Name:  rules.ChainEgressDSCP,
 				Rules: nil,
 			}}})
@@ -98,7 +99,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			mangleTable.checkChains([][]*generictables.Chain{{{
+			mangleTable.CheckChains([][]*generictables.Chain{{{
 				Name: rules.ChainEgressDSCP,
 				Rules: []generictables.Rule{
 					{
@@ -129,7 +130,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			mangleTable.checkChains([][]*generictables.Chain{{{
+			mangleTable.CheckChains([][]*generictables.Chain{{{
 				Name: rules.ChainEgressDSCP,
 				Rules: []generictables.Rule{
 					// Rendered policies are sorted.
@@ -159,7 +160,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			mangleTable.checkChains([][]*generictables.Chain{{{
+			mangleTable.CheckChains([][]*generictables.Chain{{{
 				Name: rules.ChainEgressDSCP,
 				Rules: []generictables.Rule{
 					// Rendered policies are sorted.
@@ -196,7 +197,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			mangleTable.checkChains([][]*generictables.Chain{{{
+			mangleTable.CheckChains([][]*generictables.Chain{{{
 				Name: rules.ChainEgressDSCP,
 				Rules: []generictables.Rule{
 					// Rendered policies are sorted.
@@ -230,7 +231,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			mangleTable.checkChains([][]*generictables.Chain{{{
+			mangleTable.CheckChains([][]*generictables.Chain{{{
 				Name: rules.ChainEgressDSCP,
 				Rules: []generictables.Rule{
 					// Rendered policies are sorted.
@@ -263,7 +264,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			mangleTable.checkChains([][]*generictables.Chain{{{
+			mangleTable.CheckChains([][]*generictables.Chain{{{
 				Name: rules.ChainEgressDSCP,
 				Rules: []generictables.Rule{
 					{
@@ -291,7 +292,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 			ipSets.AddOrReplaceCalled = false // Reset
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			mangleTable.checkChains([][]*generictables.Chain{{{
+			mangleTable.CheckChains([][]*generictables.Chain{{{
 				Name: rules.ChainEgressDSCP,
 				Rules: []generictables.Rule{
 					{
@@ -315,7 +316,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 			ipSets.AddOrReplaceCalled = false // Reset
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			mangleTable.checkChains([][]*generictables.Chain{{{
+			mangleTable.CheckChains([][]*generictables.Chain{{{
 				Name:  rules.ChainEgressDSCP,
 				Rules: nil,
 			}}})
