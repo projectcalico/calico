@@ -157,7 +157,7 @@ func (r *route) unmarshalBIRD(line, ipSep, previousDest string) (string, bool) {
 	}
 
 	// All good, check if we see "] *" for the primary route.
-	// https://github.com/projectcalico/bird/blob/feature-ipinip/nest/rt-table.c#L2517
+	// https://github.com/CZ-NIC/bird/blob/v1.6.8/nest/rt-table.c#L2516
 	if strings.Contains(line, "] *") {
 		r.primary = true
 	}
@@ -217,7 +217,7 @@ func scanBIRDRoutes(ipv IPFamily, conn net.Conn) ([]route, error) {
 	// IP version.
 	ipSep := ipv.Separator()
 
-	// 0001 BIRD v0.3.3+birdv1.6.8 ready.
+	// 0001 BIRD 1.6.8-1.tigera ready.
 	//
 	// 1007-0.0.0.0/0          via 172.17.0.1 on eth0 [kernel1 20:10:57] * (10)
 	//
