@@ -17,6 +17,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -198,6 +199,51 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					cc.ExpectSome(w6[1], w6[0])
 				}
 				cc.CheckConnectivity()
+			})
+
+			_ = BPFMode() && It("should keep the shared VXLAN device MTU so large packets are forwarded", func() {
+				deviceMTUs := func() string {
+					var out strings.Builder
+					for _, felix := range felixes {
+						o, _ := felix.ExecOutput("ip", "link", "show", "vxlan.calico")
+						out.WriteString(o)
+					}
+					return out.String()
+				}
+				for _, felix := range felixes {
+					Eventually(felix.ExecOutputFn("ip", "link", "show", "vxlan.calico"), "60s", "500ms").
+						Should(ContainSubstring("vxlan.calico"))
+				}
+
+				// Below the workload MTU, the kernel drops large packets that it forwards to
+				// the device; IPv6 forwarding ignores the unlocked route MTU.
+				felixes[0].Exec("ip", "link", "set", "vxlan.calico", "mtu", "1300")
+
+				if enableIPv6 {
+					// Fits the 1430 IPv6 workload MTU, but not a 1300 device.
+					const payload = 1350
+					dump := w6[1].AttachTCPDump()
+					dump.SetLogEnabled(true)
+					dump.AddMatcher("large", regexp.MustCompile(fmt.Sprintf(`IP6 %s\.\d+ > %s\.30444: UDP, length %d`,
+						regexp.QuoteMeta(w6[0].IP), regexp.QuoteMeta(w6[1].IP), payload)))
+					dump.Start(infra, "udp", "port", "30444")
+
+					// A new source port makes each packet the first of its flow, and BPF hands
+					// such a packet to the kernel when it is larger than the device MTU.
+					srcPort := 31000
+					Eventually(func() int {
+						srcPort++
+						_, _ = w6[0].RunCmd("pktgen", w6[0].IP, w6[1].IP, "udp", "--port-src", strconv.Itoa(srcPort),
+							"--port-dst", "30444", fmt.Sprintf("--payload-size=%d", payload))
+						return dump.MatchCount("large")
+					}, "30s", "1s").Should(BeNumerically(">", 0))
+				}
+
+				Eventually(func() int { return strings.Count(deviceMTUs(), "mtu 1450") }, "30s", "500ms").
+					Should(Equal(len(felixes)))
+				// Both VXLAN managers sync the shared device, so a disagreement would make it flap.
+				Consistently(func() int { return strings.Count(deviceMTUs(), "mtu 1450") }, "15s", "1s").
+					Should(Equal(len(felixes)))
 			})
 
 			It("should have some blackhole routes installed", func() {
