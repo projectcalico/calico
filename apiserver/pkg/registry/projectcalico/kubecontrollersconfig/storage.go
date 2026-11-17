@@ -80,6 +80,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options, statusOpts server.Opti
 	storageInterface, dFunc, err := opts.GetStorage(
 		prefix,
 		configureKeyFunc(prefix),
+		registry.NoNamespaceReverseKeyFunc(prefix),
 		strategy,
 		func() runtime.Object { return &calico.KubeControllersConfiguration{} },
 		func() runtime.Object { return &calico.KubeControllersConfigurationList{} },
@@ -114,6 +115,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options, statusOpts server.Opti
 	statusStorageInterface, statusDFunc, err := statusOpts.GetStorage(
 		prefix,
 		configureKeyFunc(statusPrefix),
+		registry.NoNamespaceReverseKeyFunc(statusPrefix),
 		strategy,
 		func() runtime.Object { return &calico.KubeControllersConfiguration{} },
 		func() runtime.Object { return &calico.KubeControllersConfigurationList{} },
