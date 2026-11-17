@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/route/routedefs"
@@ -59,7 +59,7 @@ var _ = Describe("IPIPManager", func() {
 			rt, ipipdefs.IPIPIfaceName,
 			4,
 			1400,
-			dataplanedefs.Config{
+			dpconfig.Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "node1",
 				ExternalNodesCidrs: []string{"10.10.10.0/24"},
@@ -499,7 +499,7 @@ var _ = Describe("IPIPManager with the IPIP cluster routes left to BIRD", func()
 			rt, ipipdefs.IPIPIfaceName,
 			4,
 			1400,
-			dataplanedefs.Config{
+			dpconfig.Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "node1",
 				ExternalNodesCidrs: []string{"10.10.10.0/24"},

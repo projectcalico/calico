@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/route/routedefs"
@@ -65,7 +65,7 @@ var _ = Describe("NoEncap Manager", func() {
 		noencapMgr = NewManagerWithShims(
 			rt,
 			4,
-			dataplanedefs.Config{
+			dpconfig.Config{
 				Hostname:                    "node1",
 				ProgramNoEncapClusterRoutes: true,
 				DeviceRouteProtocol:         routedefs.DefaultRouteProto,
@@ -76,7 +76,7 @@ var _ = Describe("NoEncap Manager", func() {
 		noencapMgrV6 = NewManagerWithShims(
 			rt,
 			6,
-			dataplanedefs.Config{
+			dpconfig.Config{
 				Hostname:                    "node1",
 				ProgramNoEncapClusterRoutes: true,
 				DeviceRouteProtocol:         routedefs.DefaultRouteProto,

@@ -29,7 +29,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/dataplane/linux/route/routedefs"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
@@ -69,7 +69,7 @@ type Manager struct {
 	// Indicates if configuration has changed since the last apply.
 	routesDirty   bool
 	nlHandle      netlinkshim.Interface
-	dpConfig      dataplanedefs.Config
+	dpConfig      dpconfig.Config
 	routeProtocol netlink.RouteProtocol
 
 	// Log context
@@ -97,7 +97,7 @@ func NewManager(
 	tunnelDevice string,
 	ipVersion uint8,
 	mtu int,
-	dpConfig dataplanedefs.Config,
+	dpConfig dpconfig.Config,
 	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 ) *Manager {
@@ -143,7 +143,7 @@ func blackholeRouteClass(ippoolType proto.IPPoolType) routetable.RouteClass {
 	}
 }
 
-func CalculateProtocol(dpConfig dataplanedefs.Config) netlink.RouteProtocol {
+func CalculateProtocol(dpConfig dpconfig.Config) netlink.RouteProtocol {
 	// For same-subnet, blackhole and ipip routes, we need a unique protocol
 	// to attach to the routes.  If the global DeviceRouteProtocol is set to
 	// a usable value, use that; otherwise, pick a safer default.  (For back

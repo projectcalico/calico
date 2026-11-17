@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/config"
 	intdataplane "github.com/projectcalico/calico/felix/dataplane/linux"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
@@ -52,7 +52,7 @@ func (*mockCollector) SetConntrackInfoReader(types.ConntrackInfoReader) {}
 
 var _ = Describe("Constructor test", func() {
 	var configParams *config.Config
-	var dpConfig dataplanedefs.Config
+	var dpConfig dpconfig.Config
 	var healthAggregator *health.HealthAggregator
 	var col collector.Collector
 	kubernetesProvider := config.ProviderNone
@@ -73,7 +73,7 @@ var _ = Describe("Constructor test", func() {
 		configParams = config.New()
 		_, err := configParams.UpdateFrom(map[string]string{"InterfaceExclude": "/^kube.*/,/veth/,eth2"}, config.EnvironmentVariable)
 		Expect(err).NotTo(HaveOccurred())
-		dpConfig = dataplanedefs.Config{
+		dpConfig = dpconfig.Config{
 			FloatingIPsEnabled: true,
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,

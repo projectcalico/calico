@@ -37,6 +37,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
@@ -151,7 +152,7 @@ type proxyNeighManager struct {
 	cancel context.CancelFunc
 }
 
-func NewManager(dpConfig dataplanedefs.Config, ipVersion uint8) *proxyNeighManager {
+func NewManager(dpConfig dpconfig.Config, ipVersion uint8) *proxyNeighManager {
 	nl, err := netlinkshim.NewRealNetlink()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create netlink handle for proxy neighbor manager")
@@ -229,7 +230,7 @@ func setIgnoreOutgoing(conn *packet.Conn) error {
 }
 
 func newProxyNeighManagerWithShims(
-	dpConfig dataplanedefs.Config,
+	dpConfig dpconfig.Config,
 	ipVersion uint8,
 	nl netlinkshim.Interface,
 	af arpClientFactory,

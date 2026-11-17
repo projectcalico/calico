@@ -20,7 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables"
@@ -67,7 +67,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 				MarkEndpoint: 0x11110000,
 			}, false)
 			manager = NewManager(ipSets, mangleTable, ruleRenderer, ipVersion,
-				dataplanedefs.Config{
+				dpconfig.Config{
 					MaxIPSetSize: 1024,
 					Hostname:     "node1",
 				})

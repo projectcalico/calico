@@ -23,6 +23,7 @@ import (
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
@@ -41,7 +42,7 @@ var _ = Describe("VXLAN, IPIP and no-encap managers sharing one route table", fu
 	var (
 		rt        *dptest.MockRouteTable
 		dataplane *mocknetlink.MockNetlinkDataplane
-		dpConfig  dataplanedefs.Config
+		dpConfig  dpconfig.Config
 	)
 
 	BeforeEach(func() {
@@ -54,7 +55,7 @@ var _ = Describe("VXLAN, IPIP and no-encap managers sharing one route table", fu
 		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
 		dataplane.ResetDeltas()
 
-		dpConfig = dataplanedefs.Config{
+		dpConfig = dpconfig.Config{
 			Hostname:     "node1",
 			MaxIPSetSize: 5,
 			// The IPIP and no-encap managers only program routes when Felix, rather than
