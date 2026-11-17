@@ -499,6 +499,7 @@ var _ = Describe("Node rendering tests", func() {
     {
       "type": "portmap",
       "snat": true,
+      "backend": "nftables",
       "capabilities": {
         "portMappings": true
       }
