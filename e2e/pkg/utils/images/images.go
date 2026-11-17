@@ -62,8 +62,9 @@ const (
 	// KubeVirtUbuntu: Ubuntu 20.04 containerDisk for KubeVirt VM e2e tests.
 	KubeVirtUbuntu = "mcas/kubevirt-ubuntu-20.04@sha256:35158058769932812d8ec3ba76985b6f3b02ba288e33a22c77445a7b7f8b3e30"
 
-	// CalicoBIRD: Calico BIRD 1.x. Keep in sync with BIRD_VERSION in metadata.mk.
-	CalicoBIRD = "calico/bird:v0.3.3-211-g9111ec3c"
+	// CalicoBIRD: the patched BIRD 1.x that calico/node ships, as a BGP router.
+	// Built by hack/rpms/bird; the tag is that directory's content hash.
+	CalicoBIRD = "calico/bird:4444f0dc0042"
 
 	// RapidClient is the multi-mode rapidclient helper: client mode for Maglev,
 	// MODE=server for the packet-size dataplane server (see

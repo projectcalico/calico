@@ -116,9 +116,13 @@ up() {
 # is absent because it is built from PR source and loaded separately.
 SEED_IMAGES=(
 	"docker.io/alpine:3"
-	"calico/bird:v0.3.3-211-g9111ec3c"
 	"registry.k8s.io/e2e-test-images/agnhost:2.47"
 )
+
+# The BIRD router image is built from this repo. A new tag is in no registry
+# until CI publishes it, so build it (a no-op when it is already loaded) rather
+# than pull it.
+BIRD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/hack/rpms/bird"
 
 # The dind daemon pulls anonymously and the framework gives each `docker run` a
 # short ssh timeout, so a slow registry fails the spec. The runner is logged in
@@ -136,8 +140,14 @@ seed() {
 			sleep 5
 		done
 	done
-	if docker save "${SEED_IMAGES[@]}" | docker exec -i "$NAME" docker load; then
-		log "seed: loaded ${#SEED_IMAGES[@]} images into $NAME"
+	local images=("${SEED_IMAGES[@]}")
+	if make --no-print-directory -C "$BIRD_DIR" image >/dev/null; then
+		images+=("$(make --no-print-directory -C "$BIRD_DIR" print-image-name)")
+	else
+		log "WARN: could not build the BIRD router image, skipping its seed"
+	fi
+	if docker save "${images[@]}" | docker exec -i "$NAME" docker load; then
+		log "seed: loaded ${#images[@]} images into $NAME"
 	else
 		log "WARN: docker load into $NAME failed, specs will pull for themselves"
 	fi
