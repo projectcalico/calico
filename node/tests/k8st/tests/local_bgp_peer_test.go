@@ -642,7 +642,7 @@ func (e *localBGPPeerEnv) runAssertions(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if !regexp.MustCompile("3 packets transmitted, 3 packets received").MatchString(out) {
+		if !regexp.MustCompile("3 packets transmitted, 3 (packets )?received").MatchString(out) {
 			return fmt.Errorf("ping did not report 3/3 received:\n%s", out)
 		}
 		return nil
