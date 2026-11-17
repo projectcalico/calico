@@ -34,6 +34,7 @@ steps:
       provisionedIops: 10000
       provisionedThroughput: 200
     depends:
+      - build-bird-image
       - build-calico-image
       - build-node-image
       - build-whisker-image
@@ -81,6 +82,8 @@ steps:
       # script and the tests' connection tester call it by name.
       export PATH="$(pwd)/hack/test/kind:${PATH}"
       .argoci/scripts/load-cached-images calico node whisker
+      # The external node runs this image as a BGP router.
+      .argoci/scripts/load-rpms-image.sh bird amd64
       .argoci/scripts/load-e2e-binaries
       export E2E_PREBUILT=true
       make ${E2E_TARGET}
