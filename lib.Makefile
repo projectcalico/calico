@@ -424,15 +424,14 @@ DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) 
 	$(addprefix --build-arg ,$(DOCKER_BUILD_COMMON_ARGS))
 
 # $(call stage_image_context,<context>,<dockerfile>,<dest>,<NAME=value ...>[,<paths>]):
-# copies a build context to <dest> with the build args DOCKER_BUILD would pass baked
-# into its Dockerfile as ARG defaults, for a builder that takes no build args (CI's
-# rootless buildkit step). Only an ARG the Dockerfile declares can take a build arg,
-# so rewriting the declarations covers every one it reads. <paths> limits the copy
-# to what the Dockerfile COPYs, for a context that also holds sources or <dest>.
+# copies a build context to <dest>, with the Dockerfile at its root and the build
+# args DOCKER_BUILD would pass in build-args beside it, for a builder given only
+# that directory (CI's rootless buildkit step). <paths> limits the copy to what the
+# Dockerfile COPYs, for a context that also holds sources or <dest>.
 stage_image_context = rm -rf $(3) && mkdir -p $(3) && \
 	$(if $(5),cd $(1) && cp -a --parents $(5) $(abspath $(3))/ && cd $(CURDIR),cp -a $(1)/. $(3)/) && \
-	sed $(foreach a,$(DOCKER_BUILD_COMMON_ARGS) $(4),-e 's|^ARG $(firstword $(subst =, ,$(a)))\(=.*\)\{0,1\}$$|ARG $(a)|') \
-		$(2) > $(3)/Dockerfile.staged && mv $(3)/Dockerfile.staged $(3)/Dockerfile
+	cp $(2) $(3)/Dockerfile && \
+	printf '%s\n' $(DOCKER_BUILD_COMMON_ARGS) $(4) > $(3)/build-args
 
 # Fail a clone that needs credentials instead of blocking on git's terminal
 # prompt, which hangs a CI job until the pipeline timeout.
