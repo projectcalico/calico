@@ -51,7 +51,7 @@ namespace:
 - `bpfin.cali` (C-side identifier: `natin_idx` / `NATIN_IFACE`)
 - `bpfout.cali` (C-side identifier: `natout_idx`)
 
-See `felix/dataplane/linux/dataplanedefs/dataplane_defs.go` for the
+See `felix/dataplane/linux/bpfep/bpfepdefs/bpfepdefs.go` for the
 Go-side constants, and `felix/bpf-gpl/globals.h` / `cali_bpf.h` for the
 C-side configurables. (The reference design document refers to these
 as `bpfnatin`/`bpfnatout`; the implementation names are slightly
@@ -73,7 +73,7 @@ packet destined for a service first exits through `bpfin.cali`.
 ### Mode selection
 
 The feature has three modes (`hostNetworkedNATMode` in
-`felix/dataplane/linux/bpf_ep_mgr.go`):
+`felix/dataplane/linux/bpfep/bpf_ep_mgr.go`):
 
 - **Disabled** — CTLB is on and handling both TCP and UDP; no bpfnat
   veth is created.

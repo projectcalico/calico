@@ -98,7 +98,9 @@ components:
       - ^felix/bpf/tc/defs/[^/]*\.go$
       - ^felix/calc/[^/]*\.go$
       - ^felix/config/[^/]*\.go$
-      - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/flowtable/flowtabledefs/[^/]*\.go$
+      - ^felix/dataplane/linux/ipip/ipipdefs/[^/]*\.go$
+      - ^felix/dataplane/linux/vxlan/vxlandefs/[^/]*\.go$
       - ^felix/deltatracker/[^/]*\.go$
       - ^felix/dispatcher/[^/]*\.go$
       - ^felix/environment/[^/]*\.go$
@@ -429,8 +431,33 @@ components:
       - ^felix/dataplane/inactive/[^/]*\.go$
       - ^felix/dataplane/ipsets/[^/]*\.go$
       - ^felix/dataplane/linux/[^/]*\.go$
+      - ^felix/dataplane/linux/bpfep/[^/]*\.go$
+      - ^felix/dataplane/linux/bpfep/bpfepdefs/[^/]*\.go$
+      - ^felix/dataplane/linux/bpfroute/[^/]*\.go$
       - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/dscp/[^/]*\.go$
+      - ^felix/dataplane/linux/endpoint/[^/]*\.go$
+      - ^felix/dataplane/linux/floatingip/[^/]*\.go$
+      - ^felix/dataplane/linux/flowtable/[^/]*\.go$
+      - ^felix/dataplane/linux/flowtable/flowtabledefs/[^/]*\.go$
+      - ^felix/dataplane/linux/hostip/[^/]*\.go$
+      - ^felix/dataplane/linux/hostsipset/[^/]*\.go$
+      - ^felix/dataplane/linux/ipip/[^/]*\.go$
+      - ^felix/dataplane/linux/ipip/ipipdefs/[^/]*\.go$
+      - ^felix/dataplane/linux/livemigration/[^/]*\.go$
+      - ^felix/dataplane/linux/masq/[^/]*\.go$
+      - ^felix/dataplane/linux/modprobe/[^/]*\.go$
+      - ^felix/dataplane/linux/noencap/[^/]*\.go$
+      - ^felix/dataplane/linux/policy/[^/]*\.go$
+      - ^felix/dataplane/linux/procsys/[^/]*\.go$
+      - ^felix/dataplane/linux/proxyneigh/[^/]*\.go$
       - ^felix/dataplane/linux/qos/[^/]*\.go$
+      - ^felix/dataplane/linux/route/[^/]*\.go$
+      - ^felix/dataplane/linux/route/routedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/serviceloop/[^/]*\.go$
+      - ^felix/dataplane/linux/vxlan/[^/]*\.go$
+      - ^felix/dataplane/linux/vxlan/vxlandefs/[^/]*\.go$
+      - ^felix/dataplane/linux/wireguardmgr/[^/]*\.go$
       - ^felix/deltatracker/[^/]*\.go$
       - ^felix/dispatcher/[^/]*\.go$
       - ^felix/environment/[^/]*\.go$
@@ -847,7 +874,8 @@ components:
       - ^felix/bpf/nat/[^/]*\.go$
       - ^felix/bpf/tc/defs/[^/]*\.go$
       - ^felix/bpf/utils/[^/]*\.go$
-      - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/bpfep/bpfepdefs/[^/]*\.go$
+      - ^felix/dataplane/linux/vxlan/vxlandefs/[^/]*\.go$
       - ^felix/environment/[^/]*\.go$
       - ^felix/ip/[^/]*\.go$
       - ^felix/iptables/cmdshim/[^/]*\.go$
@@ -1032,7 +1060,8 @@ components:
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
       - ^felix/dataplane/ipsets/[^/]*\.go$
-      - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/flowtable/flowtabledefs/[^/]*\.go$
+      - ^felix/dataplane/linux/vxlan/vxlandefs/[^/]*\.go$
       - ^felix/deltatracker/[^/]*\.go$
       - ^felix/environment/[^/]*\.go$
       - ^felix/generictables/[^/]*\.go$
@@ -1231,7 +1260,9 @@ components:
       - ^felix/bpf/tc/defs/[^/]*\.go$
       - ^felix/calc/[^/]*\.go$
       - ^felix/config/[^/]*\.go$
-      - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/flowtable/flowtabledefs/[^/]*\.go$
+      - ^felix/dataplane/linux/ipip/ipipdefs/[^/]*\.go$
+      - ^felix/dataplane/linux/vxlan/vxlandefs/[^/]*\.go$
       - ^felix/deltatracker/[^/]*\.go$
       - ^felix/dispatcher/[^/]*\.go$
       - ^felix/environment/[^/]*\.go$
@@ -1465,8 +1496,33 @@ components:
       - ^felix/dataplane/inactive/[^/]*\.go$
       - ^felix/dataplane/ipsets/[^/]*\.go$
       - ^felix/dataplane/linux/[^/]*\.go$
+      - ^felix/dataplane/linux/bpfep/[^/]*\.go$
+      - ^felix/dataplane/linux/bpfep/bpfepdefs/[^/]*\.go$
+      - ^felix/dataplane/linux/bpfroute/[^/]*\.go$
       - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/dscp/[^/]*\.go$
+      - ^felix/dataplane/linux/endpoint/[^/]*\.go$
+      - ^felix/dataplane/linux/floatingip/[^/]*\.go$
+      - ^felix/dataplane/linux/flowtable/[^/]*\.go$
+      - ^felix/dataplane/linux/flowtable/flowtabledefs/[^/]*\.go$
+      - ^felix/dataplane/linux/hostip/[^/]*\.go$
+      - ^felix/dataplane/linux/hostsipset/[^/]*\.go$
+      - ^felix/dataplane/linux/ipip/[^/]*\.go$
+      - ^felix/dataplane/linux/ipip/ipipdefs/[^/]*\.go$
+      - ^felix/dataplane/linux/livemigration/[^/]*\.go$
+      - ^felix/dataplane/linux/masq/[^/]*\.go$
+      - ^felix/dataplane/linux/modprobe/[^/]*\.go$
+      - ^felix/dataplane/linux/noencap/[^/]*\.go$
+      - ^felix/dataplane/linux/policy/[^/]*\.go$
+      - ^felix/dataplane/linux/procsys/[^/]*\.go$
+      - ^felix/dataplane/linux/proxyneigh/[^/]*\.go$
       - ^felix/dataplane/linux/qos/[^/]*\.go$
+      - ^felix/dataplane/linux/route/[^/]*\.go$
+      - ^felix/dataplane/linux/route/routedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/serviceloop/[^/]*\.go$
+      - ^felix/dataplane/linux/vxlan/[^/]*\.go$
+      - ^felix/dataplane/linux/vxlan/vxlandefs/[^/]*\.go$
+      - ^felix/dataplane/linux/wireguardmgr/[^/]*\.go$
       - ^felix/deltatracker/[^/]*\.go$
       - ^felix/dispatcher/[^/]*\.go$
       - ^felix/environment/[^/]*\.go$

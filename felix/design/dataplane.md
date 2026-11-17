@@ -86,7 +86,7 @@ driver absorb the resync complexity behind a declarative
 ## The OnUpdate / apply() split
 
 Every manager implements the `Manager` interface
-(`dataplane/linux/int_dataplane.go`):
+(`dataplane/linux/dataplanedefs/manager.go`):
 
 ```go
 type Manager interface {
@@ -465,7 +465,7 @@ Two invariants follow:
   rather than from Felix.
 - **The offload rule excludes endpoints whose features need those
   hooks, by IP.** `flowtableExclusionManager` in
-  [`flowtable_mgr.go`](../dataplane/linux/flowtable_mgr.go) maintains
+  [`flowtable_mgr.go`](../dataplane/linux/flowtable/flowtable_mgr.go) maintains
   the `no-flow-offload` IP set, holding the IPs of endpoints with DSCP
   marking (rendered into mangle POSTROUTING) or a connection or packet
   rate limit (rendered into the endpoint's filter chain), and the
@@ -483,7 +483,7 @@ Two invariants follow:
 
 Membership is also gated on the interface being up, in both the
 endpoint manager (workload veths) and
-[`flowtable_mgr.go`](../dataplane/linux/flowtable_mgr.go) (overlay and
+[`flowtable_mgr.go`](../dataplane/linux/flowtable/flowtable_mgr.go) (overlay and
 pattern-matched host devices). nft rejects the whole transaction if a
 flowtable names a device the kernel doesn't have, which takes down the
 entire table.
@@ -790,7 +790,7 @@ Legitimate asymmetries are rare on the `*tables` path. Two notes:
 
 Not everything is duplicated per family. Some components are
 deliberately **single instances that feed the per-family managers**.
-The live migration monitor (`dataplane/linux/live_migration.go`) is
+The live migration monitor (`dataplane/linux/livemigration/live_migration.go`) is
 the model: one FSM per workload, driven by GARP detection and timers
 that have nothing to do with IP family, whose state changes are then
 pushed into the endpoint managers — which own the per-family route

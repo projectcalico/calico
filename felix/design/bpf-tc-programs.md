@@ -108,7 +108,7 @@ netkit-specific concessions:
   `felix/bpf/bpfmap/bpf_maps.go` and `netkitPinOverrides` in
   `felix/bpf/hook/map.go`. The endpoint manager carries a
   matching `netkitJumpMapAllocs` allocator alongside the TC one
-  in `felix/dataplane/linux/bpf_ep_mgr.go`.
+  in `felix/dataplane/linux/bpfep/bpf_ep_mgr.go`.
 - **`host_ifindex` global.** A netkit peer program runs in the
   pod's network namespace, so `skb->ifindex` on a peer-program
   call is the *peer* ifindex, not the host-side one. Felix

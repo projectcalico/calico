@@ -1,0 +1,309 @@
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package noencap
+
+import (
+	"net"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/route/routedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/vxlan/vxlandefs"
+	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/logrusr"
+)
+
+var _ = Describe("NoEncap Manager", func() {
+	var (
+		noencapMgr, noencapMgrV6 *Manager
+		rt                       *dptest.MockRouteTable
+	)
+
+	const (
+		externalCIDR = "10.10.10.0/24"
+	)
+
+	BeforeEach(func() {
+		rt = dptest.NewMockRouteTable()
+
+		opRecorder := logrusr.NewSummarizer("test")
+
+		dataplane := mocknetlink.New()
+		_, err := dataplane.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		eth0 := dataplane.AddIface(2, "eth0", true, true)
+		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
+		dataplane.ResetDeltas()
+
+		dataplaneV6 := mocknetlink.New()
+		_, err = dataplaneV6.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		eth0V6 := dataplaneV6.AddIface(2, "eth0", true, true)
+		Expect(dataplaneV6.AddrAdd(eth0V6, &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("fc00:10:96::2")}})).To(Succeed())
+		dataplaneV6.ResetDeltas()
+
+		noencapMgr = NewManagerWithShims(
+			rt,
+			4,
+			dataplanedefs.Config{
+				Hostname:                    "node1",
+				ProgramNoEncapClusterRoutes: true,
+				DeviceRouteProtocol:         routedefs.DefaultRouteProto,
+			},
+			opRecorder,
+			dataplane,
+		)
+		noencapMgrV6 = NewManagerWithShims(
+			rt,
+			6,
+			dataplanedefs.Config{
+				Hostname:                    "node1",
+				ProgramNoEncapClusterRoutes: true,
+				DeviceRouteProtocol:         routedefs.DefaultRouteProto,
+			},
+			opRecorder,
+			dataplaneV6,
+		)
+	})
+
+	It("successfully adds a route to the noEncap interface", func() {
+		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "172.0.2.2",
+		})
+
+		noencapMgr.routeMgr.OnParentDeviceUpdate("eth0")
+
+		Expect(noencapMgr.routeMgr.ParentIfaceAddr()).NotTo(BeZero())
+		Expect(noencapMgr.routeMgr.ParentDevice()).NotTo(BeEmpty())
+		noEncapDev, err := noencapMgr.routeMgr.DetectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(noEncapDev).NotTo(BeNil())
+
+		link, addr, err := noencapMgr.device(noEncapDev)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).To(BeNil())
+		Expect(addr).To(BeZero())
+
+		Expect(noEncapDev).NotTo(BeNil())
+		Expect(err).NotTo(HaveOccurred())
+
+		noencapMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_NO_ENCAP,
+			Dst:         "192.168.0.3/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "172.0.2.2",
+			SameSubnet:  true,
+		})
+
+		noencapMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_NO_ENCAP,
+			Dst:         "192.168.0.100/26",
+			DstNodeName: "node1",
+			DstNodeIp:   "172.0.0.2",
+			SameSubnet:  true,
+		})
+
+		// Borrowed /32 should not be programmed as blackhole.
+		noencapMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_NO_ENCAP,
+			Dst:         "192.168.0.10/32",
+			DstNodeName: "node1",
+			DstNodeIp:   "172.0.0.2",
+			SameSubnet:  true,
+		})
+
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+
+		err = noencapMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(0))
+
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone][0]).To(Equal(
+			routetable.Target{
+				Type: "blackhole",
+				RouteKey: routetable.RouteKey{
+					CIDR: ip.MustParseCIDROrIP("192.168.0.100/26"),
+				},
+				Protocol: 80,
+			}))
+
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes["eth0"][0]).To(Equal(
+			routetable.Target{
+				Type: "noencap",
+				RouteKey: routetable.RouteKey{
+					CIDR: ip.MustParseCIDROrIP("192.168.0.0/26"),
+				},
+				GW:       ip.FromString("172.0.2.2"),
+				Protocol: 80,
+			}))
+	})
+
+	It("successfully adds a IPv6 route to the noEncap interface", func() {
+		noencapMgrV6.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv6Addr: "fc00:10:96::2",
+		})
+		noencapMgrV6.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv6Addr: "fc00:10:10::1",
+		})
+
+		noencapMgrV6.routeMgr.OnParentDeviceUpdate("eth0")
+
+		Expect(noencapMgrV6.routeMgr.ParentIfaceAddr()).NotTo(BeZero())
+		Expect(noencapMgrV6.routeMgr.ParentDevice()).NotTo(BeEmpty())
+		noEncapDev, err := noencapMgrV6.routeMgr.DetectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(noEncapDev).NotTo(BeNil())
+
+		link, addr, err := noencapMgrV6.device(noEncapDev)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).To(BeNil())
+		Expect(addr).To(BeZero())
+
+		Expect(noEncapDev).NotTo(BeNil())
+		Expect(err).NotTo(HaveOccurred())
+
+		noencapMgrV6.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_NO_ENCAP,
+			Dst:         "dead:beef::2:10/112",
+			DstNodeName: "node2",
+			DstNodeIp:   "fc00:10:10::1",
+			SameSubnet:  true,
+		})
+
+		// Borrowed /32 should not be programmed as blackhole.
+		noencapMgrV6.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_NO_ENCAP,
+			Dst:         "dead:beef::10:30/128",
+			DstNodeName: "node1",
+			DstNodeIp:   "fc00:10:96::2",
+			SameSubnet:  true,
+		})
+
+		noencapMgrV6.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_NO_ENCAP,
+			Dst:         "dead:beef::1:30/112",
+			DstNodeName: "node1",
+			DstNodeIp:   "fc00:10:96::2",
+			SameSubnet:  true,
+		})
+
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
+
+		err = noencapMgrV6.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(0))
+
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone][0]).To(Equal(
+			routetable.Target{
+				Type: "blackhole",
+				RouteKey: routetable.RouteKey{
+					CIDR: ip.MustParseCIDROrIP("dead:beef::1:30/112"),
+				},
+				Protocol: 80,
+			}))
+
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes["eth0"][0]).To(Equal(
+			routetable.Target{
+				Type: "noencap",
+				RouteKey: routetable.RouteKey{
+					CIDR: ip.MustParseCIDROrIP("dead:beef::2:10/112"),
+				},
+				GW:       ip.FromString("fc00:10:10::1"),
+				Protocol: 80,
+			}))
+	})
+
+	It("clears the parent address when the local host loses its IPv4 address", func() {
+		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		Expect(noencapMgr.routeMgr.ParentIfaceAddr()).To(Equal("172.0.0.2"))
+
+		// The Node is still there, but it no longer has an IPv4 address (say
+		// its BGP IPv4Address was removed and it has no v4 InternalIP), so the
+		// calc graph sends an update with an empty address rather than a
+		// remove.  Keeping the old address would leave the device-sync
+		// goroutine hunting for one that is no longer on any link.
+		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+		})
+		Expect(noencapMgr.routeMgr.ParentIfaceAddr()).To(BeEmpty())
+		_, err := noencapMgr.routeMgr.DetectParentIface()
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("clears the parent address when the local host loses its IPv6 address", func() {
+		noencapMgrV6.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv6Addr: "fc00:10:96::2",
+		})
+		Expect(noencapMgrV6.routeMgr.ParentIfaceAddr()).To(Equal("fc00:10:96::2"))
+
+		// A single HostMetadataUpdate carries both families, so a node that
+		// drops to IPv4-only shows up at the IPv6 manager as an update with an
+		// empty Ipv6Addr.
+		noencapMgrV6.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		Expect(noencapMgrV6.routeMgr.ParentIfaceAddr()).To(BeEmpty())
+	})
+
+	It("ignores host metadata for other hosts", func() {
+		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+		})
+		Expect(noencapMgr.routeMgr.ParentIfaceAddr()).To(Equal("172.0.0.2"))
+	})
+})
