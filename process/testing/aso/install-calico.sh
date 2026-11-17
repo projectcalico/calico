@@ -80,7 +80,7 @@ LOCAL_MANIFESTS_DIR="${SCRIPT_CURRENT_DIR}/../../../manifests"
 # Makefile; recompute it the same way as a fallback so the chart filename matches
 # bin/tigera-operator-${GIT_VERSION}.tgz (built at the repo root by 'make chart').
 : "${REPO_ROOT:=$( cd "${SCRIPT_CURRENT_DIR}/../../.." >/dev/null 2>&1 && pwd -P )}"
-: "${GIT_VERSION:=$(git -C "${REPO_ROOT}" describe --tags --dirty --long --always --abbrev=12)}"
+: "${GIT_VERSION:=$(git -C "${REPO_ROOT}" describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --dirty --long --always --abbrev=12)}"
 
 if [ ${PRODUCT} == 'calient' ]; then
     RELEASE_BASE_URL="https://downloads.tigera.io/ee/${RELEASE_STREAM}"

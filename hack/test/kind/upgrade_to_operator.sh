@@ -33,7 +33,7 @@
 : ${kubectl:=${REPO_ROOT}/hack/test/kind/kubectl}
 
 INFRA_DIR=${REPO_ROOT}/hack/test/kind/infra
-GIT_VERSION=${GIT_VERSION:-$(git -C "${REPO_ROOT}" describe --tags --dirty --always --abbrev=12)}
+GIT_VERSION=${GIT_VERSION:-$(git -C "${REPO_ROOT}" describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --dirty --always --abbrev=12)}
 HELM=${REPO_ROOT}/bin/helm
 CHART=${REPO_ROOT}/bin/tigera-operator-${GIT_VERSION}.tgz
 VALUES_FILE=${VALUES_FILE:-${INFRA_DIR}/values-migration.yaml}
