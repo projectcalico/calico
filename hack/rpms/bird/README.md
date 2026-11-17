@@ -11,7 +11,7 @@ BIRD 1.6.8 is the last release of the BIRD 1.6 line. The patches are the changes
 
 The RPM is `bird-1.6.8-N.tigera`, and BIRD reports `1.6.8-N.tigera` as its version. `N` is `calico_release` in `bird.spec`. Raise it whenever a patch is added, removed or changed.
 
-The image tag is a hash of this directory's build inputs, so it changes with any of them. `CalicoBIRD` in `e2e/pkg/utils/images/images.go` names the tag, and a test there fails until it is updated.
+The image tag is a hash of this directory's build inputs, so it changes with any of them. The Makefiles and CI scripts work it out. The e2e tests cannot, so `make generate` writes it into `e2e/pkg/utils/images/zz_generated.bird.go`. Run `make generate` after any change here, and commit the result.
 
 ## Source availability
 
