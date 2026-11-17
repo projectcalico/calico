@@ -70,15 +70,6 @@ var (
 	containerIDFmt   = "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
 	containerIDRegex = regexp.MustCompile("^" + containerIDFmt + "$")
 
-	// NetworkPolicy names must either be a simple DNS1123 label format (nameLabelFmt), or
-	// nameLabelFmt.nameLabelFmt (with a single dot), or
-	// must be the standard name format (nameRegex) prefixed with "knp.default" or "ossg.default".
-	networkPolicyNameRegex = regexp.MustCompile("^((" + nameLabelFmt + ")(\\." + nameLabelFmt + ")?|((?:knp|ossg)\\.default\\.(" + nameSubdomainFmt + ")))$")
-
-	// GlobalNetworkPolicy names must be a simple DNS1123 label format (nameLabelFmt) or
-	// have a single dot.
-	globalNetworkPolicyNameRegex = regexp.MustCompile("^(" + nameLabelFmt + "\\.)?" + nameLabelFmt + "$")
-
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
 	prometheusHostRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
 
@@ -1367,14 +1358,13 @@ func validateNetworkPolicy(structLevel validator.StructLevel) {
 		)
 	}
 
-	// Uses the k8s DN1123 label format for policy names (plus knp.default prefixed k8s policies).
-	matched := networkPolicyNameRegex.MatchString(np.Name)
+	matched := nameRegex.MatchString(np.Name)
 	if !matched {
 		structLevel.ReportError(
 			reflect.ValueOf(np.Name),
 			"Metadata.Name",
 			"",
-			reason("name must consist of lower case alphanumeric characters or '-' (regex: "+nameLabelFmt+")"),
+			reason("name must consist of lower case alphanumeric characters, '-' or '.' (regex: "+nameSubdomainFmt+")"),
 			"",
 		)
 	}
@@ -1399,14 +1389,13 @@ func validateStagedNetworkPolicy(structLevel validator.StructLevel) {
 		)
 	}
 
-	// Uses the k8s DN1123 label format for policy names (plus knp.default prefixed k8s policies).
-	matched := networkPolicyNameRegex.MatchString(staged.Name)
+	matched := nameRegex.MatchString(staged.Name)
 	if !matched {
 		structLevel.ReportError(
 			reflect.ValueOf(staged.Name),
 			"Metadata.Name",
 			"",
-			reason("name must consist of lower case alphanumeric characters or '-' (regex: "+nameLabelFmt+")"),
+			reason("name must consist of lower case alphanumeric characters, '-' or '.' (regex: "+nameSubdomainFmt+")"),
 			"",
 		)
 	}
@@ -1539,14 +1528,13 @@ func validateGlobalNetworkPolicy(structLevel validator.StructLevel) {
 		)
 	}
 
-	// Uses the k8s DN1123 label format for policy names.
-	matched := globalNetworkPolicyNameRegex.MatchString(gnp.Name)
+	matched := nameRegex.MatchString(gnp.Name)
 	if !matched {
 		structLevel.ReportError(
 			reflect.ValueOf(gnp.Name),
 			"Metadata.Name",
 			"",
-			reason("name must consist of lower case alphanumeric characters or '-' (regex: "+nameLabelFmt+")"),
+			reason("name must consist of lower case alphanumeric characters, '-' or '.' (regex: "+nameSubdomainFmt+")"),
 			"",
 		)
 	}
@@ -1570,14 +1558,13 @@ func validateStagedGlobalNetworkPolicy(structLevel validator.StructLevel) {
 		)
 	}
 
-	// Uses the k8s DN1123 label format for policy names.
-	matched := globalNetworkPolicyNameRegex.MatchString(staged.Name)
+	matched := nameRegex.MatchString(staged.Name)
 	if !matched {
 		structLevel.ReportError(
 			reflect.ValueOf(staged.Name),
 			"Metadata.Name",
 			"",
-			reason("name must consist of lower case alphanumeric characters or '-' (regex: "+nameLabelFmt+")"),
+			reason("name must consist of lower case alphanumeric characters, '-' or '.' (regex: "+nameSubdomainFmt+")"),
 			"",
 		)
 	}
