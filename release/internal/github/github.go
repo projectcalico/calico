@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/defaults"
 )
 
 const host = "github.com"
@@ -36,6 +37,10 @@ var TokenEnvVars = []string{"GITHUB_TOKEN", "GH_TOKEN"}
 // Authenticated reports whether a release can reach the GitHub API.
 func Authenticated(r command.CommandRunner) bool {
 	return resolveToken(r) != ""
+}
+
+func DefaultRepo() Repo {
+	return Repo{Org: defaults.Organization(), Name: defaults.Repo()}
 }
 
 type Repo struct {

@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/steps"
 )
 
@@ -55,38 +54,6 @@ type Upload struct {
 // A handler that finds its own content does not implement this.
 type Validator interface {
 	Validate(u Upload) error
-}
-
-// Only a handler that publishes files where users download them lists them.
-type ArtifactLister interface {
-	Artifacts(src string) ([]outputs.ArtifactFile, error)
-}
-
-// Metadata is the artifacts' section of the release metadata.
-func Metadata(pipeline []Upload) ([]outputs.Artifact, error) {
-	files, err := artifactFiles(pipeline)
-	if err != nil {
-		return nil, err
-	}
-	return outputs.DescribeArtifacts(files)
-}
-
-// artifactFiles lists the files the pipeline publishes for download, with the
-// URL each will be served at.
-func artifactFiles(pipeline []Upload) ([]outputs.ArtifactFile, error) {
-	var files []outputs.ArtifactFile
-	for _, u := range pipeline {
-		l, ok := u.Handler.(ArtifactLister)
-		if u.Skip || !ok {
-			continue
-		}
-		f, err := l.Artifacts(u.Source)
-		if err != nil {
-			return nil, fmt.Errorf("artifacts of %s: %w", u.label(), err)
-		}
-		files = append(files, f...)
-	}
-	return files, nil
 }
 
 // Falls back to the destination, so a log line reads without a Name.

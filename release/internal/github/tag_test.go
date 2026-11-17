@@ -124,6 +124,14 @@ func TestTagUpload(t *testing.T) {
 		}
 	})
 
+	t.Run("a tag without a remote fails validation", func(t *testing.T) {
+		rec := &command.Recorder{Reply: func(command.Call) (string, error) { return localSHA, nil }}
+		u := TagUpload(TagOptions{Tag: tag, Runner: rec})
+		if err := u.Handler.(distribution.Validator).Validate(u); err == nil || !strings.Contains(err.Error(), "remote") {
+			t.Errorf("Validate() = %v, want a missing-remote error", err)
+		}
+	})
+
 	t.Run("passes the step name and skip through", func(t *testing.T) {
 		u, _ := upload(TagOptions{Skip: true}, nil)
 		if u.Name != TagStep || !u.Skip {

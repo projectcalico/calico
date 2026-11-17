@@ -63,11 +63,15 @@ type Tag struct {
 func (t Tag) Name() string { return "git tag" }
 
 func (t Tag) Validate(distribution.Upload) error {
+	var errs []error
+	if t.Remote == "" {
+		errs = append(errs, fmt.Errorf("no git remote for tag %s", t.Tag))
+	}
 	_, err := t.git.Resolve("refs/tags/" + t.Tag)
 	if errors.Is(err, command.ErrGitRefNotFound) {
-		return fmt.Errorf("no local tag %s", t.Tag)
+		err = fmt.Errorf("no local tag %s", t.Tag)
 	}
-	return err
+	return errors.Join(append(errs, err)...)
 }
 
 // Publish skips a tag the remote already has at the same commit, so a rerun

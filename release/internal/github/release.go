@@ -103,6 +103,13 @@ func (r *Releases) Create(ctx context.Context, o CreateOptions) (*github.Reposit
 		return nil, err
 	case found && !existing.GetDraft():
 		return nil, fmt.Errorf("%s release %s is already published; refusing to modify it", r.repo, o.Tag)
+	case found && existing.GetPrerelease() != o.Prerelease:
+		edit := &github.RepositoryRelease{Prerelease: github.Bool(o.Prerelease)}
+		if _, _, err := r.svc.EditRelease(ctx, r.repo.Org, r.repo.Name, existing.GetID(), edit); err != nil {
+			return nil, fmt.Errorf("updating %s draft %s: %w", r.repo, o.Tag, err)
+		}
+		existing.Prerelease = edit.Prerelease
+		return existing, nil
 	case found:
 		return existing, nil
 	}
@@ -169,8 +176,8 @@ func (r *Releases) reconcile(ctx context.Context, attached []*github.ReleaseAsse
 	return false, nil
 }
 
-// UploadAsset attaches one file. GitHub rejects a name it already holds, so a
-// re-run clears what it is replacing with DeleteAssets first.
+// UploadAsset attaches one file. GitHub rejects a name the release already
+// holds, so the caller removes an existing asset first.
 func (r *Releases) UploadAsset(ctx context.Context, releaseID int64, path string) error {
 	name := filepath.Base(path)
 	f, err := os.Open(path)

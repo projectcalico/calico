@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	metadataFileName = "metadata.yaml"
+	MetadataFileName = "metadata.yaml"
 
 	MetadataStep = "metadata"
 )
@@ -57,7 +57,7 @@ func BuildMetadata(r Record, dir string) error {
 	if err != nil {
 		return fmt.Errorf("metadata: %w", err)
 	}
-	path := filepath.Join(dir, metadataFileName)
+	path := filepath.Join(dir, MetadataFileName)
 	if err := os.WriteFile(path, bs, 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
@@ -298,13 +298,13 @@ type ArtifactFile struct {
 	URL  string
 }
 
-// DescribeArtifacts leaves out the metadata file, because it cannot carry its
-// own hash.
+// DescribeArtifacts leaves out the metadata and sums files: each describes the
+// others, so neither can carry its own hash.
 func DescribeArtifacts(files []ArtifactFile) ([]Artifact, error) {
 	var out []Artifact
 	for _, file := range files {
 		name := file.Name
-		if name == metadataFileName {
+		if name == MetadataFileName || name == SumsFileName {
 			continue
 		}
 		f, err := os.Open(file.Path)
@@ -322,11 +322,11 @@ func DescribeArtifacts(files []ArtifactFile) ([]Artifact, error) {
 	return out, nil
 }
 
-// ArtifactsAt lists the files the filters pick in dir as artifacts served under baseURL.
-func ArtifactsAt(dir, baseURL string, filters ...fsutil.FileFilter) ([]ArtifactFile, error) {
-	paths, err := fsutil.ListFiles(dir, filters...)
+// Artifacts describes the files the filters pick in dir, served under baseURL.
+func Artifacts(dir, baseURL string, filters ...fsutil.FileFilter) ([]Artifact, error) {
+	paths, err := fsutil.ListFiles(dir, append(slices.Clone(filters), fsutil.Exclude(MetadataFileName, SumsFileName))...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list artifacts: %w", err)
 	}
 	files := make([]ArtifactFile, len(paths))
 	for i, path := range paths {
@@ -336,5 +336,5 @@ func ArtifactsAt(dir, baseURL string, filters ...fsutil.FileFilter) ([]ArtifactF
 		}
 		files[i] = ArtifactFile{Name: filepath.Base(path), Path: path, URL: u}
 	}
-	return files, nil
+	return DescribeArtifacts(files)
 }

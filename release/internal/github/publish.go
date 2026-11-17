@@ -19,8 +19,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"text/template"
 
@@ -52,12 +50,11 @@ Release notes can be found [{{.Link.Text}}]({{.Link.URL}})
 {{end}}`
 
 var (
-	_ distribution.Handler        = Release{}
-	_ distribution.ArtifactLister = Release{}
-	_ distribution.Validator      = Release{}
+	_ distribution.Handler   = Release{}
+	_ distribution.Validator = Release{}
 )
 
-var AssetsFilter = []fsutil.FileFilter{fsutil.DirFiles, fsutil.Exclude(outputs.SumsFileName)}
+var AssetsFilter = []fsutil.FileFilter{fsutil.DirFiles}
 
 // ReleaseOptions describes a GitHub release. An empty Source makes a release
 // with only a body.
@@ -65,9 +62,7 @@ type ReleaseOptions struct {
 	Repo    Repo
 	Version version.Version
 	Source  string
-	// Filter picks the files in Source to attach; nil attaches all top-level files.
-	Filter []fsutil.FileFilter
-	Notes  ReleaseNotes
+	Notes   ReleaseNotes
 
 	Skip   bool
 	Draft  bool
@@ -94,11 +89,13 @@ type Link struct {
 	URL  string
 }
 
-// ReleaseUpload creates a distribution.Upload for a GitHub release, including the required steps.
-// Default required steps are the checksums, the metadata, and the tag.
+// ReleaseUpload returns a distribution.Upload for a GitHub release, setting up its dependencies and handler.
 func ReleaseUpload(o ReleaseOptions, requires ...string) distribution.Upload {
 	ver := o.Version.String()
-	requires = append(requires, outputs.ChecksumStep, outputs.MetadataStep, TagStep)
+	if o.Source != "" {
+		requires = append(requires, outputs.ChecksumStep, outputs.MetadataStep)
+	}
+	requires = append(requires, TagStep)
 	return distribution.Upload{
 		Name:     ReleaseStep,
 		Source:   o.Source,
@@ -107,7 +104,6 @@ func ReleaseUpload(o ReleaseOptions, requires ...string) distribution.Upload {
 		Handler: Release{
 			Repo:   o.Repo,
 			Tag:    ver,
-			Filter: o.Filter,
 			Notes:  o.Notes,
 			Draft:  o.Draft,
 			DryRun: o.DryRun,
@@ -117,10 +113,9 @@ func ReleaseUpload(o ReleaseOptions, requires ...string) distribution.Upload {
 }
 
 type Release struct {
-	Repo   Repo
-	Tag    string
-	Title  string
-	Filter []fsutil.FileFilter
+	Repo  Repo
+	Tag   string
+	Title string
 
 	Notes ReleaseNotes
 
@@ -139,6 +134,9 @@ func (d Release) Validate(distribution.Upload) error {
 	var errs []error
 	if err := d.Repo.Validate(); err != nil {
 		errs = append(errs, err)
+	}
+	if _, err := d.semver(d.Tag); err != nil {
+		errs = append(errs, fmt.Errorf("parse release tag %q: %w", d.Tag, err))
 	}
 	if d.Notes.Link.Text == "" || d.Notes.Link.URL == "" {
 		errs = append(errs, fmt.Errorf("release notes need link text and a URL"))
@@ -180,25 +178,16 @@ func (d Release) Publish(ctx context.Context, src string) error {
 	}
 	var files []string
 	if src != "" {
-		if files, err = fsutil.ListFiles(src, d.filter()...); err != nil {
+		if files, err = fsutil.ListFiles(src, AssetsFilter...); err != nil {
 			return fmt.Errorf("get files: %w", err)
 		}
 		if len(files) == 0 {
-			return fmt.Errorf("no release files %s", d.Tag)
+			return fmt.Errorf("no release files in %s", src)
 		}
 	}
 	if d.DryRun {
 		d.log().WithFields(logrus.Fields{"files": files, "prerelease": prerelease}).Infof("Dry run, not creating %s", d.Name())
 		return nil
-	}
-	if src != "" {
-		// Written by an earlier step, and excluded from the listing so a re-run
-		// does not checksum it into itself.
-		sums := filepath.Join(src, outputs.SumsFileName)
-		if _, err := os.Stat(sums); err != nil {
-			return fmt.Errorf("%s: %w", outputs.SumsFileName, err)
-		}
-		files = append(files, sums)
 	}
 	gh, err := d.client()
 	if err != nil {
@@ -244,21 +233,6 @@ func (d Release) Publish(ctx context.Context, src string) error {
 		}
 	}
 	return gh.Publish(ctx, d.Tag, latest)
-}
-
-func (d Release) Artifacts(src string) ([]outputs.ArtifactFile, error) {
-	if src == "" {
-		return nil, nil
-	}
-	return outputs.ArtifactsAt(src, d.Repo.DownloadURL(d.Tag), d.filter()...)
-}
-
-// The sums file is left out here; Publish attaches it last.
-func (d Release) filter() []fsutil.FileFilter {
-	if d.Filter == nil {
-		return AssetsFilter
-	}
-	return d.Filter
 }
 
 func (d Release) makeLatest(ctx context.Context) (bool, error) {
