@@ -109,10 +109,6 @@ var (
 	windowsBranchTagDirs = slices.Clone(images.WindowsReleaseDirs)
 )
 
-func defaultRepo() github.Repo {
-	return github.Repo{Org: defaults.Organization(), Name: defaults.Repo()}
-}
-
 func NewManager(opts ...Option) (*CalicoManager, error) {
 	// Configure defaults here.
 	b := &CalicoManager{
@@ -367,6 +363,11 @@ func (r *CalicoManager) mustBuildValidation() error {
 	if r.recordsDir == "" {
 		errs = append(errs, fmt.Errorf("no records directory specified"))
 	}
+	if !r.isHashRelease || r.releaseNotes {
+		if err := r.githubRepo.Validate(); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	if r.isHashRelease {
 		return errors.Join(errs...)
 	}
@@ -425,7 +426,8 @@ func (r *CalicoManager) buildPlan() []plan.Node {
 			Rollback: func() error { return r.DeleteTag(r.calicoVersion.String()) },
 		})
 	}
-	nodes = append(nodes,
+	nodes = append(
+		nodes,
 		r.operatorNode(),
 		plan.Node{Name: images.Step, When: func() bool { return r.images }, Do: r.buildContainerImages},
 		plan.Node{Name: binaries.Step, When: func() bool { return r.binaries || (r.e2eBinaries && r.isHashRelease) }, Do: r.buildBinaries},
@@ -494,7 +496,7 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 	if err != nil {
 		return err
 	}
-	artifacts, err := distribution.Metadata(r.uploads())
+	artifacts, err := r.artifacts(dir)
 	if err != nil {
 		return err
 	}
@@ -534,6 +536,21 @@ func (r *CalicoManager) sourceMetadata() (outputs.Source, error) {
 		src.Tag = r.calicoVersion.String()
 	}
 	return src, nil
+}
+
+// artifacts describes the files in dir that users download, at the URL the
+// release serves them from.
+func (r *CalicoManager) artifacts(dir string) ([]outputs.Artifact, error) {
+	var base string
+	switch {
+	case r.isHashRelease && r.publishHashrelease:
+		base = r.hashrelease.URL()
+	case !r.isHashRelease && r.githubRelease:
+		base = r.githubRepo.DownloadURL(r.calicoVersion.String())
+	default:
+		return nil, nil
+	}
+	return outputs.Artifacts(dir, base, github.AssetsFilter...)
 }
 
 // Each chart is recorded at the first registry it was published to.
@@ -812,7 +829,8 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 		{Handler: distribution.Publisher{Kind: images.Step, Action: r.imagesAction()}, Requires: r.beforeImagesPublish()},
 		{Handler: distribution.Publisher{Kind: charts.Step, Action: r.publishHelmCharts}},
 	}
-	uploads = append(uploads,
+	uploads = append(
+		uploads,
 		distribution.Upload{Handler: distribution.Preparer{Kind: outputs.MetadataStep, Action: r.buildMetadata}},
 		// After metadata, so the sums cover it. Both destinations ship the
 		// same directory, so neither can own this.
@@ -849,11 +867,7 @@ func (r *CalicoManager) buildMetadata() error {
 
 // Users verify a download with: sha256sum -c --ignore-missing SHA256SUMS
 func (r *CalicoManager) writeChecksums() error {
-	files, err := fsutil.ListFiles(r.uploadDir(), github.AssetsFilter...)
-	if err != nil {
-		return fmt.Errorf("write checksum: %w", err)
-	}
-	return outputs.SHA256Sums(r.runner, files, r.uploadDir())
+	return outputs.SHA256Sums(r.runner, r.uploadDir(), github.AssetsFilter...)
 }
 
 // Check general prerequisites for cutting and publishing a release.
@@ -1150,7 +1164,8 @@ func (r *CalicoManager) buildBinaries() error {
 		logrus.Info("Skip building binaries")
 		return nil
 	}
-	if err := binaries.Build(r.repoRoot, r.calicoVersion.String(),
+	if err := binaries.Build(
+		r.repoRoot, r.calicoVersion.String(),
 		builders,
 		binaries.WithRunner(r.runner),
 		binaries.WithLogsDir(r.logsDir),
@@ -1274,7 +1289,9 @@ func (r *CalicoManager) resolveOperator() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("operator resolve refs writer: %w", err)
 	}
-	err = operator.Resolve(r.operatorConfig(), operator.Variants(),
+	err = operator.Resolve(
+		r.operatorConfig(),
+		operator.Variants(),
 		operator.WithRunner(r.runner),
 		operator.WithArches(r.architectures...),
 		operator.WithLogsDir(r.logsDir),
@@ -1455,7 +1472,9 @@ func (r *CalicoManager) publishOperatorBranchTag(branch string) error {
 	}
 
 	// The operator publishes to its own registries, so it takes a pass of its own.
-	if err := operator.PublishBranchTag(r.operatorConfig(), operator.Variants(), branch,
+	if err := operator.PublishBranchTag(
+		r.operatorConfig(),
+		operator.Variants(), branch,
 		operator.WithRunner(r.runner),
 		operator.WithArches(r.architectures...),
 		operator.WithLogsDir(r.logsDir),
@@ -1860,7 +1879,7 @@ func (r *CalicoManager) createPrepPR(baseBranch, prepBranch string) error {
 		"--base", baseBranch,
 		"--head", prepBranch,
 	}
-	if r.githubRepo == defaultRepo() {
+	if r.githubRepo == github.DefaultRepo() {
 		args = append(args, []string{
 			"--reviewer", fmt.Sprintf("%s/release-team", r.githubRepo.Org),
 			"--label", "release-note-not-required,docs-not-required",

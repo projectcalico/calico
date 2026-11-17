@@ -32,6 +32,7 @@ func TestReleasePublishRerun(t *testing.T) {
 	// A release is re-run after a failure, so a second pass must not checksum the
 	// sums file from the first, nor hand the same asset to the uploader twice.
 	t.Run("a rerun is idempotent", func(t *testing.T) {
+		useAssetsFilter(t, fsutil.DirFiles)
 		dir := t.TempDir()
 		for _, n := range []string{"release.tgz", "metadata.yaml"} {
 			if err := os.WriteFile(filepath.Join(dir, n), []byte(n), 0o644); err != nil {
@@ -44,11 +45,7 @@ func TestReleasePublishRerun(t *testing.T) {
 
 		var first string
 		for run := range 2 {
-			files, err := fsutil.ListFiles(dir, AssetsFilter...)
-			if err != nil {
-				t.Fatalf("run %d: ListFiles: %v", run, err)
-			}
-			if err := outputs.SHA256Sums(nil, files, dir); err != nil {
+			if err := outputs.SHA256Sums(nil, dir, AssetsFilter...); err != nil {
 				t.Fatalf("run %d: SHA256Sums: %v", run, err)
 			}
 			svc.uploaded = nil

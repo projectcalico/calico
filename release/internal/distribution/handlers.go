@@ -23,9 +23,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
-	"github.com/projectcalico/calico/release/internal/outputs"
 )
 
 const MutableCachePolicy = "max-age=60, s-maxage=300, stale-while-revalidate=60"
@@ -206,10 +204,6 @@ func (d HashreleaseServer) Publish(ctx context.Context, src string) error {
 		return nil
 	}
 	return hashreleaseserver.Record(d.ProductCode, d.Release, d.Config)
-}
-
-func (d HashreleaseServer) Artifacts(src string) ([]outputs.ArtifactFile, error) {
-	return outputs.ArtifactsAt(src, d.Release.URL(), fsutil.DirFiles, fsutil.Exclude(outputs.SumsFileName))
 }
 
 func (d HashreleaseServer) Validate(u Upload) error {

@@ -257,6 +257,7 @@ func TestBuild(t *testing.T) {
 			m.calicoVersion = testVersion(t, ver)
 			m.tmpDir = t.TempDir()
 			m.isHashRelease = tt.isHashRelease
+			m.githubRepo = calicoRepo
 			m.images = false
 			m.binaries = true
 			f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30", nil)
@@ -433,8 +434,8 @@ func TestReleasePrereqs(t *testing.T) {
 		}})
 		t.Cleanup(func() { defaults.UseRunner(nil) })
 		repo := github.Repo{Org: "example", Name: "fork"}
-		if repo != defaultRepo() {
-			t.Fatalf("defaultRepo() = %v, want %v", defaultRepo(), repo)
+		if got := github.DefaultRepo(); got != repo {
+			t.Fatalf("github.DefaultRepo() = %v, want %v", got, repo)
 		}
 		if err := newManager(t, repo).releasePrereqs(); err != nil {
 			t.Errorf("releasePrereqs() = %v, want nil", err)
@@ -1940,6 +1941,35 @@ func TestOutputDirRequiredEvenWithoutValidation(t *testing.T) {
 	}
 }
 
+func TestMustBuildValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		hashrelease bool
+		notes       bool
+		wantRepoErr bool
+	}{
+		{name: "a release needs a GitHub repo", wantRepoErr: true},
+		{name: "a hashrelease with notes needs a GitHub repo", hashrelease: true, notes: true, wantRepoErr: true},
+		{name: "a hashrelease without notes needs no GitHub repo", hashrelease: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &CalicoManager{
+				runner:        newFakeRunner(),
+				repoRoot:      "/repo",
+				calicoVersion: testVersion(t, "v3.30.0"),
+				outputDir:     t.TempDir(),
+				recordsDir:    t.TempDir(),
+				isHashRelease: tc.hashrelease,
+				releaseNotes:  tc.notes,
+			}
+			err := r.mustBuildValidation()
+			if got := err != nil && strings.Contains(err.Error(), "no github"); got != tc.wantRepoErr {
+				t.Errorf("mustBuildValidation() = %v, want a repo error: %v", err, tc.wantRepoErr)
+			}
+		})
+	}
+}
+
 func TestPublishPrereqs(t *testing.T) {
 	t.Run("a missing GitHub repo fails with validation off", func(t *testing.T) {
 		r := &CalicoManager{runner: newFakeRunner(), repoRoot: "/repo", remote: "origin", outputDir: t.TempDir(), recordsDir: t.TempDir()}
@@ -2418,6 +2448,55 @@ func TestBuildMetadata(t *testing.T) {
 		}
 		return md, nil
 	}
+
+	t.Run("lists the files users download at the release's URL", func(t *testing.T) {
+		for _, tc := range []struct {
+			name    string
+			set     func(*CalicoManager)
+			wantURL string
+		}{
+			{name: "github release", set: func(r *CalicoManager) { r.githubRelease = true }, wantURL: "https://github.com/projectcalico/calico/releases/download/v3.30.0/release.tgz"},
+			{name: "hashrelease", set: func(r *CalicoManager) {
+				r.isHashRelease, r.publishHashrelease = true, true
+				r.hashrelease.Name = "2026-10-05-v3-30-0"
+			}, wantURL: hashreleaseserver.HashreleaseURL("2026-10-05-v3-30-0") + "/release.tgz"},
+			{name: "skipped github release", set: func(*CalicoManager) {}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				r := newManager(t)
+				record(t, r.recordsDir, images.PublishStep, nodeRef+"@"+nodeDigest)
+				tc.set(r)
+				dir := t.TempDir()
+				for _, n := range []string{"release.tgz", outputs.SumsFileName} {
+					if err := os.WriteFile(filepath.Join(dir, n), []byte("hello"), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := r.BuildMetadata(dir); err != nil {
+					t.Fatal(err)
+				}
+				b, err := os.ReadFile(filepath.Join(dir, outputs.MetadataFileName))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var md outputs.Metadata
+				if err := yaml.Unmarshal(b, &md); err != nil {
+					t.Fatal(err)
+				}
+				var got []string
+				for _, a := range md.Artifacts {
+					got = append(got, a.URL)
+				}
+				var want []string
+				if tc.wantURL != "" {
+					want = []string{tc.wantURL}
+				}
+				if diff := cmp.Diff(want, got); diff != "" {
+					t.Errorf("artifact URLs (-want +got):\n%s", diff)
+				}
+			})
+		}
+	})
 
 	t.Run("describes each component from the step that published it", func(t *testing.T) {
 		r := newManager(t)
