@@ -63,13 +63,16 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/flowtable"
 	"github.com/projectcalico/calico/felix/dataplane/linux/hostip"
 	"github.com/projectcalico/calico/felix/dataplane/linux/hostsipset"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipip"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/masq"
 	"github.com/projectcalico/calico/felix/dataplane/linux/modprobe"
+	"github.com/projectcalico/calico/felix/dataplane/linux/noencap"
 	"github.com/projectcalico/calico/felix/dataplane/linux/policy"
 	"github.com/projectcalico/calico/felix/dataplane/linux/procsys"
 	"github.com/projectcalico/calico/felix/dataplane/linux/proxyneigh"
 	"github.com/projectcalico/calico/felix/dataplane/linux/serviceloop"
+	"github.com/projectcalico/calico/felix/dataplane/linux/vxlan"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlan/vxlandefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/wireguardmgr"
 	"github.com/projectcalico/calico/felix/environment"
@@ -207,17 +210,17 @@ type InternalDataplane struct {
 	ipSets          []dpsets.IPSetsDataplane
 
 	ipipParentIfaceC chan string
-	ipipManager      *ipipManager
+	ipipManager      *ipip.Manager
 
-	noEncapManager        *noEncapManager
-	noEncapManagerV6      *noEncapManager
+	noEncapManager        *noencap.Manager
+	noEncapManagerV6      *noencap.Manager
 	noEncapParentIfaceC   chan string
 	noEncapParentIfaceCV6 chan string
 
 	vxlanParentIfaceC   chan string
 	vxlanParentIfaceCV6 chan string
-	vxlanManager        *vxlanManager
-	vxlanManagerV6      *vxlanManager
+	vxlanManager        *vxlan.Manager
+	vxlanManagerV6      *vxlan.Manager
 	vxlanFDBs           []*vxlanfdb.VXLANFDB
 
 	linkAddrsManagers []linkaddrs.Interface
@@ -669,14 +672,14 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 	// Start a noEncap manager if an IP pool with no encapsulation exists.
 	if config.ProgramNoEncapClusterRoutes && config.NoEncapNeeded {
 		log.Info("NoEncap IP pool present, starting thread to keep IPv4 noencap routes in sync.")
-		dp.noEncapManager = newNoEncapManager(
+		dp.noEncapManager = noencap.NewManager(
 			routeTableV4,
 			4,
 			config,
 			dp.loopSummarizer,
 		)
 		dp.noEncapParentIfaceC = make(chan string, 1)
-		go dp.noEncapManager.monitorParentDevice(
+		go dp.noEncapManager.MonitorParentDevice(
 			context.Background(),
 			time.Second*10,
 			dp.noEncapParentIfaceC,
@@ -685,14 +688,14 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 
 		if config.IPv6Enabled {
 			log.Info("NoEncap IP pool present, starting thread to keep IPv6 noencap routes in sync.")
-			dp.noEncapManagerV6 = newNoEncapManager(
+			dp.noEncapManagerV6 = noencap.NewManager(
 				routeTableV6,
 				6,
 				config,
 				dp.loopSummarizer,
 			)
 			dp.noEncapParentIfaceCV6 = make(chan string, 1)
-			go dp.noEncapManagerV6.monitorParentDevice(
+			go dp.noEncapManagerV6.MonitorParentDevice(
 				context.Background(),
 				time.Second*10,
 				dp.noEncapParentIfaceCV6,
@@ -715,9 +718,9 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 
 	dataplaneFeatures := featureDetector.GetFeatures()
 
-	var bpfVXLANOpts []vxlanMgrOption
+	var bpfVXLANOpts []vxlan.Option
 	if config.BPFEnabled && dataplaneFeatures.VXLANVNIFilter {
-		bpfVXLANOpts = append(bpfVXLANOpts, vxlanMgrWithVNIFilter(bpfep.OverlayTunnelID(&config.RulesConfig)))
+		bpfVXLANOpts = append(bpfVXLANOpts, vxlan.WithVNIFilter(bpfep.OverlayTunnelID(&config.RulesConfig)))
 	}
 
 	if config.RulesConfig.VXLANEnabled {
@@ -728,7 +731,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, vxlandefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout, fdbOpts...)
 		dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
 
-		dp.vxlanManager = newVXLANManager(
+		dp.vxlanManager = vxlan.NewManager(
 			ipSetsV4,
 			routeTableV4,
 			vxlanFDB,
@@ -744,7 +747,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 		if config.BPFEnabled {
 			vxlanMTU = 0
 		}
-		go dp.vxlanManager.keepVXLANDeviceInSync(
+		go dp.vxlanManager.KeepDeviceInSync(
 			context.Background(),
 			vxlanMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
@@ -754,7 +757,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 		dp.RegisterManager(dp.vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
-		go cleanUpVXLANDevice(vxlandefs.VXLANIfaceNameV4)
+		go vxlan.CleanUpDevice(vxlandefs.VXLANIfaceNameV4)
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -1233,7 +1236,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 		}
 
 		// Add a manager to keep the all-hosts IP set up to date.
-		dp.ipipManager = newIPIPManager(
+		dp.ipipManager = ipip.NewManager(
 			routeTableV4,
 			ipipdefs.IPIPIfaceName,
 			4,
@@ -1242,7 +1245,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 			dp.loopSummarizer,
 		)
 		dp.ipipParentIfaceC = make(chan string, 1)
-		go dp.ipipManager.keepIPIPDeviceInSync(
+		go dp.ipipManager.KeepDeviceInSync(
 			context.Background(),
 			config.IPIPMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
@@ -1254,7 +1257,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
 		if config.RulesConfig.FelixConfigIPIPEnabled == nil {
 			// Start a cleanup goroutine not to block felix if it needs to retry
-			go cleanUpIPIPAddrs()
+			go ipip.CleanUpAddrs()
 		}
 	}
 
@@ -1329,22 +1332,22 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 
 			var (
 				fdbOpts     []vxlanfdb.Option
-				vxlanMgrOps []vxlanMgrOption
+				vxlanMgrOps []vxlan.Option
 			)
 			if config.BPFEnabled {
 				// BPF mode uses the same device for both V4 and V6
 				vxlanName = vxlandefs.VXLANIfaceNameV4
 				vxlanMgrOps = append(vxlanMgrOps, bpfVXLANOpts...)
 				if dp.vxlanManager != nil {
-					vxlanMgrOps = append(vxlanMgrOps, vxlanMgrWithDualStack())
+					vxlanMgrOps = append(vxlanMgrOps, vxlan.WithDualStack())
 				}
 				fdbOpts = append(fdbOpts, vxlanfdb.WithNeighUpdatesOnly())
-				go cleanUpVXLANDevice(vxlandefs.VXLANIfaceNameV6)
+				go vxlan.CleanUpDevice(vxlandefs.VXLANIfaceNameV6)
 			}
 			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, vxlanName, featureDetector, config.NetlinkTimeout, fdbOpts...)
 			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDBV6)
 
-			dp.vxlanManagerV6 = newVXLANManager(
+			dp.vxlanManagerV6 = vxlan.NewManager(
 				ipSetsV6,
 				routeTableV6,
 				vxlanFDBV6,
@@ -1360,7 +1363,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 			if config.BPFEnabled {
 				vxlanMTU = 0
 			}
-			go dp.vxlanManagerV6.keepVXLANDeviceInSync(
+			go dp.vxlanManagerV6.KeepDeviceInSync(
 				context.Background(),
 				vxlanMTU,
 				dataplaneFeatures.ChecksumOffloadBroken,
@@ -1370,7 +1373,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 			dp.RegisterManager(dp.vxlanManagerV6)
 		} else {
 			// Start a cleanup goroutine not to block felix if it needs to retry
-			go cleanUpVXLANDevice(vxlandefs.VXLANIfaceNameV6)
+			go vxlan.CleanUpDevice(vxlandefs.VXLANIfaceNameV6)
 		}
 
 		ipsetsManagerV6.AddDataplane(ipSetsV6)

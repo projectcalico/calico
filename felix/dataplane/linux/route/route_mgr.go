@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package route
 
 import (
 	"bytes"
@@ -40,7 +40,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-type routeManager struct {
+type Manager struct {
 	// Our dependencies.
 	routeTable           routetable.Interface
 	routeClassTunnel     routetable.RouteClass
@@ -89,7 +89,7 @@ type routeManager struct {
 	vniFilterSupported bool
 }
 
-func newRouteManager(
+func NewManager(
 	mainRouteTable routetable.Interface,
 	routeClassTunnel routetable.RouteClass,
 	routeClassSameSubnet routetable.RouteClass,
@@ -100,8 +100,8 @@ func newRouteManager(
 	dpConfig dataplanedefs.Config,
 	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
-) *routeManager {
-	return &routeManager{
+) *Manager {
+	return &Manager{
 		hostname:             dpConfig.Hostname,
 		routeTable:           mainRouteTable,
 		routeClassTunnel:     routeClassTunnel,
@@ -116,7 +116,7 @@ func newRouteManager(
 		ippoolType:           ippoolType,
 		dpConfig:             dpConfig,
 		nlHandle:             nlHandle,
-		routeProtocol:        calculateRouteProtocol(dpConfig),
+		routeProtocol:        CalculateProtocol(dpConfig),
 		opRecorder:           opRecorder,
 		logCtx: logrus.WithFields(logrus.Fields{
 			"ipVersion":    ipVersion,
@@ -143,7 +143,7 @@ func blackholeRouteClass(ippoolType proto.IPPoolType) routetable.RouteClass {
 	}
 }
 
-func calculateRouteProtocol(dpConfig dataplanedefs.Config) netlink.RouteProtocol {
+func CalculateProtocol(dpConfig dataplanedefs.Config) netlink.RouteProtocol {
 	// For same-subnet, blackhole and ipip routes, we need a unique protocol
 	// to attach to the routes.  If the global DeviceRouteProtocol is set to
 	// a usable value, use that; otherwise, pick a safer default.  (For back
@@ -159,23 +159,23 @@ func calculateRouteProtocol(dpConfig dataplanedefs.Config) netlink.RouteProtocol
 	return routeProtocol
 }
 
-// isRemoteTunnelRoute returns true if the route update signifies a need to program
+// IsRemoteTunnel returns true if the route update signifies a need to program
 // a directly connected route on the VXLAN/IPIP device for a remote tunnel endpoint. This is needed
 // in a few cases in order to ensure host <-> pod connectivity over the tunnel.
 // This happens when tunnel addresses are selected from an IP pool with blocks of a single address.
-func isRemoteTunnelRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bool {
+func IsRemoteTunnel(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bool {
 	return msg.IpPoolType == ippoolType && // Ignore irrelevant messages.
 		isType(msg, proto.RouteType_REMOTE_TUNNEL) && isType(msg, proto.RouteType_REMOTE_WORKLOAD)
 }
 
 // If we receive a route for a borrowed tunnel IP, we need to make sure to program a route for it as it
 // won't be covered by the block route.
-func isBorrowedRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bool {
+func IsBorrowed(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bool {
 	return msg.IpPoolType == ippoolType && // Ignore irrelevant messages.
 		isType(msg, proto.RouteType_REMOTE_TUNNEL) && msg.Borrowed
 }
 
-func (m *routeManager) OnUpdate(protoBufMsg any) {
+func (m *Manager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.RouteUpdate:
 		// Check to make sure that we are dealing with messages of the correct IP version.
@@ -200,13 +200,13 @@ func (m *routeManager) OnUpdate(protoBufMsg any) {
 			m.routesDirty = true
 		}
 
-		if isRemoteTunnelRoute(msg, m.ippoolType) {
+		if IsRemoteTunnel(msg, m.ippoolType) {
 			m.logCtx.WithField("msg", msg).Debug("Route manager received route update for remote tunnel endpoint")
 			m.routesByDest[msg.Dst] = msg
 			m.routesDirty = true
 		}
 
-		if isBorrowedRoute(msg, m.ippoolType) {
+		if IsBorrowed(msg, m.ippoolType) {
 			m.logCtx.WithField("msg", msg).Debug("Route manager received route update for a borrowed address")
 			m.routesByDest[msg.Dst] = msg
 			m.routesDirty = true
@@ -241,30 +241,30 @@ func (m *routeManager) OnUpdate(protoBufMsg any) {
 
 // SetMaintainIPOnly makes the manager only assign its address to a tunnel device
 // that another manager creates and maintains.
-func (m *routeManager) SetMaintainIPOnly() {
+func (m *Manager) SetMaintainIPOnly() {
 	m.maintainIPOnly = true
 }
 
 // SetVNIFilter makes the tunnel device a VNI-filtering VXLAN device that accepts
 // exactly the given VNIs.
-func (m *routeManager) SetVNIFilter(vnis []uint32) {
+func (m *Manager) SetVNIFilter(vnis []uint32) {
 	m.vniFilterSupported = true
 	m.tunnelVNIs = vnis
 }
 
-func (m *routeManager) ParentDevice() string {
+func (m *Manager) ParentDevice() string {
 	return m.parentDevice
 }
 
-func (m *routeManager) RoutesDirty() bool {
+func (m *Manager) RoutesDirty() bool {
 	return m.routesDirty
 }
 
-func (m *routeManager) triggerRouteUpdate() {
+func (m *Manager) TriggerRouteUpdate() {
 	m.routesDirty = true
 }
 
-func (m *routeManager) updateParentIfaceAddr(addr string) {
+func (m *Manager) UpdateParentIfaceAddr(addr string) {
 	m.parentDeviceLock.Lock()
 	m.parentDeviceAddr = addr
 	m.parentDeviceLock.Unlock()
@@ -279,13 +279,13 @@ func (m *routeManager) updateParentIfaceAddr(addr string) {
 	}
 }
 
-func (m *routeManager) parentIfaceAddr() string {
+func (m *Manager) ParentIfaceAddr() string {
 	m.parentDeviceLock.Lock()
 	defer m.parentDeviceLock.Unlock()
 	return m.parentDeviceAddr
 }
 
-func (m *routeManager) vxlanEnabled() bool {
+func (m *Manager) vxlanEnabled() bool {
 	return m.ippoolType == proto.IPPoolType_VXLAN
 }
 
@@ -299,7 +299,7 @@ func isRemoteWorkload(msg *proto.RouteUpdate) bool {
 	return isType(msg, proto.RouteType_REMOTE_WORKLOAD) && !msg.LocalWorkload
 }
 
-func (m *routeManager) routeIsLocalBlock(msg *proto.RouteUpdate) bool {
+func (m *Manager) routeIsLocalBlock(msg *proto.RouteUpdate) bool {
 	// RouteType_LOCAL_WORKLOAD means "local IPAM block _or_ /32 of workload" in IPv4.
 	// It means "local IPAM block _or_ /128 of workload" in IPv6.
 	if !isType(msg, proto.RouteType_LOCAL_WORKLOAD) {
@@ -334,7 +334,7 @@ func (m *routeManager) routeIsLocalBlock(msg *proto.RouteUpdate) bool {
 	return !strings.HasSuffix(msg.Dst, exactRoute)
 }
 
-func (m *routeManager) deleteRoute(dst string) {
+func (m *Manager) deleteRoute(dst string) {
 	_, exists := m.routesByDest[dst]
 	if exists {
 		logrus.Debug("deleting route dst ", dst)
@@ -350,12 +350,12 @@ func (m *routeManager) deleteRoute(dst string) {
 	}
 }
 
-func (m *routeManager) CompleteDeferredWork() error {
+func (m *Manager) CompleteDeferredWork() error {
 	if m.parentDevice == "" {
 		// Background goroutine hasn't sent us the parent interface name yet,
 		// but we can look it up synchronously.  OnParentDeviceUpdate will handle
 		// any duplicate update when it arrives.
-		parentIface, err := m.detectParentIface()
+		parentIface, err := m.DetectParentIface()
 		if err != nil {
 			// If we can't look up the parent interface then we're in trouble.
 			// It likely means that our VTEP is missing or conflicting.  We
@@ -388,7 +388,7 @@ func (m *routeManager) CompleteDeferredWork() error {
 
 // OnParentDeviceUpdate records a new parent device, reporting whether anything changed so the
 // caller knows to kick an apply.
-func (m *routeManager) OnParentDeviceUpdate(name string) bool {
+func (m *Manager) OnParentDeviceUpdate(name string) bool {
 	if name == "" {
 		m.logCtx.Warn("Empty parent interface name? Ignoring.")
 		return false
@@ -405,7 +405,7 @@ func (m *routeManager) OnParentDeviceUpdate(name string) bool {
 	return true
 }
 
-func (m *routeManager) updateRoutes() {
+func (m *Manager) updateRoutes() {
 	// Iterate through all of our L3 routes and send them through to the
 	// RouteTable.  It's a little wasteful to recalculate everything but the
 	// RouteTable will avoid making dataplane changes for routes that haven't
@@ -452,7 +452,7 @@ func (m *routeManager) updateRoutes() {
 	}
 }
 
-func (m *routeManager) setTunnelRouteFunc(fn func(ip.CIDR, *proto.RouteUpdate) *routetable.Target) {
+func (m *Manager) SetTunnelRouteFunc(fn func(ip.CIDR, *proto.RouteUpdate) *routetable.Target) {
 	m.tunnelRouteFn = fn
 }
 
@@ -477,7 +477,7 @@ func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate, proto netlin
 	return rtt
 }
 
-func (m *routeManager) noEncapRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+func (m *Manager) noEncapRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
 	if m.parentDevice == "" {
 		return nil
 	}
@@ -498,8 +498,8 @@ func (m *routeManager) noEncapRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routeta
 	return &noEncapRoute
 }
 
-func (m *routeManager) detectParentIface() (netlink.Link, error) {
-	parentAddr := m.parentIfaceAddr()
+func (m *Manager) DetectParentIface() (netlink.Link, error) {
+	parentAddr := m.ParentIfaceAddr()
 	if parentAddr == "" {
 		return nil, fmt.Errorf("parent interface not yet known")
 	}
@@ -536,7 +536,7 @@ func (m *routeManager) detectParentIface() (netlink.Link, error) {
 }
 
 // KeepDeviceInSync runs in a loop and checks that the device is still correctly configured, and updates it if necessary.
-func (m *routeManager) keepDeviceInSync(
+func (m *Manager) KeepDeviceInSync(
 	ctx context.Context,
 	mtu int,
 	xsumBroken bool,
@@ -566,13 +566,13 @@ func (m *routeManager) keepDeviceInSync(
 	}
 
 	for ctx.Err() == nil {
-		if m.parentIfaceAddr() == "" {
+		if m.ParentIfaceAddr() == "" {
 			m.logCtx.Debug("Missing local information, retrying...")
 			sleepMonitoringChans(10 * time.Second)
 			continue
 		}
 
-		parentDevice, err := m.detectParentIface()
+		parentDevice, err := m.DetectParentIface()
 		if err != nil {
 			m.logCtx.WithError(err).Warn("Failed to find parent device, retrying...")
 			sleepMonitoringChans(1 * time.Second)
@@ -588,7 +588,7 @@ func (m *routeManager) keepDeviceInSync(
 
 		if link != nil {
 			m.logCtx.Debug("Configuring tunnel device")
-			err = m.configureTunnelDevice(link, addr, mtu, xsumBroken)
+			err = m.ConfigureTunnelDevice(link, addr, mtu, xsumBroken)
 			if err != nil {
 				m.logCtx.WithError(err).Warn("Failed to configure tunnel device, retrying...")
 				logNextSuccess = true
@@ -621,7 +621,7 @@ func (m *routeManager) keepDeviceInSync(
 	}
 }
 
-func (m *routeManager) configureTunnelDevice(
+func (m *Manager) ConfigureTunnelDevice(
 	newLink netlink.Link,
 	addr string,
 	mtu int, xsumBroken bool,
@@ -751,7 +751,7 @@ func vniFilterDropped(want, got netlink.Link) bool {
 }
 
 // ensureVNIFilter makes the device's VNI filter exactly tunnelVNIs, leaving other VNIs on its port free.
-func (m *routeManager) ensureVNIFilter(link netlink.Link) error {
+func (m *Manager) ensureVNIFilter(link netlink.Link) error {
 	all, err := m.nlHandle.BridgeVniList()
 	if err != nil {
 		return fmt.Errorf("failed to list VNI filters: %w", err)
@@ -811,7 +811,7 @@ func allDesired(start, end uint32, desired set.Set[uint32]) bool {
 // removed. The kernel-managed IPv6 link-local address is always left in place. If ipStr is empty no
 // address is desired, so all Calico-managed addresses are removed; this is used in BPF mode where the
 // dataplane handles encap/decap itself and does not need an IP on the overlay device.
-func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) error {
+func (m *Manager) ensureAddressOnLink(ipStr string, link netlink.Link) error {
 	suffix := "/32"
 	family := netlink.FAMILY_V4
 	if m.ipVersion == 6 {
