@@ -101,11 +101,11 @@ func TestRapidClientImageIsConsistent(t *testing.T) {
 }
 
 // TestCalicoBIRDImageIsCurrent fails when hack/rpms/bird changes without
-// CalicoBIRD following it, which would leave the tests on a stale BIRD.
+// CalicoBIRD being regenerated, which would leave the tests on a stale BIRD.
 func TestCalicoBIRDImageIsCurrent(t *testing.T) {
 	ref, ok := declaredImages(t)["CalicoBIRD"]
 	if !ok {
-		t.Fatal("images.go no longer declares CalicoBIRD")
+		t.Fatalf("%s no longer declares CalicoBIRD", generatedBIRDImage)
 	}
 
 	out, err := exec.Command("make", "--no-print-directory", "-C", "../../../../hack/rpms/bird", "print-tag").Output()
@@ -113,22 +113,37 @@ func TestCalicoBIRDImageIsCurrent(t *testing.T) {
 		t.Fatalf("make print-tag: %v", err)
 	}
 	if want := "calico/bird:" + strings.TrimSpace(string(out)); ref != want {
-		t.Errorf("CalicoBIRD is %q, but hack/rpms/bird now builds %q; update images.go", ref, want)
+		t.Errorf("CalicoBIRD is %q, but hack/rpms/bird now builds %q; run `make -C hack/rpms/bird gen-files`", ref, want)
 	}
 }
 
+// generatedBIRDImage declares CalicoBIRD. `make generate` writes it.
+const generatedBIRDImage = "zz_generated.bird.go"
+
 // declaredImages returns the string literal bound by each top-level constant and
-// variable in images.go, keyed by name. Every one counts as an image reference;
-// anything else has to go in notSeeded.
+// variable in the package, keyed by name. Every one counts as an image
+// reference; anything else has to go in notSeeded.
 func declaredImages(t *testing.T) map[string]string {
 	t.Helper()
 
-	file, err := parser.ParseFile(token.NewFileSet(), "images.go", nil, 0)
+	refs := map[string]string{}
+	for _, name := range []string{"images.go", generatedBIRDImage} {
+		declaredImagesIn(t, name, refs)
+	}
+	if len(refs) == 0 {
+		t.Fatal("no image references found in the images package")
+	}
+	return refs
+}
+
+func declaredImagesIn(t *testing.T, name string, refs map[string]string) {
+	t.Helper()
+
+	file, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
 	if err != nil {
-		t.Fatalf("parse images.go: %v", err)
+		t.Fatalf("parse %s: %v", name, err)
 	}
 
-	refs := map[string]string{}
 	for _, decl := range file.Decls {
 		gen, ok := decl.(*ast.GenDecl)
 		if !ok || (gen.Tok != token.CONST && gen.Tok != token.VAR) {
@@ -152,8 +167,4 @@ func declaredImages(t *testing.T) map[string]string {
 			refs[value.Names[0].Name] = ref
 		}
 	}
-	if len(refs) == 0 {
-		t.Fatal("no image references found in images.go")
-	}
-	return refs
 }
