@@ -40,7 +40,7 @@ type ipipManager struct {
 	ipVersion     uint8
 	routeProtocol netlink.RouteProtocol
 	routeMgr      *routeManager
-	dpConfig      Config
+	dpConfig      dataplanedefs.Config
 
 	// Device information
 	tunnelDevice    string
@@ -60,7 +60,7 @@ func newIPIPManager(
 	tunnelDevice string,
 	ipVersion uint8,
 	mtu int,
-	dpConfig Config,
+	dpConfig dataplanedefs.Config,
 	opRecorder logrusr.OpRecorder,
 ) *ipipManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
@@ -80,7 +80,7 @@ func newIPIPManagerWithShims(
 	tunnelDevice string,
 	ipVersion uint8,
 	mtu int,
-	dpConfig Config,
+	dpConfig dataplanedefs.Config,
 	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 ) *ipipManager {

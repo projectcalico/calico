@@ -103,7 +103,7 @@ type bpfRouteManager struct {
 	svcLoopPrevention string
 }
 
-func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVersion,
+func newBPFRouteManager(config *dataplanedefs.Config, maps *bpfmap.IPMaps, ipFamily proto.IPVersion,
 	opReporter logrusr.OpRecorder,
 ) *bpfRouteManager {
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,

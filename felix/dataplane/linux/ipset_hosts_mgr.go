@@ -20,6 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
@@ -40,7 +41,7 @@ type hostsIPSetManager struct {
 
 	// Indicates if configuration has changed since the last apply.
 	ipSetDirty bool
-	dpConfig   Config
+	dpConfig   dataplanedefs.Config
 
 	// Log context
 	logCtx *logrus.Entry
@@ -49,7 +50,7 @@ type hostsIPSetManager struct {
 func newHostsIPSetManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	ipVersion uint8,
-	dpConfig Config,
+	dpConfig dataplanedefs.Config,
 ) *hostsIPSetManager {
 	return &hostsIPSetManager{
 		ipsetsDataplane: ipsetsDataplane,

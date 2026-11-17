@@ -36,7 +36,7 @@ var _ = Describe("Route manager", func() {
 	var (
 		rt        *mockRouteTable
 		dataplane *mocknetlink.MockNetlinkDataplane
-		dpConfig  Config
+		dpConfig  dataplanedefs.Config
 		routeMgr  *routeManager
 	)
 
@@ -52,7 +52,7 @@ var _ = Describe("Route manager", func() {
 		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
 		dataplane.ResetDeltas()
 
-		dpConfig = Config{
+		dpConfig = dataplanedefs.Config{
 			Hostname:     "node1",
 			MaxIPSetSize: 5,
 			// The IPIP and no-encap managers only program routes when Felix, rather than

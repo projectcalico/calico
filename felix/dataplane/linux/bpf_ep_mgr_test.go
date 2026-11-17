@@ -635,7 +635,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		var err error
 		bpfEpMgr, err = NewBPFEndpointManager(
 			mockDP,
-			&Config{
+			&dataplanedefs.Config{
 				Hostname:              "uthost",
 				BPFLogLevel:           "info",
 				BPFDataIfacePattern:   regexp.MustCompile(dataIfacePattern),
