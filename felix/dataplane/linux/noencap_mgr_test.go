@@ -22,6 +22,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/route/routedefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlan/vxlandefs"
@@ -35,7 +36,7 @@ import (
 var _ = Describe("NoEncap Manager", func() {
 	var (
 		noencapMgr, noencapMgrV6 *noEncapManager
-		rt                       *mockRouteTable
+		rt                       *dptest.MockRouteTable
 	)
 
 	const (
@@ -43,9 +44,7 @@ var _ = Describe("NoEncap Manager", func() {
 	)
 
 	BeforeEach(func() {
-		rt = &mockRouteTable{
-			currentRoutes: map[string][]routetable.Target{},
-		}
+		rt = dptest.NewMockRouteTable()
 
 		opRecorder := logrusr.NewSummarizer("test")
 
@@ -141,18 +140,18 @@ var _ = Describe("NoEncap Manager", func() {
 			SameSubnet:  true,
 		})
 
-		Expect(rt.currentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(0))
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
 		err = noencapMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(rt.currentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV4]).To(HaveLen(0))
 
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
-		Expect(rt.currentRoutes[routetable.InterfaceNone][0]).To(Equal(
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone][0]).To(Equal(
 			routetable.Target{
 				Type: "blackhole",
 				RouteKey: routetable.RouteKey{
@@ -161,8 +160,8 @@ var _ = Describe("NoEncap Manager", func() {
 				Protocol: 80,
 			}))
 
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
-		Expect(rt.currentRoutes["eth0"][0]).To(Equal(
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes["eth0"][0]).To(Equal(
 			routetable.Target{
 				Type: "noencap",
 				RouteKey: routetable.RouteKey{
@@ -227,19 +226,19 @@ var _ = Describe("NoEncap Manager", func() {
 			SameSubnet:  true,
 		})
 
-		Expect(rt.currentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(0))
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
 
 		err = noencapMgrV6.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(rt.currentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
-		Expect(rt.currentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[vxlandefs.VXLANIfaceNameV6]).To(HaveLen(0))
 
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
-		Expect(rt.currentRoutes[routetable.InterfaceNone][0]).To(Equal(
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone][0]).To(Equal(
 			routetable.Target{
 				Type: "blackhole",
 				RouteKey: routetable.RouteKey{
@@ -248,8 +247,8 @@ var _ = Describe("NoEncap Manager", func() {
 				Protocol: 80,
 			}))
 
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
-		Expect(rt.currentRoutes["eth0"][0]).To(Equal(
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes["eth0"][0]).To(Equal(
 			routetable.Target{
 				Type: "noencap",
 				RouteKey: routetable.RouteKey{

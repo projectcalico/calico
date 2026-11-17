@@ -12,30 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+// Package dptest holds test doubles shared by the Linux dataplane's manager
+// tests.
+package dptest
 
 import (
 	"fmt"
 	"strings"
 
 	"github.com/google/go-cmp/cmp"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/generictables"
 )
 
-type mockTable struct {
+type MockTable struct {
 	Table          string
-	currentChains  map[string]*generictables.Chain
+	CurrentChains  map[string]*generictables.Chain
 	expectedChains map[string]*generictables.Chain
 	UpdateCalled   bool
 }
 
-func newMockTable(table string) *mockTable {
-	return &mockTable{
+func NewMockTable(table string) *MockTable {
+	return &MockTable{
 		Table:          table,
-		currentChains:  map[string]*generictables.Chain{},
+		CurrentChains:  map[string]*generictables.Chain{},
 		expectedChains: map[string]*generictables.Chain{},
 	}
 }
@@ -51,31 +53,31 @@ func logChains(message string, chains []*generictables.Chain) {
 	}
 }
 
-func (t *mockTable) UpdateChain(chain *generictables.Chain) {
+func (t *MockTable) UpdateChain(chain *generictables.Chain) {
 	t.UpdateChains([]*generictables.Chain{chain})
 }
 
-func (t *mockTable) UpdateChains(chains []*generictables.Chain) {
+func (t *MockTable) UpdateChains(chains []*generictables.Chain) {
 	t.UpdateCalled = true
 	logChains("UpdateChains", chains)
 	for _, chain := range chains {
-		t.currentChains[chain.Name] = chain
+		t.CurrentChains[chain.Name] = chain
 	}
 }
 
-func (t *mockTable) RemoveChains(chains []*generictables.Chain) {
+func (t *MockTable) RemoveChains(chains []*generictables.Chain) {
 	logChains("RemoveChains", chains)
 	for _, chain := range chains {
 		t.RemoveChainByName(chain.Name)
-		delete(t.currentChains, chain.Name)
+		delete(t.CurrentChains, chain.Name)
 	}
 }
 
-func (t *mockTable) RemoveChainByName(name string) {
-	delete(t.currentChains, name)
+func (t *MockTable) RemoveChainByName(name string) {
+	delete(t.CurrentChains, name)
 }
 
-func (t *mockTable) checkChains(expecteds [][]*generictables.Chain) {
+func (t *MockTable) CheckChains(expecteds [][]*generictables.Chain) {
 	t.expectedChains = map[string]*generictables.Chain{}
 	for _, expected := range expecteds {
 		for _, chain := range expected {
@@ -85,7 +87,7 @@ func (t *mockTable) checkChains(expecteds [][]*generictables.Chain) {
 	t.checkChainsSameAsBefore()
 }
 
-func (t *mockTable) checkChainsSameAsBefore() {
+func (t *MockTable) checkChainsSameAsBefore() {
 	// Build a failure message in case of unexpected chains.
 	var msg strings.Builder
 	msg.WriteString("Unexpected chain:\n\n %+v\n\n Expected chains:\n\n")
@@ -95,18 +97,18 @@ func (t *mockTable) checkChainsSameAsBefore() {
 	}
 
 	// Check each current chain is as expected.
-	for _, chain := range t.currentChains {
+	for _, chain := range t.CurrentChains {
 		expected, ok := t.expectedChains[chain.Name]
-		ExpectWithOffset(2, ok).To(BeTrue(), fmt.Sprintf(msg.String(), *chain))
-		ExpectWithOffset(2, *chain).To(Equal(*expected), cmp.Diff(expected, chain))
+		gomega.ExpectWithOffset(2, ok).To(gomega.BeTrue(), fmt.Sprintf(msg.String(), *chain))
+		gomega.ExpectWithOffset(2, *chain).To(gomega.Equal(*expected), cmp.Diff(expected, chain))
 	}
 
 	// Ensure no expected chains are missing.
 	for _, chain := range t.expectedChains {
-		_, ok := t.currentChains[chain.Name]
-		ExpectWithOffset(2, ok).To(BeTrue(), "Missing expected chain: %v", chain)
+		_, ok := t.CurrentChains[chain.Name]
+		gomega.ExpectWithOffset(2, ok).To(gomega.BeTrue(), "Missing expected chain: %v", chain)
 	}
 
 	// Assert the whole map is as expected.
-	ExpectWithOffset(2, t.currentChains).To(Equal(t.expectedChains), t.Table+" chains incorrect")
+	gomega.ExpectWithOffset(2, t.CurrentChains).To(gomega.Equal(t.expectedChains), t.Table+" chains incorrect")
 }

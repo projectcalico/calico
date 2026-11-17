@@ -23,6 +23,7 @@ import (
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlan/vxlandefs"
 	"github.com/projectcalico/calico/felix/ip"
@@ -34,16 +35,14 @@ import (
 
 var _ = Describe("Route manager", func() {
 	var (
-		rt        *mockRouteTable
+		rt        *dptest.MockRouteTable
 		dataplane *mocknetlink.MockNetlinkDataplane
 		dpConfig  dataplanedefs.Config
 		routeMgr  *routeManager
 	)
 
 	BeforeEach(func() {
-		rt = &mockRouteTable{
-			currentRoutes: map[string][]routetable.Target{},
-		}
+		rt = dptest.NewMockRouteTable()
 
 		dataplane = mocknetlink.New()
 		_, err := dataplane.NewMockNetlink()
@@ -142,11 +141,11 @@ var _ = Describe("Route manager", func() {
 		It("should keep the blackhole routes of every manager", func() {
 			// Each manager owns its own route class, so no manager's SetRoutes
 			// call can delete another manager's blackhole routes.
-			Expect(rt.cidrsForClass(routetable.RouteClassBlackholeVXLAN, routetable.InterfaceNone)).To(
+			Expect(rt.CIDRsForClass(routetable.RouteClassBlackholeVXLAN, routetable.InterfaceNone)).To(
 				ConsistOf("10.0.1.0/26"))
-			Expect(rt.cidrsForClass(routetable.RouteClassBlackholeIPIP, routetable.InterfaceNone)).To(
+			Expect(rt.CIDRsForClass(routetable.RouteClassBlackholeIPIP, routetable.InterfaceNone)).To(
 				ConsistOf("10.0.2.0/26"))
-			Expect(rt.cidrsForClass(routetable.RouteClassBlackholeNoEncap, routetable.InterfaceNone)).To(
+			Expect(rt.CIDRsForClass(routetable.RouteClassBlackholeNoEncap, routetable.InterfaceNone)).To(
 				ConsistOf("10.0.3.0/26"))
 		})
 
@@ -158,10 +157,10 @@ var _ = Describe("Route manager", func() {
 				Expect(m.CompleteDeferredWork()).To(Succeed())
 			}
 
-			Expect(rt.cidrsForClass(routetable.RouteClassBlackholeIPIP, routetable.InterfaceNone)).To(BeEmpty())
-			Expect(rt.cidrsForClass(routetable.RouteClassBlackholeVXLAN, routetable.InterfaceNone)).To(
+			Expect(rt.CIDRsForClass(routetable.RouteClassBlackholeIPIP, routetable.InterfaceNone)).To(BeEmpty())
+			Expect(rt.CIDRsForClass(routetable.RouteClassBlackholeVXLAN, routetable.InterfaceNone)).To(
 				ConsistOf("10.0.1.0/26"))
-			Expect(rt.cidrsForClass(routetable.RouteClassBlackholeNoEncap, routetable.InterfaceNone)).To(
+			Expect(rt.CIDRsForClass(routetable.RouteClassBlackholeNoEncap, routetable.InterfaceNone)).To(
 				ConsistOf("10.0.3.0/26"))
 		})
 	})
@@ -210,7 +209,7 @@ var _ = Describe("Route manager", func() {
 				SameSubnet:  true,
 			})
 			Expect(routeMgr.CompleteDeferredWork()).To(Succeed())
-			Expect(rt.cidrsForClass(routetable.RouteClassVXLANSameSubnet, "eth0")).To(
+			Expect(rt.CIDRsForClass(routetable.RouteClassVXLANSameSubnet, "eth0")).To(
 				ConsistOf("10.0.1.0/26"))
 		})
 
@@ -221,7 +220,7 @@ var _ = Describe("Route manager", func() {
 			Expect(routeMgr.OnParentDeviceUpdate("")).To(BeFalse())
 
 			Expect(routeMgr.parentDevice).To(Equal("eth0"))
-			Expect(rt.cidrsForClass(routetable.RouteClassVXLANSameSubnet, "eth0")).To(
+			Expect(rt.CIDRsForClass(routetable.RouteClassVXLANSameSubnet, "eth0")).To(
 				ConsistOf("10.0.1.0/26"))
 		})
 
@@ -229,8 +228,8 @@ var _ = Describe("Route manager", func() {
 			Expect(routeMgr.OnParentDeviceUpdate("eth1")).To(BeTrue())
 			Expect(routeMgr.CompleteDeferredWork()).To(Succeed())
 
-			Expect(rt.cidrsForClass(routetable.RouteClassVXLANSameSubnet, "eth0")).To(BeEmpty())
-			Expect(rt.cidrsForClass(routetable.RouteClassVXLANSameSubnet, "eth1")).To(
+			Expect(rt.CIDRsForClass(routetable.RouteClassVXLANSameSubnet, "eth0")).To(BeEmpty())
+			Expect(rt.CIDRsForClass(routetable.RouteClassVXLANSameSubnet, "eth1")).To(
 				ConsistOf("10.0.1.0/26"))
 		})
 	})

@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
@@ -28,11 +29,11 @@ import (
 var _ = Describe("ARP chain programming", func() {
 	var (
 		epMgr    *endpointManager
-		arpTable *mockTable
+		arpTable *dptest.MockTable
 	)
 
 	BeforeEach(func() {
-		arpTable = newMockTable("arp")
+		arpTable = dptest.NewMockTable("arp")
 		epMgr = &endpointManager{
 			arpTable:        arpTable,
 			activeARPChains: map[types.WorkloadEndpointID][]*generictables.Chain{},
@@ -53,9 +54,9 @@ var _ = Describe("ARP chain programming", func() {
 		epMgr.updateWorkloadARPChains(id, wl)
 
 		chainName := rules.EndpointChainName(rules.WorkloadARPPfx, "cali12345-ab", nftrender.MaxChainNameLength)
-		Expect(arpTable.currentChains).To(HaveKey(chainName))
+		Expect(arpTable.CurrentChains).To(HaveKey(chainName))
 
-		chain := arpTable.currentChains[chainName]
+		chain := arpTable.CurrentChains[chainName]
 		Expect(chain.Rules).To(HaveLen(1))
 		Expect(chain.Rules[0].Match.Render()).To(ContainSubstring("arp operation reply"))
 		Expect(chain.Rules[0].Match.Render()).To(ContainSubstring("arp saddr ip 10.0.0.1"))
@@ -76,9 +77,9 @@ var _ = Describe("ARP chain programming", func() {
 		epMgr.updateWorkloadARPChains(id, wl)
 
 		chainName := rules.EndpointChainName(rules.WorkloadARPPfx, "cali67890-cd", nftrender.MaxChainNameLength)
-		Expect(arpTable.currentChains).To(HaveKey(chainName))
+		Expect(arpTable.CurrentChains).To(HaveKey(chainName))
 
-		chain := arpTable.currentChains[chainName]
+		chain := arpTable.CurrentChains[chainName]
 		Expect(chain.Rules).To(HaveLen(2))
 		Expect(chain.Rules[0].Match.Render()).To(ContainSubstring("arp saddr ip 10.0.0.1"))
 		Expect(chain.Rules[1].Match.Render()).To(ContainSubstring("arp saddr ip 10.0.0.2"))
@@ -98,10 +99,10 @@ var _ = Describe("ARP chain programming", func() {
 		epMgr.updateWorkloadARPChains(id, wl)
 
 		chainName := rules.EndpointChainName(rules.WorkloadARPPfx, "caliabcde-ef", nftrender.MaxChainNameLength)
-		Expect(arpTable.currentChains).To(HaveKey(chainName))
+		Expect(arpTable.CurrentChains).To(HaveKey(chainName))
 
 		epMgr.removeWorkloadARPChains(id)
-		Expect(arpTable.currentChains).NotTo(HaveKey(chainName))
+		Expect(arpTable.CurrentChains).NotTo(HaveKey(chainName))
 	})
 
 	It("should not panic when arpTable is nil (IPv6)", func() {

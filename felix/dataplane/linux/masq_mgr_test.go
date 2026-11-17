@@ -20,6 +20,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
@@ -31,7 +32,7 @@ import (
 var _ = Describe("Masquerade manager", func() {
 	var (
 		masqMgr      *masqManager
-		natTable     *mockTable
+		natTable     *dptest.MockTable
 		ipSets       *dpsets.MockIPSets
 		ruleRenderer rules.RuleRenderer
 	)
@@ -69,7 +70,7 @@ var _ = Describe("Masquerade manager", func() {
 
 	BeforeEach(func() {
 		ipSets = dpsets.NewMockIPSets()
-		natTable = newMockTable("nat")
+		natTable = dptest.NewMockTable("nat")
 		ruleRenderer = rules.NewRenderer(rules.Config{
 			IPSetConfigV4: ipsets.NewIPVersionConfig(
 				ipsets.IPFamilyV4,
@@ -106,7 +107,7 @@ var _ = Describe("Masquerade manager", func() {
 			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
 			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/16")))
 			Expect(natTable.UpdateCalled).To(BeTrue())
-			natTable.checkChains(masqChain())
+			natTable.CheckChains(masqChain())
 		})
 
 		It("an extra CompleteDeferredWork should be a no-op", func() {
@@ -132,7 +133,7 @@ var _ = Describe("Masquerade manager", func() {
 
 		Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
 		Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/16")))
-		natTable.checkChains(emptyChain())
+		natTable.CheckChains(emptyChain())
 	})
 
 	It("should populate the IP sets and program the chain, after adding both a masq and a non-masq pool", func() {
@@ -142,7 +143,7 @@ var _ = Describe("Masquerade manager", func() {
 
 		Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
 		Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/16", "10.2.0.0/16")))
-		natTable.checkChains(masqChain())
+		natTable.CheckChains(masqChain())
 	})
 
 	It("should leave only the non-masq pool in the network-pools set and program an empty chain, after adding both pools then removing the masq pool", func() {
@@ -153,7 +154,7 @@ var _ = Describe("Masquerade manager", func() {
 
 		Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
 		Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.2.0.0/16")))
-		natTable.checkChains(emptyChain())
+		natTable.CheckChains(emptyChain())
 	})
 
 	It("should empty both IP sets and program an empty chain, after adding both pools then removing both", func() {
@@ -165,7 +166,7 @@ var _ = Describe("Masquerade manager", func() {
 
 		Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
 		Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.New[string]()))
-		natTable.checkChains(emptyChain())
+		natTable.CheckChains(emptyChain())
 	})
 
 	Describe("after adding a LoadBalancer-only pool", func() {
