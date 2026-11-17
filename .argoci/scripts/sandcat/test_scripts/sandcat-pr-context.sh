@@ -56,14 +56,16 @@ newhome
 SANDCAT_PR_READ_TOKEN=read-only "${SCRIPT}" publish-pr-context >/dev/null 2>&1
 grep -qF fetched "${HOME}/store/sandcat-pr-context.json" 2>/dev/null
 check "publish-pr-context pushes the PR context for the workflow" $?
-[[ "$(cat "${HOME}/fetch-token")" == read-only ]]
-check "publish-pr-context reads the PR with SANDCAT_PR_READ_TOKEN" $?
+ok=1
+[[ "$(cat "${HOME}/fetch-token")" == read-only ]] && ok=0
+check "publish-pr-context reads the PR with SANDCAT_PR_READ_TOKEN" "${ok}"
 
 newhome
 STUB_PR=0 "${SCRIPT}" publish-pr-context >/dev/null 2>&1
 rc=$?
-[[ "${rc}" == 0 && ! -e "${HOME}/store/sandcat-pr-context.json" ]]
-check "publish-pr-context on a branch run pushes nothing and succeeds" $?
+ok=1
+[[ "${rc}" == 0 && ! -e "${HOME}/store/sandcat-pr-context.json" ]] && ok=0
+check "publish-pr-context on a branch run pushes nothing and succeeds" "${ok}"
 
 newhome
 echo '{"body":"published"}' > "${HOME}/store/sandcat-pr-context.json"
