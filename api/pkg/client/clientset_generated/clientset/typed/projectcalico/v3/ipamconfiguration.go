@@ -27,6 +27,7 @@ type IPAMConfigurationInterface interface {
 	Create(ctx context.Context, iPAMConfiguration *projectcalicov3.IPAMConfiguration, opts v1.CreateOptions) (*projectcalicov3.IPAMConfiguration, error)
 	Update(ctx context.Context, iPAMConfiguration *projectcalicov3.IPAMConfiguration, opts v1.UpdateOptions) (*projectcalicov3.IPAMConfiguration, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
+	DeleteWithResult(ctx context.Context, name string, opts v1.DeleteOptions) (v1.APIResult, error)
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.IPAMConfiguration, error)
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.IPAMConfigurationList, error)
