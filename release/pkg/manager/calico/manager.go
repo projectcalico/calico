@@ -197,6 +197,8 @@ type CalicoManager struct {
 	// isHashRelease is a flag to indicate that we should build a hashrelease.
 	isHashRelease bool
 
+	ci bool
+
 	// archiveImages controls whether we should archive container images in release tarball.
 	archiveImages bool
 
@@ -1141,7 +1143,7 @@ func (r *CalicoManager) archiveSources() ([]archives.Contributor, error) {
 		if err != nil {
 			return nil, fmt.Errorf("archive images: %w", err)
 		}
-		sources = append(sources, imgs)
+		sources = append(sources, imgs...)
 	}
 	if r.binaries {
 		sources = append(sources, binaries.Archive(r.repoRoot)...)
@@ -1196,6 +1198,7 @@ func (r *CalicoManager) buildContainerImages() error {
 		images.WithRegistries(r.imageRegistries...),
 		images.WithArches(r.architectures...),
 		images.WithLogsDir(r.logsDir),
+		images.WithPruneCache(r.ci),
 	)
 	if err != nil {
 		return fmt.Errorf("build images: %w", err)

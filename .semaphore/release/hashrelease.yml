@@ -56,6 +56,8 @@ global_job_config:
       - gcloud auth configure-docker --quiet
       # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
       - docker system prune -af
+      - df -h || true
+      - docker system df || true
 
 blocks:
   - name: Publish hashrelease
@@ -72,4 +74,6 @@ blocks:
       epilogue:
         always:
           commands:
+            - df -h || true
+            - docker system df || true
             - artifact push job ${LOGS_DIR} --destination semaphore/hashrelease-logs || true

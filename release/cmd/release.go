@@ -116,6 +116,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
 					calico.WithImageReleaseDirs(c.StringSlice(imageReleaseDirsFlag.Name)),
 					calico.WithArchiveImages(c.Bool(archiveImagesFlagName)),
+					calico.WithCI(c.Bool(ciFlag.Name)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
 					calico.WithManifests(c.Bool(manifestsFlag.Name)),
 					calico.WithBinaries(c.Bool(binariesFlag.Name)),

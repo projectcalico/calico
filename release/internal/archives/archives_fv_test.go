@@ -18,6 +18,7 @@ package archives
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -28,16 +29,25 @@ import (
 )
 
 func TestBuildFlow(t *testing.T) {
-	t.Run("logs tar", func(t *testing.T) {
+	// Image tars are large, so a source's files must be gone before the next
+	// source stages its own.
+	t.Run("clears each source before staging the next", func(t *testing.T) {
 		outputDir := testOutputDir(t)
-		logs := filepath.Join(t.TempDir(), "logs")
+		probe := &stagingProbe{}
 
-		a := testArchive(outputDir, testContent{name: "manifests", to: manifestsDir, files: []string{"calico.yaml"}})
-		if err := Build(a, WithRunner(command.RealRunner), WithLogsDir(logs)); err != nil {
+		a := testArchive(outputDir,
+			testContent{name: "node", to: imagesDir, files: []string{"node.tar"}},
+			probe,
+		)
+		if err := Build(a); err != nil {
 			t.Fatalf("Build() = %v", err)
 		}
-		if _, err := os.Stat(filepath.Join(logs, buildStep, "tar.log")); err != nil {
-			t.Errorf("tar log: %v", err)
+		if len(probe.found) != 0 {
+			t.Errorf("staging dir held %v when the next source staged", probe.found)
+		}
+		want := []string{"images/node.tar"}
+		if got := archiveContents(t, Path(a)); !slices.Equal(got, want) {
+			t.Errorf("archive contents:\n got %v\nwant %v", got, want)
 		}
 	})
 
@@ -150,6 +160,25 @@ func TestBuildFlow(t *testing.T) {
 		if _, err := os.Stat(Path(good)); !os.IsNotExist(err) {
 			t.Error("a failed rebuild left the previous archive behind")
 		}
+	})
+}
+
+type stagingProbe struct {
+	found []string
+}
+
+func (p *stagingProbe) Name() string { return "probe" }
+
+func (p *stagingProbe) Contribute(dir string) error {
+	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil || d.IsDir() {
+			return err
+		}
+		p.found = append(p.found, path)
+		return nil
 	})
 }
 
