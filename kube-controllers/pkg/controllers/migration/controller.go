@@ -29,7 +29,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	apiextclient "k8s.io/apiextensions-api/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

@@ -18,9 +18,9 @@ import (
 	"context"
 
 	"github.com/sirupsen/logrus"
-	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	apiextinformers "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
+	apiextv1 "k8s.io/apiextensions-api/pkg/apis/apiextensions/v1"
+	apiextclient "k8s.io/apiextensions-api/pkg/client/clientset/clientset"
+	apiextinformers "k8s.io/apiextensions-api/pkg/client/informers/externalversions"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/lib/std/chanutil"

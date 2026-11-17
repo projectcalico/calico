@@ -71,7 +71,7 @@ var _ = Describe("Node rendering tests", func() {
 			var defaultInstance *operatorv1.InstallationSpec
 			var typhaNodeTLS *render.TyphaNodeTLS
 			var k8sServiceEp k8sapi.ServiceEndpoint
-			one := intstr.FromInt(1)
+			one := intstr.FromInt32(1)
 			defaultNumExpectedResources := 10
 			const defaultClusterDomain = "svc.cluster.local"
 			var defaultMode int32 = 420
@@ -1984,7 +1984,7 @@ var _ = Describe("Node rendering tests", func() {
 			})
 
 			It("should render MaxUnavailable if a custom value was set", func() {
-				two := intstr.FromInt(2)
+				two := intstr.FromInt32(2)
 				defaultInstance.NodeUpdateStrategy.RollingUpdate.MaxUnavailable = &two
 				component := render.Node(&cfg)
 				Expect(component.ResolveImages(nil)).To(BeNil())
@@ -3139,14 +3139,14 @@ func verifyProbesAndLifecycle(ds *appsv1.DaemonSet, isOpenshift bool) {
 			HTTPGet: &corev1.HTTPGetAction{
 				Host: "localhost",
 				Path: "/liveness",
-				Port: intstr.FromInt(9099),
+				Port: intstr.FromInt32(9099),
 			},
 		},
 		TimeoutSeconds: 10,
 	}
 
 	if isOpenshift {
-		expectedLiveness.HTTPGet.Port = intstr.FromInt(9199)
+		expectedLiveness.HTTPGet.Port = intstr.FromInt32(9199)
 	}
 
 	var found bool
