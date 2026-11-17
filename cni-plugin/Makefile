@@ -57,8 +57,7 @@ $(WINDOWS_BIN)/calico.exe: $(SRC_FILES)
 	$(call build_windows_binary, github.com/projectcalico/calico/cmd/calico-windows, $@)
 
 protobuf pkg/dataplane/grpc/proto/cnibackend.pb.go: pkg/dataplane/grpc/proto/cnibackend.proto
-	$(DOCKER_RUN) -v $(CURDIR)/pkg/dataplane/grpc/proto:/proto:rw \
-		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=/ --go_opt=paths=source_relative cnibackend.proto'
+	$(DOCKER_GO_BUILD) sh -c 'cd pkg/dataplane/grpc && protoc --proto_path=proto --go_out=proto --go-grpc_out=. --go_opt=paths=source_relative cnibackend.proto'
 	$(MAKE) fix-changed
 
 # NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
@@ -102,12 +101,16 @@ $(FLANNEL_CNI_PLUGIN_CLONED):
 # EXTRA_DOCKER_ARGS carries RUN_AS_ROOT when the caller is root, without which
 # the build image tries to useradd uid 0 and cannot.
 $(WINDOWS_BIN)/flannel.exe: $(FLANNEL_CNI_PLUGIN_CLONED)
+ifeq ($(NATIVE_GO_BUILD),true)
+	ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) $(MAKE) -C flannel-cni-plugin build_windows
+else
 	docker run \
 		-v $(CURDIR)/flannel-cni-plugin:/go/src/github.com/flannel-io/cni-plugin:z \
 		$(EXTRA_DOCKER_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/flannel-io/cni-plugin --rm $(CALICO_BUILD) \
 		/bin/sh -xe -c ' \
 			ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) make build_windows'
+endif
 	-mkdir -p $(WINDOWS_BIN)
 	cp flannel-cni-plugin/dist/flannel-$(ARCH).exe $(WINDOWS_BIN)/flannel.exe
 
