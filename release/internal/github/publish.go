@@ -51,8 +51,6 @@ Release notes can be found [{{.Link.Text}}]({{.Link.URL}})
 {{end}}
 {{end}}`
 
-var draftRelease = true
-
 var (
 	_ distribution.Handler        = Release{}
 	_ distribution.ArtifactLister = Release{}
@@ -210,7 +208,7 @@ func (d Release) Publish(ctx context.Context, src string) error {
 		Tag:        d.Tag,
 		Name:       d.releaseName(),
 		Body:       body,
-		Draft:      draftRelease,
+		Draft:      true, // create as a draft so its assets can be attached before it is visible.
 		Prerelease: prerelease,
 	})
 	if err != nil {

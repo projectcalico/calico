@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -81,17 +80,12 @@ func (h *Hashrelease) BucketURI(cfg *Config) string {
 	return fmt.Sprintf("gs://%s/%s", cfg.BucketName, h.Name)
 }
 
-func (h *Hashrelease) URL(path ...string) string {
-	return HashreleaseURL(h.Name, path...)
+func (h *Hashrelease) URL() string {
+	return HashreleaseURL(h.Name)
 }
 
-func HashreleaseURL(hashreleaseName string, path ...string) string {
-	base := url.URL{Scheme: "https", Host: hashreleaseName + "." + BaseDomain}
-	// JoinPath with no elements still appends a trailing slash.
-	if len(path) == 0 {
-		return base.String()
-	}
-	return base.JoinPath(path...).String()
+func HashreleaseURL(hashreleaseName string) string {
+	return fmt.Sprintf("https://%s.%s", hashreleaseName, BaseDomain)
 }
 
 // Uploading the content is the caller's, not this.

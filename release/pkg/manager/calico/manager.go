@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -547,7 +548,11 @@ func (r *CalicoManager) chartsMetadata(d outputs.Digests) (*outputs.Charts, erro
 	switch {
 	case !r.helmIndex:
 	case r.isHashRelease:
-		at.Index = r.hashrelease.URL(charts.DirName)
+		index, err := url.JoinPath(r.hashrelease.URL(), charts.DirName)
+		if err != nil {
+			return nil, fmt.Errorf("hashrelease charts index: %w", err)
+		}
+		at.Index = index
 	default:
 		at.Index = r.helmRepoURL
 	}
