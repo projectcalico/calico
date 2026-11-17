@@ -284,8 +284,10 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 			s.policies[pk] = ps
 		}
 
-		// Add the Flow's stats to the policy.
-		ps.add(flow, rule.key.Action)
+		// A flow counts once toward each policy action, however many of the policy's rules it hits.
+		if !policyActionSeen(s.rules[:i], rule.key) {
+			ps.add(flow, rule.key.Action)
+		}
 
 		// Add the Flow's stats to the rule within the policy.
 		rs, ok := ps.rules[rule.key]
@@ -295,4 +297,13 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 		}
 		rs.add(flow, rule.key.Action)
 	}
+}
+
+// policyActionSeen reports whether any of rules shares key's policy and action. AddFlow uses it
+// to skip a policy's totals when an earlier rule already added the flow for that action.
+func policyActionSeen(rules []policyRule, key StatisticsKey) bool {
+	pk := key.policyID()
+	return slices.ContainsFunc(rules, func(r policyRule) bool {
+		return r.key.Action == key.Action && r.key.policyID() == pk
+	})
 }

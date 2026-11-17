@@ -4,7 +4,6 @@ package postrelease
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 	"testing"
 
@@ -28,13 +27,12 @@ func TestOperatorPrintedImagesInExpectedList(t *testing.T) {
 
 	// Pull the operator image.
 	t.Logf("Pulling operator image %s", fqOperatorImage)
-	pullCmd := exec.Command("docker", "pull", fqOperatorImage)
-	if out, err := pullCmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to pull operator image %s: %v\n%s", fqOperatorImage, err, string(out))
+	if _, err := command.Runner(commandRunner).Run("docker", []string{"pull", fqOperatorImage}); err != nil {
+		t.Fatalf("failed to pull operator image %s: %v", fqOperatorImage, err)
 	}
 
 	t.Logf("Running operator image %s with --print-images=listcalico", fqOperatorImage)
-	out, err := command.Run("docker", []string{"run", "--rm", fqOperatorImage, "--print-images=listcalico"})
+	out, err := command.Runner(commandRunner).Run("docker", []string{"run", "--rm", fqOperatorImage, "--print-images=listcalico"})
 	if err != nil {
 		t.Fatalf("failed to run operator image %s with --print-images=listcalico: %v\n%s", fqOperatorImage, err, string(out))
 	}

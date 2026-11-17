@@ -85,6 +85,9 @@ func load(path string, seen []string) (*Config, error) {
 	if err := validate(&cfg, absPath); err != nil {
 		return nil, err
 	}
+	if err := validateKind(&cfg, data, absPath); err != nil {
+		return nil, err
+	}
 
 	if len(cfg.Extends) == 0 {
 		if len(cfg.Enable) > 0 {

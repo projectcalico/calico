@@ -189,9 +189,10 @@ func waitForAPIReady(c client.Client) error {
 		if err := c.Create(ctx, probe); err == nil {
 			mutated := true
 			if admissionPoliciesEnabled {
+				// Not spec.tier: the CRD schema defaults that with or without the policy.
 				got := &v3.NetworkPolicy{}
 				mutated = c.Get(ctx, client.ObjectKeyFromObject(probe), got) == nil &&
-					got.Spec.Tier == "default"
+					got.Labels["projectcalico.org/tier"] == "default"
 			}
 			_ = c.Delete(ctx, probe)
 			if mutated {

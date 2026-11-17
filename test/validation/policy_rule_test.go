@@ -16,6 +16,7 @@ package validation_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -478,6 +479,173 @@ func TestRule_ProtocolValidation(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// Only TCP, UDP and SCTP carry ports, and without a protocol a rule can only
+// match a named port, whose protocol comes from the endpoint. A port range is a
+// string, and telling it from a name costs more than the CEL budget allows on
+// Kubernetes 1.32, so ranges are left to libcalico-go.
+func TestRule_PortsRequireProtocol(t *testing.T) {
+	const (
+		wantProtocol = "rules that specify ports must set protocol to TCP or UDP or SCTP"
+		wantNumeric  = "rules with a numeric port must set protocol to TCP or UDP or SCTP"
+	)
+	named := numorstring.Port{PortName: "http"}
+	single := numorstring.SinglePort(80)
+	portRange := numorstring.Port{MinPort: 80, MaxPort: 90}
+
+	for _, tt := range []struct {
+		name     string
+		protocol *numorstring.Protocol
+		source   v3.EntityRule
+		dest     v3.EntityRule
+		wantErr  string
+	}{
+		{name: "TCP with ports", protocol: ptr.To(numorstring.ProtocolFromString("TCP")), dest: v3.EntityRule{Ports: []numorstring.Port{single}}},
+		{name: "numeric UDP with ports", protocol: ptr.To(numorstring.ProtocolFromInt(17)), dest: v3.EntityRule{Ports: []numorstring.Port{portRange}}},
+		{name: "ICMP with ports", protocol: ptr.To(numorstring.ProtocolFromString("ICMP")), dest: v3.EntityRule{Ports: []numorstring.Port{single}}, wantErr: wantProtocol},
+		{
+			name:     "UDPLite with source notPorts",
+			protocol: ptr.To(numorstring.ProtocolFromString("UDPLite")),
+			source:   v3.EntityRule{NotPorts: []numorstring.Port{named}},
+			wantErr:  wantProtocol,
+		},
+		{name: "ICMP without ports", protocol: ptr.To(numorstring.ProtocolFromString("ICMP"))},
+		{name: "no protocol with a named port", dest: v3.EntityRule{Ports: []numorstring.Port{named}}},
+		{name: "no protocol with a numeric port", dest: v3.EntityRule{Ports: []numorstring.Port{single}}, wantErr: wantNumeric},
+		{name: "no protocol with a port range", source: v3.EntityRule{Ports: []numorstring.Port{named, portRange}}},
+		{name: "no protocol with a numeric notPort", dest: v3.EntityRule{NotPorts: []numorstring.Port{single}}, wantErr: wantNumeric},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			np := &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np-ports"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{Ingress: []v3.Rule{{
+					Action:      v3.Allow,
+					Protocol:    tt.protocol,
+					Source:      tt.source,
+					Destination: tt.dest,
+				}}},
+			}
+			if tt.wantErr != "" {
+				expectCreateFails(t, np, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, np)
+			}
+		})
+	}
+}
+
+// libcalico-go parses rule nets with ParseCIDR, so a bare IP is rejected too.
+func TestEntityRule_NetsFormat(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		entity  v3.EntityRule
+		wantErr string
+	}{
+		{name: "IPv4 CIDR", entity: v3.EntityRule{Nets: []string{"10.0.0.0/24"}}},
+		{name: "IPv6 CIDR in notNets", entity: v3.EntityRule{NotNets: []string{"fd00::/64"}}},
+		{name: "prefix longer than 32 bits", entity: v3.EntityRule{Nets: []string{"10.0.0.0/33"}}, wantErr: "nets entries must be CIDRs"},
+		{name: "bare address", entity: v3.EntityRule{Nets: []string{"10.0.0.1"}}, wantErr: "nets entries must be CIDRs"},
+		{name: "not an address", entity: v3.EntityRule{NotNets: []string{"not-a-net"}}, wantErr: "notNets entries must be CIDRs"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			gnp := &v3.GlobalNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("gnp-nets")},
+				Spec:       v3.GlobalNetworkPolicySpec{Egress: []v3.Rule{{Action: v3.Allow, Destination: tt.entity}}},
+			}
+			if tt.wantErr != "" {
+				expectCreateFails(t, gnp, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, gnp)
+			}
+		})
+	}
+}
+
+// global() selects non-namespaced endpoints, so it can't be combined with a
+// namespace label expression.
+func TestEntityRule_GlobalNamespaceSelector(t *testing.T) {
+	const wantErr = "a namespaceSelector that uses global() must be exactly global()"
+	for _, tt := range []struct {
+		selector string
+		wantErr  string
+	}{
+		{selector: "global()"},
+		{selector: " global( ) "},
+		{selector: "has(team)"},
+		{selector: "global() && has(team)", wantErr: wantErr},
+		{selector: "!global()", wantErr: wantErr},
+	} {
+		t.Run(tt.selector, func(t *testing.T) {
+			np := &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np-global"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{Ingress: []v3.Rule{{
+					Action: v3.Allow,
+					Source: v3.EntityRule{NamespaceSelector: tt.selector},
+				}}},
+			}
+			if tt.wantErr != "" {
+				expectCreateFails(t, np, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, np)
+			}
+		})
+	}
+}
+
+// Negating every address leaves a rule that can never match.
+func TestEntityRule_NotNetsCatchAll(t *testing.T) {
+	const wantErr = "a catch-all CIDR in notNets matches no traffic"
+	for _, tt := range []struct {
+		name    string
+		entity  v3.EntityRule
+		wantErr string
+	}{
+		{name: "IPv4 catch-all in notNets", entity: v3.EntityRule{NotNets: []string{"0.0.0.0/0"}}, wantErr: wantErr},
+		{name: "IPv6 catch-all in notNets", entity: v3.EntityRule{NotNets: []string{"::/0"}}, wantErr: wantErr},
+		{name: "catch-all in nets", entity: v3.EntityRule{Nets: []string{"0.0.0.0/0"}}},
+		{name: "narrower CIDR in notNets", entity: v3.EntityRule{NotNets: []string{"10.0.0.0/8"}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			np := &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np-catchall"), Namespace: "default"},
+				Spec:       v3.NetworkPolicySpec{Ingress: []v3.Rule{{Action: v3.Allow, Source: tt.entity}}},
+			}
+			if tt.wantErr != "" {
+				expectCreateFails(t, np, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, np)
+			}
+		})
+	}
+}
+
+// libcalico-go holds a named port to the Kubernetes limit of 15 characters.
+func TestRule_PortLength(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		length  int
+		wantErr string
+	}{
+		{name: "15 characters is accepted", length: 15},
+		{name: "16 characters is rejected", length: 16, wantErr: "Too long"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			np := &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np-port"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{Ingress: []v3.Rule{{
+					Action:      v3.Allow,
+					Protocol:    ptr.To(numorstring.ProtocolFromString("TCP")),
+					Destination: v3.EntityRule{Ports: []numorstring.Port{{PortName: strings.Repeat("p", tt.length)}}},
+				}}},
+			}
+			if tt.wantErr != "" {
+				expectCreateFails(t, np, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, np)
+			}
+		})
 	}
 }
 

@@ -15,7 +15,9 @@
 package v1
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -64,7 +66,7 @@ func init() {
 		return nil, fmt.Errorf("unknown filter type value %s; allowed values are '%s'", vals[0], strings.Join(allowedValues, "', '"))
 	})
 
-	codec.RegisterURLQueryJSONType[Filters]()
+	codec.RegisterStrictURLQueryJSONType[Filters]()
 }
 
 func marshalToBytes(str interface{ String() string }) ([]byte, error) {
@@ -240,6 +242,64 @@ type Filters struct {
 	PendingActions   PendingActions        `json:"pending_actions,omitempty"`
 	Policies         []PolicyMatch         `json:"policies,omitempty"`
 	Reporter         Reporter              `json:"reporter,omitempty"`
+	Endpoints        []FlowEndpointsMatch  `json:"endpoints,omitempty"`
+}
+
+// FlowEndpointsMatch is one entry of the endpoints filter. Source and Dest each constrain their own side of
+// the flow and may be set together. Either matches when the source or the destination matches, and can't be
+// combined with Source or Dest. A Namespace or Name hint request should carry only the edited row's either
+// entry, since each either entry widens the per-side check.
+type FlowEndpointsMatch struct {
+	Source *EndpointMatch `json:"source,omitempty"`
+	Dest   *EndpointMatch `json:"dest,omitempty"`
+	Either *EndpointMatch `json:"either,omitempty"`
+}
+
+// UnmarshalJSON rejects an entry that sets no end or mixes either with source or dest, since an empty entry
+// would match every flow.
+func (e *FlowEndpointsMatch) UnmarshalJSON(b []byte) error {
+	type flowEndpointsMatch FlowEndpointsMatch
+	var m flowEndpointsMatch
+	if err := unmarshalStrict(b, &m); err != nil {
+		return err
+	}
+	if m.Source == nil && m.Dest == nil && m.Either == nil {
+		return errors.New("an endpoints entry needs source, dest or either")
+	}
+	if m.Either != nil && (m.Source != nil || m.Dest != nil) {
+		return errors.New("either can't be combined with source or dest")
+	}
+	*e = FlowEndpointsMatch(m)
+	return nil
+}
+
+// EndpointMatch is one end of a flow. The namespace and the name are each optional, but not both empty.
+type EndpointMatch struct {
+	Namespace FilterMatch[string] `json:"namespace"`
+	Name      FilterMatch[string] `json:"name"`
+}
+
+// UnmarshalJSON rejects a match with neither a namespace nor a name, which would match every flow.
+func (e *EndpointMatch) UnmarshalJSON(b []byte) error {
+	type endpointMatch EndpointMatch
+	var m endpointMatch
+	if err := unmarshalStrict(b, &m); err != nil {
+		return err
+	}
+	if m.Namespace.V == "" && m.Name.V == "" {
+		return errors.New("an endpoint match needs a namespace or a name")
+	}
+	*e = EndpointMatch(m)
+	return nil
+}
+
+// unmarshalStrict decodes b into v and rejects any field v doesn't declare. A custom UnmarshalJSON gets raw bytes,
+// so the outer decoder's DisallowUnknownFields doesn't reach it, and a misspelt key in an endpoints entry would
+// otherwise drop out and widen the filter.
+func unmarshalStrict(b []byte, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	return dec.Decode(v)
 }
 
 type PolicyMatch struct {

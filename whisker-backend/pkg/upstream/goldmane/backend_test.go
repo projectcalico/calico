@@ -204,6 +204,34 @@ func TestBackendFilterHintsParameterConversion(t *testing.T) {
 	Expect(req.String()).To(Equal(expected.String()))
 }
 
+// TestBackendFilterHintsDisplayValues verifies that the side-agnostic Name and Namespace hints
+// translate Goldmane's stored values for external endpoints into their display values.
+func TestBackendFilterHintsDisplayValues(t *testing.T) {
+	RegisterTestingT(t)
+
+	tests := []hintDisplayCase{
+		{proto.FilterType_FilterTypeName, "pub", "PUBLIC NETWORK"},
+		{proto.FilterType_FilterTypeNamespace, "-", "Global"},
+		{proto.FilterType_FilterTypeName, "coredns", "coredns"},
+	}
+	for _, tc := range tests {
+		cli := new(climocks.FlowsClient)
+		cli.On("FilterHints", mock.Anything, mock.Anything).Return(&proto.ListMetadata{}, []*proto.FilterHint{{Value: tc.stored}}, nil).Once()
+
+		ft := whiskerv1.FilterType(tc.typ)
+		_, hints, err := NewBackend(cli).FilterHints(context.Background(), whiskerv1.FlowFilterHintsRequest{Type: &ft}, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(hints).To(HaveLen(1))
+		Expect(hints[0].Value).To(Equal(tc.want), tc.typ.String())
+	}
+}
+
+type hintDisplayCase struct {
+	typ    proto.FilterType
+	stored string
+	want   string
+}
+
 func TestBackendFilterHints_RejectsFlowFilter(t *testing.T) {
 	RegisterTestingT(t)
 

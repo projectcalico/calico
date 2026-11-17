@@ -205,7 +205,7 @@ func TestOperatorCommand(t *testing.T) {
 
 	t.Run("logs under the product version", func(t *testing.T) {
 		t.Chdir(t.TempDir())
-		r := &recordingRunner{}
+		r := newFakeRunner()
 		prevRunner, prevPin := commandRunner, pinForBuild
 		commandRunner = r
 		pinForBuild = func(*Config, *cli.Command) (*pinnedversion.Pin, error) {
@@ -221,10 +221,10 @@ func TestOperatorCommand(t *testing.T) {
 		if err := cmd.Run(context.Background(), []string{"build", "--hashrelease", "--no-validation"}); err != nil {
 			t.Fatalf("build: %v", err)
 		}
-		if len(r.logPaths) == 0 {
+		if len(r.logPaths()) == 0 {
 			t.Fatal("nothing ran")
 		}
-		for _, p := range r.logPaths {
+		for _, p := range r.logPaths() {
 			if !strings.HasPrefix(p, "/logs/v3.34.0/") {
 				t.Errorf("log %q is not under /logs/v3.34.0", p)
 			}
@@ -233,7 +233,7 @@ func TestOperatorCommand(t *testing.T) {
 
 	t.Run("publish resumes from its record", func(t *testing.T) {
 		t.Chdir(t.TempDir())
-		r := &recordingRunner{}
+		r := newFakeRunner()
 		prevRunner, prevPin, prevResolve := commandRunner, pinForPublish, registryDigestResolver
 		commandRunner = r
 		pinForPublish = func(*Config, *cli.Command) (*pinnedversion.Pin, error) {
@@ -247,12 +247,12 @@ func TestOperatorCommand(t *testing.T) {
 
 		cfg := &Config{RepoRootDir: t.TempDir(), OutputDir: filepath.Join(t.TempDir(), "upload")}
 		publish := func() int {
-			before := len(r.args)
+			before := len(r.args())
 			cmd := &cli.Command{Flags: freshFlags(operatorPublishFlags), Action: operatorPublishAction(cfg)}
 			if err := cmd.Run(context.Background(), []string{"publish", "--hashrelease"}); err != nil {
 				t.Fatalf("publish: %v", err)
 			}
-			return len(r.args) - before
+			return len(r.args()) - before
 		}
 		if n := publish(); n == 0 {
 			t.Fatal("first publish ran nothing")

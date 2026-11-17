@@ -20,9 +20,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/plan"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const filePerms = 0o644
@@ -100,7 +100,7 @@ func (s settings) publishOne(u Upload) error {
 	// Checked here rather than up front: an earlier upload in the list may
 	// be what creates this source.
 	if u.Source != "" {
-		exists, err := utils.PathExists(u.Source)
+		exists, err := fsutil.PathExists(u.Source)
 		if err != nil {
 			return s.Errorf("reading %s source (%s): %w", u.label(), u.Source, err)
 		}

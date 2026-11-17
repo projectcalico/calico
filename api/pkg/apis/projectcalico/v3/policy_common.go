@@ -44,6 +44,8 @@ const (
 // +kubebuilder:validation:XValidation:rule="(!has(self.notProtocol) || (self.notProtocol != 'ICMPv6' && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion == 6",message="protocol ICMPv6 requires ipVersion 6",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="!has(self.protocol) || (type(self.protocol) == int ? self.protocol >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])",message="protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP, UDPLite) or a number in 1-255",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="!has(self.notProtocol) || (type(self.notProtocol) == int ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])",message="protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP, UDPLite) or a number in 1-255",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.protocol) || (type(self.protocol) == int ? self.protocol in [6, 17, 132] : self.protocol in ['TCP', 'UDP', 'SCTP']) || ((!has(self.source) || ((!has(self.source.ports) || size(self.source.ports) == 0) && (!has(self.source.notPorts) || size(self.source.notPorts) == 0))) && (!has(self.destination) || ((!has(self.destination.ports) || size(self.destination.ports) == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts) == 0))))",message="rules that specify ports must set protocol to TCP or UDP or SCTP",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="has(self.protocol) || ((!has(self.source) || ((!has(self.source.ports) || self.source.ports.all(p, type(p) == string)) && (!has(self.source.notPorts) || self.source.notPorts.all(p, type(p) == string)))) && (!has(self.destination) || ((!has(self.destination.ports) || self.destination.ports.all(p, type(p) == string)) && (!has(self.destination.notPorts) || self.destination.notPorts.all(p, type(p) == string)))))",message="rules with a numeric port must set protocol to TCP or UDP or SCTP",reason=FieldValueInvalid
 type Rule struct {
 	Action Action `json:"action"`
 
@@ -149,11 +151,14 @@ type ICMPFields struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.services) || size(self.services.name) > 0",message="services must specify a service name",reason=FieldValueRequired
 // +kubebuilder:validation:XValidation:rule="!has(self.services) || (!has(self.selector) || size(self.selector) == 0) && (!has(self.notSelector) || size(self.notSelector) == 0)",message="cannot specify Selector/NotSelector and Services on the same rule",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.services) || (!has(self.nets) || size(self.nets) == 0) && (!has(self.notNets) || size(self.notNets) == 0)",message="cannot specify Nets/NotNets and Services on the same rule",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(') || self.namespaceSelector.matches('^ *global[(] *[)] *$')",message="a namespaceSelector that uses global() must be exactly global()",reason=FieldValueInvalid
 type EntityRule struct {
 	// Nets is an optional field that restricts the rule to only apply to traffic that
 	// originates from (or terminates at) IP addresses in any of the given subnets.
 	// +listType=set
 	// +kubebuilder:validation:MaxItems=256
+	// +kubebuilder:validation:items:MaxLength=49
+	// +kubebuilder:validation:XValidation:rule="self.all(n, isCIDR(n))",message="nets entries must be CIDRs",reason=FieldValueInvalid
 	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,net"`
 
 	// Selector is an optional field that contains a selector expression (see Policy for
@@ -218,6 +223,9 @@ type EntityRule struct {
 	// NotNets is the negated version of the Nets field.
 	// +listType=set
 	// +kubebuilder:validation:MaxItems=256
+	// +kubebuilder:validation:items:MaxLength=49
+	// +kubebuilder:validation:XValidation:rule="self.all(n, isCIDR(n))",message="notNets entries must be CIDRs",reason=FieldValueInvalid
+	// +kubebuilder:validation:XValidation:rule="self.all(n, n != '0.0.0.0/0' && n != '::/0')",message="a catch-all CIDR in notNets matches no traffic",reason=FieldValueInvalid
 	NotNets []string `json:"notNets,omitempty" validate:"omitempty,dive,net"`
 
 	// NotSelector is the negated version of the Selector field.  See Selector field for
@@ -248,6 +256,7 @@ type ServiceMatch struct {
 	// Namespace specifies the namespace of the given Service. If left empty, the rule
 	// will match within this policy's namespace.
 	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$`
 	Namespace string `json:"namespace,omitempty" validate:"omitempty,name"`
 }
 

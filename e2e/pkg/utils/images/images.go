@@ -82,10 +82,10 @@ func WindowsClientImage() string {
 	switch opsys {
 	case "1809", "1909", "1903", "2004", "20H2":
 		return "mcr.microsoft.com/windows/servercore:" + opsys
-	case "2022":
-		// For 2022, servercore uses "ltsc2022" and does not have the image tag
-		// "2022" (unlike previous Windows versions).
-		return "mcr.microsoft.com/windows/servercore:ltsc2022"
+	case "2022", "2025":
+		// From 2022, servercore only has "ltscYYYY" tags, not a bare "YYYY" tag
+		// like previous Windows versions.
+		return "mcr.microsoft.com/windows/servercore:ltsc" + opsys
 	default:
 		framework.Failf("Windows OS version currently not supported: %s", opsys)
 	}
