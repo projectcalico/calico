@@ -59,12 +59,14 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/bpfroute"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dscp"
+	"github.com/projectcalico/calico/felix/dataplane/linux/endpoint"
 	"github.com/projectcalico/calico/felix/dataplane/linux/floatingip"
 	"github.com/projectcalico/calico/felix/dataplane/linux/flowtable"
 	"github.com/projectcalico/calico/felix/dataplane/linux/hostip"
 	"github.com/projectcalico/calico/felix/dataplane/linux/hostsipset"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/livemigration"
 	"github.com/projectcalico/calico/felix/dataplane/linux/masq"
 	"github.com/projectcalico/calico/felix/dataplane/linux/modprobe"
 	"github.com/projectcalico/calico/felix/dataplane/linux/noencap"
@@ -231,7 +233,7 @@ type InternalDataplane struct {
 	ifaceMonitor *ifacemonitor.InterfaceMonitor
 	ifaceUpdates chan any
 
-	liveMigrationMonitor *liveMigrationMonitor
+	liveMigrationMonitor *livemigration.Monitor
 
 	endpointStatusCombiner *endpointStatusCombiner
 
@@ -466,7 +468,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 		getKubeProxyNftablesEnabled: detectKubeProxyNftablesMode,
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
-	dp.liveMigrationMonitor = newLiveMigrationMonitor(config.LiveMigrationRouteConvergenceTime, config.IPAMClient)
+	dp.liveMigrationMonitor = livemigration.NewMonitor(config.LiveMigrationRouteConvergenceTime, config.IPAMClient)
 	dp.RegisterManager(dp.liveMigrationMonitor)
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
@@ -1174,16 +1176,16 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 
 	dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV4)
 
-	epManager := newEndpointManager(
-		&endpointManagerConfig{
-			kubeIPVSSupportEnabled: config.RulesConfig.KubeIPVSSupportEnabled,
-			wlInterfacePrefixes:    config.RulesConfig.WorkloadIfacePrefixes,
-			bpfEnabled:             config.BPFEnabled,
-			bpfAttachType:          config.BPFAttachType,
-			nft:                    nftablesEnabled,
-			floatingIPsEnabled:     config.FloatingIPsEnabled,
-			normalRoutePriority:    config.IPv4NormalRoutePriority,
-			elevatedRoutePriority:  config.IPv4ElevatedRoutePriority,
+	epManager := endpoint.NewManager(
+		&endpoint.Config{
+			KubeIPVSSupportEnabled: config.RulesConfig.KubeIPVSSupportEnabled,
+			WorkloadIfacePrefixes:  config.RulesConfig.WorkloadIfacePrefixes,
+			BPFEnabled:             config.BPFEnabled,
+			BPFAttachType:          config.BPFAttachType,
+			NFTables:               nftablesEnabled,
+			FloatingIPsEnabled:     config.FloatingIPsEnabled,
+			NormalRoutePriority:    config.IPv4NormalRoutePriority,
+			ElevatedRoutePriority:  config.IPv4ElevatedRoutePriority,
 		},
 		rawTableV4,
 		mangleTableV4,
@@ -1204,9 +1206,9 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
-	dp.liveMigrationMonitor.registerListener(epManager)
+	dp.liveMigrationMonitor.RegisterListener(epManager)
 	if mainTablePolV4 != nil {
-		mainTablePolV4.IsWorkloadBGPPeerIface = epManager.ifaceIsForLocalBGPPeer
+		mainTablePolV4.IsWorkloadBGPPeerIface = epManager.IfaceIsForLocalBGPPeer
 	}
 	dp.RegisterManager(floatingip.NewManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(masq.NewManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
@@ -1421,16 +1423,16 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 		}
 		dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV6)
 
-		epManagerV6 := newEndpointManager(
-			&endpointManagerConfig{
-				kubeIPVSSupportEnabled: config.RulesConfig.KubeIPVSSupportEnabled,
-				wlInterfacePrefixes:    config.RulesConfig.WorkloadIfacePrefixes,
-				bpfEnabled:             config.BPFEnabled,
-				bpfAttachType:          config.BPFAttachType,
-				nft:                    nftablesEnabled,
-				floatingIPsEnabled:     config.FloatingIPsEnabled,
-				normalRoutePriority:    config.IPv6NormalRoutePriority,
-				elevatedRoutePriority:  config.IPv6ElevatedRoutePriority,
+		epManagerV6 := endpoint.NewManager(
+			&endpoint.Config{
+				KubeIPVSSupportEnabled: config.RulesConfig.KubeIPVSSupportEnabled,
+				WorkloadIfacePrefixes:  config.RulesConfig.WorkloadIfacePrefixes,
+				BPFEnabled:             config.BPFEnabled,
+				BPFAttachType:          config.BPFAttachType,
+				NFTables:               nftablesEnabled,
+				FloatingIPsEnabled:     config.FloatingIPsEnabled,
+				NormalRoutePriority:    config.IPv6NormalRoutePriority,
+				ElevatedRoutePriority:  config.IPv6ElevatedRoutePriority,
 			},
 			rawTableV6,
 			mangleTableV6,
@@ -1450,9 +1452,9 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 			nil, // arpMaps
 		)
 		dp.RegisterManager(epManagerV6)
-		dp.liveMigrationMonitor.registerListener(epManagerV6)
+		dp.liveMigrationMonitor.RegisterListener(epManagerV6)
 		if mainTablePolV6 != nil {
-			mainTablePolV6.IsWorkloadBGPPeerIface = epManagerV6.ifaceIsForLocalBGPPeer
+			mainTablePolV6.IsWorkloadBGPPeerIface = epManagerV6.IfaceIsForLocalBGPPeer
 		}
 		dp.RegisterManager(floatingip.NewManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(masq.NewManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
@@ -2291,12 +2293,12 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onDatastoreMessage(msg)
 		case ifaceUpdate := <-d.ifaceUpdates:
 			d.onIfaceMonitorMessage(ifaceUpdate)
-		case id := <-d.liveMigrationMonitor.timerC:
+		case id := <-d.liveMigrationMonitor.TimerC():
 			d.onLiveMigrationTimerPop(id)
-			drainChan(d.liveMigrationMonitor.timerC, d.onLiveMigrationTimerPop)
-		case id := <-d.liveMigrationMonitor.garpC:
+			drainChan(d.liveMigrationMonitor.TimerC(), d.onLiveMigrationTimerPop)
+		case id := <-d.liveMigrationMonitor.GARPC():
 			d.onLiveMigrationGARPDetected(id)
-			drainChan(d.liveMigrationMonitor.garpC, d.onLiveMigrationGARPDetected)
+			drainChan(d.liveMigrationMonitor.GARPC(), d.onLiveMigrationGARPDetected)
 		case name := <-d.ipipParentIfaceC:
 			d.onParentDeviceUpdate(d.ipipManager, name)
 		case name := <-d.noEncapParentIfaceC:

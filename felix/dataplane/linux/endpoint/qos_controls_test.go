@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package endpoint
 
 import (
 	"testing"
@@ -46,9 +46,9 @@ func TestIsQoSBandwidthSupported(t *testing.T) {
 			tc.IsTcxSupported = func() bool { return tst.tcxSupported }
 			defer func() { tc.IsTcxSupported = origIsTcxSupported }()
 
-			m := &endpointManager{cfg: &endpointManagerConfig{
-				bpfEnabled:    tst.bpfEnabled,
-				bpfAttachType: tst.attachType,
+			m := &Manager{cfg: &Config{
+				BPFEnabled:    tst.bpfEnabled,
+				BPFAttachType: tst.attachType,
 			}}
 
 			if actual := m.isQoSBandwidthSupported(); actual != tst.expected {
