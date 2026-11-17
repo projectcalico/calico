@@ -865,7 +865,7 @@ func (m *Manager) ensureAddressOnLink(ipStr string, link netlink.Link) error {
 	return nil
 }
 
-// vlanLinksIncompat takes two vxlan devices and compares them to make sure they match. If they do not match,
+// vxlanLinksIncompat takes two vxlan devices and compares them to make sure they match. If they do not match,
 // this function will return a message indicating which configuration is mismatched.
 func vxlanLinksIncompat(l1, l2 netlink.Link) string {
 	if l1.Type() != l2.Type() {

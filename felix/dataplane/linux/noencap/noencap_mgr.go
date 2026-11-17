@@ -131,7 +131,7 @@ func (m *Manager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Ta
 func (m *Manager) MonitorParentDevice(ctx context.Context, wait time.Duration, parentIfaceC chan string) {
 	// NoEncap manager does not need to configure any interface. It expects the parent interface to be up and configured.
 	// However, it needs to monitor the parent interface to update routes. For this, we can use route manager
-	// keepDeviceInSync method without providing any device to configure.
+	// KeepDeviceInSync method without providing any device to configure.
 	m.routeMgr.KeepDeviceInSync(ctx, 0, false, wait, parentIfaceC, m.device)
 }
 

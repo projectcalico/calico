@@ -435,6 +435,7 @@ components:
       - ^felix/dataplane/linux/bpfep/bpfepdefs/[^/]*\.go$
       - ^felix/dataplane/linux/bpfroute/[^/]*\.go$
       - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/dpconfig/[^/]*\.go$
       - ^felix/dataplane/linux/dscp/[^/]*\.go$
       - ^felix/dataplane/linux/endpoint/[^/]*\.go$
       - ^felix/dataplane/linux/floatingip/[^/]*\.go$
@@ -1500,6 +1501,7 @@ components:
       - ^felix/dataplane/linux/bpfep/bpfepdefs/[^/]*\.go$
       - ^felix/dataplane/linux/bpfroute/[^/]*\.go$
       - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/dataplane/linux/dpconfig/[^/]*\.go$
       - ^felix/dataplane/linux/dscp/[^/]*\.go$
       - ^felix/dataplane/linux/endpoint/[^/]*\.go$
       - ^felix/dataplane/linux/floatingip/[^/]*\.go$

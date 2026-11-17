@@ -47,6 +47,7 @@ type garpHandle interface {
 	gopacket.PacketDataSource
 }
 
+// Listener is told about every live migration FSM state change.
 type Listener interface {
 	OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state State)
 }

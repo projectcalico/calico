@@ -6,6 +6,7 @@ applyTo:
   - "felix/dataplane/linux/bpfep/**"
   - "felix/dataplane/linux/bpfroute/**"
   - "felix/dataplane/linux/vxlan/**"
+  - "felix/dataplane/linux/route/route_mgr.go"
   - "felix/rules/static.go"
   - "felix/fv/bpf_*_test.go"
 ---
