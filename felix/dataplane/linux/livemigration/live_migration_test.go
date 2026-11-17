@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package livemigration
 
 import (
 	"context"
@@ -45,7 +45,7 @@ type fakeLiveMigrationListener struct {
 	updates []liveMigrationStateUpdate
 }
 
-func (f *fakeLiveMigrationListener) OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState) {
+func (f *fakeLiveMigrationListener) OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state State) {
 	f.updates = append(f.updates, liveMigrationStateUpdate{ID: id, State: state})
 }
 
@@ -57,23 +57,23 @@ func (f *fakeLiveMigrationListener) drain() []liveMigrationStateUpdate {
 
 // newTestMonitor creates a liveMigrationMonitor with a no-op GARP handle factory
 // and a fake listener, preventing tests from opening real AF_PACKET sockets.
-func newTestMonitor(convergenceTime time.Duration) *liveMigrationMonitor {
-	m := newLiveMigrationMonitor(convergenceTime, &fakeIPAM{})
+func newTestMonitor(convergenceTime time.Duration) *Monitor {
+	m := NewMonitor(convergenceTime, &fakeIPAM{})
 	m.newGARPHandle = func(ifaceName string) (garpHandle, error) {
 		return newFakeGARPHandle(), nil
 	}
-	m.registerListener(&fakeLiveMigrationListener{})
+	m.RegisterListener(&fakeLiveMigrationListener{})
 	return m
 }
 
 // testListener returns the fake listener from a test monitor.
-func testListener(m *liveMigrationMonitor) *fakeLiveMigrationListener {
+func testListener(m *Monitor) *fakeLiveMigrationListener {
 	return m.listeners[0].(*fakeLiveMigrationListener)
 }
 
 // drainUpdates resolves the current batch and returns the updates delivered to
 // the fake listener.  This replaces the old PendingUpdates() method in tests.
-func drainUpdates(m *liveMigrationMonitor) []liveMigrationStateUpdate {
+func drainUpdates(m *Monitor) []liveMigrationStateUpdate {
 	_ = m.ResolveUpdateBatch()
 	return testListener(m).drain()
 }
@@ -84,7 +84,7 @@ type swapCall struct {
 }
 
 // expectSwap replaces the monitor's swap function with a stub that records calls.
-func expectSwap(m *liveMigrationMonitor) chan swapCall {
+func expectSwap(m *Monitor) chan swapCall {
 	calls := make(chan swapCall, 8)
 	m.ensureActiveVMOwnerAttrs = func(
 		ctx context.Context,
@@ -124,7 +124,7 @@ func awaitSwap(t *testing.T, calls chan swapCall) swapCall {
 
 // testFSM creates a liveMigrationFSM in the given state, wired to a monitor for
 // pendingUpdates capture.
-func testFSM(state liveMigrationState) (*liveMigrationFSM, *liveMigrationMonitor) {
+func testFSM(state State) (*liveMigrationFSM, *Monitor) {
 	m := newTestMonitor(testConvergenceTime)
 	id := types.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "test-pod", EndpointId: "ep"}
 	fsm := &liveMigrationFSM{
@@ -213,41 +213,41 @@ func wepRemove(id types.WorkloadEndpointID) *proto.WorkloadEndpointRemove {
 func TestFSMTransitionTable(t *testing.T) {
 	tests := []struct {
 		name      string
-		from      liveMigrationState
+		from      State
 		input     liveMigrationInput
-		wantState liveMigrationState
+		wantState State
 	}{
 		// Base state
-		{"Base+Target→Target", liveMigrationStateBase, liveMigrationInputTarget, liveMigrationStateTarget},
-		{"Base+GARPDetected→Base", liveMigrationStateBase, liveMigrationInputGARPDetected, liveMigrationStateBase},
-		{"Base+NoRole→Base", liveMigrationStateBase, liveMigrationInputNoRole, liveMigrationStateBase},
-		{"Base+TimerPop→Base", liveMigrationStateBase, liveMigrationInputTimerPop, liveMigrationStateBase},
-		{"Base+Source→Base", liveMigrationStateBase, liveMigrationInputSource, liveMigrationStateBase},
-		{"Base+Deleted→Base", liveMigrationStateBase, liveMigrationInputDeleted, liveMigrationStateBase},
+		{"Base+Target→Target", StateBase, liveMigrationInputTarget, StateTarget},
+		{"Base+GARPDetected→Base", StateBase, liveMigrationInputGARPDetected, StateBase},
+		{"Base+NoRole→Base", StateBase, liveMigrationInputNoRole, StateBase},
+		{"Base+TimerPop→Base", StateBase, liveMigrationInputTimerPop, StateBase},
+		{"Base+Source→Base", StateBase, liveMigrationInputSource, StateBase},
+		{"Base+Deleted→Base", StateBase, liveMigrationInputDeleted, StateBase},
 
 		// Target state
-		{"Target+Target→Target", liveMigrationStateTarget, liveMigrationInputTarget, liveMigrationStateTarget},
-		{"Target+GARPDetected→Live", liveMigrationStateTarget, liveMigrationInputGARPDetected, liveMigrationStateLive},
-		{"Target+NoRole→TimeWait", liveMigrationStateTarget, liveMigrationInputNoRole, liveMigrationStateTimeWait},
-		{"Target+TimerPop→Target", liveMigrationStateTarget, liveMigrationInputTimerPop, liveMigrationStateTarget},
-		{"Target+Source→Base", liveMigrationStateTarget, liveMigrationInputSource, liveMigrationStateBase},
-		{"Target+Deleted→Base", liveMigrationStateTarget, liveMigrationInputDeleted, liveMigrationStateBase},
+		{"Target+Target→Target", StateTarget, liveMigrationInputTarget, StateTarget},
+		{"Target+GARPDetected→Live", StateTarget, liveMigrationInputGARPDetected, StateLive},
+		{"Target+NoRole→TimeWait", StateTarget, liveMigrationInputNoRole, StateTimeWait},
+		{"Target+TimerPop→Target", StateTarget, liveMigrationInputTimerPop, StateTarget},
+		{"Target+Source→Base", StateTarget, liveMigrationInputSource, StateBase},
+		{"Target+Deleted→Base", StateTarget, liveMigrationInputDeleted, StateBase},
 
 		// Live state
-		{"Live+Target→Live", liveMigrationStateLive, liveMigrationInputTarget, liveMigrationStateLive},
-		{"Live+GARPDetected→Live", liveMigrationStateLive, liveMigrationInputGARPDetected, liveMigrationStateLive},
-		{"Live+NoRole→TimeWait", liveMigrationStateLive, liveMigrationInputNoRole, liveMigrationStateTimeWait},
-		{"Live+TimerPop→Live", liveMigrationStateLive, liveMigrationInputTimerPop, liveMigrationStateLive},
-		{"Live+Source→Base", liveMigrationStateLive, liveMigrationInputSource, liveMigrationStateBase},
-		{"Live+Deleted→Base", liveMigrationStateLive, liveMigrationInputDeleted, liveMigrationStateBase},
+		{"Live+Target→Live", StateLive, liveMigrationInputTarget, StateLive},
+		{"Live+GARPDetected→Live", StateLive, liveMigrationInputGARPDetected, StateLive},
+		{"Live+NoRole→TimeWait", StateLive, liveMigrationInputNoRole, StateTimeWait},
+		{"Live+TimerPop→Live", StateLive, liveMigrationInputTimerPop, StateLive},
+		{"Live+Source→Base", StateLive, liveMigrationInputSource, StateBase},
+		{"Live+Deleted→Base", StateLive, liveMigrationInputDeleted, StateBase},
 
 		// TimeWait state
-		{"TimeWait+Target→TimeWait", liveMigrationStateTimeWait, liveMigrationInputTarget, liveMigrationStateTimeWait},
-		{"TimeWait+GARPDetected→TimeWait", liveMigrationStateTimeWait, liveMigrationInputGARPDetected, liveMigrationStateTimeWait},
-		{"TimeWait+NoRole→TimeWait", liveMigrationStateTimeWait, liveMigrationInputNoRole, liveMigrationStateTimeWait},
-		{"TimeWait+TimerPop→Base", liveMigrationStateTimeWait, liveMigrationInputTimerPop, liveMigrationStateBase},
-		{"TimeWait+Source→Base", liveMigrationStateTimeWait, liveMigrationInputSource, liveMigrationStateBase},
-		{"TimeWait+Deleted→Base", liveMigrationStateTimeWait, liveMigrationInputDeleted, liveMigrationStateBase},
+		{"TimeWait+Target→TimeWait", StateTimeWait, liveMigrationInputTarget, StateTimeWait},
+		{"TimeWait+GARPDetected→TimeWait", StateTimeWait, liveMigrationInputGARPDetected, StateTimeWait},
+		{"TimeWait+NoRole→TimeWait", StateTimeWait, liveMigrationInputNoRole, StateTimeWait},
+		{"TimeWait+TimerPop→Base", StateTimeWait, liveMigrationInputTimerPop, StateBase},
+		{"TimeWait+Source→Base", StateTimeWait, liveMigrationInputSource, StateBase},
+		{"TimeWait+Deleted→Base", StateTimeWait, liveMigrationInputDeleted, StateBase},
 	}
 
 	for _, tt := range tests {
@@ -277,7 +277,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0].State).To(Equal(liveMigrationStateTarget))
+		g.Expect(updates[0].State).To(Equal(StateTarget))
 		g.Expect(updates[0].ID).To(Equal(wepID1))
 	})
 
@@ -291,7 +291,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		// Target + NoRole → TimeWait
-		g.Expect(updates[0].State).To(Equal(liveMigrationStateTimeWait))
+		g.Expect(updates[0].State).To(Equal(StateTimeWait))
 	})
 
 	t.Run("role change TARGET→SOURCE drives Source input", func(t *testing.T) {
@@ -304,7 +304,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		// Target + Source → Base
-		g.Expect(updates[0].State).To(Equal(liveMigrationStateBase))
+		g.Expect(updates[0].State).To(Equal(StateBase))
 	})
 
 	t.Run("same role repeated is no-op", func(t *testing.T) {
@@ -334,7 +334,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		// Target + Deleted → Base
-		g.Expect(updates[0].State).To(Equal(liveMigrationStateBase))
+		g.Expect(updates[0].State).To(Equal(StateBase))
 		// Role and iface name should be cleaned up.
 		g.Expect(m.roles).NotTo(HaveKey(wepID1))
 		g.Expect(m.ifaceNames).NotTo(HaveKey(wepID1))
@@ -365,12 +365,12 @@ func TestMonitorMultipleListeners(t *testing.T) {
 		// In production the monitor has one listener per IP version; a second
 		// listener here stands in for the IPv6 endpoint manager.
 		second := &fakeLiveMigrationListener{}
-		m.registerListener(second)
+		m.RegisterListener(second)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		g.Expect(m.ResolveUpdateBatch()).NotTo(HaveOccurred())
 
-		expected := []liveMigrationStateUpdate{{ID: wepID1, State: liveMigrationStateTarget}}
+		expected := []liveMigrationStateUpdate{{ID: wepID1, State: StateTarget}}
 		g.Expect(testListener(m).drain()).To(Equal(expected))
 		g.Expect(second.drain()).To(Equal(expected))
 	})
@@ -400,7 +400,7 @@ func TestFSMLifecycle(t *testing.T) {
 		g.Expect(m.fsms).To(HaveLen(1))
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0].State).To(Equal(liveMigrationStateLive))
+		g.Expect(updates[0].State).To(Equal(StateLive))
 	})
 
 	t.Run("ResolveUpdateBatch drains and clears buffer", func(t *testing.T) {
@@ -463,7 +463,7 @@ func TestFSMLifecycle(t *testing.T) {
 
 		// startGARPDetection should skip because ifaceName is empty.
 		g.Expect(handleCreated).To(BeFalse())
-		g.Expect(m.fsms[wepID1].currentState).To(Equal(liveMigrationStateTarget))
+		g.Expect(m.fsms[wepID1].currentState).To(Equal(StateTarget))
 	})
 }
 
@@ -475,10 +475,10 @@ func TestLiveMigrationScenarios(t *testing.T) {
 		m := newTestMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		expectUpdate(g, m, liveMigrationStateTarget)
+		expectUpdate(g, m, StateTarget)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
-		expectUpdate(g, m, liveMigrationStateTimeWait)
+		expectUpdate(g, m, StateTimeWait)
 	})
 
 	t.Run("happy path with GARP: TARGET → GARP → NO_ROLE", func(t *testing.T) {
@@ -486,13 +486,13 @@ func TestLiveMigrationScenarios(t *testing.T) {
 		m := newTestMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		expectUpdate(g, m, liveMigrationStateTarget)
+		expectUpdate(g, m, StateTarget)
 
 		m.OnGARPDetected(wepID1)
-		expectUpdate(g, m, liveMigrationStateLive)
+		expectUpdate(g, m, StateLive)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
-		expectUpdate(g, m, liveMigrationStateTimeWait)
+		expectUpdate(g, m, StateTimeWait)
 	})
 
 	t.Run("re-migration: TARGET → SOURCE", func(t *testing.T) {
@@ -500,10 +500,10 @@ func TestLiveMigrationScenarios(t *testing.T) {
 		m := newTestMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		expectUpdate(g, m, liveMigrationStateTarget)
+		expectUpdate(g, m, StateTarget)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
-		expectUpdate(g, m, liveMigrationStateBase)
+		expectUpdate(g, m, StateBase)
 	})
 
 	t.Run("delete during migration: TARGET → Remove", func(t *testing.T) {
@@ -511,10 +511,10 @@ func TestLiveMigrationScenarios(t *testing.T) {
 		m := newTestMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		expectUpdate(g, m, liveMigrationStateTarget)
+		expectUpdate(g, m, StateTarget)
 
 		m.OnUpdate(wepRemove(wepID1))
-		expectUpdate(g, m, liveMigrationStateBase)
+		expectUpdate(g, m, StateBase)
 	})
 
 	t.Run("two independent WEPs", func(t *testing.T) {
@@ -525,17 +525,17 @@ func TestLiveMigrationScenarios(t *testing.T) {
 		m.OnUpdate(wepUpdate(wepID2, proto.LiveMigrationRole_TARGET))
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(2))
-		g.Expect(updates[0]).To(Equal(liveMigrationStateUpdate{ID: wepID1, State: liveMigrationStateTarget}))
-		g.Expect(updates[1]).To(Equal(liveMigrationStateUpdate{ID: wepID2, State: liveMigrationStateTarget}))
+		g.Expect(updates[0]).To(Equal(liveMigrationStateUpdate{ID: wepID1, State: StateTarget}))
+		g.Expect(updates[1]).To(Equal(liveMigrationStateUpdate{ID: wepID2, State: StateTarget}))
 
 		// Drive WEP1 to Live via GARP, WEP2 stays in Target.
 		m.OnGARPDetected(wepID1)
 		updates = drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0]).To(Equal(liveMigrationStateUpdate{ID: wepID1, State: liveMigrationStateLive}))
+		g.Expect(updates[0]).To(Equal(liveMigrationStateUpdate{ID: wepID1, State: StateLive}))
 		// WEP2 FSM should still exist in Target.
 		g.Expect(m.fsms).To(HaveKey(wepID2))
-		g.Expect(m.fsms[wepID2].currentState).To(Equal(liveMigrationStateTarget))
+		g.Expect(m.fsms[wepID2].currentState).To(Equal(StateTarget))
 	})
 
 	t.Run("idempotent role update", func(t *testing.T) {
@@ -555,16 +555,16 @@ func TestLiveMigrationScenarios(t *testing.T) {
 		m := newTestMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		expectUpdate(g, m, liveMigrationStateTarget)
+		expectUpdate(g, m, StateTarget)
 
 		m.OnGARPDetected(wepID1)
-		expectUpdate(g, m, liveMigrationStateLive)
+		expectUpdate(g, m, StateLive)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
-		expectUpdate(g, m, liveMigrationStateTimeWait)
+		expectUpdate(g, m, StateTimeWait)
 
 		m.OnTimerPop(wepID1)
-		expectUpdate(g, m, liveMigrationStateBase)
+		expectUpdate(g, m, StateBase)
 
 		// FSM should be cleaned up.
 		g.Expect(m.fsms).To(BeEmpty())
@@ -597,7 +597,7 @@ func TestLiveMigrationTimer(t *testing.T) {
 		m.OnTimerPop(wepID1)
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0].State).To(Equal(liveMigrationStateBase))
+		g.Expect(updates[0].State).To(Equal(StateBase))
 		g.Expect(m.fsms).To(BeEmpty())
 	})
 
@@ -638,7 +638,7 @@ func TestLiveMigrationGARPChannel(t *testing.T) {
 
 		// Drive to Target state (triggers startGARPDetection).
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		expectUpdate(g, m, liveMigrationStateTarget)
+		expectUpdate(g, m, StateTarget)
 
 		// Wait for the detection goroutine to deliver the workload ID.
 		select {
@@ -652,7 +652,7 @@ func TestLiveMigrationGARPChannel(t *testing.T) {
 		m.OnGARPDetected(wepID1)
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0].State).To(Equal(liveMigrationStateLive))
+		g.Expect(updates[0].State).To(Equal(StateLive))
 	})
 }
 
@@ -714,29 +714,29 @@ func timerSenderBlocked() bool {
 func TestGARPRaceWithTargetExit(t *testing.T) {
 	tests := []struct {
 		name       string
-		exitInput  func(m *liveMigrationMonitor)
-		wantStates []liveMigrationState
+		exitInput  func(m *Monitor)
+		wantStates []State
 	}{
 		{
 			name: "migration completes (NO_ROLE)",
-			exitInput: func(m *liveMigrationMonitor) {
+			exitInput: func(m *Monitor) {
 				m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
 			},
-			wantStates: []liveMigrationState{liveMigrationStateTimeWait},
+			wantStates: []State{StateTimeWait},
 		},
 		{
 			name: "re-migration (SOURCE)",
-			exitInput: func(m *liveMigrationMonitor) {
+			exitInput: func(m *Monitor) {
 				m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
 			},
-			wantStates: []liveMigrationState{liveMigrationStateBase},
+			wantStates: []State{StateBase},
 		},
 		{
 			name: "workload removed",
-			exitInput: func(m *liveMigrationMonitor) {
+			exitInput: func(m *Monitor) {
 				m.OnUpdate(wepRemove(wepID1))
 			},
-			wantStates: []liveMigrationState{liveMigrationStateBase},
+			wantStates: []State{StateBase},
 		},
 	}
 
@@ -755,7 +755,7 @@ func TestGARPRaceWithTargetExit(t *testing.T) {
 			// delivers a GARP immediately, so detectGARP commits to the
 			// (blocking) garpC send.
 			m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-			expectUpdate(g, m, liveMigrationStateTarget)
+			expectUpdate(g, m, StateTarget)
 
 			// Wait until detectGARP is parked in the garpC send.  This pins
 			// the test to the exact interleaving from the field report - the
@@ -864,7 +864,7 @@ func TestTimerPopRaceWithTimeWaitExit(t *testing.T) {
 	drainUpdates(m)
 	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
 	drainUpdates(m)
-	g.Expect(m.fsms[wepID1].currentState).To(Equal(liveMigrationStateTimeWait))
+	g.Expect(m.fsms[wepID1].currentState).To(Equal(StateTimeWait))
 
 	// Drain timerC as the main loop would.  The stale episode-1 pop must not arrive; if it did,
 	// OnTimerPop would misattribute it to episode 2 and end its TimeWait prematurely.
@@ -876,7 +876,7 @@ func TestTimerPopRaceWithTimeWaitExit(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 		// Expected: no delivery.
 	}
-	g.Expect(m.fsms[wepID1].currentState).To(Equal(liveMigrationStateTimeWait))
+	g.Expect(m.fsms[wepID1].currentState).To(Equal(StateTimeWait))
 
 	// Reap episode 2's timer goroutine rather than leak it into the rest of the
 	// test binary.
@@ -967,7 +967,7 @@ func TestIsGARPOrRARP(t *testing.T) {
 
 // expectUpdate drains pending updates and checks that exactly one update was emitted with
 // the given state.
-func expectUpdate(g Gomega, m *liveMigrationMonitor, expectedState liveMigrationState) {
+func expectUpdate(g Gomega, m *Monitor, expectedState State) {
 	updates := drainUpdates(m)
 	g.Expect(updates).To(HaveLen(1), "expected exactly one pending update")
 	g.Expect(updates[0].State).To(Equal(expectedState))
@@ -1321,11 +1321,11 @@ func TestWEPIPTracking(t *testing.T) {
 
 func TestLiveMigrationStateString(t *testing.T) {
 	g := NewWithT(t)
-	g.Expect(liveMigrationStateBase.String()).To(Equal("Base"))
-	g.Expect(liveMigrationStateTarget.String()).To(Equal("Target"))
-	g.Expect(liveMigrationStateLive.String()).To(Equal("Live"))
-	g.Expect(liveMigrationStateTimeWait.String()).To(Equal("TimeWait"))
-	g.Expect(liveMigrationState(99).String()).To(Equal("Unknown(99)"))
+	g.Expect(StateBase.String()).To(Equal("Base"))
+	g.Expect(StateTarget.String()).To(Equal("Target"))
+	g.Expect(StateLive.String()).To(Equal("Live"))
+	g.Expect(StateTimeWait.String()).To(Equal("TimeWait"))
+	g.Expect(State(99).String()).To(Equal("Unknown(99)"))
 }
 
 func TestLiveMigrationInputString(t *testing.T) {

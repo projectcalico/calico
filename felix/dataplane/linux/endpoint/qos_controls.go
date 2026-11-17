@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package endpoint
 
 import (
 	"errors"
@@ -30,15 +30,15 @@ import (
 // mechanism: 'netkit' means netkit on workload netkit devices and TCX everywhere
 // else, so it qualifies too. Resolve it before comparing, or the QoS qdiscs are
 // silently never programmed.
-func (m *endpointManager) isQoSBandwidthSupported() bool {
-	if !m.cfg.bpfEnabled {
+func (m *Manager) isQoSBandwidthSupported() bool {
+	if !m.cfg.BPFEnabled {
 		return true
 	}
-	mechanism, _ := tc.ResolveAttachType(m.cfg.bpfAttachType)
+	mechanism, _ := tc.ResolveAttachType(m.cfg.BPFAttachType)
 	return mechanism == apiv3.BPFAttachOptionTCX
 }
 
-func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoint) error {
+func (m *Manager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoint) error {
 	var errs []error
 
 	var oldName, newName string

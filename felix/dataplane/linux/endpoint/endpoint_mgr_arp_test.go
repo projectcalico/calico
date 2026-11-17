@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package endpoint
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -28,13 +28,13 @@ import (
 
 var _ = Describe("ARP chain programming", func() {
 	var (
-		epMgr    *endpointManager
+		epMgr    *Manager
 		arpTable *dptest.MockTable
 	)
 
 	BeforeEach(func() {
 		arpTable = dptest.NewMockTable("arp")
-		epMgr = &endpointManager{
+		epMgr = &Manager{
 			arpTable:        arpTable,
 			activeARPChains: map[types.WorkloadEndpointID][]*generictables.Chain{},
 		}
@@ -106,7 +106,7 @@ var _ = Describe("ARP chain programming", func() {
 	})
 
 	It("should not panic when arpTable is nil (IPv6)", func() {
-		epMgr6 := &endpointManager{
+		epMgr6 := &Manager{
 			arpTable:        nil,
 			activeARPChains: map[types.WorkloadEndpointID][]*generictables.Chain{},
 		}

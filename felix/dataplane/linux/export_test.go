@@ -57,5 +57,5 @@ func (d *InternalDataplane) WireguardEnabledV6() bool {
 // enabled IP version: with the IPv6 endpoint manager missing, IPv6 workload routes
 // are neither suppressed on a migration target nor elevated after cutover.
 func (d *InternalDataplane) LiveMigrationListenerCount() int {
-	return len(d.liveMigrationMonitor.listeners)
+	return d.liveMigrationMonitor.ListenerCount()
 }

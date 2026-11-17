@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/endpoint"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
@@ -2100,7 +2101,7 @@ type endpointsSource interface {
 	GetRawHostEndpoints() map[types.HostEndpointID]*proto.HostEndpoint
 }
 
-var _ endpointsSource = &endpointManager{}
+var _ endpointsSource = &endpoint.Manager{}
 
 type nilIPSetsSource struct{}
 

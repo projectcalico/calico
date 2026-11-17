@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package endpoint
 
 import (
 	"context"
@@ -34,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
+	"github.com/projectcalico/calico/felix/dataplane/linux/livemigration"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -740,7 +741,7 @@ type hostEpSpec struct {
 	tierName  string
 }
 
-func applyUpdates(epMgr *endpointManager) {
+func applyUpdates(epMgr *Manager) {
 	err := epMgr.ResolveUpdateBatch()
 	Expect(err).ToNot(HaveOccurred())
 	err = epMgr.CompleteDeferredWork()
@@ -755,7 +756,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			ipv6     = "2001:db8::10.0.240.10"
 		)
 		var (
-			epMgr           *endpointManager
+			epMgr           *Manager
 			rawTable        *dptest.MockTable
 			mangleTable     *dptest.MockTable
 			filterTable     *dptest.MockTable
@@ -826,13 +827,13 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			epMgr = newEndpointManagerWithShims(
-				&endpointManagerConfig{
-					kubeIPVSSupportEnabled: rrConfigNormal.KubeIPVSSupportEnabled,
-					wlInterfacePrefixes:    []string{"cali"},
-					bpfEnabled:             false,
-					bpfAttachType:          v3.BPFAttachOptionTCX,
-					nft:                    false,
-					floatingIPsEnabled:     true,
+				&Config{
+					KubeIPVSSupportEnabled: rrConfigNormal.KubeIPVSSupportEnabled,
+					WorkloadIfacePrefixes:  []string{"cali"},
+					BPFEnabled:             false,
+					BPFAttachType:          v3.BPFAttachOptionTCX,
+					NFTables:               false,
+					FloatingIPsEnabled:     true,
 				},
 				rawTable,
 				mangleTable,
@@ -2046,7 +2047,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					// programmed.
 					Context("with floating IPs disabled, but added to the endpoint", func() {
 						JustBeforeEach(func() {
-							epMgr.cfg.floatingIPsEnabled = false
+							epMgr.cfg.FloatingIPsEnabled = false
 							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 								Id: &wlEPID1,
 								Endpoint: &proto.WorkloadEndpoint{
@@ -2379,8 +2380,8 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 			JustBeforeEach(func() {
 				// Override config with explicit route priorities.
-				epMgr.cfg.normalRoutePriority = normalPriority
-				epMgr.cfg.elevatedRoutePriority = elevatedPriority
+				epMgr.cfg.NormalRoutePriority = normalPriority
+				epMgr.cfg.ElevatedRoutePriority = elevatedPriority
 			})
 
 			Context("with endpoint already active", func() {
@@ -2398,7 +2399,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					JustBeforeEach(func() {
 						epMgr.OnLiveMigrationStateUpdate(
 							types.ProtoToWorkloadEndpointID(&wlEPID1),
-							liveMigrationStateTarget,
+							livemigration.StateTarget,
 						)
 						applyUpdates(epMgr)
 					})
@@ -2411,7 +2412,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						JustBeforeEach(func() {
 							epMgr.OnLiveMigrationStateUpdate(
 								types.ProtoToWorkloadEndpointID(&wlEPID1),
-								liveMigrationStateLive,
+								livemigration.StateLive,
 							)
 							applyUpdates(epMgr)
 						})
@@ -2424,7 +2425,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							JustBeforeEach(func() {
 								epMgr.OnLiveMigrationStateUpdate(
 									types.ProtoToWorkloadEndpointID(&wlEPID1),
-									liveMigrationStateTimeWait,
+									livemigration.StateTimeWait,
 								)
 								applyUpdates(epMgr)
 							})
@@ -2437,7 +2438,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 								JustBeforeEach(func() {
 									epMgr.OnLiveMigrationStateUpdate(
 										types.ProtoToWorkloadEndpointID(&wlEPID1),
-										liveMigrationStateBase,
+										livemigration.StateBase,
 									)
 									applyUpdates(epMgr)
 								})
@@ -2454,7 +2455,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					JustBeforeEach(func() {
 						epMgr.OnLiveMigrationStateUpdate(
 							types.ProtoToWorkloadEndpointID(&wlEPID1),
-							liveMigrationStateLive,
+							livemigration.StateLive,
 						)
 						applyUpdates(epMgr)
 						epMgr.OnUpdate(&proto.WorkloadEndpointRemove{Id: &wlEPID1})
@@ -2473,7 +2474,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					// Live migration state update arrives but WEP isn't active yet.
 					epMgr.OnLiveMigrationStateUpdate(
 						types.ProtoToWorkloadEndpointID(&wlEPID1),
-						liveMigrationStateTarget,
+						livemigration.StateTarget,
 					)
 					// Now the WEP arrives.
 					epMgr.OnUpdate(wlEPUpdate)
@@ -4108,7 +4109,7 @@ func (f *fakeFlowtableHandler) SetExternalDevices(ifces []string) {}
 
 var _ = Describe("EndpointManager flowtable", func() {
 	var (
-		epMgr     *endpointManager
+		epMgr     *Manager
 		ftHandler *fakeFlowtableHandler
 	)
 
@@ -4139,9 +4140,9 @@ var _ = Describe("EndpointManager flowtable", func() {
 		)
 
 		epMgr = newEndpointManagerWithShims(
-			&endpointManagerConfig{
-				wlInterfacePrefixes: []string{"cali"},
-				bpfAttachType:       v3.BPFAttachOptionTCX,
+			&Config{
+				WorkloadIfacePrefixes: []string{"cali"},
+				BPFAttachType:         v3.BPFAttachOptionTCX,
 			},
 			dptest.NewMockTable("raw"),
 			dptest.NewMockTable("mangle"),
