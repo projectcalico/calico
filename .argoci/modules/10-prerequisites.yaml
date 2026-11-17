@@ -425,6 +425,10 @@ steps:
       - name: sandcat-download
         keys:
           - name: SANDCAT_BIN_DOWNLOAD_TOKEN
+      - name: sandcat-nightly
+        keys:
+          - name: GH_TOKEN
+            as: SANDCAT_PR_READ_TOKEN
     commands: |
       .argoci/scripts/sandcat/sandcat.sh publish-pr-context || true
 
