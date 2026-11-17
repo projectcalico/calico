@@ -46,6 +46,9 @@ func WithRepoRoot(root string) Option {
 func IsHashRelease() Option {
 	return func(r *CalicoManager) error {
 		r.isHashRelease = true
+		r.githubRelease = false
+		r.gitRef = false
+		r.releaseNotes = true
 		return nil
 	}
 }
