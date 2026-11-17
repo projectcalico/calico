@@ -61,6 +61,17 @@ for item in \
   fi
 done
 
+# The k8st suite runs the calico/bird image as its BGP routers. It carries its
+# own content-addressed tag, so it needs no marker and no retag.
+bird_tarball="/tmp/bird-image-${ARCH}.tar.zst"
+if [ -f "${bird_tarball}" ]; then
+  echo "Loading cached $(basename "${bird_tarball}")..."
+  zstd -dc "${bird_tarball}" | docker load
+  rm -f "${bird_tarball}"
+else
+  echo "WARNING: ${bird_tarball} missing; the calico/bird image will be built from source."
+fi
+
 # The k8st suite mounts cmd/calico/bin/calico-$ARCH, which only the image build
 # we just skipped would have produced. Take it out of the image instead.
 if [ -n "${calico_image}" ]; then
