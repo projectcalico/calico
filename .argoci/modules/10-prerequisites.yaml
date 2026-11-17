@@ -420,7 +420,7 @@ steps:
   # Fetched here, in a pod, so the PR read token never reaches the e2e VMs.
   - name: sandcat-pr-context
     jobSize: small
-    requests: {cpu: 500m, memory: 256Mi}
+    requests: {cpu: 500m, memory: 548Mi}
     secretBundles:
       - name: sandcat-download
         keys:
