@@ -100,6 +100,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options, statusOpts server.Opti
 	storageInterface, dFunc, err := opts.GetStorage(
 		prefix,
 		keyFunc,
+		registry.NoNamespaceReverseKeyFunc(prefix),
 		strategy,
 		func() runtime.Object { return &calico.IPPool{} },
 		func() runtime.Object { return &calico.IPPoolList{} },
@@ -133,6 +134,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options, statusOpts server.Opti
 	statusStorageInterface, statusDFunc, err := statusOpts.GetStorage(
 		prefix,
 		statusKeyFunc,
+		registry.NoNamespaceReverseKeyFunc(statusPrefix),
 		strategy,
 		func() runtime.Object { return &calico.IPPool{} },
 		func() runtime.Object { return &calico.IPPoolList{} },

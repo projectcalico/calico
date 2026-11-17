@@ -10,51 +10,51 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// BGPConfigurations returns a BGPConfigurationInformer.
+	// BGPConfigurations returns a TypedBGPConfigurationInformer.
 	BGPConfigurations() TypedBGPConfigurationInformer
-	// BGPFilters returns a BGPFilterInformer.
+	// BGPFilters returns a TypedBGPFilterInformer.
 	BGPFilters() TypedBGPFilterInformer
-	// BGPPeers returns a BGPPeerInformer.
+	// BGPPeers returns a TypedBGPPeerInformer.
 	BGPPeers() TypedBGPPeerInformer
-	// BlockAffinities returns a BlockAffinityInformer.
+	// BlockAffinities returns a TypedBlockAffinityInformer.
 	BlockAffinities() TypedBlockAffinityInformer
-	// CalicoNodeStatuses returns a CalicoNodeStatusInformer.
+	// CalicoNodeStatuses returns a TypedCalicoNodeStatusInformer.
 	CalicoNodeStatuses() TypedCalicoNodeStatusInformer
-	// ClusterInformations returns a ClusterInformationInformer.
+	// ClusterInformations returns a TypedClusterInformationInformer.
 	ClusterInformations() TypedClusterInformationInformer
-	// FelixConfigurations returns a FelixConfigurationInformer.
+	// FelixConfigurations returns a TypedFelixConfigurationInformer.
 	FelixConfigurations() TypedFelixConfigurationInformer
-	// GlobalNetworkPolicies returns a GlobalNetworkPolicyInformer.
+	// GlobalNetworkPolicies returns a TypedGlobalNetworkPolicyInformer.
 	GlobalNetworkPolicies() TypedGlobalNetworkPolicyInformer
-	// GlobalNetworkSets returns a GlobalNetworkSetInformer.
+	// GlobalNetworkSets returns a TypedGlobalNetworkSetInformer.
 	GlobalNetworkSets() TypedGlobalNetworkSetInformer
-	// HostEndpoints returns a HostEndpointInformer.
+	// HostEndpoints returns a TypedHostEndpointInformer.
 	HostEndpoints() TypedHostEndpointInformer
-	// IPAMBlocks returns a IPAMBlockInformer.
+	// IPAMBlocks returns a TypedIPAMBlockInformer.
 	IPAMBlocks() TypedIPAMBlockInformer
-	// IPAMConfigurations returns a IPAMConfigurationInformer.
+	// IPAMConfigurations returns a TypedIPAMConfigurationInformer.
 	IPAMConfigurations() TypedIPAMConfigurationInformer
-	// IPAMHandles returns a IPAMHandleInformer.
+	// IPAMHandles returns a TypedIPAMHandleInformer.
 	IPAMHandles() TypedIPAMHandleInformer
-	// IPPools returns a IPPoolInformer.
+	// IPPools returns a TypedIPPoolInformer.
 	IPPools() TypedIPPoolInformer
-	// IPReservations returns a IPReservationInformer.
+	// IPReservations returns a TypedIPReservationInformer.
 	IPReservations() TypedIPReservationInformer
-	// KubeControllersConfigurations returns a KubeControllersConfigurationInformer.
+	// KubeControllersConfigurations returns a TypedKubeControllersConfigurationInformer.
 	KubeControllersConfigurations() TypedKubeControllersConfigurationInformer
-	// NetworkPolicies returns a NetworkPolicyInformer.
+	// NetworkPolicies returns a TypedNetworkPolicyInformer.
 	NetworkPolicies() TypedNetworkPolicyInformer
-	// NetworkSets returns a NetworkSetInformer.
+	// NetworkSets returns a TypedNetworkSetInformer.
 	NetworkSets() TypedNetworkSetInformer
-	// Profiles returns a ProfileInformer.
+	// Profiles returns a TypedProfileInformer.
 	Profiles() TypedProfileInformer
-	// StagedGlobalNetworkPolicies returns a StagedGlobalNetworkPolicyInformer.
+	// StagedGlobalNetworkPolicies returns a TypedStagedGlobalNetworkPolicyInformer.
 	StagedGlobalNetworkPolicies() TypedStagedGlobalNetworkPolicyInformer
-	// StagedKubernetesNetworkPolicies returns a StagedKubernetesNetworkPolicyInformer.
+	// StagedKubernetesNetworkPolicies returns a TypedStagedKubernetesNetworkPolicyInformer.
 	StagedKubernetesNetworkPolicies() TypedStagedKubernetesNetworkPolicyInformer
-	// StagedNetworkPolicies returns a StagedNetworkPolicyInformer.
+	// StagedNetworkPolicies returns a TypedStagedNetworkPolicyInformer.
 	StagedNetworkPolicies() TypedStagedNetworkPolicyInformer
-	// Tiers returns a TierInformer.
+	// Tiers returns a TypedTierInformer.
 	Tiers() TypedTierInformer
 }
 
