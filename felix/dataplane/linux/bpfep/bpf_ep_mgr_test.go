@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package bpfep
 
 import (
 	"encoding/binary"
@@ -501,7 +501,7 @@ func (f mockFD) FD() uint32 {
 
 var _ = Describe("BPF Endpoint Manager", func() {
 	var (
-		bpfEpMgr             *bpfEndpointManager
+		bpfEpMgr             *Manager
 		dp                   *mockDataplane
 		mockDP               bpfDataplane
 		endpointToHostAction string
@@ -634,7 +634,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	newBpfEpMgr := func(ipv6Enabled bool) {
 		var err error
-		bpfEpMgr, err = NewBPFEndpointManager(
+		bpfEpMgr, err = NewManager(
 			mockDP,
 			&dataplanedefs.Config{
 				Hostname:              "uthost",
@@ -4222,8 +4222,8 @@ var _ = Describe("jumpMapAlloc tests", func() {
 // NewBPFEndpointManager: it pulls in a full BPF map fixture, runit health
 // checks, etc., which aren't needed to exercise the maps + RWMutex contract
 // these tests target.
-func newConnLimitTestMgr() *bpfEndpointManager {
-	return &bpfEndpointManager{
+func newConnLimitTestMgr() *Manager {
+	return &Manager{
 		connLimitPodInfo: map[string]conntrack.ConnLimitPodInfo{},
 		connLimitWLToIPs: map[types.WorkloadEndpointID][]string{},
 	}
@@ -4249,7 +4249,7 @@ func connLimitWEP(name string, ipv4Nets []string, ingressMax, egressMax int64) *
 // assertConnLimitInfo asserts the (Ipv4) info entry in the manager's map. ipv4
 // is the dotted-quad string; want is what we expect to be there. If want is
 // the zero value of ConnLimitPodInfo, we assert the key is absent.
-func assertConnLimitInfo(t *testing.T, m *bpfEndpointManager, ipv4 string, want conntrack.ConnLimitPodInfo) {
+func assertConnLimitInfo(t *testing.T, m *Manager, ipv4 string, want conntrack.ConnLimitPodInfo) {
 	t.Helper()
 	got, ok := m.GetConnLimitedPodInfo()[string(net.ParseIP(ipv4).To4())]
 	if want == (conntrack.ConnLimitPodInfo{}) {
