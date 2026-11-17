@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package vxlan
 
 import (
 	"context"
@@ -40,7 +40,7 @@ import (
 
 var _ = Describe("VXLANManager", func() {
 	var (
-		vxlanMgr, vxlanMgrV6   *vxlanManager
+		vxlanMgr, vxlanMgrV6   *Manager
 		rt                     *dptest.MockRouteTable
 		fdb                    *dptest.MockVXLANFDB
 		dataplane, dataplaneV6 *mocknetlink.MockNetlinkDataplane
@@ -78,7 +78,7 @@ var _ = Describe("VXLANManager", func() {
 				VXLANPort: 20,
 			},
 		}
-		vxlanMgr = newVXLANManagerWithShims(
+		vxlanMgr = NewManagerWithShims(
 			dpsets.NewMockIPSets(),
 			rt,
 			fdb,
@@ -99,7 +99,7 @@ var _ = Describe("VXLANManager", func() {
 				VXLANPort: 20,
 			},
 		}
-		vxlanMgrV6 = newVXLANManagerWithShims(
+		vxlanMgrV6 = NewManagerWithShims(
 			dpsets.NewMockIPSets(),
 			rt,
 			fdb,
@@ -135,7 +135,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(vxlanMgr.myVTEP).NotTo(BeNil())
 		Expect(vxlanMgr.routeMgr.ParentDevice()).NotTo(BeEmpty())
 
-		parent, err := vxlanMgr.routeMgr.detectParentIface()
+		parent, err := vxlanMgr.routeMgr.DetectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(parent).NotTo(BeNil())
 
@@ -144,7 +144,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(link).NotTo(BeNil())
 		Expect(addr).NotTo(BeZero())
 
-		err = vxlanMgr.routeMgr.configureTunnelDevice(link, addr, 50, false)
+		err = vxlanMgr.routeMgr.ConfigureTunnelDevice(link, addr, 50, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(parent).NotTo(BeNil())
@@ -232,7 +232,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(vxlanMgrV6.myVTEP).NotTo(BeNil())
 		Expect(vxlanMgrV6.routeMgr.ParentDevice()).NotTo(BeEmpty())
 
-		parent, err := vxlanMgrV6.routeMgr.detectParentIface()
+		parent, err := vxlanMgrV6.routeMgr.DetectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(parent).NotTo(BeNil())
 
@@ -241,7 +241,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(link).NotTo(BeNil())
 		Expect(addr).NotTo(BeZero())
 
-		err = vxlanMgrV6.routeMgr.configureTunnelDevice(link, addr, 50, false)
+		err = vxlanMgrV6.routeMgr.ConfigureTunnelDevice(link, addr, 50, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(parent).NotTo(BeNil())
@@ -310,7 +310,7 @@ var _ = Describe("VXLANManager", func() {
 		parentNameC := make(chan string)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		go vxlanMgr.keepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
+		go vxlanMgr.KeepDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
 
 		By("Sending another node's VTEP and route.")
 		vxlanMgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
@@ -362,7 +362,7 @@ var _ = Describe("VXLANManager", func() {
 		parentNameC := make(chan string)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		go vxlanMgrV6.keepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
+		go vxlanMgrV6.KeepDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
 
 		By("Sending another node's VTEP and route.")
 		vxlanMgrV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
@@ -505,7 +505,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(vxlanMgr.myVTEP).NotTo(BeNil())
 		Expect(vxlanMgr.routeMgr.ParentDevice()).NotTo(BeEmpty())
 
-		parent, err := vxlanMgr.routeMgr.detectParentIface()
+		parent, err := vxlanMgr.routeMgr.DetectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(parent).NotTo(BeNil())
 
@@ -514,7 +514,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(link).NotTo(BeNil())
 		Expect(addr).NotTo(BeZero())
 
-		err = vxlanMgr.routeMgr.configureTunnelDevice(link, addr, 50, false)
+		err = vxlanMgr.routeMgr.ConfigureTunnelDevice(link, addr, 50, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(parent).NotTo(BeNil())
@@ -574,7 +574,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(vxlanMgrV6.myVTEP).NotTo(BeNil())
 		Expect(vxlanMgrV6.routeMgr.ParentDevice()).NotTo(BeEmpty())
 
-		parent, err := vxlanMgrV6.routeMgr.detectParentIface()
+		parent, err := vxlanMgrV6.routeMgr.DetectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(parent).NotTo(BeNil())
 
@@ -583,7 +583,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(link).NotTo(BeNil())
 		Expect(addr).NotTo(BeZero())
 
-		err = vxlanMgrV6.routeMgr.configureTunnelDevice(link, addr, 50, false)
+		err = vxlanMgrV6.routeMgr.ConfigureTunnelDevice(link, addr, 50, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(parent).NotTo(BeNil())
@@ -708,12 +708,12 @@ var _ = Describe("VXLANManager", func() {
 				ParentDeviceIpv6: "fc00:10:96::2",
 			})
 			mgr.routeMgr.OnParentDeviceUpdate("eth0")
-			parent, err := mgr.routeMgr.detectParentIface()
+			parent, err := mgr.routeMgr.DetectParentIface()
 			Expect(err).NotTo(HaveOccurred())
 
 			link, addr, err := mgr.device(parent)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(mgr.routeMgr.configureTunnelDevice(link, addr, 1450, false)).To(Succeed())
+			Expect(mgr.routeMgr.ConfigureTunnelDevice(link, addr, 1450, false)).To(Succeed())
 			actual, err := dp.LinkByName(mgr.vxlanDevice)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(actual.(*netlink.Vxlan).PortLow).To(BeZero())
@@ -724,7 +724,7 @@ var _ = Describe("VXLANManager", func() {
 			mgr.vxlanSrcPortMax = 50001
 			link, addr, err = mgr.device(parent)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(mgr.routeMgr.configureTunnelDevice(link, addr, 1450, false)).To(Succeed())
+			Expect(mgr.routeMgr.ConfigureTunnelDevice(link, addr, 1450, false)).To(Succeed())
 			Expect(dp.NumLinkAddCalls).To(Equal(1))
 			Expect(dp.NumLinkDeleteCalls).To(Equal(1))
 			actual, err = dp.LinkByName(mgr.vxlanDevice)
@@ -733,7 +733,7 @@ var _ = Describe("VXLANManager", func() {
 			Expect(actual.(*netlink.Vxlan).PortHigh).To(Equal(50001))
 			dp.ResetDeltas()
 
-			Expect(mgr.routeMgr.configureTunnelDevice(link, addr, 1450, false)).To(Succeed())
+			Expect(mgr.routeMgr.ConfigureTunnelDevice(link, addr, 1450, false)).To(Succeed())
 			Expect(dp.NumLinkAddCalls).To(BeZero())
 			Expect(dp.NumLinkDeleteCalls).To(BeZero())
 
@@ -741,7 +741,7 @@ var _ = Describe("VXLANManager", func() {
 			mgr.vxlanSrcPortMax = 0
 			link, addr, err = mgr.device(parent)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(mgr.routeMgr.configureTunnelDevice(link, addr, 1450, false)).To(Succeed())
+			Expect(mgr.routeMgr.ConfigureTunnelDevice(link, addr, 1450, false)).To(Succeed())
 			Expect(dp.NumLinkAddCalls).To(BeZero())
 			Expect(dp.NumLinkDeleteCalls).To(BeZero())
 			actual, err = dp.LinkByName(mgr.vxlanDevice)
@@ -775,7 +775,7 @@ var _ = Describe("VXLANManager", func() {
 				VXLANPort: 20,
 			},
 		}
-		mgr := newVXLANManagerWithShims(
+		mgr := NewManagerWithShims(
 			dpsets.NewMockIPSets(),
 			rt,
 			fdb,
@@ -795,7 +795,7 @@ var _ = Describe("VXLANManager", func() {
 		})
 		mgr.routeMgr.OnParentDeviceUpdate("eth0")
 
-		parent, err := mgr.routeMgr.detectParentIface()
+		parent, err := mgr.routeMgr.DetectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(parent).NotTo(BeNil())
 
@@ -835,8 +835,8 @@ var _ = Describe("VXLANManager in BPF mode", func() {
 		}
 	})
 
-	newMgr := func(opts ...vxlanMgrOption) *vxlanManager {
-		mgr := newVXLANManagerWithShims(
+	newMgr := func(opts ...Option) *Manager {
+		mgr := NewManagerWithShims(
 			dpsets.NewMockIPSets(),
 			dptest.NewMockRouteTable(),
 			&dptest.MockVXLANFDB{},
@@ -858,20 +858,20 @@ var _ = Describe("VXLANManager in BPF mode", func() {
 		return mgr
 	}
 
-	configure := func(mgr *vxlanManager) error {
-		parent, err := mgr.routeMgr.detectParentIface()
+	configure := func(mgr *Manager) error {
+		parent, err := mgr.routeMgr.DetectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		link, addr, err := mgr.device(parent)
 		Expect(err).NotTo(HaveOccurred())
-		return mgr.routeMgr.configureTunnelDevice(link, addr, 0, false)
+		return mgr.routeMgr.ConfigureTunnelDevice(link, addr, 0, false)
 	}
 
-	configureDevice := func(opts ...vxlanMgrOption) error {
+	configureDevice := func(opts ...Option) error {
 		return configure(newMgr(opts...))
 	}
 
-	withVNIFilter := func() vxlanMgrOption {
-		return vxlanMgrWithVNIFilter(bpfep.OverlayTunnelID(&dpConfig.RulesConfig))
+	withVNIFilter := func() Option {
+		return WithVNIFilter(bpfep.OverlayTunnelID(&dpConfig.RulesConfig))
 	}
 
 	vxlanDevice := func() (*netlink.Vxlan, *mocknetlink.MockLink) {

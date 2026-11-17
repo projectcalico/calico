@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package ipip
 
 import (
 	"context"
@@ -37,7 +37,7 @@ import (
 
 var _ = Describe("IPIPManager", func() {
 	var (
-		ipipMgr   *ipipManager
+		ipipMgr   *Manager
 		rt        *dptest.MockRouteTable
 		dataplane *mocknetlink.MockNetlinkDataplane
 	)
@@ -55,7 +55,7 @@ var _ = Describe("IPIPManager", func() {
 		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
 		dataplane.ResetDeltas()
 
-		ipipMgr = newIPIPManagerWithShims(
+		ipipMgr = NewManagerWithShims(
 			rt, ipipdefs.IPIPIfaceName,
 			4,
 			1400,
@@ -89,9 +89,9 @@ var _ = Describe("IPIPManager", func() {
 		})
 		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(ipipMgr.routeMgr.parentIfaceAddr()).NotTo(BeZero())
+		Expect(ipipMgr.routeMgr.ParentIfaceAddr()).NotTo(BeZero())
 		Expect(ipipMgr.routeMgr.ParentDevice()).NotTo(BeEmpty())
-		noEncapDev, err := ipipMgr.routeMgr.detectParentIface()
+		noEncapDev, err := ipipMgr.routeMgr.DetectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(noEncapDev).NotTo(BeNil())
 
@@ -100,7 +100,7 @@ var _ = Describe("IPIPManager", func() {
 		Expect(link).NotTo(BeNil())
 		Expect(addr).NotTo(BeZero())
 
-		err = ipipMgr.routeMgr.configureTunnelDevice(link, addr, 1400, false)
+		err = ipipMgr.routeMgr.ConfigureTunnelDevice(link, addr, 1400, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(noEncapDev).NotTo(BeNil())
@@ -114,7 +114,7 @@ var _ = Describe("IPIPManager", func() {
 		Expect(tunnelLink.Addrs[0].IP.String()).To(Equal("192.168.0.1"))
 
 		dataplane.ResetDeltas()
-		err = ipipMgr.routeMgr.configureTunnelDevice(link, addr, 50, false)
+		err = ipipMgr.routeMgr.ConfigureTunnelDevice(link, addr, 50, false)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dataplane.NumLinkAddCalls).To(BeZero())
 		Expect(dataplane.NumLinkSetUpCalls).To(BeZero())
@@ -124,7 +124,7 @@ var _ = Describe("IPIPManager", func() {
 		Expect(dataplane.DeletedAddrs.Len()).To(BeZero())
 
 		dataplane.ResetDeltas()
-		err = ipipMgr.routeMgr.configureTunnelDevice(link, addr, 1500, false)
+		err = ipipMgr.routeMgr.ConfigureTunnelDevice(link, addr, 1500, false)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dataplane.NumLinkAddCalls).To(BeZero())
 		Expect(dataplane.NumLinkSetUpCalls).To(BeZero())
@@ -143,7 +143,7 @@ var _ = Describe("IPIPManager", func() {
 		Expect(dataplane.AddrAdd(link, v4llAddr)).To(Succeed())
 
 		dataplane.ResetDeltas()
-		err = ipipMgr.routeMgr.configureTunnelDevice(link, "", 1500, false)
+		err = ipipMgr.routeMgr.ConfigureTunnelDevice(link, "", 1500, false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(dataplane.NameToLink[ipipdefs.IPIPIfaceName]).ToNot(BeNil())
 		Expect(dataplane.NumLinkAddCalls).To(BeZero())
@@ -173,9 +173,9 @@ var _ = Describe("IPIPManager", func() {
 
 		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(ipipMgr.routeMgr.parentIfaceAddr()).NotTo(BeZero())
+		Expect(ipipMgr.routeMgr.ParentIfaceAddr()).NotTo(BeZero())
 		Expect(ipipMgr.routeMgr.ParentDevice()).NotTo(BeEmpty())
-		noEncapDev, err := ipipMgr.routeMgr.detectParentIface()
+		noEncapDev, err := ipipMgr.routeMgr.DetectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(noEncapDev).NotTo(BeNil())
 
@@ -184,7 +184,7 @@ var _ = Describe("IPIPManager", func() {
 		Expect(link).NotTo(BeNil())
 		Expect(addr).NotTo(BeZero())
 
-		err = ipipMgr.routeMgr.configureTunnelDevice(link, addr, 50, false)
+		err = ipipMgr.routeMgr.ConfigureTunnelDevice(link, addr, 50, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(noEncapDev).NotTo(BeNil())
@@ -241,7 +241,7 @@ var _ = Describe("IPIPManager", func() {
 		dataDeviceC := make(chan string)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		go ipipMgr.keepIPIPDeviceInSync(ctx, 1400, false, 1*time.Second, dataDeviceC)
+		go ipipMgr.KeepDeviceInSync(ctx, 1400, false, 1*time.Second, dataDeviceC)
 
 		By("Sending another node's route.")
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
@@ -268,7 +268,7 @@ var _ = Describe("IPIPManager", func() {
 			Hostname: "node1",
 			Ipv4Addr: "172.0.0.2",
 		})
-		localAddr := ipipMgr.routeMgr.parentIfaceAddr()
+		localAddr := ipipMgr.routeMgr.ParentIfaceAddr()
 		Expect(localAddr).NotTo(BeNil())
 
 		// Note: no encap device name is sent after configuration so this receive
@@ -378,9 +378,9 @@ var _ = Describe("IPIPManager", func() {
 
 		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(ipipMgr.routeMgr.parentIfaceAddr()).NotTo(BeZero())
+		Expect(ipipMgr.routeMgr.ParentIfaceAddr()).NotTo(BeZero())
 		Expect(ipipMgr.routeMgr.ParentDevice()).NotTo(BeEmpty())
-		noEncapDev, err := ipipMgr.routeMgr.detectParentIface()
+		noEncapDev, err := ipipMgr.routeMgr.DetectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(noEncapDev).NotTo(BeNil())
 
@@ -389,7 +389,7 @@ var _ = Describe("IPIPManager", func() {
 		Expect(link).NotTo(BeNil())
 		Expect(addr).NotTo(BeZero())
 
-		err = ipipMgr.routeMgr.configureTunnelDevice(link, addr, 50, false)
+		err = ipipMgr.routeMgr.ConfigureTunnelDevice(link, addr, 50, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(noEncapDev).NotTo(BeNil())
@@ -479,7 +479,7 @@ var _ = Describe("IPIPManager", func() {
 // routes when confd and BIRD are the configured owner of them.
 var _ = Describe("IPIPManager with the IPIP cluster routes left to BIRD", func() {
 	var (
-		ipipMgr   *ipipManager
+		ipipMgr   *Manager
 		rt        *dptest.MockRouteTable
 		dataplane *mocknetlink.MockNetlinkDataplane
 	)
@@ -495,7 +495,7 @@ var _ = Describe("IPIPManager with the IPIP cluster routes left to BIRD", func()
 		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
 		dataplane.ResetDeltas()
 
-		ipipMgr = newIPIPManagerWithShims(
+		ipipMgr = NewManagerWithShims(
 			rt, ipipdefs.IPIPIfaceName,
 			4,
 			1400,
@@ -559,13 +559,13 @@ var _ = Describe("IPIPManager with the IPIP cluster routes left to BIRD", func()
 			Ipv4Addr: "172.0.0.2",
 		})
 		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
-		parentDev, err := ipipMgr.routeMgr.detectParentIface()
+		parentDev, err := ipipMgr.routeMgr.DetectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 
 		link, addr, err := ipipMgr.device(parentDev)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(link).NotTo(BeNil())
-		Expect(ipipMgr.routeMgr.configureTunnelDevice(link, addr, 1400, false)).To(Succeed())
+		Expect(ipipMgr.routeMgr.ConfigureTunnelDevice(link, addr, 1400, false)).To(Succeed())
 
 		Expect(dataplane.NameToLink).To(HaveKey(ipipdefs.IPIPIfaceName))
 	})
