@@ -55,6 +55,11 @@ GIT_USE_SSH = true
 # The version of BIRD to use for calico/node builds and confd tests.
 BIRD_VERSION=v0.3.3-211-g9111ec3c
 
+# Patched BIRD shipped in calico/node, and run by tests as an external BGP
+# router. Built by hack/rpms/bird/ and consumed via calico/bird:<sha>-<arch>.
+BIRD_VER=1.6.8
+BIRD_SHA256=6c61ab5d2ef59d2559a8735b8252b5a0238013b43e5fb8a96c5d9d06e7bc00b2
+
 # DEV_REGISTRIES configures the container image registries which are built from this
 # repository. By default, just build images with calico/. Allow this variable to be overridden,
 # as both CI/CD and the release tooling will override this to build publishable images.
