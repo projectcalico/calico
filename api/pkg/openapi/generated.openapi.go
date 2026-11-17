@@ -3166,7 +3166,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"iptablesFilterDenyAction": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IptablesFilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic with an iptables \"DROP\" action. If you want to use \"REJECT\" action instead you can configure it in here.",
+							Description: "IptablesFilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic with an iptables \"DROP\" action. If you want to use \"REJECT\" action instead you can configure it in here. REJECT only applies in the filter table; untracked and pre-DNAT policy, which run in the raw and mangle tables, always DROP.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
