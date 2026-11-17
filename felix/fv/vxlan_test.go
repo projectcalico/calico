@@ -17,7 +17,6 @@ package fv_test
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -220,23 +219,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				felixes[0].Exec("ip", "link", "set", "vxlan.calico", "mtu", "1300")
 
 				if enableIPv6 {
-					// Fits the 1430 IPv6 workload MTU, but not a 1300 device.
-					const payload = 1350
-					dump := w6[1].AttachTCPDump()
-					dump.SetLogEnabled(true)
-					dump.AddMatcher("large", regexp.MustCompile(fmt.Sprintf(`IP6 %s\.\d+ > %s\.30444: UDP, length %d`,
-						regexp.QuoteMeta(w6[0].IP), regexp.QuoteMeta(w6[1].IP), payload)))
-					dump.Start(infra, "udp", "port", "30444")
-
-					// A new source port makes each packet the first of its flow, and BPF hands
-					// such a packet to the kernel when it is larger than the device MTU.
-					srcPort := 31000
-					Eventually(func() int {
-						srcPort++
-						_, _ = w6[0].RunCmd("pktgen", w6[0].IP, w6[1].IP, "udp", "--port-src", strconv.Itoa(srcPort),
-							"--port-dst", "30444", fmt.Sprintf("--payload-size=%d", payload))
-						return dump.MatchCount("large")
-					}, "30s", "1s").Should(BeNumerically(">", 0))
+					// Fits the 1430 IPv6 workload MTU, but not a 1300 device. Each ping is a new
+					// flow, and BPF hands a flow's first packet to the kernel when it is larger
+					// than the device MTU.
+					const payload = "1350"
+					Eventually(func() error {
+						// A Packet Too Big leaves a cached path MTU that would refuse every later try.
+						if out, err := w6[0].ExecCombinedOutput("ip", "-6", "route", "flush", "cache"); err != nil {
+							return fmt.Errorf("%w: %s", err, out)
+						}
+						out, err := w6[0].ExecCombinedOutput("ping", "-6", "-c", "1", "-W", "1", "-s", payload, "-M", "do", w6[1].IP)
+						if err != nil {
+							return fmt.Errorf("%w: %s", err, out)
+						}
+						return nil
+					}, "30s", "1s").Should(Succeed())
 				}
 
 				Eventually(func() int { return strings.Count(deviceMTUs(), "mtu 1450") }, "30s", "500ms").
