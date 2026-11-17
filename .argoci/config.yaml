@@ -8,7 +8,14 @@ requireApproval: true
 
 # The calico/go-build tag `useGoBuild` steps run. It must match the GO_BUILD_VER
 # metadata.mk resolves to, and CI fails when the two differ.
-goBuildVersion: 1.27.2-llvm21.1.8-k8s1.37.1-2
+goBuildVersion: 1.27.3-llvm21.1.8-k8s1.37.1-1
+
+# TEMPORARY: unreleased toolchain under test, from projectcalico/toolchain
+# bm-ci-toolchain-test: go-build on LLVM 22 with scratch-utils in it (#960,
+# #958); scratch-utils with machine-type fallback, cost labels and zstd
+# transfers (#954, #959). Remove both once those are released.
+goBuildImage: gcr.io/unique-caldron-775/go-build:1.27.4-llvm22.1.8-k8s1.37.2-test-fa3c062
+vmToolImage: gcr.io/unique-caldron-775/scratch-utils:v0.6-test-bd7740a
 
 # New PRs start on `basic-ci`, which skips the costly VM suites. The label holds
 # a pending status, so removing it to run the full suite is what unblocks merge.

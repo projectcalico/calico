@@ -25,6 +25,11 @@ have_credentials() {
 
 fetch_artifact() {
   local name=$1 dest=$2
+  # Staged from the volume cache by the caller, in place of the artifact store.
+  if [ -f "${PREFETCHED_ARTIFACTS:-/nonexistent}/${name}" ]; then
+    cp "${PREFETCHED_ARTIFACTS}/${name}" "${dest}"
+    return
+  fi
   if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
     ( cd "$(dirname "${dest}")" && artifact pull workflow "${name}" )
     [ "$(basename "${dest}")" = "${name}" ] ||
