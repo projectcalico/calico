@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
@@ -67,7 +68,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 	return func() {
 		var (
 			fipMgr         *floatingIPManager
-			natTable       *mockTable
+			natTable       *dptest.MockTable
 			rrConfigNormal rules.Config
 		)
 
@@ -88,7 +89,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 
 		JustBeforeEach(func() {
 			renderer := rules.NewRenderer(rrConfigNormal, false)
-			natTable = newMockTable("nat")
+			natTable = dptest.NewMockTable("nat")
 			fipMgr = newFloatingIPManager(natTable, renderer, ipVersion, true)
 		})
 
@@ -119,7 +120,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 			})
 
 			It("should have empty NAT chains", func() {
-				natTable.checkChains([][]*generictables.Chain{{
+				natTable.CheckChains([][]*generictables.Chain{{
 					expectedDNATChain(),
 					expectedSNATChain(),
 				}})
@@ -157,7 +158,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 
 				It("should have expected NAT chains", func() {
 					if ipVersion == 4 {
-						natTable.checkChains([][]*generictables.Chain{{
+						natTable.CheckChains([][]*generictables.Chain{{
 							expectedDNATChain([]dnat{
 								{extIP: "172.16.1.3", intIP: "10.0.240.2"},
 								{extIP: "172.18.1.4", intIP: "10.0.240.2"},
@@ -167,7 +168,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 							}...),
 						}})
 					} else {
-						natTable.checkChains([][]*generictables.Chain{{
+						natTable.CheckChains([][]*generictables.Chain{{
 							expectedDNATChain([]dnat{
 								{extIP: "2001:db8:3::2", intIP: "2001:db8:2::2"},
 								{extIP: "2001:db8:4::2", intIP: "2001:db8:2::2"},
@@ -193,7 +194,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 					})
 
 					It("should have empty NAT chains", func() {
-						natTable.checkChains([][]*generictables.Chain{{
+						natTable.CheckChains([][]*generictables.Chain{{
 							expectedDNATChain(),
 							expectedSNATChain(),
 						}})
@@ -225,7 +226,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 			})
 
 			It("should have empty NAT chains", func() {
-				natTable.checkChains([][]*generictables.Chain{{
+				natTable.CheckChains([][]*generictables.Chain{{
 					expectedDNATChain(),
 					expectedSNATChain(),
 				}})
@@ -263,7 +264,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 				})
 
 				It("should have empty NAT chains", func() {
-					natTable.checkChains([][]*generictables.Chain{{
+					natTable.CheckChains([][]*generictables.Chain{{
 						expectedDNATChain(),
 						expectedSNATChain(),
 					}})
@@ -283,7 +284,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 					})
 
 					It("should have empty NAT chains", func() {
-						natTable.checkChains([][]*generictables.Chain{{
+						natTable.CheckChains([][]*generictables.Chain{{
 							expectedDNATChain(),
 							expectedSNATChain(),
 						}})
@@ -324,7 +325,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 
 				It("should have expected NAT chains", func() {
 					if ipVersion == 4 {
-						natTable.checkChains([][]*generictables.Chain{{
+						natTable.CheckChains([][]*generictables.Chain{{
 							expectedDNATChain([]dnat{
 								{extIP: "172.16.1.3", intIP: "10.0.240.2"},
 								{extIP: "172.18.1.4", intIP: "10.0.240.2"},
@@ -334,7 +335,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 							}...),
 						}})
 					} else {
-						natTable.checkChains([][]*generictables.Chain{{
+						natTable.CheckChains([][]*generictables.Chain{{
 							expectedDNATChain([]dnat{
 								{extIP: "2001:db8:3::2", intIP: "2001:db8:2::2"},
 								{extIP: "2001:db8:4::2", intIP: "2001:db8:2::2"},
@@ -360,7 +361,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 					})
 
 					It("should have empty NAT chains", func() {
-						natTable.checkChains([][]*generictables.Chain{{
+						natTable.CheckChains([][]*generictables.Chain{{
 							expectedDNATChain(),
 							expectedSNATChain(),
 						}})

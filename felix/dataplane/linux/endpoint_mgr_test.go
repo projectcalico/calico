@@ -33,6 +33,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -711,74 +712,6 @@ func chainsForIfaces(ipVersion uint8,
 	return chains
 }
 
-type mockRouteTable struct {
-	index         int
-	kernelRoutes  map[string][]routetable.Target
-	currentRoutes map[string][]routetable.Target
-
-	// currentRoutesByClass indexes the same routes the way the real RouteTable
-	// does, on (route class, interface name).  Managers that share a route table
-	// _and_ an interface - such as the blackhole routes that all hang off
-	// InterfaceNone - are only distinguishable by their class.  Lazily created,
-	// so that the plain currentRoutes-only struct literals still work.
-	currentRoutesByClass map[routetable.RouteClass]map[string][]routetable.Target
-}
-
-func (t *mockRouteTable) SetRoutes(routeClass routetable.RouteClass, ifaceName string, targets []routetable.Target) {
-	log.WithFields(log.Fields{
-		"index":      t.index,
-		"routeClass": routeClass,
-		"ifaceName":  ifaceName,
-		"targets":    targets,
-	}).Debug("SetRoutes")
-	t.currentRoutes[ifaceName] = targets
-
-	if t.currentRoutesByClass == nil {
-		t.currentRoutesByClass = map[routetable.RouteClass]map[string][]routetable.Target{}
-	}
-	if t.currentRoutesByClass[routeClass] == nil {
-		t.currentRoutesByClass[routeClass] = map[string][]routetable.Target{}
-	}
-	t.currentRoutesByClass[routeClass][ifaceName] = targets
-}
-
-// cidrsForClass returns the CIDRs of the routes that the given class currently
-// has programmed on the given interface.
-func (t *mockRouteTable) cidrsForClass(routeClass routetable.RouteClass, ifaceName string) []string {
-	var cidrs []string
-	for _, target := range t.currentRoutesByClass[routeClass][ifaceName] {
-		cidrs = append(cidrs, target.CIDR.String())
-	}
-	return cidrs
-}
-
-func (t *mockRouteTable) RouteRemove(routeClass routetable.RouteClass, ifaceName string, routeKey routetable.RouteKey) {
-}
-
-func (t *mockRouteTable) RouteUpdate(routeClass routetable.RouteClass, ifaceName string, target routetable.Target) {
-}
-
-func (t *mockRouteTable) OnIfaceStateChanged(string, int, ifacemonitor.State) {}
-func (t *mockRouteTable) QueueResync()                                        {}
-func (t *mockRouteTable) QueueResyncIface(ifaceName string)                   {}
-
-func (t *mockRouteTable) Index() int {
-	return t.index
-}
-
-func (t *mockRouteTable) ReadRoutesFromKernel(ifaceName string) ([]routetable.Target, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (t *mockRouteTable) Apply() error {
-	return nil
-}
-
-func (t *mockRouteTable) checkRoutes(ifaceName string, expected []routetable.Target) {
-	Expect(t.currentRoutes[ifaceName]).To(ConsistOf(expected), "Expect route to exist in table %d. Current routes = %v", t.index, t.currentRoutes)
-}
-
 type statusReportRecorder struct {
 	currentState map[any]string
 	extraInfo    map[any]any
@@ -823,14 +756,14 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 		)
 		var (
 			epMgr           *endpointManager
-			rawTable        *mockTable
-			mangleTable     *mockTable
-			filterTable     *mockTable
+			rawTable        *dptest.MockTable
+			mangleTable     *dptest.MockTable
+			filterTable     *dptest.MockTable
 			rrConfigNormal  rules.Config
 			eth0Addrs       set.Set[string]
 			loAddrs         set.Set[string]
 			eth1Addrs       set.Set[string]
-			routeTable      *mockRouteTable
+			routeTable      *dptest.MockRouteTable
 			mockProcSys     *testProcSys
 			statusReportRec *statusReportRecorder
 			hepListener     *testHEPListener
@@ -871,13 +804,10 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 		JustBeforeEach(func() {
 			renderer := rules.NewRenderer(rrConfigNormal, false)
-			rawTable = newMockTable("raw")
-			mangleTable = newMockTable("mangle")
-			filterTable = newMockTable("filter")
-			routeTable = &mockRouteTable{
-				index:         0,
-				currentRoutes: map[string][]routetable.Target{},
-			}
+			rawTable = dptest.NewMockTable("raw")
+			mangleTable = dptest.NewMockTable("mangle")
+			filterTable = dptest.NewMockTable("filter")
+			routeTable = dptest.NewMockRouteTable()
 			mockProcSys = &testProcSys{state: map[string]string{}, pathsThatExist: map[string]bool{}}
 			statusReportRec = &statusReportRecorder{currentState: map[any]string{}, extraInfo: map[any]any{}}
 			hepListener = &testHEPListener{}
@@ -1111,14 +1041,14 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 		expectChainsFor := func(ipVersion uint8, flowlogs bool, names ...string) func() {
 			return func() {
-				filterTable.checkChains([][]*generictables.Chain{
+				filterTable.CheckChains([][]*generictables.Chain{
 					wlDispatchEmpty,
 					hostChainsForIfaces(ipVersion, names, epMgr.epMarkMapper, flowlogs),
 				})
-				rawTable.checkChains([][]*generictables.Chain{
+				rawTable.CheckChains([][]*generictables.Chain{
 					rawChainsForIfaces(ipVersion, names, epMgr.epMarkMapper, flowlogs),
 				})
-				mangleTable.checkChains([][]*generictables.Chain{
+				mangleTable.CheckChains([][]*generictables.Chain{
 					preDNATChainsForIfaces(ipVersion, names, epMgr.epMarkMapper, flowlogs),
 					mangleEgressChainsForIfaces(ipVersion, names, epMgr.epMarkMapper, flowlogs),
 				})
@@ -1127,19 +1057,19 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 		expectEmptyChains := func(ipVersion uint8) func() {
 			return func() {
-				filterTable.checkChains([][]*generictables.Chain{
+				filterTable.CheckChains([][]*generictables.Chain{
 					wlDispatchEmpty,
 					hostDispatchEmptyNormal,
 					hostDispatchEmptyForward,
 				})
-				rawTable.checkChains([][]*generictables.Chain{
+				rawTable.CheckChains([][]*generictables.Chain{
 					hostDispatchEmptyNormal,
 					{{
 						Name:  "cali-rpf-skip",
 						Rules: []generictables.Rule{},
 					}},
 				})
-				mangleTable.checkChains([][]*generictables.Chain{
+				mangleTable.CheckChains([][]*generictables.Chain{
 					fromHostDispatchEmpty,
 					toHostDispatchEmpty,
 				})
@@ -1779,12 +1709,12 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 		expectWlChainsFor := func(ipVersion uint8, flowlogs bool, names ...string) func() {
 			return func() {
-				filterTable.checkChains([][]*generictables.Chain{
+				filterTable.CheckChains([][]*generictables.Chain{
 					hostDispatchEmptyNormal,
 					hostDispatchEmptyForward,
 					wlChainsForIfaces(ipVersion, names, epMgr.epMarkMapper, flowlogs),
 				})
-				mangleTable.checkChains([][]*generictables.Chain{
+				mangleTable.CheckChains([][]*generictables.Chain{
 					fromHostDispatchEmpty,
 					toHostDispatchEmpty,
 				})
@@ -1953,14 +1883,14 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 				It("should set routes", func() {
 					if ipVersion == 6 {
-						routeTable.checkRoutes("cali12345-ab", []routetable.Target{{
+						routeTable.CheckRoutes("cali12345-ab", []routetable.Target{{
 							RouteKey: routetable.RouteKey{
 								CIDR: ip.MustParseCIDROrIP("2001:db8:2::2/128"),
 							},
 							DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 						}})
 					} else {
-						routeTable.checkRoutes("cali12345-ab", []routetable.Target{{
+						routeTable.CheckRoutes("cali12345-ab", []routetable.Target{{
 							RouteKey: routetable.RouteKey{
 								CIDR: ip.MustParseCIDROrIP("10.0.240.0/24"),
 							},
@@ -2066,7 +1996,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 						It("should set routes", func() {
 							if ipVersion == 6 {
-								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
+								routeTable.CheckRoutes("cali12345-ab", []routetable.Target{
 									{
 										RouteKey: routetable.RouteKey{
 											CIDR: ip.MustParseCIDROrIP("2001:db8:2::2/128"),
@@ -2087,7 +2017,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 									},
 								})
 							} else {
-								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
+								routeTable.CheckRoutes("cali12345-ab", []routetable.Target{
 									{
 										RouteKey: routetable.RouteKey{
 											CIDR: ip.MustParseCIDROrIP("10.0.240.0/24"),
@@ -2147,7 +2077,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 						It("should set routes with no floating IPs", func() {
 							if ipVersion == 6 {
-								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
+								routeTable.CheckRoutes("cali12345-ab", []routetable.Target{
 									{
 										RouteKey: routetable.RouteKey{
 											CIDR: ip.MustParseCIDROrIP("2001:db8:2::2/128"),
@@ -2156,7 +2086,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 									},
 								})
 							} else {
-								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
+								routeTable.CheckRoutes("cali12345-ab", []routetable.Target{
 									{
 										RouteKey: routetable.RouteKey{
 											CIDR: ip.MustParseCIDROrIP("10.0.240.0/24"),
@@ -2179,7 +2109,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 
 						It("should have removed routes", func() {
-							routeTable.checkRoutes("cali12345-ab", nil)
+							routeTable.CheckRoutes("cali12345-ab", nil)
 						})
 						It("should report endpoint gone", func() {
 							Expect(statusReportRec.currentState).To(BeEmpty())
@@ -2214,7 +2144,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						It("should have expected chains", expectWlChainsFor(ipVersion, flowlogs, "cali12345-cd"))
 
 						It("should have removed routes for old iface", func() {
-							routeTable.checkRoutes("cali12345-ab", nil)
+							routeTable.CheckRoutes("cali12345-ab", nil)
 						})
 						It("should report endpoint up", func() {
 							Expect(statusReportRec.currentState).To(Equal(map[any]string{
@@ -2224,14 +2154,14 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 						It("should have set routes for new iface", func() {
 							if ipVersion == 6 {
-								routeTable.checkRoutes("cali12345-cd", []routetable.Target{{
+								routeTable.CheckRoutes("cali12345-cd", []routetable.Target{{
 									RouteKey: routetable.RouteKey{
 										CIDR: ip.MustParseCIDROrIP("2001:db8:2::2/128"),
 									},
 									DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 								}})
 							} else {
-								routeTable.checkRoutes("cali12345-cd", []routetable.Target{{
+								routeTable.CheckRoutes("cali12345-cd", []routetable.Target{{
 									RouteKey: routetable.RouteKey{
 										CIDR: ip.MustParseCIDROrIP("10.0.240.0/24"),
 									},
@@ -2285,7 +2215,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						mockProcSys.checkStateContains(map[string]string{
 							"/proc/sys/net/ipv4/conf/cali23456-cd/rp_filter": "0",
 						})
-						rawTable.checkChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
+						rawTable.CheckChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
 							&generictables.Chain{Name: rules.ChainRpfSkip, Rules: []generictables.Rule{
 								{
 									Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("8.8.8.8/32"),
@@ -2294,7 +2224,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							}},
 						}})
 					} else {
-						rawTable.checkChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
+						rawTable.CheckChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
 							&generictables.Chain{Name: rules.ChainRpfSkip, Rules: []generictables.Rule{
 								{
 									Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("2001:feed::1/64"),
@@ -2313,7 +2243,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							"/proc/sys/net/ipv4/conf/cali23456-cd/rp_filter": "1",
 						})
 					}
-					rawTable.checkChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
+					rawTable.CheckChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
 						&generictables.Chain{Name: rules.ChainRpfSkip, Rules: []generictables.Rule{}},
 					}})
 
@@ -2327,7 +2257,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						})
 					}
 					if ipVersion == 4 {
-						rawTable.checkChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
+						rawTable.CheckChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
 							&generictables.Chain{Name: rules.ChainRpfSkip, Rules: []generictables.Rule{
 								{
 									Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("8.8.8.8/32"),
@@ -2336,7 +2266,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							}},
 						}})
 					} else {
-						rawTable.checkChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
+						rawTable.CheckChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
 							&generictables.Chain{Name: rules.ChainRpfSkip, Rules: []generictables.Rule{
 								{
 									Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("2001:feed::1/64"),
@@ -2351,7 +2281,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						Id: &wlEPID1,
 					})
 					applyUpdates(epMgr)
-					rawTable.checkChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
+					rawTable.CheckChains([][]*generictables.Chain{hostDispatchEmptyNormal, {
 						&generictables.Chain{Name: rules.ChainRpfSkip, Rules: []generictables.Rule{}},
 					}})
 				})
@@ -2380,7 +2310,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				})
 
 				It("should have expected chains", func() {
-					Expect(filterTable.currentChains["cali-tw-cali12345-ab"]).To(Equal(
+					Expect(filterTable.CurrentChains["cali-tw-cali12345-ab"]).To(Equal(
 						&generictables.Chain{
 							Name: "cali-tw-cali12345-ab",
 							Rules: []generictables.Rule{{
@@ -2390,7 +2320,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							}},
 						},
 					))
-					Expect(filterTable.currentChains["cali-fw-cali12345-ab"]).To(Equal(
+					Expect(filterTable.CurrentChains["cali-fw-cali12345-ab"]).To(Equal(
 						&generictables.Chain{
 							Name: "cali-fw-cali12345-ab",
 							Rules: []generictables.Rule{{
@@ -2400,14 +2330,14 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							}},
 						},
 					))
-					_, ok := mangleTable.currentChains["cali-tw-cali12345-ab"]
+					_, ok := mangleTable.CurrentChains["cali-tw-cali12345-ab"]
 					Expect(ok).To(BeFalse())
-					_, ok = mangleTable.currentChains["cali-fw-cali12345-ab"]
+					_, ok = mangleTable.CurrentChains["cali-fw-cali12345-ab"]
 					Expect(ok).To(BeFalse())
 				})
 
 				It("should remove routes", func() {
-					routeTable.checkRoutes("cali12345-ab", nil)
+					routeTable.CheckRoutes("cali12345-ab", nil)
 				})
 			})
 		})
@@ -2461,7 +2391,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				})
 
 				It("should set routes at normal priority", func() {
-					routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
+					routeTable.CheckRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
 				})
 
 				Context("when live migration state becomes Target", func() {
@@ -2474,7 +2404,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					})
 
 					It("should suppress routes", func() {
-						routeTable.checkRoutes("cali12345-ab", nil)
+						routeTable.CheckRoutes("cali12345-ab", nil)
 					})
 
 					Context("when live migration state becomes Live", func() {
@@ -2487,7 +2417,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						})
 
 						It("should set routes at elevated priority", func() {
-							routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
+							routeTable.CheckRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
 						})
 
 						Context("when live migration state becomes TimeWait", func() {
@@ -2500,7 +2430,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							})
 
 							It("should still set routes at elevated priority", func() {
-								routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
+								routeTable.CheckRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
 							})
 
 							Context("when live migration state becomes Base", func() {
@@ -2513,7 +2443,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 								})
 
 								It("should revert to normal priority", func() {
-									routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
+									routeTable.CheckRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
 								})
 							})
 						})
@@ -2532,7 +2462,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					})
 
 					It("should remove routes and clean up live migration state", func() {
-						routeTable.checkRoutes("cali12345-ab", nil)
+						routeTable.CheckRoutes("cali12345-ab", nil)
 						Expect(epMgr.pendingLiveMigrationStates).To(BeEmpty())
 					})
 				})
@@ -2552,7 +2482,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				})
 
 				It("should suppress routes for the target", func() {
-					routeTable.checkRoutes("cali12345-ab", nil)
+					routeTable.CheckRoutes("cali12345-ab", nil)
 				})
 			})
 		})
@@ -2887,7 +2817,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 			Describe("policy grouping tests", func() {
 				var (
-					table              *mockTable
+					table              *dptest.MockTable
 					ep1IngressChain    string
 					ep1EgressChain     string
 					ep2IngressChain    string
@@ -2911,14 +2841,14 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 				defineIngressPolicyGroupingTests := func() {
 					It("should get the expected policy group chains (ingress)", func() {
-						ingressNamesEP1, groupsEP1 := extractGroups(table.currentChains, ep1IngressChain)
+						ingressNamesEP1, groupsEP1 := extractGroups(table.CurrentChains, ep1IngressChain)
 						Expect(groupsEP1).To(Equal([][]string{
 							{polA1, polA2},
 							{polB1, polB2},
 							{tier2PolA1, tier2PolA2},
 						}))
 
-						namesEP2, groupsEP2 := extractGroups(table.currentChains, ep2IngressChain)
+						namesEP2, groupsEP2 := extractGroups(table.CurrentChains, ep2IngressChain)
 						Expect(groupsEP2).To(Equal([][]string{
 							{
 								polB1,
@@ -2940,7 +2870,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 					It("should handle a change of selector", func() {
 						// Start as with the above test...
-						ingressNamesEP1, groupsEP1 := extractGroups(table.currentChains, ep1IngressChain)
+						ingressNamesEP1, groupsEP1 := extractGroups(table.CurrentChains, ep1IngressChain)
 						Expect(groupsEP1).To(Equal([][]string{
 							{
 								polA1,
@@ -2955,7 +2885,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 								tier2PolA2,
 							},
 						}))
-						_, groupsEP2 := extractGroups(table.currentChains, ep2IngressChain)
+						_, groupsEP2 := extractGroups(table.CurrentChains, ep2IngressChain)
 						Expect(groupsEP2).To(Equal([][]string{
 							{
 								polB1,
@@ -2977,7 +2907,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						})
 						applyUpdates(epMgr)
 
-						_, groupsEP1Post := extractGroups(table.currentChains, ep1IngressChain)
+						_, groupsEP1Post := extractGroups(table.CurrentChains, ep1IngressChain)
 						Expect(groupsEP1Post).To(Equal([][]string{
 							{
 								polA1,
@@ -2993,7 +2923,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							},
 						}))
 
-						_, groupsEP2Post := extractGroups(table.currentChains, ep2IngressChain)
+						_, groupsEP2Post := extractGroups(table.CurrentChains, ep2IngressChain)
 						Expect(groupsEP2Post).To(Equal([][]string{
 							{
 								polB1,
@@ -3009,39 +2939,39 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							},
 						}))
 
-						Expect(table.currentChains).NotTo(HaveKey(ingressNamesEP1[0]), "Old polA group should be cleaned up")
+						Expect(table.CurrentChains).NotTo(HaveKey(ingressNamesEP1[0]), "Old polA group should be cleaned up")
 					})
 
 					It("should clean up group chain that is no longer used (EP deleted)", func() {
-						namesEP1, _ := extractGroups(table.currentChains, ep1IngressChain)
+						namesEP1, _ := extractGroups(table.CurrentChains, ep1IngressChain)
 						polAGroup := namesEP1[0]
 						polBGroup := namesEP1[1]
 						tier2Group := namesEP1[2]
-						Expect(table.currentChains).To(HaveKey(polAGroup))
+						Expect(table.CurrentChains).To(HaveKey(polAGroup))
 						deleteEP1()
 						applyUpdates(epMgr)
-						Expect(table.currentChains).NotTo(HaveKey(polAGroup),
+						Expect(table.CurrentChains).NotTo(HaveKey(polAGroup),
 							"Policy A group should be cleaned up")
-						Expect(table.currentChains).To(HaveKey(polBGroup),
+						Expect(table.CurrentChains).To(HaveKey(polBGroup),
 							"Policy B group chain should still be present, it is shared with the second endpoint")
-						Expect(table.currentChains).To(HaveKey(tier2Group),
+						Expect(table.CurrentChains).To(HaveKey(tier2Group),
 							"Tier 2 group chain should still be present, it is shared with the second endpoint")
 						deleteEP2()
 						applyUpdates(epMgr)
-						Expect(table.currentChains).NotTo(HaveKey(polBGroup),
+						Expect(table.CurrentChains).NotTo(HaveKey(polBGroup),
 							"Policy B group should be cleaned up")
-						Expect(table.currentChains).NotTo(HaveKey(tier2Group),
+						Expect(table.CurrentChains).NotTo(HaveKey(tier2Group),
 							"Tier 2 group should be cleaned up")
 					})
 
 					It("should clean up group chain that is no longer used (EP updated)", func() {
-						namesEP1, _ := extractGroups(table.currentChains, ep1IngressChain)
+						namesEP1, _ := extractGroups(table.CurrentChains, ep1IngressChain)
 						polAGroup := namesEP1[0]
 						polBGroup := namesEP1[1]
-						Expect(table.currentChains).To(HaveKey(polAGroup))
+						Expect(table.CurrentChains).To(HaveKey(polAGroup))
 						removeAPolsFromEp1()
 						applyUpdates(epMgr)
-						_, groupsEP1 := extractGroups(table.currentChains, ep1IngressChain)
+						_, groupsEP1 := extractGroups(table.CurrentChains, ep1IngressChain)
 						Expect(groupsEP1).To(Equal([][]string{
 							// {"polB1", "polB2"},
 							{
@@ -3049,22 +2979,22 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 								polB2,
 							},
 						}))
-						Expect(table.currentChains).NotTo(HaveKey(polAGroup), "Policy A group should be cleaned up")
-						Expect(table.currentChains).To(HaveKey(polBGroup), "Policy B group chain should still be present, it is shared with the second endpoint")
+						Expect(table.CurrentChains).NotTo(HaveKey(polAGroup), "Policy A group should be cleaned up")
+						Expect(table.CurrentChains).To(HaveKey(polBGroup), "Policy B group chain should still be present, it is shared with the second endpoint")
 					})
 				}
 
 				defineEgressPolicyGroupingTests := func() {
 					It("should get the expected policy group chains (egress)", func() {
-						namesEP1, groupsEP1 := extractGroups(table.currentChains, ep1EgressChain)
+						namesEP1, groupsEP1 := extractGroups(table.CurrentChains, ep1EgressChain)
 						Expect(groupsEP1).To(Equal([][]string{
 							{polA1},
 							{polB1, polB2},
 							{tier2PolA1},
 							{tier2PolB1},
 						}))
-						namesEP2In, _ := extractGroups(table.currentChains, ep2IngressChain)
-						namesEP2, groupsEP2 := extractGroups(table.currentChains, ep2EgressChain)
+						namesEP2In, _ := extractGroups(table.CurrentChains, ep2IngressChain)
+						namesEP2, groupsEP2 := extractGroups(table.CurrentChains, ep2EgressChain)
 						Expect(groupsEP2).To(Equal([][]string{
 							{polB1, polB2},
 							{tier2PolA1},
@@ -4213,11 +4143,11 @@ var _ = Describe("EndpointManager flowtable", func() {
 				wlInterfacePrefixes: []string{"cali"},
 				bpfAttachType:       v3.BPFAttachOptionTCX,
 			},
-			newMockTable("raw"),
-			newMockTable("mangle"),
-			newMockTable("filter"),
+			dptest.NewMockTable("raw"),
+			dptest.NewMockTable("mangle"),
+			dptest.NewMockTable("filter"),
 			renderer,
-			&mockRouteTable{index: 0, currentRoutes: map[string][]routetable.Target{}},
+			dptest.NewMockRouteTable(),
 			4,
 			rules.NewEndpointMarkMapper(0xff00, 0x0100),
 			(&statusReportRecorder{currentState: map[any]string{}, extraInfo: map[any]any{}}).endpointStatusUpdateCallback,

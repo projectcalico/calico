@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
@@ -33,9 +34,9 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 	return func() {
 		var (
 			policyMgr    *policyManager
-			rawTable     *mockTable
-			mangleTable  *mockTable
-			filterTable  *mockTable
+			rawTable     *dptest.MockTable
+			mangleTable  *dptest.MockTable
+			filterTable  *dptest.MockTable
 			ruleRenderer *mockPolRenderer
 
 			// Expected chain names for GNP "pol1".
@@ -44,9 +45,9 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 		)
 
 		BeforeEach(func() {
-			rawTable = newMockTable("raw")
-			mangleTable = newMockTable("mangle")
-			filterTable = newMockTable("filter")
+			rawTable = dptest.NewMockTable("raw")
+			mangleTable = dptest.NewMockTable("mangle")
+			filterTable = dptest.NewMockTable("filter")
 			ruleRenderer = newMockPolRenderer()
 			policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, ipVersion, false)
 		})
@@ -75,11 +76,11 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 			})
 
 			It("should install the in and out chain", func() {
-				filterTable.checkChains([][]*generictables.Chain{{
+				filterTable.CheckChains([][]*generictables.Chain{{
 					{Name: caliPIPol1ChainName},
 					{Name: caliPOPol1ChainName},
 				}})
-				mangleTable.checkChains([][]*generictables.Chain{{
+				mangleTable.CheckChains([][]*generictables.Chain{{
 					{Name: caliPIPol1ChainName},
 					{Name: caliPOPol1ChainName},
 				}})
@@ -93,8 +94,8 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 				})
 
 				It("should remove the in and out chain", func() {
-					filterTable.checkChains([][]*generictables.Chain{})
-					mangleTable.checkChains([][]*generictables.Chain{})
+					filterTable.CheckChains([][]*generictables.Chain{})
+					mangleTable.CheckChains([][]*generictables.Chain{})
 				})
 			})
 		})
@@ -119,19 +120,19 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 			})
 
 			It("should install the raw chains", func() {
-				rawTable.checkChains([][]*generictables.Chain{{
+				rawTable.CheckChains([][]*generictables.Chain{{
 					{Name: caliPIPol1ChainName},
 					{Name: caliPOPol1ChainName},
 				}})
 			})
 			It("should install to the filter table", func() {
-				filterTable.checkChains([][]*generictables.Chain{{
+				filterTable.CheckChains([][]*generictables.Chain{{
 					{Name: caliPIPol1ChainName},
 					{Name: caliPOPol1ChainName},
 				}})
 			})
 			It("should install to the mangle table", func() {
-				mangleTable.checkChains([][]*generictables.Chain{{
+				mangleTable.CheckChains([][]*generictables.Chain{{
 					{Name: caliPIPol1ChainName},
 					{Name: caliPOPol1ChainName},
 				}})
@@ -145,13 +146,13 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 				})
 
 				It("should remove the raw chains", func() {
-					rawTable.checkChains([][]*generictables.Chain{})
+					rawTable.CheckChains([][]*generictables.Chain{})
 				})
 				It("should not insert any filter chains", func() {
-					filterTable.checkChains([][]*generictables.Chain{})
+					filterTable.CheckChains([][]*generictables.Chain{})
 				})
 				It("should remove any mangle chains", func() {
-					mangleTable.checkChains([][]*generictables.Chain{})
+					mangleTable.CheckChains([][]*generictables.Chain{})
 				})
 			})
 		})
@@ -176,19 +177,19 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 			})
 
 			It("should install the raw chains", func() {
-				rawTable.checkChains([][]*generictables.Chain{{
+				rawTable.CheckChains([][]*generictables.Chain{{
 					{Name: caliPIPol1ChainName},
 					{Name: caliPOPol1ChainName},
 				}})
 			})
 			It("should install to the filter table", func() {
-				filterTable.checkChains([][]*generictables.Chain{{
+				filterTable.CheckChains([][]*generictables.Chain{{
 					{Name: caliPIPol1ChainName},
 					{Name: caliPOPol1ChainName},
 				}})
 			})
 			It("should install to the mangle table", func() {
-				mangleTable.checkChains([][]*generictables.Chain{{
+				mangleTable.CheckChains([][]*generictables.Chain{{
 					{Name: caliPIPol1ChainName},
 					{Name: caliPOPol1ChainName},
 				}})
@@ -202,13 +203,13 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 				})
 
 				It("should remove the raw chains", func() {
-					rawTable.checkChains([][]*generictables.Chain{})
+					rawTable.CheckChains([][]*generictables.Chain{})
 				})
 				It("should not insert any filter chains", func() {
-					filterTable.checkChains([][]*generictables.Chain{})
+					filterTable.CheckChains([][]*generictables.Chain{})
 				})
 				It("should remove any mangle chains", func() {
-					mangleTable.checkChains([][]*generictables.Chain{})
+					mangleTable.CheckChains([][]*generictables.Chain{})
 				})
 			})
 		})
@@ -231,14 +232,14 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 			})
 
 			It("should install the in and out chain", func() {
-				filterTable.checkChains([][]*generictables.Chain{{
+				filterTable.CheckChains([][]*generictables.Chain{{
 					{Name: "cali-pri-prof1"},
 					{Name: "cali-pro-prof1"},
 				}})
 			})
 
 			It("should install the out chain to the mangle table", func() {
-				mangleTable.checkChains([][]*generictables.Chain{{
+				mangleTable.CheckChains([][]*generictables.Chain{{
 					{Name: "cali-pro-prof1"},
 				}})
 			})
@@ -251,8 +252,8 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 				})
 
 				It("should remove the in and out chain", func() {
-					filterTable.checkChains([][]*generictables.Chain{})
-					mangleTable.checkChains([][]*generictables.Chain{})
+					filterTable.CheckChains([][]*generictables.Chain{})
+					mangleTable.CheckChains([][]*generictables.Chain{})
 				})
 			})
 		})
@@ -270,7 +271,7 @@ var _ = Describe("Policy manager IPv6 with flowlogs", policyManagerTests(6, true
 var _ = Describe("Raw egress policy manager", func() {
 	var (
 		policyMgr        *policyManager
-		rawTable         *mockTable
+		rawTable         *dptest.MockTable
 		neededIPSets     set.Set[string]
 		numCallbackCalls int
 	)
@@ -278,7 +279,7 @@ var _ = Describe("Raw egress policy manager", func() {
 	BeforeEach(func() {
 		neededIPSets = nil
 		numCallbackCalls = 0
-		rawTable = newMockTable("raw")
+		rawTable = dptest.NewMockTable("raw")
 		ruleRenderer := rules.NewRenderer(rules.Config{
 			IPSetConfigV4:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
 			IPSetConfigV6:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),

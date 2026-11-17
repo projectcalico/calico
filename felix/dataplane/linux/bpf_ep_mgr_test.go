@@ -58,6 +58,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -627,8 +628,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			VXLANVNI:               4096,
 		}
 		ruleRenderer = rules.NewRenderer(rrConfigNormal, false)
-		filterTableV4 = newMockTable("filter")
-		filterTableV6 = newMockTable("filter")
+		filterTableV4 = dptest.NewMockTable("filter")
+		filterTableV6 = dptest.NewMockTable("filter")
 	})
 
 	newBpfEpMgr := func(ipv6Enabled bool) {
