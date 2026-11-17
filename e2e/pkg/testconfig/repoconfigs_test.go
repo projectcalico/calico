@@ -91,6 +91,7 @@ func TestThereIsOnePolicyFile(t *testing.T) {
 	}
 }
 
+// policyFiles lists the configs of kind policy, relative to e2e/config.
 func policyFiles(t *testing.T) []string {
 	t.Helper()
 	var files []string
@@ -193,6 +194,9 @@ func laneConfigs(t *testing.T) (map[string][]string, map[string][]string) {
 func TestLanesSelectWithValidConfigs(t *testing.T) {
 	_, byLane := laneConfigs(t)
 	policy := policyFiles(t)
+	if len(policy) != 1 {
+		t.Fatalf("want exactly one policy file, found %v", policy)
+	}
 	for lane, configs := range byLane {
 		t.Run(lane, func(t *testing.T) {
 			paths := make([]string, 0, len(configs))
