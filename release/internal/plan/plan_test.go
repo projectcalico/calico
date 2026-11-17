@@ -248,6 +248,32 @@ func TestRun(t *testing.T) {
 		}
 	})
 
+	t.Run("a real run logs the duration of each step that finishes", func(t *testing.T) {
+		hook := logtest.NewGlobal()
+		t.Cleanup(hook.Reset)
+		var calls []string
+		p, err := New(Options{}, node(&calls, "a", ""), Node{Name: "b", Do: func() error { return errors.New("boom") }})
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if err := p.Run(); err == nil {
+			t.Fatal("Run succeeded, want b's failure")
+		}
+		var got []string
+		for _, e := range hook.AllEntries() {
+			if e.Message != "Done" {
+				continue
+			}
+			if _, ok := e.Data["duration"]; !ok {
+				t.Errorf("Done for %v has no duration", e.Data["step"])
+			}
+			got = append(got, fmt.Sprint(e.Data["step"]))
+		}
+		if diff := cmp.Diff([]string{"a"}, got); diff != "" {
+			t.Errorf("Done logged for (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("a plan-only run logs each step's result in plan order", func(t *testing.T) {
 		hook := logtest.NewGlobal()
 		t.Cleanup(hook.Reset)

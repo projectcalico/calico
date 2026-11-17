@@ -256,6 +256,8 @@ type settings struct {
 	// did not build its own images needs.
 	pull bool
 
+	pruneCache bool
+
 	retag *retag
 	scan  *ScanRequest
 	deps  []Dependency
@@ -297,6 +299,7 @@ type (
 // missing apply method fails here rather than at a call site.
 var (
 	_ Option               = setting(nil)
+	_ BuildOption          = buildSetting(nil)
 	_ ArchiveOption        = archiveSetting(nil)
 	_ PublishOption        = publishSetting(nil)
 	_ PublishResolveOption = publishResolveSetting(nil)
@@ -308,6 +311,10 @@ func (f setting) applyBuild(s *settings) error   { return f(s) }
 func (f setting) applyArchive(s *settings) error { return f(s) }
 func (f setting) applyPublish(s *settings) error { return f(s) }
 func (f setting) applyResolve(s *settings) error { return f(s) }
+
+type buildSetting func(*settings) error
+
+func (f buildSetting) applyBuild(s *settings) error { return f(s) }
 
 type archiveSetting func(*settings) error
 
@@ -362,6 +369,14 @@ func WithStepName(name string) Option {
 			return fmt.Errorf("no step name given")
 		}
 		s.Apply([]steps.Option{steps.WithName(name)})
+		return nil
+	})
+}
+
+// WithPruneCache drops the build cache after the build; the built images stay.
+func WithPruneCache(prune bool) BuildOption {
+	return buildSetting(func(s *settings) error {
+		s.pruneCache = prune
 		return nil
 	})
 }
@@ -510,7 +525,7 @@ func (s settings) runUnit(u unit) error {
 	dir := filepath.Join(s.RepoRoot, u.dir)
 
 	for attempt := 0; ; attempt++ {
-		out, err := command.Make(s.Runner(), dir).Run(strings.Fields(u.target), command.WithEnv(u.env...), command.WithLogFile(s.logPath(u)))
+		out, err := command.Make(s.Runner(), dir).Run(strings.Fields(u.target), command.WithEnv(u.env...), command.WithLogFile(s.logPath(u)), command.WithTiming(log))
 		if err == nil {
 			log.Debug(out)
 			return nil
@@ -794,21 +809,22 @@ func (s settings) addRefs(got []resolved) error {
 	return nil
 }
 
-func (s settings) docker(args ...string) (string, error) {
-	return s.Runner().Run("docker", args)
+func (s settings) docker(args []string, opts ...command.Option) (string, error) {
+	return s.Runner().Run("docker", args, opts...)
 }
 
 // save fetches the image first when it is not already local.
 func save(s settings, image, out string) error {
+	log := s.Logger().WithField("image", image)
 	if s.pull {
-		if _, err := s.docker("image", "inspect", image); err != nil {
-			s.Logger().WithField("image", image).Info("Image not found locally, pulling")
-			if _, err := s.docker("pull", image); err != nil {
+		if _, err := s.docker([]string{"image", "inspect", image}); err != nil {
+			log.Info("Image not found locally, pulling")
+			if _, err := s.docker([]string{"pull", image}, command.WithTiming(log.WithField("action", "pull"))); err != nil {
 				return fmt.Errorf("pulling %s: %w", image, err)
 			}
 		}
 	}
-	if _, err := s.docker("save", "--output", out, image); err != nil {
+	if _, err := s.docker([]string{"save", "--output", out, image}, command.WithTiming(log.WithField("action", "save"))); err != nil {
 		return s.Errorf("%w", err)
 	}
 	return nil

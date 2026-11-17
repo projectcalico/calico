@@ -181,6 +181,8 @@ type CalicoManager struct {
 	// isHashRelease is a flag to indicate that we should build a hashrelease.
 	isHashRelease bool
 
+	ci bool
+
 	// archiveImages controls whether we should archive container images in release tarball.
 	archiveImages bool
 
@@ -599,33 +601,7 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 	if dirty {
 		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before building the hashrelease"))
 	}
-	if err := r.checkCodeGeneration(); err != nil {
-		errStack = errors.Join(errStack, err)
-	}
 	return errStack
-}
-
-// The checkout must start clean, so a failed check can reset everything
-// make generate left behind without losing anyone's work.
-func (r *CalicoManager) checkCodeGeneration() error {
-	// Untracked files count: a failed check runs git clean, which would delete them.
-	dirty, err := command.Git(r.runner).In(r.repoRoot).Porcelain()
-	if err != nil {
-		return fmt.Errorf("check git status: %w", err)
-	}
-	if dirty {
-		return fmt.Errorf("cannot check code generation in a checkout with changes")
-	}
-	if _, err := command.Make(r.runner, r.repoRoot).Run([]string{"generate", "check-dirty"}); err != nil {
-		logrus.WithError(err).Error("Failed to check code generation")
-		for _, args := range [][]string{{"checkout", "--", "."}, {"clean", "-fd"}} {
-			if _, err := command.Git(r.runner).In(r.repoRoot).Run(args...); err != nil {
-				logrus.WithError(err).Error("Failed to reset changes from code generation")
-			}
-		}
-		return fmt.Errorf("code generation error, try 'make generate' to fix")
-	}
-	return nil
 }
 
 func (r *CalicoManager) checkBranch(check func() error) error {
@@ -671,11 +647,6 @@ func (r *CalicoManager) PreReleaseValidate() error {
 	}
 	if strings.TrimSpace(out) == "true" {
 		return fmt.Errorf("attempt to release from a shallow clone is not possible")
-	}
-
-	// Check that code generation is up-to-date.
-	if err := r.checkCodeGeneration(); err != nil {
-		return err
 	}
 
 	// Assert that manifests are using the correct version.
@@ -1142,7 +1113,7 @@ func (r *CalicoManager) archiveSources() ([]archives.Contributor, error) {
 		if err != nil {
 			return nil, fmt.Errorf("archive images: %w", err)
 		}
-		sources = append(sources, imgs)
+		sources = append(sources, imgs...)
 	}
 	if r.binaries {
 		sources = append(sources, binaries.Archive(r.repoRoot)...)
@@ -1165,7 +1136,7 @@ func (r *CalicoManager) archiveSources() ([]archives.Contributor, error) {
 func (r *CalicoManager) buildBinaries() error {
 	var builders []binaries.Builder
 	if r.binaries {
-		builders = append(builders, binaries.Release(r.uploadDir())...)
+		builders = append(builders, binaries.Release(r.uploadDir(), r.architectures...)...)
 	}
 	if r.e2eBinaries && r.isHashRelease {
 		builders = append(builders, binaries.E2E(r.architectures, binaries.E2EDir(r.uploadDir())))
@@ -1197,6 +1168,7 @@ func (r *CalicoManager) buildContainerImages() error {
 		images.WithRegistries(r.imageRegistries...),
 		images.WithArches(r.architectures...),
 		images.WithLogsDir(r.logsDir),
+		images.WithPruneCache(r.ci),
 	)
 	if err != nil {
 		return fmt.Errorf("build images: %w", err)

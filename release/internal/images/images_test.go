@@ -296,6 +296,54 @@ func TestPublishConfirmLatch(t *testing.T) {
 	}
 }
 
+func TestBuild(t *testing.T) {
+	pruned := func(f *fakeRunner) bool {
+		for _, c := range f.Calls() {
+			if c.Name == "docker" && slices.Equal(c.Args, []string{"builder", "prune", "--all", "--force"}) {
+				return true
+			}
+		}
+		return false
+	}
+
+	t.Run("keeps the build cache by default", func(t *testing.T) {
+		f := newFakeRunner(nil)
+		if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f)...); err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		if pruned(f) {
+			t.Error("build cache was pruned without being asked")
+		}
+	})
+
+	t.Run("prunes the build cache when asked", func(t *testing.T) {
+		f := newFakeRunner(nil)
+		if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f, WithPruneCache(true))...); err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		if !pruned(f) {
+			t.Error("build cache was not pruned")
+		}
+	})
+
+	t.Run("a failed prune does not fail the build", func(t *testing.T) {
+		f := newFakeRunner(map[string]int{"prune": 1})
+		if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f, WithPruneCache(true))...); err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+	})
+
+	t.Run("a failed build skips the prune", func(t *testing.T) {
+		f := newFakeRunner(map[string]int{"/repo/node": 9})
+		if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f, WithPruneCache(true))...); err == nil {
+			t.Fatal("Build succeeded with a failing component")
+		}
+		if pruned(f) {
+			t.Error("build cache was pruned after a failed build")
+		}
+	})
+}
+
 func TestLogPaths(t *testing.T) {
 	t.Run("no logs dir captures in memory", func(t *testing.T) {
 		f := newFakeRunner(nil)
@@ -713,12 +761,14 @@ func TestPrefixedVariantRecordsPrefixedRefs(t *testing.T) {
 func TestArchiveSavesStandardImagesOnly(t *testing.T) {
 	f := imageNameRunner{images: "node node-windows"}.runner()
 	dir := t.TempDir()
-	a, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...)
+	sources, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...)
 	if err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
-	if err := a.Contribute(dir); err != nil {
-		t.Fatalf("Archive: %v", err)
+	for _, a := range sources {
+		if err := a.Contribute(dir); err != nil {
+			t.Fatalf("Contribute(%s): %v", a.Name(), err)
+		}
 	}
 	var saved []string
 	for _, c := range f.Calls() {
@@ -737,12 +787,14 @@ func TestArchiveSavesStandardImagesOnly(t *testing.T) {
 func TestArchivePullsWhenAsked(t *testing.T) {
 	f := imageNameRunner{images: "node"}.runner()
 	f.failures = map[string]int{"inspect": 9}
-	a, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f, WithPull(true))...)
+	sources, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f, WithPull(true))...)
 	if err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
-	if err := a.Contribute(t.TempDir()); err != nil {
-		t.Fatalf("Archive: %v", err)
+	for _, a := range sources {
+		if err := a.Contribute(t.TempDir()); err != nil {
+			t.Fatalf("Contribute(%s): %v", a.Name(), err)
+		}
 	}
 	var pulled bool
 	for _, c := range f.Calls() {
@@ -757,12 +809,14 @@ func TestArchivePullsWhenAsked(t *testing.T) {
 
 func TestArchiveRejectsNoDir(t *testing.T) {
 	f := imageNameRunner{images: "node"}.runner()
-	a, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...)
+	sources, err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...)
 	if err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
-	if err := a.Contribute(""); err == nil {
-		t.Fatal("expected an error when no archive directory is given")
+	for _, a := range sources {
+		if err := a.Contribute(""); err == nil {
+			t.Fatalf("%s: expected an error when no archive directory is given", a.Name())
+		}
 	}
 }
 

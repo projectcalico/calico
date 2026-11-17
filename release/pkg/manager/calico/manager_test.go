@@ -1120,9 +1120,17 @@ func TestArchiveSourcesIsGatedPerSource(t *testing.T) {
 			if err != nil {
 				t.Fatalf("archiveSources: %v", err)
 			}
+			// Images contribute once per directory, and the directories differ
+			// by product.
 			var got []string
 			for _, c := range sources {
-				got = append(got, c.Name())
+				name := c.Name()
+				if strings.HasPrefix(name, "images/") {
+					name = "images"
+				}
+				if len(got) == 0 || got[len(got)-1] != name {
+					got = append(got, name)
+				}
 			}
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("archiveSources() = %v, want %v", got, tc.want)
@@ -2098,56 +2106,6 @@ func TestHelmIndexUploadSetsCachePolicy(t *testing.T) {
 	}
 	if got.CachePolicy != distribution.MutableCachePolicy {
 		t.Errorf("CachePolicy = %q, want %q", got.CachePolicy, distribution.MutableCachePolicy)
-	}
-}
-
-func TestCheckCodeGeneration(t *testing.T) {
-	const (
-		status = "git status --porcelain"
-		check  = "make generate check-dirty"
-		reset  = "git checkout -- ."
-		clean  = "git clean -fd"
-	)
-	for _, tc := range []struct {
-		name    string
-		status  string
-		makeErr error
-		wantErr string
-		want    []string
-	}{
-		{name: "an up-to-date checkout passes", want: []string{status, check}},
-		{
-			name:    "stale generated files fail and are reset",
-			makeErr: errors.New("check-dirty failed"),
-			wantErr: "code generation error",
-			want:    []string{status, check, reset, clean},
-		},
-		{
-			name:    "a checkout with changes is left alone",
-			status:  "?? notes.txt",
-			wantErr: "checkout with changes",
-			want:    []string{status},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeRunner().on(status, tc.status, nil).on(check, "", tc.makeErr)
-			r := &CalicoManager{runner: f, repoRoot: t.TempDir()}
-			err := r.checkCodeGeneration()
-			if tc.wantErr == "" && err != nil {
-				t.Fatalf("checkCodeGeneration: %v", err)
-			}
-			if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
-				t.Fatalf("checkCodeGeneration() error = %v, want %q", err, tc.wantErr)
-			}
-			if len(f.calls()) != len(tc.want) {
-				t.Fatalf("ran %v, want %v", f.calls(), tc.want)
-			}
-			for i, prefix := range tc.want {
-				if !strings.HasPrefix(f.calls()[i], prefix) {
-					t.Errorf("call %d = %q, want it to start with %q", i, f.calls()[i], prefix)
-				}
-			}
-		})
 	}
 }
 

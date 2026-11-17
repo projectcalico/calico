@@ -39,17 +39,23 @@ func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) er
 	}
 
 	units := s.units(s.env())
-	s.Logger().WithField("images", len(units)).Info("Building container images")
+	s.Logger().WithFields(logrus.Fields{"images": len(units), "arches": s.Arches}).Info("Building container images")
 	if err := s.runUnits(units); err != nil {
 		return err
 	}
 	s.Logger().Info("Finished building container images")
+	if s.pruneCache {
+		if _, err := s.docker([]string{"builder", "prune", "--all", "--force"}); err != nil {
+			s.Logger().WithError(err).Warn("Failed to prune the build cache")
+		}
+	}
 	return nil
 }
 
-// Archive writes each image to its own tar under tarDir. It validates when
+// Archive returns a contributor per image directory, so the release archive
+// can drop one directory's tars before saving the next. It validates when
 // called, so a bad version fails before any build rather than at staging.
-func Archive(repoRoot, version string, imageDirs []string, opts ...ArchiveOption) (archives.Contributor, error) {
+func Archive(repoRoot, version string, imageDirs []string, opts ...ArchiveOption) ([]archives.Contributor, error) {
 	s, err := newSettings(archiveStep, repoRoot, version, NarrowVariants(StandardVariants(PublishVariants), imageDirs), opts)
 	if err != nil {
 		return nil, err
@@ -57,17 +63,23 @@ func Archive(repoRoot, version string, imageDirs []string, opts ...ArchiveOption
 	if len(s.Registries) == 0 {
 		return nil, s.Errorf("no registry to archive images from")
 	}
-	return archiver{s: s}, nil
+	units := s.units(s.env())
+	out := make([]archives.Contributor, 0, len(units))
+	for _, u := range units {
+		out = append(out, archiver{s: s, u: u})
+	}
+	return out, nil
 }
 
 var _ archives.Contributor = archiver{}
 
 type archiver struct {
 	s settings
+	u unit
 }
 
 func (a archiver) Name() string {
-	return "images"
+	return filepath.Join("images", a.u.dir)
 }
 
 func (a archiver) Contribute(dir string) error {
@@ -76,22 +88,12 @@ func (a archiver) Contribute(dir string) error {
 		return s.Errorf("no directory to write images to")
 	}
 	dest := filepath.Join(dir, "images")
-	units := s.units(s.env())
-	s.Logger().WithField("images", len(units)).Info("Archiving container images")
 	if err := os.MkdirAll(dest, fsutil.DirPerms); err != nil {
 		return fmt.Errorf("creating images dir %s: %w", dest, err)
 	}
-
 	// Images come from the first registry: an archive holds one copy, whichever
 	// registry it is pulled from.
-	reg := s.Registries[0]
-	if _, err := steps.Go(units, func(u unit) (unitDone, error) {
-		return unitDone{}, saveUnit(s, u, reg, dest)
-	}); err != nil {
-		return err
-	}
-	s.Logger().Info("Finished archiving container images")
-	return nil
+	return saveUnit(s, a.u, s.Registries[0], dest)
 }
 
 func saveUnit(s settings, u unit, reg, dest string) error {
@@ -168,7 +170,7 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 		sendImagesToISS(s, unscanned)
 		return nil
 	}
-	s.Logger().WithField("images", len(units)).Info("Publishing container images")
+	s.Logger().WithFields(logrus.Fields{"images": len(units), "arches": s.Arches}).Info("Publishing container images")
 	publishErr := s.runUnits(units)
 
 	// Record before reporting a failure: a partial publish is exactly the run
@@ -203,7 +205,7 @@ func Resolve(repoRoot, version string, variants []Variant, resolve registry.Dige
 
 	unscanned, depErr := s.runDependencies()
 	units := s.units(s.env())
-	s.Logger().WithField("images", len(units)).Info("Resolving container images")
+	s.Logger().WithFields(logrus.Fields{"images": len(units), "arches": s.Arches}).Info("Resolving container images")
 	got, lookupErr := steps.GoLimit(units, lookupLimit, s.lookup)
 
 	errs := []error{depErr}
