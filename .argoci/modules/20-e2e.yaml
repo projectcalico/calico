@@ -56,6 +56,7 @@ steps:
       - build-third-party-images
       - build-e2e-binaries
       - check-go
+      - sandcat-pr-context
     matrix:
       # Pinned rather than defaulted: from v3.33 the default gives Felix the
       # IPIP routes, and these tests need BGP to be the only routing mechanism.

@@ -11,12 +11,13 @@
 #     --spec-dir DIR | --report FILE
 #   sandcat.sh download            fetch the binary, print its path
 #   sandcat.sh fetch-pr            fetch the PR context file, print its path
+#   sandcat.sh publish-pr          fetch the PR context once and push it for the workflow's lanes
 #   sandcat.sh download-calico-mcp fetch calico-mcp, print its path
 #   sandcat.sh inline-env          print the inline hook setup as KEY=VALUE lines;
 #     --kubeconfig PATH --source-dir DIR   non-zero means do not run the hook
 #
 # Env: SANDCAT_DB_URL and SANDCAT_DB_TOKEN gate analyze and build-failure (skipped when unset).
-# SANDCAT_BIN_DOWNLOAD_TOKEN downloads the binary.
+# SANDCAT_BIN_DOWNLOAD_TOKEN downloads the binary. SANDCAT_PR_READ_TOKEN, when set, lets publish-pr read the PR.
 # SANDCAT_CALICO_MCP=0 disables calico-mcp for the inline hook; CALICO_MCP_VERSION pins it.
 
 set -uo pipefail
@@ -33,6 +34,7 @@ CALICO_MCP_LOCAL_BIN="${CALICO_MCP_LOCAL_BIN:-${HOME}/.local/bin/calico-mcp-${CA
 
 # Outside the repo so it never dirties the working copy.
 SANDCAT_PR_CONTEXT_FILE="${SANDCAT_PR_CONTEXT_FILE:-${HOME}/sandcat-pr-context.json}"
+SANDCAT_PR_ARTIFACT="sandcat-pr-context.json"
 
 _sandcat_download() {
   if [[ -x "${SANDCAT_BIN}" ]]; then
@@ -85,11 +87,18 @@ _calico_mcp_download() {
 }
 
 # Print the PR context file's path; non-zero on a branch run, which has no PR.
-# Fetched out here because the test container has no GitHub credentials.
+# On ArgoCI, publish-pr already fetched it once for the whole workflow.
 cmd_fetch_pr() {
-  _sandcat_download || return 1
 # Cleared first so a reused home cannot hand a branch run an older PR.
   rm -f "${SANDCAT_PR_CONTEXT_FILE}"
+  if [[ -n "${CI_WORKFLOW_NAME:-}" ]] && command -v artifact >/dev/null &&
+    artifact pull workflow "${SANDCAT_PR_ARTIFACT}" --destination "${SANDCAT_PR_CONTEXT_FILE}" >&2 &&
+    [[ -s "${SANDCAT_PR_CONTEXT_FILE}" ]]; then
+    echo "${SANDCAT_PR_CONTEXT_FILE}"
+    return 0
+  fi
+  rm -f "${SANDCAT_PR_CONTEXT_FILE}"
+  _sandcat_download || return 1
   # Its stdout goes to stderr so the only thing on ours is the path below.
   "${SANDCAT_BIN}" fetch-pr \
     --out "${SANDCAT_PR_CONTEXT_FILE}" >&2 || return 1
@@ -99,6 +108,19 @@ cmd_fetch_pr() {
 
 # Print the inline per-spec hook's setup as KEY=VALUE lines to eval; non-zero,
 # with the reason on stderr, when the hook must not run.
+# Keeps the PR read token off the test VMs; a branch run publishes nothing.
+cmd_publish_pr() {
+  rm -f "${SANDCAT_PR_CONTEXT_FILE}"
+  _sandcat_download || return 1
+  GITHUB_ACCESS_TOKEN="${SANDCAT_PR_READ_TOKEN:-}" "${SANDCAT_BIN}" fetch-pr \
+    --out "${SANDCAT_PR_CONTEXT_FILE}" || return 1
+  if [[ ! -s "${SANDCAT_PR_CONTEXT_FILE}" ]]; then
+    echo "[INFO] sandcat: no PR; nothing to publish"
+    return 0
+  fi
+  artifact push workflow "${SANDCAT_PR_CONTEXT_FILE}" --destination "${SANDCAT_PR_ARTIFACT}"
+}
+
 cmd_inline_env() {
 # Callers eval stdout, so only the payload may reach it: send everything else to
 # stderr and keep the real stdout on fd 3.
@@ -493,6 +515,11 @@ fi
 if [[ "${subcmd}" == "download-calico-mcp" ]]; then
   _calico_mcp_download || exit 1
   echo "${CALICO_MCP_LOCAL_BIN}"
+  exit 0
+fi
+
+if [[ "${subcmd}" == "publish-pr" ]]; then
+  cmd_publish_pr || exit 1
   exit 0
 fi
 
