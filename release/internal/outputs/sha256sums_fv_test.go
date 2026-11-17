@@ -38,11 +38,7 @@ func TestSHA256SumsOnHost(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		files, err := fsutil.ListFiles(dir, fsutil.DirFiles, fsutil.Exclude(SumsFileName))
-		if err != nil {
-			t.Fatalf("ListFiles: %v", err)
-		}
-		if err := SHA256Sums(nil, files, dir); err != nil {
+		if err := SHA256Sums(nil, dir, fsutil.DirFiles); err != nil {
 			t.Fatalf("SHA256Sums: %v", err)
 		}
 		bs, err := os.ReadFile(filepath.Join(dir, SumsFileName))

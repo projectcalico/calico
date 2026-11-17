@@ -177,6 +177,7 @@ func TestCreate(t *testing.T) {
 		published  bool
 		wantErr    string
 		wantNew    bool
+		wantEdit   bool
 	}{
 		{name: "creates when absent", wantNew: true},
 		{name: "creates a pre-release when asked", prerelease: true, wantNew: true},
@@ -184,6 +185,17 @@ func TestCreate(t *testing.T) {
 		{
 			name:     "reuses an existing draft",
 			existing: &github.RepositoryRelease{ID: github.Int64(7), Draft: github.Bool(true)},
+		},
+		{
+			name:       "marks a reused draft as a pre-release when asked",
+			existing:   &github.RepositoryRelease{ID: github.Int64(7), Draft: github.Bool(true), Prerelease: github.Bool(false)},
+			prerelease: true,
+			wantEdit:   true,
+		},
+		{
+			name:     "marks a reused pre-release draft as final when asked",
+			existing: &github.RepositoryRelease{ID: github.Int64(7), Draft: github.Bool(true), Prerelease: github.Bool(true)},
+			wantEdit: true,
 		},
 		{
 			name:     "refuses a published release",
@@ -224,6 +236,12 @@ func TestCreate(t *testing.T) {
 			}
 			if f.created != nil {
 				t.Error("expected the existing draft reused, not a new one")
+			}
+			if tc.wantEdit != (f.edited != nil) {
+				t.Fatalf("edited = %v, want an edit: %v", f.edited, tc.wantEdit)
+			}
+			if tc.wantEdit && f.edited.GetPrerelease() != tc.prerelease {
+				t.Errorf("edited Prerelease = %v, want %v", f.edited.GetPrerelease(), tc.prerelease)
 			}
 			if rel.GetID() != tc.existing.GetID() {
 				t.Errorf("got release %d, want the existing %d", rel.GetID(), tc.existing.GetID())

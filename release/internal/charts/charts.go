@@ -24,7 +24,6 @@ import (
 	"slices"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/docs"
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/outputs"
@@ -62,7 +61,7 @@ const (
 var RepoURL = docs.URL(DirName)
 
 var ChartsURL = func(c Chart) string {
-	return github.Repo{Org: defaults.Organization(), Name: defaults.Repo()}.DownloadURL(c.ProductVersion)
+	return github.DefaultRepo().DownloadURL(c.ProductVersion)
 }
 
 // All is the set a release ships. It is a var so a product shipping a
