@@ -87,7 +87,7 @@ func buildSimpleService3() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 			ClusterIP:             "127.0.0.10",
 			ClusterIPs:            []string{"127.0.0.10", "::a"},
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
-			LoadBalancerIP:        loadBalancerIP1,
+			LoadBalancerIP:        loadBalancerIP1, //nolint:staticcheck // Ignore SA1019: Calico still supports spec.loadBalancerIP.
 			IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 		},
 		Status: v1.ServiceStatus{

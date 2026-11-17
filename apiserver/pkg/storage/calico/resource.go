@@ -111,6 +111,18 @@ func (rs *resourceStore) CompactRevision() int64 {
 	return 0
 }
 
+// DeleteOnce and UpdateOnce are retry steps that only the etcd3 store and the
+// watch cache call on their own backends; this store is never wrapped by either.
+func (rs *resourceStore) DeleteOnce(_ context.Context, _ string, _ *storage.ObjState, _ runtime.Object) error {
+	logrus.Error("STUB: DeleteOnce() not supported by Calico client.")
+	return fmt.Errorf("DeleteOnce() not supported by Calico client")
+}
+
+func (rs *resourceStore) UpdateOnce(_ context.Context, _ string, _ *storage.ObjState, _ runtime.Object, _ uint64, _ runtime.Object, _ bool) (*storage.ObjState, error) {
+	logrus.Error("STUB: UpdateOnce() not supported by Calico client.")
+	return nil, fmt.Errorf("UpdateOnce() not supported by Calico client")
+}
+
 var (
 	_ storage.Interface = (*resourceStore)(nil)
 	_ util.DryRunWriter = (*resourceStore)(nil)

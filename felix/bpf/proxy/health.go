@@ -20,13 +20,15 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"net"
 	"time"
 
 	logrus "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	v1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
-	k8sp "k8s.io/kubernetes/pkg/proxy"
 	"k8s.io/kubernetes/pkg/proxy/healthcheck"
+	"k8s.io/kubernetes/pkg/proxy/nodemanager"
 )
 
 type Healthcheck interface {
@@ -38,12 +40,7 @@ type Healthcheck interface {
 func NewHealthCheck(k8s kubernetes.Interface, nodeName string, port int,
 	minSyncPeriod time.Duration) (Healthcheck, error) {
 
-	nodeMgr := new(k8sp.NodeManager)
-	node := &v1.Node{
-		Spec: v1.NodeSpec{},
-	}
-
-	nodeMgr.OnNodeChange(node)
+	nodeMgr := &staticNodeManager{name: nodeName, node: &v1.Node{Spec: v1.NodeSpec{}}}
 
 	healthzAddr := fmt.Sprintf(":%d", port)
 	server := healthcheck.NewProxyHealthServer(healthzAddr, minSyncPeriod, nodeMgr)
@@ -71,3 +68,22 @@ func (a *alwaysHealthy) Health() healthcheck.ProxyHealth {
 
 func (a *alwaysHealthy) QueuedUpdate(v1.IPFamily) {}
 func (a *alwaysHealthy) Updated(v1.IPFamily)      {}
+
+// staticNodeManager always reports a node with no taints, so the health server
+// never treats this node as draining. Node is the only method the server reads.
+type staticNodeManager struct {
+	name string
+	node *v1.Node
+}
+
+var _ nodemanager.NodeManager = (*staticNodeManager)(nil)
+
+func (m *staticNodeManager) OnNodeChange(*v1.Node)                  {}
+func (m *staticNodeManager) OnNodeDelete(*v1.Node)                  {}
+func (m *staticNodeManager) OnNodeSynced()                          {}
+func (m *staticNodeManager) Name() string                           { return m.name }
+func (m *staticNodeManager) PrimaryIPFamily() v1.IPFamily           { return "" }
+func (m *staticNodeManager) NodeIPs() map[v1.IPFamily]net.IP        { return nil }
+func (m *staticNodeManager) PodCIDRs() []string                     { return nil }
+func (m *staticNodeManager) Node() *v1.Node                         { return m.node.DeepCopy() }
+func (m *staticNodeManager) NodeInformer() v1informers.NodeInformer { return nil }
