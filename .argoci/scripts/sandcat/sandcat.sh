@@ -11,13 +11,13 @@
 #     --spec-dir DIR | --report FILE
 #   sandcat.sh download            fetch the binary, print its path
 #   sandcat.sh fetch-pr            fetch the PR context file, print its path
-#   sandcat.sh publish-pr          fetch the PR context once and push it for the workflow's lanes
+#   sandcat.sh publish-pr-context  fetch the PR context once, push it for the workflow's lanes
 #   sandcat.sh download-calico-mcp fetch calico-mcp, print its path
 #   sandcat.sh inline-env          print the inline hook setup as KEY=VALUE lines;
 #     --kubeconfig PATH --source-dir DIR   non-zero means do not run the hook
 #
 # Env: SANDCAT_DB_URL and SANDCAT_DB_TOKEN gate analyze and build-failure (skipped when unset).
-# SANDCAT_BIN_DOWNLOAD_TOKEN downloads the binary. SANDCAT_PR_READ_TOKEN, when set, lets publish-pr read the PR.
+# SANDCAT_BIN_DOWNLOAD_TOKEN downloads the binary. SANDCAT_PR_READ_TOKEN, when set, lets publish-pr-context read the PR.
 # SANDCAT_CALICO_MCP=0 disables calico-mcp for the inline hook; CALICO_MCP_VERSION pins it.
 
 set -uo pipefail
@@ -87,7 +87,7 @@ _calico_mcp_download() {
 }
 
 # Print the PR context file's path; non-zero on a branch run, which has no PR.
-# On ArgoCI, publish-pr already fetched it once for the whole workflow.
+# On ArgoCI, publish-pr-context already fetched it once for the whole workflow.
 cmd_fetch_pr() {
 # Cleared first so a reused home cannot hand a branch run an older PR.
   rm -f "${SANDCAT_PR_CONTEXT_FILE}"
@@ -109,7 +109,7 @@ cmd_fetch_pr() {
 # Print the inline per-spec hook's setup as KEY=VALUE lines to eval; non-zero,
 # with the reason on stderr, when the hook must not run.
 # Keeps the PR read token off the test VMs; a branch run publishes nothing.
-cmd_publish_pr() {
+cmd_publish_pr_context() {
   rm -f "${SANDCAT_PR_CONTEXT_FILE}"
   _sandcat_download || return 1
   GITHUB_ACCESS_TOKEN="${SANDCAT_PR_READ_TOKEN:-}" "${SANDCAT_BIN}" fetch-pr \
@@ -518,8 +518,8 @@ if [[ "${subcmd}" == "download-calico-mcp" ]]; then
   exit 0
 fi
 
-if [[ "${subcmd}" == "publish-pr" ]]; then
-  cmd_publish_pr || exit 1
+if [[ "${subcmd}" == "publish-pr-context" ]]; then
+  cmd_publish_pr_context || exit 1
   exit 0
 fi
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests publish-pr and fetch-pr sharing one PR context through a stubbed workflow artifact store.
+# Tests publish-pr-context and fetch-pr sharing one PR context through a stubbed workflow artifact store.
 
 set -uo pipefail
 
@@ -53,17 +53,17 @@ check() {
 }
 
 newhome
-SANDCAT_PR_READ_TOKEN=read-only "${SCRIPT}" publish-pr >/dev/null 2>&1
+SANDCAT_PR_READ_TOKEN=read-only "${SCRIPT}" publish-pr-context >/dev/null 2>&1
 grep -qF fetched "${HOME}/store/sandcat-pr-context.json" 2>/dev/null
-check "publish-pr pushes the PR context for the workflow" $?
+check "publish-pr-context pushes the PR context for the workflow" $?
 [[ "$(cat "${HOME}/fetch-token")" == read-only ]]
-check "publish-pr reads the PR with SANDCAT_PR_READ_TOKEN" $?
+check "publish-pr-context reads the PR with SANDCAT_PR_READ_TOKEN" $?
 
 newhome
-STUB_PR=0 "${SCRIPT}" publish-pr >/dev/null 2>&1
+STUB_PR=0 "${SCRIPT}" publish-pr-context >/dev/null 2>&1
 rc=$?
 [[ "${rc}" == 0 && ! -e "${HOME}/store/sandcat-pr-context.json" ]]
-check "publish-pr on a branch run pushes nothing and succeeds" $?
+check "publish-pr-context on a branch run pushes nothing and succeeds" $?
 
 newhome
 echo '{"body":"published"}' > "${HOME}/store/sandcat-pr-context.json"

@@ -426,7 +426,7 @@ steps:
         keys:
           - name: SANDCAT_BIN_DOWNLOAD_TOKEN
     commands: |
-      .argoci/scripts/sandcat/sandcat.sh publish-pr || true
+      .argoci/scripts/sandcat/sandcat.sh publish-pr-context || true
 
   - name: check-sandcat-scripts
     jobSize: small
