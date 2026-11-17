@@ -510,7 +510,7 @@ func (s settings) runUnit(u unit) error {
 	dir := filepath.Join(s.RepoRoot, u.dir)
 
 	for attempt := 0; ; attempt++ {
-		out, err := command.Make(s.Runner(), dir).Run(strings.Fields(u.target), command.WithEnv(u.env...), command.WithLogFile(s.logPath(u)))
+		out, err := command.Make(s.Runner(), dir).Run(strings.Fields(u.target), command.WithEnv(u.env...), command.WithLogFile(s.logPath(u)), command.WithTiming(log))
 		if err == nil {
 			log.Debug(out)
 			return nil
@@ -794,21 +794,22 @@ func (s settings) addRefs(got []resolved) error {
 	return nil
 }
 
-func (s settings) docker(args ...string) (string, error) {
-	return s.Runner().Run("docker", args)
+func (s settings) docker(args []string, opts ...command.Option) (string, error) {
+	return s.Runner().Run("docker", args, opts...)
 }
 
 // save fetches the image first when it is not already local.
 func save(s settings, image, out string) error {
+	log := s.Logger().WithField("image", image)
 	if s.pull {
-		if _, err := s.docker("image", "inspect", image); err != nil {
-			s.Logger().WithField("image", image).Info("Image not found locally, pulling")
-			if _, err := s.docker("pull", image); err != nil {
+		if _, err := s.docker([]string{"image", "inspect", image}); err != nil {
+			log.Info("Image not found locally, pulling")
+			if _, err := s.docker([]string{"pull", image}, command.WithTiming(log.WithField("action", "pull"))); err != nil {
 				return fmt.Errorf("pulling %s: %w", image, err)
 			}
 		}
 	}
-	if _, err := s.docker("save", "--output", out, image); err != nil {
+	if _, err := s.docker([]string{"save", "--output", out, image}, command.WithTiming(log.WithField("action", "save"))); err != nil {
 		return s.Errorf("%w", err)
 	}
 	return nil
