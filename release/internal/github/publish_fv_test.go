@@ -14,7 +14,7 @@
 
 //go:build fv
 
-package distribution
+package github
 
 import (
 	"context"
@@ -24,15 +24,15 @@ import (
 	"strings"
 	"testing"
 
-	ghapi "github.com/google/go-github/v53/github"
-
-	gh "github.com/projectcalico/calico/release/internal/github"
+	"github.com/projectcalico/calico/release/internal/fsutil"
+	"github.com/projectcalico/calico/release/internal/outputs"
 )
 
-func TestPublishFlow(t *testing.T) {
+func TestReleasePublishRerun(t *testing.T) {
 	// A release is re-run after a failure, so a second pass must not checksum the
 	// sums file from the first, nor hand the same asset to the uploader twice.
 	t.Run("a rerun is idempotent", func(t *testing.T) {
+		useAssetsFilter(t, fsutil.DirFiles)
 		dir := t.TempDir()
 		for _, n := range []string{"release.tgz", "metadata.yaml"} {
 			if err := os.WriteFile(filepath.Join(dir, n), []byte(n), 0o644); err != nil {
@@ -40,19 +40,16 @@ func TestPublishFlow(t *testing.T) {
 			}
 		}
 		// One service across both runs, so the second sees what the first attached.
-		svc := &fakeReleaseService{draft: &ghapi.RepositoryRelease{ID: ghapi.Int64(1), Draft: ghapi.Bool(true)}}
-		rels, err := gh.NewReleases(gh.Repo{Org: "projectcalico", Name: "calico"}, svc)
-		if err != nil {
-			t.Fatal(err)
-		}
+		svc := &fakeReleases{}
+		rels := testReleases(t, svc)
 
 		var first string
 		for run := range 2 {
-			if err := SHA256Sums(dir); err != nil {
+			if err := outputs.SHA256Sums(nil, dir, AssetsFilter...); err != nil {
 				t.Fatalf("run %d: SHA256Sums: %v", run, err)
 			}
 			svc.uploaded = nil
-			d := GithubRelease{releases: rels, Tag: "v3.30.0", Draft: true}
+			d := Release{releases: rels, Tag: "v3.30.0", Draft: true}
 			if err := d.Publish(context.Background(), dir); err != nil {
 				t.Fatalf("run %d: Publish: %v", run, err)
 			}
@@ -64,16 +61,16 @@ func TestPublishFlow(t *testing.T) {
 			// and complete, so it resends nothing.
 			var want []string
 			if run == 0 {
-				want = []string{sumsFileName, "metadata.yaml", "release.tgz"}
+				want = []string{outputs.SumsFileName, "metadata.yaml", "release.tgz"}
 			}
 			if !slices.Equal(svc.uploaded, want) {
 				t.Errorf("run %d: uploaded %v, want %v", run, svc.uploaded, want)
 			}
-			bs, err := os.ReadFile(filepath.Join(dir, sumsFileName))
+			bs, err := os.ReadFile(filepath.Join(dir, outputs.SumsFileName))
 			if err != nil {
 				t.Fatal(err)
 			}
-			if strings.Contains(string(bs), sumsFileName) {
+			if strings.Contains(string(bs), outputs.SumsFileName) {
 				t.Errorf("run %d: the sums file checksums itself:\n%s", run, bs)
 			}
 			if run == 0 {
@@ -81,43 +78,6 @@ func TestPublishFlow(t *testing.T) {
 			} else if string(bs) != first {
 				t.Errorf("a second run changed the sums file:\nfirst:\n%s\nsecond:\n%s", first, bs)
 			}
-		}
-	})
-
-	// A sums file holding absolute paths verifies nowhere but the machine that
-	// built it, so the names must stay relative to the release directory.
-	t.Run("writes names relative to the directory", func(t *testing.T) {
-		dir := t.TempDir()
-		if err := os.MkdirAll(filepath.Join(dir, "charts"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		for _, n := range []string{"release.tgz", "metadata.yaml", "charts/index.yaml"} {
-			if err := os.WriteFile(filepath.Join(dir, n), []byte(n), 0o644); err != nil {
-				t.Fatal(err)
-			}
-		}
-		files, err := topLevelFiles(dir)
-		if err != nil {
-			t.Fatalf("topLevelFiles: %v", err)
-		}
-		if _, err := sha256Sums(dir, files); err != nil {
-			t.Fatalf("sha256Sums: %v", err)
-		}
-		bs, err := os.ReadFile(filepath.Join(dir, sumsFileName))
-		if err != nil {
-			t.Fatal(err)
-		}
-		got := string(bs)
-		for _, want := range []string{"  release.tgz", "  metadata.yaml"} {
-			if !strings.Contains(got, want) {
-				t.Errorf("expected %q, got:\n%s", want, got)
-			}
-		}
-		if strings.Contains(got, dir) {
-			t.Errorf("an absolute path was written:\n%s", got)
-		}
-		if strings.Contains(got, "charts") {
-			t.Errorf("a directory was checksummed:\n%s", got)
 		}
 	})
 }

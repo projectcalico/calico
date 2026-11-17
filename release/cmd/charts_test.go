@@ -63,21 +63,11 @@ var (
 	chartsCLIRegistry = "quay.test/charts"
 	chartsCLIDigest   = "sha256:aaa"
 
-	// The repository whose index a build merges with.
-	chartsCLIRepoURL = func(t *testing.T) string {
-		t.Helper()
-		u, err := charts.RepoURL()
-		if err != nil {
-			t.Fatal(err)
-		}
-		return u
-	}
-
 	// A product serving charts from the repository it indexes replaces this:
 	// there the two URLs coincide.
 	chartsCLICheckDownloadURL = func(t *testing.T, url string) {
 		t.Helper()
-		if repo := chartsCLIRepoURL(t); url == repo {
+		if repo := charts.RepoURL; url == repo {
 			t.Errorf("expected the download url to differ from the repository url %q", repo)
 		}
 		if !strings.Contains(url, chartsCLITestVersion) {
@@ -183,7 +173,7 @@ func TestChartsBuildBuildsTheIndexByDefault(t *testing.T) {
 	if !r.ran("--merge") {
 		t.Error("expected the published index to be merged rather than replaced")
 	}
-	if repo := chartsCLIRepoURL(t); !r.ran(repo) {
+	if repo := charts.RepoURL; !r.ran(repo) {
 		t.Errorf("expected the index at %q to be downloaded", repo)
 	}
 	indexDir := chartsCLIIndexDir(cfg)
