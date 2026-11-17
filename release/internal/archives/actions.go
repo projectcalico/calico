@@ -78,7 +78,7 @@ func (s settings) write(staging string) error {
 	if err != nil {
 		return s.Errorf("creating %s: %w", Path(s.Archive), err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	zw := gzip.NewWriter(f)
 	tw := tar.NewWriter(zw)
 
@@ -131,7 +131,7 @@ func (s settings) write(staging string) error {
 			if err != nil {
 				return err
 			}
-			defer src.Close()
+			defer func() { _ = src.Close() }()
 			_, err = io.Copy(tw, src)
 			return err
 		}); err != nil {

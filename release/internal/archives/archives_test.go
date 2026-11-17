@@ -147,7 +147,7 @@ func TestBuild(t *testing.T) {
 			if hdr.Uid != int(st.Uid) || hdr.Gid != int(st.Gid) {
 				t.Errorf("%s: owner %d:%d, want %d:%d", hdr.Name, hdr.Uid, hdr.Gid, st.Uid, st.Gid)
 			}
-			if !hdr.ModTime.Equal(info.ModTime().Truncate(time.Second)) {
+			if !hdr.ModTime.Equal(info.ModTime().Round(time.Second)) {
 				t.Errorf("%s: mtime %v, want %v", hdr.Name, hdr.ModTime, info.ModTime())
 			}
 		}
@@ -163,7 +163,7 @@ func readArchive(t *testing.T, path string) map[*tar.Header][]byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	zr, err := gzip.NewReader(f)
 	if err != nil {
 		t.Fatal(err)
