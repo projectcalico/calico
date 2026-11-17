@@ -115,6 +115,8 @@ func (m *policyManager) OnUpdate(msg any) {
 		// type gets changed it may move between tables.  Hence, we put the policy into all tables.
 		// The iptables layer will avoid programming it if it is not actually used.
 		nonFilterChains := chains
+
+		// REJECT is not a valid target in the raw and mangle tables, so they get DROP-rendered chains.
 		if m.nonFilterRuleRenderer != m.ruleRenderer {
 			nonFilterChains = m.nonFilterRuleRenderer.PolicyToIptablesChains(&id, msg.Policy, m.ipVersion)
 		}
