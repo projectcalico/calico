@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
@@ -103,7 +104,7 @@ type bpfRouteManager struct {
 	svcLoopPrevention string
 }
 
-func NewManager(config *dataplanedefs.Config, maps *bpfmap.IPMaps, ipFamily proto.IPVersion,
+func NewManager(config *dpconfig.Config, maps *bpfmap.IPMaps, ipFamily proto.IPVersion,
 	opReporter logrusr.OpRecorder,
 ) *bpfRouteManager {
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,

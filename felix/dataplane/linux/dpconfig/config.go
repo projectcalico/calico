@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dataplanedefs
+// Package dpconfig holds the Linux dataplane's configuration.  It is separate
+// from dataplanedefs because it pulls in most of Felix.
+package dpconfig
 
 import (
 	"net"

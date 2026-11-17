@@ -27,6 +27,7 @@ import (
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/dataplane/linux/route"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -67,7 +68,7 @@ type Manager struct {
 	// Indicates if configuration has changed since the last apply.
 	vtepsDirty        bool
 	externalNodeCIDRs []string
-	dpConfig          dataplanedefs.Config
+	dpConfig          dpconfig.Config
 
 	// Log context
 	logCtx     *logrus.Entry
@@ -103,7 +104,7 @@ func NewManager(
 	deviceName string,
 	ipVersion uint8,
 	mtu int,
-	dpConfig dataplanedefs.Config,
+	dpConfig dpconfig.Config,
 	opRecorder logrusr.OpRecorder,
 	opts ...Option,
 ) *Manager {
@@ -129,7 +130,7 @@ func NewManagerWithShims(
 	deviceName string,
 	ipVersion uint8,
 	mtu int,
-	dpConfig dataplanedefs.Config,
+	dpConfig dpconfig.Config,
 	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 	opts ...Option,

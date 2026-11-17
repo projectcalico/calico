@@ -58,6 +58,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
 	"github.com/projectcalico/calico/felix/environment"
@@ -636,7 +637,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		var err error
 		bpfEpMgr, err = NewManager(
 			mockDP,
-			&dataplanedefs.Config{
+			&dpconfig.Config{
 				Hostname:              "uthost",
 				BPFLogLevel:           "info",
 				BPFDataIfacePattern:   regexp.MustCompile(dataIfacePattern),

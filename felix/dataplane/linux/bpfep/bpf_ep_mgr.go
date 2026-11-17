@@ -74,6 +74,7 @@ import (
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/dataplane/linux/bpfep/bpfepdefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/procsys"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlan/vxlandefs"
@@ -572,7 +573,7 @@ func getIPFragTimeout(configuredTimeout time.Duration) uint32 {
 
 func NewManager(
 	dp bpfDataplane,
-	config *dataplanedefs.Config,
+	config *dpconfig.Config,
 	bpfmaps *bpfmap.Maps,
 	workloadIfaceRegex *regexp.Regexp,
 	ipSetIDAllocV4 *idalloc.IDAllocator,

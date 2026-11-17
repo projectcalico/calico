@@ -26,7 +26,7 @@ import (
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/bpfep"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlan/vxlandefs"
 	"github.com/projectcalico/calico/felix/ip"
@@ -69,7 +69,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(dataplaneV6.AddrAdd(eth0V6, &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("fc00:10:96::2")}})).To(Succeed())
 		dataplaneV6.ResetDeltas()
 
-		dpConfig := dataplanedefs.Config{
+		dpConfig := dpconfig.Config{
 			MaxIPSetSize:       5,
 			Hostname:           "node1",
 			ExternalNodesCidrs: []string{"10.0.0.0/24"},
@@ -90,7 +90,7 @@ var _ = Describe("VXLANManager", func() {
 			dataplane,
 		)
 
-		dpConfigV6 := dataplanedefs.Config{
+		dpConfigV6 := dpconfig.Config{
 			MaxIPSetSize:       5,
 			Hostname:           "node1",
 			ExternalNodesCidrs: []string{"fd00:10:244::/112"},
@@ -764,7 +764,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
 		dataplane.ResetDeltas()
 
-		dpConfig := dataplanedefs.Config{
+		dpConfig := dpconfig.Config{
 			MaxIPSetSize:       5,
 			Hostname:           "node1",
 			ExternalNodesCidrs: []string{"10.0.0.0/24"},
@@ -812,7 +812,7 @@ var _ = Describe("VXLANManager", func() {
 var _ = Describe("VXLANManager in BPF mode", func() {
 	var (
 		dataplane *mocknetlink.MockNetlinkDataplane
-		dpConfig  dataplanedefs.Config
+		dpConfig  dpconfig.Config
 	)
 
 	BeforeEach(func() {
@@ -824,7 +824,7 @@ var _ = Describe("VXLANManager in BPF mode", func() {
 		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
 		dataplane.ResetDeltas()
 
-		dpConfig = dataplanedefs.Config{
+		dpConfig = dpconfig.Config{
 			MaxIPSetSize: 5,
 			Hostname:     "node1",
 			BPFEnabled:   true,

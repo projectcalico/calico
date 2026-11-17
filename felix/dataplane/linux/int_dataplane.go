@@ -58,6 +58,7 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/bpfep/bpfepdefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/bpfroute"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dscp"
 	"github.com/projectcalico/calico/felix/dataplane/linux/endpoint"
 	"github.com/projectcalico/calico/felix/dataplane/linux/floatingip"
@@ -271,7 +272,7 @@ type InternalDataplane struct {
 
 	applyThrottle *throttle.Throttle
 
-	config dataplanedefs.Config
+	config dpconfig.Config
 
 	// hostMTU is the smallest host interface MTU, as detected at start of day.
 	hostMTU int
@@ -375,7 +376,7 @@ func legacyIPTablesCleanupTables(
 	return tables
 }
 
-func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
+func NewIntDataplaneDriver(config dpconfig.Config) *InternalDataplane {
 	if config.BPFLogLevel == "info" {
 		config.BPFLogLevel = "off"
 	}
@@ -1634,7 +1635,7 @@ func writeMTUFile(mtu int) error {
 
 // determinePodMTU looks at the configured MTUs and enabled encapsulations to determine which
 // value for MTU should be used for pod interfaces.
-func determinePodMTU(config dataplanedefs.Config, hostMTU int) int {
+func determinePodMTU(config dpconfig.Config, hostMTU int) int {
 	// Determine the smallest MTU among enabled encap methods. If none of the encap methods are
 	// enabled, we'll just use the host's MTU.
 	mtu := 0
@@ -1668,7 +1669,7 @@ func determinePodMTU(config dataplanedefs.Config, hostMTU int) int {
 // ConfigureDefaultMTUs defaults any MTU configurations that have not been set.
 // We default the values even if the encap is not enabled, in order to match behavior from earlier versions of Calico.
 // However, they MTU will only be considered for allocation to pod interfaces if the encap is enabled.
-func ConfigureDefaultMTUs(hostMTU int, c *dataplanedefs.Config) {
+func ConfigureDefaultMTUs(hostMTU int, c *dpconfig.Config) {
 	if c.IPIPMTU == 0 {
 		log.Debug("Defaulting IPIP MTU based on host")
 		c.IPIPMTU = hostMTU - ipipMTUOverhead
@@ -2901,7 +2902,7 @@ func startBPFDataplaneComponents(
 	ipFamily proto.IPVersion,
 	maps *bpfmap.IPMaps,
 	ipSetIDAllocator *idalloc.IDAllocator,
-	config *dataplanedefs.Config,
+	config *dpconfig.Config,
 	ipSetsMgr *dpsets.IPSetsManager,
 	dp *InternalDataplane,
 	kernelLockdownConfidentiality bool,

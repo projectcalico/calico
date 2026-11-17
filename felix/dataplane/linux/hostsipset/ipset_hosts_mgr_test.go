@@ -20,7 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -40,7 +40,7 @@ var _ = Describe("IPSet all-hosts manager", func() {
 		manager = NewManager(
 			ipSets,
 			4,
-			dataplanedefs.Config{
+			dpconfig.Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "node1",
 				ExternalNodesCidrs: []string{externalCIDR},
@@ -149,7 +149,7 @@ var _ = Describe("IPSet all-hosts manager - IPv6", func() {
 		manager = NewManager(
 			ipSets,
 			6,
-			dataplanedefs.Config{
+			dpconfig.Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "node1",
 				ExternalNodesCidrs: []string{externalCIDR},

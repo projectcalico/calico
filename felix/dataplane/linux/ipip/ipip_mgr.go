@@ -23,6 +23,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/route"
 	"github.com/projectcalico/calico/felix/ip"
@@ -41,7 +42,7 @@ type Manager struct {
 	ipVersion     uint8
 	routeProtocol netlink.RouteProtocol
 	routeMgr      *route.Manager
-	dpConfig      dataplanedefs.Config
+	dpConfig      dpconfig.Config
 
 	// Device information
 	tunnelDevice    string
@@ -61,7 +62,7 @@ func NewManager(
 	tunnelDevice string,
 	ipVersion uint8,
 	mtu int,
-	dpConfig dataplanedefs.Config,
+	dpConfig dpconfig.Config,
 	opRecorder logrusr.OpRecorder,
 ) *Manager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
@@ -81,7 +82,7 @@ func NewManagerWithShims(
 	tunnelDevice string,
 	ipVersion uint8,
 	mtu int,
-	dpConfig dataplanedefs.Config,
+	dpConfig dpconfig.Config,
 	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 ) *Manager {
