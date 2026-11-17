@@ -40,7 +40,7 @@ const (
 )
 
 const (
-	chartsDirName  = "charts"
+	DirName        = "charts"
 	indexFileName  = "index.yaml"
 	valuesFileName = "values.yaml"
 
@@ -59,25 +59,10 @@ const (
 	ProjectCalicoV3CRDsChart = "projectcalico.org.v3"
 )
 
-var RepoURL = func() (string, error) {
-	return RepoURLAt(docs.BaseURL + "/" + docs.ProductSlug)
-}
+var RepoURL = docs.URL(DirName)
 
-// RepoURLAt is the Helm repository a site serves under base.
-func RepoURLAt(base string) (string, error) {
-	url, err := url.JoinPath(base, chartsDirName)
-	if err != nil {
-		return "", fmt.Errorf("charts repo URL: %w", err)
-	}
-	return url, nil
-}
-
-var ChartsURL = func(c Chart) (string, error) {
-	url, err := github.DownloadURL(defaults.Organization(), defaults.Repo(), c.ProductVersion)
-	if err != nil {
-		return "", fmt.Errorf("charts download URL: %w", err)
-	}
-	return url, nil
+var ChartsURL = func(c Chart) string {
+	return github.Repo{Org: defaults.Organization(), Name: defaults.Repo()}.DownloadURL(c.ProductVersion)
 }
 
 // All is the set a release ships. It is a var so a product shipping a
@@ -157,7 +142,7 @@ func FileName(chart, chartVersion string) string {
 
 // Dir returns the output dir with the charts directory appended.
 var Dir = func(outputDir string) string {
-	return filepath.Join(outputDir, chartsDirName)
+	return filepath.Join(outputDir, DirName)
 }
 
 // OutputDir is where a release's charts are built under outputDir.

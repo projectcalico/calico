@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/projectcalico/calico/release/internal/branch"
+	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/plan"
@@ -232,9 +233,9 @@ func WithArchitectures(architectures []string) Option {
 	}
 }
 
-func WithGithubOrg(org string) Option {
+func WithGithubRepo(org, repo string) Option {
 	return func(r *CalicoManager) error {
-		r.githubOrg = org
+		r.githubRepo = github.Repo{Org: org, Name: repo}
 		return nil
 	}
 }
@@ -242,13 +243,6 @@ func WithGithubOrg(org string) Option {
 func WithRepoRemote(remote string) Option {
 	return func(o *CalicoManager) error {
 		o.remote = remote
-		return nil
-	}
-}
-
-func WithRepoName(name string) Option {
-	return func(o *CalicoManager) error {
-		o.repo = name
 		return nil
 	}
 }

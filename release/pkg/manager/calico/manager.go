@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -50,8 +49,7 @@ import (
 
 // Global configuration for releases.
 const (
-	binDir    = "bin"
-	chartsDir = "charts"
+	binDir = "bin"
 
 	gitTrailerReleaseBranch = "Release-branch"
 )
@@ -71,8 +69,8 @@ var (
 		operator.Step, images.Step, binaries.Step, charts.Step, manifests.Step,
 		archives.WindowsStep, archives.Step,
 	}
-	sharedPublishSteps      = []string{operator.Step, images.Step, charts.Step, outputs.MetadataStep, distribution.ChecksumStep}
-	releasePublishSteps     = []string{distribution.GithubTagStep, distribution.GithubReleaseStep, helmIndexStep}
+	sharedPublishSteps      = []string{operator.Step, images.Step, charts.Step, outputs.MetadataStep, outputs.ChecksumStep}
+	releasePublishSteps     = []string{github.TagStep, github.ReleaseStep, helmIndexStep}
 	hashreleasePublishSteps = []string{distribution.HashreleasePublishStep}
 
 	// BuildSteps are the steps a release build can skip, in the order they run.
@@ -98,6 +96,8 @@ var (
 	// Default defaultRegistries to which all release images are pushed.
 	defaultRegistries = registry.DefaultCalicoRegistries
 
+	calicoRepo = github.Repo{Org: defaults.ProjectCalicoOrg, Name: defaults.CalicoRepoName}
+
 	defaultBranch = defaults.Branch
 
 	branchTagTarget = "retag-build-images-with-registries push-images-to-registries push-manifests"
@@ -107,6 +107,10 @@ var (
 
 	windowsBranchTagDirs = slices.Clone(images.WindowsReleaseDirs)
 )
+
+func defaultRepo() github.Repo {
+	return github.Repo{Org: defaults.Organization(), Name: defaults.Repo()}
+}
 
 func NewManager(opts ...Option) (*CalicoManager, error) {
 	// Configure defaults here.
@@ -130,6 +134,7 @@ func NewManager(opts ...Option) (*CalicoManager, error) {
 		gitRef:           true,
 		githubRelease:    true,
 		imageRegistries:  defaultRegistries,
+		helmRepoURL:      charts.RepoURL,
 		helmRegistries:   registry.DefaultHelmRegistries,
 		operatorRegistry: registry.DefaultOperatorRegistry,
 		operatorImage:    registry.OperatorImage,
@@ -139,6 +144,13 @@ func NewManager(opts ...Option) (*CalicoManager, error) {
 		if err := o(b); err != nil {
 			return nil, fmt.Errorf("applying option: %w", err)
 		}
+	}
+	if b.repoRoot == "" {
+		return nil, fmt.Errorf("no repo root specified")
+	}
+	logrus.WithField("repoRoot", b.repoRoot).Info("Using repo root")
+	if b.logsDir != "" {
+		logrus.WithField("logsDir", b.logsDir).Info("Per-step logs enabled")
 	}
 
 	if b.planOptions.Skip[operator.Step] {
@@ -150,34 +162,6 @@ func NewManager(opts ...Option) (*CalicoManager, error) {
 		b.planOptions.Skip = maps.Clone(b.planOptions.Skip)
 		delete(b.planOptions.Skip, images.Step)
 	}
-
-	var errs []error
-	if b.repoRoot == "" {
-		errs = append(errs, fmt.Errorf("no repo root specified"))
-	}
-	if b.githubOrg == "" {
-		errs = append(errs, fmt.Errorf("no GitHub organization specified"))
-	}
-	if b.repo == "" {
-		errs = append(errs, fmt.Errorf("no GitHub repository specified"))
-	}
-	if b.remote == "" {
-		errs = append(errs, fmt.Errorf("no git remote specified"))
-	}
-	if err := errors.Join(errs...); err != nil {
-		return nil, err
-	}
-
-	logrus.WithField("repoRoot", b.repoRoot).Info("Using repo root")
-	if b.logsDir != "" {
-		logrus.WithField("logsDir", b.logsDir).Info("Per-step logs enabled")
-	}
-	logrus.WithFields(logrus.Fields{
-		"org":    b.githubOrg,
-		"repo":   b.repo,
-		"remote": b.remote,
-	}).Info("Using GitHub configuration")
-
 	return b, nil
 }
 
@@ -257,11 +241,8 @@ type CalicoManager struct {
 	// helmRepoURL is the URL of the helm chart repository.
 	helmRepoURL string
 
-	// githubOrg is the GitHub organization to which we should publish releases.
-	githubOrg string
-
-	// repo is the GitHub repository to which we should publish releases.
-	repo string
+	// githubRepo is the GitHub repository to which we should publish releases.
+	githubRepo github.Repo
 
 	// remote is the git remote to use for pushing
 	remote string
@@ -430,7 +411,7 @@ func (r *CalicoManager) buildPlan() []plan.Node {
 			Name: outputs.ReleaseNotesStep,
 			// Notes come from the Calico repos' milestones, so no other repo has any.
 			When: func() bool {
-				return r.releaseNotes && r.githubOrg == defaults.ProjectCalicoOrg && r.repo == defaults.CalicoRepoName
+				return r.releaseNotes && r.githubRepo == calicoRepo
 			},
 			Do: r.buildReleaseNotes,
 		})
@@ -540,7 +521,7 @@ func (r *CalicoManager) sourceMetadata() (outputs.Source, error) {
 		return outputs.Source{}, fmt.Errorf("determining branch: %w", err)
 	}
 	src := outputs.Source{
-		Repository: github.Repo{Org: r.githubOrg, Name: r.repo}.String(),
+		Repository: r.githubRepo.String(),
 		Commit:     strings.TrimSpace(commit),
 	}
 	if b := strings.TrimSpace(branch); b != "HEAD" {
@@ -560,21 +541,13 @@ func (r *CalicoManager) chartsMetadata(d outputs.Digests) (*outputs.Charts, erro
 	if len(r.helmRegistries) == 0 {
 		return nil, fmt.Errorf("no helm chart registries specified")
 	}
-	at := charts.Published{Registry: r.helmRegistries[0]}
-	var err error
-	if at.DownloadURL, err = r.chartsURL(); err != nil {
-		return nil, err
-	}
+	at := charts.Published{Registry: r.helmRegistries[0], DownloadURL: r.chartsURL()}
 	switch {
 	case !r.helmIndex:
 	case r.isHashRelease:
-		if at.Index, err = charts.RepoURLAt(r.hashrelease.URL()); err != nil {
-			return nil, err
-		}
+		at.Index = r.hashrelease.URL(charts.DirName)
 	default:
-		if at.Index, err = r.helmRepo(); err != nil {
-			return nil, fmt.Errorf("helm repo URL: %w", err)
-		}
+		at.Index = r.helmRepoURL
 	}
 	return charts.Metadata(r.recordsDir, r.chart(), at, d)
 }
@@ -786,15 +759,7 @@ func (r *CalicoManager) BuildHelm() error {
 	chart := r.chart()
 	opts := []charts.BuildOption{charts.WithRunner(r.runner)}
 	if r.helmIndex {
-		chartsURL, err := r.chartsURL()
-		if err != nil {
-			return err
-		}
-		repoURL, err := r.helmRepo()
-		if err != nil {
-			return fmt.Errorf("helm repo URL: %w", err)
-		}
-		opts = append(opts, charts.WithIndex(repoURL, chartsURL, charts.IndexDir(r.uploadDir()), r.tmpDir))
+		opts = append(opts, charts.WithIndex(r.helmRepoURL, r.chartsURL(), charts.IndexDir(r.uploadDir()), r.tmpDir))
 	}
 	if r.isHashRelease {
 		opts = append(opts, charts.WithModifiedValues(charts.ValueEditsFor(r.calicoVersion.String(), r.imageRegistries[0], r.operatorImage, r.operatorVersion, r.operatorRegistry)))
@@ -802,15 +767,11 @@ func (r *CalicoManager) BuildHelm() error {
 	return charts.Build(chart, opts...)
 }
 
-func (r *CalicoManager) chartsURL() (string, error) {
+func (r *CalicoManager) chartsURL() string {
 	if r.isHashRelease {
-		return r.hashrelease.URL(), nil
+		return r.hashrelease.URL()
 	}
-	u, err := charts.ChartsURL(r.chart())
-	if err != nil {
-		return "", fmt.Errorf("charts URL: %w", err)
-	}
-	return u, nil
+	return charts.ChartsURL(r.chart())
 }
 
 // chart identifies this release's charts to the charts package.
@@ -830,14 +791,6 @@ func (r *CalicoManager) modifyHelmChartsValues(calicoVersion, operatorVersion st
 		RepoRoot: r.repoRoot,
 		Edits:    charts.ValueEditsFor(calicoVersion, r.imageRegistries[0], r.operatorImage, operatorVersion, r.operatorRegistry),
 	}, charts.WithRunner(r.runner))
-}
-
-// helmRepo is the repository whose index a build merges with.
-func (r *CalicoManager) helmRepo() (string, error) {
-	if r.helmRepoURL != "" {
-		return r.helmRepoURL, nil
-	}
-	return charts.RepoURL()
 }
 
 func (r *CalicoManager) hashreleaseUpload() distribution.Upload {
@@ -881,19 +834,26 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 	// The registries go first: metadata records the digests they produce
 	uploads := []distribution.Upload{
 		{Handler: distribution.Publisher{Kind: images.Step, Action: r.imagesAction()}, Requires: r.beforeImagesPublish()},
-		{Handler: distribution.Publisher{Kind: chartsDir, Action: r.publishHelmCharts}},
+		{Handler: distribution.Publisher{Kind: charts.Step, Action: r.publishHelmCharts}},
 	}
 	uploads = append(uploads,
 		distribution.Upload{Handler: distribution.Preparer{Kind: outputs.MetadataStep, Action: r.buildMetadata}},
 		// After metadata, so the sums cover it. Both destinations ship the
 		// same directory, so neither can own this.
-		distribution.Upload{Handler: distribution.Preparer{Kind: distribution.ChecksumStep, Action: r.writeChecksums}},
+		distribution.Upload{Handler: distribution.Preparer{Kind: outputs.ChecksumStep, Action: r.writeChecksums}},
 	)
 
 	if r.isHashRelease {
 		return append(uploads, r.hashreleaseUpload())
 	}
-	uploads = append(uploads, r.githubTagUpload(), r.githubReleaseUpload())
+	uploads = append(uploads, github.TagUpload(github.TagOptions{
+		Tag:      r.calicoVersion.String(),
+		Remote:   r.remote,
+		RepoRoot: r.repoRoot,
+		Skip:     !r.gitRef,
+		DryRun:   r.dryRun,
+		Runner:   r.runner,
+	}), r.githubReleaseUpload())
 	// Last: the index it writes points at the github release's download URLs,
 	// which 404 until that release exists.
 	return append(uploads, r.helmIndexUpload())
@@ -913,7 +873,11 @@ func (r *CalicoManager) buildMetadata() error {
 
 // Users verify a download with: sha256sum -c --ignore-missing SHA256SUMS
 func (r *CalicoManager) writeChecksums() error {
-	return distribution.SHA256Sums(r.uploadDir(), distribution.WithRunner(r.runner))
+	files, err := fsutil.ListFiles(r.uploadDir(), github.AssetsFilter...)
+	if err != nil {
+		return fmt.Errorf("write checksum: %w", err)
+	}
+	return outputs.SHA256Sums(r.runner, files, r.uploadDir())
 }
 
 // Check general prerequisites for cutting and publishing a release.
@@ -926,7 +890,7 @@ func (r *CalicoManager) releasePrereqs() error {
 	}
 
 	// If we are releasing to projectcalico/calico, make sure we are releasing to the default registries.
-	if r.githubOrg == defaults.Organization() && r.repo == defaults.Repo() {
+	if r.githubRepo == calicoRepo {
 		if !reflect.DeepEqual(r.imageRegistries, defaultRegistries) {
 			return fmt.Errorf("image registries cannot be different from default registries for a release")
 		}
@@ -1042,13 +1006,8 @@ func (r *CalicoManager) assertOperatorImageVersion() error {
 
 // Prerequisites specific to publishing a release.
 func (r *CalicoManager) publishPrereqs() error {
-	// Checked whatever validation is set to: without it the release would write
-	// its artifacts somewhere nobody asked for.
-	if r.outputDir == "" {
-		return fmt.Errorf("no output directory specified")
-	}
-	if r.recordsDir == "" {
-		return fmt.Errorf("no records directory specified")
+	if err := r.mustPublishValidation(); err != nil {
+		return err
 	}
 	if !r.validate {
 		logrus.Warn("Skipping pre-publish validation")
@@ -1057,9 +1016,6 @@ func (r *CalicoManager) publishPrereqs() error {
 	var errStack error
 	if r.calicoVersion.String() == "" {
 		errStack = errors.Join(errStack, fmt.Errorf("no calico version specified"))
-	}
-	if r.outputDir == "" {
-		errStack = errors.Join(errStack, fmt.Errorf("no output directory specified"))
 	}
 	if r.images && len(r.imageRegistries) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no image registries specified"))
@@ -1088,6 +1044,20 @@ func (r *CalicoManager) publishPrereqs() error {
 		return err
 	}
 	return r.assertImageVersions()
+}
+
+func (r *CalicoManager) mustPublishValidation() error {
+	var errs error
+	if r.outputDir == "" {
+		errs = errors.Join(errs, fmt.Errorf("no output directory specified"))
+	}
+	if r.recordsDir == "" {
+		errs = errors.Join(errs, fmt.Errorf("no records directory specified"))
+	}
+	if err := r.validateGitHub(); err != nil {
+		errs = errors.Join(errs, err)
+	}
+	return errs
 }
 
 func (r *CalicoManager) archive() archives.Archive {
@@ -1234,121 +1204,34 @@ func (r *CalicoManager) buildContainerImages() error {
 	return nil
 }
 
-func (r *CalicoManager) publishGitTag() error {
-	lsRemote, err := r.git("ls-remote", "--tags", r.remote, "refs/tags/"+r.calicoVersion.String())
-	if err != nil {
-		return fmt.Errorf("query remote tag: %w", err)
-	}
-	if remoteSHA := remoteTagCommit(lsRemote, r.calicoVersion.String()); remoteSHA != "" {
-		localSHA, err := r.git("rev-list", "-n1", r.calicoVersion.String())
-		if err != nil {
-			return fmt.Errorf("resolve local tag %s: %w", r.calicoVersion.String(), err)
-		}
-		localSHA = strings.TrimSpace(localSHA)
-		if remoteSHA == localSHA {
-			logrus.WithField("version", r.calicoVersion.String()).Info("Remote tag already exists and matches, skipping push")
-			return nil
-		}
-		return fmt.Errorf("remote tag %s already exists at %s but local tag is %s", r.calicoVersion.String(), remoteSHA, localSHA)
-	}
-
-	args := []string{"push", r.remote, r.calicoVersion.String()}
-
-	if r.dryRun {
-		args = append(args, "--dry-run")
-	}
-	if _, err := r.git(args...); err != nil {
-		return fmt.Errorf("failed to push git tag: %w", err)
-	}
-	return nil
-}
-
-// remoteTagCommit returns the commit a remote tag points at.
-// For annotated tags, use the peeled reference (refs/tags/<tag>^{}) to get the commit SHA.
-func remoteTagCommit(lsRemoteOutput, ver string) string {
-	tagRef := "refs/tags/" + ver
-	peeledRef := tagRef + "^{}"
-	var tagObjSHA, peeledSHA string
-	for _, line := range strings.Split(lsRemoteOutput, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) != 2 {
-			continue
-		}
-		switch fields[1] {
-		case peeledRef:
-			peeledSHA = fields[0]
-		case tagRef:
-			tagObjSHA = fields[0]
-		}
-	}
-	if peeledSHA != "" {
-		return peeledSHA
-	}
-	return tagObjSHA
-}
-
-func (r *CalicoManager) githubTagUpload() distribution.Upload {
-	return distribution.Upload{Name: distribution.GithubTagStep, Skip: !r.gitRef, Handler: distribution.Preparer{
-		Kind:   "git tag",
-		Action: r.publishGitTag,
-		Check: func() error {
-			_, err := command.Git(r.runner).In(r.repoRoot).Resolve("refs/tags/" + r.calicoVersion.String())
-			if errors.Is(err, command.ErrGitRefNotFound) {
-				return fmt.Errorf("no local tag %s", r.calicoVersion.String())
-			}
-			return err
-		},
-	}}
-}
-
 func (r *CalicoManager) githubReleaseUpload() distribution.Upload {
-	releaseNoteTemplate := `
-Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{branch}/release-notes/{version}-release-notes.md)
-
-Attached to this release are the following artifacts:
-
-- {release_tar}: container images, binaries, and kubernetes manifests.
-- {calico_windows_zip}: Calico for Windows.
-- {helm_chart}: Calico Helm 3 chart (also hosted at oci://quay.io/calico/charts/tigera-operator).
-- {helm_v1_crd_chart}: Calico crd.projectcalico.org/v1 CRD chart.
-- {helm_v3_crd_chart}: Calico projectcalico.org/v3 CRD chart (tech-preview).
-- ocp.tgz: Manifest bundle for OpenShift.
-
-Additional links:
-
-- [VPP data plane release information](https://github.com/projectcalico/vpp-dataplane/blob/master/RELEASE_NOTES.md)
-
-`
-	sv := r.calicoVersion.Semver()
-	formatters := []string{
-		// Alternating placeholder / filler. We can't use backticks in the multiline string above,
-		// so we replace anything that needs to be backticked into it here.
-		"{version}", r.calicoVersion.String(),
-		"{branch}", version.NewReleaseBranch(r.releaseBranchPrefix, r.calicoVersion).String(),
-		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major(), sv.Minor()),
-		"{release_tar}", fmt.Sprintf("`%s`", archives.ArchiveFileName(r.archive())),
-		"{calico_windows_zip}", fmt.Sprintf("`%s`", archives.WindowsFileName(r.calicoVersion.String())),
-		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.TigeraOperatorChart, r.calicoVersion.String()),
-		"{helm_v1_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.ProjectCalicoV1CRDsChart, r.calicoVersion.String()),
-		"{helm_v3_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.ProjectCalicoV3CRDsChart, r.calicoVersion.String()),
-	}
-	replacer := strings.NewReplacer(formatters...)
-	releaseNote := replacer.Replace(releaseNoteTemplate)
-
-	return distribution.Upload{
-		Name:     distribution.GithubReleaseStep,
-		Source:   r.uploadDir(),
-		Skip:     !r.githubRelease,
-		Requires: []string{outputs.MetadataStep, distribution.ChecksumStep, distribution.GithubTagStep},
-		Handler: distribution.GithubRelease{
-			Repo:   github.Repo{Org: r.githubOrg, Name: r.repo},
-			Tag:    r.calicoVersion.String(),
-			Body:   releaseNote,
-			Draft:  r.draftRelease,
-			DryRun: r.dryRun,
-			Runner: r.runner,
+	ver := r.calicoVersion.String()
+	return github.ReleaseUpload(github.ReleaseOptions{
+		Repo:    r.githubRepo,
+		Version: r.calicoVersion,
+		Source:  r.uploadDir(),
+		Notes: github.ReleaseNotes{
+			Link: github.Link{
+				Text: "on GitHub",
+				URL:  r.githubRepo.BlobURL(version.NewReleaseBranch(r.releaseBranchPrefix, r.calicoVersion).String(), outputs.ReleaseNoteFilePath("", ver)),
+			},
+			Artifacts: []github.ReleaseArtifact{
+				{Name: archives.ArchiveFileName(r.archive()), Description: "container images, binaries, and kubernetes manifests."},
+				{Name: archives.WindowsFileName(ver), Description: "Calico for Windows."},
+				{Name: charts.FileName(charts.TigeraOperatorChart, ver), Description: "Calico Helm 3 chart."},
+				{Name: charts.FileName(charts.ProjectCalicoV1CRDsChart, ver), Description: "Calico crd.projectcalico.org/v1 CRD chart."},
+				{Name: charts.FileName(charts.ProjectCalicoV3CRDsChart, ver), Description: "Calico projectcalico.org/v3 CRD chart (tech-preview)."},
+				{Name: manifests.OCPBundleFileName, Description: "Manifest bundle for OpenShift."},
+			},
+			AdditionalLinks: []github.Link{
+				{Text: "VPP data plane release information", URL: github.Repo{Org: "projectcalico", Name: "vpp-dataplane"}.BlobURL("master", "RELEASE_NOTES.md")},
+			},
 		},
-	}
+		Skip:   !r.githubRelease,
+		Draft:  r.draftRelease,
+		DryRun: r.dryRun,
+		Runner: r.runner,
+	})
 }
 
 func (r *CalicoManager) publishContainerImages() error {
@@ -1649,7 +1532,7 @@ func (r *CalicoManager) helmIndexUpload() distribution.Upload {
 		Source: charts.IndexFilePath(charts.IndexDir(r.uploadDir())),
 		Skip:   !r.helmCharts || !r.helmIndex,
 		Handler: distribution.S3{
-			URI:         r.s3URI(chartsDir),
+			URI:         r.s3URI(charts.DirName),
 			Profile:     r.awsProfile,
 			CachePolicy: distribution.MutableCachePolicy,
 			DryRun:      r.dryRun,
@@ -1667,7 +1550,7 @@ func (r *CalicoManager) buildReleaseNotes() error {
 	if err != nil {
 		return fmt.Errorf("determine release version: %w", err)
 	}
-	_, err = outputs.ReleaseNotes(r.runner, r.githubOrg, r.repoRoot, filepath.Join(r.outputDir, outputs.ReleaseNotesDir), ver)
+	_, err = outputs.ReleaseNotes(github.Client(r.runner), r.githubRepo.Org, r.repoRoot, filepath.Join(r.outputDir, outputs.ReleaseNotesDir), ver)
 	return err
 }
 
@@ -1707,22 +1590,40 @@ func (r *CalicoManager) git(args ...string) (string, error) {
 	return command.Git(r.runner).In(r.repoRoot).Run(args...)
 }
 
+func (r *CalicoManager) validateGitHub() error {
+	var errs error
+	if r.remote == "" {
+		errs = errors.Join(errs, fmt.Errorf("no git remote specified"))
+	}
+	if err := r.githubRepo.Validate(); err != nil {
+		errs = errors.Join(errs, err)
+	}
+	if errs != nil {
+		return errs
+	}
+	logrus.WithFields(logrus.Fields{
+		"remote": r.remote,
+		"repo":   r.githubRepo,
+	}).Info("Using GitHub configuration")
+	return nil
+}
+
 func (r *CalicoManager) releaseBranchPrereqs() error {
+	var err error
 	// cutOptions is required for the branch cut flow
 	if r.cutOptions == nil {
-		return fmt.Errorf("cut options not specified")
+		err = errors.Join(err, fmt.Errorf("cut options not specified"))
 	}
-	if !r.validate {
-		logrus.Warn("Skipping pre-release branch validation")
-		return nil
+	if e := r.validateGitHub(); e != nil {
+		err = errors.Join(err, e)
 	}
-	return nil
+	return err
 }
 
 // branchChangedPaths are the trees the prepareDerived hook rewrites; it reports
 // them so the branch flow stages them into the cut commit.
 var branchChangedPaths = []string{
-	chartsDir,
+	charts.DirName,
 	manifests.DirName,
 	".semaphore",
 	"test-tools",
@@ -1926,7 +1827,7 @@ func (r *CalicoManager) switchToPrepBranch(prepBranch string) error {
 
 var prepStagedPaths = func(repoRoot string) []string {
 	return []string{
-		filepath.Join(repoRoot, chartsDir),
+		filepath.Join(repoRoot, charts.DirName),
 		manifests.Dir(repoRoot),
 		filepath.Join(repoRoot, outputs.ReleaseNotesDir),
 	}
@@ -1978,28 +1879,25 @@ func (r *CalicoManager) pushPrepBranch(baseBranch, prepBranch string) error {
 func (r *CalicoManager) createPrepPR(baseBranch, prepBranch string) error {
 	args := []string{
 		"pr", "create", "--fill",
-		"--repo", fmt.Sprintf("%s/%s", r.githubOrg, r.repo),
+		"--repo", r.githubRepo.String(),
 		"--base", baseBranch,
 		"--head", prepBranch,
 	}
-	if r.githubOrg == defaults.Organization() && r.repo == defaults.Repo() {
+	if r.githubRepo == defaultRepo() {
 		args = append(args, []string{
-			"--reviewer", fmt.Sprintf("%s/release-team", r.githubOrg),
+			"--reviewer", fmt.Sprintf("%s/release-team", r.githubRepo.Org),
 			"--label", "release-note-not-required,docs-not-required",
 		}...)
 	}
-	fallbackURL := fmt.Sprintf("https://github.com/%s/%s/pulls?q=is%%3Aopen+head%%3A%s", r.githubOrg, r.repo, prepBranch)
+	fallbackURL := r.githubRepo.OpenPRsURL(prepBranch)
 	logrus.WithField("args", args).Debug("Creating PR for release preparation")
 	pr, err := r.runner.Run("./bin/gh", args, command.WithDir(r.repoRoot))
 	if err != nil {
 		pr = fallbackURL
 		var cmdErr *command.Error
 		if errors.As(err, &cmdErr) && strings.Contains(cmdErr.Stderr, "already exists") {
-			if m := regexp.MustCompile(`(?:^|\s)(https://github\.com/[\w.-]+/[\w.-]+/pull/\d+)(?:$|\s)`).FindStringSubmatch(cmdErr.Stderr); len(m) > 1 {
-				if u, err := url.Parse(m[1]); err != nil {
-					logrus.WithField("PR", pr).Warn("PR already exists but could not parse URL from error, find using fallback PR URL")
-					return fmt.Errorf("parsing URL for PR: %w", err)
-				} else if u.Host != "github.com" || !strings.Contains(m[1], fmt.Sprintf("%s/%s/pull/", r.githubOrg, r.repo)) {
+			if m := regexp.MustCompile(`(?:^|\s)(https://\S+/pull/\d+)(?:$|\s)`).FindStringSubmatch(cmdErr.Stderr); len(m) > 1 {
+				if !strings.HasPrefix(m[1], r.githubRepo.URL("pull")+"/") {
 					logrus.WithField("PR", pr).Warn("PR already exists but error returned an unexpected URL, find using fallback PR URL")
 					return fmt.Errorf("unexpected URL format for PR: %s", m[1])
 				}
@@ -2023,6 +1921,9 @@ func (r *CalicoManager) switchToBaseBranch(baseBranch string) error {
 }
 
 func (r *CalicoManager) prepPrereqs() error {
+	if err := r.validateGitHub(); err != nil {
+		return err
+	}
 	if !r.validate {
 		logrus.Warn("Skipping release preparation validation")
 		return nil
@@ -2052,8 +1953,8 @@ func (r *CalicoManager) prepPrereqs() error {
 		if err != nil {
 			return err
 		}
-		if owner != r.githubOrg {
-			return fmt.Errorf("current git remote is %s, expected to be from %s. Please switch to a branch from the main repo to cut the release", owner, r.githubOrg)
+		if owner != r.githubRepo.Org {
+			return fmt.Errorf("current git remote is %s, expected to be from %s. Please switch to a branch from the main repo to cut the release", owner, r.githubRepo.Org)
 		}
 		return nil
 	}); err != nil {
