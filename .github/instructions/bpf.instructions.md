@@ -3,9 +3,9 @@ applyTo:
   - "felix/bpf-gpl/**"
   - "felix/bpf/**"
   - "felix/dataplane/linux/bpf_*.go"
-  - "felix/dataplane/linux/vxlan_mgr.go"
-  - "felix/dataplane/linux/bpfep/bpfepdefs/**"
-  - "felix/dataplane/linux/vxlan/vxlandefs/**"
+  - "felix/dataplane/linux/bpfep/**"
+  - "felix/dataplane/linux/bpfroute/**"
+  - "felix/dataplane/linux/vxlan/**"
   - "felix/rules/static.go"
   - "felix/fv/bpf_*_test.go"
 ---

@@ -73,7 +73,7 @@ packet destined for a service first exits through `bpfin.cali`.
 ### Mode selection
 
 The feature has three modes (`hostNetworkedNATMode` in
-`felix/dataplane/linux/bpf_ep_mgr.go`):
+`felix/dataplane/linux/bpfep/bpf_ep_mgr.go`):
 
 - **Disabled** — CTLB is on and handling both TCP and UDP; no bpfnat
   veth is created.

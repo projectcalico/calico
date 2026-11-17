@@ -40,7 +40,7 @@ just apply the encap envelope the program has specified.
 Felix therefore creates the VXLAN device in **flow-based** (aka
 "external") mode when BPF is enabled: no fixed VNI, no fixed source,
 no fixed destination. `netlink.Vxlan.FlowBased = true` in
-`felix/dataplane/linux/vxlan_mgr.go`. The BPF program writes the
+`felix/dataplane/linux/vxlan/vxlan_mgr.go`. The BPF program writes the
 tunnel key (destination IP, VNI) via `bpf_skb_set_tunnel_key` before
 redirecting to the device, and the device applies the envelope. On
 ingress, the device decaps and the BPF program reads the original
@@ -48,7 +48,7 @@ key.
 
 A flow-based device is incompatible with a fixed-VNI device. If Felix
 detects a mismatched existing device on startup, it recreates it
-(`vxlanLinksIncompat` in `vxlan_mgr.go`).
+(`vxlanLinksIncompat` in `route_mgr.go`).
 
 ### VNI filter
 

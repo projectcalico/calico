@@ -122,7 +122,7 @@ enum needs a matching `tigera/operator` PR and the `needs-operator-pr` label.
 | `felix/calc/calc_graph.go`               | Gates construction of the `L3RouteResolver` on there being some encapsulation whose routes Felix owns.                                                                                                                                                            |
 | `felix/dataplane/driver.go`              | Copies the two booleans into the dataplane `Config`.                                                                                                                                                                                                              |
 | `felix/dataplane/linux/int_dataplane.go` | `ProgramIPIPClusterRoutes` / `ProgramNoEncapClusterRoutes`; the no-encap managers are only created when Felix owns no-encap.                                                                                                                                      |
-| `felix/dataplane/linux/ipip_mgr.go`      | The IPIP manager always runs (it owns `tunl0`), but only feeds its route manager when Felix owns IPIP cluster routes.                                                                                                                                             |
+| `felix/dataplane/linux/ipip/ipip_mgr.go` | The IPIP manager always runs (it owns `tunl0`), but only feeds its route manager when Felix owns IPIP cluster routes.                                                                                                                                             |
 
 The asymmetry between IPIP and no-encap in Felix is deliberate and worth
 restating: `noEncapManager` exists *only* to program cluster routes, so it is

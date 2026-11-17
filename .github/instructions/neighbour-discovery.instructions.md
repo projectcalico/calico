@@ -1,7 +1,7 @@
 ---
 applyTo:
-  - "felix/dataplane/linux/proxy_neigh_mgr.go"
-  - "felix/dataplane/linux/endpoint_mgr.go"
+  - "felix/dataplane/linux/proxyneigh/proxy_neigh_mgr.go"
+  - "felix/dataplane/linux/endpoint/endpoint_mgr.go"
   - "cni-plugin/pkg/dataplane/linux/dataplane_linux.go"
   - "networking-calico/networking_calico/agent/linux/dhcp.py"
 ---
