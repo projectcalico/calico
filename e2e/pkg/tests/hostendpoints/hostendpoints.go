@@ -52,8 +52,8 @@ import (
 // 4. Test the connectivity from clients on other nodes to the hostnetworked pod.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithCategory(describe.Policy),
-	describe.WithFeature("Host-Protection"),
+	describe.Covers("Host-Protection"),
+	describe.RunsAnywhere(),
 	describe.WithSerial(),
 	"host endpoint tests",
 	func() {
@@ -256,7 +256,7 @@ var _ = describe.CalicoDescribe(
 		})
 
 		Context("doNotTrack policy", func() {
-			It("should deny connections to the specified port in a doNotTrack deny policy", func() {
+			It("should deny connections to the specified port in a doNotTrack deny policy", describe.Requires(describe.DoNotTrack), func() {
 				By("asserting connections do not work initially", func() {
 					checker.ExpectFailure(client1, hepServer1.ServiceDomain().Port(hepPort1))
 					checker.ExpectFailure(client1, hepServer1.ServiceDomain().Port(hepPort2))
@@ -333,7 +333,7 @@ var _ = describe.CalicoDescribe(
 				checker.Execute()
 			})
 
-			It("should deny connections from specified source addresses in a doNotTrack deny policy (DoS mitigation)", describe.WithExternalNode(), func() {
+			It("should deny connections from specified source addresses in a doNotTrack deny policy (DoS mitigation)", describe.Requires(describe.ExternalNode), describe.Requires(describe.DoNotTrack), func() {
 				extClient := externalnode.MustNewClient()
 
 				// Wrap the external node as a conncheck Client so the probes

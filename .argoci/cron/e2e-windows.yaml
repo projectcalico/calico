@@ -29,7 +29,23 @@ steps:
       - name: DATAPLANE
         value: CalicoNftables
       - name: E2E_TEST_CONFIG
-        value: e2e/config/windows/xtables-encap.yaml
+        value: >-
+          ci-base.yaml
+          suite/windows.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/nftables.yaml
+          cluster/cni/calico.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENCAPSULATION_TYPE
         value: VXLAN
       - name: K8S_VERSION
@@ -73,7 +89,12 @@ steps:
       - name: DATAPLANE
         value: CalicoIptables
       - name: E2E_TEST_CONFIG
-        value: e2e/config/windows/aks-xtables-nobgp.yaml
+        value: >-
+          ci-base.yaml
+          suite/windows.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
       - name: ENCAPSULATION_TYPE
         value: None
       - name: K8S_VERSION

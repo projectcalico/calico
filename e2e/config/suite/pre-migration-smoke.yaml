@@ -1,0 +1,11 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Runs before a flannel or canal migration, while the cluster is still on the
+# old CNI and none of the labeled suites apply.
+
+kind: suite
+
+include:
+  namePatterns:
+    - pattern: 'should serve a basic endpoint from pods'
+      reason: 'confirms the pre-migration CNI carries pod traffic'

@@ -25,7 +25,27 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/openshift-xtables-encap-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/openshift.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
+          cluster/capability/ambient-policy.yaml
       - name: INSTALLER
         value: operator
       - name: PROVISIONER
@@ -62,7 +82,21 @@ steps:
       - name: stable-1-azure-
         env:
           - name: E2E_TEST_CONFIG
-            value: e2e/config/iptables/aks-xtables-nobgp.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/iptables.yaml
+              cluster/cni/provider.yaml
+              cluster/platform/aks.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
           - name: K8S_VERSION
             value: stable-1
           - name: AZ_NETWORK_PLUGIN
@@ -72,7 +106,29 @@ steps:
       - name: stable-1-none-
         env:
           - name: E2E_TEST_CONFIG
-            value: e2e/config/iptables/aks-xtables-encap.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/iptables.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/routing/bgp-mesh.yaml
+              cluster/routing/no-encap.yaml
+              cluster/platform/aks.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/istio.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
+              cluster/capability/ambient-policy.yaml
           - name: K8S_VERSION
             value: stable-1
           - name: AZ_NETWORK_PLUGIN
@@ -95,7 +151,28 @@ steps:
       - name: IPV4_POD_CIDR
         value: 172.16.0.0/16
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/eks-xtables-encap-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
+          cluster/capability/ambient-policy.yaml
       - name: PROVISIONER
         value: aws-eks
       - name: STERN_CHECK
@@ -121,7 +198,26 @@ steps:
       - name: INSTALLER
         value: helmerator
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/aks-xtables-encap.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
+          cluster/capability/ambient-policy.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -149,7 +245,21 @@ steps:
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/aks-xtables-nobgp.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/provider.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -172,7 +282,21 @@ steps:
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/aks-xtables-nobgp.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/provider.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: NETWORK_PLUGIN_MODE
@@ -195,7 +319,24 @@ steps:
       - name: INSTALLER
         value: operator
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/aks-xtables-encap.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
+          cluster/capability/ambient-policy.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -216,7 +357,21 @@ steps:
       - name: AZ_NETWORK_PLUGIN
         value: azure
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/aks-xtables-nobgp-v3crd.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/provider.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENCAPSULATION_TYPE
         value: None
       - name: INSTALLER
@@ -237,7 +392,22 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/eks-xtables-nobgp-v3crd.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/provider.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: INSTALLER
         value: operator
       - name: K8S_VERSION
@@ -255,7 +425,25 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-manifest.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/kind.yaml
+          cluster/ip-family/dual-stack.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENABLE_CALICOCTL_APISERVER
         value: "true"
       - name: ENABLE_DUAL_STACK
@@ -298,7 +486,24 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-manifest-v3crd.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/kind.yaml
+          cluster/ip-family/dual-stack.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENABLE_DUAL_STACK
         value: "true"
       - name: INSTALL_ETCD_POD
@@ -334,7 +539,26 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-autohep.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/kind.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/auto-heps.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENABLE_AUTOHEP
         value: "true"
       - name: PROVISIONER
@@ -347,7 +571,24 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-v3crd.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: KUBE_PROXY_MODE
         value: ipvs
       - name: PROVISIONER
@@ -388,7 +629,25 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-manifest.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENABLE_CALICOCTL_APISERVER
         value: "true"
       - name: PROVISIONER
@@ -412,7 +671,25 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: K8S_VERSION
         value: stable-1.32
       - name: RKE_VERSION
@@ -430,7 +707,27 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-wireguard.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/external-node.yaml
+          cluster/capability/wireguard.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENABLE_CALICOCTL_APISERVER
         value: "true"
       - name: ENABLE_EXTERNAL_NODE
@@ -460,7 +757,28 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-wireguard.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/external-node.yaml
+          cluster/capability/wireguard.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENABLE_CALICOCTL_APISERVER
         value: "true"
       - name: ENABLE_EXTERNAL_NODE
@@ -497,7 +815,25 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/kind.yaml
+          cluster/ip-family/dual-stack.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: INSTALLER
         value: manual
       - name: IPV6_POD_CIDR
@@ -526,7 +862,26 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/routing/no-encap.yaml
+          cluster/platform/kind.yaml
+          cluster/ip-family/ipv6.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: INSTALLER
         value: manual
       - name: IPV4_POD_CIDR
@@ -564,7 +919,28 @@ steps:
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/routing/no-encap.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/wireguard.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: PROVISIONER
         value: aws-kubeadm
       - name: USE_HASH_RELEASE
@@ -590,7 +966,27 @@ steps:
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-v3crd-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/routing/no-encap.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/wireguard.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: PROVISIONER
         value: aws-kubeadm
       - name: USE_API_SERVER
@@ -624,7 +1020,22 @@ steps:
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/aks-xtables-nobgp-wireguard.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/provider.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/wireguard.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: NETWORK_PLUGIN_MODE
         value: overlay
       - name: PROVISIONER
@@ -639,7 +1050,19 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/wireguard.yaml
+        value: >-
+          ci-base.yaml
+          suite/wireguard.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/provider.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/wireguard.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENABLE_WIREGUARD
         value: "true"
       - name: ENCAPSULATION_TYPE
@@ -675,7 +1098,22 @@ steps:
       - name: AKS_CNI
         value: calico
       - name: E2E_TEST_CONFIG
-        value: e2e/config/wireguard.yaml
+        value: >-
+          ci-base.yaml
+          suite/wireguard.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/wireguard.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENABLE_WIREGUARD
         value: "true"
       - name: ENCAPSULATION_TYPE
@@ -713,7 +1151,21 @@ steps:
       - name: CNI_PLUGIN
         value: AmazonVPC
       - name: E2E_TEST_CONFIG
-        value: e2e/config/wireguard.yaml
+        value: >-
+          ci-base.yaml
+          suite/wireguard.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/provider.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/wireguard.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENABLE_WIREGUARD
         value: "true"
       - name: INSTALLER
@@ -736,7 +1188,24 @@ steps:
       - name: CNI_PLUGIN
         value: Calico
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/eks-xtables-encap-wireguard-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/wireguard.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
       - name: ENABLE_WIREGUARD
         value: "true"
       - name: INSTALLER
@@ -759,7 +1228,24 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-encap-nobgp.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp-felix-routes.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: CLUSTER_ROUTING_MODE
         value: Felix
     matrix:
@@ -807,7 +1293,25 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-manifest.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENABLE_CALICOCTL_APISERVER
         value: "true"
       - name: PROVISIONER
@@ -828,7 +1332,23 @@ steps:
       - name: stable-1-canal-yaml
         env:
           - name: E2E_TEST_CONFIG
-            value: e2e/config/iptables/xtables-manifest-canal.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/manifest.yaml
+              cluster/api/aggregated.yaml
+              cluster/dataplane/iptables.yaml
+              cluster/cni/calico-host-local.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
           - name: K8S_VERSION
             value: stable-1
           - name: MANIFEST_FILE
@@ -841,7 +1361,25 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-manifest.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENABLE_CALICOCTL_APISERVER
         value: "true"
       - name: PROVISIONER
@@ -862,7 +1400,23 @@ steps:
       - name: beta-or-stable-canal-yaml
         env:
           - name: E2E_TEST_CONFIG
-            value: e2e/config/iptables/xtables-manifest-canal.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/manifest.yaml
+              cluster/api/aggregated.yaml
+              cluster/dataplane/iptables.yaml
+              cluster/cni/calico-host-local.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
           - name: K8S_VERSION
             value: beta-or-stable
           - name: MANIFEST_FILE
@@ -875,7 +1429,25 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-manifest-v3crd.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: INSTALL_ETCD_POD
         value: "true"
       - name: MANIFEST_FILE
@@ -896,7 +1468,22 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-manifest.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/manifest.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/platform/kind.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: CALICO_MANIFEST
         value: manifests/flannel-migration/calico.yaml
       - name: INSTALLER
@@ -926,7 +1513,27 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/gcp/kubevirt.yaml
+        value: >-
+          ci-base.yaml
+          suite/kubevirt.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/routing/no-encap.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/kubevirt.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: INSTALLER
         value: operator
       - name: K8S_VERSION

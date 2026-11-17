@@ -26,7 +26,19 @@ steps:
       - name: BUILD_CACHE_GROUP
         value: calico
       - name: E2E_TEST_CONFIG
-        value: e2e/config/kind/kubevirt.yaml
+        value: >-
+          ci-base.yaml
+          suite/kubevirt.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/kind.yaml
+          cluster/ip-family/dual-stack.yaml
+          cluster/capability/mock-virt.yaml
       # Route-priority propagation here is built on confd and BIRD programming
       # the cluster routes, and IPIP will not gain Felix-programmed live
       # migration — so the mode is pinned rather than defaulted.
