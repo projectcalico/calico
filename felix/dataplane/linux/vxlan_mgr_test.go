@@ -26,6 +26,7 @@ import (
 
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/bpfep"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlan/vxlandefs"
@@ -965,7 +966,7 @@ var _ = Describe("VXLANManager in BPF mode", func() {
 	}
 
 	withVNIFilter := func() vxlanMgrOption {
-		return vxlanMgrWithVNIFilter(bpfOverlayTunnelID(&dpConfig.RulesConfig))
+		return vxlanMgrWithVNIFilter(bpfep.OverlayTunnelID(&dpConfig.RulesConfig))
 	}
 
 	vxlanDevice := func() (*netlink.Vxlan, *mocknetlink.MockLink) {
