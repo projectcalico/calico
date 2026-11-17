@@ -87,6 +87,11 @@ const (
 
 	ChainCIDRBlock = ChainNamePrefix + "cidr-block"
 
+	// ChainReject is the target of policy rules with the Reject action.  It rejects the
+	// packet in the filter table and drops it in the raw and mangle tables, where REJECT
+	// is not a valid target.
+	ChainReject = ChainNamePrefix + "reject"
+
 	PolicyInboundPfx   PolicyChainNamePrefix  = ChainNamePrefix + "pi-"
 	PolicyOutboundPfx  PolicyChainNamePrefix  = ChainNamePrefix + "po-"
 	ProfileInboundPfx  ProfileChainNamePrefix = ChainNamePrefix + "pri-"

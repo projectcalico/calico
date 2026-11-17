@@ -56,6 +56,20 @@ var (
 	prefix_gnp1_t1_e0D = toprefix("DPE0|gnp/policy-1.2.3")
 	ruleID_gnp1_t1_e0D = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-1.2.3", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
 
+	// A reject rule is reported as a deny.
+	gnpReject_t1_key = model.PolicyKey{
+		Name: "policy-reject",
+		Kind: v3.KindGlobalNetworkPolicy,
+	}
+	gnpReject_t1 = &model.Policy{
+		Tier: "tier-1",
+		InboundRules: []model.Rule{
+			{Action: "reject"},
+		},
+	}
+	prefix_gnpReject_t1_i0D = toprefix("DPI0|gnp/policy-reject")
+	ruleID_gnpReject_t1_i0D = NewRuleID(v3.KindGlobalNetworkPolicy, "tier-1", "policy-reject", "", 0, rules.RuleDirIngress, rules.RuleActionDeny)
+
 	gnp1_t1_4i2e_key = model.PolicyKey{
 		Name: "policy-1.2.3",
 		Kind: v3.KindGlobalNetworkPolicy,
@@ -233,6 +247,7 @@ var _ = Describe("PolicyLookupsCache tests", func() {
 		Entry("GNP1 (0i0e) no match tier-1 egress", gnp1_t1_0i0e_key, gnp1_t1_0i0e, prefix_nomatch_t1_e, ruleID_nomatch_t1_e),
 		Entry("GNP1 (1i1e) i0", gnp1_t1_1i1e_key, gnp1_t1_1i1e, prefix_gnp1_t1_i0A, ruleID_gnp1_t1_i0A),
 		Entry("GNP1 (1i1e) e0", gnp1_t1_1i1e_key, gnp1_t1_1i1e, prefix_gnp1_t1_e0D, ruleID_gnp1_t1_e0D),
+		Entry("GNP reject i0 is a deny", gnpReject_t1_key, gnpReject_t1, prefix_gnpReject_t1_i0D, ruleID_gnpReject_t1_i0D),
 		Entry("GNP1 (4i2e) i0", gnp1_t1_4i2e_key, gnp1_t1_4i2e, prefix_gnp1_t1_i0A, ruleID_gnp1_t1_i0A),
 		Entry("GNP1 (4i2e) i1", gnp1_t1_4i2e_key, gnp1_t1_4i2e, prefix_gnp1_t1_i1D, ruleID_gnp1_t1_i1D),
 		Entry("GNP1 (4i2e) i2", gnp1_t1_4i2e_key, gnp1_t1_4i2e, prefix_gnp1_t1_i2N, ruleID_gnp1_t1_i2N),

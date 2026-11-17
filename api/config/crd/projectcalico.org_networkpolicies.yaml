@@ -66,6 +66,7 @@ spec:
                           - Deny
                           - Log
                           - Pass
+                          - Reject
                         type: string
                       destination:
                         description:
@@ -739,6 +740,7 @@ spec:
                           - Deny
                           - Log
                           - Pass
+                          - Reject
                         type: string
                       destination:
                         description:

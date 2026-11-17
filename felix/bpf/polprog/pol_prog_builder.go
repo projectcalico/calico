@@ -524,7 +524,9 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 	actionLabels := map[string]string{
 		"allow": allowLabel,
 		"deny":  "deny",
-		"log":   "log",
+		// The BPF dataplane does not send rejections yet, so reject drops like deny.
+		"reject": "deny",
+		"log":    "log",
 	}
 	for _, tier := range tiers {
 		endOfTierLabel := fmt.Sprint("end_of_tier_", p.tierID)
@@ -615,6 +617,7 @@ func (p *Builder) writeProfile(profile Profile, idx int, allowLabel string) {
 	actionLabels := map[string]string{
 		"allow":     allowLabel,
 		"deny":      "deny",
+		"reject":    "deny",
 		"pass":      "deny",
 		"next-tier": "deny",
 	}

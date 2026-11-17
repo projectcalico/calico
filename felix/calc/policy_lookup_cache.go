@@ -260,7 +260,8 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 		switch a {
 		case "allow":
 			return rules.RuleActionAllow
-		case "deny":
+		case "deny", "reject":
+			// Reject is a deny that rejects rather than drops, and is logged as a deny.
 			return rules.RuleActionDeny
 		case "pass", "next-tier":
 			return rules.RuleActionPass

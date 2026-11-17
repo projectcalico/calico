@@ -46,6 +46,7 @@ spec:
                         - Deny
                         - Log
                         - Pass
+                        - Reject
                     - enum:
                         - Pass
                         - Deny

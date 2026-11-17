@@ -348,7 +348,8 @@ func (s *PolicySets) protoRuleToHnsRules(policyId string, pRule *proto.Rule, isI
 	switch strings.ToLower(ruleCopy.Action) {
 	case "", "allow":
 		aclPolicy.Action = hns.Allow
-	case "deny":
+	case "deny", "reject":
+		// HNS has no reject action, so reject blocks like deny.
 		aclPolicy.Action = hns.Block
 	case "next-tier", "pass":
 		aclPolicy.Action = ActionPass

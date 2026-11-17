@@ -5398,7 +5398,8 @@ func (m *bpfEndpointManager) ruleMatchID(
 		a = rules.RuleActionAllow
 	case "next-tier", "pass":
 		a = rules.RuleActionPass
-	case "deny":
+	case "deny", "reject":
+		// The BPF dataplane treats reject as deny, so it is logged as a deny.
 		a = rules.RuleActionDeny
 	case "log":
 		// If we get it here, we dont know what to do about that, 0 means
