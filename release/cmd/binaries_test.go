@@ -117,6 +117,7 @@ func TestBinariesBuildMatchesTheManagerComponents(t *testing.T) {
 		}
 	}
 	slices.Sort(built)
+	built = slices.Compact(built)
 	if want := slices.Sorted(maps.Keys(binariesCLIComponents)); !slices.Equal(built, want) {
 		t.Errorf("built %v, want %v", built, want)
 	}

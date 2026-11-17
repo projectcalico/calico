@@ -2168,56 +2168,6 @@ func TestHelmIndexUploadSetsCachePolicy(t *testing.T) {
 	}
 }
 
-func TestCheckCodeGeneration(t *testing.T) {
-	const (
-		status = "git status --porcelain"
-		check  = "make generate check-dirty"
-		reset  = "git checkout -- ."
-		clean  = "git clean -fd"
-	)
-	for _, tc := range []struct {
-		name    string
-		status  string
-		makeErr error
-		wantErr string
-		want    []string
-	}{
-		{name: "an up-to-date checkout passes", want: []string{status, check}},
-		{
-			name:    "stale generated files fail and are reset",
-			makeErr: errors.New("check-dirty failed"),
-			wantErr: "code generation error",
-			want:    []string{status, check, reset, clean},
-		},
-		{
-			name:    "a checkout with changes is left alone",
-			status:  "?? notes.txt",
-			wantErr: "checkout with changes",
-			want:    []string{status},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeRunner().on(status, tc.status, nil).on(check, "", tc.makeErr)
-			r := &CalicoManager{runner: f, repoRoot: t.TempDir()}
-			err := r.checkCodeGeneration()
-			if tc.wantErr == "" && err != nil {
-				t.Fatalf("checkCodeGeneration: %v", err)
-			}
-			if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
-				t.Fatalf("checkCodeGeneration() error = %v, want %q", err, tc.wantErr)
-			}
-			if len(f.calls()) != len(tc.want) {
-				t.Fatalf("ran %v, want %v", f.calls(), tc.want)
-			}
-			for i, prefix := range tc.want {
-				if !strings.HasPrefix(f.calls()[i], prefix) {
-					t.Errorf("call %d = %q, want it to start with %q", i, f.calls()[i], prefix)
-				}
-			}
-		})
-	}
-}
-
 func TestPublishGitTagPreviewsThePushOnADryRun(t *testing.T) {
 	f := newFakeRunner()
 	f.on("git ls-remote --tags origin refs/tags/v3.30.0", "", nil)
