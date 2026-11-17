@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package ipip
 
 import (
 	"context"
@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/route"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
@@ -31,15 +32,15 @@ import (
 	"github.com/projectcalico/calico/lib/logrusr"
 )
 
-// ipipManager takes care of the configuration of the IPIP tunnel device, and programming IPIP routes by using
+// Manager takes care of the configuration of the IPIP tunnel device, and programming IPIP routes by using
 // route manager. Route updates are only sent to the route manager when Felix is reponsible for programming routes.
-// If BIRD is in charge of IPIP routes, ipipManager is only responsible for configuration of the IPIP tunnel device.
-type ipipManager struct {
+// If BIRD is in charge of IPIP routes, Manager is only responsible for configuration of the IPIP tunnel device.
+type Manager struct {
 	// Our dependencies.
 	hostname      string
 	ipVersion     uint8
 	routeProtocol netlink.RouteProtocol
-	routeMgr      *routeManager
+	routeMgr      *route.Manager
 	dpConfig      dataplanedefs.Config
 
 	// Device information
@@ -55,16 +56,16 @@ type ipipManager struct {
 	opRecorder logrusr.OpRecorder
 }
 
-func newIPIPManager(
+func NewManager(
 	mainRouteTable routetable.Interface,
 	tunnelDevice string,
 	ipVersion uint8,
 	mtu int,
 	dpConfig dataplanedefs.Config,
 	opRecorder logrusr.OpRecorder,
-) *ipipManager {
+) *Manager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
-	return newIPIPManagerWithShims(
+	return NewManagerWithShims(
 		mainRouteTable,
 		tunnelDevice,
 		ipVersion,
@@ -75,7 +76,7 @@ func newIPIPManager(
 	)
 }
 
-func newIPIPManagerWithShims(
+func NewManagerWithShims(
 	mainRouteTable routetable.Interface,
 	tunnelDevice string,
 	ipVersion uint8,
@@ -83,26 +84,26 @@ func newIPIPManagerWithShims(
 	dpConfig dataplanedefs.Config,
 	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
-) *ipipManager {
+) *Manager {
 	if ipVersion != 4 {
 		logrus.Errorf("IPIP manager only supports IPv4")
 		return nil
 	}
 
-	m := &ipipManager{
+	m := &Manager{
 		activeHostnameToIP: map[string]string{},
 		hostname:           dpConfig.Hostname,
 		tunnelDevice:       tunnelDevice,
 		tunnelDeviceMTU:    mtu,
 		ipVersion:          ipVersion,
 		dpConfig:           dpConfig,
-		routeProtocol:      calculateRouteProtocol(dpConfig),
+		routeProtocol:      route.CalculateProtocol(dpConfig),
 		logCtx: logrus.WithFields(logrus.Fields{
 			"ipVersion":    ipVersion,
 			"tunnelDevice": tunnelDevice,
 		}),
 		opRecorder: opRecorder,
-		routeMgr: newRouteManager(
+		routeMgr: route.NewManager(
 			mainRouteTable,
 			routetable.RouteClassIPIPTunnel,
 			routetable.RouteClassIPIPSameSubnet,
@@ -116,17 +117,17 @@ func newIPIPManagerWithShims(
 		),
 	}
 
-	m.routeMgr.setTunnelRouteFunc(m.tunnelRoute)
+	m.routeMgr.SetTunnelRouteFunc(m.tunnelRoute)
 	m.maybeUpdateRoutes()
 	return m
 }
 
-func (m *ipipManager) OnUpdate(protoBufMsg any) {
+func (m *Manager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
-			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
+			m.routeMgr.UpdateParentIfaceAddr(msg.Ipv4Addr)
 		}
 		// An empty Ipv4Addr means the host has no v4 BGP/host IP (e.g. its BGP
 		// spec was cleared). Drop the map entry so tunnelRoute won't try to
@@ -140,7 +141,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg any) {
 	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {
-			m.routeMgr.updateParentIfaceAddr("")
+			m.routeMgr.UpdateParentIfaceAddr("")
 		}
 		delete(m.activeHostnameToIP, msg.Hostname)
 		m.maybeUpdateRoutes()
@@ -151,22 +152,22 @@ func (m *ipipManager) OnUpdate(protoBufMsg any) {
 	}
 }
 
-func (m *ipipManager) maybeUpdateRoutes() {
+func (m *Manager) maybeUpdateRoutes() {
 	// Only update routes if Felix, rather than confd and BIRD, is responsible for programming the
 	// IPIP cluster routes.
 	if m.dpConfig.ProgramIPIPClusterRoutes {
-		m.routeMgr.triggerRouteUpdate()
+		m.routeMgr.TriggerRouteUpdate()
 	}
 }
 
-func (m *ipipManager) CompleteDeferredWork() error {
+func (m *Manager) CompleteDeferredWork() error {
 	if m.dpConfig.ProgramIPIPClusterRoutes {
 		return m.routeMgr.CompleteDeferredWork()
 	}
 	return nil
 }
 
-func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+func (m *Manager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
 	// Extract the gateway addr for this route based on its remote address.
 	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
 	if !ok {
@@ -185,17 +186,17 @@ func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetabl
 	}
 }
 
-func (m *ipipManager) keepIPIPDeviceInSync(
+func (m *Manager) KeepDeviceInSync(
 	ctx context.Context,
 	mtu int,
 	xsumBroken bool,
 	wait time.Duration,
 	parentIfaceC chan string,
 ) {
-	m.routeMgr.keepDeviceInSync(ctx, mtu, xsumBroken, wait, parentIfaceC, m.device)
+	m.routeMgr.KeepDeviceInSync(ctx, mtu, xsumBroken, wait, parentIfaceC, m.device)
 }
 
-func (m *ipipManager) device(_ netlink.Link) (netlink.Link, string, error) {
+func (m *Manager) device(_ netlink.Link) (netlink.Link, string, error) {
 	la := netlink.NewLinkAttrs()
 	la.Name = m.tunnelDevice
 	ipip := &netlink.Iptun{
@@ -215,7 +216,7 @@ func (m *ipipManager) device(_ netlink.Link) (netlink.Link, string, error) {
 	return ipip, address.String(), nil
 }
 
-func cleanUpIPIPAddrs() {
+func CleanUpAddrs() {
 	// If IPIP is not enabled, check to see if there is are addresses in the IPIP device and delete them if there are.
 	logrus.Debug("Checking if we need to clean up the IPIP device")
 
@@ -268,6 +269,6 @@ cleanupRetry:
 
 // OnParentDeviceUpdate records the tunnel's parent device and reports whether it
 // changed.
-func (m *ipipManager) OnParentDeviceUpdate(name string) bool {
+func (m *Manager) OnParentDeviceUpdate(name string) bool {
 	return m.routeMgr.OnParentDeviceUpdate(name)
 }

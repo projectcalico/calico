@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package route
 
 import (
 	"net"
@@ -21,10 +21,8 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 
-	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
-	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/vxlan/vxlandefs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
@@ -38,7 +36,7 @@ var _ = Describe("Route manager", func() {
 		rt        *dptest.MockRouteTable
 		dataplane *mocknetlink.MockNetlinkDataplane
 		dpConfig  dataplanedefs.Config
-		routeMgr  *routeManager
+		routeMgr  *Manager
 	)
 
 	BeforeEach(func() {
@@ -60,7 +58,7 @@ var _ = Describe("Route manager", func() {
 			ProgramNoEncapClusterRoutes: true,
 		}
 
-		routeMgr = newRouteManager(
+		routeMgr = NewManager(
 			rt,
 			routetable.RouteClassVXLANTunnel,
 			routetable.RouteClassVXLANSameSubnet,
@@ -72,96 +70,12 @@ var _ = Describe("Route manager", func() {
 			logrusr.NewSummarizer("test"),
 			dataplane,
 		)
-		routeMgr.setTunnelRouteFunc(func(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+		routeMgr.SetTunnelRouteFunc(func(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
 			return &routetable.Target{
 				Type:     routetable.TargetTypeVXLAN,
 				RouteKey: routetable.RouteKey{CIDR: cidr},
 				GW:       ip.FromString("10.0.0.1"),
 			}
-		})
-	})
-
-	Describe("with VXLAN, IPIP and no-encap managers sharing one route table", func() {
-		// This mirrors the way int_dataplane wires the managers up: they all
-		// program the same main route table, and they all see every route update.
-		var managers []dataplanedefs.Manager
-
-		localBlock := func(poolType proto.IPPoolType, dst string) *proto.RouteUpdate {
-			return &proto.RouteUpdate{
-				Types:       proto.RouteType_LOCAL_WORKLOAD,
-				IpPoolType:  poolType,
-				Dst:         dst,
-				DstNodeName: "node1",
-			}
-		}
-
-		BeforeEach(func() {
-			vxlanMgr := newVXLANManagerWithShims(
-				dpsets.NewMockIPSets(),
-				rt,
-				&dptest.MockVXLANFDB{},
-				vxlandefs.VXLANIfaceNameV4,
-				4,
-				1400,
-				dpConfig,
-				logrusr.NewSummarizer("test"),
-				dataplane,
-			)
-			ipipMgr := newIPIPManagerWithShims(
-				rt,
-				ipipdefs.IPIPIfaceName,
-				4,
-				1400,
-				dpConfig,
-				logrusr.NewSummarizer("test"),
-				dataplane,
-			)
-			noEncapMgr := newNoEncapManagerWithSims(
-				rt,
-				4,
-				dpConfig,
-				logrusr.NewSummarizer("test"),
-				dataplane,
-			)
-			managers = []dataplanedefs.Manager{vxlanMgr, ipipMgr, noEncapMgr}
-
-			// Each manager gets a local IPAM block from each type of pool; it
-			// should only program a blackhole route for the block that belongs
-			// to its own type of pool.
-			for _, m := range managers {
-				m.OnUpdate(localBlock(proto.IPPoolType_VXLAN, "10.0.1.0/26"))
-				m.OnUpdate(localBlock(proto.IPPoolType_IPIP, "10.0.2.0/26"))
-				m.OnUpdate(localBlock(proto.IPPoolType_NO_ENCAP, "10.0.3.0/26"))
-			}
-			for _, m := range managers {
-				Expect(m.CompleteDeferredWork()).To(Succeed())
-			}
-		})
-
-		It("should keep the blackhole routes of every manager", func() {
-			// Each manager owns its own route class, so no manager's SetRoutes
-			// call can delete another manager's blackhole routes.
-			Expect(rt.CIDRsForClass(routetable.RouteClassBlackholeVXLAN, routetable.InterfaceNone)).To(
-				ConsistOf("10.0.1.0/26"))
-			Expect(rt.CIDRsForClass(routetable.RouteClassBlackholeIPIP, routetable.InterfaceNone)).To(
-				ConsistOf("10.0.2.0/26"))
-			Expect(rt.CIDRsForClass(routetable.RouteClassBlackholeNoEncap, routetable.InterfaceNone)).To(
-				ConsistOf("10.0.3.0/26"))
-		})
-
-		It("should remove only its own blackhole routes when a block goes away", func() {
-			for _, m := range managers {
-				m.OnUpdate(&proto.RouteRemove{Dst: "10.0.2.0/26"})
-			}
-			for _, m := range managers {
-				Expect(m.CompleteDeferredWork()).To(Succeed())
-			}
-
-			Expect(rt.CIDRsForClass(routetable.RouteClassBlackholeIPIP, routetable.InterfaceNone)).To(BeEmpty())
-			Expect(rt.CIDRsForClass(routetable.RouteClassBlackholeVXLAN, routetable.InterfaceNone)).To(
-				ConsistOf("10.0.1.0/26"))
-			Expect(rt.CIDRsForClass(routetable.RouteClassBlackholeNoEncap, routetable.InterfaceNone)).To(
-				ConsistOf("10.0.3.0/26"))
 		})
 	})
 
@@ -171,13 +85,13 @@ var _ = Describe("Route manager", func() {
 		// holding that lock: if it did, back-to-back updates from the dataplane
 		// main loop would deadlock against the goroutine.
 		It("should not block when the device-sync goroutine hasn't drained the channel", func() {
-			routeMgr.updateParentIfaceAddr("172.0.0.2")
+			routeMgr.UpdateParentIfaceAddr("172.0.0.2")
 
 			done := make(chan struct{})
 			go func() {
 				defer GinkgoRecover()
 				defer close(done)
-				routeMgr.updateParentIfaceAddr("172.0.0.3")
+				routeMgr.UpdateParentIfaceAddr("172.0.0.3")
 			}()
 			Eventually(done).Should(BeClosed())
 
@@ -185,15 +99,15 @@ var _ = Describe("Route manager", func() {
 			addrRead := make(chan string)
 			go func() {
 				defer GinkgoRecover()
-				addrRead <- routeMgr.parentIfaceAddr()
+				addrRead <- routeMgr.ParentIfaceAddr()
 			}()
 			Eventually(addrRead).Should(Receive(Equal("172.0.0.3")))
 		})
 
 		It("should kick the device-sync goroutine", func() {
-			routeMgr.updateParentIfaceAddr("172.0.0.2")
+			routeMgr.UpdateParentIfaceAddr("172.0.0.2")
 			Expect(routeMgr.tunnelChangedC).To(Receive())
-			Expect(routeMgr.parentIfaceAddr()).To(Equal("172.0.0.2"))
+			Expect(routeMgr.ParentIfaceAddr()).To(Equal("172.0.0.2"))
 		})
 	})
 

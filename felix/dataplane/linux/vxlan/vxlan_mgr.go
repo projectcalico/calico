@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package vxlan
 
 import (
 	"context"
@@ -27,6 +27,7 @@ import (
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/route"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/netlinkshim"
@@ -37,11 +38,11 @@ import (
 	"github.com/projectcalico/calico/lib/logrusr"
 )
 
-type vxlanManager struct {
+type Manager struct {
 	// Our dependencies.
 	hostname string
-	routeMgr *routeManager
-	fdb      VXLANFDB
+	routeMgr *route.Manager
+	fdb      FDB
 
 	ipsetsDataplane dpsets.IPSetsDataplane
 	ipSetMetadata   ipsets.IPSetMetadata
@@ -73,41 +74,41 @@ type vxlanManager struct {
 	opRecorder logrusr.OpRecorder
 }
 
-type vxlanMgrOption func(m *vxlanManager)
+type Option func(m *Manager)
 
-func vxlanMgrWithDualStack() vxlanMgrOption {
-	return func(m *vxlanManager) {
+func WithDualStack() Option {
+	return func(m *Manager) {
 		m.routeMgr.SetMaintainIPOnly()
 	}
 }
 
-// vxlanMgrWithVNIFilter makes the flow-based BPF device accept only Calico's VNIs, so
+// WithVNIFilter makes the flow-based BPF device accept only Calico's VNIs, so
 // other VXLAN devices can share its port. overlayVNI is the VNI that BPF encapsulates with.
 // BPF decaps the NodePort VNI on host endpoints, so the filter only reserves it.
-func vxlanMgrWithVNIFilter(overlayVNI uint32) vxlanMgrOption {
-	return func(m *vxlanManager) {
+func WithVNIFilter(overlayVNI uint32) Option {
+	return func(m *Manager) {
 		m.vniFilter = true
 		m.routeMgr.SetVNIFilter([]uint32{overlayVNI, bpfnat.NodePortVXLANTunnelVNI})
 	}
 }
 
-type VXLANFDB interface {
+type FDB interface {
 	SetVTEPs(vteps []vxlanfdb.VTEP)
 }
 
-func newVXLANManager(
+func NewManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
-	fdb VXLANFDB,
+	fdb FDB,
 	deviceName string,
 	ipVersion uint8,
 	mtu int,
 	dpConfig dataplanedefs.Config,
 	opRecorder logrusr.OpRecorder,
-	opts ...vxlanMgrOption,
-) *vxlanManager {
+	opts ...Option,
+) *Manager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
-	return newVXLANManagerWithShims(
+	return NewManagerWithShims(
 		ipsetsDataplane,
 		mainRouteTable,
 		fdb,
@@ -121,19 +122,19 @@ func newVXLANManager(
 	)
 }
 
-func newVXLANManagerWithShims(
+func NewManagerWithShims(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
-	fdb VXLANFDB,
+	fdb FDB,
 	deviceName string,
 	ipVersion uint8,
 	mtu int,
 	dpConfig dataplanedefs.Config,
 	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
-	opts ...vxlanMgrOption,
-) *vxlanManager {
-	m := &vxlanManager{
+	opts ...Option,
+) *Manager {
+	m := &Manager{
 		ipsetsDataplane: ipsetsDataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
 			MaxSize: dpConfig.MaxIPSetSize,
@@ -158,7 +159,7 @@ func newVXLANManagerWithShims(
 			"device":    deviceName,
 		}),
 		opRecorder: opRecorder,
-		routeMgr: newRouteManager(
+		routeMgr: route.NewManager(
 			mainRouteTable,
 			routetable.RouteClassVXLANTunnel,
 			routetable.RouteClassVXLANSameSubnet,
@@ -176,12 +177,12 @@ func newVXLANManagerWithShims(
 		o(m)
 	}
 
-	m.routeMgr.setTunnelRouteFunc(m.tunnelRoute)
-	m.routeMgr.triggerRouteUpdate()
+	m.routeMgr.SetTunnelRouteFunc(m.tunnelRoute)
+	m.routeMgr.TriggerRouteUpdate()
 	return m
 }
 
-func (m *vxlanManager) OnUpdate(protoBufMsg any) {
+func (m *Manager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.VXLANTunnelEndpointUpdate:
 		// Check to make sure that we are dealing with messages of the correct IP version.
@@ -198,7 +199,7 @@ func (m *vxlanManager) OnUpdate(protoBufMsg any) {
 			m.vtepsByNode[msg.Node] = msg
 		}
 		m.vtepsDirty = true
-		m.routeMgr.triggerRouteUpdate()
+		m.routeMgr.TriggerRouteUpdate()
 	case *proto.VXLANTunnelEndpointRemove:
 		m.logCtx.WithField("msg", msg).Debug("VXLAN manager received VTEP remove")
 		if msg.Node == m.hostname {
@@ -207,13 +208,13 @@ func (m *vxlanManager) OnUpdate(protoBufMsg any) {
 			delete(m.vtepsByNode, msg.Node)
 		}
 		m.vtepsDirty = true
-		m.routeMgr.triggerRouteUpdate()
+		m.routeMgr.TriggerRouteUpdate()
 	default:
 		m.routeMgr.OnUpdate(msg)
 	}
 }
 
-func (m *vxlanManager) setLocalVTEP(vtep *proto.VXLANTunnelEndpointUpdate) {
+func (m *Manager) setLocalVTEP(vtep *proto.VXLANTunnelEndpointUpdate) {
 	m.myVTEPLock.Lock()
 	defer m.myVTEPLock.Unlock()
 	m.myVTEP = vtep
@@ -224,16 +225,16 @@ func (m *vxlanManager) setLocalVTEP(vtep *proto.VXLANTunnelEndpointUpdate) {
 			parentAddr = vtep.ParentDeviceIpv6
 		}
 	}
-	m.routeMgr.updateParentIfaceAddr(parentAddr)
+	m.routeMgr.UpdateParentIfaceAddr(parentAddr)
 }
 
-func (m *vxlanManager) getLocalVTEP() *proto.VXLANTunnelEndpointUpdate {
+func (m *Manager) getLocalVTEP() *proto.VXLANTunnelEndpointUpdate {
 	m.myVTEPLock.Lock()
 	defer m.myVTEPLock.Unlock()
 	return m.myVTEP
 }
 
-func (m *vxlanManager) CompleteDeferredWork() error {
+func (m *Manager) CompleteDeferredWork() error {
 	if m.vtepsDirty {
 		m.updateNeighborsAndAllowedSources()
 		m.vtepsDirty = false
@@ -242,7 +243,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 	return m.routeMgr.CompleteDeferredWork()
 }
 
-func (m *vxlanManager) updateNeighborsAndAllowedSources() {
+func (m *Manager) updateNeighborsAndAllowedSources() {
 	m.logCtx.Debug("VTEPs are dirty, updating allowed VXLAN sources and L2 neighbors.")
 	m.opRecorder.RecordOperation("update-vxlan-vteps")
 
@@ -279,8 +280,8 @@ func (m *vxlanManager) updateNeighborsAndAllowedSources() {
 	m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, allowedVXLANSources)
 }
 
-func (m *vxlanManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	if isRemoteTunnelRoute(r, proto.IPPoolType_VXLAN) || isBorrowedRoute(r, proto.IPPoolType_VXLAN) {
+func (m *Manager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+	if route.IsRemoteTunnel(r, proto.IPPoolType_VXLAN) || route.IsBorrowed(r, proto.IPPoolType_VXLAN) {
 		// We treat remote tunnel routes as directly connected. They don't have a gateway of
 		// the VTEP because they ARE the VTEP!
 		return &routetable.Target{
@@ -311,17 +312,17 @@ func (m *vxlanManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetab
 	}
 }
 
-func (m *vxlanManager) keepVXLANDeviceInSync(
+func (m *Manager) KeepDeviceInSync(
 	ctx context.Context,
 	mtu int,
 	xsumBroken bool,
 	wait time.Duration,
 	parentIfaceC chan string,
 ) {
-	m.routeMgr.keepDeviceInSync(ctx, mtu, xsumBroken, wait, parentIfaceC, m.device)
+	m.routeMgr.KeepDeviceInSync(ctx, mtu, xsumBroken, wait, parentIfaceC, m.device)
 }
 
-func (m *vxlanManager) device(parent netlink.Link) (netlink.Link, string, error) {
+func (m *Manager) device(parent netlink.Link) (netlink.Link, string, error) {
 	if parent == nil {
 		return nil, "", fmt.Errorf("no parent device available")
 	}
@@ -376,7 +377,7 @@ func parseMacForIPVersion(vtep *proto.VXLANTunnelEndpointUpdate, ipVersion uint8
 	}
 }
 
-func cleanUpVXLANDevice(deviceName string) {
+func CleanUpDevice(deviceName string) {
 	// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
 	logrus.Debug("Checking if we need to clean up the VXLAN device")
 
@@ -415,6 +416,6 @@ func cleanUpVXLANDevice(deviceName string) {
 
 // OnParentDeviceUpdate records the tunnel's parent device and reports whether it
 // changed.
-func (m *vxlanManager) OnParentDeviceUpdate(name string) bool {
+func (m *Manager) OnParentDeviceUpdate(name string) bool {
 	return m.routeMgr.OnParentDeviceUpdate(name)
 }

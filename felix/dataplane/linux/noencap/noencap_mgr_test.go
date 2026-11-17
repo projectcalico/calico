@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package noencap
 
 import (
 	"net"
@@ -35,7 +35,7 @@ import (
 
 var _ = Describe("NoEncap Manager", func() {
 	var (
-		noencapMgr, noencapMgrV6 *noEncapManager
+		noencapMgr, noencapMgrV6 *Manager
 		rt                       *dptest.MockRouteTable
 	)
 
@@ -62,7 +62,7 @@ var _ = Describe("NoEncap Manager", func() {
 		Expect(dataplaneV6.AddrAdd(eth0V6, &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("fc00:10:96::2")}})).To(Succeed())
 		dataplaneV6.ResetDeltas()
 
-		noencapMgr = newNoEncapManagerWithSims(
+		noencapMgr = NewManagerWithShims(
 			rt,
 			4,
 			dataplanedefs.Config{
@@ -73,7 +73,7 @@ var _ = Describe("NoEncap Manager", func() {
 			opRecorder,
 			dataplane,
 		)
-		noencapMgrV6 = newNoEncapManagerWithSims(
+		noencapMgrV6 = NewManagerWithShims(
 			rt,
 			6,
 			dataplanedefs.Config{
@@ -98,9 +98,9 @@ var _ = Describe("NoEncap Manager", func() {
 
 		noencapMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(noencapMgr.routeMgr.parentIfaceAddr()).NotTo(BeZero())
+		Expect(noencapMgr.routeMgr.ParentIfaceAddr()).NotTo(BeZero())
 		Expect(noencapMgr.routeMgr.ParentDevice()).NotTo(BeEmpty())
-		noEncapDev, err := noencapMgr.routeMgr.detectParentIface()
+		noEncapDev, err := noencapMgr.routeMgr.DetectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(noEncapDev).NotTo(BeNil())
 
@@ -184,9 +184,9 @@ var _ = Describe("NoEncap Manager", func() {
 
 		noencapMgrV6.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(noencapMgrV6.routeMgr.parentIfaceAddr()).NotTo(BeZero())
+		Expect(noencapMgrV6.routeMgr.ParentIfaceAddr()).NotTo(BeZero())
 		Expect(noencapMgrV6.routeMgr.ParentDevice()).NotTo(BeEmpty())
-		noEncapDev, err := noencapMgrV6.routeMgr.detectParentIface()
+		noEncapDev, err := noencapMgrV6.routeMgr.DetectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(noEncapDev).NotTo(BeNil())
 
@@ -264,7 +264,7 @@ var _ = Describe("NoEncap Manager", func() {
 			Hostname: "node1",
 			Ipv4Addr: "172.0.0.2",
 		})
-		Expect(noencapMgr.routeMgr.parentIfaceAddr()).To(Equal("172.0.0.2"))
+		Expect(noencapMgr.routeMgr.ParentIfaceAddr()).To(Equal("172.0.0.2"))
 
 		// The Node is still there, but it no longer has an IPv4 address (say
 		// its BGP IPv4Address was removed and it has no v4 InternalIP), so the
@@ -274,8 +274,8 @@ var _ = Describe("NoEncap Manager", func() {
 		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node1",
 		})
-		Expect(noencapMgr.routeMgr.parentIfaceAddr()).To(BeEmpty())
-		_, err := noencapMgr.routeMgr.detectParentIface()
+		Expect(noencapMgr.routeMgr.ParentIfaceAddr()).To(BeEmpty())
+		_, err := noencapMgr.routeMgr.DetectParentIface()
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -284,7 +284,7 @@ var _ = Describe("NoEncap Manager", func() {
 			Hostname: "node1",
 			Ipv6Addr: "fc00:10:96::2",
 		})
-		Expect(noencapMgrV6.routeMgr.parentIfaceAddr()).To(Equal("fc00:10:96::2"))
+		Expect(noencapMgrV6.routeMgr.ParentIfaceAddr()).To(Equal("fc00:10:96::2"))
 
 		// A single HostMetadataUpdate carries both families, so a node that
 		// drops to IPv4-only shows up at the IPv6 manager as an update with an
@@ -293,7 +293,7 @@ var _ = Describe("NoEncap Manager", func() {
 			Hostname: "node1",
 			Ipv4Addr: "172.0.0.2",
 		})
-		Expect(noencapMgrV6.routeMgr.parentIfaceAddr()).To(BeEmpty())
+		Expect(noencapMgrV6.routeMgr.ParentIfaceAddr()).To(BeEmpty())
 	})
 
 	It("ignores host metadata for other hosts", func() {
@@ -304,6 +304,6 @@ var _ = Describe("NoEncap Manager", func() {
 		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node2",
 		})
-		Expect(noencapMgr.routeMgr.parentIfaceAddr()).To(Equal("172.0.0.2"))
+		Expect(noencapMgr.routeMgr.ParentIfaceAddr()).To(Equal("172.0.0.2"))
 	})
 })

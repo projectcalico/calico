@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package noencap
 
 import (
 	"context"
@@ -22,6 +22,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/route"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
@@ -29,25 +30,25 @@ import (
 	"github.com/projectcalico/calico/lib/logrusr"
 )
 
-type noEncapManager struct {
+type Manager struct {
 	// Our dependencies.
 	hostname  string
 	ipVersion uint8
-	routeMgr  *routeManager
+	routeMgr  *route.Manager
 
 	// Log context
 	logCtx     *logrus.Entry
 	opRecorder logrusr.OpRecorder
 }
 
-func newNoEncapManager(
+func NewManager(
 	mainRouteTable routetable.Interface,
 	ipVersion uint8,
 	dpConfig dataplanedefs.Config,
 	opRecorder logrusr.OpRecorder,
-) *noEncapManager {
+) *Manager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
-	return newNoEncapManagerWithSims(
+	return NewManagerWithShims(
 		mainRouteTable,
 		ipVersion,
 		dpConfig,
@@ -56,22 +57,22 @@ func newNoEncapManager(
 	)
 }
 
-func newNoEncapManagerWithSims(
+func NewManagerWithShims(
 	mainRouteTable routetable.Interface,
 	ipVersion uint8,
 	dpConfig dataplanedefs.Config,
 	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
-) *noEncapManager {
+) *Manager {
 
-	m := &noEncapManager{
+	m := &Manager{
 		hostname:  dpConfig.Hostname,
 		ipVersion: ipVersion,
 		logCtx: logrus.WithFields(logrus.Fields{
 			"ipVersion": ipVersion,
 		}),
 		opRecorder: opRecorder,
-		routeMgr: newRouteManager(
+		routeMgr: route.NewManager(
 			mainRouteTable,
 			routetable.RouteClassNoEncap,
 			routetable.RouteClassNoEncap,
@@ -85,12 +86,12 @@ func newNoEncapManagerWithSims(
 		),
 	}
 
-	m.routeMgr.setTunnelRouteFunc(m.tunnelRoute)
-	m.routeMgr.triggerRouteUpdate()
+	m.routeMgr.SetTunnelRouteFunc(m.tunnelRoute)
+	m.routeMgr.TriggerRouteUpdate()
 	return m
 }
 
-func (m *noEncapManager) OnUpdate(protoBufMsg any) {
+func (m *Manager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.HostMetadataUpdate:
 		if msg.Hostname != m.hostname {
@@ -114,32 +115,32 @@ func (m *noEncapManager) OnUpdate(protoBufMsg any) {
 	}
 }
 
-func (m *noEncapManager) routesNeedUpdate(parentAddr string) {
-	m.routeMgr.updateParentIfaceAddr(parentAddr)
-	m.routeMgr.triggerRouteUpdate()
+func (m *Manager) routesNeedUpdate(parentAddr string) {
+	m.routeMgr.UpdateParentIfaceAddr(parentAddr)
+	m.routeMgr.TriggerRouteUpdate()
 }
 
-func (m *noEncapManager) CompleteDeferredWork() error {
+func (m *Manager) CompleteDeferredWork() error {
 	return m.routeMgr.CompleteDeferredWork()
 }
 
-func (m *noEncapManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+func (m *Manager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
 	return nil
 }
 
-func (m *noEncapManager) monitorParentDevice(ctx context.Context, wait time.Duration, parentIfaceC chan string) {
+func (m *Manager) MonitorParentDevice(ctx context.Context, wait time.Duration, parentIfaceC chan string) {
 	// NoEncap manager does not need to configure any interface. It expects the parent interface to be up and configured.
 	// However, it needs to monitor the parent interface to update routes. For this, we can use route manager
 	// keepDeviceInSync method without providing any device to configure.
-	m.routeMgr.keepDeviceInSync(ctx, 0, false, wait, parentIfaceC, m.device)
+	m.routeMgr.KeepDeviceInSync(ctx, 0, false, wait, parentIfaceC, m.device)
 }
 
-func (m *noEncapManager) device(_ netlink.Link) (netlink.Link, string, error) {
+func (m *Manager) device(_ netlink.Link) (netlink.Link, string, error) {
 	return nil, "", nil
 }
 
 // OnParentDeviceUpdate records the tunnel's parent device and reports whether it
 // changed.
-func (m *noEncapManager) OnParentDeviceUpdate(name string) bool {
+func (m *Manager) OnParentDeviceUpdate(name string) bool {
 	return m.routeMgr.OnParentDeviceUpdate(name)
 }
