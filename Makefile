@@ -462,7 +462,7 @@ e2e-run-cnp:
 # The default GATEWAY_CLASS_NAME ("tigera-gateway-class") matches what the
 # tigera-operator provisions when the GatewayAPI CR omits gatewayClasses.
 ###############################################################################
-GATEWAY_CONFORMANCE_VERSION ?= $(shell git -C $(REPO_ROOT) describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --always --dirty 2>/dev/null)
+GATEWAY_CONFORMANCE_VERSION ?= $(shell git -C $(REPO_ROOT) describe --tags --match '$(GIT_VERSION_TAG_MATCH)' --always --dirty 2>/dev/null)
 GATEWAY_CLASS_NAME ?= tigera-gateway-class
 GATEWAY_CONFORMANCE_PROFILES ?= GATEWAY-HTTP
 GATEWAY_CONFORMANCE_MODE ?= default

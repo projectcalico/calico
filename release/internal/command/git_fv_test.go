@@ -17,11 +17,16 @@
 package command
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
 
 func TestGitIgnoresNonVersionTags(t *testing.T) {
+	// A config that signs every tag would turn these lightweight tags into
+	// annotated ones, which need a message and a tagger.
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	dir := t.TempDir()
 	g := Git(RealRunner).In(dir)
 	for _, args := range [][]string{
