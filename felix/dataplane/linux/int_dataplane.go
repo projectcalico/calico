@@ -273,6 +273,11 @@ type InternalDataplane struct {
 
 	config dataplanedefs.Config
 
+	// hostMTU is the smallest host interface MTU, as detected at start of day.
+	hostMTU int
+	// bpfProxyHealthCheck is shared by the IPv4 and IPv6 BPF kube-proxies.
+	bpfProxyHealthCheck bpfproxy.Healthcheck
+
 	debugHangC <-chan time.Time
 
 	xdpState          *xdpState
@@ -428,7 +433,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 		return nil
 	}
 	ConfigureDefaultMTUs(hostMTU, &config)
-	podMTU := determinePodMTU(config)
+	podMTU := determinePodMTU(config, hostMTU)
 	if err := writeMTUFile(podMTU); err != nil {
 		// Fail early if RequireMTUFile is true
 		if config.RequireMTUFile {
@@ -459,6 +464,7 @@ func NewIntDataplaneDriver(config dataplanedefs.Config) *InternalDataplane {
 		ifaceMonitor:                ifacemonitor.New(config.IfaceMonitorConfig, featureDetector, config.FatalErrorRestartCallback),
 		ifaceUpdates:                make(chan any, 100),
 		config:                      config,
+		hostMTU:                     hostMTU,
 		applyThrottle:               throttle.New(10),
 		loopSummarizer:              logrusr.NewSummarizer("dataplane reconciliation loops"),
 		actions:                     actionSet,
@@ -1628,7 +1634,7 @@ func writeMTUFile(mtu int) error {
 
 // determinePodMTU looks at the configured MTUs and enabled encapsulations to determine which
 // value for MTU should be used for pod interfaces.
-func determinePodMTU(config dataplanedefs.Config) int {
+func determinePodMTU(config dataplanedefs.Config, hostMTU int) int {
 	// Determine the smallest MTU among enabled encap methods. If none of the encap methods are
 	// enabled, we'll just use the host's MTU.
 	mtu := 0
@@ -1650,9 +1656,9 @@ func determinePodMTU(config dataplanedefs.Config) int {
 
 	if mtu == 0 {
 		// No enabled encapsulation. Just use the host MTU.
-		mtu = config.HostMTU
-	} else if mtu > config.HostMTU {
-		fields := log.Fields{"mtu": mtu, "hostMTU": config.HostMTU}
+		mtu = hostMTU
+	} else if mtu > hostMTU {
+		fields := log.Fields{"mtu": mtu, "hostMTU": hostMTU}
 		log.WithFields(fields).Warn("Configured MTU is larger than detected host interface MTU")
 	}
 	log.WithField("mtu", mtu).Info("Determined pod MTU")
@@ -1663,7 +1669,6 @@ func determinePodMTU(config dataplanedefs.Config) int {
 // We default the values even if the encap is not enabled, in order to match behavior from earlier versions of Calico.
 // However, they MTU will only be considered for allocation to pod interfaces if the encap is enabled.
 func ConfigureDefaultMTUs(hostMTU int, c *dataplanedefs.Config) {
-	c.HostMTU = hostMTU
 	if c.IPIPMTU == 0 {
 		log.Debug("Defaulting IPIP MTU based on host")
 		c.IPIPMTU = hostMTU - ipipMTUOverhead
@@ -1845,7 +1850,7 @@ func (d *InternalDataplane) monitorHostMTU() {
 		mtu, err := findHostMTU(d.config.MTUIfacePattern)
 		if err != nil {
 			log.WithError(err).Error("Error detecting host MTU")
-		} else if d.config.HostMTU != mtu {
+		} else if d.hostMTU != mtu {
 			// Since log writing is done a background thread, we set the force-flush flag on this log to ensure that
 			// all the in-flight logs get written before we exit.
 			log.WithFields(log.Fields{logrusr.FieldForceFlush: true}).Info("Host MTU changed")
@@ -2911,9 +2916,9 @@ func startBPFDataplaneComponents(
 	ctKey := bpfconntrack.KeyFromBytes
 	ctVal := bpfconntrack.ValueFromBytes
 
-	if config.BPFProxyHealthCheck == nil && config.KubeProxyHealtzPort != 0 {
+	if dp.bpfProxyHealthCheck == nil && config.KubeProxyHealtzPort != 0 {
 		var err error
-		config.BPFProxyHealthCheck, err = bpfproxy.NewHealthCheck(
+		dp.bpfProxyHealthCheck, err = bpfproxy.NewHealthCheck(
 			config.KubeClientSet,
 			config.Hostname,
 			config.KubeProxyHealtzPort,
@@ -2930,8 +2935,8 @@ func startBPFDataplaneComponents(
 		bpfproxy.WithCTLBUDPAffinityTimeout(config.CTLBUDPAffinityTimeout()),
 	}
 
-	if config.BPFProxyHealthCheck != nil {
-		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithHealthCheck(config.BPFProxyHealthCheck))
+	if dp.bpfProxyHealthCheck != nil {
+		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithHealthCheck(dp.bpfProxyHealthCheck))
 	} else {
 		log.Info("No healthz server configured for BPF kube-proxy.")
 	}
