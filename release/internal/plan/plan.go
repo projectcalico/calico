@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -178,17 +179,19 @@ func (p *Plan) Run() (err error) {
 		if n.Do == nil {
 			continue
 		}
-		logrus.WithField("step", n.Name).Info("Running")
+		log := logrus.WithField("step", n.Name)
+		log.Info("Running")
+		start := time.Now()
 		if err = n.Do(); err != nil {
 			return fmt.Errorf("%s: %w", n.Name, err)
 		}
 		done = append(done, n)
-		if n.Verify == nil {
-			continue
+		if n.Verify != nil {
+			if err = n.Verify(); err != nil {
+				return fmt.Errorf("%s: verify: %w", n.Name, err)
+			}
 		}
-		if err = n.Verify(); err != nil {
-			return fmt.Errorf("%s: verify: %w", n.Name, err)
-		}
+		log.WithField("duration", time.Since(start).Round(time.Second)).Info("Done")
 	}
 	return nil
 }

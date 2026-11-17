@@ -77,7 +77,7 @@ func (s settings) run(component, target string, arches []string, logName string)
 
 	log.Info("Building")
 	for attempt := 0; ; attempt++ {
-		out, err := command.Make(s.Runner(), dir).Run([]string{target}, command.WithEnv(vars...), command.WithLogFile(s.LogPath(logName)))
+		out, err := command.Make(s.Runner(), dir).Run([]string{target}, command.WithEnv(vars...), command.WithLogFile(s.LogPath(logName)), command.WithTiming(log))
 		if err == nil {
 			log.Debug(out)
 			return nil
