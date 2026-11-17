@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package livemigration
 
 import (
 	"bytes"
@@ -47,26 +47,30 @@ type garpHandle interface {
 	gopacket.PacketDataSource
 }
 
-// liveMigrationStateUpdate records a per-workload FSM state change that the
-// liveMigrationMonitor needs to forward to its listeners (the endpoint managers).
-type liveMigrationStateUpdate struct {
-	ID    types.WorkloadEndpointID
-	State liveMigrationState
+type Listener interface {
+	OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state State)
 }
 
-// liveMigrationMonitor tracks per-workload live migration state that cannot be inferred
+// liveMigrationStateUpdate records a per-workload FSM state change that the
+// Monitor needs to forward to its listeners (the endpoint managers).
+type liveMigrationStateUpdate struct {
+	ID    types.WorkloadEndpointID
+	State State
+}
+
+// Monitor tracks per-workload live migration state that cannot be inferred
 // statelessly from the datastore.  It sees WorkloadEndpoint updates, extracts the live
 // migration role, and drives a per-workload FSM whose state changes are forwarded to the
-// endpoint managers via the liveMigrationListener interface during ResolveUpdateBatch.
+// endpoint managers via the Listener interface during ResolveUpdateBatch.
 //
 // There is one endpoint manager per IP version, and each keeps its own live migration state,
 // so every state change must be forwarded to all of them: a monitor with only the IPv4
 // manager registered would leave IPv6 workload routes unsuppressed and unelevated.
-type liveMigrationMonitor struct {
+type Monitor struct {
 	roles           map[types.WorkloadEndpointID]proto.LiveMigrationRole
 	fsms            map[types.WorkloadEndpointID]*liveMigrationFSM
 	pendingUpdates  []liveMigrationStateUpdate
-	listeners       []liveMigrationListener
+	listeners       []Listener
 	timerC          chan types.WorkloadEndpointID
 	garpC           chan types.WorkloadEndpointID
 	ifaceNames      map[types.WorkloadEndpointID]string
@@ -88,8 +92,8 @@ type liveMigrationMonitor struct {
 	) error
 }
 
-func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Interface) *liveMigrationMonitor {
-	return &liveMigrationMonitor{
+func NewMonitor(convergenceTime time.Duration, ipamClient ipam.Interface) *Monitor {
+	return &Monitor{
 		roles:      make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
 		fsms:       make(map[types.WorkloadEndpointID]*liveMigrationFSM),
 		timerC:     make(chan types.WorkloadEndpointID),
@@ -106,17 +110,33 @@ func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Inte
 	}
 }
 
-// registerListener adds a listener - in production, one endpoint manager per IP version -
+// RegisterListener adds a listener - in production, one endpoint manager per IP version -
 // that should be told about every FSM state change.
-func (m *liveMigrationMonitor) registerListener(l liveMigrationListener) {
+func (m *Monitor) RegisterListener(l Listener) {
 	m.listeners = append(m.listeners, l)
 }
 
+// TimerC delivers the workloads whose FSM timer has popped; the dataplane
+// passes each to OnTimerPop on its main loop.
+func (m *Monitor) TimerC() <-chan types.WorkloadEndpointID {
+	return m.timerC
+}
+
+// GARPC delivers the workloads for which a GARP or RARP was seen; the dataplane
+// passes each to OnGARPDetected on its main loop.
+func (m *Monitor) GARPC() <-chan types.WorkloadEndpointID {
+	return m.garpC
+}
+
+func (m *Monitor) ListenerCount() int {
+	return len(m.listeners)
+}
+
 // ResolveUpdateBatch drains accumulated FSM state changes and forwards them to each
-// registered listener via the liveMigrationListener interface.  This runs before
+// registered listener via the Listener interface.  This runs before
 // CompleteDeferredWork, so the endpoint managers see the state changes before they
 // program the dataplane.
-func (m *liveMigrationMonitor) ResolveUpdateBatch() error {
+func (m *Monitor) ResolveUpdateBatch() error {
 	for _, update := range m.pendingUpdates {
 		for _, l := range m.listeners {
 			l.OnLiveMigrationStateUpdate(update.ID, update.State)
@@ -145,7 +165,7 @@ func parseWEPIPs(ep *proto.WorkloadEndpoint) []cnet.IP {
 	return ips
 }
 
-func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
+func (m *Monitor) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.WorkloadEndpointUpdate:
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
@@ -184,7 +204,7 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 // different UID from the last one seen.  We don't expect that, because it means the LiveMigration
 // was replaced mid-migration.  The FSM carries on, and keeps logging the UID that it started with,
 // so that all of its logs can be correlated.
-func (m *liveMigrationMonitor) checkForMigrationUIDChange(
+func (m *Monitor) checkForMigrationUIDChange(
 	id types.WorkloadEndpointID,
 	role proto.LiveMigrationRole,
 	uid string,
@@ -204,7 +224,7 @@ func (m *liveMigrationMonitor) checkForMigrationUIDChange(
 // is discarded when it returns to the Base state, so it normally lives for one migration, and the
 // migration's UID can be fixed in its log context.  That way the UID is still logged after the
 // LiveMigration resource has been deleted, which clears it from the workload.
-func (m *liveMigrationMonitor) newFSM(id types.WorkloadEndpointID, migrationUID string) *liveMigrationFSM {
+func (m *Monitor) newFSM(id types.WorkloadEndpointID, migrationUID string) *liveMigrationFSM {
 	return &liveMigrationFSM{
 		logCtx: logrus.WithFields(logrus.Fields{
 			"id":           id,
@@ -212,7 +232,7 @@ func (m *liveMigrationMonitor) newFSM(id types.WorkloadEndpointID, migrationUID 
 		}),
 		id:                 id,
 		monitor:            m,
-		currentState:       liveMigrationStateBase,
+		currentState:       StateBase,
 		latestMigrationUID: migrationUID,
 	}
 }
@@ -220,7 +240,7 @@ func (m *liveMigrationMonitor) newFSM(id types.WorkloadEndpointID, migrationUID 
 // executeFSM delivers an input to the workload's FSM.  No FSM means the Base state, where only a
 // Target input does anything, so only a Target input creates an FSM, with the given migrationUID.
 // For any other input, migrationUID is ignored.
-func (m *liveMigrationMonitor) executeFSM(
+func (m *Monitor) executeFSM(
 	id types.WorkloadEndpointID,
 	input liveMigrationInput,
 	migrationUID string,
@@ -238,7 +258,7 @@ func (m *liveMigrationMonitor) executeFSM(
 		m.fsms[id] = fsm
 	}
 	fsm.handleInput(input)
-	if fsm.currentState == liveMigrationStateBase {
+	if fsm.currentState == StateBase {
 		delete(m.fsms, id)
 	}
 }
@@ -274,7 +294,7 @@ func (i liveMigrationInput) String() string {
 	}
 }
 
-// liveMigrationState represents the current state of the per-workload FSM.
+// State represents the current state of the per-workload FSM.
 //
 // FSM table (rows = inputs, columns = current state, cells = next state, empty = no-op):
 //
@@ -287,24 +307,24 @@ func (i liveMigrationInput) String() string {
 //    | Source       |        | Base     | Base     | Base     |
 //    | Deleted      |        | Base     | Base     | Base     |
 
-type liveMigrationState int
+type State int
 
 const (
-	liveMigrationStateBase liveMigrationState = iota
-	liveMigrationStateTarget
-	liveMigrationStateLive
-	liveMigrationStateTimeWait
+	StateBase State = iota
+	StateTarget
+	StateLive
+	StateTimeWait
 )
 
-func (s liveMigrationState) String() string {
+func (s State) String() string {
 	switch s {
-	case liveMigrationStateBase:
+	case StateBase:
 		return "Base"
-	case liveMigrationStateTarget:
+	case StateTarget:
 		return "Target"
-	case liveMigrationStateLive:
+	case StateLive:
 		return "Live"
-	case liveMigrationStateTimeWait:
+	case StateTimeWait:
 		return "TimeWait"
 	default:
 		return fmt.Sprintf("Unknown(%d)", int(s))
@@ -314,8 +334,8 @@ func (s liveMigrationState) String() string {
 type liveMigrationFSM struct {
 	logCtx       *logrus.Entry
 	id           types.WorkloadEndpointID
-	monitor      *liveMigrationMonitor
-	currentState liveMigrationState
+	monitor      *Monitor
+	currentState State
 
 	// latestMigrationUID starts as the UID in logCtx, and changes only if the LiveMigration is
 	// replaced.
@@ -335,47 +355,47 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 
 	next := f.currentState
 	switch f.currentState {
-	case liveMigrationStateBase:
+	case StateBase:
 		switch input {
 		case liveMigrationInputTarget:
-			next = liveMigrationStateTarget
+			next = StateTarget
 		}
-	case liveMigrationStateTarget:
+	case StateTarget:
 		switch input {
 		case liveMigrationInputGARPDetected:
-			next = liveMigrationStateLive
+			next = StateLive
 		case liveMigrationInputNoRole:
 			// Live migration completed but we missed the GARP.  Go straight to
 			// TimeWait to allow routing to settle before reverting to normal.
-			next = liveMigrationStateTimeWait
+			next = StateTimeWait
 		case liveMigrationInputSource:
-			next = liveMigrationStateBase
+			next = StateBase
 		case liveMigrationInputDeleted:
-			next = liveMigrationStateBase
+			next = StateBase
 		}
-	case liveMigrationStateLive:
+	case StateLive:
 		switch input {
 		case liveMigrationInputNoRole:
 			// Live migration complete.  Start the timer to allow routing to
 			// settle everywhere before reverting to normal routing.
-			next = liveMigrationStateTimeWait
+			next = StateTimeWait
 		case liveMigrationInputSource:
 			// Re-migration: this WEP is now the source of a new live migration.
-			next = liveMigrationStateBase
+			next = StateBase
 		case liveMigrationInputDeleted:
-			next = liveMigrationStateBase
+			next = StateBase
 		}
-	case liveMigrationStateTimeWait:
+	case StateTimeWait:
 		switch input {
 		case liveMigrationInputNoRole:
 			// Already in TimeWait; no-op (timer is already running).
 		case liveMigrationInputTimerPop:
-			next = liveMigrationStateBase
+			next = StateBase
 		case liveMigrationInputSource:
 			// Re-migration: this WEP is now the source of a new live migration.
-			next = liveMigrationStateBase
+			next = StateBase
 		case liveMigrationInputDeleted:
-			next = liveMigrationStateBase
+			next = StateBase
 		}
 	}
 
@@ -387,19 +407,19 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 
 		// Do actions that we should always do when leaving a state.
 		switch f.currentState {
-		case liveMigrationStateTarget:
+		case StateTarget:
 			f.stopGARPDetection()
-		case liveMigrationStateTimeWait:
+		case StateTimeWait:
 			f.stopElevatedRoutingTimer()
 		}
 
 		// Do actions that we should always do when entering a state.
 		switch next {
-		case liveMigrationStateTarget:
+		case StateTarget:
 			f.startGARPDetection()
-		case liveMigrationStateLive:
+		case StateLive:
 			f.startIPAMOwnerSwap()
-		case liveMigrationStateTimeWait:
+		case StateTimeWait:
 			f.startIPAMOwnerSwap()
 			f.startElevatedRoutingTimer()
 		}
@@ -412,7 +432,7 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 	}
 }
 
-func (f *liveMigrationFSM) emitStateChange(next liveMigrationState) {
+func (f *liveMigrationFSM) emitStateChange(next State) {
 	f.monitor.pendingUpdates = append(f.monitor.pendingUpdates, liveMigrationStateUpdate{
 		ID:    f.id,
 		State: next,
@@ -515,7 +535,7 @@ func (f *liveMigrationFSM) stopElevatedRoutingTimer() {
 
 // OnGARPDetected is called by the main loop when a GARP/RARP packet is
 // detected on a workload's interface.
-func (m *liveMigrationMonitor) OnGARPDetected(id types.WorkloadEndpointID) {
+func (m *Monitor) OnGARPDetected(id types.WorkloadEndpointID) {
 	m.executeFSM(id, liveMigrationInputGARPDetected, "")
 }
 
@@ -523,9 +543,9 @@ func (m *liveMigrationMonitor) OnGARPDetected(id types.WorkloadEndpointID) {
 // prevented at source: stopElevatedRoutingTimer() waits for the timer goroutine to exit before
 // returning, so a pop that does get through here was sent by a timer that had not been stopped.
 // The state check here is kept as cheap defence in depth.
-func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
+func (m *Monitor) OnTimerPop(id types.WorkloadEndpointID) {
 	fsm, exists := m.fsms[id]
-	if !exists || fsm.currentState != liveMigrationStateTimeWait {
+	if !exists || fsm.currentState != StateTimeWait {
 		logrus.WithField("id", id).Debug("Ignoring stale timer pop for workload not in TimeWait")
 		return
 	}
@@ -662,7 +682,7 @@ func (f *liveMigrationFSM) doIPAMOwnerSwap() {
 	}()
 }
 
-func (m *liveMigrationMonitor) CompleteDeferredWork() error {
+func (m *Monitor) CompleteDeferredWork() error {
 	// Nothing to do; state changes are forwarded in ResolveUpdateBatch.
 	return nil
 }
