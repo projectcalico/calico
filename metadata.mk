@@ -2,16 +2,16 @@
 # This file contains Makefile configuration parameters and metadata for this branch.
 #################################################################################################
 # The project Go version
-GO_VERSION=1.27.2
+GO_VERSION=1.27.4
 # Version of Kubernetes to use for dependencies, tests, registry.k8s.io/kubectl, and kubectl binary release.
-K8S_VERSION=v1.37.1
+K8S_VERSION=v1.38.0-beta.0
 # The version of LLVM to use for go-build and calico/base images.
-LLVM_VERSION=21.1.8
+LLVM_VERSION=22.1.8
 # Calico toolchain versions and the calico/base image to use.
 # Set when go-build is rebuilt for the same Go/LLVM/Kubernetes versions, which is
 # published as -1, -2 and so on. Empty for a normal tag; clear it whenever any of
 # those three versions moves.
-GO_BUILD_VER_SUFFIX=-2
+GO_BUILD_VER_SUFFIX=
 GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)$(GO_BUILD_VER_SUFFIX)
 RUST_BUILD_VER=1.99.1
 
