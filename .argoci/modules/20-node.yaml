@@ -21,10 +21,14 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
+      # etcd and kube-apiserver run as processes in the pod.
+      - name: NATIVE_GO_BUILD
+        value: "true"
     depends: [check-go]
-    requests: {cpu: 4250m, memory: 3Gi}
-    services:
-      - docker
+    requests: {cpu: 4250m, memory: 6Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     commands: |
       cd node
       make ut

@@ -1,7 +1,12 @@
-FROM quay.io/coreos/etcd:v3.6.0 AS etcd
+# The versions come from the Makefile, which a native run installs from too.
+ARG ETCD_VERSION
+ARG PYTHON_VERSION
 
-FROM python:3.8
+FROM quay.io/coreos/etcd:${ETCD_VERSION} AS etcd
+
+FROM python:${PYTHON_VERSION}
 
 COPY --from=etcd /usr/local/bin/etcd /usr/local/bin/etcd
 
-RUN pip3 install tox==3.28.0
+ARG TOX_VERSION
+RUN pip3 install tox==${TOX_VERSION}

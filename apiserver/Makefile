@@ -41,11 +41,9 @@ lint-cache-dir:
 .PHONY: ut
 ut: lint-cache-dir run-etcd
 	mkdir -p report
-	$(DOCKER_RUN) \
-	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
-	$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" gotestsum --junitfile report/apiserver_ut.xml -- $(UNIT_TEST_FLAGS) \
-			$(addprefix $(PACKAGE_NAME)/,$(TEST_DIRS))'
+	$(DOCKER_GO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) cd $(BUILD_REPO_ROOT)/apiserver && CALICO_API_GROUP=$(CALICO_API_GROUP) ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" \
+			gotestsum --junitfile report/apiserver_ut.xml -- $(UNIT_TEST_FLAGS) $(addprefix $(PACKAGE_NAME)/,$(TEST_DIRS))'
 
 .PHONY: st
 st:
@@ -67,27 +65,22 @@ hack-lib:
 	$(call fetch_file,$(GITHUB_TEST_INTEGRATION_URI)/etcd.sh,hack/lib/etcd.sh)
 
 ## Run a local kubernetes server with API in a container.
-run-kubernetes-server: run-k8s-controller-manager
-	# Create a Node in the API for the tests to use.
-	docker run \
-		--net=host \
-		--rm \
-		-v  $(CURDIR):/manifests \
-		-v $(CERTS_PATH):/home/user/certs \
-		registry.k8s.io/kubectl:$(K8S_VERSION) \
-		--kubeconfig=/home/user/certs/kubeconfig \
-		apply -f /manifests/test/mock-node.yaml
+ifeq ($(NATIVE_GO_BUILD),true)
+TEST_MANIFESTS := $(CURDIR)/test
+APPLY_TEST_MANIFESTS = kubectl --kubeconfig=$(TEST_KUBECONFIG) apply
+else
+TEST_MANIFESTS := /manifests/test
+APPLY_TEST_MANIFESTS = docker run --net=host --rm \
+	-v $(CURDIR):/manifests \
+	-v $(CERTS_PATH):/home/user/certs \
+	registry.k8s.io/kubectl:$(K8S_VERSION) \
+	--kubeconfig=/home/user/certs/kubeconfig apply
+endif
 
-	# Create Namespaces required by namespaced Calico `NetworkPolicy`
-	# tests from the manifests namespaces.yaml.
-	docker run \
-		--net=host \
-		--rm \
-		-v  $(CURDIR):/manifests \
-		-v $(CERTS_PATH):/home/user/certs \
-		registry.k8s.io/kubectl:$(K8S_VERSION) \
-		--kubeconfig=/home/user/certs/kubeconfig \
-		apply -f /manifests/test/namespaces.yaml
+run-kubernetes-server: run-k8s-controller-manager
+	# Create a Node in the API for the tests to use, and the Namespaces that
+	# namespaced Calico `NetworkPolicy` tests need.
+	$(APPLY_TEST_MANIFESTS) -f $(TEST_MANIFESTS)/mock-node.yaml -f $(TEST_MANIFESTS)/namespaces.yaml
 
 ## Stop the local kubernetes server
 stop-kubernetes-server: stop-k8s-controller-manager
@@ -101,20 +94,15 @@ fv: fv-kdd
 
 .PHONY: fv-etcd
 fv-etcd: run-kubernetes-server hack-lib
-	$(DOCKER_RUN) \
-		-v $(CERTS_PATH):/home/user/certs \
-		-e KUBECONFIG=/home/user/certs/kubeconfig \
-		$(CALICO_BUILD) \
-		sh -c 'ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" test/integration.sh'
+	$(DOCKER_GO_BUILD_WITH_CERTS) \
+		sh -c 'cd $(BUILD_REPO_ROOT)/apiserver && KUBECONFIG=$(TEST_KUBECONFIG) \
+			ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" test/integration.sh'
 
 .PHONY: fv-kdd
 fv-kdd: run-kubernetes-server hack-lib
-	$(DOCKER_RUN) \
-		-v $(CERTS_PATH):/home/user/certs \
-		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
-		-e KUBECONFIG=/home/user/certs/kubeconfig \
-		$(CALICO_BUILD) \
-		sh -c 'DATASTORE_TYPE="kubernetes" test/integration.sh'
+	$(DOCKER_GO_BUILD_WITH_CERTS) \
+		sh -c 'cd $(BUILD_REPO_ROOT)/apiserver && KUBECONFIG=$(TEST_KUBECONFIG) \
+			CALICO_API_GROUP=$(CALICO_API_GROUP) DATASTORE_TYPE="kubernetes" test/integration.sh'
 
 .PHONY: clean
 clean: clean-hack-lib
