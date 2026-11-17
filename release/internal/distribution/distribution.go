@@ -27,14 +27,9 @@ import (
 // The name becomes the log directory, so it is qualified: a bare "publish"
 // would collide with another group's.
 const (
-	sumsStep      = "distribution-sha256sums"
 	artifactsStep = "distribution-publish-artifacts"
-	sumsFileName  = "SHA256SUMS"
 
-	ChecksumStep           = "checksums"
 	HashreleasePublishStep = "hashrelease"
-	GithubTagStep          = "github-tag"
-	GithubReleaseStep      = "github-release"
 )
 
 type Handler interface {
@@ -58,13 +53,13 @@ type Upload struct {
 }
 
 // A handler that finds its own content does not implement this.
-type validator interface {
+type Validator interface {
 	Validate(u Upload) error
 }
 
 // Only a handler that publishes files where users download them lists them.
-type artifactLister interface {
-	artifacts(src string) ([]outputs.ArtifactFile, error)
+type ArtifactLister interface {
+	Artifacts(src string) ([]outputs.ArtifactFile, error)
 }
 
 // Metadata is the artifacts' section of the release metadata.
@@ -81,11 +76,11 @@ func Metadata(pipeline []Upload) ([]outputs.Artifact, error) {
 func artifactFiles(pipeline []Upload) ([]outputs.ArtifactFile, error) {
 	var files []outputs.ArtifactFile
 	for _, u := range pipeline {
-		l, ok := u.Handler.(artifactLister)
+		l, ok := u.Handler.(ArtifactLister)
 		if u.Skip || !ok {
 			continue
 		}
-		f, err := l.artifacts(u.Source)
+		f, err := l.Artifacts(u.Source)
 		if err != nil {
 			return nil, fmt.Errorf("artifacts of %s: %w", u.label(), err)
 		}
@@ -110,7 +105,7 @@ func (u Upload) validate() error {
 	if u.Handler == nil {
 		return fmt.Errorf("upload of %s has no destination", u.Source)
 	}
-	if v, ok := u.Handler.(validator); ok {
+	if v, ok := u.Handler.(Validator); ok {
 		return v.Validate(u)
 	}
 	return nil

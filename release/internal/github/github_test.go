@@ -25,22 +25,21 @@ import (
 )
 
 // Pinned to literals: deriving them from the builders would pass for any URL.
-func TestDownloadURL(t *testing.T) {
+func TestRepo(t *testing.T) {
+	r := Repo{Org: "projectcalico", Name: "calico"}
 	for _, tc := range []struct {
 		name string
-		file []string
+		got  string
 		want string
 	}{
-		{"release", nil, "https://github.com/projectcalico/calico/releases/download/v3.30.0"},
-		{"artifact", []string{"SHA256SUMS"}, "https://github.com/projectcalico/calico/releases/download/v3.30.0/SHA256SUMS"},
+		{"release downloads", r.DownloadURL("v3.30.0"), "https://github.com/projectcalico/calico/releases/download/v3.30.0"},
+		{"an artifact", r.DownloadURL("v3.30.0", "SHA256SUMS"), "https://github.com/projectcalico/calico/releases/download/v3.30.0/SHA256SUMS"},
+		{"a file on a branch", r.BlobURL("release-v3.30", "release-notes/v3.30.0-release-notes.md"), "https://github.com/projectcalico/calico/blob/release-v3.30/release-notes/v3.30.0-release-notes.md"},
+		{"open PRs from a branch", r.OpenPRsURL("prep"), "https://github.com/projectcalico/calico/pulls?q=is%3Aopen+head%3Aprep"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := DownloadURL("projectcalico", "calico", "v3.30.0", tc.file...)
-			if err != nil {
-				t.Fatalf("building url: %v", err)
-			}
-			if got != tc.want {
-				t.Errorf("got %q, want %q", got, tc.want)
+			if tc.got != tc.want {
+				t.Errorf("got %q, want %q", tc.got, tc.want)
 			}
 		})
 	}

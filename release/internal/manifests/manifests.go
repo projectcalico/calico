@@ -129,14 +129,13 @@ var validateAssert = func(m Manifests) error {
 }
 
 func defaultEnv(m Manifests) []string {
-	e := []string{
+	return []string{
 		env.Var(env.ProductVersion, m.Version),
 		env.Var(env.OperatorVersion, m.Operator.Version),
 		env.Var(env.OperatorRegistryOverride, m.Operator.Registry),
 		env.Var(env.OperatorImageOverride, m.Operator.Image),
 		env.Var(env.Registry, m.Registry),
 	}
-	return e
 }
 
 // A replacement, not an append hook: a product can drop or rewrite a variable.
