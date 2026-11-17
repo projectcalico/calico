@@ -52,9 +52,6 @@ GIT_REPO_SLUG ?= $(ORGANIZATION)/$(GIT_REPO)
 # Configure git to access repositories using SSH.
 GIT_USE_SSH = true
 
-# The version of BIRD to use for calico/node builds and confd tests.
-BIRD_VERSION=v0.3.3-211-g9111ec3c
-
 # Patched BIRD shipped in calico/node, and run by tests as an external BGP
 # router. Built by hack/rpms/bird/ and consumed via calico/bird:<sha>-<arch>.
 BIRD_VER=1.6.8
