@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package dscp
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -34,6 +34,18 @@ var (
 	_ = Describe("DSCP manager - IPv6", dscpManagerTests(6))
 )
 
+var wlEPID1 = proto.WorkloadEndpointID{
+	OrchestratorId: "k8s",
+	WorkloadId:     "pod-11",
+	EndpointId:     "endpoint-id-11",
+}
+
+var wlEPID2 = proto.WorkloadEndpointID{
+	OrchestratorId: "k8s",
+	WorkloadId:     "pod-12",
+	EndpointId:     "endpoint-id-12",
+}
+
 func dscpManagerTests(ipVersion uint8) func() {
 	return func() {
 		var (
@@ -54,7 +66,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 				MarkDrop:     0x10,
 				MarkEndpoint: 0x11110000,
 			}, false)
-			manager = newDSCPManager(ipSets, mangleTable, ruleRenderer, ipVersion,
+			manager = NewManager(ipSets, mangleTable, ruleRenderer, ipVersion,
 				dataplanedefs.Config{
 					MaxIPSetSize: 1024,
 					Hostname:     "node1",

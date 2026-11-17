@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package policy
 
 import (
 	"fmt"
@@ -49,7 +49,7 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 			mangleTable = dptest.NewMockTable("mangle")
 			filterTable = dptest.NewMockTable("filter")
 			ruleRenderer = newMockPolRenderer()
-			policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, ipVersion, false)
+			policyMgr = NewManager(rawTable, mangleTable, filterTable, ruleRenderer, ipVersion, false)
 		})
 
 		It("shouldn't touch iptables", func() {
@@ -291,7 +291,7 @@ var _ = Describe("Raw egress policy manager", func() {
 			MarkEndpoint:        0xff00,
 			MarkNonCaliEndpoint: 0x0100,
 		}, false)
-		policyMgr = newRawEgressPolicyManager(
+		policyMgr = NewRawEgressManager(
 			rawTable,
 			ruleRenderer,
 			4,

@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
 
-package intdataplane
+package flowtable
 
 import (
 	"regexp"
@@ -33,7 +33,7 @@ func (h *recordingHandler) SetExternalDevices(ifces []string) {
 var _ = Describe("flowtableManager", func() {
 	It("tracks external interfaces matching the pattern and ignores others", func() {
 		h := &recordingHandler{}
-		m := newFlowtableManager([]flowtableTarget{{handler: h}}, regexp.MustCompile("^eth"))
+		m := NewManager([]Target{{Handler: h}}, regexp.MustCompile("^eth"))
 
 		m.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "eth0", State: ifacemonitor.StateUp})
 		m.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "cali123", State: ifacemonitor.StateUp})
@@ -47,7 +47,7 @@ var _ = Describe("flowtableManager", func() {
 
 	It("only offloads overlay devices once they exist", func() {
 		h := &recordingHandler{}
-		m := newFlowtableManager([]flowtableTarget{{handler: h, overlayDevices: []string{"vxlan.calico", "tunl0"}}}, nil)
+		m := NewManager([]Target{{Handler: h, OverlayDevices: []string{"vxlan.calico", "tunl0"}}}, nil)
 
 		// Before any device comes up the overlay set is empty, so the flowtable references nothing
 		// the kernel lacks.
@@ -66,9 +66,9 @@ var _ = Describe("flowtableManager", func() {
 	It("routes each overlay device only to the handler that owns it", func() {
 		v4 := &recordingHandler{}
 		v6 := &recordingHandler{}
-		m := newFlowtableManager([]flowtableTarget{
-			{handler: v4, overlayDevices: []string{"vxlan.calico"}},
-			{handler: v6, overlayDevices: []string{"vxlan-v6.calico"}},
+		m := NewManager([]Target{
+			{Handler: v4, OverlayDevices: []string{"vxlan.calico"}},
+			{Handler: v6, OverlayDevices: []string{"vxlan-v6.calico"}},
 		}, regexp.MustCompile("^eth"))
 
 		m.OnUpdate(&dataplanedefs.IfaceStateUpdate{Name: "vxlan.calico", State: ifacemonitor.StateUp})
@@ -95,7 +95,7 @@ var _ = Describe("flowtableExclusionManager", func() {
 
 	BeforeEach(func() {
 		ipSets = dpsets.NewMockIPSets()
-		m = newFlowtableExclusionManager(ipSets, 4, 1024)
+		m = NewExclusionManager(ipSets, 4, 1024)
 	})
 
 	members := func() []string {
@@ -181,7 +181,7 @@ var _ = Describe("flowtableExclusionManager", func() {
 	})
 
 	It("tracks the IPs of the configured family only", func() {
-		v6 := newFlowtableExclusionManager(ipSets, 6, 1024)
+		v6 := NewExclusionManager(ipSets, 6, 1024)
 		v6.OnUpdate(&proto.WorkloadEndpointUpdate{Id: wepID, Endpoint: &proto.WorkloadEndpoint{
 			Ipv4Nets:    []string{"10.65.0.2/32"},
 			Ipv6Nets:    []string{"dead:beef::2/128"},

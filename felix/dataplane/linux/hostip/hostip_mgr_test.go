@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package hostip
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -31,7 +31,7 @@ var _ = Describe("Host ip manager", func() {
 
 	BeforeEach(func() {
 		ipSets = dpsets.NewMockIPSets()
-		hostIPMgr = newHostIPManager([]string{"cali"}, "this-host", ipSets, 1024)
+		hostIPMgr = NewManager([]string{"cali"}, "this-host", ipSets, 1024)
 	})
 
 	Describe("after sending a replace", func() {

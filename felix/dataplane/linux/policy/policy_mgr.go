@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package policy
 
 import (
 	"slices"
@@ -49,7 +49,7 @@ type policyRenderer interface {
 	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
 }
 
-func newPolicyManager(rawTable, mangleTable, filterTable dataplanedefs.Table, ruleRenderer policyRenderer, ipVersion uint8, nft bool) *policyManager {
+func NewManager(rawTable, mangleTable, filterTable dataplanedefs.Table, ruleRenderer policyRenderer, ipVersion uint8, nft bool) *policyManager {
 	return &policyManager{
 		rawTable:        rawTable,
 		mangleTable:     mangleTable,
@@ -60,7 +60,7 @@ func newPolicyManager(rawTable, mangleTable, filterTable dataplanedefs.Table, ru
 	}
 }
 
-func newRawEgressPolicyManager(rawTable dataplanedefs.Table, ruleRenderer policyRenderer, ipVersion uint8,
+func NewRawEgressManager(rawTable dataplanedefs.Table, ruleRenderer policyRenderer, ipVersion uint8,
 	ipSetsCallback func(neededIPSets set.Set[string]),
 	nft bool,
 ) *policyManager {

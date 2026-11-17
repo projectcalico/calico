@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
 
-package intdataplane
+package flowtable
 
 import (
 	"regexp"
@@ -20,12 +20,12 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// flowtableTarget pairs a flowtable handler with the overlay/tunnel devices that belong in its
+// Target pairs a flowtable handler with the overlay/tunnel devices that belong in its
 // flowtable. Overlay device names are IP-version specific (vxlan.calico vs vxlan-v6.calico), so
 // each handler carries its own list rather than sharing one.
-type flowtableTarget struct {
-	handler        nftables.FlowTableHandler
-	overlayDevices []string
+type Target struct {
+	Handler        nftables.FlowTableHandler
+	OverlayDevices []string
 }
 
 // flowtableManager keeps each nftables flowtable's device set in sync with the host interfaces
@@ -36,7 +36,7 @@ type flowtableTarget struct {
 // interfaces (matched against the configured pattern, shared by all handlers). Workload veths are
 // gated separately by the endpoint manager.
 type flowtableManager struct {
-	targets       []flowtableTarget
+	targets       []Target
 	devicePattern *regexp.Regexp
 
 	// activeOverlay holds overlay device names, and activeExternal pattern-matched interfaces,
@@ -48,7 +48,7 @@ type flowtableManager struct {
 	dirty bool
 }
 
-func newFlowtableManager(targets []flowtableTarget, devicePattern *regexp.Regexp) *flowtableManager {
+func NewManager(targets []Target, devicePattern *regexp.Regexp) *flowtableManager {
 	return &flowtableManager{
 		targets:        targets,
 		devicePattern:  devicePattern,
@@ -90,7 +90,7 @@ func (m *flowtableManager) OnUpdate(protoBufMsg any) {
 
 func (m *flowtableManager) isOverlayDevice(name string) bool {
 	for _, t := range m.targets {
-		for _, d := range t.overlayDevices {
+		for _, d := range t.OverlayDevices {
 			if d == name {
 				return true
 			}
@@ -107,15 +107,15 @@ func (m *flowtableManager) CompleteDeferredWork() error {
 	external := m.activeExternal.Slice()
 	sort.Strings(external)
 	for _, t := range m.targets {
-		overlay := make([]string, 0, len(t.overlayDevices))
-		for _, d := range t.overlayDevices {
+		overlay := make([]string, 0, len(t.OverlayDevices))
+		for _, d := range t.OverlayDevices {
 			if m.activeOverlay.Contains(d) {
 				overlay = append(overlay, d)
 			}
 		}
 		sort.Strings(overlay)
-		t.handler.SetOverlayDevices(overlay)
-		t.handler.SetExternalDevices(external)
+		t.Handler.SetOverlayDevices(overlay)
+		t.Handler.SetExternalDevices(external)
 	}
 	m.dirty = false
 
@@ -141,7 +141,7 @@ type flowtableExclusionManager struct {
 	logCtx *logrus.Entry
 }
 
-func newFlowtableExclusionManager(
+func NewExclusionManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	ipVersion uint8,
 	maxIPSetSize int,

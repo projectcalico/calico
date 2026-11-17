@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package serviceloop
 
 import (
 	"reflect"
@@ -44,7 +44,7 @@ type serviceLoopManager struct {
 	pendingGlobalBGPConfig *proto.GlobalBGPConfigUpdate
 }
 
-func newServiceLoopManager(
+func NewManager(
 	filterTable dataplanedefs.Table,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
