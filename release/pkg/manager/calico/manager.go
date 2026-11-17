@@ -661,7 +661,7 @@ func (r *CalicoManager) PreReleaseValidate() error {
 		return err
 	}
 	// Check that we're not already on a git tag.
-	out, err := r.git("describe", "--exact-match", "--tags", "HEAD")
+	out, err := r.git("describe", "--exact-match", "--tags", "--match", command.VersionTags, "HEAD")
 	if err == nil {
 		// On a current tag.
 		return fmt.Errorf("already on a tag (%s), refusing to create release", out)
@@ -1771,7 +1771,7 @@ func (r *CalicoManager) requireOnMainBranch(derived string) error {
 func (r *CalicoManager) cutPlan() (*branch.CutPlan, error) {
 	// Read the version from main, not HEAD: the branch is cut from main and its
 	// name and tags must derive from main's commit.
-	mainVersion, err := command.Git(r.runner).In(r.repoRoot).Run("describe", "--tags", "--abbrev=0", r.mainBranch)
+	mainVersion, err := command.Git(r.runner).In(r.repoRoot).LatestTag(r.mainBranch)
 	if err != nil {
 		return nil, fmt.Errorf("determining %s version: %w", r.mainBranch, err)
 	}

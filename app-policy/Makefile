@@ -71,7 +71,7 @@ ci: mod-download check-generated-files static-checks ut
 check-generated-files:
 	$(MAKE) clean
 	$(MAKE) protobuf
-	if (git describe --tags --dirty | grep -c dirty >/dev/null); then \
+	if ! git diff --quiet HEAD; then \
 	  echo "Generated files are out of date."; \
 	  false; \
 	else \
