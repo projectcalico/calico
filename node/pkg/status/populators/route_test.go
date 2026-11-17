@@ -24,7 +24,7 @@ var _ = Describe("Test BIRD BGP routes Scanner", func() {
 
 	It("should be able to scan routes", func() {
 
-		table := `0001 BIRD v0.3.3+birdv1.6.8 ready.
+		table := `0001 BIRD 1.6.8-1.tigera ready.
 1007-0.0.0.0/0          via 172.17.0.1 on eth0 [kernel1 20:10:57] * (10)
  192.168.110.128/26 via 172.17.0.5 on eth0 [Mesh_172_17_0_5 20:10:57] * (100/0) [i]
  192.168.82.0/26    via 172.17.0.4 on eth0 [Mesh_172_17_0_4 20:11:00] * (100/0) [i]
@@ -105,7 +105,7 @@ var _ = Describe("Test BIRD BGP routes Scanner", func() {
 
 	It("should be able to scan routes with multiple blackhole and unreachable routes", func() {
 
-		table := `0001 BIRD v0.3.3+birdv1.6.8 ready.
+		table := `0001 BIRD 1.6.8-1.tigera ready.
 1007-0.0.0.0/0          via 172.17.0.1 on eth0 [kernel1 20:10:57] * (10)
  192.168.69.128/26  blackhole [static1 09:23:20] * (200)
                    unreachable [Mesh_10_128_0_244 09:23:24 from 10.128.0.244] (100/-) [i]

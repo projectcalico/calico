@@ -70,6 +70,21 @@ else
     ssh -i "${EXT_KEY}" \
       -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=30 \
       "${EXT_USER:-ubuntu}@${EXT_IP}" -- 'sudo docker load' < "${_tar}"
+
+    # The BIRD router image is built from this repo too. A PR that changes
+    # hack/rpms/bird gives it a tag no registry has yet, so the external node
+    # could not pull it.
+    _bird_dir="${CI_HOME}/${CI_GIT_DIR}/hack/rpms/bird"
+    _bird="$(make --no-print-directory -C "${_bird_dir}" print-image-name)"
+    if docker manifest inspect "${_bird}" >/dev/null 2>&1; then
+      echo "[INFO] load_images: ${_bird} is published; the external node will pull it"
+    else
+      echo "[INFO] load_images: building ${_bird} and loading it into external node docker"
+      make -C "${_bird_dir}" image
+      docker save "${_bird}" | ssh -i "${EXT_KEY}" \
+        -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=30 \
+        "${EXT_USER:-ubuntu}@${EXT_IP}" -- 'sudo docker load'
+    fi
   fi
 
   rm -f "${_tar}"

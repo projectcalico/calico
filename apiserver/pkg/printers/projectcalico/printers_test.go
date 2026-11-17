@@ -50,14 +50,14 @@ func TestPrintCalicoNodeStatus(t *testing.T) {
 			Agent: calico.CalicoNodeAgentStatus{
 				BIRDV4: calico.BGPDaemonStatus{
 					State:                   calico.BGPDaemonStateReady,
-					Version:                 "v0.3.3+birdv1.6.8",
+					Version:                 "1.6.8-1.tigera",
 					RouterID:                "172.17.0.0",
 					LastBootTime:            "2021-09-19 20:48:56",
 					LastReconfigurationTime: "2021-09-19 20:48:56",
 				},
 				BIRDV6: calico.BGPDaemonStatus{
 					State:                   calico.BGPDaemonStateReady,
-					Version:                 "v0.3.3+birdv1.6.8",
+					Version:                 "1.6.8-1.tigera",
 					RouterID:                "2001:20::8",
 					LastBootTime:            "2021-09-19 20:48:56",
 					LastReconfigurationTime: "2021-09-19 20:48:56",

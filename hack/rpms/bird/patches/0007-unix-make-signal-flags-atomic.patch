@@ -1,0 +1,81 @@
+Subject: Unix: Make the reconfigure and dump signal flags atomic
+
+The main loop cleared each flag after it had handled the signal, so a
+signal that arrived during the handling was lost. Read and clear the flag
+in one atomic step, before the handling.
+
+Squashed from these projectcalico/bird commits, oldest first. Each keeps
+its author and message.
+
+commit 4db2e5e8c2b827c52e80c7dab0f3c4c4f30de1d5
+Author: tanguy.desreumaux <tanguy.desreumaux@ovhcloud.com>
+Date:   2022-03-29
+
+    Unix: Fix signals synchronization
+---
+ sysdep/unix/io.c   | 7 +++----
+ sysdep/unix/main.c | 5 +++--
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/sysdep/unix/io.c b/sysdep/unix/io.c
+index a90ddffd..dd5f338f 100644
+--- a/sysdep/unix/io.c
++++ b/sysdep/unix/io.c
+@@ -30,6 +30,7 @@
+ #include <netinet/tcp.h>
+ #include <netinet/udp.h>
+ #include <netinet/icmp6.h>
++#include <stdatomic.h>
+ 
+ #include "nest/bird.h"
+ #include "lib/lists.h"
+@@ -2178,18 +2179,16 @@ io_loop(void)
+        * and entering poll(), it gets caught on the next timer tick.
+        */
+ 
+-      if (async_config_flag)
++      if (atomic_exchange(&async_config_flag, 0))
+ 	{
+ 	  io_log_event(async_config, NULL);
+ 	  async_config();
+-	  async_config_flag = 0;
+ 	  continue;
+ 	}
+-      if (async_dump_flag)
++      if (atomic_exchange(&async_dump_flag, 0))
+ 	{
+ 	  io_log_event(async_dump, NULL);
+ 	  async_dump();
+-	  async_dump_flag = 0;
+ 	  continue;
+ 	}
+       if (async_shutdown_flag)
+diff --git a/sysdep/unix/main.c b/sysdep/unix/main.c
+index 7cf8da09..e891c544 100644
+--- a/sysdep/unix/main.c
++++ b/sysdep/unix/main.c
+@@ -21,6 +21,7 @@
+ #include <grp.h>
+ #include <sys/stat.h>
+ #include <libgen.h>
++#include <stdatomic.h>
+ 
+ #include "nest/bird.h"
+ #include "lib/lists.h"
+@@ -578,14 +579,14 @@ static void
+ handle_sighup(int sig UNUSED)
+ {
+   DBG("Caught SIGHUP...\n");
+-  async_config_flag = 1;
++  atomic_store(&async_config_flag, 1);
+ }
+ 
+ static void
+ handle_sigusr(int sig UNUSED)
+ {
+   DBG("Caught SIGUSR...\n");
+-  async_dump_flag = 1;
++  atomic_store(&async_dump_flag, 1);
+ }
+ 
+ static void
