@@ -35,7 +35,7 @@ import (
 
 // RouteProto identifies the netlink protocol that owns a kernel route. The
 // numeric values match the kernel's RTPROT_* constants. Felix-programmed
-// routes carry protocol 80 (felix/dataplane/linux/dataplanedefs.DefaultRouteProto);
+// routes carry protocol 80 (felix/dataplane/linux/route/routedefs.DefaultRouteProto);
 // BIRD-programmed routes carry protocol 12 (RTPROT_BIRD).
 type RouteProto int
 
