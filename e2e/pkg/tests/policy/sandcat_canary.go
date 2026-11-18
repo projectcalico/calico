@@ -16,7 +16,6 @@ package policy
 
 import (
 	"context"
-
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
