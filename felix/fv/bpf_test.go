@@ -1938,6 +1938,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 
 				if !testOpts.ipv6 && !testOpts.dsr && testOpts.protocol == "udp" && testOpts.udpUnConnected && !testOpts.connTimeEnabled {
+					udpProto := numorstring.ProtocolFromString("udp")
+					// The connectivity probe port and the pktgen port.
+					fragTestPorts := []numorstring.Port{numorstring.SinglePort(8055), numorstring.SinglePort(30444)}
+
 					It("should handle fragmented UDP from a pod", func() {
 						if testOpts.tunnel == "vxlan" && !utils.UbuntuReleaseGreater("22.04") {
 							Skip("Ubuntu too old to handle frag on vxlan dev properly")
@@ -1952,6 +1956,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						case "wireguard":
 							dev = "wireguard.cali"
 						}
+
+						// Fragments without an L4 header must still match a port-restricted rule.
+						pol.Spec.Ingress[0].Protocol = &udpProto
+						pol.Spec.Ingress[0].Destination.Ports = fragTestPorts
+						pol = updatePolicy(pol)
 
 						// pktgen sends once, so wait for policy on both nodes. Probe before
 						// tcpdump starts; probes match its filters.
@@ -2003,12 +2012,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							allowIngressFromExtClient.Name = "policy-ext-client"
 							allowIngressFromExtClient.Spec.Ingress = []api.Rule{
 								{
-									Action: "Allow",
+									Action:   "Allow",
+									Protocol: &udpProto,
 									Source: api.EntityRule{
 										Nets: []string{
 											containerIP(externalClient) + "/" + ipMask(),
 										},
 									},
+									Destination: api.EntityRule{Ports: fragTestPorts},
 								},
 							}
 

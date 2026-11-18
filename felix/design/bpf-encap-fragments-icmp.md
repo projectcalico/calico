@@ -233,6 +233,8 @@ The algorithm:
   ports and the disposition reached by policy. Subsequent fragments
   match on `(src_ip, dst_ip, ip_id)` and are allowed through without
   policy re-evaluation.
+  Every tc program does this lookup and drops a later fragment without an
+  entry: the host fragments too, e.g. to a pod's MTU on to-WEP.
   This holds for every protocol, ICMP included. An ICMP error or TCP
   RST that BPF sends in reply clears `CALI_ST_FIRST_FRAG`, so it
   records no entry of its own.
