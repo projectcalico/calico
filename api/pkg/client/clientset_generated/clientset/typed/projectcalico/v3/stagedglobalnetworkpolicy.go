@@ -27,6 +27,7 @@ type StagedGlobalNetworkPolicyInterface interface {
 	Create(ctx context.Context, stagedGlobalNetworkPolicy *projectcalicov3.StagedGlobalNetworkPolicy, opts v1.CreateOptions) (*projectcalicov3.StagedGlobalNetworkPolicy, error)
 	Update(ctx context.Context, stagedGlobalNetworkPolicy *projectcalicov3.StagedGlobalNetworkPolicy, opts v1.UpdateOptions) (*projectcalicov3.StagedGlobalNetworkPolicy, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
+	DeleteWithResult(ctx context.Context, name string, opts v1.DeleteOptions) (v1.APIResult, error)
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.StagedGlobalNetworkPolicy, error)
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.StagedGlobalNetworkPolicyList, error)

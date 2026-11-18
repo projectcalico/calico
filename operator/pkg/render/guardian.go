@@ -400,7 +400,7 @@ func (c *guardianComponent) container() []corev1.Container {
 				ProbeHandler: corev1.ProbeHandler{
 					HTTPGet: &corev1.HTTPGetAction{
 						Path: "/liveness",
-						Port: intstr.FromInt(9080),
+						Port: intstr.FromInt32(9080),
 					},
 				},
 				InitialDelaySeconds: 90,
@@ -409,7 +409,7 @@ func (c *guardianComponent) container() []corev1.Container {
 				ProbeHandler: corev1.ProbeHandler{
 					HTTPGet: &corev1.HTTPGetAction{
 						Path: "/readiness",
-						Port: intstr.FromInt(9080),
+						Port: intstr.FromInt32(9080),
 					},
 				},
 				InitialDelaySeconds: 10,

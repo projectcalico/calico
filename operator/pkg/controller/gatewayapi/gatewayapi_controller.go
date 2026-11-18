@@ -291,34 +291,24 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	if gatewayAPI.Spec.CRDManagement == nil && (err == nil || errors.IsAlreadyExists(err)) {
 		// The GatewayAPI CR does not yet have a specified value for its CRDManagement
 		// field, and we can now infer a reasonable value.
+		var setting operatorv1.CRDManagement
 		if err == nil {
 			// None of the CRDs previously existed, and all of them were just created by
 			// us.  Therefore, in future we can consider the CRDs as Tigera
 			// operator-owned, and reconcile them so as to deliver future updates.
-			setting := operatorv1.CRDManagementReconcile
-			gatewayAPI.Spec.CRDManagement = &setting
+			setting = operatorv1.CRDManagementReconcile
 		} else {
 			// Some (i.e. at least one) of the CRDs already existed.  Therefore we have
 			// to assume that someone or something else is provisioning the CRDs in this
 			// cluster, and make sure not to clobber them.
-			setting := operatorv1.CRDManagementPreferExisting
-			gatewayAPI.Spec.CRDManagement = &setting
+			setting = operatorv1.CRDManagementPreferExisting
 		}
 		// Patch that value back into the datastore.
-		err = r.client.Patch(ctx, &operatorv1.GatewayAPI{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: gatewayAPI.Name,
-			},
-			Spec: operatorv1.GatewayAPISpec{
-				CRDManagement: gatewayAPI.Spec.CRDManagement,
-			},
-		}, client.MergeFrom(&operatorv1.GatewayAPI{
-			Spec: operatorv1.GatewayAPISpec{
-				CRDManagement: nil,
-			},
-		}))
+		err = r.writeBackDefault(ctx, gatewayAPI, func(g *operatorv1.GatewayAPI) { g.Spec.CRDManagement = &setting })
 		if err != nil {
-			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to patch CRDManagement field", err, reqLogger)
+			if !errors.IsConflict(err) {
+				r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to patch CRDManagement field", err, reqLogger)
+			}
 			return reconcile.Result{}, err
 		}
 	}
@@ -415,23 +405,13 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	if gatewayAPI.Spec.GatewayClasses == nil {
 		// Write back the default setup, which is to create a class named
 		// "tigera-gateway-class" without any customizations.
-		gatewayAPI.Spec.GatewayClasses = []operatorv1.GatewayClassSpec{{Name: "tigera-gateway-class"}}
-
-		// Patch that back into the datastore.
-		err = r.client.Patch(ctx, &operatorv1.GatewayAPI{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: gatewayAPI.Name,
-			},
-			Spec: operatorv1.GatewayAPISpec{
-				GatewayClasses: gatewayAPI.Spec.GatewayClasses,
-			},
-		}, client.MergeFrom(&operatorv1.GatewayAPI{
-			Spec: operatorv1.GatewayAPISpec{
-				GatewayClasses: nil,
-			},
-		}))
+		err = r.writeBackDefault(ctx, gatewayAPI, func(g *operatorv1.GatewayAPI) {
+			g.Spec.GatewayClasses = []operatorv1.GatewayClassSpec{{Name: "tigera-gateway-class"}}
+		})
 		if err != nil {
-			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to patch GatewayClasses field", err, reqLogger)
+			if !errors.IsConflict(err) {
+				r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to patch GatewayClasses field", err, reqLogger)
+			}
 			return reconcile.Result{}, err
 		}
 	}
@@ -643,6 +623,15 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	r.status.ClearDegraded()
 
 	return reconcile.Result{}, nil
+}
+
+// writeBackDefault persists a defaulted field. The optimistic lock turns a user
+// edit made since this reconcile read the CR into a conflict, so the edit is
+// kept and the next reconcile sees it, rather than the default overwriting it.
+func (r *ReconcileGatewayAPI) writeBackDefault(ctx context.Context, gatewayAPI *operatorv1.GatewayAPI, setDefault func(*operatorv1.GatewayAPI)) error {
+	base := gatewayAPI.DeepCopy()
+	setDefault(gatewayAPI)
+	return r.client.Patch(ctx, gatewayAPI, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{}))
 }
 
 // GetGatewayAPI finds the correct GatewayAPI resource and returns a message and error in the case of an error.
