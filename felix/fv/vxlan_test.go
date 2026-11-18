@@ -200,6 +200,49 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				cc.CheckConnectivity()
 			})
 
+			_ = BPFMode() && It("should keep the shared VXLAN device MTU so large packets are forwarded", func() {
+				for _, felix := range felixes {
+					Eventually(felix.ExecOutputFn("ip", "link", "show", "vxlan.calico"), "60s", "500ms").
+						Should(ContainSubstring("vxlan.calico"))
+				}
+
+				// Below the workload MTU, the kernel drops large packets that it forwards to
+				// the device; IPv6 forwarding ignores the unlocked route MTU.
+				felixes[0].Exec("ip", "link", "set", "vxlan.calico", "mtu", "1300")
+
+				// In CrossSubnet mode the FV nodes share a subnet, so pod traffic skips the device.
+				if enableIPv6 && vxlanMode == api.VXLANModeAlways {
+					// Fits the 1430 IPv6 workload MTU, but not a 1300 device. Each ping is a new
+					// flow, and BPF hands a flow's first packet to the kernel when it is larger
+					// than the device MTU.
+					const payload = "1350"
+					Eventually(func() error {
+						// A Packet Too Big leaves a cached path MTU that would refuse every later try.
+						if out, err := w6[0].ExecCombinedOutput("ip", "-6", "route", "flush", "cache"); err != nil {
+							return fmt.Errorf("%w: %s", err, out)
+						}
+						out, err := w6[0].ExecCombinedOutput("ping", "-6", "-c", "1", "-W", "1", "-s", payload, "-M", "do", w6[1].IP)
+						if err != nil {
+							return fmt.Errorf("%w: %s", err, out)
+						}
+						return nil
+					}, "30s", "1s").Should(Succeed())
+				}
+
+				Eventually(func() error {
+					for _, felix := range felixes {
+						out, err := felix.ExecOutput("ip", "link", "show", "vxlan.calico")
+						if err != nil {
+							return fmt.Errorf("%s: %w", felix.Name, err)
+						}
+						if !strings.Contains(out, "mtu 1450") {
+							return fmt.Errorf("%s: %s", felix.Name, out)
+						}
+					}
+					return nil
+				}, "30s", "500ms").Should(Succeed())
+			})
+
 			It("should have some blackhole routes installed", func() {
 				if routeSource == "WorkloadIPs" {
 					Skip("not applicable for workload ips")
@@ -826,10 +869,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// Wait for the VXLAN device to be created.
 				mtuStr := "mtu 1450"
 				mtuStrV6 := "mtu 1430"
-				if BPFMode() {
-					mtuStr = "mtu 1500"
-					mtuStrV6 = "mtu 1500"
-				}
 				for _, felix := range felixes {
 					Eventually(func() string {
 						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
@@ -867,6 +906,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 								return out
 							}, "60s", "500ms").Should(ContainSubstring(mtuStrV6))
 						}
+					}
+				} else {
+					// With IPv4 VXLAN off, the shared device serves IPv6 only and takes its MTU.
+					for _, felix := range felixes {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
+							return out
+						}, "60s", "500ms").Should(ContainSubstring(mtuStrV6))
 					}
 				}
 
