@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/environment"
@@ -1216,6 +1217,64 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology with masqueraded host t
 			Expect(err).NotTo(HaveOccurred())
 			Expect(port).To(BeNumerically(">=", minMasqPort), "masqueraded source port should be within %s", masqPortRange)
 		}
+	})
+})
+
+var _ = BPFMode() && infrastructure.DatastoreDescribe("_BPF_ _BPF-SAFE_ VXLAN device MTU with IPv6 services", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+	const clusterIP = "dead:beef::abcd:0:0:20"
+
+	var (
+		infra   infrastructure.DatastoreInfra
+		tc      infrastructure.TopologyContainers
+		client  client.Interface
+		w6      [3]*workload.Workload
+		backend *workload.Workload
+	)
+
+	BeforeEach(func() {
+		infra = getInfra(
+			infrastructure.K8sWithDualStack(),
+			infrastructure.K8sWithAPIServerBindAddress("::"),
+			infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16"),
+		)
+		opts := createVXLANBaseTopologyOptions(api.VXLANModeAlways, true, "CalicoIPAM", false)
+		// Keep UDP service traffic on the tc NAT path rather than the socket-level load balancer.
+		opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBTCP)
+		opts.ExtraEnvVars["FELIX_BPFOverlayHostSourceIP"] = "TunnelAddress"
+		tc, client = infrastructure.StartNNodeTopology(3, opts, infra)
+		_, w6, _, _ = setupWorkloads(infra, tc, opts, client, true)
+		assignTunnelAddresses(infra, tc, client)
+
+		backendIP := strings.TrimSuffix(w6[1].IP, "3") + "4"
+		infrastructure.AssignIP("w6-udp", backendIP, tc.Felixes[1].Hostname, client)
+		backend = workload.Run(tc.Felixes[1], "w6-udp", "default", backendIP, "8055", "udp")
+		backend.ConfigureInInfra(infra)
+
+		k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+		svc := k8sService("mtu-udp", clusterIP, backend, 8055, 8055, 0, "udp")
+		_, err := k8sClient.CoreV1().Services(svc.Namespace).Create(context.Background(), svc, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(checkSvcEndpoints(k8sClient, svc), "10s").Should(Equal(1))
+	})
+
+	It("should forward large IPv6 UDP packets to a service across nodes", func() {
+		sendToService := func(sendLen int) error {
+			// A Packet Too Big leaves a cached path MTU that would fragment every later try.
+			if out, err := w6[0].ExecCombinedOutput("ip", "-6", "route", "flush", "cache"); err != nil {
+				return fmt.Errorf("%w: %s", err, out)
+			}
+			res := w6[0].CanConnectTo(clusterIP, "8055", "udp",
+				connectivity.WithSendLen(sendLen), connectivity.WithTimeout(2*time.Second))
+			if !res.HasConnectivity() {
+				return fmt.Errorf("no reply from %s with %d extra bytes", clusterIP, sendLen)
+			}
+			return nil
+		}
+		Eventually(func() error { return sendToService(0) }, "30s", "1s").Should(Succeed())
+
+		// Fits the 1430 IPv6 workload MTU, but not a 1300 device.
+		tc.Felixes[0].Exec("ip", "link", "set", "vxlan.calico", "mtu", "1300")
+		Eventually(func() error { return sendToService(1350) }, "30s", "1s").Should(Succeed())
 	})
 })
 
