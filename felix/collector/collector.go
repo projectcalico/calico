@@ -889,6 +889,9 @@ func (c *collector) applyPacketInfo(pktInfo types.PacketInfo) {
 		return
 	}
 
+	// pktInfo.HostRuleHits are host-* policy's.  Flows are not reported against
+	// host endpoints (see getDataAndUpdateEndpoints), so they are dropped.
+
 	// Determine the local endpoint for this update.
 	switch pktInfo.Direction {
 	case rules.RuleDirIngress:

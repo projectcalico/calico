@@ -139,6 +139,7 @@ var (
 	_                      = stateOffPreNATDstPort
 	stateOffPostNATDstPort = asm.FieldOffset{Offset: stateEventHdrSize + 94, Field: "state->post_nat_dport"}
 	stateOffIPProto        = asm.FieldOffset{Offset: stateEventHdrSize + 96, Field: "state->ip_proto"}
+	stateOffHostPolicyHits = asm.FieldOffset{Offset: stateEventHdrSize + 97, Field: "state->host_policy_hits"}
 	stateOffIPSize         = asm.FieldOffset{Offset: stateEventHdrSize + 98, Field: "state->ip_size"}
 	_                      = stateOffIPSize
 
@@ -216,10 +217,11 @@ type Rules struct {
 	NoProfileMatchID RuleMatchID
 
 	// Host endpoint policy.
-	HostPreDnatTiers []Tier
-	HostForwardTiers []Tier
-	HostNormalTiers  []Tier
-	HostProfiles     []Profile
+	HostPreDnatTiers     []Tier
+	HostForwardTiers     []Tier
+	HostNormalTiers      []Tier
+	HostProfiles         []Profile
+	HostNoProfileMatchID RuleMatchID
 
 	// True when building a policy program for XDP, as opposed to for TC.  This also means that
 	// we are implementing untracked policy (provided in the HostNormalTiers field) and that
@@ -245,6 +247,7 @@ func (p *Builder) Instructions(rules Rules) ([]asm.Insns, error) {
 	p.b.SetTrampolineStride(p.trampolineStride)
 	p.blocks = append(p.blocks, p.b)
 	p.writeProgramHeader()
+	p.writeStartHostPolicyHits(rules.ForHostInterface)
 	p.writeRulesUntilUnreachable(rules)
 	if !p.restUnreachable {
 		// Otherwise the split already wrote the last sub-program's footer.
@@ -325,7 +328,7 @@ normalPolicy:
 			p.b.Jump("xdp_pass")
 		} else {
 			p.writeTiers(rules.HostNormalTiers, legDest, "allowed_by_host_policy")
-			p.writeProfiles(rules.HostProfiles, rules.NoProfileMatchID, "allowed_by_host_policy")
+			p.writeProfiles(rules.HostProfiles, rules.HostNoProfileMatchID, "allowed_by_host_policy")
 		}
 	}
 
@@ -336,6 +339,7 @@ normalPolicy:
 		// On a host interface there is no workload policy, so we are now done.
 		p.b.Jump("allow")
 	} else {
+		p.writeEndHostPolicyHits()
 		// Workload policy.
 		p.writeTiers(rules.Tiers, legDest, "allow")
 		p.writeProfiles(rules.Profiles, rules.NoProfileMatchID, "allow")
@@ -366,6 +370,34 @@ func (p *Builder) writeProgramHeader() {
 	p.b.AddComment("Save state pointer in register R9")
 	p.b.Mov64(asm.R9, asm.R0)
 	p.b.LabelNextInsn("policy")
+}
+
+// writeStartHostPolicyHits marks the hits that follow as host-* policy's in a
+// workload's program.  A host interface's hits are its own host endpoint's.
+func (p *Builder) writeStartHostPolicyHits(forHostInterface bool) {
+	if !p.recordsRuleHits() || p.xdp {
+		return
+	}
+	hostHits := state.HostPolicyHitsAll
+	if forHostInterface {
+		hostHits = state.HostPolicyHitsNone
+	}
+	p.b.MovImm64(asm.R1, int32(hostHits))
+	p.b.Store8(asm.R9, asm.R1, stateOffHostPolicyHits)
+}
+
+// writeEndHostPolicyHits records that the hits so far were host-* policy's.
+func (p *Builder) writeEndHostPolicyHits() {
+	if !p.recordsRuleHits() || p.xdp {
+		return
+	}
+	p.b.Load8(asm.R1, asm.R9, stateOffRulesHit)
+	p.b.AddImm64(asm.R1, 1)
+	p.b.Store8(asm.R9, asm.R1, stateOffHostPolicyHits)
+}
+
+func (p *Builder) recordsRuleHits() bool {
+	return p.flowLogsEnabled || p.policyDebugEnabled
 }
 
 func (p *Builder) writeJumpIfToOrFromHost(label string) {
@@ -810,7 +842,7 @@ func (p *Builder) writeEndOfRule(rule Rule, actionLabel string) {
 		// If all the match criteria are met, we fall through to the end of the rule
 		// so all that's left to do is to jump to the relevant action.
 		// TODO log and log-and-xxx actions
-		if p.flowLogsEnabled || p.policyDebugEnabled {
+		if p.recordsRuleHits() {
 			p.writeRecordRuleHit(rule, actionLabel)
 		}
 		p.b.Jump(actionLabel)

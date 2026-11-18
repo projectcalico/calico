@@ -19,6 +19,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/projectcalico/calico/felix/bpf/state"
 	"github.com/projectcalico/calico/felix/calc"
 	collector "github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
@@ -84,46 +85,10 @@ func (c *CollectorPolicyListener) run() {
 			return
 		}
 
-		if e.RulesHit == 0 {
-			// This should never happen, so just to be sure. We cannot determine
-			// direction, skip it.
+		pktInfo, ok := c.PacketInfo(e)
+		if !ok {
 			continue
 		}
-
-		pktInfo := collector.PacketInfo{
-			IsDNAT:   !e.DstAddr.Equal(e.PostNATDstAddr) || e.DstPort != e.PostNATDstPort,
-			Tuple:    makeTuple(e.SrcAddr, e.PostNATDstAddr, e.IPProto, e.SrcPort, e.PostNATDstPort),
-			RuleHits: make([]collector.RuleHit, e.RulesHit),
-		}
-
-		if pktInfo.IsDNAT {
-			pktInfo.PreDNATTuple = makeTuple(e.SrcAddr, e.DstAddr, e.IPProto, e.SrcPort, e.DstPort)
-		}
-
-		for i := 0; i < int(e.RulesHit); i++ {
-			id := e.RuleIDs[i]
-			rid := c.lc.GetRuleIDFromID64(id)
-			pktInfo.RuleHits[i] = collector.RuleHit{
-				RuleID: rid,
-				Hits:   1,
-				Bytes:  int(e.IPSize),
-			}
-
-			// Note, this is only relevant when we have just upgraded from older (pre v3.8) Felix code,
-			// and the TC program has not yet been updated on all existing interfaces.
-			// The pre v3.8 TC code does not report an actual size, and Felix userspace reports 1 instead.
-			// TC program in v3.8 uses 2 bytes pad (memset to 0) in older versions to report IP length.
-			// Thus, e.IPSize == 0 only matches older (pre v3.8) TC programs since IP header is at least 20 bytes.
-			if e.IPSize == 0 {
-				pktInfo.RuleHits[i].Bytes = 1
-			}
-
-			// All directions should be the same
-			if rid != nil {
-				pktInfo.Direction = rid.Direction
-			}
-		}
-
 		select {
 		case c.outC <- pktInfo:
 			// nothing, all good
@@ -132,6 +97,78 @@ func (c *CollectorPolicyListener) run() {
 			c.outC <- pktInfo
 		}
 	}
+}
+
+// PacketInfo converts a policy verdict event into one PacketInfo, so that
+// the collector applies its host-* and workload hits together.  It returns
+// false for an event without hits.
+func (c *CollectorPolicyListener) PacketInfo(e PolicyVerdict) (collector.PacketInfo, bool) {
+	if e.RulesHit == 0 {
+		// This should never happen, so just to be sure. We cannot determine
+		// direction, skip it.
+		return collector.PacketInfo{}, false
+	}
+
+	pktInfo := collector.PacketInfo{
+		IsDNAT: !e.DstAddr.Equal(e.PostNATDstAddr) || e.DstPort != e.PostNATDstPort,
+		Tuple:  makeTuple(e.SrcAddr, e.PostNATDstAddr, e.IPProto, e.SrcPort, e.PostNATDstPort),
+	}
+
+	if pktInfo.IsDNAT {
+		pktInfo.PreDNATTuple = makeTuple(e.SrcAddr, e.DstAddr, e.IPProto, e.SrcPort, e.DstPort)
+	}
+
+	hits := make([]collector.RuleHit, e.RulesHit)
+	for i := 0; i < int(e.RulesHit); i++ {
+		id := e.RuleIDs[i]
+		rid := c.lc.GetRuleIDFromID64(id)
+		hits[i] = collector.RuleHit{
+			RuleID: rid,
+			Hits:   1,
+			Bytes:  int(e.IPSize),
+		}
+
+		// Note, this is only relevant when we have just upgraded from older (pre v3.8) Felix code,
+		// and the TC program has not yet been updated on all existing interfaces.
+		// The pre v3.8 TC code does not report an actual size, and Felix userspace reports 1 instead.
+		// TC program in v3.8 uses 2 bytes pad (memset to 0) in older versions to report IP length.
+		// Thus, e.IPSize == 0 only matches older (pre v3.8) TC programs since IP header is at least 20 bytes.
+		if e.IPSize == 0 {
+			hits[i].Bytes = 1
+		}
+
+		if rid != nil {
+			pktInfo.Direction = rid.Direction
+		}
+	}
+
+	hostEnd := 0
+	switch e.HostPolicyHits {
+	case state.HostPolicyHitsUnknown:
+		// A program from before Felix recorded host_policy_hits.  A
+		// workload's program applies host-* policy, in the opposite
+		// direction, ahead of its own, and ends with a hit in its own
+		// direction.  So the hits up to the last one in the direction
+		// opposite the last hit's are host-*'s.  An event that host-* ends
+		// holds one direction and stays unsplit.
+		for i, hit := range hits {
+			if hit.RuleID != nil && hit.RuleID.Direction != pktInfo.Direction {
+				hostEnd = i + 1
+			}
+		}
+	case state.HostPolicyHitsAll:
+		hostEnd = len(hits)
+	default:
+		hostEnd = min(int(e.HostPolicyHits)-1, len(hits))
+	}
+	if hostEnd == len(hits) {
+		// Host-* policy ended the program, or its hits filled every slot, so
+		// the last hit is host-*'s, in the direction opposite the workload's.
+		pktInfo.Direction = pktInfo.Direction.Opposite()
+	}
+	pktInfo.HostRuleHits = hits[:hostEnd]
+	pktInfo.RuleHits = hits[hostEnd:]
+	return pktInfo, true
 }
 
 // Stop stops the listener, mainly for testing purposes.
