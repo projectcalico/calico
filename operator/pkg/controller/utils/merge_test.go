@@ -624,12 +624,12 @@ var _ = Describe("Installation merge tests", func() {
 		Entry("Both set not matching", "pathx", "pathy", "pathy"),
 	)
 
-	_1 := intstr.FromInt(1)
+	_1 := intstr.FromInt32(1)
 	_roll1 := appsv1.DaemonSetUpdateStrategy{
 		Type:          appsv1.RollingUpdateDaemonSetStrategyType,
 		RollingUpdate: &appsv1.RollingUpdateDaemonSet{MaxUnavailable: &_1},
 	}
-	_2 := intstr.FromInt(2)
+	_2 := intstr.FromInt32(2)
 	_roll2 := appsv1.DaemonSetUpdateStrategy{
 		Type:          appsv1.RollingUpdateDaemonSetStrategyType,
 		RollingUpdate: &appsv1.RollingUpdateDaemonSet{MaxUnavailable: &_2},

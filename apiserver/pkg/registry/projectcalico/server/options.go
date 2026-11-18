@@ -145,6 +145,7 @@ func (o Options) KeyFunc(namespaced bool) func(context.Context, string) (string,
 func (o Options) GetStorage(
 	resourcePrefix string,
 	keyFunc func(obj runtime.Object) (string, error),
+	reverseKeyFunc storage.ReverseKeyFunc,
 	scopeStrategy rest.NamespaceScopedStrategy,
 	newFunc func() runtime.Object,
 	newListFunc func() runtime.Object,
@@ -158,6 +159,7 @@ func (o Options) GetStorage(
 			etcdRESTOpts.StorageConfig,
 			resourcePrefix,
 			keyFunc, /* keyFunc for decorator -- looks to be unused everywhere */
+			reverseKeyFunc,
 			newFunc,
 			newListFunc,
 			getAttrsFunc,

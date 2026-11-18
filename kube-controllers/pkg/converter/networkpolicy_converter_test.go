@@ -32,7 +32,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 	npConverter := converter.NewPolicyConverter()
 
 	It("should parse a basic NetworkPolicy", func() {
-		port80 := intstr.FromInt(80)
+		port80 := intstr.FromInt32(80)
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
@@ -351,7 +351,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 	})
 
 	It("should parse a NetworkPolicy with an Egress rule", func() {
-		port80 := intstr.FromInt(80)
+		port80 := intstr.FromInt32(80)
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
@@ -430,7 +430,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 	})
 
 	It("should parse a NetworkPolicy with an Egress rule and Port Range", func() {
-		port32000 := intstr.FromInt(32000)
+		port32000 := intstr.FromInt32(32000)
 		port32768 := int32(32768)
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{

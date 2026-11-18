@@ -225,7 +225,7 @@ var _ = Describe("Typha rendering tests", func() {
 			Type: appsv1.RollingUpdateDeploymentStrategyType,
 			RollingUpdate: &appsv1.RollingUpdateDeployment{
 				MaxSurge:       ptr.To(intstr.FromString("100%")),
-				MaxUnavailable: ptr.To(intstr.FromInt(1)),
+				MaxUnavailable: ptr.To(intstr.FromInt32(1)),
 			},
 		}))
 	})
@@ -463,7 +463,7 @@ var _ = Describe("Typha rendering tests", func() {
 					{
 						Port:       typhaMetricsPort,
 						Protocol:   corev1.ProtocolTCP,
-						TargetPort: intstr.FromInt(int(typhaMetricsPort)),
+						TargetPort: intstr.FromInt32(typhaMetricsPort),
 						Name:       "calico-typha-metrics",
 					},
 				},
@@ -738,7 +738,7 @@ var _ = Describe("Typha rendering tests", func() {
 
 		It("renders the default PDB when no override is set", func() {
 			pdb := getPDB()
-			Expect(pdb.Spec.MaxUnavailable).To(Equal(ptr.To(intstr.FromInt(1))))
+			Expect(pdb.Spec.MaxUnavailable).To(Equal(ptr.To(intstr.FromInt32(1))))
 			Expect(pdb.Spec.MinAvailable).To(BeNil())
 			Expect(pdb.Spec.UnhealthyPodEvictionPolicy).To(BeNil())
 			Expect(pdb.Spec.Selector).To(Equal(&metav1.LabelSelector{
@@ -754,7 +754,7 @@ var _ = Describe("Typha rendering tests", func() {
 				},
 			}
 			pdb := getPDB()
-			Expect(pdb.Spec.MaxUnavailable).To(Equal(ptr.To(intstr.FromInt(1))))
+			Expect(pdb.Spec.MaxUnavailable).To(Equal(ptr.To(intstr.FromInt32(1))))
 			Expect(pdb.Spec.MinAvailable).To(BeNil())
 			Expect(*pdb.Spec.UnhealthyPodEvictionPolicy).To(Equal(policyv1.AlwaysAllow))
 		})
@@ -762,11 +762,11 @@ var _ = Describe("Typha rendering tests", func() {
 		It("applies MinAvailable override and clears MaxUnavailable", func() {
 			cfg.Installation.TyphaPodDisruptionBudget = &operatorv1.PodDisruptionBudgetOverride{
 				Spec: &operatorv1.PodDisruptionBudgetOverrideSpec{
-					MinAvailable: ptr.To(intstr.FromInt(2)),
+					MinAvailable: ptr.To(intstr.FromInt32(2)),
 				},
 			}
 			pdb := getPDB()
-			Expect(pdb.Spec.MinAvailable).To(Equal(ptr.To(intstr.FromInt(2))))
+			Expect(pdb.Spec.MinAvailable).To(Equal(ptr.To(intstr.FromInt32(2))))
 			Expect(pdb.Spec.MaxUnavailable).To(BeNil())
 		})
 
