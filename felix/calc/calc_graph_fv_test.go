@@ -629,6 +629,11 @@ var baseTests = []StateList{
 	{localEp1WithPolicyLMSourceWorkloadLevel, localEp1WithPolicy},
 	// Live migration: local WEP as target by direct name, then LM removed.
 	{localEp1WithPolicyLMTargetByName, localEp1WithPolicy},
+	// Live migration: the WEP's UID must depend only on the LiveMigrations that exist, not on
+	// the order they arrived in.  These sequences change the UID without changing the role.
+	{localEp1LMTargetUIDA, localEp1LMTargetUIDsAAndB, localEp1LMTargetUIDB, localEp1WithPolicy},
+	{localEp1LMTargetUIDA, localEp1LMTargetRecreatedUIDB, localEp1WithPolicy},
+	{localEp1LMSelectorUIDA, localEp1LMSelectorUIDsAAndB, localEp1WithPolicy},
 
 	// Istio tests - verify that the all-istio-weps IPSet is populated correctly
 	{
@@ -853,6 +858,9 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 		state.Name)
 	Expect(mockDataplane.EndpointToLiveMigrationRole()).To(Equal(state.ExpectedLiveMigrationRoles),
 		"Live migration roles incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.EndpointToLiveMigrationUID()).To(Equal(state.ExpectedLiveMigrationUIDs),
+		"Live migration UIDs incorrect after moving to state: %v",
 		state.Name)
 }
 

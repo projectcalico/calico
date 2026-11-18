@@ -2468,6 +2468,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						epMgr.OnLiveMigrationStateUpdate(
 							types.ProtoToWorkloadEndpointID(&wlEPID1),
 							liveMigrationStateTarget,
+							nil,
 						)
 						applyUpdates(epMgr)
 					})
@@ -2481,6 +2482,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							epMgr.OnLiveMigrationStateUpdate(
 								types.ProtoToWorkloadEndpointID(&wlEPID1),
 								liveMigrationStateLive,
+								nil,
 							)
 							applyUpdates(epMgr)
 						})
@@ -2494,6 +2496,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 								epMgr.OnLiveMigrationStateUpdate(
 									types.ProtoToWorkloadEndpointID(&wlEPID1),
 									liveMigrationStateTimeWait,
+									nil,
 								)
 								applyUpdates(epMgr)
 							})
@@ -2507,6 +2510,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 									epMgr.OnLiveMigrationStateUpdate(
 										types.ProtoToWorkloadEndpointID(&wlEPID1),
 										liveMigrationStateBase,
+										nil,
 									)
 									applyUpdates(epMgr)
 								})
@@ -2524,6 +2528,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						epMgr.OnLiveMigrationStateUpdate(
 							types.ProtoToWorkloadEndpointID(&wlEPID1),
 							liveMigrationStateLive,
+							nil,
 						)
 						applyUpdates(epMgr)
 						epMgr.OnUpdate(&proto.WorkloadEndpointRemove{Id: &wlEPID1})
@@ -2535,6 +2540,50 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						Expect(epMgr.pendingLiveMigrationStates).To(BeEmpty())
 					})
 				})
+
+				Context("when live migration state becomes Live with a route-programmed callback", func() {
+					var programmedCIDRs []ip.CIDR
+
+					JustBeforeEach(func() {
+						programmedCIDRs = nil
+						epMgr.OnLiveMigrationStateUpdate(
+							types.ProtoToWorkloadEndpointID(&wlEPID1),
+							liveMigrationStateLive,
+							func(cidr ip.CIDR) { programmedCIDRs = append(programmedCIDRs, cidr) },
+						)
+						applyUpdates(epMgr)
+					})
+
+					It("should attach a callback to the elevated routes that reports their CIDR", func() {
+						targets := routeTable.currentRoutes["cali12345-ab"]
+						Expect(targets).To(HaveLen(1))
+						Expect(targets[0].OnProgrammed).NotTo(BeNil())
+
+						targets[0].OnProgrammed()
+						Expect(programmedCIDRs).To(Equal([]ip.CIDR{targets[0].CIDR}))
+
+						// Func values defeat DeepEqual, so compare the rest of the target without
+						// it.
+						targetWithoutCallback := targets[0]
+						targetWithoutCallback.OnProgrammed = nil
+						Expect([]routetable.Target{targetWithoutCallback}).To(Equal(expectedRouteTarget(elevatedPriority)))
+					})
+
+					Context("when live migration state becomes Base", func() {
+						JustBeforeEach(func() {
+							epMgr.OnLiveMigrationStateUpdate(
+								types.ProtoToWorkloadEndpointID(&wlEPID1),
+								liveMigrationStateBase,
+								nil,
+							)
+							applyUpdates(epMgr)
+						})
+
+						It("should revert to normal priority routes without a callback", func() {
+							routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
+						})
+					})
+				})
 			})
 
 			Context("when live migration state arrives before endpoint", func() {
@@ -2543,6 +2592,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					epMgr.OnLiveMigrationStateUpdate(
 						types.ProtoToWorkloadEndpointID(&wlEPID1),
 						liveMigrationStateTarget,
+						nil,
 					)
 					// Now the WEP arrives.
 					epMgr.OnUpdate(wlEPUpdate)

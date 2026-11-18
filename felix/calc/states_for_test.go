@@ -21,6 +21,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
@@ -3420,9 +3421,124 @@ var (
 		Namespace: "default",
 	}
 
+	liveMigrationKey2 = ResourceKey{
+		Kind:      internalapi.KindLiveMigration,
+		Name:      "lm-2",
+		Namespace: "default",
+	}
+
 	// A selector that matches localWlEp1's labels (has label "a").
 	liveMigrationTargetSelector = "has(a)"
 )
+
+// liveMigrationTargetingLocalEp1 returns a LiveMigration, with the given key and UID, that
+// migrates a remote WEP to localWlEp1.
+func liveMigrationTargetingLocalEp1(key ResourceKey, uid string) KVPair {
+	return KVPair{Key: key, Value: &internalapi.LiveMigration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      key.Name,
+			Namespace: key.Namespace,
+			UID:       k8stypes.UID(uid),
+		},
+		Spec: internalapi.LiveMigrationSpec{
+			Source: &internalapi.LiveMigrationSource{
+				WorkloadEndpoint: &internalapi.WorkloadEndpointIdentifier{
+					Hostname:       "remote-host",
+					OrchestratorID: "orch",
+					WorkloadID:     "remote-wep",
+					EndpointID:     "ep1",
+				},
+			},
+			Target: &internalapi.LiveMigrationTarget{
+				WorkloadEndpoint: &internalapi.WorkloadEndpointIdentifier{
+					Hostname:       localHostname,
+					OrchestratorID: "orch",
+					WorkloadID:     "wl1",
+					EndpointID:     "ep1",
+				},
+			},
+		},
+	}}
+}
+
+// When more than one LiveMigration targets a WEP, the WEP takes the greatest UID.
+var localEp1LMTargetUIDA = localEp1WithPolicy.withKVUpdates(
+	liveMigrationTargetingLocalEp1(liveMigrationKey1, "uid-a"),
+).withLiveMigrationRole(
+	localWlEp1Id, proto.LiveMigrationRole_TARGET,
+).withLiveMigrationUID(
+	localWlEp1Id, "uid-a",
+).withName("ep1 local, policy, LM target with UID a")
+
+var localEp1LMTargetUIDB = localEp1WithPolicy.withKVUpdates(
+	liveMigrationTargetingLocalEp1(liveMigrationKey2, "uid-b"),
+).withLiveMigrationRole(
+	localWlEp1Id, proto.LiveMigrationRole_TARGET,
+).withLiveMigrationUID(
+	localWlEp1Id, "uid-b",
+).withName("ep1 local, policy, LM target with UID b")
+
+var localEp1LMTargetUIDsAAndB = localEp1WithPolicy.withKVUpdates(
+	liveMigrationTargetingLocalEp1(liveMigrationKey1, "uid-a"),
+	liveMigrationTargetingLocalEp1(liveMigrationKey2, "uid-b"),
+).withLiveMigrationRole(
+	localWlEp1Id, proto.LiveMigrationRole_TARGET,
+).withLiveMigrationUID(
+	localWlEp1Id, "uid-b",
+).withName("ep1 local, policy, LM targets with UIDs a and b")
+
+// liveMigrationTargetingSelector returns a LiveMigration, with the given key and UID, whose
+// target is chosen by liveMigrationTargetSelector, which matches localWlEp1.
+func liveMigrationTargetingSelector(key ResourceKey, uid string) KVPair {
+	return KVPair{Key: key, Value: &internalapi.LiveMigration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      key.Name,
+			Namespace: key.Namespace,
+			UID:       k8stypes.UID(uid),
+		},
+		Spec: internalapi.LiveMigrationSpec{
+			Source: &internalapi.LiveMigrationSource{
+				WorkloadEndpoint: &internalapi.WorkloadEndpointIdentifier{
+					Hostname:       "remote-host",
+					OrchestratorID: "orch",
+					WorkloadID:     "remote-wep",
+					EndpointID:     "ep1",
+				},
+			},
+			Target: &internalapi.LiveMigrationTarget{
+				Selector: stringPtr(liveMigrationTargetSelector),
+			},
+		},
+	}}
+}
+
+// Two LiveMigrations with the same target selector.  Adding or removing the second one changes
+// the WEP's UID without any change in which selectors match it.
+var localEp1LMSelectorUIDA = localEp1WithPolicy.withKVUpdates(
+	liveMigrationTargetingSelector(liveMigrationKey1, "uid-a"),
+).withLiveMigrationRole(
+	localWlEp1Id, proto.LiveMigrationRole_TARGET,
+).withLiveMigrationUID(
+	localWlEp1Id, "uid-a",
+).withName("ep1 local, policy, LM target by selector with UID a")
+
+var localEp1LMSelectorUIDsAAndB = localEp1WithPolicy.withKVUpdates(
+	liveMigrationTargetingSelector(liveMigrationKey1, "uid-a"),
+	liveMigrationTargetingSelector(liveMigrationKey2, "uid-b"),
+).withLiveMigrationRole(
+	localWlEp1Id, proto.LiveMigrationRole_TARGET,
+).withLiveMigrationUID(
+	localWlEp1Id, "uid-b",
+).withName("ep1 local, policy, LM targets by selector with UIDs a and b")
+
+// The same LiveMigration name, recreated with a new UID.
+var localEp1LMTargetRecreatedUIDB = localEp1WithPolicy.withKVUpdates(
+	liveMigrationTargetingLocalEp1(liveMigrationKey1, "uid-b"),
+).withLiveMigrationRole(
+	localWlEp1Id, proto.LiveMigrationRole_TARGET,
+).withLiveMigrationUID(
+	localWlEp1Id, "uid-b",
+).withName("ep1 local, policy, LM target recreated with UID b")
 
 // Case 1: Local WEP is a live migration source.
 var localEp1WithPolicyLMSource = localEp1WithPolicy.withKVUpdates(

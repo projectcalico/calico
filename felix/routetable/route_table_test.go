@@ -2386,6 +2386,115 @@ var _ = Describe("RouteTable with multiple priorities", func() {
 				Expect(dataplane.DeletedRouteKeys).To(HaveKey(felixKey))
 			})
 		})
+
+		Describe("OnProgrammed callbacks", func() {
+			const cidr = "10.0.0.7/32"
+			var numCalls int
+			key := routeKeyStr(254, cidr, highPriority)
+
+			targetWithCallback := func() Target {
+				return Target{
+					RouteKey: RouteKey{
+						CIDR:     ip.MustParseCIDROrIP(cidr),
+						Priority: highPriority,
+					},
+					OnProgrammed: func() { numCalls++ },
+				}
+			}
+
+			// Simulates something other than Felix deleting the route, so that the next resync
+			// has to write it again.
+			removeRouteBehindFelixsBack := func() {
+				route := dataplane.RouteKeyToRoute[key]
+				dataplane.RemoveMockRoute(&route)
+				rt.QueueResync()
+			}
+
+			BeforeEach(func() {
+				numCalls = 0
+			})
+
+			It("should call the callback once the route is written, and not again while it is unchanged", func() {
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{targetWithCallback()})
+				Expect(numCalls).To(Equal(0), "callback should not be called before Apply")
+				Expect(rt.Apply()).To(Succeed())
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(key))
+				Expect(numCalls).To(Equal(1))
+
+				Expect(rt.Apply()).To(Succeed())
+				rt.QueueResync()
+				Expect(rt.Apply()).To(Succeed())
+				Expect(numCalls).To(Equal(1))
+			})
+
+			It("should call the callback only after a failed write has been retried", func() {
+				// Apply() fails the first write, then retries inline, so both attempts happen
+				// within the one Apply() call.  The callback checks the dataplane itself, to show
+				// that it is only called once the route is really there.
+				var routeInKernelAtEachCall []bool
+				target := targetWithCallback()
+				target.OnProgrammed = func() {
+					_, inKernel := dataplane.RouteKeyToRoute[key]
+					routeInKernelAtEachCall = append(routeInKernelAtEachCall, inKernel)
+				}
+				dataplane.FailuresToSimulate = mocknetlink.FailNextRouteReplace
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{target})
+				Expect(rt.Apply()).To(Succeed())
+
+				Expect(dataplane.FailuresToSimulate).To(BeZero(), "the simulated write failure should have been used")
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(key))
+				Expect(routeInKernelAtEachCall).To(Equal([]bool{true}),
+					"callback should be called once, after the successful retry, and not for the failed write")
+			})
+
+			It("should call the callback again when a resync has to rewrite the route", func() {
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{targetWithCallback()})
+				Expect(rt.Apply()).To(Succeed())
+				removeRouteBehindFelixsBack()
+				Expect(rt.Apply()).To(Succeed())
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(key))
+				Expect(numCalls).To(Equal(2))
+			})
+
+			It("should not call the callback for a route that the kernel already has", func() {
+				dataplane.AddMockRoute(&netlink.Route{
+					Family:    unix.AF_INET,
+					LinkIndex: cali1.LinkAttrs.Index,
+					Dst:       mustParseCIDR(cidr),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  FelixRouteProtocol,
+					Scope:     netlink.SCOPE_LINK,
+					Table:     unix.RT_TABLE_MAIN,
+					Priority:  highPriority,
+				})
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{targetWithCallback()})
+				dataplane.ResetDeltas()
+				Expect(rt.Apply()).To(Succeed())
+				Expect(dataplane.AddedRouteKeys).NotTo(HaveKey(key), "route should not have been rewritten")
+				Expect(dataplane.UpdatedRouteKeys).NotTo(HaveKey(key), "route should not have been rewritten")
+				Expect(numCalls).To(Equal(0))
+			})
+
+			It("should forget the callback when the target is replaced by one without", func() {
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{targetWithCallback()})
+				Expect(rt.Apply()).To(Succeed())
+				target := targetWithCallback()
+				target.OnProgrammed = nil
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{target})
+				removeRouteBehindFelixsBack()
+				Expect(rt.Apply()).To(Succeed())
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(key))
+				Expect(numCalls).To(Equal(1))
+			})
+
+			It("should forget the callback when the route is removed", func() {
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{targetWithCallback()})
+				Expect(rt.Apply()).To(Succeed())
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", nil)
+				Expect(rt.Apply()).To(Succeed())
+				Expect(rt.OnProgrammedCallbacksLen()).To(Equal(0))
+			})
+		})
 	})
 })
 
