@@ -51,8 +51,8 @@ STUB
   chmod +x "${HOME}/bin/artifact"
   PATH="${HOME}/bin:${PATH}"
   export PATH
-  # Required to pass the upload gate; port 9 refuses the upload locally.
-  export SANDCAT_INGEST_TOKEN=t SANDCAT_UPLOAD_URL=http://127.0.0.1:9/ignored
+  # Required to pass the database gate; the stub never connects.
+  export SANDCAT_DB_URL=postgres://broker.invalid SANDCAT_DB_TOKEN=t
   unset STUB_LOG_FAIL
 }
 
@@ -78,7 +78,7 @@ run_analyze() {
   local name="$1"
   shift
   rm -f "${SEEN}"
-  OUTPUT=$(cd "${HOME}/work" && SANDCAT_CALICO_MCP=0 \
+  OUTPUT=$(cd "${HOME}/work" && \
     "${SCRIPT}" analyze --source-dir "${REPO_ROOT}" "$@" 2>&1) || true
   RESULT=""
   [[ -f "${SEEN}" ]] && RESULT=$(cat "${SEEN}")

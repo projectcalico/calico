@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
-# Behaviour test for `sandcat.sh analyze` and `cut-off`. The analyzed marker,
-# which stops the epilogue from analyzing again, is written once sandcat has
-# been started, whether or not the analysis succeeded, and cut-off records a
-# job without analyzing it. sandcat is stubbed, so no binary, network or
-# cluster is needed.
+# Tests `sandcat.sh analyze` and `cut-off` against a stubbed sandcat: the database gate, its flags, and the analyzed marker.
 
 set -uo pipefail
 
@@ -13,7 +9,9 @@ fail=0
 homes=()
 trap 'rm -rf ${homes[@]+"${homes[@]}"}' EXIT
 
-export SANDCAT_INGEST_TOKEN=t SANDCAT_UPLOAD_URL=https://sandcat.invalid SANDCAT_CALICO_MCP=0
+export SANDCAT_DB_URL=postgres://broker.invalid SANDCAT_DB_TOKEN=t
+# analyze needs no calico-mcp, so no download is attempted even with it on.
+unset SANDCAT_CALICO_MCP SANDCAT_UPLOAD_URL SANDCAT_INGEST_TOKEN
 
 newhome() {
   HOME=$(mktemp -d)
@@ -22,7 +20,7 @@ newhome() {
   mkdir -p "${HOME}/.local/bin"
   cat > "${HOME}/.local/bin/sandcat" <<'STUB'
 #!/usr/bin/env bash
-printf '%s\n' "$*" >> "${HOME}/argv"
+echo "$*" > "${HOME}/args"
 exit "${STUB_RC:-0}"
 STUB
   chmod +x "${HOME}/.local/bin/sandcat"
@@ -46,6 +44,13 @@ check() {
 
 newhome
 STUB_RC=0 check "a successful analysis writes the marker" yes
+if [[ ! -f "${HOME}/args" ]] || grep -qE -- '--upload|--agent' "${HOME}/args"; then
+  echo "FAIL analyze passes no ingest or agent flags ($(cat "${HOME}/args" 2>/dev/null || echo 'sandcat not run'))"
+  fail=$((fail + 1))
+else
+  echo "PASS analyze passes no ingest or agent flags"
+  pass=$((pass + 1))
+fi
 
 newhome
 STUB_RC=1 check "a failed analysis writes the marker, so the epilogue does not run it again" yes
@@ -56,11 +61,21 @@ SANDCAT_BIN_DOWNLOAD_TOKEN='' check "an analysis that never started leaves no ma
 
 newhome
 (cd "${HOME}" && "${SCRIPT}" cut-off --after 12m --source-dir "${HOME}") >/dev/null 2>&1
-if grep -q -- '^analyze --cut-off-after 12m ' "${HOME}/argv" && ! grep -q -- '--ginkgo-report' "${HOME}/argv"; then
+if grep -q -- '^analyze --cut-off-after 12m ' "${HOME}/args" 2>/dev/null && ! grep -q -- '--ginkgo-report' "${HOME}/args"; then
   echo "PASS cut-off records the stopped analysis without analyzing"
   pass=$((pass + 1))
 else
-  echo "FAIL cut-off records the stopped analysis without analyzing: $(cat "${HOME}/argv" 2>/dev/null)"
+  echo "FAIL cut-off records the stopped analysis without analyzing: $(cat "${HOME}/args" 2>/dev/null)"
+  fail=$((fail + 1))
+fi
+
+newhome
+out=$(cd "${HOME}" && env -u SANDCAT_DB_TOKEN "${SCRIPT}" analyze --report "${HOME}/report.json" --source-dir "${HOME}" 2>&1)
+if [[ ! -f "${HOME}/args" && "${out}" == *"unset: SANDCAT_DB_TOKEN"* ]]; then
+  echo "PASS a missing database secret skips analyze and names it"
+  pass=$((pass + 1))
+else
+  echo "FAIL a missing database secret skips analyze and names it (${out})"
   fail=$((fail + 1))
 fi
 

@@ -3,7 +3,7 @@
 # failure is non-fatal; call sites wrap it in `|| true`.
 #
 # Usage:
-#   sandcat.sh analyze             analyze a ginkgo report and upload the result
+#   sandcat.sh analyze             record a ginkgo report's run and its inline diagnoses
 #     --spec-dir DIR               inline diagnoses dir, when not beside the report
 #   sandcat.sh build-failure       analyze the job log, or record the failure without one
 #     --log-file FILE | --logs-dir DIR
@@ -13,13 +13,14 @@
 #     --spec-dir DIR | --report FILE
 #   sandcat.sh download            fetch the binary, print its path
 #   sandcat.sh fetch-pr            fetch the PR context file, print its path
+#   sandcat.sh publish-pr-context  fetch the PR context once, push it for the workflow's lanes
 #   sandcat.sh download-calico-mcp fetch calico-mcp, print its path
 #   sandcat.sh inline-env          print the inline hook setup as KEY=VALUE lines;
 #     --kubeconfig PATH --source-dir DIR   non-zero means do not run the hook
 #
-# Env: SANDCAT_INGEST_TOKEN and SANDCAT_UPLOAD_URL gate analyze and build-failure
-# (skipped when unset). SANDCAT_BIN_DOWNLOAD_TOKEN downloads the binary.
-# SANDCAT_CALICO_MCP=0 disables calico-mcp; CALICO_MCP_VERSION pins it.
+# Env: SANDCAT_DB_URL and SANDCAT_DB_TOKEN gate analyze and build-failure (skipped when unset).
+# SANDCAT_BIN_DOWNLOAD_TOKEN downloads the binary. SANDCAT_PR_READ_TOKEN, when set, lets publish-pr-context read the PR.
+# SANDCAT_CALICO_MCP=0 disables calico-mcp for the inline hook; CALICO_MCP_VERSION pins it.
 
 set -uo pipefail
 
@@ -35,6 +36,7 @@ CALICO_MCP_LOCAL_BIN="${CALICO_MCP_LOCAL_BIN:-${HOME}/.local/bin/calico-mcp-${CA
 
 # Outside the repo so it never dirties the working copy.
 SANDCAT_PR_CONTEXT_FILE="${SANDCAT_PR_CONTEXT_FILE:-${HOME}/sandcat-pr-context.json}"
+SANDCAT_PR_ARTIFACT="sandcat-pr-context.json"
 
 _sandcat_download() {
   if [[ -x "${SANDCAT_BIN}" ]]; then
@@ -87,11 +89,18 @@ _calico_mcp_download() {
 }
 
 # Print the PR context file's path; non-zero on a branch run, which has no PR.
-# Fetched out here because the test container has no GitHub credentials.
+# On ArgoCI, publish-pr-context already fetched it once for the whole workflow.
 cmd_fetch_pr() {
-  _sandcat_download || return 1
 # Cleared first so a reused home cannot hand a branch run an older PR.
   rm -f "${SANDCAT_PR_CONTEXT_FILE}"
+  if [[ -n "${CI_WORKFLOW_NAME:-}" ]] && command -v artifact >/dev/null &&
+    artifact pull workflow "${SANDCAT_PR_ARTIFACT}" --destination "${SANDCAT_PR_CONTEXT_FILE}" >&2 &&
+    [[ -s "${SANDCAT_PR_CONTEXT_FILE}" ]]; then
+    echo "${SANDCAT_PR_CONTEXT_FILE}"
+    return 0
+  fi
+  rm -f "${SANDCAT_PR_CONTEXT_FILE}"
+  _sandcat_download || return 1
   # Its stdout goes to stderr so the only thing on ours is the path below.
   "${SANDCAT_BIN}" fetch-pr \
     --out "${SANDCAT_PR_CONTEXT_FILE}" >&2 || return 1
@@ -101,6 +110,19 @@ cmd_fetch_pr() {
 
 # Print the inline per-spec hook's setup as KEY=VALUE lines to eval; non-zero,
 # with the reason on stderr, when the hook must not run.
+# Keeps the PR read token off the test VMs; a branch run publishes nothing.
+cmd_publish_pr_context() {
+  rm -f "${SANDCAT_PR_CONTEXT_FILE}"
+  _sandcat_download || return 1
+  GITHUB_ACCESS_TOKEN="${SANDCAT_PR_READ_TOKEN:-}" "${SANDCAT_BIN}" fetch-pr \
+    --out "${SANDCAT_PR_CONTEXT_FILE}" || return 1
+  if [[ ! -s "${SANDCAT_PR_CONTEXT_FILE}" ]]; then
+    echo "[INFO] sandcat: no PR; nothing to publish"
+    return 0
+  fi
+  artifact push workflow "${SANDCAT_PR_CONTEXT_FILE}" --destination "${SANDCAT_PR_ARTIFACT}"
+}
+
 cmd_inline_env() {
 # Callers eval stdout, so only the payload may reach it: send everything else to
 # stderr and keep the real stdout on fd 3.
@@ -278,7 +300,6 @@ cmd_push_specs() {
 cmd_analyze() {
   local report=""
   local log_file=""
-  local kubeconfig=""
   local source_dir="."
   local spec_dir=""
 
@@ -286,7 +307,6 @@ cmd_analyze() {
     case "$1" in
       --report)      report="$2"; shift 2 ;;
       --log-file)    log_file="$2"; shift 2 ;;
-      --kubeconfig)  kubeconfig="$2"; shift 2 ;;
       --source-dir)  source_dir="$2"; shift 2 ;;
       --spec-dir)    spec_dir="$2"; shift 2 ;;
       *) shift ;;
@@ -301,16 +321,6 @@ cmd_analyze() {
 
   _sandcat_download || { echo "[WARN] sandcat: download failed"; return 0; }
   _sandcat_common_vars
-
-  # Passed as an env var, not a flag: an older sandcat dies on an unknown flag.
-  # Without calico-mcp the analysis is skipped rather than run weaker.
-  if [[ "${SANDCAT_CALICO_MCP:-1}" != "0" ]]; then
-    if ! _calico_mcp_download; then
-      echo "[ERROR] sandcat: calico-mcp unavailable; skipping analysis (set SANDCAT_CALICO_MCP=0 to analyze without live-cluster tools)"
-      return 0
-    fi
-    export CALICO_MCP_BIN="${CALICO_MCP_LOCAL_BIN}"
-  fi
 
   # Overrides sandcat's default of <report dir>/sandcat; env var for the same reason.
   [[ -n "${spec_dir}" ]] && export SANDCAT_SPEC_DIR="${spec_dir}"
@@ -327,7 +337,6 @@ cmd_analyze() {
 
   local extra_args=()
   [[ -n "${log_file}" ]]   && extra_args+=(--log-file "${log_file}")
-  [[ -n "${kubeconfig}" ]] && extra_args+=(--kubeconfig "${kubeconfig}")
   # Reuse the inline setup's PR context so both reason about the same PR.
   [[ -s "${SANDCAT_PR_CONTEXT_FILE}" ]] && extra_args+=(--pr-context "${SANDCAT_PR_CONTEXT_FILE}")
 
@@ -337,8 +346,6 @@ cmd_analyze() {
     --ginkgo-report "${report}" \
     --sha "${SANDCAT_SHA}" \
     --source-dir "${source_dir}" \
-    --agent \
-    --upload "${SANDCAT_UPLOAD_URL}" \
     --timeout 10m \
     ${extra_args[@]+"${extra_args[@]}"} \
     || echo "[WARN] sandcat: analysis failed (non-fatal)"
@@ -510,7 +517,7 @@ cmd_cut_off() {
 subcmd="${1:-}"
 shift || true
 
-# These subcommands need no ingest/upload tokens, so they run before that gate.
+# These subcommands write nothing to the database, so they run before its gate.
 if [[ "${subcmd}" == "download" ]]; then
   _sandcat_download || exit 1
   echo "${SANDCAT_BIN}"
@@ -533,16 +540,21 @@ if [[ "${subcmd}" == "download-calico-mcp" ]]; then
   exit 0
 fi
 
+if [[ "${subcmd}" == "publish-pr-context" ]]; then
+  cmd_publish_pr_context || exit 1
+  exit 0
+fi
+
 if [[ "${subcmd}" == "push-specs" ]]; then
   cmd_push_specs "$@"
   exit 0
 fi
 
-if [[ -z "${SANDCAT_INGEST_TOKEN:-}" || -z "${SANDCAT_UPLOAD_URL:-}" ]]; then
+if [[ -z "${SANDCAT_DB_URL:-}" || -z "${SANDCAT_DB_TOKEN:-}" ]]; then
   # A fork PR usually lacks the secret in the project's fork-PR allowlist.
   _sandcat_missing=""
-  if [[ -z "${SANDCAT_INGEST_TOKEN:-}" ]]; then _sandcat_missing="SANDCAT_INGEST_TOKEN"; fi
-  if [[ -z "${SANDCAT_UPLOAD_URL:-}" ]]; then _sandcat_missing="${_sandcat_missing:+${_sandcat_missing} }SANDCAT_UPLOAD_URL"; fi
+  if [[ -z "${SANDCAT_DB_URL:-}" ]]; then _sandcat_missing="SANDCAT_DB_URL"; fi
+  if [[ -z "${SANDCAT_DB_TOKEN:-}" ]]; then _sandcat_missing="${_sandcat_missing:+${_sandcat_missing} }SANDCAT_DB_TOKEN"; fi
   echo "[INFO] sandcat: skipping '${subcmd}' — unset: ${_sandcat_missing}" >&2
   exit 0
 fi

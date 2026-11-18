@@ -295,6 +295,8 @@ E2E_TEST_CONFIG ?= e2e/config/kind/conformance.yaml
 # relative to e2e/config, unless it is absolute or already starts with e2e/config/.
 e2e_config_path = $(abspath $(if $(filter /% e2e/config/%,$(1)),$(1),e2e/config/$(1)))
 E2E_TEST_CONFIG_FLAGS = $(foreach c,$(E2E_TEST_CONFIG),--calico.test-config=$(call e2e_config_path,$(c)))
+# sandcat's inline diagnosis reads the selection from the test's environment, as repo-relative paths.
+E2E_TEST_CONFIG_REL = $(foreach c,$(E2E_TEST_CONFIG),$(patsubst $(REPO_ROOT)/%,%,$(call e2e_config_path,$(c))))
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
 # Prefix for the ginkgo run; it needs the cluster up, so it wraps the run rather than the target.
@@ -430,7 +432,7 @@ endif
 e2e-run: bin/ginkgo
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
-	KUBECONFIG=$(KUBECONFIG) ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --json-report=report.json --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --non-blocking-taints=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(E2E_TEST_CONFIG_FLAGS)
+	KUBECONFIG=$(KUBECONFIG) E2E_TEST_CONFIG="$(E2E_TEST_CONFIG_REL)" ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --json-report=report.json --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --non-blocking-taints=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(E2E_TEST_CONFIG_FLAGS)
 
 # Version from go.mod. Built with whichever of Go and docker the host has: the
 # kind lanes have only docker, the remote-cluster lanes only Go.
