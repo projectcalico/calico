@@ -227,12 +227,16 @@ IPv4-only.
 
 The algorithm:
 
-- If the first fragment arrives first, the defrag program creates a
-  **fragment-forwarding** conntrack entry (`cali_v4_frgfwd`,
-  `FwdMap` in `felix/bpf/ipfrags/map.go`) that records the L4
-  ports and the disposition reached by policy. Subsequent fragments
-  match on `(src_ip, dst_ip, ip_id)` and are allowed through without
-  policy re-evaluation.
+- If the first fragment arrives first, it records a
+  **fragment-forwarding** entry (`cali_v4_frgfwd`, `FwdMap` in
+  `felix/bpf/ipfrags/map.go`) with its L4 ports and mark. Every tc
+  program records and looks up these entries, so fragments the host
+  makes itself (e.g. to a pod's MTU) are covered too. A later fragment
+  matches on `(src_ip, dst_ip, ifindex, ip_id)`, takes the stored ports
+  and goes through conntrack and policy; one without an entry is
+  dropped. Programs other than from-HEP remove the entry on the last
+  fragment, relying on the host emitting fragments in order; from-HEP
+  leaves it to the timer.
   This holds for every protocol, ICMP included. An ICMP error or TCP
   RST that BPF sends in reply clears `CALI_ST_FIRST_FRAG`, so it
   records no entry of its own.
