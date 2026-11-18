@@ -6,6 +6,7 @@ set -uo pipefail
 
 SCRIPT="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/sandcat.sh}"
 ORIGINAL_PATH="${PATH}"
+unset CI_WORKFLOW_NAME
 
 # Callers eval the payload, so this exact key set is a contract.
 PAYLOAD_KEYS=(
