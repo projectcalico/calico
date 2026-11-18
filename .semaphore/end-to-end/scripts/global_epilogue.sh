@@ -73,7 +73,7 @@ upload_to_gcs() {
     gcs_dir="${METADATA}"
   fi
   echo "[INFO] bucket_upload: uploading ${dest_name} to gs://${GS_BUCKET}/${gcs_dir}/"
-  gsutil cp "${src}" "gs://${GS_BUCKET}/${gcs_dir}/${dest_name}" || true
+  gcloud storage cp "${src}" "gs://${GS_BUCKET}/${gcs_dir}/${dest_name}" || true
 }
 
 # Create a logs tarball and upload it to GCS.
