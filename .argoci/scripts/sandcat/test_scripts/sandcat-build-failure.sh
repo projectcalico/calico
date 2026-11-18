@@ -6,12 +6,14 @@ set -uo pipefail
 
 SCRIPT="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/sandcat.sh}"
 REPO_ROOT="$(cd "$(dirname "${SCRIPT}")/../../.." && pwd)"
+TEST_ROOT=$(mktemp -d)
+trap 'rm -rf "${TEST_ROOT}"' EXIT
 pass=0
 fail=0
 
 # The stub records the --log-file it was handed and that file's content.
 newhome() {
-  HOME=$(mktemp -d)
+  HOME=$(mktemp -d -p "${TEST_ROOT}")
   export HOME
   mkdir -p "${HOME}/.local/bin" "${HOME}/bin" "${HOME}/logs" "${HOME}/tmp" "${HOME}/work"
   LOGS_DIR="${HOME}/logs"

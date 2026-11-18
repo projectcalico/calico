@@ -32,7 +32,7 @@ STUB
 op="$1" src="$3" dst="$5"
 case "${op}" in
   push) cp "${src}" "${HOME}/store/${dst}" ;;
-  pull) cp "${HOME}/store/${src}" "${dst}" 2>/dev/null ;;
+  pull) cp "${HOME}/store/${src}" "${dst}" 2>/dev/null || { mkdir -p "${dst}"; exit 1; } ;;
 esac
 STUB
   chmod +x "${HOME}/bin/artifact"
