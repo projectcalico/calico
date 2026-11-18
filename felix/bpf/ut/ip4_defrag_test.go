@@ -15,6 +15,7 @@
 package ut_test
 
 import (
+	"bytes"
 	"fmt"
 	"runtime"
 	"testing"
@@ -26,7 +27,9 @@ import (
 
 	mapsbpf "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 func TestIP4Defrag(t *testing.T) {
@@ -654,4 +657,127 @@ func TestIP4FragICMPReplyNotRecorded(t *testing.T) {
 		return mapsbpf.IterNone
 	})
 	Expect(count).To(BeZero())
+}
+
+// udpFragPair returns the first fragment of a UDP datagram to udpDefault's
+// port and a tail whose payload would read as other ports.
+func udpFragPair(id uint16) ([]byte, []byte) {
+	ipHdr := *ipv4Default
+	ipHdr.Id = id
+	ipHdr.Protocol = layers.IPProtocolUDP
+	ipHdr.Flags = layers.IPv4MoreFragments
+	firstData := make([]byte, 40)
+	tailData := bytes.Repeat([]byte{0xab}, 16)
+	ipHdr.Length = uint16(20 + 8 + len(firstData))
+	udp := *udpDefault
+	udp.Length = uint16(8 + len(firstData) + len(tailData))
+	_ = udp.SetNetworkLayerForChecksum(&ipHdr)
+
+	first := gopacket.NewSerializeBuffer()
+	Expect(gopacket.SerializeLayers(first, gopacket.SerializeOptions{ComputeChecksums: true},
+		ethDefault, &ipHdr, &udp, gopacket.Payload(firstData))).To(Succeed())
+
+	ipHdr.Flags = 0
+	ipHdr.FragOffset = uint16((8 + len(firstData)) / 8)
+	ipHdr.Length = uint16(20 + len(tailData))
+	tail := gopacket.NewSerializeBuffer()
+	Expect(gopacket.SerializeLayers(tail, gopacket.SerializeOptions{ComputeChecksums: true},
+		ethDefault, &ipHdr, gopacket.Payload(tailData))).To(Succeed())
+
+	return first.Bytes(), tail.Bytes()
+}
+
+// TestIP4FragFromHostPortPolicy checks fragments the host made against a
+// port-restricted policy: the tail gets the first fragment's verdict, and a
+// tail without its first fragment is dropped.
+func TestIP4FragFromHostPortPolicy(t *testing.T) {
+	RegisterTestingT(t)
+
+	resetMap(natMap)
+	resetMap(natBEMap)
+	defer resetCTMap(ctMap)
+	defer cleanupMap(ipfragsFwdMap)
+
+	bpfIfaceName = "FRFH"
+	defer func() { bpfIfaceName = "" }()
+
+	allowPort := []polprog.Rule{{Rule: &proto.Rule{
+		Action:   "Allow",
+		Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+		DstPorts: []*proto.PortRange{{First: int32(udpDefault.DstPort), Last: int32(udpDefault.DstPort)}},
+	}}}
+
+	hooks := []struct {
+		name      string
+		prog      string
+		rules     *polprog.Rules
+		allowAll  *polprog.Rules
+		srcRtFlag routes.Flags
+	}{{
+		name:     "to workload",
+		prog:     "calico_to_workload_ep",
+		allowAll: rulesDefaultAllow,
+		rules: &polprog.Rules{Tiers: []polprog.Tier{{
+			Name:     "base tier",
+			Policies: []polprog.Policy{{Name: "allow udp port", Rules: allowPort}},
+		}}},
+	}, {
+		name:     "to host endpoint",
+		prog:     "calico_to_host_ep",
+		allowAll: allowAllRulesHost,
+		// Host-originated, so the host's normal policy applies.
+		srcRtFlag: routes.FlagsLocalHost,
+		rules: &polprog.Rules{
+			ForHostInterface: true,
+			HostNormalTiers: []polprog.Tier{{
+				Name:     "base tier",
+				Policies: []polprog.Policy{{Name: "allow udp port", Rules: allowPort}},
+			}},
+		},
+	}}
+
+	for i, h := range hooks {
+		t.Run(h.name, func(t *testing.T) {
+			RegisterTestingT(t)
+
+			resetCTMap(ctMap)
+			cleanupMap(ipfragsFwdMap)
+
+			if h.srcRtFlag != 0 {
+				rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+				Expect(rtMap.Update(rtKey, routes.NewValue(h.srcRtFlag).AsBytes())).To(Succeed())
+				defer resetRTMap(rtMap)
+			}
+
+			pktFirst, pktTail := udpFragPair(0x7650 + uint16(2*i))
+			_, pktLoneTail := udpFragPair(0x7651 + uint16(2*i))
+
+			skbMark = 0
+			runBpfTest(t, h.prog, h.rules, func(bpfrun bpfProgRunFn) {
+				res, err := bpfrun(pktFirst)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(res.RetvalStr()).NotTo(Equal("TC_ACT_SHOT"))
+				firstRetval := res.Retval
+
+				res, err = bpfrun(pktTail)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(res.Retval).To(Equal(firstRetval))
+			}, withFromHost())
+
+			// Policy would allow it, so only the missing fragment entry can drop it.
+			resetCTMap(ctMap)
+			runBpfTest(t, h.prog, h.allowAll, func(bpfrun bpfProgRunFn) {
+				res, err := bpfrun(pktLoneTail)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"))
+			}, withFromHost())
+
+			count := 0
+			_ = ipfragsFwdMap.Iter(func(_, _ []byte) mapsbpf.IteratorAction {
+				count++
+				return mapsbpf.IterNone
+			})
+			Expect(count).To(BeZero(), "the last fragment should remove the fragment entry")
+		})
+	}
 }
