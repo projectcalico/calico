@@ -33,6 +33,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -651,10 +652,11 @@ var _ = Describe("Gateway API controller tests", func() {
 		Expect(*gwapi.Spec.CRDManagement).To(Equal(operatorv1.CRDManagementReconcile))
 	})
 
-	It("does not overwrite GatewayClasses that a user sets while defaults are written back", func() {
+	DescribeTable("does not overwrite GatewayClasses that a user sets while defaults are written back", func(crdManagement *operatorv1.CRDManagement) {
 		Expect(c.Create(ctx, installation)).NotTo(HaveOccurred())
 		gwapi := &operatorv1.GatewayAPI{
 			ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
+			Spec:       operatorv1.GatewayAPISpec{CRDManagement: crdManagement},
 		}
 		Expect(c.Create(ctx, gwapi)).NotTo(HaveOccurred())
 
@@ -683,7 +685,10 @@ var _ = Describe("Gateway API controller tests", func() {
 		By("checking the user's GatewayClasses survived")
 		Expect(c.Get(ctx, utils.DefaultEnterpriseInstanceKey, gwapi)).NotTo(HaveOccurred())
 		Expect(gwapi.Spec.GatewayClasses).To(Equal(userClasses))
-	})
+	},
+		Entry("during the CRDManagement write-back", nil),
+		Entry("during the GatewayClasses write-back", ptr.To(operatorv1.CRDManagementReconcile)),
+	)
 
 	It("Check felix configuration patching is set if it's not alreadyconfigured", func() {
 		Expect(c.Create(ctx, installation)).NotTo(HaveOccurred())

@@ -438,6 +438,7 @@ replace (
 	// the kubernets repo pulls them in via a replacement to its own vendored copies, which doesn't work for
 	// transient imports.
 	k8s.io/api => k8s.io/api v0.38.0-beta.0
+	k8s.io/apiextensions-api => k8s.io/apiextensions-api v0.38.0-beta.0
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.38.0-beta.0
 	k8s.io/apimachinery => k8s.io/apimachinery v0.38.0-beta.0
 	k8s.io/apiserver => k8s.io/apiserver v0.38.0-beta.0
@@ -454,6 +455,7 @@ replace (
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.38.0-beta.0
 	k8s.io/endpointslice => k8s.io/endpointslice v0.38.0-beta.0
 	k8s.io/externaljwt => k8s.io/externaljwt v0.38.0-beta.0
+	k8s.io/ktesting => k8s.io/ktesting v0.38.0-beta.0
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.38.0-beta.0
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.38.0-beta.0
 	// kubevirt.io/client-go requires a tagged kube-openapi version that doesn't
