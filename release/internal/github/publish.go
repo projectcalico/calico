@@ -25,6 +25,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/fsutil"
@@ -37,15 +38,15 @@ const ReleaseStep = "github-release"
 
 // Each section ends in a blank line, so leaving one out leaves no gap.
 const releaseNoteTemplate = `
-Release notes can be found [{{.Link.Text}}]({{.Link.URL}})
+Release notes can be found {{.Link}}
 
 {{if .Artifacts -}}Attached to this release are the following artifacts:
 
 {{range .Artifacts}}- ` + "`{{.Name}}`" + `: {{.Description}}
 {{end}}
-{{end}}{{if .AdditionalLinks}}Additional links:
+{{end}}{{if .Notes}}Notes:
 
-{{range .AdditionalLinks}}- [{{.Text}}]({{.URL}})
+{{range .Notes}}- {{.}}
 {{end}}
 {{end}}`
 
@@ -74,9 +75,9 @@ type ReleaseOptions struct {
 // ReleaseNotes is what a release's body says. Link.Text finishes "Release
 // notes can be found", so it carries its own preposition, such as "on GitHub".
 type ReleaseNotes struct {
-	Link            Link
-	Artifacts       []ReleaseArtifact
-	AdditionalLinks []Link
+	Link      Link
+	Artifacts []ReleaseArtifact
+	Notes     []string
 }
 
 type ReleaseArtifact struct {
@@ -89,13 +90,17 @@ type Link struct {
 	URL  string
 }
 
+func (l Link) String() string {
+	return fmt.Sprintf("[%s](%s)", l.Text, l.URL)
+}
+
 // ReleaseUpload returns a distribution.Upload for a GitHub release, setting up its dependencies and handler.
 func ReleaseUpload(o ReleaseOptions, requires ...string) distribution.Upload {
 	ver := o.Version.String()
 	if o.Source != "" {
 		requires = append(requires, outputs.ChecksumStep, outputs.MetadataStep)
 	}
-	requires = append(requires, TagStep)
+	requires = append(requires, branch.PushTagStep)
 	return distribution.Upload{
 		Name:     ReleaseStep,
 		Source:   o.Source,

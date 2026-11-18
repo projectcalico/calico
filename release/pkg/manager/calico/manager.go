@@ -57,21 +57,20 @@ const (
 
 const (
 	prepBuildStep = "prep-build"
-	tagStep       = "tag-commit"
 
 	prepPublishStep = "prep-publish"
 	helmIndexStep   = "helm-index"
 )
 
 var (
-	releaseBuildSteps     = []string{tagStep}
+	releaseBuildSteps     = []string{branch.CreateTagStep}
 	hashreleaseBuildSteps = []string{outputs.ReleaseNotesStep}
 	sharedBuildSteps      = []string{
 		operator.Step, images.Step, binaries.Step, charts.Step, manifests.Step,
 		archives.WindowsStep, archives.Step,
 	}
 	sharedPublishSteps      = []string{operator.Step, images.Step, charts.Step, outputs.MetadataStep, outputs.ChecksumStep}
-	releasePublishSteps     = []string{github.TagStep, github.ReleaseStep, helmIndexStep}
+	releasePublishSteps     = []string{branch.PushTagStep, github.ReleaseStep, helmIndexStep}
 	hashreleasePublishSteps = []string{distribution.HashreleasePublishStep}
 
 	// BuildSteps are the steps a release build can skip, in the order they run.
@@ -227,9 +226,6 @@ type CalicoManager struct {
 	draftRelease  bool
 	awsProfile    string
 	s3Bucket      string
-
-	// tagAtHEAD memoizes tagExistsAtHEAD so the rev-parse runs once per release.
-	tagAtHEAD *tagCheck
 
 	// imageRegistries is the list of imageRegistries to which we should publish images.
 	imageRegistries []string
@@ -421,9 +417,14 @@ func (r *CalicoManager) buildPlan() []plan.Node {
 		})
 	} else {
 		nodes = append(nodes, plan.Node{
-			Name:     tagStep,
-			Do:       r.TagRelease,
-			Rollback: func() error { return r.DeleteTag(r.calicoVersion.String()) },
+			Name: branch.CreateTagStep,
+			Do: func() error {
+				ver := r.calicoVersion.String()
+				return branch.CreateTag(command.Git(r.runner).In(r.repoRoot), ver, branch.TagMessage("Release "+ver))
+			},
+			Rollback: func() error {
+				return branch.DeleteTag(command.Git(r.runner).In(r.repoRoot), r.calicoVersion.String())
+			},
 		})
 	}
 	nodes = append(
@@ -679,75 +680,6 @@ func (r *CalicoManager) PreReleaseValidate() error {
 	return r.releasePrereqs()
 }
 
-func (r *CalicoManager) DeleteTag(ver string) error {
-	_, err := r.git("tag", "-d", ver)
-	if err != nil {
-		return fmt.Errorf("failed to delete tag: %s", err)
-	}
-	return nil
-}
-
-func (r *CalicoManager) TagRelease() error {
-	ver := r.calicoVersion.String()
-	branch, err := r.determineBranch()
-	if err != nil {
-		return fmt.Errorf("failed to determine branch: %w", err)
-	}
-	logrus.WithFields(logrus.Fields{"branch": branch, "version": ver}).Infof("Creating Calico release from branch")
-
-	tc := r.tagState()
-	if tc.err != nil {
-		return fmt.Errorf("checking %s tag matches HEAD: %w", ver, tc.err)
-	}
-	if tc.atHEAD {
-		logrus.WithField("version", ver).Info("Tag already exists at HEAD, skipping tag creation")
-		return nil
-	}
-
-	if _, err = r.git("tag", "-a", "-m", "Release "+ver, ver); err != nil {
-		return fmt.Errorf("tag release: %w", err)
-	}
-	return nil
-}
-
-type tagCheck struct {
-	atHEAD bool
-	err    error
-}
-
-// tagState reports whether the release tag already exists and points at HEAD.
-// A tag at a different commit is a conflict, surfaced via err.
-// The result is memoized as both releasePrereqs and TagRelease consult it.
-func (r *CalicoManager) tagState() *tagCheck {
-	if r.tagAtHEAD != nil {
-		return r.tagAtHEAD
-	}
-	tc := &tagCheck{}
-	tagCommit, err := command.Git(r.runner).In(r.repoRoot).Resolve("refs/tags/" + r.calicoVersion.String() + "^{commit}")
-	if err != nil {
-		if !errors.Is(err, command.ErrGitRefNotFound) {
-			tc.err = err
-		}
-		r.tagAtHEAD = tc
-		return tc
-	}
-	headCommit, err := r.git("rev-parse", "HEAD")
-	if err != nil {
-		tc.err = fmt.Errorf("resolve HEAD: %w", err)
-		r.tagAtHEAD = tc
-		return tc
-	}
-	headCommit = strings.TrimSpace(headCommit)
-	if tagCommit != headCommit {
-		tc.err = fmt.Errorf("tag %s already exists at %s but HEAD is %s", r.calicoVersion.String(), tagCommit, headCommit)
-		r.tagAtHEAD = tc
-		return tc
-	}
-	tc.atHEAD = true
-	r.tagAtHEAD = tc
-	return tc
-}
-
 func (r *CalicoManager) BuildHelm() error {
 	chart := r.chart()
 	opts := []charts.BuildOption{charts.WithRunner(r.runner)}
@@ -800,6 +732,57 @@ func (r *CalicoManager) hashreleaseUpload() distribution.Upload {
 	}
 }
 
+func (r *CalicoManager) releaseUploads() []distribution.Upload {
+	ver := r.calicoVersion.String()
+	vpp := github.Link{
+		Text: "VPP data plane release information",
+		URL:  github.Repo{Org: "projectcalico", Name: "vpp-dataplane"}.BlobURL("master", "RELEASE_NOTES.md"),
+	}
+	notes := []string{vpp.String()}
+	// notes = append(notes, "[Upgrade guide]("+docs.Site{Version: r.calicoVersion}.URL("operations", "upgrading")+")")
+	if r.helmCharts && len(r.helmRegistries) > 0 {
+		var refs []string
+		for _, chart := range charts.All() {
+			refs = append(refs, "`oci://"+r.helmRegistries[0]+"/"+chart+"`")
+		}
+		notes = append(notes, "All Helm charts are also in an OCI registry: "+strings.Join(refs, ", ")+".")
+	}
+	return []distribution.Upload{
+		branch.TagUpload(branch.PushTagOptions{
+			Tag:      ver,
+			Remote:   r.remote,
+			RepoRoot: r.repoRoot,
+			Skip:     !r.gitRef,
+			DryRun:   r.dryRun,
+			Runner:   r.runner,
+		}),
+		github.ReleaseUpload(github.ReleaseOptions{
+			Repo:    r.githubRepo,
+			Version: r.calicoVersion,
+			Source:  r.uploadDir(),
+			Notes: github.ReleaseNotes{
+				Link: github.Link{
+					Text: "on GitHub",
+					URL:  r.githubRepo.BlobURL(version.NewReleaseBranch(r.releaseBranchPrefix, r.calicoVersion).String(), outputs.ReleaseNoteFilePath("", ver)),
+				},
+				Artifacts: []github.ReleaseArtifact{
+					{Name: archives.ArchiveFileName(r.archive()), Description: "container images, binaries, and kubernetes manifests."},
+					{Name: archives.WindowsFileName(ver), Description: "Calico for Windows."},
+					{Name: charts.FileName(charts.TigeraOperatorChart, ver), Description: "Calico Helm 3 chart."},
+					{Name: charts.FileName(charts.ProjectCalicoV1CRDsChart, ver), Description: fmt.Sprintf("Calico %s CRD chart.", charts.ProjectCalicoV1CRDsChart)},
+					{Name: charts.FileName(charts.ProjectCalicoV3CRDsChart, ver), Description: fmt.Sprintf("Calico %s CRD chart (tech-preview).", charts.ProjectCalicoV3CRDsChart)},
+					{Name: manifests.OCPBundleFileName, Description: "Manifest bundle for OpenShift."},
+				},
+				Notes: notes,
+			},
+			Skip:   !r.githubRelease,
+			Draft:  r.draftRelease,
+			DryRun: r.dryRun,
+			Runner: r.runner,
+		}),
+	}
+}
+
 func (r *CalicoManager) PublishRelease() error {
 	nodes := r.publishPlan
 	if r.publishNodes != nil {
@@ -840,14 +823,7 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 	if r.isHashRelease {
 		return append(uploads, r.hashreleaseUpload())
 	}
-	uploads = append(uploads, github.TagUpload(github.TagOptions{
-		Tag:      r.calicoVersion.String(),
-		Remote:   r.remote,
-		RepoRoot: r.repoRoot,
-		Skip:     !r.gitRef,
-		DryRun:   r.dryRun,
-		Runner:   r.runner,
-	}), r.githubReleaseUpload())
+	uploads = append(uploads, r.releaseUploads()...)
 	// Last: the index it writes points at the github release's download URLs,
 	// which 404 until that release exists.
 	return append(uploads, r.helmIndexUpload())
@@ -886,9 +862,8 @@ func (r *CalicoManager) releasePrereqs() error {
 		}
 	}
 
-	// Check if the tag exist and that it does not point at a different commit.
-	if tc := r.tagState(); tc.err != nil {
-		return fmt.Errorf("checking %s tag matches HEAD: %w", r.calicoVersion.String(), tc.err)
+	if _, err := branch.TagAtHEAD(command.Git(r.runner).In(r.repoRoot), r.calicoVersion.String()); err != nil {
+		return err
 	}
 
 	return nil
@@ -1196,36 +1171,6 @@ func (r *CalicoManager) buildContainerImages() error {
 	return nil
 }
 
-func (r *CalicoManager) githubReleaseUpload() distribution.Upload {
-	ver := r.calicoVersion.String()
-	return github.ReleaseUpload(github.ReleaseOptions{
-		Repo:    r.githubRepo,
-		Version: r.calicoVersion,
-		Source:  r.uploadDir(),
-		Notes: github.ReleaseNotes{
-			Link: github.Link{
-				Text: "on GitHub",
-				URL:  r.githubRepo.BlobURL(version.NewReleaseBranch(r.releaseBranchPrefix, r.calicoVersion).String(), outputs.ReleaseNoteFilePath("", ver)),
-			},
-			Artifacts: []github.ReleaseArtifact{
-				{Name: archives.ArchiveFileName(r.archive()), Description: "container images, binaries, and kubernetes manifests."},
-				{Name: archives.WindowsFileName(ver), Description: "Calico for Windows."},
-				{Name: charts.FileName(charts.TigeraOperatorChart, ver), Description: "Calico Helm 3 chart."},
-				{Name: charts.FileName(charts.ProjectCalicoV1CRDsChart, ver), Description: "Calico crd.projectcalico.org/v1 CRD chart."},
-				{Name: charts.FileName(charts.ProjectCalicoV3CRDsChart, ver), Description: "Calico projectcalico.org/v3 CRD chart (tech-preview)."},
-				{Name: manifests.OCPBundleFileName, Description: "Manifest bundle for OpenShift."},
-			},
-			AdditionalLinks: []github.Link{
-				{Text: "VPP data plane release information", URL: github.Repo{Org: "projectcalico", Name: "vpp-dataplane"}.BlobURL("master", "RELEASE_NOTES.md")},
-			},
-		},
-		Skip:   !r.githubRelease,
-		Draft:  r.draftRelease,
-		DryRun: r.dryRun,
-		Runner: r.runner,
-	})
-}
-
 func (r *CalicoManager) publishContainerImages() error {
 	if !r.images {
 		logrus.Info("Skipping image publish")
@@ -1524,9 +1469,10 @@ func (r *CalicoManager) publishHelmCharts() error {
 
 func (r *CalicoManager) helmIndexUpload() distribution.Upload {
 	return distribution.Upload{
-		Name:   helmIndexStep,
-		Source: charts.IndexFilePath(charts.IndexDir(r.uploadDir())),
-		Skip:   !r.helmCharts || !r.helmIndex,
+		Name:     helmIndexStep,
+		Source:   charts.IndexFilePath(charts.IndexDir(r.uploadDir())),
+		Skip:     !r.helmCharts || !r.helmIndex,
+		Requires: []string{charts.Step, github.ReleaseStep},
 		Handler: distribution.S3{
 			URI:         r.s3URI(charts.DirName),
 			Profile:     r.awsProfile,

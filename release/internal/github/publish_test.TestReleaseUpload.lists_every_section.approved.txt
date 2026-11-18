@@ -6,7 +6,8 @@ Attached to this release are the following artifacts:
 - `a.tgz`: the a.
 - `b.zip`: the b.
 
-Additional links:
+Notes:
 
-- [More](https://example.test/more)
+- A note.
+- [A link](https://example.test/more)
 

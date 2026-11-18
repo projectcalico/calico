@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-github/v53/github"
 
+	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/outputs"
@@ -52,10 +53,10 @@ func TestReleaseUpload(t *testing.T) {
 		return got
 	}
 
-	t.Run("lists the artifacts and links", func(t *testing.T) {
+	t.Run("lists every section", func(t *testing.T) {
 		o := opts
 		o.Notes.Artifacts = []ReleaseArtifact{{Name: "a.tgz", Description: "the a."}, {Name: "b.zip", Description: "the b."}}
-		o.Notes.AdditionalLinks = []Link{{Text: "More", URL: "https://example.test/more"}}
+		o.Notes.Notes = []string{"A note.", "[A link](https://example.test/more)"}
 		approvals.VerifyString(t, body(t, o))
 	})
 
@@ -104,7 +105,7 @@ func TestReleaseUpload(t *testing.T) {
 
 	t.Run("waits for the required steps", func(t *testing.T) {
 		u := ReleaseUpload(opts)
-		if diff := cmp.Diff([]string{outputs.ChecksumStep, outputs.MetadataStep, TagStep}, u.Requires); diff != "" {
+		if diff := cmp.Diff([]string{outputs.ChecksumStep, outputs.MetadataStep, branch.PushTagStep}, u.Requires); diff != "" {
 			t.Errorf("Requires (-want +got):\n%s", diff)
 		}
 		if u.Name != ReleaseStep || u.Source != opts.Source {
@@ -115,13 +116,13 @@ func TestReleaseUpload(t *testing.T) {
 	t.Run("a body-only release waits only for the tag", func(t *testing.T) {
 		o := opts
 		o.Source = ""
-		if diff := cmp.Diff([]string{TagStep}, ReleaseUpload(o).Requires); diff != "" {
+		if diff := cmp.Diff([]string{branch.PushTagStep}, ReleaseUpload(o).Requires); diff != "" {
 			t.Errorf("Requires (-want +got):\n%s", diff)
 		}
 	})
 
 	t.Run("also waits for the steps the caller names", func(t *testing.T) {
-		want := []string{"extra", outputs.ChecksumStep, outputs.MetadataStep, TagStep}
+		want := []string{"extra", outputs.ChecksumStep, outputs.MetadataStep, branch.PushTagStep}
 		if diff := cmp.Diff(want, ReleaseUpload(opts, "extra").Requires); diff != "" {
 			t.Errorf("Requires (-want +got):\n%s", diff)
 		}
