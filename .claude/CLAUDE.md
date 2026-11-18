@@ -225,6 +225,8 @@ Per-area sub-designs carry area-specific test conventions on top of this rule
 
 Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-not-required`) and one release note label (`release-note-required` or `release-note-not-required`). Optional: `cherry-pick-candidate` (bug fix backports), `needs-operator-pr` (requires operator change).
 
+To skip a backport, comment `/skip-backport release-vX.YY` as the PR author (see the `cherry-pick-release` skill).
+
 ## AI-assisted contribution policy
 
 [`AI_POLICY.md`](../AI_POLICY.md) at the repo root governs contributions written with AI assistance. The parts that affect what you produce:
