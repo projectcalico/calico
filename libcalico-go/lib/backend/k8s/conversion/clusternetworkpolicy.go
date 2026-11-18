@@ -110,6 +110,7 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 		CreationTimestamp: kcnp.CreationTimestamp,
 		UID:               uid,
 		ResourceVersion:   kcnp.ResourceVersion,
+		ManagedFields:     kcnp.ManagedFields,
 	}
 	gnp.Spec = apiv3.GlobalNetworkPolicySpec{
 		Tier:              tier,
