@@ -27,7 +27,7 @@ GITHUB_CLI_VERSION=2.94.0
 GOTESTSUM_VERSION=v1.13.0
 HELM_VERSION=v3.21.1
 # KINDEST_NODE_VERSION is the Kubernetes version of the KIND cluster used in
-# tests, and is deliberately held one minor behind K8S_VERSION: the KubeVirt
+# tests, and is deliberately held behind K8S_VERSION: the KubeVirt
 # live-migration tests deploy KubeVirt (tigera/kubevirt mockvirt-v1.8.1, i.e.
 # KubeVirt 1.8), which only supports Kubernetes 1.33-1.35. On a 1.36 node image
 # VMIs never leave the "Scheduled" phase and the suite times out. v1.35.5 is the

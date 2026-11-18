@@ -76,7 +76,6 @@ func NewREST(scheme *runtime.Scheme, opts server.Options, calicoResourceLister r
 	storageInterface, dFunc, err := opts.GetStorage(
 		prefix,
 		keyFunc,
-		registry.NoNamespaceReverseKeyFunc(prefix),
 		strategy,
 		func() runtime.Object { return &calico.GlobalNetworkPolicy{} },
 		func() runtime.Object { return &calico.GlobalNetworkPolicyList{} },
