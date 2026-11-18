@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"slices"
 	"strings"
 	"testing"
@@ -166,10 +167,12 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributePod:       "virt-launcher-source",
 						ipam.AttributeNamespace: "test-ns",
+						ipam.AttributeVMIName:   "test-vm",
 					},
 					AlternateOwnerAttrs: map[string]string{
 						ipam.AttributePod:       "virt-launcher-target",
 						ipam.AttributeNamespace: "test-ns",
+						ipam.AttributeVMIName:   "test-vm",
 					},
 				}, nil)
 				Expect(err).NotTo(HaveOccurred())
@@ -179,7 +182,7 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 		It("should promote target to active owner on all IPs", func() {
 			ctx := context.Background()
 
-			err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+			err := EnsureActiveVMOwnerAttrs(ctx, ic, allocatedIPs, "test-ns", "test-vm", "virt-launcher-target")
 			Expect(err).NotTo(HaveOccurred())
 
 			for _, ip := range allocatedIPs {
@@ -196,11 +199,11 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 		It("should be idempotent - second call succeeds when target is already active", func() {
 			ctx := context.Background()
 
-			err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+			err := EnsureActiveVMOwnerAttrs(ctx, ic, allocatedIPs, "test-ns", "test-vm", "virt-launcher-target")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call again - should succeed (idempotent)
-			err = EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+			err = EnsureActiveVMOwnerAttrs(ctx, ic, allocatedIPs, "test-ns", "test-vm", "virt-launcher-target")
 			Expect(err).NotTo(HaveOccurred())
 
 			for _, ip := range allocatedIPs {
@@ -210,7 +213,7 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 			}
 		})
 
-		It("should return ErrAlternateOwnerEmpty when alternate is cleared before swap", func() {
+		It("should leave the allocation unchanged when alternate is cleared before swap", func() {
 			ctx := context.Background()
 
 			// Clear alternate owner on all IPs (simulates target pod deleted before swap)
@@ -221,10 +224,13 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
-			Expect(err).To(HaveOccurred())
-			Expect(errors.Is(err, ErrAlternateOwnerEmpty)).To(BeTrue(),
-				fmt.Sprintf("Expected ErrAlternateOwnerEmpty, got: %v", err))
+			err := EnsureActiveVMOwnerAttrs(ctx, ic, allocatedIPs, "test-ns", "test-vm", "virt-launcher-target")
+			Expect(err).NotTo(HaveOccurred())
+			for _, ip := range allocatedIPs {
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, ip)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs[ipam.AttributePod]).To(Equal("virt-launcher-source"))
+			}
 		})
 
 		It("should return ErrAlternateOwnerMismatch when alternate is a different pod", func() {
@@ -236,27 +242,111 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 					AlternateOwnerAttrs: map[string]string{
 						ipam.AttributePod:       "virt-launcher-unexpected",
 						ipam.AttributeNamespace: "test-ns",
+						ipam.AttributeVMIName:   "test-vm",
 					},
 				}, nil)
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+			err := EnsureActiveVMOwnerAttrs(ctx, ic, allocatedIPs, "test-ns", "test-vm", "virt-launcher-target")
 			Expect(err).To(HaveOccurred())
 			Expect(errors.Is(err, ErrAlternateOwnerMismatch)).To(BeTrue(),
 				fmt.Sprintf("Expected ErrAlternateOwnerMismatch, got: %v", err))
 		})
 
-		It("should fail when no IPs are allocated to the handle", func() {
+		It("should skip IPs that are no longer allocated", func() {
 			ctx := context.Background()
 
 			// Release all IPs
 			err := ic.ReleaseByHandle(ctx, handle)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to get IPs for handle"))
+			err = EnsureActiveVMOwnerAttrs(ctx, ic, allocatedIPs, "test-ns", "test-vm", "virt-launcher-target")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should skip an IP that is not in any pool", func() {
+			ctx := context.Background()
+			noPoolIP := cnet.IP{IP: net.ParseIP("192.168.99.1").To4()}
+
+			err := EnsureActiveVMOwnerAttrs(ctx, ic, []cnet.IP{noPoolIP}, "test-ns", "test-vm", "virt-launcher-target")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = EnsureActiveVMOwnerAttrs(ctx, ic, append([]cnet.IP{noPoolIP}, allocatedIPs...), "test-ns", "test-vm", "virt-launcher-target")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should succeed with no IPs", func() {
+			err := EnsureActiveVMOwnerAttrs(context.Background(), ic, nil, "test-ns", "test-vm", "virt-launcher-target")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should trust owner attributes naming the VMI when the handle does not match", func() {
+			ctx := context.Background()
+
+			// A handle no reconstruction can produce for this VMI, with owner
+			// attributes that name it.
+			oddHandle := "renamed-nad.vmi.other-ns.other-vm"
+			v4ia, _, err := ic.AutoAssign(ctx, ipam.AutoAssignArgs{
+				Num4:        1,
+				HandleID:    &oddHandle,
+				Hostname:    hostname,
+				IntendedUse: v3.IPPoolAllowedUseWorkload,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			oddIP := cnet.IP{IP: v4ia.IPs[0].IP}
+
+			err = ic.SetOwnerAttributes(ctx, oddIP, oddHandle, &ipam.OwnerAttributeUpdates{
+				ActiveOwnerAttrs: map[string]string{
+					ipam.AttributePod:       "virt-launcher-source",
+					ipam.AttributeNamespace: "test-ns",
+					ipam.AttributeVMIName:   "test-vm",
+				},
+				AlternateOwnerAttrs: map[string]string{
+					ipam.AttributePod:       "virt-launcher-target",
+					ipam.AttributeNamespace: "test-ns",
+					ipam.AttributeVMIName:   "test-vm",
+				},
+			}, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = EnsureActiveVMOwnerAttrs(ctx, ic, []cnet.IP{oddIP}, "test-ns", "test-vm", "virt-launcher-target")
+			Expect(err).NotTo(HaveOccurred())
+
+			allocAttr, err := ic.GetAssignmentAttributes(ctx, oddIP)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(allocAttr.ActiveOwnerAttrs[ipam.AttributePod]).To(Equal("virt-launcher-target"))
+		})
+
+		It("should skip an IP that is not the VMI's, leaving it untouched", func() {
+			ctx := context.Background()
+
+			// Allocate an IP under a pod (container ID) handle.
+			podHandle := "k8s-pod-network.0123456789abcdef"
+			v4ia, _, err := ic.AutoAssign(ctx, ipam.AutoAssignArgs{
+				Num4:        1,
+				HandleID:    &podHandle,
+				Hostname:    hostname,
+				IntendedUse: v3.IPPoolAllowedUseWorkload,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			podIP := cnet.IP{IP: v4ia.IPs[0].IP}
+
+			err = EnsureActiveVMOwnerAttrs(ctx, ic, []cnet.IP{podIP}, "test-ns", "test-vm", "virt-launcher-target")
+			Expect(err).NotTo(HaveOccurred())
+
+			allocAttr, err := ic.GetAssignmentAttributes(ctx, podIP)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(allocAttr.ActiveOwnerAttrs).To(BeEmpty())
+			Expect(allocAttr.AlternateOwnerAttrs).To(BeEmpty())
+
+			err = EnsureActiveVMOwnerAttrs(ctx, ic, append([]cnet.IP{podIP}, allocatedIPs...), "test-ns", "test-vm", "virt-launcher-target")
+			Expect(err).NotTo(HaveOccurred())
+			for _, ip := range allocatedIPs {
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, ip)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs[ipam.AttributePod]).To(Equal("virt-launcher-target"))
+			}
 		})
 
 		It("should succeed when source was already deleted but target is in alternate", func() {
@@ -271,7 +361,7 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 			}
 
 			// Swap should still succeed - it only verifies alternate
-			err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+			err := EnsureActiveVMOwnerAttrs(ctx, ic, allocatedIPs, "test-ns", "test-vm", "virt-launcher-target")
 			Expect(err).NotTo(HaveOccurred())
 
 			for _, ip := range allocatedIPs {
@@ -302,15 +392,17 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 				ActiveOwnerAttrs: map[string]string{
 					ipam.AttributePod:       "virt-launcher-source",
 					ipam.AttributeNamespace: "test-ns",
+					ipam.AttributeVMIName:   "test-vm",
 				},
 				AlternateOwnerAttrs: map[string]string{
 					ipam.AttributePod:       "virt-launcher-target",
 					ipam.AttributeNamespace: "test-ns",
+					ipam.AttributeVMIName:   "test-vm",
 				},
 			}, nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = EnsureActiveVMOwnerAttrs(ctx, ic, "multus-net1", "test-ns", "test-vm", "virt-launcher-target")
+			err = EnsureActiveVMOwnerAttrs(ctx, ic, []cnet.IP{customIP}, "test-ns", "test-vm", "virt-launcher-target")
 			Expect(err).NotTo(HaveOccurred())
 
 			allocAttr, err := ic.GetAssignmentAttributes(ctx, customIP)
@@ -327,16 +419,18 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 				ActiveOwnerAttrs: map[string]string{
 					ipam.AttributePod:       "virt-launcher-target",
 					ipam.AttributeNamespace: "test-ns",
+					ipam.AttributeVMIName:   "test-vm",
 				},
 				AlternateOwnerAttrs: map[string]string{
 					ipam.AttributePod:       "virt-launcher-source",
 					ipam.AttributeNamespace: "test-ns",
+					ipam.AttributeVMIName:   "test-vm",
 				},
 			}, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now call the function - first IP should be skipped, second IP should be swapped
-			err = EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+			err = EnsureActiveVMOwnerAttrs(ctx, ic, allocatedIPs, "test-ns", "test-vm", "virt-launcher-target")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Both IPs should now have target as active

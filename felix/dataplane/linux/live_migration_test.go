@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"runtime"
@@ -32,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -74,6 +76,50 @@ func testListener(m *liveMigrationMonitor) *fakeLiveMigrationListener {
 func drainUpdates(m *liveMigrationMonitor) []liveMigrationStateUpdate {
 	_ = m.ResolveUpdateBatch()
 	return testListener(m).drain()
+}
+
+type swapCall struct {
+	ips                               []cnet.IP
+	namespace, vmiName, targetPodName string
+}
+
+// expectSwap replaces the monitor's swap function with a stub that records calls.
+func expectSwap(m *liveMigrationMonitor) chan swapCall {
+	calls := make(chan swapCall, 8)
+	m.ensureActiveVMOwnerAttrs = func(
+		ctx context.Context,
+		ipamClient ipam.Interface,
+		ips []cnet.IP,
+		namespace string,
+		vmiName string,
+		targetPodName string,
+	) error {
+		calls <- swapCall{ips, namespace, vmiName, targetPodName}
+		return nil
+	}
+	return calls
+}
+
+// expectNoSwap waits briefly and fails the test if a swap call arrives.
+func expectNoSwap(t *testing.T, calls chan swapCall, msg string) {
+	t.Helper()
+	select {
+	case <-calls:
+		t.Fatal(msg)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+// awaitSwap waits for one swap call, failing the test on timeout.
+func awaitSwap(t *testing.T, calls chan swapCall) swapCall {
+	t.Helper()
+	select {
+	case call := <-calls:
+		return call
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for ensureActiveVMOwnerAttrs to be called")
+		return swapCall{}
+	}
 }
 
 // testFSM creates a liveMigrationFSM in the given state, wired to a monitor for
@@ -130,6 +176,28 @@ func wepUpdateWithVMIName(id types.WorkloadEndpointID, role proto.LiveMigrationR
 			LiveMigrationRole:    role,
 			LiveMigrationUid:     uid,
 			LiveMigrationVmiName: vmiName,
+		},
+	}
+}
+
+func wepUpdateWithIPs(id types.WorkloadEndpointID, role proto.LiveMigrationRole, uid, vmiName string, nets ...string) *proto.WorkloadEndpointUpdate {
+	var v4Nets, v6Nets []string
+	for _, n := range nets {
+		if strings.Contains(n, ":") {
+			v6Nets = append(v6Nets, n)
+		} else {
+			v4Nets = append(v4Nets, n)
+		}
+	}
+	return &proto.WorkloadEndpointUpdate{
+		Id: protoWEPID(id),
+		Endpoint: &proto.WorkloadEndpoint{
+			Name:                 "cali" + id.EndpointId,
+			LiveMigrationRole:    role,
+			LiveMigrationUid:     uid,
+			LiveMigrationVmiName: vmiName,
+			Ipv4Nets:             v4Nets,
+			Ipv6Nets:             v6Nets,
 		},
 	}
 }
@@ -1072,35 +1140,25 @@ func TestVMINameTracking(t *testing.T) {
 
 	t.Run("IPAM swap skipped when no VMI name", func(t *testing.T) {
 		m := newTestMonitor(testConvergenceTime)
-		m.ensureActiveVMOwnerAttrs = func(
-			ctx context.Context,
-			ipamClient ipam.Interface,
-			networkName string,
-			namespace string,
-			vmiName string,
-			targetPodName string,
-		) error {
-			t.Error("ensureActiveVMOwnerAttrs should not have been called")
-			return nil
-		}
+		calls := expectSwap(m)
 
-		// WEP with namespace/pod format and UID but no VMI name.
 		wepIDWithNS := types.WorkloadEndpointID{
 			OrchestratorId: "k8s",
 			WorkloadId:     "test-ns/virt-launcher-vm1-abc",
 			EndpointId:     "ep-1",
 		}
-		m.OnUpdate(wepUpdateWithUID(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1"))
+		m.OnUpdate(wepUpdateWithIPs(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1", "", "10.0.0.5/32"))
 		drainUpdates(m)
 
-		// Trigger Target→Live.  Swap should be skipped due to missing VMI name.
 		m.OnGARPDetected(wepIDWithNS)
 		drainUpdates(m)
+		expectNoSwap(t, calls, "swap ran with no VMI name")
 	})
 
 	t.Run("IPAM swap executed on Target to Live transition", func(t *testing.T) {
 		g := NewWithT(t)
 		m := newTestMonitor(testConvergenceTime)
+		calls := expectSwap(m)
 
 		// Use a workload ID with namespace/pod format so the parser succeeds.
 		wepIDWithNS := types.WorkloadEndpointID{
@@ -1109,40 +1167,24 @@ func TestVMINameTracking(t *testing.T) {
 			EndpointId:     "ep-1",
 		}
 
-		called := make(chan struct{}, 1)
-		m.ensureActiveVMOwnerAttrs = func(
-			ctx context.Context,
-			ipamClient ipam.Interface,
-			networkName string,
-			namespace string,
-			vmiName string,
-			targetPodName string,
-		) error {
-			g.Expect(namespace).To(Equal("test-ns"))
-			g.Expect(vmiName).To(Equal("my-vmi"))
-			g.Expect(targetPodName).To(Equal("virt-launcher-vm1-abc"))
-			called <- struct{}{}
-			return nil
-		}
-
-		m.OnUpdate(wepUpdateWithVMIName(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
+		m.OnUpdate(wepUpdateWithIPs(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi", "10.0.0.5/32"))
 		drainUpdates(m)
 
 		// Trigger Target→Live via GARP.
 		m.OnGARPDetected(wepIDWithNS)
 		drainUpdates(m)
 
-		select {
-		case <-called:
-			// Success — IPAM swap was invoked.
-		case <-time.After(2 * time.Second):
-			t.Fatal("timed out waiting for ensureActiveVMOwnerAttrs to be called")
-		}
+		call := awaitSwap(t, calls)
+		g.Expect(call.namespace).To(Equal("test-ns"))
+		g.Expect(call.vmiName).To(Equal("my-vmi"))
+		g.Expect(call.targetPodName).To(Equal("virt-launcher-vm1-abc"))
+		g.Expect(call.ips).To(Equal([]cnet.IP{*cnet.ParseIP("10.0.0.5")}))
 	})
 
 	t.Run("IPAM swap executed on missed GARP path (Target to TimeWait)", func(t *testing.T) {
 		g := NewWithT(t)
 		m := newTestMonitor(testConvergenceTime)
+		calls := expectSwap(m)
 
 		wepIDWithNS := types.WorkloadEndpointID{
 			OrchestratorId: "k8s",
@@ -1150,39 +1192,23 @@ func TestVMINameTracking(t *testing.T) {
 			EndpointId:     "ep-1",
 		}
 
-		called := make(chan struct{}, 1)
-		m.ensureActiveVMOwnerAttrs = func(
-			ctx context.Context,
-			ipamClient ipam.Interface,
-			networkName string,
-			namespace string,
-			vmiName string,
-			targetPodName string,
-		) error {
-			g.Expect(namespace).To(Equal("test-ns"))
-			g.Expect(vmiName).To(Equal("my-vmi"))
-			g.Expect(targetPodName).To(Equal("virt-launcher-vm1-abc"))
-			called <- struct{}{}
-			return nil
-		}
-
-		m.OnUpdate(wepUpdateWithVMIName(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
+		m.OnUpdate(wepUpdateWithIPs(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi", "10.0.0.5/32"))
 		drainUpdates(m)
 
 		// Trigger Target→TimeWait (missed GARP path) via NoRole.
 		m.OnUpdate(wepUpdate(wepIDWithNS, proto.LiveMigrationRole_NO_ROLE))
 		drainUpdates(m)
 
-		select {
-		case <-called:
-			// Success — IPAM swap was invoked on missed GARP path.
-		case <-time.After(2 * time.Second):
-			t.Fatal("timed out waiting for ensureActiveVMOwnerAttrs on missed GARP path")
-		}
+		call := awaitSwap(t, calls)
+		g.Expect(call.namespace).To(Equal("test-ns"))
+		g.Expect(call.vmiName).To(Equal("my-vmi"))
+		g.Expect(call.targetPodName).To(Equal("virt-launcher-vm1-abc"))
+		g.Expect(call.ips).To(Equal([]cnet.IP{*cnet.ParseIP("10.0.0.5")}))
 	})
 
 	t.Run("IPAM swap only called once when going Live then TimeWait", func(t *testing.T) {
 		m := newTestMonitor(testConvergenceTime)
+		calls := expectSwap(m)
 
 		wepIDWithNS := types.WorkloadEndpointID{
 			OrchestratorId: "k8s",
@@ -1190,43 +1216,106 @@ func TestVMINameTracking(t *testing.T) {
 			EndpointId:     "ep-1",
 		}
 
-		called := make(chan struct{}, 2)
-		m.ensureActiveVMOwnerAttrs = func(
-			ctx context.Context,
-			ipamClient ipam.Interface,
-			networkName string,
-			namespace string,
-			vmiName string,
-			targetPodName string,
-		) error {
-			called <- struct{}{}
-			return nil
-		}
-
-		m.OnUpdate(wepUpdateWithVMIName(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
+		m.OnUpdate(wepUpdateWithIPs(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi", "10.0.0.5/32"))
 		drainUpdates(m)
 
 		// Target→Live via GARP (first IPAM swap).
 		m.OnGARPDetected(wepIDWithNS)
 		drainUpdates(m)
-
-		select {
-		case <-called:
-		case <-time.After(2 * time.Second):
-			t.Fatal("timed out waiting for first IPAM swap call")
-		}
+		awaitSwap(t, calls)
 
 		// Live→TimeWait via NoRole (should NOT trigger second swap).
 		m.OnUpdate(wepUpdate(wepIDWithNS, proto.LiveMigrationRole_NO_ROLE))
 		drainUpdates(m)
+		expectNoSwap(t, calls, "IPAM swap should only be called once, got second call")
+	})
+}
 
-		// Verify no second call arrives.
-		select {
-		case <-called:
-			t.Fatal("IPAM swap should only be called once, got second call")
-		case <-time.After(200 * time.Millisecond):
-			// Expected: no second call.
+func TestWEPIPTracking(t *testing.T) {
+	t.Run("WEP IPs stored from update, both families", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdateWithIPs(wepID1, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi", "10.0.0.5/32", "fd00::5/128"))
+		g.Expect(m.wepIPs[wepID1]).To(Equal([]cnet.IP{*cnet.ParseIP("10.0.0.5"), *cnet.ParseIP("fd00::5")}))
+	})
+
+	t.Run("WEP IPs cleaned up on WEP remove", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdateWithIPs(wepID1, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi", "10.0.0.5/32"))
+		g.Expect(m.wepIPs).To(HaveKey(wepID1))
+
+		m.OnUpdate(wepRemove(wepID1))
+		g.Expect(m.wepIPs).NotTo(HaveKey(wepID1))
+	})
+
+	t.Run("only /32 and /128 addresses are recorded", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdateWithIPs(wepID1, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi",
+			"10.0.0.5/32", "10.0.1.0/24", "fd00::5/128", "fd00:1::/64"))
+		g.Expect(m.wepIPs[wepID1]).To(Equal([]cnet.IP{*cnet.ParseIP("10.0.0.5"), *cnet.ParseIP("fd00::5")}))
+	})
+
+	t.Run("IPAM swap skipped when the WEP has no IPs", func(t *testing.T) {
+		m := newTestMonitor(testConvergenceTime)
+		calls := expectSwap(m)
+
+		wepIDWithNS := types.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "test-ns/virt-launcher-vm1-abc",
+			EndpointId:     "ep-1",
 		}
+		m.OnUpdate(wepUpdateWithVMIName(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
+		drainUpdates(m)
+
+		m.OnGARPDetected(wepIDWithNS)
+		drainUpdates(m)
+		expectNoSwap(t, calls, "swap ran with no IPs")
+	})
+
+	t.Run("IPAM swap uses each WEP's own IPs", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		// Two WEPs of the same VM pod: the default pod network and a Multus
+		// secondary on an L2 network.
+		podNetWEP := types.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "test-ns/virt-launcher-vm1-abc",
+			EndpointId:     "eth0",
+		}
+		l2WEP := types.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "test-ns/virt-launcher-vm1-abc",
+			EndpointId:     "pod6c270ef2f25",
+		}
+
+		calls := expectSwap(m)
+
+		m.OnUpdate(wepUpdateWithIPs(podNetWEP, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi", "10.244.44.199/32"))
+		m.OnUpdate(wepUpdateWithIPs(l2WEP, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi", "10.101.0.70/32"))
+		drainUpdates(m)
+
+		m.OnGARPDetected(podNetWEP)
+		m.OnGARPDetected(l2WEP)
+		drainUpdates(m)
+
+		var got [][]cnet.IP
+		for range 2 {
+			call := awaitSwap(t, calls)
+			g.Expect(call.namespace).To(Equal("test-ns"))
+			g.Expect(call.vmiName).To(Equal("my-vmi"))
+			g.Expect(call.targetPodName).To(Equal("virt-launcher-vm1-abc"))
+			got = append(got, call.ips)
+		}
+		g.Expect(got).To(ConsistOf(
+			[]cnet.IP{*cnet.ParseIP("10.244.44.199")},
+			[]cnet.IP{*cnet.ParseIP("10.101.0.70")},
+		))
 	})
 }
 
@@ -1260,7 +1349,7 @@ func (i *fakeIPAM) ReleaseIPs(ctx context.Context, ips ...ipam.ReleaseOptions) (
 	return nil, nil, nil
 }
 func (i *fakeIPAM) GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (*model.AllocationAttribute, error) {
-	return nil, nil
+	return nil, cerrors.ErrorResourceDoesNotExist{Identifier: addr.String(), Err: errors.New("IP is unassigned")}
 }
 func (i *fakeIPAM) IPsByHandle(ctx context.Context, handleID string) ([]cnet.IP, error) {
 	return nil, nil
