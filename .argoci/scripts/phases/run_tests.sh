@@ -256,6 +256,48 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   esac
   mkdir -p "${go_cache}"
 
+  sandcat_sh="$(cd "$(dirname "${BASH_SOURCE[0]}")/../sandcat" && pwd)/sandcat.sh"
+  rm -rf report/sandcat report/report.json "${HOME}/.sandcat-analyzed"
+  sandcat_inline=()
+  sandcat_xtrace=""
+  [[ $- == *x* ]] && sandcat_xtrace=1 && set +x
+  if sandcat_env=$(SANDCAT_TOTAL_BUDGET="${SANDCAT_TOTAL_BUDGET:-10m}" "${sandcat_sh}" inline-env \
+      --kubeconfig "${BZ_LOCAL_DIR}/kubeconfig" --source-dir "$(pwd)"); then
+    eval "${sandcat_env}"
+    export SANDCAT_GEMINI_KEY="${SANDCAT_INLINE_GEMINI_KEY}"
+    sandcat_inline=(
+      -v "${SANDCAT_INLINE_BIN}:/usr/local/bin/sandcat:ro"
+      -e SANDCAT_INLINE_DIAG=1
+      -e SANDCAT_BIN=/usr/local/bin/sandcat
+      -e SANDCAT_GEMINI_KEY
+      -e E2E_SANDCAT_SOURCE_DIR=/go/src/github.com/projectcalico/calico
+      -e E2E_SANDCAT_OUT_DIR=/go/src/github.com/projectcalico/calico/report/sandcat
+      -e E2E_SANDCAT_E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
+      -e "E2E_SANDCAT_SHA=${SANDCAT_INLINE_SHA}"
+      -e E2E_TEST_CONFIG
+      -e "SANDCAT_SIG_DIR=${SANDCAT_SIG_DIR}"
+      -e "SANDCAT_MAX_DIAGNOSES=${SANDCAT_MAX_DIAGNOSES}"
+      -e "SANDCAT_TOTAL_BUDGET=${SANDCAT_TOTAL_BUDGET}"
+      -e SANDCAT_DB_URL -e SANDCAT_DB_TOKEN
+      -e CI_WORKFLOW_NAME -e CI_WORKFLOW_URL -e CI_STEP_NAME -e CI_STEP_ID
+      -e CI_GIT_REPO_SLUG -e CI_GIT_BRANCH -e CI_GIT_REF_TYPE
+      -e CI_GIT_PR_BRANCH -e CI_GIT_PR_NUMBER -e CI_GIT_PR_TITLE
+    )
+    if [[ -n "${SANDCAT_INLINE_CALICO_MCP_BIN}" ]]; then
+      sandcat_inline+=(
+        -v "${SANDCAT_INLINE_CALICO_MCP_BIN}:/usr/local/bin/calico-mcp:ro"
+        -e CALICO_MCP_BIN=/usr/local/bin/calico-mcp
+      )
+    fi
+    if [[ -n "${SANDCAT_INLINE_PR_CONTEXT}" ]]; then
+      sandcat_inline+=(
+        -v "${SANDCAT_INLINE_PR_CONTEXT}:/tmp/sandcat-pr-context.json:ro"
+        -e SANDCAT_PR_CONTEXT=/tmp/sandcat-pr-context.json
+      )
+    fi
+  fi
+  [[ -n "${sandcat_xtrace}" ]] && set -x
+
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
   e2e_rc=0
@@ -270,6 +312,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
     "${auth_mount[@]}" \
     "${aws_cred_env[@]}" \
+    ${sandcat_inline[@]+"${sandcat_inline[@]}"} \
     -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
     -v "${go_cache}":/go-cache:rw \
     -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
@@ -288,6 +331,13 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
   mkdir -p "${REPORT_DIR}"
   cp report/junit.xml "${REPORT_DIR}/junit.xml" 2>/dev/null || true
+
+  ("${sandcat_sh}" push-specs --spec-dir report/sandcat) || true
+  ("${sandcat_sh}" analyze \
+    --report report/report.json \
+    --log-file "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" \
+    --kubeconfig "${BZ_LOCAL_DIR}/kubeconfig" \
+    --source-dir "$(pwd)") || true
   popd || exit
 
   check_component_logs

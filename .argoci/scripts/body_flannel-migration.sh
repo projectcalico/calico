@@ -125,7 +125,9 @@ kubectl get po -A -owide
 E2E_TEST_CONFIG='e2e/config/pre-migration-smoke.yaml' STERN_CHECK=DISABLED bash "${PHASES}/run_tests.sh"
 
 # A post-migration run that never reaches Ginkgo must not publish these passes.
-rm -f "${REPORT_DIR}/junit.xml" "${CI_HOME}/${CI_GIT_DIR}/report/junit.xml"
+rm -rf "${REPORT_DIR}/junit.xml" "${CI_HOME}/${CI_GIT_DIR}/report/junit.xml" \
+  "${CI_HOME}/${CI_GIT_DIR}/report/report.json" "${CI_HOME}/${CI_GIT_DIR}/report/sandcat" \
+  "${HOME}/.sandcat-analyzed"
 
 kubectl delete -n kube-system ds cni-installer || true  # remove the CNI installer daemonset
 kubectl apply -f "$DOCS_URL/$CALICO_MANIFEST"
