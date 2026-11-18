@@ -25,7 +25,7 @@ sudo mkdir -p /etc/needrestart/conf.d 2>/dev/null || true
 printf '\044nrconf{restart} = '\''a'\'';\n' | sudo tee /etc/needrestart/conf.d/50-autorestart.conf > /dev/null 2>/dev/null || true
 
 echo "[INFO] Clean out language tools we don't use to free up disk"
-sudo rm -rf ~/{.kerl,.kiex,.npm,.nvm,.phpbrew,.rbenv,.sbt} /opt/{apache-maven*,firefox*,scala} /usr/lib/jvm /usr/local/{aws2,golang,phantomjs*} /root/.local/share/heroku /usr/local/lib/heroku
+sudo rm -rf ~/{.kerl,.kiex,.npm,.nvm,.phpbrew,.rbenv,.sbt} /opt/{apache-maven*,firefox*,scala} /usr/lib/jvm /usr/local/{aws2,phantomjs*} /root/.local/share/heroku /usr/local/lib/heroku
 
 echo "[INFO] overriding DNS..."
 echo "nameserver 208.67.222.222" | sudo tee /etc/resolv.conf
