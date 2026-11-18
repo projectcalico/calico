@@ -145,7 +145,6 @@ func (o Options) KeyFunc(namespaced bool) func(context.Context, string) (string,
 func (o Options) GetStorage(
 	resourcePrefix string,
 	keyFunc func(obj runtime.Object) (string, error),
-	reverseKeyFunc storage.ReverseKeyFunc,
 	scopeStrategy rest.NamespaceScopedStrategy,
 	newFunc func() runtime.Object,
 	newListFunc func() runtime.Object,
@@ -154,6 +153,12 @@ func (o Options) GetStorage(
 	indexers *cache.Indexers,
 ) (registry.DryRunnableStorage, factory.DestroyFunc, error) {
 	if o.storageType == StorageTypeEtcd {
+		// Watch events carry the keys the store writes, which are always under
+		// resourcePrefix, including for status subresources.
+		reverseKeyFunc := registry.NoNamespaceReverseKeyFunc(resourcePrefix)
+		if scopeStrategy.NamespaceScoped() {
+			reverseKeyFunc = registry.NamespaceReverseKeyFunc(resourcePrefix)
+		}
 		etcdRESTOpts := o.EtcdOptions.RESTOptions
 		storageInterface, dFunc, err := etcdRESTOpts.Decorator(
 			etcdRESTOpts.StorageConfig,

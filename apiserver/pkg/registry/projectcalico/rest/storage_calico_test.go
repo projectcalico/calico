@@ -15,13 +15,15 @@
 package rest_test
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic"
+	"k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
@@ -33,7 +35,6 @@ import (
 
 type decoration struct {
 	resourcePrefix string
-	keyFunc        generic.CacheKeyFunc
 	reverseKeyFunc storage.ReverseKeyFunc
 	newFunc        func() runtime.Object
 }
@@ -49,7 +50,7 @@ func (g *recordingGetter) GetRESTOptions(resource schema.GroupResource, _ runtim
 		Decorator: func(
 			_ *storagebackend.ConfigForResource,
 			resourcePrefix string,
-			keyFunc generic.CacheKeyFunc,
+			_ generic.CacheKeyFunc,
 			reverseKeyFunc storage.ReverseKeyFunc,
 			newFunc func() runtime.Object,
 			_ func() runtime.Object,
@@ -57,38 +58,47 @@ func (g *recordingGetter) GetRESTOptions(resource schema.GroupResource, _ runtim
 			_ storage.IndexerFuncs,
 			_ *cache.Indexers,
 		) (storage.Interface, factory.DestroyFunc, error) {
-			g.decorations = append(g.decorations, decoration{resourcePrefix, keyFunc, reverseKeyFunc, newFunc})
+			g.decorations = append(g.decorations, decoration{resourcePrefix, reverseKeyFunc, newFunc})
 			return nil, func() {}, nil
 		},
 	}, nil
 }
 
 // The etcd watch cache recovers object identity from the storage key alone
-// when watching without previous values, so every resource must pass a reverse
-// key function that undoes its key function.
+// when watching without previous values, so every decorated storage, status
+// storages included, must reverse the keys its registry store writes.
 func TestEtcdStorageReverseKeyFuncsRoundTrip(t *testing.T) {
 	getter := &recordingGetter{}
 	provider := calicorest.RESTStorageProvider{StorageType: server.StorageTypeEtcd}
-	if _, err := provider.NewV3Storage(runtime.NewScheme(), getter, nil, nil, nil); err != nil {
+	storages, err := provider.NewV3Storage(runtime.NewScheme(), getter, nil, nil, nil)
+	if err != nil {
 		t.Fatalf("NewV3Storage: %v", err)
 	}
 	if len(getter.decorations) == 0 {
 		t.Fatal("no storage was decorated")
 	}
 
-	for _, d := range getter.decorations {
-		obj := d.newFunc()
-		accessor, err := meta.Accessor(obj)
-		if err != nil {
-			t.Fatalf("%s: %v", d.resourcePrefix, err)
+	// A status store copies its main store, so it writes the same keys.
+	stores := map[reflect.Type]*registry.Store{}
+	for _, s := range storages {
+		if store := registryStore(s); store != nil {
+			stores[reflect.TypeOf(store.NewFunc())] = store
 		}
-		accessor.SetName("obj-a")
-		accessor.SetNamespace("ns-a")
+	}
 
-		key, err := d.keyFunc(obj)
+	ctx := genericapirequest.WithNamespace(genericapirequest.NewContext(), "ns-a")
+	for _, d := range getter.decorations {
+		store, ok := stores[reflect.TypeOf(d.newFunc())]
+		if !ok {
+			t.Errorf("%s: no registry store writes this type", d.resourcePrefix)
+			continue
+		}
+		key, err := store.KeyFunc(ctx, "obj-a")
 		if err != nil {
 			t.Fatalf("%s: key func: %v", d.resourcePrefix, err)
 		}
+		// The store's keys omit the leading slash that every resourcePrefix carries.
+		key = "/" + strings.TrimPrefix(key, "/")
 		if d.reverseKeyFunc == nil {
 			t.Errorf("%s: no reverse key func", d.resourcePrefix)
 			continue
@@ -99,11 +109,33 @@ func TestEtcdStorageReverseKeyFuncsRoundTrip(t *testing.T) {
 			continue
 		}
 		wantNamespace := ""
-		if strings.Contains(key, "/ns-a/") {
+		if store.NamespaceScoped() {
 			wantNamespace = "ns-a"
 		}
 		if name != "obj-a" || namespace != wantNamespace {
 			t.Errorf("%s: reverse of %q = (%q, %q), want (%q, %q)", d.resourcePrefix, key, name, namespace, "obj-a", wantNamespace)
 		}
 	}
+}
+
+// registryStore follows the exported, embedded Store fields that wrap a
+// registry.Store, and returns nil for storages that do not wrap one.
+func registryStore(s any) *registry.Store {
+	v := reflect.ValueOf(s)
+	for v.IsValid() {
+		if store, ok := v.Interface().(*registry.Store); ok {
+			return store
+		}
+		if v.Kind() == reflect.Pointer {
+			if v.IsNil() {
+				return nil
+			}
+			v = v.Elem()
+		}
+		if v.Kind() != reflect.Struct {
+			return nil
+		}
+		v = v.FieldByName("Store")
+	}
+	return nil
 }
