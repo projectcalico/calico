@@ -62,9 +62,9 @@ $(BUILD_DIR):
 
 # Get version from git.
 ifeq ($(LOCAL_BUILD),true)
-  GIT_VERSION?=$(shell git describe --tags --dirty --always --abbrev=12)-dev-build
+  GIT_VERSION?=$(shell git describe --tags --match '$(GIT_VERSION_TAG_MATCH)' --dirty --always --abbrev=12)-dev-build
 else
-  GIT_VERSION?=$(shell git describe --tags --dirty --always --abbrev=12)
+  GIT_VERSION?=$(shell git describe --tags --match '$(GIT_VERSION_TAG_MATCH)' --dirty --always --abbrev=12)
 endif
 
 # The version, registry and image path the built operator resolves Calico images at. A

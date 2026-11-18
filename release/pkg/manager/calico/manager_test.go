@@ -230,7 +230,7 @@ func TestBuild(t *testing.T) {
 	const (
 		ver         = "v3.30.0"
 		headSHA     = "1111111111111111111111111111111111111111"
-		gitDescribe = "git describe --tags --always --long --abbrev=12 --dirty"
+		gitDescribe = "git describe --tags --match v[0-9]*.[0-9]*.[0-9]* --always --long --abbrev=12 --dirty"
 	)
 
 	tests := []struct {
@@ -625,7 +625,7 @@ func TestOwnerFromRemoteURL(t *testing.T) {
 // TestCutPlanAdvancesMain asserts a cut off main emits no derived tag and
 // advances main to the next minor.
 func TestCutPlanAdvancesMain(t *testing.T) {
-	f := newFakeRunner().on("git describe --tags --abbrev=0 master", "v3.33.0-0.dev", nil)
+	f := newFakeRunner().on("git describe --tags --match v[0-9]*.[0-9]*.[0-9]* --abbrev=0 master", "v3.33.0-0.dev", nil)
 	m := &CalicoManager{runner: f}
 	root := t.TempDir()
 	for _, opt := range []Option{
