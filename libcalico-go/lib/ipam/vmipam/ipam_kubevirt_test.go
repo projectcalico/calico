@@ -167,10 +167,12 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributePod:       "virt-launcher-source",
 						ipam.AttributeNamespace: "test-ns",
+						ipam.AttributeVMIName:   "test-vm",
 					},
 					AlternateOwnerAttrs: map[string]string{
 						ipam.AttributePod:       "virt-launcher-target",
 						ipam.AttributeNamespace: "test-ns",
+						ipam.AttributeVMIName:   "test-vm",
 					},
 				}, nil)
 				Expect(err).NotTo(HaveOccurred())
@@ -211,7 +213,7 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 			}
 		})
 
-		It("should return ErrAlternateOwnerEmpty when alternate is cleared before swap", func() {
+		It("should leave the allocation unchanged when alternate is cleared before swap", func() {
 			ctx := context.Background()
 
 			// Clear alternate owner on all IPs (simulates target pod deleted before swap)
@@ -223,9 +225,12 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 			}
 
 			err := EnsureActiveVMOwnerAttrs(ctx, ic, allocatedIPs, "test-ns", "test-vm", "virt-launcher-target")
-			Expect(err).To(HaveOccurred())
-			Expect(errors.Is(err, ErrAlternateOwnerEmpty)).To(BeTrue(),
-				fmt.Sprintf("Expected ErrAlternateOwnerEmpty, got: %v", err))
+			Expect(err).NotTo(HaveOccurred())
+			for _, ip := range allocatedIPs {
+				allocAttr, err := ic.GetAssignmentAttributes(ctx, ip)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocAttr.ActiveOwnerAttrs[ipam.AttributePod]).To(Equal("virt-launcher-source"))
+			}
 		})
 
 		It("should return ErrAlternateOwnerMismatch when alternate is a different pod", func() {
@@ -237,6 +242,7 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 					AlternateOwnerAttrs: map[string]string{
 						ipam.AttributePod:       "virt-launcher-unexpected",
 						ipam.AttributeNamespace: "test-ns",
+						ipam.AttributeVMIName:   "test-vm",
 					},
 				}, nil)
 				Expect(err).NotTo(HaveOccurred())
@@ -312,7 +318,7 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 			Expect(allocAttr.ActiveOwnerAttrs[ipam.AttributePod]).To(Equal("virt-launcher-target"))
 		})
 
-		It("should skip an IP whose handle is not the VM's, leaving it untouched", func() {
+		It("should skip an IP that is not the VMI's, leaving it untouched", func() {
 			ctx := context.Background()
 
 			// Allocate an IP under a pod (container ID) handle.
@@ -386,10 +392,12 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 				ActiveOwnerAttrs: map[string]string{
 					ipam.AttributePod:       "virt-launcher-source",
 					ipam.AttributeNamespace: "test-ns",
+					ipam.AttributeVMIName:   "test-vm",
 				},
 				AlternateOwnerAttrs: map[string]string{
 					ipam.AttributePod:       "virt-launcher-target",
 					ipam.AttributeNamespace: "test-ns",
+					ipam.AttributeVMIName:   "test-vm",
 				},
 			}, nil)
 			Expect(err).NotTo(HaveOccurred())
@@ -411,10 +419,12 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 				ActiveOwnerAttrs: map[string]string{
 					ipam.AttributePod:       "virt-launcher-target",
 					ipam.AttributeNamespace: "test-ns",
+					ipam.AttributeVMIName:   "test-vm",
 				},
 				AlternateOwnerAttrs: map[string]string{
 					ipam.AttributePod:       "virt-launcher-source",
 					ipam.AttributeNamespace: "test-ns",
+					ipam.AttributeVMIName:   "test-vm",
 				},
 			}, nil)
 			Expect(err).NotTo(HaveOccurred())

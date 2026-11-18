@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -130,7 +131,7 @@ func (m *liveMigrationMonitor) ResolveUpdateBatch() error {
 // parseWEPIPs returns the endpoint's /32 and /128 addresses without their prefix lengths.
 func parseWEPIPs(ep *proto.WorkloadEndpoint) []cnet.IP {
 	var ips []cnet.IP
-	for _, s := range append(append([]string{}, ep.Ipv4Nets...), ep.Ipv6Nets...) {
+	for _, s := range slices.Concat(ep.Ipv4Nets, ep.Ipv6Nets) {
 		ip, ipNet, err := net.ParseCIDR(s)
 		if err != nil {
 			continue
@@ -604,7 +605,7 @@ func (f *liveMigrationFSM) doIPAMOwnerSwap() {
 				logCtx.Info("Successfully swapped IPAM owner attributes")
 				return
 			}
-			if errors.Is(err, vmipam.ErrAlternateOwnerEmpty) || errors.Is(err, vmipam.ErrAlternateOwnerMismatch) {
+			if errors.Is(err, vmipam.ErrAlternateOwnerMismatch) {
 				logCtx.WithError(err).Warn("Non-retryable error swapping IPAM owner attributes")
 				return
 			}

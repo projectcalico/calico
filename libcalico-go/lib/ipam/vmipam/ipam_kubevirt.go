@@ -25,7 +25,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -33,18 +32,9 @@ import (
 
 // Error types for EnsureActiveVMOwnerAttrs
 var (
-	// ErrAlternateOwnerEmpty is returned when AlternateOwnerAttrs is empty,
-	// indicating the target pod was deleted before the promotion could complete.
-	ErrAlternateOwnerEmpty = errors.New("AlternateOwnerAttrs is empty")
-
 	// ErrAlternateOwnerMismatch is returned when AlternateOwnerAttrs doesn't match
 	// the expected target owner, indicating an unexpected state.
 	ErrAlternateOwnerMismatch = errors.New("AlternateOwnerAttrs doesn't match expected target owner")
-
-	// errSkipIP marks a per-IP condition that is permanently true for that IP
-	// (not allocated by Calico IPAM, released, or not this VM's allocation), so the IP is
-	// skipped rather than retried or failed.
-	errSkipIP = errors.New("nothing to promote")
 )
 
 // VMHandleInfix separates a VM handle's network name from its namespace and VM name.
@@ -118,8 +108,8 @@ func VMHandleNetworks(handle string) iter.Seq[string] {
 	}
 }
 
-// EnsureActiveVMOwnerAttrs atomically verifies the target pod is in AlternateOwnerAttrs
-// and promotes it to ActiveOwnerAttrs for each of the given IPs.
+// For each of the given IPs, EnsureActiveVMOwnerAttrs atomically verifies the target pod
+// is in AlternateOwnerAttrs and promotes it to ActiveOwnerAttrs.
 //
 // This is called by Felix when KubeVirt live migration completes to transfer
 // IP ownership to the target pod. Unlike a strict swap, this function only verifies
@@ -130,12 +120,11 @@ func VMHandleNetworks(handle string) iter.Seq[string] {
 // as the active owner, it will be skipped (success). This handles partial success scenarios
 // where some IPs were swapped successfully before an error occurred.
 //
-// The IPs are the workload endpoint's addresses as Felix knows them. Each allocation
-// carries its own handle ID, which is verified to be one CreateVMHandleID could have
-// built for the VMI, so the caller never has to know which network name the CNI
-// plugin built the handle from. An IP with no Calico IPAM allocation (e.g. an
-// ipAddrsNoIpam interface) or that is not the VMI's is skipped, so an empty list or
-// one where every IP is skipped returns nil.
+// The IPs are the workload endpoint's addresses as Felix knows them. Each allocation is
+// verified to be the VMI's by the vmi-name and namespace the CNI plugin writes into its
+// owner attributes. An IP with no Calico IPAM allocation (e.g. an ipAddrsNoIpam
+// interface) or that is not the VMI's is skipped, so an empty list or one where every
+// IP is skipped returns nil.
 //
 // Parameters:
 //   - ctx: Context for the operation
@@ -147,7 +136,6 @@ func VMHandleNetworks(handle string) iter.Seq[string] {
 //
 // Returns:
 //   - nil: Success, target is active owner for all IPs (already was or just swapped)
-//   - ErrAlternateOwnerEmpty: AlternateOwnerAttrs is empty and target is not active (target pod deleted)
 //   - ErrAlternateOwnerMismatch: AlternateOwnerAttrs contains a different pod than expected
 //   - other error: Transient failure (network, CAS conflict, etc.) - caller should retry
 //
@@ -170,15 +158,11 @@ func EnsureActiveVMOwnerAttrs(
 	var lastErr error
 	for _, ip := range ips {
 		if err := verifyAndSwapSingleIP(ctx, ipamClient, ip, namespace, vmiName, expectedTargetOwner); err != nil {
-			if errors.Is(err, errSkipIP) {
-				log.WithError(err).WithField("ip", ip).Info("Skipping IP for owner swap")
-				continue
-			}
 			lastErr = err
 			log.WithError(err).WithField("ip", ip).Warning("Failed to swap owner for IP")
 
 			// If this is a non-retryable error, return immediately
-			if errors.Is(err, ErrAlternateOwnerEmpty) || errors.Is(err, ErrAlternateOwnerMismatch) {
+			if errors.Is(err, ErrAlternateOwnerMismatch) {
 				return err
 			}
 			// For transient errors, continue to try other IPs
@@ -192,35 +176,8 @@ func EnsureActiveVMOwnerAttrs(
 
 const swapRetries = 5
 
-// handleBelongsToVM is whether the handle is one CreateVMHandleID could have built
-// for the VM, for any network name.
-func handleBelongsToVM(handle, namespace, vmName string) bool {
-	for network := range VMHandleNetworks(handle) {
-		if CreateVMHandleID(network, namespace, vmName) == handle {
-			return true
-		}
-	}
-	return false
-}
-
-// allocationBelongsToVM is whether the allocation is the VMI's: an owner slot
-// names the VMI (the CNI writes vmi-name and namespace alongside each owner),
-// or the handle is one CreateVMHandleID could have built for it.
-func allocationBelongsToVM(allocAttr *model.AllocationAttribute, namespace, vmiName string) bool {
-	for _, attrs := range []map[string]string{allocAttr.ActiveOwnerAttrs, allocAttr.AlternateOwnerAttrs} {
-		if attrs[ipam.AttributeVMIName] == vmiName && attrs[ipam.AttributeNamespace] == namespace {
-			return true
-		}
-	}
-	var handleID string
-	if allocAttr.HandleID != nil {
-		handleID = *allocAttr.HandleID
-	}
-	return handleBelongsToVM(handleID, namespace, vmiName)
-}
-
-// verifyAndSwapSingleIP reads the current owner attributes, verifies the allocation's
-// handle belongs to the VMI and the target is in AlternateOwnerAttrs, and atomically
+// verifyAndSwapSingleIP reads the current owner attributes, verifies the allocation
+// is the VMI's and the target is in AlternateOwnerAttrs, and atomically
 // promotes it to ActiveOwnerAttrs.
 //
 // Both active and alternate owners are verified as preconditions to prevent
@@ -239,10 +196,12 @@ func verifyAndSwapSingleIP(
 		allocAttr, err := ipamClient.GetAssignmentAttributes(ctx, ip)
 		if err != nil {
 			if errors.As(err, new(cerrors.ErrorResourceDoesNotExist)) {
-				return fmt.Errorf("%w: IP %s is not assigned", errSkipIP, ip)
+				log.WithField("ip", ip).Info("Skipping owner swap: IP is not assigned")
+				return nil
 			}
 			if errors.As(err, new(cerrors.ErrorIPInCooldown)) {
-				return fmt.Errorf("%w: IP %s is released", errSkipIP, ip)
+				log.WithField("ip", ip).Info("Skipping owner swap: IP is released")
+				return nil
 			}
 			return fmt.Errorf("failed to get assignment attributes for IP %s: %w", ip, err)
 		}
@@ -251,19 +210,17 @@ func verifyAndSwapSingleIP(
 		if allocAttr.HandleID != nil {
 			handleID = *allocAttr.HandleID
 		}
-		if !allocationBelongsToVM(allocAttr, namespace, vmiName) {
-			return fmt.Errorf("%w: IP %s (handle %q) is not an allocation of VMI %s/%s (VMI name read from the pod's labels)",
-				errSkipIP, ip, handleID, namespace, vmiName)
-		}
 
 		// IDEMPOTENCY: If target is already the active owner, nothing to do
 		if expectedTargetOwner.Matches(allocAttr.ActiveOwnerAttrs) {
 			return nil
 		}
 
-		// Check if AlternateOwnerAttrs is empty
-		if len(allocAttr.AlternateOwnerAttrs) == 0 {
-			return fmt.Errorf("%w for IP %s", ErrAlternateOwnerEmpty, ip)
+		alt := allocAttr.AlternateOwnerAttrs
+		if alt[ipam.AttributeVMIName] != vmiName || alt[ipam.AttributeNamespace] != namespace {
+			log.WithFields(log.Fields{"ip": ip, "handle": handleID, "namespace": namespace, "vmi": vmiName}).Info(
+				"Skipping owner swap: no pending owner from this VMI (VMI name read from the pod's labels)")
+			return nil
 		}
 
 		// Verify AlternateOwnerAttrs matches expected target owner
