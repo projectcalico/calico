@@ -416,3 +416,34 @@ steps:
         - ^\.argoci/scripts/test_scripts/check-cron-coverage\.sh$
     commands: |
       ./.argoci/scripts/test_scripts/check-cron-coverage.sh
+
+  # Fetched here, in a pod, so the PR read token never reaches the e2e VMs.
+  - name: sandcat-pr-context
+    jobSize: small
+    requests: {cpu: 500m, memory: 548Mi}
+    secretBundles:
+      - name: sandcat-download
+        keys:
+          - name: SANDCAT_BIN_DOWNLOAD_TOKEN
+      - name: sandcat-nightly
+        keys:
+          - name: GH_TOKEN
+            as: SANDCAT_PR_READ_TOKEN
+    commands: |
+      .argoci/scripts/sandcat/sandcat.sh publish-pr-context || true
+
+  - name: check-sandcat-scripts
+    jobSize: small
+    requests: {cpu: 1500m, memory: 548Mi}
+    changes:
+      in:
+        - ^\.argoci/scripts/sandcat/
+        - ^Makefile$
+    commands: |
+      set -e
+      ./.argoci/scripts/sandcat/test_scripts/sandcat-inline-env.sh
+      ./.argoci/scripts/sandcat/test_scripts/with-inline-diag.sh
+      ./.argoci/scripts/sandcat/test_scripts/sandcat-build-failure.sh
+      ./.argoci/scripts/sandcat/test_scripts/sandcat-analyze.sh
+      ./.argoci/scripts/sandcat/test_scripts/sandcat-download.sh
+      ./.argoci/scripts/sandcat/test_scripts/sandcat-pr-context.sh
