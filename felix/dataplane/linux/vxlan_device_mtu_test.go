@@ -20,8 +20,8 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 )
 
-// Both VXLAN managers pass this value for the one shared device, so it must
-// cover the larger family; a v6-only cluster must not get the unused v4 MTU.
+// The shared device must cover the larger enabled family, and must not take
+// the MTU of a family that has VXLAN off.
 func TestBPFVXLANDeviceMTU(t *testing.T) {
 	for _, tst := range []struct {
 		name        string

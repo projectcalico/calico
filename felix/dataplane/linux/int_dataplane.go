@@ -1537,13 +1537,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				vxlanMgrOps...,
 			)
 			dp.vxlanParentIfaceCV6 = make(chan string, 1)
-			vxlanMTU := config.VXLANMTUV6
-			if config.BPFEnabled {
-				vxlanMTU = bpfVXLANDeviceMTU(config)
-			}
 			go dp.vxlanManagerV6.keepVXLANDeviceInSync(
 				context.Background(),
-				vxlanMTU,
+				config.VXLANMTUV6,
 				dataplaneFeatures.ChecksumOffloadBroken,
 				10*time.Second,
 				dp.vxlanParentIfaceCV6,
@@ -1836,9 +1832,8 @@ func determinePodMTU(config Config) int {
 }
 
 // bpfVXLANDeviceMTU returns the MTU of the VXLAN device that BPF mode shares
-// between IP families. The kernel still checks the device MTU, for example when
-// it forwards IPv6, so it must fit the larger family; routes and workload MTUs
-// keep each family within its own limit.
+// between IP families. In dual-stack only the IPv4 manager sets it, and the
+// kernel still checks it (e.g. when forwarding IPv6), so it fits the larger family.
 func bpfVXLANDeviceMTU(config Config) int {
 	mtu := 0
 	if config.RulesConfig.VXLANEnabled {
