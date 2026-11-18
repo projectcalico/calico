@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,6 +69,13 @@ type K8sResourceClient interface {
 	// EnsureInitialized ensures that the backend is initialized
 	// any ready to be used.
 	EnsureInitialized() error
+}
+
+// DryRunClient is implemented by resource clients whose writes honor api.WithDryRun.
+// The backend refuses a dry-run write to any other client, since that client would
+// persist it.
+type DryRunClient interface {
+	SupportsDryRun() bool
 }
 
 // K8sNodeResourceClient extends the K8sResourceClient to add a helper method to

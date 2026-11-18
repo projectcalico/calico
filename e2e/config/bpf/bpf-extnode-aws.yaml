@@ -9,6 +9,8 @@ extends: pipeline.yaml
 
 exclude:
   labels:
+    - label: RequiresV3CRDs
+      reason: "aggregated API server lane; the BGP mesh specs cut kube-apiserver off from calico-apiserver and cannot restore the mesh"
     - label: Feature:Maglev
       reason: "maglev needs BPF DSR, which this lane does not enable"
     - label: RequiresXtables

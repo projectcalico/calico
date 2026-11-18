@@ -1,0 +1,66 @@
+# ValidatingAdmissionPolicy that protects the AWS VPC CNI's pod IP annotation.
+# Calico reads a pod's IP from it until the kubelet reports one, whatever the
+# CNI, so it should not be editable by anyone but the AWS VPC CNI by default.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: protect-aws-vpc-annotations.projectcalico.org
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      # Annotations are writable through pods/status too, and a pods/binding create
+      # copies its own annotations onto the pod. Don't widen this to pods/*:
+      # pods/exec carries no metadata, so kubectl exec would be denied.
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods", "pods/status", "pods/binding"]
+        operations: ["CREATE", "UPDATE"]
+  variables:
+    - name: newAnn
+      expression: "has(object.metadata.annotations) ? object.metadata.annotations : {}"
+    # oldObject is null on CREATE.
+    - name: oldAnn
+      expression: >-
+        request.operation == 'UPDATE'
+          ? (has(oldObject.metadata.annotations) ? oldObject.metadata.annotations : {})
+          : {}
+    # Written by the AWS VPC CNI's aws-node DaemonSet when ANNOTATE_POD_IP is on.
+    - name: awsKeys
+      expression: "['vpc.amazonaws.com/pod-ips']"
+    # Keys this write adds, changes or removes.
+    - name: changed
+      expression: >-
+        variables.awsKeys.filter(k,
+          k in variables.newAnn
+            ? !(k in variables.oldAnn) || variables.oldAnn[k] != variables.newAnn[k]
+            : k in variables.oldAnn)
+    # Calico's calico-aws-vpc-annotations ClusterRole grants this to the AWS VPC CNI's
+    # kube-system:aws-node account. Nothing serves this resource; it exists only to be granted.
+    - name: canWriteAWSAnnotations
+      expression: >-
+        authorizer.group('projectcalico.org')
+          .resource('awsvpcannotations')
+          .check('write').allowed()
+    # Anyone who may delete this policy could remove it anyway, so they are not refused.
+    - name: canDeletePolicy
+      expression: >-
+        authorizer.group('admissionregistration.k8s.io')
+          .resource('validatingadmissionpolicies')
+          .name('protect-aws-vpc-annotations.projectcalico.org')
+          .check('delete').allowed()
+  validations:
+    - expression: "variables.changed.size() == 0 || variables.canWriteAWSAnnotations || variables.canDeletePolicy"
+      reason: Forbidden
+      message: "Only identities allowed to write awsvpcannotations.projectcalico.org, or to delete this policy, may set, change or remove these pod annotations"
+      messageExpression: >-
+        'Only identities allowed to write awsvpcannotations.projectcalico.org, or to delete this policy, may set, change or remove these pod annotations: ' +
+        variables.changed.join(', ')
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: protect-aws-vpc-annotations.projectcalico.org
+spec:
+  policyName: protect-aws-vpc-annotations.projectcalico.org
+  validationActions: [Deny]

@@ -344,6 +344,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 			return reconcile.Result{}, err
 		}
 
+		// A user-provided gateway certificate is served as-is even when its names
+		// do not cover the gateway hostname, so clients fail TLS verification with
+		// no operator signal. Operator-managed certificates always carry the
+		// hostname, so only the BYO path needs the check.
+		if gatewayTLSKeyPair.BYO() {
+			if cert, err := certificatemanagement.ParseCertificate(gatewayTLSKeyPair.GetCertificatePEM()); err == nil {
+				if err := certificatemanager.HasExpectedDNSNames(whisker.GatewayTLSSecretName, common.OperatorNamespace(), cert, []string{gw.Hostname}); err != nil {
+					err := fmt.Errorf("the gateway certificate in secret %q does not match the hostname %q; clients will fail TLS verification",
+						whisker.GatewayTLSSecretName, gw.Hostname)
+					r.status.SetDegraded(operatorv1.InvalidConfigurationError, "Gateway certificate hostname mismatch", err, reqLogger)
+					return reconcile.Result{}, err
+				}
+			}
+		}
+
 		gatewayComponents, err = gwHelper.Components(ctx, gw, gatewayTLSKeyPair)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceCreateError, "Failed to render gateway resources", err, reqLogger)

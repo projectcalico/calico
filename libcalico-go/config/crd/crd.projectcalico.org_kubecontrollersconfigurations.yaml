@@ -152,6 +152,7 @@ spec:
                                     description:
                                       NodeSelector allows the AutoHostEndpoint
                                       to be created only for specific nodes
+                                    maxLength: 1024
                                     type: string
                                 type: object
                               type: array
@@ -247,9 +248,9 @@ spec:
                 logSeverityScreen:
                   description: |-
                     LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-                    Valid values are: "None", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
+                    Valid values are: "Trace", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
                   enum:
-                    - None
+                    - Trace
                     - Debug
                     - Info
                     - Warning
@@ -400,6 +401,7 @@ spec:
                                         description:
                                           NodeSelector allows the AutoHostEndpoint
                                           to be created only for specific nodes
+                                        maxLength: 1024
                                         type: string
                                     type: object
                                   type: array
@@ -499,9 +501,9 @@ spec:
                     logSeverityScreen:
                       description: |-
                         LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-                        Valid values are: "None", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
+                        Valid values are: "Trace", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
                       enum:
-                        - None
+                        - Trace
                         - Debug
                         - Info
                         - Warning

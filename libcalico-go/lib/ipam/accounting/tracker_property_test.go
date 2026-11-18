@@ -37,11 +37,14 @@ type trackerInputs struct {
 	nodes        map[string]bool
 	namedNodes   bool
 	refs         map[string]AddressRef
+	extra        []string
+	newTracker   func() *Tracker
 }
 
 // rebuild is the answer the incremental tracker must match: everything added at once to a new tracker.
 func (in *trackerInputs) rebuild() *Tracker {
-	tr := NewTracker()
+	tr := in.newTracker()
+	setExtraReserved(tr, in.extra...)
 	tr.AddPools(slices.Collect(maps.Values(in.pools))...)
 	tr.AddReservations(slices.Collect(maps.Values(in.reservations))...)
 	tr.AddBlocks(slices.Collect(maps.Values(in.blocks))...)
@@ -56,15 +59,25 @@ func (in *trackerInputs) rebuild() *Tracker {
 // makes the incremental indexes safe to trust.
 func TestIncrementalMatchesRebuild(t *testing.T) {
 	RegisterTestingT(t)
+	expectIncrementalMatchesRebuild(NewTracker)
+}
+
+func TestIncrementalMatchesRebuildWithReservedClasses(t *testing.T) {
+	RegisterTestingT(t)
+	expectIncrementalMatchesRebuild(newClassedTracker)
+}
+
+func expectIncrementalMatchesRebuild(newTracker func() *Tracker) {
 	for seed := range uint64(20) {
 		rng := rand.New(rand.NewPCG(seed, 1))
-		tr := NewTracker()
+		tr := newTracker()
 		in := &trackerInputs{
 			pools:        map[string]*v3.IPPool{},
 			blocks:       map[string]*model.AllocationBlock{},
 			reservations: map[string]*v3.IPReservation{},
 			nodes:        map[string]bool{},
 			refs:         map[string]AddressRef{},
+			newTracker:   newTracker,
 		}
 		for step := range 200 {
 			op := randomOp(rng, tr, in)
@@ -79,7 +92,8 @@ var (
 		"10.0.0.0/26", "10.0.0.64/26", "10.0.1.0/26", "10.0.1.64/26", "10.0.4.0/26",
 		"10.0.0.128/28", "10.0.0.144/28", "10.1.0.0/26", "10.9.0.0/26", "fd00::/122",
 	}
-	propertyReservations = []string{"10.0.0.0/30", "10.0.1.0/25", "10.0.0.130", "fd00::/126"}
+	propertyReservations  = []string{"10.0.0.0/30", "10.0.1.0/25", "10.0.0.130", "fd00::/126"}
+	propertyExtraReserved = []string{"10.0.0.64/29", "10.0.0.129/32", "10.0.1.200/32", "fd00::8/125"}
 )
 
 // propertyPool is one of a fixed set of overlapping and nested pools, in a random state.
@@ -95,6 +109,7 @@ func propertyPool(rng *rand.Rand) *v3.IPPool {
 	}
 	p := candidates[rng.IntN(len(candidates))].DeepCopy()
 	p.Spec.Disabled = rng.IntN(4) == 0
+	p.Spec.DisableBGPExport = rng.IntN(2) == 0
 	if rng.IntN(5) == 0 {
 		p.Status = &v3.IPPoolStatus{Conditions: []metav1.Condition{{
 			Type:   v3.IPPoolConditionAllocatable,
@@ -148,7 +163,7 @@ func propertyBlock(rng *rand.Rand) *model.AllocationBlock {
 
 // randomOp applies one random change to both the tracker and the recorded inputs, and names it.
 func randomOp(rng *rand.Rand, tr *Tracker, in *trackerInputs) string {
-	switch rng.IntN(11) {
+	switch rng.IntN(12) {
 	case 0, 1:
 		p := propertyPool(rng)
 		tr.AddPools(p)
@@ -195,6 +210,16 @@ func randomOp(rng *rand.Rand, tr *Tracker, in *trackerInputs) string {
 		in.nodes[node] = true
 		in.namedNodes = true
 		return "AddNodes " + node
+	case 9:
+		var extra []string
+		for _, cidr := range propertyExtraReserved {
+			if rng.IntN(2) == 0 {
+				extra = append(extra, cidr)
+			}
+		}
+		setExtraReserved(tr, extra...)
+		in.extra = extra
+		return fmt.Sprintf("setExtraReserved %v", extra)
 	default:
 		b := in.anyBlock(rng)
 		if b == nil {

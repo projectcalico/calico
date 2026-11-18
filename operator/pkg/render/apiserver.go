@@ -197,6 +197,16 @@ func (c *apiServerComponent) SupportedOSType() rmeta.OSType {
 }
 
 func (c *apiServerComponent) Objects() ([]client.Object, []client.Object) {
+	return ObjectsWithOverrides(c)
+}
+
+var _ Overridable = (*apiServerComponent)(nil)
+
+func (c *apiServerComponent) OverrideTargets() []rcomp.OverrideTarget {
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment](APIServerNamespace, APIServerName, c.cfg.APIServer.APIServerDeployment)}
+}
+
+func (c *apiServerComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
 	// Cluster-scoped resources used by the API server, independent of variant. Any
 	// variant-specific objects are layered on by the variant's modifier.
 	globalObjects := []client.Object{
@@ -590,6 +600,12 @@ func (c *apiServerComponent) calicoCustomResourcesClusterRole() *rbacv1.ClusterR
 				"patch",
 			},
 		},
+		{
+			// IPPool creation marks the pool Allocatable via the status subresource.
+			APIGroups: []string{"crd.projectcalico.org"},
+			Resources: []string{"ippools/status"},
+			Verbs:     []string{"update"},
+		},
 	}
 	//nolint:staticcheck // Ignore QF1001 could apply De Morgan's law
 	if c.cfg.KubernetesVersion == nil || !(c.cfg.KubernetesVersion != nil && c.cfg.KubernetesVersion.Major < 2 && c.cfg.KubernetesVersion.Minor < 30) {
@@ -925,10 +941,6 @@ func (c *apiServerComponent) apiServerDeployment() *appsv1.Deployment {
 
 	if c.cfg.Installation.ControlPlaneReplicas != nil && *c.cfg.Installation.ControlPlaneReplicas > 1 {
 		d.Spec.Template.Spec.Affinity = podaffinity.NewPodAntiAffinity(APIServerName, []string{APIServerNamespace, "tigera-system", "calico-apiserver"})
-	}
-
-	if overrides := c.cfg.APIServer.APIServerDeployment; overrides != nil {
-		rcomp.ApplyDeploymentOverrides(d, overrides)
 	}
 
 	return d

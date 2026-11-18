@@ -79,8 +79,16 @@ globalPrologue: |
   export GOCACHE="${LOCAL_GO_PKG_CACHE}"
   # Keyed on the target branch, so a PR builds on what its branch last built. A
   # miss just builds cold.
+  #
+  # Modules are cached relative to GOPATH because $HOME differs between pods and
+  # VMs, and it must be the directory the docker builds mount modules from.
+  GO_MOD_ROOT="${GOPATH:-${HOME}/go}"
+  export GO_MOD_ROOT="${GO_MOD_ROOT%%:*}"
   if [ -n "${BUILD_CACHE_GROUP:-}" ]; then
-    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache restore "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) || true
+    mkdir -p "${GO_MOD_ROOT}"
+    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache restore "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) & build=$!
+    ( cd "${GO_MOD_ROOT}" && artifact cache restore "go-mod-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) & mods=$!
+    wait "$build" "$mods" || true
   fi
 
 # Only a passing branch build is worth handing to the next run; a PR's cache
@@ -88,13 +96,15 @@ globalPrologue: |
 globalEpilogue: |
   if [ "${STORE_BUILD_CACHE:-}" = true ] && [ "${CI_STEP_EXIT_CODE:-1}" = 0 ] &&
      [ "${CI_POD_STOPPED:-false}" != true ] && [ "${CI_GIT_REF_TYPE}" != PR ] && [ "${CI_GIT_REF_TYPE}" != TAG ]; then
-    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache store "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" .go-pkg-cache ) || true
+    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache store "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" .go-pkg-cache ) & build=$!
+    ( cd "${GO_MOD_ROOT}" && artifact cache store "go-mod-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" pkg/mod ) & mods=$!
+    wait "$build" "$mods" || true
   fi
 
 defaults:
   # Only the host tooling steps shell out to, since every step pulls it. A step
   # working in-process names the build image instead.
-  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
+  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
 
   jobSize: medium
 
@@ -119,6 +129,11 @@ defaults:
     - goproxy
   secretBundles:
     - docker-hub
+
+  # Every step is in the `basic-ci` tier new PRs start on. A step that needs VMs
+  # or a cluster opts out with `tiers: []` in its module; `tiers: []` on an
+  # include below is a no-op, since include tiers only add.
+  tiers: [basic]
 
 includes:
   # Each check inside carries its own gate.
@@ -219,6 +234,15 @@ includes:
     changes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/20-cmd-calico\.yaml$']
+
+  - path: .argoci/modules/20-e2e-openstack.yaml
+    changes:
+      in:
+        - ^networking-calico/e2e/
+        - ^\.argoci/modules/20-e2e-openstack\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
 
   - path: .argoci/modules/20-e2e-ut.yaml
     changes:
@@ -337,6 +361,26 @@ includes:
         - ^charts/tigera-operator/
         - ^\.argoci/modules/20-operator\.yaml$
 
+  # The bundle is assembled from manifests and CRDs outside the operator, and
+  # from YAML that no Go file imports, so those are listed by hand. deps.txt
+  # moves with the versions of the libraries gen-bundle writes the bundle with,
+  # and lib.Makefile and metadata.mk decide how gen-bundle itself is built.
+  - path: .argoci/modules/20-operator-bundle.yaml
+    changes:
+      in:
+        - ^operator/hack/gen-bundle/
+        - ^operator/deps\.txt$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^operator/config/manifests/
+        - ^operator/config/samples/
+        - ^operator/pkg/crds/operator/
+        - ^operator/Makefile$
+        - ^manifests/ocp/
+        - ^manifests/ocp-tigera-operator-no-resource-loading\.yaml$
+        - ^libcalico-go/config/crd/
+        - ^\.argoci/modules/20-operator-bundle\.yaml$
+
   - path: .argoci/modules/20-node.yaml
     changes:
       dependsOn: [node]
@@ -378,13 +422,25 @@ includes:
         - (^|/)README\.md$
         - (^|/)LICENSE$
 
-  # The FV lanes run Typha alongside Felix, and the fleet scripts drive them all.
+  # The FV lanes run Typha alongside Felix, both from the calico image, and the
+  # fleet scripts drive them all.  The FV cache keys hash what this matches, and
+  # felix-fv-memo fails if it misses part of the FV build.
   - path: .argoci/modules/20-felix.yaml
     changes:
       dependsOn: [felix, typha]
       in:
+        - ^cmd/calico/
+        - ^docker/calico/
+        - ^node/pkg/node/[^/]*\.go$
+        # Imported by the FV tests, which the generated component leaves out.
+        - ^libcalico-go/lib/testutils/[^/]*\.go$
         - ^\.semaphore/vms/
+        - ^\.semaphore/collect-artifacts$
+        - ^\.semaphore/scripts/load-felix-prereqs\.sh$
+        - ^\.argoci/scripts/load-cached-images$
         - ^\.argoci/scripts/vm-fleet-setup\.sh$
+        - ^\.argoci/scripts/felix-fv-plan$
+        - ^hack/cmd/felix-fv-memo/
         - ^process/testing/aso/
         - ^process/testing/util/
         - ^process/testing/winfv-felix/
@@ -398,15 +454,9 @@ includes:
         - ^lib\.Makefile$
         - ^\.argoci/modules/40-openstack\.yaml$
 
-  - path: .argoci/modules/20-e2e-gcp.yaml
-    changes:
-      dependsOn: [e2e]
-      in:
-        - ^\.argoci/scripts/
-        - ^\.argoci/modules/20-e2e-gcp\.yaml$
+      # The OpenStack e2e suite, which 20-e2e-openstack.yaml builds.
       exclude:
-        - (^|/)README\.md$
-        - (^|/)DESIGN\.md$
+        - ^networking-calico/e2e/
 
   - path: .argoci/modules/20-kube-controllers.yaml
     changes:
@@ -461,6 +511,7 @@ includes:
       in:
         - ^whisker/
         - ^\.argoci/modules/20-e2e\.yaml$
+        - ^\.argoci/scripts/sandcat/
 
   - path: .argoci/modules/20-manifest-install.yaml
     changes:

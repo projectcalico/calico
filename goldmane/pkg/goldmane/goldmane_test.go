@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -140,6 +140,9 @@ func TestList(t *testing.T) {
 
 	Expect(meta.TotalResults).Should(BeEquivalentTo(1))
 	Expect(meta.TotalResults).Should(BeEquivalentTo(1))
+
+	cached := types.CachedPolicyTrace(types.ProtoToFlowLogPolicy(fl.Key.Policies))
+	require.Same(t, cached, flows[0].Flow.Key.Policies, "List decoded the policy trace instead of using the cache")
 
 	// Expect aggregation to have happened.
 	exp := proto.Flow{

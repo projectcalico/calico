@@ -17,13 +17,16 @@ package conncheck
 import (
 	"context"
 	"fmt"
-	"strings"
+	"time"
 
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
+
+	"github.com/projectcalico/calico/e2e/pkg/utils"
 )
 
 // Server is a traffic destination for connection checks. The default
@@ -40,6 +43,7 @@ type Server interface {
 	ClusterIP(opts ...TargetOption) Target
 	ClusterIPv4(opts ...TargetOption) Target
 	ClusterIPv6(opts ...TargetOption) Target
+	ClusterIPFor(f utils.IPFamily, opts ...TargetOption) Target
 	HostPorts(port int) []Target
 	NodePortPort() int
 	NodePort(nodeIP string, opts ...TargetOption) Target
@@ -143,6 +147,7 @@ func (s *PodServer) WaitReady(ctx context.Context, f *framework.Framework) error
 		return fmt.Errorf("PodServer %s/%s: WaitReady called before Deploy", s.namespace.Name, s.name)
 	}
 	if err := e2epod.WaitTimeoutForPodRunningInNamespace(ctx, f.ClientSet, s.pod.Name, s.pod.Namespace, podReadyTimeout(ctx)); err != nil {
+		s.logContainer(f)
 		return err
 	}
 	p, err := f.ClientSet.CoreV1().Pods(s.namespace.Name).Get(ctx, s.pod.Name, metav1.GetOptions{})
@@ -151,6 +156,18 @@ func (s *PodServer) WaitReady(ctx context.Context, f *framework.Framework) error
 	}
 	s.pod = p
 	return nil
+}
+
+// logContainer logs the server's output; a server that exits on startup explains why only there.
+func (s *PodServer) logContainer(f *framework.Framework) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	logs, err := e2epod.GetPodLogs(ctx, f.ClientSet, s.pod.Namespace, s.pod.Name, s.pod.Spec.Containers[0].Name)
+	if err != nil {
+		logrus.WithError(err).Error("Error getting server container logs")
+		return
+	}
+	logrus.Infof("[DIAGS] Server pod %s/%s logs:\n%s", s.pod.Namespace, s.pod.Name, logs)
 }
 
 func (s *PodServer) Cleanup(ctx context.Context, f *framework.Framework) error {
@@ -212,30 +229,18 @@ func (s *PodServer) ClusterIP(opts ...TargetOption) Target {
 }
 
 func (s *PodServer) ClusterIPv4(opts ...TargetOption) Target {
-	for _, ip := range s.Service().Spec.ClusterIPs {
-		if strings.Contains(ip, ":") {
-			continue
-		}
-		t := &target{
-			server:      s,
-			targetType:  TypeClusterIP,
-			destination: ip,
-			protocol:    TCP,
-		}
-		for _, opt := range opts {
-			if err := opt(t); err != nil {
-				framework.ExpectNoError(err)
-			}
-		}
-		return t
-	}
-	framework.Fail(fmt.Sprintf("No IPv4 ClusterIP found for server %s/%s", s.namespace.Name, s.name), 1)
-	return nil
+	return s.ClusterIPFor(utils.IPv4, opts...)
 }
 
 func (s *PodServer) ClusterIPv6(opts ...TargetOption) Target {
+	return s.ClusterIPFor(utils.IPv6, opts...)
+}
+
+// ClusterIPFor targets the Service's ClusterIP in family f, failing the spec if
+// the Service has none in it.
+func (s *PodServer) ClusterIPFor(f utils.IPFamily, opts ...TargetOption) Target {
 	for _, ip := range s.Service().Spec.ClusterIPs {
-		if !strings.Contains(ip, ":") {
+		if fam, ok := utils.FamilyOf(ip); !ok || fam != f {
 			continue
 		}
 		t := &target{
@@ -251,7 +256,7 @@ func (s *PodServer) ClusterIPv6(opts ...TargetOption) Target {
 		}
 		return t
 	}
-	framework.Fail(fmt.Sprintf("No IPv6 ClusterIP found for server %s/%s", s.namespace.Name, s.name), 1)
+	framework.Fail(fmt.Sprintf("No %s ClusterIP found for server %s/%s (ClusterIPs %v)", f, s.namespace.Name, s.name, s.Service().Spec.ClusterIPs), 1)
 	return nil
 }
 

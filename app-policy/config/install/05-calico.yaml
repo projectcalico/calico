@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Calico Version master
-# https://docs.projectcalico.org/master/releases#master
+# https://docs.tigera.io/calico/latest/release-notes
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:

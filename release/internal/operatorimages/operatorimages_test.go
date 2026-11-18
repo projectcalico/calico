@@ -39,9 +39,10 @@ func TestCheckNamesTheUndeployedImages(t *testing.T) {
 }
 
 func TestCheckSkipsExceptions(t *testing.T) {
+	orig := notDeployed
 	notDeployed = map[string]string{"new-thing": "not deployed by the operator"}
 	t.Cleanup(func() {
-		notDeployed = map[string]string{}
+		notDeployed = orig
 	})
 	if err := Check([]string{"node", "new-thing"}); err != nil {
 		t.Fatalf("Check: %v", err)

@@ -108,6 +108,11 @@ func handleCalicoCNI(c *components, install *operatorv1.Installation) error {
 		}
 	}
 
+	ipamType := strings.ToLower(string(install.Spec.CNI.IPAM.Type))
+	if err := c.node.assertEnv(ctx, c.client, containerCalicoNode, "CALICO_IPAM_TYPE", ipamType); err != nil {
+		return err
+	}
+
 	ip, err := c.node.getEnv(ctx, c.client, containerCalicoNode, "IP")
 	if err != nil {
 		return err
@@ -442,6 +447,10 @@ func handleNonCalicoCNI(c *components, install *operatorv1.Installation) error {
 	if err := c.node.assertEnvIsSet(ctx, c.client, containerCalicoNode, "CALICO_NETWORKING_BACKEND", "none"); err != nil {
 		return err
 	}
+
+	// The calico chart sets this to Calico whenever it isn't using host-local, including on
+	// non-Calico CNIs. The operator renders its own value from the Installation.
+	c.node.ignoreEnv(containerCalicoNode, "CALICO_IPAM_TYPE")
 
 	if install.Spec.CNI == nil {
 		install.Spec.CNI = &operatorv1.CNISpec{}

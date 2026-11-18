@@ -25,6 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/operator/pkg/apis"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
@@ -215,6 +217,32 @@ var _ = Describe("felix env parser", func() {
 			Expect(f.Spec.IptablesBackend).ToNot(BeNil())
 			legacy := v3.IptablesBackend(v3.IptablesBackendLegacy)
 			Expect(f.Spec.IptablesBackend).To(Equal(&legacy))
+		})
+
+		// Fields held by "operator" read as a pre-apply operator's, so the first apply after
+		// migration would force-take or clear them.
+		It("writes under its own field manager", func() {
+			scheme := kscheme.Scheme
+			Expect(apis.AddToScheme(scheme, false)).ToNot(HaveOccurred())
+			c.client = ctrlrfake.DefaultFakeClientBuilder(scheme).WithReturnManagedFields().Build()
+			existing := emptyFelixConfig()
+			existing.Spec.HealthPort = ptr.To(9099)
+			Expect(c.client.Create(ctx, existing, client.FieldOwner("someone-else"))).ToNot(HaveOccurred())
+			c.node.Spec.Template.Spec.Containers[0].Env = []v1.EnvVar{{
+				Name:  "FELIX_VXLANVNI",
+				Value: "5000",
+			}}
+
+			Expect(handleFelixVars(&c)).ToNot(HaveOccurred())
+
+			f := v3.FelixConfiguration{}
+			Expect(c.client.Get(ctx, types.NamespacedName{Name: "default"}, &f)).ToNot(HaveOccurred())
+			Expect(f.Spec.VXLANVNI).To(Equal(ptr.To(5000)))
+			var managers []string
+			for _, entry := range f.ManagedFields {
+				managers = append(managers, entry.Manager)
+			}
+			Expect(managers).To(ConsistOf("someone-else", migrationFieldOwner))
 		})
 	})
 })

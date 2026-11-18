@@ -19,13 +19,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/images"
 )
 
 // Config contains overall configuration for the release tool inputs and outputs
@@ -45,24 +47,41 @@ type Config struct {
 	// runs don't clobber each other. CI may override the default by setting
 	// the LOGS_DIR environment variable.
 	LogsDir string
+
+	images releaseImages
+}
+
+type releaseImages struct {
+	list []string
+	err  error
+	once sync.Once
+}
+
+// ReleaseImages sweeps every release dir with make on first use, so the pin
+// and the publish checks share one list.
+func (c *Config) ReleaseImages() ([]string, error) {
+	c.images.once.Do(func() {
+		c.images.list, c.images.err = images.ReleaseImages(commandRunner, c.RepoRootDir)
+	})
+	return c.images.list, c.images.err
 }
 
 // loadConfig loads the configuration for the release tool.
 func loadConfig() (*Config, error) {
-	repoRoot, err := command.GitDir()
+	repoRoot, err := command.Git(commandRunner).RepoRoot()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repo root dir: %w", err)
 	}
 
 	logsDir := os.Getenv("LOGS_DIR")
 	if logsDir == "" {
-		logsDir = filepath.Join(repoRoot, utils.ReleaseFolderName, "_logs")
+		logsDir = filepath.Join(repoRoot, releaseDirName, "_logs")
 	}
 
 	config := &Config{
 		RepoRootDir: repoRoot,
-		OutputDir:   filepath.Join(repoRoot, utils.ReleaseFolderName, "_output"),
-		TmpDir:      filepath.Join(repoRoot, utils.ReleaseFolderName, "tmp"),
+		OutputDir:   filepath.Join(repoRoot, releaseDirName, "_output"),
+		TmpDir:      filepath.Join(repoRoot, releaseDirName, "tmp"),
 		LogsDir:     logsDir,
 	}
 	return config, nil
@@ -92,7 +111,7 @@ func main() {
 
 	app := &cli.Command{
 		Name:                  "release",
-		Usage:                 fmt.Sprintf("release tool for %s", utils.ProductName),
+		Usage:                 fmt.Sprintf("release tool for %s", defaults.ProductName),
 		Flags:                 globalFlags,
 		Commands:              Commands(cfg),
 		EnableShellCompletion: true,

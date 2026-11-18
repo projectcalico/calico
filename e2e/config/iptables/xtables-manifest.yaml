@@ -9,6 +9,8 @@ extends: pipeline.yaml
 
 exclude:
   labels:
+    - label: RequiresV3CRDs
+      reason: "aggregated API server lane; the BGP mesh specs cut kube-apiserver off from calico-apiserver and cannot restore the mesh"
     - label: Dataplane:BPF
       reason: "not a BPF dataplane; maglev needs BPF and only self-skips on a missing external node, so it would fail rather than skip"
     - label: ExternalNode

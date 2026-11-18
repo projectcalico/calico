@@ -9,6 +9,8 @@ extends: pipeline.yaml
 
 exclude:
   labels:
+    - label: RequiresV3CRDs
+      reason: "aggregated API server lane; the BGP mesh specs cut kube-apiserver off from calico-apiserver and cannot restore the mesh"
     - label: ExternalNode
       reason: "no external node on this lane (needs EXT_IP/EXT_KEY/EXT_USER)"
     - label: RequiresXtables

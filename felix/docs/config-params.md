@@ -885,6 +885,7 @@ Chosen directory should match the directory used by the CNI plugin for PodStartu
 
 A list of CIDR's of external, non-Calico nodes from which VXLAN/IPIP overlay traffic
 will be allowed. By default, external tunneled traffic is blocked to reduce attack surface.
+Entries must be IPv4 CIDRs or IPv4 addresses.
 
 | Detail |   |
 | --- | --- |
@@ -1453,7 +1454,8 @@ RouteTableRange specifies the indices of the route tables that Calico should use
 
 Calico programs additional Linux route tables for various purposes.
 RouteTableRanges specifies a set of table index ranges that Calico should use.
-Deprecates`RouteTableRange`, overrides `RouteTableRange`.
+Deprecates`RouteTableRange`, overrides `RouteTableRange`. The ranges may cover at most 65535
+tables in total.
 
 | Detail |   |
 | --- | --- |
@@ -2322,8 +2324,8 @@ for cleanup. This should be big enough to hold all the NAT entries that expire w
 ### `BPFMapSizeConntrackScaling` (config file) / `bpfMapSizeConntrackScaling` (YAML)
 
 Controls whether and how we scale the conntrack map size depending
-on its usage. 'Disabled' make the size stay at the default or whatever is set by
-BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even
+on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size.
+'DoubleIfFull' doubles the size of an IP family's map when it is more than 80% full
 after cleanups.
 
 | Detail |   |
@@ -2613,7 +2615,8 @@ In most cases this should not need to be changed .
 The name of the region that a particular Felix belongs to. In a multi-region
 Calico/OpenStack deployment, this must be configured somehow for each Felix (here in the datamodel,
 or in felix.cfg or the environment on each compute node), and must match the [calico]
-openstack_region value configured in neutron.conf on each node.
+openstack_region value configured in neutron.conf on each node. The region is used in a
+namespace name, so it must be a DNS label of at most 46 characters.
 
 | Detail |   |
 | --- | --- |
@@ -2621,7 +2624,7 @@ openstack_region value configured in neutron.conf on each node.
 | Encoding (env var/config file) | OpenStack region name (must be a valid DNS label) |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `openstackRegion` (YAML) `OpenstackRegion` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | String matching the regular expression <code>^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$</code>. |
 | Default value (YAML) | none |
 | Notes | Felix will exit if the value is invalid. | 
 
@@ -2753,6 +2756,37 @@ The UDP port number to use for VXLAN traffic.
 | `FelixConfiguration` field | `vxlanPort` (YAML) `VXLANPort` (Go API) |
 | `FelixConfiguration` schema | Integer |
 | Default value (YAML) | `4789` |
+
+### `VXLANSrcPortMax` (config file) / `vxlanSrcPortMax` (YAML)
+
+The upper bound (inclusive) of the UDP source port range used by Felix for outgoing
+VXLAN-encapsulated traffic. See VXLANSrcPortMin.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_VXLANSrcPortMax` |
+| Encoding (env var/config file) | Integer: [0,65535] |
+| Default value (above encoding) | `0` |
+| `FelixConfiguration` field | `vxlanSrcPortMax` (YAML) `VXLANSrcPortMax` (Go API) |
+| `FelixConfiguration` schema | Integer: [0,65535] |
+| Default value (YAML) | `0` |
+
+### `VXLANSrcPortMin` (config file) / `vxlanSrcPortMin` (YAML)
+
+The lower bound (inclusive) of the UDP source port range used by Felix for outgoing
+VXLAN-encapsulated traffic. If both VXLANSrcPortMin and VXLANSrcPortMax are set, the kernel VXLAN tunnel
+device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANSrcPortMin, VXLANSrcPortMax].
+VXLANSrcPortMin must be strictly less than VXLANSrcPortMax.
+If unset (or zero), the kernel/dataplane default is used.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_VXLANSrcPortMin` |
+| Encoding (env var/config file) | Integer: [0,65535] |
+| Default value (above encoding) | `0` |
+| `FelixConfiguration` field | `vxlanSrcPortMin` (YAML) `VXLANSrcPortMin` (Go API) |
+| `FelixConfiguration` schema | Integer: [0,65535] |
+| Default value (YAML) | `0` |
 
 ### `VXLANVNI` (config file) / `vxlanVNI` (YAML)
 

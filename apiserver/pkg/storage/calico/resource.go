@@ -1,10 +1,11 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 package calico
 
 import (
 	"bytes"
 	"context"
+	goerrors "errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -22,6 +23,7 @@ import (
 	k8swatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
 
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/util"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -109,7 +111,10 @@ func (rs *resourceStore) CompactRevision() int64 {
 	return 0
 }
 
-var _ storage.Interface = (*resourceStore)(nil)
+var (
+	_ storage.Interface = (*resourceStore)(nil)
+	_ util.DryRunWriter = (*resourceStore)(nil)
+)
 
 func CreateClientFromConfig() clientv3.Interface {
 	// TODO(doublek): nicer errors returned
@@ -179,6 +184,51 @@ func (rs *resourceStore) Create(ctx context.Context, key string, obj, out runtim
 		}
 	}
 	rs.converter.convertToAAPI(createdObj, out)
+	return nil
+}
+
+// DryRunCreate sends obj to the Calico datastore as a dry-run create. It gets every
+// check a real create gets, including the backing CRD's schema, CEL rules and
+// admission, and nothing is persisted. The caller must pass an object it owns, since
+// the Calico client modifies it.
+func (rs *resourceStore) DryRunCreate(ctx context.Context, key string, obj runtime.Object) error {
+	res, ok := obj.(resourceObject)
+	if !ok {
+		return fmt.Errorf("dry-run create of %s: unexpected type %T", key, obj)
+	}
+	_, err := rs.create(ctx, rs.client, rs.converter.convertToLibcalico(res), options.SetOptions{DryRun: true})
+	return dryRunError(err, key, res)
+}
+
+// DryRunUpdate is DryRunCreate for an update from old to obj. An unconditional
+// update carries no resource version, so it takes old's, as GuaranteedUpdate does
+// for a real one.
+func (rs *resourceStore) DryRunUpdate(ctx context.Context, key string, obj, old runtime.Object) error {
+	res, ok := obj.(resourceObject)
+	if !ok {
+		return fmt.Errorf("dry-run update of %s: unexpected type %T", key, obj)
+	}
+	oldRes, ok := old.(resourceObject)
+	if !ok {
+		return fmt.Errorf("dry-run update of %s: unexpected type %T", key, old)
+	}
+	if res.GetObjectMeta().GetResourceVersion() == "" {
+		res.GetObjectMeta().SetResourceVersion(oldRes.GetObjectMeta().GetResourceVersion())
+	}
+	_, err := rs.update(ctx, rs.client, rs.converter.convertToLibcalico(res), options.SetOptions{DryRun: true})
+	return dryRunError(err, key, res)
+}
+
+// dryRunError maps the error from a dry-run write the same way Create maps one from
+// a real write.
+func dryRunError(err error, key string, res resourceObject) error {
+	var verr errors.ErrorValidation
+	if goerrors.As(err, &verr) {
+		return validationError(verr, res.GetObjectKind().GroupVersionKind().GroupKind(), res.GetObjectMeta().GetName())
+	}
+	if err != nil {
+		return aapiError(err, key)
+	}
 	return nil
 }
 

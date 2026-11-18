@@ -9,7 +9,7 @@ timeout: 14h
 
 defaults:
   # A promotion inherits nothing from the CI workflow's defaults.
-  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
+  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
   jobSize: medium
   services:
     - docker
@@ -95,9 +95,6 @@ steps:
         value: --zone us-east1-c --project tigera-wp-tcp-redirect
       - name: HOST
         value: ubuntu@binaries-projectcalico-org
-      # For the containers being built, not the machine running the build.
-      - name: UBUNTU_REPO_OVERRIDE
-        value: ftp.uni-stuttgart.de
     commands: |
       apt-get update -y && apt-get install -y --no-install-recommends devscripts moreutils patchelf jq
       git config --global user.email marvin@tigera.io

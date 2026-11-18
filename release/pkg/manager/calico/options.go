@@ -21,10 +21,19 @@ import (
 	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/plan"
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/version"
 )
 
 type Option func(*CalicoManager) error
+
+func WithReleaseNotes(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.releaseNotes = enabled
+		return nil
+	}
+}
 
 func WithRepoRoot(root string) Option {
 	return func(r *CalicoManager) error {
@@ -54,16 +63,22 @@ func WithReleaseBranchValidation(validate bool) Option {
 	}
 }
 
-func WithVersion(version string) Option {
+func WithVersion(ver string) Option {
 	return func(r *CalicoManager) error {
-		r.calicoVersion = version
+		v, err := version.New(ver)
+		if err != nil {
+			return err
+		}
+		r.calicoVersion = v
 		return nil
 	}
 }
 
-func WithOperator(enabled bool) Option {
+// WithOperator builds or publishes the operator in the step after the plan's
+// checks. A nil run leaves the operator off.
+func WithOperator(run func() error) Option {
 	return func(r *CalicoManager) error {
-		r.operator = enabled
+		r.operator = run
 		return nil
 	}
 }
@@ -128,6 +143,13 @@ func WithHelmIndex(enabled bool) Option {
 func WithHelmCharts(enabled bool) Option {
 	return func(r *CalicoManager) error {
 		r.helmCharts = enabled
+		return nil
+	}
+}
+
+func WithDryRun(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.dryRun = enabled
 		return nil
 	}
 }
@@ -271,6 +293,13 @@ func WithImageScanning(scanning bool, cfg imagescanner.Config) Option {
 	}
 }
 
+func WithReleaseImages(list func() ([]string, error)) Option {
+	return func(r *CalicoManager) error {
+		r.releaseImages = list
+		return nil
+	}
+}
+
 func WithComponents(components map[string]registry.Component) Option {
 	return func(r *CalicoManager) error {
 		r.components = components
@@ -281,6 +310,13 @@ func WithComponents(components map[string]registry.Component) Option {
 func WithArchiveImages(archive bool) Option {
 	return func(r *CalicoManager) error {
 		r.archiveImages = archive
+		return nil
+	}
+}
+
+func WithCI(ci bool) Option {
+	return func(r *CalicoManager) error {
+		r.ci = ci
 		return nil
 	}
 }
@@ -360,5 +396,12 @@ func WithRetagImages(fromRegistry, fromTag string) Option {
 		r.fromRegistry = fromRegistry
 		r.fromTag = fromTag
 		return err
+	}
+}
+
+func WithPlanOptions(opts plan.Options) Option {
+	return func(r *CalicoManager) error {
+		r.planOptions = opts
+		return nil
 	}
 }

@@ -23,23 +23,24 @@ import (
 	"net"
 	"os"
 	"path"
-	"path/filepath"
 	"runtime"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
-	"github.com/gofrs/flock"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/calico/cni-plugin/internal/pkg/k8sclient"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
-	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/cni-plugin/pkg/upgrade"
 	"github.com/projectcalico/calico/lib/logrusr"
@@ -122,34 +123,69 @@ func Main(version string) {
 		"Calico CNI IPAM "+version)
 }
 
+// lockedIPAMTimeout bounds the IPAM work done while holding the host-wide IPAM lock. Each
+// caller starts it once it holds the lock, since a thundering herd of ADDs can hold the lock
+// for a long time.
+const lockedIPAMTimeout = 90 * time.Second
+
 type ipamArgs struct {
 	cnitypes.CommonArgs
 	IP net.IP `json:"ip,omitempty"`
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
+	configureLogging(args)
+	result, err := add(context.Background(), args)
+	if err != nil {
+		return err
+	}
+	return result.Print()
+}
+
+func cmdDel(args *skel.CmdArgs) error {
+	configureLogging(args)
+	return del(context.Background(), args)
+}
+
+// configureLogging sets up logging from the netconf when calico-ipam runs as its own binary.
+// In-process, the calico plugin has already done this from the same netconf, and a second
+// call would open another writer on its log file.
+func configureLogging(args *skel.CmdArgs) {
 	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
-		return fmt.Errorf("failed to load netconf: %v", err)
+		// add and del report the parse error.
+		return
+	}
+	utils.ConfigureLogging(conf)
+}
+
+// add assigns the sandbox's addresses and returns the result in the netconf's CNI version,
+// leaving the caller to print it or use it in-process.
+func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
+	// Read before the IPAM lock wait, so any claim stamped later than this came from a sandbox
+	// the runtime created after this one.
+	started := time.Now()
+
+	conf := types.NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return nil, fmt.Errorf("failed to load netconf: %w", err)
 	}
 
 	nodename := utils.DetermineNodename(conf)
 
-	utils.ConfigureLogging(conf)
-
-	calicoClient, err := utils.CreateClient(conf)
+	calicoClient, err := calicoClientFor(ctx, conf)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	epIDs, err := utils.GetIdentifiers(args, nodename)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	epIDs.WEPName, err = epIDs.CalculateWorkloadEndpointName(false)
 	if err != nil {
-		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
+		return nil, fmt.Errorf("error constructing WorkloadEndpoint name: %w", err)
 	}
 
 	logger := logrus.WithFields(logrus.Fields{
@@ -158,19 +194,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 	})
 
 	// Always detect VMI info so we can reject migration targets when persistence is disabled.
-	vmiInfo, err := getVMIInfoForPod(conf, epIDs, logger)
+	vmiInfo, err := getVMIInfoForPod(ctx, conf, epIDs, logger)
 	if err != nil {
-		return fmt.Errorf("failed to get VMI info: %w", err)
+		return nil, fmt.Errorf("failed to get VMI info: %w", err)
 	}
 
 	// Combined flag: VMI pod with persistence enabled.
-	ipPersistenceEnabledForVM := vmiInfo != nil && getKubeVirtVMAddressPersistence(calicoClient)
+	ipPersistenceEnabledForVM := vmiInfo != nil && getKubeVirtVMAddressPersistence(ctx, calicoClient)
 
 	// Reject migration target pods when persistence is disabled.
 	if vmiInfo != nil && vmiInfo.IsMigrationTarget() {
 		if !ipPersistenceEnabledForVM {
 			logger.Error("Live migration target pod rejected: KubeVirtVMAddressPersistence is disabled")
-			return fmt.Errorf("live migration target pod is not allowed when KubeVirtVMAddressPersistence is disabled")
+			return nil, errors.New("live migration target pod is not allowed when KubeVirtVMAddressPersistence is disabled")
 		}
 	}
 
@@ -196,13 +232,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	ipamArgs := ipamArgs{}
 	if err = cnitypes.LoadArgs(args.Args, &ipamArgs); err != nil {
-		return err
+		return nil, err
 	}
 
 	// We attach important attributes to the allocation.
 	attrs := map[string]string{
 		ipam.AttributeNode:      nodename,
-		ipam.AttributeTimestamp: time.Now().UTC().String(),
+		ipam.AttributeTimestamp: time.Now().UTC().Format(allocationTimestampLayout),
 	}
 	if epIDs.Pod != "" {
 		attrs[ipam.AttributePod] = epIDs.Pod
@@ -225,12 +261,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// - Source pod: reuses IPs from a previous pod with the same VM (pod recreation).
 		//   If no IPs exist, falls through to normal AutoAssign.
 		// - Migration target: IPs must exist (allocated by the source pod).
-		reuseExistingIPs, err := handleVirtLauncherPod(calicoClient, handleID, attrs, conf, logger, isMigrationTarget)
+		reused, err := handleVirtLauncherPod(ctx, calicoClient, handleID, attrs, logger, isMigrationTarget)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if reuseExistingIPs {
-			return nil
+		if reused != nil {
+			return reused.GetAsVersion(conf.CNIVersion)
 		}
 		// Source pod with no existing IPs - fall through to normal allocation
 	}
@@ -256,13 +292,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
-		assignIPWithLock := func() error {
-			unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
-			defer unlock()
-
-			// Only start the timeout after we get the lock. When there's a
-			// thundering herd of new pods, acquiring the lock can take a while.
-			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		err := utils.WithIPAMLock(ctx, conf.IPAMLockFile, func(ctx context.Context) error {
+			ctx, cancel := context.WithTimeout(ctx, lockedIPAMTimeout)
 			defer cancel()
 
 			if err := maybeUpgradeIPAM(ctx, calicoClient.IPAM(), nodename); err != nil {
@@ -270,6 +301,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 
 			if err := calicoClient.IPAM().AssignIP(ctx, assignArgs); err != nil {
+				if errors.Is(err, ipam.ErrNotInPool) || errors.Is(err, ipam.ErrUseNotAllowed) {
+					return addressNotOursError("address %s cannot be assigned to a workload: %s", ipamArgs.IP, strings.TrimSpace(err.Error()))
+				}
+				if errors.Is(err, ipam.ErrAffinityMismatch) {
+					return addressNotOursError("address %s cannot be assigned on this node: %s", ipamArgs.IP, err)
+				}
+
 				var exists cerrors.ErrorResourceAlreadyExists
 				if !errors.As(err, &exists) {
 					return err
@@ -281,15 +319,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 					return err
 				}
 
-				if terr := transferFromPriorSandbox(ctx, calicoClient.IPAM(), ipamArgs.IP, handleID, attrs, conf.Name, epIDs, logger); terr != nil {
+				if terr := transferFromPriorSandbox(ctx, calicoClient.IPAM(), ipamArgs.IP, handleID, attrs, conf.Name, epIDs, started, logger); terr != nil {
 					return fmt.Errorf("%w: %w", terr, err)
 				}
 			}
 			return nil
-		}
-		err := assignIPWithLock()
+		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		var ipNetwork net.IPNet
@@ -312,15 +349,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 			logger.WithField("result.IPs", ipamArgs.IP).Info("Appending an IPv4 address to the result")
 		}
 	} else {
-		// Default to assigning an IPv4 address
-		num4 := 1
-		if conf.IPAM.AssignIpv4 != nil && *conf.IPAM.AssignIpv4 == "false" {
-			num4 = 0
+		var num4, num6 int
+		if conf.IPAM.AssignsIPv4() {
+			num4 = 1
 		}
-
-		// Default to NOT assigning an IPv6 address
-		num6 := 0
-		if conf.IPAM.AssignIpv6 != nil && *conf.IPAM.AssignIpv6 == "true" {
+		if conf.IPAM.AssignsIPv6() {
 			num6 = 1
 		}
 
@@ -328,19 +361,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		var v4pools, v6pools []cnet.IPNet
 		{
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
 			v4pools, err = utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv4Pools, true)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 		{
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
 			v6pools, err = utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv6Pools, false)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 
@@ -360,10 +393,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if (conf.Kubernetes.Kubeconfig != "" || conf.Policy.PolicyType == "k8s") && namespace != "" {
 			logger.Debugf("Getting namespace for: %s", namespace)
 
-			namespaceObj, err = getNamespace(conf, namespace, logger)
+			namespaceObj, err = getNamespace(ctx, conf, namespace)
 			if err != nil {
 				logger.WithError(err).Errorf("Failed to get namespace for %s", namespace)
-				return fmt.Errorf("failed to get namespace %s: %w", namespace, err)
+				return nil, fmt.Errorf("failed to get namespace %s: %w", namespace, err)
 			}
 			logger.Debugf("Got namespace for %s: %v", namespace, namespaceObj.Labels)
 		}
@@ -397,22 +430,18 @@ func cmdAdd(args *skel.CmdArgs) error {
 			assignArgs.HostReservedAttrIPv4s = rsvdAttrWindows
 		}
 		logger.WithField("assignArgs", assignArgs).Info("Auto assigning IP")
-		autoAssignWithLock := func(calicoClient client.Interface, assignArgs ipam.AutoAssignArgs) (*ipam.IPAMAssignments, *ipam.IPAMAssignments, error) {
-			// Acquire a best-effort host-wide lock to prevent multiple copies of the CNI plugin trying to assign
-			// concurrently. AutoAssign is concurrency safe already but serialising the CNI plugins means that
-			// we only attempt one IPAM claim at a time on the host's active IPAM block.  This reduces the load
-			// on the API server by a factor of the number of concurrent requests.
-			unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
-			defer unlock()
 
-			// Only start the timeout after we get the lock. When there's a
-			// thundering herd of new pods, acquiring the lock can take a while.
-			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		// AutoAssign is concurrency safe, but serializing the host's CNI plugins on this lock means one IPAM
+		// claim at a time on the active block, cutting API server load by the number of concurrent requests.
+		var v4Assignments, v6Assignments *ipam.IPAMAssignments
+		err := utils.WithIPAMLock(ctx, conf.IPAMLockFile, func(ctx context.Context) error {
+			ctx, cancel := context.WithTimeout(ctx, lockedIPAMTimeout)
 			defer cancel()
 
-			return calicoClient.IPAM().AutoAssign(ctx, assignArgs)
-		}
-		v4Assignments, v6Assignments, err := autoAssignWithLock(calicoClient, assignArgs)
+			var err error
+			v4Assignments, v6Assignments, err = calicoClient.IPAM().AutoAssign(ctx, assignArgs)
+			return err
+		})
 		var v4ips, v6ips []cnet.IPNet
 		if v4Assignments != nil {
 			v4ips = v4Assignments.IPs
@@ -422,7 +451,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 		logger.Infof("Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v", v4ips, v6ips)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Check if IPv4 address assignment fails but IPv6 address assignment succeeds. Release IPs for the successful IPv6 address assignment.
@@ -436,7 +465,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				}
 
 				// Fresh timeout for cleanup.
-				cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 				defer cancel()
 				_, _, err := calicoClient.IPAM().ReleaseIPs(cleanupCtx, v6IPs...)
 				if err != nil {
@@ -456,7 +485,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				}
 
 				// Fresh timeout for cleanup.
-				cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 				defer cancel()
 				_, _, err := calicoClient.IPAM().ReleaseIPs(cleanupCtx, v4IPs...)
 				if err != nil {
@@ -467,7 +496,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		if num4 == 1 {
 			if err := v4Assignments.PartialFulfillmentError(); err != nil {
-				return fmt.Errorf("failed to request IPv4 addresses: %w", err)
+				return nil, fmt.Errorf("failed to request IPv4 addresses: %w", err)
 			}
 			ipV4Network := net.IPNet{IP: v4Assignments.IPs[0].IP, Mask: v4Assignments.IPs[0].Mask}
 			r.IPs = append(r.IPs, &cniv1.IPConfig{
@@ -477,7 +506,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		if num6 == 1 {
 			if err := v6Assignments.PartialFulfillmentError(); err != nil {
-				return fmt.Errorf("failed to request IPv6 addresses: %w", err)
+				return nil, fmt.Errorf("failed to request IPv6 addresses: %w", err)
 			}
 			ipV6Network := net.IPNet{IP: v6Assignments.IPs[0].IP, Mask: v6Assignments.IPs[0].Mask}
 			r.IPs = append(r.IPs, &cniv1.IPConfig{
@@ -498,12 +527,22 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	logger.WithField("routes", r.Routes).Debug("Added routes to result")
 
-	// Print result to stdout, in the format defined by the requested cniVersion.
-	return cnitypes.PrintResult(r, conf.CNIVersion)
+	return r.GetAsVersion(conf.CNIVersion)
+}
+
+// addressNotOursError builds the CNI error that tells the plugin the requested address does not
+// belong to this pod or cannot be assigned to it, so the caller may fall back to a fresh address.
+// Reuse returns it when another pod or a non-pod handle owns the address or it's in cooldown.
+// Any requested address also gets it when its pool is gone, disallows workloads, or strict
+// affinity puts its block on another node.
+func addressNotOursError(format string, args ...any) error {
+	return cnitypes.NewError(types.ErrCodeAddressNotOurs, fmt.Sprintf(format, args...), "")
 }
 
 // transferFromPriorSandbox hands an address the pod already holds to this sandbox's handle.
 // It performs the necessary precondition checks and errors if the allocation cannot be transferred.
+// It refuses an address claimed after started: only a newer sandbox could have claimed it, and
+// moving it here would let this abandoned sandbox's DEL free the address the live one uses.
 func transferFromPriorSandbox(
 	ctx context.Context,
 	ipamClient ipam.Interface,
@@ -512,26 +551,39 @@ func transferFromPriorSandbox(
 	attrs map[string]string,
 	netName string,
 	epIDs *utils.WEPIdentifiers,
+	started time.Time,
 	logger *logrus.Entry,
 ) error {
 	attr, err := ipamClient.GetAssignmentAttributes(ctx, cnet.IP{IP: ip})
 	var inCooldown cerrors.ErrorIPInCooldown
 	if errors.As(err, &inCooldown) {
 		// A released address has no owner to check, so it must finish its cooldown first.
-		return fmt.Errorf("address %s is still in its IP cooldown period and cannot be reused yet: %w", ip, err)
+		return addressNotOursError("address %s is still in its IP cooldown period and cannot be reused yet: %s", ip, err)
 	}
 	if err != nil {
 		return fmt.Errorf("could not determine the current owner of address %s: %w", ip, err)
 	}
 	if attr == nil || attr.HandleID == nil {
-		return fmt.Errorf("address %s is allocated to no handle and cannot be transferred", ip)
+		return addressNotOursError("address %s is allocated to no handle and cannot be transferred", ip)
 	}
 
 	currentHandle := *attr.HandleID
-	parsed, ok := utils.ParsePodHandleID(currentHandle, netName)
+	parsed, ok := ipam.ParsePodHandleID(currentHandle, netName)
 	if !ok {
-		logger.WithField("fromHandle", currentHandle).Info("Requested address is not held by a pod sandbox")
-		return fmt.Errorf("address %s is not held by a pod sandbox and cannot be transferred", ip)
+		logger.WithField("fromHandle", currentHandle).Info("Requested address is not on a pod sandbox's handle")
+		return addressNotOursError("address %s is not on a pod sandbox's handle and cannot be transferred", ip)
+	}
+
+	owner := &ipam.AttributeOwner{Namespace: epIDs.Namespace, Name: epIDs.Pod}
+	if !owner.Matches(attr.ActiveOwnerAttrs) {
+		logger.WithField("fromHandle", currentHandle).Info("Requested address is owned by another pod")
+		return addressNotOursError("address %s is owned by another pod and cannot be transferred", ip)
+	}
+
+	if claimedAfter(attr.ActiveOwnerAttrs, started) {
+		logger.WithField("fromHandle", currentHandle).Warn("A newer sandbox of this pod claimed the address while this ADD waited, refusing to take it")
+		msg := fmt.Sprintf("address %s was claimed by a newer sandbox of this pod after this ADD started", ip)
+		return cnitypes.NewError(types.ErrCodeSandboxSuperseded, msg, "")
 	}
 
 	logger.WithFields(logrus.Fields{
@@ -552,6 +604,19 @@ func transferFromPriorSandbox(
 		return fmt.Errorf("address %s is already allocated and cannot be transferred to this pod", ip)
 	}
 	return nil
+}
+
+// allocationTimestampLayout is the layout of an allocation's timestamp attribute. It matches
+// time.Time's String output for a UTC time, which older releases and other IPAM clients write, so
+// their stamps parse too.
+const allocationTimestampLayout = "2006-01-02 15:04:05.999999999 -0700 MST"
+
+// claimedAfter reports whether an allocation was stamped later than t. Every claim, including a
+// transfer, restamps the address. A missing or unparsable stamp counts as earlier, so the check
+// never blocks a transfer it can't judge.
+func claimedAfter(attrs map[string]string, t time.Time) bool {
+	claimed, err := time.Parse(allocationTimestampLayout, attrs[ipam.AttributeTimestamp])
+	return err == nil && claimed.After(t)
 }
 
 const ipamUpgradedFilePath = "/var/run/calico/cni/ipam_upgraded"
@@ -589,36 +654,28 @@ func touchFile(filePath string) error {
 	return nil
 }
 
-type unlockFn func()
+// calicoClientFor returns the Calico client the calling plugin put in ctx, or builds one from the netconf.
+func calicoClientFor(ctx context.Context, conf types.NetConf) (client.Interface, error) {
+	if lookups := utils.SandboxLookupsFrom(ctx); lookups.CalicoClient != nil {
+		return lookups.CalicoClient, nil
+	}
+	return utils.CreateClient(conf)
+}
 
-// acquireIPAMLockBestEffort attempts to acquire the IPAM file lock, blocking if needed.  If an error occurs
-// (for example permissions or missing directory) then it returns immediately.  Returns a function that unlocks the
-// lock again (or a no-op function if acquiring the lock failed).
-func acquireIPAMLockBestEffort(path string) unlockFn {
-	logrus.Info("About to acquire host-wide IPAM lock.")
-	if path == "" {
-		path = ipamLockPath
+// k8sClientFor returns the Kubernetes client the calling plugin put in ctx, or builds one from the netconf.
+func k8sClientFor(ctx context.Context, conf types.NetConf) (kubernetes.Interface, error) {
+	if lookups := utils.SandboxLookupsFrom(ctx); lookups.K8sClient != nil {
+		return lookups.K8sClient, nil
 	}
-	err := os.MkdirAll(filepath.Dir(path), 0o777)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to make directory for IPAM lock")
-		// Fall through, still a slight chance the file is there for us to access.
+	return k8sclient.New(conf)
+}
+
+// virtClientFor returns the KubeVirt client the calling plugin put in ctx, or builds one from the netconf.
+func virtClientFor(ctx context.Context, conf types.NetConf) (kubevirt.VirtClientInterface, error) {
+	if lookups := utils.SandboxLookupsFrom(ctx); lookups.VirtClient != nil {
+		return lookups.VirtClient, nil
 	}
-	ipamLock := flock.New(path)
-	err = ipamLock.Lock()
-	if err != nil {
-		logrus.WithError(err).Error("Failed to grab IPAM lock, may contend for datastore updates")
-		return func() {}
-	}
-	logrus.Info("Acquired host-wide IPAM lock.")
-	return func() {
-		err := ipamLock.Unlock()
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to release IPAM lock; ignoring because process is about to exit.")
-		} else {
-			logrus.Info("Released host-wide IPAM lock.")
-		}
-	}
+	return k8sclient.NewKubeVirt(conf)
 }
 
 // errPodNotFound is returned by getVMIInfoForPod when the pod has been deleted
@@ -629,7 +686,7 @@ var errPodNotFound = fmt.Errorf("pod not found")
 // Returns (vmiInfo, nil) if the pod is a valid virt-launcher pod.
 // Returns (nil, nil) if the pod is not a virt-launcher pod.
 // Returns (nil, error) if there was an error retrieving or validating VMI information.
-func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *logrus.Entry) (*kubevirt.PodVMIInfo, error) {
+func getVMIInfoForPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *logrus.Entry) (*kubevirt.PodVMIInfo, error) {
 	// Only check for VMI info in Kubernetes orchestrator
 	if epIDs.Orchestrator != "k8s" || epIDs.Pod == "" || epIDs.Namespace == "" {
 		return nil, nil
@@ -640,20 +697,12 @@ func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *l
 		return nil, nil
 	}
 
-	// Create Kubernetes client
-	k8sClient, err := k8s.NewK8sClient(conf, logger)
-	if err != nil {
-		logger.WithError(err).Error("Failed to create Kubernetes client for VMI detection")
+	pod, err := getPod(ctx, conf, epIDs)
+	if errors.Is(err, errPodNotFound) {
+		logger.Info("Pod not found, it may have been deleted")
 		return nil, err
 	}
-
-	// Get the pod
-	pod, err := k8sClient.CoreV1().Pods(epIDs.Namespace).Get(context.Background(), epIDs.Pod, metav1.GetOptions{})
 	if err != nil {
-		if kerrors.IsNotFound(err) {
-			logger.Info("Pod not found, it may have been deleted")
-			return nil, errPodNotFound
-		}
 		logger.WithError(err).Error("Failed to get pod for VMI detection")
 		return nil, err
 	}
@@ -665,7 +714,7 @@ func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *l
 	}
 
 	// Create KubeVirt client for VMI verification
-	virtClient, err := k8s.NewKubeVirtClient(conf, logger)
+	virtClient, err := virtClientFor(ctx, conf)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create KubeVirt client for VMI detection")
 		return nil, err
@@ -683,8 +732,8 @@ func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *l
 
 // getKubeVirtVMAddressPersistence retrieves the KubeVirtVMAddressPersistence setting from IPAMConfig.
 // Returns true if VM address persistence is enabled (the default), false if explicitly disabled.
-func getKubeVirtVMAddressPersistence(calicoClient client.Interface) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func getKubeVirtVMAddressPersistence(ctx context.Context, calicoClient client.Interface) bool {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	ipamConfig, err := calicoClient.IPAMConfiguration().Get(ctx, "default", options.GetOptions{})
@@ -700,19 +749,26 @@ func getKubeVirtVMAddressPersistence(calicoClient client.Interface) bool {
 	return *ipamConfig.Spec.KubeVirtVMAddressPersistence != v3.VMAddressPersistenceDisabled
 }
 
-func cmdDel(args *skel.CmdArgs) error {
+// del releases the sandbox's addresses.
+func del(ctx context.Context, args *skel.CmdArgs) error {
 	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	utils.ConfigureLogging(conf)
-
-	calicoClient, err := utils.CreateClient(conf)
+	calicoClient, err := calicoClientFor(ctx, conf)
 	if err != nil {
 		return err
 	}
+	return ReleaseSandbox(ctx, calicoClient, conf, args, nil)
+}
 
+// ReleaseSandbox is calico-ipam's DEL release for the sandbox args describes, for callers that
+// must keep some of its addresses. With no keepAddresses it releases the sandbox's handle and
+// the v2.x workload ID handle, as DEL does. Otherwise it releases only the sandbox handle's
+// addresses not in keepAddresses. A KubeVirt pod with VM address persistence ignores
+// keepAddresses, since its VM handle is shared across the VM's pods and released by owner.
+func ReleaseSandbox(ctx context.Context, calicoClient client.Interface, conf types.NetConf, args *skel.CmdArgs, keepAddresses []net.IP) error {
 	nodename := utils.DetermineNodename(conf)
 
 	// Release the IP address by using the handle - which is workloadID.
@@ -732,7 +788,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	})
 
 	// Always detect VMI info for logging, but only use VM-based handle when persistence is enabled.
-	vmiInfo, err := getVMIInfoForPod(conf, epIDs, logger)
+	vmiInfo, err := getVMIInfoForPod(ctx, conf, epIDs, logger)
 	if err != nil {
 		if errors.Is(err, errPodNotFound) {
 			// During parallel CNI DEL calls (e.g., live migration), the pod may already
@@ -745,7 +801,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	// Combined flag: VMI pod with persistence enabled.
-	ipPersistenceEnabledForVM := vmiInfo != nil && getKubeVirtVMAddressPersistence(calicoClient)
+	ipPersistenceEnabledForVM := vmiInfo != nil && getKubeVirtVMAddressPersistence(ctx, calicoClient)
 
 	// Use VM-based handle ID only when both vmiInfo is present and persistence is enabled.
 	var handleID string
@@ -772,19 +828,66 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	logger = logger.WithField("HandleID", handleID)
 
-	logger.Info("Releasing address using handleID")
+	releaseWholeHandle := ipPersistenceEnabledForVM || len(keepAddresses) == 0
+	if releaseWholeHandle {
+		logger.Info("Releasing address using handleID")
+	} else {
+		logger.WithField("keep", keepAddresses).Info("Releasing the handle's addresses other than those to keep")
+	}
 
 	// Acquire a best-effort host-wide lock to prevent multiple copies of the CNI plugin trying to assign/delete
 	// concurrently. ReleaseXXX is concurrency safe already but serialising the CNI plugins means that
 	// we only attempt one IPAM update at a time.  This reduces the load on the API server by a factor of the
 	// number of concurrent requests with essentially no downside.
-	unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
-	defer unlock()
+	return utils.WithIPAMLock(ctx, conf.IPAMLockFile, func(ctx context.Context) error {
+		ctx, cancel := context.WithTimeout(ctx, lockedIPAMTimeout)
+		defer cancel()
+		if releaseWholeHandle {
+			return releaseHandle(ctx, calicoClient, handleID, epIDs, vmiInfo, ipPersistenceEnabledForVM, logger)
+		}
+		return releaseUnlisted(ctx, calicoClient.IPAM(), handleID, keepAddresses, logger)
+	})
+}
 
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	defer cancel()
+// releaseUnlisted releases each address on handleID that is not in keepAddresses, never the
+// whole handle. A handle that doesn't exist has nothing to release. Its caller runs it under
+// the host-wide IPAM lock.
+func releaseUnlisted(ctx context.Context, ipamClient ipam.Interface, handleID string, keepAddresses []net.IP, logger *logrus.Entry) error {
+	ips, err := ipamClient.IPsByHandle(ctx, handleID)
+	if err != nil {
+		if errors.As(err, &cerrors.ErrorResourceDoesNotExist{}) {
+			return nil
+		}
+		return fmt.Errorf("listing addresses on handle %s: %w", handleID, err)
+	}
 
+	var errs []error
+	for _, ip := range ips {
+		if slices.ContainsFunc(keepAddresses, ip.Equal) {
+			logger.WithField("ip", ip).Info("Keeping address the endpoint lists")
+			continue
+		}
+		logger.WithField("ip", ip).Info("Releasing address the endpoint does not list")
+		if _, _, err := ipamClient.ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ip.String(), Handle: handleID}); err != nil {
+			errs = append(errs, fmt.Errorf("releasing %s: %w", ip, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// releaseHandle frees the addresses a sandbox holds on handleID, plus any held under the
+// workload ID handle that Calico v2.x used. For a KubeVirt pod with address persistence it
+// instead clears the pod's owner attributes, and releases the handle only once the VM or VMI
+// is being deleted and no owner remains. Its caller runs it under the host-wide IPAM lock.
+func releaseHandle(
+	ctx context.Context,
+	calicoClient client.Interface,
+	handleID string,
+	epIDs *utils.WEPIdentifiers,
+	vmiInfo *kubevirt.PodVMIInfo,
+	ipPersistenceEnabledForVM bool,
+	logger *logrus.Entry,
+) error {
 	// For VMI pods with persistence enabled, handle deletion based on VM/VMI deletion status.
 	// IP persistence is only maintained while the VM (or standalone VMI) is alive.
 	// - If VMI is owned by a VM: release when VM has DeletionTimestamp
@@ -963,20 +1066,46 @@ func cmdDel(args *skel.CmdArgs) error {
 	return nil
 }
 
-// getNamespace retrieves namespace object using Kubernetes clientset
-func getNamespace(conf types.NetConf, namespace string, logger *logrus.Entry) (*corev1.Namespace, error) {
+// getPod returns the sandbox's pod. It uses the pod the calling plugin already fetched when
+// calico-ipam runs in-process, and otherwise reads it from the Kubernetes API, returning
+// errPodNotFound if the pod is gone.
+func getPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPIdentifiers) (*corev1.Pod, error) {
+	if pod := utils.SandboxLookupsFrom(ctx).Pod; pod != nil {
+		return pod, nil
+	}
+
+	k8sClient, err := k8sClientFor(ctx, conf)
+	if err != nil {
+		return nil, err
+	}
+
+	pod, err := k8sClient.CoreV1().Pods(epIDs.Namespace).Get(ctx, epIDs.Pod, metav1.GetOptions{})
+	if kerrors.IsNotFound(err) {
+		return nil, errPodNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return pod, nil
+}
+
+// getNamespace returns the named namespace, or nil for an empty name. It uses the namespace the
+// calling plugin already fetched when there is one, and otherwise reads it from the Kubernetes API.
+func getNamespace(ctx context.Context, conf types.NetConf, namespace string) (*corev1.Namespace, error) {
 	if namespace == "" {
 		return nil, nil
 	}
+	if ns := utils.SandboxLookupsFrom(ctx).Namespace; ns != nil {
+		return ns, nil
+	}
 
-	// Create Kubernetes clientset
-	k8sClient, err := k8s.NewK8sClient(conf, logger)
+	k8sClient, err := k8sClientFor(ctx, conf)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get namespace directly from Kubernetes API
-	ns, err := k8sClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
+	ns, err := k8sClient.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -988,16 +1117,23 @@ func getNamespace(conf types.NetConf, namespace string, logger *logrus.Entry) (*
 // if IPs are already allocated to the VM handle and reusing them.
 //
 // For source pods (isMigrationTarget=false):
-//   - If existing IPs found: reuses them and sets ActiveOwnerAttrs. Returns (true, nil).
-//   - If no existing IPs: returns (false, nil) so the caller proceeds with normal AutoAssign.
+//   - If existing IPs found: reuses them, sets ActiveOwnerAttrs and returns them.
+//   - If no existing IPs: returns a nil result so the caller proceeds with normal AutoAssign.
 //
 // For migration target pods (isMigrationTarget=true):
 //   - Existing IPs must already be allocated by the source pod.
 //   - Sets AlternateOwnerAttrs (unconditionally, to handle back-to-back migrations).
 //   - Returns empty routes so CNI skips host-side route programming.
-//   - Returns (true, nil) on success, (false, error) if IPs are missing.
-func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs map[string]string, conf types.NetConf, logger *logrus.Entry, isMigrationTarget bool) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+//   - Returns an error if IPs are missing.
+func handleVirtLauncherPod(
+	ctx context.Context,
+	calicoClient client.Interface,
+	handleID string,
+	attrs map[string]string,
+	logger *logrus.Entry,
+	isMigrationTarget bool,
+) (*cniv1.Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	existingIPs, err := calicoClient.IPAM().IPsByHandle(ctx, handleID)
@@ -1005,18 +1141,18 @@ func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			// Communication or unexpected error - don't fall through to new allocation.
 			logger.WithError(err).Error("Failed to get existing IPs for VM handle")
-			return false, fmt.Errorf("failed to get existing IPs for VM handle %s: %w", handleID, err)
+			return nil, fmt.Errorf("failed to get existing IPs for VM handle %s: %w", handleID, err)
 		}
 	}
 	if len(existingIPs) == 0 {
 		if isMigrationTarget {
 			// Migration target requires existing IPs allocated by the source pod.
 			logger.Error("Migration target pod but VM handle has no allocated IPs")
-			return false, fmt.Errorf("migration target pod but no IP allocated to VM handle %s", handleID)
+			return nil, fmt.Errorf("migration target pod but no IP allocated to VM handle %s", handleID)
 		}
 		// Source pod with no existing IPs - fall through to normal AutoAssign.
 		logger.WithError(err).Info("No existing IPs for VM handle, proceeding with new allocation")
-		return false, nil
+		return nil, nil
 	}
 
 	logger.WithFields(logrus.Fields{
@@ -1055,7 +1191,7 @@ func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs
 		err = calicoClient.IPAM().SetOwnerAttributes(ctx, ip, handleID, updates, nil)
 		if err != nil {
 			logger.WithError(err).Errorf("Failed to set owner attributes for IP %s", ip)
-			return false, fmt.Errorf("failed to set owner attributes for IP %s: %w", ip, err)
+			return nil, fmt.Errorf("failed to set owner attributes for IP %s: %w", ip, err)
 		}
 	}
 
@@ -1075,5 +1211,5 @@ func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs
 		logger.Info("Source pod: returning existing IPs with routes")
 	}
 
-	return true, cnitypes.PrintResult(r, conf.CNIVersion)
+	return r, nil
 }

@@ -16,7 +16,9 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.25
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.36
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.37
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.17
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.307.0
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.2
 	github.com/aws/smithy-go v1.27.8
 	github.com/bits-and-blooms/bitset v1.24.5
 	github.com/buger/jsonparser v1.2.0
@@ -100,10 +102,9 @@ require (
 	github.com/tchap/go-patricia/v2 v2.3.3
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
 	github.com/urfave/cli/v3 v3.10.0
-	github.com/vishvananda/netlink v1.3.1
+	github.com/vishvananda/netlink v1.3.2-0.20260206161744-ab2b1904dc37
 	go.etcd.io/etcd/api/v3 v3.7.0
 	go.etcd.io/etcd/client/pkg/v3 v3.7.0
-	go.etcd.io/etcd/client/v2 v2.305.31
 	go.etcd.io/etcd/client/v3 v3.7.0
 	go.uber.org/zap v1.28.0
 	go.yaml.in/yaml/v3 v3.0.5
@@ -116,6 +117,7 @@ require (
 	golang.org/x/text v0.42.0
 	golang.org/x/time v0.16.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
+	google.golang.org/api v0.276.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
@@ -146,7 +148,7 @@ require (
 	sigs.k8s.io/gateway-api/conformance v1.6.1
 	sigs.k8s.io/kind v0.32.0
 	sigs.k8s.io/knftables v0.0.23-0.20260903141422-0087e9ef619d
-	sigs.k8s.io/network-policy-api v0.2.0
+	sigs.k8s.io/network-policy-api v0.3.0
 	sigs.k8s.io/randfill v1.0.0
 	sigs.k8s.io/secrets-store-csi-driver v1.6.0
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2
@@ -183,7 +185,6 @@ require (
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.18 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.17 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.37 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.37 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.38 // indirect
@@ -203,7 +204,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.89.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/rds v1.118.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/route53 v1.62.6 // indirect
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.5.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sns v1.39.16 // indirect
@@ -413,7 +413,6 @@ require (
 	golang.org/x/tools v0.50.0 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
-	google.golang.org/api v0.276.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260803160001-6ac0973c030d // indirect

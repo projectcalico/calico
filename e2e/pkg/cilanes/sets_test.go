@@ -27,38 +27,63 @@ const repoRoot = "../../.."
 func TestSetName(t *testing.T) {
 	RegisterTestingT(t)
 
-	name, err := SetName(Lane{Config: "e2e/config/vpp/eks.yaml", Area: "vpp.yml"})
+	// The set is named after the lane, not the config it selects with.
+	name, err := SetName(Lane{
+		Source: ".argoci/cron/e2e-iptables.yaml",
+		Name:   "datastore-k8s-e2e-kdd-old [stable-1-canal-yaml]",
+		Config: "e2e/config/iptables/xtables-manifest-canal.yaml",
+	})
 	Expect(err).NotTo(HaveOccurred())
-	Expect(name).To(Equal("vpp/eks"))
+	Expect(name).To(Equal("cron/e2e-iptables/datastore-k8s-e2e-kdd-old-stable-1-canal-yaml"))
+
+	name, err = SetName(Lane{Source: ".semaphore/semaphore.yml.d/blocks/20-e2e.yml", Name: "E2E tests (KinD) / Conformance"})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(name).To(Equal("semaphore/20-e2e/e2e-tests-kind-conformance"))
+
+	name, err = SetName(Lane{Source: ".argoci/modules/20-e2e.yaml", Name: "e2e-kind [defaulted]"})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(name).To(Equal("modules/20-e2e/e2e-kind-defaulted"))
 
 	// A set file must not land outside sets/.
-	_, err = SetName(Lane{Config: "../shared/foo.yaml"})
-	Expect(err).To(HaveOccurred())
+	_, err = SetName(Lane{Source: "../shared/foo.yaml", Name: "one"})
+	Expect(err).To(MatchError(ContainSubstring("not a known lane directory")))
+
+	_, err = SetName(Lane{Source: ".argoci/cron/e2e-iptables.yaml", Name: "[]"})
+	Expect(err).To(MatchError(ContainSubstring("leaves nothing")))
 }
 
 func TestResolveSets(t *testing.T) {
 	RegisterTestingT(t)
 
-	// Counterpart lanes in the two CI systems share one set.
-	argo := Lane{Source: "a.yaml", Name: "one", Area: "bpf.yml", Config: "e2e/config/bpf/bpf.yaml", TestType: "k8s-e2e"}
+	// Counterpart lanes in the two CI systems each get their own set, even when
+	// they select with the same config.
+	argo := Lane{Source: ".argoci/cron/a.yaml", Name: "one", Area: "bpf.yml", Config: "e2e/config/bpf/bpf.yaml", TestType: "k8s-e2e"}
 	sem := argo
-	sem.Source, sem.Name = "b.yml", "Block / job"
+	sem.Source, sem.Name = ".semaphore/semaphore.yml.d/blocks/b.yml", "Block / job"
 	sets, err := ResolveSets([]Lane{argo, sem})
 	Expect(err).NotTo(HaveOccurred())
-	Expect(sets).To(HaveLen(1))
-	Expect(sets).To(HaveKey("bpf/bpf"))
+	Expect(sets).To(HaveLen(2))
+	Expect(sets).To(HaveKeyWithValue("cron/a/one", argo))
+	Expect(sets).To(HaveKeyWithValue("semaphore/b/block-job", sem))
+
+	// Two lanes in one file whose names reduce to the same set would overwrite
+	// each other's specs.
+	clash := argo
+	clash.Name = "ONE"
+	_, err = ResolveSets([]Lane{argo, clash})
+	Expect(err).To(MatchError(ContainSubstring("both resolve to set cron/a/one")))
 
 	// Lanes that never run the binary have no set.
-	sets, err = ResolveSets([]Lane{{Source: "a.yaml", Name: "os", Area: "openstack", TestType: "openstack-e2e", Config: "e2e/config/vpp/eks.yaml"}})
+	sets, err = ResolveSets([]Lane{{Source: ".argoci/cron/a.yaml", Name: "os", Area: "openstack", TestType: "openstack-e2e", Config: "e2e/config/vpp/eks.yaml"}})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(sets).To(BeEmpty())
 
 	// A pipeline with no FUNCTIONAL_AREA runs no tests at all.
-	_, err = ResolveSets([]Lane{{Source: "cleanup.yml", Name: "gc", TestType: "k8s-e2e"}})
+	_, err = ResolveSets([]Lane{{Source: ".argoci/cron/cleanup.yaml", Name: "gc", TestType: "k8s-e2e"}})
 	Expect(err).NotTo(HaveOccurred())
 
 	// An e2e lane that lost its selection is a lane that would exit 1.
-	_, err = ResolveSets([]Lane{{Source: "a.yaml", Name: "broken", Area: "bpf.yml", TestType: "k8s-e2e"}})
+	_, err = ResolveSets([]Lane{{Source: ".argoci/cron/a.yaml", Name: "broken", Area: "bpf.yml", TestType: "k8s-e2e"}})
 	Expect(err).To(MatchError(ContainSubstring("selects nothing")))
 }
 

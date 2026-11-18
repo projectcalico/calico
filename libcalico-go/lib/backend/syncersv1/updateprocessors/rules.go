@@ -150,17 +150,8 @@ func RuleAPIV3ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		dstServiceAcctMatch = *ar.Destination.ServiceAccounts
 	}
 
-	var dstService, dstServiceNS string
-	if ar.Destination.Services != nil {
-		dstService = ar.Destination.Services.Name
-		dstServiceNS = ar.Destination.Services.Namespace
-	}
-
-	var srcService, srcServiceNS string
-	if ar.Source.Services != nil {
-		srcService = ar.Source.Services.Name
-		srcServiceNS = ar.Source.Services.Namespace
-	}
+	dstService, dstServiceNS := serviceMatchKey(ar.Destination.Services, ns)
+	srcService, srcServiceNS := serviceMatchKey(ar.Source.Services, ns)
 
 	r := model.Rule{
 		Action:      ruleActionAPIV3ToBackend(ar.Action),
@@ -212,6 +203,19 @@ func RuleAPIV3ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		}
 	}
 	return r
+}
+
+// serviceMatchKey returns the service name and namespace a rule matches, or two empty strings
+// when sm is nil. A service match with no namespace refers to the policy's own namespace, so ns
+// fills it in; ns is empty for global policies, whose validation requires an explicit namespace.
+func serviceMatchKey(sm *apiv3.ServiceMatch, ns string) (string, string) {
+	if sm == nil {
+		return "", ""
+	}
+	if sm.Namespace == "" {
+		return sm.Name, ns
+	}
+	return sm.Name, sm.Namespace
 }
 
 // parseServiceAccounts takes a v3 service account match and returns the appropriate v1 representation

@@ -39,6 +39,7 @@ components:
       - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
@@ -123,6 +124,7 @@ components:
       - ^felix/types/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
@@ -202,6 +204,7 @@ components:
       - ^kube-controllers/pkg/controllers/utils/[^/]*\.go$
       - ^kube-controllers/pkg/converter/[^/]*\.go$
       - ^lib/std/chanutil/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/time/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
@@ -344,6 +347,7 @@ components:
       - ^calicoctl/calicoctl/util/yaml/[^/]*\.go$
       - ^cmd/
       - ^cni-plugin/internal/pkg/azure/[^/]*\.go$
+      - ^cni-plugin/internal/pkg/k8sclient/[^/]*\.go$
       - ^cni-plugin/internal/pkg/utils/[^/]*\.go$
       - ^cni-plugin/internal/pkg/utils/cri/[^/]*\.go$
       - ^cni-plugin/pkg/dataplane/[^/]*\.go$
@@ -528,6 +532,7 @@ components:
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/chanutil/[^/]*\.go$
       - ^lib/std/cryptoutils/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/time/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
@@ -679,6 +684,7 @@ components:
       - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
@@ -745,6 +751,7 @@ components:
       - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
@@ -849,6 +856,7 @@ components:
       - ^felix/labelindex/ipsetmember/[^/]*\.go$
       - ^felix/netlinkshim/[^/]*\.go$
       - ^felix/proto/[^/]*\.go$
+      - ^felix/timeshim/[^/]*\.go$
       - ^felix/types/[^/]*\.go$
       - ^goldmane/proto/[^/]*\.go$
       - ^hack/test/certs/
@@ -856,6 +864,7 @@ components:
       - ^lib/httpmachinery/pkg/codec/[^/]*\.go$
       - ^lib/httpmachinery/pkg/context/[^/]*\.go$
       - ^lib/httpmachinery/pkg/header/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/time/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
@@ -936,6 +945,7 @@ components:
       - ^lib/datastructures/hashring/[^/]*\.go$
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/chanutil/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/time/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
@@ -1139,6 +1149,7 @@ components:
       - ^felix/ip/[^/]*\.go$
       - ^hack/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
@@ -1254,6 +1265,7 @@ components:
       - ^kube-controllers/
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/chanutil/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/time/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
@@ -1285,6 +1297,7 @@ components:
       - ^libcalico-go/lib/informerutil/[^/]*\.go$
       - ^libcalico-go/lib/ipam/[^/]*\.go$
       - ^libcalico-go/lib/ipam/accounting/[^/]*\.go$
+      - ^libcalico-go/lib/ipam/vmipam/[^/]*\.go$
       - ^libcalico-go/lib/kubevirt/[^/]*\.go$
       - ^libcalico-go/lib/names/[^/]*\.go$
       - ^libcalico-go/lib/namespace/[^/]*\.go$
@@ -1338,6 +1351,7 @@ components:
       - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
@@ -1369,6 +1383,7 @@ components:
       - ^app-policy/policystore/[^/]*\.go$
       - ^app-policy/types/[^/]*\.go$
       - ^cni-plugin/internal/pkg/azure/[^/]*\.go$
+      - ^cni-plugin/internal/pkg/k8sclient/[^/]*\.go$
       - ^cni-plugin/internal/pkg/utils/[^/]*\.go$
       - ^cni-plugin/internal/pkg/utils/cri/[^/]*\.go$
       - ^cni-plugin/pkg/dataplane/[^/]*\.go$
@@ -1513,6 +1528,7 @@ components:
       - ^lib/datastructures/hashring/[^/]*\.go$
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/chanutil/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/time/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
@@ -1605,6 +1621,7 @@ components:
     in:
       - ^api/admission/[^/]*\.go$
       - ^api/admission/[^/]*\.yaml$
+      - ^api/admission/aws-vpc-annotations/[^/]*\.yaml$
       - ^api/admission/cni-annotations/[^/]*\.yaml$
       - ^api/config/crd/[^/]*\.go$
       - ^api/config/crd/[^/]*\.yaml$
@@ -1634,6 +1651,7 @@ components:
       - ^lib/std/log/[^/]*\.go$
       - ^lib\.Makefile$
       - ^metadata\.mk$
+      - ^pkg/buildinfo/[^/]*\.go$
       - ^pod2daemon/
     exclude:
       - ^(?:[^/]+/)*AUTHORS[^/]*$
@@ -1645,6 +1663,7 @@ components:
       - ^(?:[^/]+/)*[^/]*\.md$
       - ^(?:[^/]+/)*\.gitignore$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
+      - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
   release:
     in:
       - ^api/pkg/lib/numorstring/[^/]*\.go$
@@ -1798,6 +1817,7 @@ components:
       - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
@@ -1865,6 +1885,8 @@ components:
       - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
   webhooks:
     in:
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/client/applyconfiguration_generated/internal/[^/]*\.go$
       - ^api/pkg/client/applyconfiguration_generated/projectcalico/v3/[^/]*\.go$
@@ -1876,17 +1898,25 @@ components:
       - ^crypto/pkg/tls/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
       - ^lib\.Makefile$
       - ^libcalico-go/lib/apis/internalapi/[^/]*\.go$
       - ^libcalico-go/lib/backend/encap/[^/]*\.go$
+      - ^libcalico-go/lib/backend/k8s/conversion/[^/]*\.go$
       - ^libcalico-go/lib/backend/model/[^/]*\.go$
       - ^libcalico-go/lib/errors/[^/]*\.go$
+      - ^libcalico-go/lib/hash/[^/]*\.go$
       - ^libcalico-go/lib/names/[^/]*\.go$
       - ^libcalico-go/lib/namespace/[^/]*\.go$
       - ^libcalico-go/lib/net/[^/]*\.go$
+      - ^libcalico-go/lib/selector/[^/]*\.go$
+      - ^libcalico-go/lib/selector/parser/[^/]*\.go$
+      - ^libcalico-go/lib/selector/tokenizer/[^/]*\.go$
+      - ^libcalico-go/lib/set/[^/]*\.go$
+      - ^libcalico-go/lib/validator/v3/[^/]*\.go$
       - ^libcalico-go/lib/winutils/[^/]*\.go$
       - ^metadata\.mk$
       - ^pkg/buildinfo/[^/]*\.go$
@@ -1936,6 +1966,7 @@ components:
       - ^libcalico-go/lib/backend/encap/[^/]*\.go$
       - ^libcalico-go/lib/backend/model/[^/]*\.go$
       - ^libcalico-go/lib/errors/[^/]*\.go$
+      - ^libcalico-go/lib/health/[^/]*\.go$
       - ^libcalico-go/lib/namespace/[^/]*\.go$
       - ^libcalico-go/lib/net/[^/]*\.go$
       - ^metadata\.mk$

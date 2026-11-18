@@ -80,9 +80,11 @@ var _ = infrastructure.DatastoreDescribe(
 			setNodeLabels(1, map[string]string{"role": "standard"})
 
 			By("Creating a selector-scoped FelixConfiguration targeting role == 'gpu'")
+			// Not BPFEnabled: that would switch node 0 into BPF mode, which the
+			// non-BPF lanes run without the programs for.
 			createSelectorFelixConfig("gpu-nodes", "role == 'gpu'", func(spec *api.FelixConfigurationSpec) {
-				enabled := true
-				spec.BPFEnabled = &enabled
+				iptRefresh := metav1.Duration{Duration: 15 * time.Second}
+				spec.IptablesRefreshInterval = &iptRefresh
 			})
 
 			By("Verifying node 0 (gpu) picks up the selector config")

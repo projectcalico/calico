@@ -71,6 +71,7 @@ const (
 	NodePrometheusTLSServerSecret = "calico-node-prometheus-server-tls"
 	CalicoNodeObjectName          = "calico-node"
 	CalicoCNIPluginObjectName     = "calico-cni-plugin"
+	AWSVPCAnnotationsObjectName   = "calico-aws-vpc-annotations"
 	BPFVolumeName                 = "bpffs"
 
 	InstallCNIContainerName = "install-cni"
@@ -127,6 +128,10 @@ type NodeConfiguration struct {
 	// the finalizer from the CNI plugin and associated RBAC resources, allowing them to be deleted.
 	// For details on why this is needed see 'Node and Installation finalizer' in the core_controller.
 	CanRemoveCNIFinalizer bool
+
+	// OmitAWSVPCAnnotationsGrant removes the calico-aws-vpc-annotations ClusterRole and binding, for
+	// when the AWS VPC CNI doesn't run as kube-system:aws-node and its annotation is left unprotected.
+	OmitAWSVPCAnnotationsGrant bool
 
 	// BGPLayouts is returned by the rendering code after modifying its namespace
 	// so that it can be deployed into the cluster.
@@ -211,6 +216,27 @@ func (c *nodeComponent) SupportedOSType() rmeta.OSType {
 }
 
 func (c *nodeComponent) Objects() ([]client.Object, []client.Object) {
+	return ObjectsWithOverrides(c)
+}
+
+var _ Overridable = (*nodeComponent)(nil)
+
+func (c *nodeComponent) OverrideTargets() []rcomp.OverrideTarget {
+	overrides := c.cfg.Installation.CalicoNodeDaemonSet
+	if overrides != nil && overrides.Spec != nil && overrides.Spec.Template != nil && overrides.Spec.Template.Spec != nil {
+		// Rename the legacy mount-bpffs init container to ebpf-bootstrap, on a copy so
+		// the user's Installation is left alone.
+		overrides = overrides.DeepCopy()
+		for i, ic := range overrides.Spec.Template.Spec.InitContainers {
+			if ic.Name == "mount-bpffs" {
+				overrides.Spec.Template.Spec.InitContainers[i].Name = "ebpf-bootstrap"
+			}
+		}
+	}
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.DaemonSet](common.CalicoNamespace, common.NodeDaemonSetName, overrides)}
+}
+
+func (c *nodeComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
 	objs := []client.Object{
 		c.nodeServiceAccount(),
 		c.nodeRole(),
@@ -218,6 +244,14 @@ func (c *nodeComponent) Objects() ([]client.Object, []client.Object) {
 		c.cniPluginServiceAccount(),
 		c.cniPluginRole(),
 		c.cniPluginRoleBinding(),
+	}
+
+	var objsToDelete []client.Object
+
+	if c.cfg.OmitAWSVPCAnnotationsGrant {
+		objsToDelete = append(objsToDelete, c.awsVPCAnnotationsRole(), c.awsVPCAnnotationsRoleBinding())
+	} else {
+		objs = append(objs, c.awsVPCAnnotationsRole(), c.awsVPCAnnotationsRoleBinding())
 	}
 
 	// These are objects to keep even when we're terminating. They will be deleted by the Kubernetes
@@ -232,8 +266,6 @@ func (c *nodeComponent) Objects() ([]client.Object, []client.Object) {
 	if c.cfg.BGPLayouts != nil {
 		objs = append(objs, configmap.ToRuntimeObjects(configmap.CopyToNamespace(common.CalicoNamespace, c.cfg.BGPLayouts)...)...)
 	}
-
-	var objsToDelete []client.Object
 
 	cniConfig := c.nodeCNIConfigMap()
 	if cniConfig != nil {
@@ -376,6 +408,44 @@ func (c *nodeComponent) cniPluginRoleBinding() *rbacv1.ClusterRoleBinding {
 		migration.AddBindingForKubeSystemCNIPlugin(crb)
 	}
 	return crb
+}
+
+// awsVPCAnnotationsRole lets the AWS VPC CNI write its pod IP annotation through
+// protect-aws-vpc-annotations.projectcalico.org. Binding it to anyone else lets them edit that annotation too.
+func (c *nodeComponent) awsVPCAnnotationsRole() *rbacv1.ClusterRole {
+	return &rbacv1.ClusterRole{
+		TypeMeta:   metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"},
+		ObjectMeta: metav1.ObjectMeta{Name: AWSVPCAnnotationsObjectName},
+		Rules: []rbacv1.PolicyRule{
+			{
+				// Nothing serves this resource; it exists only to be granted.
+				APIGroups: []string{"projectcalico.org"},
+				Resources: []string{"awsvpcannotations"},
+				Verbs:     []string{"write"},
+			},
+		},
+	}
+}
+
+// awsVPCAnnotationsRoleBinding grants awsVPCAnnotationsRole to aws-node, the account AWS's own
+// manifests and docs run the AWS VPC CNI under. On a cluster without the AWS VPC CNI it grants nothing.
+func (c *nodeComponent) awsVPCAnnotationsRoleBinding() *rbacv1.ClusterRoleBinding {
+	return &rbacv1.ClusterRoleBinding{
+		TypeMeta:   metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"},
+		ObjectMeta: metav1.ObjectMeta{Name: AWSVPCAnnotationsObjectName},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     AWSVPCAnnotationsObjectName,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      "aws-node",
+				Namespace: "kube-system",
+			},
+		},
+	}
 }
 
 // nodeRole creates the clusterrole containing policy rules that allow the node daemonset to operate normally.
@@ -958,9 +1028,7 @@ func (c *nodeComponent) nodeDaemonset(cniCfgMap *corev1.ConfigMap) *appsv1.Daemo
 		annotations[bgpLayoutHashAnnotation] = rmeta.AnnotationHash(c.cfg.BGPLayouts.Data)
 	}
 
-	if c.cfg.Installation.FlexVolumePath != "None" {
-		initContainers = append(initContainers, c.flexVolumeContainer())
-	}
+	initContainers = append(initContainers, c.flexVolumeContainer())
 
 	// Mount the bpf fs for the node container.
 	// This is required for the BPF dataplane, but also for the other dataplanes
@@ -1059,15 +1127,6 @@ func (c *nodeComponent) nodeDaemonset(cniCfgMap *corev1.ConfigMap) *appsv1.Daemo
 		migration.LimitDaemonSetToMigratedNodes(&ds)
 	}
 
-	if overrides := c.cfg.Installation.CalicoNodeDaemonSet; overrides != nil {
-		// If the overrides specify the legacy mount-bpffs init container, then we rename it to the new value: ebpf-bootstrap.
-		for index := range rcomp.GetInitContainers(overrides) {
-			if overrides.Spec.Template.Spec.InitContainers[index].Name == "mount-bpffs" {
-				overrides.Spec.Template.Spec.InitContainers[index].Name = "ebpf-bootstrap"
-			}
-		}
-		rcomp.ApplyDaemonSetOverrides(&ds, overrides)
-	}
 	return &ds
 }
 
@@ -1115,14 +1174,15 @@ func (c *nodeComponent) nodeVolumes() []corev1.Volume {
 	}
 
 	// Create and append flexvolume
-	if c.cfg.Installation.FlexVolumePath != "None" {
-		volumes = append(volumes, corev1.Volume{
-			Name: "flexvol-driver-host",
-			VolumeSource: corev1.VolumeSource{
-				HostPath: &corev1.HostPathVolumeSource{Path: c.cfg.Installation.FlexVolumePath + "nodeagent~uds", Type: &dirOrCreate},
-			},
-		})
+	flexVolumeHostPath := &corev1.HostPathVolumeSource{Path: c.cfg.Installation.FlexVolumePath + "nodeagent~uds", Type: &dirOrCreate}
+	if c.flexVolumeDisabled() {
+		root, _ := flexVolumeRoot(c.cfg.Installation.KubernetesProvider)
+		flexVolumeHostPath = &corev1.HostPathVolumeSource{Path: root, Type: &dirMustExist}
 	}
+	volumes = append(volumes, corev1.Volume{
+		Name:         "flexvol-driver-host",
+		VolumeSource: corev1.VolumeSource{HostPath: flexVolumeHostPath},
+	})
 	if c.cfg.BirdTemplates != nil {
 		volumes = append(volumes,
 			corev1.Volume{
@@ -1246,17 +1306,49 @@ func (c *nodeComponent) cniPluginsContainer() corev1.Container {
 	}
 }
 
+func DefaultFlexVolumePath(provider operatorv1.Provider) string {
+	root, rel := flexVolumeRoot(provider)
+	return filepath.Join(root, rel) + "/"
+}
+
+// The root always exists on that platform, so it can be mounted without kubelet creating it on a read-only /usr.
+func flexVolumeRoot(provider operatorv1.Provider) (string, string) {
+	switch {
+	case provider.IsOpenShift():
+		// In OpenShift 4.x, the location for flexvolume plugins has changed.
+		// See: https://bugzilla.redhat.com/show_bug.cgi?id=1667606#c5
+		return "/etc/kubernetes", "kubelet-plugins/volume/exec"
+	case provider.IsGKE():
+		return "/home/kubernetes", "flexvolume"
+	case provider.IsAKS():
+		return "/etc/kubernetes", "volumeplugins"
+	case provider.IsRKE2():
+		return "/var/lib/kubelet", "volumeplugins"
+	default:
+		return "/usr", "libexec/kubernetes/kubelet-plugins/volume/exec"
+	}
+}
+
+func (c *nodeComponent) flexVolumeDisabled() bool {
+	return c.cfg.Installation.FlexVolumePath == "None"
+}
+
 // flexVolumeContainer creates the node's init container that installs the Unix Domain Socket to allow Dikastes
 // to communicate with Felix over the Policy Sync API.
 func (c *nodeComponent) flexVolumeContainer() corev1.Container {
 	flexVolumeMounts := []corev1.VolumeMount{
 		{MountPath: "/host/driver", Name: "flexvol-driver-host"},
 	}
+	command := []string{components.CalicoBinaryPath, "component", "flexvol", "install", "--target", "/host/driver/uds"}
+	if c.flexVolumeDisabled() {
+		_, rel := flexVolumeRoot(c.cfg.Installation.KubernetesProvider)
+		command = []string{components.CalicoBinaryPath, "component", "flexvol", "install", "--if-present", "--target", filepath.Join("/host/driver", rel, "nodeagent~uds", "uds")}
+	}
 
 	return corev1.Container{
 		Name:            "flexvol-driver",
 		Image:           c.calicoImage,
-		Command:         []string{components.CalicoBinaryPath, "component", "flexvol", "install", "--target", "/host/driver/uds"},
+		Command:         command,
 		SecurityContext: securitycontext.NewRootContext(true),
 		VolumeMounts:    flexVolumeMounts,
 	}
@@ -1572,6 +1664,9 @@ func (c *nodeComponent) nodeEnvVars() []corev1.EnvVar {
 			Name:  "USE_POD_CIDR",
 			Value: "true",
 		})
+	}
+	if cni != nil && cni.IPAM != nil {
+		nodeEnv = append(nodeEnv, corev1.EnvVar{Name: "CALICO_IPAM_TYPE", Value: string(cni.IPAM.Type)})
 	}
 
 	// Configure whether or not BGP should be enabled.

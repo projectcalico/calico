@@ -21,6 +21,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,6 +43,7 @@ type Configuration struct {
 	Istio          *operatorv1.Istio
 	IstioNamespace string
 	Scheme         *runtime.Scheme
+	ClusterID      string
 }
 
 var _ render.Component = &IstioComponent{}
@@ -76,6 +78,10 @@ const (
 	IstioIstiodServiceName            = "istiod"
 
 	istioFakeImageProxyv2 = "fake.io/fakeimg/proxyv2:faketag"
+
+	istiodContainerName   = "discovery"
+	istioCNIContainerName = "install-cni"
+	ztunnelContainerName  = "istio-proxy"
 )
 
 // Component names, which key the image overrides a variant resolves through.
@@ -93,7 +99,15 @@ type ConfiguredComponent interface {
 	GetConfig() *Configuration
 }
 
+// legacyClusterID is the cluster ID the Istio charts default to.
+const legacyClusterID = "Kubernetes"
+
 func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
+	if cfg.ClusterID == "" {
+		return nil, nil, fmt.Errorf("istio cluster ID must not be empty")
+	}
+	multiCluster := &MultiClusterConfig{ClusterName: cfg.ClusterID}
+
 	// Produce Helm templates for Istio
 	istioResOpts := &ResourceOpts{
 		Namespace:                 IstioNamespace,
@@ -106,6 +120,7 @@ func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 		BaseOpts: BaseOpts{
 			Global: &GlobalConfig{
 				IstioNamespace: IstioNamespace,
+				MultiCluster:   multiCluster,
 			},
 		},
 		IstiodOpts: IstiodOpts{
@@ -118,6 +133,7 @@ func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 				ProxyInit: &ProxyInitConfig{
 					Image: istioFakeImageProxyv2,
 				},
+				MultiCluster: multiCluster,
 			},
 			Gateways: &GatewaysConfig{
 				SeccompProfile: &corev1.SeccompProfile{
@@ -126,10 +142,15 @@ func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 			},
 			Profile:                 "ambient",
 			TrustedZtunnelNamespace: IstioNamespace,
+			// Pods injected under the chart default cluster ID keep it until they
+			// restart. Without the alias istiod rejects their certificate requests
+			// and finds no services for them.
+			ExtraContainerArgs: []string{fmt.Sprintf("--clusterAliases=%s=%s", legacyClusterID, cfg.ClusterID)},
 		},
 		IstioCNIOpts: IstioCNIOpts{
 			Global: &GlobalConfig{
 				IstioNamespace: IstioNamespace,
+				MultiCluster:   multiCluster,
 			},
 			Ambient: &AmbientConfig{
 				Enabled:                    true,
@@ -139,6 +160,7 @@ func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 		ZTunnelOpts: ZTunnelOpts{
 			Global: &GlobalConfig{
 				IstioNamespace: IstioNamespace,
+				MultiCluster:   multiCluster,
 			},
 		},
 	}
@@ -189,19 +211,19 @@ func (c *IstioComponent) patchImages() (err error) {
 
 	for i := range c.resources.IstiodDeployment.Spec.Template.Spec.Containers {
 		container := &c.resources.IstiodDeployment.Spec.Template.Spec.Containers[i]
-		if container.Name == "discovery" {
+		if container.Name == istiodContainerName {
 			container.Image = c.IstioPilotImage
 		}
 	}
 	for i := range c.resources.CNIDaemonSet.Spec.Template.Spec.Containers {
 		container := &c.resources.CNIDaemonSet.Spec.Template.Spec.Containers[i]
-		if container.Name == "install-cni" {
+		if container.Name == istioCNIContainerName {
 			container.Image = c.IstioInstallCNIImage
 		}
 	}
 	for i := range c.resources.ZTunnelDaemonSet.Spec.Template.Spec.Containers {
 		container := &c.resources.ZTunnelDaemonSet.Spec.Template.Spec.Containers[i]
-		if container.Name == "istio-proxy" {
+		if container.Name == ztunnelContainerName {
 			container.Image = c.IstioZTunnelImage
 		}
 	}
@@ -243,6 +265,21 @@ func (c *IstioComponent) ResolveImages(is *operatorv1.ImageSet) error {
 
 // Objects implements the Component interface.
 func (c *IstioComponent) Objects() ([]client.Object, []client.Object) {
+	return render.ObjectsWithOverrides(c)
+}
+
+var _ render.Overridable = (*IstioComponent)(nil)
+
+func (c *IstioComponent) OverrideTargets() []rcomp.OverrideTarget {
+	res := c.resources
+	return []rcomp.OverrideTarget{
+		rcomp.Target[*appsv1.Deployment](res.IstiodDeployment.Namespace, res.IstiodDeployment.Name, c.cfg.Istio.Spec.IstiodDeployment),
+		rcomp.Target[*appsv1.DaemonSet](res.CNIDaemonSet.Namespace, res.CNIDaemonSet.Name, c.cfg.Istio.Spec.IstioCNIDaemonset),
+		rcomp.Target[*appsv1.DaemonSet](res.ZTunnelDaemonSet.Namespace, res.ZTunnelDaemonSet.Name, c.cfg.Istio.Spec.ZTunnelDaemonset),
+	}
+}
+
+func (c *IstioComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
 	res := c.resources
 
 	var objs, toDelete []client.Object
@@ -258,22 +295,10 @@ func (c *IstioComponent) Objects() ([]client.Object, []client.Object) {
 		networkpolicy.DeprecatedAllowTigeraNetworkPolicyObject("ztunnel", IstioNamespace),
 	)
 
-	if overrides := c.cfg.Istio.Spec.IstiodDeployment; overrides != nil {
-		rcomp.ApplyDeploymentOverrides(res.IstiodDeployment, overrides)
-	}
-
-	if overrides := c.cfg.Istio.Spec.IstioCNIDaemonset; overrides != nil {
-		rcomp.ApplyDaemonSetOverrides(res.CNIDaemonSet, overrides)
-	}
-
-	if overrides := c.cfg.Istio.Spec.ZTunnelDaemonset; overrides != nil {
-		rcomp.ApplyDaemonSetOverrides(res.ZTunnelDaemonSet, overrides)
-	}
-
 	// Set required configs
 	for i := range res.ZTunnelDaemonSet.Spec.Template.Spec.Containers {
 		cont := &res.ZTunnelDaemonSet.Spec.Template.Spec.Containers[i]
-		if cont.Name == "istio-proxy" {
+		if cont.Name == ztunnelContainerName {
 			cont.Env = append(cont.Env, corev1.EnvVar{
 				Name:  "TRANSPARENT_NETWORK_POLICIES",
 				Value: "true",
@@ -283,13 +308,19 @@ func (c *IstioComponent) Objects() ([]client.Object, []client.Object) {
 	}
 	for i := range res.CNIDaemonSet.Spec.Template.Spec.Containers {
 		cont := &res.CNIDaemonSet.Spec.Template.Spec.Containers[i]
-		if cont.Name == "install-cni" {
+		if cont.Name == istioCNIContainerName {
 			cont.Env = append(cont.Env, corev1.EnvVar{
 				Name:  "MAGIC_DSCP_MARK",
 				Value: strconv.FormatInt(int64(c.cfg.Istio.Spec.DSCPMark.ToUint8()), 10),
 			})
 		}
 	}
+
+	// The Istio CR's resources field sits at pod level, so the shared override
+	// path can't place it. Each workload has one main container to receive it.
+	setContainerResources(&res.IstiodDeployment.Spec.Template.Spec, istiodContainerName, rcomp.GetResources(c.cfg.Istio.Spec.IstiodDeployment))
+	setContainerResources(&res.CNIDaemonSet.Spec.Template.Spec, istioCNIContainerName, rcomp.GetResources(c.cfg.Istio.Spec.IstioCNIDaemonset))
+	setContainerResources(&res.ZTunnelDaemonSet.Spec.Template.Spec, ztunnelContainerName, rcomp.GetResources(c.cfg.Istio.Spec.ZTunnelDaemonset))
 
 	// Set additional pull secrets
 	res.IstiodDeployment.Spec.Template.Spec.ImagePullSecrets = append(
@@ -434,6 +465,15 @@ func (c *IstioComponentCRDs) ResolveImages(is *operatorv1.ImageSet) error {
 
 func (c *IstioComponentCRDs) SupportedOSType() rmeta.OSType {
 	return rmeta.OSTypeLinux
+}
+
+// setContainerResources replaces the resources of the named container with r.
+// A nil r leaves the Helm chart's defaults in place.
+func setContainerResources(spec *corev1.PodSpec, name string, r *corev1.ResourceRequirements) {
+	if r == nil {
+		return
+	}
+	render.MustContainer(spec, name).Resources = *r
 }
 
 func cniBinDir(installation *operatorv1.InstallationSpec) string {

@@ -1,1 +1,0 @@
-[sig-calico] [Team:CORE] [Feature:Wireguard] [Category:Networking] WireGuard tests should carry pod traffic between nodes over the tunnel

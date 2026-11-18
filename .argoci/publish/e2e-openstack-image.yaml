@@ -1,0 +1,54 @@
+# Publishes the `openstack-e2e` image as gcr.io/unique-caldron-775/openstack-e2e,
+# tagged with the commit SHA and :stable.  The weekly OpenStack e2e runs
+# (.argoci/cron/e2e-openstack.yaml) use :stable.  On merge rather than a
+# promotion, since it builds from source and reads nothing a run produced.
+version: condensed
+generateName: e2e-openstack-image-
+timeout: 1h
+
+notifications:
+  slack:
+    channel: ci-notifications-os
+    when: changed
+
+defaults:
+  timeout: 1h
+
+steps:
+  - name: publish-e2e-openstack-image
+    # Only master, because :stable is what the weekly runs on master use.
+    when: GIT_BRANCH == 'master'
+    changes:
+      in:
+        - ^networking-calico/e2e/
+        - ^\.argoci/publish/e2e-openstack-image\.yaml$
+    services: [docker]
+
+    # The default size cannot build this image, and this workflow doesn't
+    # inherit ciworkflow.yaml's defaults, which the PR build in
+    # 20-e2e-openstack.yaml gets.
+    jobSize: medium
+    requests: {cpu: 1500m, memory: 2Gi}
+
+    # Naming the key limits what is exposed; a bare bundle name would inject
+    # every key in it.
+    secretBundles:
+      - {name: banzai-secrets, keys: [{name: banzai-google-service-account.json}]}
+    commands: |
+      # Belt and braces with the `when:` above.  CI_GIT_BRANCH is the base ref,
+      # so on a merge it is the branch merged into.
+      if [ "${CI_GIT_BRANCH}" != "master" ]; then
+        echo "[ERROR] refusing to publish from branch '${CI_GIT_BRANCH}' (expected master)" >&2
+        exit 1
+      fi
+
+      createLocalSecret "banzai-google-service-account.json" "${HOME}/secrets/banzai-google-service-account.json"
+      gcloud auth activate-service-account --key-file="${HOME}/secrets/banzai-google-service-account.json"
+      gcloud auth -q configure-docker gcr.io
+
+      # An empty SHA would word-split to just "stable", publishing with no
+      # immutable tag to roll back to, and reporting success.
+      : "${CI_GIT_SHA:?empty on a merge event; refusing to publish without an immutable tag}"
+
+      # SHA first, so a failed :stable push still leaves a recoverable build.
+      IMAGE_TAGS="${CI_GIT_SHA} stable" make -C networking-calico/e2e push

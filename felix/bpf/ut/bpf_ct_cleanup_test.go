@@ -87,7 +87,7 @@ func runCTCleanupTest(t *testing.T, tc cttestdata.CTCleanupTest) {
 
 func setUpConntrackScanTest(t *testing.T) *conntrack.Scanner {
 	RegisterTestingT(t)
-	lc := conntrack.NewLivenessScanner(timeouts.DefaultTimeouts(), true, conntrack.WithTimeShim(mocktime.New()))
+	lc := conntrack.NewLivenessScanner(timeouts.DefaultTimeouts(), true, 4, conntrack.WithTimeShim(mocktime.New()))
 	cleaner, err := conntrack.NewBPFProgCleaner(4, timeouts.DefaultTimeouts(), conntrack.BPFLogLevelDebug)
 	Expect(err).NotTo(HaveOccurred(), "Failed to create BPFCleaner")
 	scanner := conntrack.NewScanner(ctMap, conntrack.KeyFromBytes,
@@ -109,7 +109,7 @@ func setUpConntrackScanTest(t *testing.T) *conntrack.Scanner {
 
 func setUpConntrackV6ScanTest(t *testing.T) *conntrack.Scanner {
 	RegisterTestingT(t)
-	lc := conntrack.NewLivenessScanner(timeouts.DefaultTimeouts(), true, conntrack.WithTimeShim(mocktime.New()))
+	lc := conntrack.NewLivenessScanner(timeouts.DefaultTimeouts(), true, 6, conntrack.WithTimeShim(mocktime.New()))
 	cleaner, err := conntrack.NewBPFProgCleaner(6, timeouts.DefaultTimeouts(), conntrack.BPFLogLevelDebug)
 	Expect(err).NotTo(HaveOccurred(), "Failed to create IPv6 BPFCleaner")
 	scanner := conntrack.NewScanner(ctMapV6, conntrack.KeyV6FromBytes,

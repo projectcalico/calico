@@ -25,6 +25,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -53,11 +54,14 @@ type vxlanManager struct {
 	myVTEP     *proto.VXLANTunnelEndpointUpdate
 
 	// VXLAN configuration.
-	vxlanDevice string
-	vxlanID     int
-	vxlanPort   int
-	ipVersion   uint8
-	mtu         int
+	vxlanDevice     string
+	vxlanID         int
+	vxlanPort       int
+	vxlanSrcPortMin int
+	vxlanSrcPortMax int
+	ipVersion       uint8
+	mtu             int
+	vniFilter       bool
 
 	// Indicates if configuration has changed since the last apply.
 	vtepsDirty        bool
@@ -74,6 +78,17 @@ type vxlanMgrOption func(m *vxlanManager)
 func vxlanMgrWithDualStack() vxlanMgrOption {
 	return func(m *vxlanManager) {
 		m.routeMgr.maintainIPOnly = true
+	}
+}
+
+// vxlanMgrWithVNIFilter makes the flow-based BPF device accept only Calico's VNIs, so
+// other VXLAN devices can share its port. overlayVNI is the VNI that BPF encapsulates with.
+// BPF decaps the NodePort VNI on host endpoints, so the filter only reserves it.
+func vxlanMgrWithVNIFilter(overlayVNI uint32) vxlanMgrOption {
+	return func(m *vxlanManager) {
+		m.vniFilter = true
+		m.routeMgr.vniFilterSupported = true
+		m.routeMgr.tunnelVNIs = []uint32{overlayVNI, bpfnat.NodePortVXLANTunnelVNI}
 	}
 }
 
@@ -132,6 +147,8 @@ func newVXLANManagerWithShims(
 		vxlanDevice:       deviceName,
 		vxlanID:           dpConfig.RulesConfig.VXLANVNI,
 		vxlanPort:         dpConfig.RulesConfig.VXLANPort,
+		vxlanSrcPortMin:   dpConfig.VXLANSrcPortMin,
+		vxlanSrcPortMax:   dpConfig.VXLANSrcPortMax,
 		ipVersion:         ipVersion,
 		mtu:               mtu,
 		externalNodeCIDRs: dpConfig.ExternalNodesCidrs,
@@ -329,10 +346,13 @@ func (m *vxlanManager) device(parent netlink.Link) (netlink.Link, string, error)
 	vxlan := &netlink.Vxlan{
 		LinkAttrs: la,
 		Port:      m.vxlanPort,
+		PortLow:   m.vxlanSrcPortMin,
+		PortHigh:  m.vxlanSrcPortMax,
 	}
 
 	if m.dpConfig.BPFEnabled {
 		vxlan.FlowBased = true
+		vxlan.VniFilter = m.vniFilter
 		if !m.dpConfig.BPFOverlayIPOnDevice {
 			// BPF dataplane handles encap/decap and source IP selection itself,
 			// so it doesn't need an IP assigned to the overlay device.
@@ -364,6 +384,11 @@ func vxlanLinksIncompat(l1, l2 netlink.Link) string {
 		return fmt.Sprintf("flow-based mode: %v vs %v", v1.FlowBased, v2.FlowBased)
 	}
 
+	// The kernel cannot toggle VNI filtering on an existing device.
+	if v1.VniFilter != v2.VniFilter {
+		return fmt.Sprintf("vni filter: %v vs %v", v1.VniFilter, v2.VniFilter)
+	}
+
 	if v1.VxlanId != v2.VxlanId {
 		return fmt.Sprintf("vni: %v vs %v", v1.VxlanId, v2.VxlanId)
 	}
@@ -386,6 +411,14 @@ func vxlanLinksIncompat(l1, l2 netlink.Link) string {
 
 	if v1.Port > 0 && v2.Port > 0 && v1.Port != v2.Port {
 		return fmt.Sprintf("port: %v vs %v", v1.Port, v2.Port)
+	}
+
+	// Only the desired range is don't-care when unset; an existing 0/0 range is the kernel default.
+	if v1.PortLow != 0 || v1.PortHigh != 0 {
+		if v1.PortLow != v2.PortLow || v1.PortHigh != v2.PortHigh {
+			return fmt.Sprintf("source port range: [%d,%d] vs [%d,%d]",
+				v1.PortLow, v1.PortHigh, v2.PortLow, v2.PortHigh)
+		}
 	}
 
 	if v1.GBP != v2.GBP {

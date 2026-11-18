@@ -15,12 +15,18 @@
 package archives
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 
+	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/env"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 func beforeBuild(a Archive) (cleanupFn func() error, err error) {
@@ -52,37 +58,100 @@ func Build(a Archive, opts ...BuildOption) error {
 		}
 	}()
 
-	s.Logger().WithField("sources", len(s.Sources)).Info("Staging release archive")
-	staging := s.stagingDir()
-	if err := s.stage(staging); err != nil {
-		return err
-	}
-	if err := s.tar(staging); err != nil {
+	s.Logger().WithField("sources", len(s.Sources)).Info("Building release archive")
+	if err := s.write(s.stagingDir()); err != nil {
+		if rmErr := os.Remove(Path(s.Archive)); rmErr != nil && !os.IsNotExist(rmErr) {
+			s.Logger().WithError(rmErr).Warn("Failed to remove the partial archive")
+		}
 		return err
 	}
 	s.Logger().WithField("path", Path(s.Archive)).Info("Built release archive")
 	return nil
 }
 
-func (s settings) stage(staging string) error {
+// Each source is staged, archived and deleted before the next, so the disk
+// holds the archive and one source at a time rather than every image tar.
+func (s settings) write(staging string) error {
+	if err := os.MkdirAll(s.OutputDir, fsutil.DirPerms); err != nil {
+		return s.Errorf("creating %s: %w", s.OutputDir, err)
+	}
+	f, err := os.Create(Path(s.Archive))
+	if err != nil {
+		return s.Errorf("creating %s: %w", Path(s.Archive), err)
+	}
+	defer func() { _ = f.Close() }()
+	zw := gzip.NewWriter(f)
+	tw := tar.NewWriter(zw)
+
+	root := filepath.Base(staging)
+	written := map[string]bool{}
 	for _, c := range s.Sources {
+		if err := os.MkdirAll(staging, fsutil.DirPerms); err != nil {
+			return s.Errorf("creating %s: %w", staging, err)
+		}
 		if err := c.Contribute(staging); err != nil {
 			return s.Errorf("staging %s: %w", c.Name(), err)
 		}
-		s.Logger().WithField("source", c.Name()).Info("Staged")
+		if err := filepath.WalkDir(staging, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			rel, err := filepath.Rel(staging, path)
+			if err != nil {
+				return err
+			}
+			name := filepath.ToSlash(filepath.Join(root, rel))
+			if d.IsDir() {
+				// Sources share directories such as bin/, and a tar lists each once.
+				if written[name] {
+					return nil
+				}
+				written[name] = true
+			} else if !d.Type().IsRegular() {
+				return fmt.Errorf("%s is not a regular file", path)
+			}
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			hdr, err := tar.FileInfoHeader(info, "")
+			if err != nil {
+				return err
+			}
+			hdr.Name = name
+			if d.IsDir() {
+				hdr.Name += "/"
+			}
+			if err := tw.WriteHeader(hdr); err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			src, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = src.Close() }()
+			_, err = io.Copy(tw, src)
+			return err
+		}); err != nil {
+			return s.Errorf("archiving %s: %w", c.Name(), err)
+		}
+		if err := os.RemoveAll(staging); err != nil {
+			return s.Errorf("clearing staged %s: %w", c.Name(), err)
+		}
+		s.Logger().WithField("source", c.Name()).Info("Archived")
 	}
-	return nil
-}
 
-func (s settings) tar(staging string) error {
-	if err := os.MkdirAll(s.OutputDir, utils.DirPerms); err != nil {
-		return s.Errorf("creating %s: %w", s.OutputDir, err)
+	if err := tw.Close(); err != nil {
+		return s.Errorf("finishing %s: %w", Path(s.Archive), err)
 	}
-	args := []string{"-czvf", Path(s.Archive), "-C", filepath.Dir(staging), filepath.Base(staging)}
-	out, err := s.Run("tar", args, nil, s.LogPath("tar"))
-	if err != nil {
-		s.Logger().Error(out)
-		return s.Errorf("creating %s: %w", Path(s.Archive), err)
+	if err := zw.Close(); err != nil {
+		return s.Errorf("compressing %s: %w", Path(s.Archive), err)
+	}
+	if err := f.Close(); err != nil {
+		return s.Errorf("closing %s: %w", Path(s.Archive), err)
 	}
 	return nil
 }
@@ -95,7 +164,7 @@ func BuildWindows(a Archive, opts ...WindowsOption) error {
 		return err
 	}
 
-	env := append(os.Environ(), utils.Env(utils.EnvVersion, s.Version))
+	vars := []string{env.Var(env.Version, s.Version)}
 	dir := filepath.Join(s.RepoRoot, windowsComponent)
 	// The install script is a file target with no prerequisites, so make skips
 	// it when one is already there and the stale version's script survives.
@@ -103,9 +172,7 @@ func BuildWindows(a Archive, opts ...WindowsOption) error {
 		return s.Errorf("clearing stale %s: %w", windowsScriptTarget, err)
 	}
 	for _, target := range []string{windowsArchiveTarget, windowsScriptTarget} {
-		args := append([]string{"-C", dir}, target)
-		if out, err := s.Run("make", args, env, s.LogPath(target)); err != nil {
-			s.Logger().Error(out)
+		if _, err := command.Make(s.Runner(), dir).Run([]string{target}, command.WithEnv(vars...), command.WithLogFile(s.LogPath(target))); err != nil {
 			return s.Errorf("building %s: %w", target, err)
 		}
 	}
@@ -115,10 +182,10 @@ func BuildWindows(a Archive, opts ...WindowsOption) error {
 		windowsScript:              WindowsScriptDir(s.OutputDir),
 	}
 	for name, dst := range collect {
-		if err := os.MkdirAll(dst, utils.DirPerms); err != nil {
+		if err := os.MkdirAll(dst, fsutil.DirPerms); err != nil {
 			return s.Errorf("creating %s: %w", dst, err)
 		}
-		if err := utils.LinkOrCopyFile(filepath.Join(dir, windowsDistDir, name), filepath.Join(dst, name)); err != nil {
+		if err := fsutil.LinkOrCopyFile(filepath.Join(dir, windowsDistDir, name), filepath.Join(dst, name)); err != nil {
 			return s.Errorf("collecting %s: %w", name, err)
 		}
 	}

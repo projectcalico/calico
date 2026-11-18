@@ -141,10 +141,15 @@ class EtcdWatcher(object):
         self.dispatcher.register(*args, **kwargs)
 
     def _pre_snapshot_hook(self):
-        return None
+        """Called before each attempt to load a snapshot.
 
-    def _post_snapshot_hook(self, _):
-        pass
+        An attempt that fails partway is retried without ``_post_snapshot_hook``, so
+        this can be called again before that is.  Keep any state that reconciliation
+        needs on the object.
+        """
+
+    def _post_snapshot_hook(self):
+        """Called once a snapshot has been loaded completely."""
 
     def start(self):
         LOG.info("Start watching %s", self.prefix)
@@ -181,11 +186,10 @@ class EtcdWatcher(object):
                 eventlet.sleep(5)
                 continue
 
-            # Allow subclass to do pre-snapshot processing, and to return any
-            # data that it will need for reconciliation after the snapshot.
+            # Allow subclass to do pre-snapshot processing.
             my_name = self.__class__.__name__
             LOG.debug("%s Calling pre-snapshot hook", my_name)
-            snapshot_data = self._pre_snapshot_hook()
+            self._pre_snapshot_hook()
 
             try:
                 # Get all existing values and process them through the
@@ -210,7 +214,7 @@ class EtcdWatcher(object):
 
             # Allow subclass to do post-snapshot reconciliation.
             LOG.debug("%s Done loading snapshot, calling post snapshot hook", my_name)
-            self._post_snapshot_hook(snapshot_data)
+            self._post_snapshot_hook()
 
             # Now watch for any changes, starting after the revision above.
             try:

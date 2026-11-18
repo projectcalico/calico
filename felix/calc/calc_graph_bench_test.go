@@ -222,7 +222,7 @@ func generateNetSetIPs() (ips []calinet.IPNet) {
 }
 
 func makeNamespaceUpdates(num int) []api.Update {
-	updates := make([]api.Update, 0, 2*num)
+	updates := make([]api.Update, 0, num)
 	for i := range num {
 		name := fmt.Sprintf("namespace-%d", i)
 		prof := &v3.Profile{
@@ -237,17 +237,6 @@ func makeNamespaceUpdates(num int) []api.Update {
 			KVPair: model.KVPair{
 				Key:   model.ResourceKey{Kind: v3.KindProfile, Name: conversion.NamespaceProfileNamePrefix + name},
 				Value: prof,
-			},
-		})
-		updates = append(updates, api.Update{
-			KVPair: model.KVPair{
-				Key: model.ProfileRulesKey{
-					ProfileKey: model.ProfileKey{Name: conversion.NamespaceProfileNamePrefix + name},
-				},
-				Value: &model.ProfileRules{
-					InboundRules:  nil,
-					OutboundRules: nil,
-				},
 			},
 		})
 	}
@@ -504,13 +493,13 @@ func sendCustomerLocalEndpoints(cg *CalcGraph, updates []api.Update) {
 	cg.AllUpdDispatcher.OnUpdates(updates)
 }
 
-// makeCustomerNamespaceUpdates creates Profile + ProfileRules for each
-// customer namespace. Each namespace gets three labels:
+// makeCustomerNamespaceUpdates creates a Profile for each customer namespace.  Each namespace gets
+// three labels:
 //   - kubernetes.io/metadata.name (standard)
 //   - namespace-id: unique 20-char identifier
 //   - production: boolean "true"/"false"
 func makeCustomerNamespaceUpdates(numCustomers int) []api.Update {
-	updates := make([]api.Update, 0, 2*numCustomers)
+	updates := make([]api.Update, 0, numCustomers)
 
 	for n := 0; n < numCustomers; n++ {
 		name := fmt.Sprintf("customer-%d", n)
@@ -528,14 +517,6 @@ func makeCustomerNamespaceUpdates(numCustomers int) []api.Update {
 			KVPair: model.KVPair{
 				Key:   model.ResourceKey{Kind: v3.KindProfile, Name: profName},
 				Value: prof,
-			},
-		})
-		updates = append(updates, api.Update{
-			KVPair: model.KVPair{
-				Key: model.ProfileRulesKey{
-					ProfileKey: model.ProfileKey{Name: profName},
-				},
-				Value: &model.ProfileRules{},
 			},
 		})
 	}

@@ -17944,8 +17944,8 @@ spec:
                 flexVolumePath:
                   description: |-
                     FlexVolumePath optionally specifies a custom path for FlexVolume. If not specified, FlexVolume will be
-                    enabled by default. If set to 'None', FlexVolume will be disabled. The default is based on the
-                    kubernetesProvider.
+                    enabled by default. If set to 'None', FlexVolume will not be installed, but a driver already installed in
+                    the default path is updated. The default is based on the kubernetesProvider.
                   type: string
                 imagePath:
                   description: |-
@@ -25953,6 +25953,14 @@ spec:
                         maxLength: 40
                         pattern: ^(\d+):(\d+)$|^(\d+):(\d+):(\d+)$
                         type: string
+                        x-kubernetes-validations:
+                          - message:
+                              standard community values must be 16-bit numbers
+                              and large community values 32-bit numbers
+                            reason: FieldValueInvalid
+                            rule:
+                              "self.split(':').all(p, p.matches('^[0-9]{1,10}$')
+                              && int(p) <= (size(self.split(':')) == 2 ? 65535 : 4294967295))"
                     type: object
                     x-kubernetes-map-type: atomic
                   maxItems: 500
@@ -27336,12 +27344,12 @@ spec:
                         <IPv4>:<port> or [<IPv6>]:<port>
                       reason: FieldValueInvalid
                       rule:
-                        self == '' || isIP(self) || (self.startsWith('[') && self.contains(']:')
-                        && isIP(self.substring(1, self.lastIndexOf(']:'))) && self.substring(self.lastIndexOf(']:')
-                        + 2).matches('^[0-9]{1,5}$') && int(self.substring(self.lastIndexOf(']:')
+                        self == '' || isIP(self) || (self.startsWith('[') && self.matches('[]]:[0-9]{1,5}$')
+                        && isIP(self.substring(1, self.lastIndexOf(']:'))) && int(self.substring(self.lastIndexOf(']:')
                         + 2)) >= 1 && int(self.substring(self.lastIndexOf(']:') + 2))
-                        <= 65535) || (self.matches('^[0-9.]+:[0-9]{1,5}$') && isIP(self.split(':')[0])
-                        && int(self.split(':')[1]) >= 1 && int(self.split(':')[1]) <=
+                        <= 65535) || (self.matches('^[0-9.]+:[0-9]{1,5}$') && isIP(self.substring(0,
+                        self.lastIndexOf(':'))) && int(self.substring(self.lastIndexOf(':')
+                        + 1)) >= 1 && int(self.substring(self.lastIndexOf(':') + 1)) <=
                         65535)
                 peerSelector:
                   description: |-
@@ -27525,6 +27533,9 @@ spec:
                   type: string
                 type:
                   description: The type of affinity.
+                  enum:
+                    - host
+                    - virtual
                   type: string
               required:
                 - cidr
@@ -28131,7 +28142,7 @@ spec:
                       description: |-
                         CreationGracePeriod gives a generic grace period to new connections
                         before they are considered for cleanup [Default: 10s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     genericTimeout:
                       description: |-
@@ -28139,7 +28150,7 @@ spec:
                         entry for cleanup after the connection became idle. If set to 'Auto', the
                         value from nf_conntrack_generic_timeout is used. If nil, Calico uses its
                         own default value. [Default: 10m].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     icmpTimeout:
                       description: |-
@@ -28147,7 +28158,7 @@ spec:
                         entry for cleanup after the connection became idle. If set to 'Auto', the
                         value from nf_conntrack_icmp_timeout is used. If nil, Calico uses its
                         own default value. [Default: 5s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpEstablished:
                       description: |-
@@ -28155,7 +28166,7 @@ spec:
                         cleanup after the connection became idle. If set to 'Auto', the
                         value from nf_conntrack_tcp_timeout_established is used. If nil, Calico uses
                         its own default value. [Default: 1h].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpFinsSeen:
                       description: |-
@@ -28163,14 +28174,14 @@ spec:
                         cleanup after the connection was closed gracefully. If set to 'Auto', the
                         value from nf_conntrack_tcp_timeout_time_wait is used. If nil, Calico uses
                         its own default value. [Default: Auto].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpResetSeen:
                       description: |-
                         TCPResetSeen controls how long it takes before considering this entry for
                         cleanup after the connection was aborted. If nil, Calico uses its own
                         default value. [Default: 40s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     tcpSynSent:
                       description: |-
@@ -28178,14 +28189,14 @@ spec:
                         cleanup after the last SYN without a response. If set to 'Auto', the
                         value from nf_conntrack_tcp_timeout_syn_sent is used. If nil, Calico uses
                         its own default value. [Default: 20s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                     udpTimeout:
                       description: |-
                         UDPTimeout controls how long it takes before considering this entry for
                         cleanup after the connection became idle. If nil, Calico uses its own
                         default value. [Default: 60s].
-                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      pattern: ^((([0-9]+(\.[0-9]*)?|\.[0-9]+)(ms|s|h|m|us))+|Auto)$
                       type: string
                   type: object
                 bpfDSROptoutCIDRs:
@@ -28203,12 +28214,22 @@ spec:
                     flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the
                     cluster.  It should not match the workload interfaces (usually named cali...) or any other special device managed
                     by Calico itself (e.g., tunnels).
+                  maxLength: 1024
                   type: string
+                  x-kubernetes-validations:
+                    - message: must be a valid regular expression
+                      reason: FieldValueInvalid
+                      rule: type('x'.matches(self)) == bool
                 bpfDisableGROForIfaces:
                   description: |-
                     BPFDisableGROForIfaces is a regular expression that controls which interfaces Felix should disable the
                     Generic Receive Offload [GRO] option.  It should not match the workload interfaces (usually named cali...).
+                  maxLength: 1024
                   type: string
+                  x-kubernetes-validations:
+                    - message: must be a valid regular expression
+                      reason: FieldValueInvalid
+                      rule: type('x'.matches(self)) == bool
                 bpfDisableUnprivileged:
                   description: |-
                     BPFDisableUnprivileged, if enabled, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable
@@ -28333,7 +28354,12 @@ spec:
                     BPFL3IfacePattern is a regular expression that allows to list tunnel devices like wireguard or vxlan (i.e., L3 devices)
                     in addition to BPFDataIfacePattern. That is, tunnel interfaces not created by Calico, that Calico workload traffic flows
                     over as well as any interfaces that handle incoming traffic to nodeports and services from outside the cluster.
+                  maxLength: 1024
                   type: string
+                  x-kubernetes-validations:
+                    - message: must be a valid regular expression
+                      reason: FieldValueInvalid
+                      rule: type('x'.matches(self)) == bool
                 bpfLogFilters:
                   additionalProperties:
                     type: string
@@ -28389,8 +28415,8 @@ spec:
                 bpfMapSizeConntrackScaling:
                   description: |-
                     BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending
-                    on its usage. 'Disabled' make the size stay at the default or whatever is set by
-                    BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even
+                    on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size.
+                    'DoubleIfFull' doubles the size of an IP family's map when it is more than 80% full
                     after cleanups. [Default: DoubleIfFull]
                   pattern: ^(?i)(Disabled|DoubleIfFull)?$
                   type: string
@@ -28610,9 +28636,18 @@ spec:
                   description: |-
                     ExternalNodesCIDRList is a list of CIDR's of external, non-Calico nodes from which VXLAN/IPIP overlay traffic
                     will be allowed.  By default, external tunneled traffic is blocked to reduce attack surface.
+                    Entries must be IPv4 CIDRs or IPv4 addresses.
                   items:
+                    maxLength: 49
                     type: string
+                  maxItems: 10000
                   type: array
+                  x-kubernetes-validations:
+                    - message: externalNodesList entries must be IPv4 CIDRs or IPv4 addresses
+                      reason: FieldValueInvalid
+                      rule:
+                        "self.all(c, isCIDR(c) ? cidr(c).ip().family() == 4 : (isIP(c)
+                        && ip(c).family() == 4))"
                 failsafeInboundHostPorts:
                   description: |-
                     FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will
@@ -28985,10 +29020,21 @@ spec:
                     anyOf:
                       - type: integer
                       - type: string
+                    maxLength: 11
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
+                    x-kubernetes-validations:
+                      - message: port ranges must be written low:high
+                        reason: FieldValueInvalid
+                        rule:
+                          type(self) != string || !self.contains(':') || int(self.split(':')[0])
+                          <= int(self.split(':')[1])
                   maxItems: 7
                   type: array
+                  x-kubernetes-validations:
+                    - message: kubeNodePortRanges must not contain named ports
+                      reason: FieldValueInvalid
+                      rule: self.all(p, type(p) == int || p.matches('^[0-9:]+$'))
                 liveMigrationRouteConvergenceTime:
                   description: |-
                     LiveMigrationRouteConvergenceTime is the time to keep elevated route priority after a
@@ -29065,7 +29111,12 @@ spec:
                     LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
                     Only logs from files with names that match the given regular expression are included.  The filter only applies
                     to Debug level logs.
+                  maxLength: 1024
                   type: string
+                  x-kubernetes-validations:
+                    - message: must be a valid regular expression
+                      reason: FieldValueInvalid
+                      rule: type('x'.matches(self)) == bool
                 logFilePath:
                   description:
                     "LogFilePath is the full path to the Felix log. Set to
@@ -29125,7 +29176,12 @@ spec:
                     MTUIfacePattern is a regular expression that controls which interfaces Felix should scan in order
                     to calculate the host's MTU.
                     This should not match workload interfaces (usually named cali...).
+                  maxLength: 1024
                   type: string
+                  x-kubernetes-validations:
+                    - message: must be a valid regular expression
+                      reason: FieldValueInvalid
+                      rule: type('x'.matches(self)) == bool
                 natOutgoingAddress:
                   description: |-
                     NATOutgoingAddress specifies an address to use when performing source NAT for traffic in a natOutgoing pool that
@@ -29191,7 +29247,12 @@ spec:
                     interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
                     offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
                     is not Disabled. [Default: ""]
+                  maxLength: 1024
                   type: string
+                  x-kubernetes-validations:
+                    - message: must be a valid regular expression
+                      reason: FieldValueInvalid
+                      rule: type('x'.matches(self)) == bool
                 nftablesFlowTableOffload:
                   default: Disabled
                   description: |-
@@ -29256,7 +29317,10 @@ spec:
                     OpenstackRegion is the name of the region that a particular Felix belongs to. In a multi-region
                     Calico/OpenStack deployment, this must be configured somehow for each Felix (here in the datamodel,
                     or in felix.cfg or the environment on each compute node), and must match the [calico]
-                    openstack_region value configured in neutron.conf on each node. [Default: Empty]
+                    openstack_region value configured in neutron.conf on each node. The region is used in a
+                    namespace name, so it must be a DNS label of at most 46 characters. [Default: Empty]
+                  maxLength: 46
+                  pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$
                   type: string
                 policySyncPathPrefix:
                   description: |-
@@ -29421,7 +29485,8 @@ spec:
                   description: |-
                     Calico programs additional Linux route tables for various purposes.
                     RouteTableRanges specifies a set of table index ranges that Calico should use.
-                    Deprecates`RouteTableRange`, overrides `RouteTableRange`.
+                    Deprecates`RouteTableRange`, overrides `RouteTableRange`. The ranges may cover at most 65535
+                    tables in total.
                   items:
                     properties:
                       max:
@@ -29439,7 +29504,15 @@ spec:
                       - message: min must not be greater than max
                         reason: FieldValueInvalid
                         rule: self.min <= self.max
+                      - message: max must be <= 4294967295
+                        reason: FieldValueInvalid
+                        rule: self.max <= 4294967295
+                  maxItems: 100
                   type: array
+                  x-kubernetes-validations:
+                    - message: routeTableRanges must cover at most 65535 tables in total
+                      reason: FieldValueInvalid
+                      rule: self.map(r, r.max - r.min + 1).sum() <= 65535
                 serviceLoopPrevention:
                   description: |-
                     When service IP advertisement is enabled, prevent routing loops to service IPs that are
@@ -29494,6 +29567,23 @@ spec:
                   description:
                     "VXLANPort is the UDP port number to use for VXLAN traffic.
                     [Default: 4789]"
+                  type: integer
+                vxlanSrcPortMax:
+                  description: |-
+                    VXLANSrcPortMax is the upper bound (inclusive) of the UDP source port range used by Felix for outgoing
+                    VXLAN-encapsulated traffic. See VXLANSrcPortMin. [Default: 0 (unset)]
+                  maximum: 65535
+                  minimum: 0
+                  type: integer
+                vxlanSrcPortMin:
+                  description: |-
+                    VXLANSrcPortMin is the lower bound (inclusive) of the UDP source port range used by Felix for outgoing
+                    VXLAN-encapsulated traffic. If both VXLANSrcPortMin and VXLANSrcPortMax are set, the kernel VXLAN tunnel
+                    device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANSrcPortMin, VXLANSrcPortMax].
+                    VXLANSrcPortMin must be strictly less than VXLANSrcPortMax.
+                    If unset (or zero), the kernel/dataplane default is used. [Default: 0 (unset)]
+                  maximum: 65535
+                  minimum: 0
                   type: integer
                 vxlanVNI:
                   description: |-
@@ -29750,19 +29840,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -29772,8 +29875,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -29791,12 +29901,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -29830,6 +29948,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -29838,6 +29958,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -29862,6 +29983,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -29899,6 +30021,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -30059,19 +30188,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -30081,8 +30223,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -30100,12 +30249,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -30139,6 +30296,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -30147,6 +30306,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -30171,6 +30331,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -30208,6 +30369,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -30271,9 +30439,39 @@ spec:
                           "!has(self.notProtocol) || (type(self.notProtocol) == int
                           ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
                           in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          rules that specify ports must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          in [6, 17, 132] : self.protocol in ['TCP', 'UDP', 'SCTP'])
+                          || ((!has(self.source) || ((!has(self.source.ports) || size(self.source.ports)
+                          == 0) && (!has(self.source.notPorts) || size(self.source.notPorts)
+                          == 0))) && (!has(self.destination) || ((!has(self.destination.ports)
+                          || size(self.destination.ports) == 0) && (!has(self.destination.notPorts)
+                          || size(self.destination.notPorts) == 0))))"
+                      - message:
+                          rules with a numeric port must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          has(self.protocol) || ((!has(self.source) || ((!has(self.source.ports)
+                          || self.source.ports.all(p, type(p) == string)) && (!has(self.source.notPorts)
+                          || self.source.notPorts.all(p, type(p) == string)))) && (!has(self.destination)
+                          || ((!has(self.destination.ports) || self.destination.ports.all(p,
+                          type(p) == string)) && (!has(self.destination.notPorts) || self.destination.notPorts.all(p,
+                          type(p) == string)))))
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.destination) || !has(r.destination.services)
+                        || (has(r.destination.services.namespace) && size(r.destination.services.namespace)
+                        > 0))
                 ingress:
                   description: |-
                     The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
@@ -30322,19 +30520,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -30344,8 +30555,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -30363,12 +30581,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -30402,6 +30628,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -30410,6 +30638,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -30434,6 +30663,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -30471,6 +30701,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -30631,19 +30868,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -30653,8 +30903,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -30672,12 +30929,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -30711,6 +30976,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -30719,6 +30986,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -30743,6 +31011,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -30780,6 +31049,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -30843,9 +31119,38 @@ spec:
                           "!has(self.notProtocol) || (type(self.notProtocol) == int
                           ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
                           in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          rules that specify ports must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          in [6, 17, 132] : self.protocol in ['TCP', 'UDP', 'SCTP'])
+                          || ((!has(self.source) || ((!has(self.source.ports) || size(self.source.ports)
+                          == 0) && (!has(self.source.notPorts) || size(self.source.notPorts)
+                          == 0))) && (!has(self.destination) || ((!has(self.destination.ports)
+                          || size(self.destination.ports) == 0) && (!has(self.destination.notPorts)
+                          || size(self.destination.notPorts) == 0))))"
+                      - message:
+                          rules with a numeric port must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          has(self.protocol) || ((!has(self.source) || ((!has(self.source.ports)
+                          || self.source.ports.all(p, type(p) == string)) && (!has(self.source.notPorts)
+                          || self.source.notPorts.all(p, type(p) == string)))) && (!has(self.destination)
+                          || ((!has(self.destination.ports) || self.destination.ports.all(p,
+                          type(p) == string)) && (!has(self.destination.notPorts) || self.destination.notPorts.all(p,
+                          type(p) == string)))))
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.source) || !has(r.source.services) || (has(r.source.services.namespace)
+                        && size(r.source.services.namespace) > 0))
                 namespaceSelector:
                   description:
                     NamespaceSelector is an optional field for an expression
@@ -30980,6 +31285,17 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+                - message: services are not allowed in an egress rule source
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))"
+                - message: services are not allowed in an ingress rule destination
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
+                    || !has(r.destination.services))"
+                - message: HTTP match is not allowed in egress rules
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.http))"
           required:
             - metadata
             - spec
@@ -31192,6 +31508,8 @@ spec:
                     profile is applied in the order that they appear in this list.  Profile rules are applied
                     after the selector-based security policy.
                   items:
+                    maxLength: 253
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                     type: string
                   type: array
                   x-kubernetes-list-type: set
@@ -32116,6 +32434,7 @@ spec:
                                     description:
                                       NodeSelector allows the AutoHostEndpoint
                                       to be created only for specific nodes
+                                    maxLength: 1024
                                     type: string
                                 type: object
                               type: array
@@ -32211,9 +32530,9 @@ spec:
                 logSeverityScreen:
                   description: |-
                     LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-                    Valid values are: "None", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
+                    Valid values are: "Trace", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
                   enum:
-                    - None
+                    - Trace
                     - Debug
                     - Info
                     - Warning
@@ -32364,6 +32683,7 @@ spec:
                                         description:
                                           NodeSelector allows the AutoHostEndpoint
                                           to be created only for specific nodes
+                                        maxLength: 1024
                                         type: string
                                     type: object
                                   type: array
@@ -32463,9 +32783,9 @@ spec:
                     logSeverityScreen:
                       description: |-
                         LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-                        Valid values are: "None", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
+                        Valid values are: "Trace", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
                       enum:
-                        - None
+                        - Trace
                         - Debug
                         - Info
                         - Warning
@@ -32591,19 +32911,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -32613,8 +32946,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -32632,12 +32972,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -32671,6 +33019,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -32679,6 +33029,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -32703,6 +33054,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -32740,6 +33092,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -32900,19 +33259,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -32922,8 +33294,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -32941,12 +33320,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -32980,6 +33367,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -32988,6 +33377,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -33012,6 +33402,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -33049,6 +33440,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -33112,6 +33510,29 @@ spec:
                           "!has(self.notProtocol) || (type(self.notProtocol) == int
                           ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
                           in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          rules that specify ports must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          in [6, 17, 132] : self.protocol in ['TCP', 'UDP', 'SCTP'])
+                          || ((!has(self.source) || ((!has(self.source.ports) || size(self.source.ports)
+                          == 0) && (!has(self.source.notPorts) || size(self.source.notPorts)
+                          == 0))) && (!has(self.destination) || ((!has(self.destination.ports)
+                          || size(self.destination.ports) == 0) && (!has(self.destination.notPorts)
+                          || size(self.destination.notPorts) == 0))))"
+                      - message:
+                          rules with a numeric port must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          has(self.protocol) || ((!has(self.source) || ((!has(self.source.ports)
+                          || self.source.ports.all(p, type(p) == string)) && (!has(self.source.notPorts)
+                          || self.source.notPorts.all(p, type(p) == string)))) && (!has(self.destination)
+                          || ((!has(self.destination.ports) || self.destination.ports.all(p,
+                          type(p) == string)) && (!has(self.destination.notPorts) || self.destination.notPorts.all(p,
+                          type(p) == string)))))
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -33163,19 +33584,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -33185,8 +33619,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -33204,12 +33645,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -33243,6 +33692,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -33251,6 +33702,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -33275,6 +33727,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -33312,6 +33765,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -33472,19 +33932,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -33494,8 +33967,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -33513,12 +33993,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -33552,6 +34040,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -33560,6 +34050,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -33584,6 +34075,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -33621,6 +34113,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -33684,6 +34183,29 @@ spec:
                           "!has(self.notProtocol) || (type(self.notProtocol) == int
                           ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
                           in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          rules that specify ports must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          in [6, 17, 132] : self.protocol in ['TCP', 'UDP', 'SCTP'])
+                          || ((!has(self.source) || ((!has(self.source.ports) || size(self.source.ports)
+                          == 0) && (!has(self.source.notPorts) || size(self.source.notPorts)
+                          == 0))) && (!has(self.destination) || ((!has(self.destination.ports)
+                          || size(self.destination.ports) == 0) && (!has(self.destination.notPorts)
+                          || size(self.destination.notPorts) == 0))))"
+                      - message:
+                          rules with a numeric port must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          has(self.protocol) || ((!has(self.source) || ((!has(self.source.ports)
+                          || self.source.ports.all(p, type(p) == string)) && (!has(self.source.notPorts)
+                          || self.source.notPorts.all(p, type(p) == string)))) && (!has(self.destination)
+                          || ((!has(self.destination.ports) || self.destination.ports.all(p,
+                          type(p) == string)) && (!has(self.destination.notPorts) || self.destination.notPorts.all(p,
+                          type(p) == string)))))
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -33784,6 +34306,17 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
+                - message: services are not allowed in an egress rule source
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))"
+                - message: services are not allowed in an ingress rule destination
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
+                    || !has(r.destination.services))"
+                - message: HTTP match is not allowed in egress rules
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.http))"
           required:
             - metadata
             - spec
@@ -33967,19 +34500,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -33989,8 +34535,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34008,12 +34561,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34047,6 +34608,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -34055,6 +34618,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -34079,6 +34643,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -34116,6 +34681,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -34276,19 +34848,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -34298,8 +34883,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34317,12 +34909,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34356,6 +34956,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -34364,6 +34966,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -34388,6 +34991,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -34425,6 +35029,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -34488,9 +35099,39 @@ spec:
                           "!has(self.notProtocol) || (type(self.notProtocol) == int
                           ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
                           in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          rules that specify ports must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          in [6, 17, 132] : self.protocol in ['TCP', 'UDP', 'SCTP'])
+                          || ((!has(self.source) || ((!has(self.source.ports) || size(self.source.ports)
+                          == 0) && (!has(self.source.notPorts) || size(self.source.notPorts)
+                          == 0))) && (!has(self.destination) || ((!has(self.destination.ports)
+                          || size(self.destination.ports) == 0) && (!has(self.destination.notPorts)
+                          || size(self.destination.notPorts) == 0))))"
+                      - message:
+                          rules with a numeric port must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          has(self.protocol) || ((!has(self.source) || ((!has(self.source.ports)
+                          || self.source.ports.all(p, type(p) == string)) && (!has(self.source.notPorts)
+                          || self.source.notPorts.all(p, type(p) == string)))) && (!has(self.destination)
+                          || ((!has(self.destination.ports) || self.destination.ports.all(p,
+                          type(p) == string)) && (!has(self.destination.notPorts) || self.destination.notPorts.all(p,
+                          type(p) == string)))))
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.destination) || !has(r.destination.services)
+                        || (has(r.destination.services.namespace) && size(r.destination.services.namespace)
+                        > 0))
                 ingress:
                   description: |-
                     The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
@@ -34539,19 +35180,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -34561,8 +35215,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34580,12 +35241,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34619,6 +35288,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -34627,6 +35298,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -34651,6 +35323,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -34688,6 +35361,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -34848,19 +35528,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -34870,8 +35563,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34889,12 +35589,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -34928,6 +35636,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -34936,6 +35646,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -34960,6 +35671,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -34997,6 +35709,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -35060,9 +35779,38 @@ spec:
                           "!has(self.notProtocol) || (type(self.notProtocol) == int
                           ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
                           in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          rules that specify ports must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          in [6, 17, 132] : self.protocol in ['TCP', 'UDP', 'SCTP'])
+                          || ((!has(self.source) || ((!has(self.source.ports) || size(self.source.ports)
+                          == 0) && (!has(self.source.notPorts) || size(self.source.notPorts)
+                          == 0))) && (!has(self.destination) || ((!has(self.destination.ports)
+                          || size(self.destination.ports) == 0) && (!has(self.destination.notPorts)
+                          || size(self.destination.notPorts) == 0))))"
+                      - message:
+                          rules with a numeric port must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          has(self.protocol) || ((!has(self.source) || ((!has(self.source.ports)
+                          || self.source.ports.all(p, type(p) == string)) && (!has(self.source.notPorts)
+                          || self.source.notPorts.all(p, type(p) == string)))) && (!has(self.destination)
+                          || ((!has(self.destination.ports) || self.destination.ports.all(p,
+                          type(p) == string)) && (!has(self.destination.notPorts) || self.destination.notPorts.all(p,
+                          type(p) == string)))))
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - message: services in a global policy must specify a namespace
+                      reason: FieldValueRequired
+                      rule:
+                        self.all(r, !has(r.source) || !has(r.source.services) || (has(r.source.services.namespace)
+                        && size(r.source.services.namespace) > 0))
                 namespaceSelector:
                   description:
                     NamespaceSelector is an optional field for an expression
@@ -35207,6 +35955,31 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+                - message: services are not allowed in an egress rule source
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))"
+                - message: services are not allowed in an ingress rule destination
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
+                    || !has(r.destination.services))"
+                - message: HTTP match is not allowed in egress rules
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.http))"
+                - message:
+                    spec fields other than tier must be empty when stagedAction
+                    is Delete
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.stagedAction) || self.stagedAction != 'Delete' ||
+                    (!has(self.order) && (!has(self.ingress) || size(self.ingress) ==
+                    0) && (!has(self.egress) || size(self.egress) == 0) && (!has(self.selector)
+                    || size(self.selector) == 0) && (!has(self.serviceAccountSelector)
+                    || size(self.serviceAccountSelector) == 0) && (!has(self.performanceHints)
+                    || size(self.performanceHints) == 0) && (!has(self.doNotTrack) ||
+                    !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT) && (!has(self.applyOnForward)
+                    || !self.applyOnForward) && (!has(self.namespaceSelector) || size(self.namespaceSelector)
+                    == 0))"
           required:
             - metadata
             - spec
@@ -35747,6 +36520,15 @@ spec:
                     - Ignore
                   type: string
               type: object
+              x-kubernetes-validations:
+                - message: spec fields must be empty when stagedAction is Delete
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.stagedAction) || self.stagedAction != 'Delete' ||
+                    ((!has(self.ingress) || size(self.ingress) == 0) && (!has(self.egress)
+                    || size(self.egress) == 0) && (!has(self.podSelector) || ((!has(self.podSelector.matchLabels)
+                    || size(self.podSelector.matchLabels) == 0) && (!has(self.podSelector.matchExpressions)
+                    || size(self.podSelector.matchExpressions) == 0))))"
           required:
             - metadata
             - spec
@@ -35854,19 +36636,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -35876,8 +36671,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -35895,12 +36697,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -35934,6 +36744,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -35942,6 +36754,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -35966,6 +36779,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -36003,6 +36817,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -36163,19 +36984,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -36185,8 +37019,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -36204,12 +37045,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -36243,6 +37092,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -36251,6 +37102,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -36275,6 +37127,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -36312,6 +37165,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -36375,6 +37235,29 @@ spec:
                           "!has(self.notProtocol) || (type(self.notProtocol) == int
                           ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
                           in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          rules that specify ports must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          in [6, 17, 132] : self.protocol in ['TCP', 'UDP', 'SCTP'])
+                          || ((!has(self.source) || ((!has(self.source.ports) || size(self.source.ports)
+                          == 0) && (!has(self.source.notPorts) || size(self.source.notPorts)
+                          == 0))) && (!has(self.destination) || ((!has(self.destination.ports)
+                          || size(self.destination.ports) == 0) && (!has(self.destination.notPorts)
+                          || size(self.destination.notPorts) == 0))))"
+                      - message:
+                          rules with a numeric port must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          has(self.protocol) || ((!has(self.source) || ((!has(self.source.ports)
+                          || self.source.ports.all(p, type(p) == string)) && (!has(self.source.notPorts)
+                          || self.source.notPorts.all(p, type(p) == string)))) && (!has(self.destination)
+                          || ((!has(self.destination.ports) || self.destination.ports.all(p,
+                          type(p) == string)) && (!has(self.destination.notPorts) || self.destination.notPorts.all(p,
+                          type(p) == string)))))
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -36426,19 +37309,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -36448,8 +37344,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -36467,12 +37370,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -36506,6 +37417,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -36514,6 +37427,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -36538,6 +37452,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -36575,6 +37490,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -36735,19 +37657,32 @@ spec:
                               Nets is an optional field that restricts the rule to only apply to traffic that
                               originates from (or terminates at) IP addresses in any of the given subnets.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: nets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
                           notNets:
                             description:
                               NotNets is the negated version of the Nets
                               field.
                             items:
+                              maxLength: 49
                               type: string
                             maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
+                            x-kubernetes-validations:
+                              - message: notNets entries must be CIDRs
+                                reason: FieldValueInvalid
+                                rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -36757,8 +37692,15 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -36776,12 +37718,20 @@ spec:
 
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
+                              Named ports are at most 15 characters, like Kubernetes port names.
                             items:
                               anyOf:
                                 - type: integer
                                 - type: string
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
+                              x-kubernetes-validations:
+                                - message: port ranges must be written low:high
+                                  reason: FieldValueInvalid
+                                  rule:
+                                    type(self) != string || !self.contains(':') ||
+                                    int(self.split(':')[0]) <= int(self.split(':')[1])
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -36815,6 +37765,8 @@ spec:
                                   Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates
                                   at) a pod running as a service account whose name is in the list.
                                 items:
+                                  maxLength: 253
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                   type: string
                                 type: array
                                 x-kubernetes-list-type: set
@@ -36823,6 +37775,7 @@ spec:
                                   Selector is an optional field that restricts the rule to only apply to traffic that originates from
                                   (or terminates at) a pod running as a service account that matches the given label selector.
                                   If both Names and Selector are specified then they are AND'ed.
+                                maxLength: 1024
                                 type: string
                             type: object
                           services:
@@ -36847,6 +37800,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -36884,6 +37838,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -36947,6 +37908,29 @@ spec:
                           "!has(self.notProtocol) || (type(self.notProtocol) == int
                           ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
                           in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          rules that specify ports must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          in [6, 17, 132] : self.protocol in ['TCP', 'UDP', 'SCTP'])
+                          || ((!has(self.source) || ((!has(self.source.ports) || size(self.source.ports)
+                          == 0) && (!has(self.source.notPorts) || size(self.source.notPorts)
+                          == 0))) && (!has(self.destination) || ((!has(self.destination.ports)
+                          || size(self.destination.ports) == 0) && (!has(self.destination.notPorts)
+                          || size(self.destination.notPorts) == 0))))"
+                      - message:
+                          rules with a numeric port must set protocol to TCP or
+                          UDP or SCTP
+                        reason: FieldValueInvalid
+                        rule:
+                          has(self.protocol) || ((!has(self.source) || ((!has(self.source.ports)
+                          || self.source.ports.all(p, type(p) == string)) && (!has(self.source.notPorts)
+                          || self.source.notPorts.all(p, type(p) == string)))) && (!has(self.destination)
+                          || ((!has(self.destination.ports) || self.destination.ports.all(p,
+                          type(p) == string)) && (!has(self.destination.notPorts) || self.destination.notPorts.all(p,
+                          type(p) == string)))))
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -37058,6 +38042,28 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
+                - message: services are not allowed in an egress rule source
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))"
+                - message: services are not allowed in an ingress rule destination
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
+                    || !has(r.destination.services))"
+                - message: HTTP match is not allowed in egress rules
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.http))"
+                - message:
+                    spec fields other than tier must be empty when stagedAction
+                    is Delete
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.stagedAction) || self.stagedAction != 'Delete' ||
+                    (!has(self.order) && (!has(self.ingress) || size(self.ingress) ==
+                    0) && (!has(self.egress) || size(self.egress) == 0) && (!has(self.selector)
+                    || size(self.selector) == 0) && (!has(self.serviceAccountSelector)
+                    || size(self.serviceAccountSelector) == 0) && (!has(self.performanceHints)
+                    || size(self.performanceHints) == 0))"
           required:
             - metadata
             - spec
@@ -37254,6 +38260,12 @@ spec:
               rule:
                 self.metadata.name != 'kube-baseline' || (has(self.spec.order) &&
                 self.spec.order == 10000000.0)
+            - message:
+                tier name must be a DNS label of at most 63 characters, with no
+                dots
+              optionalOldSelf: true
+              reason: FieldValueInvalid
+              rule: oldSelf.hasValue() || (size(self.metadata.name) <= 63 && self.metadata.name.matches('^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'))
       served: true
       storage: true
       subresources:

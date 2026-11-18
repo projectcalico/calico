@@ -64,7 +64,11 @@ var _ = infrastructure.DatastoreDescribe("etcd connection interruption", []apico
 			if err != nil {
 				return err
 			}
-			defer nlHandle.Close()
+			defer func() {
+				if err := nlHandle.Close(); err != nil {
+					logrus.WithError(err).Warn("Failed to close netlink handle")
+				}
+			}()
 			links, err := netlinkutils.LinkListRetryEINTR(nlHandle)
 			if err != nil {
 				return err

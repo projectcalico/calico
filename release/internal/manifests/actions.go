@@ -22,8 +22,12 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/fsutil"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
@@ -55,9 +59,8 @@ func (s settings) generate() (cleanup func() error, err error) {
 	cleanup = s.reset
 
 	s.Logger().WithField("version", s.Version).Info("Generating manifests")
-	env := append(os.Environ(), Env(s.Manifests)...)
-	if out, err := s.Run("make", []string{"-C", s.RepoRoot, generateTarget}, env, s.LogPath(generateTarget)); err != nil {
-		s.Logger().Error(out)
+	env := Env(s.Manifests)
+	if _, err := s.Make().Run([]string{generateTarget}, command.WithEnv(env...), command.WithLogFile(s.LogPath(generateTarget))); err != nil {
 		return cleanup, s.Errorf("generating manifests: %w", err)
 	}
 	if !s.collect {
@@ -69,22 +72,20 @@ func (s settings) generate() (cleanup func() error, err error) {
 // Logged rather than returned: the caller's own error is the one worth having.
 func (s settings) reset() error {
 	args := append([]string{"checkout"}, generatedTrees...)
-	if out, err := s.Run("git", args, nil, ""); err != nil {
-		s.Logger().Error(out)
+	if _, err := command.Git(s.Runner()).In(s.RepoRoot).Run(args...); err != nil {
 		return fmt.Errorf("resetting manifests: %v", err)
 	}
 	return nil
 }
 
 func (s settings) collectInto(dest string) error {
-	if err := os.MkdirAll(dest, utils.DirPerms); err != nil {
+	if err := os.MkdirAll(dest, fsutil.DirPerms); err != nil {
 		return s.Errorf("creating %s: %w", dest, err)
 	}
 	// Trailing separators stop rsync nesting the directory inside itself.
 	args := rsyncArgs()
 	args = append(args, Dir(s.RepoRoot)+"/", dest+"/")
-	if out, err := s.Run("rsync", args, nil, s.LogPath("rsync")); err != nil {
-		s.Logger().Error(out)
+	if _, err := s.Run("rsync", args, command.WithLogFile(s.LogPath("rsync"))); err != nil {
 		return s.Errorf("copying manifests to %s: %w", dest, err)
 	}
 	s.Logger().WithField("dir", dest).Info("Collected manifests")
@@ -106,17 +107,16 @@ func rsyncArgs() []string {
 // collecting separately.
 func (s settings) buildOCPBundle() error {
 	s.Logger().Info("Building OCP bundle")
-	env := append(os.Environ(), Env(s.Manifests)...)
+	env := Env(s.Manifests)
 
-	if out, err := s.Run("make", []string{"-C", s.RepoRoot, ocpBundleTarget}, env, s.LogPath(ocpBundleTarget)); err != nil {
-		s.Logger().Error(out)
+	if _, err := s.Make().Run([]string{ocpBundleTarget}, command.WithEnv(env...), command.WithLogFile(s.LogPath(ocpBundleTarget))); err != nil {
 		return s.Errorf("building OCP bundle: %w", err)
 	}
-	if err := os.MkdirAll(s.OutputDir, utils.DirPerms); err != nil {
+	if err := os.MkdirAll(s.OutputDir, fsutil.DirPerms); err != nil {
 		return s.Errorf("creating %s: %w", s.OutputDir, err)
 	}
 	src := filepath.Join(s.RepoRoot, ocpBundleTarget)
-	if err := utils.LinkOrCopyFile(src, BundlePath(s.OutputDir)); err != nil {
+	if err := fsutil.LinkOrCopyFile(src, BundlePath(s.OutputDir)); err != nil {
 		return s.Errorf("collecting OCP bundle: %w", err)
 	}
 	return nil
@@ -203,4 +203,43 @@ func applyTo(opt any, s *settings) error {
 	default:
 		return fmt.Errorf("unknown option type %T", opt)
 	}
+}
+
+var (
+	productImage     = "calico/calico"
+	productManifest  = "ocp/02-tigera-operator.yaml"
+	operatorManifest = "tigera-operator.yaml"
+)
+
+// Versions returns the product and operator versions the manifests in the tree are at.
+func Versions(repoRoot string) (version.Version, version.Version, error) {
+	productVersion, err := versionFromManifest(repoRoot, productManifest, productImage)
+	if err != nil {
+		return version.Version{}, version.Version{}, err
+	}
+	operatorVersion, err := versionFromManifest(repoRoot, operatorManifest, registry.OperatorImage)
+	if err != nil {
+		return version.Version{}, version.Version{}, err
+	}
+	return productVersion, operatorVersion, nil
+}
+
+func versionFromManifest(repoRoot, manifest, imgMatch string) (version.Version, error) {
+	imgs, err := yamledit.Read(filepath.Join(Dir(repoRoot), manifest), imageKey)
+	if err != nil {
+		return version.Version{}, fmt.Errorf("read %s image from manifest %s: %w", imgMatch, manifest, err)
+	}
+	for _, i := range imgs {
+		if strings.Contains(i, imgMatch) {
+			splits := strings.SplitAfter(i, ":")
+			ver := splits[len(splits)-1]
+			// On the default branch the image is tagged "master", which is not a
+			// valid semver; treat it as the v0.0.0 dev version.
+			if ver == defaults.Branch {
+				ver = "v0.0.0"
+			}
+			return version.New(ver)
+		}
+	}
+	return version.Version{}, fmt.Errorf("no images matching %s in manifest %s", imgMatch, manifest)
 }

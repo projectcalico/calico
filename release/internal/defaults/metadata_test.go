@@ -15,10 +15,15 @@
 package defaults
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/projectcalico/calico/release/internal/command"
 )
 
 // setValues replaces the cached loader with one that returns v. Tests defer
@@ -28,77 +33,72 @@ func setValues(v map[string]string) {
 }
 
 func resetValues() {
-	load = sync.OnceValue(readMetadata)
+	UseRunner(nil)
 }
 
-func TestParseMetadata(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("testdata", "metadata.mk"))
-	if err != nil {
-		t.Fatalf("read fixture: %v", err)
+func TestAccessors(t *testing.T) {
+	type values struct{ org, repo, remote, prefix, suffix string }
+	get := func() values {
+		return values{Organization(), Repo(), Remote(), ReleaseBranchPrefix(), DevTagSuffix()}
 	}
-	m, err := parseMetadata(data)
-	if err != nil {
-		t.Fatalf("parseMetadata: %v", err)
-	}
-	cases := map[string]string{
-		KeyOrganization:        "testorg",
-		KeyGitRepo:             "testrepo",
-		KeyGitRemote:           "testremote",
-		KeyReleaseBranchPrefix: "testprefix",
-		KeyDevTagSuffix:        "testsuffix",
-	}
-	for k, want := range cases {
-		if got := m[k]; got != want {
-			t.Errorf("key %q: got %q, want %q", k, got, want)
+
+	t.Run("metadata set", func(t *testing.T) {
+		t.Cleanup(resetValues)
+		setValues(map[string]string{
+			KeyOrganization:        "o",
+			KeyGitRepo:             "r",
+			KeyGitRemote:           "rem",
+			KeyReleaseBranchPrefix: "rp",
+			KeyDevTagSuffix:        "ds",
+		})
+		if diff := cmp.Diff(values{"o", "r", "rem", "rp", "ds"}, get(), cmp.AllowUnexported(values{})); diff != "" {
+			t.Errorf("accessors (-want +got):\n%s", diff)
 		}
-	}
-}
-
-func TestParseMetadataIgnoresPreExistingVars(t *testing.T) {
-	m, err := parseMetadata([]byte("ORGANIZATION ?= newvalue\n"))
-	if err != nil {
-		t.Fatalf("parseMetadata: %v", err)
-	}
-	if got := m[KeyOrganization]; got != "newvalue" {
-		t.Errorf("ORGANIZATION: got %q, want %q", got, "newvalue")
-	}
-	for _, k := range []string{"VARS_OLD", "MAKEFLAGS", "SHELL", ".VARIABLES"} {
-		if _, ok := m[k]; ok {
-			t.Errorf("%s should not appear in parsed output", k)
-		}
-	}
-}
-
-func TestAccessorsWithInjectedValues(t *testing.T) {
-	t.Cleanup(resetValues)
-	setValues(map[string]string{
-		KeyOrganization:        "o",
-		KeyGitRepo:             "r",
-		KeyGitRemote:           "rem",
-		KeyReleaseBranchPrefix: "rp",
-		KeyDevTagSuffix:        "ds",
 	})
-	if got := Organization(); got != "o" {
-		t.Errorf("Organization: got %q, want %q", got, "o")
-	}
-	if got := Repo(); got != "r" {
-		t.Errorf("Repo: got %q, want %q", got, "r")
-	}
-	if got := Remote(); got != "rem" {
-		t.Errorf("Remote: got %q, want %q", got, "rem")
-	}
-	if got := ReleaseBranchPrefix(); got != "rp" {
-		t.Errorf("ReleaseBranchPrefix: got %q, want %q", got, "rp")
-	}
-	if got := DevTagSuffix(); got != "ds" {
-		t.Errorf("DevTagSuffix: got %q, want %q", got, "ds")
-	}
+
+	t.Run("metadata unset", func(t *testing.T) {
+		t.Cleanup(resetValues)
+		setValues(map[string]string{})
+		want := values{organization, repo, remote, releaseBranchPrefix, devTagSuffix}
+		if diff := cmp.Diff(want, get(), cmp.AllowUnexported(values{})); diff != "" {
+			t.Errorf("accessors (-want +got):\n%s", diff)
+		}
+	})
 }
 
-func TestAccessorsEmptyWhenUnset(t *testing.T) {
-	t.Cleanup(resetValues)
-	setValues(map[string]string{})
-	if got := Organization(); got != "" {
-		t.Errorf("Organization with empty map: got %q, want empty", got)
-	}
+func TestReadMetadata(t *testing.T) {
+	t.Run("feeds the repo's metadata.mk to make", func(t *testing.T) {
+		root := t.TempDir()
+		data := "ORGANIZATION ?= o\n"
+		if err := os.WriteFile(filepath.Join(root, MetadataFile), []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(resetValues)
+		r := &command.Recorder{Reply: func(c command.Call) (string, error) {
+			if c.Name == "git" {
+				return root, nil
+			}
+			return "ORGANIZATION = o", nil
+		}}
+		UseRunner(r)
+		if diff := cmp.Diff(map[string]string{KeyOrganization: "o"}, readMetadata()); diff != "" {
+			t.Errorf("metadata (-want +got):\n%s", diff)
+		}
+		want := command.Call{Name: "make", Args: []string{"--quiet", "-f", "-", "_defaults_print"}, Stdin: driverPrefix + data + driverSuffix}
+		if diff := cmp.Diff(want, r.Calls()[1]); diff != "" {
+			t.Errorf("make call (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("no repo root leaves every value unset", func(t *testing.T) {
+		t.Cleanup(resetValues)
+		r := &command.Recorder{Reply: func(command.Call) (string, error) { return "", errors.New("not a git repository") }}
+		UseRunner(r)
+		if got := readMetadata(); len(got) != 0 {
+			t.Errorf("got %v, want no values", got)
+		}
+		if n := len(r.Calls()); n != 1 {
+			t.Errorf("ran %d commands, want only git", n)
+		}
+	})
 }

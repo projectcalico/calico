@@ -425,28 +425,22 @@ func streamInPod(t testing.TB, pod *corev1.Pod, command []string, stdin string, 
 // ----------------------------------------------------------------------------
 // Diags.
 
-// CollectDiagsOnFailure registers a t.Cleanup that prints diagnostics if the
-// test (or any of its parents) failed. It mirrors utils.py:DiagsCollector,
-// which is used as a context manager around test bodies.
-//
-// Usage:
+// CollectDiagsOnFailure returns a func that prints diagnostics if the test has
+// failed. Defer it from the test body, not a setup helper: a defer runs before
+// any t.Cleanup, so the dump sees the state that explains the failure.
+// It mirrors utils.py:DiagsCollector, which wraps test bodies.
 //
 //	func TestSomething(t *testing.T) {
 //	    defer utils.CollectDiagsOnFailure(t)()
 //	    ...
 //	}
-//
-// The returned func is intentionally a no-op so it can be used with defer
-// or ignored; the actual diag dump runs from t.Cleanup.
 func CollectDiagsOnFailure(t testing.TB) func() {
 	t.Helper()
-	t.Cleanup(func() {
-		if !t.Failed() {
-			return
+	return func() {
+		if t.Failed() {
+			dumpDiags(t)
 		}
-		dumpDiags(t)
-	})
-	return func() {}
+	}
 }
 
 func dumpDiags(t testing.TB) {

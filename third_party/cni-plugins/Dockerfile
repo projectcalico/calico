@@ -7,7 +7,7 @@ FROM ${CALICO_BASE}
 ARG TARGETARCH
 ARG GIT_VERSION=unknown
 
-# Upstream CNI plugins built from projectcalico/containernetworking-plugins
+# Upstream CNI plugins built from containernetworking/plugins
 # and projectcalico/flannel-cni-plugin. See ../../metadata.mk for the pinned
 # versions.
 COPY bin/${TARGETARCH}/host-local /plugins/host-local

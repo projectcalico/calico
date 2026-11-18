@@ -2558,7 +2558,7 @@ class InvalidData(TestBase):
                                              'source': {}}],
                                 'order': 100000,
                                 'selector': ""}
-                   }, 'minimum port number (65535) is greater than maximum port number (1) in port range'),
+                   }, "Port = '1' (port range invalid)"),
                    ("policy-invalidAction", {
                        'apiVersion': API_VERSION,
                        'kind': 'NetworkPolicy',

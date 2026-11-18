@@ -216,48 +216,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 		srcIP := net.IPv4(123, 123, 123, 123)
 		dstIP := net.IPv4(121, 121, 121, 121)
 
-		val := formatBytesWithPrefix(conntrack.NewValueNormal(now, 0, leg, leg).AsBytes())
-		c := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(`.*Overriding bpfMapSizeConntrack \(10000\) with map size growth \(20000\)`))
+		val := conntrack.NewValueNormal(now, 0, leg, leg).AsBytes()
+		c := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(
+			`Using IPv4 conntrack map size 20000 recorded by BPFMapSizeConntrackScaling instead of the configured 10000`))
 
-		line := ""
-		// Program 10k tcp ct entries into map. This is done in batches of 2k.
-		for i := 1; i <= 20000; i++ {
-			sport := uint16(i)
-			dport := uint16(i & 0xffff)
-			key := formatBytesWithPrefix(conntrack.NewKey(6 /* UDP */, srcIP, sport, dstIP, dport).AsBytes())
-			args := []string{"map", "update", "pinned", conntrack.Map().Path()}
-			args = append(args, "key")
-			args = append(args, key...)
-			args = append(args, []string{"value", "hex"}...)
-			args = append(args, val...)
-			output := strings.Join(args, " ")
-			if line == "" {
-				line = output
-			} else {
-				line = line + "\n" + output
-			}
-			if i%2000 == 0 {
-				err := os.WriteFile("/tmp/data_in", []byte(line), 0644)
-				Expect(err).NotTo(HaveOccurred())
-				utils.Run("docker", "cp", "/tmp/data_in", fmt.Sprintf("%s:/tmp/data_in", tc.Felixes[0].Name))
-				line = ""
-				_, err = tc.Felixes[0].ExecOutput("bpftool", "batch", "file", "/tmp/data_in")
-				Expect(err).NotTo(HaveOccurred())
-			}
-		}
+		fillCtMap(tc.Felixes[0], conntrack.Map(), 20000, func(i int) []byte {
+			return conntrack.NewKey(6 /* TCP */, srcIP, uint16(i), dstIP, uint16(i)).AsBytes()
+		}, val)
 
-		defer os.Remove("/tmp/data_in")
-		Eventually(func() bool {
-			select {
-			case _, ok := <-c:
-				if !ok {
-					return true
-				}
-				return false
-			default:
-				return false
-			}
-		}, "60s", "1s").Should(BeTrue())
+		Eventually(c, "60s", "1s").Should(BeClosed())
+		Eventually(getMapSizeFn(tc.Felixes[0], conntrack.Map()), "30s", "1s").Should(Equal(20000))
 
 		expectPongs()
 
@@ -265,6 +233,96 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 		Expect(err).NotTo(HaveOccurred())
 	})
 })
+
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dual-stack conntrack table dynamic resize",
+	[]apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+
+		if !BPFMode() {
+			return
+		}
+
+		var tc infrastructure.TopologyContainers
+
+		BeforeEach(func() {
+			infra := getInfra(
+				infrastructure.K8sWithDualStack(),
+				infrastructure.K8sWithAPIServerBindAddress("::"),
+				infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16"),
+			)
+			opts := infrastructure.DefaultTopologyOptions()
+			opts.EnableIPv6 = true
+			opts.IPIPMode = api.IPIPModeNever
+			opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
+			opts.ExtraEnvVars["FELIX_BPFMapSizeConntrack"] = "10000"
+			tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
+		})
+
+		now := func() time.Duration { return time.Duration(timeshim.RealTime().KTimeNanos()) }
+		leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
+
+		expectResizeOnlyOf := func(full, other maps.Map, family string, fill func()) {
+			felix := tc.Felixes[0]
+			Eventually(getMapSizeFn(felix, full), "30s", "1s").Should(Equal(10000))
+			Eventually(getMapSizeFn(felix, other), "30s", "1s").Should(Equal(10000))
+
+			c := felix.WatchStdoutFor(regexp.MustCompile(
+				`Using ` + family + ` conntrack map size 20000 recorded by BPFMapSizeConntrackScaling instead of the configured 10000`))
+			fill()
+
+			Eventually(c, "60s", "1s").Should(BeClosed())
+			Eventually(getMapSizeFn(felix, full), "30s", "1s").Should(Equal(20000))
+			Expect(getMapSize(felix, other)).To(Equal(10000))
+		}
+
+		It("should resize only the IPv6 ct map when it is full", func() {
+			val := conntrack.NewValueV6Normal(now(), 0, leg, leg).AsBytes()
+			srcIP := net.ParseIP("dead:beef::123")
+			dstIP := net.ParseIP("dead:beef::121")
+
+			expectResizeOnlyOf(conntrack.MapV6(), conntrack.Map(), "IPv6", func() {
+				fillCtMap(tc.Felixes[0], conntrack.MapV6(), 20000, func(i int) []byte {
+					return conntrack.NewKeyV6(17 /* UDP */, srcIP, uint16(i), dstIP, 53).AsBytes()
+				}, val)
+			})
+		})
+
+		It("should resize only the IPv4 ct map when it is full", func() {
+			val := conntrack.NewValueNormal(now(), 0, leg, leg).AsBytes()
+			srcIP := net.IPv4(123, 123, 123, 123)
+			dstIP := net.IPv4(121, 121, 121, 121)
+
+			expectResizeOnlyOf(conntrack.Map(), conntrack.MapV6(), "IPv4", func() {
+				fillCtMap(tc.Felixes[0], conntrack.Map(), 20000, func(i int) []byte {
+					return conntrack.NewKey(17 /* UDP */, srcIP, uint16(i), dstIP, 53).AsBytes()
+				}, val)
+			})
+		})
+	})
+
+// fillCtMap writes n entries into the felix's ct map with bpftool, in batches of 2k.
+func fillCtMap(felix *infrastructure.Felix, m maps.Map, n int, key func(i int) []byte, val []byte) {
+	tmp, err := os.CreateTemp("", "ct-batch")
+	Expect(err).NotTo(HaveOccurred())
+	tmp.Close()
+	defer os.Remove(tmp.Name())
+
+	var lines []string
+	for i := 1; i <= n; i++ {
+		args := []string{"map", "update", "pinned", m.Path(), "key"}
+		args = append(args, formatBytesWithPrefix(key(i))...)
+		args = append(args, "value", "hex")
+		args = append(args, formatBytesWithPrefix(val)...)
+		lines = append(lines, strings.Join(args, " "))
+
+		if i%2000 == 0 || i == n {
+			Expect(os.WriteFile(tmp.Name(), []byte(strings.Join(lines, "\n")), 0o644)).To(Succeed())
+			utils.Run("docker", "cp", tmp.Name(), felix.Name+":/tmp/data_in")
+			_, err := felix.ExecOutput("bpftool", "batch", "file", "/tmp/data_in")
+			Expect(err).NotTo(HaveOccurred())
+			lines = nil
+		}
+	}
+}
 
 func getMapSizeFn(felix *infrastructure.Felix, m maps.Map) func() (int, error) {
 	return func() (int, error) {

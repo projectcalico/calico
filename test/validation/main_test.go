@@ -189,9 +189,10 @@ func waitForAPIReady(c client.Client) error {
 		if err := c.Create(ctx, probe); err == nil {
 			mutated := true
 			if admissionPoliciesEnabled {
+				// Not spec.tier: the CRD schema defaults that with or without the policy.
 				got := &v3.NetworkPolicy{}
 				mutated = c.Get(ctx, client.ObjectKeyFromObject(probe), got) == nil &&
-					got.Spec.Tier == "default"
+					got.Labels["projectcalico.org/tier"] == "default"
 			}
 			_ = c.Delete(ctx, probe)
 			if mutated {
@@ -282,6 +283,10 @@ func TestMain(m *testing.M) {
 	}
 	if err := installAdmissionPolicies(testClient, cniAnnotationsAdmissionDir(), skipUnserved); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to install the CNI annotation admission policies: %v\n", err)
+		return
+	}
+	if err := installAdmissionPolicies(testClient, filepath.Join(admissionDir(), "aws-vpc-annotations"), skipUnserved); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to install the AWS VPC CNI annotation admission policy: %v\n", err)
 		return
 	}
 

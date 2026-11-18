@@ -53,6 +53,10 @@ var unitlessEnvVars = map[string]string{
 	"FELIX_IPTABLESREFRESHINTERVAL": "s",
 }
 
+// migrationFieldOwner names the converter's FelixConfiguration writes, so the API server doesn't
+// record them as "operator", which the managedfields package treats as a pre-apply operator.
+const migrationFieldOwner = "operator.tigera.io/migration"
+
 // handleFelixVars handles unexpected felix env vars (i.e. vars that start with FELIX_*) on the calico-node container
 // by patching them into the default FelixConfiguration resource.
 func handleFelixVars(c *components) error {
@@ -103,7 +107,7 @@ func handleFelixVars(c *components) error {
 
 	return c.client.Patch(ctx, &v3.FelixConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: "default"},
-	}, p)
+	}, p, client.FieldOwner(migrationFieldOwner))
 }
 
 func patchFromVal(key, val string) (patch, error) {

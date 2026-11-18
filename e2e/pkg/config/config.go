@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -88,10 +88,27 @@ var allConfigOptions = map[string]*configOption{
 
 	testConfig: {
 		envVarName:   testConfig,
-		helpText:     "Path to a YAML test selection config file.",
+		helpText:     "Path to a YAML test selection config file. Repeat the flag, or space-separate the environment variable, to combine several.",
 		defaultValue: "",
 	},
 }
+
+// pathList is a flag that collects every occurrence, since a lane names one
+// config per fragment and a string flag would keep only the last.
+type pathList []string
+
+// String joins the collected paths with spaces, the form TEST_CONFIG takes.
+func (p *pathList) String() string {
+	return strings.Join(*p, " ")
+}
+
+// Set adds one occurrence of the flag.
+func (p *pathList) Set(v string) error {
+	*p = append(*p, v)
+	return nil
+}
+
+var testConfigFlags pathList
 
 func RemoteClusterKubeconfig() string {
 	return allConfigOptions[remoteKubeConfig].actualValue
@@ -135,20 +152,28 @@ func init() {
 	}
 }
 
-// TestConfigPath returns the path to the test selection config file, or empty
-// if none was specified.
-func TestConfigPath() string {
-	return allConfigOptions[testConfig].actualValue
+// TestConfigPaths returns the test selection config files, in the order given,
+// or nil if none was specified. The binary merges them into one selection.
+func TestConfigPaths() []string {
+	return strings.Fields(allConfigOptions[testConfig].actualValue)
 }
 
 func RegisterFlags(flags *flag.FlagSet) {
 	// Register each of the defined config options as a flag.
-	for _, c := range allConfigOptions {
+	for name, c := range allConfigOptions {
+		if name == testConfig {
+			flags.Var(&testConfigFlags, c.cliName(), c.helpText)
+			continue
+		}
 		flags.StringVar(&c.cmdLineValue, c.cliName(), "", c.helpText)
 	}
 }
 
 func AfterReadingAllFlags() {
+	if len(testConfigFlags) > 0 {
+		allConfigOptions[testConfig].cmdLineValue = testConfigFlags.String()
+	}
+
 	// Make sure any supplied command line args override defaults and env variables
 	for _, c := range allConfigOptions {
 		if c.cmdLineValue != "" {

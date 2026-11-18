@@ -91,6 +91,8 @@ const (
 	PolicySetV3CRDs PolicySet = "v3-crds"
 	// PolicySetCNIAnnotations protects the Calico CNI plugin's pod annotations.
 	PolicySetCNIAnnotations PolicySet = "cni-annotations"
+	// PolicySetAWSVPCAnnotations protects the AWS VPC CNI's pod IP annotation.
+	PolicySetAWSVPCAnnotations PolicySet = "aws-vpc-annotations"
 )
 
 // ProtectCNIAnnotationsName names the ValidatingAdmissionPolicy, and its binding, that stops
@@ -99,8 +101,9 @@ const ProtectCNIAnnotationsName = "protect-cni-annotations.projectcalico.org"
 
 // policySetDirs maps each PolicySet to the directory of the policy files that hold it.
 var policySetDirs = map[PolicySet]string{
-	PolicySetV3CRDs:         ".",
-	PolicySetCNIAnnotations: "cni-annotations",
+	PolicySetV3CRDs:            ".",
+	PolicySetCNIAnnotations:    "cni-annotations",
+	PolicySetAWSVPCAnnotations: "aws-vpc-annotations",
 }
 
 // policyParseFunc parses a single YAML document into a typed admission policy object at the given

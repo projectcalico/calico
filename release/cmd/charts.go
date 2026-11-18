@@ -21,8 +21,8 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/version"
 )
 
 func chartsCommand(cfg *Config) *cli.Command {
@@ -119,23 +119,27 @@ var pinnedChart = func(cfg *Config, c *cli.Command, pin pinned) (*charts.Chart, 
 		if err != nil {
 			return nil, err
 		}
+		h, err := p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false)
+		if err != nil {
+			return nil, err
+		}
 		return &charts.Chart{
 			RepoRoot:       cfg.RepoRootDir,
 			ProductVersion: p.ProductVersion,
 			ChartVersion:   p.ChartVersion,
 			Names:          charts.All(),
-			BaseDir:        charts.OutputDir(p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false).Source),
+			BaseDir:        charts.OutputDir(h.Source),
 		}, nil
 	}
-	ver, _, err := version.VersionsFromManifests(cfg.RepoRootDir)
+	ver, _, err := manifests.Versions(cfg.RepoRootDir)
 	if err != nil {
 		return nil, err
 	}
 	return &charts.Chart{
 		RepoRoot:       cfg.RepoRootDir,
-		ProductVersion: ver.FormattedString(),
+		ProductVersion: ver.String(),
 		Names:          charts.All(),
-		BaseDir:        charts.OutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
+		BaseDir:        charts.OutputDir(releaseOutputDir(cfg.RepoRootDir, ver.String())),
 	}, nil
 }
 
@@ -153,7 +157,11 @@ var chartsBuildOptions = func(cfg *Config, c *cli.Command, chart charts.Chart, p
 		if err != nil {
 			return nil, err
 		}
-		outputDir = p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false).Source
+		h, err := p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false)
+		if err != nil {
+			return nil, err
+		}
+		outputDir = h.Source
 		opts = append(opts, charts.WithModifiedValues(charts.ValueEditsFor(p.ProductVersion, p.ProductRegistry, p.Operator.Image, p.Operator.Version, p.Operator.Registry)))
 		chartURL = hashreleaseserver.HashreleaseURL(p.ReleaseName)
 	}

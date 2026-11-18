@@ -22,8 +22,10 @@ import (
 	"strings"
 
 	"github.com/projectcalico/calico/release/internal/archives"
+	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/env"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 func Build(repoRoot, version string, builders []Builder, opts ...BuildOption) error {
@@ -39,8 +41,19 @@ func Build(repoRoot, version string, builders []Builder, opts ...BuildOption) er
 	}
 
 	s.Logger().WithField("builders", len(builders)).Info("Building binaries")
+	var done []prereq
+	for _, b := range builders {
+		p, ok := sharedPrereqs()[b.Component()]
+		if !ok || slices.Contains(done, p) {
+			continue
+		}
+		done = append(done, p)
+		if err := s.run(p.component, p.target, nil, p.component+"-"+p.target); err != nil {
+			return err
+		}
+	}
 	if _, err := steps.Go(builders, func(b Builder) (unitDone, error) {
-		return unitDone{}, s.build(b)
+		return unitDone{}, s.run(b.Component(), b.Target(), b.Arches(), b.Component())
 	}); err != nil {
 		return err
 	}
@@ -53,14 +66,18 @@ func Build(repoRoot, version string, builders []Builder, opts ...BuildOption) er
 	return nil
 }
 
-func (s settings) build(b Builder) error {
-	log := s.Logger().WithFields(map[string]any{"component": b.Component(), "target": b.Target()})
-	dir := filepath.Join(s.RepoRoot, b.Component())
-	env := append(s.env(), b.Env()...)
+// No arches leaves the make default, the host arch.
+func (s settings) run(component, target string, arches []string, logName string) error {
+	log := s.Logger().WithFields(map[string]any{"component": component, "target": target, "arches": arches})
+	dir := filepath.Join(s.RepoRoot, component)
+	vars := s.env()
+	if len(arches) > 0 {
+		vars = append(vars, env.Var(env.Arches, strings.Join(arches, " ")))
+	}
 
-	args := append([]string{"-C", dir}, strings.Fields(b.Target())...)
+	log.Info("Building")
 	for attempt := 0; ; attempt++ {
-		out, err := s.Run("make", args, env, s.LogPath(b.Component()))
+		out, err := command.Make(s.Runner(), dir).Run([]string{target}, command.WithEnv(vars...), command.WithLogFile(s.LogPath(logName)), command.WithTiming(log))
 		if err == nil {
 			log.Debug(out)
 			return nil
@@ -69,18 +86,16 @@ func (s settings) build(b Builder) error {
 			log.WithError(err).WithField("attempt", attempt).Warn("Binary build failed, retrying")
 			continue
 		}
-		// Surface the captured output; the failure cause is usually only there.
-		log.Error(out)
-		return s.Errorf("building %s binaries: %w", b.Component(), err)
+		return s.Errorf("building %s %s: %w", component, target, err)
 	}
 }
 
 func (s settings) collect(b Builder) error {
-	dest, include := b.Output()
+	dest, filters := b.Output()
 	if dest == "" {
 		return nil
 	}
-	n, err := s.linkFrom(b.SourceDir(s.RepoRoot), dest, include)
+	n, err := s.linkFrom(b.SourceDir(s.RepoRoot), dest, filters)
 	if err != nil {
 		return s.Errorf("collecting %s binaries: %w", b.Component(), err)
 	}
@@ -89,18 +104,18 @@ func (s settings) collect(b Builder) error {
 	return nil
 }
 
-func (s settings) linkFrom(src, dest string, include utils.IncludeFunc) (int, error) {
-	found, err := utils.FindRecursiveFiles(src, include)
+func (s settings) linkFrom(src, dest string, filters []fsutil.FileFilter) (int, error) {
+	found, err := fsutil.ListFiles(src, filters...)
 	if err != nil {
 		return 0, fmt.Errorf("reading %s: %w", src, err)
 	}
 	if len(found) == 0 {
 		return 0, fmt.Errorf("no binaries found in %s", src)
 	}
-	if err := os.MkdirAll(dest, utils.DirPerms); err != nil {
+	if err := os.MkdirAll(dest, fsutil.DirPerms); err != nil {
 		return 0, fmt.Errorf("creating %s: %w", dest, err)
 	}
-	return len(found), utils.LinkOrCopyDir(src, dest, include)
+	return len(found), fsutil.LinkOrCopyFiles(src, dest, found)
 }
 
 func Archive(repoRoot string) []archives.Contributor {
@@ -136,8 +151,7 @@ func applyTo(opt any, s *settings) error {
 }
 
 func (s settings) env() []string {
-	env := append(os.Environ(), utils.Env(utils.EnvVersion, s.Version))
-	return append(env, s.extraEnv...)
+	return append(s.extraEnv, env.Var(env.Version, s.Version))
 }
 
 type unitDone struct{}

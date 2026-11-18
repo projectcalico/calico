@@ -119,7 +119,7 @@ func init() {
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
 				tcpRevKey: conntrack.NewValueNATReverse(Now-59*time.Minute, 0,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
-					nil, nil, 5555),
+					nil, ipSvc, 80),
 			},
 		},
 
@@ -131,7 +131,7 @@ func init() {
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
 				tcpRevKey: conntrack.NewValueNATReverse(Now-2*time.Hour, 0,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
-					nil, nil, 5555),
+					nil, ipSvc, 80),
 			},
 			ExpectedDeletions: []conntrack.Key{tcpFwdKey, tcpRevKey},
 		},
@@ -144,7 +144,7 @@ func init() {
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
 				tcpRevKey: conntrack.NewValueNATReverse(Now-59*time.Minute, v4.FlagNATFwdDsr,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: false, AckSeen: false},
-					nil, nil, 5555),
+					nil, ipSvc, 80),
 			},
 		},
 
@@ -156,7 +156,7 @@ func init() {
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
 				tcpRevKey: conntrack.NewValueNATReverse(Now-2*time.Hour, v4.FlagNATFwdDsr,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: false, AckSeen: false},
-					nil, nil, 5555),
+					nil, ipSvc, 80),
 			},
 			ExpectedDeletions: []conntrack.Key{tcpFwdKey, tcpRevKey},
 		},
@@ -167,6 +167,40 @@ func init() {
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
 			},
 			ExpectedDeletions: []conntrack.Key{tcpFwdKey},
+		},
+		CTCleanupTest{
+			Description: "forward NAT entry whose reverse key holds a live normal entry",
+			KVs: map[conntrack.Key]conntrack.Value{
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
+				tcpRevKey: conntrack.NewValueNormal(Now-1*time.Minute, 0,
+					conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}, conntrack.Leg{SynSeen: true, AckSeen: true}),
+			},
+			ExpectedDeletions: []conntrack.Key{tcpFwdKey},
+		},
+		CTCleanupTest{
+			Description: "forward NAT entry whose reverse key holds another service's live reverse entry",
+			KVs: map[conntrack.Key]conntrack.Value{
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
+				tcpRevKey: conntrack.NewValueNATReverse(Now-1*time.Minute, 0,
+					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
+					nil, ipSvc, 81),
+			},
+			ExpectedDeletions: []conntrack.Key{tcpFwdKey},
+		},
+		CTCleanupTest{
+			Description: "forward NAT entry whose reverse key holds another client port's live reverse entry",
+			KVs: map[conntrack.Key]conntrack.Value{
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
+				tcpRevKey: makeNATReverseFrom(Now-1*time.Minute, 6666),
+			},
+			ExpectedDeletions: []conntrack.Key{tcpFwdKey},
+		},
+		CTCleanupTest{
+			Description: "forward NAT entry whose reverse entry names its client",
+			KVs: map[conntrack.Key]conntrack.Value{
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
+				tcpRevKey: makeNATReverseFrom(Now-1*time.Minute, 5555),
+			},
 		},
 		CTCleanupTest{
 			Description: "forward NAT entry without reverse out of grace period",
@@ -182,7 +216,7 @@ func init() {
 				// Note: last seen time on the forward entry should be ignored in
 				// favour of the last-seen time on the reverse entry.
 				udpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, udpRevKey),
-				udpRevKey: conntrack.NewValueNATReverse(Now-time.Second, 0, conntrack.Leg{}, conntrack.Leg{}, nil, nil, 5555),
+				udpRevKey: conntrack.NewValueNATReverse(Now-time.Second, 0, conntrack.Leg{}, conntrack.Leg{}, nil, ipSvc, 53),
 			},
 		},
 	)
@@ -204,6 +238,15 @@ func init() {
 
 	addSingleKVTest("icmp almost timed out", icmpKey, icmpAlmostTimedOut, false)
 	addSingleKVTest("icmp timed out", icmpKey, icmpTimedOut, true)
+}
+
+// makeNATReverseFrom makes a live TCP reverse entry for ipSvc:80 opened from client port origSport.
+func makeNATReverseFrom(lastSeen time.Duration, origSport uint16) conntrack.Value {
+	v := conntrack.NewValueNATReverse(lastSeen, 0,
+		conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
+		nil, ipSvc, 80)
+	v.SetOrigSport(origSport)
+	return v
 }
 
 func makeValue(lastSeen time.Duration, legA conntrack.Leg, legB conntrack.Leg) conntrack.Value {

@@ -384,6 +384,9 @@ spec:
             - name: CALICO_MANAGE_CNI
               value: "false"
 {{- end }}
+            # The IPAM plugin in use. calico/node only creates IPAM config for Calico IPAM.
+            - name: CALICO_IPAM_TYPE
+              value: "{{- if or (eq .Values.network "flannel") (eq .Values.ipam "host-local") -}} HostLocal {{- else -}} Calico {{- end -}}"
             # The default IPv4 pool to create on startup if none exists. Pod IPs will be
             # chosen from this range. Changing this value after installation will have
             # no effect. This should fall within `--cluster-cidr`.

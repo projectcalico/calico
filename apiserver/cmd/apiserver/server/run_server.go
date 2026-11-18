@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 /*
 Copyright 2017 The Kubernetes Authors.
@@ -27,6 +27,7 @@ import (
 	gpath "path"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/admission/plugin/policy/mutating"
 	"k8s.io/apiserver/pkg/admission/plugin/policy/validating"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -70,61 +71,41 @@ func PrepareServer(opts *CalicoServerOptions) (*apiserver.ProjectCalicoServer, e
 	return config.Complete().New()
 }
 
-// RunServer runs the Calico API server.  This blocks until stopped channel (passed in through options) is closed.
+// RunServer runs the Calico API server until the stop channel in opts is closed or the server fails. It returns
+// the server's error so a failure exits non-zero. Changes to the client CA and request-header settings in
+// kube-system/extension-apiserver-authentication are reloaded by the upstream authenticator, so no restart is needed.
 func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer) error {
-	// Create a context rather than using the stop channel - it's a little more versatile.
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		// Wait for the stop channel and cancel.
-		select {
-		case <-opts.StopCh:
-			cancel()
-		case <-ctx.Done():
+	// Derive a context from the stop channel so the server also stops when RunServer returns.
+	ctx, cancel := context.WithCancel(wait.ContextForChannel(opts.StopCh))
+	defer cancel()
+
+	logrus.Info("Running the API server")
+
+	// Start the Calico resource handler and shared informers and wait for sync before starting other components.
+	server.CalicoResourceLister.Start()
+	server.WatchManager.Start()
+	server.SharedInformerFactory.Start(ctx.Done())
+	server.CalicoResourceLister.WaitForCacheSync(ctx.Done())
+	server.WatchManager.WaitForCacheSync(ctx.Done())
+	server.SharedInformerFactory.WaitForCacheSync(ctx.Done())
+
+	if opts.PrintSwagger {
+		printSwagger := func(genericapiserver.PostStartHookContext) error {
+			WriteSwaggerJSON(server.GenericAPIServer.Handler, opts.SwaggerFilePath)
+
+			// PrintSwagger option prints and exit.
+			os.Exit(0)
+			return nil
 		}
-	}()
-
-	go func() {
-		logrus.Info("Starting watch extension")
-		changed, err := WatchExtensionAuth(ctx)
-		if err != nil {
-			logrus.Error("Unable to watch the extension auth ConfigMap: ", err)
+		if err := server.GenericAPIServer.AddPostStartHook("swagger-printer", printSwagger); err != nil {
+			logrus.WithError(err).Error("Failed to add post start hook swagger-printer")
 		}
-		if changed {
-			logrus.Info("Detected change in extension-apiserver-authentication ConfigMap, exiting so apiserver can be restarted")
-			cancel()
-		}
-	}()
+	}
 
-	go func() {
-		logrus.Info("Running the API server")
-
-		// Start the Calico resource handler and shared informers and wait for sync before starting other components.
-		server.CalicoResourceLister.Start()
-		server.WatchManager.Start()
-		server.SharedInformerFactory.Start(ctx.Done())
-		server.CalicoResourceLister.WaitForCacheSync(ctx.Done())
-		server.WatchManager.WaitForCacheSync(ctx.Done())
-		server.SharedInformerFactory.WaitForCacheSync(ctx.Done())
-
-		if opts.PrintSwagger {
-			if err := server.GenericAPIServer.AddPostStartHook("swagger-printer",
-				func(context genericapiserver.PostStartHookContext) error {
-					WriteSwaggerJSON(server.GenericAPIServer.Handler, opts.SwaggerFilePath)
-					// PrintSwagger option prints and exit.
-					os.Exit(0)
-					return nil
-				}); err != nil {
-				logrus.Error("failed to add post start hook swagger-printer:", err)
-			}
-		}
-		if err := server.GenericAPIServer.PrepareRun().RunWithContext(ctx); err != nil {
-			logrus.Error("Error running API server: ", err)
-		}
-	}()
-
-	// Wait until the context is done.
-	<-ctx.Done()
-
+	// Block until the context is canceled or the server fails.
+	if err := server.GenericAPIServer.PrepareRun().RunWithContext(ctx); err != nil {
+		return fmt.Errorf("running API server: %w", err)
+	}
 	return nil
 }
 

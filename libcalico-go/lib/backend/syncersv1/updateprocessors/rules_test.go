@@ -25,6 +25,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
 
 var _ = Describe("Test the Rules Conversion Functions", func() {
@@ -498,6 +500,19 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		})
 	})
 
+	DescribeTable("service match namespace",
+		func(policyNamespace, serviceNamespace, wantNamespace string) {
+			svc := &apiv3.ServiceMatch{Name: "my-svc", Namespace: serviceNamespace}
+			src := updateprocessors.RuleAPIV3ToBackend(apiv3.Rule{Action: apiv3.Allow, Source: apiv3.EntityRule{Services: svc}}, policyNamespace)
+			dst := updateprocessors.RuleAPIV3ToBackend(apiv3.Rule{Action: apiv3.Allow, Destination: apiv3.EntityRule{Services: svc}}, policyNamespace)
+			Expect(src.SrcServiceNamespace).To(Equal(wantNamespace))
+			Expect(dst.DstServiceNamespace).To(Equal(wantNamespace))
+		},
+		Entry("defaults to the namespace of a namespaced policy", "default", "", "default"),
+		Entry("keeps an explicit namespace in a namespaced policy", "default", "kube-system", "kube-system"),
+		Entry("stays empty in a global policy", "", "", ""),
+	)
+
 	It("should parse a serviceaccount match with selector and namespace", func() {
 		dste := fmt.Sprintf("(pcns.nskey == \"nsvalue\") && (((%skey == \"value2\") && (%s in {\"%s\"})) && (has(label1)))", conversion.ServiceAccountLabelPrefix, apiv3.LabelServiceAccount, "sa3")
 
@@ -572,5 +587,30 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(outRules[0].DstSelector).To(Equal("(pcns.namespace == \"red\") && (has(label1))"))
 		Expect(outRules[1].DstSelector).To(Equal("(has(projectcalico.org/namespace)) && (has(label2))"))
 		Expect(outRules[2].DstSelector).To(Equal("(!has(projectcalico.org/namespace)) && (has(label3))"))
+	})
+})
+
+var _ = Describe("Rule selector nesting depth", func() {
+	It("should produce parseable selectors from API selectors at the nesting limit", func() {
+		// Alternating || and && doubles in depth when String() re-renders it;
+		// conversion then wraps it in further parentheses.
+		sel := "a == 'x'"
+		for range parser.MaxAPIDepth {
+			sel = fmt.Sprintf("a == 'x' || b == 'y' && (%s)", sel)
+		}
+		Expect(selector.Validate(sel, selector.MaxAPIDepth)).To(Succeed())
+		oneLevelDeeper := fmt.Sprintf("a == 'x' || b == 'y' && (%s)", sel)
+		Expect(selector.Validate(oneLevelDeeper, selector.MaxAPIDepth)).To(MatchError(parser.ErrNestingTooDeep))
+
+		er := apiv3.EntityRule{
+			Selector:          sel,
+			NamespaceSelector: sel,
+			NotSelector:       sel,
+			ServiceAccounts:   &apiv3.ServiceAccountMatch{Selector: sel, Names: []string{"sa"}},
+		}
+		rule := updateprocessors.RuleAPIV3ToBackend(apiv3.Rule{Action: apiv3.Allow, Source: er}, "ns")
+
+		Expect(selector.Validate(rule.SrcSelector, selector.MaxParseDepth)).To(Succeed())
+		Expect(selector.Validate(rule.NotSrcSelector, selector.MaxParseDepth)).To(Succeed())
 	})
 })

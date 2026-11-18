@@ -5,6 +5,8 @@
 # The workflow is a no-op if either secret is missing or the triage
 # service is unreachable / errors out — it never fails noisily on a
 # transient backend issue.
+#
+# Triages failed ArgoCI and Semaphore runs; Semaphore statuses are ignored where ArgoCI runs, as it is a no-op there.
 
 name: sem-ai CI triage
 
@@ -13,8 +15,12 @@ on:
   workflow_dispatch:
     inputs:
       workflow_id:
-        description: "Semaphore workflow_id (UUID)"
-        required: true
+        description: "Semaphore workflow_id (UUID); leave empty for an Argo run"
+        required: false
+        type: string
+      argo_workflow:
+        description: "ArgoCI workflow name, e.g. calico-14294-pr-lm9hx; leave empty for a Semaphore run"
+        required: false
         type: string
       pr_number:
         description: "PR number to comment on"
@@ -23,10 +29,11 @@ on:
 
 # SHA-keyed for status events: a force-push gets a new SHA and runs in a
 # separate group, so the old SHA's run is not cancelled. Acceptable here —
-# Semaphore typically fires one status per (SHA, context), so the race is
+# each CI typically fires one status per (SHA, context), so the race is
 # rare and a stale comment would be overwritten on the next failure anyway.
+# The CI is in the key, so Semaphore's no-op status cannot cancel an ArgoCI triage.
 concurrency:
-  group: sem-ai-ci-triage-${{ inputs.pr_number || github.event.sha || github.run_id }}
+  group: sem-ai-ci-triage-${{ github.event.context || (inputs.argo_workflow != '' && 'argo') || 'semaphore' }}-${{ inputs.pr_number || github.event.sha || github.run_id }}
   cancel-in-progress: true
 
 permissions:
@@ -38,10 +45,12 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'status' &&
-       github.event.context == 'ci/semaphoreci/pr: Calico' &&
+       (github.event.context == 'ci/semaphoreci/pr: Calico' ||
+        github.event.context == 'continuous-integration/calico') &&
        (github.event.state == 'failure' || github.event.state == 'error'))
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # argo-triage reads a run under an 8 minute budget.
+    timeout-minutes: 12
     env:
       SEM_AI_TRIAGE_URL: ${{ secrets.SEM_AI_TRIAGE_URL }}
       SEM_AI_TRIAGE_TOKEN: ${{ secrets.SEM_AI_TRIAGE_TOKEN }}
@@ -58,22 +67,46 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Resolve workflow_id + pr_number from event
+      - name: Resolve CI, run + pr_number from event
         id: resolve
         if: steps.gate.outputs.skip != 'true'
+        env:
+          INPUT_WID: ${{ inputs.workflow_id }}
+          INPUT_ARGO: ${{ inputs.argo_workflow }}
+          INPUT_PR: ${{ inputs.pr_number }}
+          TARGET: ${{ github.event.target_url }}
+          SHA: ${{ github.event.sha }}
+          CONTEXT: ${{ github.event.context }}
         run: |
+          # ArgoCI runs PRs into master, and branches cut from it, where it posts its own status.
+          argo_runs() {
+            local base argo
+            base=$(gh api "repos/$REPO/pulls/$1" --jq .base.ref)
+            argo=$(gh api "repos/$REPO/commits/$SHA/statuses?per_page=100" \
+              --jq 'any(.[]; .context == "continuous-integration/calico")')
+            [[ "$base" == master || "$argo" == true ]]
+          }
+          # The run id reaches the agent prompt, so it must match a strict pattern.
+          UUID='^[0-9a-fA-F-]{36}$'
+          ARGO_NAME='^[a-z0-9][a-z0-9.-]{0,252}$'
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "wid=${{ inputs.workflow_id }}" >> "$GITHUB_OUTPUT"
-            echo "pr=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
-            echo "source=workflow_dispatch" >> "$GITHUB_OUTPUT"
+            if [[ -n "$INPUT_ARGO" && -n "$INPUT_WID" ]] || [[ -z "$INPUT_ARGO" && -z "$INPUT_WID" ]]; then
+              echo "::error::set exactly one of workflow_id (Semaphore) or argo_workflow (ArgoCI)"
+              exit 1
+            fi
+            if [[ -n "$INPUT_ARGO" ]]; then
+              CI=argo RUN="$INPUT_ARGO"
+            else
+              CI=semaphore RUN="$INPUT_WID"
+            fi
+            PR="$INPUT_PR"
+            SOURCE=workflow_dispatch
           else
-            TARGET="${{ github.event.target_url }}"
-            SHA="${{ github.event.sha }}"
-            WID=$(printf '%s' "$TARGET" | sed -nE 's|.*/workflows/([0-9a-fA-F-]{36}).*|\1|p')
-            if [[ -z "$WID" ]]; then
-              echo "::warning::could not extract workflow_id from target_url='$TARGET' — skipping"
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-              exit 0
+            if [[ "$CONTEXT" == "continuous-integration/calico" ]]; then
+              # ArgoCI links the run as .../public/wf/<workflow name>.
+              CI=argo RUN=$(printf '%s' "$TARGET" | sed -nE 's|.*/public/wf/([a-z0-9.-]+).*|\1|p')
+            else
+              CI=semaphore RUN=$(printf '%s' "$TARGET" | sed -nE 's|.*/workflows/([0-9a-fA-F-]{36}).*|\1|p')
             fi
             # Use the search API rather than repos/$REPO/commits/$SHA/pulls:
             # the latter does not return PRs whose head commit lives on a
@@ -85,10 +118,31 @@ jobs:
               echo "skip=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            echo "wid=$WID" >> "$GITHUB_OUTPUT"
-            echo "pr=$PR" >> "$GITHUB_OUTPUT"
-            echo "source=status:${{ github.event.context }}:${{ github.event.state }}" >> "$GITHUB_OUTPUT"
+            if [[ "$CI" == semaphore ]] && argo_runs "$PR"; then
+              echo "::notice::ArgoCI runs this PR; Semaphore's status is a no-op — skipping"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            SOURCE="status:$CONTEXT:${{ github.event.state }}"
           fi
+          PATTERN=$UUID
+          [[ "$CI" == argo ]] && PATTERN=$ARGO_NAME
+          if [[ ! "$RUN" =~ $PATTERN ]]; then
+            echo "::warning::no valid $CI run in the dispatch input or target_url='$TARGET' — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ ! "$PR" =~ ^[0-9]+$ ]]; then
+            echo "::warning::pr_number must be numeric — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "ci=$CI"
+            echo "run=$RUN"
+            echo "pr=$PR"
+            echo "source=$SOURCE"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Fetch PR title + body
         if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true'
@@ -98,13 +152,19 @@ jobs:
           echo "PR #${{ steps.resolve.outputs.pr }} : $(jq -r .title pr.json)"
           echo "body length: $(jq -r '.body|length' pr.json) chars"
           echo "trigger: ${{ steps.resolve.outputs.source }}"
+          echo "run: ${{ steps.resolve.outputs.ci }} ${{ steps.resolve.outputs.run }}"
 
       - name: Call sem-ai triage service
         id: triage
         if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true'
+        env:
+          CI: ${{ steps.resolve.outputs.ci }}
+          RUN: ${{ steps.resolve.outputs.run }}
         run: |
-          PROMPT=$(jq -n --slurpfile pr pr.json --arg wf "${{ steps.resolve.outputs.wid }}" '
-            "Triage Semaphore workflow " + $wf + ".\n\n" +
+          KIND="Semaphore workflow"
+          [[ "$CI" == argo ]] && KIND="Argo workflow"
+          PROMPT=$(jq -n --slurpfile pr pr.json --arg kind "$KIND" --arg wf "$RUN" '
+            "Triage " + $kind + " " + $wf + ".\n\n" +
             "PR title: " + $pr[0].title + "\n\n" +
             "PR description:\n" + ($pr[0].body // "")')
 
@@ -126,7 +186,7 @@ jobs:
           # The PoC backend is best-effort — never fail the workflow on
           # a transient backend issue and never post a half-broken comment.
           set +e
-          HTTP=$(curl -sS --max-time 300 -o resp.json -w '%{http_code}' \
+          HTTP=$(curl -sS --max-time 600 -o resp.json -w '%{http_code}' \
             "$SEM_AI_TRIAGE_URL" \
             -H "Authorization: Bearer $SEM_AI_TRIAGE_TOKEN" \
             -H 'Content-Type: application/json' \
@@ -192,10 +252,12 @@ jobs:
   # without this a now-passing PR keeps showing an obsolete failure report.
   # Mutually exclusive with `triage`: that job requires failure/error, this
   # one requires success, so exactly one runs per status event.
+  # Semaphore's no-op pass where ArgoCI runs must not delete ArgoCI's analysis.
   cleanup:
     if: >-
       github.event_name == 'status' &&
-      github.event.context == 'ci/semaphoreci/pr: Calico' &&
+      (github.event.context == 'ci/semaphoreci/pr: Calico' ||
+       github.event.context == 'continuous-integration/calico') &&
       github.event.state == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -203,6 +265,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
       SHA: ${{ github.event.sha }}
+      CONTEXT: ${{ github.event.context }}
     steps:
       - name: Resolve PR from SHA
         id: resolve
@@ -214,6 +277,16 @@ jobs:
             echo "::notice::no open PR for sha=$SHA — nothing to clean up"
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+          if [[ "$CONTEXT" == "ci/semaphoreci/pr: Calico" ]]; then
+            BASE=$(gh api "repos/$REPO/pulls/$PR" --jq .base.ref)
+            ARGO=$(gh api "repos/$REPO/commits/$SHA/statuses?per_page=100" \
+              --jq 'any(.[]; .context == "continuous-integration/calico")')
+            if [[ "$BASE" == master || "$ARGO" == true ]]; then
+              echo "::notice::ArgoCI runs this PR; Semaphore's pass is a no-op — skipping"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
           echo "pr=$PR" >> "$GITHUB_OUTPUT"
 

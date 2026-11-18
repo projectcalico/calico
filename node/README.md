@@ -1,13 +1,13 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/projectcalico/node)](https://goreportcard.com/report/github.com/projectcalico/node)
 
 # calico/node
-<img src="http://docs.projectcalico.org/images/felix.png" width="100" height="100">
+<img src="https://docs.projectcalico.org/images/felix.png" width="100" height="100">
 
 This repository contains the source for the `calico/node` container.
 
 ## Get Started Using Calico
 
-For users who want to learn more about the project or get started with Calico, see the documentation on [docs.projectcalico.org](https://docs.projectcalico.org).
+For users who want to learn more about the project or get started with Calico, see the documentation on [docs.tigera.io](https://docs.tigera.io/).
 
 ## Get Started Developing Calico
 

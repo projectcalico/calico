@@ -1,5 +1,5 @@
 # Calico Controllers for Kubernetes
-<img src="http://docs.projectcalico.org/images/felix.png" width="100" height="100">
+<img src="https://docs.projectcalico.org/images/felix.png" width="100" height="100">
 
 This repository contains a collection of kubernetes controllers for Calico. There are several controllers, each of which monitors
 the resources in the Kubernetes API and performs a specific job in response to events. The source for each controller can be found
@@ -9,7 +9,7 @@ For more information on what each does, see [the Calico documentation][calico-do
 
 ## Get Started Using Calico
 
-For users who want to learn more about the project or get started with Calico, see the documentation on [docs.projectcalico.org](https://docs.projectcalico.org).
+For users who want to learn more about the project or get started with Calico, see the documentation on [docs.tigera.io](https://docs.tigera.io/).
 
 ## Get Started Developing Calico
 
@@ -32,4 +32,4 @@ Contributions to this code are welcome!  The code in this repository can be buil
 For more information, see `make help`.
 
 [controllers-src]: https://github.com/projectcalico/calico/tree/master/kube-controllers/pkg/controllers
-[calico-docs]: https://docs.projectcalico.org/latest/reference/kube-controllers/configuration
+[calico-docs]: https://docs.tigera.io/calico/latest/reference/kube-controllers/configuration

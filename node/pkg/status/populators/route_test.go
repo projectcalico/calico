@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -277,4 +277,32 @@ var _ = Describe("Test BIRD BGP routes Scanner", func() {
 			},
 		),
 	)
+})
+
+var _ = Describe("BIRD routes populator with no BIRD socket", func() {
+	var status *v3.CalicoNodeStatus
+
+	BeforeEach(func() {
+		for _, ipv := range []IPFamily{IPFamilyV4, IPFamilyV6} {
+			_, err := getBirdConn(ipv)
+			Expect(err).To(BeAssignableToTypeOf(ErrorSocketConnection{}), "test needs BIRD sockets to be absent")
+		}
+		status = &v3.CalicoNodeStatus{}
+		status.Status.Routes = v3.CalicoNodeBGPRouteStatus{
+			RoutesV4: []v3.CalicoNodeRoute{{Type: v3.RouteTypeFIB, Destination: "192.168.82.0/26"}},
+			RoutesV6: []v3.CalicoNodeRoute{{Type: v3.RouteTypeFIB, Destination: "fd00:10:244::/122"}},
+		}
+	})
+
+	It("clears only the IPv6 routes when the IPv6 socket is unreachable", func() {
+		Expect(NewBirdRoutes(IPFamilyV6).Populate(status)).To(Succeed())
+		Expect(status.Status.Routes.RoutesV6).To(BeEmpty())
+		Expect(status.Status.Routes.RoutesV4).To(HaveLen(1))
+	})
+
+	It("clears only the IPv4 routes when the IPv4 socket is unreachable", func() {
+		Expect(NewBirdRoutes(IPFamilyV4).Populate(status)).To(Succeed())
+		Expect(status.Status.Routes.RoutesV4).To(BeEmpty())
+		Expect(status.Status.Routes.RoutesV6).To(HaveLen(1))
+	})
 })

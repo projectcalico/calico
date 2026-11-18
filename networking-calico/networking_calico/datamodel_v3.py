@@ -319,6 +319,18 @@ def get_namespace(region_string):
         return NO_REGION_NAMESPACE
 
 
+def split_endpoint_name(name):
+    """Split a WorkloadEndpoint name into its parts, with their dashes unescaped.
+
+    A well-formed name gives four: host, orchestrator, workload and endpoint.
+    """
+
+    # "-" separates the parts, and "--" is a dash within one.  "#" can't appear in a
+    # host name or a UUID, so it can stand in for "--" while splitting.
+    parts = name.replace("--", "#").split("-")
+    return tuple(part.replace("#", "-") for part in parts)
+
+
 def _build_key(resource_kind, namespace, name):
     kind_plural = _plural(resource_kind).lower()
     if _is_namespaced(resource_kind):

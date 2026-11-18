@@ -197,6 +197,7 @@ var _ = Describe("Rendering tests", func() {
 		// created by the controller without any optional ones. These include:
 		// - 5 node resources (ServiceAccount, ClusterRole, Binding, ConfigMap, DaemonSet)
 		// - 3 calico-cni-plugin resources (ServiceAccount, ClusterRole, ClusterRoleBinding)
+		// - 2 calico-aws-vpc-annotations resources (ClusterRole, ClusterRoleBinding)
 		// - 4 secrets for Typha comms (2 in operator namespace and 2 in calico namespace)
 		// - 1 ConfigMap for Typha comms (1 in calico namespace)
 		// - 6 typha resources (Service, SA, Role, Binding, Deployment, PodDisruptionBudget)
@@ -205,7 +206,7 @@ var _ = Describe("Rendering tests", func() {
 		// - 2 Windows node resources (ConfigMap, DaemonSet)
 		c, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, typhaNodeTLS, nil, false, "", dns.DefaultClusterDomain, 9094, nil)
 		Expect(err).To(BeNil(), "Expected Calico to create successfully %s", err)
-		Expect(componentCount(c)).To(Equal(5 + 3 + 4 + 1 + 6 + 6 + 1 + 2))
+		Expect(componentCount(c)).To(Equal(5 + 3 + 2 + 4 + 1 + 6 + 6 + 1 + 2))
 	})
 
 	It("should render all resources when variant is Tigera Secure", func() {
@@ -218,7 +219,7 @@ var _ = Describe("Rendering tests", func() {
 		instance.NodeMetricsPort = &nodeMetricsPort
 		c, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, typhaNodeTLS, nil, false, "", dns.DefaultClusterDomain, 9094, nil)
 		Expect(err).To(BeNil(), "Expected Calico to create successfully %s", err)
-		Expect(componentCount(c)).To(Equal(5 + 3 + 4 + 1 + 6 + 6 + 1 + 2))
+		Expect(componentCount(c)).To(Equal(5 + 3 + 2 + 4 + 1 + 6 + 6 + 1 + 2))
 	})
 
 	It("should render calico with a apparmor profile if annotation is present in installation", func() {

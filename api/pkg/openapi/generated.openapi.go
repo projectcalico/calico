@@ -2826,7 +2826,7 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Ports is an optional field that restricts the rule to only apply to traffic that has a source (destination) port that matches one of these ranges/values. This value is a list of integers or strings that represent ranges of ports.\n\nSince only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\", \"UDP\", or \"SCTP\".",
+							Description: "Ports is an optional field that restricts the rule to only apply to traffic that has a source (destination) port that matches one of these ranges/values. This value is a list of integers or strings that represent ranges of ports.\n\nSince only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\", \"UDP\", or \"SCTP\". Named ports are at most 15 characters, like Kubernetes port names.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -3117,7 +3117,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"openstackRegion": {
 						SchemaProps: spec.SchemaProps{
-							Description: "OpenstackRegion is the name of the region that a particular Felix belongs to. In a multi-region Calico/OpenStack deployment, this must be configured somehow for each Felix (here in the datamodel, or in felix.cfg or the environment on each compute node), and must match the [calico] openstack_region value configured in neutron.conf on each node. [Default: Empty]",
+							Description: "OpenstackRegion is the name of the region that a particular Felix belongs to. In a multi-region Calico/OpenStack deployment, this must be configured somehow for each Felix (here in the datamodel, or in felix.cfg or the environment on each compute node), and must match the [calico] openstack_region value configured in neutron.conf on each node. The region is used in a namespace name, so it must be a DNS label of at most 46 characters. [Default: Empty]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3279,6 +3279,20 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"vxlanPort": {
 						SchemaProps: spec.SchemaProps{
 							Description: "VXLANPort is the UDP port number to use for VXLAN traffic. [Default: 4789]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"vxlanSrcPortMin": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VXLANSrcPortMin is the lower bound (inclusive) of the UDP source port range used by Felix for outgoing VXLAN-encapsulated traffic. If both VXLANSrcPortMin and VXLANSrcPortMax are set, the kernel VXLAN tunnel device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANSrcPortMin, VXLANSrcPortMax]. VXLANSrcPortMin must be strictly less than VXLANSrcPortMax. If unset (or zero), the kernel/dataplane default is used. [Default: 0 (unset)]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"vxlanSrcPortMax": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VXLANSrcPortMax is the upper bound (inclusive) of the UDP source port range used by Felix for outgoing VXLAN-encapsulated traffic. See VXLANSrcPortMin. [Default: 0 (unset)]",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -3588,7 +3602,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"externalNodesList": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ExternalNodesCIDRList is a list of CIDR's of external, non-Calico nodes from which VXLAN/IPIP overlay traffic will be allowed.  By default, external tunneled traffic is blocked to reduce attack surface.",
+							Description: "ExternalNodesCIDRList is a list of CIDR's of external, non-Calico nodes from which VXLAN/IPIP overlay traffic will be allowed.  By default, external tunneled traffic is blocked to reduce attack surface. Entries must be IPv4 CIDRs or IPv4 addresses.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -3968,7 +3982,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfMapSizeConntrackScaling": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending on its usage. 'Disabled' make the size stay at the default or whatever is set by BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even after cleanups. [Default: DoubleIfFull]",
+							Description: "BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending on its usage. 'Disabled' stops the map from growing; a map that already grew keeps its size. 'DoubleIfFull' doubles the size of an IP family's map when it is more than 80% full after cleanups. [Default: DoubleIfFull]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4155,7 +4169,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"routeTableRanges": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Calico programs additional Linux route tables for various purposes. RouteTableRanges specifies a set of table index ranges that Calico should use. Deprecates`RouteTableRange`, overrides `RouteTableRange`.",
+							Description: "Calico programs additional Linux route tables for various purposes. RouteTableRanges specifies a set of table index ranges that Calico should use. Deprecates`RouteTableRange`, overrides `RouteTableRange`. The ranges may cover at most 65535 tables in total.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -6040,7 +6054,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref commo
 				Properties: map[string]spec.Schema{
 					"logSeverityScreen": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info] Valid values are: \"None\", \"Debug\", \"Info\", \"Warning\", \"Error\", \"Fatal\", \"Panic\".",
+							Description: "LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info] Valid values are: \"Trace\", \"Debug\", \"Info\", \"Warning\", \"Error\", \"Fatal\", \"Panic\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},

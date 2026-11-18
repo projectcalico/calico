@@ -126,6 +126,10 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 		// Marking it would contradict the pool controller, which reports a disabled pool as not allocatable.
 		return pool, nil
 	}
+	if opts.DryRun {
+		// The pool was never stored, so a status update would only fail with NotFound.
+		return pool, nil
+	}
 	return r.markAllocatable(ctx, pool, opts), nil
 }
 

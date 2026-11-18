@@ -146,16 +146,26 @@ func (r *ReconcileTiers) Reconcile(ctx context.Context, request reconcile.Reques
 		return *reconcileResult, nil
 	}
 
+	// The variant's extension only layers itself on once the Installation has been computed. Until then the tiers
+	// render on their own, and the Installation watch brings us back here once it is.
+	installationSpec, err := utils.GetComputedInstallationSpec(ctx, r.client)
+	if err != nil && !apierrors.IsNotFound(err) {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying Installation", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+	ri := render.Inputs{Installation: installationSpec}
+
 	component := tiers.Tiers(tiersConfig)
 
-	componentHandler := utils.NewComponentHandler(log, r.client, r.scheme, nil)
-	err := componentHandler.CreateOrUpdateOrDelete(ctx, component, nil)
+	err = utils.NewComponentHandler(log, r.client, r.scheme, nil, utils.WithExtension(r.opts.Extensions.Tiers(), ri)).
+		CreateOrUpdateOrDelete(ctx, component, nil)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error creating / updating resource", err, reqLogger)
 		return reconcile.Result{}, err
 	}
 
 	// Try to delete allow-tigera deprecated tier
+	componentHandler := utils.NewComponentHandler(log, r.client, r.scheme, nil)
 	err = componentHandler.CreateOrUpdateOrDelete(ctx, render.NewDeletionPassthrough(&v3.Tier{
 		TypeMeta:   metav1.TypeMeta{Kind: "Tier", APIVersion: "projectcalico.org/v3"},
 		ObjectMeta: metav1.ObjectMeta{Name: "allow-tigera"},

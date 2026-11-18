@@ -39,6 +39,7 @@ API design principles and the Go/kubebuilder coding conventions for `api/v1` CRD
 
 - **Core code is variant-blind.** Controllers and render packages outside `pkg/enterprise` must not name a variant, in code or in comments. Behavior a single variant needs registers through `pkg/extensions`.
 - **A controller only one variant runs lives in `pkg/enterprise/controller`, and its render code in `pkg/enterprise/render`.** Both mirror the core tree they came from. The controller is contributed through the controller list on `ControllerOptions` rather than named by `AddToManager`, so it carries no variant check of its own.
+- **User overrides apply after a variant's modifier, not before.** A component whose workloads take overrides implements `render.Overridable`: `ObjectsBeforeOverrides` renders without them, and `OverrideTargets` names each overridden object (kind, namespace, name) and its override struct. `extensions.Decorate` runs the modifier on `ObjectsBeforeOverrides`, applies the overrides once, then runs any `WithDerive` stage, which builds objects copied from overridden ones. A wrapper around an overridable component must embed `render.Overridable` rather than `render.Component`, or `Decorate` falls back to `Objects()` and anything the modifier adds misses the user's overrides.
 
 ## Component Versions and Publishing
 

@@ -24,22 +24,19 @@ import (
 	"slices"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/docs"
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
-// The name becomes the log directory, so it is qualified: a bare "build"
-// would collide with another group's.
 const (
-	buildStep = "charts-build"
-
-	// PublishStep names the step, and so the record a resume reads back.
-	PublishStep = "charts-publish"
+	Step        = "charts"
+	buildStep   = Step + "-build"
+	PublishStep = Step + "-publish"
 )
 
 const (
@@ -76,7 +73,7 @@ func RepoURLAt(base string) (string, error) {
 }
 
 var ChartsURL = func(c Chart) (string, error) {
-	url, err := github.DownloadURL(utils.Organization(), utils.Repo(), c.ProductVersion)
+	url, err := github.DownloadURL(defaults.Organization(), defaults.Repo(), c.ProductVersion)
 	if err != nil {
 		return "", fmt.Errorf("charts download URL: %w", err)
 	}
@@ -223,7 +220,7 @@ type settings struct {
 }
 
 func (s *settings) Helm(args []string, env []string, logPath string) (string, error) {
-	return s.Run(helmBinary, args, env, logPath)
+	return s.Run(helmBinary, args, command.WithEnv(env...), command.WithLogFile(logPath))
 }
 
 // index is where a build writes its repository index.

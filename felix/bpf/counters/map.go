@@ -29,7 +29,9 @@ var MapParameters = maps.MapParameters{
 	ValueSize:  counterMapValueSize * MaxCounterNumber,
 	MaxEntries: 20000,
 	Name:       "cali_counters",
-	Version:    6,
+	// Bumped with MaxCounterNumber: it sets ValueSize above, and a pinned map
+	// cannot change layout under the same name.
+	Version: 8,
 }
 
 func Map() maps.Map {

@@ -30,6 +30,11 @@ const (
 	sumsStep      = "distribution-sha256sums"
 	artifactsStep = "distribution-publish-artifacts"
 	sumsFileName  = "SHA256SUMS"
+
+	ChecksumStep           = "checksums"
+	HashreleasePublishStep = "hashrelease"
+	GithubTagStep          = "github-tag"
+	GithubReleaseStep      = "github-release"
 )
 
 type Handler interface {
@@ -47,6 +52,9 @@ type Upload struct {
 
 	// A skipped upload stays in the plan but does not run.
 	Skip bool
+
+	// Requires names steps whose output this upload reads.
+	Requires []string
 }
 
 // A handler that finds its own content does not implement this.

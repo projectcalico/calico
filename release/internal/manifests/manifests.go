@@ -21,14 +21,16 @@ import (
 	"path/filepath"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/env"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const (
-	buildStep  = "manifests-build"
-	assertStep = "manifests-assert-versions"
+	Step       = "manifests"
+	buildStep  = Step + "-build"
+	assertStep = Step + "-assert-versions"
 )
 
 const (
@@ -58,14 +60,16 @@ var Files = func() []string {
 
 var excluded = []string{"generate.sh", "README.md", ".gitattributes"}
 
-// Include reports whether a file in the manifests tree ships with a release.
-func Include(_, _, relPath string) bool {
+var Shipped = []fsutil.FileFilter{fsutil.Recursive, fsutil.Exclude(excluded...)}
+
+// S3Excludes must leave out the same files as Shipped. In S3 filters * also
+// matches /, so */name excludes name at any depth.
+func S3Excludes() []string {
+	var patterns []string
 	for _, name := range excluded {
-		if filepath.Base(relPath) == name {
-			return false
-		}
+		patterns = append(patterns, name, "*/"+name)
 	}
-	return true
+	return patterns
 }
 
 func Dir(outputDir string) string {
@@ -124,19 +128,19 @@ var validateAssert = func(m Manifests) error {
 	return errors.Join(errs...)
 }
 
-func env(m Manifests) []string {
+func defaultEnv(m Manifests) []string {
 	e := []string{
-		utils.Env(utils.EnvProductVersion, m.Version),
-		utils.Env(utils.EnvOperatorVersion, m.Operator.Version),
-		utils.Env(utils.EnvOperatorRegistryOverride, m.Operator.Registry),
-		utils.Env(utils.EnvOperatorImageOverride, m.Operator.Image),
-		utils.Env(utils.EnvRegistry, m.Registry),
+		env.Var(env.ProductVersion, m.Version),
+		env.Var(env.OperatorVersion, m.Operator.Version),
+		env.Var(env.OperatorRegistryOverride, m.Operator.Registry),
+		env.Var(env.OperatorImageOverride, m.Operator.Image),
+		env.Var(env.Registry, m.Registry),
 	}
 	return e
 }
 
 // A replacement, not an append hook: a product can drop or rewrite a variable.
-var Env = env
+var Env = defaultEnv
 
 type settings struct {
 	Manifests

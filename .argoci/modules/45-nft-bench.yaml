@@ -2,6 +2,9 @@
 # gate. On a VM because it programs a real nftables table.
 version: condensed-module
 
+defaults:
+  tiers: []
+
 steps:
   - name: nft-bench
     runOn: vm

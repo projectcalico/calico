@@ -29,9 +29,9 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -64,13 +64,19 @@ func (r Repo) Validate() error {
 	return nil
 }
 
-func (r Repo) GitVersion() (string, error) {
-	return command.GitVersion(r.Dir, true)
+func (r Repo) GitVersion(cr command.CommandRunner) (string, error) {
+	return command.Git(cr).In(r.Dir).Version(true)
 }
 
 // Config is the input to loading a pin.
 type Config struct {
 	RootDir string
+
+	// Runner defaults to running real commands.
+	Runner command.CommandRunner
+
+	// ReleaseImages lists the released images. Only a generated pin calls it.
+	ReleaseImages func() ([]string, error)
 
 	Dir string
 
@@ -92,6 +98,10 @@ type Config struct {
 	// ChartVersion qualifies the chart version when the charts rev separately
 	// from the product. Empty means they share the product version.
 	ChartVersion string
+}
+
+func (c Config) runner() command.CommandRunner {
+	return command.Runner(c.Runner)
 }
 
 func (c Config) Valid() error {
@@ -152,11 +162,6 @@ func (p *Pin) HelmChartVersion() string {
 	return charts.Version(p.ProductVersion, p.ChartVersion)
 }
 
-// ReleaseBranch returns the release branch for the pinned product version.
-func (p *Pin) ReleaseBranch(releaseBranchPrefix string) string {
-	return releaseBranch(releaseBranchPrefix, p.ProductVersion)
-}
-
 // Released returns every pinned component and the operator, keyed by component
 // name. A component that produces an image has its image name, which defaults
 // to the component name; the rest carry only a version.
@@ -196,7 +201,12 @@ func (p *Pin) ImageNames() []string {
 }
 
 // Hashrelease describes the pin as a hashrelease.
-func (p *Pin) Hashrelease(srcBaseDir string, latest bool) *hashreleaseserver.Hashrelease {
+func (p *Pin) Hashrelease(srcBaseDir string, latest bool) (*hashreleaseserver.Hashrelease, error) {
+	v, err := version.New(p.ProductVersion)
+	if err != nil {
+		return nil, err
+	}
+	stream := version.PublishStream(p.branch, v)
 	source := srcBaseDir
 	if source != "" {
 		source = filepath.Join(srcBaseDir, p.Hash)
@@ -205,14 +215,14 @@ func (p *Pin) Hashrelease(srcBaseDir string, latest bool) *hashreleaseserver.Has
 		Name:           p.ReleaseName,
 		Hash:           p.Hash,
 		Note:           p.Note,
-		Stream:         version.DeterminePublishStream(p.branch, p.ProductVersion),
+		Stream:         stream,
 		ProductVersion: p.ProductVersion,
 		ChartVersion:   p.ChartVersion,
 		Operator:       p.Operator,
 		Components:     maps.Clone(p.Components),
 		Source:         source,
 		Latest:         latest,
-	}
+	}, nil
 }
 
 // SetBranch records the product branch, which decides the publish stream.
@@ -273,6 +283,9 @@ type FileLoader struct {
 
 	// RootDir is set when the pin needs its branch resolved.
 	RootDir string
+
+	// Runner defaults to running real commands.
+	Runner command.CommandRunner
 }
 
 func (l FileLoader) Valid() error {
@@ -285,13 +298,17 @@ func (l FileLoader) Valid() error {
 	return nil
 }
 
+func (l FileLoader) runner() command.CommandRunner {
+	return command.Runner(l.Runner)
+}
+
 func (l FileLoader) Load() (*Pin, error) {
 	p, err := read(l.Dir)
 	if err != nil {
 		return nil, err
 	}
 	if p.branch == "" && l.RootDir != "" {
-		if err := setBranch(p, l.RootDir); err != nil {
+		if err := setBranch(l.runner(), p, l.RootDir); err != nil {
 			return nil, err
 		}
 	}
@@ -299,8 +316,8 @@ func (l FileLoader) Load() (*Pin, error) {
 }
 
 // setBranch resolves the branch a file-read pin lacks; it decides the publish stream.
-var setBranch = func(p *Pin, repoDir string) error {
-	branch, err := utils.GitBranch(repoDir)
+var setBranch = func(r command.CommandRunner, p *Pin, repoDir string) error {
+	branch, err := command.Git(r).In(repoDir).Branch()
 	if err != nil {
 		return fmt.Errorf("git branch: %w", err)
 	}
@@ -318,17 +335,9 @@ func (l LocalLoader) Valid() error {
 }
 
 func (l LocalLoader) Load() (*Pin, error) {
-	if p, err := reusable(l, l.Config.Dir); err != nil {
-		return nil, err
-	} else if p != nil {
-		if err := setBranch(p, l.Config.RootDir); err != nil {
-			return nil, err
-		}
-		return p, nil
-	}
-	pin, err := l.source()
-	if err != nil {
-		return nil, fmt.Errorf("source pin: %w", err)
+	pin, reused, err := l.find()
+	if err != nil || reused {
+		return pin, err
 	}
 	dirs := []string{l.Config.Dir}
 	if l.Config.HashreleaseDir != "" {
@@ -344,9 +353,37 @@ func (l LocalLoader) Reuse(p *Pin) bool {
 	return localCheck(l, p)
 }
 
+// find returns the pin in Dir while the checkout still matches it, else a new one.
+func (l LocalLoader) find() (pin *Pin, reused bool, err error) {
+	if p, err := reusable(l, l.Config.Dir); err != nil {
+		return nil, false, err
+	} else if p != nil {
+		if err := setBranch(l.Config.runner(), p, l.Config.RootDir); err != nil {
+			return nil, false, err
+		}
+		return p, true, nil
+	}
+	pin, err = l.source()
+	if err != nil {
+		return nil, false, fmt.Errorf("source pin: %w", err)
+	}
+	return pin, false, nil
+}
+
+// PreviewLoader loads the pin a LocalLoader would, without writing it, so a
+// preview never replaces the pin a build left for its publish.
+type PreviewLoader struct {
+	LocalLoader
+}
+
+func (l PreviewLoader) Load() (*Pin, error) {
+	pin, _, err := l.find()
+	return pin, err
+}
+
 // localCheck is the reuse rule for LocalLoader.
 var localCheck = func(l LocalLoader, p *Pin) bool {
-	productVer, err := productVersion(l.Config.RootDir)
+	productVer, err := productVersion(l.Config.runner(), l.Config.RootDir)
 	if err != nil {
 		return false
 	}
@@ -358,25 +395,29 @@ var localCheck = func(l LocalLoader, p *Pin) bool {
 
 // source pins the versions of this repository and any extra repos.
 func (l LocalLoader) source() (*Pin, error) {
-	branch, err := utils.GitBranch(l.Config.RootDir)
+	r := l.Config.runner()
+	branch, err := command.Git(r).In(l.Config.RootDir).Branch()
 	if err != nil {
 		return nil, fmt.Errorf("git branch: %w", err)
 	}
-	productVer, err := productVersion(l.Config.RootDir)
+	productVer, err := productVersion(r, l.Config.RootDir)
 	if err != nil {
 		return nil, err
 	}
-	components, err := productComponents(l.Config, productVer)
+	components, err := productComponents(l.Config, branch, productVer)
 	if err != nil {
 		return nil, err
 	}
-	repos, err := repoComponents(l.Config.Repos)
+	repos, err := repoComponents(r, l.Config.Repos)
 	if err != nil {
 		return nil, err
 	}
 	maps.Copy(components, repos)
 
-	name := releaseName(branch, productVer)
+	name, err := releaseName(branch, productVer)
+	if err != nil {
+		return nil, err
+	}
 	return &Pin{
 		ReleaseName:     name,
 		Hash:            hash(productVer, repos),
@@ -440,7 +481,7 @@ func write(p *Pin, dirs ...string) error {
 func makeDirs(dirs []string) error {
 	var errs error
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, utils.DirPerms); err != nil {
+		if err := os.MkdirAll(dir, fsutil.DirPerms); err != nil {
 			errs = errors.Join(errs, fmt.Errorf("%s: %w", dir, err))
 		}
 	}

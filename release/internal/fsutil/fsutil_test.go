@@ -1,0 +1,379 @@
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package fsutil
+
+import (
+	"os"
+	"path/filepath"
+	"sort"
+	"testing"
+)
+
+func TestMoveFile(t *testing.T) {
+	t.Run("moves the single matching file", func(t *testing.T) {
+		dir := t.TempDir()
+		src := filepath.Join(dir, "artifact-v1.2.3.tar")
+		dst := filepath.Join(dir, "artifact.tar")
+		if err := os.WriteFile(src, []byte("payload"), 0o644); err != nil {
+			t.Fatalf("failed to write src: %v", err)
+		}
+
+		if err := MoveFile(filepath.Join(dir, "artifact-*.tar"), dst); err != nil {
+			t.Fatalf("MoveFile failed: %v", err)
+		}
+
+		got, err := os.ReadFile(dst)
+		if err != nil {
+			t.Fatalf("failed to read dst: %v", err)
+		}
+		if string(got) != "payload" {
+			t.Errorf("dst content = %q, want %q", got, "payload")
+		}
+		if _, err := os.Stat(src); !os.IsNotExist(err) {
+			t.Errorf("expected src to be gone, stat err = %v", err)
+		}
+	})
+
+	t.Run("errors when no file matches", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := MoveFile(filepath.Join(dir, "nope-*.tar"), filepath.Join(dir, "out.tar")); err == nil {
+			t.Error("expected an error when no file matches, got nil")
+		}
+	})
+
+	t.Run("errors when multiple files match", func(t *testing.T) {
+		dir := t.TempDir()
+		for _, name := range []string{"a-1.tar", "a-2.tar"} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+				t.Fatalf("failed to write %s: %v", name, err)
+			}
+		}
+		if err := MoveFile(filepath.Join(dir, "a-*.tar"), filepath.Join(dir, "out.tar")); err == nil {
+			t.Error("expected an error when multiple files match, got nil")
+		}
+	})
+}
+
+func TestCopyFile(t *testing.T) {
+	t.Run("copies contents", func(t *testing.T) {
+		dir := t.TempDir()
+		src := filepath.Join(dir, "src.txt")
+		dst := filepath.Join(dir, "dst.txt")
+		if err := os.WriteFile(src, []byte("contents"), 0o644); err != nil {
+			t.Fatalf("failed to write src: %v", err)
+		}
+
+		if err := CopyFile(src, dst); err != nil {
+			t.Fatalf("CopyFile failed: %v", err)
+		}
+
+		got, err := os.ReadFile(dst)
+		if err != nil {
+			t.Fatalf("failed to read dst: %v", err)
+		}
+		if string(got) != "contents" {
+			t.Errorf("dst content = %q, want %q", got, "contents")
+		}
+
+		// A copy, not a link: the two paths must be distinct files.
+		srcInfo, err := os.Stat(src)
+		if err != nil {
+			t.Fatalf("failed to stat src: %v", err)
+		}
+		dstInfo, err := os.Stat(dst)
+		if err != nil {
+			t.Fatalf("failed to stat dst: %v", err)
+		}
+		if os.SameFile(srcInfo, dstInfo) {
+			t.Error("expected src and dst to be distinct files (copy, not link)")
+		}
+	})
+
+	t.Run("errors when source does not exist", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := CopyFile(filepath.Join(dir, "missing.txt"), filepath.Join(dir, "dst.txt")); err == nil {
+			t.Error("expected an error for a missing source, got nil")
+		}
+	})
+}
+
+func TestDirExists(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "file.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	cases := map[string]struct {
+		path string
+		want bool
+	}{
+		"existing directory": {path: dir, want: true},
+		"regular file":       {path: file, want: false},
+		"missing path":       {path: filepath.Join(dir, "missing"), want: false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, err := DirExists(tc.path)
+			if err != nil {
+				t.Fatalf("DirExists failed: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("DirExists(%q) = %v, want %v", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFileExists(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "file.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	cases := map[string]struct {
+		path string
+		want bool
+	}{
+		"regular file":       {path: file, want: true},
+		"existing directory": {path: dir, want: false},
+		"missing path":       {path: filepath.Join(dir, "missing"), want: false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, err := FileExists(tc.path)
+			if err != nil {
+				t.Fatalf("FileExists failed: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("FileExists(%q) = %v, want %v", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPathExists(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "file.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	cases := map[string]struct {
+		path string
+		want bool
+	}{
+		"regular file":       {path: file, want: true},
+		"existing directory": {path: dir, want: true},
+		"missing path":       {path: filepath.Join(dir, "missing"), want: false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, err := PathExists(tc.path)
+			if err != nil {
+				t.Fatalf("PathExists failed: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("PathExists(%q) = %v, want %v", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLinkOrCopyFile(t *testing.T) {
+	t.Run("hard links a file", func(t *testing.T) {
+		dir := t.TempDir()
+		src := filepath.Join(dir, "src.txt")
+		dst := filepath.Join(dir, "dst.txt")
+		if err := os.WriteFile(src, []byte("hello"), 0o644); err != nil {
+			t.Fatalf("failed to write src: %v", err)
+		}
+
+		if err := LinkOrCopyFile(src, dst); err != nil {
+			t.Fatalf("LinkOrCopyFile failed: %v", err)
+		}
+
+		got, err := os.ReadFile(dst)
+		if err != nil {
+			t.Fatalf("failed to read dst: %v", err)
+		}
+		if string(got) != "hello" {
+			t.Errorf("dst content = %q, want %q", got, "hello")
+		}
+
+		// Within a single temp dir the two paths should share an inode,
+		// confirming a hard link rather than a copy was used.
+		srcInfo, err := os.Stat(src)
+		if err != nil {
+			t.Fatalf("failed to stat src: %v", err)
+		}
+		dstInfo, err := os.Stat(dst)
+		if err != nil {
+			t.Fatalf("failed to stat dst: %v", err)
+		}
+		if !os.SameFile(srcInfo, dstInfo) {
+			t.Error("expected src and dst to be the same file (hard link)")
+		}
+	})
+
+	t.Run("overwrites an existing destination", func(t *testing.T) {
+		dir := t.TempDir()
+		src := filepath.Join(dir, "src.txt")
+		dst := filepath.Join(dir, "dst.txt")
+		if err := os.WriteFile(src, []byte("new"), 0o644); err != nil {
+			t.Fatalf("failed to write src: %v", err)
+		}
+		if err := os.WriteFile(dst, []byte("old"), 0o644); err != nil {
+			t.Fatalf("failed to write dst: %v", err)
+		}
+
+		if err := LinkOrCopyFile(src, dst); err != nil {
+			t.Fatalf("LinkOrCopyFile failed: %v", err)
+		}
+
+		got, err := os.ReadFile(dst)
+		if err != nil {
+			t.Fatalf("failed to read dst: %v", err)
+		}
+		if string(got) != "new" {
+			t.Errorf("dst content = %q, want %q", got, "new")
+		}
+	})
+
+	t.Run("errors when source does not exist", func(t *testing.T) {
+		dir := t.TempDir()
+		src := filepath.Join(dir, "missing.txt")
+		dst := filepath.Join(dir, "dst.txt")
+
+		if err := LinkOrCopyFile(src, dst); err == nil {
+			t.Error("expected an error for a missing source, got nil")
+		}
+	})
+
+	t.Run("preserves the source file mode", func(t *testing.T) {
+		// Whether LinkOrCopyFile hard-links (dst shares the inode, hence the
+		// mode) or falls back to copying (which chmods dst to match src), the
+		// destination must end up with the source's mode — notably executable
+		// bits, which the plain CopyFile fallback would otherwise drop.
+		dir := t.TempDir()
+		src := filepath.Join(dir, "script.sh")
+		dst := filepath.Join(dir, "copy.sh")
+		if err := os.WriteFile(src, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatalf("failed to write src: %v", err)
+		}
+
+		if err := LinkOrCopyFile(src, dst); err != nil {
+			t.Fatalf("LinkOrCopyFile failed: %v", err)
+		}
+
+		srcInfo, err := os.Stat(src)
+		if err != nil {
+			t.Fatalf("failed to stat src: %v", err)
+		}
+		dstInfo, err := os.Stat(dst)
+		if err != nil {
+			t.Fatalf("failed to stat dst: %v", err)
+		}
+		if dstInfo.Mode() != srcInfo.Mode() {
+			t.Errorf("dst mode = %v, want %v", dstInfo.Mode(), srcInfo.Mode())
+		}
+	})
+}
+
+func TestLinkOrCopyFiles(t *testing.T) {
+	t.Run("keeps each file's path relative to the source", func(t *testing.T) {
+		srcDir := t.TempDir()
+		dstDir := t.TempDir()
+		writeTree(t, srcDir, map[string]string{"top.txt": "top", "sub/deep/leaf.txt": "leaf", "skip.log": "skip"})
+
+		files := []string{filepath.Join(srcDir, "top.txt"), filepath.Join(srcDir, "sub/deep/leaf.txt")}
+		if err := LinkOrCopyFiles(srcDir, dstDir, files); err != nil {
+			t.Fatalf("LinkOrCopyFiles failed: %v", err)
+		}
+
+		assertTree(t, dstDir, map[string]string{"top.txt": "top", "sub/deep/leaf.txt": "leaf"})
+	})
+
+	t.Run("errors when a file does not exist", func(t *testing.T) {
+		srcDir := t.TempDir()
+		if err := LinkOrCopyFiles(srcDir, t.TempDir(), []string{filepath.Join(srcDir, "missing")}); err == nil {
+			t.Error("expected an error for a missing file, got nil")
+		}
+	})
+}
+
+// writeTree writes the given relPath -> contents map under root, creating
+// intermediate directories as needed.
+func writeTree(t *testing.T, root string, files map[string]string) {
+	t.Helper()
+	for rel, contents := range files {
+		path := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("failed to create dir for %s: %v", rel, err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			t.Fatalf("failed to write %s: %v", rel, err)
+		}
+	}
+}
+
+// assertTree verifies that root contains exactly the given relPath -> contents
+// map (no extra files, all contents matching).
+func assertTree(t *testing.T, root string, want map[string]string) {
+	t.Helper()
+	var got []string
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		got = append(got, rel)
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if string(contents) != want[rel] {
+			t.Errorf("%s content = %q, want %q", rel, contents, want[rel])
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("failed to walk dst: %v", err)
+	}
+
+	wantPaths := make([]string, 0, len(want))
+	for rel := range want {
+		wantPaths = append(wantPaths, rel)
+	}
+	sort.Strings(got)
+	sort.Strings(wantPaths)
+	if len(got) != len(wantPaths) {
+		t.Errorf("copied files = %v, want %v", got, wantPaths)
+		return
+	}
+	for i := range got {
+		if got[i] != wantPaths[i] {
+			t.Errorf("copied files = %v, want %v", got, wantPaths)
+			return
+		}
+	}
+}

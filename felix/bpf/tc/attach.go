@@ -60,6 +60,8 @@ type AttachPoint struct {
 	SkipEgressRedirect            bool
 	TunnelMTU                     uint16
 	VXLANPort                     uint16
+	VXLANSrcPortMin               uint16
+	VXLANSrcPortMax               uint16
 	WgPort                        uint16
 	Wg6Port                       uint16
 	ExtToServiceConnmark          uint32
@@ -590,20 +592,22 @@ func (ap *AttachPoint) Config() string {
 
 func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	globalData := &libbpf.TcGlobalData{
-		ExtToSvcMark:  ap.ExtToServiceConnmark,
-		VxlanPort:     ap.VXLANPort,
-		Tmtu:          ap.TunnelMTU,
-		PSNatStart:    ap.PSNATStart,
-		PSNatLen:      ap.PSNATEnd,
-		WgPort:        ap.WgPort,
-		Wg6Port:       ap.Wg6Port,
-		NatIn:         ap.NATin,
-		NatOut:        ap.NATout,
-		LogFilterJmp:  uint32(ap.LogFilterIdx),
-		DSCP:          ap.DSCP,
-		IstioDSCP:     ap.IstioDSCP,
-		MaglevLUTSize: ap.MaglevLUTSize,
-		IPFragTimeout: ap.IPFragTimeout,
+		ExtToSvcMark:    ap.ExtToServiceConnmark,
+		VxlanPort:       ap.VXLANPort,
+		VxlanSrcPortMin: ap.VXLANSrcPortMin,
+		VxlanSrcPortMax: ap.VXLANSrcPortMax,
+		Tmtu:            ap.TunnelMTU,
+		PSNatStart:      ap.PSNATStart,
+		PSNatLen:        ap.PSNATEnd,
+		WgPort:          ap.WgPort,
+		Wg6Port:         ap.Wg6Port,
+		NatIn:           ap.NATin,
+		NatOut:          ap.NATout,
+		LogFilterJmp:    uint32(ap.LogFilterIdx),
+		DSCP:            ap.DSCP,
+		IstioDSCP:       ap.IstioDSCP,
+		MaglevLUTSize:   ap.MaglevLUTSize,
+		IPFragTimeout:   ap.IPFragTimeout,
 	}
 
 	// Only set HostIfindex for netkit interfaces. For netkit, skb->ifindex
@@ -779,8 +783,11 @@ var IsTcxSupported = sync.OnceValue(func() bool {
 	return err == nil
 })
 
+// NetkitProbeIface is the short-lived device that IsNetkitSupported creates.
+const NetkitProbeIface = "cali_nk_probe"
+
 var IsNetkitSupported = sync.OnceValue(func() bool {
-	name := "cali_nk_probe"
+	name := NetkitProbeIface
 	// Clean up a stale probe device that may have been left behind by a
 	// previous crash before the deferred cleanup could run.
 	if old, err := netlink.LinkByName(name); err == nil {

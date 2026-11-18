@@ -1,0 +1,15 @@
+# Builds and validates the OpenShift operator bundle, which otherwise first runs
+# at release time, when a broken CSV or a staged manifest that moved is costly.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+
+steps:
+  - name: operator-bundle
+    requests: {cpu: 2250m, memory: 2Gi}
+    commands: |
+      cd operator
+      make bundle-check

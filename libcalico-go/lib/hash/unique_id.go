@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,7 +68,9 @@ func GetLengthLimitedID(fixedPrefix, suffix string, maxLength int) string {
 			log.Panicf("GetLengthLimitedID: maxLength %d is too small for prefix %q (length %d); "+
 				"need at least %d", maxLength, fixedPrefix, prefixLen, prefixLen+2)
 		}
-		return fixedPrefix + shortenedPrefix + hash[0:charsLeftForHash]
+
+		// A limit with room to spare gets the whole hash rather than a slice past its end.
+		return fixedPrefix + shortenedPrefix + hash[:min(charsLeftForHash, len(hash))]
 	}
 	// No need to shorten.
 	return fixedPrefix + suffix
