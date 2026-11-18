@@ -34,6 +34,19 @@ const (
 	MaxRuleIDs           = 32
 )
 
+// The policy program records in host_policy_hits how many of the leading rule
+// IDs are a workload's host-* policy, so that a workload's own hits are not
+// confused with host-*'s; tier names and policies can be shared, so their IDs
+// can be too.  It stores the count plus one, so that zero means a program
+// that predates the field.  A host interface's program records zero host-*
+// hits: its hits are its own host endpoint's.
+const (
+	HostPolicyHitsUnknown = 0
+	HostPolicyHitsNone    = 1
+	// HostPolicyHitsAll means that the program ended in host-* policy.
+	HostPolicyHitsAll = 0xff
+)
+
 // struct cali_tc_state {
 //    struct event_header eventhdr;  // 64 bits
 //    __be32 ip_src;
@@ -63,7 +76,7 @@ const (
 //    __u16 pre_nat_dport;
 //    __u16 post_nat_dport;
 //    __u8 ip_proto;
-//    __u8 __pad;
+//    __u8 host_policy_hits;
 //    __be16 ip_size;
 //    __u32 rules_hit;
 //    __u64 rule_ids[MAX_RULE_IDS];
@@ -103,7 +116,7 @@ type State struct {
 	PreNATDstPort       uint16
 	PostNATDstPort      uint16
 	IPProto             uint8
-	pad                 uint8
+	HostPolicyHits      uint8
 	IPSize              uint16
 	RulesHit            uint32
 	RuleIDs             [MaxRuleIDs]uint64

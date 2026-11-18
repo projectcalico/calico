@@ -188,6 +188,11 @@ stream, and its drops are explicit and countable.
   BPF and userspace. The reader in `felix/bpf/events/` and any
   downstream collector (Goldmane, syslog shipper) need to be
   updated in step.
+- A workload program's policy-verdict event lists host-*'s hits
+  before the workload's own, and records in `host_policy_hits` how
+  many lead, since rule IDs cannot tell the two apart.
+  `felix/bpf/events/` splits on it, so a policy-program change
+  that moves the host-*/workload boundary must move that record.
 - New event types go in `events_type.h` (new enum value) and
   need a handler on the reader side. Emitting an unknown type
   leaves it at "ignored" in userspace — silent data loss.

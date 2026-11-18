@@ -205,6 +205,7 @@ func ParsePolicyVerdict(data []byte, isIPv6 bool) PolicyVerdict {
 		DstPort:        binary.LittleEndian.Uint16(data[92:94]),
 		PostNATDstPort: binary.LittleEndian.Uint16(data[94:96]),
 		IPProto:        uint8(data[96]),
+		HostPolicyHits: uint8(data[97]),
 		IPSize:         binary.BigEndian.Uint16(data[98:100]),
 		RulesHit:       binary.LittleEndian.Uint32(data[100:104]),
 	}
@@ -246,7 +247,7 @@ type PolicyVerdict struct {
 	DstPort        uint16
 	PostNATDstPort uint16
 	IPProto        uint8
-	pad8           uint8 //nolint:unused // Ignore U1000 unused
+	HostPolicyHits uint8
 	IPSize         uint16
 	RulesHit       uint32
 	RuleIDs        [state.MaxRuleIDs]uint64

@@ -38,6 +38,9 @@ func TestPolicyVerdictEvents(t *testing.T) {
 		policy   polprog.Rules
 		hits     int
 		rulesIDs [state.MaxRuleIDs]uint64
+		// hostPolicyHits is the expected host_policy_hits, if not
+		// state.HostPolicyHitsNone.
+		hostPolicyHits uint8
 	}{
 		{
 			name:   "no rules, drop all",
@@ -112,6 +115,38 @@ func TestPolicyVerdictEvents(t *testing.T) {
 			hits:     2,
 			rulesIDs: [state.MaxRuleIDs]uint64{17, 1717},
 		},
+		{
+			name:   "host-* forward end-of-tier drop",
+			accept: false,
+			policy: polprog.Rules{
+				HostForwardTiers: []polprog.Tier{{
+					Name:      "default",
+					EndRuleID: 0xe0,
+					EndAction: polprog.TierEndDeny,
+					Policies: []polprog.Policy{{
+						Name: "allow tcp",
+						Rules: []polprog.Rule{{
+							Rule: &proto.Rule{
+								Action:   "Allow",
+								Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+							},
+							MatchID: 6,
+						}},
+					}},
+				}},
+				Tiers: []polprog.Tier{{
+					Name:      "default",
+					EndRuleID: 0xe1,
+					Policies: []polprog.Policy{{
+						Name:  "allow all",
+						Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Allow"}, MatchID: 0x1234}},
+					}},
+				}},
+			},
+			hits:           1,
+			rulesIDs:       [state.MaxRuleIDs]uint64{0xe0},
+			hostPolicyHits: state.HostPolicyHitsAll,
+		},
 	}
 
 	evnts, err := events.New(events.SourceRingBuffer, 1<<20)
@@ -175,6 +210,11 @@ func TestPolicyVerdictEvents(t *testing.T) {
 
 			Expect(fl.RulesHit).To(Equal(uint32(tc.hits)))
 			Expect(fl.RuleIDs).To(Equal(tc.rulesIDs))
+			hostPolicyHits := uint8(state.HostPolicyHitsNone)
+			if tc.hostPolicyHits != 0 {
+				hostPolicyHits = tc.hostPolicyHits
+			}
+			Expect(fl.HostPolicyHits).To(Equal(hostPolicyHits))
 
 			Expect(fl.IPSize).To(Equal(uint16(ipv4.Length)))
 		})

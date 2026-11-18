@@ -2398,6 +2398,9 @@ type testExpander struct {
 type testFlowLogCase struct {
 	packet  packet
 	matches []uint64
+	// hostPolicyHits is the expected state->host_policy_hits, if not
+	// state.HostPolicyHitsNone.
+	hostPolicyHits *uint8
 }
 
 func (tc testFlowLogCase) ForIPv6() bool {
@@ -2423,6 +2426,10 @@ func (tc testFlowLogCase) MatchStateOut(stateOut state.State) {
 		s.RulesHit = uint32(state.MaxRuleIDs)
 	}
 	copy(s.RuleIDs[:], tc.matches[:int(s.RulesHit)])
+	s.HostPolicyHits = state.HostPolicyHitsNone
+	if tc.hostPolicyHits != nil {
+		s.HostPolicyHits = *tc.hostPolicyHits
+	}
 
 	// Zero parts we do not care about
 	s.PolicyRC = 0 // PolicyRC tested by the caller
@@ -2514,6 +2521,79 @@ func TestPolicyProgramsExceedMatchIdSpace(t *testing.T) {
 	test.allowedPackets = []testFlowLogCase{pkt}
 
 	runTest(t, test, polprog.WithFlowLogs())
+}
+
+// The policy program records how many of its hits are host-* policy's, so that
+// the collector does not resolve them against the workload's own policy.
+func TestPolicyProgramsFlowLogHostPolicyHits(t *testing.T) {
+	hostForwardTiers := []polprog.Tier{{
+		Name:      "default",
+		EndRuleID: 0xe0,
+		EndAction: polprog.TierEndDeny,
+		Policies: []polprog.Policy{{
+			Name: "host-fwd",
+			Rules: []polprog.Rule{{
+				Rule:    &proto.Rule{Action: "Allow", DstNet: []string{"10.96.0.10/32"}},
+				MatchID: 0x10,
+			}},
+		}},
+	}}
+	workloadTiers := []polprog.Tier{{
+		Name:      "default",
+		EndRuleID: 0xe1,
+		EndAction: polprog.TierEndDeny,
+		Policies: []polprog.Policy{{
+			Name:  "pod-allow",
+			Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Allow"}, MatchID: 0x20}},
+		}},
+	}}
+	allowedByHost := udpPkt("10.0.0.1:31245", "10.96.0.10:53")
+	droppedByHost := udpPkt("10.0.0.1:31245", "10.0.0.2:80")
+
+	tests := []struct {
+		name string
+		test testFlowLog
+	}{
+		{
+			name: "workload without host-* policy",
+			test: testFlowLog{
+				policy: polprog.Rules{Tiers: workloadTiers},
+				allowedPackets: []testFlowLogCase{
+					{packet: droppedByHost, matches: []uint64{0x20}},
+				},
+			},
+		},
+		{
+			name: "workload with host-* forward policy",
+			test: testFlowLog{
+				policy: polprog.Rules{HostForwardTiers: hostForwardTiers, Tiers: workloadTiers},
+				allowedPackets: []testFlowLogCase{
+					{packet: allowedByHost, matches: []uint64{0x10, 0x20}, hostPolicyHits: new(uint8(1 + 1))},
+				},
+				droppedPackets: []testFlowLogCase{
+					{packet: droppedByHost, matches: []uint64{0xe0}, hostPolicyHits: new(uint8(state.HostPolicyHitsAll))},
+				},
+			},
+		},
+		{
+			name: "host interface",
+			test: testFlowLog{
+				policy: polprog.Rules{ForHostInterface: true, HostForwardTiers: hostForwardTiers},
+				allowedPackets: []testFlowLogCase{
+					{packet: allowedByHost, matches: []uint64{0x10}},
+				},
+				droppedPackets: []testFlowLogCase{
+					{packet: droppedByHost, matches: []uint64{0xe0}},
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			runTest(t, tc.test, polprog.WithFlowLogs())
+		})
+	}
 }
 
 func TestPolicyProgramsFlowLog(t *testing.T) {
@@ -2810,10 +2890,12 @@ func (p packet) MatchStateOut(stateOut state.State) {
 	expectedStateOut.PolicyRC = 0 // PolicyRC tested by the caller
 	expectedStateOut.RulesHit = 0
 	expectedStateOut.RuleIDs = [state.MaxRuleIDs]uint64{}
+	expectedStateOut.HostPolicyHits = 0
 
 	stateOut.PolicyRC = 0
 	stateOut.RulesHit = 0
 	stateOut.RuleIDs = [state.MaxRuleIDs]uint64{}
+	stateOut.HostPolicyHits = 0
 
 	Expect(stateOut).To(Equal(expectedStateOut), "policy program modified unexpected parts of the state")
 }

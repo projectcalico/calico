@@ -38,11 +38,15 @@ type PacketInfo struct {
 	IsDNAT       bool
 	Direction    rules.RuleDir
 	RuleHits     []RuleHit
+	// HostRuleHits are hits of the host-* endpoint's policy, which a
+	// workload's BPF program applies ahead of the workload's own, in the
+	// opposite direction.
+	HostRuleHits []RuleHit
 }
 
 func (pkt PacketInfo) String() string {
-	return fmt.Sprintf("Tuple: {%s}, PreDNATTuple: {%s}, IsDNAT: %t, Direction: %s, RuleHits: %+v",
-		&pkt.Tuple, &pkt.PreDNATTuple, pkt.IsDNAT, pkt.Direction, pkt.RuleHits)
+	return fmt.Sprintf("Tuple: {%s}, PreDNATTuple: {%s}, IsDNAT: %t, Direction: %s, HostRuleHits: %+v, RuleHits: %+v",
+		&pkt.Tuple, &pkt.PreDNATTuple, pkt.IsDNAT, pkt.Direction, pkt.HostRuleHits, pkt.RuleHits)
 }
 
 // PacketInfoReader is an interface for a reader that consumes information
