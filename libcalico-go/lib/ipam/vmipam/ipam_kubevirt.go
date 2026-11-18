@@ -219,7 +219,7 @@ func verifyAndSwapSingleIP(
 		alt := allocAttr.AlternateOwnerAttrs
 		if alt[ipam.AttributeVMIName] != vmiName || alt[ipam.AttributeNamespace] != namespace {
 			log.WithFields(log.Fields{"ip": ip, "handle": handleID, "namespace": namespace, "vmi": vmiName}).Info(
-				"Skipping owner swap: no pending owner from this VMI (VMI name read from the pod's labels)")
+				"Skipping owner swap: no pending owner from this VMI")
 			return nil
 		}
 
