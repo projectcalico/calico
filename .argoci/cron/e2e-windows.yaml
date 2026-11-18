@@ -40,6 +40,31 @@ steps:
         value: "2022"
     commands: |
       .argoci/scripts/body_standard.sh
+  - name: calico-windows-azr-aso-2025-stable-nftables-vxlan
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      # banzai-core picks the ASO Windows host image from these and defaults to
+      # 2022; WINDOWS_OS only selects the e2e test client image.
+      - name: AZ_WINDOWS_IMAGE_SKU
+        value: 2025-datacenter-core-g2
+      - name: AZ_WINDOWS_SERVER_VERSION
+        value: windows-2025
+      - name: DATAPLANE
+        value: CalicoNftables
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/windows/xtables-encap.yaml
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: K8S_VERSION
+        value: stable
+      - name: PROVISIONER
+        value: azr-aso
+      - name: WINDOWS_OS
+        value: "2025"
+    commands: |
+      .argoci/scripts/body_standard.sh
   - name: calico-windows-azr-aks-2022-stable-1-iptables-no-encap-azure-cni
     services:
       - docker
