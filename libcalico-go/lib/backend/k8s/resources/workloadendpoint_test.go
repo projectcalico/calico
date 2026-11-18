@@ -124,7 +124,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 					},
 					Spec: internalapi.WorkloadEndpointSpec{
 						ContainerID: "abcde12345",
+						Endpoint:    "eth0",
 						IPNetworks:  []string{"192.168.91.117/32", "192.168.91.118/32"},
+						Netns:       "/run/netns/cni-1234",
 					},
 				}
 
@@ -144,9 +146,10 @@ var _ = Describe("WorkloadEndpointClient", func() {
 				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get(ctx, "simplePod", metav1.GetOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(pod.GetAnnotations()).Should(Equal(map[string]string{
-					conversion.AnnotationPodIP:       "192.168.91.117/32",
-					conversion.AnnotationPodIPs:      "192.168.91.117/32,192.168.91.118/32",
-					conversion.AnnotationContainerID: "abcde12345",
+					conversion.AnnotationPodIP:         "192.168.91.117/32",
+					conversion.AnnotationPodIPs:        "192.168.91.117/32,192.168.91.118/32",
+					conversion.AnnotationContainerID:   "abcde12345",
+					conversion.AnnotationNetworkStatus: `{"netns":"/run/netns/cni-1234"}`,
 				}))
 			})
 		})

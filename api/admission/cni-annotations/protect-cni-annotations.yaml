@@ -38,7 +38,6 @@ spec:
           'cni.projectcalico.org/podIP',
           'cni.projectcalico.org/podIPs',
           'cni.projectcalico.org/containerID',
-          'cni.projectcalico.org/podNetns',
           'cni.projectcalico.org/network-status'
         ] + variables.perInterfaceKeys
     # Keys this write adds, changes or removes.
