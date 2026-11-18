@@ -15,6 +15,21 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
+      - name: E2E_RUN_WRAPPER
+        value: .argoci/scripts/sandcat/with-inline-diag.sh
+      - name: SANDCAT_TOTAL_BUDGET
+        value: 10m
+    secretBundles:
+      - name: sandcat-nightly
+        keys:
+          - name: SANDCAT_GEMINI_KEY
+      - name: sandcat-download
+        keys:
+          - name: SANDCAT_BIN_DOWNLOAD_TOKEN
+      - name: sandcat-db
+        keys:
+          - name: SANDCAT_DB_URL
+          - name: SANDCAT_DB_TOKEN
     vm:
       # Cheapest first, all families that can attach a hyperdisk. A region can run
       # short of any one of them.
@@ -41,6 +56,7 @@ steps:
       - build-third-party-images
       - build-e2e-binaries
       - check-go
+      - sandcat-pr-context
     matrix:
       # Pinned rather than defaulted: from v3.33 the default gives Felix the
       # IPIP routes, and these tests need BGP to be the only routing mechanism.
@@ -64,6 +80,9 @@ steps:
         env:
           - name: E2E_TARGET
             value: e2e-test-clusternetworkpolicy
+          # A go test binary with no ginkgo report, so sandcat would record every failure as a build failure.
+          - name: SANDCAT_SKIP
+            value: "true"
           - name: EXTRA_VALUES_FILES
             value: hack/test/kind/infra/values-felix-routing.yaml
           - name: KIND_CALICO_API_GROUP
@@ -75,7 +94,7 @@ steps:
           - name: E2E_TARGET
             value: e2e-test-bpf
     commands: |
-      sudo apt-get update -y && sudo apt-get install -y make
+      sudo apt-get update -y && sudo apt-get install -y make jq
       sudo modprobe sctp
       # The Makefiles call the kubectl they download by full path; the deploy
       # script and the tests' connection tester call it by name.
@@ -83,7 +102,23 @@ steps:
       .argoci/scripts/load-cached-images calico node whisker
       .argoci/scripts/load-e2e-binaries
       export E2E_PREBUILT=true
-      make ${E2E_TARGET}
+      mkdir -p artifacts
+      set -o pipefail
+      rc=0
+      make ${E2E_TARGET} 2>&1 | tee artifacts/e2e.log || rc=$?
+      # Here rather than in the epilogue: the cluster and the report are on the VM.
+      if [ "${SANDCAT_SKIP:-}" != true ]; then
+        .argoci/scripts/sandcat/sandcat.sh push-specs --spec-dir report/sandcat || true
+        SANDCAT_REPORT=report/report.json
+        [ -f "${SANDCAT_REPORT}" ] || SANDCAT_REPORT=$(ls -t report/*.xml 2>/dev/null | head -1) || true
+        if [ -n "${SANDCAT_REPORT}" ]; then
+          .argoci/scripts/sandcat/sandcat.sh analyze --report "${SANDCAT_REPORT}" --source-dir "$(pwd)" \
+            --log-file artifacts/e2e.log || true
+        elif [ "${rc}" != 0 ]; then
+          .argoci/scripts/sandcat/sandcat.sh build-failure --logs-dir artifacts --source-dir "$(pwd)" || true
+        fi
+      fi
+      exit "${rc}"
     epilogue: |
       copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/report" report || true
       artifact push job report --destination test-results || true
