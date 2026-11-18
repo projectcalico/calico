@@ -712,10 +712,11 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 	}
 
 	// Fall back to spec.loadBalancerIP when no specific IP was requested via annotation.
-	if loadBalancerIPs == nil && svc.Spec.LoadBalancerIP != "" { //nolint:staticcheck // Ignore SA1019: Calico still supports spec.loadBalancerIP.
-		ip := cnet.ParseIP(svc.Spec.LoadBalancerIP) //nolint:staticcheck // Ignore SA1019: Calico still supports spec.loadBalancerIP.
+	specIP := svc.Spec.LoadBalancerIP //nolint:staticcheck // Ignore SA1019: Calico still supports spec.loadBalancerIP.
+	if loadBalancerIPs == nil && specIP != "" {
+		ip := cnet.ParseIP(specIP)
 		if ip == nil {
-			return nil, fmt.Errorf("invalid IP in spec.loadBalancerIP: %s", svc.Spec.LoadBalancerIP) //nolint:staticcheck // Ignore SA1019: Calico still supports spec.loadBalancerIP.
+			return nil, fmt.Errorf("invalid IP in spec.loadBalancerIP: %s", specIP)
 		}
 		loadBalancerIPs = []cnet.IP{*ip}
 	}

@@ -57,7 +57,6 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 	storageInterface, dFunc, err := opts.GetStorage(
 		prefix,
 		keyFunc,
-		registry.NoNamespaceReverseKeyFunc(prefix),
 		strategy,
 		func() runtime.Object { return &calico.IPAMConfiguration{} },
 		func() runtime.Object { return &calico.IPAMConfigurationList{} },
