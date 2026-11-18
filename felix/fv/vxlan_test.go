@@ -201,14 +201,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			})
 
 			_ = BPFMode() && It("should keep the shared VXLAN device MTU so large packets are forwarded", func() {
-				deviceMTUs := func() string {
-					var out strings.Builder
-					for _, felix := range felixes {
-						o, _ := felix.ExecOutput("ip", "link", "show", "vxlan.calico")
-						out.WriteString(o)
-					}
-					return out.String()
-				}
 				for _, felix := range felixes {
 					Eventually(felix.ExecOutputFn("ip", "link", "show", "vxlan.calico"), "60s", "500ms").
 						Should(ContainSubstring("vxlan.calico"))
@@ -237,8 +229,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					}, "30s", "1s").Should(Succeed())
 				}
 
-				Eventually(func() int { return strings.Count(deviceMTUs(), "mtu 1450") }, "30s", "500ms").
-					Should(Equal(len(felixes)))
+				Eventually(func() error {
+					for _, felix := range felixes {
+						out, err := felix.ExecOutput("ip", "link", "show", "vxlan.calico")
+						if err != nil {
+							return fmt.Errorf("%s: %w", felix.Name, err)
+						}
+						if !strings.Contains(out, "mtu 1450") {
+							return fmt.Errorf("%s: %s", felix.Name, out)
+						}
+					}
+					return nil
+				}, "30s", "500ms").Should(Succeed())
 			})
 
 			It("should have some blackhole routes installed", func() {

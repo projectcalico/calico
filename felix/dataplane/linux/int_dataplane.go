@@ -1832,8 +1832,8 @@ func determinePodMTU(config Config) int {
 }
 
 // bpfVXLANDeviceMTU returns the MTU of the VXLAN device that BPF mode shares
-// between IP families. In dual-stack only the IPv4 manager sets it, and the
-// kernel still checks it (e.g. when forwarding IPv6), so it fits the larger family.
+// between IP families. The kernel still checks it (e.g. when forwarding IPv6),
+// so it fits the larger family.
 func bpfVXLANDeviceMTU(config Config) int {
 	mtu := 0
 	if config.RulesConfig.VXLANEnabled {
