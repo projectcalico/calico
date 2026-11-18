@@ -7,6 +7,8 @@ set -uo pipefail
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 WRAPPER="${DIR}/with-inline-diag.sh"
 REPO_ROOT=$(cd "${DIR}/../../.." && pwd)
+TEST_ROOT=$(mktemp -d)
+trap 'rm -rf "${TEST_ROOT}"' EXIT
 pass=0
 fail=0
 
@@ -31,7 +33,7 @@ run() {
 }
 
 newhome() {
-  HOME=$(mktemp -d)
+  HOME=$(mktemp -d -p "${TEST_ROOT}")
   export HOME
   mkdir -p "${HOME}/.local/bin"
   CALICO_MCP_LOCAL_BIN="${HOME}/.local/bin/calico-mcp"

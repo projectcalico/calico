@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests `sandcat.sh analyze` against a stubbed sandcat: the database gate, its flags, and the analyzed marker.
+# Tests `sandcat.sh analyze` and `cut-off` against a stubbed sandcat: the database gate, its flags, and the analyzed marker.
 
 set -uo pipefail
 
@@ -53,7 +53,21 @@ else
 fi
 
 newhome
-STUB_RC=1 check "a failed analysis leaves no marker, so the epilogue retries" no
+STUB_RC=1 check "a failed analysis writes the marker, so the epilogue does not run it again" yes
+
+newhome
+rm "${HOME}/.local/bin/sandcat"
+SANDCAT_BIN_DOWNLOAD_TOKEN='' check "an analysis that never started leaves no marker, so the epilogue runs it" no
+
+newhome
+(cd "${HOME}" && "${SCRIPT}" cut-off --after 12m --source-dir "${HOME}") >/dev/null 2>&1
+if grep -q -- '^analyze --cut-off-after 12m ' "${HOME}/args" 2>/dev/null && ! grep -q -- '--ginkgo-report' "${HOME}/args"; then
+  echo "PASS cut-off records the stopped analysis without analyzing"
+  pass=$((pass + 1))
+else
+  echo "FAIL cut-off records the stopped analysis without analyzing: $(cat "${HOME}/args" 2>/dev/null)"
+  fail=$((fail + 1))
+fi
 
 newhome
 out=$(cd "${HOME}" && env -u SANDCAT_DB_TOKEN "${SCRIPT}" analyze --report "${HOME}/report.json" --source-dir "${HOME}" 2>&1)

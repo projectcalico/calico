@@ -438,6 +438,8 @@ steps:
     changes:
       in:
         - ^\.argoci/scripts/sandcat/
+        - ^\.argoci/scripts/global_epilogue\.sh$
+        - ^\.argoci/scripts/merge_junit\.py$
         - ^Makefile$
     commands: |
       set -e
@@ -447,3 +449,4 @@ steps:
       ./.argoci/scripts/sandcat/test_scripts/sandcat-analyze.sh
       ./.argoci/scripts/sandcat/test_scripts/sandcat-download.sh
       ./.argoci/scripts/sandcat/test_scripts/sandcat-pr-context.sh
+      ./.argoci/scripts/sandcat/test_scripts/epilogue-sandcat.sh
