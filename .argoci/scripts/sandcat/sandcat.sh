@@ -92,14 +92,14 @@ _calico_mcp_download() {
 # On ArgoCI, publish-pr-context already fetched it once for the whole workflow.
 cmd_fetch_pr() {
 # Cleared first so a reused home cannot hand a branch run an older PR.
-  rm -f "${SANDCAT_PR_CONTEXT_FILE}"
+  rm -rf "${SANDCAT_PR_CONTEXT_FILE}"
   if [[ -n "${CI_WORKFLOW_NAME:-}" ]] && command -v artifact >/dev/null &&
     artifact pull workflow "${SANDCAT_PR_ARTIFACT}" --destination "${SANDCAT_PR_CONTEXT_FILE}" >&2 &&
     [[ -s "${SANDCAT_PR_CONTEXT_FILE}" ]]; then
     echo "${SANDCAT_PR_CONTEXT_FILE}"
     return 0
   fi
-  rm -f "${SANDCAT_PR_CONTEXT_FILE}"
+  rm -rf "${SANDCAT_PR_CONTEXT_FILE}"
   _sandcat_download || return 1
   # Its stdout goes to stderr so the only thing on ours is the path below.
   "${SANDCAT_BIN}" fetch-pr \
@@ -112,7 +112,7 @@ cmd_fetch_pr() {
 # with the reason on stderr, when the hook must not run.
 # Keeps the PR read token off the test VMs; a branch run publishes nothing.
 cmd_publish_pr_context() {
-  rm -f "${SANDCAT_PR_CONTEXT_FILE}"
+  rm -rf "${SANDCAT_PR_CONTEXT_FILE}"
   _sandcat_download || return 1
   GITHUB_ACCESS_TOKEN="${SANDCAT_PR_READ_TOKEN:-}" "${SANDCAT_BIN}" fetch-pr \
     --out "${SANDCAT_PR_CONTEXT_FILE}" || return 1
@@ -138,7 +138,7 @@ cmd_inline_env() {
   done
 
 # Cleared before any early return so analyze cannot read an earlier job's PR.
-  rm -f "${SANDCAT_PR_CONTEXT_FILE}"
+  rm -rf "${SANDCAT_PR_CONTEXT_FILE}"
 
 # Say why it is off, or a job that never tried reads like one that found nothing.
   local gemini_key="${SANDCAT_GEMINI_KEY:-${GEMINI_API_KEY:-}}"
@@ -338,7 +338,7 @@ cmd_analyze() {
   local extra_args=()
   [[ -n "${log_file}" ]]   && extra_args+=(--log-file "${log_file}")
   # Reuse the inline setup's PR context so both reason about the same PR.
-  [[ -s "${SANDCAT_PR_CONTEXT_FILE}" ]] && extra_args+=(--pr-context "${SANDCAT_PR_CONTEXT_FILE}")
+  [[ -f "${SANDCAT_PR_CONTEXT_FILE}" && -s "${SANDCAT_PR_CONTEXT_FILE}" ]] && extra_args+=(--pr-context "${SANDCAT_PR_CONTEXT_FILE}")
 
   echo "[INFO] sandcat: analyzing (sha=${SANDCAT_SHA:-unknown})..."
   touch "${HOME}/.sandcat-analyzed"
