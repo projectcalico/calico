@@ -8,6 +8,8 @@
 #     CI). E2E_TEST_CONFIG lists the YAML configs that select the specs. Per-PR
 #     runs read them from the checkout; scheduled runs unpack e2e/config from the
 #     same hashrelease over the checkout's, with no fallback.
+#     To rename a config, land the new file first and switch the cron after
+#     a hashrelease ships it; a same-PR rename fails scheduled runs until then.
 #   - Else (non-e2e test types: benchmarks, certification, etc.) → `bz tests`.
 #
 # Required env:
