@@ -652,42 +652,52 @@ var _ = Describe("Gateway API controller tests", func() {
 		Expect(*gwapi.Spec.CRDManagement).To(Equal(operatorv1.CRDManagementReconcile))
 	})
 
-	DescribeTable("does not overwrite GatewayClasses that a user sets while defaults are written back", func(crdManagement *operatorv1.CRDManagement) {
-		Expect(c.Create(ctx, installation)).NotTo(HaveOccurred())
-		gwapi := &operatorv1.GatewayAPI{
-			ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
-			Spec:       operatorv1.GatewayAPISpec{CRDManagement: crdManagement},
-		}
-		Expect(c.Create(ctx, gwapi)).NotTo(HaveOccurred())
+	userClasses := []operatorv1.GatewayClassSpec{{Name: "custom-gc"}}
+	DescribeTable("keeps a user edit made while defaults are written back",
+		func(crdManagement *operatorv1.CRDManagement, userEdit func(*operatorv1.GatewayAPI), wantCRDManagement operatorv1.CRDManagement, wantClasses []operatorv1.GatewayClassSpec) {
+			Expect(c.Create(ctx, installation)).NotTo(HaveOccurred())
+			gwapi := &operatorv1.GatewayAPI{
+				ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
+				Spec:       operatorv1.GatewayAPISpec{CRDManagement: crdManagement},
+			}
+			Expect(c.Create(ctx, gwapi)).NotTo(HaveOccurred())
 
-		By("updating the CR as a user would, after the reconcile has read it but before its write-back")
-		userClasses := []operatorv1.GatewayClassSpec{{Name: "custom-gc"}}
-		userUpdated := false
-		r.client = interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
-			Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-				if _, ok := obj.(*operatorv1.GatewayAPI); ok && !userUpdated {
-					userUpdated = true
-					current := &operatorv1.GatewayAPI{}
-					Expect(cl.Get(ctx, utils.DefaultEnterpriseInstanceKey, current)).NotTo(HaveOccurred())
-					current.Spec.GatewayClasses = userClasses
-					Expect(cl.Update(ctx, current)).NotTo(HaveOccurred())
-				}
-				return cl.Patch(ctx, obj, patch, opts...)
-			},
-		})
+			By("updating the CR as a user would, after the reconcile has read it but before its first write-back")
+			userUpdated := false
+			r.client = interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
+				Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+					if _, ok := obj.(*operatorv1.GatewayAPI); ok && !userUpdated {
+						userUpdated = true
+						current := &operatorv1.GatewayAPI{}
+						Expect(cl.Get(ctx, utils.DefaultEnterpriseInstanceKey, current)).NotTo(HaveOccurred())
+						userEdit(current)
+						Expect(cl.Update(ctx, current)).NotTo(HaveOccurred())
+					}
+					return cl.Patch(ctx, obj, patch, opts...)
+				},
+			})
 
-		By("reconciling until the write-back settles")
-		for range 3 {
-			_, _ = r.Reconcile(ctx, reconcile.Request{})
-		}
-		Expect(userUpdated).To(BeTrue())
+			By("reconciling once: the conflict is retried within the reconcile")
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(userUpdated).To(BeTrue())
 
-		By("checking the user's GatewayClasses survived")
-		Expect(c.Get(ctx, utils.DefaultEnterpriseInstanceKey, gwapi)).NotTo(HaveOccurred())
-		Expect(gwapi.Spec.GatewayClasses).To(Equal(userClasses))
-	},
-		Entry("during the CRDManagement write-back", nil),
-		Entry("during the GatewayClasses write-back", ptr.To(operatorv1.CRDManagementReconcile)),
+			By("checking the user's edit and the defaults")
+			Expect(c.Get(ctx, utils.DefaultEnterpriseInstanceKey, gwapi)).NotTo(HaveOccurred())
+			Expect(gwapi.Spec.CRDManagement).To(Equal(&wantCRDManagement))
+			Expect(gwapi.Spec.GatewayClasses).To(Equal(wantClasses))
+		},
+		// The operator created the CRDs in this reconcile, so the inferred
+		// default must stay Reconcile even though the first write-back conflicts.
+		Entry("other field edited during the CRDManagement write-back",
+			nil, func(g *operatorv1.GatewayAPI) { g.Spec.GatewayClasses = userClasses },
+			operatorv1.CRDManagementReconcile, userClasses),
+		Entry("same field edited during the CRDManagement write-back",
+			nil, func(g *operatorv1.GatewayAPI) { g.Spec.CRDManagement = ptr.To(operatorv1.CRDManagementPreferExisting) },
+			operatorv1.CRDManagementPreferExisting, []operatorv1.GatewayClassSpec{{Name: "tigera-gateway-class"}}),
+		Entry("same field edited during the GatewayClasses write-back",
+			ptr.To(operatorv1.CRDManagementReconcile), func(g *operatorv1.GatewayAPI) { g.Spec.GatewayClasses = userClasses },
+			operatorv1.CRDManagementReconcile, userClasses),
 	)
 
 	It("Check felix configuration patching is set if it's not alreadyconfigured", func() {

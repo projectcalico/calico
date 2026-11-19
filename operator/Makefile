@@ -195,10 +195,12 @@ GINKGO_FOCUS_ARG = $(if $(GINKGO_FOCUS),-ginkgo.focus="$(GINKGO_FOCUS)")
 # directory it runs in. Ginkgo resolves its report path against each suite instead,
 # which scatters the reports through the package tree where CI cannot collect them.
 .PHONY: ut
-ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES) setup-envtest
+# envtest runs the oldest supported Kubernetes, so a CEL rule in the operator
+# CRDs that only newer API servers accept fails here rather than at install.
+ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES) setup-envtest-min
 	-mkdir -p .go-pkg-cache report
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	export KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_CONTAINER_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1) && \
+	export KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_CONTAINER_DIR)/k8s/$(ENVTEST_MIN_K8S_MINOR)*-$(BUILDOS)-$(BUILDARCH) | tail -1) && \
 	gotestsum --format testname --junitfile report/operator_ut.xml -- $(UT_DIR)/... $(GO_TEST_ARGS) $(GINKGO_FOCUS_ARG)'
 
 ## Run the functional tests against a local kind cluster.
