@@ -99,6 +99,10 @@ func tagMismatch(g command.GitRunner, tagName, remote, lsRemote string) error {
 // TagAtHEAD reports whether tagName is on HEAD. A missing tag reports false;
 // one on another commit is an error.
 func TagAtHEAD(g command.GitRunner, tagName string) (bool, error) {
+	return tagAt(g, tagName, "HEAD")
+}
+
+func tagAt(g command.GitRunner, tagName, rev string) (bool, error) {
 	tagCommit, err := g.Resolve(tagRefPrefix + tagName + "^{commit}")
 	if errors.Is(err, command.ErrGitRefNotFound) {
 		return false, nil
@@ -106,12 +110,12 @@ func TagAtHEAD(g command.GitRunner, tagName string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	head, err := g.Resolve("HEAD")
+	want, err := g.Resolve(rev + "^{commit}")
 	if err != nil {
 		return false, err
 	}
-	if tagCommit != head {
-		return false, fmt.Errorf("tag %s already exists at %s but HEAD is %s", tagName, tagCommit, head)
+	if tagCommit != want {
+		return false, fmt.Errorf("tag %s already exists at %s but %s is %s", tagName, tagCommit, rev, want)
 	}
 	return true, nil
 }
@@ -119,6 +123,7 @@ func TagAtHEAD(g command.GitRunner, tagName string) (bool, error) {
 type tagSpec struct {
 	message string
 	move    bool
+	commit  string
 }
 
 type TagOption func(*tagSpec)
@@ -128,26 +133,32 @@ func TagMessage(msg string) TagOption {
 	return func(s *tagSpec) { s.message = msg }
 }
 
-// MoveTag lets a tag on another commit move to HEAD. Only a tag that was never
-// pushed is safe to move.
+// TagCommit tags commit instead of HEAD.
+func TagCommit(commit string) TagOption {
+	return func(s *tagSpec) { s.commit = commit }
+}
+
+// MoveTag lets a tag on another commit move to the target.
+// Only a tag that was never pushed is safe to move.
 func MoveTag() TagOption {
 	return func(s *tagSpec) { s.move = true }
 }
 
 // CreateTag tags HEAD, lightweight unless given a message. A tag already on
-// HEAD is kept, so a rerun succeeds; one elsewhere is an error unless moved.
+// its commit is kept, so a rerun succeeds; one elsewhere is an error unless moved.
 func CreateTag(g command.GitRunner, tagName string, opts ...TagOption) error {
 	var s tagSpec
 	for _, opt := range opts {
 		opt(&s)
 	}
+	target := cmp.Or(s.commit, "HEAD")
 	if !s.move {
-		atHEAD, err := TagAtHEAD(g, tagName)
+		exists, err := tagAt(g, tagName, target)
 		if err != nil {
 			return err
 		}
-		if atHEAD {
-			logrus.WithField("tag", tagName).Info("Tag already exists at HEAD, skipping tag creation")
+		if exists {
+			logrus.WithFields(logrus.Fields{"tag": tagName, "commit": target}).Info("Tag already exists, skipping tag creation")
 			return nil
 		}
 	}
@@ -160,7 +171,11 @@ func CreateTag(g command.GitRunner, tagName string, opts ...TagOption) error {
 	} else {
 		args = append(args, "--no-sign")
 	}
-	if _, err := g.Run(append(args, tagName)...); err != nil {
+	args = append(args, tagName)
+	if s.commit != "" {
+		args = append(args, s.commit)
+	}
+	if _, err := g.Run(args...); err != nil {
 		return fmt.Errorf("tag %s: %w", tagName, err)
 	}
 	return nil

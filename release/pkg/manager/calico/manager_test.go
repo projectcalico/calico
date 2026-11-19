@@ -364,7 +364,7 @@ func TestReleasePrereqsTagConflict(t *testing.T) {
 	)
 	f := newFakeRunner()
 	f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30", nil)
-	f.on("git rev-parse --verify --quiet HEAD", headSHA, nil)
+	f.on("git rev-parse --verify --quiet HEAD^{commit}", headSHA, nil)
 	f.on(fmt.Sprintf("git rev-parse --verify --quiet refs/tags/%s^{commit}", ver), otherSHA, nil)
 
 	r := &CalicoManager{runner: f, calicoVersion: testVersion(t, ver), githubRepo: github.Repo{Org: "myfork", Name: "calico"}}

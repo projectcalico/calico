@@ -60,6 +60,7 @@ func TestCreateTag(t *testing.T) {
 	annotated := fmt.Sprintf("git tag -a -m Release %s %s", testTag, testTag)
 	lightweight := "git tag --no-sign " + testTag
 	moved := "git tag -f --no-sign " + testTag
+	atCommit := fmt.Sprintf("git tag --no-sign %s %s", testTag, remoteSHA)
 
 	for _, tc := range []struct {
 		name        string
@@ -73,9 +74,12 @@ func TestCreateTag(t *testing.T) {
 		{name: "a tag at HEAD is kept", tagCommit: localSHA},
 		{name: "a tag at another commit fails", tagCommit: remoteSHA, errContains: []string{localSHA, remoteSHA}},
 		{name: "a moved tag at another commit is retagged", tagCommit: remoteSHA, opts: []TagOption{MoveTag()}, want: moved},
+		{name: "a missing tag is created at the given commit", opts: []TagOption{TagCommit(remoteSHA)}, want: atCommit},
+		{name: "a tag at the given commit is kept", tagCommit: remoteSHA, opts: []TagOption{TagCommit(remoteSHA)}},
+		{name: "a tag off the given commit fails", tagCommit: localSHA, opts: []TagOption{TagCommit(remoteSHA)}, errContains: []string{localSHA, remoteSHA}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			replies := map[string]string{"git rev-parse --verify --quiet HEAD": localSHA, annotated: "", lightweight: "", moved: ""}
+			replies := map[string]string{"git rev-parse --verify --quiet HEAD^{commit}": localSHA, "git rev-parse --verify --quiet " + remoteSHA + "^{commit}": remoteSHA, annotated: "", lightweight: "", moved: "", atCommit: ""}
 			if tc.tagCommit != "" {
 				replies[resolveTag] = tc.tagCommit
 			}

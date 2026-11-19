@@ -416,16 +416,7 @@ func (r *CalicoManager) buildPlan() []plan.Node {
 			Do: r.buildReleaseNotes,
 		})
 	} else {
-		nodes = append(nodes, plan.Node{
-			Name: branch.CreateTagStep,
-			Do: func() error {
-				ver := r.calicoVersion.String()
-				return branch.CreateTag(command.Git(r.runner).In(r.repoRoot), ver, branch.TagMessage("Release "+ver))
-			},
-			Rollback: func() error {
-				return branch.DeleteTag(command.Git(r.runner).In(r.repoRoot), r.calicoVersion.String())
-			},
-		})
+		nodes = append(nodes, r.createTagNode())
 	}
 	nodes = append(
 		nodes,
@@ -453,6 +444,19 @@ func (r *CalicoManager) buildPlan() []plan.Node {
 		},
 	)
 	return nodes
+}
+
+func (r *CalicoManager) createTagNode() plan.Node {
+	return plan.Node{
+		Name: branch.CreateTagStep,
+		Do: func() error {
+			ver := r.calicoVersion.String()
+			return branch.CreateTag(command.Git(r.runner).In(r.repoRoot), ver, branch.TagMessage("Release "+ver))
+		},
+		Rollback: func() error {
+			return branch.DeleteTag(command.Git(r.runner).In(r.repoRoot), r.calicoVersion.String())
+		},
+	}
 }
 
 func (r *CalicoManager) operatorNode() plan.Node {
@@ -769,8 +773,8 @@ func (r *CalicoManager) releaseUploads() []distribution.Upload {
 					{Name: archives.ArchiveFileName(r.archive()), Description: "container images, binaries, and kubernetes manifests."},
 					{Name: archives.WindowsFileName(ver), Description: "Calico for Windows."},
 					{Name: charts.FileName(charts.TigeraOperatorChart, ver), Description: "Calico Helm 3 chart."},
-					{Name: charts.FileName(charts.ProjectCalicoV1CRDsChart, ver), Description: fmt.Sprintf("Calico %s CRD chart.", charts.ProjectCalicoV1CRDsChart)},
-					{Name: charts.FileName(charts.ProjectCalicoV3CRDsChart, ver), Description: fmt.Sprintf("Calico %s CRD chart (tech-preview).", charts.ProjectCalicoV3CRDsChart)},
+					{Name: charts.FileName(charts.ProjectCalicoV1CRDsChart, ver), Description: "Calico crd.projectcalico.org/v1 CRD chart."},
+					{Name: charts.FileName(charts.ProjectCalicoV3CRDsChart, ver), Description: "Calico projectcalico.org/v3 CRD chart (tech-preview)."},
 					{Name: manifests.OCPBundleFileName, Description: "Manifest bundle for OpenShift."},
 				},
 				Notes: notes,
