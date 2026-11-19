@@ -4,12 +4,18 @@ version: condensed-module
 
 defaults:
   timeout: 1h
-  services:
-    - docker
+  # In the build image, with NATIVE_GO_BUILD running each recipe in place rather
+  # than in a nested container.
+  useGoBuild: true
+  # The image ships tools under /go/bin, which the default /go volume hides.
+  workspaceVolumes: none
 
 steps:
   - name: check-operator-images
-    requests: {cpu: 2250m, memory: 2Gi}
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    requests: {cpu: 2250m, memory: 3Gi}
     commands: |
       cd release
       make check-operator-images

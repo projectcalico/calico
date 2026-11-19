@@ -3,13 +3,13 @@ version: condensed-module
 
 defaults:
   timeout: 30m
-  services:
-    - docker
 
 steps:
   - name: api-ci
     depends: [check-manifests]
     requests: {cpu: 2750m, memory: 2.25Gi}
+    services:
+      - docker
     commands: |
       cd api
       make ci
@@ -17,9 +17,16 @@ steps:
       cd "${CI_HOME}/${CI_GIT_DIR}/api"
       artifact push job report --destination test-results || true
 
+  # The CRD validation tests run against envtest's binaries, so a pod will do.
   - name: api-validation
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     depends: [check-manifests]
-    requests: {cpu: 3000m, memory: 2.25Gi}
+    requests: {cpu: 3000m, memory: 3Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     commands: |
       cd test
       make ci
