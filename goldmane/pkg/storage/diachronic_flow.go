@@ -472,9 +472,12 @@ func (d *DiachronicFlow) recordIPs(flow *types.Flow, start, end int64) {
 // equally recent ones; see evictLeastRecent. So an IP arriving late, for a window older than every
 // retained entry, is dropped rather than evicting newer data.
 func recordIPSet(m map[string]*ipEntry, ips []string, slot int, start int64) map[string]*ipEntry {
+	// Updates rarely queue many new IPs, so fresh starts on the stack.
+	var freshBuf [16]string
+	fresh := freshBuf[:0]
+
 	// New IPs go straight in while there is room. Once m is full they wait in fresh, so every
-	// already-tracked IP is refreshed before anything is evicted and can keep its earlier history.
-	var fresh []string
+	// tracked IP is refreshed, keeping its history, before anything is evicted.
 	for _, ip := range ips {
 		if ip == "" {
 			continue
@@ -524,38 +527,113 @@ func (a ipRecency) compare(b ipRecency) int {
 	return strings.Compare(a.ip, b.ip)
 }
 
-// evictLeastRecent makes room in m for fresh, a set of distinct IPs absent from m and all seen at
-// start. It ranks m's entries and fresh together, removes the lowest-ranked until the rest fit in
-// MaxIPsPerFlow, and returns the IPs from fresh that survived.
+// evictLeastRecent makes room in m for fresh, a sorted set of distinct IPs absent from m and all
+// seen at start. It ranks m's entries and fresh together by ipRecency.compare, drops the overflow
+// lowest-ranked so the rest fit in MaxIPsPerFlow, and returns the IPs from fresh that survived.
+// It finds them in one pass instead of sorting every candidate, so evicting one IP costs a single
+// scan of m.
 func evictLeastRecent(m map[string]*ipEntry, fresh []string, start int64) []string {
+	// overflow is how many IPs, tracked or fresh, have to go.
 	overflow := len(m) + len(fresh) - MaxIPsPerFlow
 	if overflow <= 0 {
 		return fresh
 	}
 
-	// Entries seen after start outrank every fresh IP, so only the rest compete for eviction.
-	candidates := make([]ipRecency, 0, len(m)+len(fresh))
+	// The shortlist holds the overflow IPs to drop. It fits on the stack unless a single
+	// update overflows by more than MaxIPsPerFlow.
+	var buf [MaxIPsPerFlow]ipRecency
+	slots := buf[:min(overflow, MaxIPsPerFlow)]
+	if overflow > MaxIPsPerFlow {
+		slots = make([]ipRecency, overflow)
+	}
+	shortlist := evictionShortlist{slots: slots}
 	for ip, e := range m {
+		// Entries seen after start outrank every fresh IP, so they can never be evicted here.
 		if e.lastSeen <= start {
-			candidates = append(candidates, ipRecency{lastSeen: e.lastSeen, ip: ip})
+			shortlist.offer(ipRecency{lastSeen: e.lastSeen, ip: ip})
 		}
 	}
 	for _, ip := range fresh {
-		candidates = append(candidates, ipRecency{lastSeen: start, ip: ip})
-	}
-	slices.SortFunc(candidates, ipRecency.compare)
-
-	survivors := fresh[:0]
-	for i, c := range candidates {
-		_, retained := m[c.ip]
-		switch {
-		case i < overflow && retained:
-			delete(m, c.ip)
-		case i >= overflow && !retained:
-			survivors = append(survivors, c.ip)
+		// fresh is sorted and shares one lastSeen, so once an IP misses the shortlist, every
+		// later (higher) address would miss it too.
+		if !shortlist.offer(ipRecency{lastSeen: start, ip: ip}) {
+			break
 		}
 	}
-	return survivors
+
+	// Shortlisted fresh IPs are the lowest addresses in fresh, so they form a prefix of it and
+	// the survivors are everything after that prefix.
+	droppedFresh := 0
+	for _, c := range shortlist.members() {
+		if _, tracked := m[c.ip]; tracked {
+			delete(m, c.ip)
+		} else {
+			droppedFresh++
+		}
+	}
+	return fresh[droppedFresh:]
+}
+
+// evictionShortlist collects the len(slots) lowest-ranked IPs offered to it, by
+// ipRecency.compare. Its members form a max-heap, so slots[0] always holds the highest-ranked
+// member: the one each newcomer must beat, and the one it displaces. It is hand-rolled because
+// container/heap boxes every element in an interface, which allocates.
+type evictionShortlist struct {
+	// slots is fixed-length storage for the heap, so the caller can back it with a stack array.
+	// Only the first size entries are members.
+	slots []ipRecency
+	size  int
+}
+
+// members returns the IPs currently on the shortlist, in heap order.
+func (s *evictionShortlist) members() []ipRecency {
+	return s.slots[:s.size]
+}
+
+// offer adds c if the shortlist has room, or if c ranks below the highest-ranked member, which c
+// then displaces. It reports whether c was added.
+func (s *evictionShortlist) offer(c ipRecency) bool {
+	if s.size < len(s.slots) {
+		s.slots[s.size] = c
+		s.size++
+		s.siftUp(s.size - 1)
+		return true
+	}
+	if c.compare(s.slots[0]) >= 0 {
+		return false
+	}
+	s.slots[0] = c
+	s.siftDown(0)
+	return true
+}
+
+// siftUp moves the member at i toward the root until its parent ranks at or above it.
+func (s *evictionShortlist) siftUp(i int) {
+	for i > 0 {
+		parent := (i - 1) / 2
+		if s.slots[parent].compare(s.slots[i]) >= 0 {
+			return
+		}
+		s.slots[parent], s.slots[i] = s.slots[i], s.slots[parent]
+		i = parent
+	}
+}
+
+// siftDown moves the member at i away from the root until neither child ranks above it.
+func (s *evictionShortlist) siftDown(i int) {
+	for {
+		highest := i
+		for _, child := range []int{2*i + 1, 2*i + 2} {
+			if child < s.size && s.slots[child].compare(s.slots[highest]) > 0 {
+				highest = child
+			}
+		}
+		if highest == i {
+			return
+		}
+		s.slots[i], s.slots[highest] = s.slots[highest], s.slots[i]
+		i = highest
+	}
 }
 
 // windowIPs returns the sorted source and destination IPs seen in the given window.

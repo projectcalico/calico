@@ -143,6 +143,60 @@ func TestDiachronicFlow_IPSetEvictionMatchesModel(t *testing.T) {
 	}
 }
 
+// TestDiachronicFlow_IPSetEvictionLargerThanCap covers an update that brings more new IPs than
+// the cap into a full set, so more than MaxIPsPerFlow IPs are evicted at once. The older window
+// should lose every IP, and the new window should keep only its highest addresses.
+func TestDiachronicFlow_IPSetEvictionLargerThanCap(t *testing.T) {
+	defer setupTest(t)()
+
+	k := ipTestFlowKey()
+	flow := storage.NewDiachronicFlow(k, 0)
+	addIPs(flow, k, 0, distinctIPs(0, storage.MaxIPsPerFlow)...)
+	incoming := distinctIPs(1000, storage.MaxIPsPerFlow+50)
+	addIPs(flow, k, 1, incoming...)
+
+	require.Nil(t, flow.Aggregate(0, ipTestInterval).SourceIps)
+	want := slices.Sorted(slices.Values(incoming))[50:]
+	require.Equal(t, want, flow.Aggregate(ipTestInterval, 2*ipTestInterval).SourceIps)
+}
+
+// BenchmarkDiachronicFlow_AddFlowNewIPsIntoFullSet adds a flow per window to a full IP set,
+// carrying a few addresses the set has never seen plus 10 it already tracks. That is the common
+// shape for a busy flow, and each new IP evicts one tracked IP.
+func BenchmarkDiachronicFlow_AddFlowNewIPsIntoFullSet(b *testing.B) {
+	const history, repeated = 240, 10
+	for _, newPerUpdate := range []int{1, 2, 5, 10, 25} {
+		b.Run(fmt.Sprintf("new=%d", newPerUpdate), func(b *testing.B) {
+			key := ipTestFlowKey()
+			ips := distinctIPs(0, 1<<17)
+			ipAt := func(i int) string { return ips[i%len(ips)] }
+
+			// Fill the set with one IP per window, so every entry has a different lastSeen.
+			flow := storage.NewDiachronicFlow(key, 0)
+			for w := range storage.MaxIPsPerFlow {
+				addIPs(flow, key, w, ipAt(w))
+			}
+
+			next, window := storage.MaxIPsPerFlow, storage.MaxIPsPerFlow
+			batch := make([]string, 0, repeated+newPerUpdate)
+			b.ReportAllocs()
+			for b.Loop() {
+				// The repeated IPs are the most recently added, so they are still in the set.
+				batch = batch[:0]
+				for i := next - repeated; i < next+newPerUpdate; i++ {
+					batch = append(batch, ipAt(i))
+				}
+				addIPs(flow, key, window, batch...)
+				if window >= history {
+					flow.Rollover(int64((window - history) * ipTestInterval))
+				}
+				next += newPerUpdate
+				window++
+			}
+		})
+	}
+}
+
 // BenchmarkDiachronicFlow_AddFlowChurningIPs adds a flow per window carrying MaxIPsPerFlow
 // addresses the full set has never seen, rolling over as the ring would, so every update evicts
 // the whole set.
