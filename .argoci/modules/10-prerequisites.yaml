@@ -78,6 +78,8 @@ steps:
     changes:
       in:
         - ^networking-calico/
+        # bin/uv's recipe.
+        - ^Makefile$
         - ^lib\.Makefile$
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$

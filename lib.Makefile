@@ -212,7 +212,7 @@ endef
 # For windows builds that do not require cgo. The target is set inside the shell,
 # where it overrides the GOOS and GOARCH a native build exports.
 define build_windows_binary
-	$(DOCKER_GO_BUILD) \
+	$(DOCKER_GO_BUILD_RECURSIVE) \
 		sh -c '$(GIT_CONFIG_SSH) CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS) -s -w" $(1)'
 endef
 

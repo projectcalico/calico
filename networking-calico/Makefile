@@ -14,30 +14,42 @@ TEST_ETCD_VERSION := v3.6.0
 # NATIVE_PYTHON=true runs tox on this machine rather than in a container, with
 # the same interpreter, tox and etcd. tox reformats with an unpinned black, whose
 # newest release depends on the interpreter, so the interpreter is pinned too
-# rather than taken from the host. Only executables land under bin/; uv keeps
-# the interpreter and tox outside the checkout.
+# rather than taken from the host. Only executables and a stamp land under bin/;
+# uv keeps the interpreter and tox outside the checkout. Both are named for their
+# versions, so bumping one replaces what an earlier run installed.
 ifeq ($(NATIVE_PYTHON),true)
 TEST_CODE_DIR := $(CURDIR)
 NATIVE_BIN := $(CURDIR)/bin
 UV := ../bin/uv
 export UV_PYTHON_BIN_DIR := $(NATIVE_BIN)
 export UV_TOOL_BIN_DIR := $(NATIVE_BIN)
+TOX_STAMP := $(NATIVE_BIN)/.tox-py$(TEST_PYTHON_VERSION)-$(TEST_TOX_VERSION)
 
-build-test-container: $(NATIVE_BIN)/tox $(NATIVE_BIN)/etcd
+build-test-container: $(TOX_STAMP) $(NATIVE_BIN)/etcd
 
 RUN_TEST_CONTAINER = env PATH=$(NATIVE_BIN):$$PATH $(if $(PIP_CONSTRAINT),PIP_CONSTRAINT=$(PIP_CONSTRAINT))
 
 $(UV):
 	$(MAKE) -C .. bin/uv
 
-$(NATIVE_BIN)/tox: $(UV)
+$(TOX_STAMP): $(UV)
+	mkdir -p $(NATIVE_BIN)
+	rm -f $(NATIVE_BIN)/.tox-*
 	$(UV) python install $(TEST_PYTHON_VERSION)
 	$(UV) tool install --python $(TEST_PYTHON_VERSION) tox==$(TEST_TOX_VERSION)
+	touch $@
 
-$(NATIVE_BIN)/etcd:
+$(NATIVE_BIN)/etcd: $(NATIVE_BIN)/etcd-$(TEST_ETCD_VERSION)
+	cp $< $@.tmp
+	mv $@.tmp $@
+
+$(NATIVE_BIN)/etcd-$(TEST_ETCD_VERSION):
 	mkdir -p $(NATIVE_BIN)
+	rm -f $(NATIVE_BIN)/etcd-*
 	../hack/fetch-file https://github.com/etcd-io/etcd/releases/download/$(TEST_ETCD_VERSION)/etcd-$(TEST_ETCD_VERSION)-linux-amd64.tar.gz $@.tar.gz
-	tar -xzf $@.tar.gz -C $(NATIVE_BIN) --strip-components=1 etcd-$(TEST_ETCD_VERSION)-linux-amd64/etcd
+	tar -xzf $@.tar.gz -O etcd-$(TEST_ETCD_VERSION)-linux-amd64/etcd > $@.tmp
+	chmod +x $@.tmp
+	mv $@.tmp $@
 	rm -f $@.tar.gz
 else
 TEST_CODE_DIR := /code

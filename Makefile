@@ -65,14 +65,6 @@ go-vet: operator-charts
 	$(MAKE) -C felix clone-libbpf
 	$(DOCKER_GO_BUILD) go vet --tags fvtests ./...
 
-# Compiles what go-vet does without running its checks, to fill a build cache:
-# every package and its tests, and what only tests import. `go list -export`
-# compiles for export data and never links, which go build would for every main
-# package, against a libbpf this only has the headers of.
-go-compile-all: operator-charts
-	$(MAKE) -C felix clone-libbpf
-	$(DOCKER_GO_BUILD) go list --tags fvtests -export -test -deps ./... >/dev/null
-
 update-x-libraries:
 	$(DOCKER_GO_BUILD) sh -c "go get golang.org/x/... && go mod tidy"
 
@@ -124,7 +116,13 @@ endif
 # Written under a temporary name: a half-extracted binary looks complete to make.
 # uv names its builds by the kernel's machine name.
 UV_PLATFORM := $(shell uname -m)-unknown-linux-gnu
-bin/uv:
+# Fetched under its version, so bumping UV_VERSION replaces a uv already here.
+bin/uv: bin/uv-$(UV_VERSION)
+	cp $< $@.tmp
+	mv $@.tmp $@
+
+bin/uv-$(UV_VERSION):
+	rm -f bin/uv-*
 	$(call fetch_file,https://github.com/astral-sh/uv/releases/download/$(UV_VERSION)/uv-$(UV_PLATFORM).tar.gz,bin/.uv.tar.gz)
 	tar -xzf bin/.uv.tar.gz -O uv-$(UV_PLATFORM)/uv > $@.tmp
 	chmod +x $@.tmp
