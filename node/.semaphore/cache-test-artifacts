@@ -42,7 +42,7 @@ fetch_image() {
 # Fetch the pre-built images if they are available, and re-upload them into the
 # GCS fv-artifacts directory for the test VM. These were built by the "Build: *"
 # blocks in the Prerequisites stage.
-for img in calico-image.tar.zst node-image.tar.zst whisker-image.tar.zst; do
+for img in bird-image-amd64.tar.zst calico-image.tar.zst node-image.tar.zst whisker-image.tar.zst; do
   if fetch_image "${img}"; then
     echo "Found pre-built ${img}, including in artifacts."
     gcloud storage cp "/tmp/${img}" "${GCS_WORKFLOW_DIR}/node/fv-artifacts/${img}"

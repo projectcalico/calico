@@ -46,16 +46,13 @@ func StartExternalNodeWithBGP(t testing.TB, name, birdPeerConfig, bird6PeerConfi
 	_, _ = Run(t, "df -h", RunOptions{AllowFail: true})
 
 	// Start the router in privileged mode so it can program routes.
-	MustRun(t, fmt.Sprintf("docker run -d --privileged --net=kind --name %s %s", name, RouterImage))
+	MustRun(t, fmt.Sprintf("docker run -d --privileged --net=kind --name %s %s", name, MustRouterImage(t)))
 
 	// The image may still be downloading; retry until the container responds.
 	NewWithT(t).Eventually(func() error {
 		_, err := Run(t, fmt.Sprintf("docker exec %s df -h", name), RunOptions{AllowFail: true, SuppressErrLog: true})
 		return err
 	}, time.Minute, time.Second).Should(Succeed(), "external node %s did not come up", name)
-
-	// Install curl and iproute2.
-	MustRun(t, fmt.Sprintf("docker exec %s apk add --no-cache curl iproute2", name))
 
 	// Set ECMP hash algorithm to L4 for proper load balancing between nodes.
 	MustRun(t, fmt.Sprintf("docker exec %s sysctl -w net.ipv4.fib_multipath_hash_policy=1", name))

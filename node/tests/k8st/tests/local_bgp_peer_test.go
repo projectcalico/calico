@@ -64,10 +64,6 @@ const (
 	// router the cluster nodes peer with. Matches the Python "kind-node-tor".
 	torNodeName = "kind-node-tor"
 
-	// localBGPBirdImage is the BIRD image used for the child-cluster workload
-	// pods. Pinned to match the Python test.
-	localBGPBirdImage = "calico/bird:v0.3.3-211-g9111ec3c"
-
 	// localPeeringIPV4 / localPeeringIPV6 are the link-local-ish addresses the
 	// node presents to its local workload peers (BGPConfiguration
 	// localWorkloadPeeringIP{V4,V6}).
@@ -480,7 +476,7 @@ func (e *localBGPPeerEnv) createWorkloadPod(t *testing.T, name, node, color stri
 			TerminationGracePeriodSeconds: new(int64(0)),
 			Containers: []corev1.Container{{
 				Name:            "bird",
-				Image:           localBGPBirdImage,
+				Image:           utils.MustRouterImage(t),
 				SecurityContext: &corev1.SecurityContext{Privileged: new(true)},
 			}},
 		},
@@ -646,7 +642,7 @@ func (e *localBGPPeerEnv) runAssertions(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if !regexp.MustCompile("3 packets transmitted, 3 packets received").MatchString(out) {
+		if !regexp.MustCompile("3 packets transmitted, 3 (packets )?received").MatchString(out) {
 			return fmt.Errorf("ping did not report 3/3 received:\n%s", out)
 		}
 		return nil

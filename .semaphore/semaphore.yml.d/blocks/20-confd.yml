@@ -3,12 +3,15 @@
     when: "${CHANGE_IN(confd)}"
   dependencies:
     - Prerequisites
+    - "Build: BIRD image"
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
         value: "calico"
     prologue:
       commands:
+        # The FV tests check rendered configs with the BIRD in this image.
+        - .argoci/scripts/load-rpms-image.sh bird amd64
         - cd confd
     jobs:
       - name: "confd: CI"

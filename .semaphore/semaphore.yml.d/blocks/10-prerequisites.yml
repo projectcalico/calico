@@ -349,6 +349,7 @@
   run:
     when: "${CHANGE_IN_WITH_DEPENDENTS(node,non-go:/node/)}"
   dependencies:
+    - "Build: BIRD image"
     - "Build: nftables RPMs"
   task:
     agent:
@@ -358,6 +359,9 @@
     jobs:
       - name: "Build and cache node image"
         commands:
+          # Load the calico/bird image (built/cached by "Build: BIRD image") so
+          # the node Dockerfile's bird build context resolves locally.
+          - .argoci/scripts/load-rpms-image.sh bird amd64
           # Load the patched nftables RPMs producer image (built/cached by
           # "Build: nftables RPMs") so the node Dockerfile's FROM ${NFT_RPMS_IMAGE}
           # resolves locally without re-pulling from Docker Hub.

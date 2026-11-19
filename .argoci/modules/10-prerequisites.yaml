@@ -305,15 +305,16 @@ steps:
     services: [docker]
     timeout: 1h
     requests: {cpu: 4000m, memory: 5Gi}
-    depends: [build-nft-rpms]
+    depends: [build-bird-image, build-nft-rpms]
     changes:
       dependsOn: [node]
       in:
         - '^node/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     commands: |
-      # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
-      # does not go back to the registry for it.
+      # Resolves the Dockerfile's bird and nft-rpms build contexts locally, so
+      # BuildKit does not go back to the registry for them.
+      .argoci/scripts/load-rpms-image.sh bird amd64
       .argoci/scripts/load-nft-rpms.sh amd64
       make -C node image
       docker save calico/node:latest-amd64 -o /tmp/node-image.tar

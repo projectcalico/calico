@@ -64,8 +64,8 @@ func (b *birdStatus) unmarshalBIRD(line string) bool {
 
 	if strings.Contains(line, "BIRD") && strings.Contains(line, "ready") {
 		b.ready = true
-	} else if strings.HasPrefix(line, "BIRD v") {
-		b.version = strings.TrimPrefix(line, "BIRD ")
+	} else if after, ok := strings.CutPrefix(line, "BIRD "); ok {
+		b.version = after
 	} else if after, ok := strings.CutPrefix(line, "Router ID is "); ok {
 		b.routerID = after
 	} else if after, ok := strings.CutPrefix(line, "Current server time is "); ok {
@@ -107,9 +107,9 @@ func readBIRDStatus(bc *birdConn) (*birdStatus, error) {
 func scanBIRDStatus(conn net.Conn) (*birdStatus, error) {
 	// The following is sample output from BIRD
 	//
-	// 0001 BIRD v0.3.3+birdv1.6.8 ready.
+	// 0001 BIRD 1.6.8-1.tigera ready.
 	//
-	// 1000-BIRD v0.3.3+birdv1.6.8
+	// 1000-BIRD 1.6.8-1.tigera
 	//
 	// 1011-Router ID is 172.17.0.3
 	//
