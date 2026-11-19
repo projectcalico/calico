@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
@@ -199,9 +200,9 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 func (m *bpfRouteManager) OnUpdate(msg any) {
 	switch msg := msg.(type) {
 	// Updates to local IPs.  We use these to include host IPs in the map.
-	case *ifaceStateUpdate:
+	case *dataplanedefs.IfaceStateUpdate:
 		m.onIfaceUpdate(msg)
-	case *ifaceAddrsUpdate:
+	case *dataplanedefs.IfaceAddrsUpdate:
 		m.onIfaceAddrsUpdate(msg)
 
 	// Updates for remote IPAM blocks and remote workloads with borrowed IPs.  These tell us
@@ -508,7 +509,7 @@ func (m *bpfRouteManager) resyncWithDataplane() {
 	}
 }
 
-func (m *bpfRouteManager) onIfaceUpdate(msg *ifaceStateUpdate) {
+func (m *bpfRouteManager) onIfaceUpdate(msg *dataplanedefs.IfaceStateUpdate) {
 	// We're interested in the mapping from interface name to interface index.
 	if msg.State == ifacemonitor.StateUp {
 		oldIdx, ok := m.ifaceNameToIdx[msg.Name]
@@ -537,7 +538,7 @@ func (m *bpfRouteManager) onIfaceIdxChanged(name string) {
 	}
 }
 
-func (m *bpfRouteManager) onIfaceAddrsUpdate(update *ifaceAddrsUpdate) {
+func (m *bpfRouteManager) onIfaceAddrsUpdate(update *dataplanedefs.IfaceAddrsUpdate) {
 	changed := false
 
 	var newCIDRs set.Set[ip.CIDR]
