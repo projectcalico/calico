@@ -1,0 +1,44 @@
+Subject: Netlink: Ignore address updates on down interfaces
+
+Skip the work for an interface that is not administratively up. This
+matters for a down interface that holds many addresses, such as
+kube-ipvs0.
+
+Squashed from these projectcalico/bird commits, oldest first. Each keeps
+its author and message.
+
+commit 3d15998f2410ff7043dbaa96879e2d9a11b1c3dc
+Author: Dmitry Ilyevsky <dilyevsky@render.com>
+Date:   2022-11-21
+
+    [proto/device] Ignore addr updates on DOWN ifcs
+
+    Ignores netlink addr updates for interfaces that *do not* have
+    UP admin state. Improves performance for kube-ipvs* interfaces with
+    large number of addresses.
+
+commit 38f4c6e474b997d9780347482102e39b4bb60d27
+Author: Bogdan Luca <luca.bogdan@gmail.com>
+Date:   2023-12-29
+
+    Remove spammy debug log message.
+---
+ sysdep/linux/netlink.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/sysdep/linux/netlink.c b/sysdep/linux/netlink.c
+index 27cec042..f4fb9f7e 100644
+--- a/sysdep/linux/netlink.c
++++ b/sysdep/linux/netlink.c
+@@ -744,6 +744,11 @@ nl_parse_addr(struct nlmsghdr *h, int scan)
+       return;
+     }
+ 
++  if (!(ifi->flags & IF_ADMIN_UP)) /* Ignore addresses for DOWN interfaces. */
++    {
++      return;
++    }
++
+   bzero(&ifa, sizeof(ifa));
+   ifa.iface = ifi;
+   if (ifa_flags & IFA_F_SECONDARY)

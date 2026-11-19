@@ -1,0 +1,60 @@
+Subject: Iface: Remove deleted interfaces from the interface list
+
+A deleted interface stayed in the list, flagged as shut down. Remove it
+from the list when the kernel reports the deletion, and when a scan no
+longer finds it.
+
+Squashed from these projectcalico/bird commits, oldest first. Each keeps
+its author and message.
+
+commit 7d2e01bf74f83bbee303d31acada9d4e20e916dc
+Author: Mathew Heard <splitice@users.noreply.github.com>
+Date:   2022-08-27
+
+    nest/iface.c: Determine if the iface passed by the if_update() function is the one to delete, and if so, remove it from the iface_list
+
+commit b32135cb60855b8a73cfcc43343df215f4631bcf
+Author: Axel Siebenborn <axel.siebenborn@sap.com>
+Date:   2023-09-21
+
+    Remove interfaces that are flagged as shutdown.
+---
+ nest/iface.c | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/nest/iface.c b/nest/iface.c
+index 55677803..a0d80a56 100644
+--- a/nest/iface.c
++++ b/nest/iface.c
+@@ -301,6 +301,12 @@ if_update(struct iface *new)
+   WALK_LIST(i, iface_list)
+     if (!strcmp(new->name, i->name))
+       {
++        /* if interface need to be deleted, delete from list and return */
++        if(new->flags & IF_SHUTDOWN)
++        {
++          rem_node(&i->n);
++          return i;
++        }
+ 	new->addr = i->addr;
+ 	new->flags = if_recalc_flags(new, new->flags);
+ 	c = if_what_changed(i, new);
+@@ -357,13 +363,15 @@ if_end_partial_update(struct iface *i)
+ void
+ if_end_update(void)
+ {
+-  struct iface *i;
++  struct iface *i, *j;
+   struct ifa *a, *b;
+ 
+-  WALK_LIST(i, iface_list)
++  WALK_LIST_DELSAFE(i, j, iface_list)
+     {
+-      if (!(i->flags & IF_UPDATED))
++      if (!(i->flags & IF_UPDATED)) {
+ 	if_change_flags(i, (i->flags & ~IF_ADMIN_UP) | IF_SHUTDOWN);
++        rem_node(&i->n);
++      }
+       else
+ 	{
+ 	  WALK_LIST_DELSAFE(a, b, i->addrs)

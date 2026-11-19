@@ -216,6 +216,33 @@ steps:
       tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
       artifact push workflow /tmp/libbpf-amd64.tar.zst
 
+  # The patched BIRD RPM for calico/node, in an image that tests also run as a
+  # BGP router. Tagged by a hash of the recipe, like the nftables RPMs below.
+  - name: build-bird-image
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 2000m, memory: 1Gi}
+    matrix:
+      - name: amd64
+        env: [{name: ARCH, value: amd64}]
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    changes:
+      in:
+        - '^hack/rpms/bird/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      mkdir -p logs
+      export BUILD_LOG="logs/build-bird-image-${ARCH}.log"
+      .argoci/scripts/build-rpms-image.sh bird "${ARCH}"
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job logs --destination logs || true
+
   # Tagged by a hash of the recipe, so an unchanged one is a pull rather than a
   # ~20 minute emulated build.
   - name: build-nft-rpms

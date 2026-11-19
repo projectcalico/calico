@@ -1,0 +1,344 @@
+Subject: KRT: Add the krt_tunnel route attribute
+
+A filter sets krt_tunnel to the name of a tunnel device. The kernel
+protocol then programs the route through that device, on-link, with the
+BGP next hop as the gateway. Calico uses this for IP-in-IP routes.
+
+The attribute is a string, so this adds a string extended attribute type.
+A route already in the kernel is compared by its tunnel device when the
+attribute is set, and by gateway and interface otherwise.
+
+Squashed from these projectcalico/bird commits, oldest first. Each keeps
+its author and message.
+
+commit 9da214920826e6d844ca7b6a99cc6a5d210619ec
+Author: Mike Evans <mike.evans@metaswitch.com>
+Date:   2015-06-04
+
+    Add kernel tunnel dynamic attribute
+
+commit 3a440ae147eddeb94a8b9e5d85cfe10b03736cfe
+Author: Mike Evans <mike.evans@metaswitch.com>
+Date:   2015-06-04
+
+    Add support for EAF_TYPE_STRING - ie. read-write string extended attributes
+
+commit a3a535c1b840e37727f46af4f351d1adb2495674
+Author: Mike Evans <mike.evans@metaswitch.com>
+Date:   2015-06-04
+
+    Change krt_tunnel extended attribute to EAF_TYPE_STRING
+
+commit 69b7ae48bb370ed93ea0b0fa629a2f8c2dafd2a8
+Author: Neil Jerram <Neil.Jerram@metaswitch.com>
+Date:   2015-07-30
+
+    For IP-in-IP routes, use original next hop received in BGP UPDATE
+
+    Instead of using a recursively resolved next hop, which will probably
+    be to somewhere half way along the tunnel, from where packets won't be
+    able to be routed any further.
+
+commit 205aa82fa23d05702ae11b4fa7fb09135e9955e1
+Author: Neil Jerram <neil@tigera.io>
+Date:   2016-10-03
+
+    Fix issue with broken tunnel routes after rebooting host
+
+    Now interface equality for filtered routes with tunnel attribute is
+    checked when the verdict for route action is being determined.
+
+    See https://github.com/projectcalico/calico-containers/issues/947
+
+    This fix was developed by Aleks Kuznetsov @aleks-v-k and then just
+    simplified and committed by me - see PR discussion at
+    https://github.com/projectcalico/calico-bird/pull/21.
+
+commit 1b9b90fc757b6447e26c1436fe62123a2595d345
+Author: Neil Jerram <neil@tigera.io>
+Date:   2017-03-24
+
+    Resolve remaining conflicts
+
+commit 93d06e2df1ff8456109e9bcd027eceb993bed409
+Author: Dario Nieuwenhuis <dirbaio@dirbaio.net>
+Date:   2017-05-11
+
+    Fix change detection logic for tunnel routes.
+
+    When a tunnel route gets added to the kernel, the gateway gets replaced
+    with the source IP, and the interface gets replaced with the tunnel
+    interface. The change detection wasn't taking this into account, causing
+    krt_same_dest return false, and the route would get deleted and
+    readded constantly.
+
+    This commit fixes it by not doing the krt_same_dest check for tunnel
+    routes, doing its own checks instead.
+
+commit ec1325868f45cbbfaddf5e993aa8f8855e0d3633
+Author: Neil Jerram <neil@tigera.io>
+Date:   2017-05-15
+
+    Use 'orig_gw' instead of 'from' in tunnel route change check
+
+    As discussed in
+    https://github.com/projectcalico/bird/pull/37#issuecomment-301123189
+
+commit 79a25f8e6500479ef7fcede0038897399a265cb2
+Author: Neil Jerram <neil@tigera.io>
+Date:   2017-05-15
+
+    Invert logic of Calico-specific tunnel route change check
+
+    To improve clarity, as discussed in
+    https://github.com/projectcalico/bird/pull/37#issuecomment-301123189
+
+commit 0d986b66d2d97d792c958059559baa9c9dbf2c89
+Author: Rob Brockbank <rob@tigera.io>
+Date:   2018-01-16
+
+    Check interface index when scanning routes
+
+commit 56ce006fe6b27fbd2d7ffc5c1868cde1b2003358
+Author: Neil Jerram <neil@tigera.io>
+Date:   2019-12-02
+
+    Use BA_NEXT_HOP attr instead of orig_gw
+---
+ filter/filter.c        | 20 ++++++++++++++++++--
+ nest/route.h           |  1 +
+ sysdep/linux/krt-sys.h |  1 +
+ sysdep/linux/netlink.Y |  4 +++-
+ sysdep/linux/netlink.c | 26 ++++++++++++++++++++++++--
+ sysdep/unix/krt.c      | 40 +++++++++++++++++++++++++++++++++++-----
+ 6 files changed, 82 insertions(+), 10 deletions(-)
+
+diff --git a/filter/filter.c b/filter/filter.c
+index 63219dae..5744e0e1 100644
+--- a/filter/filter.c
++++ b/filter/filter.c
+@@ -636,6 +636,8 @@ interpret(struct f_inst *what)
+   unsigned u1, u2;
+   int i;
+   u32 as;
++  int len;
++  struct adata *ad;
+ 
+   for ( ; what; what = what->next) {
+   res.type = T_VOID;
+@@ -1064,6 +1066,10 @@ interpret(struct f_inst *what)
+ 	res.type = T_INT;
+ 	res.val.i = e->u.data;
+ 	break;
++      case EAF_TYPE_STRING:
++        res.type = T_STRING;
++        res.val.s = e->u.ptr->data;
++        break;
+       case EAF_TYPE_ROUTER_ID:
+ 	res.type = T_QUAD;
+ 	res.val.i = e->u.data;
+@@ -1127,6 +1133,16 @@ interpret(struct f_inst *what)
+ 	l->attrs[0].u.data = v1.val.i;
+ 	break;
+ 
++      case EAF_TYPE_STRING:
++        if (v1.type != T_STRING)
++          runtime( "Setting string attribute to non-string value" );
++        len = strlen(v1.val.s) + 1;
++	ad = lp_alloc(f_pool, sizeof(struct adata) + len);
++        ad->length = len;
++        strcpy(ad->data, v1.val.s);
++        l->attrs[0].u.ptr = ad;
++        break;
++
+       case EAF_TYPE_ROUTER_ID:
+ #ifndef IPV6
+ 	/* IP->Quad implicit conversion */
+@@ -1147,8 +1163,8 @@ interpret(struct f_inst *what)
+       case EAF_TYPE_IP_ADDRESS:
+ 	if (v1.type != T_IP)
+ 	  runtime( "Setting ip attribute to non-ip value" );
+-	int len = sizeof(ip_addr);
+-	struct adata *ad = lp_alloc(f_pool, sizeof(struct adata) + len);
++	len = sizeof(ip_addr);
++	ad = lp_alloc(f_pool, sizeof(struct adata) + len);
+ 	ad->length = len;
+ 	(* (ip_addr *) ad->data) = v1.val.px.ip;
+ 	l->attrs[0].u.ptr = ad;
+diff --git a/nest/route.h b/nest/route.h
+index b9f8f795..c7faaae3 100644
+--- a/nest/route.h
++++ b/nest/route.h
+@@ -450,6 +450,7 @@ typedef struct eattr {
+ #define EAF_TYPE_MASK 0x1f		/* Mask with this to get type */
+ #define EAF_TYPE_INT 0x01		/* 32-bit unsigned integer number */
+ #define EAF_TYPE_OPAQUE 0x02		/* Opaque byte string (not filterable) */
++#define EAF_TYPE_STRING 0x03            /* String */
+ #define EAF_TYPE_IP_ADDRESS 0x04	/* IP address */
+ #define EAF_TYPE_ROUTER_ID 0x05		/* Router ID (IPv4 address) */
+ #define EAF_TYPE_AS_PATH 0x06		/* BGP AS path (encoding per RFC 1771:4.3) */
+diff --git a/sysdep/linux/krt-sys.h b/sysdep/linux/krt-sys.h
+index 76ae29b7..5b74b34f 100644
+--- a/sysdep/linux/krt-sys.h
++++ b/sysdep/linux/krt-sys.h
+@@ -37,6 +37,7 @@ static inline struct ifa * kif_get_primary_ip(struct iface *i UNUSED) { return N
+ #define EA_KRT_PREFSRC		EA_CODE(EAP_KRT, 0x10)
+ #define EA_KRT_REALM		EA_CODE(EAP_KRT, 0x11)
+ #define EA_KRT_SCOPE		EA_CODE(EAP_KRT, 0x12)
++#define EA_KRT_TUNNEL		EA_CODE(EAP_KRT, 0x13)
+ 
+ 
+ #define KRT_METRICS_MAX		0x10	/* RTAX_QUICKACK+1 */
+diff --git a/sysdep/linux/netlink.Y b/sysdep/linux/netlink.Y
+index f577244d..df2a7be5 100644
+--- a/sysdep/linux/netlink.Y
++++ b/sysdep/linux/netlink.Y
+@@ -15,7 +15,8 @@ CF_KEYWORDS(KERNEL, TABLE, METRIC, KRT_PREFSRC, KRT_REALM, KRT_SCOPE, KRT_MTU, K
+ 	    KRT_HOPLIMIT, KRT_INITCWND, KRT_RTO_MIN, KRT_INITRWND, KRT_QUICKACK,
+ 	    KRT_LOCK_MTU, KRT_LOCK_WINDOW, KRT_LOCK_RTT, KRT_LOCK_RTTVAR,
+ 	    KRT_LOCK_SSTRESH, KRT_LOCK_CWND, KRT_LOCK_ADVMSS, KRT_LOCK_REORDERING,
+-	    KRT_LOCK_HOPLIMIT, KRT_LOCK_RTO_MIN, KRT_FEATURE_ECN, KRT_FEATURE_ALLFRAG)
++	    KRT_LOCK_HOPLIMIT, KRT_LOCK_RTO_MIN, KRT_FEATURE_ECN, KRT_FEATURE_ALLFRAG,
++	    KRT_TUNNEL)
+ 
+ CF_GRAMMAR
+ 
+@@ -29,6 +30,7 @@ kern_sys_item:
+ CF_ADDTO(dynamic_attr, KRT_PREFSRC	{ $$ = f_new_dynamic_attr(EAF_TYPE_IP_ADDRESS, T_IP, EA_KRT_PREFSRC); })
+ CF_ADDTO(dynamic_attr, KRT_REALM	{ $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_KRT_REALM); })
+ CF_ADDTO(dynamic_attr, KRT_SCOPE	{ $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_KRT_SCOPE); })
++CF_ADDTO(dynamic_attr, KRT_TUNNEL       { $$ = f_new_dynamic_attr(EAF_TYPE_STRING, T_STRING, EA_KRT_TUNNEL); })
+ 
+ CF_ADDTO(dynamic_attr, KRT_MTU		{ $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_KRT_MTU); })
+ CF_ADDTO(dynamic_attr, KRT_WINDOW	{ $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_KRT_WINDOW); })
+diff --git a/sysdep/linux/netlink.c b/sysdep/linux/netlink.c
+index f4fb9f7e..7613f274 100644
+--- a/sysdep/linux/netlink.c
++++ b/sysdep/linux/netlink.c
+@@ -26,6 +26,7 @@
+ #include "lib/string.h"
+ #include "lib/hash.h"
+ #include "conf/conf.h"
++#include "proto/bgp/bgp.h"
+ 
+ #include <asm/types.h>
+ #include <linux/if.h>
+@@ -936,6 +937,7 @@ static int
+ nl_send_route(struct krt_proto *p, rte *e, struct ea_list *eattrs, int op, int dest, ip_addr gw, struct iface *iface)
+ {
+   eattr *ea;
++  eattr *nh;
+   net *net = e->net;
+   rta *a = e->attrs;
+   u32 priority = 0;
+@@ -945,6 +947,7 @@ nl_send_route(struct krt_proto *p, rte *e, struct ea_list *eattrs, int op, int d
+     struct rtmsg r;
+     char buf[0];
+   } *r;
++  struct iface* i;
+ 
+   uint rsize = sizeof(*r) + 128 + KRT_METRICS_MAX*8 + nh_bufsize(a->nexthops);
+   r = alloca(rsize);
+@@ -1023,8 +1026,23 @@ dest:
+     {
+     case RTD_ROUTER:
+       r->r.rtm_type = RTN_UNICAST;
+-      nl_add_attr_u32(&r->h, rsize, RTA_OIF, iface->index);
+-      nl_add_attr_ipa(&r->h, rsize, RTA_GATEWAY, gw);
++      if ((ea = ea_find(eattrs, EA_KRT_TUNNEL)) &&
++          (nh = ea_find(eattrs, EA_CODE(EAP_BGP, BA_NEXT_HOP))) &&
++          (i = if_find_by_name(ea->u.ptr->data)))
++      {
++        /*
++         * Tunnel attribute is set, so set the route up using the specified tunnel device
++         * to the originator of the route.
++         */
++        nl_add_attr_u32(&r->h, rsize, RTA_OIF, i->index);
++        nl_add_attr_ipa(&r->h, rsize, RTA_GATEWAY, *(ip_addr *)(nh->u.ptr->data));
++        r->r.rtm_flags |= RTNH_F_ONLINK;
++      }
++      else
++      {
++         nl_add_attr_u32(&r->h, rsize, RTA_OIF, iface->index);
++         nl_add_attr_ipa(&r->h, rsize, RTA_GATEWAY, gw);
++      }
+       break;
+     case RTD_DEVICE:
+       r->r.rtm_type = RTN_UNICAST;
+@@ -1722,6 +1740,10 @@ krt_sys_get_attr(eattr *a, byte *buf, int buflen UNUSED)
+     bsprintf(buf, "scope");
+     return GA_NAME;
+ 
++  case EA_KRT_TUNNEL:
++    bsprintf(buf, "tunnel");
++    return GA_NAME;
++
+   case EA_KRT_LOCK:
+     buf += bsprintf(buf, "lock:");
+     ea_format_bitfield(a, buf, buflen, krt_metrics_names, 2, KRT_METRICS_MAX);
+diff --git a/sysdep/unix/krt.c b/sysdep/unix/krt.c
+index 526c0cab..c625da2c 100644
+--- a/sysdep/unix/krt.c
++++ b/sysdep/unix/krt.c
+@@ -657,7 +657,17 @@ krt_same_dest(rte *k, rte *e)
+   switch (ka->dest)
+     {
+     case RTD_ROUTER:
+-      return ipa_equal(ka->gw, ea->gw);
++	  /* Calico-BIRD specific: in addition to checking that the gw is the same, we
++	   * also check that the interface is as expected - this covers the case where
++	   * a route was previously using the IPIP tunnel but is no longer: the gateway
++	   * may be the same but the interface will be different.  The calculated
++	   * interface index will be for the non-tunl route. Only at the point the route
++	   * is programmed in nl_send_route does the tunnel index get calculated.
++	   * Therefore the check performed here is not valid when the route should be
++	   * over the tunnel - hence there is an an explicit check in krt_got_route for
++	   * the tunnel scenario, and in that case krt_same_dest is not invoked.
++	   */
++      return ipa_equal(ka->gw, ea->gw) && ka->iface->index == ea->iface->index;
+     case RTD_DEVICE:
+       return !strcmp(ka->iface->name, ea->iface->name);
+     case RTD_MULTIPATH:
+@@ -720,7 +730,9 @@ krt_got_route(struct krt_proto *p, rte *e)
+   if (net->n.flags & KRF_INSTALLED)
+     {
+       rte *new, *rt_free;
+-      ea_list *tmpa;
++      ea_list *tmpa = NULL;
++      eattr *ea = NULL;
++      struct iface* i = NULL;
+ 
+       new = krt_export_net(p, net, &rt_free, &tmpa);
+ 
+@@ -728,10 +740,28 @@ krt_got_route(struct krt_proto *p, rte *e)
+ 
+       if (!new)
+ 	verdict = KRF_DELETE;
+-      else if ((net->n.flags & KRF_SYNC_ERROR) || !krt_same_dest(e, new))
++      else if ((net->n.flags & KRF_SYNC_ERROR))
+ 	verdict = KRF_UPDATE;
+-      else
+-	verdict = KRF_SEEN;
++      else if (tmpa &&
++	  (e->attrs->dest == RTD_ROUTER) &&
++	  (ea = ea_find(tmpa, EA_KRT_TUNNEL)) &&
++	  (i = if_find_by_name(ea->u.ptr->data)))
++	{
++	  /* Calico-BIRD specific: we check if the export filter set a tunnel
++	   * attribute for the route.  If it did, and the tunnel interface is
++	   * different from the outgoing interface that is already programmed
++	   * for the route, generate KRF_UPDATE here so that the route gets
++	   * updated to have the tunnel as its outgoing interface.
++	   */
++	  if (!strcmp(i->name, e->attrs->iface->name))
++	    verdict = KRF_SEEN;
++	  else
++	    verdict = KRF_UPDATE;
++	}
++	else if(!krt_same_dest(e, new))
++	  verdict = KRF_UPDATE;
++	else
++	  verdict = KRF_SEEN;
+ 
+       if (rt_free)
+ 	rte_free(rt_free);
