@@ -1333,12 +1333,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log networkse
 	})
 })
 
-// A workload's BPF program applies host-* forward policy ahead of the
-// workload's own and reports both in one policy event.  End-of-tier rule IDs
-// depend only on direction and tier name, so a host-* end-of-tier drop of
-// traffic to a same-node pod with policy in a tier of the same name must not
-// be reported as that pod's deny.
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log host-* forward policy tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+// BPF policy programs apply a host endpoint's pre-DNAT and apply-on-forward
+// policy ahead of the endpoint's own and report both in one policy event:
+// host-*'s in a workload's program, the interface's host endpoint's in a host
+// interface's program.  End-of-tier rule IDs depend only on direction and tier
+// name, so a host endpoint's end-of-tier drop of traffic to a pod with policy
+// in a tier of the same name must not be reported as that pod's deny.
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log host endpoint forward policy tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	const wepPort = 8055
 
 	var (
@@ -1346,6 +1347,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log host-* fo
 		tc                       infrastructure.TopologyContainers
 		client                   client.Interface
 		client0, blocked, target *workload.Workload
+		remoteClient             *workload.Workload
 	)
 
 	BeforeEach(func() {
@@ -1359,22 +1361,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log host-* fo
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
-		// Two nodes, since a one-node topology gets no IP pool.
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
 		infra.AddDefaultAllow()
 
-		runWorkload := func(name, ip string) *workload.Workload {
-			infrastructure.AssignIP(name+"0", ip, tc.Felixes[0].Hostname, client)
-			w := workload.Run(tc.Felixes[0], name+"0", "default", ip, fmt.Sprint(wepPort), "tcp")
+		runWorkload := func(felix int, name, ip string) *workload.Workload {
+			infrastructure.AssignIP(name+"0", ip, tc.Felixes[felix].Hostname, client)
+			w := workload.Run(tc.Felixes[felix], name+"0", "default", ip, fmt.Sprint(wepPort), "tcp")
 			w.WorkloadEndpoint.GenerateName = name
 			w.ConfigureInInfra(infra)
 			return w
 		}
-		client0 = runWorkload("client-", "10.65.0.0")
-		blocked = runWorkload("blocked-", "10.65.0.1")
-		target = runWorkload("target-", "10.65.0.2")
+		client0 = runWorkload(0, "client-", "10.65.0.0")
+		blocked = runWorkload(0, "blocked-", "10.65.0.1")
+		target = runWorkload(0, "target-", "10.65.0.2")
+		// Its traffic reaches felix 0's pods through felix 0's eth0.
+		remoteClient = runWorkload(1, "remote-", "10.65.1.0")
 
-		// Pod policy in the default tier, which host-*'s forward policy is in too.
+		// Pod policy in the default tier, which the host endpoints' forward
+		// policy is in too.
 		podPolicy := api.NewGlobalNetworkPolicy()
 		podPolicy.Name = "pod-ingress"
 		podPolicy.Spec.Selector = "projectcalico.org/namespace == 'default'"
@@ -1383,8 +1387,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log host-* fo
 		_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, podPolicy, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Host-* lets everything but traffic to the blocked pod through, so
-		// that traffic hits host-*'s end-of-tier drop.
+		// The host endpoints let everything but traffic to the blocked pod
+		// through, so that traffic hits their end-of-tier drop.
 		hostPolicy := api.NewGlobalNetworkPolicy()
 		hostPolicy.Name = "host-fwd"
 		hostPolicy.Spec.Selector = "host-endpoint == 'true'"
@@ -1397,36 +1401,37 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log host-* fo
 		_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, hostPolicy, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
-		hep := api.NewHostEndpoint()
-		hep.Name = "all-interfaces"
-		hep.Labels = map[string]string{"host-endpoint": "true"}
-		hep.Spec.Node = tc.Felixes[0].Hostname
-		hep.Spec.ExpectedIPs = []string{tc.Felixes[0].IP}
-		hep.Spec.InterfaceName = "*"
-		_, err = client.HostEndpoints().Create(utils.Ctx, hep, options.SetOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		// host-* for felix 0's workload programs, eth0's own for its host
+		// interface program.
+		for name, iface := range map[string]string{"all-interfaces": "*", "eth0": "eth0"} {
+			hep := api.NewHostEndpoint()
+			hep.Name = name
+			hep.Labels = map[string]string{"host-endpoint": "true"}
+			hep.Spec.Node = tc.Felixes[0].Hostname
+			hep.Spec.ExpectedIPs = []string{tc.Felixes[0].IP}
+			hep.Spec.InterfaceName = iface
+			_, err = client.HostEndpoints().Create(utils.Ctx, hep, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		ensureAllNodesBPFProgramsAttached(tc.Felixes)
 	})
 
-	It("should not report a host-* end-of-tier drop as the destination pod's deny", func() {
-		cc := &connectivity.Checker{}
-		cc.ExpectNone(client0, blocked)
-		// The positive control: flows from the same client are reported.
-		cc.ExpectSome(client0, target)
-		cc.CheckConnectivity()
-		flowlogs.WaitForConntrackScan(true)
-		tc.Felixes[0].Exec("conntrack", "-F")
-
-		aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, flowlogs.SourcePortIsNotIncluded, wepPort)
-		wepMeta := func(aggregatedName string) endpoint.Metadata {
-			return endpoint.Metadata{
-				Type:           "wep",
-				Namespace:      "default",
-				Name:           flowlog.FieldNotIncluded,
-				AggregatedName: aggregatedName,
-			}
+	aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, flowlogs.SourcePortIsNotIncluded, wepPort)
+	wepMeta := func(aggregatedName string) endpoint.Metadata {
+		return endpoint.Metadata{
+			Type:           "wep",
+			Namespace:      "default",
+			Name:           flowlog.FieldNotIncluded,
+			AggregatedName: aggregatedName,
 		}
+	}
+
+	// expectOnlyFlowsToTarget checks that felix 0 reports exactly the given
+	// allowed flows from src to target.  The flows to target are the positive
+	// control: a deny of src to blocked, attributed to pod-ingress, is
+	// reported with or soon after them.
+	expectOnlyFlowsToTarget := func(src string, reporterPolicies map[flowlog.ReporterType]string) {
 		checkFlows := func() error {
 			flowTester := flowlogs.NewFlowTester(flowlogs.FlowTesterOptions{
 				ExpectLabels:           true,
@@ -1437,35 +1442,54 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log host-* fo
 			if err := flowTester.PopulateFromFlowLogs(tc.Felixes[0]); err != nil {
 				return fmt.Errorf("error populating flow logs from Felix[0]: %w", err)
 			}
-			for _, fl := range []struct {
-				reporter flowlog.ReporterType
-				policy   string
-			}{
-				{flowlog.ReporterSrc, "0|__PROFILE__|pro:default|allow|0"},
-				{flowlog.ReporterDst, "0|default|gnp:pod-ingress|allow|0"},
-			} {
+			for reporter, policy := range reporterPolicies {
 				flowTester.CheckFlow(flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
 						Tuple:      aggrTuple,
-						SrcMeta:    wepMeta("client-*"),
+						SrcMeta:    wepMeta(src),
 						DstMeta:    wepMeta("target-*"),
 						DstService: flowlog.EmptyService,
 						Action:     "allow",
-						Reporter:   fl.reporter,
+						Reporter:   reporter,
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{fl.policy: {}},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{policy: {}},
 				})
 			}
-			// Finish fails on any flow not checked above, such as a deny of
-			// client to blocked attributed to pod-ingress.
+			// Finish fails on any flow not checked above.
 			if err := flowTester.Finish(); err != nil {
 				return fmt.Errorf("flows incorrect on Felix[0]:\n%w", err)
 			}
 			return nil
 		}
 		Eventually(checkFlows, "30s", "3s").ShouldNot(HaveOccurred())
-		// The drop's flow would be flushed with or soon after the control's.
 		Consistently(checkFlows, "6s", "2s").ShouldNot(HaveOccurred())
+	}
+
+	It("should not report host-*'s end-of-tier drop to a same-node pod as the pod's deny", func() {
+		cc := &connectivity.Checker{}
+		cc.ExpectNone(client0, blocked)
+		cc.ExpectSome(client0, target)
+		cc.CheckConnectivity()
+		flowlogs.WaitForConntrackScan(true)
+		tc.Felixes[0].Exec("conntrack", "-F")
+
+		expectOnlyFlowsToTarget("client-*", map[flowlog.ReporterType]string{
+			flowlog.ReporterSrc: "0|__PROFILE__|pro:default|allow|0",
+			flowlog.ReporterDst: "0|default|gnp:pod-ingress|allow|0",
+		})
+	})
+
+	It("should not report eth0's end-of-tier drop to a local pod as the pod's deny", func() {
+		cc := &connectivity.Checker{}
+		cc.ExpectNone(remoteClient, blocked)
+		cc.ExpectSome(remoteClient, target)
+		cc.CheckConnectivity()
+		flowlogs.WaitForConntrackScan(true)
+		tc.Felixes[0].Exec("conntrack", "-F")
+
+		expectOnlyFlowsToTarget("remote-*", map[flowlog.ReporterType]string{
+			flowlog.ReporterDst: "0|default|gnp:pod-ingress|allow|0",
+		})
 	})
 })
 
