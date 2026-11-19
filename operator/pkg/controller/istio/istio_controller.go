@@ -115,7 +115,8 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	if err = utils.AddConfigMapWatch(c, istio.TrustAnchorsConfigMapName, istio.IstioNamespace, &handler.EnqueueRequestForObject{}); err != nil {
 		return fmt.Errorf("istio-controller failed to watch ConfigMap %s/%s: %w", istio.IstioNamespace, istio.TrustAnchorsConfigMapName, err)
 	}
-	// The data plane and a CA signer transition wait for istiod to finish its rollout.
+	// The data plane, a CA signer transition and a ztunnel trust roll wait for
+	// istiod to finish its rollout.
 	if err = c.WatchObject(&appsv1.Deployment{}, &handler.EnqueueRequestForObject{}, istiodRolloutPredicate()); err != nil {
 		return fmt.Errorf("istio-controller failed to watch Deployment %s/%s: %w", istio.IstioNamespace, istio.IstioIstiodDeploymentName, err)
 	}

@@ -535,6 +535,83 @@ var _ = Describe("Istio Component Rendering", func() {
 			Expect(istiodHashOf(renderObjects())).To(BeEmpty())
 		})
 
+		Context("ztunnel trust roll", func() {
+			ztunnelOf := func(objs []client.Object) *appsv1.DaemonSet {
+				ds, err := rtest.GetResourceOfType[*appsv1.DaemonSet](objs, istio.IstioZTunnelDaemonSetName, istio.IstioNamespace)
+				Expect(err).NotTo(HaveOccurred())
+				return ds
+			}
+			ztunnelHash := func() string {
+				return ztunnelOf(renderObjects()).Spec.Template.Annotations[istio.ZTunnelTrustHashAnnotation]
+			}
+
+			It("leaves ztunnel alone while it trusts only the signer", func() {
+				Expect(ztunnelHash()).To(BeEmpty())
+			})
+
+			It("rolls ztunnel when the roots beside the signer's change, and not for their order", func() {
+				a, b := newTestCert("a", nil, true), newTestCert("b", nil, true)
+				cfg.AdditionalRoots = []*x509.Certificate{a.cert}
+				hash := ztunnelHash()
+				Expect(hash).NotTo(BeEmpty())
+
+				cfg.AdditionalRoots = []*x509.Certificate{a.cert, b.cert}
+				withB := ztunnelHash()
+				Expect(withB).NotTo(Equal(hash))
+				cfg.AdditionalRoots = []*x509.Certificate{b.cert, a.cert}
+				Expect(ztunnelHash()).To(Equal(withB))
+
+				cfg.AdditionalRoots = []*x509.Certificate{a.cert}
+				ca.ExtraRoots = []*x509.Certificate{b.cert}
+				Expect(ztunnelHash()).To(Equal(withB))
+			})
+
+			It("does not roll ztunnel for a signer change", func() {
+				cfg.AdditionalRoots = []*x509.Certificate{newTestCert("a", nil, true).cert}
+				hash := ztunnelHash()
+
+				next, err := istio.GenerateCA("cluster.local")
+				Expect(err).NotTo(HaveOccurred())
+				cfg.Transition = &istio.SignerTransition{
+					Phase:    istio.TransitionSwitchSigner,
+					Retiring: ca.Roots,
+					Incoming: next.Roots,
+				}
+				cfg.LocalCA = next
+				Expect(ztunnelHash()).To(Equal(hash))
+			})
+
+			It("moves the hash only once istiod serves the bundle", func() {
+				cfg.AdditionalRoots = []*x509.Certificate{newTestCert("a", nil, true).cert}
+				objs := renderObjects()
+				want := ztunnelOf(objs).Spec.Template.Annotations[istio.ZTunnelTrustHashAnnotation]
+				istiod, err := rtest.GetResourceOfType[*appsv1.Deployment](objs, istio.IstioIstiodDeploymentName, istio.IstioNamespace)
+				Expect(err).NotTo(HaveOccurred())
+				ztunnel := ztunnelOf(objs).DeepCopy()
+				ztunnel.Spec.Template.Annotations[istio.ZTunnelTrustHashAnnotation] = "running"
+				cfg.Live = &istio.LiveWorkloads{Istiod: istiod, ZTunnel: ztunnel}
+
+				Expect(ztunnelHash()).To(Equal("running"))
+
+				replicas := ptr.Deref(istiod.Spec.Replicas, 1)
+				istiod.Status = appsv1.DeploymentStatus{ObservedGeneration: istiod.Generation, Replicas: replicas, UpdatedReplicas: replicas, AvailableReplicas: replicas}
+				Expect(ztunnelHash()).To(Equal(want))
+			})
+
+			It("keeps the running hash without a local CA", func() {
+				ztunnel := ztunnelOf(renderObjects()).DeepCopy()
+				if ztunnel.Spec.Template.Annotations == nil {
+					ztunnel.Spec.Template.Annotations = map[string]string{}
+				}
+				ztunnel.Spec.Template.Annotations[istio.ZTunnelTrustHashAnnotation] = "running"
+				cfg.LocalCA = nil
+				Expect(ztunnelHash()).To(BeEmpty())
+
+				cfg.Live = &istio.LiveWorkloads{ZTunnel: ztunnel}
+				Expect(ztunnelHash()).To(Equal("running"))
+			})
+		})
+
 		Describe("IstiodRolledOut", func() {
 			var (
 				cacerts *corev1.Secret

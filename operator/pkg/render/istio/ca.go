@@ -57,6 +57,9 @@ const (
 	CASecretLabel = "operator.tigera.io/istio-ca"
 	// CACertsHashAnnotation on the istiod pod template rolls istiod when cacerts changes.
 	CACertsHashAnnotation = "hash.operator.tigera.io/cacerts"
+	// ZTunnelTrustHashAnnotation on the ztunnel pod template rolls ztunnel when
+	// the roots it trusts beyond the signers' own change, once istiod serves them.
+	ZTunnelTrustHashAnnotation = "hash.operator.tigera.io/istio-trust-anchors"
 
 	DefaultTrustDomain = "cluster.local"
 

@@ -368,6 +368,13 @@ func (c *IstioComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Obj
 		}
 		template.Annotations[CACertsHashAnnotation] = hash
 	}
+	if hash := c.ztunnelTrustHash(); hash != "" {
+		template := &res.ZTunnelDaemonSet.Spec.Template
+		if template.Annotations == nil {
+			template.Annotations = map[string]string{}
+		}
+		template.Annotations[ZTunnelTrustHashAnnotation] = hash
+	}
 	if c.cfg.LocalCA != nil {
 		objs = append(objs, c.cacertsSecret())
 	}
@@ -400,6 +407,29 @@ func (c *IstioComponent) cacertsHash() string {
 		return rmeta.SecretsAnnotationHash(c.cfg.CurrentCACerts)
 	}
 	return ""
+}
+
+// ztunnelTrustHash is the hash of the roots ztunnel trusts beside the signers'.
+// A ztunnel learns roots only with a fresh workload certificate, so without a
+// roll a root added or withdrawn waits up to a certificate TTL to take effect.
+// A signer transition waits out that refresh by design and must not roll
+// ztunnel, so the signers' roots stay out of the hash. The hash moves only
+// once istiod serves the bundle: a ztunnel that restarts earlier gets the old
+// one and keeps it until its next refresh.
+func (c *IstioComponent) ztunnelTrustHash() string {
+	live := c.cfg.Live
+	running := live != nil && live.ZTunnel != nil
+	var current string
+	if running {
+		current = live.ZTunnel.Spec.Template.Annotations[ZTunnelTrustHashAnnotation]
+	}
+	if c.cfg.LocalCA == nil || (running && !IstiodRolledOut(live.Istiod, c.cacertsSecret())) {
+		return current
+	}
+	if len(c.cfg.LocalCA.ExtraRoots) == 0 && len(c.cfg.AdditionalRoots) == 0 {
+		return ""
+	}
+	return rmeta.AnnotationHash(ComposeRootBundle(c.cfg.LocalCA.ExtraRoots, c.cfg.AdditionalRoots))
 }
 
 // ztunnelEnv is the environment the operator sets on ztunnel beyond the chart's.
