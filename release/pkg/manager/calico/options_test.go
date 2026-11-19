@@ -31,8 +31,7 @@ import (
 func requiredOpts() []Option {
 	return []Option{
 		WithRepoRoot("/tmp"),
-		WithGithubRepo("projectcalico", "calico"),
-		WithRepoRemote("origin"),
+		WithRepo("projectcalico", "calico", "origin"),
 	}
 }
 

@@ -39,7 +39,7 @@ func TestReleaseUpload(t *testing.T) {
 		t.Fatal(err)
 	}
 	opts := ReleaseOptions{
-		Repo:    Repo{Org: "projectcalico", Name: "calico"},
+		Repo:    Repo{Owner: "projectcalico", Name: "calico"},
 		Version: ver,
 		Source:  t.TempDir(),
 		Notes:   ReleaseNotes{Link: Link{Text: "on GitHub", URL: "https://example.test/notes.md"}},

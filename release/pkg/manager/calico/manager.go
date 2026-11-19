@@ -96,7 +96,7 @@ var (
 	// Default defaultRegistries to which all release images are pushed.
 	defaultRegistries = registry.DefaultCalicoRegistries
 
-	calicoRepo = github.Repo{Org: defaults.ProjectCalicoOrg, Name: defaults.CalicoRepoName}
+	calicoRepo = github.Repo{Owner: defaults.ProjectCalicoOrg, Name: defaults.CalicoRepoName}
 
 	defaultBranch = defaults.Branch
 
@@ -236,11 +236,7 @@ type CalicoManager struct {
 	// helmRepoURL is the URL of the helm chart repository.
 	helmRepoURL string
 
-	// githubRepo is the GitHub repository to which we should publish releases.
-	githubRepo github.Repo
-
-	// remote is the git remote to use for pushing
-	remote string
+	repo github.Repo
 
 	// mainBranch is the default branch for the repo
 	// It is also where a new release branch is cut from.
@@ -360,7 +356,7 @@ func (r *CalicoManager) mustBuildValidation() error {
 		errs = append(errs, fmt.Errorf("no records directory specified"))
 	}
 	if !r.isHashRelease || r.releaseNotes {
-		if err := r.githubRepo.Validate(); err != nil {
+		if err := r.repo.Validate(); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -411,7 +407,7 @@ func (r *CalicoManager) buildPlan() []plan.Node {
 			Name: outputs.ReleaseNotesStep,
 			// Notes come from the Calico repos' milestones, so no other repo has any.
 			When: func() bool {
-				return r.releaseNotes && r.githubRepo == calicoRepo
+				return r.releaseNotes && r.repo.Is(calicoRepo)
 			},
 			Do: r.buildReleaseNotes,
 		})
@@ -531,7 +527,7 @@ func (r *CalicoManager) sourceMetadata() (outputs.Source, error) {
 		return outputs.Source{}, fmt.Errorf("determining branch: %w", err)
 	}
 	src := outputs.Source{
-		Repository: r.githubRepo.String(),
+		Repository: r.repo.FullName(),
 		Commit:     strings.TrimSpace(commit),
 	}
 	if b := strings.TrimSpace(branch); b != "HEAD" {
@@ -551,7 +547,7 @@ func (r *CalicoManager) artifacts(dir string) ([]outputs.Artifact, error) {
 	case r.isHashRelease && r.publishHashrelease:
 		base = r.hashrelease.URL()
 	case !r.isHashRelease && r.githubRelease:
-		base = r.githubRepo.DownloadURL(r.calicoVersion.String())
+		base = r.repo.DownloadURL(r.calicoVersion.String())
 	default:
 		return nil, nil
 	}
@@ -740,7 +736,7 @@ func (r *CalicoManager) releaseUploads() []distribution.Upload {
 	ver := r.calicoVersion.String()
 	vpp := github.Link{
 		Text: "VPP data plane release information",
-		URL:  github.Repo{Org: "projectcalico", Name: "vpp-dataplane"}.BlobURL("master", "RELEASE_NOTES.md"),
+		URL:  github.Repo{Owner: "projectcalico", Name: "vpp-dataplane"}.BlobURL("master", "RELEASE_NOTES.md"),
 	}
 	notes := []string{vpp.String()}
 	// notes = append(notes, "[Upgrade guide]("+docs.Site{Version: r.calicoVersion}.URL("operations", "upgrading")+")")
@@ -754,20 +750,20 @@ func (r *CalicoManager) releaseUploads() []distribution.Upload {
 	return []distribution.Upload{
 		branch.TagUpload(branch.PushTagOptions{
 			Tag:      ver,
-			Remote:   r.remote,
+			Remote:   r.repo.Remote,
 			RepoRoot: r.repoRoot,
 			Skip:     !r.gitRef,
 			DryRun:   r.dryRun,
 			Runner:   r.runner,
 		}),
 		github.ReleaseUpload(github.ReleaseOptions{
-			Repo:    r.githubRepo,
+			Repo:    r.repo,
 			Version: r.calicoVersion,
 			Source:  r.uploadDir(),
 			Notes: github.ReleaseNotes{
 				Link: github.Link{
 					Text: "on GitHub",
-					URL:  r.githubRepo.BlobURL(version.NewReleaseBranch(r.releaseBranchPrefix, r.calicoVersion).String(), outputs.ReleaseNoteFilePath("", ver)),
+					URL:  r.repo.BlobURL(version.NewReleaseBranch(r.releaseBranchPrefix, r.calicoVersion).String(), outputs.ReleaseNoteFilePath("", ver)),
 				},
 				Artifacts: []github.ReleaseArtifact{
 					{Name: archives.ArchiveFileName(r.archive()), Description: "container images, binaries, and kubernetes manifests."},
@@ -860,7 +856,7 @@ func (r *CalicoManager) releasePrereqs() error {
 	}
 
 	// If we are releasing to projectcalico/calico, make sure we are releasing to the default registries.
-	if r.githubRepo == calicoRepo {
+	if r.repo.Is(calicoRepo) {
 		if !reflect.DeepEqual(r.imageRegistries, defaultRegistries) {
 			return fmt.Errorf("image registries cannot be different from default registries for a release")
 		}
@@ -1496,7 +1492,7 @@ func (r *CalicoManager) buildReleaseNotes() error {
 	if err != nil {
 		return fmt.Errorf("determine release version: %w", err)
 	}
-	_, err = outputs.ReleaseNotes(github.Client(r.runner), r.githubRepo.Org, r.repoRoot, filepath.Join(r.outputDir, outputs.ReleaseNotesDir), ver)
+	_, err = outputs.ReleaseNotes(github.Client(r.runner), r.repo.Owner, r.repoRoot, filepath.Join(r.outputDir, outputs.ReleaseNotesDir), ver)
 	return err
 }
 
@@ -1538,18 +1534,18 @@ func (r *CalicoManager) git(args ...string) (string, error) {
 
 func (r *CalicoManager) validateGitHub() error {
 	var errs error
-	if r.remote == "" {
+	if r.repo.Remote == "" {
 		errs = errors.Join(errs, fmt.Errorf("no git remote specified"))
 	}
-	if err := r.githubRepo.Validate(); err != nil {
+	if err := r.repo.Validate(); err != nil {
 		errs = errors.Join(errs, err)
 	}
 	if errs != nil {
 		return errs
 	}
 	logrus.WithFields(logrus.Fields{
-		"remote": r.remote,
-		"repo":   r.githubRepo,
+		"remote": r.repo.Remote,
+		"repo":   r.repo,
 	}).Info("Using GitHub configuration")
 	return nil
 }
@@ -1584,7 +1580,7 @@ func (r *CalicoManager) CutBranch() error {
 	d := &branch.Driver{
 		RepoRoot:            r.repoRoot,
 		Runner:              r.runner,
-		Remote:              r.remote,
+		Remote:              r.repo.Remote,
 		MainBranch:          r.mainBranch,
 		DevTagIdentifier:    r.devTagIdentifier,
 		ReleaseBranchPrefix: r.releaseBranchPrefix,
@@ -1658,7 +1654,7 @@ func (r *CalicoManager) cutPlan() (*branch.CutPlan, error) {
 	return &branch.CutPlan{
 		Derived: version.NewReleaseBranch(r.releaseBranchPrefix, cur).String(),
 		Source:  r.mainBranch,
-		Remote:  r.remote,
+		Remote:  r.repo.Remote,
 		TagTargets: []branch.TagTarget{
 			{Branch: r.mainBranch, DevTag: nextBranch.String() + "-" + r.devTagIdentifier},
 		},
@@ -1805,7 +1801,7 @@ func (r *CalicoManager) pushPrepBranch(baseBranch, prepBranch string) error {
 		return r.switchToBaseBranch(baseBranch)
 	}
 
-	args := []string{"push", "--force-with-lease", r.remote, prepBranch}
+	args := []string{"push", "--force-with-lease", r.repo.Remote, prepBranch}
 	if r.dryRun {
 		args = append(args, "--dry-run")
 	}
@@ -1825,17 +1821,17 @@ func (r *CalicoManager) pushPrepBranch(baseBranch, prepBranch string) error {
 func (r *CalicoManager) createPrepPR(baseBranch, prepBranch string) error {
 	args := []string{
 		"pr", "create", "--fill",
-		"--repo", r.githubRepo.String(),
+		"--repo", r.repo.FullName(),
 		"--base", baseBranch,
 		"--head", prepBranch,
 	}
-	if r.githubRepo == github.DefaultRepo() {
+	if r.repo.Is(github.DefaultRepo()) {
 		args = append(args, []string{
-			"--reviewer", fmt.Sprintf("%s/release-team", r.githubRepo.Org),
+			"--reviewer", fmt.Sprintf("%s/release-team", r.repo.Owner),
 			"--label", "release-note-not-required,docs-not-required",
 		}...)
 	}
-	fallbackURL := r.githubRepo.OpenPRsURL(prepBranch)
+	fallbackURL := r.repo.OpenPRsURL(prepBranch)
 	logrus.WithField("args", args).Debug("Creating PR for release preparation")
 	pr, err := r.runner.Run("./bin/gh", args, command.WithDir(r.repoRoot))
 	if err != nil {
@@ -1843,7 +1839,7 @@ func (r *CalicoManager) createPrepPR(baseBranch, prepBranch string) error {
 		var cmdErr *command.Error
 		if errors.As(err, &cmdErr) && strings.Contains(cmdErr.Stderr, "already exists") {
 			if m := regexp.MustCompile(`(?:^|\s)(https://\S+/pull/\d+)(?:$|\s)`).FindStringSubmatch(cmdErr.Stderr); len(m) > 1 {
-				if !strings.HasPrefix(m[1], r.githubRepo.URL("pull")+"/") {
+				if !strings.HasPrefix(m[1], r.repo.URL("pull")+"/") {
 					logrus.WithField("PR", pr).Warn("PR already exists but error returned an unexpected URL, find using fallback PR URL")
 					return fmt.Errorf("unexpected URL format for PR: %s", m[1])
 				}
@@ -1899,8 +1895,8 @@ func (r *CalicoManager) prepPrereqs() error {
 		if err != nil {
 			return err
 		}
-		if owner != r.githubRepo.Org {
-			return fmt.Errorf("current git remote is %s, expected to be from %s. Please switch to a branch from the main repo to cut the release", owner, r.githubRepo.Org)
+		if owner != r.repo.Owner {
+			return fmt.Errorf("current git remote is %s, expected to be from %s. Please switch to a branch from the main repo to cut the release", owner, r.repo.Owner)
 		}
 		return nil
 	}); err != nil {
@@ -1927,9 +1923,9 @@ func (r *CalicoManager) prepPrereqs() error {
 
 // remoteOwner extracts the GitHub owner (org or user) from the configured git remote URL.
 func (r *CalicoManager) remoteOwner() (string, error) {
-	out, err := r.git("config", "--get", fmt.Sprintf("remote.%s.url", r.remote))
+	out, err := r.git("config", "--get", fmt.Sprintf("remote.%s.url", r.repo.Remote))
 	if err != nil {
-		return "", fmt.Errorf("failed to get remote %s url: %w", r.remote, err)
+		return "", fmt.Errorf("failed to get remote %s url: %w", r.repo.Remote, err)
 	}
 	return ownerFromRemoteURL(strings.TrimSpace(out))
 }

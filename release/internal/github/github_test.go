@@ -26,12 +26,14 @@ import (
 
 // Pinned to literals: deriving them from the builders would pass for any URL.
 func TestRepo(t *testing.T) {
-	r := Repo{Org: "projectcalico", Name: "calico"}
+	r := Repo{Owner: "projectcalico", Name: "calico"}
 	for _, tc := range []struct {
 		name string
 		got  string
 		want string
 	}{
+		{"full name", r.FullName(), "projectcalico/calico"},
+		{"clone URL", r.CloneURL(), "git@github.com:projectcalico/calico.git"},
 		{"release downloads", r.DownloadURL("v3.30.0"), "https://github.com/projectcalico/calico/releases/download/v3.30.0"},
 		{"an artifact", r.DownloadURL("v3.30.0", "SHA256SUMS"), "https://github.com/projectcalico/calico/releases/download/v3.30.0/SHA256SUMS"},
 		{"a file on a branch", r.BlobURL("release-v3.30", "release-notes/v3.30.0-release-notes.md"), "https://github.com/projectcalico/calico/blob/release-v3.30/release-notes/v3.30.0-release-notes.md"},
