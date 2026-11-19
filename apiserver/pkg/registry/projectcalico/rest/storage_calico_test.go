@@ -97,8 +97,18 @@ func TestEtcdStorageReverseKeyFuncsRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: key func: %v", d.resourcePrefix, err)
 		}
-		// The store's keys omit the leading slash that every resourcePrefix carries.
-		key = "/" + strings.TrimPrefix(key, "/")
+		// Known issue: the store's keys lack the leading slash that resourcePrefix
+		// carries, and the etcd store rejects keys outside its prefix, so etcd
+		// storage mode cannot work yet. Pin that mismatch instead of hiding it,
+		// and check the reverse function against the key a fixed store writes.
+		if strings.HasPrefix(key, d.resourcePrefix+"/") {
+			t.Errorf("%s: store key %q now carries the resource prefix: drop the known-issue handling here", d.resourcePrefix, key)
+		} else if !strings.HasPrefix("/"+key, d.resourcePrefix+"/") {
+			t.Errorf("%s: store key %q is outside the resource prefix, even with the missing slash added", d.resourcePrefix, key)
+			continue
+		} else {
+			key = "/" + key
+		}
 		if d.reverseKeyFunc == nil {
 			t.Errorf("%s: no reverse key func", d.resourcePrefix)
 			continue
