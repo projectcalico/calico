@@ -102,7 +102,7 @@ const birdRecursiveStaticTemplate = `protocol static static_recursive {
 // Assigning bgp_next_hop in the export filter is what makes the node receive the prefix with a
 // third-party NEXT_HOP — the workload's IP rather than the peer's own address — which is the
 // whole point: it forces the receiving node to resolve the next hop recursively against its own
-// RIB.  Verified against calico/bird v0.3.3+birdv1.6.8: the assignment alone is sufficient and
+// RIB.  Verified against BIRD 1.6.8: the assignment alone is sufficient and
 // "next hop keep" is not required, despite this being an eBGP session.
 const birdRecursivePeerTemplate = `protocol bgp node_%d from bgp_template {
   neighbor %s as 64512;

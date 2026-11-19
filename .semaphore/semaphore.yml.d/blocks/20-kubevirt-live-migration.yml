@@ -3,6 +3,7 @@
     when: "${CHANGE_IN(felix,cni-plugin,confd,node,e2e,libcalico-go,operator,non-go:/e2e/pkg/)}"
   dependencies:
     - Prerequisites
+    - "Build: BIRD image"
     - "Build: calico image"
     - "Build: node image"
     - "Build: operator image"
@@ -27,6 +28,7 @@
       commands:
         - docker system prune -af
         - .argoci/scripts/load-cached-images calico node
+        - .argoci/scripts/load-rpms-image.sh bird amd64
     jobs:
       - name: "KubeVirt live migration (KIND)"
         commands:
@@ -45,7 +47,7 @@
           # Start external BIRD BGP peer container on the KIND Docker network.
           # Tests discover this container via the BIRD_BGPPEER_CONTAINER_NAME env var.
           - export BIRD_BGPPEER_CONTAINER_NAME=bird-bgp-peer
-          - docker run -d --name ${BIRD_BGPPEER_CONTAINER_NAME} --privileged --network kind calico/bird:v0.3.3-211-g9111ec3c
+          - docker run -d --name ${BIRD_BGPPEER_CONTAINER_NAME} --privileged --network kind $(make --no-print-directory -C hack/rpms/bird print-image)
           # Run KubeVirt e2e tests
           - .semaphore/run-and-monitor e2e-kubevirt-kind.log make e2e-run KUBECONFIG=$(pwd)/hack/test/kind/kind-kubeconfig.yaml
     epilogue:
