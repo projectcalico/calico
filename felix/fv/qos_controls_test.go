@@ -573,13 +573,22 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(err).NotTo(HaveOccurred())
 
 						By("Running iperf2 client on workload 1 with no packet rate limits")
-						baselineRate, err := retryIperf2Client(w[1], 5, 5*time.Second, "-c", w[0].IP, "-u", "-l1000", "-b100M", "-t10")
+						// The baseline rate is bounded by the per-packet cost in the sender: both
+						// FV "nodes" share one kernel, so every BPF program on the path runs in the
+						// iperf client's sending context, and with bpfLogLevel=Debug each one does
+						// per-packet debug logging (~100us per packet in total). That caps the
+						// client below 100Mbit/sec of 1000-byte packets. iperf2's -b20M is
+						// 20*2^20 bit/s, about 2600 packets/s (one per ~380us), well within that
+						// budget.
+						const baselineRateMbps = 20
+						baselineRate, err := retryIperf2Client(w[1], 5, 5*time.Second, "-c", w[0].IP, "-u", "-l1000", fmt.Sprintf("-b%dM", baselineRateMbps), "-t10")
 						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("iperf client rate with no packet rate limit (bps): %v", baselineRate)
-						// Expect the baseline rate to be much greater than the bandwidth that we
-						// would get with the packet rate limit we are going to configure just below (within
-						// 20% of the requested 100Mbit/sec).
-						Expect(baselineRate).To(BeNumerically(">=", 100*1e6*0.8))
+						// Expect the baseline rate to be at least 80% of 20*10^6 bit/s, which is
+						// much greater than the bandwidth that we would get with the packet rate
+						// limit we are going to configure just below (0.8Mbit/sec sustained,
+						// 2.88Mbit/sec peak at most).
+						Expect(baselineRate).To(BeNumerically(">=", baselineRateMbps*1e6*0.8))
 
 						By("Setting 100 packets/s limit for ingress on workload 0 (iperf2 server)")
 						w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
