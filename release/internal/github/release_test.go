@@ -122,7 +122,7 @@ func (f *fakeReleases) UploadReleaseAsset(_ context.Context, _, _ string, _ int6
 
 func testReleases(t *testing.T, f *fakeReleases) *Releases {
 	t.Helper()
-	r, err := NewReleases(Repo{Org: "projectcalico", Name: "calico"}, f)
+	r, err := NewReleases(Repo{Owner: "projectcalico", Name: "calico"}, f)
 	if err != nil {
 		t.Fatalf("NewReleases: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestNewReleases(t *testing.T) {
 		want string
 	}{
 		{"no org", Repo{Name: "calico"}, "organization"},
-		{"no name", Repo{Org: "projectcalico"}, "repository"},
+		{"no name", Repo{Owner: "projectcalico"}, "repository"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := NewReleases(tc.repo, &fakeReleases{}); err == nil || !strings.Contains(err.Error(), tc.want) {

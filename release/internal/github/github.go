@@ -40,17 +40,24 @@ func Authenticated(r command.CommandRunner) bool {
 }
 
 func DefaultRepo() Repo {
-	return Repo{Org: defaults.Organization(), Name: defaults.Repo()}
+	return Repo{Owner: defaults.Organization(), Name: defaults.Repo()}
 }
 
 type Repo struct {
-	Org  string
-	Name string
+	Owner  string
+	Name   string
+	Branch string
+	Remote string
+}
+
+// Is reports whether two repositories have the same full name.
+func (r Repo) Is(other Repo) bool {
+	return r.FullName() == other.FullName()
 }
 
 func (r Repo) Validate() error {
 	var errs []error
-	if r.Org == "" {
+	if r.Owner == "" {
 		errs = append(errs, fmt.Errorf("no github organization specified"))
 	}
 	if r.Name == "" {
@@ -59,13 +66,21 @@ func (r Repo) Validate() error {
 	return errors.Join(errs...)
 }
 
+func (r Repo) FullName() string {
+	return r.Owner + "/" + r.Name
+}
+
 func (r Repo) String() string {
-	return r.Org + "/" + r.Name
+	return r.FullName()
+}
+
+func (r Repo) CloneURL() string {
+	return fmt.Sprintf("git@%s:%s.git", host, r.FullName())
 }
 
 // URL is the repository's page, or a page under it.
 func (r Repo) URL(path ...string) string {
-	return baseURL.JoinPath(append([]string{r.Org, r.Name}, path...)...).String()
+	return baseURL.JoinPath(append([]string{r.FullName()}, path...)...).String()
 }
 
 // DownloadURL is where a release's artifacts are downloaded from.

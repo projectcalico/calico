@@ -236,16 +236,9 @@ func WithArchitectures(architectures []string) Option {
 	}
 }
 
-func WithGithubRepo(org, repo string) Option {
+func WithRepo(org, name, remote string) Option {
 	return func(r *CalicoManager) error {
-		r.githubRepo = github.Repo{Org: org, Name: repo}
-		return nil
-	}
-}
-
-func WithRepoRemote(remote string) Option {
-	return func(o *CalicoManager) error {
-		o.remote = remote
+		r.repo = github.Repo{Owner: org, Name: name, Remote: remote}
 		return nil
 	}
 }
