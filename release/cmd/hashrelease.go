@@ -163,6 +163,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithImages(c.Bool(imagesFlagName)),
 					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
 					calico.WithArchiveImages(c.Bool(archiveImagesFlagName)),
+					calico.WithCI(c.Bool(ciFlag.Name)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
 					calico.WithManifests(c.Bool(manifestsFlag.Name)),
 					calico.WithBinaries(c.Bool(binariesFlag.Name)),

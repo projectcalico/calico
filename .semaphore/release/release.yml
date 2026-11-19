@@ -43,6 +43,14 @@ blocks:
           # Set our git config so we can do things like commit
           - git config --global user.name marvin-tigera
           - git config --global user.email marvin@projectcalico.io
+          - docker system prune -af
+          - df -h || true
+          - docker system df || true
+      epilogue:
+        always:
+          commands:
+            - df -h || true
+            - docker system df || true
       jobs:
         - name: "Release on Semaphore VM"
           execution_time_limit:

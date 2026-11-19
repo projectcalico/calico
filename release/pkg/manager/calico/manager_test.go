@@ -713,3 +713,24 @@ func TestPublishHelmChartsSemverTag(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildContainerImagesPrunesBuildCacheOnCI(t *testing.T) {
+	for _, ci := range []bool{true, false} {
+		t.Run(fmt.Sprintf("ci=%t", ci), func(t *testing.T) {
+			f := newFakeRunner()
+			r := &CalicoManager{runner: f, images: true, ci: ci, repoRoot: t.TempDir(), calicoVersion: "v3.33.0"}
+			if err := r.buildContainerImages(); err != nil {
+				t.Fatalf("buildContainerImages: %v", err)
+			}
+			if got := f.ran("docker builder prune --all --force"); got != ci {
+				t.Fatalf("build cache pruned = %t, want %t; calls: %v", got, ci, f.calls)
+			}
+			if !ci {
+				return
+			}
+			if last := f.calls[len(f.calls)-1]; last != "docker builder prune --all --force" {
+				t.Fatalf("prune ran before the last image build; last call: %q", last)
+			}
+		})
+	}
+}
