@@ -472,33 +472,48 @@ func (d *DiachronicFlow) recordIPs(flow *types.Flow, start, end int64) {
 // equally recent ones; see evictLeastRecent. So an IP arriving late, for a window older than every
 // retained entry, is dropped rather than evicting newer data.
 func recordIPSet(m map[string]*ipEntry, ips []string, slot int, start int64) map[string]*ipEntry {
-	// Updates rarely queue many new IPs, so fresh starts on the stack.
+	// fresh queues new IPs that arrive once m is full. Updates rarely queue many, so it starts on
+	// the stack.
 	var freshBuf [16]string
 	fresh := freshBuf[:0]
 
-	// New IPs go straight in while there is room. Once m is full they wait in fresh, so every
-	// tracked IP is refreshed, keeping its history, before anything is evicted.
+	// First pass: refresh the IPs m already tracks, and add new ones while there's room. Once m
+	// is full, new IPs wait in fresh, so every tracked IP is refreshed before anything is evicted.
 	for _, ip := range ips {
+		// Flows can carry empty addresses; there's nothing to record for them.
 		if ip == "" {
 			continue
 		}
+
+		// Check whether m already tracks this IP. If it does, mark it seen in this window and
+		// bump its lastSeen, keeping its history from earlier windows.
 		if e, ok := m[ip]; ok {
 			e.windows.set(slot)
 			e.lastSeen = max(e.lastSeen, start)
 			continue
 		}
+
+		// The IP is new. If m is full, queue it until every tracked IP has been refreshed, so
+		// eviction ranks against up-to-date lastSeen values.
 		if len(m) >= MaxIPsPerFlow {
 			fresh = append(fresh, ip)
 			continue
 		}
+
+		// The IP is new and there's room, so add it right away, allocating m on the flow's first IP.
 		if m == nil {
 			m = make(map[string]*ipEntry, min(len(ips), MaxIPsPerFlow))
 		}
 		addIPEntry(m, ip, slot, start)
 	}
+
+	// Every new IP fit without evicting anything, so we're done.
 	if len(fresh) == 0 {
 		return m
 	}
+
+	// Second pass: dedupe the queued IPs, evict to make room, and add whichever queued IPs
+	// outranked the IPs they'd displace.
 	slices.Sort(fresh)
 	for _, ip := range evictLeastRecent(m, slices.Compact(fresh), start) {
 		addIPEntry(m, ip, slot, start)
@@ -521,6 +536,8 @@ type ipRecency struct {
 
 // compare orders the least recently seen first, then the lowest address.
 func (a ipRecency) compare(b ipRecency) int {
+	// The more recently seen IP ranks higher. Only IPs last seen in the same window fall through
+	// to the address tie-break.
 	if a.lastSeen != b.lastSeen {
 		return cmp.Compare(a.lastSeen, b.lastSeen)
 	}
@@ -533,44 +550,53 @@ func (a ipRecency) compare(b ipRecency) int {
 // It finds them in one pass instead of sorting every candidate, so evicting one IP costs a single
 // scan of m.
 func evictLeastRecent(m map[string]*ipEntry, fresh []string, start int64) []string {
-	// overflow is how many IPs, tracked or fresh, have to go.
+	// overflow is how many IPs, tracked or fresh, have to go. If everything fits, nothing is
+	// evicted and every fresh IP survives.
 	overflow := len(m) + len(fresh) - MaxIPsPerFlow
 	if overflow <= 0 {
 		return fresh
 	}
 
-	// The shortlist holds the overflow IPs to drop. It fits on the stack unless a single
-	// update overflows by more than MaxIPsPerFlow.
+	// Size the shortlist to hold exactly the overflow IPs to drop. It fits on the stack unless a
+	// single update overflows by more than MaxIPsPerFlow, which needs a heap-allocated one.
 	var buf [MaxIPsPerFlow]ipRecency
 	slots := buf[:min(overflow, MaxIPsPerFlow)]
 	if overflow > MaxIPsPerFlow {
 		slots = make([]ipRecency, overflow)
 	}
 	shortlist := evictionShortlist{slots: slots}
+
+	// Offer every tracked IP to the shortlist, except those seen after start. Those outrank
+	// every fresh IP, so they can never be among the lowest-ranked.
 	for ip, e := range m {
-		// Entries seen after start outrank every fresh IP, so they can never be evicted here.
 		if e.lastSeen <= start {
 			shortlist.offer(ipRecency{lastSeen: e.lastSeen, ip: ip})
 		}
 	}
+
+	// Offer the fresh IPs, lowest address first. They all share one lastSeen, so once one misses
+	// the shortlist, every later (higher) address would miss it too and we can stop.
 	for _, ip := range fresh {
-		// fresh is sorted and shares one lastSeen, so once an IP misses the shortlist, every
-		// later (higher) address would miss it too.
 		if !shortlist.offer(ipRecency{lastSeen: start, ip: ip}) {
 			break
 		}
 	}
 
-	// Shortlisted fresh IPs are the lowest addresses in fresh, so they form a prefix of it and
-	// the survivors are everything after that prefix.
+	// At this point the shortlist holds exactly the IPs to drop. Evict the tracked ones from m,
+	// and count the fresh ones, which were never added.
 	droppedFresh := 0
 	for _, c := range shortlist.members() {
+		// Check whether this is an IP m tracks. If it is, evict it. Otherwise it's a fresh IP
+		// that lost its place, so just count it.
 		if _, tracked := m[c.ip]; tracked {
 			delete(m, c.ip)
 		} else {
 			droppedFresh++
 		}
 	}
+
+	// Dropped fresh IPs are the lowest addresses in fresh, so they form a prefix of it and the
+	// survivors are everything after.
 	return fresh[droppedFresh:]
 }
 
@@ -593,15 +619,23 @@ func (s *evictionShortlist) members() []ipRecency {
 // offer adds c if the shortlist has room, or if c ranks below the highest-ranked member, which c
 // then displaces. It reports whether c was added.
 func (s *evictionShortlist) offer(c ipRecency) bool {
+	// The shortlist isn't full yet, so c gets on regardless. Add it at the end and restore the
+	// heap order.
 	if s.size < len(s.slots) {
 		s.slots[s.size] = c
 		s.size++
 		s.siftUp(s.size - 1)
 		return true
 	}
+
+	// The shortlist is full. If c ranks at or above every member, it isn't among the
+	// lowest-ranked, so it stays off.
 	if c.compare(s.slots[0]) >= 0 {
 		return false
 	}
+
+	// c ranks below the highest-ranked member, so it takes that member's place at the root and
+	// sinks to its position in the heap.
 	s.slots[0] = c
 	s.siftDown(0)
 	return true
@@ -610,6 +644,8 @@ func (s *evictionShortlist) offer(c ipRecency) bool {
 // siftUp moves the member at i toward the root until its parent ranks at or above it.
 func (s *evictionShortlist) siftUp(i int) {
 	for i > 0 {
+		// The heap is in order once the parent ranks at or above this member. Otherwise swap
+		// them and keep climbing.
 		parent := (i - 1) / 2
 		if s.slots[parent].compare(s.slots[i]) >= 0 {
 			return
@@ -622,12 +658,17 @@ func (s *evictionShortlist) siftUp(i int) {
 // siftDown moves the member at i away from the root until neither child ranks above it.
 func (s *evictionShortlist) siftDown(i int) {
 	for {
+		// Find the highest-ranked of this member and its children (at 2i+1 and 2i+2), skipping
+		// child positions past the end of the heap.
 		highest := i
 		for _, child := range []int{2*i + 1, 2*i + 2} {
 			if child < s.size && s.slots[child].compare(s.slots[highest]) > 0 {
 				highest = child
 			}
 		}
+
+		// The heap is in order once neither child ranks above this member. Otherwise swap it
+		// with the higher child and keep sinking.
 		if highest == i {
 			return
 		}
