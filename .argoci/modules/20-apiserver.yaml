@@ -3,16 +3,21 @@ version: condensed-module
 
 defaults:
   timeout: 30m
-  services:
-    - docker
+  # In the build image, with NATIVE_GO_BUILD running each recipe in place rather
+  # than in a nested container.
+  useGoBuild: true
+  # The image ships tools under /go/bin, which the default /go volume hides.
+  workspaceVolumes: none
 
 steps:
   - name: apiserver-ci
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
+      - name: NATIVE_GO_BUILD
+        value: "true"
     depends: [check-go]
-    requests: {cpu: 4500m, memory: 3.5Gi}
+    requests: {cpu: 4500m, memory: 6Gi}
     commands: |
       cd apiserver
       make ci

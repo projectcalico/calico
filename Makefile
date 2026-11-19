@@ -99,10 +99,35 @@ test-charts: bin/helm
 	
 # yamllint is single-threaded, so the files are split across cores. Parsable
 # output keeps each problem on one line, so parallel runs can't garble it.
+YAML_LINT_CMD = find . -name .git -prune -o -type f \( -name "*.yaml" -o -name "*.yml" -o -name .yamllint \) -print0 | \
+	xargs -0 -r -P $(or $(GOMAXPROCS),$$(nproc)) -n 50 $(1) -f parsable
+
+# NATIVE_PYTHON=true runs the linter on this machine rather than in its image.
+ifeq ($(NATIVE_PYTHON),true)
+yaml-lint: bin/uv
+	@bin/uv tool install -q yamllint==$(YAMLLINT_VERSION)
+	@$(call YAML_LINT_CMD,"$$(bin/uv tool dir --bin)/yamllint")
+else
 yaml-lint:
 	@docker run --rm -v $(PWD):/data -w /data --entrypoint sh cytopia/yamllint:latest -c \
-	  'find . -name .git -prune -o -type f \( -name "*.yaml" -o -name "*.yml" -o -name .yamllint \) -print0 | \
-	   xargs -0 -r -P $(or $(GOMAXPROCS),$$(nproc)) -n 50 yamllint -f parsable'
+	  '$(call YAML_LINT_CMD,yamllint)'
+endif
+
+# Written under a temporary name: a half-extracted binary looks complete to make.
+# uv names its builds by the kernel's machine name.
+UV_PLATFORM := $(shell uname -m)-unknown-linux-gnu
+# Fetched under its version, so bumping UV_VERSION replaces a uv already here.
+bin/uv: bin/uv-$(UV_VERSION)
+	cp $< $@.tmp
+	mv $@.tmp $@
+
+bin/uv-$(UV_VERSION):
+	rm -f bin/uv-*
+	$(call fetch_file,https://github.com/astral-sh/uv/releases/download/$(UV_VERSION)/uv-$(UV_PLATFORM).tar.gz,bin/.uv.tar.gz)
+	tar -xzf bin/.uv.tar.gz -O uv-$(UV_PLATFORM)/uv > $@.tmp
+	chmod +x $@.tmp
+	mv $@.tmp $@
+	rm -f bin/.uv.tar.gz
 
 protobuf:
 	$(MAKE) -C app-policy protobuf
