@@ -1,0 +1,7 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Calico came from a manifest such as calico.yaml, with no tigera-operator.
+
+kind: cluster
+
+provides: []

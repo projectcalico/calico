@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,9 +40,9 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("NetworkPolicy"),
-	describe.WithCategory(describe.Policy),
-	describe.WithWindows(),
+	describe.Covers("NetworkPolicy"),
+	describe.RunsAnywhere(),
+	describe.Covers("Windows"),
 	"Calico NetworkPolicy",
 	func() {
 		// Define variables common across all tests.

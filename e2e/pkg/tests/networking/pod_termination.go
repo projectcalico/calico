@@ -40,8 +40,8 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithCategory(describe.Networking),
-	describe.WithFeature("Pods"),
+	describe.Covers("Pods"),
+	describe.RunsAnywhere(),
 	"Pod Termination Grace Period",
 	func() {
 		f := utils.NewDefaultFramework("pod-termination")
