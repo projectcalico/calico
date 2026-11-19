@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/endpoint"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
@@ -1575,8 +1576,8 @@ func (s *xdpIPState) getMemberChanges() map[string]memberChanges {
 			toDrop: set.New[string](),
 		}
 		if pr, ok := s.ipsetIDsToMembers.pendingReplaces[setID]; ok {
-			mc.toAdd = setDifference[string](pr, oldMembers)
-			mc.toDrop = setDifference[string](oldMembers, pr)
+			mc.toAdd = set.Difference(pr, oldMembers)
+			mc.toDrop = set.Difference(oldMembers, pr)
 		} else {
 			if pa, ok := s.ipsetIDsToMembers.pendingAdds[setID]; ok {
 				mc.toAdd = pa
@@ -1594,16 +1595,6 @@ func (s *xdpIPState) getMemberChanges() map[string]memberChanges {
 	}
 
 	return changes
-}
-
-func setDifference[T comparable](a, b set.Set[T]) set.Set[T] {
-	result := set.New[T]()
-	for item := range a.All() {
-		if !b.Contains(item) {
-			result.Add(item)
-		}
-	}
-	return result
 }
 
 func (s *xdpIPState) getAffectedIfaces(setID string) map[string]uint32 {
@@ -2110,7 +2101,7 @@ type endpointsSource interface {
 	GetRawHostEndpoints() map[types.HostEndpointID]*proto.HostEndpoint
 }
 
-var _ endpointsSource = &endpointManager{}
+var _ endpointsSource = &endpoint.Manager{}
 
 type nilIPSetsSource struct{}
 

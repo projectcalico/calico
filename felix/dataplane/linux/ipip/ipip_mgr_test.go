@@ -1,0 +1,572 @@
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package ipip
+
+import (
+	"context"
+	"net"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dptest"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/route/routedefs"
+	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/logrusr"
+)
+
+var _ = Describe("IPIPManager", func() {
+	var (
+		ipipMgr   *Manager
+		rt        *dptest.MockRouteTable
+		dataplane *mocknetlink.MockNetlinkDataplane
+	)
+
+	BeforeEach(func() {
+		rt = dptest.NewMockRouteTable()
+
+		opRecorder := logrusr.NewSummarizer("test")
+
+		dataplane = mocknetlink.New()
+		_, err := dataplane.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		dataplane.ImmediateLinkUp = true
+		eth0 := dataplane.AddIface(2, "eth0", true, true)
+		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
+		dataplane.ResetDeltas()
+
+		ipipMgr = NewManagerWithShims(
+			rt, ipipdefs.IPIPIfaceName,
+			4,
+			1400,
+			dpconfig.Config{
+				MaxIPSetSize:       1024,
+				Hostname:           "node1",
+				ExternalNodesCidrs: []string{"10.10.10.0/24"},
+				RulesConfig: rules.Config{
+					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
+				},
+				ProgramIPIPClusterRoutes: true,
+				DeviceRouteProtocol:      routedefs.DefaultRouteProto,
+			},
+			opRecorder,
+			dataplane,
+		)
+	})
+
+	It("should report parent device changes", func() {
+		Expect(ipipMgr.OnParentDeviceUpdate("eth0")).To(BeTrue())
+		Expect(ipipMgr.OnParentDeviceUpdate("eth0")).To(BeFalse())
+		Expect(ipipMgr.OnParentDeviceUpdate("")).To(BeFalse())
+		Expect(ipipMgr.routeMgr.ParentDevice()).To(Equal("eth0"))
+		Expect(ipipMgr.OnParentDeviceUpdate("bond0")).To(BeTrue())
+	})
+
+	It("should configure tunnel properly", func() {
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
+
+		Expect(ipipMgr.routeMgr.ParentIfaceAddr()).NotTo(BeZero())
+		Expect(ipipMgr.routeMgr.ParentDevice()).NotTo(BeEmpty())
+		noEncapDev, err := ipipMgr.routeMgr.DetectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(noEncapDev).NotTo(BeNil())
+
+		link, addr, err := ipipMgr.device(noEncapDev)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		Expect(addr).NotTo(BeZero())
+
+		err = ipipMgr.routeMgr.ConfigureTunnelDevice(link, addr, 1400, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(noEncapDev).NotTo(BeNil())
+		Expect(err).NotTo(HaveOccurred())
+
+		tunnelLink := dataplane.NameToLink[ipipdefs.IPIPIfaceName]
+		Expect(tunnelLink).ToNot(BeNil())
+		Expect(tunnelLink.LinkAttrs.MTU).To(Equal(1400))
+		Expect(tunnelLink.LinkAttrs.Flags).To(Equal(net.FlagUp))
+		Expect(tunnelLink.Addrs).To(HaveLen(1))
+		Expect(tunnelLink.Addrs[0].IP.String()).To(Equal("192.168.0.1"))
+
+		dataplane.ResetDeltas()
+		err = ipipMgr.routeMgr.ConfigureTunnelDevice(link, addr, 50, false)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dataplane.NumLinkAddCalls).To(BeZero())
+		Expect(dataplane.NumLinkSetUpCalls).To(BeZero())
+		Expect(dataplane.NumLinkSetMTUCalls).To(Equal(1))
+		Expect(tunnelLink.LinkAttrs.MTU).To(Equal(50))
+		Expect(dataplane.AddedAddrs.Len()).To(BeZero())
+		Expect(dataplane.DeletedAddrs.Len()).To(BeZero())
+
+		dataplane.ResetDeltas()
+		err = ipipMgr.routeMgr.ConfigureTunnelDevice(link, addr, 1500, false)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dataplane.NumLinkAddCalls).To(BeZero())
+		Expect(dataplane.NumLinkSetUpCalls).To(BeZero())
+		Expect(tunnelLink.LinkAttrs.MTU).To(Equal(1500))
+		Expect(tunnelLink.Addrs).To(HaveLen(1))
+		Expect(tunnelLink.Addrs[0].IP.String()).To(Equal("192.168.0.1"))
+
+		// Seed a kernel-managed IPv6 link-local address; reconciling to "no address" must remove the
+		// Calico-assigned global address but leave the link-local one in place.
+		llAddr := &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("fe80::1"), Mask: net.CIDRMask(64, 128)}}
+		Expect(dataplane.AddrAdd(link, llAddr)).To(Succeed())
+
+		// Seed an IPv4 link-local (169.254.0.0/16) address too. Unlike the IPv6 link-local it is not
+		// kernel-managed on the tunnel device, so reconciling to "no address" must remove it.
+		v4llAddr := &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("169.254.1.1"), Mask: net.CIDRMask(32, 32)}}
+		Expect(dataplane.AddrAdd(link, v4llAddr)).To(Succeed())
+
+		dataplane.ResetDeltas()
+		err = ipipMgr.routeMgr.ConfigureTunnelDevice(link, "", 1500, false)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dataplane.NameToLink[ipipdefs.IPIPIfaceName]).ToNot(BeNil())
+		Expect(dataplane.NumLinkAddCalls).To(BeZero())
+		Expect(dataplane.NumLinkSetUpCalls).To(BeZero())
+		Expect(tunnelLink.LinkAttrs.MTU).To(Equal(1500))
+		Expect(tunnelLink.LinkAttrs.Flags).To(Equal(net.FlagUp))
+		// Empty addr means no Calico address is wanted: the existing global address and the IPv4
+		// link-local address are removed (clean break) so they can't linger and influence source-IP
+		// selection, while the kernel-managed IPv6 link-local address is preserved.
+		Expect(dataplane.AddedAddrs.Len()).To(BeZero())
+		Expect(dataplane.DeletedAddrs.Contains("192.168.0.1/32")).To(BeTrue())
+		Expect(dataplane.DeletedAddrs.Contains("169.254.1.1/32")).To(BeTrue())
+		Expect(dataplane.DeletedAddrs.Len()).To(Equal(2))
+		Expect(tunnelLink.Addrs).To(HaveLen(1))
+		Expect(tunnelLink.Addrs[0].IP.String()).To(Equal("fe80::1"))
+	})
+
+	It("successfully adds a route to the noEncap interface", func() {
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "172.0.2.2",
+		})
+
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
+
+		Expect(ipipMgr.routeMgr.ParentIfaceAddr()).NotTo(BeZero())
+		Expect(ipipMgr.routeMgr.ParentDevice()).NotTo(BeEmpty())
+		noEncapDev, err := ipipMgr.routeMgr.DetectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(noEncapDev).NotTo(BeNil())
+
+		link, addr, err := ipipMgr.device(noEncapDev)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		Expect(addr).NotTo(BeZero())
+
+		err = ipipMgr.routeMgr.ConfigureTunnelDevice(link, addr, 50, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(noEncapDev).NotTo(BeNil())
+		Expect(err).NotTo(HaveOccurred())
+
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.3/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "172.0.2.2",
+			SameSubnet:  true,
+		})
+
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.2/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "172.0.2.2",
+		})
+
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.100/26",
+			DstNodeName: "node1",
+			DstNodeIp:   "172.0.0.2",
+			SameSubnet:  true,
+		})
+
+		// Borrowed /32 should not be programmed as blackhole.
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.10/32",
+			DstNodeName: "node1",
+			DstNodeIp:   "172.0.0.2",
+			SameSubnet:  true,
+		})
+
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+
+		err = ipipMgr.CompleteDeferredWork()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes["eth0"]).NotTo(BeNil())
+	})
+
+	It("should fall back to programming tunneled routes if the noEncap device is not known", func() {
+		dataDeviceC := make(chan string)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go ipipMgr.KeepDeviceInSync(ctx, 1400, false, 1*time.Second, dataDeviceC)
+
+		By("Sending another node's route.")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "10.0.0.2",
+		})
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.10.0/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "10.0.0.2",
+			SameSubnet:  true,
+		})
+
+		err := ipipMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ipipMgr.routeMgr.RoutesDirty()).To(BeFalse())
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(1))
+
+		By("Sending another local node update.")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		localAddr := ipipMgr.routeMgr.ParentIfaceAddr()
+		Expect(localAddr).NotTo(BeNil())
+
+		// Note: no encap device name is sent after configuration so this receive
+		// ensures we don't race.
+
+		By("waiting")
+		Eventually(dataDeviceC, "2s").Should(Receive(Equal("eth0")))
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
+
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
+		err = ipipMgr.CompleteDeferredWork()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ipipMgr.routeMgr.RoutesDirty()).To(BeFalse())
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
+	})
+
+	It("should program routes for remote endpoints with borrowed IP addresses", func() {
+		By("Sending host updates")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "172.0.2.2",
+		})
+
+		By("Sending a borrowed tunnel IP address")
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_TUNNEL,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "10.0.1.1/32",
+			DstNodeName: "node2",
+			DstNodeIp:   "172.0.2.2",
+			Borrowed:    true,
+		})
+
+		err := ipipMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a directly connected route to the borrowed IP.
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName][0]).To(Equal(
+			routetable.Target{
+				Type: "onlink",
+				RouteKey: routetable.RouteKey{
+					CIDR: ip.MustParseCIDROrIP("10.0.1.1/32"),
+				},
+				GW:       ip.FromString("172.0.2.2"),
+				Protocol: 80,
+			}))
+
+		// Delete the route.
+		ipipMgr.OnUpdate(&proto.RouteRemove{
+			Dst: "10.0.1.1/32",
+		})
+
+		err = ipipMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect no routes.
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
+	})
+
+	It("should program no tunnel route for a local workload that borrowed a remote block's IP", func() {
+		By("Sending host updates")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "172.0.2.2",
+		})
+
+		By("Sending a local workload holding an IP borrowed from node2's block")
+		// The calc graph flags a borrowed IP both ways and sets LocalWorkload.
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:         proto.RouteType_REMOTE_WORKLOAD | proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:    proto.IPPoolType_IPIP,
+			Dst:           "10.0.1.1/32",
+			DstNodeName:   "node1",
+			DstNodeIp:     "172.0.0.2",
+			LocalWorkload: true,
+			Borrowed:      true,
+		})
+
+		err := ipipMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Treating it as remote yields an onlink route via our own address, which
+		// the kernel rejects forever.
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(BeEmpty())
+	})
+
+	It("should only program black hole routes for local endpoints", func() {
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "172.0.2.2",
+		})
+
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
+
+		Expect(ipipMgr.routeMgr.ParentIfaceAddr()).NotTo(BeZero())
+		Expect(ipipMgr.routeMgr.ParentDevice()).NotTo(BeEmpty())
+		noEncapDev, err := ipipMgr.routeMgr.DetectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(noEncapDev).NotTo(BeNil())
+
+		link, addr, err := ipipMgr.device(noEncapDev)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		Expect(addr).NotTo(BeZero())
+
+		err = ipipMgr.routeMgr.ConfigureTunnelDevice(link, addr, 50, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(noEncapDev).NotTo(BeNil())
+		Expect(err).NotTo(HaveOccurred())
+
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.100/26",
+			DstNodeName: "node1",
+			DstNodeIp:   "172.0.0.2",
+			SameSubnet:  true,
+		})
+
+		// Borrowed /32 should not be programmed as blackhole.
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.10/32",
+			DstNodeName: "node1",
+			DstNodeIp:   "172.0.0.2",
+			SameSubnet:  true,
+		})
+
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
+
+		err = ipipMgr.CompleteDeferredWork()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(HaveLen(1)) // Black hole route
+	})
+
+	It("should program routes for remote tunnel endpoint", func() {
+		By("Sending host updates")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "172.0.2.2",
+		})
+
+		By("Sending a tunnel IP address")
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_TUNNEL | proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "10.0.1.1/32",
+			DstNodeName: "node2",
+			DstNodeIp:   "172.0.2.2",
+			Borrowed:    false,
+		})
+
+		err := ipipMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect one exact route.
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(1))
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName][0]).To(Equal(
+			routetable.Target{
+				Type: "onlink",
+				RouteKey: routetable.RouteKey{
+					CIDR: ip.MustParseCIDROrIP("10.0.1.1/32"),
+				},
+				GW:       ip.FromString("172.0.2.2"),
+				Protocol: 80,
+			}))
+
+		// Delete the route.
+		ipipMgr.OnUpdate(&proto.RouteRemove{
+			Dst: "10.0.1.1/32",
+		})
+
+		err = ipipMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect no routes.
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(HaveLen(0))
+	})
+})
+
+// The IPIP manager always runs, because it owns the tunnel device, but it must not program cluster
+// routes when confd and BIRD are the configured owner of them.
+var _ = Describe("IPIPManager with the IPIP cluster routes left to BIRD", func() {
+	var (
+		ipipMgr   *Manager
+		rt        *dptest.MockRouteTable
+		dataplane *mocknetlink.MockNetlinkDataplane
+	)
+
+	BeforeEach(func() {
+		rt = dptest.NewMockRouteTable()
+
+		dataplane = mocknetlink.New()
+		_, err := dataplane.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		dataplane.ImmediateLinkUp = true
+		eth0 := dataplane.AddIface(2, "eth0", true, true)
+		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
+		dataplane.ResetDeltas()
+
+		ipipMgr = NewManagerWithShims(
+			rt, ipipdefs.IPIPIfaceName,
+			4,
+			1400,
+			dpconfig.Config{
+				MaxIPSetSize:       1024,
+				Hostname:           "node1",
+				ExternalNodesCidrs: []string{"10.10.10.0/24"},
+				RulesConfig: rules.Config{
+					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
+				},
+				ProgramIPIPClusterRoutes: false,
+				DeviceRouteProtocol:      routedefs.DefaultRouteProto,
+			},
+			logrusr.NewSummarizer("test"),
+			dataplane,
+		)
+	})
+
+	It("should program no routes at all", func() {
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "172.0.2.2",
+		})
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
+
+		// A remote workload route, which Felix would program via the tunnel if it owned the IPIP
+		// cluster routes...
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.2/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "172.0.2.2",
+		})
+		// ...and a local one, which it would program as a blackhole.
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.100/26",
+			DstNodeName: "node1",
+			DstNodeIp:   "172.0.0.2",
+			SameSubnet:  true,
+		})
+
+		Expect(ipipMgr.CompleteDeferredWork()).To(Succeed())
+
+		Expect(rt.CurrentRoutes[ipipdefs.IPIPIfaceName]).To(BeEmpty())
+		Expect(rt.CurrentRoutes[routetable.InterfaceNone]).To(BeEmpty())
+		Expect(rt.CurrentRoutes["eth0"]).To(BeEmpty())
+	})
+
+	It("should still configure the tunnel device", func() {
+		// The local host's address still has to reach the route manager, even though it will not
+		// program any routes with it.
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
+		parentDev, err := ipipMgr.routeMgr.DetectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+
+		link, addr, err := ipipMgr.device(parentDev)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		Expect(ipipMgr.routeMgr.ConfigureTunnelDevice(link, addr, 1400, false)).To(Succeed())
+
+		Expect(dataplane.NameToLink).To(HaveKey(ipipdefs.IPIPIfaceName))
+	})
+})
