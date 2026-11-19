@@ -19,20 +19,18 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/env"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const (
@@ -114,31 +112,21 @@ func ReleaseDirs() []string {
 	return VariantDirs(PublishVariants)
 }
 
-var releaseImages = sync.OnceValues(func() ([]string, error) {
-	rootDir, err := command.GitDir()
-	if err != nil {
-		return nil, fmt.Errorf("determining root git dir: %w", err)
-	}
+// ReleaseImages returns every image the release publishes
+func ReleaseImages(r command.CommandRunner, rootDir string) ([]string, error) {
 	dirs := ReleaseDirs()
-	imgs, err := BuildImages(rootDir, dirs...)
+	imgs, err := BuildImages(r, rootDir, dirs...)
 	if err != nil {
 		return nil, fmt.Errorf("building release images list for release dirs[%s]: %w", strings.Join(dirs, ","), err)
 	}
 	return imgs, nil
-})
-
-// ReleaseImages returns every image the release publishes. The list is
-// resolved once by running make in each release directory.
-func ReleaseImages() ([]string, error) {
-	imgs, err := releaseImages()
-	return slices.Clone(imgs), err
 }
 
 // BuildImages returns every image built in dirs, whatever the variant.
-func BuildImages(rootDir string, dirs ...string) ([]string, error) {
+func BuildImages(r command.CommandRunner, rootDir string, dirs ...string) ([]string, error) {
 	var all []string
 	for _, d := range dirs {
-		imgs, err := buildImages(&command.RealCommandRunner{}, filepath.Join(rootDir, d), os.Environ())
+		imgs, err := buildImages(r, filepath.Join(rootDir, d), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -147,11 +135,11 @@ func BuildImages(rootDir string, dirs ...string) ([]string, error) {
 	return all, nil
 }
 
-func buildImages(r command.CommandRunner, dir string, env []string) ([]string, error) {
+func buildImages(r command.CommandRunner, dir string, vars []string) ([]string, error) {
 	// RELEASE selects the released image names, set here so they cannot
 	// depend on the caller's environment.
-	env = append(slices.Clone(env), utils.EnvTrue(utils.EnvRelease))
-	out, err := r.RunInDir("", "make", []string{"-C", dir, "-s", "--no-print-directory", "build-images"}, env)
+	vars = append(slices.Clone(vars), env.True(env.Release))
+	out, err := command.Make(r, dir).Print("build-images", command.WithEnv(vars...))
 	if err != nil {
 		return nil, fmt.Errorf("reading images in %s: %w", dir, err)
 	}
@@ -268,6 +256,8 @@ type settings struct {
 	// did not build its own images needs.
 	pull bool
 
+	pruneCache bool
+
 	retag *retag
 	scan  *ScanRequest
 	deps  []Dependency
@@ -309,6 +299,7 @@ type (
 // missing apply method fails here rather than at a call site.
 var (
 	_ Option               = setting(nil)
+	_ BuildOption          = buildSetting(nil)
 	_ ArchiveOption        = archiveSetting(nil)
 	_ PublishOption        = publishSetting(nil)
 	_ PublishResolveOption = publishResolveSetting(nil)
@@ -320,6 +311,10 @@ func (f setting) applyBuild(s *settings) error   { return f(s) }
 func (f setting) applyArchive(s *settings) error { return f(s) }
 func (f setting) applyPublish(s *settings) error { return f(s) }
 func (f setting) applyResolve(s *settings) error { return f(s) }
+
+type buildSetting func(*settings) error
+
+func (f buildSetting) applyBuild(s *settings) error { return f(s) }
 
 type archiveSetting func(*settings) error
 
@@ -374,6 +369,14 @@ func WithStepName(name string) Option {
 			return fmt.Errorf("no step name given")
 		}
 		s.Apply([]steps.Option{steps.WithName(name)})
+		return nil
+	})
+}
+
+// WithPruneCache drops the build cache after the build; the built images stay.
+func WithPruneCache(prune bool) BuildOption {
+	return buildSetting(func(s *settings) error {
+		s.pruneCache = prune
 		return nil
 	})
 }
@@ -486,17 +489,17 @@ func (c Image) validate() error {
 }
 
 func (c Image) env() []string {
-	env := append(os.Environ(),
-		utils.Env(utils.EnvVersion, c.Version),
-		utils.Env(utils.EnvImageTag, c.Version),
-	)
+	vars := []string{
+		env.Var(env.Version, c.Version),
+		env.Var(env.ImageTag, c.Version),
+	}
 	if len(c.Registries) > 0 {
-		env = append(env, utils.Env(utils.EnvDevRegistries, strings.Join(c.Registries, " ")))
+		vars = append(vars, env.Var(env.DevRegistries, strings.Join(c.Registries, " ")))
 	}
 	if len(c.Arches) > 0 {
-		env = append(env, utils.Env(utils.EnvArches, strings.Join(c.Arches, " ")))
+		vars = append(vars, env.Var(env.Arches, strings.Join(c.Arches, " ")))
 	}
-	return env
+	return vars
 }
 
 func (s settings) runUnits(units []unit) error {
@@ -521,9 +524,8 @@ func (s settings) runUnit(u unit) error {
 	log := s.Logger().WithFields(logrus.Fields{"variant": u.variant, "component": u.dir, "target": u.target})
 	dir := filepath.Join(s.RepoRoot, u.dir)
 
-	args := append([]string{"-C", dir}, strings.Fields(u.target)...)
 	for attempt := 0; ; attempt++ {
-		out, err := s.Run("make", args, u.env, s.logPath(u))
+		out, err := command.Make(s.Runner(), dir).Run(strings.Fields(u.target), command.WithEnv(u.env...), command.WithLogFile(s.logPath(u)), command.WithTiming(log))
 		if err == nil {
 			log.Debug(out)
 			return nil
@@ -532,8 +534,6 @@ func (s settings) runUnit(u unit) error {
 			log.WithError(err).WithField("attempt", attempt).Warn("Image step failed, retrying")
 			continue
 		}
-		// Surface the captured output; the failure cause is usually only in there.
-		log.Error(out)
 		return s.Errorf("%s images in %s: %w", u.variant, u.dir, err)
 	}
 }
@@ -562,11 +562,11 @@ func (c Image) units(baseEnv []string) []unit {
 	var out []unit
 	for _, v := range c.Variants {
 		for _, dir := range v.ReleaseDirs {
-			env := make([]string, 0, len(baseEnv)+len(v.Env))
-			env = append(env, baseEnv...)
-			env = append(env, v.Env...)
+			vars := make([]string, 0, len(baseEnv)+len(v.Env))
+			vars = append(vars, baseEnv...)
+			vars = append(vars, v.Env...)
 			out = append(out, unit{
-				variant: v.Name, dir: dir, target: v.Target, env: env,
+				variant: v.Name, dir: dir, target: v.Target, env: vars,
 				images: v.Images,
 			})
 		}
@@ -605,7 +605,7 @@ func (c Image) imageNames(u unit) ([]string, error) {
 // than declared here.
 func (c Image) tagPrefix(u unit) (string, error) {
 	dir := filepath.Join(c.RepoRoot, u.dir)
-	out, err := c.Runner().RunInDir("", "make", []string{"-C", dir, "-s", "--no-print-directory", "image-tag-prefix"}, u.env)
+	out, err := command.Make(c.Runner(), dir).Print("image-tag-prefix", command.WithEnv(u.env...))
 	if err != nil {
 		return "", fmt.Errorf("reading tag prefix in %s: %w", u.dir, err)
 	}
@@ -809,17 +809,22 @@ func (s settings) addRefs(got []resolved) error {
 	return nil
 }
 
+func (s settings) docker(args []string, opts ...command.Option) (string, error) {
+	return s.Runner().Run("docker", args, opts...)
+}
+
 // save fetches the image first when it is not already local.
 func save(s settings, image, out string) error {
+	log := s.Logger().WithField("image", image)
 	if s.pull {
-		if _, err := s.Runner().Run("docker", []string{"image", "inspect", image}, nil); err != nil {
-			s.Logger().WithField("image", image).Info("Image not found locally, pulling")
-			if _, err := s.Runner().Run("docker", []string{"pull", image}, nil); err != nil {
+		if _, err := s.docker([]string{"image", "inspect", image}); err != nil {
+			log.Info("Image not found locally, pulling")
+			if _, err := s.docker([]string{"pull", image}, command.WithTiming(log.WithField("action", "pull"))); err != nil {
 				return fmt.Errorf("pulling %s: %w", image, err)
 			}
 		}
 	}
-	if _, err := s.Runner().Run("docker", []string{"save", "--output", out, image}, nil); err != nil {
+	if _, err := s.docker([]string{"save", "--output", out, image}, command.WithTiming(log.WithField("action", "save"))); err != nil {
 		return s.Errorf("%w", err)
 	}
 	return nil

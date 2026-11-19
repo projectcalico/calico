@@ -5,7 +5,11 @@
 #   - TEST_TYPE == k8s-e2e → run the monorepo e2e binary via `make e2e-run`.
 #     The binary is acquired first: built from local source when RUN_LOCAL_TESTS
 #     is set (per-PR CI), otherwise downloaded from the hashrelease (scheduled
-#     CI). E2E_TEST_CONFIG names the YAML config that selects the specs.
+#     CI). E2E_TEST_CONFIG lists the YAML configs that select the specs. Per-PR
+#     runs read them from the checkout; scheduled runs unpack e2e/config from the
+#     same hashrelease over the checkout's, with no fallback.
+#     To rename a config, land the new file first and switch the cron after
+#     a hashrelease ships it; a same-PR rename fails scheduled runs until then.
 #   - Else (non-e2e test types: benchmarks, certification, etc.) → `bz tests`.
 #
 # Required env:
@@ -177,6 +181,38 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   chmod +x "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s/e2e.test"
   echo "[INFO] downloaded e2e binary to ${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s/e2e.test"
   E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
+
+  # The configs come from the same hashrelease as the binary, never from this
+  # checkout: the binary's labels and the configs' exclusions must match.
+  E2E_CONFIG_URL="${HASHREL_URL}/files/e2e/config.tar.gz"
+  E2E_CONFIG_DIR="${CI_HOME}/${CI_GIT_DIR}/e2e/config"
+  E2E_CONFIG_TAR="$(mktemp)"
+  echo "[INFO] downloading e2e config from hashrelease: ${E2E_CONFIG_URL}"
+
+  # No --retry-all-errors: a hashrelease built before the archive existed
+  # answers 404, which should fail now rather than after minutes of backoff.
+  if ! curl --retry 9 -fsSL "${E2E_CONFIG_URL}" -o "${E2E_CONFIG_TAR}"; then
+    echo "[ERROR] hashrelease has no e2e config at ${E2E_CONFIG_URL}; not falling back to the branch checkout"
+    exit 1
+  fi
+  rm -rf "${E2E_CONFIG_DIR}"
+  tar -xzf "${E2E_CONFIG_TAR}" -C "${CI_HOME}/${CI_GIT_DIR}/e2e" || { echo "[ERROR] could not unpack ${E2E_CONFIG_URL}"; exit 1; }
+  rm -f "${E2E_CONFIG_TAR}"
+  echo "[INFO] e2e config path: ${E2E_CONFIG_URL} unpacked to ${E2E_CONFIG_DIR}"
+
+  # Mirror how `make e2e-run` resolves each entry, so a name the hashrelease
+  # lacks fails here, naming the file, rather than as a loader error.
+  for _entry in ${E2E_TEST_CONFIG:-}; do
+    case "${_entry}" in
+      /*) _cfg="${_entry}" ;;
+      e2e/config/*) _cfg="${CI_HOME}/${CI_GIT_DIR}/${_entry}" ;;
+      *) _cfg="${E2E_CONFIG_DIR}/${_entry}" ;;
+    esac
+    if [[ ! -f "${_cfg}" ]]; then
+      echo "[ERROR] e2e config ${_entry} is not in the hashrelease config ${E2E_CONFIG_URL} (looked for ${_cfg})"
+      exit 1
+    fi
+  done
 fi
 
 # E2E_BINARY is a set/unset sentinel (its value is not used here -- make
@@ -256,6 +292,48 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   esac
   mkdir -p "${go_cache}"
 
+  sandcat_sh="$(cd "$(dirname "${BASH_SOURCE[0]}")/../sandcat" && pwd)/sandcat.sh"
+  rm -rf report/sandcat report/report.json "${HOME}/.sandcat-analyzed"
+  sandcat_inline=()
+  sandcat_xtrace=""
+  [[ $- == *x* ]] && sandcat_xtrace=1 && set +x
+  if sandcat_env=$(SANDCAT_TOTAL_BUDGET="${SANDCAT_TOTAL_BUDGET:-10m}" "${sandcat_sh}" inline-env \
+      --kubeconfig "${BZ_LOCAL_DIR}/kubeconfig" --source-dir "$(pwd)"); then
+    eval "${sandcat_env}"
+    export SANDCAT_GEMINI_KEY="${SANDCAT_INLINE_GEMINI_KEY}"
+    sandcat_inline=(
+      -v "${SANDCAT_INLINE_BIN}:/usr/local/bin/sandcat:ro"
+      -e SANDCAT_INLINE_DIAG=1
+      -e SANDCAT_BIN=/usr/local/bin/sandcat
+      -e SANDCAT_GEMINI_KEY
+      -e E2E_SANDCAT_SOURCE_DIR=/go/src/github.com/projectcalico/calico
+      -e E2E_SANDCAT_OUT_DIR=/go/src/github.com/projectcalico/calico/report/sandcat
+      -e E2E_SANDCAT_E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
+      -e "E2E_SANDCAT_SHA=${SANDCAT_INLINE_SHA}"
+      -e E2E_TEST_CONFIG
+      -e "SANDCAT_SIG_DIR=${SANDCAT_SIG_DIR}"
+      -e "SANDCAT_MAX_DIAGNOSES=${SANDCAT_MAX_DIAGNOSES}"
+      -e "SANDCAT_TOTAL_BUDGET=${SANDCAT_TOTAL_BUDGET}"
+      -e SANDCAT_DB_URL -e SANDCAT_DB_TOKEN
+      -e CI_WORKFLOW_NAME -e CI_WORKFLOW_URL -e CI_STEP_NAME -e CI_STEP_ID
+      -e CI_GIT_REPO_SLUG -e CI_GIT_BRANCH -e CI_GIT_REF_TYPE
+      -e CI_GIT_PR_BRANCH -e CI_GIT_PR_NUMBER -e CI_GIT_PR_TITLE
+    )
+    if [[ -n "${SANDCAT_INLINE_CALICO_MCP_BIN}" ]]; then
+      sandcat_inline+=(
+        -v "${SANDCAT_INLINE_CALICO_MCP_BIN}:/usr/local/bin/calico-mcp:ro"
+        -e CALICO_MCP_BIN=/usr/local/bin/calico-mcp
+      )
+    fi
+    if [[ -n "${SANDCAT_INLINE_PR_CONTEXT}" ]]; then
+      sandcat_inline+=(
+        -v "${SANDCAT_INLINE_PR_CONTEXT}:/tmp/sandcat-pr-context.json:ro"
+        -e SANDCAT_PR_CONTEXT=/tmp/sandcat-pr-context.json
+      )
+    fi
+  fi
+  [[ -n "${sandcat_xtrace}" ]] && set -x
+
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
   e2e_rc=0
@@ -270,6 +348,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
     "${auth_mount[@]}" \
     "${aws_cred_env[@]}" \
+    ${sandcat_inline[@]+"${sandcat_inline[@]}"} \
     -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
     -v "${go_cache}":/go-cache:rw \
     -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
@@ -288,6 +367,13 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
   mkdir -p "${REPORT_DIR}"
   cp report/junit.xml "${REPORT_DIR}/junit.xml" 2>/dev/null || true
+
+  ("${sandcat_sh}" push-specs --spec-dir report/sandcat) || true
+  ("${sandcat_sh}" analyze \
+    --report report/report.json \
+    --log-file "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" \
+    --kubeconfig "${BZ_LOCAL_DIR}/kubeconfig" \
+    --source-dir "$(pwd)") || true
   popd || exit
 
   check_component_logs

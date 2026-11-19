@@ -1,5 +1,5 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
-
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,22 +14,4 @@
 
 package utils
 
-import (
-	"strings"
-
-	"github.com/projectcalico/calico/release/internal/command"
-)
-
-// GitBranch returns the current git branch of the repository.
-func GitBranch(dir string) (string, error) {
-	return command.GitInDir(dir, "rev-parse", "--abbrev-ref", "HEAD")
-}
-
-// GitIsDirty returns true if the repository is dirty.
-func GitIsDirty(dir string) (bool, error) {
-	version, err := command.GitVersion(dir, true)
-	if err != nil {
-		return false, err
-	}
-	return strings.HasSuffix(version, "-dirty"), nil
-}
+const ipamLockPath = "/var/run/calico/ipam.lock"

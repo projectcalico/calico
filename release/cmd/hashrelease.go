@@ -16,9 +16,7 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 
@@ -26,7 +24,6 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/charts"
-	"github.com/projectcalico/calico/release/internal/ci"
 	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
@@ -52,6 +49,8 @@ var (
 		return pinnedversion.Config{
 			Dir:                 cfg.TmpDir,
 			RootDir:             cfg.RepoRootDir,
+			Runner:              commandRunner,
+			ReleaseImages:       cfg.ReleaseImages,
 			ReleaseBranchPrefix: c.String(releaseBranchPrefixFlag.Name),
 			Registry:            productRegistry(c),
 			Operator: registry.Component{
@@ -110,10 +109,6 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 			return err
 		}
 
-		if err := validateCIBuildRequirements(c, cfg.RepoRootDir); err != nil {
-			return err
-		}
-
 		pin, err := pinForBuild(cfg, c)
 		if err != nil {
 			return err
@@ -162,6 +157,7 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 			calico.WithImages(c.Bool(imagesFlagName)),
 			calico.WithArchitectures(c.StringSlice(archFlag.Name)),
 			calico.WithArchiveImages(c.Bool(archiveImagesFlagName)),
+			calico.WithCI(c.Bool(ciFlag.Name)),
 			calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
 			calico.WithManifests(c.Bool(manifestsFlag.Name)),
 			calico.WithBinaries(c.Bool(binariesFlag.Name)),
@@ -277,7 +273,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		} else {
 			opts = append(opts, calico.WithImageScanning(c.Bool(imageScanFlag.Name), *imageScanningAPIConfig(c)))
 		}
-		opts = append(opts, calico.WithComponents(pin.Released()))
+		opts = append(opts, calico.WithComponents(pin.Released()), calico.WithReleaseImages(cfg.ReleaseImages))
 		if reg := c.StringSlice(helmRegistryFlag.Name); len(reg) > 0 {
 			opts = append(opts, calico.WithHelmRegistries(reg))
 		}
@@ -351,10 +347,6 @@ var validateHashreleaseBuildFlags = func(c *cli.Command) error {
 		if !hashreleaseServerConfig(c).Valid() {
 			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s is set",
 				hashreleaseServerBucketFlag.Name)
-		}
-		// Only the image promotions check reads it, and that is Semaphore's alone.
-		if c.String(ciTokenFlag.Name) == "" && os.Getenv("CI_WORKFLOW_NAME") == "" {
-			return fmt.Errorf("%s API token must be set when running on CI, either set \"SEMAPHORE_API_TOKEN\" or use %s flag", semaphoreCI, ciTokenFlag.Name)
 		}
 	} else {
 		// If building images, log a warning if no registry is specified.
@@ -448,32 +440,4 @@ func imageScanningAPIConfig(c *cli.Command) *imagescanner.Config {
 		Token:   c.String(imageScannerTokenFlag.Name),
 		Scanner: c.String(imageScannerSelectFlag.Name),
 	}
-}
-
-func validateCIBuildRequirements(c *cli.Command, repoRootDir string) error {
-	if !c.Bool(ciFlag.Name) {
-		return nil
-	}
-	if os.Getenv("CI_WORKFLOW_NAME") != "" {
-		logrus.Info("Not running on Semaphore, skipping images promotions check...")
-		return nil
-	}
-	if c.Bool(imagesFlagName) {
-		logrus.Info("Building images in hashrelease, skipping images promotions check...")
-		return nil
-	}
-	orgURL := c.String(ciBaseURLFlag.Name)
-	token := c.String(ciTokenFlag.Name)
-	pipelineID := c.String(ciPipelineIDFlag.Name)
-	if orgURL == "" || pipelineID == "" {
-		return fmt.Errorf("checking image promotions requires --%s and --%s", ciBaseURLFlag.Name, ciPipelineIDFlag.Name)
-	}
-	promotionsDone, err := ci.EvaluateImagePromotions(repoRootDir, orgURL, pipelineID, token)
-	if err != nil {
-		return err
-	}
-	if !promotionsDone {
-		return errors.New("images promotions are not done, wait for all images promotions to pass before publishing the hashrelease")
-	}
-	return nil
 }

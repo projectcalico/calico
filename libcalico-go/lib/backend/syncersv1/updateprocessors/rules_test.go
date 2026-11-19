@@ -500,6 +500,19 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		})
 	})
 
+	DescribeTable("service match namespace",
+		func(policyNamespace, serviceNamespace, wantNamespace string) {
+			svc := &apiv3.ServiceMatch{Name: "my-svc", Namespace: serviceNamespace}
+			src := updateprocessors.RuleAPIV3ToBackend(apiv3.Rule{Action: apiv3.Allow, Source: apiv3.EntityRule{Services: svc}}, policyNamespace)
+			dst := updateprocessors.RuleAPIV3ToBackend(apiv3.Rule{Action: apiv3.Allow, Destination: apiv3.EntityRule{Services: svc}}, policyNamespace)
+			Expect(src.SrcServiceNamespace).To(Equal(wantNamespace))
+			Expect(dst.DstServiceNamespace).To(Equal(wantNamespace))
+		},
+		Entry("defaults to the namespace of a namespaced policy", "default", "", "default"),
+		Entry("keeps an explicit namespace in a namespaced policy", "default", "kube-system", "kube-system"),
+		Entry("stays empty in a global policy", "", "", ""),
+	)
+
 	It("should parse a serviceaccount match with selector and namespace", func() {
 		dste := fmt.Sprintf("(pcns.nskey == \"nsvalue\") && (((%skey == \"value2\") && (%s in {\"%s\"})) && (has(label1)))", conversion.ServiceAccountLabelPrefix, apiv3.LabelServiceAccount, "sa3")
 

@@ -107,9 +107,9 @@ func (b *Backend) FilterHints(ctx context.Context, params whiskerv1.FlowFilterHi
 	hints := make([]whiskerv1.FlowFilterHintResponse, len(gmhints))
 	for i, hint := range gmhints {
 		switch params.Type.AsProto() {
-		case proto.FilterType_FilterTypeSourceNamespace, proto.FilterType_FilterTypeDestNamespace:
+		case proto.FilterType_FilterTypeSourceNamespace, proto.FilterType_FilterTypeDestNamespace, proto.FilterType_FilterTypeNamespace:
 			hint.Value = protoToNamespace(hint.Value)
-		case proto.FilterType_FilterTypeSourceName, proto.FilterType_FilterTypeDestName:
+		case proto.FilterType_FilterTypeSourceName, proto.FilterType_FilterTypeDestName, proto.FilterType_FilterTypeName:
 			hint.Value = protoToName(hint.Value)
 		}
 		hints[i] = whiskerv1.FlowFilterHintResponse{Value: hint.Value}

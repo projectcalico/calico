@@ -71,7 +71,7 @@ var (
 		Category: gitCategory,
 		Usage:    "The GitHub organization to use for the release",
 		Sources:  cli.NewValueSourceChain(cli.EnvVar("ORGANIZATION"), defaults.MK(defaults.KeyOrganization)),
-		Value:    defaults.Organization(),
+		Value:    defaults.Builtin(defaults.KeyOrganization),
 	}
 	repoFlagName = "repo"
 	repoFlag     = &cli.StringFlag{
@@ -79,7 +79,7 @@ var (
 		Category: gitCategory,
 		Usage:    "The GitHub repository to use for the release",
 		Sources:  cli.NewValueSourceChain(cli.EnvVar("GIT_REPO"), defaults.MK(defaults.KeyGitRepo)),
-		Value:    defaults.Repo(),
+		Value:    defaults.Builtin(defaults.KeyGitRepo),
 	}
 	repoRemoteFlagName = "remote"
 	repoRemoteFlag     = &cli.StringFlag{
@@ -87,7 +87,7 @@ var (
 		Category: gitCategory,
 		Usage:    "The remote for the git repository",
 		Sources:  cli.NewValueSourceChain(cli.EnvVar("GIT_REMOTE"), defaults.MK(defaults.KeyGitRemote)),
-		Value:    defaults.Remote(),
+		Value:    defaults.Builtin(defaults.KeyGitRemote),
 	}
 
 	// Branch/Tag flags are flags used for branch & tag management
@@ -97,7 +97,7 @@ var (
 		Category: gitCategory,
 		Usage:    "The stardard prefix used to denote release branches",
 		Sources:  cli.NewValueSourceChain(cli.EnvVar("RELEASE_BRANCH_PREFIX"), defaults.MK(defaults.KeyReleaseBranchPrefix)),
-		Value:    defaults.ReleaseBranchPrefix(),
+		Value:    defaults.Builtin(defaults.KeyReleaseBranchPrefix),
 	}
 	devTagSuffixFlagName = "dev-tag-suffix"
 	devTagSuffixFlag     = &cli.StringFlag{
@@ -105,7 +105,7 @@ var (
 		Category: gitCategory,
 		Usage:    "The suffix used to denote development tags",
 		Sources:  cli.NewValueSourceChain(cli.EnvVar("DEV_TAG_SUFFIX"), defaults.MK(defaults.KeyDevTagSuffix)),
-		Value:    defaults.DevTagSuffix(),
+		Value:    defaults.Builtin(defaults.KeyDevTagSuffix),
 	}
 	mainBranchFlag = &cli.StringFlag{
 		Name:     "main-branch",
@@ -332,10 +332,9 @@ var (
 
 // External flags are flags used to interact with external services
 var (
-	// CI flags for interacting with CI services (Semaphore)
-	ciFlags     = []cli.Flag{ciFlag, ciBaseURLFlag, ciJobIDFlag, ciPipelineIDFlag, ciTokenFlag}
-	semaphoreCI = "semaphore"
-	ciFlag      = &cli.BoolFlag{
+	// CI flags for interacting with CI services
+	ciFlags = []cli.Flag{ciFlag, ciBaseURLFlag, ciJobIDFlag}
+	ciFlag  = &cli.BoolFlag{
 		Name:     "ci",
 		Category: ciCategory,
 		Usage:    "Run in a continuous integration (CI) environment",
@@ -345,26 +344,14 @@ var (
 	ciBaseURLFlag = &cli.StringFlag{
 		Name:     "ci-url",
 		Category: ciCategory,
-		Usage:    fmt.Sprintf("The URL for accesing %s CI", semaphoreCI),
+		Usage:    "The CI base URL, used to build links to CI jobs",
 		Sources:  cli.EnvVars("SEMAPHORE_ORGANIZATION_URL"),
 	}
 	ciJobIDFlag = &cli.StringFlag{
 		Name:     "ci-job-id",
 		Category: ciCategory,
-		Usage:    fmt.Sprintf("The job ID for the %s CI job", semaphoreCI),
+		Usage:    "The CI job ID for the run",
 		Sources:  cli.EnvVars("SEMAPHORE_JOB_ID"),
-	}
-	ciPipelineIDFlag = &cli.StringFlag{
-		Name:     "ci-pipeline-id",
-		Category: ciCategory,
-		Usage:    fmt.Sprintf("The pipeline ID for the %s CI pipeline", semaphoreCI),
-		Sources:  cli.EnvVars("SEMAPHORE_PIPELINE_ID"),
-	}
-	ciTokenFlag = &cli.StringFlag{
-		Name:     "ci-token",
-		Category: ciCategory,
-		Usage:    fmt.Sprintf("The token for interacting with %s API", semaphoreCI),
-		Sources:  cli.EnvVars("SEMAPHORE_API_TOKEN"),
 	}
 
 	// Slack flags for posting messages to Slack
@@ -658,7 +645,7 @@ var (
 			if c.String(orgFlag.Name) != defaults.ProjectCalicoOrg || c.String(repoFlag.Name) != defaults.CalicoRepoName {
 				return fmt.Errorf("release notes can only be generated from %s/%s", defaults.ProjectCalicoOrg, defaults.CalicoRepoName)
 			}
-			if !github.Authenticated() {
+			if !github.Authenticated(commandRunner) {
 				return fmt.Errorf("release notes need GitHub authentication")
 			}
 			return nil
@@ -718,7 +705,7 @@ var (
 			if !b {
 				return nil
 			}
-			if !github.Authenticated() {
+			if !github.Authenticated(commandRunner) {
 				return fmt.Errorf("publishing a release needs GitHub authentication")
 			}
 			return nil

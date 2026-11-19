@@ -146,7 +146,7 @@ ut-validation: setup-envtest
 ## Check if generated files are out of date
 .PHONY: check-generated-files
 check-generated-files: .generate_files
-	if (git describe --tags --dirty | grep -c dirty >/dev/null); then \
+	if ! git diff --quiet HEAD; then \
 	  echo "Generated files are out of date."; \
 	  false; \
 	else \

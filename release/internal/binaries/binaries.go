@@ -27,9 +27,9 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const (
@@ -58,6 +58,15 @@ var all = func() map[string]string {
 		CalicoctlComponent: "build-all",
 		FelixComponent:     "release-build",
 	}
+}
+
+type prereq struct{ component, target string }
+
+// Builders run in parallel, so output two of them share is built once up
+// front. Otherwise each make cleans and rebuilds it while the other reads it.
+var sharedPrereqs = func() map[string]prereq {
+	libbpf := prereq{component: FelixComponent, target: "libbpf"}
+	return map[string]prereq{FelixComponent: libbpf, E2EComponent: libbpf}
 }
 
 // ppc64le and s390x have no e2e runners, so building them costs time and disk
@@ -90,20 +99,21 @@ func E2EDir(outputDir string) string {
 	return filepath.Join(outputDir, outputs.FilesDirName, E2EComponent)
 }
 
-func e2eShipped(_, _, relPath string) bool {
-	return strings.HasPrefix(relPath, fmt.Sprintf("%s-linux", E2EComponent))
+var e2eShipped = []fsutil.FileFilter{
+	fsutil.Recursive,
+	fsutil.Match(func(relPath string) bool {
+		return strings.HasPrefix(relPath, fmt.Sprintf("%s-linux", E2EComponent))
+	}),
 }
-
-func includeAll(_, _, _ string) bool { return true }
 
 // Builder is one kind of binary: the make target that builds it, and what
 // happens to the output.
 type Builder interface {
 	Component() string
 	Target() string
-	Env() []string
+	Arches() []string
 	SourceDir(repoRoot string) string
-	Output() (dir string, include utils.IncludeFunc)
+	Output() (dir string, filters []fsutil.FileFilter)
 }
 
 var (
@@ -118,12 +128,12 @@ var outDir = func(name, outputDir string) string {
 	return ""
 }
 
-func Release(outputDir string) []Builder {
+func Release(outputDir string, arches ...string) []Builder {
 	targets := all()
 	out := make([]Builder, 0, len(targets))
 	for _, name := range slices.Sorted(maps.Keys(targets)) {
 		dir := outDir(name, outputDir)
-		out = append(out, releaseBinaries{name: name, target: targets[name], outputDir: dir})
+		out = append(out, releaseBinaries{name: name, target: targets[name], outputDir: dir, arches: arches})
 	}
 	return out
 }
@@ -132,17 +142,18 @@ type releaseBinaries struct {
 	name      string
 	target    string
 	outputDir string
+	arches    []string
 }
 
 func (c releaseBinaries) Component() string                { return c.name }
 func (c releaseBinaries) Target() string                   { return c.target }
-func (c releaseBinaries) Env() []string                    { return nil }
 func (c releaseBinaries) SourceDir(repoRoot string) string { return sourceDir(repoRoot, c.name) }
-func (c releaseBinaries) Output() (string, utils.IncludeFunc) {
+func (c releaseBinaries) Arches() []string                 { return c.arches }
+func (c releaseBinaries) Output() (string, []fsutil.FileFilter) {
 	if c.outputDir == "" {
 		return "", nil
 	}
-	return c.outputDir, includeAll
+	return c.outputDir, []fsutil.FileFilter{fsutil.Recursive}
 }
 
 func E2E(arches []string, outputDir string) Builder {
@@ -163,13 +174,11 @@ type e2eBinaries struct {
 	outputDir string
 }
 
-func (e e2eBinaries) Component() string { return E2EComponent }
-func (e e2eBinaries) Target() string    { return e2eTarget }
-func (e e2eBinaries) Env() []string {
-	return []string{utils.Env(utils.EnvArches, strings.Join(e.arches, " "))}
-}
-func (e e2eBinaries) SourceDir(repoRoot string) string    { return e2eSourceDir(repoRoot) }
-func (e e2eBinaries) Output() (string, utils.IncludeFunc) { return e.outputDir, e2eShipped }
+func (e e2eBinaries) Component() string                     { return E2EComponent }
+func (e e2eBinaries) Target() string                        { return e2eTarget }
+func (e e2eBinaries) Arches() []string                      { return e.arches }
+func (e e2eBinaries) SourceDir(repoRoot string) string      { return e2eSourceDir(repoRoot) }
+func (e e2eBinaries) Output() (string, []fsutil.FileFilter) { return e.outputDir, e2eShipped }
 
 // archived is what each component contributes to the release archive. A var so
 // a product shipping a different set can replace it.
@@ -185,7 +194,7 @@ var archived = func(repoRoot string) []archives.DirSource {
 			To:    binDirName,
 			From:  sourceDir(repoRoot, FelixComponent),
 			// Felix's bin/ holds build output; only the BPF tool ships.
-			Filter: func(_, _, relPath string) bool { return relPath == FelixBinary },
+			Filter: []fsutil.FileFilter{fsutil.DirFiles, fsutil.Include(FelixBinary)},
 		},
 	}
 }

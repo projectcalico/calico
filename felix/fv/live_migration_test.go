@@ -600,6 +600,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ live migration route progra
 				Attrs: map[string]string{
 					ipam.AttributeNamespace: "default",
 					ipam.AttributePod:       source.Name,
+					ipam.AttributeVMIName:   vmiName,
 				},
 				Hostname: tc.Felixes[0].Hostname,
 			})
@@ -609,10 +610,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ live migration route progra
 					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNamespace: "default",
 						ipam.AttributePod:       source.Name,
+						ipam.AttributeVMIName:   vmiName,
 					},
 					AlternateOwnerAttrs: map[string]string{
 						ipam.AttributeNamespace: "default",
 						ipam.AttributePod:       target.Name,
+						ipam.AttributeVMIName:   vmiName,
 					},
 				}, nil)
 			Expect(err).NotTo(HaveOccurred())

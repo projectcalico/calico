@@ -40,6 +40,7 @@ const (
 // +kubebuilder:validation:XValidation:rule="self.metadata.name != 'default' || (has(self.spec.order) && self.spec.order == 1000000.0)",message="default tier order must be 1000000",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="self.metadata.name != 'kube-admin' || (has(self.spec.order) && self.spec.order == 1000.0)",message="kube-admin tier order must be 1000",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="self.metadata.name != 'kube-baseline' || (has(self.spec.order) && self.spec.order == 10000000.0)",message="kube-baseline tier order must be 10000000",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="oldSelf.hasValue() || (size(self.metadata.name) <= 63 && self.metadata.name.matches('^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'))",message="tier name must be a DNS label of at most 63 characters, with no dots",reason=FieldValueInvalid,optionalOldSelf=true
 type Tier struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`

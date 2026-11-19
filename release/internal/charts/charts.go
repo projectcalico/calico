@@ -220,7 +220,7 @@ type settings struct {
 }
 
 func (s *settings) Helm(args []string, env []string, logPath string) (string, error) {
-	return s.Run(helmBinary, args, env, logPath)
+	return s.Run(helmBinary, args, command.WithEnv(env...), command.WithLogFile(logPath))
 }
 
 // index is where a build writes its repository index.

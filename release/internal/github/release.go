@@ -23,6 +23,8 @@ import (
 	"path/filepath"
 
 	"github.com/google/go-github/v53/github"
+
+	"github.com/projectcalico/calico/release/internal/command"
 )
 
 // Indicates that GitHub did receive the whole file.
@@ -85,14 +87,11 @@ func NewReleases(repo Repo, svc ReleaseService) (*Releases, error) {
 	if err := repo.validate(); err != nil {
 		return nil, err
 	}
-	if svc != nil {
-		return &Releases{repo: repo, svc: svc}, nil
-	}
-	return &Releases{repo: repo, svc: Client().Repositories}, nil
+	return &Releases{repo: repo, svc: svc}, nil
 }
 
-func Client() *github.Client {
-	return github.NewClient(&http.Client{Transport: &GithubAuthTransport{}})
+func Client(r command.CommandRunner) *github.Client {
+	return github.NewClient(&http.Client{Transport: &authTransport{runner: r}})
 }
 
 // Get returns the release for a tag. exists is false with a nil error when no

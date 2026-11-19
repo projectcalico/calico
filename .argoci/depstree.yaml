@@ -347,6 +347,7 @@ components:
       - ^calicoctl/calicoctl/util/yaml/[^/]*\.go$
       - ^cmd/
       - ^cni-plugin/internal/pkg/azure/[^/]*\.go$
+      - ^cni-plugin/internal/pkg/k8sclient/[^/]*\.go$
       - ^cni-plugin/internal/pkg/utils/[^/]*\.go$
       - ^cni-plugin/internal/pkg/utils/cri/[^/]*\.go$
       - ^cni-plugin/pkg/dataplane/[^/]*\.go$
@@ -853,6 +854,7 @@ components:
       - ^felix/labelindex/ipsetmember/[^/]*\.go$
       - ^felix/netlinkshim/[^/]*\.go$
       - ^felix/proto/[^/]*\.go$
+      - ^felix/timeshim/[^/]*\.go$
       - ^felix/types/[^/]*\.go$
       - ^goldmane/proto/[^/]*\.go$
       - ^hack/test/certs/
@@ -1379,6 +1381,7 @@ components:
       - ^app-policy/policystore/[^/]*\.go$
       - ^app-policy/types/[^/]*\.go$
       - ^cni-plugin/internal/pkg/azure/[^/]*\.go$
+      - ^cni-plugin/internal/pkg/k8sclient/[^/]*\.go$
       - ^cni-plugin/internal/pkg/utils/[^/]*\.go$
       - ^cni-plugin/internal/pkg/utils/cri/[^/]*\.go$
       - ^cni-plugin/pkg/dataplane/[^/]*\.go$
