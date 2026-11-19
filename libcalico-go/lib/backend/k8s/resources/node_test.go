@@ -37,7 +37,7 @@ var _ = Describe("Test Node conversion", func() {
 				Annotations: map[string]string{
 					nodeBgpIpv4AddrAnnotation: "172.17.17.10",
 					nodeBgpAsnAnnotation:      "2546",
-					nodeInterfacesAnnotation:  "[{\"name\":\"eth1\",\"addresses\":[\"172.31.11.4\"]},{\"name\":\"eth0\",\"addresses\":[\"172.17.17.10\",\"172.17.17.11\"]}]",
+					nodeInterfacesAnnotation:  "[{\"name\":\"eth1\",\"addresses\":[\"172.31.11.4\"]},{\"name\":\"eth0\",\"addresses\":[\"172.17.17.10\",\"172.17.17.11\"],\"cidrs\":[\"172.17.17.10/24\",\"172.17.17.11/24\"]}]",
 				},
 			},
 			Status: k8sapi.NodeStatus{
@@ -79,6 +79,7 @@ var _ = Describe("Test Node conversion", func() {
 			{
 				Name:      "eth0",
 				Addresses: []string{"172.17.17.10", "172.17.17.11"},
+				CIDRs:     []string{"172.17.17.10/24", "172.17.17.11/24"},
 			},
 		}
 
@@ -339,6 +340,7 @@ var _ = Describe("Test Node conversion", func() {
 				{
 					Name:      "eth0",
 					Addresses: []string{"172.17.17.10", "172.17.17.11"},
+					CIDRs:     []string{"172.17.17.10/24", "172.17.17.11/24"},
 				},
 			},
 		}
@@ -349,7 +351,7 @@ var _ = Describe("Test Node conversion", func() {
 		Expect(newK8sNode.Annotations).To(HaveKeyWithValue(nodeBgpIpv6AddrAnnotation, "aa:bb:cc::ffff/120"))
 		Expect(newK8sNode.Annotations).To(HaveKeyWithValue(nodeBgpAsnAnnotation, "2456"))
 		Expect(newK8sNode.Annotations).To(HaveKeyWithValue(RouteReflectorClusterIDAnnotation, "245.0.0.3"))
-		Expect(newK8sNode.Annotations).To(HaveKeyWithValue(nodeInterfacesAnnotation, "[{\"name\":\"eth1\",\"addresses\":[\"172.31.11.4\"]},{\"name\":\"eth0\",\"addresses\":[\"172.17.17.10\",\"172.17.17.11\"]}]"))
+		Expect(newK8sNode.Annotations).To(HaveKeyWithValue(nodeInterfacesAnnotation, "[{\"name\":\"eth1\",\"addresses\":[\"172.31.11.4\"]},{\"name\":\"eth0\",\"addresses\":[\"172.17.17.10\",\"172.17.17.11\"],\"cidrs\":[\"172.17.17.10/24\",\"172.17.17.11/24\"]}]"))
 
 		// The calico node annotations and labels should not have escaped directly into the node annotations
 		// and labels.

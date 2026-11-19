@@ -16,6 +16,7 @@ package calc
 
 import (
 	"maps"
+	"slices"
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -118,17 +119,19 @@ type EventSequencer struct {
 }
 
 type HostInfo struct {
-	ip4Addr  string
-	ip6Addr  string
-	labels   map[string]string
-	asnumber string
+	ip4Addr        string
+	ip6Addr        string
+	labels         map[string]string
+	asnumber       string
+	interfaceCIDRs []string
 }
 
 func (h *HostInfo) equals(a *HostInfo) bool {
 	return h.ip4Addr == a.ip4Addr &&
 		h.ip6Addr == a.ip6Addr &&
 		h.asnumber == a.asnumber &&
-		maps.Equal(h.labels, a.labels)
+		maps.Equal(h.labels, a.labels) &&
+		slices.Equal(h.interfaceCIDRs, a.interfaceCIDRs)
 }
 
 type serviceID struct {
@@ -628,11 +631,12 @@ func (buf *EventSequencer) OnHostMetadataUpdate(hostname string, info *HostInfo)
 func (buf *EventSequencer) flushHostUpdates() {
 	for hostname, hostInfo := range buf.pendingHostMetadataUpdates {
 		buf.Callback(&proto.HostMetadataUpdate{
-			Hostname: hostname,
-			Ipv4Addr: hostInfo.ip4Addr,
-			Ipv6Addr: hostInfo.ip6Addr,
-			Asnumber: hostInfo.asnumber,
-			Labels:   hostInfo.labels,
+			Hostname:       hostname,
+			Ipv4Addr:       hostInfo.ip4Addr,
+			Ipv6Addr:       hostInfo.ip6Addr,
+			Asnumber:       hostInfo.asnumber,
+			Labels:         hostInfo.labels,
+			InterfaceCidrs: hostInfo.interfaceCIDRs,
 		})
 		buf.sentHosts.Add(hostname)
 		delete(buf.pendingHostMetadataUpdates, hostname)

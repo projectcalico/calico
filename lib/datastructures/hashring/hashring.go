@@ -167,9 +167,9 @@ func (r *Ring[V]) Insert(key string, value V) {
 }
 
 // Remove queues a member for removal. The member's virtual nodes
-// stay in the ring until the next Lookup, which sweeps them in one
-// pass; this amortises bulk Removes from O(K*N) to O(N). Remove
-// itself is O(1). It is a no-op if key is not present (whether
+// stay in the ring until the next Lookup or LookupFunc, which sweeps
+// them in one pass; this amortises bulk Removes from O(K*N) to O(N).
+// Remove itself is O(1). It is a no-op if key is not present (whether
 // "not present" means never inserted or already queued).
 func (r *Ring[V]) Remove(key string) {
 	if _, ok := r.members[key]; !ok {
@@ -190,12 +190,27 @@ func (r *Ring[V]) Len() int {
 // the first time it is called after a mutation; subsequent lookups
 // are O(probes * log N).
 func (r *Ring[V]) Lookup(key string) (V, bool) {
+	return r.LookupFunc(key, nil)
+}
+
+// LookupFunc returns the member that owns key among the members for
+// which accept returns true; a nil accept accepts every member, which
+// makes it Lookup. The result is the same as Lookup on a ring holding
+// only the accepted members: virtual-node positions depend only on
+// each member's own key, so skipping rejected entries leaves the
+// accepted members' positions untouched. In particular, a key whose
+// Lookup owner is accepted keeps that owner. The boolean is false (and
+// the returned value is the zero V) iff no live member is accepted.
+//
+// accept is called with member values, possibly several times per
+// member.
+func (r *Ring[V]) LookupFunc(key string, accept func(member V) bool) (V, bool) {
 	var zero V
 	if r.Len() == 0 {
 		return zero, false
 	}
 	if len(r.deletedKeys) > 0 {
-		// slices.DeleteFunc must preserve relative order — Lookup
+		// slices.DeleteFunc must preserve relative order — LookupFunc
 		// binary-searches r.entries assuming it stays sorted when
 		// r.sorted is true. If you replace this with any non-stable
 		// filter (swap-and-truncate etc.), set r.sorted = false
@@ -219,20 +234,28 @@ func (r *Ring[V]) Lookup(key string) (V, bool) {
 		r.sorted = true
 	}
 	bestDist := ^uint64(0)
-	bestIdx := 0
+	bestIdx := -1
 	for i := range r.probes {
 		probe := r.saltedHash(key, i)
-		idx, _ := slices.BinarySearchFunc(r.entries, probe, func(e entry, p uint64) int {
+		start, _ := slices.BinarySearchFunc(r.entries, probe, func(e entry, p uint64) int {
 			return cmp.Compare(e.hash, p)
 		})
-		if idx == len(r.entries) {
-			idx = 0
+		// Walk clockwise from the probe, wrapping past the end, to the
+		// first accepted entry.
+		for n := range len(r.entries) {
+			idx := (start + n) % len(r.entries)
+			if accept != nil && !accept(r.members[r.entries[idx].key]) {
+				continue
+			}
+			if dist := r.entries[idx].hash - probe; bestIdx < 0 || dist < bestDist {
+				bestDist = dist
+				bestIdx = idx
+			}
+			break
 		}
-		dist := r.entries[idx].hash - probe
-		if dist < bestDist {
-			bestDist = dist
-			bestIdx = idx
-		}
+	}
+	if bestIdx < 0 {
+		return zero, false
 	}
 	return r.members[r.entries[bestIdx].key], true
 }

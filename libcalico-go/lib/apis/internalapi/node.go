@@ -81,10 +81,16 @@ type NodeAddress struct {
 	Type string `json:"type,omitempty" validate:"omitempty,ipType"`
 }
 
+// NodeInterface represents a network interface on a node.
 type NodeInterface struct {
+	// Name is the name of the interface.
 	Name string `json:"name,omitempty" validate:"omitempty,name"`
 
+	// Addresses lists the IP addresses assigned to the interface.
 	Addresses []string `json:"addresses,omitempty" validate:"omitempty"`
+
+	// CIDRs lists the same addresses as Addresses, in CIDR form with the interface's prefix length (e.g. 192.168.1.10/24).
+	CIDRs []string `json:"cidrs,omitempty" validate:"omitempty"`
 }
 
 type NodeStatus struct {

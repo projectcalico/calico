@@ -188,7 +188,10 @@ PNM answers ARP and NDP on host NICs, sends gratuitous ARPs and
 unsolicited neighbour advertisements when it takes ownership of an IP,
 answers IPv6 DAD probes, and re-announces periodically. For pod IPs the
 hosting node always answers; for LoadBalancer VIPs a consistent hash
-ring picks a single answering node.
+ring picks a single answering node among those whose Node resource
+reports an interface in the VIP's subnet (none, if no node does).
+Eligibility must come from that cluster-wide data, never from a node's
+own interfaces, or nodes disagree on the owner.
 
 Its live-migration handling is **not** wired to the migration state
 machine. It gates directly on the role carried on the workload
