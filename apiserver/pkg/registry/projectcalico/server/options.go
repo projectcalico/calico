@@ -153,8 +153,8 @@ func (o Options) GetStorage(
 	indexers *cache.Indexers,
 ) (registry.DryRunnableStorage, factory.DestroyFunc, error) {
 	if o.storageType == StorageTypeEtcd {
-		// Watch events carry the keys the store writes, which are always under
-		// resourcePrefix, including for status subresources.
+		// Built the way upstream's defaultStoreKeyFuncs does. Production uses the
+		// calico storage type, not this one.
 		reverseKeyFunc := registry.NoNamespaceReverseKeyFunc(resourcePrefix)
 		if scopeStrategy.NamespaceScoped() {
 			reverseKeyFunc = registry.NamespaceReverseKeyFunc(resourcePrefix)
