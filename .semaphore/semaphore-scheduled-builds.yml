@@ -273,9 +273,13 @@ promotions:
         branch =~ 'master|release-.*' and change_in('/e2e/images/', {pipeline_file: 'ignore', default_branch: 'master', exclude: ['/**/README.md', '/**/DESIGN.md']})
   - name: Push istio images
     pipeline_file: push-images/istio.yml
-  # Auto-fires (unlike the component pushes above) because this is a build-time
-  # prerequisite node/istio pull before building, not a release artifact. No-op
-  # when the tag is already published.
+  # These two auto-fire (unlike the component pushes above) because each is a
+  # build-time prerequisite that node, istio or the tests pull before building,
+  # not a release artifact. No-op when the tag is already published.
+  - name: Push BIRD image
+    pipeline_file: push-images/bird.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*'"
   - name: Push nftables RPM images
     pipeline_file: push-images/nft-rpms.yml
     auto_promote:
