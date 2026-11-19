@@ -16,6 +16,8 @@ package istio
 
 import (
 	"context"
+	"crypto/x509"
+	"fmt"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -35,15 +37,21 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/apis"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/components"
+	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
+	"github.com/projectcalico/calico/operator/pkg/controller/utils"
+	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
+	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/pkg/render/istio"
 	"github.com/projectcalico/calico/operator/test"
 )
@@ -398,6 +406,109 @@ var _ = Describe("Istio controller tests", func() {
 		})
 	})
 
+	Context("Upgrade order", func() {
+		const oldImage = "registry.example/old:1"
+
+		var r *ReconcileIstio
+
+		reconcileOnce := func() {
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
+			Expect(err).NotTo(HaveOccurred())
+		}
+		key := func(name string) types.NamespacedName {
+			return types.NamespacedName{Name: name, Namespace: istio.IstioNamespace}
+		}
+		getIstiod := func() *appsv1.Deployment {
+			d := &appsv1.Deployment{}
+			Expect(cli.Get(ctx, key(istio.IstioIstiodDeploymentName), d)).To(Succeed())
+			return d
+		}
+		getZTunnel := func() *appsv1.DaemonSet {
+			ds := &appsv1.DaemonSet{}
+			Expect(cli.Get(ctx, key(istio.IstioZTunnelDaemonSetName), ds)).To(Succeed())
+			return ds
+		}
+		markRolledOut := func() {
+			d := getIstiod()
+			n := ptr.Deref(d.Spec.Replicas, 1)
+			d.Status = appsv1.DeploymentStatus{ObservedGeneration: d.Generation, Replicas: n, UpdatedReplicas: n, AvailableReplicas: n}
+			Expect(cli.Status().Update(ctx, d)).To(Succeed())
+		}
+		// downgradeTo makes the cluster look like an install of an older Istio
+		// that has finished rolling out.
+		downgradeTo := func(image string, annotations map[string]string) {
+			d := getIstiod()
+			d.Spec.Template.Spec.Containers[0].Image = image
+			d.Annotations = annotations
+			Expect(cli.Update(ctx, d)).To(Succeed())
+			markRolledOut()
+			ds := getZTunnel()
+			ds.Spec.Template.Spec.Containers[0].Image = image
+			Expect(cli.Update(ctx, ds)).To(Succeed())
+		}
+
+		BeforeEach(func() {
+			createResources()
+			r = &ReconcileIstio{
+				Client:   cli,
+				scheme:   scheme,
+				provider: operatorv1.ProviderNone,
+				status:   mockStatus,
+			}
+			reconcileOnce()
+		})
+
+		It("upgrades ztunnel only after istiod has rolled out the new image", func() {
+			newZTunnel := getZTunnel().Spec.Template.Spec.Containers[0].Image
+			downgradeTo(oldImage, nil)
+
+			reconcileOnce()
+			Expect(getIstiod().Spec.Template.Spec.Containers[0].Image).NotTo(Equal(oldImage))
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(oldImage))
+
+			markRolledOut()
+			reconcileOnce()
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(newZTunnel))
+		})
+
+		It("does not wait for an istiod the operator ignores", func() {
+			newZTunnel := getZTunnel().Spec.Template.Spec.Containers[0].Image
+			downgradeTo(oldImage, map[string]string{"unsupported.operator.tigera.io/ignore": "true"})
+
+			reconcileOnce()
+			Expect(getIstiod().Spec.Template.Spec.Containers[0].Image).To(Equal(oldImage))
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(newZTunnel))
+		})
+
+		It("holds ztunnel while a deleted istiod is created again", func() {
+			newZTunnel := getZTunnel().Spec.Template.Spec.Containers[0].Image
+			downgradeTo(oldImage, nil)
+			Expect(cli.Delete(ctx, getIstiod())).To(Succeed())
+
+			reconcileOnce()
+			Expect(getIstiod().Spec.Template.Spec.Containers[0].Image).NotTo(Equal(oldImage))
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(oldImage))
+
+			markRolledOut()
+			reconcileOnce()
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(newZTunnel))
+		})
+
+		It("reconciles on an istiod status update that keeps the generation", func() {
+			pred := istiodRolloutPredicate()
+			deployment := func(name, rv string, available int32) *appsv1.Deployment {
+				return &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: istio.IstioNamespace, Generation: 2, ResourceVersion: rv},
+					Status:     appsv1.DeploymentStatus{ObservedGeneration: 2, AvailableReplicas: available},
+				}
+			}
+			name := istio.IstioIstiodDeploymentName
+			Expect(pred.Update(event.UpdateEvent{ObjectOld: deployment(name, "1", 0), ObjectNew: deployment(name, "2", 1)})).To(BeTrue())
+			Expect(pred.Update(event.UpdateEvent{ObjectOld: deployment(name, "2", 1), ObjectNew: deployment(name, "2", 1)})).To(BeFalse())
+			Expect(pred.Update(event.UpdateEvent{ObjectOld: deployment("other", "1", 0), ObjectNew: deployment("other", "2", 1)})).To(BeFalse())
+		})
+	})
+
 	Context("Provider-specific tests", func() {
 		DescribeTable("should handle different providers correctly",
 			func(provider operatorv1.Provider) {
@@ -466,6 +577,7 @@ var _ = Describe("Istio controller tests", func() {
 				return errors.IsNotFound(err)
 			}).Should(BeTrue())
 		})
+
 		// After an operator restart the first reconcile can already see a deleting
 		// CR, and a dormant status manager would not report how its cleanup goes.
 		It("enables the status while the CR is deleting", func() {
@@ -1009,6 +1121,194 @@ var _ = Describe("Istio controller tests", func() {
 			Entry("underscore", "a_b", "must match"),
 		)
 	})
+
+	Context("Extension hooks", func() {
+		var (
+			ext *fakeIstioExtension
+			r   *ReconcileIstio
+			fc  *v3.FelixConfiguration
+			req = reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}}
+		)
+
+		BeforeEach(func() {
+			createResources()
+			fc = &v3.FelixConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "default"}}
+			Expect(cli.Create(ctx, fc)).NotTo(HaveOccurred())
+
+			ext = &fakeIstioExtension{finalizeDone: true}
+			r = &ReconcileIstio{
+				Client:   cli,
+				scheme:   scheme,
+				provider: operatorv1.ProviderNone,
+				status:   mockStatus,
+				ext:      extensions.New(extensions.Set{Istio: ext}),
+			}
+		})
+
+		deleteIstio := func() {
+			_, err := r.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			current := &operatorv1.Istio{}
+			Expect(cli.Get(ctx, utils.DefaultInstanceKey, current)).NotTo(HaveOccurred())
+			Expect(current.Finalizers).To(ContainElement(istio.IstioFinalizer))
+			Expect(cli.Delete(ctx, current)).NotTo(HaveOccurred())
+		}
+
+		getFelixConfiguration := func() *v3.FelixConfiguration {
+			got := &v3.FelixConfiguration{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, got)).NotTo(HaveOccurred())
+			return got
+		}
+
+		It("hands ExtendInputs the status and its payload to Modify", func() {
+			_, err := r.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(ext.extendInputs.Status).To(BeIdenticalTo(mockStatus))
+			Expect(ext.extendInputs.Terminating).To(BeFalse())
+			Expect(cli.Get(ctx, types.NamespacedName{Name: extensionConfigMapName, Namespace: istio.IstioNamespace}, &corev1.ConfigMap{})).To(Succeed())
+			mockStatus.AssertCalled(GinkgoT(), "ClearDegraded")
+		})
+
+		It("renders everything after a partial ExtendInputs, then degrades with its reason", func() {
+			ext.extendErr = extensions.Partialf(operatorv1.ResourceValidationError, "peer left out")
+
+			_, err := r.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, &appsv1.Deployment{})).To(Succeed())
+			Expect(cli.Get(ctx, types.NamespacedName{Name: extensionConfigMapName, Namespace: istio.IstioNamespace}, &corev1.ConfigMap{})).To(Succeed())
+			Expect(getFelixConfiguration().Spec.IstioAmbientMode).NotTo(BeNil())
+			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceValidationError, "peer left out", nil, mock.Anything)
+			mockStatus.AssertNotCalled(GinkgoT(), "ClearDegraded")
+		})
+
+		It("reports a CA problem and a partial ExtendInputs in one Degraded message", func() {
+			current := &operatorv1.Istio{}
+			Expect(cli.Get(ctx, utils.DefaultInstanceKey, current)).NotTo(HaveOccurred())
+			current.Spec.CertificateAuthority = &operatorv1.IstioCertificateAuthority{Secret: &operatorv1.IstioCASecret{Name: "absent-ca"}}
+			Expect(cli.Update(ctx, current)).NotTo(HaveOccurred())
+			ext.extendErr = extensions.Partialf(operatorv1.ResourceReadError, "peer left out")
+
+			_, err := r.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceValidationError,
+				mock.MatchedBy(func(msg string) bool {
+					return strings.Contains(msg, "absent-ca") && strings.Contains(msg, "peer left out")
+				}), nil, mock.Anything)
+			mockStatus.AssertNotCalled(GinkgoT(), "ClearDegraded")
+		})
+
+		It("renders nothing after a fatal ExtendInputs", func() {
+			ext.extendErr = extensions.Degradedf(operatorv1.ResourceReadError, "cannot read")
+
+			_, err := r.Reconcile(ctx, req)
+			Expect(err).To(MatchError("cannot read"))
+
+			err = cli.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, &appsv1.Deployment{})
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceReadError, "cannot read", nil, mock.Anything)
+		})
+
+		bundle := func() string {
+			cacerts := &corev1.Secret{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.CACertsSecretName, Namespace: istio.IstioNamespace}, cacerts)).To(Succeed())
+			return string(cacerts.Data[istio.RootCertKey])
+		}
+		published := func() string {
+			cm := &corev1.ConfigMap{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.TrustAnchorsConfigMapName, Namespace: istio.IstioNamespace}, cm)).To(Succeed())
+			return cm.Data[istio.RootCertKey]
+		}
+
+		It("trusts the extension's roots without publishing them", func() {
+			peer := newTestCert("peer-root", nil, true)
+			ext.trustRoots = []*x509.Certificate{peer.cert}
+
+			_, err := r.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(ext.trustInputs.Status).To(BeIdenticalTo(mockStatus))
+			Expect(istio.TrustDomain(ext.trustInstance)).To(Equal(istio.DefaultTrustDomain))
+			Expect(bundle()).To(ContainSubstring(string(peer.certPEM)))
+			Expect(published()).NotTo(BeEmpty())
+			Expect(published()).NotTo(ContainSubstring(string(peer.certPEM)))
+			mockStatus.AssertCalled(GinkgoT(), "ClearDegraded")
+		})
+
+		It("trusts the roots of a partial TrustRoots and reports it beside a partial ExtendInputs", func() {
+			peer := newTestCert("peer-root", nil, true)
+			ext.trustRoots = []*x509.Certificate{peer.cert}
+			ext.trustErr = extensions.Partialf(operatorv1.ResourceReadError, "peer roots left out")
+			ext.extendErr = extensions.Partialf(operatorv1.ResourceValidationError, "peer left out")
+
+			_, err := r.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(bundle()).To(ContainSubstring(string(peer.certPEM)))
+			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceReadError, "peer roots left out; peer left out", nil, mock.Anything)
+			mockStatus.AssertNotCalled(GinkgoT(), "ClearDegraded")
+		})
+
+		It("renders nothing after a fatal TrustRoots", func() {
+			ext.trustErr = fmt.Errorf("cannot read")
+
+			_, err := r.Reconcile(ctx, req)
+			Expect(err).To(MatchError("cannot read"))
+
+			err = cli.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, &appsv1.Deployment{})
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceReadError, "Error reading the Istio extension's trust roots", "cannot read", mock.Anything)
+		})
+
+		It("holds the finalizer and the FelixConfiguration while Finalize is not done", func() {
+			deleteIstio()
+			ext.finalizeDone = false
+
+			res, err := r.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(utils.FinalizerRemovalRetry))
+
+			Expect(ext.finalizeCalls).To(Equal(1))
+			Expect(ext.finalizeInputs.Terminating).To(BeTrue())
+			Expect(ext.finalizeInputs.Status).To(BeIdenticalTo(mockStatus))
+			Expect(ext.finalizeInputs.Client).NotTo(BeNil())
+			current := &operatorv1.Istio{}
+			Expect(cli.Get(ctx, utils.DefaultInstanceKey, current)).To(Succeed())
+			Expect(current.Finalizers).To(ContainElement(istio.IstioFinalizer))
+			Expect(getFelixConfiguration().Spec.IstioAmbientMode).NotTo(BeNil())
+		})
+
+		It("cleans up and releases the CR once Finalize is done", func() {
+			deleteIstio()
+			ext.finalizeDone = false
+			_, err := r.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			ext.finalizeDone = true
+			_, err = r.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(ext.finalizeCalls).To(Equal(2))
+			err = cli.Get(ctx, utils.DefaultInstanceKey, &operatorv1.Istio{})
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+			Expect(getFelixConfiguration().Spec.IstioAmbientMode).To(BeNil())
+		})
+
+		It("degrades with the Finalize reason and keeps the finalizer when Finalize fails", func() {
+			deleteIstio()
+			ext.finalizeErr = extensions.Degradedf(operatorv1.ResourceReadError, "cannot list")
+
+			_, err := r.Reconcile(ctx, req)
+			Expect(err).To(MatchError("cannot list"))
+
+			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceReadError, "Error cleaning up the Istio extension", "cannot list", mock.Anything)
+			current := &operatorv1.Istio{}
+			Expect(cli.Get(ctx, utils.DefaultInstanceKey, current)).To(Succeed())
+			Expect(current.Finalizers).To(ContainElement(istio.IstioFinalizer))
+		})
+	})
 })
 
 var _ = DescribeTable("validateClusterGUID",
@@ -1036,3 +1336,67 @@ var _ = DescribeTable("validateClusterGUID",
 	Entry("space", "a b", false),
 	Entry("slash", "a/b", false),
 )
+
+// extensionConfigMapName is the object the fake extension's modifier adds, named
+// from the payload ExtendInputs produced.
+const extensionConfigMapName = "istio-extension-payload"
+
+// fakeIstioExtension records what the controller hands each hook.
+type fakeIstioExtension struct {
+	trustRoots   []*x509.Certificate
+	trustErr     error
+	extendErr    error
+	finalizeDone bool
+	finalizeErr  error
+
+	trustInputs    controller.Inputs
+	trustInstance  *operatorv1.Istio
+	extendInputs   controller.Inputs
+	finalizeInputs controller.Inputs
+	finalizeCalls  int
+}
+
+func (*fakeIstioExtension) PolicySyncRequired(context.Context, client.Client) (bool, error) {
+	return false, nil
+}
+
+func (*fakeIstioExtension) Watches(ctrlruntime.Controller) error {
+	return nil
+}
+
+func (f *fakeIstioExtension) TrustRoots(_ context.Context, ci controller.Inputs, instance *operatorv1.Istio) ([]*x509.Certificate, error) {
+	f.trustInputs = ci
+	f.trustInstance = instance
+	return f.trustRoots, f.trustErr
+}
+
+func (f *fakeIstioExtension) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, error) {
+	f.extendInputs = ci
+	ci.RenderInputs.Extension = extensionConfigMapName
+	return ci, f.extendErr
+}
+
+func (f *fakeIstioExtension) Finalize(_ context.Context, ci controller.Inputs, _ *operatorv1.Istio) (bool, error) {
+	f.finalizeCalls++
+	f.finalizeInputs = ci
+	return f.finalizeDone, f.finalizeErr
+}
+
+func (*fakeIstioExtension) Modify(c render.Component, ri render.Inputs) render.Component {
+	if _, ok := c.(istio.ConfiguredComponent); !ok {
+		return c
+	}
+	name := render.ExtractExtensionData[string](ri)
+	return withObject{Component: c, obj: &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: istio.IstioNamespace}}}
+}
+
+// withObject adds one object to what a component creates.
+type withObject struct {
+	render.Component
+	obj client.Object
+}
+
+func (w withObject) Objects() ([]client.Object, []client.Object) {
+	create, del := w.Component.Objects()
+	return append(create, w.obj), del
+}

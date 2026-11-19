@@ -16,10 +16,13 @@ package extensions
 
 import (
 	"context"
+	"crypto/x509"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/controller"
+	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
@@ -29,10 +32,27 @@ type IstioExtension interface {
 	// socket, which the istio controller shares the FelixConfiguration field with.
 	PolicySyncRequired(ctx context.Context, c client.Client) (bool, error)
 
-	// Images overrides the images the istio render resolves.
+	// Watches registers the watches the extension needs, so a change to an input
+	// only the extension reads reconciles the Istio CR.
+	Watches(c ctrlruntime.Controller) error
+
+	// TrustRoots are roots the variant adds to the mesh trust bundle. Istio
+	// accepts any workload identity they sign, so they join root-cert.pem but
+	// are never published as this cluster's own. An error from Partialf leaves
+	// the returned roots usable: the controller renders with them, then degrades.
+	// instance has its defaults applied.
+	TrustRoots(ctx context.Context, ci controller.Inputs, instance *operatorv1.Istio) ([]*x509.Certificate, error)
 
 	// ExtendInputs resolves what the modifier needs but cannot read for itself.
+	// ci.Status is set, for warnings. An error from Partialf leaves the returned
+	// inputs usable: the controller renders with them, then degrades.
 	ExtendInputs(ctx context.Context, ci controller.Inputs) (controller.Inputs, error)
+
+	// Finalize cleans up what the extension created outside the objects the Istio CR
+	// owns. The controller calls it while the CR is deleting, before its own cleanup,
+	// and keeps the finalizer, retrying, until Finalize reports done. ci carries the
+	// client and the status, with Terminating set.
+	Finalize(ctx context.Context, ci controller.Inputs, instance *operatorv1.Istio) (done bool, err error)
 
 	// Modify layers the variant onto a component the controller rendered.
 	Modify(c render.Component, ri render.Inputs) render.Component
@@ -45,10 +65,22 @@ func (noopIstio) PolicySyncRequired(context.Context, client.Client) (bool, error
 	return false, nil
 }
 
+func (noopIstio) Watches(ctrlruntime.Controller) error {
+	return nil
+}
+
+func (noopIstio) TrustRoots(context.Context, controller.Inputs, *operatorv1.Istio) ([]*x509.Certificate, error) {
+	return nil, nil
+}
+
 func (noopIstio) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, error) {
 	return ci, nil
 }
 
 func (noopIstio) Modify(c render.Component, _ render.Inputs) render.Component {
 	return c
+}
+
+func (noopIstio) Finalize(context.Context, controller.Inputs, *operatorv1.Istio) (bool, error) {
+	return true, nil
 }
