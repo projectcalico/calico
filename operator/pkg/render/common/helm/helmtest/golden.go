@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -59,8 +60,9 @@ func ToYAML(objs []client.Object) ([]byte, error) {
 			return nil, fmt.Errorf("marshal %s %s/%s: %w", kind(o), o.GetNamespace(), o.GetName(), err)
 		}
 		if kind(o) == "CustomResourceDefinition" {
-			// helm copies CRDs from the chart verbatim and they make up most of
-			// the output, so a digest pins them without bloating the file.
+			// CRDs make up most of the output, so a digest of the serialized
+			// object pins them without bloating the file. A serialization change
+			// in a library bump changes every digest at once.
 			fmt.Fprintf(&b, "---\n# %s %s sha256:%x\n", kind(o), o.GetName(), sha256.Sum256(out))
 			continue
 		}
@@ -88,7 +90,22 @@ func CompareGolden(path string, got []byte) error {
 		return fmt.Errorf("%w: run with %s=true to create it", err, UpdateEnv)
 	}
 	if !bytes.Equal(want, got) {
-		return fmt.Errorf("rendered output differs from %s: rerun with %s=true and review the diff", path, UpdateEnv)
+		return fmt.Errorf("rendered output differs from %s: rerun with %s=true and review the diff\n%s", path, UpdateEnv, firstDifference(want, got))
 	}
 	return nil
+}
+
+// firstDifference shows the first differing line with a little context, so a
+// CI log says what changed without the whole file.
+func firstDifference(want, got []byte) string {
+	w, g := strings.Split(string(want), "\n"), strings.Split(string(got), "\n")
+	i := 0
+	for i < len(w) && i < len(g) && w[i] == g[i] {
+		i++
+	}
+	from := max(i-3, 0)
+	section := func(lines []string) string {
+		return strings.Join(lines[min(from, len(lines)):min(i+3, len(lines))], "\n")
+	}
+	return fmt.Sprintf("first difference at line %d\n--- golden:\n%s\n+++ rendered:\n%s", i+1, section(w), section(g))
 }

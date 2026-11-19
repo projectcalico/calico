@@ -67,7 +67,9 @@ var log = logf.Log.WithName("controller_gatewayapi")
 
 // ReconcilerOptions is what the Gateway API reconciler needs to run.
 type ReconcilerOptions struct {
-	Client         client.Client
+	Client client.Client
+	// APIReader reads past the cache. Without it, reads use Client.
+	APIReader      client.Reader
 	Scheme         *runtime.Scheme
 	Status         status.StatusManager
 	TierWatchReady *utils.ReadyFlag
@@ -84,8 +86,13 @@ func NewReconciler(o ReconcilerOptions) *ReconcileGatewayAPI {
 		tierWatchReady = &utils.ReadyFlag{}
 	}
 
+	apiReader := o.APIReader
+	if apiReader == nil {
+		apiReader = o.Client
+	}
 	return &ReconcileGatewayAPI{
 		client:              o.Client,
+		apiReader:           apiReader,
 		scheme:              o.Scheme,
 		status:              o.Status,
 		tierWatchReady:      tierWatchReady,
@@ -107,6 +114,7 @@ func NewReconciler(o ReconcilerOptions) *ReconcileGatewayAPI {
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	r := NewReconciler(ReconcilerOptions{
 		Client:        mgr.GetClient(),
+		APIReader:     mgr.GetAPIReader(),
 		Scheme:        mgr.GetScheme(),
 		Status:        status.New(mgr.GetClient(), "gatewayapi", opts.KubernetesVersion),
 		ClusterDomain: opts.ClusterDomain,
@@ -209,6 +217,7 @@ var _ reconcile.Reconciler = &ReconcileGatewayAPI{}
 // ReconcileGatewayAPI reconciles a GatewayAPI object
 type ReconcileGatewayAPI struct {
 	client              client.Client
+	apiReader           client.Reader
 	scheme              *runtime.Scheme
 	tierWatchReady      *utils.ReadyFlag
 	status              status.StatusManager
@@ -306,9 +315,7 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 		}
 		// Patch that value back into the datastore. Nothing before this point
 		// depends on the rest of the spec, so a re-read on conflict is safe.
-		err = r.writeBackDefaultWithRetry(ctx, gatewayAPI,
-			func(g *operatorv1.GatewayAPI) bool { return g.Spec.CRDManagement != nil },
-			func(g *operatorv1.GatewayAPI) { g.Spec.CRDManagement = &setting })
+		err = r.writeBackCRDManagement(ctx, gatewayAPI, setting)
 		if errors.IsConflict(err) {
 			reqLogger.V(1).Info("GatewayAPI changed while writing back CRDManagement, will retry")
 			return reconcile.Result{RequeueAfter: time.Second}, nil
@@ -648,25 +655,25 @@ func (r *ReconcileGatewayAPI) writeBackDefault(ctx context.Context, gatewayAPI *
 	return err
 }
 
-// writeBackDefaultWithRetry re-reads the CR on a conflict and retries within
-// this reconcile, unless the user has set the field meanwhile. It exists for
-// defaults inferred from this reconcile's own work: a later reconcile could
-// infer a different value, because the CRDs this one created would then look
-// pre-existing.
-func (r *ReconcileGatewayAPI) writeBackDefaultWithRetry(ctx context.Context, gatewayAPI *operatorv1.GatewayAPI, isSet func(*operatorv1.GatewayAPI) bool, setDefault func(*operatorv1.GatewayAPI)) error {
+// writeBackCRDManagement retries a conflicting write-back within this
+// reconcile, because a later reconcile could infer a different value: the CRDs
+// this one created would then look pre-existing. Each retry reads the CR past
+// the cache, after the backoff, so it sees the edit that caused the conflict.
+// A value the user set meanwhile is kept.
+func (r *ReconcileGatewayAPI) writeBackCRDManagement(ctx context.Context, gatewayAPI *operatorv1.GatewayAPI, setting operatorv1.CRDManagement) error {
+	attempt := 0
 	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		if isSet(gatewayAPI) {
-			return nil
-		}
-		err := r.writeBackDefault(ctx, gatewayAPI, setDefault)
-		if errors.IsConflict(err) {
+		if attempt++; attempt > 1 {
 			latest := &operatorv1.GatewayAPI{}
-			if getErr := r.client.Get(ctx, client.ObjectKeyFromObject(gatewayAPI), latest); getErr != nil {
-				return getErr
+			if err := r.apiReader.Get(ctx, client.ObjectKeyFromObject(gatewayAPI), latest); err != nil {
+				return err
 			}
 			*gatewayAPI = *latest
 		}
-		return err
+		if gatewayAPI.Spec.CRDManagement != nil {
+			return nil
+		}
+		return r.writeBackDefault(ctx, gatewayAPI, func(g *operatorv1.GatewayAPI) { g.Spec.CRDManagement = &setting })
 	})
 }
 

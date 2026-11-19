@@ -117,6 +117,7 @@ var _ = Describe("Gateway API controller tests", func() {
 		fakeComponentHandlers = nil
 		r = &ReconcileGatewayAPI{
 			client:              c,
+			apiReader:           c,
 			scheme:              scheme,
 			status:              mockStatus,
 			variant:             operatorv1.Calico,
@@ -663,13 +664,24 @@ var _ = Describe("Gateway API controller tests", func() {
 			Expect(c.Create(ctx, gwapi)).NotTo(HaveOccurred())
 
 			By("updating the CR as a user would, after the reconcile has read it but before its first write-back")
+			// The cached client keeps returning the CR as it was before the edit,
+			// like a lagging cache. Only r.apiReader sees the edit.
+			var preEdit *operatorv1.GatewayAPI
 			userUpdated := false
 			r.client = interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
+				Get: func(ctx context.Context, cl client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					if g, ok := obj.(*operatorv1.GatewayAPI); ok && preEdit != nil {
+						preEdit.DeepCopyInto(g)
+						return nil
+					}
+					return cl.Get(ctx, key, obj, opts...)
+				},
 				Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 					if _, ok := obj.(*operatorv1.GatewayAPI); ok && !userUpdated {
 						userUpdated = true
 						current := &operatorv1.GatewayAPI{}
 						Expect(cl.Get(ctx, utils.DefaultEnterpriseInstanceKey, current)).NotTo(HaveOccurred())
+						preEdit = current.DeepCopy()
 						userEdit(current)
 						Expect(cl.Update(ctx, current)).NotTo(HaveOccurred())
 					}

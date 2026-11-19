@@ -140,6 +140,11 @@ Packages that do not use Ginkgo reject the focus flag, so `UT_DIR` is required h
 
 	make ut UT_DIR=./pkg/render GINKGO_FOCUS="component function tests"
 
+Golden files pin what the operator renders from the embedded Istio and Envoy Gateway charts. After
+changing a chart version or the helm renderer, regenerate them and review the diff:
+
+	make ut UT_DIR=./pkg/render UPDATE_EXPECTED_DATA=true
+
 ## Making temporary changes to components the operator manages
 
 The operator creates and manages resources and will reconcile them to be in the desired state. Due to the
