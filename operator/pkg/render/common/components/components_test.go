@@ -1373,7 +1373,7 @@ var _ = Describe("ApplyPodDisruptionBudgetOverrides", func() {
 		pdb = &policyv1.PodDisruptionBudget{
 			ObjectMeta: metav1.ObjectMeta{Name: "calico-typha", Namespace: "calico-system"},
 			Spec: policyv1.PodDisruptionBudgetSpec{
-				MaxUnavailable: ptr.To(intstr.FromInt(1)),
+				MaxUnavailable: ptr.To(intstr.FromInt32(1)),
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"k8s-app": "calico-typha"},
 				},
@@ -1383,7 +1383,7 @@ var _ = Describe("ApplyPodDisruptionBudgetOverrides", func() {
 
 	It("does nothing when overrides is nil", func() {
 		ApplyPodDisruptionBudgetOverrides(pdb, nil)
-		Expect(pdb.Spec.MaxUnavailable).To(Equal(ptr.To(intstr.FromInt(1))))
+		Expect(pdb.Spec.MaxUnavailable).To(Equal(ptr.To(intstr.FromInt32(1))))
 		Expect(pdb.Spec.MinAvailable).To(BeNil())
 		Expect(pdb.Spec.UnhealthyPodEvictionPolicy).To(BeNil())
 	})
@@ -1392,7 +1392,7 @@ var _ = Describe("ApplyPodDisruptionBudgetOverrides", func() {
 		Expect(func() {
 			ApplyPodDisruptionBudgetOverrides(nil, &v1.PodDisruptionBudgetOverride{
 				Spec: &v1.PodDisruptionBudgetOverrideSpec{
-					MinAvailable: ptr.To(intstr.FromInt(2)),
+					MinAvailable: ptr.To(intstr.FromInt32(2)),
 				},
 			})
 		}).ToNot(Panic())
@@ -1405,7 +1405,7 @@ var _ = Describe("ApplyPodDisruptionBudgetOverrides", func() {
 				UnhealthyPodEvictionPolicy: &policy,
 			},
 		})
-		Expect(pdb.Spec.MaxUnavailable).To(Equal(ptr.To(intstr.FromInt(1))))
+		Expect(pdb.Spec.MaxUnavailable).To(Equal(ptr.To(intstr.FromInt32(1))))
 		Expect(pdb.Spec.MinAvailable).To(BeNil())
 		Expect(*pdb.Spec.UnhealthyPodEvictionPolicy).To(Equal(policyv1.AlwaysAllow))
 	})
@@ -1413,16 +1413,16 @@ var _ = Describe("ApplyPodDisruptionBudgetOverrides", func() {
 	It("clears MaxUnavailable when MinAvailable is set", func() {
 		ApplyPodDisruptionBudgetOverrides(pdb, &v1.PodDisruptionBudgetOverride{
 			Spec: &v1.PodDisruptionBudgetOverrideSpec{
-				MinAvailable: ptr.To(intstr.FromInt(2)),
+				MinAvailable: ptr.To(intstr.FromInt32(2)),
 			},
 		})
-		Expect(pdb.Spec.MinAvailable).To(Equal(ptr.To(intstr.FromInt(2))))
+		Expect(pdb.Spec.MinAvailable).To(Equal(ptr.To(intstr.FromInt32(2))))
 		Expect(pdb.Spec.MaxUnavailable).To(BeNil())
 	})
 
 	It("clears MinAvailable when MaxUnavailable is set to a percentage", func() {
 		pdb.Spec.MaxUnavailable = nil
-		pdb.Spec.MinAvailable = ptr.To(intstr.FromInt(3))
+		pdb.Spec.MinAvailable = ptr.To(intstr.FromInt32(3))
 		ApplyPodDisruptionBudgetOverrides(pdb, &v1.PodDisruptionBudgetOverride{
 			Spec: &v1.PodDisruptionBudgetOverrideSpec{
 				MaxUnavailable: ptr.To(intstr.FromString("50%")),
@@ -1436,11 +1436,11 @@ var _ = Describe("ApplyPodDisruptionBudgetOverrides", func() {
 		policy := policyv1.AlwaysAllow
 		ApplyPodDisruptionBudgetOverrides(pdb, &v1.PodDisruptionBudgetOverride{
 			Spec: &v1.PodDisruptionBudgetOverrideSpec{
-				MinAvailable:               ptr.To(intstr.FromInt(2)),
+				MinAvailable:               ptr.To(intstr.FromInt32(2)),
 				UnhealthyPodEvictionPolicy: &policy,
 			},
 		})
-		Expect(pdb.Spec.MinAvailable).To(Equal(ptr.To(intstr.FromInt(2))))
+		Expect(pdb.Spec.MinAvailable).To(Equal(ptr.To(intstr.FromInt32(2))))
 		Expect(pdb.Spec.MaxUnavailable).To(BeNil())
 		Expect(*pdb.Spec.UnhealthyPodEvictionPolicy).To(Equal(policyv1.AlwaysAllow))
 	})
@@ -1449,7 +1449,7 @@ var _ = Describe("ApplyPodDisruptionBudgetOverrides", func() {
 		original := pdb.Spec.Selector.DeepCopy()
 		ApplyPodDisruptionBudgetOverrides(pdb, &v1.PodDisruptionBudgetOverride{
 			Spec: &v1.PodDisruptionBudgetOverrideSpec{
-				MinAvailable: ptr.To(intstr.FromInt(2)),
+				MinAvailable: ptr.To(intstr.FromInt32(2)),
 			},
 		})
 		Expect(pdb.Spec.Selector).To(Equal(original))
@@ -1472,7 +1472,7 @@ var _ = Describe("ApplyPodDisruptionBudgetOverrides", func() {
 		ApplyPodDisruptionBudgetOverrides(pdb, &v1.PodDisruptionBudgetOverride{
 			Metadata: &v1.Metadata{Labels: map[string]string{"a": "b"}},
 		})
-		Expect(pdb.Spec.MaxUnavailable).To(Equal(ptr.To(intstr.FromInt(1))))
+		Expect(pdb.Spec.MaxUnavailable).To(Equal(ptr.To(intstr.FromInt32(1))))
 		Expect(pdb.Spec.MinAvailable).To(BeNil())
 		Expect(pdb.Spec.UnhealthyPodEvictionPolicy).To(BeNil())
 		Expect(pdb.Labels).To(HaveKeyWithValue("a", "b"))

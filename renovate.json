@@ -42,7 +42,7 @@
     {
       "customType": "regex",
       "managerFilePatterns": ["/^metadata\\.mk$/", "/^\\.argoci\\/config\\.yaml$/"],
-      "matchStrings": ["K8S_VERSION=v(?<currentValue>\\d+\\.\\d+\\.\\d+)", "-k8s(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "matchStrings": ["K8S_VERSION=v(?<currentValue>\\d+\\.\\d+\\.\\d+(?:-(?:alpha|beta|rc)\\.\\d+)?)", "-k8s(?<currentValue>\\d+\\.\\d+\\.\\d+(?:-(?:alpha|beta|rc)\\.\\d+)?)"],
       "depNameTemplate": "kubernetes/kubernetes",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v(?<version>.*)$"

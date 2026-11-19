@@ -31,7 +31,7 @@ import (
 	"go.etcd.io/etcd/client/pkg/v3/srv"
 	"go.etcd.io/etcd/client/pkg/v3/transport"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	apiextclient "k8s.io/apiextensions-api/pkg/client/clientset/clientset"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/storage/etcd3"
 	"k8s.io/client-go/dynamic"

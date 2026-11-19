@@ -29,11 +29,13 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	apiextenv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextenv1 "k8s.io/apiextensions-api/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	gapi "sigs.k8s.io/gateway-api/apis/v1"
 	"sigs.k8s.io/yaml" // gopkg.in/yaml.v2 didn't parse all the fields but this package did
@@ -649,6 +651,44 @@ var _ = Describe("Gateway API controller tests", func() {
 		Expect(gwapi.Spec.CRDManagement).NotTo(BeNil())
 		Expect(*gwapi.Spec.CRDManagement).To(Equal(operatorv1.CRDManagementReconcile))
 	})
+
+	DescribeTable("does not overwrite GatewayClasses that a user sets while defaults are written back", func(crdManagement *operatorv1.CRDManagement) {
+		Expect(c.Create(ctx, installation)).NotTo(HaveOccurred())
+		gwapi := &operatorv1.GatewayAPI{
+			ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
+			Spec:       operatorv1.GatewayAPISpec{CRDManagement: crdManagement},
+		}
+		Expect(c.Create(ctx, gwapi)).NotTo(HaveOccurred())
+
+		By("updating the CR as a user would, after the reconcile has read it but before its write-back")
+		userClasses := []operatorv1.GatewayClassSpec{{Name: "custom-gc"}}
+		userUpdated := false
+		r.client = interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
+			Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				if _, ok := obj.(*operatorv1.GatewayAPI); ok && !userUpdated {
+					userUpdated = true
+					current := &operatorv1.GatewayAPI{}
+					Expect(cl.Get(ctx, utils.DefaultEnterpriseInstanceKey, current)).NotTo(HaveOccurred())
+					current.Spec.GatewayClasses = userClasses
+					Expect(cl.Update(ctx, current)).NotTo(HaveOccurred())
+				}
+				return cl.Patch(ctx, obj, patch, opts...)
+			},
+		})
+
+		By("reconciling until the write-back settles")
+		for range 3 {
+			_, _ = r.Reconcile(ctx, reconcile.Request{})
+		}
+		Expect(userUpdated).To(BeTrue())
+
+		By("checking the user's GatewayClasses survived")
+		Expect(c.Get(ctx, utils.DefaultEnterpriseInstanceKey, gwapi)).NotTo(HaveOccurred())
+		Expect(gwapi.Spec.GatewayClasses).To(Equal(userClasses))
+	},
+		Entry("during the CRDManagement write-back", nil),
+		Entry("during the GatewayClasses write-back", ptr.To(operatorv1.CRDManagementReconcile)),
+	)
 
 	It("Check felix configuration patching is set if it's not alreadyconfigured", func() {
 		Expect(c.Create(ctx, installation)).NotTo(HaveOccurred())

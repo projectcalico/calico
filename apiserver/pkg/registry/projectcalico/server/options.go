@@ -153,11 +153,18 @@ func (o Options) GetStorage(
 	indexers *cache.Indexers,
 ) (registry.DryRunnableStorage, factory.DestroyFunc, error) {
 	if o.storageType == StorageTypeEtcd {
+		// Watch events carry the keys the store writes, which are always under
+		// resourcePrefix, including for status subresources.
+		reverseKeyFunc := registry.NoNamespaceReverseKeyFunc(resourcePrefix)
+		if scopeStrategy.NamespaceScoped() {
+			reverseKeyFunc = registry.NamespaceReverseKeyFunc(resourcePrefix)
+		}
 		etcdRESTOpts := o.EtcdOptions.RESTOptions
 		storageInterface, dFunc, err := etcdRESTOpts.Decorator(
 			etcdRESTOpts.StorageConfig,
 			resourcePrefix,
 			keyFunc, /* keyFunc for decorator -- looks to be unused everywhere */
+			reverseKeyFunc,
 			newFunc,
 			newListFunc,
 			getAttrsFunc,
