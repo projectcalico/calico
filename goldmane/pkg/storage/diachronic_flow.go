@@ -493,16 +493,17 @@ func recordIPSet(m map[string]*ipEntry, ips []string, slot int, start int64) map
 			continue
 		}
 
-		// This IP is new, but m is full. Queue it in fresh and evict only after the loop, so every
-		// tracked IP's lastSeen is up to date when we rank them.
+		// This IP is new. Check whether m has reached MaxIPsPerFlow.
 		if len(m) >= MaxIPsPerFlow {
+			// m is full. Queue the IP in fresh and evict only after the loop, so every tracked IP's
+			// lastSeen is up to date when we rank them.
 			fresh = append(fresh, ip)
 			continue
 		}
 
-		// This IP is new and m has room, so add it straight away. If it's the first IP this flow
-		// has seen, create m first.
+		// This IP is new and m has room, so we add it straight away.
 		if m == nil {
+			// This is the first IP the flow has seen, so we create m first.
 			m = make(map[string]*ipEntry, min(len(ips), MaxIPsPerFlow))
 		}
 		addIPEntry(m, ip, slot, start)
@@ -526,7 +527,8 @@ func recordIPSet(m map[string]*ipEntry, ips []string, slot int, start int64) map
 	return m
 }
 
-// addIPEntry records a new IP in m as seen only in the given window slot.
+// addIPEntry records a new IP in m. Since this is a new IP, the entry is marked only for the given
+// window slot.
 func addIPEntry(m map[string]*ipEntry, ip string, slot int, start int64) {
 	e := &ipEntry{lastSeen: start}
 	e.windows.set(slot)
@@ -578,9 +580,9 @@ func evictLeastRecent(m map[string]*ipEntry, fresh []string, start int64) []stri
 
 	// Offer each tracked IP to the shortlist.
 	for ip, e := range m {
-		// An IP seen after start ranks above every fresh IP, so it can never be among the
-		// lowest-ranked. Skip it.
+		// Check whether this IP was seen after start.
 		if e.lastSeen > start {
+			// It ranks above every fresh IP, so it can never be among the lowest-ranked. Skip it.
 			continue
 		}
 		shortlist.offer(evictionCandidate{lastSeen: e.lastSeen, ip: ip})
@@ -633,9 +635,10 @@ func (s *evictionShortlist) members() []evictionCandidate {
 // offer adds candidate if the shortlist has room, or if it ranks below the highest-ranked member,
 // which it then replaces. It reports whether candidate was added.
 func (s *evictionShortlist) offer(candidate evictionCandidate) bool {
-	// The shortlist isn't full yet, so the candidate gets on regardless. We put it at the end and
-	// move it up the tree to its place.
+	// Check whether the shortlist has a free slot.
 	if s.size < len(s.slots) {
+		// It isn't full yet, so the candidate gets on regardless. We put it at the end and move it
+		// up the tree to its place.
 		s.slots[s.size] = candidate
 		s.size++
 		s.siftUp(s.size - 1)
