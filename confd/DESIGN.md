@@ -26,7 +26,7 @@ cross-component and lives at the repo level:
   nodes, per encapsulation type; the `programClusterRoutes` fields
   on `BGPConfiguration` and `FelixConfiguration`; the deprecation
   of BIRD-programmed IPIP cluster routes and of the `krt_tunnel`
-  BIRD fork.
+  BIRD patch.
 
 Operational guidance (flags, logging, no-op mode, BIRD config
 examples) is under [`confd/docs/`](./docs/).
