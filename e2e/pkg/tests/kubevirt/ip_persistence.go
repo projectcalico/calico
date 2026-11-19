@@ -28,6 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -414,6 +415,14 @@ var _ = describe.CalicoDescribe(
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-static-ip-mac"
+
+			// KubeMacPool (on by default in OpenShift Virtualization) would swap
+			// the requested MAC for one from its pool; this label opts the
+			// namespace out.
+			_, err := f.ClientSet.CoreV1().Namespaces().Patch(ctx, ns, types.MergePatchType,
+				[]byte(`{"metadata":{"labels":{"mutatevirtualmachines.kubemacpool.io":"ignore"}}}`),
+				metav1.PatchOptions{})
+			Expect(err).NotTo(HaveOccurred(), "labelling the namespace to opt out of KubeMacPool")
 
 			// Pick an unallocated static IP from the cluster's IPPool.
 			lcgc := newLibcalicoClient(f)
