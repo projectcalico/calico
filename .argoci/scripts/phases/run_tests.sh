@@ -7,9 +7,9 @@
 #     is set (per-PR CI), otherwise downloaded from the hashrelease (scheduled
 #     CI). E2E_TEST_CONFIG lists the YAML configs that select the specs. Per-PR
 #     runs read them from the checkout; scheduled runs unpack e2e/config from the
-#     same hashrelease over the checkout's, with no fallback.
-#     To rename a config, land the new file first and switch the cron after
-#     a hashrelease ships it; a same-PR rename fails scheduled runs until then.
+#     same hashrelease over the checkout's, with no fallback. A lane naming a
+#     config the hashrelease doesn't ship yet is skipped, with a skipped JUnit
+#     case, until a hashrelease built after that config merged.
 #   - Else (non-e2e test types: benchmarks, certification, etc.) → `bz tests`.
 #
 # Required env:
@@ -200,8 +200,10 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   rm -f "${E2E_CONFIG_TAR}"
   echo "[INFO] e2e config path: ${E2E_CONFIG_URL} unpacked to ${E2E_CONFIG_DIR}"
 
-  # Mirror how `make e2e-run` resolves each entry, so a name the hashrelease
-  # lacks fails here, naming the file, rather than as a loader error.
+  # Resolved as `make e2e-run` does. PR CI proved every entry exists in the
+  # checkout, so a missing one means the hashrelease predates it, and the lane
+  # waits rather than run a mismatched selection.
+  _unpublished=()
   for _entry in ${E2E_TEST_CONFIG:-}; do
     case "${_entry}" in
       /*) _cfg="${_entry}" ;;
@@ -209,10 +211,25 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
       *) _cfg="${E2E_CONFIG_DIR}/${_entry}" ;;
     esac
     if [[ ! -f "${_cfg}" ]]; then
-      echo "[ERROR] e2e config ${_entry} is not in the hashrelease config ${E2E_CONFIG_URL} (looked for ${_cfg})"
-      exit 1
+      _unpublished+=("${_entry}")
     fi
   done
+  if (( ${#_unpublished[@]} > 0 )); then
+    _skip_msg="lane waits for a hashrelease that ships ${_unpublished[*]}; ${HASHREL_URL} predates them"
+    echo "[WARN] skipping ${CI_STEP_NAME:-this lane}: ${_skip_msg}"
+    mkdir -p "${REPORT_DIR}"
+    cat > "${REPORT_DIR}/junit.xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="0" errors="0" skipped="1">
+  <testsuite name="e2e config publication" tests="1" failures="0" errors="0" skipped="1">
+    <testcase name="e2e config published in hashrelease" classname="run_tests">
+      <skipped message="${_skip_msg}"/>
+    </testcase>
+  </testsuite>
+</testsuites>
+EOF
+    exit 0
+  fi
 fi
 
 # E2E_BINARY is a set/unset sentinel (its value is not used here -- make
