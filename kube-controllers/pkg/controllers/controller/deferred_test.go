@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	fakeapiext "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake"
+	apiextv1 "k8s.io/apiextensions-api/pkg/apis/apiextensions/v1"
+	fakeapiext "k8s.io/apiextensions-api/pkg/client/clientset/clientset/fake"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

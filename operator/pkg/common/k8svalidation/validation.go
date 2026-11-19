@@ -24,6 +24,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/validate/content"
 	apimachineryvalidation "k8s.io/apimachinery/pkg/api/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	unversionedvalidation "k8s.io/apimachinery/pkg/apis/meta/v1/validation"
@@ -295,7 +296,7 @@ func ValidateTolerations(tolerations []core.Toleration, fldPath *field.Path) fie
 		switch toleration.Operator {
 		// empty operator means Equal
 		case core.TolerationOpEqual, "":
-			if errs := validation.IsValidLabelValue(toleration.Value); len(errs) != 0 {
+			if errs := content.IsLabelValue(toleration.Value); len(errs) != 0 {
 				allErrors = append(allErrors, field.Invalid(idxPath.Child("operator"), toleration.Value, strings.Join(errs, ";")))
 			}
 		case core.TolerationOpExists:
@@ -432,7 +433,7 @@ func validateTaintEffect(effect *core.TaintEffect, allowEmpty bool, fldPath *fie
 // ValidateQualifiedName validates if name is what Kubernetes calls a "qualified name".
 func ValidateQualifiedName(value string, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	for _, msg := range validation.IsQualifiedName(value) {
+	for _, msg := range content.IsLabelKey(value) {
 		allErrs = append(allErrs, field.Invalid(fldPath, value, msg))
 	}
 	return allErrs

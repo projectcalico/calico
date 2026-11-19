@@ -26,12 +26,12 @@ import (
 
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/api/validate/content"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 // IsHugePageResourceName returns true if the resource name has the huge page
@@ -91,7 +91,7 @@ func IsExtendedResourceName(name core.ResourceName) bool {
 	}
 	// Ensure it satisfies the rules in IsQualifiedName() after converted into quota resource name
 	nameForQuota := fmt.Sprintf("%s%s", core.DefaultResourceRequestsPrefix, string(name))
-	if errs := validation.IsQualifiedName(string(nameForQuota)); len(errs) != 0 {
+	if errs := content.IsLabelKey(string(nameForQuota)); len(errs) != 0 {
 		return false
 	}
 	return true

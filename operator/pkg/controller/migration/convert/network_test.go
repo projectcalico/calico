@@ -121,7 +121,7 @@ var _ = Describe("Convert network tests", func() {
 			cfg, err := Convert(ctx, c)
 			Expect(err).NotTo(HaveOccurred())
 			var _1440 int32 = 1440
-			_1intstr := intstr.FromInt(1)
+			_1intstr := intstr.FromInt32(1)
 			Expect(*cfg).To(Equal(operatorv1.Installation{Spec: operatorv1.InstallationSpec{
 				CNI: &operatorv1.CNISpec{
 					Type: operatorv1.PluginCalico,

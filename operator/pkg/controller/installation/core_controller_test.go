@@ -999,7 +999,7 @@ var _ = Describe("Testing core-controller installation", func() {
 							IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
 							ClusterIP:  "1.2.3.4",
 							Ports: []corev1.ServicePort{
-								{Name: "https", Port: 443, TargetPort: intstr.FromInt(443)},
+								{Name: "https", Port: 443, TargetPort: intstr.FromInt32(443)},
 							},
 						},
 					})
@@ -1136,7 +1136,7 @@ var _ = Describe("Testing core-controller installation", func() {
 								IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol, corev1.IPv6Protocol},
 								ClusterIPs: []string{"1.2.3.4", "fd00::1"},
 								Ports: []corev1.ServicePort{
-									{Name: "https", Port: 443, TargetPort: intstr.FromInt(443)},
+									{Name: "https", Port: 443, TargetPort: intstr.FromInt32(443)},
 								},
 							},
 						})).NotTo(HaveOccurred())
@@ -3340,7 +3340,7 @@ var _ = Describe("AWS VPC CNI annotation admission policy", func() {
 			ObjectMeta: metav1.ObjectMeta{Name: "aws-node", Namespace: metav1.NamespaceSystem},
 			Spec: appsv1.DaemonSetSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
 				ServiceAccountName:       sa,
-				DeprecatedServiceAccount: deprecatedSA,
+				DeprecatedServiceAccount: deprecatedSA, //nolint:staticcheck // Ignore SA1019: older DaemonSets may only set the legacy field.
 			}}},
 		}
 	}
