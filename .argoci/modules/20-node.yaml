@@ -35,7 +35,7 @@ steps:
 
   # Emulated, so each of these is closer to twenty minutes than two.
   - name: node-build
-    depends: [build-nft-rpms, check-go]
+    depends: [build-bird-image, build-nft-rpms, check-go]
     requests: {cpu: 2000m, memory: 4Gi}
     services:
       - docker
@@ -47,8 +47,9 @@ steps:
       - name: s390x
         env: [{name: ARCH, value: s390x}]
     commands: |
-      # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
-      # does not go back to the registry for it.
+      # Resolves the Dockerfile's bird and nft-rpms build contexts locally, so
+      # BuildKit does not go back to the registry for them.
+      .argoci/scripts/load-rpms-image.sh bird "${ARCH}"
       .argoci/scripts/load-nft-rpms.sh "${ARCH}"
       cd node
       make image ARCH=$ARCH

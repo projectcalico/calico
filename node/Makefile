@@ -51,16 +51,18 @@ NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
 # that are flaky to retrieve.
 THIRD_PARTY_DEPS_MIRROR=https://storage.googleapis.com/public-calico-third-party-deps
 
-# Versions and location of dependencies used in the build.
-BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
-BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
+# The calico/bird image: it carries the patched BIRD RPM we install in the
+# runtime stage, and the tests run it as an external BGP router. The tag is
+# content-addressed so any change to the spec, patches, or version pins yields
+# a new tag (see hack/rpms/bird/Makefile).
+include ../hack/rpms/bird/image.mk
 
 # Producer image carrying the patched nftables + libnftnl RPMs we install in
 # the runtime stage. The tag is content-addressed so any change to specs,
 # patches, or version pins yields a new tag (see hack/rpms/nftables/Makefile).
 include ../hack/rpms/nftables/image.mk
 FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.xz
-INCLUDED_SOURCE=$(BIRD_SOURCE) $(FELIX_GPL_SOURCE)
+INCLUDED_SOURCE=$(FELIX_GPL_SOURCE)
 
 TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
@@ -246,40 +248,36 @@ dist/LICENSE: ../LICENSE.md
 
 image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER)
 
-# nft-rpms-image builds (or no-ops on cache hit) the per-arch producer image
-# carrying our patched nftables + libnftnl RPMs. It's an order-only prereq;
-# the consumer build wires it in via --build-context nft-rpms=docker-image://...
-# so buildkit sources it from the local daemon (avoiding `--pull=always`
-# trying to fetch it from a registry where it may not have been pushed yet).
-.PHONY: nft-rpms-image
+# bird-image and nft-rpms-image build (or no-op on cache hit) the per-arch
+# producer images carrying our patched BIRD and nftables + libnftnl RPMs.
+# They are order-only prereqs; the consumer build wires each in via
+# --build-context <name>=docker-image://... so buildkit sources it from the
+# local daemon (avoiding `--pull=always` trying to fetch it from a registry
+# where it may not have been pushed yet).
+.PHONY: bird-image nft-rpms-image
 # `| register` so binfmt is set up before cross-arch buildx.
+bird-image: | register
+	$(MAKE) -C ../hack/rpms/bird image ARCH=$(ARCH)
 nft-rpms-image: | register
 	$(MAKE) -C ../hack/rpms/nftables image ARCH=$(ARCH)
 
 # Drop --pull from DOCKER_BUILD: with --pull=always, buildkit treats the
-# nft-rpms build context (docker-image://calico/nftables-rpms:<sha>-<arch>)
-# as a registry pull and fails when that tag hasn't been pushed yet (PR
-# builds, fresh local builds). Other base images (UBI_IMAGE, BIRD_IMAGE,
-# BPFTOOL_IMAGE) are pinned by tag so cache freshness is fine without --pull.
+# RPM build contexts (docker-image://calico/nftables-rpms:<sha>-<arch> and
+# docker-image://calico/bird:<sha>-<arch>) as registry pulls and fails
+# when a tag hasn't been pushed yet (PR builds, fresh local builds). Other
+# base images (UBI_IMAGE, BPFTOOL_IMAGE) are pinned by tag so cache freshness
+# is fine without --pull.
 $(NODE_CONTAINER_CREATED): DOCKER_PULL :=
 
-$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register nft-rpms-image
+$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register bird-image nft-rpms-image
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
-		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
 		--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
+		--build-context bird=docker-image://$(BIRD_IMAGE) \
 		--build-context nft-rpms=docker-image://$(NFT_RPMS_IMAGE) \
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
 		-t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
-	touch $@
-
-# download BIRD source to include in image.
-$(BIRD_SOURCE): .bird-source.created
-.bird-source.created:
-	rm -rf filesystem/included-source/bird*
-	mkdir -p filesystem/included-source/
-	$(call fetch_file,https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION),$(BIRD_SOURCE))
 	touch $@
 
 # include GPL felix code in the image.
@@ -377,7 +375,10 @@ bin/k8st.test:
 # from pytest to Go, so this runs only the Go test binary; its exit code is the
 # suite's pass/fail.
 .PHONY: kind-k8st-run-test
-kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG) bin/k8st.test
+kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG) bin/k8st.test | bird-image
+	# Some tests run the router image as a pod, and no registry has a tag that
+	# CI has not published yet.
+	$(KIND) load docker-image $(BIRD_IMAGE) --name $(KIND_NAME)
 	mkdir -p report
 	rm -f report/$(K8ST_GO_REPORT_LOG) report/$(K8ST_GO_REPORT_FILENAME) report/.go-rc
 	docker run -t --rm \
