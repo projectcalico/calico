@@ -1,0 +1,974 @@
+---
+# ClusterRole /tigera-gateway-api-gateway-helm-certgen:calico-system
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    helm.sh/hook: pre-install, pre-upgrade
+    helm.sh/hook-weight: "-1"
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: tigera-gateway-api-gateway-helm-certgen:calico-system
+rules:
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - admissionregistration.k8s.io
+  resourceNames:
+  - envoy-gateway-topology-injector.calico-system
+  resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - update
+  - patch
+---
+# ClusterRole /tigera-gateway-api-gateway-helm-cluster-infra-manager
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: tigera-gateway-api-gateway-helm-cluster-infra-manager
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  - services
+  - configmaps
+  verbs:
+  - create
+  - get
+  - list
+  - delete
+  - deletecollection
+  - patch
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - daemonsets
+  verbs:
+  - create
+  - get
+  - list
+  - delete
+  - deletecollection
+  - patch
+  - watch
+- apiGroups:
+  - autoscaling
+  resources:
+  - horizontalpodautoscalers
+  verbs:
+  - create
+  - get
+  - list
+  - delete
+  - deletecollection
+  - patch
+  - watch
+- apiGroups:
+  - policy
+  resources:
+  - poddisruptionbudgets
+  verbs:
+  - create
+  - get
+  - list
+  - delete
+  - deletecollection
+  - patch
+  - watch
+- apiGroups:
+  - certificates.k8s.io
+  resources:
+  - clustertrustbundles
+  verbs:
+  - list
+  - get
+  - watch
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+---
+# ClusterRole /tigera-gateway-api-gateway-helm-envoy-gateway-role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: tigera-gateway-api-gateway-helm-envoy-gateway-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gatewayclasses
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gatewayclasses/status
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.x-k8s.io
+  resources:
+  - serviceimports
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - secrets
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - daemonsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.envoyproxy.io
+  resources:
+  - envoyproxies
+  - envoypatchpolicies
+  - clienttrafficpolicies
+  - backendtrafficpolicies
+  - securitypolicies
+  - envoyextensionpolicies
+  - backends
+  - httproutefilters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.envoyproxy.io
+  resources:
+  - envoyproxies/status
+  - envoypatchpolicies/status
+  - clienttrafficpolicies/status
+  - backendtrafficpolicies/status
+  - securitypolicies/status
+  - envoyextensionpolicies/status
+  - backends/status
+  verbs:
+  - update
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gateways
+  - listenersets
+  - grpcroutes
+  - httproutes
+  - referencegrants
+  - tcproutes
+  - tlsroutes
+  - udproutes
+  - backendtlspolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gateways/status
+  - listenersets/status
+  - grpcroutes/status
+  - httproutes/status
+  - tcproutes/status
+  - tlsroutes/status
+  - udproutes/status
+  - backendtlspolicies/status
+  verbs:
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - pods/binding
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+# ClusterRoleBinding /tigera-gateway-api-gateway-helm-certgen:calico-system
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  annotations:
+    helm.sh/hook: pre-install, pre-upgrade
+    helm.sh/hook-weight: "-1"
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: tigera-gateway-api-gateway-helm-certgen:calico-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tigera-gateway-api-gateway-helm-certgen:calico-system
+subjects:
+- kind: ServiceAccount
+  name: tigera-gateway-api-gateway-helm-certgen
+  namespace: calico-system
+---
+# ClusterRoleBinding /tigera-gateway-api-gateway-helm-cluster-infra-manager
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: tigera-gateway-api-gateway-helm-cluster-infra-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tigera-gateway-api-gateway-helm-cluster-infra-manager
+subjects:
+- kind: ServiceAccount
+  name: envoy-gateway
+  namespace: calico-system
+---
+# ClusterRoleBinding /tigera-gateway-api-gateway-helm-envoy-gateway-rolebinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: tigera-gateway-api-gateway-helm-envoy-gateway-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tigera-gateway-api-gateway-helm-envoy-gateway-role
+subjects:
+- kind: ServiceAccount
+  name: envoy-gateway
+  namespace: calico-system
+---
+# ConfigMap calico-system/envoy-gateway-config
+apiVersion: v1
+data:
+  envoy-gateway.yaml: |
+    apiVersion: gateway.envoyproxy.io/v1alpha1
+    kind: EnvoyGateway
+    extensionApis: {}
+    gateway:
+      controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    logging:
+      level:
+        default: info
+    provider:
+      kubernetes:
+        deploy:
+          type: GatewayNamespace
+        rateLimitDeployment:
+          container:
+            image: docker.io/envoyproxy/ratelimit:8fe6ea42
+          patch:
+            type: StrategicMerge
+            value:
+              spec:
+                template:
+                  spec:
+                    containers:
+                    - imagePullPolicy: IfNotPresent
+                      name: envoy-ratelimit
+        shutdownManager:
+          image: docker.io/envoyproxy/gateway:v1.9.1
+      type: Kubernetes
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: envoy-gateway-config
+  namespace: calico-system
+---
+# CustomResourceDefinition backends.gateway.envoyproxy.io sha256:4c3c4f414c6d15126ccfb2c389c6523df437f91c8e162c808cbb78a4d2b4cc71
+---
+# CustomResourceDefinition backendtlspolicies.gateway.networking.k8s.io sha256:9ecc74b68432d96f3c0fea611357cf9673dcf827be526c17f10c77805d9ff720
+---
+# CustomResourceDefinition backendtrafficpolicies.gateway.envoyproxy.io sha256:992824ea373bef890e825fdc6ea57eee87248ceb5df0c26c5a55ff44ee94b52e
+---
+# CustomResourceDefinition clienttrafficpolicies.gateway.envoyproxy.io sha256:66cfc76321ffcd6fe72b9c19f65fb8ee3b85c3edffcce1ceea8fd5cb51ffc88f
+---
+# CustomResourceDefinition envoyextensionpolicies.gateway.envoyproxy.io sha256:007c1046f6689ddeb4bef254bb4ace19fff58bc00f799391ad45ee5585cf5ff6
+---
+# CustomResourceDefinition envoypatchpolicies.gateway.envoyproxy.io sha256:47be7d9e7ce755f800f212db90bbed762f6bdcabd3254bb7b8ccd4556a657ae6
+---
+# CustomResourceDefinition envoyproxies.gateway.envoyproxy.io sha256:ecf96b53f8ae30c6f28868044a2285ae03c32a68d3f825b680a632a74a12afbb
+---
+# CustomResourceDefinition gatewayclasses.gateway.networking.k8s.io sha256:c5066cd7143d2bf352fd30737dee9bd93ac313eb0f6977632ad0fb4ad497e723
+---
+# CustomResourceDefinition gateways.gateway.networking.k8s.io sha256:c124ff2724ceee8842d1fbbdaa00cb9ea32a957d4abab6b488893182b6deafa3
+---
+# CustomResourceDefinition grpcroutes.gateway.networking.k8s.io sha256:c2523385d727a5f74594b617b190bce96ff7ed5523d73afbbdf52a8cd0ff1f40
+---
+# CustomResourceDefinition httproutefilters.gateway.envoyproxy.io sha256:03bdf872f30f7112fdc35f95c19fb91544d8e0d057acfe694c4ac4d1c22bdfea
+---
+# CustomResourceDefinition httproutes.gateway.networking.k8s.io sha256:a3e3e7c1173d8eaa3eebf34cb72d663181fa3e563434d8777ca85d60164012e4
+---
+# CustomResourceDefinition listenersets.gateway.networking.k8s.io sha256:ed5ac5e217205702f74d1e17b20700b9d067ea85ae6aacedfdea2b82690b9f34
+---
+# CustomResourceDefinition referencegrants.gateway.networking.k8s.io sha256:ccb35449b41317e520f6e43d9b3e51a60db8dfa455b6cdcb9a669490f5f5587a
+---
+# CustomResourceDefinition securitypolicies.gateway.envoyproxy.io sha256:ab7a76f0f275d4341ad3b46cd654e75fd6d94f3b6e50abd33bc4632758bf8747
+---
+# CustomResourceDefinition tcproutes.gateway.networking.k8s.io sha256:7b7c6d687725bfba54a7da35bac24a1b55a34a0b753e4a30c66ece2495780cee
+---
+# CustomResourceDefinition tlsroutes.gateway.networking.k8s.io sha256:9e0116ecda1aa9e7448ee710a1cad2f54cbf9ba2adc33ceac217290fe209e41c
+---
+# CustomResourceDefinition udproutes.gateway.networking.k8s.io sha256:a4fe6e87b7e37ac2b26132147522f092ceb78dc64f17537fa497ee107ef31b2f
+---
+# CustomResourceDefinition xbackends.gateway.networking.x-k8s.io sha256:0daad33e3661a8793460e557b0d63a860ed4a21f37082b97f8441ffe250fb636
+---
+# CustomResourceDefinition xbackendtrafficpolicies.gateway.networking.x-k8s.io sha256:d0941154dec9794e1215bd768084ea1cbe6e81640b9b91e4b0ef529e1e0ad934
+---
+# CustomResourceDefinition xmeshes.gateway.networking.x-k8s.io sha256:2e116353b0cd72fc0f101abe18302c37b673442b374c0557674e5b56f1e2beb0
+---
+# Deployment calico-system/envoy-gateway
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    control-plane: envoy-gateway
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: envoy-gateway
+  namespace: calico-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: tigera-gateway-api
+      app.kubernetes.io/name: gateway-helm
+      control-plane: envoy-gateway
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        prometheus.io/port: "19001"
+        prometheus.io/scrape: "true"
+      labels:
+        app.kubernetes.io/instance: tigera-gateway-api
+        app.kubernetes.io/name: gateway-helm
+        control-plane: envoy-gateway
+    spec:
+      automountServiceAccountToken: true
+      containers:
+      - args:
+        - server
+        - --config-path=/config/envoy-gateway.yaml
+        env:
+        - name: ENVOY_GATEWAY_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: cluster.local
+        image: docker.io/envoyproxy/gateway:v1.9.1
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          periodSeconds: 20
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: envoy-gateway
+        ports:
+        - containerPort: 18000
+          name: grpc
+        - containerPort: 18001
+          name: ratelimit
+        - containerPort: 18002
+          name: wasm
+        - containerPort: 19001
+          name: metrics
+        - containerPort: 9443
+          name: webhook
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: true
+          runAsGroup: 65532
+          runAsNonRoot: true
+          runAsUser: 65532
+          seccompProfile:
+            type: RuntimeDefault
+        startupProbe:
+          failureThreshold: 30
+          httpGet:
+            path: /healthz
+            port: 8081
+          periodSeconds: 1
+          successThreshold: 1
+          timeoutSeconds: 1
+        volumeMounts:
+        - mountPath: /config
+          name: envoy-gateway-config
+          readOnly: true
+        - mountPath: /certs
+          name: certs
+          readOnly: true
+        - mountPath: /var/lib/eg/wasm
+          name: wasm-cache
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: envoy-gateway
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: envoy-gateway-config
+        name: envoy-gateway-config
+      - name: certs
+        secret:
+          secretName: envoy-gateway
+      - emptyDir: {}
+        name: wasm-cache
+status: {}
+---
+# Job calico-system/tigera-gateway-api-gateway-helm-certgen
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    helm.sh/hook: pre-install, pre-upgrade
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: tigera-gateway-api-gateway-helm-certgen
+  namespace: calico-system
+spec:
+  backoffLimit: 1
+  completions: 1
+  parallelism: 1
+  template:
+    metadata:
+      labels:
+        app: certgen
+    spec:
+      automountServiceAccountToken: true
+      containers:
+      - command:
+        - envoy-gateway
+        - certgen
+        env:
+        - name: ENVOY_GATEWAY_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: cluster.local
+        image: docker.io/envoyproxy/gateway:v1.9.1
+        imagePullPolicy: IfNotPresent
+        name: envoy-gateway-certgen
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: true
+          runAsGroup: 65532
+          runAsNonRoot: true
+          runAsUser: 65532
+          seccompProfile:
+            type: RuntimeDefault
+      restartPolicy: Never
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: tigera-gateway-api-gateway-helm-certgen
+  ttlSecondsAfterFinished: 30
+status: {}
+---
+# MutatingWebhookConfiguration /envoy-gateway-topology-injector.calico-system
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  annotations:
+    helm.sh/hook: pre-install, pre-upgrade
+    helm.sh/hook-weight: "-1"
+  labels:
+    app.kubernetes.io/component: topology-injector
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: envoy-gateway-topology-injector.calico-system
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: envoy-gateway
+      namespace: calico-system
+      path: /inject-pod-topology
+      port: 9443
+  failurePolicy: Ignore
+  name: topology.webhook.gateway.envoyproxy.io
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    resources:
+    - pods/binding
+  sideEffects: None
+---
+# Role calico-system/tigera-gateway-api-gateway-helm-certgen
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  annotations:
+    helm.sh/hook: pre-install, pre-upgrade
+    helm.sh/hook-weight: "-1"
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: tigera-gateway-api-gateway-helm-certgen
+  namespace: calico-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - create
+  - update
+---
+# Role calico-system/tigera-gateway-api-gateway-helm-infra-manager
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: tigera-gateway-api-gateway-helm-infra-manager
+  namespace: calico-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  - services
+  - configmaps
+  verbs:
+  - create
+  - get
+  - list
+  - delete
+  - deletecollection
+  - patch
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - daemonsets
+  verbs:
+  - create
+  - get
+  - list
+  - delete
+  - deletecollection
+  - patch
+  - watch
+- apiGroups:
+  - autoscaling
+  resources:
+  - horizontalpodautoscalers
+  verbs:
+  - create
+  - get
+  - list
+  - delete
+  - deletecollection
+  - patch
+  - watch
+- apiGroups:
+  - policy
+  resources:
+  - poddisruptionbudgets
+  verbs:
+  - create
+  - get
+  - list
+  - delete
+  - deletecollection
+  - patch
+  - watch
+- apiGroups:
+  - certificates.k8s.io
+  resources:
+  - clustertrustbundles
+  verbs:
+  - list
+  - get
+  - watch
+---
+# Role calico-system/tigera-gateway-api-gateway-helm-leader-election-role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: tigera-gateway-api-gateway-helm-leader-election-role
+  namespace: calico-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+# RoleBinding calico-system/tigera-gateway-api-gateway-helm-certgen
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  annotations:
+    helm.sh/hook: pre-install, pre-upgrade
+    helm.sh/hook-weight: "-1"
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: tigera-gateway-api-gateway-helm-certgen
+  namespace: calico-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tigera-gateway-api-gateway-helm-certgen
+subjects:
+- kind: ServiceAccount
+  name: tigera-gateway-api-gateway-helm-certgen
+  namespace: calico-system
+---
+# RoleBinding calico-system/tigera-gateway-api-gateway-helm-infra-manager
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: tigera-gateway-api-gateway-helm-infra-manager
+  namespace: calico-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tigera-gateway-api-gateway-helm-infra-manager
+subjects:
+- kind: ServiceAccount
+  name: envoy-gateway
+  namespace: calico-system
+---
+# RoleBinding calico-system/tigera-gateway-api-gateway-helm-leader-election-rolebinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: tigera-gateway-api-gateway-helm-leader-election-rolebinding
+  namespace: calico-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tigera-gateway-api-gateway-helm-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: envoy-gateway
+  namespace: calico-system
+---
+# Service calico-system/envoy-gateway
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    control-plane: envoy-gateway
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: envoy-gateway
+  namespace: calico-system
+spec:
+  ports:
+  - name: grpc
+    port: 18000
+    targetPort: 18000
+  - name: ratelimit
+    port: 18001
+    targetPort: 18001
+  - name: wasm
+    port: 18002
+    targetPort: 18002
+  - name: metrics
+    port: 19001
+    targetPort: 19001
+  - name: webhook
+    port: 9443
+    targetPort: 9443
+  selector:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/name: gateway-helm
+    control-plane: envoy-gateway
+  type: ClusterIP
+status:
+  loadBalancer: {}
+---
+# ServiceAccount calico-system/envoy-gateway
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: envoy-gateway
+  namespace: calico-system
+---
+# ServiceAccount calico-system/tigera-gateway-api-gateway-helm-certgen
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  annotations:
+    helm.sh/hook: pre-install, pre-upgrade
+    helm.sh/hook-weight: "-1"
+  labels:
+    app.kubernetes.io/instance: tigera-gateway-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/version: v1.9.1
+    helm.sh/chart: gateway-helm-v1.9.1
+  name: tigera-gateway-api-gateway-helm-certgen
+  namespace: calico-system
+---
+# ValidatingAdmissionPolicy /safe-upgrades.gateway.networking.k8s.io
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  annotations:
+    gateway.networking.k8s.io/bundle-version: v1.6.1
+    gateway.networking.k8s.io/channel: standard
+  name: safe-upgrades.gateway.networking.k8s.io
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - apiextensions.k8s.io
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - '*'
+  validations:
+  - expression: object.spec.group != 'gateway.networking.k8s.io' || oldObject == null
+      || ( has(object.metadata.annotations) && object.metadata.annotations.exists(k,
+      k == 'gateway.networking.k8s.io/channel') && object.metadata.annotations['gateway.networking.k8s.io/channel']
+      == 'standard' ) || ( oldObject != null && has(oldObject.metadata.annotations)
+      && oldObject.metadata.annotations.exists(k, k == 'gateway.networking.k8s.io/channel')
+      && oldObject.metadata.annotations['gateway.networking.k8s.io/channel'] == 'experimental'
+      )
+    message: Installing experimental CRDs on top of standard channel CRDs is prohibited
+      by default. Uninstall ValidatingAdmissionPolicy safe-upgrades.gateway.networking.k8s.io
+      to install experimental CRDs on top of standard channel CRDs.
+    reason: Invalid
+  - expression: |
+      object.spec.group != 'gateway.networking.k8s.io' ||
+      (has(object.metadata.annotations) && object.metadata.annotations.exists(k, k == 'gateway.networking.k8s.io/bundle-version') &&
+      (object.metadata.annotations['gateway.networking.k8s.io/bundle-version'] == 'v0.0.0-dev' ||
+      (object.metadata.annotations['gateway.networking.k8s.io/bundle-version'].startsWith('v1.') &&
+       !matches(object.metadata.annotations['gateway.networking.k8s.io/bundle-version'], '^v1\\.[0-4](\\.|$)'))))
+    message: Installing CRDs with version other than v0.0.0-dev or v1.5+ is prohibited
+      by default. Uninstall ValidatingAdmissionPolicy safe-upgrades.gateway.networking.k8s.io
+      to install other versions.
+    reason: Invalid
+status: {}
+---
+# ValidatingAdmissionPolicyBinding /safe-upgrades.gateway.networking.k8s.io
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  annotations:
+    gateway.networking.k8s.io/bundle-version: v1.6.1
+    gateway.networking.k8s.io/channel: standard
+  name: safe-upgrades.gateway.networking.k8s.io
+spec:
+  matchResources:
+    resourceRules:
+    - apiGroups:
+      - apiextensions.k8s.io
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - customresourcedefinitions
+  policyName: safe-upgrades.gateway.networking.k8s.io
+  validationActions:
+  - Deny

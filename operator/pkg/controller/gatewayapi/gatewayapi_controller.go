@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 	"k8s.io/utils/set"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -304,11 +305,15 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 			setting = operatorv1.CRDManagementPreferExisting
 		}
 		// Patch that value back into the datastore.
-		err = r.writeBackDefault(ctx, gatewayAPI, func(g *operatorv1.GatewayAPI) { g.Spec.CRDManagement = &setting })
+		err = r.writeBackDefault(ctx, gatewayAPI,
+			func(g *operatorv1.GatewayAPI) bool { return g.Spec.CRDManagement != nil },
+			func(g *operatorv1.GatewayAPI) { g.Spec.CRDManagement = &setting })
+		if errors.IsConflict(err) {
+			reqLogger.V(1).Info("GatewayAPI changed while writing back CRDManagement, will retry")
+			return reconcile.Result{RequeueAfter: time.Second}, nil
+		}
 		if err != nil {
-			if !errors.IsConflict(err) {
-				r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to patch CRDManagement field", err, reqLogger)
-			}
+			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to patch CRDManagement field", err, reqLogger)
 			return reconcile.Result{}, err
 		}
 	}
@@ -405,13 +410,17 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	if gatewayAPI.Spec.GatewayClasses == nil {
 		// Write back the default setup, which is to create a class named
 		// "tigera-gateway-class" without any customizations.
-		err = r.writeBackDefault(ctx, gatewayAPI, func(g *operatorv1.GatewayAPI) {
-			g.Spec.GatewayClasses = []operatorv1.GatewayClassSpec{{Name: "tigera-gateway-class"}}
-		})
+		err = r.writeBackDefault(ctx, gatewayAPI,
+			func(g *operatorv1.GatewayAPI) bool { return g.Spec.GatewayClasses != nil },
+			func(g *operatorv1.GatewayAPI) {
+				g.Spec.GatewayClasses = []operatorv1.GatewayClassSpec{{Name: "tigera-gateway-class"}}
+			})
+		if errors.IsConflict(err) {
+			reqLogger.V(1).Info("GatewayAPI changed while writing back GatewayClasses, will retry")
+			return reconcile.Result{RequeueAfter: time.Second}, nil
+		}
 		if err != nil {
-			if !errors.IsConflict(err) {
-				r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to patch GatewayClasses field", err, reqLogger)
-			}
+			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to patch GatewayClasses field", err, reqLogger)
 			return reconcile.Result{}, err
 		}
 	}
@@ -625,13 +634,30 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	return reconcile.Result{}, nil
 }
 
-// writeBackDefault persists a defaulted field. The optimistic lock turns a user
-// edit made since this reconcile read the CR into a conflict, so the edit is
-// kept and the next reconcile sees it, rather than the default overwriting it.
-func (r *ReconcileGatewayAPI) writeBackDefault(ctx context.Context, gatewayAPI *operatorv1.GatewayAPI, setDefault func(*operatorv1.GatewayAPI)) error {
-	base := gatewayAPI.DeepCopy()
-	setDefault(gatewayAPI)
-	return r.client.Patch(ctx, gatewayAPI, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{}))
+// writeBackDefault persists a defaulted field unless it is already set. The
+// optimistic lock stops the default from overwriting a user edit made since the
+// CR was read. On a conflict it re-reads the CR and retries in this reconcile,
+// because a later reconcile might infer a different default: the CRDs this one
+// created would then look pre-existing.
+func (r *ReconcileGatewayAPI) writeBackDefault(ctx context.Context, gatewayAPI *operatorv1.GatewayAPI, isSet func(*operatorv1.GatewayAPI) bool, setDefault func(*operatorv1.GatewayAPI)) error {
+	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		if isSet(gatewayAPI) {
+			return nil
+		}
+		base := gatewayAPI.DeepCopy()
+		setDefault(gatewayAPI)
+		err := r.client.Patch(ctx, gatewayAPI, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{}))
+		if errors.IsConflict(err) {
+			// Decoding into gatewayAPI would keep the unsaved default, so read
+			// into a fresh object.
+			latest := &operatorv1.GatewayAPI{}
+			if getErr := r.client.Get(ctx, client.ObjectKeyFromObject(base), latest); getErr != nil {
+				return getErr
+			}
+			*gatewayAPI = *latest
+		}
+		return err
+	})
 }
 
 // GetGatewayAPI finds the correct GatewayAPI resource and returns a message and error in the case of an error.
