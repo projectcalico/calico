@@ -410,7 +410,7 @@ func TestLiveMigrationCalculator_SelectorMatchThenLMDeleted(t *testing.T) {
 // Note, this scenario isn't expected as part of mainline live migration.  We would expect every
 // unique LiveMigration resource to have its own unique selector.  But it's useful to test how the
 // product code would respond.
-func TestLiveMigrationCalculator_SelectorRefCounting(t *testing.T) {
+func TestLiveMigrationCalculator_SharedSelector(t *testing.T) {
 	env := newTestLMCEnv()
 
 	// Two LMs with the same selector.
@@ -422,14 +422,6 @@ func TestLiveMigrationCalculator_SelectorRefCounting(t *testing.T) {
 	lm2 := makeLM(nil, makeTargetSelector("has(migrate)"))
 	env.lmc.OnUpdate(makeLMUpdate(lm2Key, lm2))
 
-	// Selector should be active (added once, ref count = 2).
-	if _, ok := env.lmc.selectorKeys["has(migrate)"]; !ok {
-		t.Fatal("expected selector to be tracked")
-	}
-	if env.lmc.selectorKeys["has(migrate)"].Len() != 2 {
-		t.Fatalf("expected 2 LM refs, got %d", env.lmc.selectorKeys["has(migrate)"].Len())
-	}
-
 	// Add a matching endpoint — should get TARGET.
 	wepKey := makeWEPKey("ns", "dst-pod")
 	env.addLabeledEndpoint(wepKey, map[string]string{"migrate": "true"})
@@ -439,21 +431,15 @@ func TestLiveMigrationCalculator_SelectorRefCounting(t *testing.T) {
 	}
 	eventCount := len(env.roleEvents)
 
-	// Delete first LM — selector should still be active, WEP still TARGET.
+	// Delete first LM — WEP still TARGET, through the second LM.
 	env.lmc.OnUpdate(makeLMDelete(lm1Key))
-	if _, ok := env.lmc.selectorKeys["has(migrate)"]; !ok {
-		t.Fatal("expected selector to still be tracked after first LM deleted")
-	}
 	// No role change event expected (still TARGET).
 	if len(env.roleEvents) != eventCount {
 		t.Errorf("expected no role change, got %v", env.roleEvents[eventCount:])
 	}
 
-	// Delete second LM — selector removed, WEP reverts to NO_ROLE.
+	// Delete second LM — WEP reverts to NO_ROLE.
 	env.lmc.OnUpdate(makeLMDelete(lm2Key))
-	if _, ok := env.lmc.selectorKeys["has(migrate)"]; ok {
-		t.Fatal("expected selector to be removed after both LMs deleted")
-	}
 	if env.lastRole(wepKey) != proto.LiveMigrationRole_NO_ROLE {
 		t.Errorf("expected NO_ROLE after all LMs deleted, got %v", env.lastRole(wepKey))
 	}
@@ -469,10 +455,6 @@ func TestLiveMigrationCalculator_SelectorChangeOnUpdate(t *testing.T) {
 	lm := makeLM(nil, makeTargetSelector("has(selectorA)"))
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
-	if _, ok := env.lmc.selectorKeys["has(selectorA)"]; !ok {
-		t.Fatal("expected selectorA to be tracked")
-	}
-
 	// Add a WEP matching selectorA.
 	wepKey := makeWEPKey("ns", "pod-a")
 	env.addLabeledEndpoint(wepKey, map[string]string{"selectorA": "yes", "selectorB": "yes"})
@@ -484,13 +466,6 @@ func TestLiveMigrationCalculator_SelectorChangeOnUpdate(t *testing.T) {
 	// Update LM to change selector from A to B.
 	lmUpdated := makeLM(nil, makeTargetSelector("has(selectorB)"))
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lmUpdated))
-
-	if _, ok := env.lmc.selectorKeys["has(selectorA)"]; ok {
-		t.Error("expected selectorA to be untracked after update")
-	}
-	if _, ok := env.lmc.selectorKeys["has(selectorB)"]; !ok {
-		t.Error("expected selectorB to be tracked after update")
-	}
 
 	// WEP matches both selectors, so it should still be TARGET via selectorB.
 	if env.lastRole(wepKey) != proto.LiveMigrationRole_TARGET {
@@ -598,9 +573,9 @@ func TestLiveMigrationCalculator_TargetWithNilFieldsInside(t *testing.T) {
 	}
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
-	// Should not crash and should have no selector tracked.
-	if len(env.lmc.selectorKeys) != 0 {
-		t.Errorf("expected no selectors tracked, got %d", len(env.lmc.selectorKeys))
+	// Should not crash, or give any WEP a role.
+	if len(env.roleEvents) != 0 {
+		t.Errorf("expected no role events, got %v", env.roleEvents)
 	}
 }
 
@@ -766,6 +741,54 @@ func TestLiveMigrationCalculator_UIDPropagation(t *testing.T) {
 	}
 	if env.lastUID(dstKey) != "" {
 		t.Errorf("expected empty UID for dst-pod after LM deleted, got %q", env.lastUID(dstKey))
+	}
+}
+
+// A LiveMigration for KubeVirt is created with only a target selector, and then gains its
+// source, with the same UID, once the source pod is known.  The target WEP must not lose its
+// role in between, even transiently.
+func TestLiveMigrationCalculator_SourceAddedWithSameUID(t *testing.T) {
+	env := newTestLMCEnv()
+
+	srcKey := makeWEPKey("ns", "src-pod")
+	env.lmc.OnUpdate(makeWEPUpdate(srcKey))
+	dstKey := makeWEPKey("ns", "dst-pod")
+	env.addLabeledEndpoint(dstKey, map[string]string{"migrate": "true"})
+
+	lmKey := makeLMKey("lm1")
+	env.lmc.OnUpdate(makeLMUpdate(lmKey, makeLMWithUID(nil, makeTargetSelector("has(migrate)"), "uid-1")))
+	if env.lastRole(dstKey) != proto.LiveMigrationRole_TARGET {
+		t.Fatalf("expected TARGET, got %v", env.lastRole(dstKey))
+	}
+	eventCount := len(env.roleEvents)
+
+	env.lmc.OnUpdate(makeLMUpdate(lmKey, makeLMWithUID(
+		makeSourceWEI("host1", "k8s", "ns/src-pod", ""),
+		makeTargetSelector("has(migrate)"),
+		"uid-1",
+	)))
+
+	// Only the source WEP's role should be emitted.
+	newEvents := env.roleEvents[eventCount:]
+	if len(newEvents) != 1 || newEvents[0].key != srcKey || newEvents[0].role != proto.LiveMigrationRole_SOURCE {
+		t.Errorf("expected only a SOURCE event for src-pod, got %v", newEvents)
+	}
+}
+
+// Deleting a LiveMigration must unregister its target selector, so that a WEP that matches the
+// selector afterwards gets no role from it.
+func TestLiveMigrationCalculator_SelectorUnregisteredOnDelete(t *testing.T) {
+	env := newTestLMCEnv()
+
+	lmKey := makeLMKey("lm1")
+	env.lmc.OnUpdate(makeLMUpdate(lmKey, makeLMWithUID(nil, makeTargetSelector("has(migrate)"), "uid-1")))
+	env.lmc.OnUpdate(makeLMDelete(lmKey))
+
+	wepKey := makeWEPKey("ns", "dst-pod")
+	env.addLabeledEndpoint(wepKey, map[string]string{"migrate": "true"})
+
+	if len(env.roleEvents) != 0 {
+		t.Errorf("expected no role events after the LiveMigration was deleted, got %v", env.roleEvents)
 	}
 }
 
