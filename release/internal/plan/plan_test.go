@@ -97,6 +97,26 @@ func TestRun(t *testing.T) {
 				wantErr: `node "b" requires "a", which is off in this run`,
 			},
 			{
+				name:  "a skipped requirement that is done is met",
+				opts:  Options{Skip: map[string]bool{"a": true}},
+				nodes: []Node{{Name: "a", Do: noop, Done: noop}, {Name: "b", Requires: []string{"a"}, Do: noop}},
+			},
+			{
+				name:  "a requirement turned off that is done is met, wherever it sits",
+				nodes: []Node{{Name: "b", Requires: []string{"a"}, Do: noop}, {Name: "a", When: func() bool { return false }, Do: noop, Done: noop}},
+			},
+			{
+				name:    "a skipped requirement that is not done fails",
+				opts:    Options{Skip: map[string]bool{"a": true}},
+				nodes:   []Node{{Name: "a", Do: noop, Done: func() error { return errors.New("no output") }}, {Name: "b", Requires: []string{"a"}, Do: noop}},
+				wantErr: `node "b" requires "a", which is off and not done: no output`,
+			},
+			{
+				name:    "a requirement that is on must still run first, even when done",
+				nodes:   []Node{{Name: "b", Requires: []string{"a"}, Do: noop}, {Name: "a", Do: noop, Done: noop}},
+				wantErr: `node "b" requires "a", which runs after it`,
+			},
+			{
 				name:  "an off node's requirements are not checked",
 				nodes: []Node{{Name: "b", When: func() bool { return false }, Requires: []string{"a"}, Do: noop}},
 			},
@@ -129,6 +149,28 @@ func TestRun(t *testing.T) {
 					t.Error("a node ran despite an unmet requirement")
 				}
 			})
+		}
+	})
+
+	t.Run("done is checked once, and only for an off requirement", func(t *testing.T) {
+		checks := map[string]int{}
+		done := func(name string) func() error {
+			return func() error { checks[name]++; return nil }
+		}
+		p, err := New(Options{Skip: map[string]bool{"a": true}},
+			Node{Name: "a", Do: noop, Done: done("a")},
+			Node{Name: "b", Do: noop, Done: done("b")},
+			Node{Name: "c", Requires: []string{"a", "b"}, Do: noop},
+			Node{Name: "d", Requires: []string{"a"}, Do: noop},
+		)
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if err := p.Run(); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		if diff := cmp.Diff(map[string]int{"a": 1}, checks); diff != "" {
+			t.Errorf("Done calls (-want +got):\n%s", diff)
 		}
 	})
 

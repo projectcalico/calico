@@ -47,17 +47,18 @@ func TestOperatorSteps(t *testing.T) {
 		args   []string
 		wantOn bool
 	}{
-		{name: "the operator on gives both steps", wantOn: true},
-		{name: "the operator off gives neither step", args: []string{"--no-operator"}},
+		{name: "the operator on gives its steps and its done check", wantOn: true},
+		{name: "the operator off gives none of them", args: []string{"--no-operator"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var build, publish func() error
+			var build, publish, published func() error
 			c := &cli.Command{
 				Name:  "build",
 				Flags: []cli.Flag{operatorFlag()},
 				Action: func(_ context.Context, c *cli.Command) error {
 					build = operatorBuild(c, operator.Operator{}, operatorVariants(c), false, t.TempDir())
 					publish = operatorPublish(c, operator.Operator{}, operatorVariants(c), false, t.TempDir(), t.TempDir())
+					published = operatorPublished(c, operator.Operator{}, operatorVariants(c), t.TempDir())
 					return nil
 				},
 			}
@@ -69,6 +70,9 @@ func TestOperatorSteps(t *testing.T) {
 			}
 			if (publish != nil) != tc.wantOn {
 				t.Errorf("publish step on = %v, want %v", publish != nil, tc.wantOn)
+			}
+			if (published != nil) != tc.wantOn {
+				t.Errorf("done check on = %v, want %v", published != nil, tc.wantOn)
 			}
 		})
 	}

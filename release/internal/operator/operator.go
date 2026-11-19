@@ -72,6 +72,10 @@ func Narrow(variants []Variant, names []string) []Variant {
 	return out
 }
 
+type Driver struct {
+	Do, Done func() error
+}
+
 type Operator struct {
 	RepoRoot string
 

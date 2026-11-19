@@ -233,7 +233,7 @@ func TestBuild(t *testing.T) {
 		f, m := release(t)
 		f.on("git describe", "v3.30.1-0.dev-1-g111111111111", nil)
 		built := false
-		m.operator = func() error { built = true; return nil }
+		m.operator = operator.Driver{Do: func() error { built = true; return nil }}
 		err := m.Build()
 		if err == nil || !strings.Contains(err.Error(), "run release prep first") {
 			t.Fatalf("Build() error = %v, want a prep mismatch", err)
@@ -259,7 +259,7 @@ func TestBuild(t *testing.T) {
 		f, m := release(t)
 		m.recordsDir = ""
 		built := false
-		m.operator = func() error { built = true; return nil }
+		m.operator = operator.Driver{Do: func() error { built = true; return nil }}
 		err := m.Build()
 		if err == nil || !strings.Contains(err.Error(), "no records directory specified") {
 			t.Fatalf("Build() error = %v, want a missing records directory", err)
@@ -1095,7 +1095,7 @@ func imageManager(t *testing.T, f *fakeRunner, logsDir string) (*CalicoManager, 
 		images:              true,
 		operatorImage:       registry.OperatorImage,
 		operatorRegistry:    registry.DefaultOperatorRegistry,
-		operator:            func() error { return nil },
+		operator:            operator.Driver{Do: func() error { return nil }},
 		logsDir:             logsDir,
 		outputDir:           t.TempDir(),
 		recordsDir:          t.TempDir(),
@@ -1272,7 +1272,7 @@ func TestResolveContainerImages(t *testing.T) {
 
 	t.Run("the prereqs look nothing up", func(t *testing.T) {
 		m := withoutImages(t, newFakeRunner())
-		m.operator = nil
+		m.operator = operator.Driver{}
 		var lookups int
 		m.resolveDigest = func(string) (string, bool, error) {
 			lookups++
@@ -1347,7 +1347,7 @@ func TestResolveOperator(t *testing.T) {
 		m, _ := imageManager(t, newFakeRunner(), "")
 		m.images = false
 		m.isHashRelease = true
-		m.operator = nil
+		m.operator = operator.Driver{}
 		m.operatorVersion = "v1.40.0"
 		m.resolveDigest = resolve
 		return m
@@ -1461,7 +1461,7 @@ func TestResolveOperator(t *testing.T) {
 			lookups.Add(1)
 			return "", false, nil
 		})
-		m.operator = func() error { return nil }
+		m.operator = operator.Driver{Do: func() error { return nil }}
 		if _, err := m.resolveOperator(); err != nil {
 			t.Fatalf("resolveOperator: %v", err)
 		}
@@ -1725,7 +1725,7 @@ func TestPublishBranchTag(t *testing.T) {
 	t.Run("skipped when the operator is off", func(t *testing.T) {
 		f := newFakeRunner()
 		r, root := imageManager(t, f, "")
-		r.operator = nil
+		r.operator = operator.Driver{}
 		if err := r.publishContainerImages(); err != nil {
 			t.Fatalf("publishContainerImages: %v", err)
 		}
@@ -2157,7 +2157,7 @@ func TestPublishNodes(t *testing.T) {
 		}
 
 		t.Run("when the operator publishes", func(t *testing.T) {
-			r := &CalicoManager{calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir(), operator: func() error { return nil }}
+			r := &CalicoManager{calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir(), operator: operator.Driver{Do: func() error { return nil }}}
 			if diff := cmp.Diff([]string{operator.Step}, requires(r)); diff != "" {
 				t.Errorf("requires (-want +got):\n%s", diff)
 			}
@@ -2174,14 +2174,14 @@ func TestPublishNodes(t *testing.T) {
 			}
 		})
 
-		t.Run("not when the operator is skipped", func(t *testing.T) {
+		t.Run("even when the operator is skipped", func(t *testing.T) {
 			r := &CalicoManager{
 				calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir(),
-				operator:    func() error { return nil },
+				operator:    operator.Driver{Do: func() error { return nil }},
 				planOptions: plan.Options{Skip: map[string]bool{operator.Step: true}},
 			}
-			if got := requires(r); got != nil {
-				t.Errorf("requires %v with the operator skipped", got)
+			if diff := cmp.Diff([]string{operator.Step}, requires(r)); diff != "" {
+				t.Errorf("requires (-want +got):\n%s", diff)
 			}
 		})
 	})
@@ -2193,7 +2193,7 @@ func TestPublishRelease(t *testing.T) {
 		r := &CalicoManager{
 			calicoVersion: testVersion(t, "v3.30.0"),
 			outputDir:     t.TempDir(),
-			operator:      func() error { published = true; return nil },
+			operator:      operator.Driver{Do: func() error { published = true; return nil }},
 		}
 		err := r.PublishRelease()
 		if err == nil || !strings.Contains(err.Error(), "no records directory specified") {
@@ -2210,7 +2210,7 @@ func TestPublishRelease(t *testing.T) {
 			calicoVersion: testVersion(t, "v3.30.0"),
 			outputDir:     t.TempDir(),
 			githubRelease: true,
-			operator:      func() error { published = true; return nil },
+			operator:      operator.Driver{Do: func() error { published = true; return nil }},
 		}
 		err := r.PublishRelease()
 		if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("requires %q, which is off", branch.PushTagStep)) {
@@ -2230,7 +2230,7 @@ func TestPublishRelease(t *testing.T) {
 			outputDir:     t.TempDir(),
 			gitRef:        true,
 			githubRelease: true,
-			operator:      func() error { published = true; return nil },
+			operator:      operator.Driver{Do: func() error { published = true; return nil }},
 		}
 		err := r.PublishRelease()
 		if err == nil || !strings.Contains(err.Error(), "no local tag v3.30.0") {
@@ -2248,7 +2248,7 @@ func TestPublishRelease(t *testing.T) {
 				calicoVersion: testVersion(t, "v3.30.0"),
 				outputDir:     t.TempDir(),
 				githubRelease: true,
-				operator:      func() error { published = true; return nil },
+				operator:      operator.Driver{Do: func() error { published = true; return nil }},
 				planOptions:   plan.Options{Skip: map[string]bool{step: true}},
 			}
 			err := r.PublishRelease()
@@ -2260,6 +2260,38 @@ func TestPublishRelease(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("skipping the operator needs an earlier run to have published it", func(t *testing.T) {
+		for _, tc := range []struct {
+			name    string
+			done    func() error
+			wantErr string
+		}{
+			{name: "with no check", wantErr: fmt.Sprintf("requires %q, which is off in this run", operator.Step)},
+			{
+				name:    "with a failing check",
+				done:    func() error { return errors.New("not published") },
+				wantErr: fmt.Sprintf("requires %q, which is off and not done: not published", operator.Step),
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				published := false
+				r := &CalicoManager{
+					calicoVersion: testVersion(t, "v3.30.0"),
+					outputDir:     t.TempDir(),
+					operator:      operator.Driver{Do: func() error { published = true; return nil }, Done: tc.done},
+					planOptions:   plan.Options{Skip: map[string]bool{operator.Step: true}},
+				}
+				err := r.PublishRelease()
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("PublishRelease() error = %v, want it to contain %q", err, tc.wantErr)
+				}
+				if published {
+					t.Error("published the skipped operator")
+				}
+			})
+		}
+	})
 }
 
 func TestGetRegistryFromManifestsFallsBackWhenAbsent(t *testing.T) {
