@@ -776,7 +776,7 @@ func k8sServiceForDualStack(name string, clusterIPs []string, w *workload.Worklo
 					Port:       int32(port),
 					NodePort:   nodePort,
 					Name:       fmt.Sprintf("port-%d", tgtPort),
-					TargetPort: intstr.FromInt(tgtPort),
+					TargetPort: intstr.FromInt32(int32(tgtPort)),
 				},
 			},
 		},

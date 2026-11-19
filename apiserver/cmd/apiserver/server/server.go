@@ -25,8 +25,8 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	"k8s.io/apiserver/pkg/server/signals"
 
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
 )
@@ -58,7 +58,7 @@ func NewCommandStartCalicoServer(out io.Writer) (*cobra.Command, *CalicoServerOp
 
 		// The first SIGINT or SIGTERM starts graceful shutdown and a second exits immediately. It panics if called
 		// twice, so it lives here rather than where the command is built.
-		opts.StopCh = genericapiserver.SetupSignalHandler()
+		opts.StopCh = signals.SetupSignalHandler()
 
 		server, err := PrepareServer(opts)
 		if err != nil {

@@ -353,7 +353,7 @@ var _ = Describe("core handler", func() {
 			Expect(i.Spec.NodeUpdateStrategy).To(Equal(appsv1.DaemonSetUpdateStrategy{}))
 		})
 		It("should carry forward updateStrategy", func() {
-			twelve := intstr.FromInt(12)
+			twelve := intstr.FromInt32(12)
 			updateStrategy := appsv1.DaemonSetUpdateStrategy{
 				Type: appsv1.OnDeleteDaemonSetStrategyType,
 				RollingUpdate: &appsv1.RollingUpdateDaemonSet{

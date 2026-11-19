@@ -24,8 +24,8 @@ import (
 	"strings"
 	"testing"
 
-	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	apiextv1 "k8s.io/apiextensions-api/pkg/apis/apiextensions/v1"
+	apiextclient "k8s.io/apiextensions-api/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

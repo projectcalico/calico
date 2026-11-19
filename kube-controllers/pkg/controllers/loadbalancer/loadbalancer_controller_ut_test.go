@@ -633,7 +633,7 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 	})
 
 	It("should require loadBalancerClass calico for spec.loadBalancerIP in RequestedServicesOnly mode", func() {
-		svc.Spec.LoadBalancerIP = "10.0.0.5"
+		svc.Spec.LoadBalancerIP = "10.0.0.5" //nolint:staticcheck // Ignore SA1019: Calico still supports spec.loadBalancerIP.
 		Expect(IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)).To(BeFalse())
 		Expect(IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices)).To(BeTrue())
 
@@ -655,7 +655,7 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 			},
 		}
 
-		svc.Spec.LoadBalancerIP = "10.0.0.5"
+		svc.Spec.LoadBalancerIP = "10.0.0.5" //nolint:staticcheck // Ignore SA1019: Calico still supports spec.loadBalancerIP.
 		svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "10.0.0.5"}}
 		created, err := c.clientSet.CoreV1().Services(svc.Namespace).Create(context.Background(), &svc, metav1.CreateOptions{})
 		Expect(err).ToNot(HaveOccurred())
