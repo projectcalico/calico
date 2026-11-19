@@ -16,6 +16,8 @@ package extensions_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -95,6 +97,23 @@ var _ = Describe("the zero value Extensions", func() {
 
 		create, _ := e.APIServer().Modify(baseComponent(), render.Inputs{}).Objects()
 		Expect(create).To(HaveLen(1))
+	})
+
+	It("lets the Istio CR go without waiting on anything", func() {
+		var e extensions.Extensions
+
+		Expect(e.Istio().Watches(nil)).To(Succeed())
+		done, err := e.Istio().Finalize(context.Background(), controller.Inputs{}, &operatorv1.Istio{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue())
+	})
+
+	It("adds no Istio trust roots", func() {
+		var e extensions.Extensions
+
+		roots, err := e.Istio().TrustRoots(context.Background(), controller.Inputs{}, &operatorv1.Istio{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(roots).To(BeEmpty())
 	})
 
 	It("passes the operator's startup checks", func() {
@@ -189,5 +208,30 @@ var _ = Describe("MustFindObject", func() {
 		Expect(func() {
 			extensions.MustFindObject[*corev1.Secret](objs, "present")
 		}).To(PanicWith(ContainSubstring(`BUG: no object named "present"`)))
+	})
+})
+
+var _ = Describe("Partialf", func() {
+	It("carries its reason like Degradedf and is told apart from it", func() {
+		err := extensions.Partialf(operatorv1.ResourceValidationError, "peer %s left out", "a")
+
+		Expect(err).To(MatchError("peer a left out"))
+		Expect(extensions.IsPartial(err)).To(BeTrue())
+		reason, ok := extensions.DegradedReason(err)
+		Expect(ok).To(BeTrue())
+		Expect(reason).To(Equal(operatorv1.ResourceValidationError))
+	})
+
+	It("survives wrapping", func() {
+		err := fmt.Errorf("resolving peers: %w", extensions.Partialf(operatorv1.ResourceValidationError, "left out"))
+
+		Expect(extensions.IsPartial(err)).To(BeTrue())
+	})
+
+	It("is not reported for the other extension errors", func() {
+		Expect(extensions.IsPartial(extensions.Degradedf(operatorv1.ResourceReadError, "x"))).To(BeFalse())
+		Expect(extensions.IsPartial(extensions.InvalidConfigf("x"))).To(BeFalse())
+		Expect(extensions.IsPartial(errors.New("x"))).To(BeFalse())
+		Expect(extensions.IsPartial(nil)).To(BeFalse())
 	})
 })
