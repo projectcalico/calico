@@ -443,10 +443,17 @@ var _ = describe.CalicoDescribe(
 
 			// Bridge binding hands the pod interface's MAC to the guest, so the
 			// guest MAC shows the CNI's choice end to end.
-			vmi := &kubevirtv1.VirtualMachineInstance{}
-			Expect(cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: vmName}, vmi)).To(Succeed())
-			Expect(vmi.Status.Interfaces).NotTo(BeEmpty())
-			Expect(strings.ToLower(vmi.Status.Interfaces[0].MAC)).To(Equal(staticMAC),
+			// Eventually because VMI status can report the IP before the MAC.
+			Eventually(func() (string, error) {
+				vmi := &kubevirtv1.VirtualMachineInstance{}
+				if err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: vmName}, vmi); err != nil {
+					return "", err
+				}
+				if len(vmi.Status.Interfaces) == 0 {
+					return "", fmt.Errorf("no interfaces yet")
+				}
+				return strings.ToLower(vmi.Status.Interfaces[0].MAC), nil
+			}, 30*time.Second, 2*time.Second).Should(Equal(staticMAC),
 				"VM should receive the static MAC from the annotation")
 
 			// 2. Verify the IPAM handle exists for this IP.
@@ -472,6 +479,9 @@ var _ = describe.CalicoDescribe(
 				}
 				if len(vmi.Status.Interfaces) == 0 || vmi.Status.Interfaces[0].IP == "" {
 					return fmt.Errorf("no IP yet")
+				}
+				if vmi.Status.Interfaces[0].MAC == "" {
+					return fmt.Errorf("no MAC yet")
 				}
 				if vmi.Status.NodeName == sourceNode {
 					return fmt.Errorf("VMI still on source node")

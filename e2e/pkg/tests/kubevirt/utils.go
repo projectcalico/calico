@@ -300,6 +300,7 @@ func (v *kubeVirtVM) FindVirtLauncherPod(ctx context.Context, f *framework.Frame
 // randomLocalMAC returns a random unicast, locally-administered MAC, so it
 // can't collide with a vendor-assigned address.
 func randomLocalMAC() string {
+	GinkgoHelper()
 	mac := make(net.HardwareAddr, 6)
 	_, err := rand.Read(mac)
 	Expect(err).NotTo(HaveOccurred())
