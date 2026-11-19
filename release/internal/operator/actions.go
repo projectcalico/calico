@@ -78,6 +78,37 @@ func Publish(o Operator, variants []Variant, hashrelease bool, opts ...PublishOp
 	})
 }
 
+// Published fails unless every variant is in the registry at a digest the
+// WithResume record holds, so a run that skips the publish can rely on it.
+func Published(o Operator, variants []Variant, opts ...PublishOption) error {
+	s, err := newSettings(PublishStep, o, validatePublish, opts)
+	if err != nil {
+		return err
+	}
+	if s.resolve == nil {
+		s.resolve = registry.ResolveDigest
+	}
+	var recorded registry.RecordedDigests
+	if s.resume != nil {
+		recorded = registry.DigestsByRepo(s.resume.published)
+	}
+	var missing []string
+	err = eachVariant(variants, func(v Variant) error {
+		done, err := s.published(v, recorded)
+		if err == nil && !done {
+			missing = append(missing, v.Name)
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	if len(missing) > 0 {
+		return s.Errorf("not published by an earlier run: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
 // Resolve records an operator an earlier run published. Only the first
 // registry must hold each variant's release tag.
 func Resolve(o Operator, variants []Variant, opts ...ResolveOption) error {

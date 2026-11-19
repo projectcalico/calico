@@ -148,9 +148,6 @@ func NewManager(opts ...Option) (*CalicoManager, error) {
 		logrus.WithField("logsDir", b.logsDir).Info("Per-step logs enabled")
 	}
 
-	if b.planOptions.Skip[operator.Step] {
-		b.operator = nil
-	}
 	// Skipping images means using the published ones, which the images step resolves.
 	if b.planOptions.Skip[images.Step] {
 		b.images = false
@@ -284,7 +281,7 @@ type CalicoManager struct {
 	planOptions  plan.Options
 	buildNodes   func() []plan.Node
 	publishNodes func() []plan.Node
-	operator     func() error
+	operator     operator.Driver
 
 	retagImages  bool
 	fromRegistry string
@@ -457,8 +454,9 @@ func (r *CalicoManager) createTagNode() plan.Node {
 func (r *CalicoManager) operatorNode() plan.Node {
 	return plan.Node{
 		Name: operator.Step,
-		When: func() bool { return r.operator != nil },
-		Do:   func() error { return r.operator() },
+		Do:   func() error { return r.operator.Do() },
+		When: func() bool { return r.operator.Do != nil },
+		Done: r.operator.Done,
 	}
 }
 
@@ -832,9 +830,9 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 	}))
 }
 
-// The images scan sends these to ISS, which a skip defers to a later scan.
+// The images scan sends the operator to ISS, so it must be published first.
 func (r *CalicoManager) beforeImagesPublish() []string {
-	if r.operator == nil || r.planOptions.Skip[operator.Step] {
+	if r.operator.Do == nil {
 		return nil
 	}
 	return []string{operator.Step}
@@ -1230,7 +1228,7 @@ func (r *CalicoManager) dependencies() []images.Dependency {
 // A hashrelease hands out the pinned operator even when this run did not
 // publish it, as an earlier run may have.
 func (r *CalicoManager) resolveOperator() ([]string, error) {
-	if !r.isHashRelease || r.operator != nil {
+	if !r.isHashRelease || r.includesOperator() {
 		return nil, nil
 	}
 	refs, err := outputs.NewRefsWriter(r.recordsDir, operator.ResolveStep)
@@ -1247,6 +1245,10 @@ func (r *CalicoManager) resolveOperator() ([]string, error) {
 		operator.WithRecord(refs),
 	)
 	return r.checkResolved(r.operatorImage, false, err)
+}
+
+func (r *CalicoManager) includesOperator() bool {
+	return r.operator.Do != nil && !r.planOptions.Skip[operator.Step]
 }
 
 // checkResolved lets an excluded component's missing images pass, and leaves
@@ -1407,7 +1409,7 @@ func (r *CalicoManager) releaseBranch() (string, error) {
 }
 
 func (r *CalicoManager) publishOperatorBranchTag(branch string) error {
-	if r.operator == nil {
+	if !r.includesOperator() {
 		logrus.WithField("branch", branch).Info("Skip moving the operator branch tag: the operator is off")
 		return nil
 	}

@@ -128,7 +128,9 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithDryRun(c.Bool(localFlag.Name)),
 					// The operator carries the versions of the images it deploys in its binary, so a
 					// release rebuilds it rather than retagging the one a hashrelease published.
-					calico.WithOperator(operatorBuild(c, *o, operatorVariants(c), false, filepath.Join(cfg.LogsDir, o.ProductVersion))),
+					calico.WithOperator(operator.Driver{
+						Do: operatorBuild(c, *o, operatorVariants(c), false, filepath.Join(cfg.LogsDir, o.ProductVersion)),
+					}),
 					calico.WithPlanOptions(plan.Options{
 						Preview: c.Bool(planFlag.Name),
 						Skip:    skipSet(c.StringSlice(skipFlagName)),
@@ -196,8 +198,12 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				if v := c.String(s3BucketFlag.Name); v != "" {
 					opts = append(opts, calico.WithS3Bucket(v))
 				}
-				opts = append(opts,
-					calico.WithOperator(operatorPublish(c, *o, operatorVariants(c), false, outputs.RecordsDir(cfg.OutputDir, o.ProductVersion), filepath.Join(cfg.LogsDir, o.ProductVersion))),
+				opts = append(
+					opts,
+					calico.WithOperator(operator.Driver{
+						Do:   operatorPublish(c, *o, operatorVariants(c), false, outputs.RecordsDir(cfg.OutputDir, o.ProductVersion), filepath.Join(cfg.LogsDir, o.ProductVersion)),
+						Done: operatorPublished(c, *o, operatorVariants(c), outputs.RecordsDir(cfg.OutputDir, o.ProductVersion)),
+					}),
 					calico.WithPlanOptions(plan.Options{
 						Preview: c.Bool(planFlag.Name),
 						Skip:    skipSet(c.StringSlice(skipFlagName)),
@@ -219,7 +225,8 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 
 func releasePrepCommand(cfg *Config) *cli.Command {
 	flags := slices.Clone(productFlags)
-	flags = append(flags,
+	flags = append(
+		flags,
 		branchCheckFlag,
 		validationFlag,
 		localFlag,
@@ -301,6 +308,24 @@ func operatorBuild(c *cli.Command, o operator.Operator, variants []operator.Vari
 	}
 }
 
+// operatorPublished reads the record without writing it, as it runs before any
+// step does.
+func operatorPublished(c *cli.Command, o operator.Operator, variants []operator.Variant, recordsDir string) func() error {
+	if !c.Bool(operatorFlagName) {
+		return nil
+	}
+	return func() error {
+		published, _, err := publishRecord(recordsDir, operator.PublishStep, false)
+		if err != nil {
+			return err
+		}
+		return operator.Published(o, variants,
+			operator.WithArches(c.StringSlice(archFlag.Name)...),
+			operator.WithResolver(registryDigestResolver),
+			operator.WithResume(published, false))
+	}
+}
+
 func operatorPublish(c *cli.Command, o operator.Operator, variants []operator.Variant, hashrelease bool, recordsDir, logsDir string) func() error {
 	if !c.Bool(operatorFlagName) {
 		return nil
@@ -318,7 +343,8 @@ func operatorPublish(c *cli.Command, o operator.Operator, variants []operator.Va
 func releasePublishFlags() []cli.Flag {
 	f := append(slices.Clone(productFlags), publishStepFlags(false)...)
 	f = append(f, operatorPublishCommandFlags...)
-	f = append(f,
+	f = append(
+		f,
 		registryFlag,
 		imageReleaseDirsFlag,
 		helmRegistryFlag,

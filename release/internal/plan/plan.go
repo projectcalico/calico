@@ -31,7 +31,8 @@ type Node struct {
 	// stays in the list, so Replace and Remove still find it.
 	When func() bool
 
-	// Requires names nodes that must be on and earlier in the list.
+	// Requires names nodes that must be done before this one runs: on and
+	// earlier in the list, or off with a Done that passes.
 	Requires []string
 
 	// Validate runs for every node that is on, before any node's Do.
@@ -39,6 +40,10 @@ type Node struct {
 
 	// Do may be nil for a node that only checks.
 	Do func() error
+
+	// Done reports whether this node's output already exists. It runs before
+	// any node's Do, so it must only read. nil means the node cannot tell.
+	Done func() error
 
 	// Verify checks this node's own output, straight after its Do.
 	Verify func() error
@@ -55,6 +60,7 @@ type Options struct {
 
 type Plan struct {
 	nodes []Node
+	named map[string]Node
 	on    map[string]bool
 	opts  Options
 }
@@ -62,24 +68,25 @@ type Plan struct {
 // New rejects a plan that cannot run as written, before any node runs.
 func New(opts Options, nodes ...Node) (*Plan, error) {
 	var errs []error
-	in := map[string]bool{}
+	named := map[string]Node{}
 	on := map[string]bool{}
 	for i, n := range nodes {
+		_, dup := named[n.Name]
 		switch {
 		case n.Name == "":
 			errs = append(errs, fmt.Errorf("node %d has no name", i))
-		case in[n.Name]:
+		case dup:
 			errs = append(errs, fmt.Errorf("node %q appears more than once", n.Name))
 		case n.Do == nil && n.Validate == nil:
 			errs = append(errs, fmt.Errorf("node %q has nothing to do", n.Name))
 		}
-		in[n.Name] = true
+		named[n.Name] = n
 		on[n.Name] = (n.When == nil || n.When()) && !opts.Skip[n.Name]
 	}
 	if err := errors.Join(errs...); err != nil {
 		return nil, fmt.Errorf("cannot assemble plan: %w", err)
 	}
-	return &Plan{nodes: nodes, on: on, opts: opts}, nil
+	return &Plan{nodes: nodes, named: named, on: on, opts: opts}, nil
 }
 
 // Replace and Remove fail when the name is absent, so a renamed node fails
@@ -107,16 +114,26 @@ func (p *Plan) Run() (err error) {
 	var errs []error
 	failed := map[string][]error{}
 	before := map[string]bool{}
+	doneErrs := map[string]error{}
 	for _, n := range p.nodes {
 		for _, req := range n.Requires {
-			_, exists := p.on[req]
+			r, exists := p.named[req]
 			var reqErr error
 			switch {
 			case !p.on[n.Name]:
 			case !exists:
 				reqErr = fmt.Errorf("node %q requires %q, which does not exist", n.Name, req)
-			case !p.on[req]:
+			case !p.on[req] && r.Done == nil:
 				reqErr = fmt.Errorf("node %q requires %q, which is off in this run", n.Name, req)
+			case !p.on[req]:
+				doneErr, checked := doneErrs[req]
+				if !checked {
+					doneErr = r.Done()
+					doneErrs[req] = doneErr
+				}
+				if doneErr != nil {
+					reqErr = fmt.Errorf("node %q requires %q, which is off and not done: %w", n.Name, req, doneErr)
+				}
 			case !before[req]:
 				reqErr = fmt.Errorf("node %q requires %q, which runs after it", n.Name, req)
 			}

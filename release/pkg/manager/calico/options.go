@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/plan"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/version"
@@ -79,10 +80,11 @@ func WithVersion(ver string) Option {
 }
 
 // WithOperator builds or publishes the operator in the step after the plan's
-// checks. A nil run leaves the operator off.
-func WithOperator(run func() error) Option {
+// checks. A nil Do leaves the operator off. Done lets a run that skips the
+// operator rely on an earlier run's.
+func WithOperator(o operator.Driver) Option {
 	return func(r *CalicoManager) error {
-		r.operator = run
+		r.operator = o
 		return nil
 	}
 }

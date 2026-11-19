@@ -820,6 +820,56 @@ func TestResolve(t *testing.T) {
 	})
 }
 
+func TestPublished(t *testing.T) {
+	variants := []Variant{{Name: standardVariant}, {Name: "alt", Image: "operator-alt"}}
+	resolve := fakeResolver{
+		"quay.io/a/operator:v1.44.0":     "sha256:a",
+		"quay.io/a/operator-alt:v1.44.0": "sha256:alt",
+	}
+	for _, tc := range []struct {
+		name      string
+		published []string
+		wantErr   string
+	}{
+		{
+			name:      "every variant at a recorded digest is published",
+			published: []string{"quay.io/a/operator@sha256:a", "quay.io/a/operator-alt@sha256:alt"},
+		},
+		{
+			name:      "a variant the record lacks is not",
+			published: []string{"quay.io/a/operator@sha256:a"},
+			wantErr:   "not published by an earlier run: alt",
+		},
+		{
+			name:    "nothing is published without a record",
+			wantErr: "not published by an earlier run: standard, alt",
+		},
+		{
+			name:      "a tag that moved fails",
+			published: []string{"quay.io/a/operator@sha256:old", "quay.io/a/operator-alt@sha256:alt"},
+			wantErr:   "Pass --force",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &command.Recorder{}
+			err := Published(oneRegistryOperator(), variants, WithRunner(f),
+				WithResolver(resolve.resolve), WithResume(tc.published, false))
+			if len(f.Calls()) != 0 {
+				t.Errorf("ran %v", targets(f))
+			}
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("err = %v, want it to contain %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestPublishBranchTag(t *testing.T) {
 	t.Run("retags at the branch", func(t *testing.T) {
 		for _, tc := range []struct {
