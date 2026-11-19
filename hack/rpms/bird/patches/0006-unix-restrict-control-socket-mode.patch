@@ -1,0 +1,29 @@
+Subject: Unix: Create the control socket with mode 0600
+
+Only the owner needs the control socket.
+
+Squashed from these projectcalico/bird commits, oldest first. Each keeps
+its author and message.
+
+commit 8923abe65356f0c2e502429332fa7592061c20de
+Author: Michal Fupso <michal@tigera.io>
+Date:   2024-06-26
+
+    change permissions for socket file
+---
+ sysdep/unix/main.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sysdep/unix/main.c b/sysdep/unix/main.c
+index 01c0dedb..7cf8da09 100644
+--- a/sysdep/unix/main.c
++++ b/sysdep/unix/main.c
+@@ -484,7 +484,7 @@ cli_init_unix(uid_t use_uid, gid_t use_gid)
+     if (chown(path_control_socket, use_uid, use_gid) < 0)
+       die("chown: %m");
+ 
+-  if (chmod(path_control_socket, 0660) < 0)
++  if (chmod(path_control_socket, 0600) < 0)
+     die("chmod: %m");
+ }
+ 
