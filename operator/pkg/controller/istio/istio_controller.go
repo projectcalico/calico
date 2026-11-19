@@ -123,6 +123,10 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		return fmt.Errorf("istio-controller failed to create periodic reconcile watch: %w", err)
 	}
 
+	if err = opts.Extensions.Istio().Watches(c); err != nil {
+		return fmt.Errorf("istio-controller failed to add the extension watches: %w", err)
+	}
+
 	return nil
 }
 
@@ -320,8 +324,13 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 	ci := controller.Inputs{
 		RenderInputs: render.Inputs{Installation: installationSpec},
 		Client:       r.Client,
+		Status:       r.status,
 	}
 	ci, err = r.ext.Istio().ExtendInputs(ctx, ci)
+	var partialErr error
+	if extensions.IsPartial(err) {
+		partialErr, err = err, nil
+	}
 	if err != nil {
 		if reason, ok := extensions.DegradedReason(err); ok {
 			r.status.SetDegraded(reason, err.Error(), nil, reqLogger)
@@ -379,11 +388,22 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 	// to see istiod roll, or for a phase deadline.
 	result := reconcile.Result{RequeueAfter: trust.requeueAfter}
 
-	// Invalid CA or trust anchor input is excluded, not fatal: the rest rendered,
-	// and the watches reconcile again once the named Secret or field is fixed.
-	if len(trust.problems) > 0 {
-		r.status.SetDegraded(operatorv1.ResourceValidationError,
-			"Istio certificate authority or trust anchors need attention: "+strings.Join(trust.problems, "; "), nil, reqLogger)
+	// Invalid CA or trust anchor input, and input the extension left out, are
+	// excluded, not fatal: the rest rendered, and the watches reconcile again
+	// once the input is fixed. They share one Degraded condition, so both are
+	// reported together rather than one hiding the other.
+	if len(trust.problems) > 0 || partialErr != nil {
+		reason := operatorv1.ResourceValidationError
+		var messages []string
+		if len(trust.problems) > 0 {
+			messages = append(messages, "Istio certificate authority or trust anchors need attention: "+strings.Join(trust.problems, "; "))
+		} else {
+			reason, _ = extensions.DegradedReason(partialErr)
+		}
+		if partialErr != nil {
+			messages = append(messages, partialErr.Error())
+		}
+		r.status.SetDegraded(reason, strings.Join(messages, "; "), nil, reqLogger)
 		return result, nil
 	}
 
@@ -595,6 +615,19 @@ func (r *ReconcileIstio) configurePolicySyncPathPrefix(ctx context.Context, inst
 func (r *ReconcileIstio) maintainFinalizer(ctx context.Context, instance *operatorv1.Istio, reqLogger logr.Logger) (res reconcile.Result, err error, finalized bool) {
 	// Executing clean up on finalizing
 	if !instance.DeletionTimestamp.IsZero() {
+		ci := controller.Inputs{Client: r.Client, Status: r.status, Terminating: true}
+		var done bool
+		if done, err = r.ext.Istio().Finalize(ctx, ci, instance); err != nil {
+			reason, ok := extensions.DegradedReason(err)
+			if !ok {
+				reason = operatorv1.ResourceUpdateError
+			}
+			r.status.SetDegraded(reason, "Error cleaning up the Istio extension", err, reqLogger)
+			return
+		}
+		if !done {
+			return reconcile.Result{RequeueAfter: utils.FinalizerRemovalRetry}, nil, true
+		}
 		if _, err = utils.PatchFelixConfiguration(ctx, r.Client, fieldOwner, func(fc *v3.FelixConfiguration) (bool, error) {
 			return r.setIstioFelixConfiguration(ctx, instance, fc, true)
 		}); err != nil {
