@@ -74,6 +74,7 @@ config docs, and manifests. See also `hack/docs/adding-an-api.md`.
 | `.semaphore/semaphore.yml` | `.semaphore/semaphore.yml.d/` templates | `make gen-semaphore-yaml` |
 | `manifests/` | `charts/` | `make gen-manifests` |
 | `*.pb.go` protobuf files | `.proto` sources | `make protobuf` |
+| `e2e/pkg/utils/images/zz_generated.bird.go` | `hack/rpms/bird/` | `make -C hack/rpms/bird gen-files` |
 
 After regenerating, commit the generated files alongside your source changes.
 

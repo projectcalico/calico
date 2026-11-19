@@ -125,6 +125,7 @@ generate:
 	$(MAKE) -C operator gen-files
 	$(MAKE) gen-manifests
 	$(MAKE) -C e2e gen-test-set
+	$(MAKE) -C hack/rpms/bird gen-files
 	$(MAKE) fix-changed
 
 gen-manifests: bin/helm bin/yq
