@@ -9,6 +9,10 @@ BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
 ENVOY_GATEWAY_VERSION=v1.9.4
 
+# This tree's go.mod needs a newer Go than GO_VERSION. "+auto" sets a floor
+# and moves higher only when go.mod asks.
+EXTRA_DOCKER_ARGS += -e GOTOOLCHAIN=go1.26.11+auto
+
 ##############################################################################
 # Include lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
