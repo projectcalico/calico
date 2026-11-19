@@ -51,9 +51,6 @@ steps:
           cluster/api/aggregated.yaml
           cluster/dataplane/iptables.yaml
           cluster/cni/calico.yaml
-          cluster/routing/bgp.yaml
-          cluster/routing/bgp-mesh.yaml
-          cluster/routing/no-encap.yaml
           cluster/platform/aks.yaml
           cluster/ip-family/ipv4.yaml
           cluster/capability/host-ports.yaml

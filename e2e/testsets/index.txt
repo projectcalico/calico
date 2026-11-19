@@ -5,7 +5,7 @@
 .argoci/cron/e2e-bpf.yaml | 9k-mtu-runs-aws-bpf-9k-mtu [none] | cron/e2e-bpf/9k-mtu-runs-aws-bpf-9k-mtu-none | 224
 .argoci/cron/e2e-bpf.yaml | 9k-mtu-runs-aws-iptables-9k-mtu [none] | cron/e2e-bpf/9k-mtu-runs-aws-iptables-9k-mtu-none | 230
 .argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-aks-arm64 [stable-1-azure-] | cron/e2e-bpf/arm64-smoke-tests-aks-arm64-stable-1-azure | 208
-.argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-aks-arm64 [stable-1-none-] | cron/e2e-bpf/arm64-smoke-tests-aks-arm64-stable-1-none | 216
+.argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-aks-arm64 [stable-1-none-] | cron/e2e-bpf/arm64-smoke-tests-aks-arm64-stable-1-none | 211
 .argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-kubeadm-arm64 [rocky-linux-9-arm64] | cron/e2e-bpf/arm64-smoke-tests-kubeadm-arm64-rocky-linux-9-arm64 | 218
 .argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-kubeadm-arm64 [ubuntu-2204-lts-arm64] | cron/e2e-bpf/arm64-smoke-tests-kubeadm-arm64-ubuntu-2204-lts-arm64 | 218
 .argoci/cron/e2e-bpf.yaml | bpf-mini-scale-runs | (scale-test) | -
@@ -48,7 +48,7 @@
 .argoci/cron/e2e-iptables.yaml | aks-aks-w-aks-cni | cron/e2e-iptables/aks-aks-w-aks-cni | 201
 .argoci/cron/e2e-iptables.yaml | aks-aks-w-calico-cni [calico] | cron/e2e-iptables/aks-aks-w-calico-cni-calico | 217
 .argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-aks-arm64 [stable-1-azure-] | cron/e2e-iptables/arm64-smoke-tests-aks-arm64-stable-1-azure | 201
-.argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-aks-arm64 [stable-1-none-] | cron/e2e-iptables/arm64-smoke-tests-aks-arm64-stable-1-none | 222
+.argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-aks-arm64 [stable-1-none-] | cron/e2e-iptables/arm64-smoke-tests-aks-arm64-stable-1-none | 217
 .argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-eks-arm64-calico-cni [stable-1] | cron/e2e-iptables/arm64-smoke-tests-eks-arm64-calico-cni-stable-1 | 210
 .argoci/cron/e2e-iptables.yaml | autohep-test | cron/e2e-iptables/autohep-test | 214
 .argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-etcd [stable-3] | cron/e2e-iptables/datastore-k8s-e2e-etcd-stable-3 | 211
