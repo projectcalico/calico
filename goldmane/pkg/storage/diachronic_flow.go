@@ -503,15 +503,16 @@ func recordIPSet(m map[string]*ipEntry, ips []string, slot int, start int64) map
 
 		// This IP is new and m has room, so we add it straight away.
 		if m == nil {
-			// This is the first IP the flow has seen, so we create m first.
+			// This is the first IP this set has seen, so we create m first.
 			m = make(map[string]*ipEntry, min(len(ips), MaxIPsPerFlow))
 		}
 		addIPEntry(m, ip, slot, start)
 	}
 
-	// We don't have to evict any IP addresses here, since fresh is only populated when we're above
-	// the limit and new IPs arrive.
+	// Check whether any new IPs had to wait in fresh.
 	if len(fresh) == 0 {
+		// We don't have to evict any IP addresses here, since fresh is only populated when m is
+		// full and new IPs arrive.
 		return m
 	}
 
@@ -520,7 +521,7 @@ func recordIPSet(m map[string]*ipEntry, ips []string, slot int, start int64) map
 	fresh = slices.Compact(fresh)
 
 	// We have new IPs to consider. Evict a number equal to the new IPs we have collected, and add
-	// the new entries in their place.
+	// the new entries in their place, unless they rank below what we already track.
 	for _, ip := range evictLeastRecent(m, fresh, start) {
 		addIPEntry(m, ip, slot, start)
 	}
@@ -536,7 +537,7 @@ func addIPEntry(m map[string]*ipEntry, ip string, slot int, start int64) {
 }
 
 // evictionCandidate is an IP that could be evicted, with the start of the newest window it was
-// seen in. Together those decide its rank; see compare.
+// seen in. The IP and that window start decide its rank; see compare.
 type evictionCandidate struct {
 	lastSeen int64
 	ip       string
@@ -554,8 +555,8 @@ func (c evictionCandidate) compare(other evictionCandidate) int {
 }
 
 // evictLeastRecent makes room in m for fresh, a sorted set of distinct IPs absent from m and all
-// seen at start. It ranks m's entries and fresh together by evictionCandidate.compare, drops the
-// overflow lowest-ranked so the rest fit in MaxIPsPerFlow, and returns the IPs from fresh that
+// seen at start. It ranks m's entries and fresh together by evictionCandidate.compare, drops as
+// many of the lowest-ranked as it takes for the rest to fit in MaxIPsPerFlow, and returns the IPs from fresh that
 // survived. It finds them in one pass instead of sorting every candidate, so evicting one IP costs
 // a single scan of m.
 func evictLeastRecent(m map[string]*ipEntry, fresh []string, start int64) []string {
@@ -610,8 +611,8 @@ func evictLeastRecent(m map[string]*ipEntry, fresh []string, start int64) []stri
 		}
 	}
 
-	// The fresh IPs that ranked too low are its lowest addresses, so they sit at the front of
-	// fresh, and we keep everything after them.
+	// The fresh IPs that ranked too low are the lowest addresses in fresh, so they sit at the
+	// front of the sorted slice, and we keep everything after them.
 	return fresh[droppedFresh:]
 }
 

@@ -85,6 +85,8 @@ func (m *ipSetModel) rollover(limiter int64) {
 	for ip, starts := range m.windows {
 		// Forget each window this IP was seen in that ended at or before the limiter.
 		for s := range starts {
+			// A window ends at its start plus the interval, so it has expired if that's at or
+			// before the limiter.
 			if s+ipTestInterval <= limiter {
 				delete(starts, s)
 			}
@@ -134,7 +136,8 @@ func TestDiachronicFlow_IPSetEvictionMatchesModel(t *testing.T) {
 		// Each step sends one random update, sometimes rolls over, then compares recent windows.
 		// Steps start at 8 so the eight windows we look back over are never negative.
 		for step := 8; step < 68; step++ {
-			// Most updates land in the current window, but some arrive up to three windows late.
+			// A quarter of updates land in the current window, and the rest arrive one to three
+			// windows late.
 			window := step - rng.IntN(4)
 
 			// Build a batch of addresses drawn from the pool. Drawing with replacement gives us
@@ -202,6 +205,16 @@ func TestDiachronicFlow_IPSetEvictionLargerThanCap(t *testing.T) {
 // roll their flow over at that depth, as the ring would.
 const ringHistory = 240
 
+// rollOverLikeRing rolls flow over after adding window, dropping the oldest window once the flow
+// holds more than ringHistory of them, as the ring would.
+func rollOverLikeRing(flow *storage.DiachronicFlow, window int) {
+	// Check whether the flow has filled its history yet.
+	if window >= ringHistory {
+		// It has, so the window ringHistory back from this one expires.
+		flow.Rollover(int64((window - ringHistory) * ipTestInterval))
+	}
+}
+
 // BenchmarkDiachronicFlow_AddFlowNewIPsIntoFullSet adds a flow per window to a full IP set,
 // carrying a few addresses the set has never seen plus some it already tracks, so each new IP
 // evicts one tracked IP.
@@ -233,11 +246,7 @@ func BenchmarkDiachronicFlow_AddFlowNewIPsIntoFullSet(b *testing.B) {
 					batch = append(batch, ipAt(i))
 				}
 				addIPs(flow, key, window, batch...)
-
-				// Once the flow holds ringHistory windows, roll the oldest over, as the ring would.
-				if window >= ringHistory {
-					flow.Rollover(int64((window - ringHistory) * ipTestInterval))
-				}
+				rollOverLikeRing(flow, window)
 				next += newPerUpdate
 				window++
 			}
@@ -262,11 +271,7 @@ func BenchmarkDiachronicFlow_AddFlowChurningIPs(b *testing.B) {
 	var window int
 	for b.Loop() {
 		addIPs(flow, key, window, batches[window%len(batches)]...)
-
-		// Once the flow holds ringHistory windows, roll the oldest over, as the ring would.
-		if window >= ringHistory {
-			flow.Rollover(int64((window - ringHistory) * ipTestInterval))
-		}
+		rollOverLikeRing(flow, window)
 		window++
 	}
 }
