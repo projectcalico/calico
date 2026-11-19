@@ -680,6 +680,7 @@ blocks:
     run:
       when: "true"
     dependencies:
+      - "Build: BIRD image"
       - "Build: nftables RPMs"
     task:
       agent:
@@ -689,6 +690,9 @@ blocks:
       jobs:
         - name: "Build and cache node image"
           commands:
+            # Load the calico/bird image (built/cached by "Build: BIRD image") so
+            # the node Dockerfile's bird build context resolves locally.
+            - .argoci/scripts/load-rpms-image.sh bird amd64
             # Load the patched nftables RPMs producer image (built/cached by
             # "Build: nftables RPMs") so the node Dockerfile's FROM ${NFT_RPMS_IMAGE}
             # resolves locally without re-pulling from Docker Hub.
@@ -987,12 +991,15 @@ blocks:
       when: "true"
     dependencies:
       - Prerequisites
+      - "Build: BIRD image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
           value: "calico"
       prologue:
         commands:
+          # The FV tests check rendered configs with the BIRD in this image.
+          - .argoci/scripts/load-rpms-image.sh bird amd64
           - cd confd
       jobs:
         - name: "confd: CI"
@@ -1832,6 +1839,7 @@ blocks:
       when: "true"
     dependencies:
       - Prerequisites
+      - "Build: BIRD image"
       - "Build: nftables RPMs"
     task:
       prologue:
@@ -1846,6 +1854,9 @@ blocks:
                 - ppc64le
                 - s390x
           commands:
+            # Load the per-arch calico/bird image (built/cached by "Build: BIRD
+            # image") so Dockerfile's bird build context resolves locally.
+            - ../.argoci/scripts/load-rpms-image.sh bird "${ARCH}"
             # Load the per-arch patched nftables RPMs producer image (built/cached
             # by "Build: nftables RPMs") so Dockerfile's FROM ${NFT_RPMS_IMAGE}
             # resolves locally without re-pulling from Docker Hub.
@@ -1865,6 +1876,7 @@ blocks:
       - "Prerequisites"
       # cache-test-artifacts ships these images to the test VMs. Without the
       # dependency the VMs build from source instead, which fails on the VM.
+      - "Build: BIRD image"
       - "Build: calico image"
       - "Build: node image"
       - "Build: whisker image"

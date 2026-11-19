@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BIRD_IMAGE=calico/bird:latest
 ARG BPFTOOL_IMAGE
 ARG UBI_IMAGE
 
@@ -20,15 +19,14 @@ ARG RUNIT_VER=2.1.2
 
 FROM ${BPFTOOL_IMAGE} AS bpftool
 
-FROM ${BIRD_IMAGE} AS bird
-
-# nft-rpms is supplied as a named build context
-# (--build-context nft-rpms=docker-image://<NFT_RPMS_IMAGE>) by node/Makefile.
-# Using a build context rather than FROM ${NFT_RPMS_IMAGE} avoids buildkit's
-# `--pull=always` trying to fetch our locally-built/loaded producer image
-# from a registry. The image is built by hack/rpms/nftables/ and carries the
-# patched nftables + libnftnl RPMs (referenced via COPY --from=nft-rpms
-# below). The tag is content-addressed; see hack/rpms/nftables/Makefile.
+# bird and nft-rpms are supplied as named build contexts
+# (--build-context nft-rpms=docker-image://<NFT_RPMS_IMAGE>, and the same for
+# bird) by node/Makefile. Using a build context rather than
+# FROM ${NFT_RPMS_IMAGE} avoids buildkit's `--pull=always` trying to fetch our
+# locally-built/loaded producer images from a registry. The images are built
+# by hack/rpms/bird/ and hack/rpms/nftables/ and carry the patched BIRD RPM
+# and the patched nftables + libnftnl RPMs (referenced via COPY --from below).
+# The tags are content-addressed; see the Makefile in each directory.
 
 # Use this build stage to install iptables-legacy and build runit binaries.
 # We need to build runit because there aren't any rpms for it in AlmaLinux or ubi repositories.
@@ -119,6 +117,11 @@ COPY --from=nft-rpms /rpms/ /tmp/rpms/
 RUN rpm -Uvh /tmp/rpms/libnftnl-*.rpm /tmp/rpms/nftables-*.rpm && \
     rm -rf /tmp/rpms
 
+# Install our patched BIRD RPM: bird, bird6, birdcl and birdcl6 in /usr/bin.
+COPY --from=bird /rpms/ /tmp/rpms/
+RUN rpm -Uvh /tmp/rpms/bird-*.rpm && \
+    rm -rf /tmp/rpms
+
 RUN microdnf clean all
 
 # Copy in runit binaries
@@ -142,19 +145,16 @@ RUN set -eux; \
         ln -sf xtables-legacy-multi /usr/sbin/${link} || true; \
     done
 
-# Copy our bird binaries in
-COPY --from=bird /bird /bin/bird
-COPY --from=bird /bird6 /bin/bird6
-COPY --from=bird /birdcl /bin/birdcl
-COPY --from=bird /birdcl6 /bin/birdcl6
-
 # Copy in the filesystem - this contains licenses, etc...
 COPY filesystem/etc/ /etc
 COPY filesystem/included-source/ /included-source
 # Corresponding source for the patched nftables (GPL-2.0-only) and libnftnl
-# (GPL-2.0-or-later) we install above, shipped alongside the BIRD and Felix
-# GPL source already in this dir.
+# (GPL-2.0-or-later) we install above, shipped alongside the Felix GPL source
+# already in this dir.
 COPY --from=nft-rpms /src/ /included-source/
+# Corresponding source for the patched BIRD (GPL-2.0-or-later) we install
+# above.
+COPY --from=bird /src/ /included-source/bird/
 COPY filesystem/sbin/ /usr/sbin/
 COPY filesystem/usr/ /usr
 

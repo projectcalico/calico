@@ -44,8 +44,19 @@ import (
 )
 
 // RouterImage is the BIRD image used to stand up external BGP routers in
-// tests. Overridable via $ROUTER_IMAGE to match utils.py.
-var RouterImage = envOr("ROUTER_IMAGE", "calico/bird:latest")
+// tests, and BIRD pods in the cluster. The Makefile sets $ROUTER_IMAGE to the
+// calico/bird image built from this repo, and loads it into the cluster. No
+// registry has a fallback: the image's tag follows its build inputs.
+var RouterImage = os.Getenv("ROUTER_IMAGE")
+
+// MustRouterImage returns RouterImage, and fails the test when it is not set.
+func MustRouterImage(t testing.TB) string {
+	t.Helper()
+	if RouterImage == "" {
+		t.Fatal("ROUTER_IMAGE is not set; run the suite with `make -C node kind-k8st-run-test`")
+	}
+	return RouterImage
+}
 
 // Agnhost is Kubernetes' swiss-army e2e image. Used via `netexec` for
 // multi-protocol servers (HTTP/UDP/SCTP on one pod) and via other
