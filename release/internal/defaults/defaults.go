@@ -24,6 +24,7 @@ const (
 // Fallbacks for values metadata.mk does not set. A repo with other values
 // sets them in an init().
 var (
+	ProductSlug         = "calico"
 	ProductName         = "Calico"
 	ProductCode         = "os"
 	organization        = ProjectCalicoOrg

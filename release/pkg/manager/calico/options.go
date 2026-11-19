@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/projectcalico/calico/release/internal/branch"
+	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/plan"
@@ -45,6 +46,9 @@ func WithRepoRoot(root string) Option {
 func IsHashRelease() Option {
 	return func(r *CalicoManager) error {
 		r.isHashRelease = true
+		r.githubRelease = false
+		r.gitRef = false
+		r.releaseNotes = true
 		return nil
 	}
 }
@@ -232,23 +236,9 @@ func WithArchitectures(architectures []string) Option {
 	}
 }
 
-func WithGithubOrg(org string) Option {
+func WithRepo(org, name, remote string) Option {
 	return func(r *CalicoManager) error {
-		r.githubOrg = org
-		return nil
-	}
-}
-
-func WithRepoRemote(remote string) Option {
-	return func(o *CalicoManager) error {
-		o.remote = remote
-		return nil
-	}
-}
-
-func WithRepoName(name string) Option {
-	return func(o *CalicoManager) error {
-		o.repo = name
+		r.repo = github.Repo{Owner: org, Name: name, Remote: remote}
 		return nil
 	}
 }

@@ -25,8 +25,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/steps"
 )
 
-const filePerms = 0o644
-
 func Publish(pipeline []Upload, opts ...Option) error {
 	s, err := newSettings(artifactsStep, opts)
 	if err != nil {
