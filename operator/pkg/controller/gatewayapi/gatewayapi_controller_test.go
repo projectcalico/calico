@@ -654,7 +654,7 @@ var _ = Describe("Gateway API controller tests", func() {
 
 	userClasses := []operatorv1.GatewayClassSpec{{Name: "custom-gc"}}
 	DescribeTable("keeps a user edit made while defaults are written back",
-		func(crdManagement *operatorv1.CRDManagement, userEdit func(*operatorv1.GatewayAPI), wantCRDManagement operatorv1.CRDManagement, wantClasses []operatorv1.GatewayClassSpec) {
+		func(crdManagement *operatorv1.CRDManagement, userEdit func(*operatorv1.GatewayAPI), wantRequeue bool, wantCRDManagement operatorv1.CRDManagement, wantClasses []operatorv1.GatewayClassSpec) {
 			Expect(c.Create(ctx, installation)).NotTo(HaveOccurred())
 			gwapi := &operatorv1.GatewayAPI{
 				ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
@@ -677,10 +677,11 @@ var _ = Describe("Gateway API controller tests", func() {
 				},
 			})
 
-			By("reconciling once: the conflict is retried within the reconcile")
-			_, err := r.Reconcile(ctx, reconcile.Request{})
+			By("reconciling once: a conflict is retried within the reconcile or requeued, never returned")
+			result, err := r.Reconcile(ctx, reconcile.Request{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(userUpdated).To(BeTrue())
+			Expect(result.RequeueAfter > 0).To(Equal(wantRequeue))
 
 			By("checking the user's edit and the defaults")
 			Expect(c.Get(ctx, utils.DefaultEnterpriseInstanceKey, gwapi)).NotTo(HaveOccurred())
@@ -691,13 +692,15 @@ var _ = Describe("Gateway API controller tests", func() {
 		// default must stay Reconcile even though the first write-back conflicts.
 		Entry("other field edited during the CRDManagement write-back",
 			nil, func(g *operatorv1.GatewayAPI) { g.Spec.GatewayClasses = userClasses },
-			operatorv1.CRDManagementReconcile, userClasses),
+			false, operatorv1.CRDManagementReconcile, userClasses),
 		Entry("same field edited during the CRDManagement write-back",
 			nil, func(g *operatorv1.GatewayAPI) { g.Spec.CRDManagement = ptr.To(operatorv1.CRDManagementPreferExisting) },
-			operatorv1.CRDManagementPreferExisting, []operatorv1.GatewayClassSpec{{Name: "tigera-gateway-class"}}),
+			false, operatorv1.CRDManagementPreferExisting, []operatorv1.GatewayClassSpec{{Name: "tigera-gateway-class"}}),
+		// The reconcile has already used the spec, so it requeues instead of
+		// continuing with the re-read CR.
 		Entry("same field edited during the GatewayClasses write-back",
 			ptr.To(operatorv1.CRDManagementReconcile), func(g *operatorv1.GatewayAPI) { g.Spec.GatewayClasses = userClasses },
-			operatorv1.CRDManagementReconcile, userClasses),
+			true, operatorv1.CRDManagementReconcile, userClasses),
 	)
 
 	It("Check felix configuration patching is set if it's not alreadyconfigured", func() {

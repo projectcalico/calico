@@ -304,8 +304,9 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 			// cluster, and make sure not to clobber them.
 			setting = operatorv1.CRDManagementPreferExisting
 		}
-		// Patch that value back into the datastore.
-		err = r.writeBackDefault(ctx, gatewayAPI,
+		// Patch that value back into the datastore. Nothing before this point
+		// depends on the rest of the spec, so a re-read on conflict is safe.
+		err = r.writeBackDefaultWithRetry(ctx, gatewayAPI,
 			func(g *operatorv1.GatewayAPI) bool { return g.Spec.CRDManagement != nil },
 			func(g *operatorv1.GatewayAPI) { g.Spec.CRDManagement = &setting })
 		if errors.IsConflict(err) {
@@ -410,11 +411,11 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	if gatewayAPI.Spec.GatewayClasses == nil {
 		// Write back the default setup, which is to create a class named
 		// "tigera-gateway-class" without any customizations.
-		err = r.writeBackDefault(ctx, gatewayAPI,
-			func(g *operatorv1.GatewayAPI) bool { return g.Spec.GatewayClasses != nil },
-			func(g *operatorv1.GatewayAPI) {
-				g.Spec.GatewayClasses = []operatorv1.GatewayClassSpec{{Name: "tigera-gateway-class"}}
-			})
+		// The reconcile has already used the spec read at its start, so on a
+		// conflict it requeues rather than continuing with a re-read CR.
+		err = r.writeBackDefault(ctx, gatewayAPI, func(g *operatorv1.GatewayAPI) {
+			g.Spec.GatewayClasses = []operatorv1.GatewayClassSpec{{Name: "tigera-gateway-class"}}
+		})
 		if errors.IsConflict(err) {
 			reqLogger.V(1).Info("GatewayAPI changed while writing back GatewayClasses, will retry")
 			return reconcile.Result{RequeueAfter: time.Second}, nil
@@ -634,24 +635,33 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	return reconcile.Result{}, nil
 }
 
-// writeBackDefault persists a defaulted field unless it is already set. The
-// optimistic lock stops the default from overwriting a user edit made since the
-// CR was read. On a conflict it re-reads the CR and retries in this reconcile,
-// because a later reconcile might infer a different default: the CRDs this one
-// created would then look pre-existing.
-func (r *ReconcileGatewayAPI) writeBackDefault(ctx context.Context, gatewayAPI *operatorv1.GatewayAPI, isSet func(*operatorv1.GatewayAPI) bool, setDefault func(*operatorv1.GatewayAPI)) error {
+// writeBackDefault persists a defaulted field. The optimistic lock turns a user
+// edit made since the CR was read into a conflict, so the default cannot
+// overwrite it. On failure gatewayAPI is left as it was read.
+func (r *ReconcileGatewayAPI) writeBackDefault(ctx context.Context, gatewayAPI *operatorv1.GatewayAPI, setDefault func(*operatorv1.GatewayAPI)) error {
+	base := gatewayAPI.DeepCopy()
+	setDefault(gatewayAPI)
+	err := r.client.Patch(ctx, gatewayAPI, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{}))
+	if err != nil {
+		*gatewayAPI = *base
+	}
+	return err
+}
+
+// writeBackDefaultWithRetry re-reads the CR on a conflict and retries within
+// this reconcile, unless the user has set the field meanwhile. It exists for
+// defaults inferred from this reconcile's own work: a later reconcile could
+// infer a different value, because the CRDs this one created would then look
+// pre-existing.
+func (r *ReconcileGatewayAPI) writeBackDefaultWithRetry(ctx context.Context, gatewayAPI *operatorv1.GatewayAPI, isSet func(*operatorv1.GatewayAPI) bool, setDefault func(*operatorv1.GatewayAPI)) error {
 	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		if isSet(gatewayAPI) {
 			return nil
 		}
-		base := gatewayAPI.DeepCopy()
-		setDefault(gatewayAPI)
-		err := r.client.Patch(ctx, gatewayAPI, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{}))
+		err := r.writeBackDefault(ctx, gatewayAPI, setDefault)
 		if errors.IsConflict(err) {
-			// Decoding into gatewayAPI would keep the unsaved default, so read
-			// into a fresh object.
 			latest := &operatorv1.GatewayAPI{}
-			if getErr := r.client.Get(ctx, client.ObjectKeyFromObject(base), latest); getErr != nil {
+			if getErr := r.client.Get(ctx, client.ObjectKeyFromObject(gatewayAPI), latest); getErr != nil {
 				return getErr
 			}
 			*gatewayAPI = *latest
