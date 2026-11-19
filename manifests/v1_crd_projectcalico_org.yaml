@@ -20029,6 +20029,35 @@ spec:
             spec:
               description: IstioSpec defines the desired state of Istio
               properties:
+                certificateAuthority:
+                  description: |-
+                    CertificateAuthority selects the certificate authority istiod signs workload
+                    certificates with. At most one member may be set. When unset, the operator
+                    generates and manages the CA.
+                  maxProperties: 1
+                  properties:
+                    operatorManaged:
+                      description: |-
+                        OperatorManaged is the explicit form of the default: the operator generates
+                        the CA and manages its lifecycle.
+                      type: object
+                    secret:
+                      description: |-
+                        Secret names a Secret in the operator namespace that holds a customer CA, in
+                        either Istio's plug-in CA layout (ca-cert.pem, ca-key.pem, cert-chain.pem,
+                        root-cert.pem) or the kubernetes.io/tls layout (tls.crt, tls.key, ca.crt).
+                        The Secret must have the label operator.tigera.io/istio-ca: "true",
+                        because the operator copies its private key into the Istio namespace.
+                      properties:
+                        name:
+                          description: Name is the name of the Secret.
+                          maxLength: 253
+                          minLength: 1
+                          type: string
+                      required:
+                        - name
+                      type: object
+                  type: object
                 dscpMark:
                   default: 23
                   description: |-
@@ -22253,6 +22282,52 @@ spec:
                           type: object
                       type: object
                   type: object
+                trustAnchors:
+                  description: |-
+                    TrustAnchors configures the root certificates ztunnel trusts in addition to
+                    this cluster's own root. When unset, no static roots are added.
+                  properties:
+                    additional:
+                      description: |-
+                        Additional lists static root certificates to trust, for meshes that include
+                        clusters Calico does not manage.
+                      items:
+                        description:
+                          IstioTrustAnchor is one static root certificate.
+                          Exactly one member must be set.
+                        maxProperties: 1
+                        minProperties: 1
+                        properties:
+                          pem:
+                            description: PEM is the certificate in PEM form.
+                            minLength: 1
+                            type: string
+                          secret:
+                            description: |-
+                              Secret names a Secret in the operator namespace whose root-cert.pem key holds
+                              the certificate.
+                            properties:
+                              name:
+                                description: Name is the name of the Secret.
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                            required:
+                              - name
+                            type: object
+                        type: object
+                      maxItems: 64
+                      type: array
+                  type: object
+                trustDomain:
+                  description: |-
+                    TrustDomain is the trust domain of workload identities, rendered to istiod's
+                    meshConfig.trustDomain and ztunnel's TRUST_DOMAIN. It is one or more
+                    dot-separated DNS-1123 labels, optionally ending in a dot, and must be
+                    identical in every cluster of a mesh. Defaults to cluster.local.
+                  maxLength: 253
+                  pattern: ^([a-zA-Z0-9]([-a-zA-Z0-9]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([-a-zA-Z0-9]{0,61}[a-zA-Z0-9])?\.?$
+                  type: string
                 waypointLogging:
                   description: |-
                     WaypointLogging controls whether L7 logging is enabled on every Gateway
