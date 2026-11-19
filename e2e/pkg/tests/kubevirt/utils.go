@@ -16,6 +16,7 @@ package kubevirt
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"math/big"
@@ -294,6 +295,16 @@ func (v *kubeVirtVM) FindVirtLauncherPod(ctx context.Context, f *framework.Frame
 		}
 	}
 	return nil, fmt.Errorf("no running virt-launcher pod found for VM %s (total pods: %d)", v.name, len(pods.Items))
+}
+
+// randomLocalMAC returns a random unicast, locally-administered MAC, so it
+// can't collide with a vendor-assigned address.
+func randomLocalMAC() string {
+	mac := make(net.HardwareAddr, 6)
+	_, err := rand.Read(mac)
+	Expect(err).NotTo(HaveOccurred())
+	mac[0] = (mac[0] | 0x02) &^ 0x01
+	return mac.String()
 }
 
 // setupAntiAffinityPod creates a long-running pod scheduled away from the
