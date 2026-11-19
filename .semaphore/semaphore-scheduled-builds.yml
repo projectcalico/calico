@@ -434,7 +434,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/operator/api', '/operator/pkg/crds', '/operator/pkg/admission', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/hack/rpms/bird', '/kube-controllers/pkg/apis/migration', '/operator/api', '/operator/pkg/crds', '/operator/pkg/admission', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -447,6 +447,7 @@ blocks:
             - make -C goldmane gen-files
             - make -C kube-controllers gen-files
             - make -C operator gen-files
+            - make -C hack/rpms/bird gen-files
             - make gen-manifests
             - make fix-changed
             - make check-ocp-no-crds
@@ -1068,6 +1069,7 @@ blocks:
       when: "true"
     dependencies:
       - Prerequisites
+      - "Build: BIRD image"
       - "Build: calico image"
       - "Build: node image"
       - "Build: whisker image"
@@ -1086,6 +1088,8 @@ blocks:
           # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
           - docker system prune -af
           - .argoci/scripts/load-cached-images calico node whisker
+          # The external node runs this image as a BGP router.
+          - .argoci/scripts/load-rpms-image.sh bird amd64
       jobs:
         - name: "E2E tests: Conformance (cluster routing: BIRD)"
           commands:
@@ -1656,6 +1660,7 @@ blocks:
       when: "true"
     dependencies:
       - Prerequisites
+      - "Build: BIRD image"
       - "Build: calico image"
       - "Build: node image"
       - "Build: operator image"
@@ -1680,6 +1685,7 @@ blocks:
         commands:
           - docker system prune -af
           - .argoci/scripts/load-cached-images calico node
+          - .argoci/scripts/load-rpms-image.sh bird amd64
       jobs:
         - name: "KubeVirt live migration (KIND)"
           commands:
@@ -1698,7 +1704,7 @@ blocks:
             # Start external BIRD BGP peer container on the KIND Docker network.
             # Tests discover this container via the BIRD_BGPPEER_CONTAINER_NAME env var.
             - export BIRD_BGPPEER_CONTAINER_NAME=bird-bgp-peer
-            - docker run -d --name ${BIRD_BGPPEER_CONTAINER_NAME} --privileged --network kind calico/bird:v0.3.3-211-g9111ec3c
+            - docker run -d --name ${BIRD_BGPPEER_CONTAINER_NAME} --privileged --network kind $(make --no-print-directory -C hack/rpms/bird print-image)
             # Run KubeVirt e2e tests
             - .semaphore/run-and-monitor e2e-kubevirt-kind.log make e2e-run KUBECONFIG=$(pwd)/hack/test/kind/kind-kubeconfig.yaml
       epilogue:
