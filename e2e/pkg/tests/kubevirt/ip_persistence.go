@@ -406,17 +406,14 @@ var _ = describe.CalicoDescribe(
 				targetPodName, targetNode, sourcePod.Name, sourceNode)
 		})
 
-		// Test 6: assigning a static IP and MAC via the cni.projectcalico.org/ipAddrs
-		// and hwAddr annotations on the VM spec template - the pair a VM migrated in
-		// from another platform uses to keep its primary-NIC identity. The
-		// annotations propagate through VMI to the virt-launcher pod, where the
-		// Calico CNI plugin honours them. After a live migration both must survive
-		// on the new pod.
+		// Test 6: the ipAddrs and hwAddr annotations are how a VM migrated in from
+		// another platform keeps its primary-NIC identity, so both must hold from
+		// first boot and through live migration.
 		It("should assign static IP and MAC via annotation and preserve them across migration", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), singleMigrationTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
-			vmName := "e2e-static-ip"
+			vmName := "e2e-static-ip-mac"
 
 			// Pick an unallocated static IP from the cluster's IPPool.
 			lcgc := newLibcalicoClient(f)
@@ -436,14 +433,14 @@ var _ = describe.CalicoDescribe(
 			vm.Create(ctx, cli)
 			DeferCleanup(func() { vm.Delete(cli) })
 
-			// 1. Verify the VM gets the exact static IP.
+			// 1. Verify the VM gets the exact static IP and MAC.
 			ip, sourceNode := vm.WaitForRunningWithIP(ctx, cli)
 			Expect(ip).To(Equal(staticIP),
 				"VM should receive the static IP from the annotation")
 
-			// Bridge binding hands the pod interface's MAC to the guest, so the
-			// guest MAC shows the CNI's choice end to end.
-			// Eventually because VMI status can report the IP before the MAC.
+			// With bridge binding KubeVirt builds the domain NIC from the pod
+			// interface, so the VMI's reported MAC is the one the CNI set. Eventually
+			// because VMI status can report the IP before the MAC.
 			Eventually(func() (string, error) {
 				vmi := &kubevirtv1.VirtualMachineInstance{}
 				if err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: vmName}, vmi); err != nil {
@@ -463,14 +460,14 @@ var _ = describe.CalicoDescribe(
 			Expect(ips).To(HaveLen(1))
 			Expect(ips[0].String()).To(Equal(staticIP))
 
-			// 3. Migrate and verify the static IP survives.
+			// 3. Migrate.
 			vmim := newVMIMigration(vmName+"-mig", ns, vmName)
 			err = cli.Create(ctx, vmim)
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
 			expectMigrationSuccess(ctx, cli, vmim)
 
-			// 4. Verify IP preserved and VM moved to a different node.
+			// 4. Verify IP and MAC preserved and VM moved to a different node.
 			var postIP, postMAC, postNode string
 			Eventually(func() error {
 				vmi := &kubevirtv1.VirtualMachineInstance{}
