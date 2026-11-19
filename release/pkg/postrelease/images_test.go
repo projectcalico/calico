@@ -125,7 +125,7 @@ func TestImagesInMetadata(t *testing.T) {
 }
 
 func getMetadataImages() ([]string, error) {
-	metadataURL := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s", githubOrg, githubRepo, releaseVersion, metadataFileName)
+	metadataURL := githubRepo.DownloadURL(releaseVersion, metadataFileName)
 
 	// Fetch the metadata
 	resp, err := http.Get(metadataURL)

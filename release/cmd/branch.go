@@ -57,9 +57,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 				configureLogging("branch-cut.log")
 
 				calicoManager, err := calico.NewManager(
-					calico.WithGithubOrg(c.String(orgFlag.Name)),
-					calico.WithRepoName(c.String(repoFlag.Name)),
-					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
+					calico.WithRepo(c.String(orgFlag.Name), c.String(repoFlag.Name), c.String(repoRemoteFlag.Name)),
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithMainBranch(c.String(mainBranchFlag.Name)),

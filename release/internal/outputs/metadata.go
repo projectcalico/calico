@@ -30,11 +30,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.yaml.in/yaml/v3"
 
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 const (
-	metadataFileName = "metadata.yaml"
+	MetadataFileName = "metadata.yaml"
 
 	MetadataStep = "metadata"
 )
@@ -56,7 +57,7 @@ func BuildMetadata(r Record, dir string) error {
 	if err != nil {
 		return fmt.Errorf("metadata: %w", err)
 	}
-	path := filepath.Join(dir, metadataFileName)
+	path := filepath.Join(dir, MetadataFileName)
 	if err := os.WriteFile(path, bs, 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
@@ -297,13 +298,13 @@ type ArtifactFile struct {
 	URL  string
 }
 
-// DescribeArtifacts leaves out the metadata file, because it cannot carry its
-// own hash.
+// DescribeArtifacts leaves out the metadata and sums files: each describes the
+// others, so neither can carry its own hash.
 func DescribeArtifacts(files []ArtifactFile) ([]Artifact, error) {
 	var out []Artifact
 	for _, file := range files {
 		name := file.Name
-		if name == metadataFileName {
+		if name == MetadataFileName || name == SumsFileName {
 			continue
 		}
 		f, err := os.Open(file.Path)
@@ -319,4 +320,21 @@ func DescribeArtifacts(files []ArtifactFile) ([]Artifact, error) {
 		out = append(out, Artifact{Name: name, Size: size, SHA256: hex.EncodeToString(h.Sum(nil)), URL: file.URL})
 	}
 	return out, nil
+}
+
+// Artifacts describes the files the filters pick in dir, served under baseURL.
+func Artifacts(dir, baseURL string, filters ...fsutil.FileFilter) ([]Artifact, error) {
+	paths, err := fsutil.ListFiles(dir, append(slices.Clone(filters), fsutil.Exclude(MetadataFileName, SumsFileName))...)
+	if err != nil {
+		return nil, fmt.Errorf("list artifacts: %w", err)
+	}
+	files := make([]ArtifactFile, len(paths))
+	for i, path := range paths {
+		u, err := url.JoinPath(baseURL, filepath.Base(path))
+		if err != nil {
+			return nil, fmt.Errorf("url for %s: %w", path, err)
+		}
+		files[i] = ArtifactFile{Name: filepath.Base(path), Path: path, URL: u}
+	}
+	return DescribeArtifacts(files)
 }
