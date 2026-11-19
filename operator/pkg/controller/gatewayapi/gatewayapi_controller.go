@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 	"k8s.io/utils/set"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -291,32 +292,26 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	if gatewayAPI.Spec.CRDManagement == nil && (err == nil || errors.IsAlreadyExists(err)) {
 		// The GatewayAPI CR does not yet have a specified value for its CRDManagement
 		// field, and we can now infer a reasonable value.
+		var setting operatorv1.CRDManagement
 		if err == nil {
 			// None of the CRDs previously existed, and all of them were just created by
 			// us.  Therefore, in future we can consider the CRDs as Tigera
 			// operator-owned, and reconcile them so as to deliver future updates.
-			setting := operatorv1.CRDManagementReconcile
-			gatewayAPI.Spec.CRDManagement = &setting
+			setting = operatorv1.CRDManagementReconcile
 		} else {
 			// Some (i.e. at least one) of the CRDs already existed.  Therefore we have
 			// to assume that someone or something else is provisioning the CRDs in this
 			// cluster, and make sure not to clobber them.
-			setting := operatorv1.CRDManagementPreferExisting
-			gatewayAPI.Spec.CRDManagement = &setting
+			setting = operatorv1.CRDManagementPreferExisting
 		}
 		// Patch that value back into the datastore.
-		err = r.client.Patch(ctx, &operatorv1.GatewayAPI{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: gatewayAPI.Name,
-			},
-			Spec: operatorv1.GatewayAPISpec{
-				CRDManagement: gatewayAPI.Spec.CRDManagement,
-			},
-		}, client.MergeFrom(&operatorv1.GatewayAPI{
-			Spec: operatorv1.GatewayAPISpec{
-				CRDManagement: nil,
-			},
-		}))
+		err = r.writeBackDefault(ctx, gatewayAPI,
+			func(g *operatorv1.GatewayAPI) bool { return g.Spec.CRDManagement != nil },
+			func(g *operatorv1.GatewayAPI) { g.Spec.CRDManagement = &setting })
+		if errors.IsConflict(err) {
+			reqLogger.V(1).Info("GatewayAPI changed while writing back CRDManagement, will retry")
+			return reconcile.Result{RequeueAfter: time.Second}, nil
+		}
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to patch CRDManagement field", err, reqLogger)
 			return reconcile.Result{}, err
@@ -415,21 +410,15 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	if gatewayAPI.Spec.GatewayClasses == nil {
 		// Write back the default setup, which is to create a class named
 		// "tigera-gateway-class" without any customizations.
-		gatewayAPI.Spec.GatewayClasses = []operatorv1.GatewayClassSpec{{Name: "tigera-gateway-class"}}
-
-		// Patch that back into the datastore.
-		err = r.client.Patch(ctx, &operatorv1.GatewayAPI{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: gatewayAPI.Name,
-			},
-			Spec: operatorv1.GatewayAPISpec{
-				GatewayClasses: gatewayAPI.Spec.GatewayClasses,
-			},
-		}, client.MergeFrom(&operatorv1.GatewayAPI{
-			Spec: operatorv1.GatewayAPISpec{
-				GatewayClasses: nil,
-			},
-		}))
+		err = r.writeBackDefault(ctx, gatewayAPI,
+			func(g *operatorv1.GatewayAPI) bool { return g.Spec.GatewayClasses != nil },
+			func(g *operatorv1.GatewayAPI) {
+				g.Spec.GatewayClasses = []operatorv1.GatewayClassSpec{{Name: "tigera-gateway-class"}}
+			})
+		if errors.IsConflict(err) {
+			reqLogger.V(1).Info("GatewayAPI changed while writing back GatewayClasses, will retry")
+			return reconcile.Result{RequeueAfter: time.Second}, nil
+		}
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to patch GatewayClasses field", err, reqLogger)
 			return reconcile.Result{}, err
@@ -643,6 +632,32 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	r.status.ClearDegraded()
 
 	return reconcile.Result{}, nil
+}
+
+// writeBackDefault persists a defaulted field unless it is already set. The
+// optimistic lock stops the default from overwriting a user edit made since the
+// CR was read. On a conflict it re-reads the CR and retries in this reconcile,
+// because a later reconcile might infer a different default: the CRDs this one
+// created would then look pre-existing.
+func (r *ReconcileGatewayAPI) writeBackDefault(ctx context.Context, gatewayAPI *operatorv1.GatewayAPI, isSet func(*operatorv1.GatewayAPI) bool, setDefault func(*operatorv1.GatewayAPI)) error {
+	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		if isSet(gatewayAPI) {
+			return nil
+		}
+		base := gatewayAPI.DeepCopy()
+		setDefault(gatewayAPI)
+		err := r.client.Patch(ctx, gatewayAPI, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{}))
+		if errors.IsConflict(err) {
+			// Decoding into gatewayAPI would keep the unsaved default, so read
+			// into a fresh object.
+			latest := &operatorv1.GatewayAPI{}
+			if getErr := r.client.Get(ctx, client.ObjectKeyFromObject(base), latest); getErr != nil {
+				return getErr
+			}
+			*gatewayAPI = *latest
+		}
+		return err
+	})
 }
 
 // GetGatewayAPI finds the correct GatewayAPI resource and returns a message and error in the case of an error.

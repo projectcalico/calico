@@ -71,7 +71,7 @@ var _ = Describe("kube-proxy controller tests", func() {
 				IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
 				ClusterIP:  "1.2.3.4",
 				Ports: []corev1.ServicePort{
-					{Name: "https", Port: 443, TargetPort: intstr.FromInt(443)},
+					{Name: "https", Port: 443, TargetPort: intstr.FromInt32(443)},
 				},
 			},
 		}

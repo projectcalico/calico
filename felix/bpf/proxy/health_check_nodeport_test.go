@@ -56,7 +56,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 				{
 					Protocol:   v1.ProtocolTCP,
 					Port:       4321,
-					TargetPort: intstr.FromInt(32678),
+					TargetPort: intstr.FromInt32(32678),
 				},
 			},
 		},

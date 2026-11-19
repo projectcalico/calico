@@ -44,7 +44,7 @@ var _ = Describe("Windows rendering tests", func() {
 	var defaultInstance *operatorv1.InstallationSpec
 	var typhaNodeTLS *render.TyphaNodeTLS
 	var k8sServiceEp k8sapi.ServiceEndpoint
-	one := intstr.FromInt(1)
+	one := intstr.FromInt32(1)
 	defaultNumExpectedResources := 2
 	const defaultClusterDomain = "svc.cluster.local"
 	var defaultMode int32 = 420
@@ -1434,7 +1434,7 @@ var _ = Describe("Windows rendering tests", func() {
 	})
 
 	It("should render MaxUnavailable if a custom value was set", func() {
-		two := intstr.FromInt(2)
+		two := intstr.FromInt32(2)
 		defaultInstance.NodeUpdateStrategy.RollingUpdate.MaxUnavailable = &two
 		component := render.Windows(&cfg)
 		Expect(component.ResolveImages(nil)).To(BeNil())
