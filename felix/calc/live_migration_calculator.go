@@ -217,8 +217,9 @@ func (lmc *LiveMigrationCalculator) updateSelectorMatch(
 	exactID := wepOwnerIDFromKey(wepKey)
 	wd := lmc.weps[exactID]
 	if wd == nil {
-		// Shouldn't happen, because a WEP update reaches this calculator before any selector
-		// match for that WEP, but harmless.
+		// A WEP update reaches this calculator before any selector match change that it
+		// causes.  So for a match the WEP is always known, but for a match stopping because
+		// the WEP was deleted, it's already gone and there's nothing to update.
 		return
 	}
 	logrus.WithFields(logrus.Fields{
