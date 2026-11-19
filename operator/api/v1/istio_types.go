@@ -131,6 +131,59 @@ type ZTunnelDaemonset struct {
 	Spec *ZTunnelDaemonsetSpec `json:"spec,omitempty"`
 }
 
+// IstioCertificateAuthority selects the certificate authority istiod signs workload
+// certificates with. At most one member may be set; an empty value means the same
+// as unset.
+// +kubebuilder:validation:MaxProperties=1
+type IstioCertificateAuthority struct {
+	// OperatorManaged is the explicit form of the default: the operator generates
+	// the CA and manages its lifecycle.
+	// +optional
+	OperatorManaged *IstioOperatorManagedCA `json:"operatorManaged,omitempty"`
+	// Secret names a Secret in the operator namespace that holds a customer CA, in
+	// either Istio's plug-in CA layout (ca-cert.pem, ca-key.pem, cert-chain.pem,
+	// root-cert.pem) or the kubernetes.io/tls layout (tls.crt, tls.key, ca.crt).
+	// +optional
+	Secret *IstioCASecret `json:"secret,omitempty"`
+}
+
+// IstioOperatorManagedCA configures the certificate authority the operator
+// generates and manages. It has no settings yet.
+type IstioOperatorManagedCA struct{}
+
+// IstioCASecret references a Secret in the operator namespace by name.
+type IstioCASecret struct {
+	// Name is the name of the Secret.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	Name string `json:"name"`
+}
+
+// IstioTrustAnchors configures the root certificates ztunnel trusts in addition to
+// this cluster's own root.
+type IstioTrustAnchors struct {
+	// Additional lists static root certificates to trust, for meshes that include
+	// clusters Calico does not manage.
+	// +optional
+	// +kubebuilder:validation:MaxItems=64
+	Additional []IstioTrustAnchor `json:"additional,omitempty"`
+}
+
+// IstioTrustAnchor is one static root certificate. Exactly one member must be set.
+// +kubebuilder:validation:MinProperties=1
+// +kubebuilder:validation:MaxProperties=1
+type IstioTrustAnchor struct {
+	// Secret names a Secret in the operator namespace whose root-cert.pem key holds
+	// the certificate.
+	// +optional
+	Secret *IstioCASecret `json:"secret,omitempty"`
+	// PEM is the certificate in PEM form.
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	PEM string `json:"pem,omitempty"`
+}
+
 // IstioSpec defines the desired state of Istio
 type IstioSpec struct {
 	// IstiodDeployment defines the resource requirements and node selector for the Istio deployment.
@@ -159,6 +212,23 @@ type IstioSpec struct {
 	// +kubebuilder:validation:Pattern=`^.*`
 	// +kubebuilder:default=23
 	DSCPMark *numorstring.DSCP `json:"dscpMark,omitempty"`
+	// CertificateAuthority selects the certificate authority istiod signs workload
+	// certificates with. At most one member may be set. When unset, the operator
+	// generates and manages the CA.
+	// +optional
+	CertificateAuthority *IstioCertificateAuthority `json:"certificateAuthority,omitempty"`
+	// TrustAnchors configures the root certificates ztunnel trusts in addition to
+	// this cluster's own root. When unset, no static roots are added.
+	// +optional
+	TrustAnchors *IstioTrustAnchors `json:"trustAnchors,omitempty"`
+	// TrustDomain is the trust domain of workload identities, rendered to istiod's
+	// meshConfig.trustDomain and ztunnel's TRUST_DOMAIN. It is one or more
+	// dot-separated DNS-1123 labels, optionally ending in a dot, and must be
+	// identical in every cluster of a mesh. Defaults to cluster.local.
+	// +optional
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^([a-zA-Z0-9]([-a-zA-Z0-9]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([-a-zA-Z0-9]{0,61}[a-zA-Z0-9])?\.?$`
+	TrustDomain *string `json:"trustDomain,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Enabled;Disabled

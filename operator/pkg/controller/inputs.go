@@ -51,7 +51,8 @@ type Inputs struct {
 	CertificateManager certificatemanager.CertificateManager
 
 	// Status and ShutdownContext are set by the controllers whose extension owns a
-	// background goroutine. Everywhere else they are nil.
+	// background goroutine. The istio controller also sets Status, so its extension
+	// can report warnings. Everywhere else they are nil.
 	Status          status.StatusManager
 	ShutdownContext context.Context
 
