@@ -307,42 +307,6 @@ func randomLocalMAC() string {
 	return mac.String()
 }
 
-// expectWorkloadEndpointMAC asserts that the WorkloadEndpoint of the VM's
-// virt-launcher pod on node records mac. The CNI writes the MAC it actually
-// set on the pod interface, so this proves cni.projectcalico.org/hwAddr was
-// applied to that pod. Matching on node, not phase, picks the right pod
-// while a migration source is still shutting down.
-func (v *kubeVirtVM) expectWorkloadEndpointMAC(ctx context.Context, f *framework.Framework, c clientv3.Interface, node, mac string) {
-	EventuallyWithOffset(1, func() (string, error) {
-		pods, err := f.ClientSet.CoreV1().Pods(v.namespace).List(ctx, metav1.ListOptions{
-			LabelSelector: fmt.Sprintf("kubevirt.io=virt-launcher,vm.kubevirt.io/name=%s", v.name),
-		})
-		if err != nil {
-			return "", err
-		}
-		podName := ""
-		for _, pod := range pods.Items {
-			if pod.Spec.NodeName == node && pod.DeletionTimestamp == nil {
-				podName = pod.Name
-			}
-		}
-		if podName == "" {
-			return "", fmt.Errorf("no virt-launcher pod for VM %s on node %s", v.name, node)
-		}
-		weps, err := c.WorkloadEndpoints().List(ctx, options.ListOptions{Namespace: v.namespace})
-		if err != nil {
-			return "", err
-		}
-		for _, wep := range weps.Items {
-			if wep.Spec.Pod == podName {
-				return wep.Spec.MAC, nil
-			}
-		}
-		return "", fmt.Errorf("no WorkloadEndpoint for pod %s/%s", v.namespace, podName)
-	}, 1*time.Minute, 2*time.Second).Should(Equal(mac),
-		"WorkloadEndpoint MAC on node %s should match the cni.projectcalico.org/hwAddr annotation", node)
-}
-
 // setupAntiAffinityPod creates a long-running pod scheduled away from the
 // given node, used for TCP tests where the client must be on a different node
 // than the server VM to exercise cross-node BGP routing. Returns both the

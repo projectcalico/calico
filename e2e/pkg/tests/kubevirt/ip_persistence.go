@@ -448,7 +448,6 @@ var _ = describe.CalicoDescribe(
 			Expect(vmi.Status.Interfaces).NotTo(BeEmpty())
 			Expect(strings.ToLower(vmi.Status.Interfaces[0].MAC)).To(Equal(staticMAC),
 				"VM should receive the static MAC from the annotation")
-			vm.expectWorkloadEndpointMAC(ctx, f, lcgc, sourceNode, staticMAC)
 
 			// 2. Verify the IPAM handle exists for this IP.
 			handleID := vmipam.CreateVMHandleID("k8s-pod-network", ns, vmName)
@@ -485,12 +484,11 @@ var _ = describe.CalicoDescribe(
 
 			Expect(postIP).To(Equal(staticIP),
 				"Static IP should survive live migration")
+			// Weaker than it looks: the guest keeps its MAC whatever the target pod
+			// got, and KDD WorkloadEndpoints carry no MAC to check the target by.
 			Expect(strings.ToLower(postMAC)).To(Equal(staticMAC),
 				"Static MAC should survive live migration")
 			Expect(postNode).NotTo(Equal(sourceNode))
-			// The guest keeps its MAC whatever the target pod got, so only the
-			// target pod's endpoint shows the CNI honoured hwAddr there too.
-			vm.expectWorkloadEndpointMAC(ctx, f, lcgc, postNode, staticMAC)
 
 			// 5. Verify IPAM handle still holds the same IP after migration.
 			postIPs, err := lcgc.IPAM().IPsByHandle(ctx, handleID)
