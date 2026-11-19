@@ -138,6 +138,8 @@ type CalicoManager struct {
 	// isHashRelease is a flag to indicate that we should build a hashrelease.
 	isHashRelease bool
 
+	ci bool
+
 	// archiveImages controls whether we should archive container images in release tarball.
 	archiveImages bool
 
@@ -1380,6 +1382,11 @@ func (r *CalicoManager) buildContainerImages() error {
 		fullDir := filepath.Join(r.repoRoot, dir)
 		if _, err := r.makeInDirectoryToFile(fullDir, "image-windows", "build-windows", env...); err != nil {
 			return fmt.Errorf("failed to build %s windows images: %s", dir, err)
+		}
+	}
+	if r.ci {
+		if out, err := r.runner.Run("docker", []string{"builder", "prune", "--all", "--force"}, nil); err != nil {
+			logrus.WithError(err).Warnf("Failed to prune the build cache: %s", out)
 		}
 	}
 	return nil

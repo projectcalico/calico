@@ -277,6 +277,13 @@ func WithArchiveImages(archive bool) Option {
 	}
 }
 
+func WithCI(ci bool) Option {
+	return func(r *CalicoManager) error {
+		r.ci = ci
+		return nil
+	}
+}
+
 func WithOperatorBranch(branch string) Option {
 	return func(r *CalicoManager) error {
 		r.operatorBranch = branch
