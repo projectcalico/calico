@@ -149,10 +149,11 @@ func (lc *LookupsCache) SetMockData(
 		}
 	}
 	for id, rid := range nm {
+		prefix := strings.TrimRight(string(id[:]), "\x00")
 		if rid == nil {
-			delete(lc.polCache.nflogPrefixHash, id)
+			lc.polCache.deleteNFLogPrefixEntry(prefix)
 		} else {
-			lc.polCache.addNFLogPrefixEntry(strings.TrimRight(string(id[:]), "\x00"), rid)
+			lc.polCache.addNFLogPrefixEntry(prefix, rid)
 		}
 	}
 	for k, v := range ns {

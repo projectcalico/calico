@@ -28,47 +28,55 @@ import (
 )
 
 var (
-	hostIngressAllow = calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "host-fwd", "",
+	hostIngressAllow = calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "host", "",
 		0, rules.RuleDirIngress, rules.RuleActionAllow)
-	hostIngressDeny = calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "host-fwd", "",
+	hostIngressDeny = calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "host", "",
 		1, rules.RuleDirIngress, rules.RuleActionDeny)
 	podEgressPass = calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "pod-pass", "",
 		0, rules.RuleDirEgress, rules.RuleActionPass)
 	podEgressAllow = calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "pod-allow", "",
 		0, rules.RuleDirEgress, rules.RuleActionAllow)
+
+	// unresolvable stands for a rule ID that the lookups cache does not know.
+	unresolvable = &calc.RuleID{}
 )
 
-// newTestListener returns a listener that resolves the returned event rule
-// IDs to rids.
+// newTestListener returns a listener and the event rule IDs that it resolves
+// to rids.
 func newTestListener(rids ...*calc.RuleID) (*CollectorPolicyListener, [state.MaxRuleIDs]uint64) {
 	prefixes := map[[64]byte]*calc.RuleID{}
 	for i, rid := range rids {
-		prefixes[[64]byte{byte('A' + i)}] = rid
+		if rid != unresolvable {
+			prefixes[[64]byte{byte('A' + i)}] = rid
+		}
 	}
 	lc := calc.NewLookupsCache()
 	lc.EnableID64()
 	lc.SetMockData(nil, prefixes, nil, nil)
 
 	var ids [state.MaxRuleIDs]uint64
-	for i := range rids {
+	for i, rid := range rids {
 		ids[i] = lc.GetID64FromNFLOGPrefix([64]byte{byte('A' + i)})
+		if rid == unresolvable {
+			ids[i] = 0xdead
+		}
 	}
 	return NewCollectorPolicyListener(lc), ids
 }
 
-func verdict(ruleIDs [state.MaxRuleIDs]uint64, n int, hostPolicyHits uint8) PolicyVerdict {
+func verdict(ruleIDs [state.MaxRuleIDs]uint64, n int, transitPolicyHits uint8) PolicyVerdict {
 	return PolicyVerdict{
-		HostPolicyHits: hostPolicyHits,
-		SrcAddr:        net.ParseIP("10.65.0.1").To4(),
-		DstAddr:        net.ParseIP("8.8.8.8").To4(),
-		PostNATDstAddr: net.ParseIP("8.8.8.8").To4(),
-		SrcPort:        12345,
-		DstPort:        53,
-		PostNATDstPort: 53,
-		IPProto:        17,
-		IPSize:         60,
-		RulesHit:       uint32(n),
-		RuleIDs:        ruleIDs,
+		TransitPolicyHits: transitPolicyHits,
+		SrcAddr:           net.ParseIP("10.65.0.1").To4(),
+		DstAddr:           net.ParseIP("8.8.8.8").To4(),
+		PostNATDstAddr:    net.ParseIP("8.8.8.8").To4(),
+		SrcPort:           12345,
+		DstPort:           53,
+		PostNATDstPort:    53,
+		IPProto:           17,
+		IPSize:            60,
+		RulesHit:          uint32(n),
+		RuleIDs:           ruleIDs,
 	}
 }
 
@@ -80,88 +88,140 @@ func ruleIDsOf(hits []collector.RuleHit) []*calc.RuleID {
 	return rids
 }
 
-func TestPacketInfoSplitsHostHitsFromWorkloadHits(t *testing.T) {
+func TestPacketInfoKeepsOnlyTheEndpointsOwnHits(t *testing.T) {
 	for _, tc := range []struct {
-		name           string
-		hits           []*calc.RuleID
-		hostPolicyHits uint8
-		dir            rules.RuleDir
-		host, workload []*calc.RuleID
+		name              string
+		hits              []*calc.RuleID
+		transitPolicyHits uint8
+		// ok is false if the event has no hits to report.
+		ok   bool
+		dir  rules.RuleDir
+		kept []*calc.RuleID
 	}{
 		{
-			name:           "workload program after host-* policy",
-			hits:           []*calc.RuleID{hostIngressAllow, podEgressPass, podEgressAllow},
-			hostPolicyHits: 1 + 1,
-			dir:            rules.RuleDirEgress,
-			host:           []*calc.RuleID{hostIngressAllow},
-			workload:       []*calc.RuleID{podEgressPass, podEgressAllow},
+			name:              "transit hits then the workload's",
+			hits:              []*calc.RuleID{hostIngressAllow, podEgressPass, podEgressAllow},
+			transitPolicyHits: 1 + 1,
+			ok:                true,
+			dir:               rules.RuleDirEgress,
+			kept:              []*calc.RuleID{podEgressPass, podEgressAllow},
 		},
 		{
-			name:           "workload program without host-* hits",
-			hits:           []*calc.RuleID{podEgressPass, podEgressAllow},
-			hostPolicyHits: 0 + 1,
-			dir:            rules.RuleDirEgress,
-			workload:       []*calc.RuleID{podEgressPass, podEgressAllow},
+			// A transit hit can share the endpoint's direction, e.g. in a
+			// host interface's program.
+			name:              "transit hit in the endpoint's direction",
+			hits:              []*calc.RuleID{hostIngressAllow, hostIngressDeny},
+			transitPolicyHits: 1 + 1,
+			ok:                true,
+			dir:               rules.RuleDirIngress,
+			kept:              []*calc.RuleID{hostIngressDeny},
 		},
 		{
-			name:           "workload program ended by host-* policy",
-			hits:           []*calc.RuleID{hostIngressDeny},
-			hostPolicyHits: state.HostPolicyHitsAll,
-			dir:            rules.RuleDirEgress,
-			host:           []*calc.RuleID{hostIngressDeny},
+			name:              "no transit hits",
+			hits:              []*calc.RuleID{podEgressPass, podEgressAllow},
+			transitPolicyHits: 0 + 1,
+			ok:                true,
+			dir:               rules.RuleDirEgress,
+			kept:              []*calc.RuleID{podEgressPass, podEgressAllow},
 		},
 		{
-			name:           "workload program whose host-* hits fill every slot",
-			hits:           []*calc.RuleID{hostIngressAllow},
-			hostPolicyHits: state.MaxRuleIDs + 1,
-			dir:            rules.RuleDirEgress,
-			host:           []*calc.RuleID{hostIngressAllow},
+			name:              "transit policy ended the program",
+			hits:              []*calc.RuleID{hostIngressAllow, hostIngressDeny},
+			transitPolicyHits: state.TransitPolicyHitsAll,
 		},
 		{
-			name:           "host interface program",
-			hits:           []*calc.RuleID{hostIngressDeny},
-			hostPolicyHits: state.HostPolicyHitsNone,
-			dir:            rules.RuleDirIngress,
-			workload:       []*calc.RuleID{hostIngressDeny},
+			name:              "every hit is transit",
+			hits:              []*calc.RuleID{hostIngressAllow},
+			transitPolicyHits: 1 + 1,
 		},
 		{
-			name:           "older program with hits in both directions",
-			hits:           []*calc.RuleID{hostIngressAllow, podEgressPass, podEgressAllow},
-			hostPolicyHits: state.HostPolicyHitsUnknown,
-			dir:            rules.RuleDirEgress,
-			host:           []*calc.RuleID{hostIngressAllow},
-			workload:       []*calc.RuleID{podEgressPass, podEgressAllow},
+			name:              "transit hits fill every slot",
+			hits:              []*calc.RuleID{hostIngressAllow},
+			transitPolicyHits: state.MaxRuleIDs + 1,
 		},
 		{
-			name:           "older program with hits in one direction",
-			hits:           []*calc.RuleID{hostIngressDeny},
-			hostPolicyHits: state.HostPolicyHitsUnknown,
-			dir:            rules.RuleDirIngress,
-			workload:       []*calc.RuleID{hostIngressDeny},
+			name:              "host-* normal policy then the workload's",
+			hits:              []*calc.RuleID{hostIngressAllow, podEgressAllow},
+			transitPolicyHits: 0 + 1,
+			ok:                true,
+			dir:               rules.RuleDirEgress,
+			kept:              []*calc.RuleID{podEgressAllow},
+		},
+		{
+			name:              "transit, then host-* normal policy, then the workload's",
+			hits:              []*calc.RuleID{podEgressPass, hostIngressAllow, podEgressAllow},
+			transitPolicyHits: 1 + 1,
+			ok:                true,
+			dir:               rules.RuleDirEgress,
+			kept:              []*calc.RuleID{podEgressAllow},
+		},
+		{
+			// For traffic to the host, host-* normal policy can end the
+			// program; its hits stay, in their own direction.
+			name:              "only host-* normal policy",
+			hits:              []*calc.RuleID{hostIngressAllow, hostIngressDeny},
+			transitPolicyHits: 0 + 1,
+			ok:                true,
+			dir:               rules.RuleDirIngress,
+			kept:              []*calc.RuleID{hostIngressAllow, hostIngressDeny},
+		},
+		{
+			name:              "older program with hits in both directions",
+			hits:              []*calc.RuleID{hostIngressAllow, podEgressPass, podEgressAllow},
+			transitPolicyHits: state.TransitPolicyHitsUnknown,
+			ok:                true,
+			dir:               rules.RuleDirEgress,
+			kept:              []*calc.RuleID{podEgressPass, podEgressAllow},
+		},
+		{
+			name:              "older program with hits in one direction",
+			hits:              []*calc.RuleID{hostIngressDeny},
+			transitPolicyHits: state.TransitPolicyHitsUnknown,
+			ok:                true,
+			dir:               rules.RuleDirIngress,
+			kept:              []*calc.RuleID{hostIngressDeny},
+		},
+		{
+			name:              "no hits resolve",
+			hits:              []*calc.RuleID{unresolvable},
+			transitPolicyHits: 0 + 1,
+		},
+		{
+			name:              "only the transit hits resolve",
+			hits:              []*calc.RuleID{hostIngressAllow, unresolvable},
+			transitPolicyHits: 1 + 1,
+		},
+		{
+			name:              "last hit does not resolve",
+			hits:              []*calc.RuleID{hostIngressAllow, podEgressAllow, unresolvable},
+			transitPolicyHits: 0 + 1,
+			ok:                true,
+			dir:               rules.RuleDirEgress,
+			kept:              []*calc.RuleID{podEgressAllow, nil},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			RegisterTestingT(t)
 			l, ids := newTestListener(tc.hits...)
 
-			pi, ok := l.PacketInfo(verdict(ids, len(tc.hits), tc.hostPolicyHits))
+			pi, ok := l.PacketInfo(verdict(ids, len(tc.hits), tc.transitPolicyHits))
 
-			Expect(ok).To(BeTrue())
+			Expect(ok).To(Equal(tc.ok))
+			if !tc.ok {
+				return
+			}
 			Expect(pi.Direction).To(Equal(tc.dir))
-			Expect(ruleIDsOf(pi.HostRuleHits)).To(Equal(tc.host))
-			Expect(ruleIDsOf(pi.RuleHits)).To(Equal(tc.workload))
+			Expect(ruleIDsOf(pi.RuleHits)).To(Equal(tc.kept))
 		})
 	}
 }
 
-// Converting an event allocates only its rule hits, split or not.
+// Converting an event allocates only the hits it keeps.
 func TestPacketInfoAllocations(t *testing.T) {
 	RegisterTestingT(t)
-	single, singleIDs := newTestListener(podEgressPass, podEgressAllow)
-	mixed, mixedIDs := newTestListener(hostIngressAllow, podEgressPass, podEgressAllow)
+	l, ids := newTestListener(hostIngressAllow, podEgressPass, podEgressAllow)
 
-	singleEvent, mixedEvent := verdict(singleIDs, 2, 0+1), verdict(mixedIDs, 3, 1+1)
+	e := verdict(ids, 3, 1+1)
 
-	Expect(testing.AllocsPerRun(100, func() { single.PacketInfo(singleEvent) })).To(Equal(1.0))
-	Expect(testing.AllocsPerRun(100, func() { mixed.PacketInfo(mixedEvent) })).To(Equal(1.0))
+	Expect(testing.AllocsPerRun(100, func() { l.PacketInfo(e) })).To(Equal(1.0))
 }

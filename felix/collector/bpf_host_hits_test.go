@@ -34,14 +34,15 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 )
 
-// These tests feed the collector the policy events of a workload's BPF
-// program with host-* present: host-* hits, in the opposite direction, then
-// the workload's own.  Flows are not reported against host endpoints, so the
-// host-* hits must reach no trace; before the listener split them off, they
-// were resolved against a workload's policy.
+// These tests feed the collector, through the policy listener, BPF policy
+// events whose leading hits are a host endpoint's transit (pre-DNAT and
+// apply-on-forward) policy: host-* in a workload's program, or the interface's
+// host endpoint in a host interface's program.  Flows are not reported
+// against host endpoints, so those hits must reach no trace; before the
+// listener dropped them, they were resolved against a workload's policy.
 
 var (
-	// Host-* ingress policy.
+	// Host endpoint ingress policy.
 	gpIngressAllow = calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "gp", "",
 		0, rules.RuleDirIngress, rules.RuleActionAllow)
 
@@ -120,8 +121,8 @@ type hostHitsTest struct {
 	tuple    tuple.Tuple
 }
 
-// newHostHitsTest returns a test of a flow from the pod to dst.
-func newHostHitsTest(t *testing.T, dst [16]byte) *hostHitsTest {
+// newHostHitsTest returns a test of a flow from src to dst.
+func newHostHitsTest(t *testing.T, src, dst [16]byte) *hostHitsTest {
 	t.Helper()
 	epMap := map[[16]byte]calc.EndpointData{
 		localIp1: newHostHitsTestPod(),
@@ -144,7 +145,7 @@ func newHostHitsTest(t *testing.T, dst [16]byte) *hostHitsTest {
 		c:        newCollector(lc, conf).(*collector),
 		lc:       lc,
 		listener: events.NewCollectorPolicyListener(lc),
-		tuple:    tuple.Make(localIp1, dst, proto_tcp, srcPort, dstPort),
+		tuple:    tuple.Make(src, dst, proto_tcp, srcPort, dstPort),
 	}
 }
 
@@ -154,26 +155,27 @@ func eventPrefix(i int) [64]byte {
 	return pfx
 }
 
-// applyEvent applies one policy event of a packet of h.tuple: the pod's egress
-// program's, with hostHits then podHits.
-func (h *hostHitsTest) applyEvent(t *testing.T, hostHits, podHits []*calc.RuleID) {
+// applyEvent applies one policy event of a packet of h.tuple, with
+// transitHits then ownHits.  A nil ownHits means transit policy denied the
+// packet.
+func (h *hostHitsTest) applyEvent(t *testing.T, transitHits, ownHits []*calc.RuleID) {
 	t.Helper()
 	e := events.PolicyVerdict{
-		SrcAddr:        net.IP(h.tuple.Src[:]).To4(),
-		DstAddr:        net.IP(h.tuple.Dst[:]).To4(),
-		PostNATDstAddr: net.IP(h.tuple.Dst[:]).To4(),
-		SrcPort:        uint16(h.tuple.L4Src),
-		DstPort:        uint16(h.tuple.L4Dst),
-		PostNATDstPort: uint16(h.tuple.L4Dst),
-		IPProto:        uint8(h.tuple.Proto),
-		IPSize:         60,
-		RulesHit:       uint32(len(hostHits) + len(podHits)),
-		HostPolicyHits: uint8(len(hostHits) + 1),
+		SrcAddr:           net.IP(h.tuple.Src[:]).To4(),
+		DstAddr:           net.IP(h.tuple.Dst[:]).To4(),
+		PostNATDstAddr:    net.IP(h.tuple.Dst[:]).To4(),
+		SrcPort:           uint16(h.tuple.L4Src),
+		DstPort:           uint16(h.tuple.L4Dst),
+		PostNATDstPort:    uint16(h.tuple.L4Dst),
+		IPProto:           uint8(h.tuple.Proto),
+		IPSize:            60,
+		RulesHit:          uint32(len(transitHits) + len(ownHits)),
+		TransitPolicyHits: uint8(len(transitHits) + 1),
 	}
-	if len(podHits) == 0 {
-		e.HostPolicyHits = state.HostPolicyHitsAll
+	if ownHits == nil {
+		e.TransitPolicyHits = state.TransitPolicyHitsAll
 	}
-	for i, rid := range slices.Concat(hostHits, podHits) {
+	for i, rid := range slices.Concat(transitHits, ownHits) {
 		e.RuleIDs[i] = h.id(t, rid)
 	}
 	if pktInfo, ok := h.listener.PacketInfo(e); ok {
@@ -202,58 +204,86 @@ func traceHits(t *RuleTrace) map[int]*calc.RuleID {
 	return hits
 }
 
-func TestBPFHostHitsNotResolvedAgainstWorkloads(t *testing.T) {
+func TestBPFTransitHitsNotResolvedAgainstWorkloads(t *testing.T) {
+	external := utils.IpStrTo16Byte(publicIP1Str)
 	for _, tc := range []struct {
-		name     string
-		dst      [16]byte
-		hostHits []*calc.RuleID
-		podHits  []*calc.RuleID
-		egress   map[int]*calc.RuleID
+		name        string
+		src, dst    [16]byte
+		transitHits []*calc.RuleID
+		ownHits     []*calc.RuleID
+		// The pod's egress trace; host endpoint policy must reach no trace.
+		egress map[int]*calc.RuleID
 	}{
 		{
 			// The pod's t1 would claim host-*'s end-of-tier pass by tier name.
-			name:     "host-* end-of-tier pass in a tier the pod also has",
-			dst:      utils.IpStrTo16Byte(publicIP1Str),
-			hostHits: []*calc.RuleID{t1IngressEOTPass},
-			podHits:  []*calc.RuleID{t1EgressEOTPass, podAllow},
-			egress:   map[int]*calc.RuleID{1: t1EgressEOTPass, 2: podAllow},
+			name:        "workload program: host-* end-of-tier pass in a tier the pod also has",
+			src:         localIp1,
+			dst:         external,
+			transitHits: []*calc.RuleID{t1IngressEOTPass},
+			ownHits:     []*calc.RuleID{t1EgressEOTPass, podAllow},
+			egress:      map[int]*calc.RuleID{1: t1EgressEOTPass, 2: podAllow},
 		},
 		{
 			// gp applies to host-* (ingress) and to the pod (egress).
-			name:     "host-* policy that also applies to the pod",
-			dst:      utils.IpStrTo16Byte(publicIP1Str),
-			hostHits: []*calc.RuleID{gpIngressAllow},
-			podHits:  []*calc.RuleID{gpEgressAllow},
-			egress:   map[int]*calc.RuleID{2: gpEgressAllow},
+			name:        "workload program: host-* policy that also applies to the pod",
+			src:         localIp1,
+			dst:         external,
+			transitHits: []*calc.RuleID{gpIngressAllow},
+			ownHits:     []*calc.RuleID{gpEgressAllow},
+			egress:      map[int]*calc.RuleID{2: gpEgressAllow},
 		},
 		{
 			// gp also selects the same-node peer.
-			name:     "host-* policy that also applies to a same-node peer",
-			dst:      localIp2,
-			hostHits: []*calc.RuleID{gpIngressAllow},
-			podHits:  []*calc.RuleID{podAllow},
-			egress:   map[int]*calc.RuleID{2: podAllow},
+			name:        "workload program: host-* policy that also applies to a same-node peer",
+			src:         localIp1,
+			dst:         localIp2,
+			transitHits: []*calc.RuleID{gpIngressAllow},
+			ownHits:     []*calc.RuleID{podAllow},
+			egress:      map[int]*calc.RuleID{2: podAllow},
 		},
 		{
 			// Host-* ends the pod's program, so the event holds only host-*
 			// hits, in the peer's direction.  The peer has policy in a tier
 			// of the same name, so it would claim host-*'s end-of-tier drop.
-			name:     "host-* end-of-tier drop to a same-node peer",
-			dst:      localIp2,
-			hostHits: []*calc.RuleID{defaultIngressEOTDeny},
-			egress:   map[int]*calc.RuleID{},
+			name:        "workload program: host-* end-of-tier drop to a same-node peer",
+			src:         localIp1,
+			dst:         localIp2,
+			transitHits: []*calc.RuleID{defaultIngressEOTDeny},
+		},
+		{
+			// The host endpoint's program on the interface the traffic
+			// arrives on; the pod's tier of the same name would claim the
+			// drop.
+			name:        "host interface program: end-of-tier drop of traffic to a local pod",
+			src:         external,
+			dst:         localIp2,
+			transitHits: []*calc.RuleID{defaultIngressEOTDeny},
+		},
+		{
+			// gp applies to the host endpoint and to the pod.
+			name:        "host interface program: policy that also applies to a local pod",
+			src:         external,
+			dst:         localIp2,
+			transitHits: []*calc.RuleID{gpIngressAllow},
+			ownHits:     []*calc.RuleID{},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			g := NewWithT(t)
-			h := newHostHitsTest(t, tc.dst)
+			h := newHostHitsTest(t, tc.src, tc.dst)
 
-			h.applyEvent(t, tc.hostHits, tc.podHits)
+			h.applyEvent(t, tc.transitHits, tc.ownHits)
 
-			data := h.c.epStats[h.tuple]
-			g.Expect(data).NotTo(BeNil())
-			g.Expect(traceHits(&data.IngressRuleTrace)).To(BeEmpty(), "a host-* hit reached the ingress trace")
-			g.Expect(traceHits(&data.EgressRuleTrace)).To(Equal(tc.egress))
+			ingress, egress := map[int]*calc.RuleID{}, map[int]*calc.RuleID{}
+			if data := h.c.epStats[h.tuple]; data != nil {
+				ingress, egress = traceHits(&data.IngressRuleTrace), traceHits(&data.EgressRuleTrace)
+			}
+			g.Expect(ingress).To(BeEmpty(), "host endpoint policy reached the ingress trace")
+			if tc.egress == nil {
+				g.Expect(egress).To(BeEmpty(), "host endpoint policy reached the egress trace")
+			} else {
+				g.Expect(egress).To(Equal(tc.egress))
+			}
 		})
 	}
 }

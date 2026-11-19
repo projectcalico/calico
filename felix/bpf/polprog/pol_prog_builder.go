@@ -124,24 +124,24 @@ var (
 
 	// Offsets within the cal_tc_state struct.
 	// WARNING: must be kept in sync with the definitions in bpf-gpl/types.h.
-	stateOffIPSrc          = asm.FieldOffset{Offset: stateEventHdrSize + 0, Field: "state->ip_src"}
-	stateOffIPDst          = asm.FieldOffset{Offset: stateEventHdrSize + 16, Field: "state->ip_dst"}
-	_                      = stateOffIPDst
-	stateOffPreNATIPDst    = asm.FieldOffset{Offset: stateEventHdrSize + 32, Field: "state->pre_nat_ip_dst"}
-	_                      = stateOffPreNATIPDst
-	stateOffPostNATIPDst   = asm.FieldOffset{Offset: stateEventHdrSize + 48, Field: "state->post_nat_ip_dst"}
-	stateOffPolResult      = asm.FieldOffset{Offset: stateEventHdrSize + 84, Field: "state->pol_rc"}
-	stateOffSrcPort        = asm.FieldOffset{Offset: stateEventHdrSize + 88, Field: "state->sport"}
-	stateOffDstPort        = asm.FieldOffset{Offset: stateEventHdrSize + 90, Field: "state->dport"}
-	_                      = stateOffDstPort
-	stateOffICMPType       = asm.FieldOffset{Offset: stateEventHdrSize + 90, Field: "state->icmp_type"}
-	stateOffPreNATDstPort  = asm.FieldOffset{Offset: stateEventHdrSize + 92, Field: "state->pre_nat_dport"}
-	_                      = stateOffPreNATDstPort
-	stateOffPostNATDstPort = asm.FieldOffset{Offset: stateEventHdrSize + 94, Field: "state->post_nat_dport"}
-	stateOffIPProto        = asm.FieldOffset{Offset: stateEventHdrSize + 96, Field: "state->ip_proto"}
-	stateOffHostPolicyHits = asm.FieldOffset{Offset: stateEventHdrSize + 97, Field: "state->host_policy_hits"}
-	stateOffIPSize         = asm.FieldOffset{Offset: stateEventHdrSize + 98, Field: "state->ip_size"}
-	_                      = stateOffIPSize
+	stateOffIPSrc             = asm.FieldOffset{Offset: stateEventHdrSize + 0, Field: "state->ip_src"}
+	stateOffIPDst             = asm.FieldOffset{Offset: stateEventHdrSize + 16, Field: "state->ip_dst"}
+	_                         = stateOffIPDst
+	stateOffPreNATIPDst       = asm.FieldOffset{Offset: stateEventHdrSize + 32, Field: "state->pre_nat_ip_dst"}
+	_                         = stateOffPreNATIPDst
+	stateOffPostNATIPDst      = asm.FieldOffset{Offset: stateEventHdrSize + 48, Field: "state->post_nat_ip_dst"}
+	stateOffPolResult         = asm.FieldOffset{Offset: stateEventHdrSize + 84, Field: "state->pol_rc"}
+	stateOffSrcPort           = asm.FieldOffset{Offset: stateEventHdrSize + 88, Field: "state->sport"}
+	stateOffDstPort           = asm.FieldOffset{Offset: stateEventHdrSize + 90, Field: "state->dport"}
+	_                         = stateOffDstPort
+	stateOffICMPType          = asm.FieldOffset{Offset: stateEventHdrSize + 90, Field: "state->icmp_type"}
+	stateOffPreNATDstPort     = asm.FieldOffset{Offset: stateEventHdrSize + 92, Field: "state->pre_nat_dport"}
+	_                         = stateOffPreNATDstPort
+	stateOffPostNATDstPort    = asm.FieldOffset{Offset: stateEventHdrSize + 94, Field: "state->post_nat_dport"}
+	stateOffIPProto           = asm.FieldOffset{Offset: stateEventHdrSize + 96, Field: "state->ip_proto"}
+	stateOffTransitPolicyHits = asm.FieldOffset{Offset: stateEventHdrSize + 97, Field: "state->transit_policy_hits"}
+	stateOffIPSize            = asm.FieldOffset{Offset: stateEventHdrSize + 98, Field: "state->ip_size"}
+	_                         = stateOffIPSize
 
 	stateOffRulesHit = asm.FieldOffset{Offset: stateEventHdrSize + 100, Field: "state->rules_hit"}
 	stateOffRuleIDs  = asm.FieldOffset{Offset: stateEventHdrSize + 104, Field: "state->rule_ids"}
@@ -217,11 +217,10 @@ type Rules struct {
 	NoProfileMatchID RuleMatchID
 
 	// Host endpoint policy.
-	HostPreDnatTiers     []Tier
-	HostForwardTiers     []Tier
-	HostNormalTiers      []Tier
-	HostProfiles         []Profile
-	HostNoProfileMatchID RuleMatchID
+	HostPreDnatTiers []Tier
+	HostForwardTiers []Tier
+	HostNormalTiers  []Tier
+	HostProfiles     []Profile
 
 	// True when building a policy program for XDP, as opposed to for TC.  This also means that
 	// we are implementing untracked policy (provided in the HostNormalTiers field) and that
@@ -247,7 +246,7 @@ func (p *Builder) Instructions(rules Rules) ([]asm.Insns, error) {
 	p.b.SetTrampolineStride(p.trampolineStride)
 	p.blocks = append(p.blocks, p.b)
 	p.writeProgramHeader()
-	p.writeStartHostPolicyHits(rules.ForHostInterface)
+	p.writeStartTransitPolicyHits()
 	p.writeRulesUntilUnreachable(rules)
 	if !p.restUnreachable {
 		// Otherwise the split already wrote the last sub-program's footer.
@@ -281,6 +280,14 @@ func (p *Builder) writeRulesUntilUnreachable(rules Rules) {
 }
 
 func (p *Builder) writeRules(rules Rules) {
+	// Pre-DNAT and apply-on-forward policy are the transit policy of the host endpoint that
+	// this program applies.  Their non-deny exits go through trampolines that record how
+	// many hits they made; see state.TransitPolicyHitsAll.
+	transitEnd, transitEndToHost := "allowed_by_host_policy", "to_or_from_host"
+	if p.recordsTransitPolicyHits() {
+		transitEnd, transitEndToHost = "transit_end", "transit_end_to_host"
+	}
+
 	if p.xdp {
 		// For an XDP program HostNormalTiers continues the untracked policy to enforce;
 		// other fields are unused.
@@ -289,7 +296,7 @@ func (p *Builder) writeRules(rules Rules) {
 
 	// Pre-DNAT policy: on a host interface, or host-* policy on a workload interface.  Traffic
 	// is allowed to continue if there is no applicable pre-DNAT policy.
-	p.writeTiers(rules.HostPreDnatTiers, legDestPreNAT, "allowed_by_host_policy")
+	p.writeTiers(rules.HostPreDnatTiers, legDestPreNAT, transitEnd)
 
 	// If traffic is to or from the local host, skip over any apply-on-forward policy.  Note
 	// that this case can be:
@@ -300,9 +307,9 @@ func (p *Builder) writeRules(rules Rules) {
 	// the case when we're building the policy program for workload -> host and
 	// DefaultEndpointToHostAction is ACCEPT or DROP; or for host -> workload.
 	if rules.SuppressNormalHostPolicy {
-		p.writeJumpIfToOrFromHost("allowed_by_host_policy")
+		p.writeJumpIfToOrFromHost(transitEnd)
 	} else {
-		p.writeJumpIfToOrFromHost("to_or_from_host")
+		p.writeJumpIfToOrFromHost(transitEndToHost)
 	}
 
 	// At this point we know we have traffic that is being forwarded through the host's root
@@ -314,10 +321,19 @@ func (p *Builder) writeRules(rules Rules) {
 
 	// Apply-On-Forward policy: on a host interface, or host-* policy on a workload interface.
 	// Traffic is allowed to continue if there is no applicable AoF policy.
-	p.writeTiers(rules.HostForwardTiers, legDest, "allowed_by_host_policy")
+	p.writeTiers(rules.HostForwardTiers, legDest, transitEnd)
 
-	// Now skip over normal host policy and jump to where we apply possible workload policy.
-	p.b.Jump("allowed_by_host_policy")
+	if p.recordsTransitPolicyHits() {
+		p.b.LabelNextInsn("transit_end")
+		p.writeRecordTransitPolicyHits()
+		p.b.Jump("allowed_by_host_policy")
+		// Falls through to normal host policy.
+		p.b.LabelNextInsn("transit_end_to_host")
+		p.writeRecordTransitPolicyHits()
+	} else {
+		// Now skip over normal host policy and jump to where we apply possible workload policy.
+		p.b.Jump("allowed_by_host_policy")
+	}
 
 normalPolicy:
 	if !rules.SuppressNormalHostPolicy {
@@ -328,7 +344,7 @@ normalPolicy:
 			p.b.Jump("xdp_pass")
 		} else {
 			p.writeTiers(rules.HostNormalTiers, legDest, "allowed_by_host_policy")
-			p.writeProfiles(rules.HostProfiles, rules.HostNoProfileMatchID, "allowed_by_host_policy")
+			p.writeProfiles(rules.HostProfiles, rules.NoProfileMatchID, "allowed_by_host_policy")
 		}
 	}
 
@@ -339,7 +355,6 @@ normalPolicy:
 		// On a host interface there is no workload policy, so we are now done.
 		p.b.Jump("allow")
 	} else {
-		p.writeEndHostPolicyHits()
 		// Workload policy.
 		p.writeTiers(rules.Tiers, legDest, "allow")
 		p.writeProfiles(rules.Profiles, rules.NoProfileMatchID, "allow")
@@ -372,32 +387,30 @@ func (p *Builder) writeProgramHeader() {
 	p.b.LabelNextInsn("policy")
 }
 
-// writeStartHostPolicyHits marks the hits that follow as host-* policy's in a
-// workload's program.  A host interface's hits are its own host endpoint's.
-func (p *Builder) writeStartHostPolicyHits(forHostInterface bool) {
-	if !p.recordsRuleHits() || p.xdp {
+// writeStartTransitPolicyHits records that every hit is transit policy's, which
+// holds if transit policy denies the packet.
+func (p *Builder) writeStartTransitPolicyHits() {
+	if !p.recordsTransitPolicyHits() {
 		return
 	}
-	hostHits := state.HostPolicyHitsAll
-	if forHostInterface {
-		hostHits = state.HostPolicyHitsNone
-	}
-	p.b.MovImm64(asm.R1, int32(hostHits))
-	p.b.Store8(asm.R9, asm.R1, stateOffHostPolicyHits)
+	p.b.MovImm64(asm.R1, state.TransitPolicyHitsAll)
+	p.b.Store8(asm.R9, asm.R1, stateOffTransitPolicyHits)
 }
 
-// writeEndHostPolicyHits records that the hits so far were host-* policy's.
-func (p *Builder) writeEndHostPolicyHits() {
-	if !p.recordsRuleHits() || p.xdp {
-		return
-	}
+// writeRecordTransitPolicyHits records that the hits so far were transit
+// policy's.
+func (p *Builder) writeRecordTransitPolicyHits() {
 	p.b.Load8(asm.R1, asm.R9, stateOffRulesHit)
 	p.b.AddImm64(asm.R1, 1)
-	p.b.Store8(asm.R9, asm.R1, stateOffHostPolicyHits)
+	p.b.Store8(asm.R9, asm.R1, stateOffTransitPolicyHits)
 }
 
 func (p *Builder) recordsRuleHits() bool {
 	return p.flowLogsEnabled || p.policyDebugEnabled
+}
+
+func (p *Builder) recordsTransitPolicyHits() bool {
+	return p.recordsRuleHits() && !p.xdp
 }
 
 func (p *Builder) writeJumpIfToOrFromHost(label string) {

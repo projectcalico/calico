@@ -33,20 +33,19 @@ func TestPolicyVerdictEvents(t *testing.T) {
 	RegisterTestingT(t)
 
 	tests := []struct {
-		name     string
-		accept   bool
-		policy   polprog.Rules
-		hits     int
-		rulesIDs [state.MaxRuleIDs]uint64
-		// hostPolicyHits is the expected host_policy_hits, if not
-		// state.HostPolicyHitsNone.
-		hostPolicyHits uint8
+		name              string
+		accept            bool
+		policy            polprog.Rules
+		hits              int
+		rulesIDs          [state.MaxRuleIDs]uint64
+		transitPolicyHits uint8
 	}{
 		{
-			name:   "no rules, drop all",
-			accept: false,
-			policy: polprog.Rules{},
-			hits:   1,
+			name:              "no rules, drop all",
+			accept:            false,
+			policy:            polprog.Rules{},
+			hits:              1,
+			transitPolicyHits: 0 + 1,
 		},
 		{
 			name:   "allow all",
@@ -60,8 +59,9 @@ func TestPolicyVerdictEvents(t *testing.T) {
 					}},
 				}},
 			},
-			hits:     1,
-			rulesIDs: [state.MaxRuleIDs]uint64{0x1234},
+			hits:              1,
+			rulesIDs:          [state.MaxRuleIDs]uint64{0x1234},
+			transitPolicyHits: 0 + 1,
 		},
 		{
 			name:   "udp tier",
@@ -112,8 +112,35 @@ func TestPolicyVerdictEvents(t *testing.T) {
 					},
 				},
 			},
-			hits:     2,
-			rulesIDs: [state.MaxRuleIDs]uint64{17, 1717},
+			hits:              2,
+			rulesIDs:          [state.MaxRuleIDs]uint64{17, 1717},
+			transitPolicyHits: 0 + 1,
+		},
+		{
+			name:   "host-* forward allow",
+			accept: true,
+			policy: polprog.Rules{
+				HostForwardTiers: []polprog.Tier{{
+					Name:      "default",
+					EndRuleID: 0xe0,
+					EndAction: polprog.TierEndDeny,
+					Policies: []polprog.Policy{{
+						Name:  "allow all",
+						Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Allow"}, MatchID: 6}},
+					}},
+				}},
+				Tiers: []polprog.Tier{{
+					Name:      "default",
+					EndRuleID: 0xe1,
+					Policies: []polprog.Policy{{
+						Name:  "allow all",
+						Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Allow"}, MatchID: 0x1234}},
+					}},
+				}},
+			},
+			hits:              2,
+			rulesIDs:          [state.MaxRuleIDs]uint64{6, 0x1234},
+			transitPolicyHits: 1 + 1,
 		},
 		{
 			name:   "host-* forward end-of-tier drop",
@@ -143,9 +170,9 @@ func TestPolicyVerdictEvents(t *testing.T) {
 					}},
 				}},
 			},
-			hits:           1,
-			rulesIDs:       [state.MaxRuleIDs]uint64{0xe0},
-			hostPolicyHits: state.HostPolicyHitsAll,
+			hits:              1,
+			rulesIDs:          [state.MaxRuleIDs]uint64{0xe0},
+			transitPolicyHits: state.TransitPolicyHitsAll,
 		},
 	}
 
@@ -210,11 +237,7 @@ func TestPolicyVerdictEvents(t *testing.T) {
 
 			Expect(fl.RulesHit).To(Equal(uint32(tc.hits)))
 			Expect(fl.RuleIDs).To(Equal(tc.rulesIDs))
-			hostPolicyHits := uint8(state.HostPolicyHitsNone)
-			if tc.hostPolicyHits != 0 {
-				hostPolicyHits = tc.hostPolicyHits
-			}
-			Expect(fl.HostPolicyHits).To(Equal(hostPolicyHits))
+			Expect(fl.TransitPolicyHits).To(Equal(tc.transitPolicyHits))
 
 			Expect(fl.IPSize).To(Equal(uint16(ipv4.Length)))
 		})

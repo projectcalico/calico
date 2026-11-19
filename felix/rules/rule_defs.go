@@ -207,13 +207,6 @@ func (r RuleDir) String() string {
 	return ""
 }
 
-func (r RuleDir) Opposite() RuleDir {
-	if r == RuleDirIngress {
-		return RuleDirEgress
-	}
-	return RuleDirIngress
-}
-
 type RuleOwnerType byte
 
 const (
