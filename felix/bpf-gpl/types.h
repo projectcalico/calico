@@ -105,8 +105,10 @@ struct cali_tc_state {
 	__u16 post_nat_dport;
 	/* Packet IP proto; updated to UDP when we encap. */
 	__u8 ip_proto;
-	/* Flags from enum cali_state_flags. */
-	__u8 __pad;
+	/* Written by the policy program: one plus the number of leading rule_ids
+	 * that are pre-DNAT or apply-on-forward policy hits; 0xff if all are;
+	 * 0 if not recorded. */
+	__u8 transit_policy_hits;
 	/* Packet size filled from iphdr->tot_len in tc_state_fill_from_iphdr(). */
 	__be16 ip_size;
 	/* Count of rules that were hit while processing policy. */

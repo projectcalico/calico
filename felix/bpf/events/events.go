@@ -200,13 +200,14 @@ func (e ErrLostEvents) Num() int {
 // ParsePolicyVerdict converts a bpf event data and converts to go structure
 func ParsePolicyVerdict(data []byte, isIPv6 bool) PolicyVerdict {
 	fl := PolicyVerdict{
-		PolicyRC:       state.PolicyResult(binary.LittleEndian.Uint32(data[84:88])),
-		SrcPort:        binary.LittleEndian.Uint16(data[88:90]),
-		DstPort:        binary.LittleEndian.Uint16(data[92:94]),
-		PostNATDstPort: binary.LittleEndian.Uint16(data[94:96]),
-		IPProto:        uint8(data[96]),
-		IPSize:         binary.BigEndian.Uint16(data[98:100]),
-		RulesHit:       binary.LittleEndian.Uint32(data[100:104]),
+		PolicyRC:          state.PolicyResult(binary.LittleEndian.Uint32(data[84:88])),
+		SrcPort:           binary.LittleEndian.Uint16(data[88:90]),
+		DstPort:           binary.LittleEndian.Uint16(data[92:94]),
+		PostNATDstPort:    binary.LittleEndian.Uint16(data[94:96]),
+		IPProto:           uint8(data[96]),
+		TransitPolicyHits: uint8(data[97]),
+		IPSize:            binary.BigEndian.Uint16(data[98:100]),
+		RulesHit:          binary.LittleEndian.Uint32(data[100:104]),
 	}
 
 	if fl.RulesHit > state.MaxRuleIDs {
@@ -237,19 +238,19 @@ func ParsePolicyVerdict(data []byte, isIPv6 bool) PolicyVerdict {
 // PolicyVerdict describes the policy verdict event and must match the initial part of
 // bpf/state.State after the space reserved for the event header.
 type PolicyVerdict struct {
-	SrcAddr        net.IP
-	DstAddr        net.IP
-	PostNATDstAddr net.IP
-	NATTunSrcAddr  net.IP
-	PolicyRC       state.PolicyResult
-	SrcPort        uint16
-	DstPort        uint16
-	PostNATDstPort uint16
-	IPProto        uint8
-	pad8           uint8 //nolint:unused // Ignore U1000 unused
-	IPSize         uint16
-	RulesHit       uint32
-	RuleIDs        [state.MaxRuleIDs]uint64
+	SrcAddr           net.IP
+	DstAddr           net.IP
+	PostNATDstAddr    net.IP
+	NATTunSrcAddr     net.IP
+	PolicyRC          state.PolicyResult
+	SrcPort           uint16
+	DstPort           uint16
+	PostNATDstPort    uint16
+	IPProto           uint8
+	TransitPolicyHits uint8
+	IPSize            uint16
+	RulesHit          uint32
+	RuleIDs           [state.MaxRuleIDs]uint64
 }
 
 // Type return TypePolicyVerdict
