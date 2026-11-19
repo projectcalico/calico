@@ -240,10 +240,14 @@ endif
 # can't parse, and Windows builds (e.g. fluentd-base) don't link Go binaries that
 # embed buildinfo. Each $(shell git ...) call would otherwise spawn PowerShell on
 # every sub-make recursion, multiplying parse time noticeably.
+#
+# Every git describe matches this, so a tag that is not a vX.Y.Z version (another
+# project's release, a stream name like v3.25) near HEAD never becomes the version.
+GIT_VERSION_TAG_MATCH := v[0-9]*.[0-9]*.[0-9]*
 ifneq ($(OS),Windows_NT)
-GIT_VERSION ?= $(shell git describe --tags --dirty --always --abbrev=12 --long)
+GIT_VERSION ?= $(shell git describe --tags --match '$(GIT_VERSION_TAG_MATCH)' --dirty --always --abbrev=12 --long)
 ifeq ($(RELEASE),true)
-	GIT_VERSION := $(shell git describe --tags --dirty --always --abbrev=12)
+	GIT_VERSION := $(shell git describe --tags --match '$(GIT_VERSION_TAG_MATCH)' --dirty --always --abbrev=12)
 endif
 
 # Figure out version information.  To support builds from release tarballs, we default to
@@ -254,7 +258,7 @@ BUILD_ID:=$(shell git rev-parse HEAD || uuidgen | sed 's/-//g')
 # Lazily set the git version we embed into the binaries we build. We want the
 # git tag at the time we build the binary.
 # Variables elsewhere that depend on this (such as LDFLAGS) must also be lazy.
-GIT_DESCRIPTION=$(shell git describe --tags --dirty --always --abbrev=12 || echo '<unknown>')
+GIT_DESCRIPTION=$(shell git describe --tags --match '$(GIT_VERSION_TAG_MATCH)' --dirty --always --abbrev=12 || echo '<unknown>')
 endif
 
 # cd-common publishes every image at BRANCH_NAME, so that is the tag a build which names
@@ -1277,7 +1281,7 @@ push-manifests-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANC
 # and BRANCH_NAME env variables to figure out what to tag and where to push it to.
 cd-common: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
 	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) VALIDARCHES="$(VALIDARCHES)"
-	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12) VALIDARCHES="$(VALIDARCHES)"
+	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --match '$(GIT_VERSION_TAG_MATCH)' --dirty --long --always --abbrev=12) VALIDARCHES="$(VALIDARCHES)"
 
 ###############################################################################
 # Release targets and helpers
@@ -1314,11 +1318,11 @@ fetch-all:
 	git fetch --all -q
 
 # git-dev-tag retrieves the dev tag for the current commit (the one are dev images are tagged with).
-git-dev-tag = $(shell git describe --tags --long --always --abbrev=12 --match "*dev*")
+git-dev-tag = $(shell git describe --tags --long --always --abbrev=12 --match "$(GIT_VERSION_TAG_MATCH)dev*")
 # git-release-tag-from-dev-tag gets the release version from the current commits dev tag.
 git-release-tag-from-dev-tag = $(shell echo $(call git-dev-tag) | grep -P -o "^v\d*.\d*.\d*")
 # git-release-tag-for-current-commit gets the release tag for the current commit if there is one.
-git-release-tag-for-current-commit = $(shell git describe --tags --exact-match --exclude "*dev*")
+git-release-tag-for-current-commit = $(shell git describe --tags --exact-match --match "$(GIT_VERSION_TAG_MATCH)" --exclude "*dev*")
 
 # release-branch-for-tag finds the latest branch that corresponds to the given tag.
 release-branch-for-tag = $(firstword $(shell git --no-pager branch --format='%(refname:short)' --contains $1 | grep -P "^release"))
@@ -2246,7 +2250,7 @@ retag-windows-image-with-registries: var-require-one-of-CONFIRM-DRYRUN var-requi
 	done;
 
 release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME bin/crane
-	describe_tag=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12); \
+	describe_tag=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --match '$(GIT_VERSION_TAG_MATCH)' --dirty --long --always --abbrev=12); \
 	release_tag=$(if $(VERSION),$(VERSION),$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME)); \
 	$(MAKE) release-windows-with-tag IMAGETAG=$${describe_tag}; \
 	for registry in $(DEV_REGISTRIES); do \

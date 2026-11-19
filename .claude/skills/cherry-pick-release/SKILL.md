@@ -1,6 +1,6 @@
 ---
 name: cherry-pick-release
-description: Cherry-pick a merged PR onto a Calico release branch using hack/cherry-pick-pull. Use when the user wants to backport a fix to a release-vX.YY branch or asks about the cherry-pick process.
+description: Cherry-pick a merged PR onto a Calico release branch using hack/cherry-pick-pull, or opt a PR out of a backport with /skip-backport. Use when the user wants to backport a fix to a release-vX.YY branch, says a PR is "not for backport to 3.xx", or asks about the cherry-pick process.
 ---
 
 # Cherry-picking to Release Branches
@@ -56,3 +56,22 @@ A hand-made pick must name its original so the agent and merge cat see it.
 `(cherry picked from commit <sha>)` line or add `Backports #<PR>` to the pick
 PR's body. Closing a `release-backport` batch PR without merging rejects its
 fixes on that branch for good.
+
+## Skipping a backport
+
+The merge-queue bot (`tigera/merge-queue-bot`, `backport_reminders.go`) asks
+about each live release branch for a `cherry-pick-candidate` PR. To opt out of
+a branch, comment on the PR:
+
+    /skip-backport release-v3.32
+
+- Separate several branches with spaces or commas.
+- Put the command on its own line. Text before it on the same line is ignored.
+- Only the PR author's comments count.
+- Each token must be a full branch name (`release-v3.32`). Tokens such as
+  `3.32` or `release-v3.x` are ignored, and so is a bare `/skip-backport`.
+- It works per branch. There is no "skip all"; list every branch.
+- Don't use labels to say "not for branch X". Labels apply to the whole PR.
+
+Post it with the REST API:
+`gh api repos/projectcalico/calico/issues/<PR>/comments -f body='/skip-backport release-v3.32'`

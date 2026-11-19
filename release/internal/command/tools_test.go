@@ -34,7 +34,15 @@ func TestGit(t *testing.T) {
 				_, err := g.In("/repo").Version(true)
 				return err
 			},
-			want: Call{Name: "git", Args: []string{"describe", "--tags", "--always", "--long", "--abbrev=12", "--dirty"}, Dir: "/repo"},
+			want: Call{Name: "git", Args: []string{"describe", "--tags", "--match", "v[0-9]*.[0-9]*.[0-9]*", "--always", "--long", "--abbrev=12", "--dirty"}, Dir: "/repo"},
+		},
+		{
+			name: "latest tag matches only version tags, in the bound dir",
+			run: func(g GitRunner) error {
+				_, err := g.In("/repo").LatestTag("master")
+				return err
+			},
+			want: Call{Name: "git", Args: []string{"describe", "--tags", "--match", "v[0-9]*.[0-9]*.[0-9]*", "--abbrev=0", "master"}, Dir: "/repo"},
 		},
 		{
 			name: "branch runs in the bound dir",
@@ -50,7 +58,7 @@ func TestGit(t *testing.T) {
 				_, err := g.In("/repo").Dirty()
 				return err
 			},
-			want: Call{Name: "git", Args: []string{"describe", "--tags", "--always", "--long", "--abbrev=12", "--dirty"}, Dir: "/repo"},
+			want: Call{Name: "git", Args: []string{"describe", "--tags", "--match", "v[0-9]*.[0-9]*.[0-9]*", "--always", "--long", "--abbrev=12", "--dirty"}, Dir: "/repo"},
 		},
 		{
 			name: "repo root runs where the caller is",
