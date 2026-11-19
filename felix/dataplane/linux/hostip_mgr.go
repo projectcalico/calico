@@ -21,6 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -79,7 +80,7 @@ func (m *hostIPManager) getCurrentMembers() []string {
 
 func (m *hostIPManager) OnUpdate(msg any) {
 	switch msg := msg.(type) {
-	case *ifaceAddrsUpdate:
+	case *dataplanedefs.IfaceAddrsUpdate:
 		log.WithField("update", msg).Info("Interface addrs changed.")
 		if m.nonHostIfacesRegexp.MatchString(msg.Name) {
 			log.WithField("update", msg).Debug("Not a real host interface, ignoring.")
