@@ -1,0 +1,11 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# The node-to-node mesh is the only path between nodes, since no pool uses VXLAN.
+
+kind: cluster
+
+needs:
+  - routing/bgp.yaml
+
+provides:
+  - BGPMesh

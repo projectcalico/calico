@@ -47,8 +47,9 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithSerial(),
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("Istio"),
-	describe.WithCategory(describe.Networking),
+	describe.Covers("Istio"),
+	describe.Requires(describe.Istio),
+	describe.Requires(describe.OpenShift),
 	"Istio OpenShift Platform Configuration",
 	func() {
 		f := utils.NewDefaultFramework("istio-openshift")
@@ -59,11 +60,6 @@ var _ = describe.CalicoDescribe(
 			var err error
 			cli, err = client.New(f.ClientConfig())
 			gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create controller-runtime client")
-
-			// Skip if not running on OpenShift.
-			if !utils.IsOpenShift(f) {
-				ginkgo.Skip("Skipping OpenShift-specific Istio tests on non-OpenShift cluster")
-			}
 		})
 
 		// Test: Verify Istio deploys correctly on OpenShift with the platform profile.

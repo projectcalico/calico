@@ -44,24 +44,53 @@ const (
 	// The flannel migration script runs the suite once before migrating with a
 	// hardcoded config, then again with the job's own.
 	flannelMigrationScript    = "body_flannel-migration.sh"
-	flannelMigrationPreConfig = "e2e/config/pre-migration-smoke.yaml"
+	flannelMigrationPreConfig = "ci-base.yaml suite/pre-migration-smoke.yaml cluster/ip-family/ipv4.yaml"
 	flannelMigrationPreName   = " [pre-migration]"
 )
+
+// kindSelection is where a kind make target's config comes from. Each field
+// names a Makefile variable holding the list, or is empty.
+type kindSelection struct {
+	// fixed is the variable the target hardcodes, ignoring the environment.
+	fixed string
+
+	// fallback is the variable the Makefile's ?= supplies when the
+	// environment names no config.
+	fallback string
+}
 
 // kindTargets maps each make target that runs the calico e2e binary to where
 // its selection comes from. The provisioned lanes get a config from
 // run_tests.sh; the kind lanes call make directly, so the target decides.
-var kindTargets = map[string]struct {
-	// fixed is the config the target hardcodes, ignoring the environment.
-	fixed string
-	// fallback is the config the Makefile's ?= supplies when the environment
-	// names none.
-	fallback string
-}{
-	"e2e-test":                   {fallback: "e2e/config/kind/conformance.yaml"},
-	"e2e-test-bpf":               {fixed: "e2e/config/kind/bpf.yaml"},
-	"kind-manifest-install-test": {fixed: "e2e/config/kind/manifest-install.yaml"},
+var kindTargets = map[string]kindSelection{
+	"e2e-test":                   {fallback: "KIND_CONFORMANCE_E2E_CONFIG"},
+	"e2e-test-bpf":               {fixed: "KIND_BPF_E2E_CONFIG"},
+	"kind-manifest-install-test": {fixed: "KIND_MANIFEST_E2E_CONFIG"},
 	"e2e-run":                    {},
+}
+
+// kindConfigs copies each kind list the Makefile defines, keyed by variable.
+var kindConfigs = map[string]string{
+	"KIND_CONFORMANCE_E2E_CONFIG": "ci-base.yaml suite/calico-conformance.yaml suite/network-conformance.yaml " +
+		"suite/bgp-peering.yaml cluster/install/operator.yaml cluster/capability/goldmane.yaml cluster/api/v3-crds.yaml " +
+		"cluster/dataplane/iptables.yaml cluster/cni/calico.yaml cluster/routing/bgp.yaml cluster/routing/bgp-mesh.yaml " +
+		"cluster/platform/kind.yaml cluster/ip-family/dual-stack.yaml cluster/capability/host-ports.yaml " +
+		"cluster/capability/calico-mtu.yaml cluster/capability/node-port-across-nodes.yaml " +
+		"cluster/capability/rapidclient-image.yaml cluster/capability/host-network-services.yaml " +
+		"cluster/capability/host-endpoint-cross-node.yaml cluster/capability/connection-limits.yaml",
+	"KIND_BPF_E2E_CONFIG": "ci-base.yaml suite/calico.yaml cluster/install/operator.yaml cluster/capability/goldmane.yaml " +
+		"cluster/api/v3-crds.yaml cluster/dataplane/bpf.yaml cluster/cni/calico.yaml cluster/routing/bgp.yaml " +
+		"cluster/platform/kind.yaml cluster/ip-family/dual-stack.yaml cluster/capability/host-ports.yaml " +
+		"cluster/capability/calico-mtu.yaml cluster/capability/external-node.yaml " +
+		"cluster/capability/node-port-across-nodes.yaml cluster/capability/rapidclient-image.yaml " +
+		"cluster/capability/host-network-services.yaml cluster/capability/host-endpoint-cross-node.yaml " +
+		"cluster/capability/connection-limits.yaml",
+	"KIND_MANIFEST_E2E_CONFIG": "ci-base.yaml suite/manifest-install.yaml cluster/install/manifest.yaml " +
+		"cluster/api/v3-crds.yaml cluster/dataplane/iptables.yaml cluster/cni/calico.yaml cluster/routing/bgp.yaml " +
+		"cluster/routing/bgp-mesh.yaml cluster/platform/kind.yaml cluster/ip-family/ipv4.yaml " +
+		"cluster/capability/host-ports.yaml cluster/capability/node-port-across-nodes.yaml " +
+		"cluster/capability/rapidclient-image.yaml cluster/capability/host-network-services.yaml " +
+		"cluster/capability/host-endpoint-cross-node.yaml cluster/capability/connection-limits.yaml",
 }
 
 // Selection variables. run_tests.sh runs the e2e binary against the config
@@ -460,10 +489,10 @@ func e2eMakeTarget(commands string) (string, bool) {
 func kindConfig(target, fromEnv string) string {
 	t := kindTargets[target]
 	if t.fixed != "" {
-		return t.fixed
+		return kindConfigs[t.fixed]
 	}
 	if fromEnv != "" {
 		return fromEnv
 	}
-	return t.fallback
+	return kindConfigs[t.fallback]
 }

@@ -24,9 +24,9 @@ import (
 	"testing"
 )
 
-// Every suite has to declare a feature, or its cases land in no per-feature view
+// Every suite has to declare what it covers, or its cases land in no per-feature view
 // of the CI dashboard and nobody notices them failing.
-func TestEverySuiteDeclaresAFeature(t *testing.T) {
+func TestEverySuiteDeclaresCoverage(t *testing.T) {
 	root, err := filepath.Abs("../tests")
 	if err != nil {
 		t.Fatalf("resolve tests root: %v", err)
@@ -51,7 +51,7 @@ func TestEverySuiteDeclaresAFeature(t *testing.T) {
 				return true
 			}
 			for _, arg := range call.Args {
-				if inner, ok := arg.(*ast.CallExpr); ok && isDescribeCall(inner, "WithFeature") {
+				if inner, ok := arg.(*ast.CallExpr); ok && isDescribeCall(inner, "Covers") {
 					return true
 				}
 			}
@@ -66,7 +66,7 @@ func TestEverySuiteDeclaresAFeature(t *testing.T) {
 	}
 
 	for _, pos := range undeclared {
-		t.Errorf("%s: suite has no describe.WithFeature label", pos)
+		t.Errorf("%s: suite has no describe.Covers label", pos)
 	}
 }
 

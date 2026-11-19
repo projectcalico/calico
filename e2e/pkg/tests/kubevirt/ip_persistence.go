@@ -49,8 +49,8 @@ import (
 //   - At least 2 schedulable worker nodes
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("KubeVirt"),
-	describe.WithCategory(describe.Networking),
+	describe.Covers("KubeVirt"),
+	describe.Requires(describe.KubeVirt),
 	"KubeVirt IP persistence",
 	func() {
 		f := utils.NewDefaultFramework("calico-kubevirt-ip")

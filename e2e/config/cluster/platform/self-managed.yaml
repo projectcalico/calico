@@ -1,0 +1,9 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# A cluster CI provisions on its own VMs, such as kubeadm, Talos or RKE2, whose
+# network routes any IP pool's addresses.
+
+kind: cluster
+
+provides:
+  - RoutableIPPools

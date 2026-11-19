@@ -48,10 +48,10 @@ const (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("IPAM"),
-	describe.RequiresCalicoIPAM(),
+	describe.Covers("IPAM"),
+	describe.Requires(describe.CalicoIPAM),
+	describe.Requires(describe.RoutableIPPools),
 	describe.WithSerial(), // Modifies global IPAMConfiguration state.
-	describe.WithCategory(describe.Networking),
 	"IPAM StrictAffinity",
 	func() {
 		var cli ctrlclient.Client

@@ -33,12 +33,11 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("IPPool"),
-	describe.WithCategory(describe.Operator),
-	describe.RequiresOperator(),
+	describe.Covers("IPPool"),
+	describe.Requires(describe.Operator),
 
 	// Validation on non-Calico CNI clusters forces IP pools to use the 'all()' node selector.
-	describe.RequiresCalicoCNI(),
+	describe.Requires(describe.CalicoCNI),
 
 	// Mutates the default Installation, which every other spec shares.
 	describe.WithSerial(),

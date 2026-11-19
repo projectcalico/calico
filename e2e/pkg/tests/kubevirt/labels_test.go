@@ -23,9 +23,9 @@ import (
 	"testing"
 )
 
-// Lanes whose clusters have no KubeVirt exclude these suites by the Feature
-// label, so a suite filed under another feature runs everywhere and fails.
-func TestEveryKubeVirtSuiteDeclaresTheKubeVirtFeature(t *testing.T) {
+// A KubeVirt suite without the requirement is selected on lanes whose clusters
+// have no KubeVirt, and fails there.
+func TestEveryKubeVirtSuiteRequiresKubeVirt(t *testing.T) {
 	fset := token.NewFileSet()
 	paths, err := filepath.Glob("*.go")
 	if err != nil {
@@ -48,17 +48,14 @@ func TestEveryKubeVirtSuiteDeclaresTheKubeVirtFeature(t *testing.T) {
 			checked++
 			for _, arg := range call.Args {
 				inner, ok := arg.(*ast.CallExpr)
-				if !ok || !isDescribeCall(inner, "WithFeature") {
+				if !ok || !isDescribeCall(inner, "Requires") || len(inner.Args) != 1 {
 					continue
 				}
-				if len(inner.Args) == 0 {
-					continue
-				}
-				if lit, ok := inner.Args[0].(*ast.BasicLit); ok && lit.Value == `"KubeVirt"` {
+				if capability, ok := inner.Args[0].(*ast.SelectorExpr); ok && capability.Sel.Name == "KubeVirt" {
 					return true
 				}
 			}
-			t.Errorf("%s: suite is not labelled with the KubeVirt feature", fset.Position(call.Pos()))
+			t.Errorf("%s: suite has no describe.Requires(describe.KubeVirt) label", fset.Position(call.Pos()))
 			return true
 		})
 	}
