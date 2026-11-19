@@ -120,15 +120,6 @@ func ignoreMissingRef(err error) error {
 	return err
 }
 
-// tag force-creates tagName. -f is safe: a remote collision is advanced past
-// earlier, so any tag met here is local-only and safe to move.
-func tag(g command.GitRunner, tagName string) error {
-	if _, err := g.Run("tag", "-f", "--no-sign", tagName); err != nil {
-		return fmt.Errorf("tag %s: %w", tagName, err)
-	}
-	return nil
-}
-
 // tagWithEmptyCommit adds an empty "Begin development" commit on branch and tags
 // it, for a target whose dev tag must sit on a fresh commit. Leaves HEAD there.
 func tagWithEmptyCommit(g command.GitRunner, branch, tagName string) error {
@@ -138,7 +129,8 @@ func tagWithEmptyCommit(g command.GitRunner, branch, tagName string) error {
 	if _, err := g.Run("commit", "--allow-empty", "-m", "Begin development for "+tagName); err != nil {
 		return fmt.Errorf("create commit on %s: %w", branch, err)
 	}
-	return tag(g, tagName)
+	// A remote collision is advanced past earlier, so any tag met here is local-only.
+	return CreateTag(g, tagName, MoveTag())
 }
 
 // tagHead tags branch's head with no new commit, for the derived branch whose
@@ -147,7 +139,7 @@ func tagHead(g command.GitRunner, branch, tagName string) error {
 	if err := checkoutBranch(g, branch); err != nil {
 		return err
 	}
-	return tag(g, tagName)
+	return CreateTag(g, tagName, MoveTag())
 }
 
 // remoteRefMatches reports whether ref exists on remote and whether it points at
