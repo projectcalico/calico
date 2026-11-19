@@ -338,7 +338,7 @@ func (c *apiServerComponent) deploymentSelector() *metav1.LabelSelector {
 }
 
 func (c *apiServerComponent) apiServerPodDisruptionBudget() *policyv1.PodDisruptionBudget {
-	maxUnavailable := intstr.FromInt(1)
+	maxUnavailable := intstr.FromInt32(1)
 	return &policyv1.PodDisruptionBudget{
 		TypeMeta: metav1.TypeMeta{Kind: "PodDisruptionBudget", APIVersion: "policy/v1"},
 		ObjectMeta: metav1.ObjectMeta{

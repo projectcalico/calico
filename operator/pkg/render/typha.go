@@ -145,7 +145,7 @@ func (c *typhaComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Obj
 }
 
 func (c *typhaComponent) typhaPodDisruptionBudget() *policyv1.PodDisruptionBudget {
-	maxUnavailable := intstr.FromInt(1)
+	maxUnavailable := intstr.FromInt32(1)
 	return &policyv1.PodDisruptionBudget{
 		TypeMeta: metav1.TypeMeta{Kind: "PodDisruptionBudget", APIVersion: "policy/v1"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -373,7 +373,7 @@ func (c *typhaComponent) typhaDeployment() []client.Object {
 	var terminationGracePeriod int64 = defaultTyphaTerminationGracePeriod
 	var revisionHistoryLimit int32 = 2
 	// Allowing 1 unavailable Typha by default ensures that we make progress in a cluster with constrained scheduling.
-	maxUnavailable := intstr.FromInt(1)
+	maxUnavailable := intstr.FromInt32(1)
 	// Allowing 100% surge allows a complete replacement fleet of Typha instances to start during an upgrade. When
 	// combined with Typha's graceful shutdown, we get nice emergent behavior:
 	// - All up-level Typhas start if there's room available.
@@ -604,7 +604,7 @@ func TyphaHealthPort(felixHealthPort int) int {
 
 // livenessReadinessProbes creates the typha's liveness and readiness probes.
 func (c *typhaComponent) livenessReadinessProbes(host string) (*corev1.Probe, *corev1.Probe) {
-	port := intstr.FromInt(typhaHealthPort(c.cfg))
+	port := intstr.FromInt32(int32(typhaHealthPort(c.cfg)))
 	lp := &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -713,7 +713,7 @@ func (c *typhaComponent) typhaPrometheusService() *corev1.Service {
 				{
 					Port:       *port,
 					Protocol:   corev1.ProtocolTCP,
-					TargetPort: intstr.FromInt(int(*port)),
+					TargetPort: intstr.FromInt32(*port),
 					Name:       TyphaMetricsName,
 				},
 			},

@@ -389,7 +389,7 @@ func (rg *routeGenerator) isAllowedLoadBalancerIP(loadBalancerIP string) bool {
 // actual assigned IPs from svc.Status.LoadBalancer.Ingress, since IPs assigned
 // from a Calico IPPool only appear in status, not spec.
 func (rg *routeGenerator) hasAnySingleLoadBalancerIP(svc *v1.Service) bool {
-	if rg.isSingleLoadBalancerIP(svc.Spec.LoadBalancerIP) {
+	if rg.isSingleLoadBalancerIP(svc.Spec.LoadBalancerIP) { //nolint:staticcheck // Ignore SA1019: Calico still supports spec.loadBalancerIP.
 		return true
 	}
 	for _, ingress := range svc.Status.LoadBalancer.Ingress {

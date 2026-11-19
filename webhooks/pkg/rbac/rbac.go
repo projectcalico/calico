@@ -30,7 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
 	kauth "k8s.io/apiserver/pkg/authorization/authorizer"
-	"k8s.io/apiserver/pkg/authorization/cel"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/plugin/pkg/authorizer/webhook"
 	"k8s.io/apiserver/plugin/pkg/authorizer/webhook/metrics"
@@ -57,9 +56,10 @@ func RegisterHook(cs kubernetes.Interface, tierGetter TierGetter, handleFn utils
 	// Create a new Kubernetes authorizer.
 	bo := webhook.DefaultRetryBackoff()
 	m := &metrics.NoopAuthorizerMetrics{}
-	compl := cel.NewDefaultCompiler()
 
-	authz, err := webhook.NewFromInterface(cs.AuthorizationV1(), 5*time.Second, 5*time.Second, *bo, kauth.DecisionDeny, m, compl)
+	// No conditions review client: conditional authorization is an alpha API that
+	// most clusters do not serve.
+	authz, err := webhook.NewFromInterface(cs.AuthorizationV1(), 5*time.Second, 5*time.Second, *bo, kauth.DecisionDeny, m, nil)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create webhook authorizer")
 	}

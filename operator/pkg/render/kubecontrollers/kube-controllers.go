@@ -643,7 +643,7 @@ func (c *kubeControllersComponent) prometheusService() *corev1.Service {
 				{
 					Name:       "metrics-port",
 					Port:       int32(c.cfg.MetricsPort),
-					TargetPort: intstr.FromInt(int(c.cfg.MetricsPort)),
+					TargetPort: intstr.FromInt32(int32(c.cfg.MetricsPort)),
 					Protocol:   corev1.ProtocolTCP,
 				},
 			},
