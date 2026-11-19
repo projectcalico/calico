@@ -291,9 +291,18 @@ E2E_TIMEOUT ?= 90m
 # reach it: run_tests.sh always passes E2E_TEST_CONFIG on make's command line,
 # and a command-line assignment overrides ?= even when its value is empty.
 E2E_TEST_CONFIG ?= e2e/config/kind/conformance.yaml
+# E2E_TEST_CONFIG is a list, one --calico.test-config per entry. An entry is
+# relative to e2e/config, unless it is absolute or already starts with e2e/config/.
+e2e_config_path = $(abspath $(if $(filter /% e2e/config/%,$(1)),$(1),e2e/config/$(1)))
+E2E_TEST_CONFIG_FLAGS = $(foreach c,$(E2E_TEST_CONFIG),--calico.test-config=$(call e2e_config_path,$(c)))
+# sandcat's inline diagnosis reads the selection from the test's environment, as repo-relative paths.
+E2E_TEST_CONFIG_REL = $(foreach c,$(E2E_TEST_CONFIG),$(patsubst $(REPO_ROOT)/%,%,$(call e2e_config_path,$(c))))
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
-K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
+# Prefix for the ginkgo run; it needs the cluster up, so it wraps the run rather than the target.
+E2E_RUN_WRAPPER ?=
+# ClusterNetworkPolicyNamedPorts needs the experimental-channel CRD; we install the standard one.
+K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
 
 # rapidclient helper image for the packet-size and maglev specs. e2e-test-bpf loads
@@ -353,7 +362,7 @@ kind-manifest-install-test:
 e2e-test:
 	$(E2E_BUILD)
 	$(MAKE) kind-up
-	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
+	KUBECONFIG=$(KIND_KUBECONFIG) $(E2E_RUN_WRAPPER) $(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
 
 ## Create a kind cluster with the BPF dataplane plus an external node, and run
 ## the sig-calico BPF e2e tests (including the ExternalNode specs).
@@ -364,16 +373,20 @@ e2e-test-bpf:
 	$(E2E_BUILD)
 	$(MAKE) kind-up KIND_NAME=kind KIND_CONFIG=$(KIND_DIR)/kind-bpf.config EXTRA_VALUES_FILES=$(KIND_INFRA_DIR)/values-bpf.yaml
 	$(MAKE) kind-load-rapidclient KIND_NAME=kind
-	$(KIND_DIR)/external-node.sh up
+	EXTERNAL_NODE_IMAGE=$(EXTERNAL_NODE_IMAGE) $(KIND_DIR)/external-node.sh up
+	$(KIND_DIR)/external-node.sh seed
 	$(MAKE) external-node-load-rapidclient
 	# EXT_* / SSH_AUTH_SOCK are passed as environment (the e2e binary reads them
-	# via os.Getenv); KIND_NAME/KUBECONFIG/E2E_TEST_CONFIG are make variables.
+	# via os.Getenv); KIND_NAME/E2E_TEST_CONFIG are make variables. KUBECONFIG is
+	# deliberately both: the wrapper reads it from the environment.
 	# SSH_AUTH_SOCK is cleared so the framework's ssh uses only EXT_KEY and does
 	# not trip over unrelated agent keys.
 	EXT_USER=ubuntu \
 	EXT_IP="$$(cat $(KIND_DIR)/external-node-ip)" \
 	EXT_KEY=$(KIND_DIR)/external-node-key \
 	SSH_AUTH_SOCK= \
+	KUBECONFIG=$(KIND_KUBECONFIG) \
+	$(E2E_RUN_WRAPPER) \
 	$(MAKE) e2e-run \
 		KIND_NAME=kind \
 		KUBECONFIG=$(KIND_KUBECONFIG) \
@@ -419,7 +432,7 @@ endif
 e2e-run: bin/ginkgo
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
-	KUBECONFIG=$(KUBECONFIG) ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --non-blocking-taints=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
+	KUBECONFIG=$(KUBECONFIG) E2E_TEST_CONFIG="$(E2E_TEST_CONFIG_REL)" ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --json-report=report.json --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --non-blocking-taints=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(E2E_TEST_CONFIG_FLAGS)
 
 # Version from go.mod. Built with whichever of Go and docker the host has: the
 # kind lanes have only docker, the remote-cluster lanes only Go.
@@ -456,7 +469,7 @@ e2e-run-cnp:
 # The default GATEWAY_CLASS_NAME ("tigera-gateway-class") matches what the
 # tigera-operator provisions when the GatewayAPI CR omits gatewayClasses.
 ###############################################################################
-GATEWAY_CONFORMANCE_VERSION ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null)
+GATEWAY_CONFORMANCE_VERSION ?= $(shell git -C $(REPO_ROOT) describe --tags --match '$(GIT_VERSION_TAG_MATCH)' --always --dirty 2>/dev/null)
 GATEWAY_CLASS_NAME ?= tigera-gateway-class
 GATEWAY_CONFORMANCE_PROFILES ?= GATEWAY-HTTP
 GATEWAY_CONFORMANCE_MODE ?= default

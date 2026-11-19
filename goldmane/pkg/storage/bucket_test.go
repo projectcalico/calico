@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,11 +16,13 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/time"
 )
 
@@ -33,7 +35,6 @@ func addFlows(b *AggregationBucket, cache *diachronicCache, n int) {
 		cache.add(tf)
 		b.AddFlow(tf)
 	}
-	b.markReady()
 }
 
 type diachronicCache struct {
@@ -90,7 +91,7 @@ func TestConcurrentAccess(t *testing.T) {
 				// Iterate the bucket, sending an indicator when we have started the first iteration.
 				// We'll then just wait for the context to expire and exit. If concurrent access does not function,
 				// we will block other readers.
-				b.Iter(func(b FlowBuilder) bool {
+				newBucketInterval(b).Iter(nil, func(b FlowBuilder) bool {
 					iterStarted <- true
 					<-ctx.Done()
 					return true // Indicates stop iteration.
@@ -135,7 +136,7 @@ func TestConcurrentAccess(t *testing.T) {
 				t.Errorf("Test timed out")
 				return
 			default:
-				b.Iter(func(FlowBuilder) bool {
+				newBucketInterval(b).Iter(nil, func(FlowBuilder) bool {
 					return false
 				})
 			}
@@ -146,15 +147,99 @@ func TestConcurrentAccess(t *testing.T) {
 	})
 }
 
-func TestReady(t *testing.T) {
-	// Bucket should not iterate if it is not marked ready.
+// A provider queued before the bucket was reset yields nothing, while one taken after the reset
+// yields the bucket's new flows.
+func TestQueuedIntervalSkipsResetBucket(t *testing.T) {
 	_, cache, b, cancel := setup(t)
 	defer cancel()
 
-	addFlows(b, cache, 100)
-	b.ready = false
-	b.Iter(func(_ FlowBuilder) bool {
-		t.Errorf("Should not iterate!")
+	addFlows(b, cache, 10)
+	queued := newBucketInterval(b)
+
+	b.Reset(b.EndTime, b.EndTime+15)
+	addFlows(b, cache, 10)
+
+	queued.Iter(nil, func(FlowBuilder) bool {
+		t.Fatal("queued provider iterated a reset bucket")
 		return true
 	})
+
+	var n int
+	newBucketInterval(b).Iter(nil, func(FlowBuilder) bool {
+		n++
+		return false
+	})
+	if want := b.Flows.Len(); n == 0 || n != want {
+		t.Fatalf("current provider yields %d flows, want %d", n, want)
+	}
+}
+
+// addNamespacedFlows adds n distinct flows from namespace ns to the bucket.
+func addNamespacedFlows(b *AggregationBucket, cache *diachronicCache, ns string, n int) {
+	for i := range n {
+		f := testutils.NewRandomFlow(now.Unix())
+		f.Key.SourceNamespace = ns
+		f.Key.SourceName = fmt.Sprintf("%s-client-%d", ns, i)
+		tf := types.ProtoToFlow(f)
+		cache.add(tf)
+		b.AddFlow(tf)
+	}
+}
+
+func TestIterFilter(t *testing.T) {
+	_, cache, bucket, cancel := setup(t)
+	defer cancel()
+
+	addNamespacedFlows(bucket, cache, "match", 3)
+	addNamespacedFlows(bucket, cache, "other", 5)
+
+	count := func(filter *proto.Filter) int {
+		var n int
+		newBucketInterval(bucket).Iter(filter, func(FlowBuilder) bool {
+			n++
+			return false
+		})
+		return n
+	}
+
+	filter := &proto.Filter{SourceNamespaces: []*proto.StringMatch{{Value: "match", Type: proto.MatchType_Exact}}}
+	if got := count(filter); got != 3 {
+		t.Errorf("expected 3 flows matching the filter, got %d", got)
+	}
+	if got := count(nil); got != 8 {
+		t.Errorf("expected all 8 flows with no filter, got %d", got)
+	}
+	if got := count(&proto.Filter{}); got != 8 {
+		t.Errorf("expected all 8 flows with an empty filter, got %d", got)
+	}
+}
+
+// A consumer that stalls inside Iter must not hold up writes to the bucket.
+func TestIterDoesNotBlockAddFlow(t *testing.T) {
+	_, cache, bucket, cancel := setup(t)
+	defer cancel()
+
+	addFlows(bucket, cache, 10)
+
+	release := make(chan struct{})
+	defer close(release)
+	inIter := make(chan struct{})
+	go newBucketInterval(bucket).Iter(nil, func(FlowBuilder) bool {
+		close(inIter)
+		<-release
+		return true
+	})
+	<-inIter
+
+	added := make(chan struct{})
+	go func() {
+		addFlows(bucket, cache, 1)
+		close(added)
+	}()
+
+	select {
+	case <-added:
+	case <-time.After(5 * time.Second):
+		t.Fatal("AddFlow blocked while a consumer was stalled inside Iter")
+	}
 }

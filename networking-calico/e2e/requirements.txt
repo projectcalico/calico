@@ -1,0 +1,10 @@
+etcd3gw
+keystoneauth1
+netaddr
+paramiko
+python-keystoneclient
+python-neutronclient
+python-novaclient
+python-openstackclient
+scapy
+unittest-xml-reporting

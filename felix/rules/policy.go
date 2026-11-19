@@ -296,15 +296,15 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	// Port matches.  We only need to render blocks of ports if, in total, there's more than one
 	// source or more than one destination match that needs to be or-ed together.
 	//
-	// Split the port list into blocks of 15, as per iptables limit and add in the number of
-	// named ports.
+	// Split the port list into blocks that fit the backend's port match and add in the number
+	// of named ports.
 	var ipSetConfig *ipsets.IPVersionConfig
 	if ipVersion == 4 {
 		ipSetConfig = r.IPSetConfigV4
 	} else {
 		ipSetConfig = r.IPSetConfigV6
 	}
-	srcPortSplits := SplitPortList(ruleCopy.SrcPorts)
+	srcPortSplits := SplitPortList(ruleCopy.SrcPorts, r.matchCapabilities.PortsPerRule)
 	if len(srcPortSplits)+len(ruleCopy.SrcNamedPortIpSetIds) > 1 {
 		// Render a block for the source ports.
 		matchBlockBuilder.AppendPortMatchBlock(ipSetConfig, ruleCopy.Protocol, srcPortSplits, ruleCopy.SrcNamedPortIpSetIds, src)
@@ -312,7 +312,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		ruleCopy.SrcPorts = nil
 		ruleCopy.SrcNamedPortIpSetIds = nil
 	}
-	dstPortSplits := SplitPortList(ruleCopy.DstPorts)
+	dstPortSplits := SplitPortList(ruleCopy.DstPorts, r.matchCapabilities.PortsPerRule)
 	if len(dstPortSplits)+len(ruleCopy.DstNamedPortIpSetIds) > 1 {
 		// Render a block for the destination ports.
 		matchBlockBuilder.AppendPortMatchBlock(ipSetConfig, ruleCopy.Protocol, dstPortSplits, ruleCopy.DstNamedPortIpSetIds, dst)
@@ -321,14 +321,16 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		ruleCopy.DstNamedPortIpSetIds = nil
 	}
 
-	// If there's more than one positive source/destination CIDR match, we have to render a block.
-	// Otherwise, if there's exactly one, we'll include it in the main rule below.
-	if len(ruleCopy.SrcNet) > 1 {
+	cidrLimit := r.matchCapabilities.CIDRsPerRule
+
+	// If there are more positive source/destination CIDR matches than one rule can hold, we have
+	// to render a block. Otherwise, we'll include them in the main rule below.
+	if len(ruleCopy.SrcNet) > cidrLimit {
 		matchBlockBuilder.AppendCIDRMatchBlock(ruleCopy.SrcNet, src)
 		// Since we're using a block for this, nil out the match.
 		ruleCopy.SrcNet = nil
 	}
-	if len(ruleCopy.DstNet) > 1 {
+	if len(ruleCopy.DstNet) > cidrLimit {
 		matchBlockBuilder.AppendCIDRMatchBlock(ruleCopy.DstNet, dst)
 		// Since we're using a block for this, nil out the match.
 		ruleCopy.DstNet = nil
@@ -344,7 +346,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	// any negative matches will tip the count over 1.  Otherwise, we'll need 2 or more negative
 	// matches to make the count more than 1.
 	totalSrcMatches := len(ruleCopy.SrcNet) + len(ruleCopy.NotSrcNet)
-	if totalSrcMatches > 1 {
+	if totalSrcMatches > cidrLimit {
 		// We have some negated source CIDR matches and the total number of source
 		// CIDR matches won't fit in the rule.  Render a block of rules to do the
 		// negated match.
@@ -353,7 +355,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		ruleCopy.NotSrcNet = nil
 	}
 	totalDstMatches := len(ruleCopy.DstNet) + len(ruleCopy.NotDstNet)
-	if totalDstMatches > 1 {
+	if totalDstMatches > cidrLimit {
 		// We have some negated dest CIDR matches and the total number of dest
 		// CIDR matches won't fit in the rule.  Render a block of rules to do the
 		// negated match.
@@ -570,13 +572,12 @@ func (sod srcOrDst) MatchIPPortIPSet(m generictables.MatchCriteria, setID string
 	return nil
 }
 
-// SplitPortList splits the input list of ports into groups containing up to 15 port numbers.
-// If the input list is empty, it returns an empty slice.
+// SplitPortList splits the input list of ports into groups that each fit in one port match
+// of maxPorts ports. If the input list is empty, it returns an empty slice.
 //
-// The requirement to split into groups of 15, comes from iptables' limit on the number of ports
-// "slots" in a multiport match.  A single port takes up one slot, a range of ports requires 2.
-func SplitPortList(ports []*proto.PortRange) (splits [][]*proto.PortRange) {
-	slotsAvailableInCurrentSplit := 15
+// A range of ports counts as two, as in an iptables multiport match, which holds 15 ports.
+func SplitPortList(ports []*proto.PortRange, maxPorts int) (splits [][]*proto.PortRange) {
+	slotsAvailableInCurrentSplit := maxPorts
 	var split []*proto.PortRange
 	for _, portRange := range ports {
 		// First figure out how many slots adding this PortRange would require.
@@ -587,10 +588,10 @@ func SplitPortList(ports []*proto.PortRange) (splits [][]*proto.PortRange) {
 			numSlotsRequired = 2
 		}
 		if slotsAvailableInCurrentSplit < numSlotsRequired {
-			// Adding this port to the current split would take it over the 15 slot
+			// Adding this port to the current split would take it over the port
 			// limit, start a new split.
 			splits = append(splits, split)
-			slotsAvailableInCurrentSplit = 15
+			slotsAvailableInCurrentSplit = maxPorts
 			split = nil
 		}
 		split = append(split, portRange)
@@ -858,12 +859,9 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	// First, process positive (non-negated) match criteria.
 	match = appendProtocolMatch(match, pRule.Protocol, logCxt)
 
-	if len(pRule.SrcNet) == 1 {
-		logCxt.WithField("cidr", pRule.SrcNet[0]).Debug("Adding src CIDR match")
-		match = match.SourceNet(pRule.SrcNet[0])
-	} else if len(pRule.SrcNet) > 1 {
-		logrus.WithField("rule", pRule).Panic(
-			"CalculateRuleMatch() passed more than one CIDR in SrcNet.")
+	if len(pRule.SrcNet) > 0 {
+		logCxt.WithField("cidrs", pRule.SrcNet).Debug("Adding src CIDR match")
+		match = match.SourceNets(pRule.SrcNet)
 	}
 
 	nameForIPSet := func(ipsetID string) string {
@@ -903,12 +901,9 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		match = match.SourceIPPortSet(ipsetName)
 	}
 
-	if len(pRule.DstNet) == 1 {
-		logCxt.WithField("cidr", pRule.DstNet[0]).Debug("Adding dest CIDR match")
-		match = match.DestNet(pRule.DstNet[0])
-	} else if len(pRule.DstNet) > 1 {
-		logrus.WithField("rule", pRule).Panic(
-			"CalculateRuleMatch() passed more than one CIDR in DstNet.")
+	if len(pRule.DstNet) > 0 {
+		logCxt.WithField("cidrs", pRule.DstNet).Debug("Adding dest CIDR match")
+		match = match.DestNets(pRule.DstNet)
 	}
 
 	for _, ipsetID := range pRule.DstIpSetIds {
@@ -984,11 +979,9 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		}
 	}
 
-	if len(pRule.NotSrcNet) == 1 {
-		logCxt.WithField("cidr", pRule.NotSrcNet[0]).Debug("Adding negated src CIDR match")
-		match = match.NotSourceNet(pRule.NotSrcNet[0])
-	} else if len(pRule.NotSrcNet) > 1 {
-		logrus.WithField("rule", pRule).Panic("CalculateRuleMatch() passed more than one CIDR in NotSrcNet.")
+	if len(pRule.NotSrcNet) > 0 {
+		logCxt.WithField("cidrs", pRule.NotSrcNet).Debug("Adding negated src CIDR match")
+		match = match.NotSourceNets(pRule.NotSrcNet)
 	}
 
 	for _, ipsetID := range pRule.NotSrcIpSetIds {
@@ -1004,7 +997,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		logCxt.WithFields(logrus.Fields{
 			"ports": pRule.NotSrcPorts,
 		}).Debug("Adding negated src port match")
-		for _, portSplit := range SplitPortList(pRule.NotSrcPorts) {
+		for _, portSplit := range SplitPortList(pRule.NotSrcPorts, r.matchCapabilities.PortsPerRule) {
 			match = match.NotSourcePortRanges(portSplit)
 		}
 	}
@@ -1018,11 +1011,9 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		match = match.NotSourceIPPortSet(ipsetName)
 	}
 
-	if len(pRule.NotDstNet) == 1 {
-		logCxt.WithField("cidr", pRule.NotDstNet[0]).Debug("Adding !dst CIDR match")
-		match = match.NotDestNet(pRule.NotDstNet[0])
-	} else if len(pRule.NotDstNet) > 1 {
-		logrus.WithField("rule", pRule).Panic("CalculateRuleMatch() passed more than one CIDR in NotDstNet.")
+	if len(pRule.NotDstNet) > 0 {
+		logCxt.WithField("cidrs", pRule.NotDstNet).Debug("Adding !dst CIDR match")
+		match = match.NotDestNets(pRule.NotDstNet)
 	}
 
 	for _, ipsetID := range pRule.NotDstIpSetIds {
@@ -1038,7 +1029,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		logCxt.WithFields(logrus.Fields{
 			"ports": pRule.NotDstPorts,
 		}).Debug("Adding negated dst port match")
-		for _, portSplit := range SplitPortList(pRule.NotDstPorts) {
+		for _, portSplit := range SplitPortList(pRule.NotDstPorts, r.matchCapabilities.PortsPerRule) {
 			match = match.NotDestPortRanges(portSplit)
 		}
 	}

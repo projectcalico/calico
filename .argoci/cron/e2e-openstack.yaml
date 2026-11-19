@@ -8,7 +8,8 @@
 # openstack-calico-test VPC), Calico packages from ppa:project-calico/master,
 # calico/{ctl,node}:master images, and the test image
 # (gcr.io/unique-caldron-775/openstack-e2e:stable, built from
-# tigera/calico-test — the only remaining use of that repo's coding).
+# networking-calico/e2e and published by
+# .argoci/publish/e2e-openstack-image.yaml).
 # Release branches will need INSTALL_SOURCE / CALICOCTL_IMAGE /
 # CALICO_NODE_IMAGE overrides here once we publish packages and images from
 # release branches.

@@ -1,0 +1,11 @@
+# Builds the `openstack-e2e` image for OpenStack e2e testing.  Publishing it is
+# .argoci/publish/e2e-openstack-image.yaml's job.
+version: condensed-module
+
+steps:
+  # Only on PRs, because a merge to master builds the image again to publish it.
+  - name: e2e-openstack-image
+    when: "GIT_REF_TYPE == 'PR'"
+    services: [docker]
+    commands: |
+      make -C networking-calico/e2e e2e-image

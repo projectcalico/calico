@@ -155,6 +155,9 @@ the source alone.
   IPAM). Pointer stubs may sit in consumer subdirectories, but the canonical
   content lives here.
 - `<component>/CLAUDE.md` — operational guidance only. Not architecture.
+- [`.github/instructions/*.instructions.md`](../.github/instructions/) —
+  path-scoped review rules, shared with Copilot. When reviewing, apply every
+  file whose `applyTo` globs match the changed paths.
 
 Complex components split their design across a directory with an "applies to"
 glob per topic — Felix uses [`felix/DESIGN.md`](../felix/DESIGN.md) as an index
@@ -222,6 +225,8 @@ Per-area sub-designs carry area-specific test conventions on top of this rule
 
 Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-not-required`) and one release note label (`release-note-required` or `release-note-not-required`). Optional: `cherry-pick-candidate` (bug fix backports), `needs-operator-pr` (requires operator change).
 
+To skip a backport, comment `/skip-backport release-vX.YY` as the PR author (see the `cherry-pick-release` skill).
+
 ## AI-assisted contribution policy
 
 [`AI_POLICY.md`](../AI_POLICY.md) at the repo root governs contributions written with AI assistance. The parts that affect what you produce:
@@ -229,7 +234,7 @@ Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-no
 - The PR description discloses the assistance - the PR template has an **AI assistance** line for it.
 - Never add an AI co-author or `Assisted-By:` trailer to a commit.
 - The human author has to be able to explain the change without you, so leave the code and the PR description in a state they can defend.
-- Don't reply to review comments on their behalf.
+- On review threads, the only reply you may post for them is one that points at the fix commit ("Done in abc1234"). Explanations, pushback, and questions about review feedback come from the human.
 
 ## Additional Resources
 

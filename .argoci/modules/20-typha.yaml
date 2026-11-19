@@ -30,6 +30,7 @@ steps:
   # Depends on the producer only to skip a commit whose first build failed;
   # `clean` discards the cached image anyway.
   - name: typha-fv-ubi
+    tiers: []
     vm:
       machineType: e2-standard-8
     depends: [build-calico-image, check-go]

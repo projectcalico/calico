@@ -152,10 +152,11 @@ func RequiresBGP() any {
 	return framework.WithLabel("RequiresBGP")
 }
 
-// RequiresOperator marks tests that need tigera-operator running to reconcile a CR
-// they create. Manifest-installed clusters (INSTALLER=manual/packaged, i.e. a
-// MANIFEST_FILE like calico.yaml) have no operator, so such a test blocks until its
-// wait times out rather than skipping.
+// RequiresOperator marks tests that need an operator-managed cluster: they create a
+// CR for tigera-operator to reconcile, or read an operator resource such as the
+// Installation. Manifest-installed clusters (INSTALLER=manual/packaged, i.e. a
+// MANIFEST_FILE like calico.yaml) have neither, so such a test fails or waits out
+// its timeout rather than skipping.
 func RequiresOperator() any {
 	return framework.WithLabel("RequiresOperator")
 }

@@ -24,6 +24,9 @@ sleep $((RANDOM % 60))
 createLocalSecret "marvin" "${HOME}/.keys/marvin" || true
 createLocalSecret "banzai-google-service-account.json" "${HOME}/secrets/banzai-google-service-account.json" || true
 createLocalSecret "docker_cfg.json" "${HOME}/.docker/config.json" || true
+# bz init copies ~/secrets into the profile, where Calico installs look for the
+# registry pull secret.
+createLocalSecret "docker_cfg.json" "${HOME}/secrets/docker_cfg.json" || true
 # Red Hat pull secret for aws-openshift provisioning; no-op until the secret is
 # added to the argoci store (see aws-openshift:check-prereqs). Staged into the
 # bz profile below.
@@ -181,7 +184,7 @@ export BZ_GLOBAL_BIN="${BZ_GLOBAL_BIN:-${HOME}/.local/bin}"
 mkdir -p "${BZ_GLOBAL_BIN}"
 export PATH="${BZ_GLOBAL_BIN}:${PATH}"
 if ! command -v bz >/dev/null 2>&1; then
-  echo "[INFO] bz not on PATH; BZ_REPO=${BZ_REPO:-<UNSET>} GITHUB_ACCESS_TOKEN=$( [ -n "${GITHUB_ACCESS_TOKEN:-}" ] && echo SET || echo EMPTY ) jq=$(command -v jq || echo none) wget=$(command -v wget || echo none)"
+  echo "[INFO] bz not on PATH; BZ_REPO=${BZ_REPO:-<UNSET>} GITHUB_ACCESS_TOKEN=$( [ -n "${GITHUB_ACCESS_TOKEN:-}" ] && echo SET || echo EMPTY ) jq=$(command -v jq || echo none) curl=$(command -v curl || echo none)"
   : "${BZ_REPO:?BZ_REPO not set (expected from banzai-secrets)}"
   : "${GITHUB_ACCESS_TOKEN:?GITHUB_ACCESS_TOKEN not set (expected from banzai-secrets)}"
   [[ -n "${BZ_VERSION:-}" ]] && BZ_RELEASE="tags/${BZ_VERSION}" || BZ_RELEASE="latest"
@@ -212,9 +215,14 @@ if ! command -v bz >/dev/null 2>&1; then
         break
       fi
     fi
+    # wget forwards in-URL creds across the 302 to the signed asset host (token leak,
+    # and S3 400s on double auth); curl drops the header cross-host.
     if [[ "${BZ_ASSET_ID}" =~ ^[0-9]+$ ]] \
-       && wget -q --tries=3 --waitretry=5 --auth-no-challenge --header='Accept:application/octet-stream' \
-            "https://${GITHUB_ACCESS_TOKEN}:@api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID}" -O "${BZ_GLOBAL_BIN}/bz" \
+       && curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+            -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
+            -H "Accept: application/octet-stream" \
+            -o "${BZ_GLOBAL_BIN}/bz" \
+            "https://api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID}" \
        && [[ $(stat -c%s "${BZ_GLOBAL_BIN}/bz" 2>/dev/null || echo 0) -gt 1000000 ]]; then
       chmod +x "${BZ_GLOBAL_BIN}/bz"
       echo "[INFO] bz installed (asset id=${BZ_ASSET_ID}, attempt ${attempt})"

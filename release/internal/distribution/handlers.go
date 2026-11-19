@@ -28,6 +28,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/outputs"
@@ -48,6 +49,7 @@ var (
 	_ validator = GCS{}
 	_ validator = GithubRelease{}
 	_ validator = HashreleaseServer{}
+	_ validator = Preparer{}
 )
 
 type S3 struct {
@@ -194,7 +196,8 @@ type GithubRelease struct {
 	Draft  bool
 	DryRun bool
 
-	Log *logrus.Entry
+	Log    *logrus.Entry
+	Runner command.CommandRunner
 
 	releases *github.Releases
 }
@@ -205,7 +208,7 @@ func (d GithubRelease) github() (*github.Releases, error) {
 	if d.releases != nil {
 		return d.releases, nil
 	}
-	return github.NewReleases(d.Repo, nil)
+	return github.NewReleases(d.Repo, github.Client(d.Runner).Repositories)
 }
 
 func (d GithubRelease) Publish(ctx context.Context, src string) error {
@@ -346,7 +349,7 @@ func (d GithubRelease) Validate(u Upload) error {
 // SHA256Sums writes a checksum file covering everything at the top level of
 // dir, and returns dir's files plus that file. Any existing sums file is
 // replaced rather than checksummed into itself.
-func SHA256Sums(dir string) error {
+func SHA256Sums(dir string, opts ...Option) error {
 	files, err := topLevelFiles(dir)
 	if err != nil {
 		return err
@@ -354,12 +357,12 @@ func SHA256Sums(dir string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("no files to checksum in %s", dir)
 	}
-	_, err = sha256Sums(dir, files)
+	_, err = sha256Sums(dir, files, opts...)
 	return err
 }
 
-func sha256Sums(dir string, files []string) ([]string, error) {
-	s, err := newSettings(sumsStep, nil)
+func sha256Sums(dir string, files []string, opts ...Option) ([]string, error) {
+	s, err := newSettings(sumsStep, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -375,9 +378,8 @@ func sha256Sums(dir string, files []string) ([]string, error) {
 	for i, f := range files {
 		names[i] = filepath.Base(f)
 	}
-	out, err := s.Runner().RunInDir(dir, "sha256sum", names, nil)
+	out, err := s.Runner().Run("sha256sum", names, command.WithDir(dir))
 	if err != nil {
-		s.Logger().Error(out)
 		return nil, s.Errorf("checksumming files: %w", err)
 	}
 	if err := os.WriteFile(path, []byte(out), filePerms); err != nil {
@@ -465,9 +467,17 @@ type Preparer struct {
 	Kind string
 
 	Action func() error
+	Check  func() error
 }
 
 func (d Preparer) Name() string { return d.Kind }
+
+func (d Preparer) Validate(Upload) error {
+	if d.Check == nil {
+		return nil
+	}
+	return d.Check()
+}
 
 func (d Preparer) Publish(context.Context, string) error { return d.Action() }
 

@@ -16,7 +16,6 @@ package main
 
 import (
 	"context"
-	"path/filepath"
 
 	cli "github.com/urfave/cli/v3"
 
@@ -105,6 +104,6 @@ var pinnedManifests = func(cfg *Config, c *cli.Command, pin pinned) (*manifests.
 			Registry: operatorRegistries(c)[0],
 		},
 		Registry:  firstRegistry(c),
-		OutputDir: filepath.Join(cfg.OutputDir, ver.String()),
+		OutputDir: releaseOutputDir(cfg.RepoRootDir, ver.String()),
 	}, nil
 }

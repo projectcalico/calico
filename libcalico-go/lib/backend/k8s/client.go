@@ -36,7 +36,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	kubevirtclient "kubevirt.io/client-go/kubevirt/typed/core/v1"
-	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
+	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1beta1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
@@ -61,7 +61,7 @@ type KubeClient struct {
 	ClientSet kubernetes.Interface
 
 	// Client for interacting with K8S Cluster Network Policy.
-	k8sClusterPolicyClient *netpolicyclient.PolicyV1alpha2Client
+	k8sClusterPolicyClient *netpolicyclient.PolicyV1beta1Client
 
 	// Contains methods for converting Kubernetes resources to
 	// Calico resources.
@@ -131,7 +131,7 @@ type ClientOptions struct {
 	RESTClient                 rest.Interface
 	Group                      resources.BackingAPIGroup
 	UsePodCIDR                 bool
-	ClusterNetworkPolicyClient *netpolicyclient.PolicyV1alpha2Client
+	ClusterNetworkPolicyClient *netpolicyclient.PolicyV1beta1Client
 	VMIMClientFactory          func(namespace string) resources.VMIMClient
 }
 
@@ -571,7 +571,7 @@ func (c *KubeClient) Close() error {
 }
 
 // clusterNetworkPolicyClient builds a RESTClient configured to interact Cluster Network Policy.
-func clusterNetworkPolicyClient(cfg *rest.Config) (*netpolicyclient.PolicyV1alpha2Client, error) {
+func clusterNetworkPolicyClient(cfg *rest.Config) (*netpolicyclient.PolicyV1beta1Client, error) {
 	return netpolicyclient.NewForConfig(cfg)
 }
 
@@ -601,6 +601,22 @@ func restClient(cfg rest.Config, group resources.BackingAPIGroup) (*rest.RESTCli
 	return cli, nil
 }
 
+// checkDryRunSupported refuses a dry-run write to a resource client that can't honor
+// one, since that client would persist the write instead.
+func checkDryRunSupported(ctx context.Context, client resources.K8sResourceClient, key model.Key, op string) error {
+	if !api.IsDryRun(ctx) {
+		return nil
+	}
+	if dr, ok := client.(resources.DryRunClient); ok && dr.SupportsDryRun() {
+		return nil
+	}
+	return cerrors.ErrorOperationNotSupported{
+		Identifier: key,
+		Operation:  op,
+		Reason:     "dry run is not supported for this resource",
+	}
+}
+
 // Create an entry in the datastore.  This errors if the entry already exists.
 func (c *KubeClient) Create(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	// Do not log d.Value, it may contain sensitive resource specs (e.g. BGPPassword).
@@ -612,6 +628,9 @@ func (c *KubeClient) Create(ctx context.Context, d *model.KVPair) (*model.KVPair
 			Identifier: d.Key,
 			Operation:  "Create",
 		}
+	}
+	if err := checkDryRunSupported(ctx, client, d.Key, "Create"); err != nil {
+		return nil, err
 	}
 	return client.Create(ctx, d)
 }
@@ -629,6 +648,9 @@ func (c *KubeClient) Update(ctx context.Context, d *model.KVPair) (*model.KVPair
 			Operation:  "Update",
 		}
 	}
+	if err := checkDryRunSupported(ctx, client, d.Key, "Update"); err != nil {
+		return nil, err
+	}
 	return client.Update(ctx, d)
 }
 
@@ -644,6 +666,9 @@ func (c *KubeClient) UpdateStatus(ctx context.Context, d *model.KVPair) (*model.
 			Identifier: d.Key,
 			Operation:  "UpdateStatus",
 		}
+	}
+	if err := checkDryRunSupported(ctx, client, d.Key, "UpdateStatus"); err != nil {
+		return nil, err
 	}
 	// Use the UpdateStatus method on the resource client if it supports it,
 	// otherwise fall back to Update.

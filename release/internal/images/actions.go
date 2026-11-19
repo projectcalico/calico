@@ -25,10 +25,11 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/archives"
+	"github.com/projectcalico/calico/release/internal/env"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) error {
@@ -38,65 +39,61 @@ func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) er
 	}
 
 	units := s.units(s.env())
-	s.Logger().WithField("images", len(units)).Info("Building container images")
+	s.Logger().WithFields(logrus.Fields{"images": len(units), "arches": s.Arches}).Info("Building container images")
 	if err := s.runUnits(units); err != nil {
 		return err
 	}
 	s.Logger().Info("Finished building container images")
+	if s.pruneCache {
+		if _, err := s.docker([]string{"builder", "prune", "--all", "--force"}); err != nil {
+			s.Logger().WithError(err).Warn("Failed to prune the build cache")
+		}
+	}
 	return nil
 }
 
-// Archive writes each image to its own tar under tarDir.
-func Archive(repoRoot, version string, imageDirs []string, opts ...ArchiveOption) archives.Contributor {
-	return archiver{
-		RepoRoot: repoRoot,
-		Version:  version,
-		Variants: NarrowVariants(StandardVariants(PublishVariants), imageDirs),
-		Options:  opts,
+// Archive returns a contributor per image directory, so the release archive
+// can drop one directory's tars before saving the next. It validates when
+// called, so a bad version fails before any build rather than at staging.
+func Archive(repoRoot, version string, imageDirs []string, opts ...ArchiveOption) ([]archives.Contributor, error) {
+	s, err := newSettings(archiveStep, repoRoot, version, NarrowVariants(StandardVariants(PublishVariants), imageDirs), opts)
+	if err != nil {
+		return nil, err
 	}
+	if len(s.Registries) == 0 {
+		return nil, s.Errorf("no registry to archive images from")
+	}
+	units := s.units(s.env())
+	out := make([]archives.Contributor, 0, len(units))
+	for _, u := range units {
+		out = append(out, archiver{s: s, u: u})
+	}
+	return out, nil
 }
 
 var _ archives.Contributor = archiver{}
 
 type archiver struct {
-	RepoRoot string
-	Version  string
-	Variants []Variant
-	Options  []ArchiveOption
+	s settings
+	u unit
 }
 
 func (a archiver) Name() string {
-	return "images"
+	return filepath.Join("images", a.u.dir)
 }
 
 func (a archiver) Contribute(dir string) error {
-	s, err := newSettings(archiveStep, a.RepoRoot, a.Version, a.Variants, a.Options)
-	if err != nil {
-		return err
-	}
+	s := a.s
 	if dir == "" {
 		return s.Errorf("no directory to write images to")
 	}
 	dest := filepath.Join(dir, "images")
-	if len(s.Registries) == 0 {
-		return s.Errorf("no registry to archive images from")
-	}
-	units := s.units(s.env())
-	s.Logger().WithField("images", len(units)).Info("Archiving container images")
-	if err := os.MkdirAll(dest, os.ModePerm); err != nil {
+	if err := os.MkdirAll(dest, fsutil.DirPerms); err != nil {
 		return fmt.Errorf("creating images dir %s: %w", dest, err)
 	}
-
 	// Images come from the first registry: an archive holds one copy, whichever
 	// registry it is pulled from.
-	reg := s.Registries[0]
-	if _, err := steps.Go(units, func(u unit) (unitDone, error) {
-		return unitDone{}, saveUnit(s, u, reg, dest)
-	}); err != nil {
-		return err
-	}
-	s.Logger().Info("Finished archiving container images")
-	return nil
+	return saveUnit(s, a.u, s.Registries[0], dest)
 }
 
 func saveUnit(s settings, u unit, reg, dest string) error {
@@ -114,29 +111,29 @@ func saveUnit(s settings, u unit, reg, dest string) error {
 }
 
 var publishEnv = func(s settings) []string {
-	env := append(s.env(),
-		utils.EnvTrue(utils.EnvRelease),
-		utils.Env(utils.EnvReleaseTag, s.Version),
+	vars := append(s.env(),
+		env.True(env.Release),
+		env.Var(env.ReleaseTag, s.Version),
 	)
 	if s.confirm {
-		env = append(env, utils.EnvTrue(utils.EnvConfirm))
+		vars = append(vars, env.True(env.Confirm))
 	} else {
-		env = append(env, utils.EnvTrue(utils.EnvDryRun))
+		vars = append(vars, env.True(env.DryRun))
 	}
 	if s.retag != nil {
 		// Retagging inverts DEV_REGISTRIES: it becomes the source, so the
 		// destination has to be named separately.
-		env = append(env,
-			utils.EnvTrue(utils.EnvImageOnly),
-			utils.Env(utils.EnvDevTag, s.retag.tag),
-			utils.Env(utils.EnvDevRegistries, s.retag.registry),
-			utils.Env(utils.EnvReleaseRegistries, strings.Join(s.Registries, " ")),
+		vars = append(vars,
+			env.True(env.ImageOnly),
+			env.Var(env.DevTag, s.retag.tag),
+			env.Var(env.DevRegistries, s.retag.registry),
+			env.Var(env.ReleaseRegistries, strings.Join(s.Registries, " ")),
 		)
 		if s.retag.skipDev {
-			env = append(env, utils.EnvTrue(utils.EnvSkipDevImageRetag))
+			vars = append(vars, env.True(env.SkipDevImageRetag))
 		}
 	}
-	return env
+	return vars
 }
 
 // confirm latches the push: without it the make targets run as a dry run, so it
@@ -173,7 +170,7 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 		sendImagesToISS(s, unscanned)
 		return nil
 	}
-	s.Logger().WithField("images", len(units)).Info("Publishing container images")
+	s.Logger().WithFields(logrus.Fields{"images": len(units), "arches": s.Arches}).Info("Publishing container images")
 	publishErr := s.runUnits(units)
 
 	// Record before reporting a failure: a partial publish is exactly the run
@@ -208,7 +205,7 @@ func Resolve(repoRoot, version string, variants []Variant, resolve registry.Dige
 
 	unscanned, depErr := s.runDependencies()
 	units := s.units(s.env())
-	s.Logger().WithField("images", len(units)).Info("Resolving container images")
+	s.Logger().WithFields(logrus.Fields{"images": len(units), "arches": s.Arches}).Info("Resolving container images")
 	got, lookupErr := steps.GoLimit(units, lookupLimit, s.lookup)
 
 	errs := []error{depErr}

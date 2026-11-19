@@ -39,6 +39,7 @@ import (
 
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
 
@@ -215,9 +216,34 @@ func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse 
 		}
 	}
 
-	// If validation passes, return an allowed response
+	if resp := validatePolicy(logCtx, ar.Request, obj); resp != nil {
+		return resp
+	}
+
 	logCtx.Debug("User is authorized")
 	return &v1.AdmissionResponse{Allowed: true}
+}
+
+// validatePolicy applies Calico's API validation, which the CRD schema can't express (e.g. selector
+// syntax).  Returns an AdmissionResponse if the policy is invalid, or nil if it is valid.
+func validatePolicy(logCtx *logrus.Entry, req *v1.AdmissionRequest, obj client.Object) *v1.AdmissionResponse {
+	// Don't block deletion, including the updates that remove finalizers from a policy that was
+	// admitted before this validation existed.
+	if req.Operation == v1.Delete || obj.GetDeletionTimestamp() != nil {
+		return nil
+	}
+	if err := validator.Validate(obj); err != nil {
+		logCtx.WithError(err).Info("Policy failed validation")
+		return &v1.AdmissionResponse{
+			Allowed: false,
+			Result: &metav1.Status{
+				Status:  metav1.StatusFailure,
+				Message: fmt.Sprintf("Invalid %s: %v", req.Kind.Kind, err),
+				Reason:  metav1.StatusReasonInvalid,
+			},
+		}
+	}
+	return nil
 }
 
 // checkTierExists verifies the tier exists and is not terminating. Returns an AdmissionResponse if

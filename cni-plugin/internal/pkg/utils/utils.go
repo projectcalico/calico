@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -640,7 +641,7 @@ func GetIdentifiers(args *skel.CmdArgs, nodename string) (*WEPIdentifiers, error
 }
 
 func GetHandleID(netName, containerID, workload string) string {
-	handleID := fmt.Sprintf("%s.%s", netName, containerID)
+	handleID := ipam.PodHandleID(netName, containerID)
 
 	logrus.WithFields(logrus.Fields{
 		"HandleID":    handleID,
@@ -649,38 +650,6 @@ func GetHandleID(netName, containerID, workload string) string {
 		"ContainerID": containerID,
 	}).Debug("Generated IPAM handle")
 	return handleID
-}
-
-// ParsedPodHandle is a pod's IPAM handle broken into its components.
-type ParsedPodHandle struct {
-	Network     string
-	ContainerID string
-}
-
-// ParsePodHandleID splits a pod's IPAM handle for the given network. Workload, VM and
-// load balancer handles use their own formats and are rejected; see
-// design/ipam/ipam-cni.md for the pod form.
-func ParsePodHandleID(handleID, netName string) (ParsedPodHandle, bool) {
-	// Handles written during the host-local migration can carry a trailing carriage
-	// return; see https://github.com/projectcalico/cni-plugin/issues/821.
-	handleID = strings.Split(handleID, "\r")[0]
-
-	containerID, ok := strings.CutPrefix(handleID, netName+".")
-	if !ok {
-		return ParsedPodHandle{}, false
-	}
-
-	// A dot left in the container ID means this is not a sandbox handle: pre-v3 handles
-	// name the workload (k8s-pod-network.default.mypod), VM handles name the VMI
-	// (k8s-pod-network.vmi.default.vm1).
-	if containerID == "" || strings.Contains(containerID, ".") {
-		return ParsedPodHandle{}, false
-	}
-
-	return ParsedPodHandle{
-		Network:     netName,
-		ContainerID: containerID,
-	}, true
 }
 
 func CreateClient(conf types.NetConf) (client.Interface, error) {
@@ -779,12 +748,10 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 	return calicoClient, nil
 }
 
-// ReleaseIPAllocation is called to cleanup IPAM allocations if something goes wrong during
-// CNI ADD execution. It forces the CNI_COMMAND to be DEL for the duration of the cleanup.
-func ReleaseIPAllocation(ctx context.Context, logger *logrus.Entry, conf types.NetConf, args *skel.CmdArgs) {
-	logger.Info("Cleaning up IP allocations for failed ADD")
-
-	// The caller may carry on with the ADD after a cleanup it can recover from.
+// ReleaseIPAllocation releases a sandbox's IPAM allocations by running the IPAM plugin's DEL,
+// for a failed ADD's cleanup or a DEL. It sets CNI_COMMAND to DEL for the call and restores it
+// after, since a failed ADD's caller may carry on. The release finishes even if ctx is canceled.
+func ReleaseIPAllocation(ctx context.Context, logger *logrus.Entry, conf types.NetConf, args *skel.CmdArgs) error {
 	command := os.Getenv("CNI_COMMAND")
 	defer func() {
 		if err := os.Setenv("CNI_COMMAND", command); err != nil {
@@ -793,15 +760,9 @@ func ReleaseIPAllocation(ctx context.Context, logger *logrus.Entry, conf types.N
 	}()
 
 	if err := os.Setenv("CNI_COMMAND", "DEL"); err != nil {
-		// Failed to set CNI_COMMAND to DEL.
-		logger.Warning("Failed to set CNI_COMMAND=DEL")
-	} else {
-		// Cleanup runs even when the ADD's context has been canceled.
-		if err := DeleteIPAM(context.WithoutCancel(ctx), conf, args, logger); err != nil {
-			// Failed to cleanup the IP allocation.
-			logger.Warning("Failed to clean up IP allocations for failed ADD")
-		}
+		return fmt.Errorf("setting CNI_COMMAND=DEL: %w", err)
 	}
+	return DeleteIPAM(context.WithoutCancel(ctx), conf, args, logger)
 }
 
 // Set up logging for both Calico and libcalico using the provided log level,

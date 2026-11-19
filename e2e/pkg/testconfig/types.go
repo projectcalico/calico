@@ -16,6 +16,7 @@ package testconfig
 
 import (
 	"fmt"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -24,6 +25,11 @@ import (
 // It defines which tests to include and exclude using Ginkgo v2 labels and
 // test name patterns.
 type Config struct {
+	// Kind says what the file is for, which fixes the keys it may carry and the
+	// directory it sits in. A file without one loads as the old shape, with
+	// every key allowed.
+	Kind Kind `yaml:"kind,omitempty"`
+
 	// Extends names parent config files (relative to this file's directory)
 	// whose include and exclude lists this config inherits. Parents are merged
 	// left-to-right and this config's own entries are appended last, so a lane
@@ -43,6 +49,20 @@ type Config struct {
 	// cluster does provide what the label needs. Each entry must match a label
 	// an ancestor excludes.
 	Enable []EnableLabel `yaml:"enable,omitempty"`
+
+	// Provides lists the capabilities the lane's cluster has. Once declared,
+	// even empty, a spec runs only if every Requires:<Capability> label it
+	// carries is listed. Nil leaves Requires: labels out of selection.
+	Provides []string `yaml:"provides,omitempty"`
+
+	// Needs names the other fragments this one only makes sense beside, such as
+	// BGP routing needing Calico CNI. Selection ignores it; the lane checks
+	// confirm a lane naming this fragment also names those.
+	Needs []string `yaml:"needs,omitempty"`
+
+	// Upstream lists upstream Kubernetes specs a platform can't run. Those specs
+	// can't carry our labels, so they are skipped by name.
+	Upstream []NamePatternEntry `yaml:"upstream,omitempty"`
 }
 
 // ExtendsList is the parent list for a config. It accepts a bare string for the
@@ -200,6 +220,11 @@ type NamePatternEntry struct {
 	Group    string   `yaml:"group,omitempty"`
 	Link     string   `yaml:"link,omitempty"`
 	Patterns []string `yaml:"patterns,omitempty"`
+
+	// Ticket and Quarantined record who is fixing a quarantined spec and the
+	// day it went in, as YYYY-MM-DD. The date is a start, not an expiry.
+	Ticket      string `yaml:"ticket,omitempty"`
+	Quarantined string `yaml:"quarantined,omitempty"`
 }
 
 // Validate checks that the entry has either a single pattern (which must
@@ -224,6 +249,11 @@ func (e *NamePatternEntry) Validate() error {
 	}
 	if hasGroup && len(e.Patterns) == 0 {
 		return fmt.Errorf("namePattern group %q must have at least one pattern", e.Group)
+	}
+	if e.Quarantined != "" {
+		if _, err := time.Parse(time.DateOnly, e.Quarantined); err != nil {
+			return fmt.Errorf("namePattern quarantined date %q is not YYYY-MM-DD", e.Quarantined)
+		}
 	}
 	return nil
 }

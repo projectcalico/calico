@@ -321,6 +321,13 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 	logger.Debugf("Retrieved list of endpoints: %v", endpoints)
 
+	releaseIPAM := func() {
+		logger.Info("Cleaning up IP allocations for failed ADD")
+		if err := utils.ReleaseIPAllocation(ctx, logger, conf, args); err != nil {
+			logger.WithError(err).Warning("Failed to clean up IP allocations for failed ADD")
+		}
+	}
+
 	var endpoint *internalapi.WorkloadEndpoint
 
 	// If the prefix list returns 1 or more items, we go through the items and try to see if the name matches the WEP
@@ -446,12 +453,12 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			// See CNI Spec doc for more details.
 			result, err = cniv1.NewResultFromResult(ipamResult)
 			if err != nil {
-				utils.ReleaseIPAllocation(ctx, logger, conf, args)
+				releaseIPAM()
 				return
 			}
 
 			if len(result.IPs) == 0 {
-				utils.ReleaseIPAllocation(ctx, logger, conf, args)
+				releaseIPAM()
 				err = errors.New("IPAM plugin returned no IP addresses in result")
 				return
 			}
@@ -485,7 +492,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			logger.WithField("endpoint", endpoint).Debug("Populated endpoint (without nets)")
 			if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(ctx, logger, conf, args)
+				releaseIPAM()
 				return
 			}
 			logger.WithField("endpoint", endpoint).Info("Populated endpoint (with nets)")
@@ -506,7 +513,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 				ctx, calicoClient, args, result, desiredVethName, utils.DefaultRoutes, endpoint, map[string]string{}, false)
 			if err != nil {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(ctx, logger, conf, args)
+				releaseIPAM()
 				return
 			}
 
@@ -524,7 +531,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			if !endpointAlreadyExisted {
 				// Only clean up the IP allocation if this was a new endpoint.  Otherwise,
 				// we'd release the IP that is already attached to the existing endpoint.
-				utils.ReleaseIPAllocation(ctx, logger, conf, args)
+				releaseIPAM()
 			}
 			return
 		}
@@ -562,7 +569,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 				exists = false
 			} else {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(ctx, logger, conf, args)
+				releaseIPAM()
 				return
 			}
 		}
@@ -594,7 +601,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 			if _, err = calicoClient.Profiles().Create(ctx, profile, options.SetOptions{}); err != nil {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(ctx, logger, conf, args)
+				releaseIPAM()
 				return
 			}
 		}

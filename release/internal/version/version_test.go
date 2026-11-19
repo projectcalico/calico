@@ -232,6 +232,29 @@ func TestPublishStream(t *testing.T) {
 	}
 }
 
+// A fork whose branches pick their own stream overrides branchStream; PublishStream
+// must use it ahead of the version, and leave every other branch alone.
+func TestPublishStreamBranchOverride(t *testing.T) {
+	orig := branchStream
+	t.Cleanup(func() { branchStream = orig })
+	branchStream = func(branch string) (string, bool) {
+		if branch == "hotfix-foo" {
+			return "hotfix-foo", true
+		}
+		return "", false
+	}
+
+	if got := PublishStream("hotfix-foo", mustNew(t, "v3.29.0")); got != "hotfix-foo" {
+		t.Errorf("PublishStream(hotfix-foo) = %q, want the override's stream", got)
+	}
+	if got := PublishStream("release-v3.29", mustNew(t, "v3.29.0")); got != "v3.29" {
+		t.Errorf("PublishStream(release-v3.29) = %q, want v3.29", got)
+	}
+	if got := PublishStream("master", mustNew(t, "v3.29.0-0.dev-4-gfd40f1838223")); got != "master" {
+		t.Errorf("PublishStream(master) = %q, want master", got)
+	}
+}
+
 func mustNew(t *testing.T, s string) Version {
 	t.Helper()
 	v, err := New(s)

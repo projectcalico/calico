@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,8 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
-	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
+	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1beta1"
+	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1beta1"
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -475,6 +475,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Disabled:       false,
 					AssignmentMode: apiv3.Automatic,
 					AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+					NodeSelector:   "all()",
 				},
 				Revision: pool.ResourceVersion,
 			})
@@ -776,7 +777,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests (ClusterNetworkPolicy
 
 	var be api.Client
 	var syncTester *testutils.SyncerTester
-	var kcnpClient *netpolicyclient.PolicyV1alpha2Client
+	var kcnpClient *netpolicyclient.PolicyV1beta1Client
 	var err error
 
 	BeforeEach(func() {

@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -307,4 +307,143 @@ func TestFilterHints(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFilterHintsEitherEndpoints(t *testing.T) {
+	either := func(ns, name string, matchType proto.MatchType) *proto.FlowEndpointsMatch {
+		m := &proto.EndpointMatch{}
+		if ns != "" {
+			m.Namespace = &proto.StringMatch{Value: ns, Type: matchType}
+		}
+		if name != "" {
+			m.Name = &proto.StringMatch{Value: name, Type: matchType}
+		}
+		return &proto.FlowEndpointsMatch{Either: m}
+	}
+
+	tests := []eitherHintsCase{
+		{
+			name: "Name, no filter",
+			req:  &proto.FilterHintsRequest{Type: proto.FilterType_FilterTypeName},
+			want: []string{"calico-manager", "coredns", "debug", "kube-dns", "metrics-server"},
+		},
+		{
+			name: "Name, either fuzzy name",
+			req: &proto.FilterHintsRequest{
+				Type:   proto.FilterType_FilterTypeName,
+				Filter: &proto.Filter{Endpoints: []*proto.FlowEndpointsMatch{either("", "core", proto.MatchType_Fuzzy)}},
+			},
+			want: []string{"coredns"},
+		},
+		{
+			name: "Name, either namespace",
+			req: &proto.FilterHintsRequest{
+				Type:   proto.FilterType_FilterTypeName,
+				Filter: &proto.Filter{Endpoints: []*proto.FlowEndpointsMatch{either("calico-system", "", proto.MatchType_Exact)}},
+			},
+			want: []string{"calico-manager"},
+		},
+		{
+			name: "Name, deny action and either namespace",
+			req: &proto.FilterHintsRequest{
+				Type: proto.FilterType_FilterTypeName,
+				Filter: &proto.Filter{
+					Actions:   []proto.Action{proto.Action_Deny},
+					Endpoints: []*proto.FlowEndpointsMatch{either("kube-system", "", proto.MatchType_Exact)},
+				},
+			},
+			want: []string{"kube-dns"},
+		},
+		{
+			name: "Namespace, either fuzzy namespace",
+			req: &proto.FilterHintsRequest{
+				Type:   proto.FilterType_FilterTypeNamespace,
+				Filter: &proto.Filter{Endpoints: []*proto.FlowEndpointsMatch{either("calico", "", proto.MatchType_Fuzzy)}},
+			},
+			want: []string{"calico-system"},
+		},
+		{
+			name: "Name, source entry does not narrow once an either entry exists",
+			req: &proto.FilterHintsRequest{
+				Type: proto.FilterType_FilterTypeName,
+				Filter: &proto.Filter{Endpoints: []*proto.FlowEndpointsMatch{
+					{Source: &proto.EndpointMatch{Namespace: &proto.StringMatch{Value: "zzz", Type: proto.MatchType_Exact}}},
+					either("calico-system", "", proto.MatchType_Exact),
+				}},
+			},
+			want: []string{"calico-manager"},
+		},
+		{
+			name:      "Name, second page",
+			req:       &proto.FilterHintsRequest{Type: proto.FilterType_FilterTypeName, PageSize: 2, Page: 1},
+			want:      []string{"debug", "kube-dns"},
+			wantTotal: 5,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			clock := newClock(initialNow)
+			roller := &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 clock,
+			}
+			opts := []goldmane.Option{
+				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverFunc(roller.After),
+				goldmane.WithNowFunc(clock.Now),
+			}
+			defer setupTest(t, opts...)()
+			<-gm.Run(clock.Now().Unix())
+
+			fixtures := []eitherHintsFlow{
+				{"calico-system", "calico-manager", "kube-system", "coredns", proto.Action_Allow},
+				{"kube-system", "metrics-server", "calico-system", "calico-manager", proto.Action_Allow},
+				{"default", "debug", "kube-system", "kube-dns", proto.Action_Deny},
+			}
+			for _, f := range fixtures {
+				fl := testutils.NewRandomFlow(clock.Now().Unix() - 1)
+				fl.Key.SourceNamespace = f.srcNamespace
+				fl.Key.SourceName = f.srcName
+				fl.Key.DestNamespace = f.dstNamespace
+				fl.Key.DestName = f.dstName
+				fl.Key.Proto = "tcp"
+				fl.Key.Action = f.action
+				gm.Receive(types.ProtoToFlow(fl), "")
+			}
+
+			Eventually(func() bool {
+				results, err := gm.List(&proto.FlowListRequest{})
+				return err == nil && len(results.Flows) == len(fixtures)
+			}, waitTimeout, retryTime, "Didn't receive all flows").Should(BeTrue())
+
+			results, err := gm.Hints(tc.req)
+			require.NoError(t, err)
+
+			var got []string
+			for _, h := range results.Hints {
+				got = append(got, h.Value)
+			}
+			require.Equal(t, tc.want, got)
+			if tc.wantTotal != 0 {
+				require.Equal(t, tc.wantTotal, results.Meta.TotalResults)
+			}
+		})
+	}
+}
+
+type eitherHintsCase struct {
+	name      string
+	req       *proto.FilterHintsRequest
+	want      []string
+	wantTotal int64
+}
+
+type eitherHintsFlow struct {
+	srcNamespace string
+	srcName      string
+	dstNamespace string
+	dstName      string
+	action       proto.Action
 }

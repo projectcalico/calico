@@ -3,6 +3,7 @@
 version: condensed-module
 
 defaults:
+  tiers: []
   timeout: 1h
   services:
     - docker

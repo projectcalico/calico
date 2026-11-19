@@ -16,7 +16,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"path"
 	"runtime"
 	"strings"
@@ -33,9 +35,10 @@ import (
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/slack"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
+
+const releaseDirName = "release"
 
 var (
 	// debug controls whether or not to emit debug level logging.
@@ -43,9 +46,9 @@ var (
 
 	// releaseOutputPath is the directory where all outputs are stored
 	// relative to the repo root
-	releaseOutputPath = []string{utils.ReleaseFolderName, "_output"}
+	releaseOutputPath = []string{releaseDirName, "_output"}
 
-	commandRunner          command.CommandRunner = &command.RealCommandRunner{}
+	commandRunner          command.CommandRunner = command.RealRunner
 	registryDigestResolver                       = registry.ResolveDigest
 )
 
@@ -155,15 +158,20 @@ func oncePin(pin pinned) pinned {
 
 var (
 	loadPin pinned = func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
-		pin, err := pinnedversion.Load(localPinLoader(pinConfig(cfg, c)))
+		pin, err := pinnedversion.Load(pinLoader(pinConfig(cfg, c), c))
 		if err != nil {
 			return nil, fmt.Errorf("load pin: %w", err)
 		}
 		return pin, nil
 	}
 	pinForBuild        = loadPin
-	builtPin    pinned = func(cfg *Config, _ *cli.Command) (*pinnedversion.Pin, error) {
-		pin, err := pinnedversion.Load(pinnedversion.FileLoader{Dir: cfg.TmpDir, RootDir: cfg.RepoRootDir})
+	builtPin    pinned = func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
+		pin, err := pinnedversion.Load(pinnedversion.FileLoader{Dir: cfg.TmpDir, RootDir: cfg.RepoRootDir, Runner: commandRunner})
+		// A planned build writes no pin, so a plan of build then publish has none to load.
+		if errors.Is(err, fs.ErrNotExist) && c != nil && c.Bool(planFlag.Name) {
+			logrus.WithError(err).Warn("No built pin, planning against the pin a build would write")
+			return loadPin(cfg, c)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("load built pin: %w", err)
 		}
@@ -171,6 +179,14 @@ var (
 	}
 	pinForPublish = builtPin
 )
+
+func pinLoader(pc pinnedversion.Config, c *cli.Command) pinnedversion.Loader {
+	l := localPinLoader(pc)
+	if c.Bool(planFlag.Name) {
+		return pinnedversion.PreviewLoader{LocalLoader: l}
+	}
+	return l
+}
 
 // A generated pin versions the operator like the product; a release takes the
 // operator's own version from the manifests.
@@ -190,7 +206,7 @@ func pinForRelease(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
 // releaseVersion is the version being released. A hashrelease is versioned from git.
 var releaseVersion = func(cfg *Config, c *cli.Command) (*version.Version, error) {
 	if c.Bool(hashreleaseFlag.Name) {
-		v, err := command.GitVersion(cfg.RepoRootDir, true)
+		v, err := command.Git(commandRunner).In(cfg.RepoRootDir).Version(true)
 		if err != nil {
 			return nil, fmt.Errorf("git version: %w", err)
 		}

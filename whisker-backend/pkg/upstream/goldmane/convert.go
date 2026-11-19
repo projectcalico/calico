@@ -87,7 +87,41 @@ func toProtoFilter(filters whiskerv1.Filters) *proto.Filter {
 		PendingActions:   filters.PendingActions.AsProtos(),
 		Policies:         toProtoPolicyMatch(filters.Policies),
 		Reporter:         filters.Reporter.AsProto(),
+		Endpoints:        toProtoFlowEndpointsMatches(filters.Endpoints),
 	}
+}
+
+func toProtoFlowEndpointsMatches(endpoints []whiskerv1.FlowEndpointsMatch) []*proto.FlowEndpointsMatch {
+	var protos []*proto.FlowEndpointsMatch
+	for _, e := range endpoints {
+		protos = append(protos, &proto.FlowEndpointsMatch{
+			Source: toProtoEndpointMatch(e.Source),
+			Dest:   toProtoEndpointMatch(e.Dest),
+			Either: toProtoEndpointMatch(e.Either),
+		})
+	}
+	return protos
+}
+
+func toProtoEndpointMatch(e *whiskerv1.EndpointMatch) *proto.EndpointMatch {
+	if e == nil {
+		return nil
+	}
+	return &proto.EndpointMatch{
+		Namespace: toProtoEndpointField(e.Namespace, toProtoNamespace),
+		Name:      toProtoEndpointField(e.Name, toProtoName),
+	}
+}
+
+// toProtoEndpointField translates display sentinels on exact matches only. A translated fuzzy value would
+// substring-match the wrong thing ("Global" becomes "-", which matches every hyphenated namespace), and
+// Goldmane already matches fuzzy values against the display forms.
+func toProtoEndpointField(m whiskerv1.FilterMatch[string], translate func(string) string) *proto.StringMatch {
+	v := m.V
+	if m.Type != whiskerv1.MatchTypeFuzzy {
+		v = translate(v)
+	}
+	return &proto.StringMatch{Value: v, Type: m.Type.AsProto()}
 }
 
 func toProtoPolicyMatch(policies []whiskerv1.PolicyMatch) []*proto.PolicyMatch {

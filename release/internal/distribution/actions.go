@@ -20,8 +20,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/fsutil"
+	"github.com/projectcalico/calico/release/internal/plan"
 	"github.com/projectcalico/calico/release/internal/steps"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const filePerms = 0o644
@@ -56,6 +57,24 @@ func Publish(pipeline []Upload, opts ...Option) error {
 	return nil
 }
 
+// Node publishes one upload as a plan step named after it.
+// The plan checks every destination before any upload runs.
+func Node(u Upload, opts ...Option) plan.Node {
+	return plan.Node{
+		Name:     u.label(),
+		When:     func() bool { return !u.Skip },
+		Requires: u.Requires,
+		Validate: u.validate,
+		Do: func() error {
+			s, err := newSettings(artifactsStep, opts)
+			if err != nil {
+				return err
+			}
+			return s.publishOne(u)
+		},
+	}
+}
+
 // Ordered, and stops at the first failure as a later upload may depend on an earlier one.
 // Returns what published, so a record never names an upload that failed or was never reached.
 func (s settings) push(uploads []Upload) ([]Upload, error) {
@@ -81,7 +100,7 @@ func (s settings) publishOne(u Upload) error {
 	// Checked here rather than up front: an earlier upload in the list may
 	// be what creates this source.
 	if u.Source != "" {
-		exists, err := utils.PathExists(u.Source)
+		exists, err := fsutil.PathExists(u.Source)
 		if err != nil {
 			return s.Errorf("reading %s source (%s): %w", u.label(), u.Source, err)
 		}

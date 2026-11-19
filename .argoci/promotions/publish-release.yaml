@@ -95,9 +95,6 @@ steps:
         value: --zone us-east1-c --project tigera-wp-tcp-redirect
       - name: HOST
         value: ubuntu@binaries-projectcalico-org
-      # For the containers being built, not the machine running the build.
-      - name: UBUNTU_REPO_OVERRIDE
-        value: ftp.uni-stuttgart.de
     commands: |
       apt-get update -y && apt-get install -y --no-install-recommends devscripts moreutils patchelf jq
       git config --global user.email marvin@tigera.io

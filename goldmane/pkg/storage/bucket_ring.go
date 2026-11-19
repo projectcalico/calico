@@ -202,7 +202,7 @@ func extractPolicyFieldsFromFlowKey(getField func(*proto.PolicyHit) string) func
 	return func(key *types.FlowKey) []string {
 		var values []string
 
-		policyTrace := types.FlowLogPolicyToProto(key.Policies())
+		policyTrace := types.CachedPolicyTrace(key.Policies())
 		for _, policyList := range [][]*proto.PolicyHit{policyTrace.EnforcedPolicies, policyTrace.PendingPolicies} {
 			for _, p := range policyList {
 				// Skip Profiles in hints, as these aren't a real kind in Kubernetes clusters - these are
@@ -221,6 +221,22 @@ func extractPolicyFieldsFromFlowKey(getField func(*proto.PolicyHit) string) func
 			}
 		}
 
+		return values
+	}
+}
+
+// eitherSideValues returns a value function that emits the source value, the destination value, or
+// both, depending on which sides of the flow match the filter's either entries.
+func eitherSideValues(filter *proto.Filter, source, dest func(*types.FlowKey) string) func(*types.FlowKey) []string {
+	return func(key *types.FlowKey) []string {
+		var values []string
+		matchSource, matchDest := types.MatchingSides(filter, key)
+		if matchSource {
+			values = append(values, source(key))
+		}
+		if matchDest {
+			values = append(values, dest(key))
+		}
 		return values
 	}
 }
@@ -261,6 +277,10 @@ func (r *BucketRing) FilterHints(req *proto.FilterHintsRequest) ([]string, *type
 				return p.Namespace
 			},
 		)
+	case proto.FilterType_FilterTypeNamespace:
+		valueFunc = eitherSideValues(req.Filter, (*types.FlowKey).SourceNamespace, (*types.FlowKey).DestNamespace)
+	case proto.FilterType_FilterTypeName:
+		valueFunc = eitherSideValues(req.Filter, (*types.FlowKey).SourceName, (*types.FlowKey).DestName)
 	default:
 		return nil, nil, fmt.Errorf("unsupported filter type '%s'", req.Type.String())
 	}
@@ -297,8 +317,8 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 	return r.rollover(sink, true)
 }
 
-// rollover is Rollover with control over streaming. Seeding marks buckets ready for backfill without
-// sending them, because a queued empty bucket is later reused for real flows.
+// rollover is Rollover with control over streaming. Seeding rolls over without streaming, since the
+// seed buckets are empty.
 func (r *BucketRing) rollover(sink Sink, stream bool) int64 {
 	start := r.nowFunc()
 	defer func() {
@@ -314,8 +334,6 @@ func (r *BucketRing) rollover(sink Sink, stream bool) int64 {
 	// Send flows to the stream manager.
 	if stream {
 		r.flushToStreams()
-	} else {
-		r.streamingBucket().markReady()
 	}
 
 	// Move the head index to the next bucket.
@@ -783,8 +801,7 @@ func (r *BucketRing) flushToStreams() {
 }
 
 func (r *BucketRing) streamBucket(b *AggregationBucket, s Receiver) {
-	b.markReady()
-	s.Receive(b, "")
+	s.Receive(newBucketInterval(b), "")
 }
 
 // streamingBucket returns the bucket currently slated to be sent to the stream manager.
@@ -848,12 +865,22 @@ func (r *BucketRing) NumFlows(start, end int64) int {
 	return count
 }
 
+// Backfill sends recv the buckets from start up to BackfillEndTime, tagged with the stream ID.
+// A start at or after BackfillEndTime has nothing to backfill, because the following rollovers
+// stream those buckets as they complete.
 func (r *BucketRing) Backfill(recv Receiver, id string, start int64) {
-	// Backfill the stream with any buckets that match its time range.
-	_ = r.iterBucketsTime(start, r.BackfillEndTime(), func(b *AggregationBucket) error {
-		recv.Receive(b, id)
+	end := r.BackfillEndTime()
+	if start >= end {
+		// Otherwise iterBuckets would wrap the whole ring from start round to end.
+		return
+	}
+	err := r.iterBucketsTime(start, end, func(b *AggregationBucket) error {
+		recv.Receive(newBucketInterval(b), id)
 		return nil
 	})
+	if err != nil {
+		logrus.WithError(err).WithField("id", id).Warn("Failed to backfill stream")
+	}
 }
 
 // IterFlows iterates through all of the Flows in the given time range.

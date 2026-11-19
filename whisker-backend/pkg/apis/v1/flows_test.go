@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -152,6 +152,16 @@ func TestListFlowsFilterHints_ValidFilterTypes(t *testing.T) {
 			typ:         "PolicyTier",
 			expected:    v1.FilterType(proto.FilterType_FilterTypePolicyTier),
 		},
+		{
+			description: "Decoder parses Namespace",
+			typ:         "Namespace",
+			expected:    v1.FilterType(proto.FilterType_FilterTypeNamespace),
+		},
+		{
+			description: "Decoder parses Name",
+			typ:         "Name",
+			expected:    v1.FilterType(proto.FilterType_FilterTypeName),
+		},
 	}
 
 	for _, tc := range tt {
@@ -247,6 +257,93 @@ func TestFilters_DecodedFromRawString(t *testing.T) {
 			Expect(params.Filters).Should(Equal(tc.expected), cmp.Diff(params.Filters, tc.expected))
 		})
 	}
+}
+
+func TestFilters_DecodesFlowEndpoints(t *testing.T) {
+	sc := setupTest(t)
+
+	req := mustCreateGetRequest("GET", "/api/v1/flows", map[string][]string{
+		"filters": {`{"endpoints": [
+			{"source": {"namespace": {"value": "acme", "type": "Exact"}, "name": {"value": "virt-launcher-vm-01-*", "type": "Exact"}}},
+			{"dest": {"namespace": {"value": "acme", "type": "Exact"}, "name": {"value": "debug-shell", "type": "Fuzzy"}}},
+			{"source": {"namespace": {"value": "kube-system", "type": "Exact"}}, "dest": {"name": {"value": "m", "type": "Exact"}}},
+			{"either": {"namespace": {"value": "acme", "type": "Exact"}}},
+			{"either": {"name": {"value": "x", "type": "Exact"}}}
+		]}`},
+	})
+	params, err := codec.DecodeAndValidateRequestParams[v1.ListFlowsParams](sc.apiCtx, sc.URLVars, req)
+	Expect(err).ShouldNot(HaveOccurred())
+	Expect(params.Filters).Should(Equal(v1.Filters{Endpoints: []v1.FlowEndpointsMatch{
+		{Source: &v1.EndpointMatch{
+			Namespace: v1.NewFilterMatch("acme", v1.MatchTypeExact),
+			Name:      v1.NewFilterMatch("virt-launcher-vm-01-*", v1.MatchTypeExact),
+		}},
+		{Dest: &v1.EndpointMatch{
+			Namespace: v1.NewFilterMatch("acme", v1.MatchTypeExact),
+			Name:      v1.NewFilterMatch("debug-shell", v1.MatchTypeFuzzy),
+		}},
+		{
+			Source: &v1.EndpointMatch{Namespace: v1.NewFilterMatch("kube-system", v1.MatchTypeExact)},
+			Dest:   &v1.EndpointMatch{Name: v1.NewFilterMatch("m", v1.MatchTypeExact)},
+		},
+		{Either: &v1.EndpointMatch{Namespace: v1.NewFilterMatch("acme", v1.MatchTypeExact)}},
+		{Either: &v1.EndpointMatch{Name: v1.NewFilterMatch("x", v1.MatchTypeExact)}},
+	}}))
+}
+
+func TestFilters_RejectsUnknownEndpointMatchType(t *testing.T) {
+	sc := setupTest(t)
+
+	req := mustCreateGetRequest("GET", "/api/v1/flows", map[string][]string{
+		"filters": {`{"endpoints": [{"either": {"namespace": {"value": "acme", "type": "Regex"}, "name": {"value": "x"}}}]}`},
+	})
+	_, err := codec.DecodeAndValidateRequestParams[v1.ListFlowsParams](sc.apiCtx, sc.URLVars, req)
+	Expect(err).Should(MatchError(ContainSubstring("unknown value: Regex")))
+}
+
+type invalidFlowEndpointsCase struct {
+	endpoints string
+	wantErr   string
+}
+
+func TestFilters_RejectsInvalidFlowEndpoints(t *testing.T) {
+	sc := setupTest(t)
+
+	tests := []invalidFlowEndpointsCase{
+		{`[{}]`, "an endpoints entry needs source, dest or either"},
+		{`[{"either": {"namespace": {"value": "acme"}}, "source": {"namespace": {"value": "acme"}}}]`, "either can't be combined with source or dest"},
+		{`[{"either": {"namespace": {"value": "acme"}}, "dest": {"name": {"value": "x"}}}]`, "either can't be combined with source or dest"},
+		{`[{"either": {}}]`, "an endpoint match needs a namespace or a name"},
+		{`[{"source": {"namespace": {"value": "", "type": "Exact"}}}]`, "an endpoint match needs a namespace or a name"},
+		{`[{"source": {"namespace": {"value": "acme"}}}, {}]`, "an endpoints entry needs source, dest or either"},
+		{`[{"source": {"namespace": {"value": "acme"}}, "destination": {"name": {"value": "x"}}}]`, `unknown field "destination"`},
+		{`[{"either": {"namespace": {"value": "acme"}, "nmae": {"value": "x"}}}]`, `unknown field "nmae"`},
+		{`[{"source": {"namespace": {"value": "acme", "tpye": "Fuzzy"}}}]`, `unknown field "tpye"`},
+	}
+	for _, tc := range tests {
+		req := mustCreateGetRequest("GET", "/api/v1/flows", map[string][]string{
+			"filters": {`{"endpoints": ` + tc.endpoints + `}`},
+		})
+		_, err := codec.DecodeAndValidateRequestParams[v1.ListFlowsParams](sc.apiCtx, sc.URLVars, req)
+		Expect(err).Should(MatchError(ContainSubstring(tc.wantErr)), tc.endpoints)
+	}
+}
+
+func TestFilters_RejectsUnknownTopLevelKey(t *testing.T) {
+	sc := setupTest(t)
+
+	req := mustCreateGetRequest("GET", "/api/v1/flows", map[string][]string{
+		"filters": {`{"source_namespace": [{"value": "acme", "type": "Exact"}]}`},
+	})
+	_, err := codec.DecodeAndValidateRequestParams[v1.ListFlowsParams](sc.apiCtx, sc.URLVars, req)
+	Expect(err).Should(MatchError(ContainSubstring(`unknown field "source_namespace"`)))
+
+	req = mustCreateGetRequest("GET", "/api/v1/flows-filter-hints", map[string][]string{
+		"type":    {"SourceName"},
+		"filters": {`{"policies": [{"tier": {"value": "default"}, "nmae": {"value": "x"}}]}`},
+	})
+	_, err = codec.DecodeAndValidateRequestParams[v1.FlowFilterHintsRequest](sc.apiCtx, sc.URLVars, req)
+	Expect(err).Should(MatchError(ContainSubstring(`unknown field "nmae"`)))
 }
 
 // TestFlowResponseEndpointTypeJSON pins the wire names of the endpoint type

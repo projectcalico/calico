@@ -634,6 +634,7 @@ var baseTests = []StateList{
 	{localEp1LMTargetUIDA, localEp1LMTargetUIDsAAndB, localEp1LMTargetUIDB, localEp1WithPolicy},
 	{localEp1LMTargetUIDA, localEp1LMTargetRecreatedUIDB, localEp1WithPolicy},
 	{localEp1LMSelectorUIDA, localEp1LMSelectorUIDsAAndB, localEp1WithPolicy},
+	{localEp1LMSelectorUIDA, localEp1LMDifferentSelectorsUIDsAAndB, localEp1LMOtherSelectorUIDB, localEp1WithPolicy},
 
 	// Istio tests - verify that the all-istio-weps IPSet is populated correctly
 	{

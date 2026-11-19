@@ -18,6 +18,19 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 )
 
+// MatchCapabilities says how much one rule's match can hold on a given backend. The
+// policy renderer splits anything larger across extra rules, using mark bits to combine them.
+type MatchCapabilities struct {
+	// CIDRsPerRule is how many source CIDRs, positive and negated together, one rule
+	// can match. It limits destination CIDRs separately, so a rule can hold this many
+	// of each.
+	CIDRsPerRule int
+
+	// PortsPerRule is how many ports one source or destination port match can hold.
+	// A port range counts as two ports, as in an iptables multiport match.
+	PortsPerRule int
+}
+
 type MatchCriteria interface {
 	Render() string
 	String() string
@@ -47,6 +60,14 @@ type MatchCriteria interface {
 	NotSourceNet(net string) MatchCriteria
 	DestNet(net string) MatchCriteria
 	NotDestNet(net string) MatchCriteria
+
+	// SourceNets, NotSourceNets, DestNets and NotDestNets match any (or, negated, none)
+	// of the given CIDRs. Callers must keep the list within the backend's MatchCapabilities.
+	SourceNets(nets []string) MatchCriteria
+	NotSourceNets(nets []string) MatchCriteria
+	DestNets(nets []string) MatchCriteria
+	NotDestNets(nets []string) MatchCriteria
+
 	SourceIPSet(name string) MatchCriteria
 	NotSourceIPSet(name string) MatchCriteria
 	SourceIPPortSet(name string) MatchCriteria

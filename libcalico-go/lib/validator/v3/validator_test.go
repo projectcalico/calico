@@ -16,6 +16,7 @@ package v3_test
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -33,6 +34,7 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
@@ -630,6 +632,16 @@ func init() {
 		Entry("should accept valid selector with 'has' and two '/'", api.EntityRule{Selector: "has(calico/k8s_ns/role)"}, true),
 		Entry("should accept valid selector with 'has' and two '/' and '-.'", api.EntityRule{Selector: "has(calico/k8s_NS-.1/role)"}, true),
 		Entry("should reject invalid selector", api.EntityRule{Selector: "thing=hello &"}, false),
+		Entry("should accept selector at the nesting limit",
+			api.EntityRule{Selector: strings.Repeat("(", parser.MaxAPIDepth) + "all()" + strings.Repeat(")", parser.MaxAPIDepth)}, true),
+		Entry("should reject selector over the nesting limit",
+			api.EntityRule{Selector: strings.Repeat("(", parser.MaxAPIDepth+1) + "all()" + strings.Repeat(")", parser.MaxAPIDepth+1)}, false),
+		Entry("should accept valid service account names", api.ServiceAccountMatch{Names: []string{"sa-1", "sa.2"}}, true),
+		Entry("should reject service account name with a quote", api.ServiceAccountMatch{Names: []string{"a'b"}}, false),
+		Entry("should reject service account name with upper case", api.ServiceAccountMatch{Names: []string{"SA"}}, false),
+		Entry("should reject invalid service account selector", api.ServiceAccountMatch{Selector: "thing=hello &"}, false),
+		Entry("should accept valid live migration target selector", internalapi.LiveMigrationTarget{Selector: ptr.To("vmi == 'a'")}, true),
+		Entry("should reject invalid live migration target selector", internalapi.LiveMigrationTarget{Selector: ptr.To("vmi == 'a'b'")}, false),
 
 		// (API) Labels and Annotations.
 		Entry("should accept a valid labelsToApply", api.ProfileSpec{LabelsToApply: map[string]string{"project.calico.org/my-valid-label": value63}}, true),
@@ -845,6 +857,8 @@ func init() {
 			true),
 		Entry("should reject an invalid list of ExternalNodesCIDRList", api.FelixConfigurationSpec{ExternalNodesCIDRList: &[]string{"foobar", "1.1.1.1"}}, false),
 		Entry("should reject IPv6 list of ExternalNodesCIDRList", api.FelixConfigurationSpec{ExternalNodesCIDRList: &[]string{"abcd::1", "abef::2/128"}}, false),
+		Entry("should accept a valid NodeSelector", api.FelixConfigurationSpec{NodeSelector: ptr.To("role == 'worker'")}, true),
+		Entry("should reject an invalid NodeSelector", api.FelixConfigurationSpec{NodeSelector: ptr.To("thing=hello &")}, false),
 
 		Entry("should accept aan empty OpenStackRegion", api.FelixConfigurationSpec{OpenstackRegion: ""}, true),
 		Entry("should accept a valid OpenStackRegion", api.FelixConfigurationSpec{OpenstackRegion: "foo"}, true),
@@ -2699,8 +2713,8 @@ func init() {
 		Entry("disallow name with invalid character", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"}}, false),
 		Entry("disallow name with mixed case characters", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "tHiNg"}}, false),
 		Entry("allow valid name", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
-		Entry("disallow k8s policy name", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "knp.default.thing"}}, false),
-		Entry("disallow name with dot", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"}}, false),
+		Entry("allow k8s policy name", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "knp.default.thing"}}, true),
+		Entry("allow name with dots", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"}}, true),
 		Entry("should reject GlobalNetworkPolicy with both PreDNAT and DoNotTrack",
 			&api.GlobalNetworkPolicy{
 				ObjectMeta: v1.ObjectMeta{Name: "thing"},
@@ -3037,14 +3051,14 @@ func init() {
 			ObjectMeta: v1.ObjectMeta{Name: "thing"},
 			Spec:       api.StagedGlobalNetworkPolicySpec{StagedAction: api.StagedActionSet, Selector: "foo == \"bar\""},
 		}, true),
-		Entry("disallow k8s policy name", &api.StagedGlobalNetworkPolicy{
+		Entry("allow k8s policy name", &api.StagedGlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{Name: "knp.default.thing"},
 			Spec:       api.StagedGlobalNetworkPolicySpec{StagedAction: api.StagedActionSet, Selector: "foo == \"bar\""},
-		}, false),
-		Entry("disallow name with dot", &api.StagedGlobalNetworkPolicy{
+		}, true),
+		Entry("allow name with dots", &api.StagedGlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"},
 			Spec:       api.StagedGlobalNetworkPolicySpec{StagedAction: api.StagedActionSet, Selector: "foo == \"bar\""},
-		}, false),
+		}, true),
 		Entry("should accept a valid StagedAction value 'Set'",
 			&api.StagedGlobalNetworkPolicy{
 				ObjectMeta: v1.ObjectMeta{Name: "thing"},
@@ -3216,7 +3230,7 @@ func init() {
 
 		// NetworkPolicySpec Types field checks.
 		Entry("allow valid name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
-		Entry("disallow name with dot", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"}}, false),
+		Entry("allow name with dots", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"}}, true),
 		Entry("disallow name with mixed case", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "tHiNg"}}, false),
 		Entry("allow valid name of 253 chars", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength])}}, true),
 		Entry("disallow a name of 254 chars", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength+1])}}, false),
@@ -3281,10 +3295,10 @@ func init() {
 			ObjectMeta: v1.ObjectMeta{Name: "thing"},
 			Spec:       api.StagedNetworkPolicySpec{StagedAction: api.StagedActionDelete},
 		}, true),
-		Entry("disallow name with dot", &api.StagedNetworkPolicy{
+		Entry("allow name with dots", &api.StagedNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"},
 			Spec:       api.StagedNetworkPolicySpec{StagedAction: api.StagedActionDelete},
-		}, false),
+		}, true),
 		Entry("disallow name with mixed case", &api.StagedNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{Name: "tHiNg"},
 			Spec:       api.StagedNetworkPolicySpec{StagedAction: api.StagedActionDelete},
@@ -3376,7 +3390,7 @@ func init() {
 		// NetworkPolicy Object MetaData checks.
 		Entry("allow valid name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
 		Entry("allow name with single dot - tier", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "th.ing"}}, true),
-		Entry("disallow name with multiple dot", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"}}, false),
+		Entry("allow name with multiple dots", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"}}, true),
 		Entry("allow valid name of 253 chars", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength])}}, true),
 		Entry("disallow a name of 254 chars", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength+1])}}, false),
 		Entry("disallow name with invalid character", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"}}, false),

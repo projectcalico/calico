@@ -151,8 +151,8 @@ func (v Version) NextReleaseVersion() (Version, error) {
 }
 
 // GitVersion returns the current git version of the directory as a Version object.
-func GitVersion() (Version, error) {
-	previousTag, err := command.GitVersion(".", true)
+func GitVersion(r command.CommandRunner) (Version, error) {
+	previousTag, err := command.Git(r).In(".").Version(true)
 	if err != nil {
 		return Version{}, fmt.Errorf("determine git version: %w", err)
 	}
@@ -251,11 +251,18 @@ func (b ReleaseBranch) EPLine() int {
 	return n
 }
 
+// branchStream returns the stream a branch publishes to when the branch, not
+// the version, decides it. A fork with such branches overrides it from an init function.
+var branchStream = func(branch string) (string, bool) { return "", false }
+
 // PublishStream returns the stream a build of v on branch publishes to.
 // Early preview line number comes from the branch.
 func PublishStream(branch string, v Version) string {
 	if branch == defaults.Branch {
 		return branch
+	}
+	if stream, ok := branchStream(branch); ok {
+		return stream
 	}
 	if i := strings.LastIndex(branch, "-v"); i > 0 {
 		if rb, ok := ParseReleaseBranch(branch[:i], branch); ok && rb.EPLine() > 0 {

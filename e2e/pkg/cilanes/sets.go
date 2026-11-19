@@ -18,13 +18,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
-const configPrefix = "e2e/config/"
+// nonSlug matches every run of characters a set name leaves out.
+var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 
-// ResolveSets maps each distinct selection to a stable name. Two lanes claiming
-// one name with different selections is CI drift.
+// ResolveSets maps every lane that runs the e2e binary to its set name. Two
+// lanes claiming one name would overwrite each other's set, so that is an error.
 func ResolveSets(lanes []Lane) (map[string]Lane, error) {
 	sets := map[string]Lane{}
 	for _, l := range lanes {
@@ -39,20 +41,34 @@ func ResolveSets(lanes []Lane) (map[string]Lane, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s (%s): %w", l.Name, l.Source, err)
 		}
-		if _, ok := sets[name]; !ok {
-			sets[name] = l
+		if other, ok := sets[name]; ok {
+			return nil, fmt.Errorf("%s (%s) and %s (%s) both resolve to set %s", other.Name, other.Source, l.Name, l.Source, name)
 		}
+		sets[name] = l
 	}
 	return sets, nil
 }
 
-// SetName is the lane's config path, relative to e2e/config and without the
-// extension.
+// SetName names the lane's set after the lane itself: the sets/ subdirectory of
+// the lane's source directory, the file that declares it, and the lane name
+// reduced to lowercase words joined by hyphens. It fails for a source outside
+// the known lane directories and for a name with nothing left to slug.
 func SetName(l Lane) (string, error) {
-	if !strings.HasPrefix(l.Config, configPrefix) {
-		return "", fmt.Errorf("config %q is not under %s", l.Config, configPrefix)
+	dir := ""
+	for _, src := range laneSources {
+		if src.dir == filepath.Dir(l.Source) {
+			dir = src.setDir
+		}
 	}
-	return strings.TrimSuffix(strings.TrimPrefix(l.Config, configPrefix), ".yaml"), nil
+	if dir == "" {
+		return "", fmt.Errorf("source %q is not a known lane directory", l.Source)
+	}
+	file := strings.TrimSuffix(filepath.Base(l.Source), filepath.Ext(l.Source))
+	lane := strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(l.Name), "-"), "-")
+	if lane == "" {
+		return "", fmt.Errorf("lane name %q leaves nothing to name a set by", l.Name)
+	}
+	return dir + "/" + file + "/" + lane, nil
 }
 
 // Write records the index and one file per set under dir.

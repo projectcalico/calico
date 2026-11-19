@@ -38,7 +38,7 @@ import (
 
 // rest implements a RESTStorage for API services against etcd
 type REST struct {
-	*registry.Store
+	*util.Store
 	rbac.CalicoResourceLister
 	authorizer   authorizer.TierAuthorizer
 	watchManager *util.WatchManager
@@ -106,7 +106,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options, calicoResourceLister r
 		DestroyFunc: dFunc,
 	}
 
-	return &REST{store, calicoResourceLister, authorizer.NewTierAuthorizer(opts.Authorizer), watchManager, opts.ShortNames}, nil
+	return &REST{util.NewStore(store), calicoResourceLister, authorizer.NewTierAuthorizer(opts.Authorizer), watchManager, opts.ShortNames}, nil
 }
 
 func (r *REST) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {

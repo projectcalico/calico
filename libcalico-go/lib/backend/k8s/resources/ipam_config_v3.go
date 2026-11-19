@@ -114,6 +114,12 @@ func (c *v3IPAMConfigurationClient) Update(ctx context.Context, kvp *model.KVPai
 	return c.rc.Update(ctx, kvp)
 }
 
+// SupportsDryRun reports that writes honor api.WithDryRun, since they all go through
+// the CRD client.
+func (c *v3IPAMConfigurationClient) SupportsDryRun() bool {
+	return c.rc.SupportsDryRun()
+}
+
 func (c *v3IPAMConfigurationClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	return c.Delete(ctx, kvp.Key, kvp.Revision, kvp.UID)
 }
