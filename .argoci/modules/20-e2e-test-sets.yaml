@@ -14,11 +14,12 @@ steps:
   # cache; Go, not the restored files, decides what is stale.
   - name: e2e-test-set-drift
     env:
-      - name: BUILD_CACHE_GROUP
-        value: e2e
       - name: NATIVE_GO_BUILD
         value: "true"
-    depends: [check-go]
+    depends: [check-go, go-cache]
     requests: {cpu: 5500m, memory: 6Gi}
+    cache:
+      - {name: go, mode: read, path: /cache/go}
     commands: |
+      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" e2e-test-set-drift) || exit 1; eval "$go_env"
       make -C e2e check-test-set
