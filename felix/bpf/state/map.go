@@ -96,7 +96,7 @@ type State struct {
 	TunIP2              uint32
 	TunIP3              uint32
 	ihl                 uint16
-	_                   uint16
+	PreNATSrcPort       uint16
 	PolicyRC            PolicyResult
 	SrcPort             uint16
 	DstPort             uint16
@@ -117,10 +117,10 @@ type State struct {
 	_                   uint32
 	NATData             uint64
 	ProgStartTime       uint64
-	SrcAddrMasq         uint32
-	SrcAddrMasq1        uint32
-	SrcAddrMasq2        uint32
-	SrcAddrMasq3        uint32
+	PreNATSrcAddr       uint32
+	PreNATSrcAddr1      uint32
+	PreNATSrcAddr2      uint32
+	PreNATSrcAddr3      uint32
 	NATSvcID            uint32
 	_                   uint32
 	_                   [44]byte // ipv6 padding
