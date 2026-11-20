@@ -29,13 +29,17 @@ steps:
   # go vet fans out across every package, so it scales with the cores it gets.
   - name: check-go
     env:
-      - name: BUILD_CACHE_GROUP
-        value: preflight-go-checks
-      - name: STORE_BUILD_CACHE
+      - name: NATIVE_GO_BUILD
         value: "true"
+    useGoBuild: true
+    # go-cache compiles exactly what go vet does, so the vet is mostly cache hits.
+    depends: [go-cache]
     jobSize: large
     requests: {cpu: 14000m, memory: 16Gi}
-    services: [docker]
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    cache:
+      - {name: go, mode: read, path: /cache/go}
     changes:
       in:
         - ^go\.mod$
@@ -49,6 +53,7 @@ steps:
         - ^\.argoci/config\.yaml$
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
+      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" check-go) || exit 1; eval "$go_env"
       # `useGoBuild` steps take their image tag from config.yaml rather than from
       # the toolchain the Makefiles build with.
       want=$(make --no-print-directory -s -f metadata.mk --eval 'print: ; @echo $(GO_BUILD_VER)' print)
