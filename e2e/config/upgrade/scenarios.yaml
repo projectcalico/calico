@@ -1,11 +1,10 @@
 # Copyright (c) 2026 Tigera, Inc. All rights reserved.
 #
-# Marker for the upgrade-scenario seed run (.argoci/scripts/phases/pre_upgrade.sh
-# appends it to the lane's configs). E2E_UPGRADE_PHASE=seed replaces the
-# include below, so this file changes no selection. Its job is to be missing
-# from hashreleases built before the binary understood E2E_UPGRADE_PHASE, so
-# run_tests.sh skips the seed run there instead of running the lane's whole
-# suite on the downlevel cluster.
+# Marker for the upgrade-scenario seed run, which CI appends to the lane's
+# configs. E2E_UPGRADE_PHASE=seed replaces the include below, so this file
+# changes no selection. Its job is to be missing from hashreleases built
+# before the binary understood E2E_UPGRADE_PHASE, so CI skips the seed run
+# there instead of running the lane's whole suite on the downlevel cluster.
 
 include:
   - label: Upgrade:Seed

@@ -299,12 +299,12 @@ func (s *Scenario) checkPolicyScope(o *unstructured.Unstructured) error {
 		if !pinned {
 			return fmt.Errorf("fixture %s %s: spec.namespaceSelector must select only namespace %s", o.GetKind(), o.GetName(), s.Namespace())
 		}
-	case "ClusterNetworkPolicy":
+	case "ClusterNetworkPolicy", "AdminNetworkPolicy", "BaselineAdminNetworkPolicy":
 		const nsLabel = "kubernetes.io/metadata.name"
 		byNS, _, _ := unstructured.NestedString(o.Object, "spec", "subject", "namespaces", "matchLabels", nsLabel)
 		byPod, _, _ := unstructured.NestedString(o.Object, "spec", "subject", "pods", "namespaceSelector", "matchLabels", nsLabel)
 		if byNS != s.Namespace() && byPod != s.Namespace() {
-			return fmt.Errorf("fixture ClusterNetworkPolicy %s: spec.subject must pin %s to %s", o.GetName(), nsLabel, s.Namespace())
+			return fmt.Errorf("fixture %s %s: spec.subject must pin %s to %s", o.GetKind(), o.GetName(), nsLabel, s.Namespace())
 		}
 	}
 	return nil

@@ -54,13 +54,11 @@ record_upgrade_window() {
 # wait_for_rollout - the window must end when Calico has finished rolling out,
 # not when bz returns, or probes would be judged mid-rollout.
 wait_for_rollout() {
-  local ns img rc=0
-  ns="$(calico_ns)"
+  local ns img rc=0 deadline=$(( $(date +%s) + 600 ))
   # The operator rewrites calico-node some time after bz returns. Until then
   # the old DaemonSet reports rolled out and every check below passes at once.
   # A failed read prints nothing, which must not pass for a new image.
   if [[ -n "${_pre_image}" ]]; then
-    local deadline=$(( $(date +%s) + 600 ))
     until img="$(calico_node_image || true)"; [[ -n "${img}" && "${img}" != "${_pre_image}" ]]; do
       if (( $(date +%s) > deadline )); then
         echo "[ERROR] calico-node still runs ${_pre_image} 10 minutes after bz upgrade"
@@ -71,6 +69,14 @@ wait_for_rollout() {
   else
     echo "[WARN] couldn't read calico-node's image before the upgrade; the window may end before the rollout starts"
   fi
+  # A transient read error must not settle on the wrong namespace.
+  until ns="$(calico_ns)"; do
+    if (( $(date +%s) > deadline )); then
+      echo "[ERROR] no calico-node DaemonSet in calico-system or kube-system"
+      return 1
+    fi
+    sleep 5
+  done
   upgrade_kubectl -n "${ns}" rollout status ds/calico-node --timeout=15m || rc=1
   upgrade_kubectl -n "${ns}" rollout status deploy/calico-kube-controllers --timeout=15m || rc=1
   if upgrade_kubectl -n "${ns}" get deploy calico-typha >/dev/null 2>&1; then
@@ -83,7 +89,11 @@ wait_for_rollout() {
 }
 
 calico_ns() {
-  if upgrade_kubectl -n calico-system get ds calico-node >/dev/null 2>&1; then echo calico-system; else echo kube-system; fi
+  local ns
+  for ns in calico-system kube-system; do
+    if upgrade_kubectl -n "${ns}" get ds calico-node >/dev/null 2>&1; then echo "${ns}"; return 0; fi
+  done
+  return 1
 }
 
 calico_node_image() {

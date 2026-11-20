@@ -233,9 +233,8 @@ func plantLeak(ctx context.Context, e *upgrade.Env, handleID string) (ip, node s
 			if !ok {
 				continue
 			}
-			if _, err := e.Dynamic.Resource(ipamBlockGVR).Update(ctx, b, metav1.UpdateOptions{}); err != nil {
-				return err
-			}
+			// Handle first, as the IPAM client does: a block entry whose handle
+			// is missing can never be released.
 			cidr, _, _ := unstructured.NestedString(b.Object, "spec", "cidr")
 			handle := &unstructured.Unstructured{Object: map[string]any{
 				"apiVersion": "crd.projectcalico.org/v1",
@@ -243,8 +242,17 @@ func plantLeak(ctx context.Context, e *upgrade.Env, handleID string) (ip, node s
 				"metadata":   map[string]any{"name": handleID},
 				"spec":       map[string]any{"handleID": handleID, "block": map[string]any{cidr: int64(1)}, "deleted": false},
 			}}
-			_, err := e.Dynamic.Resource(ipamHandleGVR).Create(ctx, handle, metav1.CreateOptions{})
-			return err
+			if _, err := e.Dynamic.Resource(ipamHandleGVR).Create(ctx, handle, metav1.CreateOptions{}); err != nil {
+				return err
+			}
+			if _, err := e.Dynamic.Resource(ipamBlockGVR).Update(ctx, b, metav1.UpdateOptions{}); err != nil {
+				// A retry on conflict re-creates the handle, possibly for another block.
+				if derr := e.Dynamic.Resource(ipamHandleGVR).Delete(ctx, handleID, metav1.DeleteOptions{}); derr != nil {
+					return errors.Join(err, derr)
+				}
+				return err
+			}
+			return nil
 		}
 		return fmt.Errorf("no IPv4 IPAM block with a host affinity and a free address")
 	})

@@ -24,6 +24,12 @@ else
   done
 
   echo "[INFO] pre_upgrade: seeding upgrade scenarios from ${RELEASE_STREAM}"
+  if [[ -z "${RUN_LOCAL_TESTS:-}" && -z "${HASHREL_URL:-}" ]]; then
+    # Seed and verify must run the same binary, or verify can select a
+    # scenario that seed's older binary never had.
+    HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${UPLEVEL_RELEASE_STREAM}.txt") || HASHREL_URL=""
+    export HASHREL_URL
+  fi
   # run_tests.sh exits when it finishes, hence a child shell. The component-log
   # check belongs to the post-upgrade run, which reads the whole job's logs.
   _seed_rc=0
@@ -43,6 +49,11 @@ else
   if [[ ${_seed_rc} -ne 0 ]]; then
     echo "[WARN] pre_upgrade: seeding failed (rc=${_seed_rc}); continuing. See junit-upgrade-seed.xml."
   fi
-  # Tells run_tests.sh to add the verify specs; a lane that never seeded must not.
-  export E2E_UPGRADE_SEEDED=1
+  # Tells the post-upgrade run to add the verify specs; a lane whose seed run
+  # was skipped for an unpublished config must not.
+  if grep -q 'e2e config published in hashrelease' "${REPORT_DIR}/junit-upgrade-seed.xml" 2>/dev/null; then
+    echo "[INFO] pre_upgrade: seed run skipped; verify specs stay off"
+  else
+    export E2E_UPGRADE_SEEDED=1
+  fi
 fi

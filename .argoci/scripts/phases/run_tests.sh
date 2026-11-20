@@ -173,7 +173,9 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   # Upgrade runs set RELEASE_STREAM to the downlevel version they install
   # first, but the tests run against the uplevel version.
   E2E_STREAM=${UPLEVEL_RELEASE_STREAM:-${RELEASE_STREAM}}
-  HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${E2E_STREAM}.txt")
+  # Preset when an upgrade job pins one hashrelease across its seed and
+  # verify runs; a newer one published in between would bring different specs.
+  HASHREL_URL=${HASHREL_URL:-$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${E2E_STREAM}.txt")}
   echo "[INFO] hashrelease URL: ${HASHREL_URL}"
   ARCH=$(uname -m); [[ "$ARCH" == "x86_64" ]] && ARCH=amd64; [[ "$ARCH" == "aarch64" ]] && ARCH=arm64
   mkdir -p "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s"

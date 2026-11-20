@@ -100,8 +100,8 @@ done`
 						Image:           images.Netshoot,
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						Command:         []string{"bash", "-c", script},
-						// Compatible with restricted PSA and OpenShift's restricted SCC
-						// without pinning a UID the SCC would reject.
+						// Meets OpenShift's restricted SCC without pinning a UID the SCC
+						// would reject. Not restricted PSA, which also needs runAsNonRoot.
 						SecurityContext: &corev1.SecurityContext{
 							AllowPrivilegeEscalation: ptr.To(false),
 							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},

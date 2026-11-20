@@ -193,6 +193,7 @@ func TestValidate(t *testing.T) {
 		{"unscoped GNP", validScenario(map[string]string{"gnp.yaml": "apiVersion: projectcalico.org/v3\nkind: GlobalNetworkPolicy\nmetadata: {name: e2e-upgrade-demo-gnp}\nspec: {selector: all()}\n"}), "namespaceSelector"},
 		{"GNP excluding the scenario namespace", validScenario(map[string]string{"gnp.yaml": "apiVersion: projectcalico.org/v3\nkind: GlobalNetworkPolicy\nmetadata: {name: e2e-upgrade-demo-gnp}\nspec: {selector: all(), namespaceSelector: \"projectcalico.org/name != 'e2e-upgrade-demo'\"}\n"}), "namespaceSelector"},
 		{"GNP pinned to the scenario namespace", validScenario(map[string]string{"gnp.yaml": "apiVersion: projectcalico.org/v3\nkind: GlobalNetworkPolicy\nmetadata: {name: e2e-upgrade-demo-gnp}\nspec: {selector: all(), namespaceSelector: \"projectcalico.org/name == 'e2e-upgrade-demo'\"}\n"}), ""},
+		{"unscoped ANP", validScenario(map[string]string{"anp.yaml": "apiVersion: policy.networking.k8s.io/v1alpha1\nkind: AdminNetworkPolicy\nmetadata: {name: e2e-upgrade-demo-anp}\nspec: {priority: 10, subject: {namespaces: {}}}\n"}), "spec.subject"},
 		{"bad feature", func() Scenario { s := validScenario(base); s.Feature = "Nope"; return s }(), "feature"},
 		{"bad stream", func() Scenario { s := validScenario(base); s.From = []string{"3.33"}; return s }(), "want vX.Y"},
 		{"no verify", func() Scenario { s := validScenario(base); s.Verify = nil; return s }(), "verify is nil"},

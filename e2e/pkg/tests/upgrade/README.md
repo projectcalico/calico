@@ -50,7 +50,8 @@ by one (`crd-invalid-stored`).
 - Cluster-scoped objects must be named `e2e-upgrade-<name>-*`.
 - Cluster-scoped policy must be confined to the scenario namespace, because the
   normal suite runs between seed and verify. A GlobalNetworkPolicy's
-  `namespaceSelector` must name it. A ClusterNetworkPolicy subject must pin
+  `namespaceSelector` must name it. A ClusterNetworkPolicy (or
+  AdminNetworkPolicy/BaselineAdminNetworkPolicy) subject must pin
   `kubernetes.io/metadata.name` via `subject.namespaces.matchLabels` or
   `subject.pods.namespaceSelector.matchLabels`.
 - Images must be ones `seed_images.sh` pre-loads; kubeadm cells can't pull from
@@ -159,4 +160,5 @@ Point the e2e binary at a cluster running the from-stream:
 2. upgrade, writing the `upgrade-window` ConfigMap as `migrate.sh` does;
 3. run with `E2E_UPGRADE_PHASE=verify E2E_UPGRADE_FROM=v3.33`.
 
-Re-running seed resets the scenario namespace.
+Re-running seed resets the scenario namespace, but not the cluster-scoped
+objects a failed verify keeps for diagnosis; delete those first.
