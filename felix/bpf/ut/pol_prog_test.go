@@ -2398,6 +2398,9 @@ type testExpander struct {
 type testFlowLogCase struct {
 	packet  packet
 	matches []uint64
+	// transitPolicyHits is the expected state->transit_policy_hits, if not
+	// 0+1: no transit policy hits.
+	transitPolicyHits *uint8
 }
 
 func (tc testFlowLogCase) ForIPv6() bool {
@@ -2423,6 +2426,10 @@ func (tc testFlowLogCase) MatchStateOut(stateOut state.State) {
 		s.RulesHit = uint32(state.MaxRuleIDs)
 	}
 	copy(s.RuleIDs[:], tc.matches[:int(s.RulesHit)])
+	s.TransitPolicyHits = 0 + 1
+	if tc.transitPolicyHits != nil {
+		s.TransitPolicyHits = *tc.transitPolicyHits
+	}
 
 	// Zero parts we do not care about
 	s.PolicyRC = 0 // PolicyRC tested by the caller
@@ -2514,6 +2521,193 @@ func TestPolicyProgramsExceedMatchIdSpace(t *testing.T) {
 	test.allowedPackets = []testFlowLogCase{pkt}
 
 	runTest(t, test, polprog.WithFlowLogs())
+}
+
+// The policy program records how many of its hits are transit (pre-DNAT and
+// apply-on-forward) policy's, so that the collector does not resolve them
+// against an endpoint's own policy.
+func TestPolicyProgramsFlowLogTransitPolicyHits(t *testing.T) {
+	preDNATPassTiers := []polprog.Tier{{
+		Name:      "pre",
+		EndRuleID: 0x30,
+		EndAction: polprog.TierEndPass,
+		Policies: []polprog.Policy{{
+			Name: "pre-dnat",
+			Rules: []polprog.Rule{{
+				Rule:    &proto.Rule{Action: "Allow", DstNet: []string{"10.99.0.0/16"}},
+				MatchID: 0x31,
+			}},
+		}},
+	}}
+	preDNATAllowTiers := []polprog.Tier{{
+		Name:      "pre",
+		EndRuleID: 0x30,
+		EndAction: polprog.TierEndPass,
+		Policies: []polprog.Policy{{
+			Name: "pre-dnat",
+			Rules: []polprog.Rule{{
+				Rule:    &proto.Rule{Action: "Allow", DstNet: []string{"10.96.0.10/32"}},
+				MatchID: 0x32,
+			}},
+		}},
+	}}
+	forwardTiers := []polprog.Tier{{
+		Name:      "default",
+		EndRuleID: 0xe0,
+		EndAction: polprog.TierEndDeny,
+		Policies: []polprog.Policy{{
+			Name: "host-fwd",
+			Rules: []polprog.Rule{{
+				Rule:    &proto.Rule{Action: "Allow", DstNet: []string{"10.96.0.10/32"}},
+				MatchID: 0x10,
+			}},
+		}},
+	}}
+	normalTiers := []polprog.Tier{{
+		Name:      "default",
+		EndRuleID: 0xe2,
+		EndAction: polprog.TierEndDeny,
+		Policies: []polprog.Policy{{
+			Name:  "host-normal",
+			Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Allow"}, MatchID: 0x40}},
+		}},
+	}}
+	workloadTiers := []polprog.Tier{{
+		Name:      "default",
+		EndRuleID: 0xe1,
+		EndAction: polprog.TierEndDeny,
+		Policies: []polprog.Policy{{
+			Name:  "pod-allow",
+			Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Allow"}, MatchID: 0x20}},
+		}},
+	}}
+	allowedByForward := udpPkt("10.0.0.1:31245", "10.96.0.10:53")
+	droppedByForward := udpPkt("10.0.0.1:31245", "10.0.0.2:80")
+	toHost := udpPkt("10.0.0.1:31245", "10.0.0.3:80").toHost()
+
+	transit := func(n uint8) *uint8 { return new(n + 1) }
+	all := new(uint8(state.TransitPolicyHitsAll))
+
+	tests := []struct {
+		name string
+		test testFlowLog
+	}{
+		{
+			name: "workload without host policy",
+			test: testFlowLog{
+				policy: polprog.Rules{Tiers: workloadTiers},
+				allowedPackets: []testFlowLogCase{
+					{packet: droppedByForward, matches: []uint64{0x20}, transitPolicyHits: transit(0)},
+				},
+			},
+		},
+		{
+			name: "workload, forwarded",
+			test: testFlowLog{
+				policy: polprog.Rules{
+					HostPreDnatTiers: preDNATPassTiers,
+					HostForwardTiers: forwardTiers,
+					HostNormalTiers:  normalTiers,
+					Tiers:            workloadTiers,
+				},
+				allowedPackets: []testFlowLogCase{
+					{packet: allowedByForward, matches: []uint64{0x30, 0x10, 0x20}, transitPolicyHits: transit(2)},
+				},
+				droppedPackets: []testFlowLogCase{
+					{packet: droppedByForward, matches: []uint64{0x30, 0xe0}, transitPolicyHits: all},
+				},
+			},
+		},
+		{
+			name: "workload, allowed by pre-DNAT policy",
+			test: testFlowLog{
+				policy: polprog.Rules{
+					HostPreDnatTiers: preDNATAllowTiers,
+					HostForwardTiers: forwardTiers,
+					Tiers:            workloadTiers,
+				},
+				allowedPackets: []testFlowLogCase{
+					{packet: allowedByForward, matches: []uint64{0x32, 0x20}, transitPolicyHits: transit(1)},
+				},
+			},
+		},
+		{
+			name: "workload, forwarded, without apply-on-forward policy",
+			test: testFlowLog{
+				policy: polprog.Rules{HostPreDnatTiers: preDNATPassTiers, Tiers: workloadTiers},
+				allowedPackets: []testFlowLogCase{
+					{packet: droppedByForward, matches: []uint64{0x30, 0x20}, transitPolicyHits: transit(1)},
+				},
+			},
+		},
+		{
+			// Normal host policy is not transit policy.
+			name: "workload, to host",
+			test: testFlowLog{
+				policy: polprog.Rules{
+					HostPreDnatTiers: preDNATPassTiers,
+					HostForwardTiers: forwardTiers,
+					HostNormalTiers:  normalTiers,
+					Tiers:            workloadTiers,
+				},
+				allowedPackets: []testFlowLogCase{
+					{packet: toHost, matches: []uint64{0x30, 0x40, 0x20}, transitPolicyHits: transit(1)},
+				},
+			},
+		},
+		{
+			name: "workload, to host, normal host policy suppressed",
+			test: testFlowLog{
+				policy: polprog.Rules{
+					SuppressNormalHostPolicy: true,
+					HostPreDnatTiers:         preDNATPassTiers,
+					HostForwardTiers:         forwardTiers,
+					HostNormalTiers:          normalTiers,
+					Tiers:                    workloadTiers,
+				},
+				allowedPackets: []testFlowLogCase{
+					{packet: toHost, matches: []uint64{0x30, 0x20}, transitPolicyHits: transit(1)},
+				},
+			},
+		},
+		{
+			name: "host interface, forwarded",
+			test: testFlowLog{
+				policy: polprog.Rules{
+					ForHostInterface: true,
+					HostPreDnatTiers: preDNATPassTiers,
+					HostForwardTiers: forwardTiers,
+					HostNormalTiers:  normalTiers,
+				},
+				allowedPackets: []testFlowLogCase{
+					{packet: allowedByForward, matches: []uint64{0x30, 0x10}, transitPolicyHits: transit(2)},
+				},
+				droppedPackets: []testFlowLogCase{
+					{packet: droppedByForward, matches: []uint64{0x30, 0xe0}, transitPolicyHits: all},
+				},
+			},
+		},
+		{
+			name: "host interface, to host",
+			test: testFlowLog{
+				policy: polprog.Rules{
+					ForHostInterface: true,
+					HostPreDnatTiers: preDNATPassTiers,
+					HostForwardTiers: forwardTiers,
+					HostNormalTiers:  normalTiers,
+				},
+				allowedPackets: []testFlowLogCase{
+					{packet: toHost, matches: []uint64{0x30, 0x40}, transitPolicyHits: transit(1)},
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			runTest(t, tc.test, polprog.WithFlowLogs())
+		})
+	}
 }
 
 func TestPolicyProgramsFlowLog(t *testing.T) {
@@ -2810,10 +3004,12 @@ func (p packet) MatchStateOut(stateOut state.State) {
 	expectedStateOut.PolicyRC = 0 // PolicyRC tested by the caller
 	expectedStateOut.RulesHit = 0
 	expectedStateOut.RuleIDs = [state.MaxRuleIDs]uint64{}
+	expectedStateOut.TransitPolicyHits = 0
 
 	stateOut.PolicyRC = 0
 	stateOut.RulesHit = 0
 	stateOut.RuleIDs = [state.MaxRuleIDs]uint64{}
+	stateOut.TransitPolicyHits = 0
 
 	Expect(stateOut).To(Equal(expectedStateOut), "policy program modified unexpected parts of the state")
 }

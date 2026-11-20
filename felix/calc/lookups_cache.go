@@ -15,6 +15,8 @@
 package calc
 
 import (
+	"strings"
+
 	kapiv1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/proxy"
 
@@ -147,10 +149,11 @@ func (lc *LookupsCache) SetMockData(
 		}
 	}
 	for id, rid := range nm {
+		prefix := strings.TrimRight(string(id[:]), "\x00")
 		if rid == nil {
-			delete(lc.polCache.nflogPrefixHash, id)
+			lc.polCache.deleteNFLogPrefixEntry(prefix)
 		} else {
-			lc.polCache.nflogPrefixHash[id] = pcRuleID{ruleID: rid}
+			lc.polCache.addNFLogPrefixEntry(prefix, rid)
 		}
 	}
 	for k, v := range ns {

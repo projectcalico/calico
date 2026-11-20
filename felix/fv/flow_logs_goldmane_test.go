@@ -1333,6 +1333,166 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log networkse
 	})
 })
 
+// BPF policy programs apply a host endpoint's pre-DNAT and apply-on-forward
+// policy ahead of the endpoint's own and report both in one policy event:
+// host-*'s in a workload's program, the interface's host endpoint's in a host
+// interface's program.  End-of-tier rule IDs depend only on direction and tier
+// name, so a host endpoint's end-of-tier drop of traffic to a pod with policy
+// in a tier of the same name must not be reported as that pod's deny.
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log host endpoint forward policy tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+	const wepPort = 8055
+
+	var (
+		infra                    infrastructure.DatastoreInfra
+		tc                       infrastructure.TopologyContainers
+		client                   client.Interface
+		client0, blocked, target *workload.Workload
+		remoteClient             *workload.Workload
+	)
+
+	BeforeEach(func() {
+		if !BPFMode() {
+			Skip("BPF only: in iptables mode host-* policy does not apply between same-node pods")
+		}
+		infra = getInfra()
+		opts := infrastructure.DefaultTopologyOptions()
+		opts.IPIPMode = api.IPIPModeNever
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
+		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
+		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
+		infra.AddDefaultAllow()
+
+		runWorkload := func(felix int, name, ip string) *workload.Workload {
+			infrastructure.AssignIP(name+"0", ip, tc.Felixes[felix].Hostname, client)
+			w := workload.Run(tc.Felixes[felix], name+"0", "default", ip, fmt.Sprint(wepPort), "tcp")
+			w.WorkloadEndpoint.GenerateName = name
+			w.ConfigureInInfra(infra)
+			return w
+		}
+		client0 = runWorkload(0, "client-", "10.65.0.0")
+		blocked = runWorkload(0, "blocked-", "10.65.0.1")
+		target = runWorkload(0, "target-", "10.65.0.2")
+		// Its traffic reaches felix 0's pods through felix 0's eth0.
+		remoteClient = runWorkload(1, "remote-", "10.65.1.0")
+
+		// Pod policy in the default tier, which the host endpoints' forward
+		// policy is in too.
+		podPolicy := api.NewGlobalNetworkPolicy()
+		podPolicy.Name = "pod-ingress"
+		podPolicy.Spec.Selector = "projectcalico.org/namespace == 'default'"
+		podPolicy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
+		podPolicy.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+		_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, podPolicy, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		// The host endpoints let everything but traffic to the blocked pod
+		// through, so that traffic hits their end-of-tier drop.
+		hostPolicy := api.NewGlobalNetworkPolicy()
+		hostPolicy.Name = "host-fwd"
+		hostPolicy.Spec.Selector = "host-endpoint == 'true'"
+		hostPolicy.Spec.ApplyOnForward = true
+		hostPolicy.Spec.Ingress = []api.Rule{{
+			Action:      api.Allow,
+			Destination: api.EntityRule{NotNets: []string{blocked.IP + "/32"}},
+		}}
+		hostPolicy.Spec.Egress = []api.Rule{{Action: api.Allow}}
+		_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, hostPolicy, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		// host-* for felix 0's workload programs, eth0's own for its host
+		// interface program.
+		for name, iface := range map[string]string{"all-interfaces": "*", "eth0": "eth0"} {
+			hep := api.NewHostEndpoint()
+			hep.Name = name
+			hep.Labels = map[string]string{"host-endpoint": "true"}
+			hep.Spec.Node = tc.Felixes[0].Hostname
+			hep.Spec.ExpectedIPs = []string{tc.Felixes[0].IP}
+			hep.Spec.InterfaceName = iface
+			_, err = client.HostEndpoints().Create(utils.Ctx, hep, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		ensureAllNodesBPFProgramsAttached(tc.Felixes)
+	})
+
+	aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, flowlogs.SourcePortIsNotIncluded, wepPort)
+	wepMeta := func(aggregatedName string) endpoint.Metadata {
+		return endpoint.Metadata{
+			Type:           "wep",
+			Namespace:      "default",
+			Name:           flowlog.FieldNotIncluded,
+			AggregatedName: aggregatedName,
+		}
+	}
+
+	// expectOnlyFlowsToTarget checks that felix 0 reports exactly the given
+	// allowed flows from src to target.  The flows to target are the positive
+	// control: a deny of src to blocked, attributed to pod-ingress, is
+	// reported with or soon after them.
+	expectOnlyFlowsToTarget := func(src string, reporterPolicies map[flowlog.ReporterType]string) {
+		checkFlows := func() error {
+			flowTester := flowlogs.NewFlowTester(flowlogs.FlowTesterOptions{
+				ExpectLabels:           true,
+				ExpectEnforcedPolicies: true,
+				MatchEnforcedPolicies:  true,
+				Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
+			})
+			if err := flowTester.PopulateFromFlowLogs(tc.Felixes[0]); err != nil {
+				return fmt.Errorf("error populating flow logs from Felix[0]: %w", err)
+			}
+			for reporter, policy := range reporterPolicies {
+				flowTester.CheckFlow(flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    wepMeta(src),
+						DstMeta:    wepMeta("target-*"),
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   reporter,
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{policy: {}},
+				})
+			}
+			// Finish fails on any flow not checked above.
+			if err := flowTester.Finish(); err != nil {
+				return fmt.Errorf("flows incorrect on Felix[0]:\n%w", err)
+			}
+			return nil
+		}
+		Eventually(checkFlows, "30s", "3s").ShouldNot(HaveOccurred())
+		Consistently(checkFlows, "6s", "2s").ShouldNot(HaveOccurred())
+	}
+
+	It("should not report host-*'s end-of-tier drop to a same-node pod as the pod's deny", func() {
+		cc := &connectivity.Checker{}
+		cc.ExpectNone(client0, blocked)
+		cc.ExpectSome(client0, target)
+		cc.CheckConnectivity()
+		flowlogs.WaitForConntrackScan(true)
+		tc.Felixes[0].Exec("conntrack", "-F")
+
+		expectOnlyFlowsToTarget("client-*", map[flowlog.ReporterType]string{
+			flowlog.ReporterSrc: "0|__PROFILE__|pro:default|allow|0",
+			flowlog.ReporterDst: "0|default|gnp:pod-ingress|allow|0",
+		})
+	})
+
+	It("should not report eth0's end-of-tier drop to a local pod as the pod's deny", func() {
+		cc := &connectivity.Checker{}
+		cc.ExpectNone(remoteClient, blocked)
+		cc.ExpectSome(remoteClient, target)
+		cc.CheckConnectivity()
+		flowlogs.WaitForConntrackScan(true)
+		tc.Felixes[0].Exec("conntrack", "-F")
+
+		expectOnlyFlowsToTarget("remote-*", map[flowlog.ReporterType]string{
+			flowlog.ReporterDst: "0|default|gnp:pod-ingress|allow|0",
+		})
+	})
+})
+
 func countNodesWithNodeIP(c client.Interface) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
