@@ -17,6 +17,7 @@ package charts
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -25,9 +26,13 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"sigs.k8s.io/yaml"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/distribution"
+	"github.com/projectcalico/calico/release/internal/github"
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/yamledit"
@@ -1032,6 +1037,42 @@ func TestMetadata(t *testing.T) {
 		_, err := Metadata(t.TempDir(), c, at, required)
 		if err == nil || !strings.Contains(err.Error(), "chart tigera-operator") {
 			t.Errorf("err = %v, want it to name the chart", err)
+		}
+	})
+}
+
+func TestIndexUpload(t *testing.T) {
+	dir := t.TempDir()
+	u := IndexUpload(IndexOptions{OutputDir: dir, Handler: distribution.S3{URL: url.URL{Scheme: "s3", Host: "bucket"}, Profile: "prof", DryRun: true}})
+
+	t.Run("uploads the index from the charts dir", func(t *testing.T) {
+		if want := filepath.Join(dir, DirName, indexFileName); u.Source != want {
+			t.Errorf("Source = %q, want %q", u.Source, want)
+		}
+	})
+
+	t.Run("uploads to the bucket's charts prefix", func(t *testing.T) {
+		want := distribution.S3{
+			URL:         url.URL{Scheme: "s3", Host: "bucket", Path: "/charts/"},
+			Profile:     "prof",
+			CachePolicy: distribution.MutableCachePolicy,
+			DryRun:      true,
+		}
+		sameURL := cmp.Comparer(func(a, b url.URL) bool { return a.String() == b.String() })
+		if diff := cmp.Diff(want, u.Handler, sameURL, cmpopts.IgnoreUnexported(distribution.S3{})); diff != "" {
+			t.Errorf("handler (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("waits for the images and the GitHub release", func(t *testing.T) {
+		if diff := cmp.Diff([]string{images.Step, github.ReleaseStep}, u.Requires); diff != "" {
+			t.Errorf("Requires (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("skips when asked", func(t *testing.T) {
+		if !IndexUpload(IndexOptions{Skip: true}).Skip {
+			t.Error("Skip = false, want true")
 		}
 	})
 }
