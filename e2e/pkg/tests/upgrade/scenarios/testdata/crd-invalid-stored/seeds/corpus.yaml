@@ -72,7 +72,7 @@ spec: {node: e2e-upgrade-no-such-node, peerIP: 'not-an-ip', asNumber: 64512}
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkSet
 metadata: {name: e2e-upgrade-crd-invalid-stored-netset-dup}  # 14058
-spec: {nets: ['10.0.0.0/24', '10.0.0.0/24']}
+spec: {nets: ['192.0.2.0/24', '192.0.2.0/24']}
 ---
 apiVersion: projectcalico.org/v3
 kind: IPPool

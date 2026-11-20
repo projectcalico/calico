@@ -85,9 +85,12 @@ wait_for_rollout() {
   # Only the statuses covering the dataplane and the API scenarios use; a
   # degraded optional component (goldmane, whisker) is for the tests to report,
   # not a reason to stop the job.
+  # Available stays True from before the upgrade while the operator is still
+  # progressing, so it alone says nothing about the rollout.
   local ts
   for ts in calico apiserver; do
     if upgrade_kubectl get tigerastatus "${ts}" >/dev/null 2>&1; then
+      upgrade_kubectl wait tigerastatus "${ts}" --for=condition=Progressing=False --timeout=15m || rc=1
       upgrade_kubectl wait tigerastatus "${ts}" --for=condition=Available --timeout=15m || rc=1
     fi
   done
