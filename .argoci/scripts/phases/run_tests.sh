@@ -215,7 +215,23 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
     fi
   done
   if (( ${#_unpublished[@]} > 0 )); then
-    _skip_msg="lane waits for a hashrelease that ships ${_unpublished[*]}; ${HASHREL_URL} predates them"
+    # The wait is bounded by the hashrelease's age, read from the date in its
+    # name, so a stalled or rarely rebuilt hashrelease fails the lane.
+    # Three days covers a Friday merge waiting for Monday's build.
+    _max_days="${E2E_UNPUBLISHED_MAX_DAYS:-3}"
+    _hr_date="$(grep -o -E -m1 '[0-9]{4}-[0-9]{2}-[0-9]{2}' <<<"${HASHREL_URL}" || true)"
+    if [[ -z "${_hr_date}" ]]; then
+      echo "[ERROR] e2e configs ${_unpublished[*]} are not in ${HASHREL_URL}, and its name has no date to bound the wait by"
+      exit 1
+    fi
+    _hr_age_days=$(( ($(date -u +%s) - $(date -u -d "${_hr_date}" +%s)) / 86400 ))
+
+    # Past the limit, the missing entries are no longer a hashrelease in flight.
+    if (( _hr_age_days > _max_days )); then
+      echo "[ERROR] e2e configs ${_unpublished[*]} are not in ${HASHREL_URL}, which is ${_hr_age_days} days old (limit ${_max_days}); check that hashreleases are still being built"
+      exit 1
+    fi
+    _skip_msg="lane waits for a hashrelease that ships ${_unpublished[*]}; ${HASHREL_URL} predates them (${_hr_age_days} of ${_max_days} days)"
     echo "[WARN] skipping ${CI_STEP_NAME:-this lane}: ${_skip_msg}"
     mkdir -p "${REPORT_DIR}"
     cat > "${REPORT_DIR}/junit.xml" <<EOF
