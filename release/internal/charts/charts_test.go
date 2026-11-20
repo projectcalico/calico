@@ -592,6 +592,69 @@ func TestPublishResumeSkipsChartsAlreadyPublished(t *testing.T) {
 	}
 }
 
+func TestPushed(t *testing.T) {
+	both := []string{"quay.test/charts/chart-one@sha256:aaa", "quay.test/charts/chart-two@sha256:bbb"}
+	for _, tc := range []struct {
+		name     string
+		digests  map[string]string
+		recorded []string
+		wantErr  []string
+	}{
+		{
+			name:     "every chart at its recorded digest is done",
+			digests:  map[string]string{"chart-one": "sha256:aaa", "chart-two": "sha256:bbb"},
+			recorded: both,
+		},
+		{
+			name:     "a chart the record does not hold is not done",
+			digests:  map[string]string{"chart-one": "sha256:aaa", "chart-two": "sha256:bbb"},
+			recorded: both[:1],
+			wantErr:  []string{"quay.test/charts/chart-two"},
+		},
+		{
+			name:     "a recorded chart missing from the registry is not done",
+			digests:  map[string]string{"chart-one": "sha256:aaa"},
+			recorded: both,
+			wantErr:  []string{"quay.test/charts/chart-two"},
+		},
+		{
+			name:     "a chart at another digest fails",
+			digests:  map[string]string{"chart-one": "sha256:zzz", "chart-two": "sha256:bbb"},
+			recorded: both,
+			wantErr:  []string{"sha256:zzz", "sha256:aaa"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recordsDir := t.TempDir()
+			w, err := outputs.NewRefsWriter(recordsDir, PublishStep)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := w.Add(tc.recorded...); err != nil {
+				t.Fatal(err)
+			}
+			f := newFakeRunner(nil)
+			err = Pushed(publishable(t), []string{"quay.test/charts"}, recordsDir,
+				WithRunner(f),
+				WithResolver(resolvesPerChart(tc.digests)))
+			if len(tc.wantErr) == 0 && err != nil {
+				t.Fatalf("Pushed() = %v, want nil", err)
+			}
+			if len(tc.wantErr) > 0 && err == nil {
+				t.Fatal("Pushed() = nil, want an error")
+			}
+			for _, want := range tc.wantErr {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q does not contain %q", err, want)
+				}
+			}
+			if calls := f.Calls(); len(calls) != 0 {
+				t.Errorf("Pushed ran commands: %v", calls)
+			}
+		})
+	}
+}
+
 // A digest disagreeing with the record means the tag moved under us.
 func TestPublishResumeFailsOnDigestMismatch(t *testing.T) {
 	c := publishable(t)

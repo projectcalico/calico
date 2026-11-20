@@ -165,6 +165,31 @@ func TestFileExists(t *testing.T) {
 	}
 }
 
+func TestRequireFile(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "file.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	cases := map[string]struct {
+		path    string
+		wantErr bool
+	}{
+		"regular file":       {path: file},
+		"existing directory": {path: dir, wantErr: true},
+		"missing path":       {path: filepath.Join(dir, "missing"), wantErr: true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			err := FilePresent(tc.path)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("FilePresent(%q) = %v, want error %v", tc.path, err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestPathExists(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "file.txt")
