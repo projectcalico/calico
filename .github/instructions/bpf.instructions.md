@@ -4,7 +4,8 @@ applyTo:
   - "felix/bpf/**"
   - "felix/dataplane/linux/bpf_*.go"
   - "felix/dataplane/linux/vxlan_mgr.go"
-  - "felix/dataplane/linux/dataplanedefs/dataplane_defs.go"
+  - "felix/dataplane/linux/bpfep/bpfepdefs/**"
+  - "felix/dataplane/linux/vxlan/vxlandefs/**"
   - "felix/rules/static.go"
   - "felix/fv/bpf_*_test.go"
 ---

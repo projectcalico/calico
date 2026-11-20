@@ -17,6 +17,7 @@ package intdataplane
 import (
 	"reflect"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
@@ -35,7 +36,7 @@ type serviceLoopManager struct {
 	ipVersion uint8
 
 	// Our dependencies.
-	filterTable  Table
+	filterTable  dataplanedefs.Table
 	ruleRenderer rules.RuleRenderer
 
 	// Internal state.
@@ -44,7 +45,7 @@ type serviceLoopManager struct {
 }
 
 func newServiceLoopManager(
-	filterTable Table,
+	filterTable dataplanedefs.Table,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
 ) *serviceLoopManager {
