@@ -256,6 +256,55 @@ func TestAbortBeforeMigrationStartsLeavesClusterInfoAlone(t *testing.T) {
 	g.Expect(v3CI.Annotations).To(HaveKeyWithValue(migratedByAnnotation, "migration-a"))
 }
 
+// lockedAbortCase is one phase that holds the v1 lock before Migrating starts.
+type lockedAbortCase struct {
+	name  string
+	phase migrationv1.DatastoreMigrationPhase
+}
+
+// TestAbortUnlocksV1BeforeMigrationStarts verifies that aborting after Pending
+// has locked v1, but before Migrating, unlocks v1 and deletes no v3 resources.
+// TestAbortBeforeMigrationStartsLeavesClusterInfoAlone is the negative case,
+// where the lock was never taken.
+func TestAbortUnlocksV1BeforeMigrationStarts(t *testing.T) {
+	cases := []lockedAbortCase{
+		{name: "draining in Pending", phase: migrationv1.DatastoreMigrationPhasePending},
+		{name: "waiting on conflicts", phase: migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			ctx := context.Background()
+
+			lockedAt := metav1.Now()
+			dm := &migrationv1.DatastoreMigration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       defaultMigrationName,
+					UID:        "migration-f",
+					Finalizers: []string{finalizerName},
+				},
+				Spec: migrationv1.DatastoreMigrationSpec{Type: migrationv1.DatastoreMigrationTypeAPIServerToCRDs},
+				Status: migrationv1.DatastoreMigrationStatus{
+					Phase:             tc.phase,
+					DatastoreLockedAt: &lockedAt,
+				},
+			}
+			objects := []rtclient.Object{dm, migratedTier("security", "migration-f")}
+			m, rt := newFakeController(t, objects, []*unstructured.Unstructured{
+				crdObj("tiers.crd.projectcalico.org", "crd.projectcalico.org"),
+			})
+			v1ClusterInfo(g, m).Spec.DatastoreReady = ptr.To(false)
+
+			g.Expect(rt.Delete(ctx, dm)).To(Succeed())
+			g.Expect(m.reconcile()).To(Succeed())
+
+			g.Expect(kerrors.IsNotFound(rt.Get(ctx, dmKey, &migrationv1.DatastoreMigration{}))).To(BeTrue(), "finalizer should have been removed")
+			g.Expect(v1ClusterInfo(g, m).Spec.DatastoreReady).To(Equal(ptr.To(true)), "abort should unlock the v1 datastore")
+			g.Expect(tierNames(g, rt)).To(ConsistOf("security"), "no v3 resources exist to clean up before Migrating")
+		})
+	}
+}
+
 // TestAbortDeletesClusterInfoItCreated verifies that abort deletes the v3
 // ClusterInformation this migration created and unlocks the v1 one.
 func TestAbortDeletesClusterInfoItCreated(t *testing.T) {

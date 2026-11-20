@@ -14636,6 +14636,7 @@ rules:
       - list
       - watch
       - create
+      - update
       - delete
   # Migration controller: read v1 resources and write v3 resources.
   - apiGroups: ["projectcalico.org"]

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ import (
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -31,7 +33,16 @@ func Lock(config string, allowVersionMismatch bool) error {
 		return err
 	}
 
-	client, err := clientmgr.NewClient(config)
+	// Native v3 CRD mode rejects user writes to ClusterInformation, so say so
+	// up front instead of surfacing the webhook's denial.
+	cfg, err := clientmgr.LoadClientConfig(config)
+	if err != nil {
+		return err
+	}
+	if err := checkLockSupported(cfg, "lock"); err != nil {
+		return err
+	}
+	client, err := clientmgr.NewClientFromConfig(cfg)
 	if err != nil {
 		return err
 	}
@@ -60,4 +71,16 @@ func Lock(config string, allowVersionMismatch bool) error {
 
 	fmt.Print("Datastore locked.\n")
 	return nil
+}
+
+// checkLockSupported returns an error when the datastore uses native
+// projectcalico.org/v3 CRDs. In that mode an admission webhook lets only Calico
+// components write ClusterInformation, so calicoctl can neither lock nor unlock
+// the datastore. action names the operation for the error message.
+func checkLockSupported(cfg *apiconfig.CalicoAPIConfig, action string) error {
+	if cfg.Spec.DatastoreType != apiconfig.Kubernetes || !k8s.UsingV3CRDs(&cfg.Spec) {
+		return nil
+	}
+	return fmt.Errorf("cannot %s the datastore: this cluster uses native projectcalico.org/v3 CRDs, "+
+		"where ClusterInformation is read-only to users and only Calico components can change datastoreReady", action)
 }
