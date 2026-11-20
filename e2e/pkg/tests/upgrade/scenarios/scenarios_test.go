@@ -15,6 +15,8 @@
 package scenarios
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"regexp"
 	"slices"
@@ -34,6 +36,10 @@ var (
 func cronStreams(t *testing.T) []string {
 	t.Helper()
 	data, err := os.ReadFile(upgradeCron)
+	if errors.Is(err, fs.ErrNotExist) {
+		// Repos sharing this code don't all run the upgrade cron.
+		t.Skipf("no upgrade cron at %s, so no streams to check against", upgradeCron)
+	}
 	if err != nil {
 		t.Fatalf("reading the upgrade cron: %v", err)
 	}

@@ -93,6 +93,8 @@ func TestUpgradePhaseVerify(t *testing.T) {
 		{labels: normalSpec, runs: true},
 		{labels: verifyV333, runs: true},
 		{labels: []string{"sig-calico", UpgradeVerifyLabel, "UpgradeFrom:v3.32"}, runs: false},
+		// The lane's own include must not reach another stream's verify spec.
+		{labels: []string{"Conformance", "sig-calico", UpgradeVerifyLabel, "UpgradeFrom:v3.32"}, runs: false},
 		{labels: seedV333, runs: false},
 		{labels: append([]string{"Conformance"}, seedV333...), runs: false},
 		{labels: append(verifyV333, "Dataplane:BPF"), runs: false},
@@ -111,6 +113,47 @@ func TestUpgradePhaseRejectsBadInput(t *testing.T) {
 			t.Errorf("ApplyUpgradePhase(%q, %q) = %v, want error containing %q", tc.phase, tc.from, err, tc.want)
 		}
 	}
+}
+
+// An include-less lane keeps selecting everything else alongside its verify
+// specs.
+func TestUpgradePhaseVerifyOnIncludeLessLane(t *testing.T) {
+	cfg, err := LoadAll([]string{writeFile(t, t.TempDir(), "lane.yaml", `exclude:
+  labels:
+    - label: Upgrade:Seed
+      reason: "upgrade phases only"
+    - label: Upgrade:Verify
+      reason: "upgrade phases only"
+`)})
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	if err := ApplyUpgradePhase(cfg, UpgradePhaseVerify, "v3.33"); err != nil {
+		t.Fatalf("ApplyUpgradePhase: %v", err)
+	}
+	checkSelection(t, cfg, []selectionCase{
+		{labels: normalSpec, runs: true},
+		{labels: verifyV333, runs: true},
+		{labels: []string{"sig-calico", UpgradeVerifyLabel, "UpgradeFrom:v3.32"}, runs: false},
+		{labels: seedV333, runs: false},
+	})
+}
+
+// A normal run of a lane that doesn't extend base.yaml still leaves the
+// scenario specs out.
+func TestUpgradePhaseUnsetWithoutBaseExcludes(t *testing.T) {
+	cfg, err := LoadAll([]string{writeFile(t, t.TempDir(), "lane.yaml", "include:\n  - sig-calico\n")})
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	if err := ApplyUpgradePhase(cfg, "", ""); err != nil {
+		t.Fatalf("ApplyUpgradePhase: %v", err)
+	}
+	checkSelection(t, cfg, []selectionCase{
+		{labels: normalSpec, runs: true},
+		{labels: seedV333, runs: false},
+		{labels: verifyV333, runs: false},
+	})
 }
 
 // A lane config that forgot base.yaml would otherwise run scenario specs in

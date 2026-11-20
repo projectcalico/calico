@@ -72,6 +72,9 @@ func TestE2E(t *testing.T) {
 		if err := applyTestConfig(paths); err != nil {
 			t.Fatalf("Failed to apply test config %q: %v", paths, err)
 		}
+	} else if phase := os.Getenv(testconfig.UpgradePhaseEnvVar); phase != "" {
+		// Without a config nothing excludes the other phase's specs.
+		t.Fatalf("%s=%s needs a test config", testconfig.UpgradePhaseEnvVar, phase)
 	}
 	e2e.RunE2ETests(t)
 }

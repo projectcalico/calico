@@ -178,7 +178,7 @@ func (s *Scenario) validate() error {
 	}
 	for _, f := range s.From {
 		if !streamRE.MatchString(f) {
-			return fmt.Errorf("from stream %q: want vX.Y", f)
+			return fmt.Errorf("from stream %q: want vX.Y or master", f)
 		}
 	}
 	if s.Verify == nil {
@@ -236,28 +236,30 @@ func (s *Scenario) validateFixtures(objs []*unstructured.Unstructured) error {
 		if p.Expect == (Expect{}) {
 			return fmt.Errorf("probe %s: expect checks nothing", p.Name)
 		}
-		kind, host, _, err := parseTarget(p.Target)
+		kind, host, port, err := parseTarget(p.Target)
 		if err != nil {
 			return fmt.Errorf("probe %s: %w", p.Name, err)
 		}
 		if kind != "svc" {
 			continue
 		}
-		a, d := allowedIn[host], deniedIn[host]
+		// Per port: a server can be up on one port and dead on another.
+		target := fmt.Sprintf("%s:%d", host, port)
+		a, d := allowedIn[target], deniedIn[target]
 		for i, st := range []State{p.Expect.Before, p.Expect.During, p.Expect.After} {
 			a[i] = a[i] || st == Allowed
 			d[i] = d[i] || st == Denied
 		}
-		allowedIn[host], deniedIn[host] = a, d
+		allowedIn[target], deniedIn[target] = a, d
 	}
 
 	// A Denied probe against a target that is down passes; an Allowed probe to
-	// the same Service in the same slice proves the target was up.
+	// the same Service port in the same slice proves the target was up.
 	slices := [3]string{"before", "during", "after"}
-	for host, d := range deniedIn {
+	for target, d := range deniedIn {
 		for i := range d {
-			if d[i] && !allowedIn[host][i] {
-				return fmt.Errorf("service %s is expected Denied %s the upgrade with no Allowed probe to it in that slice as a positive control", host, slices[i])
+			if d[i] && !allowedIn[target][i] {
+				return fmt.Errorf("svc:%s is expected Denied %s the upgrade with no Allowed probe to it in that slice as a positive control", target, slices[i])
 			}
 		}
 	}

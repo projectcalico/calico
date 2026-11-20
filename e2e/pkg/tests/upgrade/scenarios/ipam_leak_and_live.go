@@ -96,6 +96,11 @@ func seedIPAMLeak(ctx context.Context, e *upgrade.Env) error {
 	if err != nil {
 		return err
 	}
+	if old == "0s" {
+		// Left by an earlier seed that never reached verify; restoring it
+		// would leave GC off for good.
+		old = ""
+	}
 	e.Record.Values["oldLeakGracePeriod"] = old
 	if err := setLeakGracePeriod(ctx, e, "0s"); err != nil {
 		return err

@@ -353,14 +353,20 @@ func runVerify(ctx context.Context, s *Scenario, e *Env) error {
 		}
 		ginkgo.By("Judging the probe logs")
 		var problems []string
+		var unjudged []error
 		for _, p := range s.Probes {
 			ps, err := judgeProbe(ctx, e, p, rec)
 			if err != nil {
-				return fmt.Errorf("probe %s: %w", p.Name, err)
+				// One untrustworthy log mustn't hide another probe's violation.
+				unjudged = append(unjudged, fmt.Errorf("probe %s: %w", p.Name, err))
+				continue
 			}
 			problems = append(problems, ps...)
 		}
-		gomega.Expect(problems).To(gomega.BeEmpty(), "connectivity broke the scenario's expectations around the upgrade")
+		gomega.Expect(problems).To(gomega.BeEmpty(), "connectivity broke the scenario's expectations around the upgrade (unjudged probes: %v)", errors.Join(unjudged...))
+		if len(unjudged) > 0 {
+			return errors.Join(unjudged...)
+		}
 	}
 
 	ginkgo.By("Running the scenario's verify step")

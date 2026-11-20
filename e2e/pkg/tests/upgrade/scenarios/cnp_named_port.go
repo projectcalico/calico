@@ -44,8 +44,10 @@ func init() {
 			{Name: "cli-9090", Client: "cli", Target: "svc:srv:9090", Protocol: "tcp", Expect: upgrade.AlwaysDenied},
 			{Name: "cli-80", Client: "cli", Target: "svc:srv:80", Protocol: "tcp", Expect: upgrade.Expect{Before: upgrade.Allowed, After: upgrade.Denied}},
 			{Name: "cli-8080", Client: "cli", Target: "svc:srv:8080", Protocol: "tcp", Expect: upgrade.Expect{Before: upgrade.Allowed, After: upgrade.Denied}},
-			// Positive control: srv was serving throughout.
+			// Positive controls: srv was serving on every port throughout.
 			{Name: "oth-80", Client: "oth", Target: "svc:srv:80", Protocol: "tcp", Expect: upgrade.AlwaysAllowed},
+			{Name: "oth-8080", Client: "oth", Target: "svc:srv:8080", Protocol: "tcp", Expect: upgrade.AlwaysAllowed},
+			{Name: "oth-9090", Client: "oth", Target: "svc:srv:9090", Protocol: "tcp", Expect: upgrade.AlwaysAllowed},
 		},
 		Verify: func(ctx context.Context, e *upgrade.Env) error {
 			return upgrade.ExpectField(ctx, e, cnpGVR, "", "e2e-upgrade-cnp-named-port-accept", "{.spec.ingress[0].protocols[0]}", "{}")

@@ -174,6 +174,7 @@ func validScenario(files map[string]string, probes ...Probe) Scenario {
 func TestValidate(t *testing.T) {
 	allowed := Probe{Name: "a", Client: "cli", Target: "svc:srv:80", Protocol: "tcp", Expect: AlwaysAllowed}
 	denied := Probe{Name: "d", Client: "cli", Target: "svc:srv:81", Protocol: "tcp", Expect: AlwaysDenied}
+	control81 := Probe{Name: "c", Client: "cli", Target: "svc:srv:81", Protocol: "tcp", Expect: Expect{Before: Allowed, During: Allowed, After: Allowed}}
 	base := map[string]string{"cli.yaml": clientPod, "srv.yaml": serverSvc}
 
 	for _, tc := range []struct {
@@ -181,8 +182,9 @@ func TestValidate(t *testing.T) {
 		s    Scenario
 		want string
 	}{
-		{"valid", validScenario(base, allowed, denied), ""},
+		{"valid", validScenario(base, allowed, denied, control81), ""},
 		{"denied without a positive control", validScenario(base, denied), "positive control"},
+		{"control on another port", validScenario(base, allowed, denied), "svc:srv:81"},
 		{"unknown client", validScenario(base, Probe{Name: "a", Client: "nope", Target: "svc:srv:80", Protocol: "tcp", Expect: AlwaysAllowed}), "not a fixture Pod"},
 		{"empty expect", validScenario(base, Probe{Name: "a", Client: "cli", Target: "svc:srv:80", Protocol: "tcp"}), "checks nothing"},
 		{"duplicate probe", validScenario(base, allowed, allowed), "unique"},

@@ -54,13 +54,14 @@ record_upgrade_window() {
 # wait_for_rollout - the window must end when Calico has finished rolling out,
 # not when bz returns, or probes would be judged mid-rollout.
 wait_for_rollout() {
-  local ns rc=0
+  local ns img rc=0
   ns="$(calico_ns)"
   # The operator rewrites calico-node some time after bz returns. Until then
   # the old DaemonSet reports rolled out and every check below passes at once.
+  # A failed read prints nothing, which must not pass for a new image.
   if [[ -n "${_pre_image}" ]]; then
     local deadline=$(( $(date +%s) + 600 ))
-    until [[ "$(calico_node_image)" != "${_pre_image}" ]]; do
+    until img="$(calico_node_image || true)"; [[ -n "${img}" && "${img}" != "${_pre_image}" ]]; do
       if (( $(date +%s) > deadline )); then
         echo "[ERROR] calico-node still runs ${_pre_image} 10 minutes after bz upgrade"
         return 1

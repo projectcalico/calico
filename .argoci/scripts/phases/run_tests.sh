@@ -248,8 +248,8 @@ EOF
   fi
 fi
 
-# After pre_upgrade.sh seeded the downlevel cluster, the post-upgrade run also
-# selects the scenarios' verify specs. The binary reads both variables.
+# Once the downlevel cluster was seeded, the post-upgrade run also selects the
+# scenarios' verify specs. The binary reads both variables.
 if [[ -z "${E2E_UPGRADE_PHASE:-}" && -n "${E2E_UPGRADE_SEEDED:-}" ]]; then
   export E2E_UPGRADE_PHASE=verify E2E_UPGRADE_FROM="${RELEASE_STREAM}"
 fi
