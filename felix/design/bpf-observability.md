@@ -461,7 +461,7 @@ The feature is gated at two levels:
   `istio.io/dataplane-mode` label on the WEP's namespace or the
   WEP itself (with `=none` as an opt-out); the result is tracked
   as `hasIstioDSCP` in
-  `felix/dataplane/linux/bpf_ep_mgr.go` and pushed into the
+  `felix/dataplane/linux/bpfep/bpf_ep_mgr.go` and pushed into the
   attach-point globals when the program is (re)attached.
 
 So the DSCP marking fires only when **both** the attached WEP is

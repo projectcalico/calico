@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"reflect"
 	"regexp"
@@ -28,18 +27,15 @@ import (
 	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack"
-	bpftimeouts "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/events"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfifstate "github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -53,13 +49,35 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
-	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector"
 	collectortypes "github.com/projectcalico/calico/felix/collector/types"
 	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/bpfep"
+	"github.com/projectcalico/calico/felix/dataplane/linux/bpfep/bpfepdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/bpfroute"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dscp"
+	"github.com/projectcalico/calico/felix/dataplane/linux/endpoint"
+	"github.com/projectcalico/calico/felix/dataplane/linux/floatingip"
+	"github.com/projectcalico/calico/felix/dataplane/linux/flowtable"
+	"github.com/projectcalico/calico/felix/dataplane/linux/hostip"
+	"github.com/projectcalico/calico/felix/dataplane/linux/hostsipset"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipip"
+	"github.com/projectcalico/calico/felix/dataplane/linux/ipip/ipipdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/livemigration"
+	"github.com/projectcalico/calico/felix/dataplane/linux/masq"
+	"github.com/projectcalico/calico/felix/dataplane/linux/modprobe"
+	"github.com/projectcalico/calico/felix/dataplane/linux/noencap"
+	"github.com/projectcalico/calico/felix/dataplane/linux/policy"
+	"github.com/projectcalico/calico/felix/dataplane/linux/procsys"
+	"github.com/projectcalico/calico/felix/dataplane/linux/proxyneigh"
+	"github.com/projectcalico/calico/felix/dataplane/linux/serviceloop"
+	"github.com/projectcalico/calico/felix/dataplane/linux/vxlan"
+	"github.com/projectcalico/calico/felix/dataplane/linux/vxlan/vxlandefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/wireguardmgr"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -74,7 +92,6 @@ import (
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
-	"github.com/projectcalico/calico/felix/routerule"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
 	"github.com/projectcalico/calico/felix/rules"
@@ -85,7 +102,6 @@ import (
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -140,8 +156,6 @@ var (
 
 	processStartTime time.Time
 	zeroKey          = wgtypes.Key{}
-
-	maxCleanupRetries = 5
 )
 
 func init() {
@@ -153,195 +167,6 @@ func init() {
 	prometheus.MustRegister(summaryIfaceBatchSize)
 	prometheus.MustRegister(summaryAddrBatchSize)
 	processStartTime = time.Now()
-}
-
-type Config struct {
-	Hostname             string
-	NodeZone             string
-	IPv6Enabled          bool
-	RuleRendererOverride rules.RuleRenderer
-	IPIPMTU              int
-	VXLANMTU             int
-	VXLANMTUV6           int
-	VXLANPort            int
-	VXLANSrcPortMin      int
-	VXLANSrcPortMax      int
-
-	MaxIPSetSize int
-
-	RouteSyncDisabled            bool
-	IptablesBackend              string
-	IPSetsRefreshInterval        time.Duration
-	RouteRefreshInterval         time.Duration
-	DeviceRouteSourceAddress     net.IP
-	DeviceRouteSourceAddressIPv6 net.IP
-	DeviceRouteProtocol          netlink.RouteProtocol
-	RemoveExternalRoutes         bool
-
-	// ProgramIPIPClusterRoutes and ProgramNoEncapClusterRoutes record whether Felix, as opposed
-	// to confd and BIRD, is responsible for the cluster routes of IPIP and of unencapsulated IP
-	// Pools respectively.  NoEncapNeeded already incorporates ProgramNoEncapClusterRoutes (see
-	// calc.EncapsulationCalculator.NoEncapNeeded).
-	ProgramIPIPClusterRoutes    bool
-	ProgramNoEncapClusterRoutes bool
-	NoEncapNeeded               bool
-
-	IPForwarding                   string
-	TableRefreshInterval           time.Duration
-	IptablesPostWriteCheckInterval time.Duration
-	IptablesInsertMode             string
-	IptablesLockTimeout            time.Duration
-	IptablesLockProbeInterval      time.Duration
-	XDPRefreshInterval             time.Duration
-
-	FloatingIPsEnabled bool
-
-	LocalSubnetL2Reachability                string
-	LocalSubnetL2ReachabilityRefreshInterval time.Duration
-
-	Wireguard wireguard.Config
-
-	NetlinkTimeout time.Duration
-
-	RulesConfig rules.Config
-
-	IfaceMonitorConfig ifacemonitor.Config
-
-	StatusReportingInterval time.Duration
-
-	ConfigChangedRestartCallback func()
-	FatalErrorRestartCallback    func(error)
-
-	PostInSyncCallback  func()
-	HealthAggregator    *health.HealthAggregator
-	WatchdogTimeout     time.Duration
-	RouteTableManager   *idalloc.IndexAllocator
-	bpfProxyHealthCheck bpfproxy.Healthcheck
-
-	DebugSimulateDataplaneHangAfter  time.Duration
-	DebugSimulateDataplaneApplyDelay time.Duration
-
-	ExternalNodesCidrs []string
-
-	BPFEnabled                         bool
-	BPFOverlayIPOnDevice               bool
-	BPFPolicyDebugEnabled              bool
-	BPFDisableUnprivileged             bool
-	BPFJITHardening                    string
-	BPFKubeProxyIptablesCleanupEnabled bool
-	BPFLogLevel                        string
-	BPFConntrackLogLevel               string
-	BPFLogFilters                      map[string]string
-	BPFCTLBLogFilter                   string
-	BPFExtToServiceConnmark            int
-	BPFDataIfacePattern                *regexp.Regexp
-	NFTablesFlowTableDataIfacePattern  *regexp.Regexp
-	BPFL3IfacePattern                  *regexp.Regexp
-	XDPEnabled                         bool
-	XDPAllowGeneric                    bool
-	BPFConntrackCleanupMode            apiv3.BPFConntrackMode
-	BPFConntrackTimeouts               bpftimeouts.Timeouts
-	BPFCgroupV2                        string
-	BPFConnTimeLBEnabled               bool
-	BPFConnTimeLB                      string
-	BPFHostNetworkedNAT                string
-	BPFNodePortDSREnabled              bool
-	BPFDSROptoutCIDRs                  []string
-	BPFPSNATPorts                      numorstring.Port
-	BPFMapSizeRoute                    int
-	BPFMapSizeConntrack                int
-	BPFMapSizePerCPUConntrack          int
-	BPFMapSizeConntrackScaling         string
-	BPFMapSizeConntrackCleanupQueue    int
-	BPFMapSizeNATFrontend              int
-	BPFMapSizeNATBackend               int
-	BPFMapSizeNATAffinity              int
-	BPFMapSizeIPSets                   int
-	BPFMapSizeIfState                  int
-	BPFMapSizeMaglev                   int
-	BPFMaglevLUTSize                   int
-	BPFIpv6Enabled                     bool
-	BPFHostConntrackBypass             bool
-	BPFIPFragmentReassemblyEnabled     bool
-	BPFEnforceRPF                      string
-	BPFDisableGROForIfaces             *regexp.Regexp
-	BPFExcludeCIDRsFromNAT             []string
-	BPFExportBufferSizeMB              int
-	BPFRedirectToPeer                  string
-	BPFAttachType                      apiv3.BPFAttachOption
-	BPFIPFragTimeout                   time.Duration
-
-	BPFProfiling               string
-	KubeProxyMinSyncPeriod     time.Duration
-	KubeProxyHealtzPort        int
-	SidecarAccelerationEnabled bool
-	WorkloadSourceSpoofing     bool
-
-	// Flow logs related fields.
-	NfNetlinkBufSize int
-	Collector        collector.Collector
-	LookupsCache     *calc.LookupsCache
-	FlowLogsEnabled  bool
-
-	ServiceLoopPrevention string
-
-	LookPathOverride func(file string) (string, error)
-
-	KubeClientSet kubernetes.Interface
-
-	FeatureDetectOverrides map[string]string
-	FeatureGates           map[string]string
-
-	// Populated with the smallest host MTU based on auto-detection.
-	hostMTU         int
-	MTUIfacePattern *regexp.Regexp
-	RequireMTUFile  bool
-
-	RouteSource string
-
-	IPv4NormalRoutePriority   int
-	IPv4ElevatedRoutePriority int
-	IPv6NormalRoutePriority   int
-	IPv6ElevatedRoutePriority int
-
-	LiveMigrationRouteConvergenceTime time.Duration
-
-	// IPAMClient is the Calico IPAM client used to swap owner attributes
-	// when a KubeVirt live migration completes.
-	IPAMClient ipam.Interface
-
-	KubernetesProvider felixconfig.Provider
-
-	// For testing purposes - allows unit tests to mock out the creation of the nftables dataplane.
-	NewNftablesDataplane nftables.NewNftablesDataplaneFn
-}
-
-// ctlbExcludesUDP returns whether the connect-time load balancer leaves UDP to
-// the TC programs.
-func (config *Config) ctlbExcludesUDP() bool {
-	return config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBTCP) &&
-		config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled)
-}
-
-// ctlbUDPAffinityTimeout returns how long the connect-time load balancer holds a
-// backend affine to an unconnected UDP socket, or 0 if the CTLB does not handle
-// UDP on this node. The CTLB uses this so that consecutive datagrams from one
-// socket reach one backend; the BPF kube-proxy needs the same value so that its
-// affinity map cleanup leaves those entries alone until they really have expired.
-func (config *Config) ctlbUDPAffinityTimeout() time.Duration {
-	if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBDisabled) || config.ctlbExcludesUDP() {
-		return 0
-	}
-	// The BPF programs are given the timeout in whole seconds.
-	return config.BPFConntrackTimeouts.UDPTimeout.Truncate(time.Second)
-}
-
-type UpdateBatchResolver interface {
-	// Opportunity for a manager component to resolve state that depends jointly on the updates
-	// that it has seen since the preceding CompleteDeferredWork call.  Processing here can
-	// include passing resolved state to other managers.  It should not include any actual
-	// dataplane updates yet.  (Those should be actioned in CompleteDeferredWork.)
-	ResolveUpdateBatch() error
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
@@ -388,34 +213,34 @@ type InternalDataplane struct {
 	ipSets          []dpsets.IPSetsDataplane
 
 	ipipParentIfaceC chan string
-	ipipManager      *ipipManager
+	ipipManager      *ipip.Manager
 
-	noEncapManager        *noEncapManager
-	noEncapManagerV6      *noEncapManager
+	noEncapManager        *noencap.Manager
+	noEncapManagerV6      *noencap.Manager
 	noEncapParentIfaceC   chan string
 	noEncapParentIfaceCV6 chan string
 
 	vxlanParentIfaceC   chan string
 	vxlanParentIfaceCV6 chan string
-	vxlanManager        *vxlanManager
-	vxlanManagerV6      *vxlanManager
+	vxlanManager        *vxlan.Manager
+	vxlanManagerV6      *vxlan.Manager
 	vxlanFDBs           []*vxlanfdb.VXLANFDB
 
 	linkAddrsManagers []linkaddrs.Interface
 
-	wireguardManager   *wireguardManager
-	wireguardManagerV6 *wireguardManager
+	wireguardManager   *wireguardmgr.Manager
+	wireguardManagerV6 *wireguardmgr.Manager
 
 	ifaceMonitor *ifacemonitor.InterfaceMonitor
 	ifaceUpdates chan any
 
-	liveMigrationMonitor *liveMigrationMonitor
+	liveMigrationMonitor *livemigration.Monitor
 
 	endpointStatusCombiner *endpointStatusCombiner
 
-	allManagers             []Manager
-	managersWithRouteTables []ManagerWithRouteTables
-	managersWithRouteRules  []ManagerWithRouteRules
+	allManagers             []dataplanedefs.Manager
+	managersWithRouteTables []dataplanedefs.ManagerWithRouteTables
+	managersWithRouteRules  []dataplanedefs.ManagerWithRouteRules
 	ruleRenderer            rules.RuleRenderer
 
 	// datastoreInSync is set to true after we receive the "in sync" message from the datastore.
@@ -447,7 +272,12 @@ type InternalDataplane struct {
 
 	applyThrottle *throttle.Throttle
 
-	config Config
+	config dpconfig.Config
+
+	// hostMTU is the smallest host interface MTU, as detected at start of day.
+	hostMTU int
+	// bpfProxyHealthCheck is shared by the IPv4 and IPv6 BPF kube-proxies.
+	bpfProxyHealthCheck bpfproxy.Healthcheck
 
 	debugHangC <-chan time.Time
 
@@ -546,7 +376,7 @@ func legacyIPTablesCleanupTables(
 	return tables
 }
 
-func NewIntDataplaneDriver(config Config) *InternalDataplane {
+func NewIntDataplaneDriver(config dpconfig.Config) *InternalDataplane {
 	if config.BPFLogLevel == "info" {
 		config.BPFLogLevel = "off"
 	}
@@ -575,9 +405,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Best-effort load of the flowtable module before probing: on hosts where it ships as a
 		// module but isn't autoloaded, this lets detection succeed. Kernels that have it built in
 		// or genuinely lack it are unaffected and fall through to the probe result.
-		mp := newModProbe(moduleFlowTable, newRealCmd)
+		mp := modprobe.New(modprobe.ModuleFlowTable, modprobe.NewRealCmd)
 		out, err := mp.Exec()
-		log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", moduleFlowTable)
+		log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", modprobe.ModuleFlowTable)
 
 		supported, counterSupported := nftables.DetectFlowOffloadSupported(config.NewNftablesDataplane)
 		if !supported {
@@ -604,7 +434,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		return nil
 	}
 	ConfigureDefaultMTUs(hostMTU, &config)
-	podMTU := determinePodMTU(config)
+	podMTU := determinePodMTU(config, hostMTU)
 	if err := writeMTUFile(podMTU); err != nil {
 		// Fail early if RequireMTUFile is true
 		if config.RequireMTUFile {
@@ -635,6 +465,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ifaceMonitor:                ifacemonitor.New(config.IfaceMonitorConfig, featureDetector, config.FatalErrorRestartCallback),
 		ifaceUpdates:                make(chan any, 100),
 		config:                      config,
+		hostMTU:                     hostMTU,
 		applyThrottle:               throttle.New(10),
 		loopSummarizer:              logrusr.NewSummarizer("dataplane reconciliation loops"),
 		actions:                     actionSet,
@@ -644,7 +475,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		getKubeProxyNftablesEnabled: detectKubeProxyNftablesMode,
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
-	dp.liveMigrationMonitor = newLiveMigrationMonitor(config.LiveMigrationRouteConvergenceTime, config.IPAMClient)
+	dp.liveMigrationMonitor = livemigration.NewMonitor(config.LiveMigrationRouteConvergenceTime, config.IPAMClient)
 	dp.RegisterManager(dp.liveMigrationMonitor)
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
@@ -788,7 +619,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if !config.RouteSyncDisabled {
 		log.Debug("Route management is enabled.")
 		mainTablePolV4 = ownershippol.NewMainTable(
-			dataplanedefs.VXLANIfaceNameV4,
+			vxlandefs.VXLANIfaceNameV4,
 			config.DeviceRouteProtocol,
 			config.RulesConfig.WorkloadIfacePrefixes,
 			config.RemoveExternalRoutes,
@@ -810,7 +641,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		if config.IPv6Enabled {
 			mainTablePolV6 = ownershippol.NewMainTable(
-				dataplanedefs.VXLANIfaceNameV6,
+				vxlandefs.VXLANIfaceNameV6,
 				config.DeviceRouteProtocol,
 				config.RulesConfig.WorkloadIfacePrefixes,
 				config.RemoveExternalRoutes,
@@ -850,14 +681,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	// Start a noEncap manager if an IP pool with no encapsulation exists.
 	if config.ProgramNoEncapClusterRoutes && config.NoEncapNeeded {
 		log.Info("NoEncap IP pool present, starting thread to keep IPv4 noencap routes in sync.")
-		dp.noEncapManager = newNoEncapManager(
+		dp.noEncapManager = noencap.NewManager(
 			routeTableV4,
 			4,
 			config,
 			dp.loopSummarizer,
 		)
 		dp.noEncapParentIfaceC = make(chan string, 1)
-		go dp.noEncapManager.monitorParentDevice(
+		go dp.noEncapManager.MonitorParentDevice(
 			context.Background(),
 			time.Second*10,
 			dp.noEncapParentIfaceC,
@@ -866,14 +697,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if config.IPv6Enabled {
 			log.Info("NoEncap IP pool present, starting thread to keep IPv6 noencap routes in sync.")
-			dp.noEncapManagerV6 = newNoEncapManager(
+			dp.noEncapManagerV6 = noencap.NewManager(
 				routeTableV6,
 				6,
 				config,
 				dp.loopSummarizer,
 			)
 			dp.noEncapParentIfaceCV6 = make(chan string, 1)
-			go dp.noEncapManagerV6.monitorParentDevice(
+			go dp.noEncapManagerV6.MonitorParentDevice(
 				context.Background(),
 				time.Second*10,
 				dp.noEncapParentIfaceCV6,
@@ -886,19 +717,19 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	// and respond to ARP (IPv4) / NDP (IPv6) requests for pod and LB IPs that fall
 	// within the same subnet as a host physical interface.
 	if apiv3.LocalSubnetL2ReachabilityMode(config.LocalSubnetL2Reachability) != apiv3.LocalSubnetL2ReachabilityDisabled {
-		proxyNeighMgr4 := newProxyNeighManager(config, 4)
+		proxyNeighMgr4 := proxyneigh.NewManager(config, 4)
 		dp.RegisterManager(proxyNeighMgr4)
 		if config.IPv6Enabled {
-			proxyNeighMgr6 := newProxyNeighManager(config, 6)
+			proxyNeighMgr6 := proxyneigh.NewManager(config, 6)
 			dp.RegisterManager(proxyNeighMgr6)
 		}
 	}
 
 	dataplaneFeatures := featureDetector.GetFeatures()
 
-	var bpfVXLANOpts []vxlanMgrOption
+	var bpfVXLANOpts []vxlan.Option
 	if config.BPFEnabled && dataplaneFeatures.VXLANVNIFilter {
-		bpfVXLANOpts = append(bpfVXLANOpts, vxlanMgrWithVNIFilter(bpfOverlayTunnelID(&config.RulesConfig)))
+		bpfVXLANOpts = append(bpfVXLANOpts, vxlan.WithVNIFilter(config.RulesConfig.BPFOverlayTunnelID()))
 	}
 
 	if config.RulesConfig.VXLANEnabled {
@@ -906,14 +737,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if config.BPFEnabled {
 			fdbOpts = append(fdbOpts, vxlanfdb.WithNeighUpdatesOnly())
 		}
-		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, dataplanedefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout, fdbOpts...)
+		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, vxlandefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout, fdbOpts...)
 		dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
 
-		dp.vxlanManager = newVXLANManager(
+		dp.vxlanManager = vxlan.NewManager(
 			ipSetsV4,
 			routeTableV4,
 			vxlanFDB,
-			dataplanedefs.VXLANIfaceNameV4,
+			vxlandefs.VXLANIfaceNameV4,
 			4,
 			config.VXLANMTU,
 			config,
@@ -925,7 +756,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if config.BPFEnabled {
 			vxlanMTU = 0
 		}
-		go dp.vxlanManager.keepVXLANDeviceInSync(
+		go dp.vxlanManager.KeepDeviceInSync(
 			context.Background(),
 			vxlanMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
@@ -935,7 +766,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(dp.vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
-		go cleanUpVXLANDevice(dataplanedefs.VXLANIfaceNameV4)
+		go vxlan.CleanUpDevice(vxlandefs.VXLANIfaceNameV4)
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -1022,12 +853,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// BPF mode disabled, create the iptables/nftables-only managers.
 		dp.ipsetsSourceV4 = ipsetsManager
 		// TODO Connect host IP manager to BPF
-		dp.RegisterManager(newHostIPManager(
+		dp.RegisterManager(hostip.NewManager(
 			config.RulesConfig.WorkloadIfacePrefixes,
 			rules.IPSetIDThisHostIPs,
 			ipSetsV4,
 			config.MaxIPSetSize))
-		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, nftablesEnabled))
+		dp.RegisterManager(policy.NewManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, nftablesEnabled))
 
 		// Clean up any leftover BPF state.
 		err := bpfnat.RemoveConnectTimeLoadBalancer(true, "")
@@ -1038,7 +869,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfutils.RemoveBPFSpecialDevices()
 	} else {
 		// In BPF mode we still use iptables for raw egress policy.
-		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter, nftablesEnabled))
+		dp.RegisterManager(policy.NewRawEgressManager(rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter, nftablesEnabled))
 	}
 
 	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
@@ -1072,7 +903,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	bpfringbuf.SetMapSize(ringBufSize)
 
 	var (
-		bpfEndpointManager *bpfEndpointManager
+		bpfEndpointManager *bpfep.Manager
 		bpfEvnt            events.Events
 		bpfEventPoller     *bpfEventPoller
 
@@ -1152,7 +983,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
 		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
-		bpfEndpointManager, err = NewBPFEndpointManager(
+		bpfEndpointManager, err = bpfep.NewManager(
 			nil,
 			&config,
 			bpfMaps,
@@ -1200,7 +1031,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		if config.BPFConnTimeLB != string(apiv3.BPFConnectTimeLBDisabled) {
-			excludeUDP := config.ctlbExcludesUDP()
+			excludeUDP := config.CTLBExcludesUDP()
 			logLevel := strings.ToLower(config.BPFLogLevel)
 			if config.BPFLogFilters != nil {
 				if logLevel != "off" && config.BPFCTLBLogFilter != "all" {
@@ -1289,7 +1120,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	var filterMaps nftables.MapsDataplane
 	var flowtableHandlerV4 nftables.FlowTableHandler
-	var flowtableTargets []flowtableTarget
+	var flowtableTargets []flowtable.Target
 	if nftablesEnabled {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
 
@@ -1301,17 +1132,17 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			// them up front.
 			var overlayDevicesV4 []string
 			if config.RulesConfig.VXLANEnabled {
-				overlayDevicesV4 = append(overlayDevicesV4, dataplanedefs.VXLANIfaceNameV4)
+				overlayDevicesV4 = append(overlayDevicesV4, vxlandefs.VXLANIfaceNameV4)
 			}
 			if config.RulesConfig.IPIPEnabled {
-				overlayDevicesV4 = append(overlayDevicesV4, dataplanedefs.IPIPIfaceName)
+				overlayDevicesV4 = append(overlayDevicesV4, ipipdefs.IPIPIfaceName)
 			}
 			if config.RulesConfig.WireguardEnabled && len(config.RulesConfig.WireguardInterfaceName) > 0 {
 				overlayDevicesV4 = append(overlayDevicesV4, config.RulesConfig.WireguardInterfaceName)
 			}
-			flowtableTargets = append(flowtableTargets, flowtableTarget{
-				handler:        nftablesV4RootTable,
-				overlayDevices: overlayDevicesV4,
+			flowtableTargets = append(flowtableTargets, flowtable.Target{
+				Handler:        nftablesV4RootTable,
+				OverlayDevices: overlayDevicesV4,
 			})
 		}
 	}
@@ -1352,16 +1183,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV4)
 
-	epManager := newEndpointManager(
-		&endpointManagerConfig{
-			kubeIPVSSupportEnabled: config.RulesConfig.KubeIPVSSupportEnabled,
-			wlInterfacePrefixes:    config.RulesConfig.WorkloadIfacePrefixes,
-			bpfEnabled:             config.BPFEnabled,
-			bpfAttachType:          config.BPFAttachType,
-			nft:                    nftablesEnabled,
-			floatingIPsEnabled:     config.FloatingIPsEnabled,
-			normalRoutePriority:    config.IPv4NormalRoutePriority,
-			elevatedRoutePriority:  config.IPv4ElevatedRoutePriority,
+	epManager := endpoint.NewManager(
+		&endpoint.Config{
+			KubeIPVSSupportEnabled: config.RulesConfig.KubeIPVSSupportEnabled,
+			WorkloadIfacePrefixes:  config.RulesConfig.WorkloadIfacePrefixes,
+			BPFEnabled:             config.BPFEnabled,
+			BPFAttachType:          config.BPFAttachType,
+			NFTables:               nftablesEnabled,
+			FloatingIPsEnabled:     config.FloatingIPsEnabled,
+			NormalRoutePriority:    config.IPv4NormalRoutePriority,
+			ElevatedRoutePriority:  config.IPv4ElevatedRoutePriority,
 		},
 		rawTableV4,
 		mangleTableV4,
@@ -1382,24 +1213,24 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
-	dp.liveMigrationMonitor.registerListener(epManager)
+	dp.liveMigrationMonitor.RegisterListener(epManager)
 	if mainTablePolV4 != nil {
-		mainTablePolV4.IsWorkloadBGPPeerIface = epManager.ifaceIsForLocalBGPPeer
+		mainTablePolV4.IsWorkloadBGPPeerIface = epManager.IfaceIsForLocalBGPPeer
 	}
-	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
-	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
+	dp.RegisterManager(floatingip.NewManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
+	dp.RegisterManager(masq.NewManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 
 	if config.RulesConfig.IPIPEnabled ||
 		config.RulesConfig.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
-		dp.RegisterManager(newHostsIPSetManager(ipSetsV4, 4, config))
+		dp.RegisterManager(hostsipset.NewManager(ipSetsV4, 4, config))
 	}
 
 	if !config.BPFEnabled {
-		dp.RegisterManager(newDSCPManager(ipSetsV4, mangleTableV4, ruleRenderer, 4, config))
+		dp.RegisterManager(dscp.NewManager(ipSetsV4, mangleTableV4, ruleRenderer, 4, config))
 	}
 
 	if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload {
-		dp.RegisterManager(newFlowtableExclusionManager(ipSetsV4, 4, config.MaxIPSetSize))
+		dp.RegisterManager(flowtable.NewExclusionManager(ipSetsV4, 4, config.MaxIPSetSize))
 	}
 
 	if config.RulesConfig.IPIPEnabled {
@@ -1414,16 +1245,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		// Add a manager to keep the all-hosts IP set up to date.
-		dp.ipipManager = newIPIPManager(
+		dp.ipipManager = ipip.NewManager(
 			routeTableV4,
-			dataplanedefs.IPIPIfaceName,
+			ipipdefs.IPIPIfaceName,
 			4,
 			config.IPIPMTU,
 			config,
 			dp.loopSummarizer,
 		)
 		dp.ipipParentIfaceC = make(chan string, 1)
-		go dp.ipipManager.keepIPIPDeviceInSync(
+		go dp.ipipManager.KeepDeviceInSync(
 			context.Background(),
 			config.IPIPMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
@@ -1435,7 +1266,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
 		if config.RulesConfig.FelixConfigIPIPEnabled == nil {
 			// Start a cleanup goroutine not to block felix if it needs to retry
-			go cleanUpIPIPAddrs()
+			go ipip.CleanUpAddrs()
 		}
 	}
 
@@ -1453,10 +1284,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.loopSummarizer,
 		featureDetector,
 	)
-	dp.wireguardManager = newWireguardManager(cryptoRouteTableWireguard, config, 4)
+	dp.wireguardManager = wireguardmgr.NewManager(cryptoRouteTableWireguard, config, 4)
 	dp.RegisterManager(dp.wireguardManager) // IPv4
 
-	dp.RegisterManager(newServiceLoopManager(filterTableV4, ruleRenderer, 4))
+	dp.RegisterManager(serviceloop.NewManager(filterTableV4, ruleRenderer, 4))
 
 	if config.IPv6Enabled {
 		// Build out both iptables and nftables implementations for IPv6.
@@ -1506,26 +1337,26 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.filterTables = append(dp.filterTables, filterTableV6)
 
 		if config.RulesConfig.VXLANEnabledV6 {
-			vxlanName := dataplanedefs.VXLANIfaceNameV6
+			vxlanName := vxlandefs.VXLANIfaceNameV6
 
 			var (
 				fdbOpts     []vxlanfdb.Option
-				vxlanMgrOps []vxlanMgrOption
+				vxlanMgrOps []vxlan.Option
 			)
 			if config.BPFEnabled {
 				// BPF mode uses the same device for both V4 and V6
-				vxlanName = dataplanedefs.VXLANIfaceNameV4
+				vxlanName = vxlandefs.VXLANIfaceNameV4
 				vxlanMgrOps = append(vxlanMgrOps, bpfVXLANOpts...)
 				if dp.vxlanManager != nil {
-					vxlanMgrOps = append(vxlanMgrOps, vxlanMgrWithDualStack())
+					vxlanMgrOps = append(vxlanMgrOps, vxlan.WithDualStack())
 				}
 				fdbOpts = append(fdbOpts, vxlanfdb.WithNeighUpdatesOnly())
-				go cleanUpVXLANDevice(dataplanedefs.VXLANIfaceNameV6)
+				go vxlan.CleanUpDevice(vxlandefs.VXLANIfaceNameV6)
 			}
 			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, vxlanName, featureDetector, config.NetlinkTimeout, fdbOpts...)
 			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDBV6)
 
-			dp.vxlanManagerV6 = newVXLANManager(
+			dp.vxlanManagerV6 = vxlan.NewManager(
 				ipSetsV6,
 				routeTableV6,
 				vxlanFDBV6,
@@ -1541,7 +1372,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			if config.BPFEnabled {
 				vxlanMTU = 0
 			}
-			go dp.vxlanManagerV6.keepVXLANDeviceInSync(
+			go dp.vxlanManagerV6.KeepDeviceInSync(
 				context.Background(),
 				vxlanMTU,
 				dataplaneFeatures.ChecksumOffloadBroken,
@@ -1551,20 +1382,20 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.RegisterManager(dp.vxlanManagerV6)
 		} else {
 			// Start a cleanup goroutine not to block felix if it needs to retry
-			go cleanUpVXLANDevice(dataplanedefs.VXLANIfaceNameV6)
+			go vxlan.CleanUpDevice(vxlandefs.VXLANIfaceNameV6)
 		}
 
 		ipsetsManagerV6.AddDataplane(ipSetsV6)
 		dp.RegisterManager(ipsetsManagerV6)
 		if !config.BPFEnabled {
-			dp.RegisterManager(newHostIPManager(
+			dp.RegisterManager(hostip.NewManager(
 				config.RulesConfig.WorkloadIfacePrefixes,
 				rules.IPSetIDThisHostIPs,
 				ipSetsV6,
 				config.MaxIPSetSize))
-			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, nftablesEnabled))
+			dp.RegisterManager(policy.NewManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, nftablesEnabled))
 		} else {
-			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, nftablesEnabled))
+			dp.RegisterManager(policy.NewRawEgressManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, nftablesEnabled))
 		}
 
 		var filterMapsV6 nftables.MapsDataplane
@@ -1577,14 +1408,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 				var overlayDevicesV6 []string
 				if config.RulesConfig.VXLANEnabledV6 {
-					overlayDevicesV6 = append(overlayDevicesV6, dataplanedefs.VXLANIfaceNameV6)
+					overlayDevicesV6 = append(overlayDevicesV6, vxlandefs.VXLANIfaceNameV6)
 				}
 				if config.RulesConfig.WireguardEnabledV6 && len(config.RulesConfig.WireguardInterfaceNameV6) > 0 {
 					overlayDevicesV6 = append(overlayDevicesV6, config.RulesConfig.WireguardInterfaceNameV6)
 				}
-				flowtableTargets = append(flowtableTargets, flowtableTarget{
-					handler:        nftablesV6RootTable,
-					overlayDevices: overlayDevicesV6,
+				flowtableTargets = append(flowtableTargets, flowtable.Target{
+					Handler:        nftablesV6RootTable,
+					OverlayDevices: overlayDevicesV6,
 				})
 			}
 		}
@@ -1599,16 +1430,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 		dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV6)
 
-		epManagerV6 := newEndpointManager(
-			&endpointManagerConfig{
-				kubeIPVSSupportEnabled: config.RulesConfig.KubeIPVSSupportEnabled,
-				wlInterfacePrefixes:    config.RulesConfig.WorkloadIfacePrefixes,
-				bpfEnabled:             config.BPFEnabled,
-				bpfAttachType:          config.BPFAttachType,
-				nft:                    nftablesEnabled,
-				floatingIPsEnabled:     config.FloatingIPsEnabled,
-				normalRoutePriority:    config.IPv6NormalRoutePriority,
-				elevatedRoutePriority:  config.IPv6ElevatedRoutePriority,
+		epManagerV6 := endpoint.NewManager(
+			&endpoint.Config{
+				KubeIPVSSupportEnabled: config.RulesConfig.KubeIPVSSupportEnabled,
+				WorkloadIfacePrefixes:  config.RulesConfig.WorkloadIfacePrefixes,
+				BPFEnabled:             config.BPFEnabled,
+				BPFAttachType:          config.BPFAttachType,
+				NFTables:               nftablesEnabled,
+				FloatingIPsEnabled:     config.FloatingIPsEnabled,
+				NormalRoutePriority:    config.IPv6NormalRoutePriority,
+				ElevatedRoutePriority:  config.IPv6ElevatedRoutePriority,
 			},
 			rawTableV6,
 			mangleTableV6,
@@ -1628,24 +1459,24 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			nil, // arpMaps
 		)
 		dp.RegisterManager(epManagerV6)
-		dp.liveMigrationMonitor.registerListener(epManagerV6)
+		dp.liveMigrationMonitor.RegisterListener(epManagerV6)
 		if mainTablePolV6 != nil {
-			mainTablePolV6.IsWorkloadBGPPeerIface = epManagerV6.ifaceIsForLocalBGPPeer
+			mainTablePolV6.IsWorkloadBGPPeerIface = epManagerV6.IfaceIsForLocalBGPPeer
 		}
-		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
-		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
-		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
+		dp.RegisterManager(floatingip.NewManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
+		dp.RegisterManager(masq.NewManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
+		dp.RegisterManager(serviceloop.NewManager(filterTableV6, ruleRenderer, 6))
 
 		if config.RulesConfig.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
-			dp.RegisterManager(newHostsIPSetManager(ipSetsV6, 6, config))
+			dp.RegisterManager(hostsipset.NewManager(ipSetsV6, 6, config))
 		}
 
 		if !config.BPFEnabled {
-			dp.RegisterManager(newDSCPManager(ipSetsV6, mangleTableV6, ruleRenderer, 6, config))
+			dp.RegisterManager(dscp.NewManager(ipSetsV6, mangleTableV6, ruleRenderer, 6, config))
 		}
 
 		if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload {
-			dp.RegisterManager(newFlowtableExclusionManager(ipSetsV6, 6, config.MaxIPSetSize))
+			dp.RegisterManager(flowtable.NewExclusionManager(ipSetsV6, 6, config.MaxIPSetSize))
 		}
 
 		// Add a manager for IPv6 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
@@ -1661,7 +1492,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			},
 			dp.loopSummarizer,
 			featureDetector)
-		dp.wireguardManagerV6 = newWireguardManager(cryptoRouteTableWireguardV6, config, 6)
+		dp.wireguardManagerV6 = wireguardmgr.NewManager(cryptoRouteTableWireguardV6, config, 6)
 		dp.RegisterManager(dp.wireguardManagerV6)
 	}
 
@@ -1680,7 +1511,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	if config.RulesConfig.NFTablesFlowTableOffload && len(flowtableTargets) > 0 {
-		dp.RegisterManager(newFlowtableManager(flowtableTargets, config.NFTablesFlowTableDataIfacePattern))
+		dp.RegisterManager(flowtable.NewManager(flowtableTargets, config.NFTablesFlowTableDataIfacePattern))
 	}
 
 	dp.cleanupTables = append(dp.cleanupTables, cleanupTables...)
@@ -1804,7 +1635,7 @@ func writeMTUFile(mtu int) error {
 
 // determinePodMTU looks at the configured MTUs and enabled encapsulations to determine which
 // value for MTU should be used for pod interfaces.
-func determinePodMTU(config Config) int {
+func determinePodMTU(config dpconfig.Config, hostMTU int) int {
 	// Determine the smallest MTU among enabled encap methods. If none of the encap methods are
 	// enabled, we'll just use the host's MTU.
 	mtu := 0
@@ -1826,9 +1657,9 @@ func determinePodMTU(config Config) int {
 
 	if mtu == 0 {
 		// No enabled encapsulation. Just use the host MTU.
-		mtu = config.hostMTU
-	} else if mtu > config.hostMTU {
-		fields := log.Fields{"mtu": mtu, "hostMTU": config.hostMTU}
+		mtu = hostMTU
+	} else if mtu > hostMTU {
+		fields := log.Fields{"mtu": mtu, "hostMTU": hostMTU}
 		log.WithFields(fields).Warn("Configured MTU is larger than detected host interface MTU")
 	}
 	log.WithField("mtu", mtu).Info("Determined pod MTU")
@@ -1838,8 +1669,7 @@ func determinePodMTU(config Config) int {
 // ConfigureDefaultMTUs defaults any MTU configurations that have not been set.
 // We default the values even if the encap is not enabled, in order to match behavior from earlier versions of Calico.
 // However, they MTU will only be considered for allocation to pod interfaces if the encap is enabled.
-func ConfigureDefaultMTUs(hostMTU int, c *Config) {
-	c.hostMTU = hostMTU
+func ConfigureDefaultMTUs(hostMTU int, c *dpconfig.Config) {
 	if c.IPIPMTU == 0 {
 		log.Debug("Defaulting IPIP MTU based on host")
 		c.IPIPMTU = hostMTU - ipipMTUOverhead
@@ -1884,34 +1714,6 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 	}
 }
 
-type Manager interface {
-	// OnUpdate is called for each protobuf message from the datastore.  May either directly
-	// send updates to the IPSets and generictables.Table objects (which will queue the updates
-	// until the main loop instructs them to act) or (for efficiency) may wait until
-	// a call to CompleteDeferredWork() to flush updates to the dataplane.
-	OnUpdate(protoBufMsg any)
-	// Called before the main loop flushes updates to the dataplane to allow for batched
-	// work to be completed.
-	CompleteDeferredWork() error
-}
-
-type ManagerWithRouteTables interface {
-	Manager
-	GetRouteTableSyncers() []routetable.SyncerInterface
-}
-
-type ManagerWithRouteRules interface {
-	Manager
-	GetRouteRules() []routeRules
-}
-
-type routeRules interface {
-	SetRule(rule *routerule.Rule)
-	RemoveRule(rule *routerule.Rule)
-	QueueResync()
-	Apply() error
-}
-
 func (d *InternalDataplane) routeTableSyncers() []routetable.SyncerInterface {
 	rts := d.mainRouteTables
 	for _, mrts := range d.managersWithRouteTables {
@@ -1920,8 +1722,8 @@ func (d *InternalDataplane) routeTableSyncers() []routetable.SyncerInterface {
 	return rts
 }
 
-func (d *InternalDataplane) routeRules() []routeRules {
-	var rrs []routeRules
+func (d *InternalDataplane) routeRules() []dataplanedefs.RouteRules {
+	var rrs []dataplanedefs.RouteRules
 	for _, mrrs := range d.managersWithRouteRules {
 		rrs = append(rrs, mrrs.GetRouteRules()...)
 	}
@@ -1929,8 +1731,8 @@ func (d *InternalDataplane) routeRules() []routeRules {
 	return rrs
 }
 
-func (d *InternalDataplane) RegisterManager(mgr Manager) {
-	tableMgr, ok := mgr.(ManagerWithRouteTables)
+func (d *InternalDataplane) RegisterManager(mgr dataplanedefs.Manager) {
+	tableMgr, ok := mgr.(dataplanedefs.ManagerWithRouteTables)
 	if ok {
 		// Used to log the whole manager out here but if we do that then we cause races if the manager has
 		// other threads or locks.
@@ -1938,7 +1740,7 @@ func (d *InternalDataplane) RegisterManager(mgr Manager) {
 		d.managersWithRouteTables = append(d.managersWithRouteTables, tableMgr)
 	}
 
-	rulesMgr, ok := mgr.(ManagerWithRouteRules)
+	rulesMgr, ok := mgr.(dataplanedefs.ManagerWithRouteRules)
 	if ok {
 		log.WithField("manager", mgr).Debug("registering ManagerWithRouteRules")
 		d.managersWithRouteRules = append(d.managersWithRouteRules, rulesMgr)
@@ -1961,10 +1763,8 @@ func (d *InternalDataplane) Start() {
 // onIfaceInSync is used as a callback from the interface monitor.  We use it to send a message back to
 // the main goroutine via a channel.
 func (d *InternalDataplane) onIfaceInSync() {
-	d.ifaceUpdates <- &ifaceInSync{}
+	d.ifaceUpdates <- &dataplanedefs.IfaceInSync{}
 }
-
-type ifaceInSync struct{}
 
 // onIfaceStateChange is our interface monitor callback.  It gets called from the monitor's thread.
 func (d *InternalDataplane) onIfaceStateChange(ifaceName string, state ifacemonitor.State, ifIndex int) {
@@ -1973,25 +1773,7 @@ func (d *InternalDataplane) onIfaceStateChange(ifaceName string, state ifacemoni
 		"ifIndex":   ifIndex,
 		"state":     state,
 	}).Info("Linux interface state changed.")
-	d.ifaceUpdates <- &ifaceStateUpdate{
-		Name:  ifaceName,
-		State: state,
-		Index: ifIndex,
-	}
-}
-
-type ifaceStateUpdate struct {
-	Name  string
-	State ifacemonitor.State
-	Index int
-}
-
-func NewIfaceStateUpdate(name string, state ifacemonitor.State, index int) any {
-	return &ifaceStateUpdate{
-		Name:  name,
-		State: state,
-		Index: index,
-	}
+	d.ifaceUpdates <- dataplanedefs.NewIfaceStateUpdate(ifaceName, state, ifIndex)
 }
 
 // Check if current felix ipvs config is correct when felix gets a kube-ipvs0 interface update.
@@ -2049,21 +1831,9 @@ func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set[s
 		"ifaceName": ifaceName,
 		"addrs":     addrs,
 	}).Info("Linux interface addrs changed.")
-	d.ifaceUpdates <- &ifaceAddrsUpdate{
+	d.ifaceUpdates <- &dataplanedefs.IfaceAddrsUpdate{
 		Name:  ifaceName,
 		Addrs: addrs,
-	}
-}
-
-type ifaceAddrsUpdate struct {
-	Name  string
-	Addrs set.Set[string]
-}
-
-func NewIfaceAddrsUpdate(name string, ips ...string) any {
-	return &ifaceAddrsUpdate{
-		Name:  name,
-		Addrs: set.FromArray[string](ips),
 	}
 }
 
@@ -2081,7 +1851,7 @@ func (d *InternalDataplane) monitorHostMTU() {
 		mtu, err := findHostMTU(d.config.MTUIfacePattern)
 		if err != nil {
 			log.WithError(err).Error("Error detecting host MTU")
-		} else if d.config.hostMTU != mtu {
+		} else if d.hostMTU != mtu {
 			// Since log writing is done a background thread, we set the force-flush flag on this log to ensure that
 			// all the in-flight logs get written before we exit.
 			log.WithFields(log.Fields{logrusr.FieldForceFlush: true}).Info("Host MTU changed")
@@ -2249,9 +2019,9 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			}
 			fwdRules = append(fwdRules,
 				generictables.Rule{
-					Match:   d.newMatch().InInterface(dataplanedefs.BPFOutDev),
+					Match:   d.newMatch().InInterface(bpfepdefs.BPFOutDev),
 					Action:  d.actions.Allow(),
-					Comment: []string{"From ", dataplanedefs.BPFOutDev, " device, mark verified, accept."},
+					Comment: []string{"From ", bpfepdefs.BPFOutDev, " device, mark verified, accept."},
 				},
 			)
 
@@ -2529,22 +2299,22 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onDatastoreMessage(msg)
 		case ifaceUpdate := <-d.ifaceUpdates:
 			d.onIfaceMonitorMessage(ifaceUpdate)
-		case id := <-d.liveMigrationMonitor.timerC:
+		case id := <-d.liveMigrationMonitor.TimerC():
 			d.onLiveMigrationTimerPop(id)
-			drainChan(d.liveMigrationMonitor.timerC, d.onLiveMigrationTimerPop)
-		case id := <-d.liveMigrationMonitor.garpC:
+			drainChan(d.liveMigrationMonitor.TimerC(), d.onLiveMigrationTimerPop)
+		case id := <-d.liveMigrationMonitor.GARPC():
 			d.onLiveMigrationGARPDetected(id)
-			drainChan(d.liveMigrationMonitor.garpC, d.onLiveMigrationGARPDetected)
+			drainChan(d.liveMigrationMonitor.GARPC(), d.onLiveMigrationGARPDetected)
 		case name := <-d.ipipParentIfaceC:
-			d.onParentDeviceUpdate(d.ipipManager.routeMgr, name)
+			d.onParentDeviceUpdate(d.ipipManager, name)
 		case name := <-d.noEncapParentIfaceC:
-			d.onParentDeviceUpdate(d.noEncapManager.routeMgr, name)
+			d.onParentDeviceUpdate(d.noEncapManager, name)
 		case name := <-d.noEncapParentIfaceCV6:
-			d.onParentDeviceUpdate(d.noEncapManagerV6.routeMgr, name)
+			d.onParentDeviceUpdate(d.noEncapManagerV6, name)
 		case name := <-d.vxlanParentIfaceC:
-			d.onParentDeviceUpdate(d.vxlanManager.routeMgr, name)
+			d.onParentDeviceUpdate(d.vxlanManager, name)
 		case name := <-d.vxlanParentIfaceCV6:
-			d.onParentDeviceUpdate(d.vxlanManagerV6.routeMgr, name)
+			d.onParentDeviceUpdate(d.vxlanManagerV6, name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
@@ -2671,9 +2441,13 @@ func (d *InternalDataplane) processMsgFromCalcGraph(msg any) {
 	}
 }
 
+type parentDeviceListener interface {
+	OnParentDeviceUpdate(name string) bool
+}
+
 // onParentDeviceUpdate marks the dataplane dirty when a tunnel's parent device moves, since the
 // goroutine that spots the move may be the only thing happening at the time.
-func (d *InternalDataplane) onParentDeviceUpdate(mgr *routeManager, name string) {
+func (d *InternalDataplane) onParentDeviceUpdate(mgr parentDeviceListener, name string) {
 	if mgr.OnParentDeviceUpdate(name) {
 		d.dataplaneNeedsSync = true
 	}
@@ -2712,11 +2486,11 @@ func (d *InternalDataplane) onLiveMigrationGARPDetected(id types.WorkloadEndpoin
 
 func (d *InternalDataplane) processIfaceUpdate(ifaceUpdate any) {
 	switch ifaceUpdateMsg := ifaceUpdate.(type) {
-	case *ifaceStateUpdate:
+	case *dataplanedefs.IfaceStateUpdate:
 		d.processIfaceStateUpdate(ifaceUpdateMsg)
-	case *ifaceAddrsUpdate:
+	case *dataplanedefs.IfaceAddrsUpdate:
 		d.processIfaceAddrsUpdate(ifaceUpdateMsg)
-	case *ifaceInSync:
+	case *dataplanedefs.IfaceInSync:
 		d.processIfaceInSync()
 	}
 }
@@ -2730,7 +2504,7 @@ func (d *InternalDataplane) processIfaceInSync() {
 	d.dataplaneNeedsSync = true
 }
 
-func (d *InternalDataplane) processIfaceStateUpdate(ifaceUpdate *ifaceStateUpdate) {
+func (d *InternalDataplane) processIfaceStateUpdate(ifaceUpdate *dataplanedefs.IfaceStateUpdate) {
 	log.WithField("msg", ifaceUpdate).Info("Received interface update")
 	d.dataplaneNeedsSync = true
 	d.linkUpdateBatchSize++
@@ -2757,7 +2531,7 @@ func (d *InternalDataplane) processIfaceStateUpdate(ifaceUpdate *ifaceStateUpdat
 	}
 }
 
-func (d *InternalDataplane) processIfaceAddrsUpdate(ifaceAddrsUpdate *ifaceAddrsUpdate) {
+func (d *InternalDataplane) processIfaceAddrsUpdate(ifaceAddrsUpdate *dataplanedefs.IfaceAddrsUpdate) {
 	log.WithField("msg", ifaceAddrsUpdate).Info("Received interface addresses update")
 	d.dataplaneNeedsSync = true
 	d.addrsUpdateBatchSize++
@@ -2785,20 +2559,20 @@ func (d *InternalDataplane) configureKernel() {
 	// conntrack without it being a kernel module, and so modprobe will fail.
 	// Log result at INFO level for troubleshooting, but otherwise ignore any
 	// failed modprobe calls.
-	mp := newModProbe(moduleConntrackSCTP, newRealCmd)
+	mp := modprobe.New(modprobe.ModuleConntrackSCTP, modprobe.NewRealCmd)
 	out, err := mp.Exec()
-	log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", moduleConntrackSCTP)
+	log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", modprobe.ModuleConntrackSCTP)
 
 	if d.config.IPForwarding == "Enabled" {
 		log.Info("Making sure IPv4 forwarding is enabled.")
-		err = writeProcSys("/proc/sys/net/ipv4/ip_forward", "1")
+		err = procsys.Write("/proc/sys/net/ipv4/ip_forward", "1")
 		if err != nil {
 			log.WithError(err).Error("Failed to set IPv4 forwarding sysctl")
 		}
 
 		if d.config.IPv6Enabled {
 			log.Info("Making sure IPv6 forwarding is enabled.")
-			err = writeProcSys("/proc/sys/net/ipv6/conf/all/forwarding", "1")
+			err = procsys.Write("/proc/sys/net/ipv6/conf/all/forwarding", "1")
 			if err != nil {
 				log.WithError(err).Error("Failed to set IPv6 forwarding sysctl")
 			}
@@ -2808,23 +2582,23 @@ func (d *InternalDataplane) configureKernel() {
 	}
 
 	// Enable conntrack packet and byte accounting.
-	err = writeProcSys("/proc/sys/net/netfilter/nf_conntrack_acct", "1")
+	err = procsys.Write("/proc/sys/net/netfilter/nf_conntrack_acct", "1")
 	if err != nil {
 		log.Warnf("failed to set enable conntrack packet and byte accounting: %v\n", err)
 	}
 
 	if d.config.BPFEnabled && d.config.BPFDisableUnprivileged {
 		log.Info("BPF enabled, disabling unprivileged BPF usage.")
-		err := writeProcSys("/proc/sys/kernel/unprivileged_bpf_disabled", "1")
+		err := procsys.Write("/proc/sys/kernel/unprivileged_bpf_disabled", "1")
 		if err != nil {
 			log.WithError(err).Error("Failed to set unprivileged_bpf_disabled sysctl")
 		}
 	}
 	if d.config.Wireguard.Enabled || d.config.Wireguard.EnabledV6 {
 		// wireguard module is available in linux kernel >= 5.6
-		mpwg := newModProbe(moduleWireguard, newRealCmd)
+		mpwg := modprobe.New(modprobe.ModuleWireguard, modprobe.NewRealCmd)
 		out, err = mpwg.Exec()
-		log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", moduleWireguard)
+		log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", modprobe.ModuleWireguard)
 	}
 }
 
@@ -2846,7 +2620,7 @@ func (d *InternalDataplane) apply() {
 	// manager (BPFEndpointManager.OnHEPUpdate) that must happen before either of those managers
 	// begins its dataplane programming updates.
 	for _, mgr := range d.allManagers {
-		if handler, ok := mgr.(UpdateBatchResolver); ok {
+		if handler, ok := mgr.(dataplanedefs.UpdateBatchResolver); ok {
 			err := handler.ResolveUpdateBatch()
 			if err != nil {
 				log.WithField("manager", reflect.TypeOf(mgr).Name()).WithError(err).Debug(
@@ -2980,7 +2754,7 @@ func (d *InternalDataplane) apply() {
 	var rulesWG sync.WaitGroup
 	for _, r := range d.routeRules() {
 		rulesWG.Add(1)
-		go func(r routeRules) {
+		go func(r dataplanedefs.RouteRules) {
 			err := r.Apply()
 			if err != nil {
 				log.Warn("Failed to synchronize routing rules, will retry...")
@@ -3115,14 +2889,6 @@ func (d *InternalDataplane) loopReportingStatus() {
 	}
 }
 
-// Table is a shim interface for generictables.Table.
-type Table interface {
-	UpdateChain(chain *generictables.Chain)
-	UpdateChains([]*generictables.Chain)
-	RemoveChains([]*generictables.Chain)
-	RemoveChainByName(name string)
-}
-
 func (d *InternalDataplane) reportHealth() {
 	if d.config.HealthAggregator != nil {
 		d.config.HealthAggregator.Report(
@@ -3136,7 +2902,7 @@ func startBPFDataplaneComponents(
 	ipFamily proto.IPVersion,
 	maps *bpfmap.IPMaps,
 	ipSetIDAllocator *idalloc.IDAllocator,
-	config *Config,
+	config *dpconfig.Config,
 	ipSetsMgr *dpsets.IPSetsManager,
 	dp *InternalDataplane,
 	kernelLockdownConfidentiality bool,
@@ -3151,9 +2917,9 @@ func startBPFDataplaneComponents(
 	ctKey := bpfconntrack.KeyFromBytes
 	ctVal := bpfconntrack.ValueFromBytes
 
-	if config.bpfProxyHealthCheck == nil && config.KubeProxyHealtzPort != 0 {
+	if dp.bpfProxyHealthCheck == nil && config.KubeProxyHealtzPort != 0 {
 		var err error
-		config.bpfProxyHealthCheck, err = bpfproxy.NewHealthCheck(
+		dp.bpfProxyHealthCheck, err = bpfproxy.NewHealthCheck(
 			config.KubeClientSet,
 			config.Hostname,
 			config.KubeProxyHealtzPort,
@@ -3167,11 +2933,11 @@ func startBPFDataplaneComponents(
 	bpfproxyOpts := []bpfproxy.Option{
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
 		bpfproxy.WithMaglevLUTSize(config.BPFMaglevLUTSize),
-		bpfproxy.WithCTLBUDPAffinityTimeout(config.ctlbUDPAffinityTimeout()),
+		bpfproxy.WithCTLBUDPAffinityTimeout(config.CTLBUDPAffinityTimeout()),
 	}
 
-	if config.bpfProxyHealthCheck != nil {
-		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithHealthCheck(config.bpfProxyHealthCheck))
+	if dp.bpfProxyHealthCheck != nil {
+		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithHealthCheck(dp.bpfProxyHealthCheck))
 	} else {
 		log.Info("No healthz server configured for BPF kube-proxy.")
 	}
@@ -3224,7 +2990,7 @@ func startBPFDataplaneComponents(
 	)
 	dp.RegisterManager(failsafeMgr)
 
-	bpfRTMgr := newBPFRouteManager(config, maps, ipFamily, dp.loopSummarizer)
+	bpfRTMgr := bpfroute.NewManager(config, maps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
 	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled, int(ipFamily),
@@ -3272,8 +3038,8 @@ func startBPFDataplaneComponents(
 		// we might-as-well just funnel it directly from the calc-graph.
 		dp.RegisterManager(kp)
 
-		bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
-		bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
+		bpfRTMgr.SetHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
+		bpfRTMgr.SetRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
 		conntrackScanner.AddUnlocked(bpfconntrack.NewStaleNATScanner(kp, int(ipFamily)))
 	} else {
 		log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
