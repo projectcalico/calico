@@ -19,12 +19,17 @@ ARCH=${ARCH:-amd64}
 LIBBPF_A="felix/bpf-gpl/libbpf/src/${ARCH}/libbpf.a"
 
 have_credentials() {
-  [[ -n "${CI_ARTIFACT_STORAGE:-}" ]] ||
+  [[ -n "${CALICO_BUILD_DIR:-}" ]] || [[ -n "${CI_ARTIFACT_STORAGE:-}" ]] ||
     [[ -n "${CALICO_S3_ACCESS_KEY:-}" && -n "${CALICO_S3_SECRET_KEY:-}" ]]
 }
 
 fetch_artifact() {
   local name=$1 dest=$2
+  # A directory ArgoCI already put the build's outputs in, read where they lie.
+  if [ -n "${CALICO_BUILD_DIR:-}" ]; then
+    cp "${CALICO_BUILD_DIR}/${name}" "${dest}"
+    return
+  fi
   if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
     ( cd "$(dirname "${dest}")" && artifact pull workflow "${name}" )
     [ "$(basename "${dest}")" = "${name}" ] ||
