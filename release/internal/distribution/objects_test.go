@@ -339,19 +339,19 @@ func TestTransferFetch(t *testing.T) {
 	})
 }
 
-func TestBucketURI(t *testing.T) {
+func TestBucketKey(t *testing.T) {
 	for _, tc := range []struct {
-		name, uri, scheme   string
+		name, url, scheme   string
 		wantBucket, wantKey string
 		wantErr             bool
 	}{
-		{name: "a prefix", uri: "s3://bucket/charts/", scheme: "s3", wantBucket: "bucket", wantKey: "charts/"},
-		{name: "a bucket root", uri: "gs://bucket", scheme: "gs", wantBucket: "bucket"},
-		{name: "the wrong scheme", uri: "gs://bucket/x", scheme: "s3", wantErr: true},
-		{name: "no bucket", uri: "s3:///x", scheme: "s3", wantErr: true},
+		{name: "a prefix", url: "s3://bucket/charts/", scheme: "s3", wantBucket: "bucket", wantKey: "charts/"},
+		{name: "a bucket root", url: "gs://bucket", scheme: "gs", wantBucket: "bucket"},
+		{name: "the wrong scheme", url: "gs://bucket/x", scheme: "s3", wantErr: true},
+		{name: "no bucket", url: "s3:///x", scheme: "s3", wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			bucket, key, err := bucketURI(tc.uri, tc.scheme)
+			bucket, key, err := bucketKey(parseURL(t, tc.url), tc.scheme)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("error = %v, want error %v", err, tc.wantErr)
 			}

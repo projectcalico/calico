@@ -24,8 +24,10 @@ import (
 	"slices"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/docs"
 	"github.com/projectcalico/calico/release/internal/github"
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
@@ -36,6 +38,7 @@ const (
 	Step        = "charts"
 	buildStep   = Step + "-build"
 	PublishStep = Step + "-publish"
+	IndexStep   = "helm-index"
 )
 
 const (
@@ -152,6 +155,26 @@ var OutputDir = func(outputDir string) string {
 // IndexDir is where a chart index sit under outputDir.
 var IndexDir = func(outputDir string) string {
 	return Dir(outputDir)
+}
+
+type IndexOptions struct {
+	OutputDir string
+	Handler   distribution.S3
+	Skip      bool
+}
+
+// IndexUpload waits for the GitHub release the index links to, and the
+// images its charts pull.
+func IndexUpload(o IndexOptions) distribution.Upload {
+	h := o.Handler.At(DirName, "") // empty element to ensure trailing slash
+	h.CachePolicy = distribution.MutableCachePolicy
+	return distribution.Upload{
+		Name:     IndexStep,
+		Source:   IndexFilePath(IndexDir(o.OutputDir)),
+		Skip:     o.Skip,
+		Requires: []string{images.Step, github.ReleaseStep},
+		Handler:  h,
+	}
 }
 
 // versionedDir keeps one release's charts apart from another's, for a directory
@@ -360,7 +383,8 @@ func calicoChartEdits(productVersion, productRegistry string) []ValueEdit {
 // ValueEditsFor points the operator and product charts at the versions a
 // release pins.
 var ValueEditsFor = func(productVersion, productRegistry, operatorImage, operatorVersion, operatorRegistry string) []ValueEdit {
-	return append(slices.Clone(calicoChartEdits(productVersion, productRegistry)),
+	return append(
+		slices.Clone(calicoChartEdits(productVersion, productRegistry)),
 		operatorChartEdits(productVersion, productRegistry, operatorImage, operatorVersion, operatorRegistry)...,
 	)
 }

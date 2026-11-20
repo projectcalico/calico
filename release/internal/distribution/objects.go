@@ -66,16 +66,12 @@ type transfer struct {
 	differs func(src, dst object, srcPath string) (bool, error)
 }
 
-// bucketURI splits s3://bucket/key or gs://bucket/key.
-func bucketURI(uri, scheme string) (bucket, key string, err error) {
-	parsed, err := url.Parse(uri)
-	if err != nil {
-		return "", "", fmt.Errorf("parsing %s: %w", uri, err)
+// bucketKey splits s3://bucket/key or gs://bucket/key.
+func bucketKey(u url.URL, scheme string) (bucket, key string, err error) {
+	if u.Scheme != scheme || u.Host == "" {
+		return "", "", fmt.Errorf("%s is not a %s:// URL", u.String(), scheme)
 	}
-	if parsed.Scheme != scheme || parsed.Host == "" {
-		return "", "", fmt.Errorf("%s is not a %s:// URI", uri, scheme)
-	}
-	return parsed.Host, strings.TrimPrefix(parsed.Path, "/"), nil
+	return u.Host, strings.TrimPrefix(u.Path, "/"), nil
 }
 
 // upload copies src, a file or a tree, to key. A file sent to a key ending

@@ -16,7 +16,9 @@ package distribution
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"cloud.google.com/go/storage"
@@ -27,6 +29,11 @@ import (
 )
 
 const MutableCachePolicy = "max-age=60, s-maxage=300, stale-while-revalidate=60"
+
+const (
+	s3Scheme  = "s3"
+	gcsScheme = "gs"
+)
 
 var (
 	_ Handler = S3{}
@@ -41,8 +48,14 @@ var (
 	_ Validator = Preparer{}
 )
 
+// S3Handler points at elem under bucket. The bucket may carry a key prefix,
+// as in "bucket/prefix".
+func S3Handler(profile, bucket string, dryRun bool, elem ...string) S3 {
+	return S3{URL: bucketURL(s3Scheme, bucket, elem...), Profile: profile, DryRun: dryRun}
+}
+
 type S3 struct {
-	URI string
+	URL url.URL
 
 	Sync bool
 
@@ -63,7 +76,12 @@ type S3 struct {
 	store objectStore
 }
 
-func (d S3) Name() string { return d.URI }
+func (d S3) Name() string { return d.URL.String() }
+
+func (d S3) At(elem ...string) S3 {
+	d.URL = joinPrefix(d.URL, elem...)
+	return d
+}
 
 func (d S3) Publish(ctx context.Context, src string) error {
 	// A dry-run copy reads nothing remote, so it needs no client or credentials.
@@ -72,25 +90,25 @@ func (d S3) Publish(ctx context.Context, src string) error {
 		return err
 	}
 	if err := t.upload(ctx, src, key); err != nil {
-		return fmt.Errorf("copying to %s: %w", d.URI, err)
+		return fmt.Errorf("copying to %s: %w", d.Name(), err)
 	}
 	return nil
 }
 
-// Fetch copies the tree under URI, or the one object it names, to dest.
+// Fetch copies the tree under URL, or the one object it names, to dest.
 func (d S3) Fetch(ctx context.Context, dest string) error {
 	t, key, err := d.transfer(ctx, false)
 	if err != nil {
 		return err
 	}
 	if err := t.fetch(ctx, key, dest); err != nil {
-		return fmt.Errorf("copying from %s: %w", d.URI, err)
+		return fmt.Errorf("copying from %s: %w", d.Name(), err)
 	}
 	return nil
 }
 
 func (d S3) transfer(ctx context.Context, offline bool) (transfer, string, error) {
-	bucket, key, err := bucketURI(d.URI, "s3")
+	bucket, key, err := bucketKey(d.URL, s3Scheme)
 	if err != nil {
 		return transfer{}, "", err
 	}
@@ -101,14 +119,28 @@ func (d S3) transfer(ctx context.Context, offline bool) (transfer, string, error
 	store := d.store
 	if store == nil && !offline {
 		if store, err = newS3Store(ctx, bucket, d); err != nil {
-			return transfer{}, "", fmt.Errorf("%s: %w", d.URI, err)
+			return transfer{}, "", fmt.Errorf("%s: %w", d.Name(), err)
 		}
 	}
 	return transfer{store: store, sync: d.Sync, dryRun: d.DryRun, rules: rules, differs: newerOrResized}, key, nil
 }
 
 func (d S3) Validate(u Upload) error {
-	return validSource(u)
+	_, _, err := bucketKey(d.URL, s3Scheme)
+	return errors.Join(validSource(u), err)
+}
+
+func bucketURL(scheme, bucket string, elem ...string) url.URL {
+	host, prefix, _ := strings.Cut(bucket, "/")
+	return joinPrefix(url.URL{Scheme: scheme, Host: host, Path: "/" + prefix}, elem...)
+}
+
+// joinPrefix ends in a slash so a file upload lands inside the prefix rather
+// than replace it.
+func joinPrefix(u url.URL, elem ...string) url.URL {
+	u = *u.JoinPath(elem...)
+	u.Path = addTrailingSlash(u.Path)
+	return u
 }
 
 func addTrailingSlash(s string) string {
@@ -118,8 +150,14 @@ func addTrailingSlash(s string) string {
 	return s
 }
 
+// GCSHandler points at elem under bucket. The bucket may carry a key prefix,
+// as in "bucket/prefix".
+func GCSHandler(bucket string, dryRun bool, elem ...string) GCS {
+	return GCS{URL: bucketURL(gcsScheme, bucket, elem...), DryRun: dryRun}
+}
+
 type GCS struct {
-	URI string
+	URL url.URL
 
 	// Sync mirrors the source, deleting objects it no longer has.
 	Sync bool
@@ -129,7 +167,7 @@ type GCS struct {
 	store objectStore
 }
 
-func (d GCS) Name() string { return d.URI }
+func (d GCS) Name() string { return d.URL.String() }
 
 func (d GCS) Publish(ctx context.Context, src string) error {
 	t, key, done, err := d.transfer(ctx, d.DryRun && !d.Sync)
@@ -138,12 +176,12 @@ func (d GCS) Publish(ctx context.Context, src string) error {
 	}
 	defer done()
 	if err := t.upload(ctx, src, key); err != nil {
-		return fmt.Errorf("copying to %s: %w", d.URI, err)
+		return fmt.Errorf("copying to %s: %w", d.Name(), err)
 	}
 	return nil
 }
 
-// Fetch copies the tree under URI, or the one object it names, to dest.
+// Fetch copies the tree under URL, or the one object it names, to dest.
 func (d GCS) Fetch(ctx context.Context, dest string) error {
 	t, key, done, err := d.transfer(ctx, false)
 	if err != nil {
@@ -151,13 +189,13 @@ func (d GCS) Fetch(ctx context.Context, dest string) error {
 	}
 	defer done()
 	if err := t.fetch(ctx, key, dest); err != nil {
-		return fmt.Errorf("copying from %s: %w", d.URI, err)
+		return fmt.Errorf("copying from %s: %w", d.Name(), err)
 	}
 	return nil
 }
 
 func (d GCS) transfer(ctx context.Context, offline bool) (transfer, string, func(), error) {
-	bucket, key, err := bucketURI(d.URI, "gs")
+	bucket, key, err := bucketKey(d.URL, gcsScheme)
 	if err != nil {
 		return transfer{}, "", nil, err
 	}
@@ -165,7 +203,7 @@ func (d GCS) transfer(ctx context.Context, offline bool) (transfer, string, func
 	if store == nil && !offline {
 		client, err := storage.NewClient(ctx)
 		if err != nil {
-			return transfer{}, "", nil, fmt.Errorf("%s: storage client: %w", d.URI, err)
+			return transfer{}, "", nil, fmt.Errorf("%s: storage client: %w", d.Name(), err)
 		}
 		store, done = gcsStore{bucket: client.Bucket(bucket)}, func() { _ = client.Close() }
 	}
@@ -173,7 +211,8 @@ func (d GCS) transfer(ctx context.Context, offline bool) (transfer, string, func
 }
 
 func (d GCS) Validate(u Upload) error {
-	return validSource(u)
+	_, _, err := bucketKey(d.URL, gcsScheme)
+	return errors.Join(validSource(u), err)
 }
 
 // Hashrelease uploads the whole output tree, then records the hashrelease in
@@ -191,11 +230,8 @@ type HashreleaseServer struct {
 func (d HashreleaseServer) Name() string { return fmt.Sprintf("%s hashrelease", d.Release.Name) }
 
 func (d HashreleaseServer) Publish(ctx context.Context, src string) error {
-	bucket := GCS{
-		URI:    d.Release.BucketURI(d.Config),
-		Sync:   true,
-		DryRun: d.DryRun,
-	}
+	bucket := GCSHandler(d.Config.BucketName, d.DryRun, d.Release.Name)
+	bucket.Sync = true
 	if err := bucket.Publish(ctx, src); err != nil {
 		return err
 	}

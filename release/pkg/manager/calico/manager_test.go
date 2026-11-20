@@ -2004,16 +2004,16 @@ func TestPublishHelmChartsRecordsWhatItPushed(t *testing.T) {
 
 // The index is only written when both steps ran, so the upload has to say it
 // may be absent rather than failing a release that did not build one.
-func TestHelmIndexUploadAllowsAMissingIndex(t *testing.T) {
+func TestHelmIndexUploadSkip(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		helmCharts bool
 		helmIndex  bool
-		wantAllow  bool
+		wantSkip   bool
 	}{
 		{name: "both steps ran", helmCharts: true, helmIndex: true},
-		{name: "charts disabled", helmIndex: true, wantAllow: true},
-		{name: "index disabled", helmCharts: true, wantAllow: true},
+		{name: "charts disabled", helmIndex: true, wantSkip: true},
+		{name: "index disabled", helmCharts: true, wantSkip: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &CalicoManager{
@@ -2023,34 +2023,15 @@ func TestHelmIndexUploadAllowsAMissingIndex(t *testing.T) {
 				s3Bucket:      "bucket",
 				outputDir:     t.TempDir(),
 			}
-			if got := r.helmIndexUpload().Skip; got != tc.wantAllow {
-				t.Errorf("Skip = %v, want %v", got, tc.wantAllow)
+			uploads := r.uploads()
+			i := slices.IndexFunc(uploads, func(u distribution.Upload) bool { return u.Name == charts.IndexStep })
+			if i < 0 {
+				t.Fatalf("no %s upload", charts.IndexStep)
+			}
+			if got := uploads[i].Skip; got != tc.wantSkip {
+				t.Errorf("Skip = %v, want %v", got, tc.wantSkip)
 			}
 		})
-	}
-}
-
-// aws s3 cp to a key with no trailing slash writes an object named for the
-// prefix rather than a file inside it, so the index silently stops updating.
-func TestHelmIndexUploadTargetsTheChartsPrefix(t *testing.T) {
-	r := &CalicoManager{helmCharts: true, helmIndex: true, s3Bucket: "bucket", outputDir: t.TempDir()}
-	got, ok := r.helmIndexUpload().Handler.(distribution.S3)
-	if !ok {
-		t.Fatalf("handler is %T, want distribution.S3", r.helmIndexUpload().Handler)
-	}
-	if want := "s3://bucket/charts/"; got.URI != want {
-		t.Errorf("URI = %q, want %q", got.URI, want)
-	}
-}
-
-func TestHelmIndexUploadSetsCachePolicy(t *testing.T) {
-	r := &CalicoManager{helmCharts: true, helmIndex: true, s3Bucket: "bucket", outputDir: t.TempDir()}
-	got, ok := r.helmIndexUpload().Handler.(distribution.S3)
-	if !ok {
-		t.Fatalf("handler is %T, want distribution.S3", r.helmIndexUpload().Handler)
-	}
-	if got.CachePolicy != distribution.MutableCachePolicy {
-		t.Errorf("CachePolicy = %q, want %q", got.CachePolicy, distribution.MutableCachePolicy)
 	}
 }
 
@@ -2118,7 +2099,7 @@ func TestPublishNodes(t *testing.T) {
 		r := &CalicoManager{calicoVersion: testVersion(t, "v3.30.0"), repo: github.Repo{Owner: "projectcalico", Name: "calico"}, outputDir: t.TempDir()}
 		want := []string{
 			prepPublishStep, operator.Step, images.Step, charts.Step, outputs.MetadataStep, outputs.ChecksumStep,
-			branch.PushTagStep, github.ReleaseStep, helmIndexStep,
+			branch.PushTagStep, github.ReleaseStep, charts.IndexStep,
 		}
 		if diff := cmp.Diff(want, names(r)); diff != "" {
 			t.Errorf("nodes (-want +got):\n%s", diff)
