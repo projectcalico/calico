@@ -500,11 +500,13 @@ var _ = describe.CalicoDescribe(
 
 			Expect(postIP).To(Equal(staticIP),
 				"Static IP should survive live migration")
-			// Weaker than it looks: the guest keeps its MAC whatever the target pod
-			// got, and KDD WorkloadEndpoints carry no MAC to check the target by.
 			Expect(strings.ToLower(postMAC)).To(Equal(staticMAC),
 				"Static MAC should survive live migration")
 			Expect(postNode).NotTo(Equal(sourceNode))
+			// The guest keeps its MAC whatever the target pod got, so only the
+			// target pod's own interface shows the CNI honoured hwAddr there.
+			Expect(vm.launcherPodMAC(ctx, f, postNode)).To(Equal(staticMAC),
+				"the target virt-launcher pod's eth0 should carry the hwAddr MAC")
 
 			// 5. Verify IPAM handle still holds the same IP after migration.
 			postIPs, err := lcgc.IPAM().IPsByHandle(ctx, handleID)
