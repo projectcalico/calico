@@ -59,7 +59,6 @@ const (
 	prepBuildStep = "prep-build"
 
 	prepPublishStep = "prep-publish"
-	helmIndexStep   = "helm-index"
 )
 
 var (
@@ -70,7 +69,7 @@ var (
 		archives.WindowsStep, archives.Step,
 	}
 	sharedPublishSteps      = []string{operator.Step, images.Step, charts.Step, outputs.MetadataStep, outputs.ChecksumStep}
-	releasePublishSteps     = []string{branch.PushTagStep, github.ReleaseStep, helmIndexStep}
+	releasePublishSteps     = []string{branch.PushTagStep, github.ReleaseStep, charts.IndexStep}
 	hashreleasePublishSteps = []string{distribution.HashreleasePublishStep}
 
 	// BuildSteps are the steps a release build can skip, in the order they run.
@@ -824,9 +823,11 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 		return append(uploads, r.hashreleaseUpload())
 	}
 	uploads = append(uploads, r.releaseUploads()...)
-	// Last: the index it writes points at the github release's download URLs,
-	// which 404 until that release exists.
-	return append(uploads, r.helmIndexUpload())
+	return append(uploads, charts.IndexUpload(charts.IndexOptions{
+		OutputDir: r.uploadDir(),
+		Handler:   distribution.S3Handler(r.awsProfile, r.s3Bucket, r.dryRun),
+		Skip:      !r.helmCharts || !r.helmIndex,
+	}))
 }
 
 // The images scan sends these to ISS, which a skip defers to a later scan.
@@ -1465,25 +1466,6 @@ func (r *CalicoManager) publishHelmCharts() error {
 		opts = append(opts, charts.WithResume(published, false))
 	}
 	return charts.Publish(chart, r.helmRegistries, !r.dryRun, opts...)
-}
-
-func (r *CalicoManager) helmIndexUpload() distribution.Upload {
-	return distribution.Upload{
-		Name:     helmIndexStep,
-		Source:   charts.IndexFilePath(charts.IndexDir(r.uploadDir())),
-		Skip:     !r.helmCharts || !r.helmIndex,
-		Requires: []string{charts.Step, github.ReleaseStep},
-		Handler: distribution.S3{
-			URI:         r.s3URI(charts.DirName),
-			Profile:     r.awsProfile,
-			CachePolicy: distribution.MutableCachePolicy,
-			DryRun:      r.dryRun,
-		},
-	}
-}
-
-func (r *CalicoManager) s3URI(path ...string) string {
-	return fmt.Sprintf("s3://%s/%s/", r.s3Bucket, strings.Join(path, "/"))
 }
 
 func (r *CalicoManager) buildReleaseNotes() error {

@@ -75,11 +75,6 @@ type Hashrelease struct {
 	ImageScanResultURL string `yaml:"iss_url,omitempty"`
 }
 
-// BucketURI is where the hashrelease's content is served from.
-func (h *Hashrelease) BucketURI(cfg *Config) string {
-	return fmt.Sprintf("gs://%s/%s", cfg.BucketName, h.Name)
-}
-
 func (h *Hashrelease) URL() string {
 	return HashreleaseURL(h.Name)
 }
