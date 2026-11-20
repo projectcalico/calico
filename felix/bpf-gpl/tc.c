@@ -475,6 +475,13 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		}
 	}
 
+	if (HAS_MAGLEV && (ctx->state->flags & CALI_ST_RELATED_MISS)) {
+		CALI_DEBUG("ICMP error without CT entry, checking for a Maglev service");
+		CALI_JUMP_TO(ctx, PROG_INDEX_MAGLEV);
+		CALI_DEBUG("Failed to jump to maglev program");
+		ctx->state->flags &= ~CALI_ST_RELATED_MISS;
+	}
+
 	/* Skip policy if we get conntrack hit */
 	if (ct_result_rc(ctx->state->ct_result.rc) != CALI_CT_NEW && ct_result_rc(ctx->state->ct_result.rc) != CALI_CT_MID_FLOW_MISS) {
 		if (ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_FIB) {
@@ -2445,6 +2452,95 @@ deny:
 #endif /* !IPVER6 */
 
 #if HAS_MAGLEV
+/* calico_tc_maglev_icmp_err forwards an ICMP error for a Maglev VIP that landed
+ * on a node without the flow's CT entry, which ECMP on the ToR makes routine,
+ * to the backend's node, which holds the CT entry and delivers it from there.
+ * The error quotes the reply (VIP->client), so the tuple is reversed before
+ * hashing; otherwise it would select a different LUT slot than the ingress
+ * node did. No CT entry is created: the error belongs to the existing flow.
+ */
+static CALI_BPF_INLINE void calico_tc_maglev_icmp_err(struct cali_tc_ctx *ctx)
+{
+	struct cali_tc_state *state = ctx->state;
+	int inner_off = skb_l4hdr_offset(ctx) + ICMP_SIZE;
+	ipv46_addr_t client, vip;
+	__u8 inner_proto;
+
+#ifdef IPVER6
+	struct ipv6hdr inner;
+
+	if (bpf_skb_load_bytes(ctx->skb, inner_off, &inner, sizeof(inner))) {
+		goto no_maglev;
+	}
+	ipv6hdr_ip_to_ipv6_addr_t(&vip, &inner.saddr);
+	ipv6hdr_ip_to_ipv6_addr_t(&client, &inner.daddr);
+	inner_proto = inner.nexthdr;
+#else
+	struct iphdr inner;
+
+	if (bpf_skb_load_bytes(ctx->skb, inner_off, &inner, sizeof(inner))) {
+		goto no_maglev;
+	}
+	vip = inner.saddr;
+	client = inner.daddr;
+	inner_proto = inner.protocol;
+#endif
+
+	/* Conntrack has already replaced the ports with the inner ones. */
+	__u16 vip_port = state->sport;
+	__u16 client_port = state->dport;
+
+	nat_lookup_result nat_res = NAT_LOOKUP_ALLOW;
+	calico_nat_lookup_tc(ctx, &client, &vip, inner_proto, vip_port, false, &nat_res);
+	if (nat_res != NAT_MAGLEV) {
+		goto no_maglev;
+	}
+
+	struct calico_nat_dest *backend = maglev_select_backend(ctx, &client, &vip,
+								client_port, vip_port, inner_proto);
+	if (!backend) {
+		CALI_DEBUG("Maglev: ICMP error, no backend");
+		deny_reason(ctx, CALI_REASON_MAGLEV_NO_BACKEND);
+		return;
+	}
+
+	struct cali_rt *rt = cali_rt_lookup(&backend->addr);
+	if (!rt) {
+		CALI_DEBUG("Maglev: ICMP error, no route to backend " IP_FMT "", debug_ip(backend->addr));
+		deny_reason(ctx, CALI_REASON_RT_UNKNOWN);
+		return;
+	}
+
+	/* Had this node carried the flow to a local backend, the CT lookup would
+	 * have hit. Delivering without that check would let an error for a flow
+	 * that doesn't exist here reach the pod.
+	 */
+	if (cali_rt_is_local(rt)) {
+		CALI_DEBUG("Maglev: ICMP error for local backend without CT entry");
+		goto no_maglev;
+	}
+
+	CALI_DEBUG("Maglev: forwarding ICMP error to backend " IP_FMT ":%d",
+			debug_ip(backend->addr), backend->port);
+
+	/* Shape the result like a related hit on an NP_FWD entry, so the
+	 * accepted program encapsulates the error to the backend's node.
+	 */
+	state->ct_result.rc = CALI_CT_ESTABLISHED_DNAT;
+	ct_result_set_flag(state->ct_result.rc, CT_RES_RELATED);
+	state->ct_result.nat_ip = backend->addr;
+	state->ct_result.nat_port = backend->port;
+	state->ct_result.flags |= CALI_CT_FLAG_NP_FWD;
+	state->ct_result.tun_ip = rt->next_hop;
+
+no_maglev:
+	state->flags &= ~CALI_ST_RELATED_MISS;
+	state->pol_rc = CALI_POL_ALLOW;
+	state->flags |= CALI_ST_SKIP_POLICY;
+	CALI_JUMP_TO(ctx, PROG_INDEX_ALLOWED);
+	CALI_DEBUG("jump to allowed failed");
+}
+
 SEC("tc")
 int calico_tc_maglev(struct __sk_buff *skb)
 {
@@ -2461,7 +2557,14 @@ int calico_tc_maglev(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	if (!(ctx->nat_dest = maglev_select_backend(ctx))) {
+	if (ctx->state->flags & CALI_ST_RELATED_MISS) {
+		calico_tc_maglev_icmp_err(ctx);
+		goto deny;
+	}
+
+	if (!(ctx->nat_dest = maglev_select_backend(ctx, &ctx->state->ip_src, &ctx->state->ip_dst,
+						    ctx->state->sport, ctx->state->dport,
+						    ctx->state->ip_proto))) {
 		CALI_DEBUG("Maglev: select backend failed");
 		deny_reason(ctx, CALI_REASON_MAGLEV_NO_BACKEND);
 		goto deny;
