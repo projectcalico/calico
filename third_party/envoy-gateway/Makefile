@@ -7,7 +7,11 @@ BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
-ENVOY_GATEWAY_VERSION=v1.9.1
+ENVOY_GATEWAY_VERSION=v1.9.4
+
+# This tree's go.mod needs a newer Go than GO_VERSION. "+auto" sets a floor
+# and moves higher only when go.mod asks.
+EXTRA_DOCKER_ARGS += -e GOTOOLCHAIN=go1.26.11+auto
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -34,7 +38,7 @@ $(ENVOY_GATEWAY_DOWNLOADED):
 # 	For each valid patch file, it applies the patch to the envoy-gateway directory using patch -p1.
 	for patch in patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
-			patch -d envoy-gateway -p1 < "$$patch"; \
+			patch -d envoy-gateway -p1 --forward < "$$patch" || exit 1; \
 		fi; \
 	done; \
 
