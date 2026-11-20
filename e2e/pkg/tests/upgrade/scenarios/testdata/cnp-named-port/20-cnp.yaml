@@ -1,0 +1,44 @@
+# v1alpha2 is the only version v3.32 and v3.33 serve. After the upgrade the
+# v0.3.0 CRD prunes destinationNamedPort, so the entry reads back as {} and
+# Calico drops the whole Accept rule, numeric 8080 entry included.
+apiVersion: policy.networking.k8s.io/v1alpha2
+kind: ClusterNetworkPolicy
+metadata:
+  name: e2e-upgrade-cnp-named-port-accept
+spec:
+  tier: Admin
+  priority: 917
+  subject:
+    pods:
+      namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: e2e-upgrade-cnp-named-port}}
+      podSelector: {matchLabels: {app: srv}}
+  ingress:
+  - name: accept-cli
+    action: Accept
+    from:
+    - pods:
+        namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: e2e-upgrade-cnp-named-port}}
+        podSelector: {matchLabels: {app: cli}}
+    protocols:
+    - destinationNamedPort: http
+    - tcp: {destinationPort: {number: 8080}}
+---
+# Makes a dropped Accept visible as a denial rather than as default-allow.
+apiVersion: policy.networking.k8s.io/v1alpha2
+kind: ClusterNetworkPolicy
+metadata:
+  name: e2e-upgrade-cnp-named-port-baseline
+spec:
+  tier: Baseline
+  priority: 917
+  subject:
+    pods:
+      namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: e2e-upgrade-cnp-named-port}}
+      podSelector: {matchLabels: {app: srv}}
+  ingress:
+  - name: deny-cli
+    action: Deny
+    from:
+    - pods:
+        namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: e2e-upgrade-cnp-named-port}}
+        podSelector: {matchLabels: {app: cli}}
