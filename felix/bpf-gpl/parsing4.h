@@ -95,6 +95,7 @@ deny:
 static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v4(struct cali_tc_ctx *ctx)
 {
 	ctx->state->ip_src = ip_hdr(ctx)->saddr;
+	ctx->state->pre_nat_ip_src = ip_hdr(ctx)->saddr;
 	ctx->state->ip_dst = ip_hdr(ctx)->daddr;
 	ctx->state->pre_nat_ip_dst = ip_hdr(ctx)->daddr;
 	ctx->state->ip_proto = ip_hdr(ctx)->protocol;
