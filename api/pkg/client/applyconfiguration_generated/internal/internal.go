@@ -983,6 +983,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: chainInsertMode
       type:
         scalar: string
+    - name: criSocketPath
+      type:
+        scalar: string
     - name: dataplaneDriver
       type:
         scalar: string
@@ -1244,6 +1247,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: netlinkTimeout
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+    - name: networkStatusNetns
+      type:
+        scalar: string
     - name: nftablesFilterAllowAction
       type:
         scalar: string
@@ -1275,6 +1281,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: string
     - name: policySyncPathPrefix
+      type:
+        scalar: string
+    - name: procRootPath
       type:
         scalar: string
     - name: programClusterRoutes

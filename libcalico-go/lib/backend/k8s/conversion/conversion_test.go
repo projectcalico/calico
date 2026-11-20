@@ -1193,6 +1193,42 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(pod).To(Equal(makePod()), "Original pod should not be modified")
 	})
 
+	It("should read the netns from the Calico network-status annotation", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod",
+				Namespace: "default",
+				Annotations: map[string]string{
+					AnnotationNetworkStatus: `{"netns":"/run/netns/cni-1234"}`,
+				},
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName: "nodeA",
+			},
+		}
+		wep, err := podToWorkloadEndpoint(c, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wep.Value.(*internalapi.WorkloadEndpoint).Spec.Netns).To(Equal("/run/netns/cni-1234"))
+	})
+
+	It("should leave the netns empty when the network-status annotation is malformed", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod",
+				Namespace: "default",
+				Annotations: map[string]string{
+					AnnotationNetworkStatus: `{"netns":`,
+				},
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName: "nodeA",
+			},
+		}
+		wep, err := podToWorkloadEndpoint(c, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wep.Value.(*internalapi.WorkloadEndpoint).Spec.Netns).To(BeEmpty())
+	})
+
 	It("should parse valid QoSControl annotations", func() {
 		dscp := numorstring.DSCPFromString("cs5")
 		pod := kapiv1.Pod{

@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -139,6 +140,15 @@ func RunIPAMPlugin(netconf, command, args, cid, cniVersion string) (*cniv1.Resul
 	}
 
 	return result, e, exitCode
+}
+
+// CanonicalNetnsPath returns the netns path as the CNI plugin records it, with symlinks resolved.
+func CanonicalNetnsPath(netns ns.NetNS) string {
+	p, err := filepath.EvalSymlinks(netns.Path())
+	if err != nil {
+		return netns.Path()
+	}
+	return p
 }
 
 func CreateContainerNamespace() (containerNs ns.NetNS, containerId string, err error) {

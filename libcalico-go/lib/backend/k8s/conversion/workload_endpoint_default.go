@@ -267,6 +267,10 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		wep.Annotations["k8s.v1.cni.cncf.io/network-status"] = v
 	}
 
+	// Felix uses the netns recorded by Calico CNI at cmdAdd to resolve the pod's
+	// netns cookie locally, avoiding a /proc scan and the hostPID requirement.
+	wep.Spec.Netns = InterfaceStatusFromAnnotation(pod.Annotations, DefaultPodInterface).Netns
+
 	// Embed the workload endpoint into a KVPair.
 	kvp := model.KVPair{
 		Key: model.ResourceKey{
