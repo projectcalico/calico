@@ -58,27 +58,28 @@ func WithCategory(cat Category) any {
 //
 // If you are unsure which feature to use, please ask!
 var features = map[string]bool{
-	"NetworkPolicy":   true,
-	"Tiered-Policy":   true,
-	"IPPool":          true,
-	"IPAM":            true,
-	"AutoHEPs":        true,
-	"Host-Protection": true,
-	"HostPorts":       true,
-	"OwnerReferences": true,
-	"MTU":             true,
-	"Maglev":          true,
-	"BGPPeer":         true,
-	"IPIP":            true,
-	"Tiered-RBAC":     true,
-	"Pods":            true,
-	"QoS":             true,
-	"Datapath":        true,
-	"IngressGateway":  true,
-	"Istio":           true,
-	"KubeVirt":        true,
-	"Wireguard":       true,
-	"Flow-Logs":       true,
+	"NetworkPolicy":        true,
+	"Tiered-Policy":        true,
+	"IPPool":               true,
+	"IPAM":                 true,
+	"AutoHEPs":             true,
+	"Host-Protection":      true,
+	"HostPorts":            true,
+	"OwnerReferences":      true,
+	"MTU":                  true,
+	"Maglev":               true,
+	"BGPPeer":              true,
+	"IPIP":                 true,
+	"Tiered-RBAC":          true,
+	"Pods":                 true,
+	"QoS":                  true,
+	"Datapath":             true,
+	"IngressGateway":       true,
+	"Istio":                true,
+	"KubeVirt":             true,
+	"Wireguard":            true,
+	"Flow-Logs":            true,
+	"ClusterNetworkPolicy": true,
 }
 
 // RequiresRealKubeVirt marks tests that need a real KubeVirt installation with
@@ -172,6 +173,12 @@ func RequiresCalicoIPAM() any {
 // (AWS VPC, Azure, GKE).
 func RequiresCalicoCNI() any {
 	return framework.WithLabel("RequiresCalicoCNI")
+}
+
+// IsFeature reports whether WithFeature accepts name, for callers that must
+// validate before ginkgo is running (WithFeature fails the spec instead).
+func IsFeature(name string) bool {
+	return features[name]
 }
 
 // WithFeature marks tests as verifying a specific feature.
