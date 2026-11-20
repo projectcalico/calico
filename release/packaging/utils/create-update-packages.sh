@@ -213,7 +213,8 @@ function docker_run_rm {
 function do_bld_images {
     # Build the docker images that we use for building for each target platform.
     pushd "${rootdir}/release/packaging/docker-build-images"
-    docker buildx bake --set "centos7.args.UID=$(id -u)" --set "centos7.args.GID=$(id -g)"
+    docker buildx bake --set "centos8.args.UID=$(id -u)" --set "centos8.args.GID=$(id -g)" \
+        --set "centos8.args.GO_VERSION=$(sed -n 's/^GO_VERSION=//p' "${rootdir}/metadata.mk")"
     popd
 }
 
@@ -246,7 +247,10 @@ function do_felix {
     # content, because it's infeasible to work out a set of Debian and
     # RPM golang build dependencies that is exactly equivalent to our
     # containerized builds.
-    make bin/calico-felix DATE="${build_date}"
+    # Build libbpf and the felix binary in the EL8 image (instead of
+    # calico/go-build) so that they link against EL8's older glibc.
+    rm -rf bin/calico-felix bin/calico-felix-amd64 bpf-gpl/libbpf/src/amd64
+    make bin/calico-felix DATE="${build_date}" CALICO_BUILD=calico-build/centos8 ${FORCE_VERSION:+GIT_DESCRIPTION=${FORCE_VERSION}}
     # Remove all the files that were added by that build, except for the
     # bin/calico-felix binary.
     rm -f bin/calico-felix-amd64
@@ -285,7 +289,7 @@ function do_calicoctl {
     # equivalent to our containerized builds.  Unlike Felix, calicoctl
     # is statically linked (CGO_ENABLED=0), so it needs no patchelf
     # fixups and has no shared library dependencies.
-    make bin/calicoctl DATE="${build_date}"
+    make bin/calicoctl DATE="${build_date}" ${FORCE_VERSION:+GIT_DESCRIPTION=${FORCE_VERSION}}
 
     # Remove the arch-suffixed binary that the build also creates,
     # keeping just bin/calicoctl.
@@ -328,9 +332,9 @@ function do_dnsmasq {
     git clone https://github.com/projectcalico/calico-dnsmasq.git dnsmasq
     cd dnsmasq
 
-    # CentOS/RHEL 7
+    # CentOS/RHEL 8
     git checkout origin/rpm_2.79
-    docker_run_rm -e EL_VERSION=el7 calico-build/centos7 /code/release/packaging/rpm/build-rpms
+    docker_run_rm -e EL_VERSION=el8 calico-build/centos8 /code/release/packaging/rpm/build-rpms
 
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'dnsmasq_*-*' -exec mv '{}' "$outputDir" \;
