@@ -295,17 +295,17 @@ func (d *DiachronicFlow) appendWindow(flow *types.Flow, start, end int64) {
 
 // Aggregate aggregates the statistics from the DiachronicFlow into a new Flow object over the specified time range.
 func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *types.Flow {
-	if !d.Within(startGte, startLt) {
-		return nil
-	}
-
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
+	ws := d.windowsWithin(startGte, startLt)
+	if len(ws) == 0 {
+		return nil
+	}
 	f := newAggregateFlow(d)
 	var mask windowSet
-	for i := range d.windows {
-		if w := &d.windows[i]; w.inRange(startGte, startLt) {
+	for i := range ws {
+		if w := &ws[i]; w.inRange(startGte, startLt) {
 			d.aggregateWindow(f, w)
 			mask.set(bitIndex(w.start, w.end))
 		}
@@ -314,16 +314,57 @@ func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *types.Flow {
 	return f
 }
 
+// Within reports whether the flow has data in [startGte, startLt), a zero bound being open, and if
+// so returns the StartTime that Aggregate would give it, without building the flow. That start is
+// zero when the flow's only window in the range is the current bucket's, which ends after
+// startLt.
+func (d *DiachronicFlow) Within(startGte, startLt int64) (int64, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	ws := d.windowsWithin(startGte, startLt)
+	if len(ws) == 0 {
+		if logrus.IsLevelEnabled(logrus.DebugLevel) {
+			logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+				"startGte": startGte,
+				"startLt":  startLt,
+			}).Debug("DiachronicFlow does not have data for time range")
+		}
+		return 0, false
+	}
+
+	// Each window starts after the one before it ends, so if the first window ends past the range,
+	// every window does.
+	if ws[0].inRange(startGte, startLt) {
+		return ws[0].start, true
+	}
+	return 0, true
+}
+
+// windowsWithin returns the windows that start in [startGte, startLt), a zero bound being open.
+// They may end after startLt, unlike the windows Window.inRange accepts, which start and end in
+// the range; every one of those is among them. Callers must hold mu.
+func (d *DiachronicFlow) windowsWithin(startGte, startLt int64) []Window {
+	lo, hi := 0, len(d.windows)
+	if startGte != 0 {
+		lo = sort.Search(hi, func(i int) bool { return d.windows[i].start >= startGte })
+	}
+	if startLt != 0 {
+		hi = lo + sort.Search(hi-lo, func(i int) bool { return d.windows[lo+i].start >= startLt })
+	}
+	return d.windows[lo:hi]
+}
+
 // bucketWindow returns a copy of the window for the given bucket. A bucket maps to exactly one
 // window, because BucketRing.AddFlow passes the bucket's own start and end.
 func (d *DiachronicFlow) bucketWindow(startGte, startLt int64) (Window, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	for i := range d.windows {
-		if d.windows[i].inRange(startGte, startLt) {
-			return d.windows[i], true
-		}
+	// Each window starts after the one before it ends, so if the first window starting in the range
+	// ends past it, every one does.
+	if ws := d.windowsWithin(startGte, startLt); len(ws) > 0 && ws[0].inRange(startGte, startLt) {
+		return ws[0], true
 	}
 	return Window{}, false
 }
@@ -377,35 +418,13 @@ func (d *DiachronicFlow) aggregateWindow(f *types.Flow, w *Window) {
 }
 
 func (d *DiachronicFlow) Matches(filter *proto.Filter, startGte, startLt int64) bool {
-	if !d.Within(startGte, startLt) {
+	if _, ok := d.Within(startGte, startLt); !ok {
 		return false
 	}
 	if filter == nil {
 		return true
 	}
 	return types.Matches(filter, &d.Key)
-}
-
-func (d *DiachronicFlow) Within(startGte, startLt int64) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	// Go through each window and return true if any of them
-	// fall within the start and end time.
-	for _, w := range d.windows {
-		if (startGte == 0 || w.start >= startGte) &&
-			(startLt == 0 || w.start < startLt) {
-			return true
-		}
-	}
-
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
-			"startGte": startGte,
-			"startLt":  startLt,
-		}).Debug("DiachronicFlow does not have data for time range")
-	}
-	return false
 }
 
 // intersection returns the intersection of two comma-separated label sets stored as unique handles.

@@ -106,6 +106,7 @@ local:goldmane/pkg/emitter
 local:goldmane/pkg/flowgen
 local:goldmane/pkg/goldmane
 local:goldmane/pkg/internal/flowcache
+local:goldmane/pkg/internal/topk
 local:goldmane/pkg/internal/utils
 local:goldmane/pkg/server
 local:goldmane/pkg/storage
