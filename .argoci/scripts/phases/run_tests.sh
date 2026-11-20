@@ -248,6 +248,12 @@ EOF
   fi
 fi
 
+# Once the downlevel cluster was seeded, the post-upgrade run also selects the
+# scenarios' verify specs. The binary reads both variables.
+if [[ -z "${E2E_UPGRADE_PHASE:-}" && -n "${E2E_UPGRADE_SEEDED:-}" ]]; then
+  export E2E_UPGRADE_PHASE=verify E2E_UPGRADE_FROM="${RELEASE_STREAM}"
+fi
+
 # E2E_BINARY is a set/unset sentinel (its value is not used here -- make
 # e2e-run locates the binary itself). Take the structured path whenever a
 # k8s-e2e binary was acquired above; non-e2e test types fall through to bz
@@ -378,6 +384,8 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -e KUBECONFIG=/kubeconfig \
     -e PRODUCT=${PRODUCT:-calico} \
     -e WINDOWS_OS \
+    -e E2E_UPGRADE_PHASE \
+    -e E2E_UPGRADE_FROM \
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
     "${auth_mount[@]}" \
     "${aws_cred_env[@]}" \
