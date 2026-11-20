@@ -223,6 +223,64 @@ func TestOperatorDeploymentStrategy(t *testing.T) {
 	})
 }
 
+func TestOperatorPreDeleteHook(t *testing.T) {
+	const uninstallTemplate = "templates/tigera-operator/00-uninstall.yaml"
+
+	t.Run("renders the uninstall Job as a pre-delete hook by default", func(t *testing.T) {
+		g := NewWithT(t)
+
+		jobs, err := renderObjects(t, &helm.Options{}, isJob)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(jobs).To(HaveLen(1))
+		g.Expect(jobs[0].Name).To(Equal("tigera-operator-uninstall"))
+		g.Expect(jobs[0].Annotations).To(HaveKeyWithValue("helm.sh/hook", "pre-delete"))
+		g.Expect(jobs[0].Spec.Template.Spec.Containers).To(HaveLen(1))
+		g.Expect(jobs[0].Spec.Template.Spec.Containers[0].Args).To(Equal([]string{"-pre-delete"}))
+	})
+
+	t.Run("renders no Job when disabled", func(t *testing.T) {
+		g := NewWithT(t)
+		opts := &helm.Options{
+			SetValues: map[string]string{"preDeleteHook.enabled": "false"},
+		}
+
+		jobs, err := renderObjects(t, opts, isJob)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(jobs).To(BeEmpty())
+
+		// renderObjects skips a leftover fragment with no kind, so also check the template renders nothing.
+		chartDir, err := filepath.Abs("../tigera-operator")
+		g.Expect(err).NotTo(HaveOccurred())
+		_, err = helm.RenderTemplateE(t, opts, chartDir, "tigera-operator", []string{uninstallTemplate})
+		g.Expect(err).To(MatchError(ContainSubstring("could not find template")))
+	})
+
+	// Values templated by GitOps tools often arrive as the string "false".
+	t.Run("renders no Job when disabled with the string false", func(t *testing.T) {
+		g := NewWithT(t)
+		opts := &helm.Options{
+			SetStrValues: map[string]string{"preDeleteHook.enabled": "false"},
+		}
+
+		jobs, err := renderObjects(t, opts, isJob)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(jobs).To(BeEmpty())
+	})
+
+	// helm upgrade --reuse-values renders with the previous chart's values, which may not have the key.
+	t.Run("keeps the Job when the key is missing", func(t *testing.T) {
+		g := NewWithT(t)
+		opts := &helm.Options{
+			SetValues: map[string]string{"preDeleteHook": "null"},
+		}
+
+		jobs, err := renderObjects(t, opts, isJob)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(jobs).To(HaveLen(1))
+		g.Expect(jobs[0].Name).To(Equal("tigera-operator-uninstall"))
+	})
+}
+
 func finalizerResourceNames(cr rbacv1.ClusterRole) []string {
 	var names []string
 	for _, rule := range cr.Rules {
