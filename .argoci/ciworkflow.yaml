@@ -17,6 +17,17 @@ notifications:
 # Generated from the Go import graph; every `dependsOn:` name resolves here.
 dependencies: .argoci/depstree.yaml
 
+# Hands go-cache's build and module caches to the go-build steps. Shared: each
+# name is one writer's disk, mounted read-only by its readers, so a name must
+# never gain a second writer, a retry, or a `when`.
+cache:
+  strategy: shared
+  size: 32Gi
+  storageClass: premium-rwo
+  # A PR's next run starts go-cache from what its last one built. Go's caches are
+  # content-addressed, so what is stale goes unused rather than wrong.
+  persist: [go]
+
 # A promotion runs at the source run's commit, so an old build republishes
 # itself rather than master.
 promotions:
@@ -60,8 +71,12 @@ promotions:
 # uses the public one — falling back to the source repositories on any error,
 # since go does not retry a download that breaks mid-stream.
 globalPrologue: |
-  mkdir -p /go/src/github.com/projectcalico
-  ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+  # A go-build step is checked out there already; linking it onto itself would
+  # leave a stray link inside the tree.
+  if [ "${CI_HOME}/${CI_GIT_DIR}" != /go/src/github.com/projectcalico/calico ]; then
+    mkdir -p /go/src/github.com/projectcalico
+    ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+  fi
   export GOPROXY="${GOPROXY:-https://proxy.golang.org|direct}"
   # Anonymous Docker Hub pulls are rate limited. The daemon is up by now on any
   # step that has one. A VM step never gets the credentials: the bundle is loaded

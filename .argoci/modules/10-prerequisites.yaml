@@ -29,13 +29,17 @@ steps:
   # go vet fans out across every package, so it scales with the cores it gets.
   - name: check-go
     env:
-      - name: BUILD_CACHE_GROUP
-        value: preflight-go-checks
-      - name: STORE_BUILD_CACHE
+      - name: NATIVE_GO_BUILD
         value: "true"
+    useGoBuild: true
+    # go-cache compiles exactly what go vet does, so the vet is mostly cache hits.
+    depends: [go-cache]
     jobSize: large
     requests: {cpu: 14000m, memory: 16Gi}
-    services: [docker]
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    cache:
+      - {name: go, mode: read, path: /cache/go}
     changes:
       in:
         - ^go\.mod$
@@ -49,6 +53,7 @@ steps:
         - ^\.argoci/config\.yaml$
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
+      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" check-go) || exit 1; eval "$go_env"
       # `useGoBuild` steps take their image tag from config.yaml rather than from
       # the toolchain the Makefiles build with.
       want=$(make --no-print-directory -s -f metadata.mk --eval 'print: ; @echo $(GO_BUILD_VER)' print)
@@ -65,6 +70,79 @@ steps:
       # A cron or tag has no range to diff against, so it reformats everything.
       if [ "${CI_GIT_REF_TYPE}" = PR ] || [ "${CI_GIT_REF_TYPE}" = MERGE ]; then make fix-changed; else make fix-all; fi
       make check-dirty
+
+  # Every module's downloads and a compile of every package, written straight to
+  # the shared go cache disk, where the go-build steps read them in place
+  # (restore-go-cache).
+  - name: go-cache
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    useGoBuild: true
+    jobSize: large
+    # Nearly every Go step waits on this one, and the compile scales with cores.
+    requests: {cpu: 9000m, memory: 10Gi}
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    changes:
+      in:
+        - ^\.argoci/scripts/restore-go-cache$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    cache:
+      - {name: go, mode: write, path: /cache/go}
+    commands: |
+      # Built at the go-build container's repo and module paths, which are in every
+      # build output's cache key. goBuildCheckoutDir puts the repo there.
+      if [ "$PWD" != /go/src/github.com/projectcalico/calico ]; then
+        echo "go-cache: checked out at $PWD, not the go-build path; readers will miss its build cache" >&2
+      fi
+      mkdir -p /cache/go/mod /go/pkg
+      # Set aside, not merged: the image's own modules are not on the shared disk.
+      if [ -e /go/pkg/mod ] && [ ! -L /go/pkg/mod ]; then mv /go/pkg/mod /go/pkg/mod.image; fi
+      ln -sfn /cache/go/mod /go/pkg/mod
+      export GOCACHE=/cache/go/build GOMODCACHE=/go/pkg/mod
+      # The disk comes from the PR's last snapshot, and no build output survives a
+      # toolchain change: kept, they fill the disk alongside the rebuild.
+      toolchain=$(make -s --no-print-directory -f metadata.mk --eval='print-go-build-ver: ; @echo $(GO_BUILD_VER)' print-go-build-ver)
+      if [ "$(cat /cache/go/build-toolchain 2>/dev/null)" != "$toolchain" ]; then
+        echo "go-cache: build cache is not from go-build ${toolchain}; starting it empty"
+        find /cache/go/build -mindepth 1 -delete 2>/dev/null || true
+        echo "$toolchain" >/cache/go/build-toolchain
+      fi
+      s=$(date +%s)
+      # Alongside the compile, which fetches what it needs itself: the other
+      # modules are for the steps that build in them. go locks each module it
+      # downloads.
+      (
+        set -e
+        for mod in $(git ls-files '*go.mod' | grep -v -e '^third_party/' -e '/vendor/'); do
+          echo "go-cache: go mod download in $(dirname "$mod")"
+          ( cd "$(dirname "$mod")" && go mod download )
+        done
+      ) &
+      downloads=$!
+      # The package build prints nothing, so a count of what it has compiled.
+      while sleep 30; do
+        echo "go-cache: $(find /cache/go/build -name '*-d' | wc -l) compiled outputs, $(du -sh /cache/go/build | cut -f1)"
+      done &
+      progress=$!
+      # || true: under errexit a failing trap fails the step, and the ticker is
+      # usually gone by now.
+      trap 'kill "$progress" 2>/dev/null || true' EXIT
+      # Through make, so the settings are the ones the readers build with.
+      make go-compile-all
+      echo "go-cache: compiled in $(( $(date +%s) - s ))s"
+      if ! wait "$downloads"; then
+        echo "go-cache: a module download failed; readers would find modules missing" >&2
+        exit 1
+      fi
+      kill "$progress" 2>/dev/null || true
+      # Go trims only what has gone unused for days, so the snapshot would carry
+      # every output any run ever made. A hit refreshes an entry's mtime once it is
+      # an hour old, so anything older than that before this run began went unused.
+      find /cache/go/build -mindepth 2 -type f ! -newermt "@$(( s - 3600 ))" -delete
+      find /cache/go/build -mindepth 2 -type d -empty -delete
+      du -sh /cache/go/build /cache/go/mod
 
   - name: check-python
     env:
