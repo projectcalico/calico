@@ -673,12 +673,18 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains(ipVersion uint8) []*gene
 		},
 	)
 
+	// Jump to the no-endpoints chain only for workload traffic. External
+	// traffic must retain kube-proxy's normal no-endpoints handling.
+	for _, prefix := range r.WorkloadIfacePrefixes {
+		ifaceMatch := prefix + r.wildcard
+		rules = append(rules, generictables.Rule{
+			Match:  r.NewMatch().InInterface(ifaceMatch),
+			Action: r.Jump(ChainLBNoEndpoints),
+		})
+	}
+
 	// Jump to chain for blocking service CIDR loops.
-	rules = append(rules,
-		generictables.Rule{
-			Action: r.Jump(ChainCIDRBlock),
-		},
-	)
+	rules = append(rules, generictables.Rule{Action: r.Jump(ChainCIDRBlock)})
 
 	return []*generictables.Chain{{
 		Name:  ChainFilterForward,
