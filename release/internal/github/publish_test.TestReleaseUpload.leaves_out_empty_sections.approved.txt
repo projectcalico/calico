@@ -1,0 +1,3 @@
+
+Release notes can be found [on GitHub](https://example.test/notes.md)
+

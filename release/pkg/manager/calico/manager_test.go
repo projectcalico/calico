@@ -38,10 +38,12 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/projectcalico/calico/release/internal/binaries"
+	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/distribution"
+	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
@@ -159,77 +161,9 @@ func (f *fakeRunner) envFor(prefix string) []string {
 	return nil
 }
 
-func TestTagRelease(t *testing.T) {
-	const (
-		ver      = "v3.30.0"
-		headSHA  = "1111111111111111111111111111111111111111"
-		otherSHA = "2222222222222222222222222222222222222222"
-	)
-
-	tests := []struct {
-		name        string
-		tagCommit   string // canned `rev-parse refs/tags/<ver>^{commit}`; empty => tag missing
-		tagErr      error  // canned error for that lookup
-		wantTag     bool   // expect `git tag <ver>` to be issued
-		wantErr     bool
-		errContains []string
-	}{
-		{
-			name:      "tag does not exist creates it",
-			tagCommit: "",
-			tagErr:    errNoGitRef,
-			wantTag:   true,
-		},
-		{
-			name:      "tag exists at HEAD skips",
-			tagCommit: headSHA,
-			wantTag:   false,
-		},
-		{
-			name:        "tag exists at different commit errors",
-			tagCommit:   otherSHA,
-			wantTag:     false,
-			wantErr:     true,
-			errContains: []string{otherSHA, headSHA},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			f := newFakeRunner()
-			f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30", nil)
-			f.on("git rev-parse HEAD", headSHA, nil)
-			f.on(fmt.Sprintf("git rev-parse --verify --quiet refs/tags/%s^{commit}", ver), tt.tagCommit, tt.tagErr)
-			f.on(fmt.Sprintf("git tag -a -m Release %s %s", ver, ver), "", nil)
-
-			r := &CalicoManager{runner: f, calicoVersion: testVersion(t, ver)}
-			err := r.TagRelease()
-
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("TagRelease() = nil, want error")
-				}
-				for _, sub := range tt.errContains {
-					if !strings.Contains(err.Error(), sub) {
-						t.Errorf("error %q does not contain %q", err.Error(), sub)
-					}
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("TagRelease() unexpected error: %v", err)
-			}
-			if got := f.ran("git tag -a "); got != tt.wantTag {
-				t.Errorf("git tag issued = %v, want %v (calls: %v)", got, tt.wantTag, f.calls())
-			}
-		})
-	}
-}
-
 func TestBuild(t *testing.T) {
 	const (
 		ver         = "v3.30.0"
-		headSHA     = "1111111111111111111111111111111111111111"
 		gitDescribe = "git describe --tags --match v[0-9]*.[0-9]*.[0-9]* --always --long --abbrev=12 --dirty"
 	)
 
@@ -256,10 +190,10 @@ func TestBuild(t *testing.T) {
 			m.calicoVersion = testVersion(t, ver)
 			m.tmpDir = t.TempDir()
 			m.isHashRelease = tt.isHashRelease
+			m.repo = calicoRepo
 			m.images = false
 			m.binaries = true
 			f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30", nil)
-			f.on("git rev-parse HEAD", headSHA, nil)
 			f.on(fmt.Sprintf("git rev-parse --verify --quiet refs/tags/%s^{commit}", ver), "", errNoGitRef)
 			// Fail a binaries target so Build returns after the tag is taken.
 			f.on(root+"/felix $ make release-build", "", fmt.Errorf("boom"))
@@ -381,27 +315,47 @@ func TestBuild(t *testing.T) {
 	})
 }
 
-// The tag/HEAD comparison is consulted by both releasePrereqs (fail-fast) and
-// TagRelease (authoritative), but the rev-parse must run only once per release.
-func TestTagStateMemoized(t *testing.T) {
-	const ver = "v3.30.0"
-	f := newFakeRunner()
-	f.on(fmt.Sprintf("git rev-parse --verify --quiet refs/tags/%s^{commit}", ver), "", errNoGitRef)
-
-	r := &CalicoManager{runner: f, calicoVersion: testVersion(t, ver)}
-	if tc := r.tagState(); tc.err != nil {
-		t.Fatal(tc.err)
-	}
-	if tc := r.tagState(); tc.err != nil {
-		t.Fatal(tc.err)
-	}
-	if got := f.count("git rev-parse --verify --quiet refs/tags/" + ver); got != 1 {
-		t.Errorf("tag rev-parse ran %d times, want 1 (calls: %v)", got, f.calls())
-	}
-}
-
 // releasePrereqs fails fast when the tag points at a different commit, before
 // the build runs.
+func TestReleasePrereqs(t *testing.T) {
+	newManager := func(t *testing.T, repo github.Repo) *CalicoManager {
+		f := newFakeRunner()
+		f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30", nil)
+		return &CalicoManager{
+			runner: f, calicoVersion: testVersion(t, "v3.30.0"), repo: repo,
+			imageRegistries: []string{"example.test/calico"},
+		}
+	}
+
+	t.Run("projectcalico/calico must use the default registries", func(t *testing.T) {
+		if err := newManager(t, calicoRepo).releasePrereqs(); err == nil {
+			t.Error("releasePrereqs() = nil, want a registries error")
+		}
+	})
+
+	// A product's own defaults pick its repo, not projectcalico/calico.
+	t.Run("the defaults' repo may use other registries", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, defaults.MetadataFile), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		defaults.UseRunner(&command.Recorder{Reply: func(c command.Call) (string, error) {
+			if c.Name == "git" {
+				return root, nil
+			}
+			return "ORGANIZATION = example\nGIT_REPO = fork", nil
+		}})
+		t.Cleanup(func() { defaults.UseRunner(nil) })
+		repo := github.Repo{Owner: "example", Name: "fork"}
+		if got := github.DefaultRepo(); got != repo {
+			t.Fatalf("github.DefaultRepo() = %v, want %v", got, repo)
+		}
+		if err := newManager(t, repo).releasePrereqs(); err != nil {
+			t.Errorf("releasePrereqs() = %v, want nil", err)
+		}
+	})
+}
+
 func TestReleasePrereqsTagConflict(t *testing.T) {
 	const (
 		ver      = "v3.30.0"
@@ -410,10 +364,10 @@ func TestReleasePrereqsTagConflict(t *testing.T) {
 	)
 	f := newFakeRunner()
 	f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30", nil)
-	f.on("git rev-parse HEAD", headSHA, nil)
+	f.on("git rev-parse --verify --quiet HEAD^{commit}", headSHA, nil)
 	f.on(fmt.Sprintf("git rev-parse --verify --quiet refs/tags/%s^{commit}", ver), otherSHA, nil)
 
-	r := &CalicoManager{runner: f, calicoVersion: testVersion(t, ver), githubOrg: "myfork", repo: "calico"}
+	r := &CalicoManager{runner: f, calicoVersion: testVersion(t, ver), repo: github.Repo{Owner: "myfork", Name: "calico"}}
 	err := r.releasePrereqs()
 	if err == nil {
 		t.Fatal("releasePrereqs() = nil, want conflict error")
@@ -445,102 +399,6 @@ func TestAssertImageVersions(t *testing.T) {
 			t.Errorf("did not inspect whisker: %v", f.calls())
 		}
 	})
-}
-
-func TestPublishGitTag(t *testing.T) {
-	const (
-		ver       = "v3.30.0"
-		remote    = "origin"
-		localSHA  = "1111111111111111111111111111111111111111"
-		remoteSHA = "2222222222222222222222222222222222222222"
-		tagObjSHA = "3333333333333333333333333333333333333333"
-	)
-
-	tests := []struct {
-		name        string
-		lsRemote    string // canned `git ls-remote --tags <remote> refs/tags/<ver>`
-		wantPush    bool
-		wantErr     bool
-		errContains []string
-	}{
-		{
-			name:     "remote tag missing pushes",
-			lsRemote: "",
-			wantPush: true,
-		},
-		{
-			name:     "remote tag matches local skips",
-			lsRemote: fmt.Sprintf("%s\trefs/tags/%s", localSHA, ver),
-			wantPush: false,
-		},
-		{
-			name:        "remote tag differs errors",
-			lsRemote:    fmt.Sprintf("%s\trefs/tags/%s", remoteSHA, ver),
-			wantPush:    false,
-			wantErr:     true,
-			errContains: []string{localSHA, remoteSHA},
-		},
-		{
-			name:     "annotated tag peeled line matches local skips",
-			lsRemote: fmt.Sprintf("%s\trefs/tags/%s\n%s\trefs/tags/%s^{}", tagObjSHA, ver, localSHA, ver),
-			wantPush: false,
-		},
-		{
-			name:        "annotated tag peeled line differs errors",
-			lsRemote:    fmt.Sprintf("%s\trefs/tags/%s\n%s\trefs/tags/%s^{}", tagObjSHA, ver, remoteSHA, ver),
-			wantPush:    false,
-			wantErr:     true,
-			errContains: []string{localSHA, remoteSHA},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			f := newFakeRunner()
-			f.on(fmt.Sprintf("git ls-remote --tags %s refs/tags/%s", remote, ver), tt.lsRemote, nil)
-			f.on(fmt.Sprintf("git rev-list -n1 %s", ver), localSHA, nil)
-			f.on(fmt.Sprintf("git push %s %s", remote, ver), "", nil)
-
-			r := &CalicoManager{runner: f, remote: remote, calicoVersion: testVersion(t, ver)}
-			err := r.publishGitTag()
-
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("publishGitTag() = nil, want error")
-				}
-				for _, sub := range tt.errContains {
-					if !strings.Contains(err.Error(), sub) {
-						t.Errorf("error %q does not contain %q", err.Error(), sub)
-					}
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("publishGitTag() unexpected error: %v", err)
-			}
-			if got := f.ran(fmt.Sprintf("git push %s %s", remote, ver)); got != tt.wantPush {
-				t.Errorf("git push issued = %v, want %v (calls: %v)", got, tt.wantPush, f.calls())
-			}
-		})
-	}
-}
-
-func TestPublishGithubReleaseSkipped(t *testing.T) {
-	f := newFakeRunner()
-	r := &CalicoManager{
-		runner:        f,
-		githubRelease: false,
-		calicoVersion: testVersion(t, "v3.30.0"),
-		githubOrg:     "projectcalico",
-		repo:          "calico",
-		outputDir:     t.TempDir(),
-	}
-	if upload := r.githubReleaseUpload(); !upload.Skip {
-		t.Errorf("expected the upload skipped with the flag off, got %+v", upload)
-	}
-	if len(f.calls()) != 0 {
-		t.Errorf("expected nothing run with the flag off, got %v", f.calls())
-	}
 }
 
 func TestOwnerFromRemoteURL(t *testing.T) {
@@ -671,7 +529,7 @@ func TestPrepareRelease(t *testing.T) {
 	t.Run("beforePrep runs on the base branch and its error stops the prep", func(t *testing.T) {
 		f := newFakeRunner()
 		f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30\n", nil)
-		r := &CalicoManager{runner: f, repoRoot: t.TempDir(), calicoVersion: testVersion(t, "v3.30.0"), releaseBranchPrefix: "release"}
+		r := &CalicoManager{runner: f, repoRoot: t.TempDir(), repo: github.Repo{Owner: "projectcalico", Name: "calico", Remote: "origin"}, calicoVersion: testVersion(t, "v3.30.0"), releaseBranchPrefix: "release"}
 		r.beforePrep = func() error {
 			if f.ran("git switch") {
 				t.Errorf("switched branch before beforePrep (calls: %v)", f.calls())
@@ -708,7 +566,7 @@ func TestPrepareRelease(t *testing.T) {
 			}
 		}
 		r := &CalicoManager{
-			runner: f, repoRoot: root, calicoVersion: testVersion(t, "v3.30.0"),
+			runner: f, repoRoot: root, repo: github.Repo{Owner: "projectcalico", Name: "calico", Remote: "origin"}, calicoVersion: testVersion(t, "v3.30.0"),
 			releaseBranchPrefix: "release", imageRegistries: []string{"quay.io/calico"},
 			operatorImage: "tigera/operator", operatorVersion: "v1.38.0", operatorRegistry: "quay.io",
 		}
@@ -739,7 +597,7 @@ func TestPrepPrereqs(t *testing.T) {
 			f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30\n", nil)
 			f.on("git config --get remote.origin.url", tc.remote+"\n", nil)
 			r := &CalicoManager{
-				runner: f, repoRoot: "/repo", remote: "origin", githubOrg: "projectcalico",
+				runner: f, repoRoot: "/repo", repo: github.Repo{Owner: "projectcalico", Name: "calico", Remote: "origin"},
 				calicoVersion: testVersion(t, "v3.30.0"), operatorVersion: "v1.38.0",
 				releaseBranchPrefix: "release", validate: true, validateBranch: tc.validateBranch,
 				gitRef: true, dryRun: true,
@@ -759,6 +617,20 @@ func TestPrepPrereqs(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("a missing GitHub repo fails with validation off", func(t *testing.T) {
+		r := &CalicoManager{runner: newFakeRunner(), repoRoot: "/repo", repo: github.Repo{Remote: "origin"}}
+		if err := r.prepPrereqs(); err == nil {
+			t.Error("prepPrereqs() = nil, want an error")
+		}
+	})
+
+	t.Run("a missing git remote fails with validation off", func(t *testing.T) {
+		r := &CalicoManager{runner: newFakeRunner(), repoRoot: "/repo", repo: github.Repo{Owner: "projectcalico", Name: "calico"}}
+		if err := r.prepPrereqs(); err == nil {
+			t.Error("prepPrereqs() = nil, want an error")
+		}
+	})
 }
 
 func TestPushPrepBranch(t *testing.T) {
@@ -776,7 +648,7 @@ func TestPushPrepBranch(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFakeRunner()
-			r := &CalicoManager{runner: f, remote: "origin", gitRef: tc.gitRef, dryRun: tc.dryRun}
+			r := &CalicoManager{runner: f, repo: github.Repo{Remote: "origin"}, gitRef: tc.gitRef, dryRun: tc.dryRun}
 			if err := r.pushPrepBranch("release-v3.30", "build-v3.30.0"); err != nil {
 				t.Fatalf("pushPrepBranch() unexpected error: %v", err)
 			}
@@ -845,18 +717,20 @@ func TestBuildNodes(t *testing.T) {
 		return false
 	}
 	for _, tc := range []struct {
-		name  string
-		notes bool
-		org   string
-		repo  string
-		want  bool
+		name   string
+		notes  bool
+		org    string
+		repo   string
+		remote string
+		want   bool
 	}{
 		{name: "release notes are on for the Calico repo", notes: true, org: defaults.ProjectCalicoOrg, repo: defaults.CalicoRepoName, want: true},
 		{name: "release notes are off by flag", org: defaults.ProjectCalicoOrg, repo: defaults.CalicoRepoName},
 		{name: "release notes are off for another repo", notes: true, org: "example", repo: "fork"},
+		{name: "release notes stay on for the Calico repo with a remote", notes: true, org: defaults.ProjectCalicoOrg, repo: defaults.CalicoRepoName, remote: "upstream", want: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r := &CalicoManager{isHashRelease: true, releaseNotes: tc.notes, githubOrg: tc.org, repo: tc.repo}
+			r := &CalicoManager{isHashRelease: true, releaseNotes: tc.notes, repo: github.Repo{Owner: tc.org, Name: tc.repo, Remote: tc.remote}}
 			if got := on(r, outputs.ReleaseNotesStep); got != tc.want {
 				t.Errorf("release-notes on = %v, want %v", got, tc.want)
 			}
@@ -1132,25 +1006,6 @@ func TestHashreleaseManifestsAreCollectedBeforeTheArchiveReadsThem(t *testing.T)
 	}
 	if copied < gen {
 		t.Errorf("manifests were copied before they were generated, ran: %v", f.calls())
-	}
-}
-
-func TestReleaseNoteNamesTheArtifactsThroughTheirAccessors(t *testing.T) {
-	m := &CalicoManager{
-		calicoVersion: testVersion(t, "v3.30.0"),
-		githubRelease: true,
-		githubOrg:     "projectcalico",
-		repo:          "calico",
-	}
-	body := m.githubReleaseUpload().Handler.(distribution.GithubRelease).Body
-
-	// Stated outright rather than computed from the accessors: the note tells a
-	// user what to download, so it has to match the published asset names that
-	// pkg/postrelease asserts against a real release.
-	for _, want := range []string{"release-v3.30.0.tgz", "calico-windows-v3.30.0.zip"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("release note does not name %q:\n%s", want, body)
-		}
 	}
 }
 
@@ -2001,6 +1856,60 @@ func TestOutputDirRequiredEvenWithoutValidation(t *testing.T) {
 	}
 }
 
+func TestMustBuildValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		hashrelease bool
+		notes       bool
+		wantRepoErr bool
+	}{
+		{name: "a release needs a GitHub repo", wantRepoErr: true},
+		{name: "a hashrelease with notes needs a GitHub repo", hashrelease: true, notes: true, wantRepoErr: true},
+		{name: "a hashrelease without notes needs no GitHub repo", hashrelease: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &CalicoManager{
+				runner:        newFakeRunner(),
+				repoRoot:      "/repo",
+				calicoVersion: testVersion(t, "v3.30.0"),
+				outputDir:     t.TempDir(),
+				recordsDir:    t.TempDir(),
+				isHashRelease: tc.hashrelease,
+				releaseNotes:  tc.notes,
+			}
+			err := r.mustBuildValidation()
+			if got := err != nil && strings.Contains(err.Error(), "no github"); got != tc.wantRepoErr {
+				t.Errorf("mustBuildValidation() = %v, want a repo error: %v", err, tc.wantRepoErr)
+			}
+		})
+	}
+}
+
+func TestPublishPrereqs(t *testing.T) {
+	t.Run("a missing GitHub repo fails with validation off", func(t *testing.T) {
+		r := &CalicoManager{runner: newFakeRunner(), repoRoot: "/repo", repo: github.Repo{Remote: "origin"}, outputDir: t.TempDir(), recordsDir: t.TempDir()}
+		if err := r.publishPrereqs(); err == nil {
+			t.Error("publishPrereqs() = nil, want an error")
+		}
+	})
+
+	t.Run("a missing git remote fails with validation off", func(t *testing.T) {
+		r := &CalicoManager{runner: newFakeRunner(), repoRoot: "/repo", repo: github.Repo{Owner: "projectcalico", Name: "calico"}, outputDir: t.TempDir(), recordsDir: t.TempDir()}
+		if err := r.publishPrereqs(); err == nil {
+			t.Error("publishPrereqs() = nil, want an error")
+		}
+	})
+}
+
+func TestReleaseBranchPrereqs(t *testing.T) {
+	t.Run("a missing git remote fails with validation off", func(t *testing.T) {
+		r := &CalicoManager{cutOptions: &CutOptions{}}
+		if err := r.releaseBranchPrereqs(); err == nil {
+			t.Error("releaseBranchPrereqs() = nil, want an error")
+		}
+	})
+}
+
 func TestChartsAndIndexLocation(t *testing.T) {
 	out := t.TempDir()
 	for _, tt := range []struct {
@@ -2093,37 +2002,6 @@ func TestPublishHelmChartsRecordsWhatItPushed(t *testing.T) {
 	}
 }
 
-// The flag decides whether a release goes public, so a wrong default either
-// strands every release in draft or publishes one nobody approved.
-func TestGithubReleaseDraftFlag(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		draft bool
-	}{
-		{name: "drafts when asked", draft: true},
-		{name: "publishes when the draft flag is off"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			r := &CalicoManager{
-				githubRelease: true,
-				draftRelease:  tc.draft,
-				calicoVersion: testVersion(t, "v3.30.0"),
-				githubOrg:     "projectcalico",
-				repo:          "calico",
-				outputDir:     t.TempDir(),
-			}
-			upload := r.githubReleaseUpload()
-			got, ok := upload.Handler.(distribution.GithubRelease)
-			if !ok {
-				t.Fatalf("handler is %T, want distribution.GithubRelease", upload.Handler)
-			}
-			if got.Draft != tc.draft {
-				t.Errorf("Draft = %v, want %v", got.Draft, tc.draft)
-			}
-		})
-	}
-}
-
 // The index is only written when both steps ran, so the upload has to say it
 // may be absent rather than failing a release that did not build one.
 func TestHelmIndexUploadAllowsAMissingIndex(t *testing.T) {
@@ -2173,26 +2051,6 @@ func TestHelmIndexUploadSetsCachePolicy(t *testing.T) {
 	}
 	if got.CachePolicy != distribution.MutableCachePolicy {
 		t.Errorf("CachePolicy = %q, want %q", got.CachePolicy, distribution.MutableCachePolicy)
-	}
-}
-
-func TestPublishGitTagPreviewsThePushOnADryRun(t *testing.T) {
-	f := newFakeRunner()
-	f.on("git ls-remote --tags origin refs/tags/v3.30.0", "", nil)
-
-	r := &CalicoManager{
-		runner:        f,
-		gitRef:        true,
-		dryRun:        true,
-		calicoVersion: testVersion(t, "v3.30.0"),
-		remote:        "origin",
-		repoRoot:      t.TempDir(),
-	}
-	if err := r.publishGitTag(); err != nil {
-		t.Fatalf("publishGitTag() = %v, want nil", err)
-	}
-	if !f.ran("git push origin v3.30.0 --dry-run") {
-		t.Errorf("expected a previewed push, got %v", f.calls())
 	}
 }
 
@@ -2257,10 +2115,10 @@ func TestPublishNodes(t *testing.T) {
 	}
 
 	t.Run("a release tags, then releases, then indexes the charts", func(t *testing.T) {
-		r := &CalicoManager{calicoVersion: testVersion(t, "v3.30.0"), githubOrg: "projectcalico", repo: "calico", outputDir: t.TempDir()}
+		r := &CalicoManager{calicoVersion: testVersion(t, "v3.30.0"), repo: github.Repo{Owner: "projectcalico", Name: "calico"}, outputDir: t.TempDir()}
 		want := []string{
-			prepPublishStep, operator.Step, images.Step, charts.Step, outputs.MetadataStep, distribution.ChecksumStep,
-			distribution.GithubTagStep, distribution.GithubReleaseStep, helmIndexStep,
+			prepPublishStep, operator.Step, images.Step, charts.Step, outputs.MetadataStep, outputs.ChecksumStep,
+			branch.PushTagStep, github.ReleaseStep, helmIndexStep,
 		}
 		if diff := cmp.Diff(want, names(r)); diff != "" {
 			t.Errorf("nodes (-want +got):\n%s", diff)
@@ -2269,7 +2127,7 @@ func TestPublishNodes(t *testing.T) {
 
 	t.Run("a hashrelease ends with the hashrelease upload", func(t *testing.T) {
 		r := &CalicoManager{isHashRelease: true, calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir()}
-		want := []string{prepPublishStep, operator.Step, images.Step, charts.Step, outputs.MetadataStep, distribution.ChecksumStep, distribution.HashreleasePublishStep}
+		want := []string{prepPublishStep, operator.Step, images.Step, charts.Step, outputs.MetadataStep, outputs.ChecksumStep, distribution.HashreleasePublishStep}
 		if diff := cmp.Diff(want, names(r)); diff != "" {
 			t.Errorf("nodes (-want +got):\n%s", diff)
 		}
@@ -2285,6 +2143,23 @@ func TestPublishNodes(t *testing.T) {
 		} {
 			if diff := cmp.Diff(tc.want, names(tc.r)[1:]); diff != "" {
 				t.Errorf("skip list (-want +got):\n%s", diff)
+			}
+		}
+	})
+
+	t.Run("every required step is an earlier node", func(t *testing.T) {
+		for _, r := range []*CalicoManager{
+			{calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir()},
+			{isHashRelease: true, calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir()},
+		} {
+			before := map[string]bool{}
+			for _, n := range r.publishPlan() {
+				for _, req := range n.Requires {
+					if !before[req] {
+						t.Errorf("%s requires %s, which is not an earlier node", n.Name, req)
+					}
+				}
+				before[n.Name] = true
 			}
 		}
 	})
@@ -2357,7 +2232,7 @@ func TestPublishRelease(t *testing.T) {
 			operator:      func() error { published = true; return nil },
 		}
 		err := r.PublishRelease()
-		if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("requires %q, which is off", distribution.GithubTagStep)) {
+		if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("requires %q, which is off", branch.PushTagStep)) {
 			t.Fatalf("PublishRelease() error = %v, want the release to require the tag", err)
 		}
 		if published {
@@ -2385,7 +2260,7 @@ func TestPublishRelease(t *testing.T) {
 		}
 	})
 
-	for _, step := range []string{outputs.MetadataStep, distribution.ChecksumStep, distribution.GithubTagStep} {
+	for _, step := range []string{outputs.MetadataStep, outputs.ChecksumStep, branch.PushTagStep} {
 		t.Run("skipping "+step+" fails before anything publishes", func(t *testing.T) {
 			published := false
 			r := &CalicoManager{
@@ -2434,8 +2309,7 @@ func TestChecksumsAreWrittenOnBothPaths(t *testing.T) {
 				helmCharts:         true,
 				helmIndex:          true,
 				calicoVersion:      testVersion(t, "v3.30.0"),
-				githubOrg:          "projectcalico",
-				repo:               "calico",
+				repo:               github.Repo{Owner: "projectcalico", Name: "calico"},
 				s3Bucket:           "bucket",
 				outputDir:          t.TempDir(),
 			}
@@ -2443,7 +2317,7 @@ func TestChecksumsAreWrittenOnBothPaths(t *testing.T) {
 			for _, u := range r.uploads() {
 				kinds = append(kinds, u.Handler.Name())
 			}
-			if !slices.Contains(kinds, "checksums") {
+			if !slices.Contains(kinds, outputs.ChecksumStep) {
 				t.Errorf("no checksums step in the pipeline: %v", kinds)
 			}
 		})
@@ -2475,8 +2349,7 @@ func TestBuildMetadata(t *testing.T) {
 		record(t, records, operator.PublishStep, opRef+"@"+opDigest)
 		return &CalicoManager{
 			runner:           f,
-			githubOrg:        "projectcalico",
-			repo:             "calico",
+			repo:             github.Repo{Owner: "projectcalico", Name: "calico"},
 			calicoVersion:    testVersion(t, "v3.30.0"),
 			operatorVersion:  "v1.38.0",
 			operatorImage:    registry.OperatorImage,
@@ -2507,6 +2380,55 @@ func TestBuildMetadata(t *testing.T) {
 		}
 		return md, nil
 	}
+
+	t.Run("lists the files users download at the release's URL", func(t *testing.T) {
+		for _, tc := range []struct {
+			name    string
+			set     func(*CalicoManager)
+			wantURL string
+		}{
+			{name: "github release", set: func(r *CalicoManager) { r.githubRelease = true }, wantURL: "https://github.com/projectcalico/calico/releases/download/v3.30.0/release.tgz"},
+			{name: "hashrelease", set: func(r *CalicoManager) {
+				r.isHashRelease, r.publishHashrelease = true, true
+				r.hashrelease.Name = "2026-10-05-v3-30-0"
+			}, wantURL: hashreleaseserver.HashreleaseURL("2026-10-05-v3-30-0") + "/release.tgz"},
+			{name: "skipped github release", set: func(*CalicoManager) {}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				r := newManager(t)
+				record(t, r.recordsDir, images.PublishStep, nodeRef+"@"+nodeDigest)
+				tc.set(r)
+				dir := t.TempDir()
+				for _, n := range []string{"release.tgz", outputs.SumsFileName} {
+					if err := os.WriteFile(filepath.Join(dir, n), []byte("hello"), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := r.BuildMetadata(dir); err != nil {
+					t.Fatal(err)
+				}
+				b, err := os.ReadFile(filepath.Join(dir, outputs.MetadataFileName))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var md outputs.Metadata
+				if err := yaml.Unmarshal(b, &md); err != nil {
+					t.Fatal(err)
+				}
+				var got []string
+				for _, a := range md.Artifacts {
+					got = append(got, a.URL)
+				}
+				var want []string
+				if tc.wantURL != "" {
+					want = []string{tc.wantURL}
+				}
+				if diff := cmp.Diff(want, got); diff != "" {
+					t.Errorf("artifact URLs (-want +got):\n%s", diff)
+				}
+			})
+		}
+	})
 
 	t.Run("describes each component from the step that published it", func(t *testing.T) {
 		r := newManager(t)
@@ -2549,7 +2471,7 @@ func TestSourceMetadata(t *testing.T) {
 		f := newFakeRunner()
 		f.on("git rev-parse --abbrev-ref HEAD", branch+"\n", nil)
 		f.on("git rev-parse HEAD", headSHA+"\n", nil)
-		return &CalicoManager{runner: f, githubOrg: "projectcalico", repo: "calico", calicoVersion: testVersion(t, "v3.30.0"), gitRef: true}
+		return &CalicoManager{runner: f, repo: github.Repo{Owner: "projectcalico", Name: "calico"}, calicoVersion: testVersion(t, "v3.30.0"), gitRef: true}
 	}
 
 	t.Run("a release records its branch and tag", func(t *testing.T) {
@@ -2598,7 +2520,7 @@ func TestSourceMetadata(t *testing.T) {
 	})
 
 	t.Run("fails when git cannot resolve HEAD", func(t *testing.T) {
-		r := &CalicoManager{runner: newFakeRunner().on("git rev-parse HEAD", "", fmt.Errorf("not a git repository"))}
+		r := &CalicoManager{repo: github.Repo{Owner: "projectcalico", Name: "calico"}, runner: newFakeRunner().on("git rev-parse HEAD", "", fmt.Errorf("not a git repository"))}
 		if _, err := r.sourceMetadata(); err == nil || !strings.Contains(err.Error(), "not a git repository") {
 			t.Errorf("err = %v, want it to contain %q", err, "not a git repository")
 		}
@@ -2710,6 +2632,14 @@ func TestCreatePrepPR(t *testing.T) {
 			},
 		},
 		{
+			name: "an existing PR in another repo is an error",
+			ghErr: &command.Error{
+				Stderr: "a pull request for branch \"prep\" into branch \"master\" already exists:\nhttps://github.com/otherorg/somerepo/pull/42",
+				Err:    errors.New("exit status 1"),
+			},
+			wantErr: true,
+		},
+		{
 			name:    "other failure is returned",
 			ghErr:   &command.Error{Stderr: "HTTP 502", Err: errors.New("exit status 1")},
 			wantErr: true,
@@ -2723,7 +2653,7 @@ func TestCreatePrepPR(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newFakeRunner().on("./bin/gh pr create", "", tt.ghErr)
-			r := &CalicoManager{runner: f, githubOrg: "someorg", repo: "somerepo"}
+			r := &CalicoManager{runner: f, repo: github.Repo{Owner: "someorg", Name: "somerepo"}}
 			err := r.createPrepPR("master", "prep")
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("createPrepPR() = %v, wantErr %v", err, tt.wantErr)
