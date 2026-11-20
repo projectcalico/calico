@@ -476,11 +476,15 @@ BUNDLE_CHANNEL = --channels=$(if \
 		 $(filter $(RELEASE_BRANCH_PATTERN),$(CHANNEL)),$(CHANNEL),\
 		 $(error Channel for bundle should be a release branch of the format 'release-v3.YY', not '$(CHANNEL)'))
 
-# We only specify one channel so we don't need to set a
-# default, but if we have one then include it.
-ifneq ($(origin DEFAULT_CHANNEL), undefined)
-BUNDLE_DEFAULT_CHANNEL := --default-channel=$(DEFAULT_CHANNEL)
-endif
+# The bundle's default channel annotation. The bundle spec only requires it
+# when the default changes, but published bundles carry it, so it is always
+# set: to the one channel the bundle is in, unless overridden. It does not move
+# the package default, which the catalog's defaultChannel decides - see
+# bundle/README.md.
+DEFAULT_CHANNEL ?= $(CHANNEL)
+BUNDLE_DEFAULT_CHANNEL = --default-channel=$(if \
+		 $(filter $(DEFAULT_CHANNEL),$(CHANNEL)),$(DEFAULT_CHANNEL),\
+		 $(error DEFAULT_CHANNEL must be the bundle's channel '$(CHANNEL)', not '$(DEFAULT_CHANNEL)'))
 
 # Collate our metadata
 BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNEL) $(BUNDLE_DEFAULT_CHANNEL)
@@ -495,7 +499,7 @@ BUNDLE_CRD_DIR ?= $(BUNDLE_BASE_DIR)/crds
 BUNDLE_DEPLOY_DIR ?= $(BUNDLE_BASE_DIR)/deploy
 
 ## Create an operator bundle image.
-# E.g., make bundle VERSION=3.34.0 PREV_VERSION=3.33.0 CHANNEL=release-v3.34 DEFAULT_CHANNEL=release-v3.34
+# E.g., make bundle VERSION=3.34.0 PREV_VERSION=3.33.0 CHANNEL=release-v3.34
 #
 # Each step depends on the one before it, rather than being listed here in
 # order, so that the steps still run in order under 'make -j'.
@@ -559,6 +563,7 @@ update-bundle: bundle-generate $(BINDIR)/gen-bundle
 		--operator-dir "$(CURDIR)" \
 		--version "$(VERSION)" \
 		--prev-version "$(PREV_VERSION)" \
+		--channel "$(CHANNEL)" \
 		--image "$(BUNDLE_OPERATOR_IMAGE)"
 
 # Built for the host, which runs it, so cgo is off to keep it from linking
