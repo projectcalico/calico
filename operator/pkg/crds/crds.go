@@ -26,7 +26,7 @@ import (
 
 	"github.com/go-logr/logr"
 	v3crd "github.com/projectcalico/api/config/crd"
-	apiextenv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextenv1 "k8s.io/apiextensions-api/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml" // gopkg.in/yaml.v2 didn't parse all the fields but this package did

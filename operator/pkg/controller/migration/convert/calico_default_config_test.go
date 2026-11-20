@@ -30,7 +30,7 @@ func calicoDefaultConfig() []runtime.Object {
 	directoryOrCreate := corev1.HostPathDirectoryOrCreate
 	isPrivileged := true
 	var terminationGracePeriod int64 = 0
-	maxUnav := intstr.FromInt(1)
+	maxUnav := intstr.FromInt32(1)
 	updateStrat := appsv1.RollingUpdateDaemonSet{MaxUnavailable: &maxUnav}
 	var _1 int32 = 1
 	return []runtime.Object{

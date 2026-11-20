@@ -207,7 +207,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			Spec: kapiv1.ServiceSpec{
 				Type:           "ClusterIP",
 				ClusterIPs:     []string{"10.96.0.1"},
-				LoadBalancerIP: "1.1.1.1",
+				LoadBalancerIP: "1.1.1.1", //nolint:staticcheck // Ignore SA1019: Calico still supports spec.loadBalancerIP.
 				ExternalIPs:    []string{"1.2.3.4"},
 				Ports: []kapiv1.ServicePort{
 					{

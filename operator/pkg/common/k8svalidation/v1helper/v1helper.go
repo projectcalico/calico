@@ -26,9 +26,9 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/api/validate/content"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
-	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 // IsExtendedResourceName returns true if:
@@ -42,7 +42,7 @@ func IsExtendedResourceName(name v1.ResourceName) bool {
 	}
 	// Ensure it satisfies the rules in IsQualifiedName() after converted into quota resource name
 	nameForQuota := fmt.Sprintf("%s%s", v1.DefaultResourceRequestsPrefix, string(name))
-	if errs := validation.IsQualifiedName(string(nameForQuota)); len(errs) != 0 {
+	if errs := content.IsLabelKey(string(nameForQuota)); len(errs) != 0 {
 		return false
 	}
 	return true

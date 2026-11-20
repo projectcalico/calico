@@ -712,7 +712,7 @@ func (e *bgpAdvertEnv) testSingleIPLBRR(t *testing.T) {
 		}
 		s.Spec.Type = corev1.ServiceTypeLoadBalancer
 		s.Spec.LoadBalancerClass = new("calico")
-		s.Spec.LoadBalancerIP = "80.15.0.100"
+		s.Spec.LoadBalancerIP = "80.15.0.100" //nolint:staticcheck // Ignore SA1019: Calico still supports spec.loadBalancerIP.
 		s.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyLocal
 	})
 
@@ -730,7 +730,7 @@ func (e *bgpAdvertEnv) testSingleIPLBRR(t *testing.T) {
 	e.createRRPeer(t)
 
 	clusterIP := svc.Spec.ClusterIP
-	loadBalancerIP := svc.Spec.LoadBalancerIP
+	loadBalancerIP := svc.Spec.LoadBalancerIP //nolint:staticcheck // Ignore SA1019: Calico still supports spec.loadBalancerIP.
 	e.assertRouteContains(t, clusterIP)
 	e.assertRouteContains(t, loadBalancerIP)
 }
