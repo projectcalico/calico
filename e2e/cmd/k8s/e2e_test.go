@@ -17,6 +17,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/onsi/ginkgo/v2"
@@ -41,6 +42,7 @@ import (
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/networking"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/operator"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/policy"
+	_ "github.com/projectcalico/calico/e2e/pkg/tests/upgrade/scenarios"
 )
 
 func init() {
@@ -84,6 +86,10 @@ func applyTestConfig(paths []string) error {
 	cfg, err := testconfig.LoadAll(paths)
 	if err != nil {
 		return fmt.Errorf("load: %w", err)
+	}
+
+	if err := testconfig.ApplyUpgradePhase(cfg, os.Getenv(testconfig.UpgradePhaseEnvVar), os.Getenv(testconfig.UpgradeFromEnvVar)); err != nil {
+		return fmt.Errorf("upgrade phase: %w", err)
 	}
 
 	flags, err := testconfig.ToFlags(cfg)

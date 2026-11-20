@@ -97,6 +97,36 @@ steps:
             value: operator
           - name: DATAPLANE
             value: CalicoIptables
+          # Covers the n-1 from-stream; the prologue default covers n-2.
+          - name: RELEASE_STREAM
+            value: v3.33
+    commands: |
+      .argoci/scripts/body_standard.sh
+  # The only manifest-install upgrade cell. It needs the Calico API server for
+  # the upgrade scenarios' projectcalico.org/v3 fixtures, which a manifest
+  # install doesn't include on its own.
+  - name: calico-tests-kubeadm-manifest
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/upgrade/xtables.yaml
+    matrix:
+      - name: gcp-kubeadm-stable-1-manual-calicoiptables
+        env:
+          - name: PROVISIONER
+            value: gcp-kubeadm
+          - name: K8S_VERSION
+            value: stable-1
+          - name: INSTALLER
+            value: manual
+          - name: DATAPLANE
+            value: CalicoIptables
+          - name: ENABLE_CALICOCTL_APISERVER
+            value: "true"
+          - name: RELEASE_STREAM
+            value: v3.33
     commands: |
       .argoci/scripts/body_standard.sh
   - name: calico-tests-kubeadm-bpf
