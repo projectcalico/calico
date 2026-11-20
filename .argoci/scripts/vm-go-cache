@@ -1,0 +1,79 @@
+#!/bin/bash
+# Run on a createVM machine: gives its go-build containers the go-cache step's
+# caches in place, as a pod gets them, by attaching the cache disk read-only.
+# Go runs only in those containers (make's non-native path), never on the
+# machine. The exports it prints are for the caller to eval, which also moves
+# it into the repo at the go-build path:
+#
+#   go_env=$(.argoci/scripts/vm-go-cache <step>) || exit 1; eval "$go_env"
+#
+# The step forwards CI_WORKFLOW_NAME (runOnVM env), which names the cache disk.
+#
+# A build output's cache key holds the toolchain, its settings and every source
+# path. The container brings the first two; the repo is bind-mounted at the
+# path the container sees it at, which go-cache built at, so the machine's
+# make and a test binary's own source paths (runtime.Caller) agree with it.
+set -euo pipefail
+
+step=${1:?usage: vm-go-cache <step>}
+checkout=$PWD
+repo=/go/src/github.com/projectcalico/calico
+log() { echo "vm-go-cache: $*" >&2; }
+
+md() { curl -sf -H 'Metadata-Flavor: Google' "http://metadata.google.internal/computeMetadata/v1/$1"; }
+project=$(md project/project-id)
+zone=$(md instance/zone); zone=${zone##*/}
+vm=$(md instance/name)
+# The machine's own account: the step may since have activated another, which
+# can reach the image registry but not this project's disks.
+account=$(md instance/service-accounts/default/email)
+# Not from the machine's name: a matrixed step's machine carries its lane too.
+wf=${CI_WORKFLOW_NAME:?vm-go-cache: forward CI_WORKFLOW_NAME to the machine}
+pvc="${wf}-cache-go"
+
+start=$(date +%s)
+disk=""
+while IFS=$'\t' read -r name desc; do
+  if [[ "$desc" == *"\"kubernetes.io/created-for/pvc/name\":\"${pvc}\""* ]]; then disk=$name; fi
+done < <(gcloud compute disks list --account="$account" --project="$project" \
+  --filter="zone:${zone} AND description~${pvc}" --format='value[separator="\t"](name,description)')
+[ -n "$disk" ] || { log "no disk for ${pvc} in ${project}/${zone}"; exit 1; }
+
+# GCE refuses a read-only attachment while the writer's read-write one remains,
+# which outlives the go-cache step by up to a few minutes.
+for i in $(seq 1 30); do
+  if gcloud compute instances attach-disk "$vm" --account="$account" --project="$project" --zone="$zone" \
+      --disk="$disk" --mode=ro --device-name=go-cache --quiet 2>/tmp/attach.err; then
+    break
+  fi
+  [ "$i" -lt 30 ] || { cat /tmp/attach.err >&2; log "could not attach ${disk}"; exit 1; }
+  sleep 10
+done
+sudo mkdir -p /cache/go
+# noload: the filesystem was last mounted read-write, and replaying its journal
+# would write to a read-only disk.
+sudo mount -o ro,noload /dev/disk/by-id/google-go-cache /cache/go
+log "${step} attached ${disk} in $(( $(date +%s) - start ))s"
+
+# A bind mount, not a link: git rev-parse and os.Getwd would see through a link
+# to the checkout's own path.
+sudo mkdir -p "$repo"
+mountpoint -q "$repo" || sudo mount --bind "$checkout" "$repo"
+
+start=$(date +%s)
+# Pulled here because make's own pull, on first docker run, has no retry.
+image=$(make -s --no-print-directory -C "$repo" --eval='print-calico-build: ; @echo $(CALICO_BUILD)' print-calico-build)
+for i in 1 2 3; do
+  docker pull -q "$image" >/dev/null && break
+  [ "$i" -lt 3 ] || { log "could not pull ${image}"; exit 1; }
+  sleep 10
+done
+log "${step} pulled ${image} in $(( $(date +%s) - start ))s"
+
+# The container mounts the machine's module cache at /go/pkg/mod and its build
+# cache at /go-cache; the shared disk goes in at the same path, for the links
+# into it and for gocacheprog.
+GO_LOCAL_MOD="${HOME}/go/pkg/mod" GOCACHE=/go-cache \
+  "$repo/.argoci/scripts/restore-go-cache" "$step" /cache/go | grep '^export GOCACHEPROG='
+echo "export EXTRA_DOCKER_ARGS='-v /cache/go:/cache/go:ro -e GOCACHEPROG'"
+echo "cd '${repo}'"

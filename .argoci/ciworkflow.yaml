@@ -453,6 +453,7 @@ includes:
         - ^\.semaphore/collect-artifacts$
         - ^\.semaphore/scripts/load-felix-prereqs\.sh$
         - ^\.argoci/scripts/load-cached-images$
+        - ^\.argoci/scripts/vm-go-cache$
         - ^\.argoci/scripts/vm-fleet-setup\.sh$
         - ^\.argoci/scripts/felix-fv-plan$
         - ^hack/cmd/felix-fv-memo/
@@ -481,12 +482,12 @@ includes:
   - path: .argoci/modules/20-typha.yaml
     changes:
       dependsOn: [typha]
-      in: ['^\.argoci/modules/20-typha\.yaml$']
+      in: ['^\.argoci/modules/20-typha\.yaml$', '^\.argoci/scripts/(vm-go-cache|load-cached-images)$']
 
   - path: .argoci/modules/20-cni-plugin.yaml
     changes:
       dependsOn: [cni-plugin]
-      in: ['^\.argoci/modules/20-cni-plugin\.yaml$']
+      in: ['^\.argoci/modules/20-cni-plugin\.yaml$', '^\.argoci/scripts/(vm-go-cache|load-cached-images)$']
 
   # The FV drivers are shell and PowerShell rather than Go, so the generated
   # component does not reach them and they are listed here.
@@ -527,6 +528,7 @@ includes:
         - ^whisker/
         - ^\.argoci/modules/20-e2e\.yaml$
         - ^\.argoci/scripts/sandcat/
+        - ^\.argoci/scripts/(vm-go-cache|load-cached-images)$
 
   - path: .argoci/modules/20-manifest-install.yaml
     changes:
@@ -540,6 +542,7 @@ includes:
         - ^operator/pkg/controller/migration/
         - ^Makefile$
         - ^\.argoci/modules/20-manifest-install\.yaml$
+        - ^\.argoci/scripts/(vm-go-cache|load-cached-images)$
 
   - path: .argoci/modules/20-kubevirt-live-migration.yaml
     changes:
@@ -547,3 +550,4 @@ includes:
       in:
         - ^e2e/pkg/
         - ^\.argoci/modules/20-kubevirt-live-migration\.yaml$
+        - ^\.argoci/scripts/(vm-go-cache|load-cached-images)$
