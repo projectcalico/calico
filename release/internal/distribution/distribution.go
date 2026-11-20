@@ -49,6 +49,9 @@ type Upload struct {
 
 	// Requires names steps whose output this upload reads.
 	Requires []string
+
+	// Done is called to verify that the upload has been completed successfully.
+	Done func() error
 }
 
 // A handler that finds its own content does not implement this.

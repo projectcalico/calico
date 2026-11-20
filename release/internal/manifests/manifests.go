@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/env"
 	"github.com/projectcalico/calico/release/internal/fsutil"
@@ -60,9 +61,9 @@ var Files = func() []string {
 
 var excluded = []string{"generate.sh", "README.md", ".gitattributes"}
 
-var Shipped = []fsutil.FileFilter{fsutil.Recursive, fsutil.Exclude(excluded...)}
+var shipped = []fsutil.FileFilter{fsutil.Recursive, fsutil.Exclude(excluded...)}
 
-// S3Excludes must leave out the same files as Shipped. In S3 filters * also
+// S3Excludes must leave out the same files as shipped. In S3 filters * also
 // matches /, so */name excludes name at any depth.
 func S3Excludes() []string {
 	var patterns []string
@@ -74,6 +75,16 @@ func S3Excludes() []string {
 
 func Dir(outputDir string) string {
 	return filepath.Join(outputDir, DirName)
+}
+
+// Archive is what the release archive takes from the manifests under root.
+func Archive(root string) archives.DirSource {
+	return archives.DirSource{
+		Label:  DirName,
+		To:     DirName,
+		From:   Dir(root),
+		Filter: shipped,
+	}
 }
 
 func BundlePath(outputDir string) string {

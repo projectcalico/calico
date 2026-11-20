@@ -414,14 +414,20 @@ func (r *CalicoManager) buildPlan() []plan.Node {
 		nodes,
 		r.operatorNode(),
 		plan.Node{Name: images.Step, When: func() bool { return r.images }, Do: r.buildContainerImages},
-		plan.Node{Name: binaries.Step, When: func() bool { return r.binaries || (r.e2eBinaries && r.isHashRelease) }, Do: r.buildBinaries},
+		plan.Node{
+			Name: binaries.Step,
+			When: func() bool { return r.binaries || (r.e2eBinaries && r.isHashRelease) },
+			Do:   r.buildBinaries,
+			Done: func() error { return binaries.Built(r.repoRoot) },
+		},
 		plan.Node{Name: charts.Step, When: func() bool { return r.helmCharts }, Do: r.BuildHelm},
 		plan.Node{
 			Name: manifests.Step,
 			When: func() bool {
 				return (r.isHashRelease && r.manifests) || r.ocpBundle
 			},
-			Do: r.buildManifests,
+			Do:   r.buildManifests,
+			Done: manifests.Archive(r.manifestsRoot()).Present,
 		},
 		plan.Node{Name: archives.WindowsStep, When: func() bool { return r.windowsArchive }, Do: r.buildWindowsArchive},
 		plan.Node{
@@ -807,14 +813,26 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 	// The registries go first: metadata records the digests they produce
 	uploads := []distribution.Upload{
 		{Handler: distribution.Publisher{Kind: images.Step, Action: r.imagesAction()}, Requires: r.beforeImagesPublish()},
-		{Handler: distribution.Publisher{Kind: charts.Step, Action: r.publishHelmCharts}},
+		{
+			Handler: distribution.Publisher{Kind: charts.Step, Action: r.publishHelmCharts},
+			Done: func() error {
+				return charts.Pushed(r.chart(), r.helmRegistries, r.recordsDir,
+					charts.WithRunner(r.runner), charts.WithResolver(r.digestResolver()))
+			},
+		},
 	}
 	uploads = append(
 		uploads,
-		distribution.Upload{Handler: distribution.Preparer{Kind: outputs.MetadataStep, Action: r.buildMetadata}},
+		distribution.Upload{
+			Handler: distribution.Preparer{Kind: outputs.MetadataStep, Action: r.buildMetadata},
+			Done:    func() error { return fsutil.FilePresent(filepath.Join(r.uploadDir(), outputs.MetadataFileName)) },
+		},
 		// After metadata, so the sums cover it. Both destinations ship the
 		// same directory, so neither can own this.
-		distribution.Upload{Handler: distribution.Preparer{Kind: outputs.ChecksumStep, Action: r.writeChecksums}},
+		distribution.Upload{
+			Handler: distribution.Preparer{Kind: outputs.ChecksumStep, Action: r.writeChecksums},
+			Done:    func() error { return fsutil.FilePresent(filepath.Join(r.uploadDir(), outputs.SumsFileName)) },
+		},
 	)
 
 	if r.isHashRelease {
@@ -1112,18 +1130,16 @@ func (r *CalicoManager) archiveSources() ([]archives.Contributor, error) {
 		sources = append(sources, binaries.Archive(r.repoRoot)...)
 	}
 	if r.manifests {
-		root := r.repoRoot
-		if r.isHashRelease {
-			root = r.hashrelease.Source
-		}
-		sources = append(sources, archives.DirSource{
-			Label:  manifests.DirName,
-			To:     manifests.DirName,
-			From:   manifests.Dir(root),
-			Filter: manifests.Shipped,
-		})
+		sources = append(sources, manifests.Archive(r.manifestsRoot()))
 	}
 	return sources, nil
+}
+
+func (r *CalicoManager) manifestsRoot() string {
+	if r.isHashRelease {
+		return r.hashrelease.Source
+	}
+	return r.repoRoot
 }
 
 func (r *CalicoManager) buildBinaries() error {

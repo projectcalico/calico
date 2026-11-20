@@ -466,6 +466,31 @@ func testArchived(repoRoot string) []archives.DirSource {
 	}
 }
 
+func TestBuilt(t *testing.T) {
+	prev := archived
+	archived = testArchived
+	t.Cleanup(func() { archived = prev })
+
+	t.Run("every archived binary on disk passes", func(t *testing.T) {
+		repoRoot := t.TempDir()
+		writeBinary(t, repoRoot, "alpha", "alpha-linux-amd64")
+		writeBinary(t, repoRoot, "beta", "tool")
+		if err := Built(repoRoot); err != nil {
+			t.Fatalf("Built() = %v, want nil", err)
+		}
+	})
+
+	t.Run("a missing binary fails and names its component", func(t *testing.T) {
+		repoRoot := t.TempDir()
+		writeBinary(t, repoRoot, "alpha", "alpha-linux-amd64")
+		writeBinary(t, repoRoot, "beta", "some-other-tool")
+		err := Built(repoRoot)
+		if err == nil || !strings.Contains(err.Error(), "beta tool binary") {
+			t.Fatalf("Built() = %v, want an error naming beta tool binary", err)
+		}
+	})
+}
+
 func TestArchiveLaysOutTheBinDir(t *testing.T) {
 	repoRoot, dest := t.TempDir(), t.TempDir()
 	prev := archived

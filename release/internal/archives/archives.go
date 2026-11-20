@@ -158,22 +158,36 @@ func (d DirSource) Name() string { return d.Label }
 // Hard-linked to keep staging disk usage flat. Linking nothing is an error:
 // the copy skips non-regular files, so empty means a missing component.
 func (d DirSource) Contribute(dir string) error {
-	filters := d.Filter
-	if filters == nil {
-		filters = []fsutil.FileFilter{fsutil.Recursive}
-	}
-	found, err := fsutil.ListFiles(d.From, filters...)
+	found, err := d.files()
 	if err != nil {
-		return fmt.Errorf("reading %s: %w", d.From, err)
-	}
-	if len(found) == 0 {
-		return fmt.Errorf("no files found in %s", d.From)
+		return err
 	}
 	dest := filepath.Join(dir, d.To)
 	if err := os.MkdirAll(dest, fsutil.DirPerms); err != nil {
 		return fmt.Errorf("creating destination(%s) for %s: %w", dest, d.Name(), err)
 	}
 	return fsutil.LinkOrCopyFiles(d.From, dest, found)
+}
+
+// Present fails when Contribute would find nothing to add.
+func (d DirSource) Present() error {
+	_, err := d.files()
+	return err
+}
+
+func (d DirSource) files() ([]string, error) {
+	filters := d.Filter
+	if filters == nil {
+		filters = []fsutil.FileFilter{fsutil.Recursive}
+	}
+	found, err := fsutil.ListFiles(d.From, filters...)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", d.From, err)
+	}
+	if len(found) == 0 {
+		return nil, fmt.Errorf("no files found in %s", d.From)
+	}
+	return found, nil
 }
 
 type settings struct {

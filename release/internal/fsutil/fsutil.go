@@ -144,6 +144,18 @@ func FileExists(path string) (bool, error) {
 	return info.Mode().IsRegular(), nil
 }
 
+// FilePresent fails unless path is a regular file.
+func FilePresent(path string) error {
+	ok, err := FileExists(path)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("%s is not a file", path)
+	}
+	return nil
+}
+
 // PathExists reports whether path exists. It returns (false, nil) only when
 // the path is genuinely absent; any other Stat failure (permission denied,
 // malformed path, etc.) is surfaced so callers do not silently skip work.

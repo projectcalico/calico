@@ -198,15 +198,17 @@ type PushTagOptions struct {
 }
 
 func TagUpload(o PushTagOptions) distribution.Upload {
+	t := TagPush{
+		Tag:    o.Tag,
+		Remote: o.Remote,
+		DryRun: o.DryRun,
+		git:    command.Git(o.Runner).In(o.RepoRoot),
+	}
 	return distribution.Upload{
-		Name: PushTagStep,
-		Skip: o.Skip,
-		Handler: TagPush{
-			Tag:    o.Tag,
-			Remote: o.Remote,
-			DryRun: o.DryRun,
-			git:    command.Git(o.Runner).In(o.RepoRoot),
-		},
+		Name:    PushTagStep,
+		Skip:    o.Skip,
+		Handler: t,
+		Done:    t.Pushed,
 	}
 }
 
@@ -232,6 +234,18 @@ func (t TagPush) Validate(distribution.Upload) error {
 		err = fmt.Errorf("no local tag %s", t.Tag)
 	}
 	return errors.Join(append(errs, err)...)
+}
+
+// Pushed fails unless the remote has the tag at the local tag's commit.
+func (t TagPush) Pushed() error {
+	out, err := lsRemoteTag(t.git, t.Tag, t.Remote)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(out) == "" {
+		return fmt.Errorf("tag %s is not on %s", t.Tag, t.Remote)
+	}
+	return tagMismatch(t.git, t.Tag, t.Remote, out)
 }
 
 // Publish skips a tag the remote already has at the same commit, so a rerun

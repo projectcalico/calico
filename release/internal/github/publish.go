@@ -101,19 +101,21 @@ func ReleaseUpload(o ReleaseOptions, requires ...string) distribution.Upload {
 		requires = append(requires, outputs.ChecksumStep, outputs.MetadataStep)
 	}
 	requires = append(requires, branch.PushTagStep)
+	rel := Release{
+		Repo:   o.Repo,
+		Tag:    ver,
+		Notes:  o.Notes,
+		Draft:  o.Draft,
+		DryRun: o.DryRun,
+		Runner: o.Runner,
+	}
 	return distribution.Upload{
 		Name:     ReleaseStep,
 		Source:   o.Source,
 		Skip:     o.Skip,
 		Requires: requires,
-		Handler: Release{
-			Repo:   o.Repo,
-			Tag:    ver,
-			Notes:  o.Notes,
-			Draft:  o.Draft,
-			DryRun: o.DryRun,
-			Runner: o.Runner,
-		},
+		Handler:  rel,
+		Done:     rel.Published,
 	}
 }
 
@@ -238,6 +240,23 @@ func (d Release) Publish(ctx context.Context, src string) error {
 		}
 	}
 	return gh.Publish(ctx, d.Tag, latest)
+}
+
+// Published fails unless the release is live. GitHub serves a draft only by
+// listing, so a draft counts as not published.
+func (d Release) Published() error {
+	gh, err := d.client()
+	if err != nil {
+		return fmt.Errorf("github client: %w", err)
+	}
+	_, found, err := gh.Get(context.Background(), d.Tag)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("no published %s", d.Name())
+	}
+	return nil
 }
 
 func (d Release) makeLatest(ctx context.Context) (bool, error) {
