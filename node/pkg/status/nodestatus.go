@@ -47,7 +47,7 @@ func RunWithContext(ctx context.Context) error {
 		return fmt.Errorf("NODENAME environment is not set")
 	}
 
-	cfg, c := calicoclient.CreateClient()
+	cfg, c := calicoclient.CreateClient("calico-node-status")
 	r := NewNodeStatusReporter(nodename, cfg, c, GetPopulators())
 
 	typhaConfig := syncclientutils.ReadTyphaConfig([]string{"FELIX_", "CALICO_"})
