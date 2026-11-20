@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// gen-test-set records the specs each CI lane selects, by dry-running the e2e
-// binary once per distinct selection and writing one set per lane.
+// gen-test-set records the specs each CI lane selects and the ones it drops,
+// by dry-running the e2e binary per distinct selection and writing a set and a
+// drop list per lane.
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -69,26 +68,27 @@ func run(repoRoot, binary, outDir string) error {
 	}
 	sort.Strings(names)
 
-	selections, err := dryRunSelections(binary, repoRoot, sets)
+	audits, err := auditSelections(binary, repoRoot, sets)
 	if err != nil {
 		return err
 	}
-	specs := make(map[string][]string, len(sets))
+	byName := make(map[string]cilanes.Audit, len(sets))
 	for _, name := range names {
-		specs[name] = selections[selectionKey(sets[name])]
+		byName[name] = audits[selectionKey(sets[name])]
 	}
 
 	for _, name := range names {
-		if len(specs[name]) == 0 {
+		a := byName[name]
+		if len(a.Runs) == 0 {
 			// An empty set is a lane burning a cluster on nothing, so report it
 			// rather than failing the whole generation.
 			fmt.Fprintf(os.Stderr, "%5s  %s\n", "EMPTY", name)
 			continue
 		}
-		fmt.Fprintf(os.Stderr, "%5d  %s\n", len(specs[name]), name)
+		fmt.Fprintf(os.Stderr, "%5d  %s (%d dropped)\n", len(a.Runs), name, len(a.Drops))
 	}
 
-	return cilanes.Write(filepath.Join(repoRoot, outDir), lanes, specs)
+	return cilanes.Write(filepath.Join(repoRoot, outDir), lanes, byName)
 }
 
 // selectionKey identifies a lane's selection by its parsed config list, so two
@@ -97,101 +97,44 @@ func selectionKey(l cilanes.Lane) string {
 	return strings.Join(l.Configs(), " ")
 }
 
-// selectionSpecs holds the spec names each distinct selection runs, keyed by
-// selectionKey. The concurrent dry runs fill it in through recordSpecs.
-type selectionSpecs struct {
-	mu    sync.Mutex
-	specs map[string][]string
+// selectionAudits holds the audit of each distinct selection, keyed by
+// selectionKey. The concurrent audits fill it in through record.
+type selectionAudits struct {
+	mu     sync.Mutex
+	audits map[string]cilanes.Audit
 }
 
-// recordSpecs stores the specs one selection's dry run found.
-func (s *selectionSpecs) recordSpecs(key string, found []string) {
+// record stores the audit of one selection.
+func (s *selectionAudits) record(key string, audit cilanes.Audit) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.specs[key] = found
+	s.audits[key] = audit
 }
 
-// dryRunSelections runs the binary once per distinct selection among the sets,
-// since many lanes share one config. It returns the specs keyed by
+// auditSelections audits one lane per distinct selection among the sets, since
+// many lanes share one config list. It returns the audits keyed by
 // selectionKey.
-func dryRunSelections(binary, repoRoot string, sets map[string]cilanes.Lane) (map[string][]string, error) {
+func auditSelections(binary, repoRoot string, sets map[string]cilanes.Lane) (map[string]cilanes.Audit, error) {
 	byConfig := map[string]cilanes.Lane{}
 	for _, l := range sets {
 		byConfig[selectionKey(l)] = l
 	}
 
-	results := &selectionSpecs{specs: make(map[string][]string, len(byConfig))}
+	results := &selectionAudits{audits: make(map[string]cilanes.Audit, len(byConfig))}
 	group := new(errgroup.Group)
 	group.SetLimit(runtime.NumCPU())
 	for config, l := range byConfig {
-		args, err := l.SelectionArgs(repoRoot)
-		if err != nil {
-			return nil, err
-		}
 		group.Go(func() error {
-			found, err := dryRun(binary, repoRoot, args)
+			audit, err := cilanes.AuditLane(binary, repoRoot, l)
 			if err != nil {
 				return fmt.Errorf("%s: %w", config, err)
 			}
-			results.recordSpecs(config, found)
+			results.record(config, audit)
 			return nil
 		})
 	}
 	if err := group.Wait(); err != nil {
 		return nil, err
 	}
-	return results.specs, nil
-}
-
-// ginkgoReport is the subset of ginkgo's JSON report that names the specs a run
-// would execute.
-type ginkgoReport struct {
-	SpecReports []struct {
-		ContainerHierarchyTexts []string `json:"ContainerHierarchyTexts"`
-		LeafNodeText            string   `json:"LeafNodeText"`
-		LeafNodeType            string   `json:"LeafNodeType"`
-		State                   string   `json:"State"`
-	} `json:"SpecReports"`
-}
-
-// dryRun returns the sorted spec names a selection would run. A dry run passes
-// selected specs and skips filtered ones.
-func dryRun(binary, workDir string, args []string) ([]string, error) {
-	report, err := os.CreateTemp("", "gen-test-set-*.json")
-	if err != nil {
-		return nil, err
-	}
-	report.Close()
-	defer os.Remove(report.Name())
-
-	cmd := exec.Command(binary, append([]string{
-		"--ginkgo.dry-run",
-		"--ginkgo.json-report=" + report.Name(),
-	}, args...)...)
-	cmd.Dir = workDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("%w\n%s", err, out)
-	}
-
-	data, err := os.ReadFile(report.Name())
-	if err != nil {
-		return nil, err
-	}
-	var suites []ginkgoReport
-	if err := json.Unmarshal(data, &suites); err != nil {
-		return nil, err
-	}
-
-	var names []string
-	for _, suite := range suites {
-		for _, spec := range suite.SpecReports {
-			if spec.LeafNodeType != "It" || spec.State != "passed" {
-				continue
-			}
-			parts := append(append([]string{}, spec.ContainerHierarchyTexts...), spec.LeafNodeText)
-			names = append(names, strings.Join(parts, " "))
-		}
-	}
-	sort.Strings(names)
-	return names, nil
+	return results.audits, nil
 }

@@ -71,22 +71,30 @@ func SetName(l Lane) (string, error) {
 	return dir + "/" + file + "/" + lane, nil
 }
 
-// Write records the index and one file per set under dir.
-func Write(dir string, lanes []Lane, specs map[string][]string) error {
+// dropsSuffix ends the name of a lane's drop list, which sits beside its set
+// file. No set name can contain a dot, so it never collides with another set.
+const dropsSuffix = ".drops.txt"
+
+// Write records the index and, for each set, a file of the specs the lane runs
+// and a file of the specs a suite selected that it dropped, with the reasons.
+func Write(dir string, lanes []Lane, audits map[string]Audit) error {
 	setsDir := filepath.Join(dir, "sets")
 	if err := os.RemoveAll(setsDir); err != nil {
 		return err
 	}
-	for name, list := range specs {
-		path := filepath.Join(setsDir, filepath.FromSlash(name)+".txt")
+	for name, audit := range audits {
+		path := filepath.Join(setsDir, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return err
 		}
 		var body string
-		if len(list) > 0 {
-			body = strings.Join(list, "\n") + "\n"
+		if len(audit.Runs) > 0 {
+			body = strings.Join(audit.Runs, "\n") + "\n"
 		}
-		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		if err := os.WriteFile(path+".txt", []byte(body), 0o644); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path+dropsSuffix, []byte(FormatDrops(audit.Drops)), 0o644); err != nil {
 			return err
 		}
 	}
@@ -104,7 +112,7 @@ func Write(dir string, lanes []Lane, specs map[string][]string) error {
 			if err != nil {
 				return err
 			}
-			set, count = name, fmt.Sprint(len(specs[name]))
+			set, count = name, fmt.Sprint(len(audits[name].Runs))
 		}
 		fmt.Fprintf(&index, "%s | %s | %s | %s\n", l.Source, l.Name, set, count)
 	}
