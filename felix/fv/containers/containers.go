@@ -357,6 +357,10 @@ func runWithFixedName(name string, opts RunOpts, args ...string) (*Container, er
 	} {
 		out, err := c.dockerInspect(f.format)
 		if err != nil {
+			// The container may be running; stop it, since the caller never gets it to clean up.
+			if stopErr := c.stop(); stopErr != nil {
+				log.WithError(stopErr).WithField("container", c.Name).Warn("Failed to stop container after failed start")
+			}
 			return nil, err
 		}
 		*f.field = strings.TrimSpace(out)
