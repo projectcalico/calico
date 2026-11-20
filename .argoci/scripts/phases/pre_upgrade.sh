@@ -30,7 +30,7 @@ else
     HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${UPLEVEL_RELEASE_STREAM}.txt") || HASHREL_URL=""
     export HASHREL_URL
   fi
-  # run_tests.sh exits when it finishes, hence a child shell. The component-log
+  # The test phase exits when it finishes, hence a child shell. The component-log
   # check belongs to the post-upgrade run, which reads the whole job's logs.
   _seed_rc=0
   # scenarios.yaml gates the run on a hashrelease whose binary knows the phase.
@@ -49,9 +49,13 @@ else
   if [[ ${_seed_rc} -ne 0 ]]; then
     echo "[WARN] pre_upgrade: seeding failed (rc=${_seed_rc}); continuing. See junit-upgrade-seed.xml."
   fi
-  # Tells the post-upgrade run to add the verify specs; a lane whose seed run
-  # was skipped for an unpublished config must not.
-  if grep -q 'e2e config published in hashrelease' "${REPORT_DIR}/junit-upgrade-seed.xml" 2>/dev/null; then
+  # Tells the post-upgrade run to add the verify specs. Not when the seed run
+  # was skipped for an unpublished config, nor when the binary died before
+  # running specs (no junit): verify would die the same way and take the
+  # normal suite with it.
+  if [[ ! -s "${REPORT_DIR}/junit-upgrade-seed.xml" ]]; then
+    echo "[WARN] pre_upgrade: seed run wrote no results; verify specs stay off"
+  elif grep -q 'e2e config published in hashrelease' "${REPORT_DIR}/junit-upgrade-seed.xml"; then
     echo "[INFO] pre_upgrade: seed run skipped; verify specs stay off"
   else
     export E2E_UPGRADE_SEEDED=1

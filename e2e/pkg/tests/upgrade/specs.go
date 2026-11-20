@@ -41,9 +41,10 @@ import (
 )
 
 const (
-	seedTimeout   = 10 * time.Minute
-	verifyTimeout = 20 * time.Minute
-	warmupTimeout = 2 * time.Minute
+	seedTimeout    = 10 * time.Minute
+	verifyTimeout  = 20 * time.Minute
+	warmupTimeout  = 2 * time.Minute
+	restoreTimeout = time.Minute
 )
 
 // declareSpecs adds the scenario's two specs to the ginkgo tree. They run in
@@ -148,7 +149,11 @@ func restoreAfter(ctx context.Context, s *Scenario, e *Env, err error) error {
 	if s.Restore == nil {
 		return err
 	}
-	if rerr := s.Restore(ctx, e); rerr != nil {
+	// The seed may have failed because its context expired, and Restore must
+	// still get to run.
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), restoreTimeout)
+	defer cancel()
+	if rerr := s.Restore(rctx, e); rerr != nil {
 		return errors.Join(err, fmt.Errorf("restore: %w", rerr))
 	}
 	return err

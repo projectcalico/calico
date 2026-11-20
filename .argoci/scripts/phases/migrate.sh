@@ -82,9 +82,15 @@ wait_for_rollout() {
   if upgrade_kubectl -n "${ns}" get deploy calico-typha >/dev/null 2>&1; then
     upgrade_kubectl -n "${ns}" rollout status deploy/calico-typha --timeout=15m || rc=1
   fi
-  if upgrade_kubectl get crd tigerastatuses.operator.tigera.io >/dev/null 2>&1; then
-    upgrade_kubectl wait tigerastatus --all --for=condition=Available --timeout=15m || rc=1
-  fi
+  # Only the statuses covering the dataplane and the API scenarios use; a
+  # degraded optional component (goldmane, whisker) is for the tests to report,
+  # not a reason to stop the job.
+  local ts
+  for ts in calico apiserver; do
+    if upgrade_kubectl get tigerastatus "${ts}" >/dev/null 2>&1; then
+      upgrade_kubectl wait tigerastatus "${ts}" --for=condition=Available --timeout=15m || rc=1
+    fi
+  done
   return ${rc}
 }
 

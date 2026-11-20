@@ -75,8 +75,25 @@ func TestE2E(t *testing.T) {
 	} else if phase := os.Getenv(testconfig.UpgradePhaseEnvVar); phase != "" {
 		// Without a config nothing excludes the other phase's specs.
 		t.Fatalf("%s=%s needs a test config", testconfig.UpgradePhaseEnvVar, phase)
+	} else if err := excludeUpgradeSpecs(); err != nil {
+		t.Fatalf("Failed to exclude upgrade scenario specs: %v", err)
 	}
 	e2e.RunE2ETests(t)
+}
+
+// excludeUpgradeSpecs keeps a config-less run, selected only by a focus or
+// label filter, off the upgrade scenario specs: seed changes cluster-wide
+// state that only a later verify undoes.
+func excludeUpgradeSpecs() error {
+	f := flag.Lookup("ginkgo.label-filter")
+	if f == nil {
+		return fmt.Errorf("ginkgo.label-filter is not registered")
+	}
+	filter := fmt.Sprintf("!%s && !%s", testconfig.UpgradeSeedLabel, testconfig.UpgradeVerifyLabel)
+	if cur := f.Value.String(); cur != "" {
+		filter = fmt.Sprintf("(%s) && %s", cur, filter)
+	}
+	return flag.Set("ginkgo.label-filter", filter)
 }
 
 // applyTestConfig loads the YAML test selection configs, merged into one, and

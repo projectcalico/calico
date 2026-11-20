@@ -69,6 +69,11 @@ func seedInvalidObjects(ctx context.Context, e *upgrade.Env) error {
 		if apierrors.IsAlreadyExists(err) {
 			return fmt.Errorf("%s %s is left from an earlier run; delete it and re-seed: %w", o.GetKind(), o.GetName(), err)
 		}
+		// Nor is an API server that couldn't answer.
+		if err != nil && (apierrors.IsServiceUnavailable(err) || apierrors.IsTimeout(err) || apierrors.IsServerTimeout(err) ||
+			apierrors.IsTooManyRequests(err) || ctx.Err() != nil) {
+			return fmt.Errorf("creating %s %s: %w", o.GetKind(), o.GetName(), err)
+		}
 		if err != nil {
 			framework.Logf("from-stream rejected %s %s: %v", o.GetKind(), o.GetName(), err)
 			continue

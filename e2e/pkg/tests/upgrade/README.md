@@ -155,7 +155,9 @@ provision → install → seed_images → configure → **pre_upgrade** → migr
 
 ### Running locally
 
-Point the e2e binary at a cluster running the from-stream:
+Point the e2e binary at a cluster running the from-stream, with a lane config
+such as `TEST_CONFIG=e2e/config/upgrade/xtables.yaml` (a phase without a config
+is refused, and a run without a phase never selects the upgrade specs):
 1. run with `E2E_UPGRADE_PHASE=seed E2E_UPGRADE_FROM=v3.33`;
 2. upgrade, writing the `upgrade-window` ConfigMap as `migrate.sh` does;
 3. run with `E2E_UPGRADE_PHASE=verify E2E_UPGRADE_FROM=v3.33`.
