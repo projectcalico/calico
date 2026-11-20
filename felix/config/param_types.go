@@ -930,7 +930,7 @@ func (p *RouteTableRangeParam) Parse(raw string) (result any, err error) {
 }
 
 func (p *RouteTableRangeParam) SchemaDescription() string {
-	return "Range of route table indices `n-m`, where `n` and `m` are integers in [0,250]."
+	return "Range of route table indices `n-m`, where `n` and `m` are integers in [1,250]."
 }
 
 type RouteTableRangesParam struct {
@@ -1002,7 +1002,7 @@ func (p *RouteTableRangesParam) Parse(raw string) (result any, err error) {
 
 func (p *RouteTableRangesParam) SchemaDescription() string {
 	return fmt.Sprintf("Comma or space-delimited list of route table ranges of the form `n-m` "+
-		"where `n` and `m` are integers in [0,%d]. The sum of the sizes of all ranges may not exceed %d.",
+		"where `n` and `m` are integers in [1,%d]. The sum of the sizes of all ranges may not exceed %d.",
 		routeTableMaxLinux, routeTableRangeMaxTables)
 }
 
