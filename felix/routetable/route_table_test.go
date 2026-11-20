@@ -39,7 +39,12 @@ const routePriorityForTest int = 48931
 
 // routeKeyStr builds a mock dataplane route key string that includes table, CIDR, and priority.
 func routeKeyStr(table int, cidr string, priority int) string {
-	return fmt.Sprintf("%d-%s-%d", table, cidr, priority)
+	dst := ip.MustParseCIDROrIP(cidr).ToIPNet()
+	return mocknetlink.KeyForRoute(&netlink.Route{
+		Table:    table,
+		Dst:      &dst,
+		Priority: priority,
+	})
 }
 
 // mainRouteKey builds a route key string for the main routing table with the standard test priority.
@@ -132,7 +137,7 @@ var _ = Describe("RouteTable v6", func() {
 		}
 		rt.SetRoutes(RouteClassLocalWorkload, noopLink.LinkAttrs.Name, []Target{{
 			RouteKey: RouteKey{
-				CIDR:     ip.MustParseCIDROrIP("10.0.0.4/32"),
+				CIDR:     ip.MustParseCIDROrIP("fd00::4/128"),
 				Priority: routePriorityForTest,
 			},
 			DestMAC: mac1,
@@ -143,7 +148,7 @@ var _ = Describe("RouteTable v6", func() {
 		deleteLink := dataplane.AddIface(5, "cali5", true, true)
 		deleteRoute := netlink.Route{
 			LinkIndex: deleteLink.LinkAttrs.Index,
-			Dst:       mustParseCIDR("10.0.0.1/32"),
+			Dst:       mustParseCIDR("fd00::1/128"),
 			Type:      syscall.RTN_UNICAST,
 			Protocol:  FelixRouteProtocol,
 			Scope:     netlink.SCOPE_LINK,
@@ -152,7 +157,7 @@ var _ = Describe("RouteTable v6", func() {
 		dataplane.AddMockRoute(&deleteRoute)
 		deleteRoute2 := netlink.Route{
 			LinkIndex: deleteLink.LinkAttrs.Index,
-			Dst:       mustParseCIDR("10.0.0.2/32"),
+			Dst:       mustParseCIDR("fd00::2/128"),
 			Type:      syscall.RTN_UNICAST,
 			Protocol:  FelixRouteProtocol,
 			Scope:     netlink.SCOPE_LINK,
@@ -194,6 +199,29 @@ var _ = Describe("RouteTable v6", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(routeKeyStr(254, "fd00::1/128", 1024)))
 	})
+
+	DescribeTable("should not reprogram unchanged routes on resync",
+		func(targetType TargetType) {
+			link := dataplane.AddIface(10, "cali10", true, true)
+			rt.OnIfaceStateChanged(link.LinkAttrs.Name, link.LinkAttrs.Index, ifacemonitor.StateUp)
+			rt.RouteUpdate(RouteClassLocalWorkload, link.LinkAttrs.Name, Target{
+				RouteKey: RouteKey{CIDR: ip.MustParseCIDROrIP("fd00::1/128")},
+				Type:     targetType,
+			})
+			Expect(rt.Apply()).To(Succeed())
+			Expect(dataplane.RouteKeyToRoute).To(HaveKey(routeKeyStr(254, "fd00::1/128", 1024)))
+
+			dataplane.ResetDeltas()
+			rt.QueueResync()
+			Expect(rt.Apply()).To(Succeed())
+			Expect(dataplane.UpdatedRouteKeys).To(BeEmpty())
+			Expect(dataplane.AddedRouteKeys).To(BeEmpty())
+		},
+		Entry("workload route (link scope on IPv4)", TargetType("")),
+		Entry("link-local unicast", TargetTypeLinkLocalUnicast),
+		Entry("local (host scope on IPv4)", TargetTypeLocal),
+		Entry("VXLAN", TargetTypeVXLAN),
+	)
 })
 
 var _ = Describe("RouteTable", func() {
@@ -279,6 +307,7 @@ var _ = Describe("RouteTable", func() {
 			}
 			dataplane.AddMockRoute(&cali3Route)
 			gatewayRoute = netlink.Route{
+				Dst:       mustParseCIDR("0.0.0.0/0"),
 				Family:    unix.AF_INET,
 				LinkIndex: eth0.LinkAttrs.Index,
 				Type:      syscall.RTN_UNICAST,
@@ -883,7 +912,6 @@ var _ = Describe("RouteTable", func() {
 					Protocol:  deviceRouteProtocol,
 					Scope:     netlink.SCOPE_UNIVERSE,
 					Table:     unix.RT_TABLE_MAIN,
-					Flags:     syscall.RTNH_F_ONLINK,
 					MultiPath: []*netlink.NexthopInfo{
 						{
 							LinkIndex: addLink.LinkAttrs.Index,
@@ -967,7 +995,6 @@ var _ = Describe("RouteTable", func() {
 					Protocol:  deviceRouteProtocol,
 					Scope:     netlink.SCOPE_UNIVERSE,
 					Table:     unix.RT_TABLE_MAIN,
-					Flags:     syscall.RTNH_F_ONLINK,
 					MultiPath: []*netlink.NexthopInfo{
 						{
 							LinkIndex: addLink.LinkAttrs.Index,
@@ -992,8 +1019,17 @@ var _ = Describe("RouteTable", func() {
 				err = rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
 				// It's ok to have one interface down on a multi-path route.
-				// Kernel keeps the route in place.
-				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(Equal(expectedRoute),
+				// Kernel keeps the route in place, marking the next hop dead.
+				routeWithDeadNextHop := expectedRoute
+				routeWithDeadNextHop.MultiPath = []*netlink.NexthopInfo{
+					{
+						LinkIndex: addLink.LinkAttrs.Index,
+						Gw:        net.ParseIP("10.0.0.6").To4(),
+						Flags:     unix.RTNH_F_ONLINK | unix.RTNH_F_DEAD | unix.RTNH_F_LINKDOWN,
+					},
+					expectedRoute.MultiPath[1],
+				}
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(Equal(routeWithDeadNextHop),
 					"Route should not be removed when only one interface is down")
 
 				By("Bringing other interface down")
@@ -1059,7 +1095,6 @@ var _ = Describe("RouteTable", func() {
 					Protocol:  deviceRouteProtocol,
 					Scope:     netlink.SCOPE_UNIVERSE,
 					Table:     unix.RT_TABLE_MAIN,
-					Flags:     syscall.RTNH_F_ONLINK,
 					MultiPath: []*netlink.NexthopInfo{
 						{
 							LinkIndex: addLink.LinkAttrs.Index,
@@ -1122,7 +1157,6 @@ var _ = Describe("RouteTable", func() {
 					Protocol: deviceRouteProtocol,
 					Scope:    netlink.SCOPE_UNIVERSE,
 					Table:    unix.RT_TABLE_MAIN,
-					Flags:    syscall.RTNH_F_ONLINK,
 					MTU:      1400,
 					MultiPath: []*netlink.NexthopInfo{
 						{
@@ -1748,6 +1782,7 @@ var _ = Describe("RouteTable", func() {
 							LinkIndex: cali1.LinkAttrs.Index,
 							Dst:       mustParseCIDR("10.0.0.22/32"),
 							Type:      syscall.RTN_UNICAST,
+							Protocol:  FelixRouteProtocol,
 							Scope:     netlink.SCOPE_LINK,
 							Table:     unix.RT_TABLE_MAIN,
 						}
@@ -2448,6 +2483,7 @@ var _ = Describe("RouteTable (main table)", func() {
 			}
 			dataplane.AddMockRoute(&cali1RouteTable100)
 			gatewayRoute = netlink.Route{
+				Dst:       mustParseCIDR("0.0.0.0/0"),
 				Family:    unix.AF_INET,
 				LinkIndex: eth0.LinkAttrs.Index,
 				Type:      syscall.RTN_UNICAST,
@@ -2552,6 +2588,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 			}
 			dataplane.AddMockRoute(&caliRouteTable100)
 			gatewayRoute = netlink.Route{
+				Dst:       mustParseCIDR("0.0.0.0/0"),
 				Family:    unix.AF_INET,
 				LinkIndex: eth0.LinkAttrs.Index,
 				Type:      syscall.RTN_UNICAST,
