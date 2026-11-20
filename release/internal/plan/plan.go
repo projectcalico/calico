@@ -41,21 +41,21 @@ type Node struct {
 	// Do may be nil for a node that only checks.
 	Do func() error
 
-	// Done reports whether this node's output already exists. It runs before
-	// any node's Do, so it must only read. nil means the node cannot tell.
+	// Done reports whether this node's output exists: for an off node before
+	// any Do, for an on node straight after its own. It must only read. nil
+	// means the node cannot tell.
 	Done func() error
 
-	// Verify checks this node's own output, straight after its Do.
-	Verify func() error
-
-	// Rollback undoes Do when this node's Verify or any later node fails.
+	// Rollback undoes Do when this node's Done or any later node fails.
 	Rollback func() error
 }
 
 type Options struct {
 	// Preview runs every Validate, but no Do, and logs what would run.
 	Preview bool
-	Skip    map[string]bool
+	// Local skips Done after Do: a local run changes nothing remote to check.
+	Local bool
+	Skip  map[string]bool
 }
 
 type Plan struct {
@@ -203,9 +203,9 @@ func (p *Plan) Run() (err error) {
 			return fmt.Errorf("%s: %w", n.Name, err)
 		}
 		done = append(done, n)
-		if n.Verify != nil {
-			if err = n.Verify(); err != nil {
-				return fmt.Errorf("%s: verify: %w", n.Name, err)
+		if n.Done != nil && !p.opts.Local {
+			if err = n.Done(); err != nil {
+				return fmt.Errorf("%s: not done after running: %w", n.Name, err)
 			}
 		}
 		log.WithField("duration", time.Since(start).Round(time.Second)).Info("Done")

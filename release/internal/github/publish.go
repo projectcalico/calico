@@ -115,7 +115,7 @@ func ReleaseUpload(o ReleaseOptions, requires ...string) distribution.Upload {
 		Skip:     o.Skip,
 		Requires: requires,
 		Handler:  rel,
-		Done:     rel.Published,
+		Done:     rel.Done,
 	}
 }
 
@@ -242,19 +242,30 @@ func (d Release) Publish(ctx context.Context, src string) error {
 	return gh.Publish(ctx, d.Tag, latest)
 }
 
-// Published fails unless the release is live. GitHub serves a draft only by
-// listing, so a draft counts as not published.
-func (d Release) Published() error {
+// Done fails unless the release is in the state Publish leaves it: a draft
+// when Draft is set, else live. GitHub serves a draft only by listing.
+func (d Release) Done() error {
 	gh, err := d.client()
 	if err != nil {
 		return fmt.Errorf("github client: %w", err)
 	}
-	_, found, err := gh.Get(context.Background(), d.Tag)
+	ctx := context.Background()
+	if !d.Draft {
+		_, found, err := gh.Get(ctx, d.Tag)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("no published %s", d.Name())
+		}
+		return nil
+	}
+	rel, found, err := gh.forTag(ctx, d.Tag)
 	if err != nil {
 		return err
 	}
-	if !found {
-		return fmt.Errorf("no published %s", d.Name())
+	if !found || !rel.GetDraft() {
+		return fmt.Errorf("no draft %s", d.Name())
 	}
 	return nil
 }

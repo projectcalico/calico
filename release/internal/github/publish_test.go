@@ -238,9 +238,10 @@ func TestReleasePublish(t *testing.T) {
 // LatestTag returns an empty string when a repository has no published
 // release. Parsing that as a version fails, so a first release could never
 // be published.
-func TestReleasePublished(t *testing.T) {
+func TestReleaseDone(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
+		draft   bool
 		fake    func(*fakeReleases)
 		wantErr string
 	}{
@@ -257,6 +258,18 @@ func TestReleasePublished(t *testing.T) {
 		},
 		{name: "no release is not done", fake: func(*fakeReleases) {}, wantErr: "no published"},
 		{
+			name:  "a draft is done when the release is a draft",
+			draft: true,
+			fake:  func(f *fakeReleases) { f.draft("v3.30.0", &github.RepositoryRelease{Draft: github.Bool(true)}) },
+		},
+		{
+			name:    "a published release is not done when the release is a draft",
+			draft:   true,
+			fake:    func(f *fakeReleases) { f.byTag = map[string]*github.RepositoryRelease{"v3.30.0": {TagName: github.String("v3.30.0")}} },
+			wantErr: "no draft",
+		},
+		{name: "no draft is not done", draft: true, fake: func(*fakeReleases) {}, wantErr: "no draft"},
+		{
 			name:    "a failed lookup is not done",
 			fake:    func(f *fakeReleases) { f.getErr = errors.New("rate limited") },
 			wantErr: "rate limited",
@@ -265,15 +278,15 @@ func TestReleasePublished(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &fakeReleases{}
 			tc.fake(f)
-			err := Release{releases: testReleases(t, f), Tag: "v3.30.0"}.Published()
+			err := Release{releases: testReleases(t, f), Tag: "v3.30.0", Draft: tc.draft}.Done()
 			if tc.wantErr == "" && err != nil {
-				t.Fatalf("Published() = %v, want nil", err)
+				t.Fatalf("Done() = %v, want nil", err)
 			}
 			if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
-				t.Fatalf("Published() = %v, want an error containing %q", err, tc.wantErr)
+				t.Fatalf("Done() = %v, want an error containing %q", err, tc.wantErr)
 			}
 			if f.created != nil || f.edited != nil {
-				t.Error("Published changed a release")
+				t.Error("Done changed a release")
 			}
 		})
 	}

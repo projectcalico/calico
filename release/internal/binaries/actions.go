@@ -131,6 +131,15 @@ func Built(repoRoot string) error {
 	return errors.Join(errs...)
 }
 
+// E2EBuilt passes when no requested arch has e2e support, since E2E then
+// builds nothing.
+func E2EBuilt(arches []string, outputDir string) error {
+	if len(e2eArchitectures(arches)) == 0 {
+		return nil
+	}
+	return archives.DirSource{Label: E2EComponent, From: E2EDir(outputDir), Filter: e2eShipped}.Present()
+}
+
 func Archive(repoRoot string) []archives.Contributor {
 	sources := archived(repoRoot)
 	out := make([]archives.Contributor, 0, len(sources))

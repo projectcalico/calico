@@ -1187,7 +1187,7 @@ func TestResolveContainerImages(t *testing.T) {
 
 	t.Run("a dry run lets a missing image pass", func(t *testing.T) {
 		m := withoutImages(t, newFakeRunner())
-		m.dryRun = true
+		m.planOptions.Local = true
 		missing := registry.DefaultProductRegistry + "/calico:" + m.calicoVersion.String()
 		m.resolveDigest = func(image string) (string, bool, error) {
 			if image == missing {
@@ -1206,7 +1206,7 @@ func TestResolveContainerImages(t *testing.T) {
 	t.Run("a dry run with missing images still reports its scan", func(t *testing.T) {
 		m := withoutImages(t, newFakeRunner())
 		scans := enableScan(t, m)
-		m.dryRun = true
+		m.planOptions.Local = true
 		m.resolveDigest = func(string) (string, bool, error) { return "", false, nil }
 		hook := logtest.NewGlobal()
 		t.Cleanup(hook.Reset)
@@ -1227,7 +1227,7 @@ func TestResolveContainerImages(t *testing.T) {
 
 	t.Run("a dry run still fails a failed lookup", func(t *testing.T) {
 		m := withoutImages(t, newFakeRunner())
-		m.dryRun = true
+		m.planOptions.Local = true
 		m.resolveDigest = func(string) (string, bool, error) {
 			return "", false, fmt.Errorf("unauthorized")
 		}
@@ -1261,7 +1261,7 @@ func TestResolveContainerImages(t *testing.T) {
 	t.Run("a dry run does not scan", func(t *testing.T) {
 		m := withoutImages(t, newFakeRunner())
 		scans := enableScan(t, m)
-		m.dryRun = true
+		m.planOptions.Local = true
 		if err := m.uploads()[0].Handler.Publish(context.Background(), ""); err != nil {
 			t.Fatalf("images upload: %v", err)
 		}
