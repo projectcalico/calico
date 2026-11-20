@@ -222,8 +222,9 @@ func (s *Scenario) validateFixtures(objs []*unstructured.Unstructured) error {
 	allowedIn := map[string][3]bool{}
 	deniedIn := map[string][3]bool{}
 	for _, p := range s.Probes {
-		if !dns1123.MatchString(p.Name) || names[p.Name] {
-			return fmt.Errorf("probe name %q must be unique and DNS-1123", p.Name)
+		// The name is also the prober's label value, which caps it at 63.
+		if !dns1123.MatchString(p.Name) || len(p.Name) > 63 || names[p.Name] {
+			return fmt.Errorf("probe name %q must be unique, DNS-1123 and at most 63 characters", p.Name)
 		}
 		names[p.Name] = true
 		if _, ok := pods[p.Client]; !ok {

@@ -69,8 +69,8 @@ func declareSpecs(s *Scenario) {
 			// The scenario owns a fixed namespace that must outlive this process.
 			f.SkipNamespaceCreation = true
 
-			// Per-scenario decorators go on an inner container because the
-			// labels lint wants WithFeature as a literal CalicoDescribe argument.
+			// Per-scenario decorators go on an inner container so that
+			// WithFeature stays a literal CalicoDescribe argument.
 			framework.Context(append(decorators, "scenario", func() {
 				framework.It("seed", framework.WithLabel(testconfig.UpgradeSeedLabel), func(ctx context.Context) {
 					ctx, cancel := context.WithTimeout(ctx, seedTimeout)
