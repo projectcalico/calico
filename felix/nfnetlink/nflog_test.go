@@ -55,12 +55,40 @@ var _ = Describe("ParseNflog", func() {
 	})
 })
 
+var _ = Describe("NflogSubscribe", func() {
+	It("should end cleanly when done is closed", func() {
+		ch := make(chan map[NflogPacketTuple]*NflogPacketAggregate, 10)
+		done := make(chan struct{})
+		endC, err := NflogSubscribe(0, 0, ch, done, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		close(done)
+		var endErr error
+		Eventually(endC, "2s").Should(Receive(&endErr))
+		Expect(endErr).NotTo(HaveOccurred(), "closing done was reported as a socket failure")
+		Expect(ch).NotTo(BeClosed(), "ch must stay open for a resubscribe")
+	})
+})
+
 var _ = Describe("parseAndAggregateFlowLogs", func() {
+	// startParsing runs parseAndAggregateFlowLogs in the background and returns a channel that
+	// closes when it returns.
+	startParsing := func(
+		resChan <-chan [][]byte, ch chan<- map[NflogPacketTuple]*NflogPacketAggregate, done <-chan struct{},
+	) <-chan struct{} {
+		finished := make(chan struct{})
+		go func() {
+			defer close(finished)
+			parseAndAggregateFlowLogs(0, resChan, ch, done)
+		}()
+		return finished
+	}
+
 	It("should aggregate packets and flush on ticker", func() {
 		resChan := make(chan [][]byte, 10)
 		ch := make(chan map[NflogPacketTuple]*NflogPacketAggregate, 10)
 
-		parseAndAggregateFlowLogs(0, resChan, ch)
+		finished := startParsing(resChan, ch, nil)
 
 		// Send 3 identical packets as a single batch (as the reader goroutine would).
 		msg := makeNflogMessage()
@@ -77,16 +105,15 @@ var _ = Describe("parseAndAggregateFlowLogs", func() {
 			Expect(agg.Prefixes[0].Packets).To(Equal(3))
 		}
 
-		// Close input; output channel should eventually close.
 		close(resChan)
-		Eventually(ch, "1s").Should(BeClosed())
+		Eventually(finished, "1s").Should(BeClosed())
 	})
 
 	It("should flush remaining data when input channel closes", func() {
 		resChan := make(chan [][]byte, 10)
 		ch := make(chan map[NflogPacketTuple]*NflogPacketAggregate, 10)
 
-		parseAndAggregateFlowLogs(0, resChan, ch)
+		finished := startParsing(resChan, ch, nil)
 
 		// Send packets and immediately close before ticker fires.
 		msg := makeNflogMessage()
@@ -102,19 +129,33 @@ var _ = Describe("parseAndAggregateFlowLogs", func() {
 			Expect(agg.Prefixes[0].Packets).To(Equal(2))
 		}
 
-		// Output channel should be closed.
-		Eventually(ch, "1s").Should(BeClosed())
+		Eventually(finished, "1s").Should(BeClosed())
+		Expect(ch).NotTo(BeClosed())
 	})
 
-	It("should close output channel when input closes with no data", func() {
+	It("should return without sending when input closes with no data", func() {
 		resChan := make(chan [][]byte, 10)
 		ch := make(chan map[NflogPacketTuple]*NflogPacketAggregate, 10)
 
-		parseAndAggregateFlowLogs(0, resChan, ch)
-
+		finished := startParsing(resChan, ch, nil)
 		close(resChan)
 
-		// Output channel should close without sending any data.
-		Eventually(ch, "1s").Should(BeClosed())
+		Eventually(finished, "1s").Should(BeClosed())
+		Expect(ch).NotTo(Receive())
+	})
+
+	It("should drop the final aggregate instead of blocking once done is closed", func() {
+		resChan := make(chan [][]byte, 10)
+		// Unbuffered and never read, as after the reader has stopped.
+		ch := make(chan map[NflogPacketTuple]*NflogPacketAggregate)
+		done := make(chan struct{})
+
+		finished := startParsing(resChan, ch, done)
+		msg := makeNflogMessage()
+		resChan <- [][]byte{msg}
+		close(done)
+		close(resChan)
+
+		Eventually(finished, "1s").Should(BeClosed())
 	})
 })
