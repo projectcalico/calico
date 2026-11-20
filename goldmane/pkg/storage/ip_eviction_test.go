@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -120,8 +120,6 @@ func (m *ipSetModel) windowIPs(start int64) []string {
 // random updates, including repeats, late arrivals, duplicates, empty addresses and rollovers, and
 // checks every live window reports the model's IPs after each step.
 func TestDiachronicFlow_IPSetEvictionMatchesModel(t *testing.T) {
-	defer setupTest(t)()
-
 	// A fixed seed makes every run identical, so a failing trial can be reproduced.
 	rng := rand.New(rand.NewPCG(1, 2))
 	for trial := range 200 {
@@ -184,7 +182,6 @@ func TestDiachronicFlow_IPSetEvictionMatchesModel(t *testing.T) {
 // the cap into a full set, so more than MaxIPsPerFlow IPs are evicted at once. The older window
 // should lose every IP, and the new window should keep only its highest addresses.
 func TestDiachronicFlow_IPSetEvictionLargerThanCap(t *testing.T) {
-	defer setupTest(t)()
 	const extraIPs = 50
 
 	// Fill the set in window 0, then send window 1 extraIPs more new addresses than the cap.

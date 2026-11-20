@@ -469,8 +469,8 @@ func (d *DiachronicFlow) recordIPs(flow *types.Flow, start, end int64) {
 
 // recordIPSet adds ips to m against the given window slot, lazily allocating m. When m would grow
 // past MaxIPsPerFlow, it keeps the most recently seen IPs, dropping the lowest address among
-// equally recent ones; see evictLeastRecent. An IP that arrives late, for a window older than
-// every retained entry, is therefore dropped rather than evicting newer data.
+// equally recent ones; see evictLeastRecent. So once m is full, an IP that arrives late, for a
+// window older than every retained entry, is dropped rather than evicting newer data.
 func recordIPSet(m map[string]*ipEntry, ips []string, slot int, start int64) map[string]*ipEntry {
 	// fresh collects new IPs that arrive once m is full; after the loop, we evict to make room for
 	// them. Updates rarely bring many, so fresh starts in a small fixed array and rarely allocates.
@@ -567,17 +567,18 @@ func evictLeastRecent(m map[string]*ipEntry, fresh []string, start int64) []stri
 		return fresh
 	}
 
+	// Check whether this update brings more new IPs than the set can hold.
+	if surplus := len(fresh) - MaxIPsPerFlow; surplus > 0 {
+		// The fresh IPs share one lastSeen, so the lowest addresses rank lowest and would be dropped
+		// anyway. Dropping them up front keeps the overflow within the shortlist's fixed array.
+		fresh = fresh[surplus:]
+		overflow -= surplus
+	}
+
 	// The shortlist holds the overflow lowest-ranked IPs, which are the ones we'll drop. Its
 	// storage is a fixed-size array, so building it doesn't allocate memory.
 	var buf [MaxIPsPerFlow]evictionCandidate
-	slots := buf[:min(overflow, MaxIPsPerFlow)]
-
-	// A single update can overflow by more than the array holds. Only then do we allocate a bigger
-	// slice for the shortlist.
-	if overflow > MaxIPsPerFlow {
-		slots = make([]evictionCandidate, overflow)
-	}
-	shortlist := evictionShortlist{slots: slots}
+	shortlist := evictionShortlist{slots: buf[:overflow]}
 
 	// Offer each tracked IP to the shortlist.
 	for ip, e := range m {
