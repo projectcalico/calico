@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ipamplugin
+package k8s
 
-const ipamLockPath = `c:\CalicoWindows\ipam.lock`
+import (
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+)
+
+func init() {
+	testutils.HookLogrusForGinkgo()
+}
+
+func TestK8s(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "k8s suite")
+}
