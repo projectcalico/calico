@@ -1042,17 +1042,19 @@ func (m *migrationController) nudgeTerminatingCRD(crdClient dynamic.ResourceInte
 func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *migrationv1.DatastoreMigration) error {
 	logCtx.Info("Migration incomplete, aborting and restoring pre-migration state")
 
-	if dm.Status.StartedAt == nil {
-		// Only the Migrating phase creates v3 resources and locks v1, so steps 1
-		// and 2 have nothing to undo.
-		logCtx.Info("Migration never started, skipping v3 resource cleanup and v1 ClusterInformation restore")
-	} else {
-		// Step 1: Delete v3 resources created during migration. Best-effort, since
-		// they go inert once the APIService is restored.
+	// Step 1: Delete v3 resources created during migration. Only the Migrating
+	// phase creates them, so there is nothing to delete before it starts. This is
+	// best-effort, since they go inert once the APIService is restored.
+	if dm.Status.StartedAt != nil {
 		m.cleanupPartialV3Resources(logCtx, dm)
+	} else {
+		logCtx.Info("Migration never started, skipping v3 resource cleanup")
+	}
 
-		// Step 2: Restore v1 ClusterInformation to DatastoreReady=true so components
-		// reading from crd.projectcalico.org/v1 resume normal operation.
+	// Step 2: Restore v1 ClusterInformation to DatastoreReady=true so components
+	// reading from crd.projectcalico.org/v1 resume normal operation. Pending takes
+	// the lock before Migrating starts, so this runs whenever the lock was taken.
+	if v1LockTaken(dm) {
 		// This is the only unlock: nothing on the success path clears the v1 lock,
 		// so giving up here leaves the datastore locked with no CR left to retry from.
 		if err := m.setV1ClusterInfoReady(logCtx, true); err != nil {
@@ -1062,6 +1064,8 @@ func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *migrationv1.
 			}
 			logCtx.WithError(err).Info("No v1 ClusterInformation to restore")
 		}
+	} else {
+		logCtx.Info("Datastore was never locked, skipping v1 ClusterInformation restore")
 	}
 
 	// Step 3: Undo whatever this migration did to the v3 ClusterInformation.
@@ -1074,6 +1078,14 @@ func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *migrationv1.
 	}
 
 	return m.removeFinalizer(dm)
+}
+
+// v1LockTaken reports whether this migration locked the v1 datastore, so abort
+// knows whether there is a lock to undo. DatastoreLockedAt records the lock from
+// v3.32.2 onward. A CR written by v3.32.0 or v3.32.1, which locked v1 on entering
+// Migrating, only has StartedAt set.
+func v1LockTaken(dm *migrationv1.DatastoreMigration) bool {
+	return dm.Status.DatastoreLockedAt != nil || dm.Status.StartedAt != nil
 }
 
 // cleanupPartialV3Resources deletes v3 resources that this migration created.
