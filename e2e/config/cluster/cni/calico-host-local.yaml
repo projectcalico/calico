@@ -1,0 +1,8 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Calico CNI with host-local IPAM, as canal.yaml installs it.
+
+kind: cluster
+
+provides:
+  - CalicoCNI

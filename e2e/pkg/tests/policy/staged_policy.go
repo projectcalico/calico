@@ -53,10 +53,8 @@ import (
 // PRECONDITIONS:
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithCategory(describe.Policy),
-	describe.WithFeature("Flow-Logs"),
-	describe.RequiresGoldmane(),
-	describe.WithNoTierPrefix(),
+	describe.Covers("Flow-Logs"),
+	describe.Requires(describe.Goldmane),
 	"staged network policy",
 	func() {
 		var (
@@ -82,7 +80,7 @@ var _ = describe.CalicoDescribe(
 			installed, err := utils.WhiskerInstalled(cli)
 			Expect(err).NotTo(HaveOccurred())
 			if !installed {
-				framework.Failf("Whisker is not installed in this cluster, so the lane should exclude the RequiresGoldmane label")
+				framework.Failf("Whisker is not installed in this cluster, so the lane must not provide Goldmane")
 			}
 
 			whiskerHTTPSClient, err = buildWhiskerHTTPSClient(context.TODO(), cli)

@@ -1,0 +1,8 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Every IP pool has IPIP and VXLAN off.
+
+kind: cluster
+
+provides:
+  - NoEncap

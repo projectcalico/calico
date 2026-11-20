@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2018 Tigera, Inc. All rights reserved.
+Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,11 +27,11 @@ import (
 	"github.com/onsi/ginkgo/v2/types"
 )
 
-const windowsLabel = "RunsOnWindows"
+const windowsLabel = "Covers:Windows"
 
 // ClusterIsWindows returns true if the cluster supports running Windows tests and false otherwise.
 //
-// TODO: Right now, we infer this from the run selecting specs by "RunsOnWindows". This isn't
+// TODO: Right now, we infer this from the run selecting specs by "Covers:Windows". This isn't
 // necessarily true. We could be more precise by either checking the cluster itself, or adding a
 // CLI flag to control this behavior.
 func ClusterIsWindows() bool {
@@ -41,7 +41,7 @@ func ClusterIsWindows() bool {
 
 // selectsWindows reports whether the run selects specs by the Windows label, either via a focus
 // string or via a label filter that would reject the current spec without it. Evaluating the
-// filter, rather than searching it for the label, keeps a negated "!RunsOnWindows" from counting.
+// filter, rather than searching it for the label, keeps a negated "!Covers:Windows" from counting.
 func selectsWindows(focusStrings []string, labelFilter string, specLabels []string) bool {
 	for _, s := range focusStrings {
 		if strings.Contains(s, windowsLabel) {

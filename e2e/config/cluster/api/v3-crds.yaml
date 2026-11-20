@@ -1,0 +1,8 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# kube-apiserver serves projectcalico.org/v3 from the v3 CRDs.
+
+kind: cluster
+
+provides:
+  - V3CRDs

@@ -1,0 +1,11 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Goldmane and Whisker are installed and ready.
+
+kind: cluster
+
+needs:
+  - install/operator.yaml
+
+provides:
+  - Goldmane

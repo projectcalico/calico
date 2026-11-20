@@ -33,7 +33,28 @@ steps:
       - name: DATAPLANE
         value: CalicoIptables
       - name: E2E_TEST_CONFIG
-        value: e2e/config/patch-verification/xtables.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/routing/no-encap.yaml
+          cluster/platform/kind.yaml
+          cluster/ip-family/ipv6.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: INSTALLER
         value: helmerator
       - name: IPV4_POD_CIDR
@@ -66,7 +87,23 @@ steps:
       - name: DOWNLEVEL_MANIFEST
         value: https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
       - name: E2E_TEST_CONFIG
-        value: e2e/config/patch-verification/xtables-encap-manifest.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/manifest.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENCAPSULATION_TYPE
         value: VXLAN
       - name: INSTALLER
@@ -97,7 +134,22 @@ steps:
       - name: DATAPLANE
         value: CalicoIptables
       - name: E2E_TEST_CONFIG
-        value: e2e/config/patch-verification/xtables-manifest.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/manifest.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico-host-local.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: GOOGLE_MACHINE_TYPE
         value: e2-standard-2
       - name: INSTALLER
@@ -130,7 +182,22 @@ steps:
       - name: DOWNLEVEL_MANIFEST
         value: https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/canal.yaml
       - name: E2E_TEST_CONFIG
-        value: e2e/config/patch-verification/xtables-manifest.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/manifest.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: GOOGLE_MACHINE_TYPE
         value: e2-standard-2
       - name: INSTALLER
@@ -157,7 +224,24 @@ steps:
       - name: DATAPLANE
         value: CalicoIptables
       - name: E2E_TEST_CONFIG
-        value: e2e/config/patch-verification/xtables-encap-manifest.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/manifest.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENCAPSULATION_TYPE
         value: IPIP
       - name: GOOGLE_MACHINE_TYPE
@@ -192,7 +276,25 @@ steps:
       - name: DATAPLANE
         value: CalicoNftables
       - name: E2E_TEST_CONFIG
-        value: e2e/config/patch-verification/xtables-encap-manifest.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/dataplane/nftables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENCAPSULATION_TYPE
         value: IPIP
       - name: GOOGLE_MACHINE_TYPE
@@ -227,7 +329,21 @@ steps:
       - name: CNI_PLUGIN
         value: AzureVNET
       - name: E2E_TEST_CONFIG
-        value: e2e/config/patch-verification/aks-xtables-nobgp.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/provider.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: INSTALLER
         value: operator
       - name: IPV4_POD_CIDR
@@ -254,7 +370,27 @@ steps:
       - name: DATAPLANE
         value: CalicoBPF
       - name: E2E_TEST_CONFIG
-        value: e2e/config/patch-verification/eks-bpf-encap-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/wireguard.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: EKS_AMI_FAMILY
         value: AmazonLinux2023
       - name: ENABLE_NODE_LOCAL_DNS_CACHE
@@ -291,7 +427,24 @@ steps:
       - name: DATAPLANE
         value: CalicoBPF
       - name: E2E_TEST_CONFIG
-        value: e2e/config/patch-verification/eks-bpf-nobgp-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/provider.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: INSTALLER
         value: operator
       - name: IPAM_TEST_POOL_SUBNET
@@ -316,7 +469,27 @@ steps:
       - name: DATAPLANE
         value: CalicoBPF
       - name: E2E_TEST_CONFIG
-        value: e2e/config/patch-verification/bpf-encap-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENCAPSULATION_TYPE
         value: VXLAN
       - name: INSTALLER
@@ -345,7 +518,29 @@ steps:
       - name: DATAPLANE
         value: CalicoNftables
       - name: E2E_TEST_CONFIG
-        value: e2e/config/patch-verification/xtables-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/nftables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/routing/no-encap.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENCAPSULATION_TYPE
         value: None
       - name: INSTALLER
@@ -376,7 +571,26 @@ steps:
       - name: DATAPLANE
         value: CalicoBPF
       - name: E2E_TEST_CONFIG
-        value: e2e/config/patch-verification/bpf-encap.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENCAPSULATION_TYPE
         value: VXLAN
       - name: INSTALLER
@@ -395,7 +609,27 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/gcp/kubevirt.yaml
+        value: >-
+          ci-base.yaml
+          suite/kubevirt.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/routing/no-encap.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/kubevirt.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: INSTALLER
         value: operator
       - name: K8S_VERSION
@@ -414,7 +648,25 @@ steps:
       - name: DATAPLANE
         value: CalicoBPF
       - name: E2E_TEST_CONFIG
-        value: e2e/config/patch-verification/bpf-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/network-conformance.yaml
+          suite/calico-conformance.yaml
+          suite/tiered-rbac.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/openshift.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: INSTALLER
         value: operator
       - name: IP_FAMILY

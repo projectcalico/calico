@@ -126,7 +126,10 @@ check_config_env() {
   local got
   got=$(make -s -n -C "${REPO_ROOT}" e2e-run KUBECONFIG=/tmp/kubeconfig "$@" 2>/dev/null |
     grep -F ./bin/ginkgo | grep -oE 'E2E_TEST_CONFIG="[^"]*"')
-  if [[ "${got}" == "E2E_TEST_CONFIG=\"${want}\"" ]]; then
+
+  # want is a glob, so the default lane's long fragment list can be checked by its first entry.
+  # shellcheck disable=SC2053
+  if [[ "${got}" == E2E_TEST_CONFIG=\"${want}\" ]]; then
     echo "PASS ${name}"
     pass=$((pass + 1))
   else
@@ -135,11 +138,14 @@ check_config_env() {
   fi
 }
 
-check_config_env "e2e-run exports the default selection" e2e/config/kind/conformance.yaml
-check_config_env "e2e-run exports an absolute selection repo-relative" e2e/config/kind/bpf.yaml \
-  E2E_TEST_CONFIG="${REPO_ROOT}/e2e/config/kind/bpf.yaml"
-check_config_env "e2e-run exports a short selection repo-relative" e2e/config/kind/bpf.yaml \
-  E2E_TEST_CONFIG=kind/bpf.yaml
+check_config_env "e2e-run exports the default selection" 'e2e/config/ci-base.yaml e2e/config/suite/*'
+check_config_env "e2e-run exports an absolute selection repo-relative" e2e/config/suite/conformance.yaml \
+  E2E_TEST_CONFIG="${REPO_ROOT}/e2e/config/suite/conformance.yaml"
+check_config_env "e2e-run exports a short selection repo-relative" e2e/config/suite/conformance.yaml \
+  E2E_TEST_CONFIG=suite/conformance.yaml
+check_config_env "e2e-run exports each entry of a list repo-relative" \
+  'e2e/config/ci-base.yaml e2e/config/suite/conformance.yaml' \
+  E2E_TEST_CONFIG="ci-base.yaml suite/conformance.yaml"
 
 echo "=== ${pass} passed, ${fail} failed"
 [[ "${fail}" == 0 ]]

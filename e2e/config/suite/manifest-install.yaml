@@ -1,0 +1,12 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# The smallest set that fails if a manifest install does not network pods:
+# pod, service and NodePort paths, Calico policy, and the hostPort spec,
+# which needs the portmap plugin off the host.
+
+kind: suite
+
+include:
+  - Conformance && sig-calico && Covers:Datapath
+  - Conformance && sig-calico && Covers:NetworkPolicy
+  - Conformance && sig-calico && Covers:HostPorts

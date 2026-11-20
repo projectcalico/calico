@@ -50,11 +50,10 @@ const (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("IngressGateway"),
-	describe.WithCategory(describe.Operator),
+	describe.Covers("IngressGateway"),
 	describe.WithSerial(),
-	describe.RequiresOperator(),
-	describe.RequiresGoldmane(),
+	describe.Requires(describe.Operator),
+	describe.Requires(describe.Goldmane),
 	"whisker access via calico ingress gateway",
 	func() {
 		f := utils.NewDefaultFramework("ingress-gateway-whisker")
