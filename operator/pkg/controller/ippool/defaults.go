@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"slices"
 	"strings"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -79,31 +80,17 @@ func fillDefaults(ctx context.Context, client client.Client, spec *operator.Inst
 	// Only add default CIDRs if there are no existing pools in the cluster. On a cluster that already has
 	// pools, the caller has decided which ones to manage.
 	if currentPools == nil || len(currentPools.Items) == 0 {
-		if spec.KubernetesProvider.IsOpenShift() {
-			// If configured to run in openshift, then also fetch the openshift configuration API.
-			log.V(1).Info("Fetching OpenShift network configuration")
-			openshiftConfig := &configv1.Network{}
-			openshiftNetworkConfig := "cluster"
-			if err := client.Get(ctx, types.NamespacedName{Name: openshiftNetworkConfig}, openshiftConfig); err != nil {
-				return fmt.Errorf("unable to read openshift network configuration: %s", err.Error())
+		if spec.CNI.Type == operator.PluginCalico {
+			if spec.CalicoNetwork == nil {
+				spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
 			}
-
-			// Merge in OpenShift configuration.
-			if err := updateInstallationForOpenshiftNetwork(spec, openshiftConfig); err != nil {
-				return fmt.Errorf("could not resolve CalicoNetwork IPPool and OpenShift network: %s", err.Error())
-			}
-		} else {
-			// Check if we're running on kubeadm by getting the config map.
-			log.V(1).Info("Fetching kubeadm config map")
-			kubeadmConfig := &corev1.ConfigMap{}
-			key := types.NamespacedName{Name: kubeadmConfigMap, Namespace: metav1.NamespaceSystem}
-			if err := client.Get(ctx, key, kubeadmConfig); err == nil {
-				// We found the configmap - merge in kubeadm configuration.
-				if err := updateInstallationForKubeadm(spec, kubeadmConfig); err != nil {
-					return fmt.Errorf("could not resolve CalicoNetwork IPPool and kubeadm configuration: %s", err.Error())
+			// The platform's CIDRs only seed pools the Installation leaves unset, so declared pools don't need them.
+			if spec.CalicoNetwork.IPPools == nil {
+				platformCIDRs, err := platformPodCIDRs(ctx, client, spec)
+				if err != nil {
+					return err
 				}
-			} else if !apierrors.IsNotFound(err) {
-				return fmt.Errorf("unable to read kubeadm config map: %s", err.Error())
+				mergePlatformPodCIDRs(spec, platformCIDRs)
 			}
 		}
 
@@ -255,93 +242,84 @@ func isDualStack(spec *operator.InstallationSpec) bool {
 	return hasV4 && hasV6
 }
 
-func updateInstallationForOpenshiftNetwork(spec *operator.InstallationSpec, o *configv1.Network) error {
-	// If CNI plugin is specified and not Calico then skip any CalicoNetwork initialization
-	if spec.CNI != nil && spec.CNI.Type != operator.PluginCalico {
-		return nil
-	}
-	if spec.CalicoNetwork == nil {
-		spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
-	}
-
-	platformCIDRs := []string{}
-	for _, c := range o.Spec.ClusterNetwork {
-		platformCIDRs = append(platformCIDRs, c.CIDR)
-	}
-	return mergePlatformPodCIDRs(spec, platformCIDRs)
-}
-
-func updateInstallationForKubeadm(spec *operator.InstallationSpec, c *corev1.ConfigMap) error {
-	// If CNI plugin is specified and not Calico then skip any CalicoNetwork initialization
-	if spec.CNI != nil && spec.CNI.Type != operator.PluginCalico {
-		return nil
-	}
-	if spec.CalicoNetwork == nil {
-		spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
+// platformPodCIDRs returns the pod network CIDRs configured in the underlying Kubernetes platform.
+// A cluster without a kubeadm config map has none.
+func platformPodCIDRs(ctx context.Context, c client.Client, spec *operator.InstallationSpec) ([]string, error) {
+	if spec.KubernetesProvider.IsOpenShift() {
+		openshiftConfig := &configv1.Network{}
+		if err := c.Get(ctx, types.NamespacedName{Name: "cluster"}, openshiftConfig); err != nil {
+			return nil, fmt.Errorf("unable to read openshift network configuration: %w", err)
+		}
+		cidrs := []string{}
+		for _, n := range openshiftConfig.Spec.ClusterNetwork {
+			cidrs = append(cidrs, n.CIDR)
+		}
+		return cidrs, nil
 	}
 
-	platformCIDRs, err := extractKubeadmCIDRs(c)
+	kubeadmConfig := &corev1.ConfigMap{}
+	key := types.NamespacedName{Name: kubeadmConfigMap, Namespace: metav1.NamespaceSystem}
+	if err := c.Get(ctx, key, kubeadmConfig); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("unable to read kubeadm config map: %w", err)
+	}
+	cidrs, err := extractKubeadmCIDRs(kubeadmConfig)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("unable to parse kubeadm config map: %w", err)
 	}
-	return mergePlatformPodCIDRs(spec, platformCIDRs)
+	return cidrs, nil
 }
 
-func mergePlatformPodCIDRs(spec *operator.InstallationSpec, platformCIDRs []string) error {
-	// If IPPools is nil, add IPPool with CIDRs detected from platform configuration.
-	if spec.CalicoNetwork.IPPools == nil {
-		if len(platformCIDRs) == 0 {
-			// If the platform has no CIDRs defined as well, then return and let the
-			// normal defaulting happen.
-			return nil
+// mergePlatformPodCIDRs adds an IP pool for each platform CIDR.
+func mergePlatformPodCIDRs(spec *operator.InstallationSpec, platformCIDRs []string) {
+	v4found := false
+	v6found := false
+	for _, c := range platformCIDRs {
+		log.Info("Adding IP pool for platform CIDR", "cidr", c)
+		addr, _, err := net.ParseCIDR(c)
+		if err != nil {
+			log.Error(err, "Failed to parse platform's pod network CIDR.")
+			continue
 		}
-		v4found := false
-		v6found := false
 
-		// For each platform CIDR, add it as an IP pool.
-		for _, c := range platformCIDRs {
-			log.Info("Adding IP pool for platform CIDR", "cidr", c)
-			addr, _, err := net.ParseCIDR(c)
-			if err != nil {
-				log.Error(err, "Failed to parse platform's pod network CIDR.")
-				continue
+		// The first CIDR of each family becomes the default pool; the rest are named after their CIDR.
+		if addr.To4() == nil {
+			name := defaultV6PoolName
+			if v6found {
+				name = ""
 			}
-
-			if addr.To4() == nil {
-				// Treat the first IPv6 CIDR as the default. Subsequent CIDRs will be named based on their CIDR.
-				name := defaultV6PoolName
-				if v6found {
-					name = ""
-				}
-				v6found = true
-				spec.CalicoNetwork.IPPools = append(spec.CalicoNetwork.IPPools, operator.IPPool{Name: name, CIDR: c})
-			} else {
-				// Treat the first IPv4 CIDR as the default. Subsequent CIDRs will be named based on their CIDR.
-				name := defaultPoolName
-				if v4found {
-					name = ""
-				}
-				v4found = true
-				spec.CalicoNetwork.IPPools = append(spec.CalicoNetwork.IPPools, operator.IPPool{Name: name, CIDR: c})
+			v6found = true
+			spec.CalicoNetwork.IPPools = append(spec.CalicoNetwork.IPPools, operator.IPPool{Name: name, CIDR: c})
+		} else {
+			name := defaultPoolName
+			if v4found {
+				name = ""
 			}
-		}
-	} else if len(spec.CalicoNetwork.IPPools) == 0 {
-		// Empty IPPools list so nothing to do.
-		return nil
-	} else {
-		// Pools are configured on the Installation. Make sure they are compatible with
-		// the configuration set in the underlying Kubernetes platform.
-		for _, pool := range spec.CalicoNetwork.IPPools {
-			within := false
-			for _, c := range platformCIDRs {
-				within = within || cidrWithinCidr(c, pool.CIDR)
-			}
-			if !within {
-				return fmt.Errorf("IPPool %v is not within the platform's configured pod network CIDR(s) %v", pool.CIDR, platformCIDRs)
-			}
+			v4found = true
+			spec.CalicoNetwork.IPPools = append(spec.CalicoNetwork.IPPools, operator.IPPool{Name: name, CIDR: c})
 		}
 	}
-	return nil
+}
+
+// poolsOutsidePlatformCIDRs returns the CIDRs of the workload pools that don't fit within any of the platform's
+// pod network CIDRs.
+func poolsOutsidePlatformCIDRs(pools []operator.IPPool, platformCIDRs []string) []string {
+	if len(platformCIDRs) == 0 {
+		return nil
+	}
+	var outside []string
+	for _, pool := range pools {
+		// Only workload addresses have to be inside the pod network.
+		if len(pool.AllowedUses) > 0 && !slices.Contains(pool.AllowedUses, operator.IPPoolAllowedUseWorkload) {
+			continue
+		}
+		if !slices.ContainsFunc(platformCIDRs, func(c string) bool { return cidrWithinCidr(c, pool.CIDR) }) {
+			outside = append(outside, pool.CIDR)
+		}
+	}
+	return outside
 }
 
 // cidrWithinCidr checks that all IPs in the pool passed in are within the
