@@ -1050,6 +1050,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 		CALI_CT_DEBUG("Miss.");
 		if (related) {
+			/* Not for an error that came through a tunnel: re-resolving it
+			 * could bounce it between nodes whose LUTs briefly differ. */
+			if (CALI_F_FROM_HEP && ip_void(STATE->tun_ip)) {
+				STATE->flags |= CALI_ST_RELATED_MISS;
+			}
 			goto out_invalid;
 		} else {
 			goto out_lookup_fail;
@@ -1163,7 +1168,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 
 			ct_result_set_flag(result.rc, CT_RES_TUN_SRC_CHANGED);
 
-			if (result.flags & CALI_CT_FLAG_MAGLEV) {
+			/* An ICMP error can be ECMP-hashed to any node, which then
+			 * forwards it here, so its tunnel source says nothing about
+			 * where the flow now ingresses. */
+			if ((result.flags & CALI_CT_FLAG_MAGLEV) && !related) {
 				CALI_DEBUG("overwriting tunnel src for Maglev packet");
 				tracking_v->tun_ip = ctx->state->tun_ip;
 			}

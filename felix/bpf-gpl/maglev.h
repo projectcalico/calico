@@ -12,14 +12,17 @@
 #include "nat_types.h"
 #include "types.h"
 
-static CALI_BPF_INLINE struct calico_nat_dest* maglev_select_backend(struct cali_tc_ctx *ctx)
+/* maglev_select_backend takes the tuple in client->VIP order. Every node must
+ * hash the same values in the same order to pick the same LUT slot.
+ */
+static CALI_BPF_INLINE struct calico_nat_dest* maglev_select_backend(struct cali_tc_ctx *ctx,
+								     ipv46_addr_t *ip_src,
+								     ipv46_addr_t *ip_dst,
+								     __u16 sport,
+								     __u16 dport,
+								     __u8 ip_proto)
 {
 	__u32 hash;
-	ipv46_addr_t *ip_src = &ctx->state->ip_src;
-	ipv46_addr_t *ip_dst = &ctx->state->ip_dst;
-	__u16 sport = ctx->state->sport;
-	__u16 dport = ctx->state->dport;
-	__u8 ip_proto = ctx->state->ip_proto;
 	__u32 lut_size = ctx->globals->data.maglev_lut_size;
 
 #ifdef IPVER6
