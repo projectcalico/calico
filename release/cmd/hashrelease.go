@@ -170,9 +170,9 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 			calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
 			calico.WithValidation(c.Bool(validationFlag.Name)),
 			calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
-			calico.WithDryRun(c.Bool(localFlag.Name)),
 			calico.WithPlanOptions(plan.Options{
 				Preview: c.Bool(planFlag.Name),
+				Local:   c.Bool(localFlag.Name),
 				Skip:    skipSet(c.StringSlice(skipFlagName)),
 			}),
 		}
@@ -256,13 +256,13 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 			calico.WithValidation(c.Bool(validationFlag.Name)),
 			calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 			calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
-			calico.WithDryRun(c.Bool(localFlag.Name)),
 			calico.WithOperator(operator.Driver{
 				Do:   operatorPublish(c, o, operatorVariants(c), true, outputs.RecordsDir(cfg.OutputDir, hashrel.Hash), filepath.Join(cfg.LogsDir, hashrel.ProductVersion)),
 				Done: operatorPublished(c, o, operatorVariants(c), outputs.RecordsDir(cfg.OutputDir, hashrel.Hash)),
 			}),
 			calico.WithPlanOptions(plan.Options{
 				Preview: c.Bool(planFlag.Name),
+				Local:   c.Bool(localFlag.Name),
 				Skip:    skipSet(c.StringSlice(skipFlagName)),
 			}),
 		}

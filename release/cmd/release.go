@@ -125,7 +125,6 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
 					calico.WithValidation(c.Bool(validationFlag.Name)),
 					calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
-					calico.WithDryRun(c.Bool(localFlag.Name)),
 					// The operator carries the versions of the images it deploys in its binary, so a
 					// release rebuilds it rather than retagging the one a hashrelease published.
 					calico.WithOperator(operator.Driver{
@@ -133,6 +132,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					}),
 					calico.WithPlanOptions(plan.Options{
 						Preview: c.Bool(planFlag.Name),
+						Local:   c.Bool(localFlag.Name),
 						Skip:    skipSet(c.StringSlice(skipFlagName)),
 					}),
 				}
@@ -179,7 +179,15 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithDraftRelease(c.Bool(draftGithubReleaseFlag.Name)),
 					calico.WithValidation(c.Bool(validationFlag.Name)),
 					calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
-					calico.WithDryRun(c.Bool(localFlag.Name)),
+					calico.WithOperator(operator.Driver{
+						Do:   operatorPublish(c, *o, operatorVariants(c), false, outputs.RecordsDir(cfg.OutputDir, o.ProductVersion), filepath.Join(cfg.LogsDir, o.ProductVersion)),
+						Done: operatorPublished(c, *o, operatorVariants(c), outputs.RecordsDir(cfg.OutputDir, o.ProductVersion)),
+					}),
+					calico.WithPlanOptions(plan.Options{
+						Preview: c.Bool(planFlag.Name),
+						Local:   c.Bool(localFlag.Name),
+						Skip:    skipSet(c.StringSlice(skipFlagName)),
+					}),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
@@ -198,17 +206,6 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				if v := c.String(s3BucketFlag.Name); v != "" {
 					opts = append(opts, calico.WithS3Bucket(v))
 				}
-				opts = append(
-					opts,
-					calico.WithOperator(operator.Driver{
-						Do:   operatorPublish(c, *o, operatorVariants(c), false, outputs.RecordsDir(cfg.OutputDir, o.ProductVersion), filepath.Join(cfg.LogsDir, o.ProductVersion)),
-						Done: operatorPublished(c, *o, operatorVariants(c), outputs.RecordsDir(cfg.OutputDir, o.ProductVersion)),
-					}),
-					calico.WithPlanOptions(plan.Options{
-						Preview: c.Bool(planFlag.Name),
-						Skip:    skipSet(c.StringSlice(skipFlagName)),
-					}),
-				)
 
 				r, err := calico.NewManager(opts...)
 				if err != nil {

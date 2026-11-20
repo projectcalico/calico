@@ -216,6 +216,7 @@ type CalicoManager struct {
 	// after a run, and the directory can be uploaded as a CI artifact.
 	logsDir string
 
+	// dryRun is for branch cut and release prep, which do not run a plan.
 	dryRun        bool
 	gitRef        bool
 	githubRelease bool
@@ -418,7 +419,7 @@ func (r *CalicoManager) buildPlan() []plan.Node {
 			Name: binaries.Step,
 			When: func() bool { return r.binaries || (r.e2eBinaries && r.isHashRelease) },
 			Do:   r.buildBinaries,
-			Done: func() error { return binaries.Built(r.repoRoot) },
+			Done: r.binariesBuilt,
 		},
 		plan.Node{Name: charts.Step, When: func() bool { return r.helmCharts }, Do: r.BuildHelm},
 		plan.Node{
@@ -732,7 +733,7 @@ func (r *CalicoManager) hashreleaseUpload() distribution.Upload {
 			Release:     &r.hashrelease,
 			Config:      &r.hashreleaseConfig,
 			ProductCode: r.productCode,
-			DryRun:      r.dryRun,
+			DryRun:      r.planOptions.Local,
 		},
 	}
 }
@@ -758,7 +759,7 @@ func (r *CalicoManager) releaseUploads() []distribution.Upload {
 			Remote:   r.repo.Remote,
 			RepoRoot: r.repoRoot,
 			Skip:     !r.gitRef,
-			DryRun:   r.dryRun,
+			DryRun:   r.planOptions.Local,
 			Runner:   r.runner,
 		}),
 		github.ReleaseUpload(github.ReleaseOptions{
@@ -782,7 +783,7 @@ func (r *CalicoManager) releaseUploads() []distribution.Upload {
 			},
 			Skip:   !r.githubRelease,
 			Draft:  r.draftRelease,
-			DryRun: r.dryRun,
+			DryRun: r.planOptions.Local,
 			Runner: r.runner,
 		}),
 	}
@@ -817,6 +818,7 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 		{Handler: distribution.Publisher{Kind: images.Step, Action: r.imagesAction()}, Requires: r.beforeImagesPublish()},
 		{
 			Handler: distribution.Publisher{Kind: charts.Step, Action: r.publishHelmCharts},
+			Skip:    !r.helmCharts,
 			Done: func() error {
 				return charts.Pushed(r.chart(), r.helmRegistries, r.recordsDir,
 					charts.WithRunner(r.runner), charts.WithResolver(r.digestResolver()))
@@ -843,7 +845,7 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 	uploads = append(uploads, r.releaseUploads()...)
 	return append(uploads, charts.IndexUpload(charts.IndexOptions{
 		OutputDir: r.uploadDir(),
-		Handler:   distribution.S3Handler(r.awsProfile, r.s3Bucket, r.dryRun),
+		Handler:   distribution.S3Handler(r.awsProfile, r.s3Bucket, r.planOptions.Local),
 		Skip:      !r.helmCharts || !r.helmIndex,
 	}))
 }
@@ -1144,6 +1146,17 @@ func (r *CalicoManager) manifestsRoot() string {
 	return r.repoRoot
 }
 
+func (r *CalicoManager) binariesBuilt() error {
+	var errs []error
+	if r.binaries {
+		errs = append(errs, binaries.Built(r.repoRoot))
+	}
+	if r.e2eBinaries && r.isHashRelease {
+		errs = append(errs, binaries.E2EBuilt(r.architectures, r.uploadDir()))
+	}
+	return errors.Join(errs...)
+}
+
 func (r *CalicoManager) buildBinaries() error {
 	var builders []binaries.Builder
 	if r.binaries {
@@ -1223,7 +1236,7 @@ func (r *CalicoManager) publishContainerImages() error {
 	if err := images.Publish(
 		r.repoRoot, r.calicoVersion.String(),
 		images.NarrowVariants(images.PublishVariants, r.imageReleaseDirs),
-		!r.dryRun, r.digestResolver(), opts...,
+		!r.planOptions.Local, r.digestResolver(), opts...,
 	); err != nil {
 		return fmt.Errorf("publish images: %w", err)
 	}
@@ -1304,7 +1317,7 @@ func (r *CalicoManager) resolveContainerImages() error {
 		opts...,
 	)
 	// A dry run pushes nothing, so images it built are never in the registry.
-	if missing, onlyMissing := images.OnlyMissing(err); onlyMissing && r.dryRun {
+	if missing, onlyMissing := images.OnlyMissing(err); onlyMissing && r.planOptions.Local {
 		logrus.WithField("images", missing).Warn("Dry run, not resolving unpublished images")
 		return nil
 	}
@@ -1336,7 +1349,7 @@ func (r *CalicoManager) scanRequest() *images.ScanRequest {
 		Stream:      r.calicoVersion.PrimaryStream(),
 		Release:     !r.isHashRelease,
 		OutputDir:   r.tmpDir,
-		DryRun:      r.dryRun,
+		DryRun:      r.planOptions.Local,
 	}
 }
 
@@ -1380,7 +1393,7 @@ func (r *CalicoManager) publishBranchTag() error {
 	if err := images.Publish(
 		r.repoRoot, branch,
 		images.NarrowVariants(variants, r.imageReleaseDirs),
-		!r.dryRun, r.digestResolver(),
+		!r.planOptions.Local, r.digestResolver(),
 		images.WithRunner(r.runner),
 		images.WithRegistries(registry),
 		images.WithArches(r.architectures...),
@@ -1444,7 +1457,7 @@ func (r *CalicoManager) publishOperatorBranchTag(branch string) error {
 		operator.WithRunner(r.runner),
 		operator.WithArches(r.architectures...),
 		operator.WithLogsDir(r.logsDir),
-		operator.WithDryRun(r.dryRun),
+		operator.WithDryRun(r.planOptions.Local),
 	); err != nil {
 		return fmt.Errorf("publish branch %s tag operator image: %w", branch, err)
 	}
@@ -1461,10 +1474,6 @@ func (r *CalicoManager) operatorConfig() operator.Operator {
 }
 
 func (r *CalicoManager) publishHelmCharts() error {
-	if !r.helmCharts {
-		logrus.Info("Skipping publishing helm charts")
-		return nil
-	}
 	chart := r.chart()
 	refs, err := outputs.NewRefsWriter(r.recordsDir, charts.PublishStep)
 	if err != nil {
@@ -1485,7 +1494,7 @@ func (r *CalicoManager) publishHelmCharts() error {
 	if len(published) > 0 {
 		opts = append(opts, charts.WithResume(published, false))
 	}
-	return charts.Publish(chart, r.helmRegistries, !r.dryRun, opts...)
+	return charts.Publish(chart, r.helmRegistries, !r.planOptions.Local, opts...)
 }
 
 func (r *CalicoManager) buildReleaseNotes() error {
