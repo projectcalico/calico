@@ -119,6 +119,11 @@ type Scenario struct {
 	Probes   []Probe
 	Seed     func(ctx context.Context, e *Env) error
 	Verify   func(ctx context.Context, e *Env) error
+	// Restore undoes cluster-wide changes Seed made. It runs when seeding
+	// fails, and after verify whether or not verify got as far as Verify, so
+	// an early failure can't leave the rest of the job on a patched config.
+	// It must cope with Seed having stopped part-way.
+	Restore func(ctx context.Context, e *Env) error
 }
 
 // Namespace is the namespace holding the scenario's namespaced state.
@@ -280,8 +285,16 @@ func (s *Scenario) validateFixtures(objs []*unstructured.Unstructured) error {
 func (s *Scenario) checkPolicyScope(o *unstructured.Unstructured) error {
 	switch o.GetKind() {
 	case "GlobalNetworkPolicy", "StagedGlobalNetworkPolicy":
+		// An exact equality, because a substring match also passes a negation
+		// ("!=") or a longer namespace name sharing this prefix.
 		sel, _, _ := unstructured.NestedString(o.Object, "spec", "namespaceSelector")
-		if !strings.Contains(sel, s.Namespace()) {
+		pinned := false
+		for _, key := range []string{"projectcalico.org/name", "kubernetes.io/metadata.name"} {
+			for _, q := range []string{"'", `"`} {
+				pinned = pinned || strings.TrimSpace(sel) == key+" == "+q+s.Namespace()+q
+			}
+		}
+		if !pinned {
 			return fmt.Errorf("fixture %s %s: spec.namespaceSelector must select only namespace %s", o.GetKind(), o.GetName(), s.Namespace())
 		}
 	case "ClusterNetworkPolicy":

@@ -189,6 +189,8 @@ func TestValidate(t *testing.T) {
 		{"foreign namespace", validScenario(map[string]string{"cli.yaml": strings.Replace(clientPod, "name: cli\n", "name: cli\n  namespace: default\n", 1)}), "leave it empty"},
 		{"service selects client", validScenario(map[string]string{"cli.yaml": clientPod, "srv.yaml": strings.Replace(serverSvc, "app: srv", "app: cli", 1)}, allowed), "selects client pod"},
 		{"unscoped GNP", validScenario(map[string]string{"gnp.yaml": "apiVersion: projectcalico.org/v3\nkind: GlobalNetworkPolicy\nmetadata: {name: e2e-upgrade-demo-gnp}\nspec: {selector: all()}\n"}), "namespaceSelector"},
+		{"GNP excluding the scenario namespace", validScenario(map[string]string{"gnp.yaml": "apiVersion: projectcalico.org/v3\nkind: GlobalNetworkPolicy\nmetadata: {name: e2e-upgrade-demo-gnp}\nspec: {selector: all(), namespaceSelector: \"projectcalico.org/name != 'e2e-upgrade-demo'\"}\n"}), "namespaceSelector"},
+		{"GNP pinned to the scenario namespace", validScenario(map[string]string{"gnp.yaml": "apiVersion: projectcalico.org/v3\nkind: GlobalNetworkPolicy\nmetadata: {name: e2e-upgrade-demo-gnp}\nspec: {selector: all(), namespaceSelector: \"projectcalico.org/name == 'e2e-upgrade-demo'\"}\n"}), ""},
 		{"bad feature", func() Scenario { s := validScenario(base); s.Feature = "Nope"; return s }(), "feature"},
 		{"bad stream", func() Scenario { s := validScenario(base); s.From = []string{"3.33"}; return s }(), "want vX.Y"},
 		{"no verify", func() Scenario { s := validScenario(base); s.Verify = nil; return s }(), "verify is nil"},

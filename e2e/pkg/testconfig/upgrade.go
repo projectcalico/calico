@@ -59,13 +59,16 @@ func ApplyUpgradePhase(cfg *Config, phase, from string) error {
 		return fmt.Errorf("%s=%q: want a release stream such as v3.33", UpgradeFromEnvVar, from)
 	}
 
+	// Ginkgo ANDs focus with the label filter, so a phase include on a lane
+	// that selects by name pattern would select nothing.
+	if len(cfg.Include.NamePatterns) > 0 {
+		return fmt.Errorf("%s=%s: the lane selects by name pattern, which would AND with the %s label filter", UpgradePhaseEnvVar, phase, phase)
+	}
+
 	var selected, stillExcluded string
 	switch phase {
 	case UpgradePhaseSeed:
 		selected, stillExcluded = UpgradeSeedLabel, UpgradeVerifyLabel
-		if len(cfg.Include.NamePatterns) > 0 {
-			return fmt.Errorf("%s=%s: the lane selects by name pattern, which would AND with the seed label filter", UpgradePhaseEnvVar, phase)
-		}
 		cfg.Include.Labels = nil
 	case UpgradePhaseVerify:
 		selected, stillExcluded = UpgradeVerifyLabel, UpgradeSeedLabel

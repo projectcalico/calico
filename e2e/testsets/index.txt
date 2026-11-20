@@ -130,7 +130,7 @@
 .argoci/cron/e2e-upgrade.yaml | calico-tests-eks [stable-1-calico-operator-calicobpf] | cron/e2e-upgrade/calico-tests-eks-stable-1-calico-operator-calicobpf | 82
 .argoci/cron/e2e-upgrade.yaml | calico-tests-kubeadm-bpf [gcp-kubeadm-stable-operator-calicobpf] | cron/e2e-upgrade/calico-tests-kubeadm-bpf-gcp-kubeadm-stable-operator-calicobpf | 91
 .argoci/cron/e2e-upgrade.yaml | calico-tests-kubeadm-iptables [aws-kubeadm-stable-3-operator-calicoiptables] | cron/e2e-upgrade/calico-tests-kubeadm-iptables-aws-kubeadm-stable-3-operator-calicoiptables | 91
-.argoci/cron/e2e-upgrade.yaml | calico-tests-kubeadm-manifest [gcp-kubeadm-stable-1-manual-calicoiptables] | cron/e2e-upgrade/calico-tests-kubeadm-manifest-gcp-kubeadm-stable-1-manual-calicoiptables | 91
+.argoci/cron/e2e-upgrade.yaml | calico-tests-kubeadm-manifest [gcp-kubeadm-stable-1-manual-calicoiptables] | cron/e2e-upgrade/calico-tests-kubeadm-manifest-gcp-kubeadm-stable-1-manual-calicoiptables | 87
 .argoci/cron/e2e-upgrade.yaml | calico-tests-openshift [4-22-11-calicoiptables-operator] | cron/e2e-upgrade/calico-tests-openshift-4-22-11-calicoiptables-operator | 91
 .argoci/cron/e2e-upgrade.yaml | calico-tests-rke2 [-stable-2-operator-calicoiptables] | cron/e2e-upgrade/calico-tests-rke2-stable-2-operator-calicoiptables | 91
 .argoci/cron/e2e-vpp.yaml | iptables-openshift [aws-openshift] | cron/e2e-vpp/iptables-openshift-aws-openshift | 132

@@ -26,8 +26,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// The CI migrate phase writes the window; keep these names in step with
-// .argoci/scripts/phases/migrate.sh.
+// CI writes the window outside this binary, so the window names are a
+// contract with the CI scripts.
 const (
 	windowNamespace = "e2e-upgrade-system"
 	windowConfigMap = "upgrade-window"

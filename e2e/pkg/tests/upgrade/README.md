@@ -104,8 +104,10 @@ routes or IPAM in `Verify`, via `Get`, `ExpectField` or `ExecCalicoNode`.
   `RequiresBGP`, `Dataplane:BPF`).
 - Set `Serial` when Seed patches cluster-wide config (Felix or
   KubeControllers configuration), or when a cluster-scoped fixture could change
-  what other specs see. Restore patched values in a verify `DeferCleanup`.
-  Pick values that are harmless to the specs that run in between.
+  what other specs see. Undo patched config in `Restore`, which runs after a
+  failed seed and after every verify, including one that fails before
+  `Verify`. Keep the old values in `Env.Record.Values`. Pick values that are
+  harmless to the specs that run in between.
 
 ### Retirement
 
@@ -155,6 +157,6 @@ provision → install → seed_images → configure → **pre_upgrade** → migr
 Point the e2e binary at a cluster running the from-stream:
 1. run with `E2E_UPGRADE_PHASE=seed E2E_UPGRADE_FROM=v3.33`;
 2. upgrade, writing the `upgrade-window` ConfigMap as `migrate.sh` does;
-3. run with `E2E_UPGRADE_PHASE=verify`.
+3. run with `E2E_UPGRADE_PHASE=verify E2E_UPGRADE_FROM=v3.33`.
 
 Re-running seed resets the scenario namespace.

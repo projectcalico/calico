@@ -64,6 +64,11 @@ func seedInvalidObjects(ctx context.Context, e *upgrade.Env) error {
 	var seeds []upgrade.ObjRef
 	for _, o := range objs {
 		ref, err := upgrade.Create(ctx, e, o)
+		// A leftover from an earlier failed run isn't a rejection; counting it
+		// as one would silently shrink the corpus.
+		if apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("%s %s is left from an earlier run; delete it and re-seed: %w", o.GetKind(), o.GetName(), err)
+		}
 		if err != nil {
 			framework.Logf("from-stream rejected %s %s: %v", o.GetKind(), o.GetName(), err)
 			continue

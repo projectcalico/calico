@@ -50,8 +50,8 @@ var (
 )
 
 const (
-	leakHandle    = "e2e-upgrade-ipam-leak-and-live-leak"
-	leakReleaseBy = 6 * time.Minute
+	leakHandlePrefix = "e2e-upgrade-ipam-leak-and-live-leak-"
+	leakReleaseBy    = 6 * time.Minute
 )
 
 // An IP leaked on the old version must be released by the new version's GC,
@@ -69,11 +69,20 @@ func init() {
 		Fixtures: upgrade.Sub(ipamLeakFS, "testdata/ipam-leak-and-live"),
 		Seed:     seedIPAMLeak,
 		Verify:   verifyIPAMLeak,
+		Restore:  restoreLeakGracePeriod,
 	})
 }
 
+func restoreLeakGracePeriod(ctx context.Context, e *upgrade.Env) error {
+	old, ok := e.Record.Values["oldLeakGracePeriod"]
+	if !ok {
+		return nil // seed stopped before changing it
+	}
+	return setLeakGracePeriod(ctx, e, old)
+}
+
 func seedIPAMLeak(ctx context.Context, e *upgrade.Env) error {
-	live, err := livePodIPs(ctx, e, true)
+	live, err := livePodIPs(ctx, e)
 	if err != nil {
 		return err
 	}
@@ -92,32 +101,27 @@ func seedIPAMLeak(ctx context.Context, e *upgrade.Env) error {
 		return err
 	}
 
-	ip, node, err := plantLeak(ctx, e)
+	// Unique per seed, so re-seeding a dev cluster after a failed verify
+	// doesn't collide with the earlier, still-unreleased leak.
+	handle := fmt.Sprintf("%s%d", leakHandlePrefix, time.Now().Unix())
+	ip, node, err := plantLeak(ctx, e, handle)
 	if err != nil {
-		// Leaving GC off would let leaks pile up for the rest of the run.
-		if rerr := setLeakGracePeriod(ctx, e, old); rerr != nil {
-			err = errors.Join(err, fmt.Errorf("restoring leakGracePeriod: %w", rerr))
-		}
 		return err
 	}
-	e.Record.Values["leakIP"], e.Record.Values["leakNode"] = ip, node
-	framework.Logf("planted leaked IP %s on node %s under handle %s", ip, node, leakHandle)
+	e.Record.Values["leakHandle"], e.Record.Values["leakIP"], e.Record.Values["leakNode"] = handle, ip, node
+	framework.Logf("planted leaked IP %s on node %s under handle %s", ip, node, handle)
 	return nil
 }
 
 func verifyIPAMLeak(ctx context.Context, e *upgrade.Env) error {
-	ginkgo.DeferCleanup(func(ctx context.Context) {
-		if err := setLeakGracePeriod(ctx, e, e.Record.Values["oldLeakGracePeriod"]); err != nil {
-			framework.Logf("WARNING: restoring leakGracePeriod: %v", err)
-		}
-	})
-
+	handle := e.Record.Values["leakHandle"]
 	ginkgo.By("Checking live pods kept their IPs")
 	var want map[string]string
 	if err := json.Unmarshal([]byte(e.Record.Values["livePodIPs"]), &want); err != nil {
 		return fmt.Errorf("seed record livePodIPs: %w", err)
 	}
-	got, err := livePodIPs(ctx, e, false)
+	// Waiting keeps a readiness blip from reading as a lost IP.
+	got, err := livePodIPs(ctx, e)
 	if err != nil {
 		return err
 	}
@@ -142,12 +146,12 @@ func verifyIPAMLeak(ctx context.Context, e *upgrade.Env) error {
 	}
 	var lastErr error
 	err = wait.PollUntilContextTimeout(ctx, 10*time.Second, leakReleaseBy, true, func(ctx context.Context) (bool, error) {
-		ips, err := lcgc.IPAM().IPsByHandle(ctx, leakHandle)
+		ips, err := lcgc.IPAM().IPsByHandle(ctx, handle)
 		var dne cerrors.ErrorResourceDoesNotExist
 		if errors.As(err, &dne) || (err == nil && len(ips) == 0) {
 			return true, nil
 		}
-		lastErr = fmt.Errorf("handle %s still holds %v (err %v)", leakHandle, ips, err)
+		lastErr = fmt.Errorf("handle %s still holds %v (err %v)", handle, ips, err)
 		return false, nil
 	})
 	if err != nil {
@@ -156,8 +160,8 @@ func verifyIPAMLeak(ctx context.Context, e *upgrade.Env) error {
 	return nil
 }
 
-// livePodIPs maps each live pod to its IP, optionally waiting for all three.
-func livePodIPs(ctx context.Context, e *upgrade.Env, wait bool) (map[string]string, error) {
+// livePodIPs maps each live pod to its IP once all three are Ready.
+func livePodIPs(ctx context.Context, e *upgrade.Env) (map[string]string, error) {
 	out := map[string]string{}
 	poll := func(ctx context.Context) (bool, error) {
 		if err := upgrade.PodsReady(ctx, e, "app=live"); err != nil {
@@ -172,10 +176,6 @@ func livePodIPs(ctx context.Context, e *upgrade.Env, wait bool) (map[string]stri
 			out[p.Name] = p.Status.PodIP
 		}
 		return len(out) == 3, nil
-	}
-	if !wait {
-		_, err := poll(ctx)
-		return out, err
 	}
 	if err := waitPoll(ctx, poll); err != nil {
 		return nil, fmt.Errorf("waiting for 3 Ready live pods: %w", err)
@@ -213,7 +213,7 @@ func setLeakGracePeriod(ctx context.Context, e *upgrade.Env, v string) error {
 // plantLeak records an allocation for a pod that doesn't exist, the way the
 // IPAM client would, without using master's client on the old datastore.
 // IPAM has no projectcalico.org/v3 API, hence the crd.projectcalico.org edit.
-func plantLeak(ctx context.Context, e *upgrade.Env) (ip, node string, err error) {
+func plantLeak(ctx context.Context, e *upgrade.Env, handleID string) (ip, node string, err error) {
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		blocks, err := e.Dynamic.Resource(ipamBlockGVR).List(ctx, metav1.ListOptions{})
 		if err != nil {
@@ -222,7 +222,7 @@ func plantLeak(ctx context.Context, e *upgrade.Env) (ip, node string, err error)
 		for i := range blocks.Items {
 			b := &blocks.Items[i]
 			var ok bool
-			if ip, node, ok, err = allocateGhost(b, e.Namespace); err != nil {
+			if ip, node, ok, err = allocateGhost(b, e.Namespace, handleID); err != nil {
 				return err
 			}
 			if !ok {
@@ -235,8 +235,8 @@ func plantLeak(ctx context.Context, e *upgrade.Env) (ip, node string, err error)
 			handle := &unstructured.Unstructured{Object: map[string]any{
 				"apiVersion": "crd.projectcalico.org/v1",
 				"kind":       "IPAMHandle",
-				"metadata":   map[string]any{"name": leakHandle},
-				"spec":       map[string]any{"handleID": leakHandle, "block": map[string]any{cidr: int64(1)}, "deleted": false},
+				"metadata":   map[string]any{"name": handleID},
+				"spec":       map[string]any{"handleID": handleID, "block": map[string]any{cidr: int64(1)}, "deleted": false},
 			}}
 			_, err := e.Dynamic.Resource(ipamHandleGVR).Create(ctx, handle, metav1.CreateOptions{})
 			return err
@@ -247,7 +247,7 @@ func plantLeak(ctx context.Context, e *upgrade.Env) (ip, node string, err error)
 }
 
 // allocateGhost takes the first free ordinal of an IPv4 host-affine block.
-func allocateGhost(b *unstructured.Unstructured, ns string) (ip, node string, ok bool, err error) {
+func allocateGhost(b *unstructured.Unstructured, ns, handleID string) (ip, node string, ok bool, err error) {
 	spec, _, _ := unstructured.NestedMap(b.Object, "spec")
 	affinity, _ := spec["affinity"].(string)
 	cidrStr, _ := spec["cidr"].(string)
@@ -268,7 +268,7 @@ func allocateGhost(b *unstructured.Unstructured, ns string) (ip, node string, ok
 	spec["allocations"] = allocs
 	spec["unallocated"] = unalloc[1:]
 	spec["attributes"] = append(attrs, map[string]any{
-		"handle_id": leakHandle,
+		"handle_id": handleID,
 		"secondary": map[string]any{
 			"namespace": ns,
 			"pod":       "ghost",

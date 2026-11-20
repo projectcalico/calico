@@ -111,7 +111,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/upgrade/xtables.yaml
+        value: e2e/config/upgrade/xtables-manifest.yaml
     matrix:
       - name: gcp-kubeadm-stable-1-manual-calicoiptables
         env:

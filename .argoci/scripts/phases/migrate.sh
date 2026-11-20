@@ -37,8 +37,8 @@ upgrade_kubectl() {
 }
 
 # record_upgrade_window - tell the upgrade scenarios' verify specs when the
-# upgrade ran (e2e/pkg/tests/upgrade/state.go reads this ConfigMap). Called
-# with no argument at the start, and with the result at the end.
+# upgrade ran; they read this ConfigMap by name. Called with no argument at the
+# start, and with the result at the end.
 record_upgrade_window() {
   local args=(--from-literal=start="${_upgrade_start}")
   if [[ -n "${1:-}" ]]; then
@@ -54,8 +54,22 @@ record_upgrade_window() {
 # wait_for_rollout - the window must end when Calico has finished rolling out,
 # not when bz returns, or probes would be judged mid-rollout.
 wait_for_rollout() {
-  local ns=calico-system rc=0
-  upgrade_kubectl -n "${ns}" get ds calico-node >/dev/null 2>&1 || ns=kube-system
+  local ns rc=0
+  ns="$(calico_ns)"
+  # The operator rewrites calico-node some time after bz returns. Until then
+  # the old DaemonSet reports rolled out and every check below passes at once.
+  if [[ -n "${_pre_image}" ]]; then
+    local deadline=$(( $(date +%s) + 600 ))
+    until [[ "$(calico_node_image)" != "${_pre_image}" ]]; do
+      if (( $(date +%s) > deadline )); then
+        echo "[ERROR] calico-node still runs ${_pre_image} 10 minutes after bz upgrade"
+        return 1
+      fi
+      sleep 5
+    done
+  else
+    echo "[WARN] couldn't read calico-node's image before the upgrade; the window may end before the rollout starts"
+  fi
   upgrade_kubectl -n "${ns}" rollout status ds/calico-node --timeout=15m || rc=1
   upgrade_kubectl -n "${ns}" rollout status deploy/calico-kube-controllers --timeout=15m || rc=1
   if upgrade_kubectl -n "${ns}" get deploy calico-typha >/dev/null 2>&1; then
@@ -67,14 +81,23 @@ wait_for_rollout() {
   return ${rc}
 }
 
+calico_ns() {
+  if upgrade_kubectl -n calico-system get ds calico-node >/dev/null 2>&1; then echo calico-system; else echo kube-system; fi
+}
+
+calico_node_image() {
+  upgrade_kubectl -n "$(calico_ns)" get ds calico-node -o jsonpath='{.spec.template.spec.containers[?(@.name=="calico-node")].image}' 2>/dev/null
+}
+
 if [[ -n "${UPLEVEL_RELEASE_STREAM}" ]]; then
   echo "[INFO] starting bz upgrade..."
+  _pre_image="$(calico_node_image || true)"
   _upgrade_start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   record_upgrade_window
   _upgrade_rc=0
   bz upgrade ${VERBOSE} |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/upgrade.log.gz") || _upgrade_rc=$?
   if [[ ${_upgrade_rc} -eq 0 ]] && ! wait_for_rollout; then
-    echo "[ERROR] Calico didn't finish rolling out within 15 minutes of bz upgrade"
+    echo "[ERROR] Calico didn't finish rolling out after bz upgrade"
     _upgrade_rc=1
   fi
   if [[ ${_upgrade_rc} -ne 0 ]]; then

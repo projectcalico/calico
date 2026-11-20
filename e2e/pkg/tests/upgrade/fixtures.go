@@ -120,8 +120,13 @@ func (s *Scenario) applyFixtures(ctx context.Context, e *Env) ([]ObjRef, error) 
 		if m.Scope.Name() == meta.RESTScopeNameNamespace {
 			o.SetNamespace(e.Namespace)
 			res = ri.Namespace(e.Namespace)
-		} else if !strings.HasPrefix(o.GetName(), "e2e-upgrade-"+s.Name+"-") {
-			return refs, fmt.Errorf("cluster-scoped fixture %s %s must be named e2e-upgrade-%s-*", gvk.Kind, o.GetName(), s.Name)
+		} else {
+			if !strings.HasPrefix(o.GetName(), "e2e-upgrade-"+s.Name+"-") {
+				return refs, fmt.Errorf("cluster-scoped fixture %s %s must be named e2e-upgrade-%s-*", gvk.Kind, o.GetName(), s.Name)
+			}
+			// A namespace left in the YAML would make cleanup take it for a
+			// namespaced object and skip it.
+			o.SetNamespace("")
 		}
 		if _, err := res.Apply(ctx, o.GetName(), o, metav1.ApplyOptions{FieldManager: fieldManager, Force: true}); err != nil {
 			return refs, fmt.Errorf("applying fixture %s %s: %w", gvk.Kind, o.GetName(), err)

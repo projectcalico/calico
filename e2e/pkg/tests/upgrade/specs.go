@@ -132,12 +132,26 @@ func runSeed(ctx context.Context, s *Scenario, e *Env) error {
 	if s.Seed != nil {
 		ginkgo.By("Running the scenario's seed step")
 		if err := s.Seed(ctx, e); err != nil {
-			return fmt.Errorf("seed step: %w", err)
+			return restoreAfter(ctx, s, e, fmt.Errorf("seed step: %w", err))
 		}
 	}
 
 	ginkgo.By("Writing the seed record")
-	return writeRecord(ctx, e.Kube, e.Namespace, rec)
+	// No record means verify never runs Restore, so seed must.
+	if err := writeRecord(ctx, e.Kube, e.Namespace, rec); err != nil {
+		return restoreAfter(ctx, s, e, err)
+	}
+	return nil
+}
+
+func restoreAfter(ctx context.Context, s *Scenario, e *Env, err error) error {
+	if s.Restore == nil {
+		return err
+	}
+	if rerr := s.Restore(ctx, e); rerr != nil {
+		return errors.Join(err, fmt.Errorf("restore: %w", rerr))
+	}
+	return err
 }
 
 func recreateNamespace(ctx context.Context, e *Env) error {
@@ -301,6 +315,14 @@ func runVerify(ctx context.Context, s *Scenario, e *Env) error {
 	rec, err := readRecord(ctx, e.Kube, e.Namespace)
 	if err != nil {
 		return err
+	}
+	e.Record = rec
+	if s.Restore != nil {
+		ginkgo.DeferCleanup(func(ctx context.Context) {
+			if err := s.Restore(ctx, e); err != nil {
+				framework.Fail(fmt.Sprintf("restoring cluster-wide state after scenario %s: %v", s.Name, err))
+			}
+		})
 	}
 	w, err := readWindow(ctx, e.Kube)
 	if err != nil {

@@ -125,6 +125,27 @@ func TestUpgradePhaseNeedsBaseExcludes(t *testing.T) {
 	}
 }
 
+// A phase include on a name-pattern lane would AND with its focus, so verify
+// would drop the lane's whole normal suite.
+func TestUpgradePhaseRejectsNamePatternLane(t *testing.T) {
+	lane := namePatternsYAML + `exclude:
+  labels:
+    - label: Upgrade:Seed
+      reason: "upgrade phases only"
+    - label: Upgrade:Verify
+      reason: "upgrade phases only"
+`
+	for _, phase := range []string{UpgradePhaseSeed, UpgradePhaseVerify} {
+		cfg, err := LoadAll([]string{writeFile(t, t.TempDir(), "lane.yaml", lane)})
+		if err != nil {
+			t.Fatalf("LoadAll: %v", err)
+		}
+		if err := ApplyUpgradePhase(cfg, phase, "v3.33"); err == nil || !strings.Contains(err.Error(), "name pattern") {
+			t.Errorf("ApplyUpgradePhase(%s) on a name-pattern lane = %v, want a name pattern error", phase, err)
+		}
+	}
+}
+
 // The seed run's real config list: a lane plus the scenarios.yaml marker.
 func TestUpgradePhasesOnRepoLane(t *testing.T) {
 	lane := []string{"../../config/upgrade/xtables.yaml", "../../config/upgrade/scenarios.yaml"}
