@@ -7,7 +7,7 @@ BUILD_IMAGES ?= $(ENVOY_RATELIMIT_IMAGE)
 
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
-ENVOY_RATELIMIT_VERSION=5ae0682ef1472776f3b7f979d39575572ff85eeb
+ENVOY_RATELIMIT_VERSION=3dfe2f9ad8ec4c8d4b037f2a955d3a50609c3b7e
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -32,7 +32,7 @@ $(ENVOY_RATELIMIT_DOWNLOADED):
 # 	For each valid patch file, it applies the patch to the envoy-ratelimit directory using patch -p1.
 	for patch in patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
-			patch -d envoy-ratelimit -p1 < "$$patch"; \
+			patch -d envoy-ratelimit -p1 --forward < "$$patch" || exit 1; \
 		fi; \
 	done; \
 	touch $@
