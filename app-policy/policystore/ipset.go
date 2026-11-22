@@ -84,8 +84,6 @@ func (m ipMapSet) RemoveString(ip string) {
 	delete(m, ip)
 }
 
-// Contains is called for every IP set a rule names, once per rule walked, so it must not build a
-// log entry unless debug logging is on.
 func (m ipMapSet) Contains(addr string) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithField("address", addr).Debug("Finding address in ipMapSet")
@@ -109,6 +107,8 @@ func (m ipPortMapSet) RemoveString(ip string) {
 	delete(m, ip)
 }
 
+// Contains is called once per rule walked for each named port or destination service the rule
+// matches on, so it must not build a log entry unless debug logging is on.
 func (m ipPortMapSet) Contains(protocol string) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithField("protocol", protocol).Debug("Finding address in ipPortMapSet")
