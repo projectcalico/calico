@@ -430,18 +430,30 @@ func parsePacketHeader(tuple *NflogPacketTuple, hwProtocol int, nflogPayload []b
 }
 
 func parseLayer4Header(tuple *NflogPacketTuple, l4payload []byte) {
+	// A packet can stop part way through its transport header: conntrack marks such a packet
+	// invalid, and it still reaches the logging rules when Felix is configured not to drop invalid
+	// packets.
 	switch tuple.Proto {
 	case ProtoIcmp, ProtoIcmpv6:
+		if len(l4payload) < pkt.SizeofICMPHeader {
+			return
+		}
 		// ICMPv6 has the same type, code and echo identifier layout as ICMP.
 		header := pkt.ParseICMPHeader(l4payload)
 		tuple.L4Src.Id = int(header.Id)
 		tuple.L4Dst.Type = int(header.Type)
 		tuple.L4Dst.Code = int(header.Code)
 	case ProtoTcp:
+		if len(l4payload) < pkt.SizeofTCPHeader {
+			return
+		}
 		header := pkt.ParseTCPHeader(l4payload)
 		tuple.L4Src.Port = int(header.Source)
 		tuple.L4Dst.Port = int(header.Dest)
 	case ProtoUdp:
+		if len(l4payload) < pkt.SizeofUDPHeader {
+			return
+		}
 		header := pkt.ParseUDPHeader(l4payload)
 		tuple.L4Src.Port = int(header.Source)
 		tuple.L4Dst.Port = int(header.Dest)
