@@ -63,7 +63,7 @@ type L4Flow interface {
 	GetDestIP() net.IP
 	GetSourcePort() int
 	// GetDestPort returns the destination port. For ICMP and ICMPv6 flows it returns the ICMP
-	// type in the high byte and the code in the low byte, the way Felix's collector keys them.
+	// type in the high byte and the code in the low byte.
 	GetDestPort() int
 	GetProtocol() int
 }
@@ -113,8 +113,7 @@ func match(policyNamespace string, rule *proto.Rule, req *requestCache) bool {
 	// and because it panics on a malformed one: leaving it last confines that to
 	// requests that a rule otherwise matches.
 	return matchL4Protocol(rule, req.GetProtocol()) &&
-		matchIPVersion(rule, req) &&
-		matchICMP(rule, req) &&
+		matchIPVersionAndICMP(rule, req) &&
 		matchSrcPort(rule, req) &&
 		matchDstPort(rule, req) &&
 		matchSrcNet(rule, req) &&
@@ -662,8 +661,8 @@ func matchSrcNet(rule *proto.Rule, req *requestCache) bool {
 		matchNotNet("src", rule.GetNotSrcNet(), req.GetSourceIP())
 }
 
-// matchNet checks if the IP is within the CIDRs of its IP family. It returns true if the IP
-// matches, false otherwise.
+// matchNet checks if the IP is within the CIDRs. It returns true if the IP matches, false
+// otherwise.
 func matchNet(dir string, nets []string, ip net.IP) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
@@ -676,11 +675,7 @@ func matchNet(dir string, nets []string, ip net.IP) bool {
 		return true
 	}
 
-	version := ipVersionOf(ip)
 	for _, n := range nets {
-		if !cidrInFamily(n, version) {
-			continue
-		}
 		_, ipn, err := net.ParseCIDR(n)
 		if err != nil {
 			// Don't match CIDRs if they are malformed. This case should generally be weeded out by
@@ -728,7 +723,8 @@ func matchNotNet(dir string, nets []string, ip net.IP) bool {
 		}
 	}
 	// The dataplanes don't render the rule at all for an IP family that none of its negated
-	// CIDRs belong to, rather than render it without the negation.
+	// CIDRs belong to, rather than render it without the negation. A positive list needs no such
+	// care, because a CIDR never contains an address of the other family.
 	return inFamily
 }
 
@@ -743,10 +739,9 @@ func ipVersionOf(addr net.IP) proto.IPVersion {
 	return proto.IPVersion_ANY
 }
 
-// cidrInFamily reports whether the CIDR belongs to the given IP family. The dataplanes render a
-// rule once per family with only that family's CIDRs, and tell the families apart this way, so
-// an IPv4-mapped IPv6 CIDR such as ::ffff:10.0.0.0/104 never matches an IPv4 address. An address
-// of unknown family keeps every CIDR.
+// cidrInFamily reports whether the CIDR belongs to the given IP family, telling the families apart
+// the way the dataplanes do when they render a rule once per family with only that family's
+// CIDRs. An address of unknown family keeps every CIDR.
 func cidrInFamily(cidr string, version proto.IPVersion) bool {
 	switch version {
 	case proto.IPVersion_IPV4:
@@ -755,6 +750,19 @@ func cidrInFamily(cidr string, version proto.IPVersion) bool {
 		return strings.Contains(cidr, ":")
 	}
 	return true
+}
+
+// matchIPVersionAndICMP checks the rule's IP version and ICMP criteria. Few rules have either, so
+// the test for neither is kept small enough to inline into the walk over every rule.
+func matchIPVersionAndICMP(rule *proto.Rule, req *requestCache) bool {
+	if rule.IpVersion == proto.IPVersion_ANY && rule.Icmp == nil && rule.NotIcmp == nil {
+		return true
+	}
+	return matchIPVersionThenICMP(rule, req)
+}
+
+func matchIPVersionThenICMP(rule *proto.Rule, req *requestCache) bool {
+	return matchIPVersion(rule, req) && matchICMP(rule, req)
 }
 
 // matchIPVersion checks the rule's IP version against the flow's. A flow without a parseable
