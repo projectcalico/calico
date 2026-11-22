@@ -118,3 +118,24 @@ var _ = Describe("parseAndAggregateFlowLogs", func() {
 		Eventually(ch, "1s").Should(BeClosed())
 	})
 })
+
+var _ = Describe("Parse ICMPv6 packet header", func() {
+	It("should read the type, code and echo identifier", func() {
+		payload := make([]byte, 48)
+		payload[0] = 0x60 // IPv6
+		payload[6] = ProtoIcmpv6
+		copy(payload[8:24], net.ParseIP("fd00::1"))
+		copy(payload[24:40], net.ParseIP("fd00::2"))
+		payload[40] = 129 // echo reply
+		payload[41] = 0
+		payload[44], payload[45] = 0x04, 0xd2
+
+		var tuple NflogPacketTuple
+		parsePacketHeader(&tuple, IPv6Proto, payload)
+		Expect(tuple.Proto).To(Equal(58))
+		Expect(net.IP(tuple.Src[:]).String()).To(Equal("fd00::1"))
+		Expect(tuple.L4Src.Id).To(Equal(1234))
+		Expect(tuple.L4Dst.Type).To(Equal(129))
+		Expect(tuple.L4Dst.Code).To(Equal(0))
+	})
+})

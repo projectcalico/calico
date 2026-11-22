@@ -1346,3 +1346,56 @@ func TestProtocolResolvedOncePerRequest(t *testing.T) {
 	Expect(checkStore(EnforcedOnly, store, ep, rules.RuleDirIngress, flow).Code).To(Equal(PERMISSION_DENIED))
 	Expect(flow.protocolCalls).To(Equal(1))
 }
+
+// The pending verdict for a staged rule that allows only ping is what the rule does once it is
+// enforced: it lets echo requests through and leaves other ICMP, such as destination
+// unreachable, to the tier's default action. The same goes for a rule that allows only IPv4.
+func TestEvaluateStagedRulesHonourICMPTypeAndIPVersion(t *testing.T) {
+	stagedPing := &proto.PolicyID{Name: "allow-ping", Kind: v3.KindStagedGlobalNetworkPolicy}
+	stagedV4 := &proto.PolicyID{Name: "allow-v4", Kind: v3.KindStagedGlobalNetworkPolicy}
+
+	store := policystore.NewPolicyStore()
+	store.PolicyByID[types.ProtoToPolicyID(stagedPing)] = &proto.Policy{
+		Tier: "tier1",
+		InboundRules: []*proto.Rule{{
+			Action:    "allow",
+			IpVersion: proto.IPVersion_IPV4,
+			Protocol:  &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "ICMP"}},
+			Icmp:      &proto.Rule_IcmpType{IcmpType: 8},
+		}},
+	}
+	store.PolicyByID[types.ProtoToPolicyID(stagedV4)] = &proto.Policy{
+		Tier:         "tier2",
+		InboundRules: []*proto.Rule{{Action: "allow", IpVersion: proto.IPVersion_IPV4}},
+	}
+
+	allowed := func(pID *proto.PolicyID, tier string) []*calc.RuleID {
+		return []*calc.RuleID{calc.NewRuleID(pID.Kind, tier, pID.Name, "", 0, rules.RuleDirIngress, rules.RuleActionAllow)}
+	}
+	denied := func(pID *proto.PolicyID, tier string) []*calc.RuleID {
+		return []*calc.RuleID{calc.NewRuleID(pID.Kind, tier, pID.Name, "", tierDefaultActionIndex, rules.RuleDirIngress, rules.RuleActionDeny)}
+	}
+	v4, v6 := net.ParseIP("10.0.0.1"), net.ParseIP("fd00::1")
+	pingEp := &proto.WorkloadEndpoint{Tiers: tierInfos(policyIDs(stagedPing))}
+	v4Ep := &proto.WorkloadEndpoint{Tiers: tierInfos(nil, policyIDs(stagedV4))}
+
+	testCases := []struct {
+		title    string
+		ep       *proto.WorkloadEndpoint
+		flow     *MockFlow
+		expected []*calc.RuleID
+	}{
+		{"echo request", pingEp, &MockFlow{SourceIP: v4, DestIP: v4, Protocol: 1, DestPort: 8 << 8}, allowed(stagedPing, "tier1")},
+		{"destination unreachable", pingEp, &MockFlow{SourceIP: v4, DestIP: v4, Protocol: 1, DestPort: 3<<8 | 1}, denied(stagedPing, "tier1")},
+		{"IPv4 flow", v4Ep, &MockFlow{SourceIP: v4, DestIP: v4, Protocol: 6, DestPort: 80}, allowed(stagedV4, "tier2")},
+		{"IPv6 flow", v4Ep, &MockFlow{SourceIP: v6, DestIP: v6, Protocol: 6, DestPort: 80}, denied(stagedV4, "tier2")},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
+			trace, err := Evaluate(StagedAsEnforced, rules.RuleDirIngress, store, tc.ep, tc.flow)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(trace).To(Equal(tc.expected))
+		})
+	}
+}

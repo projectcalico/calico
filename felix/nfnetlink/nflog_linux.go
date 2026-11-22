@@ -37,9 +37,10 @@ const (
 )
 
 const (
-	ProtoIcmp = 1
-	ProtoTcp  = 6
-	ProtoUdp  = 17
+	ProtoIcmp   = 1
+	ProtoTcp    = 6
+	ProtoUdp    = 17
+	ProtoIcmpv6 = 58
 )
 
 const (
@@ -430,7 +431,8 @@ func parsePacketHeader(tuple *NflogPacketTuple, hwProtocol int, nflogPayload []b
 
 func parseLayer4Header(tuple *NflogPacketTuple, l4payload []byte) {
 	switch tuple.Proto {
-	case ProtoIcmp:
+	case ProtoIcmp, ProtoIcmpv6:
+		// ICMPv6 has the same type, code and echo identifier layout as ICMP.
 		header := pkt.ParseICMPHeader(l4payload)
 		tuple.L4Src.Id = int(header.Id)
 		tuple.L4Dst.Type = int(header.Type)

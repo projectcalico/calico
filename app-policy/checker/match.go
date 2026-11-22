@@ -62,6 +62,8 @@ type L4Flow interface {
 	GetSourceIP() net.IP
 	GetDestIP() net.IP
 	GetSourcePort() int
+	// GetDestPort returns the destination port. For ICMP and ICMPv6 flows it returns the ICMP
+	// type in the high byte and the code in the low byte, the way Felix's collector keys them.
 	GetDestPort() int
 	GetProtocol() int
 }
@@ -102,7 +104,8 @@ func match(policyNamespace string, rule *proto.Rule, req *requestCache) bool {
 	// cheapest-first, because most rules in a large policy set are rejected by exactly
 	// one criterion and the walk stops at it:
 	//
-	//   - protocol and ports are integer comparisons against the flow;
+	//   - protocol, IP version, ICMP type and code, and ports are integer comparisons
+	//     against the flow;
 	//   - the address criteria parse a CIDR per entry, or hash and walk an IP set;
 	//   - the identity criteria parse and evaluate a label selector.
 	//
@@ -110,6 +113,8 @@ func match(policyNamespace string, rule *proto.Rule, req *requestCache) bool {
 	// and because it panics on a malformed one: leaving it last confines that to
 	// requests that a rule otherwise matches.
 	return matchL4Protocol(rule, req.GetProtocol()) &&
+		matchIPVersion(rule, req) &&
+		matchICMP(rule, req) &&
 		matchSrcPort(rule, req) &&
 		matchDstPort(rule, req) &&
 		matchSrcNet(rule, req) &&
@@ -657,8 +662,8 @@ func matchSrcNet(rule *proto.Rule, req *requestCache) bool {
 		matchNotNet("src", rule.GetNotSrcNet(), req.GetSourceIP())
 }
 
-// matchNet checks if the IP is within the CIDRs. It returns true if the IP matches, false
-// otherwise.
+// matchNet checks if the IP is within the CIDRs of its IP family. It returns true if the IP
+// matches, false otherwise.
 func matchNet(dir string, nets []string, ip net.IP) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
@@ -671,7 +676,11 @@ func matchNet(dir string, nets []string, ip net.IP) bool {
 		return true
 	}
 
+	version := ipVersionOf(ip)
 	for _, n := range nets {
+		if !cidrInFamily(n, version) {
+			continue
+		}
 		_, ipn, err := net.ParseCIDR(n)
 		if err != nil {
 			// Don't match CIDRs if they are malformed. This case should generally be weeded out by
@@ -686,8 +695,8 @@ func matchNet(dir string, nets []string, ip net.IP) bool {
 	return false
 }
 
-// matchNotNet checks if the IP is not within the CIDRs. It returns false if the IP matches, true
-// otherwise.
+// matchNotNet checks if the IP is not within the CIDRs of its IP family. It returns false if the
+// IP matches, true otherwise.
 func matchNotNet(dir string, nets []string, ip net.IP) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
@@ -700,7 +709,13 @@ func matchNotNet(dir string, nets []string, ip net.IP) bool {
 		return true
 	}
 
+	version := ipVersionOf(ip)
+	inFamily := false
 	for _, n := range nets {
+		if !cidrInFamily(n, version) {
+			continue
+		}
+		inFamily = true
 		_, ipn, err := net.ParseCIDR(n)
 		if err != nil {
 			// Don't match CIDRs if they are malformed. This case should generally be weeded out by
@@ -712,12 +727,97 @@ func matchNotNet(dir string, nets []string, ip net.IP) bool {
 			return false
 		}
 	}
+	// The dataplanes don't render the rule at all for an IP family that none of its negated
+	// CIDRs belong to, rather than render it without the negation.
+	return inFamily
+}
+
+// ipVersionOf returns the IP version of the address, or IPVersion_ANY for a nil or malformed one.
+func ipVersionOf(addr net.IP) proto.IPVersion {
+	switch {
+	case addr.To4() != nil:
+		return proto.IPVersion_IPV4
+	case len(addr) == net.IPv6len:
+		return proto.IPVersion_IPV6
+	}
+	return proto.IPVersion_ANY
+}
+
+// cidrInFamily reports whether the CIDR belongs to the given IP family. The dataplanes render a
+// rule once per family with only that family's CIDRs, and tell the families apart this way, so
+// an IPv4-mapped IPv6 CIDR such as ::ffff:10.0.0.0/104 never matches an IPv4 address. An address
+// of unknown family keeps every CIDR.
+func cidrInFamily(cidr string, version proto.IPVersion) bool {
+	switch version {
+	case proto.IPVersion_IPV4:
+		return !strings.Contains(cidr, ":")
+	case proto.IPVersion_IPV6:
+		return strings.Contains(cidr, ":")
+	}
 	return true
 }
 
+// matchIPVersion checks the rule's IP version against the flow's. A flow without a parseable
+// address has no version, and only matches rules for either version.
+func matchIPVersion(rule *proto.Rule, req *requestCache) bool {
+	v := rule.GetIpVersion()
+	return v == proto.IPVersion_ANY || v == req.getIPVersion()
+}
+
+// matchICMP checks the rule's ICMP type and code, and their negations. The dataplanes render
+// them with the ICMP match of the flow's IP family, which only matches ICMP packets of that
+// family, so a negated type or code doesn't match a flow of any other protocol.
+func matchICMP(rule *proto.Rule, req *requestCache) bool {
+	icmp, notICMP := rule.GetIcmp(), rule.GetNotIcmp()
+	if icmp == nil && notICMP == nil {
+		return true
+	}
+	switch req.GetProtocol() {
+	case protoICMP:
+		if req.getIPVersion() == proto.IPVersion_IPV6 {
+			return false
+		}
+	case protoICMPv6:
+		if req.getIPVersion() == proto.IPVersion_IPV4 {
+			return false
+		}
+	default:
+		return false
+	}
+
+	// The dataplanes compare 8-bit values, so the rule's type and code are truncated the same way.
+	icmpType, icmpCode := uint8(req.GetDestPort()>>8), uint8(req.GetDestPort())
+	switch m := icmp.(type) {
+	case *proto.Rule_IcmpType:
+		if icmpType != uint8(m.IcmpType) {
+			return false
+		}
+	case *proto.Rule_IcmpTypeCode:
+		if icmpType != uint8(m.IcmpTypeCode.GetType()) || icmpCode != uint8(m.IcmpTypeCode.GetCode()) {
+			return false
+		}
+	}
+	switch m := notICMP.(type) {
+	case *proto.Rule_NotIcmpType:
+		if icmpType == uint8(m.NotIcmpType) {
+			return false
+		}
+	case *proto.Rule_NotIcmpTypeCode:
+		if icmpType == uint8(m.NotIcmpTypeCode.GetType()) && icmpCode == uint8(m.NotIcmpTypeCode.GetCode()) {
+			return false
+		}
+	}
+	return true
+}
+
+const (
+	protoICMP   = 1
+	protoICMPv6 = 58
+)
+
 var stringToProto = map[string]int{
-	"icmp":    1,
-	"icmpv6":  58,
+	"icmp":    protoICMP,
+	"icmpv6":  protoICMPv6,
 	"tcp":     6,
 	"udp":     17,
 	"udplite": 136,
