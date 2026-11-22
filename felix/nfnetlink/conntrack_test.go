@@ -164,12 +164,13 @@ func ipStrTo16Byte(ipStr string) [16]byte {
 var _ = Describe("Conntrack Entry ICMP DNAT", func() {
 	It("should keep the original type and code in the post-DNAT tuple", func() {
 		for _, protoNum := range []int{nfnl.ICMP_PROTO, nfnl.ICMPV6_PROTO} {
-			// An echo request's reply tuple holds the echo reply type, and NAT may change the
-			// identifier but never the type or code.
+			// The reply tuple holds the reply's type, such as echo reply for an echo request, and NAT
+			// may change the identifier but never the type or code. The codes differ here only so
+			// that taking either field from the wrong tuple shows up.
 			cte := CtEntry{
 				OriginalTuple: CtTuple{
 					Src: [16]byte{1, 1, 1, 1}, Dst: [16]byte{3, 3, 3, 3}, ProtoNum: protoNum,
-					L4Src: CtL4Src{Id: 1234}, L4Dst: CtL4Dst{Type: 8, Code: 0},
+					L4Src: CtL4Src{Id: 1234}, L4Dst: CtL4Dst{Type: 8, Code: 2},
 				},
 				ReplyTuple: CtTuple{
 					Src: [16]byte{2, 2, 2, 2}, Dst: [16]byte{1, 1, 1, 1}, ProtoNum: protoNum,
@@ -181,7 +182,7 @@ var _ = Describe("Conntrack Entry ICMP DNAT", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(t.Dst).To(Equal(cte.ReplyTuple.Src))
 			Expect(t.L4Src).To(Equal(CtL4Src{Id: 4321}))
-			Expect(t.L4Dst).To(Equal(CtL4Dst{Type: 8, Code: 0}), "protocol %d", protoNum)
+			Expect(t.L4Dst).To(Equal(CtL4Dst{Type: 8, Code: 2}), "protocol %d", protoNum)
 		}
 	})
 })
@@ -191,8 +192,8 @@ var _ = Describe("Conntrack ICMPv6 tuple parsing", func() {
 		attrs := [][]byte{
 			nl.NewRtAttr(nfnl.CTA_PROTO_NUM, []byte{nfnl.ICMPV6_PROTO}).Serialize(),
 			nl.NewRtAttr(nfnl.CTA_PROTO_ICMPV6_ID, []byte{0x04, 0xd2}).Serialize(),
-			nl.NewRtAttr(nfnl.CTA_PROTO_ICMPV6_TYPE, []byte{128}).Serialize(),
-			nl.NewRtAttr(nfnl.CTA_PROTO_ICMPV6_CODE, []byte{0}).Serialize(),
+			nl.NewRtAttr(nfnl.CTA_PROTO_ICMPV6_TYPE, []byte{1}).Serialize(),
+			nl.NewRtAttr(nfnl.CTA_PROTO_ICMPV6_CODE, []byte{4}).Serialize(),
 		}
 		var value []byte
 		for _, a := range attrs {
@@ -202,7 +203,7 @@ var _ = Describe("Conntrack ICMPv6 tuple parsing", func() {
 		Expect(parseTupleProto(&tuple, value)).To(Succeed())
 		Expect(tuple.ProtoNum).To(Equal(nfnl.ICMPV6_PROTO))
 		Expect(tuple.L4Src.Id).To(Equal(1234))
-		Expect(tuple.L4Dst.Type).To(Equal(128))
-		Expect(tuple.L4Dst.Code).To(Equal(0))
+		Expect(tuple.L4Dst.Type).To(Equal(1))
+		Expect(tuple.L4Dst.Code).To(Equal(4))
 	})
 })
