@@ -15,9 +15,11 @@
 package policystore
 
 import (
+	"io"
 	"testing"
 
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
 )
@@ -265,4 +267,67 @@ func TestIPNetV6(t *testing.T) {
 	Expect(uut.Contains(addrfe80_23af_77bd_34)).To(BeTrue())
 	Expect(uut.Contains(addrfe80_23af_22)).To(BeFalse())
 	Expect(uut.Contains(addrfe81_23af_77bd_fe80)).To(BeFalse())
+}
+
+// Policy evaluation checks a flow against every IP set each rule it walks names, so with debug
+// logging off a membership check must not allocate.
+func TestIPSetContainsDoesNotAllocate(t *testing.T) {
+	RegisterTestingT(t)
+	withLogLevel(t, log.InfoLevel)
+
+	for _, tc := range []struct {
+		name   string
+		typ    proto.IPSetUpdate_IPSetType
+		member string
+		miss   string
+	}{
+		{"IP", proto.IPSetUpdate_IP, "10.0.0.1", "10.0.0.2"},
+		{"IP and port", proto.IPSetUpdate_IP_AND_PORT, "10.0.0.1,tcp:8080", "10.0.0.1,tcp:8081"},
+	} {
+		s := NewIPSet(tc.typ)
+		s.AddString(tc.member)
+		for _, addr := range []string{tc.member, tc.miss} {
+			allocs := testing.AllocsPerRun(100, func() { s.Contains(addr) })
+			Expect(allocs).To(BeZero(), "%s set, address %s", tc.name, addr)
+		}
+	}
+}
+
+func BenchmarkIPSetContains(b *testing.B) {
+	for _, tc := range []struct {
+		name   string
+		typ    proto.IPSetUpdate_IPSetType
+		member string
+	}{
+		{"IP", proto.IPSetUpdate_IP, "10.0.0.1"},
+		{"IPAndPort", proto.IPSetUpdate_IP_AND_PORT, "10.0.0.1,tcp:8080"},
+		{"Net", proto.IPSetUpdate_NET, "10.0.0.0/16"},
+	} {
+		addr := tc.member
+		if tc.typ == proto.IPSetUpdate_NET {
+			addr = "10.0.1.1"
+		}
+		for _, level := range []log.Level{log.InfoLevel, log.DebugLevel} {
+			b.Run(tc.name+"/"+level.String(), func(b *testing.B) {
+				withLogLevel(b, level)
+				// Debug lines would swamp the benchmark output.
+				out := log.StandardLogger().Out
+				log.SetOutput(io.Discard)
+				b.Cleanup(func() { log.SetOutput(out) })
+
+				s := NewIPSet(tc.typ)
+				s.AddString(tc.member)
+				b.ReportAllocs()
+				for b.Loop() {
+					s.Contains(addr)
+				}
+			})
+		}
+	}
+}
+
+func withLogLevel(tb testing.TB, level log.Level) {
+	old := log.GetLevel()
+	log.SetLevel(level)
+	tb.Cleanup(func() { log.SetLevel(old) })
 }
