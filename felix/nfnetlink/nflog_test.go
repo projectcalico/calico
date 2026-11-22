@@ -139,3 +139,42 @@ var _ = Describe("Parse ICMPv6 packet header", func() {
 		Expect(tuple.L4Dst.Code).To(Equal(0))
 	})
 })
+
+var _ = Describe("Parse truncated packet headers", func() {
+	// truncated builds an IP packet whose transport header stops after four bytes, the shape of a
+	// packet conntrack marks invalid, which reaches the logging rules when Felix is configured not
+	// to drop invalid packets.
+	truncated := func(hwProtocol, ipProto int) []byte {
+		if hwProtocol == IPv6Proto {
+			payload := make([]byte, 44)
+			payload[0] = 0x60
+			payload[6] = byte(ipProto)
+			copy(payload[8:24], net.ParseIP("fd00::1"))
+			copy(payload[24:40], net.ParseIP("fd00::2"))
+			copy(payload[40:], []byte{128, 0, 0, 0})
+			return payload
+		}
+		payload := make([]byte, 24)
+		payload[0] = 0x45
+		payload[9] = byte(ipProto)
+		copy(payload[12:16], net.ParseIP("10.0.0.1").To4())
+		copy(payload[16:20], net.ParseIP("10.0.0.2").To4())
+		copy(payload[20:], []byte{8, 0, 0, 0})
+		return payload
+	}
+
+	DescribeTable("should keep the addresses and leave the transport fields empty",
+		func(hwProtocol, ipProto int) {
+			var tuple NflogPacketTuple
+			Expect(func() { parsePacketHeader(&tuple, hwProtocol, truncated(hwProtocol, ipProto)) }).NotTo(Panic())
+			Expect(tuple.Proto).To(Equal(ipProto))
+			Expect(tuple.Src).NotTo(Equal([16]byte{}))
+			Expect(tuple.L4Src).To(Equal(NflogL4Info{}))
+			Expect(tuple.L4Dst).To(Equal(NflogL4Info{}))
+		},
+		Entry("ICMPv6", IPv6Proto, ProtoIcmpv6),
+		Entry("ICMP", IPv4Proto, ProtoIcmp),
+		Entry("TCP", IPv4Proto, ProtoTcp),
+		Entry("UDP over IPv6", IPv6Proto, ProtoUdp),
+	)
+})
