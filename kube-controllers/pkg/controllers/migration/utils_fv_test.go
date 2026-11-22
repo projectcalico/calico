@@ -286,6 +286,7 @@ func cleanupMigrationResources(t *testing.T, ctx context.Context) {
 		fvRTClient.DeleteAllOf(ctx, &apiv3.Tier{}),
 		fvRTClient.DeleteAllOf(ctx, &apiv3.GlobalNetworkPolicy{}),
 		fvRTClient.DeleteAllOf(ctx, &apiv3.ClusterInformation{}),
+		fvRTClient.DeleteAllOf(ctx, &apiv3.IPAMHandle{}),
 	} {
 		if err != nil {
 			t.Logf("cleanup: %v", err)
