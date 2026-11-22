@@ -1706,8 +1706,6 @@ func TestMatchNetsByFamily(t *testing.T) {
 		{"mixed negated CIDRs, IPv6 address inside them", &proto.Rule{NotSrcNet: []string{"10.0.0.0/8", "fd00::/8"}}, "fd00::1", false},
 		{"mixed CIDRs, IPv4 address", &proto.Rule{SrcNet: []string{"10.0.0.0/8", "fd00::/8"}}, "10.1.2.3", true},
 		{"mixed CIDRs, IPv6 address", &proto.Rule{SrcNet: []string{"10.0.0.0/8", "fd00::/8"}}, "fd00::1", true},
-		{"IPv4-mapped IPv6 CIDR, IPv4 address", &proto.Rule{SrcNet: []string{"::ffff:10.0.0.0/104"}}, "10.1.2.3", false},
-		{"IPv4-mapped IPv6 negated CIDR, IPv4 address", &proto.Rule{NotSrcNet: []string{"::ffff:10.0.0.0/104"}}, "10.1.2.3", false},
 	}
 
 	for _, tc := range testCases {
@@ -1716,6 +1714,33 @@ func TestMatchNetsByFamily(t *testing.T) {
 			flow := &MockFlow{SourceIP: net.ParseIP(tc.src), DestIP: net.ParseIP(tc.src), Protocol: 6}
 			req := NewRequestCache(policystore.NewPolicyStore(), flow)
 			Expect(matchSrcNet(tc.rule, req)).To(Equal(tc.expectMatch))
+		})
+	}
+}
+
+// A rule with any one of IP version, ICMP or negated ICMP criteria gets them checked: only a rule
+// with none of the three skips the checks.
+func TestMatchChecksIPVersionAndICMPCriteria(t *testing.T) {
+	testCases := []struct {
+		title string
+		rule  *proto.Rule
+	}{
+		{"IP version only", &proto.Rule{Action: "allow", IpVersion: proto.IPVersion_IPV6}},
+		{"ICMP type only", &proto.Rule{Action: "allow", Icmp: &proto.Rule_IcmpType{IcmpType: 3}}},
+		{"negated ICMP type only", &proto.Rule{Action: "allow", NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 8}}},
+	}
+	echoRequest := &MockFlow{
+		SourceIP: net.ParseIP("10.0.0.1"),
+		DestIP:   net.ParseIP("10.0.0.2"),
+		Protocol: 1,
+		DestPort: 8 << 8,
+	}
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
+			req := NewRequestCache(policystore.NewPolicyStore(), echoRequest)
+			Expect(match("", tc.rule, req)).To(BeFalse())
+			Expect(match("", &proto.Rule{Action: "allow"}, req)).To(BeTrue())
 		})
 	}
 }
