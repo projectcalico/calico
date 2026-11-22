@@ -2142,8 +2142,8 @@ type PolicyHit struct {
 	// RuleIndex is the order of the Rule within the Policy rules.
 	RuleIndex int64 `protobuf:"varint,7,opt,name=rule_index,json=ruleIndex,proto3" json:"rule_index,omitempty"`
 	// Trigger names the last policy in the tier that selected this Flow, which the tier's
-	// end-of-tier action is reported against. This is only valid for kind=EndOfTier, and is nil
-	// otherwise.
+	// end-of-tier action is reported against. Staged policies count only in pending policies.
+	// This is only valid for kind=EndOfTier, and is nil otherwise.
 	Trigger       *PolicyHit `protobuf:"bytes,8,opt,name=trigger,proto3" json:"trigger,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

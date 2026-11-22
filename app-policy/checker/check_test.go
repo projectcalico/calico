@@ -1077,6 +1077,7 @@ func TestCheckTiersPolicyScope(t *testing.T) {
 	stagedNoMatch := &proto.PolicyID{Name: "staged-no-match", Kind: v3.KindStagedGlobalNetworkPolicy}
 	enforcedAllow := &proto.PolicyID{Name: "allow", Kind: v3.KindGlobalNetworkPolicy}
 	enforcedNoMatch := &proto.PolicyID{Name: "no-match", Kind: v3.KindGlobalNetworkPolicy}
+	enforcedPass := &proto.PolicyID{Name: "pass", Kind: v3.KindGlobalNetworkPolicy}
 	notInStore := &proto.PolicyID{Name: "not-in-store", Kind: v3.KindGlobalNetworkPolicy}
 
 	for _, tc := range []struct {
@@ -1123,6 +1124,14 @@ func TestCheckTiersPolicyScope(t *testing.T) {
 			wantPending: PERMISSION_DENIED,
 		},
 		{
+			// What is in scope is worked out afresh for each tier: the earlier tier's policy
+			// mustn't make the staged-only tier apply its default action when enforcing.
+			name:        "a staged-only tier after a passing tier is skipped when enforcing",
+			tiers:       tierInfos(policyIDs(enforcedPass), policyIDs(stagedNoMatch)),
+			wantEnforce: OK,
+			wantPending: PERMISSION_DENIED,
+		},
+		{
 			name: "a policy missing from the store fails the evaluation",
 			// Its verdict is unknowable, so fail closed rather than hand the request on to the rest
 			// of the tier.
@@ -1162,6 +1171,9 @@ func TestCheckTiersPolicyScope(t *testing.T) {
 				}
 				store.PolicyByID[types.ProtoToPolicyID(enforcedAllow)] = &proto.Policy{
 					InboundRules: []*proto.Rule{{Action: "allow"}},
+				}
+				store.PolicyByID[types.ProtoToPolicyID(enforcedPass)] = &proto.Policy{
+					InboundRules: []*proto.Rule{{Action: "pass"}},
 				}
 
 				st := checkStore(scope.PolicyScope, store, store.Endpoint, rules.RuleDirIngress,

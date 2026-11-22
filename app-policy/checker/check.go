@@ -194,9 +194,8 @@ func checkTiers(scope PolicyScope, store *policystore.PolicyStore, ep *proto.Wor
 		var (
 			ruleIndex int
 			// The tier's default action is reported against the last of its policies in scope,
-			// the one Felix names for the enforced verdict, so that pending and enforced flow logs
-			// agree when no policy is staged. A tier with no policy in scope contributes nothing
-			// at all, end-of-tier action included.
+			// the policy that enforced flow logs name for it. A tier with no policy in scope
+			// contributes nothing at all, end-of-tier action included.
 			lastInScope *proto.PolicyID
 		)
 
