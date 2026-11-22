@@ -269,27 +269,33 @@ func TestIPNetV6(t *testing.T) {
 	Expect(uut.Contains(addrfe81_23af_77bd_fe80)).To(BeFalse())
 }
 
-// Policy evaluation checks a flow against every IP set each rule it walks names, so with debug
-// logging off a membership check must not allocate.
+// Policy evaluation checks every IP set named by each rule it walks, so with debug logging off a
+// membership check must not allocate.
 func TestIPSetContainsDoesNotAllocate(t *testing.T) {
-	RegisterTestingT(t)
 	withLogLevel(t, log.InfoLevel)
 
 	for _, tc := range []struct {
 		name   string
 		typ    proto.IPSetUpdate_IPSetType
 		member string
+		hit    string
 		miss   string
 	}{
-		{"IP", proto.IPSetUpdate_IP, "10.0.0.1", "10.0.0.2"},
-		{"IP and port", proto.IPSetUpdate_IP_AND_PORT, "10.0.0.1,tcp:8080", "10.0.0.1,tcp:8081"},
+		{"IP", proto.IPSetUpdate_IP, "10.0.0.1", "10.0.0.1", "10.0.0.2"},
+		{"IP and port", proto.IPSetUpdate_IP_AND_PORT, "10.0.0.1,tcp:8080", "10.0.0.1,tcp:8080", "10.0.0.1,tcp:8081"},
+		{"NET", proto.IPSetUpdate_NET, "10.0.0.0/16", "10.0.1.1", "10.1.0.1"},
 	} {
-		s := NewIPSet(tc.typ)
-		s.AddString(tc.member)
-		for _, addr := range []string{tc.member, tc.miss} {
-			allocs := testing.AllocsPerRun(100, func() { s.Contains(addr) })
-			Expect(allocs).To(BeZero(), "%s set, address %s", tc.name, addr)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			s := NewIPSet(tc.typ)
+			s.AddString(tc.member)
+			Expect(s.Contains(tc.hit)).To(BeTrue())
+			Expect(s.Contains(tc.miss)).To(BeFalse())
+			for _, addr := range []string{tc.hit, tc.miss} {
+				allocs := testing.AllocsPerRun(100, func() { s.Contains(addr) })
+				Expect(allocs).To(BeZero(), "address %s", addr)
+			}
+		})
 	}
 }
 

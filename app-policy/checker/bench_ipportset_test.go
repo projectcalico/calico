@@ -14,9 +14,9 @@
 
 package checker
 
-// Benchmark for Evaluate() against rules that match on a named port or on a service, both of
-// which Felix sends as IP+port sets, with a flow that matches none of them. Every rule costs one
-// set membership check, so the per-rule cost is dominated by that check.
+// Benchmark for Evaluate() against rules that match on a named port or on a destination service,
+// both of which Felix sends as IP+port sets, with a flow that matches none of them. Every rule
+// reaches one set membership check, so a per-check cost shows up once per rule.
 //
 //	go test ./app-policy/checker/ -run '^$' -bench BenchmarkEvaluateIPPortSets \
 //	    -benchmem -benchtime 1000x -cpu 1
@@ -71,9 +71,18 @@ func benchEvaluateIPPortSets(b *testing.B, ruleFor func(setID string) *proto.Rul
 	}}}
 	flow := egressFlow("10.2.0.1", 8080)
 
-	// Pre-flight outside the timed loop: the flow must walk every rule to the tier's default
-	// deny, or the benchmark would time an early exit.
-	trace, err := Evaluate(EnforcedOnly, rules.RuleDirEgress, store, ep, flow)
+	// Pre-flight outside the timed loop. A flow to the last rule's set member must be allowed by
+	// that rule, which shows the rules get as far as their set check; and the benchmark's flow
+	// must walk every rule to the tier's default deny, or the loop would time an early exit.
+	last := fmt.Sprintf("10.1.%d.%d", (ipPortSetRules-1)/256, (ipPortSetRules-1)%256)
+	trace, err := Evaluate(EnforcedOnly, rules.RuleDirEgress, store, ep, egressFlow(last, 8080))
+	if err != nil {
+		b.Fatalf("evaluation failed: %v", err)
+	}
+	if len(trace) != 1 || trace[0].Action != rules.RuleActionAllow || trace[0].Index != ipPortSetRules-1 {
+		b.Fatalf("expected an allow from the last rule, got %v", trace)
+	}
+	trace, err = Evaluate(EnforcedOnly, rules.RuleDirEgress, store, ep, flow)
 	if err != nil {
 		b.Fatalf("evaluation failed: %v", err)
 	}
