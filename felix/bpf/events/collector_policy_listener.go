@@ -86,8 +86,8 @@ const (
 
 // icmpTypeCodeAsDstPort converts the ICMP type and code that the BPF programs leave in the
 // destination port field, type in the low byte, to the order the iptables and nftables
-// dataplanes report them in, type in the high byte. Every ICMP flow then has the same tuple,
-// whichever dataplane reported it, and policy evaluation reads the type and code from it.
+// dataplanes report them in, type in the high byte. ICMP flows then have the same destination
+// port whichever dataplane reported them, and policy evaluation reads the type and code from it.
 func icmpTypeCodeAsDstPort(bpfDstPort uint16) uint16 {
 	return bpfDstPort<<8 | bpfDstPort>>8
 }
