@@ -497,8 +497,8 @@ message PolicyHit {
   int64 rule_index = 7;
 
   // Trigger names the last policy in the tier that selected this Flow, which the tier's
-  // end-of-tier action is reported against. This is only valid for kind=EndOfTier, and is nil
-  // otherwise.
+  // end-of-tier action is reported against. Staged policies count only in pending policies.
+  // This is only valid for kind=EndOfTier, and is nil otherwise.
   PolicyHit trigger = 8;
 }
 
