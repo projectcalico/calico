@@ -8,8 +8,6 @@
       machine:
         type: f1-standard-2
         os_image: ubuntu2204
-    secrets:
-      - name: banzai-secrets
     jobs:
       - name: "Policy evaluation benchmark"
         execution_time_limit:
@@ -21,13 +19,34 @@
           # this is trend tracking, not a per-PR gate.
           - make -C app-policy bench-policy-eval
           - make -C felix bench-policy-eval
-          - make bin/send-perf-results
-          # Publish to Lens. send-perf-results no-ops if the creds are unset.
-          - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
-          - export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
-          - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
-          - ./bin/send-perf-results --dir artifacts/perf
+          - artifact push workflow artifacts/perf --destination policy-eval-perf
     epilogue:
       always:
         commands:
           - artifact push job artifacts/perf || true
+# Publishing is a block of its own so that the Lens credentials, which this project
+# also exposes to forked PRs, only reach branch pipelines: a PR's pipeline skips it.
+- name: "Policy evaluation benchmark: publish"
+  run:
+    when: "branch =~ 'master|release-.*' and ${CHANGE_IN(app-policy/checker,felix/collector,non-go:/hack/perf/)}"
+  dependencies:
+    - "Policy evaluation benchmark"
+  task:
+    agent:
+      machine:
+        type: f1-standard-2
+        os_image: ubuntu2204
+    secrets:
+      - name: banzai-secrets
+    jobs:
+      - name: "Policy evaluation benchmark: publish"
+        execution_time_limit:
+          minutes: 15
+        commands:
+          - artifact pull workflow policy-eval-perf --destination artifacts/perf
+          - make bin/send-perf-results
+          # send-perf-results no-ops if the creds are unset.
+          - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+          - export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
+          - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
+          - ./bin/send-perf-results --dir artifacts/perf
