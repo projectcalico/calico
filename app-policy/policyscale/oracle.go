@@ -149,10 +149,11 @@ func (fx *Fixture) ruleMatches(r *ruleModel, f *Flow) bool {
 	if !icmpMatches(r, f, family) {
 		return false
 	}
-	if !fx.dstPortMatches(r, f) || !portInRanges(r.srcPortRanges, f.SrcPort, true) {
+	if !fx.dstPortMatches(r, f) || !fx.srcPortMatches(r, f) {
 		return false
 	}
-	if portInRanges(r.notDstPortRanges, f.DstPort, false) || fx.ipPortSetHolds(r.notDstNamedPortSet, f.DstIP, f.Protocol, f.DstPort, false) {
+	if portInRanges(r.notDstPortRanges, f.DstPort, false) || fx.ipPortSetHolds(r.notDstNamedPortSet, f.DstIP, f.Protocol, f.DstPort, false) ||
+		portInRanges(r.notSrcPortRanges, f.SrcPort, false) || fx.ipPortSetHolds(r.notSrcNamedPortSet, f.SrcIP, f.Protocol, f.SrcPort, false) {
 		return false
 	}
 	dstNets := r.dstNets
@@ -212,6 +213,15 @@ func (fx *Fixture) dstPortMatches(r *ruleModel, f *Flow) bool {
 	return slices.Contains(r.dstPorts, int32(f.DstPort)) ||
 		portInRanges(r.dstPortRanges, f.DstPort, false) ||
 		fx.ipPortSetHolds(r.dstNamedPortSet, f.DstIP, f.Protocol, f.DstPort, false)
+}
+
+// srcPortMatches is dstPortMatches for the source port and the named port on the source address.
+func (fx *Fixture) srcPortMatches(r *ruleModel, f *Flow) bool {
+	if len(r.srcPortRanges) == 0 && r.srcNamedPortSet == "" {
+		return true
+	}
+	return portInRanges(r.srcPortRanges, f.SrcPort, false) ||
+		fx.ipPortSetHolds(r.srcNamedPortSet, f.SrcIP, f.Protocol, f.SrcPort, false)
 }
 
 // portInRanges reports whether the port is in one of the ranges, or ifEmpty when there are none.

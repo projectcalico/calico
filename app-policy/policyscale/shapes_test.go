@@ -113,6 +113,9 @@ func TestShapesCoverEveryCriterion(t *testing.T) {
 			mark("not icmp type", pr.GetNotIcmpType() != 0)
 			mark("not icmp type and code", pr.GetNotIcmpTypeCode() != nil)
 			mark("src ports", len(pr.SrcPorts) > 0)
+			mark("not src ports", len(pr.NotSrcPorts) > 0)
+			mark("src named port", len(pr.SrcNamedPortIpSetIds) > 0)
+			mark("not src named port", len(pr.NotSrcNamedPortIpSetIds) > 0)
 			mark("dst ports", len(pr.DstPorts) > 0)
 			mark("not dst ports", len(pr.NotDstPorts) > 0)
 			mark("src net", len(pr.SrcNet) > 0)
@@ -134,7 +137,7 @@ func TestShapesCoverEveryCriterion(t *testing.T) {
 	for _, name := range []string{
 		"protocol name", "protocol number", "not protocol name", "not protocol number", "ip version 4", "ip version 6",
 		"icmp type", "icmp type and code", "not icmp type", "not icmp type and code",
-		"src ports", "dst ports", "not dst ports", "src net", "dst net", "not src net", "not dst net",
+		"src ports", "not src ports", "src named port", "not src named port", "dst ports", "not dst ports", "src net", "dst net", "not src net", "not dst net",
 		"src ip set", "dst ip set", "not src ip set", "not dst ip set",
 		"dst named port", "not dst named port", "dst service", "allow", "deny", "pass",
 	} {

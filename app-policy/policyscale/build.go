@@ -109,12 +109,14 @@ type ruleModel struct {
 	ipVersion             int // 0 for either family, else 4 or 6.
 	icmp, notICMP         *icmpModel
 	srcPortRanges         []portRange
+	notSrcPortRanges      []portRange
 	dstPortRanges         []portRange
 	notDstPortRanges      []portRange
 	srcNets, notSrcNets   []netip.Prefix
 	dstNets, notDstNets   []netip.Prefix
 	// IP+port sets: a named port on the destination, its negation, and a destination service.
 	dstNamedPortSet, notDstNamedPortSet string
+	srcNamedPortSet, notSrcNamedPortSet string
 	dstServiceSet                       string
 
 	// shape is set on the rules the rule-shape preset builds.
@@ -122,8 +124,9 @@ type ruleModel struct {
 }
 
 func (r *ruleModel) hasPorts() bool {
-	return len(r.dstPorts) > 0 || len(r.srcPortRanges) > 0 || len(r.dstPortRanges) > 0 || len(r.notDstPortRanges) > 0 ||
-		r.dstNamedPortSet != "" || r.notDstNamedPortSet != ""
+	return len(r.dstPorts) > 0 || len(r.srcPortRanges) > 0 || len(r.notSrcPortRanges) > 0 ||
+		len(r.dstPortRanges) > 0 || len(r.notDstPortRanges) > 0 ||
+		r.dstNamedPortSet != "" || r.notDstNamedPortSet != "" || r.srcNamedPortSet != "" || r.notSrcNamedPortSet != ""
 }
 
 // protocolModel is a rule's protocol as the API spells it: a name, or a number when name is empty.
@@ -491,6 +494,13 @@ func (r *ruleModel) proto() *proto.Rule {
 	}
 	if r.notDstNamedPortSet != "" {
 		pr.NotDstNamedPortIpSetIds = []string{r.notDstNamedPortSet}
+	}
+	pr.NotSrcPorts = protoPortRanges(r.notSrcPortRanges)
+	if r.srcNamedPortSet != "" {
+		pr.SrcNamedPortIpSetIds = []string{r.srcNamedPortSet}
+	}
+	if r.notSrcNamedPortSet != "" {
+		pr.NotSrcNamedPortIpSetIds = []string{r.notSrcNamedPortSet}
 	}
 	if r.dstServiceSet != "" {
 		pr.DstIpPortSetIds = []string{r.dstServiceSet}
