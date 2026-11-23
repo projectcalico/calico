@@ -496,8 +496,9 @@ message PolicyHit {
   // RuleIndex is the order of the Rule within the Policy rules.
   int64 rule_index = 7;
 
-  // Trigger indicates the first policy that selected this Flow and thus triggered the tier's
-  // end-of-tier action. This is only valid for kind=EndOfTier, and is nil otherwise.
+  // Trigger names the last policy in the tier that selected this Flow, which the tier's
+  // end-of-tier action is reported against. Staged policies count only in pending policies.
+  // This is only valid for kind=EndOfTier, and is nil otherwise.
   PolicyHit trigger = 8;
 }
 
