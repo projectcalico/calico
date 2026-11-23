@@ -95,7 +95,9 @@ func (cte *CtEntry) OriginalTuplePostDNAT() (CtTuple, error) {
 	}
 
 	switch cte.OriginalTuple.ProtoNum {
-	case nfnl.ICMP_PROTO:
+	case nfnl.ICMP_PROTO, nfnl.ICMPV6_PROTO:
+		// NAT doesn't change the type and code, and the reply tuple holds the reply's type, such
+		// as echo reply for an echo request, so they come from the original tuple.
 		return CtTuple{
 			cte.OriginalTuple.Src,
 			cte.ReplyTuple.Src,
@@ -103,7 +105,7 @@ func (cte *CtEntry) OriginalTuplePostDNAT() (CtTuple, error) {
 			cte.OriginalTuple.ProtoNum,
 			cte.OriginalTuple.Zone,
 			CtL4Src{Id: cte.ReplyTuple.L4Src.Id},
-			CtL4Dst{Type: cte.ReplyTuple.L4Dst.Type, Code: cte.ReplyTuple.L4Dst.Code}}, nil
+			CtL4Dst{Type: cte.OriginalTuple.L4Dst.Type, Code: cte.OriginalTuple.L4Dst.Code}}, nil
 	case nfnl.TCP_PROTO, nfnl.UDP_PROTO:
 		return CtTuple{
 			cte.OriginalTuple.Src,
