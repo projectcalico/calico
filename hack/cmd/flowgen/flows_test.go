@@ -16,60 +16,64 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"io"
 	"net"
-	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/projectcalico/calico/app-policy/policyscale"
 )
 
-// The run sends close to the requested rate, and spreads it over the second rather than sending
-// a second's worth at once: no 100 ms window carries much more than a tenth of the rate.
-func TestRunFlowsPacesEvenly(t *testing.T) {
-	const rate = 500
-	var (
-		mu    sync.Mutex
-		times []time.Time
-	)
-	send := func(*policyscale.Flow) (outcome, error) {
-		mu.Lock()
-		times = append(times, time.Now())
-		mu.Unlock()
-		return sent, nil
-	}
-	fx := policyscale.Build(policyscale.EgressAllowList())
-	sampler := fx.NewSampler(1, policyscale.FlowModel{Direction: policyscale.Egress})
-	start := time.Now()
-	res := runFlows(sampler.Next, flowsConfig{rate: rate, duration: time.Second, concurrency: 4, describe: "test"}, send, io.Discard, nil)
+var (
+	egressFixture = sync.OnceValue(func() *policyscale.Fixture { return policyscale.Build(policyscale.EgressAllowList()) })
+	shapesFixture = sync.OnceValue(func() *policyscale.Fixture { return policyscale.Build(policyscale.RuleShapes()) })
+)
 
-	// Ticks the scheduler couldn't deliver are dropped rather than made up, so a loaded machine
-	// sends fewer; it must never send more.
-	if res.opened > rate+rate/100 || res.opened < rate/2 {
-		t.Fatalf("opened %d flows in a 1 s run at %d/s", res.opened, rate)
-	}
-	windows := map[int]int{}
-	for _, ts := range times {
-		windows[int(ts.Sub(start)/(100*time.Millisecond))]++
-	}
-	for w, n := range windows {
-		if n > rate/10*3/2 {
-			t.Errorf("window %d carried %d flows, more than 1.5 times its share of %d", w, n, rate/10)
+// The run sends close to the requested rate, and spreads it over the second rather than sending
+// a second's worth at once: no 100 ms window carries much more than a tenth of the rate. Below
+// 100 flows/s only the per-tick remainder sends anything.
+func TestRunFlowsPacesEvenly(t *testing.T) {
+	for _, rate := range []int{500, 50} {
+		var (
+			mu    sync.Mutex
+			times []time.Time
+		)
+		send := func(*policyscale.Flow) (outcome, error) {
+			mu.Lock()
+			times = append(times, time.Now())
+			mu.Unlock()
+			return sent, nil
+		}
+		sampler := egressFixture().NewSampler(1, policyscale.FlowModel{Direction: policyscale.Egress})
+		start := time.Now()
+		res := runFlows(sampler.Next, flowsConfig{rate: rate, duration: time.Second, concurrency: 4, describe: "test"}, send, io.Discard, nil)
+
+		// Ticks the scheduler couldn't deliver are dropped rather than made up, so a loaded machine
+		// sends fewer; it must never send many more.
+		if res.opened > uint64(rate+rate/100+1) || res.opened < uint64(rate/2) {
+			t.Fatalf("opened %d flows in a 1 s run at %d/s", res.opened, rate)
+		}
+		windows := map[int]int{}
+		for _, ts := range times {
+			windows[int(ts.Sub(start)/(100*time.Millisecond))]++
+		}
+		for w, n := range windows {
+			if n > max(rate/10*3/2, 2) {
+				t.Errorf("rate %d: window %d carried %d flows, more than 1.5 times its share of %d", rate, w, n, rate/10)
+			}
 		}
 	}
 }
 
-// The flows sent are the fixture's, in the fixture's order, so each has the verdict policyscale
+// The flows sent are the fixture's, in the fixture's order, so each has the trace policyscale
 // -flows prints for it.
 func TestRunFlowsDrawsTheFixturesFlows(t *testing.T) {
-	spec, err := policyscale.Preset("egress", policyscale.DefaultSeed)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fx := policyscale.Build(spec)
+	fx := egressFixture()
 	model := policyscale.FlowModel{Direction: policyscale.Egress, MissFraction: 0.1, RepeatFraction: 0.5}
 
 	var got []*policyscale.Flow
@@ -91,11 +95,10 @@ func TestRunFlowsDrawsTheFixturesFlows(t *testing.T) {
 }
 
 func TestCheckFixture(t *testing.T) {
-	if err := checkFixture("", "abc"); err != nil {
-		t.Errorf("no -fixture given: %v", err)
-	}
-	if err := checkFixture("abc", "abc"); err != nil {
-		t.Errorf("same fixture: %v", err)
+	for _, ok := range []string{"", "abc", " ABC\n"} {
+		if err := checkFixture(ok, "abc"); err != nil {
+			t.Errorf("-fixture %q: %v", ok, err)
+		}
 	}
 	if err := checkFixture("abd", "abc"); err == nil || !strings.Contains(err.Error(), "POLICYSCALE_") {
 		t.Errorf("different fixture: %v", err)
@@ -105,26 +108,21 @@ func TestCheckFixture(t *testing.T) {
 // A policy set scaled through the environment is a different fixture, so a flowgen run without the
 // same environment is caught by the fingerprint.
 func TestScaledFixtureHasAnotherFingerprint(t *testing.T) {
+	unscaled := egressFixture().Fingerprint()
+	t.Setenv("POLICYSCALE_POLICIES", "50")
 	spec, err := policyscale.Preset("egress", policyscale.DefaultSeed)
 	if err != nil {
 		t.Fatal(err)
 	}
-	unscaled := policyscale.Build(spec).Fingerprint()
-	t.Setenv("POLICYSCALE_POLICIES", "500")
-	spec, err = policyscale.Preset("egress", policyscale.DefaultSeed)
-	if err != nil {
-		t.Fatal(err)
-	}
-	scaled := policyscale.Build(spec).Fingerprint()
-	if checkFixture(scaled, unscaled) == nil {
+	if scaled := policyscale.Build(spec).Fingerprint(); checkFixture(scaled, unscaled) == nil {
 		t.Fatalf("scaling the preset kept fingerprint %s", scaled)
 	}
 }
 
 // Each flow keeps the protocol the fixture gave it unless one is forced, and the targets and the
-// spread source apply to the copy that is sent, never to the fixture's flow.
+// spread addresses apply to the copy that is sent, never to the fixture's flow.
 func TestPreparer(t *testing.T) {
-	fx := policyscale.Build(policyscale.RuleShapes())
+	fx := shapesFixture()
 	var flows []*policyscale.Flow
 	protocols := map[int]bool{}
 	for _, sf := range fx.ShapeFlows(policyscale.Egress) {
@@ -134,106 +132,147 @@ func TestPreparer(t *testing.T) {
 	if len(protocols) < 3 {
 		t.Fatalf("the shapes preset should give flows of several protocols, got %v", protocols)
 	}
-	keep := preparer(0, nil, false)
+	keep := preparer(prepareConfig{})
 	for _, f := range flows {
 		if c := keep(f); c.Protocol != f.Protocol || c == f {
 			t.Fatalf("%s: sent as protocol %d", f, c.Protocol)
 		}
 	}
-	udp := preparer(policyscale.ProtocolUDP, nil, false)
+	udp := preparer(prepareConfig{forcedProtocol: policyscale.ProtocolUDP})
 	for _, f := range flows {
 		if c := udp(f); c.Protocol != policyscale.ProtocolUDP {
 			t.Fatalf("%s: -protocol udp sent protocol %d", f, c.Protocol)
 		}
 	}
 
-	targets := []net.IP{net.ParseIP("10.0.0.1"), net.ParseIP("10.0.0.2")}
-	to := preparer(0, targets, true)
-	f := policyscale.NewFlow(policyscale.SourceIP, 40000, "198.51.100.7", 443)
-	var dsts, srcs []string
+	to := preparer(prepareConfig{targets: []net.IP{net.ParseIP("10.0.0.1"), net.ParseIP("10.0.0.2")}})
+	f := policyscale.NewFlow(policyscale.SourceIP, 40000, policyscale.DeniedDestIP, 443)
+	var dsts []string
 	for range 3 {
-		c := to(f)
-		dsts = append(dsts, c.DstIP.String())
-		srcs = append(srcs, c.SrcIP.String())
+		dsts = append(dsts, to(f).DstIP.String())
 	}
 	if strings.Join(dsts, ",") != "10.0.0.1,10.0.0.2,10.0.0.1" {
 		t.Errorf("targets not taken in turn: %v", dsts)
 	}
-	for _, s := range srcs {
-		if s == policyscale.SourceIP || !strings.HasPrefix(s, "192.0.2.") {
-			t.Errorf("shared source not spread across its /24: %v", srcs)
+
+	spread := preparer(prepareConfig{spreadSource: true, spreadDenied: true})
+	srcs, denied := map[string]bool{}, map[string]bool{}
+	for range 2 * 253 {
+		c := spread(f)
+		srcs[c.SrcIP.String()] = true
+		denied[c.DstIP.String()] = true
+	}
+	for name, seen := range map[string]map[string]bool{policyscale.SourceIP: srcs, policyscale.DeniedDestIP: denied} {
+		prefix := name[:strings.LastIndex(name, ".")+1]
+		if len(seen) != 253 || seen[name] || seen[prefix+"0"] || seen[prefix+"255"] {
+			t.Errorf("%s spread over %d addresses of its /24, including itself or the ends: %v", name, len(seen), seen[name])
 		}
 	}
-	if f.DstIP.String() != "198.51.100.7" || f.SrcIP.String() != policyscale.SourceIP {
+	if f.DstIP.String() != policyscale.DeniedDestIP || f.SrcIP.String() != policyscale.SourceIP {
 		t.Errorf("the fixture's flow was changed: %s", f)
+	}
+}
+
+// Spreading the shared source and the denied destination over their /24s changes no trace: no rule
+// names those addresses.
+func TestSpreadKeepsTraces(t *testing.T) {
+	for name, fx := range map[string]*policyscale.Fixture{
+		"egress":    egressFixture(),
+		"composite": policyscale.Build(policyscale.Composite()),
+		"shapes":    shapesFixture(),
+	} {
+		prepare := preparer(prepareConfig{spreadSource: true, spreadDenied: true})
+		for _, dir := range []policyscale.Direction{policyscale.Ingress, policyscale.Egress} {
+			if fx.Rules(dir) == 0 {
+				continue
+			}
+			s := fx.NewSampler(1, policyscale.FlowModel{Direction: dir, MissFraction: 0.5})
+			if c := sampleVerdictChanges(fx, dir, s, prepare, 300); c.Changed != 0 {
+				t.Errorf("%s %s: spreading changed %d of %d traces", name, dir, c.Changed, c.Sampled)
+			}
+		}
+	}
+}
+
+// Sending to a target in place of the generated destination changes the traces, and flowgen says
+// how many; with neither -targets nor a forced protocol nothing changes.
+func TestSampleVerdictChanges(t *testing.T) {
+	fx := egressFixture()
+	model := policyscale.FlowModel{Direction: policyscale.Egress, MissFraction: 0.1}
+	override := preparer(prepareConfig{targets: []net.IP{net.ParseIP("127.0.0.1")}})
+	if c := sampleVerdictChanges(fx, policyscale.Egress, fx.NewSampler(1, model), override, 200); c.Changed < 150 {
+		t.Errorf("-override-dst 127.0.0.1 changed only %d of %d egress traces", c.Changed, c.Sampled)
+	}
+	if c := sampleVerdictChanges(fx, policyscale.Egress, fx.NewSampler(1, model), preparer(prepareConfig{}), 200); c.Changed != 0 {
+		t.Errorf("an unchanged flow got another trace %d times", c.Changed)
 	}
 }
 
 // A dry run counts the flows that match a rule as they would be sent, which is how it shows a
 // forced protocol at work: every flow misses rules that name TCP.
 func TestDryRunTally(t *testing.T) {
-	fx := policyscale.Build(policyscale.EgressAllowList())
+	fx := egressFixture()
 	model := policyscale.FlowModel{Direction: policyscale.Egress, MissFraction: 0.1}
 
-	run := func(forced int) string {
+	run := func(forced int) *dryRunSummary {
 		tally := newDryRunTally(fx, policyscale.Egress)
-		prepare := preparer(forced, nil, false)
+		prepare := preparer(prepareConfig{forcedProtocol: forced})
 		s := fx.NewSampler(1, model)
 		for range 200 {
-			tally.record(prepare(s.Next()))
+			f := s.Next()
+			tally.record(f, prepare(f))
 		}
-		var b bytes.Buffer
-		tally.print(&b)
-		return b.String()
+		return tally.summary()
 	}
 
-	out := run(0)
-	if !strings.Contains(out, "by protocol: tcp=200;") || strings.Contains(out, "matching a rule: 0,") || !strings.Contains(out, "skipped (protocol flowgen can't send): 0") {
-		t.Errorf("fixture protocols: %s", out)
+	if s := run(0); s.ByProtocol["tcp"] != 200 || s.Matching == 0 || s.Changed != 0 || s.Skipped != 0 {
+		t.Errorf("fixture protocols: %+v", s)
 	}
-	out = run(policyscale.ProtocolUDP)
-	if !strings.Contains(out, "by protocol: udp=200;") || !strings.Contains(out, "matching a rule: 0, matching none: 200;") {
-		t.Errorf("-protocol udp against TCP rules should match no rule: %s", out)
+	if s := run(policyscale.ProtocolUDP); s.ByProtocol["udp"] != 200 || s.Matching != 0 || s.Changed == 0 {
+		t.Errorf("-protocol udp against TCP rules should match no rule, and change the matching flows' traces: %+v", s)
 	}
 
-	shapes := policyscale.Build(policyscale.RuleShapes())
-	tally := newDryRunTally(shapes, policyscale.Egress)
+	tally := newDryRunTally(shapesFixture(), policyscale.Egress)
 	var unsendable int
-	for _, sf := range shapes.ShapeFlows(policyscale.Egress) {
+	for _, sf := range shapesFixture().ShapeFlows(policyscale.Egress) {
 		if p := sf.Flow.Protocol; p != policyscale.ProtocolTCP && p != policyscale.ProtocolUDP {
 			unsendable++
 		}
-		tally.record(sf.Flow)
+		tally.record(sf.Flow, sf.Flow)
 	}
-	var b bytes.Buffer
-	tally.print(&b)
-	if unsendable == 0 || !strings.Contains(b.String(), "skipped (protocol flowgen can't send): "+strconv.Itoa(unsendable)) {
-		t.Errorf("shapes preset, %d flows flowgen can't send: %s", unsendable, b.String())
+	if s := tally.summary(); unsendable == 0 || s.Skipped != unsendable {
+		t.Errorf("shapes preset, %d flows flowgen can't send: %+v", unsendable, s)
 	}
 }
 
-// The sender puts a UDP flow on the wire as a datagram and a TCP flow as a connection, to the
-// target in place of the generated destination; a flow of another protocol is skipped.
+// The sender puts a UDP flow on the wire as a datagram and a TCP flow as a connection that ends in
+// a reset, to the target in place of the generated destination. A refused attempt made a flow
+// too; a flow of another protocol is skipped.
 func TestSenderSendsToASink(t *testing.T) {
 	udpSink, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer udpSink.Close()
+	defer func() { _ = udpSink.Close() }()
 	tcpSink, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tcpSink.Close()
-	accepted := make(chan struct{}, 1)
+	defer func() { _ = tcpSink.Close() }()
+	readErr := make(chan error, 1)
 	go func() {
-		if c, err := tcpSink.Accept(); err == nil {
-			_ = c.Close()
-			accepted <- struct{}{}
+		c, err := tcpSink.Accept()
+		if err != nil {
+			readErr <- err
+			return
 		}
+		_ = c.SetReadDeadline(time.Now().Add(5 * time.Second))
+		_, err = c.Read(make([]byte, 1))
+		_ = c.Close()
+		readErr <- err
 	}()
 
-	send := sender(preparer(0, []net.IP{net.ParseIP("127.0.0.1")}, false), time.Second, false)
+	send := sender(preparer(prepareConfig{targets: []net.IP{net.ParseIP("127.0.0.1")}}), time.Second, false)
 	udpFlow := policyscale.NewFlow(policyscale.SourceIP, 40000, "198.51.100.7", udpSink.LocalAddr().(*net.UDPAddr).Port)
 	udpFlow.Protocol = policyscale.ProtocolUDP
 	if o, err := send(udpFlow); o != sent {
@@ -249,10 +288,19 @@ func TestSenderSendsToASink(t *testing.T) {
 	if o, err := send(tcpFlow); o != sent {
 		t.Fatalf("TCP flow: %v %v", o, err)
 	}
-	select {
-	case <-accepted:
-	case <-time.After(5 * time.Second):
-		t.Fatal("TCP sink accepted no connection")
+	// A reset, not a close, so the sender's side leaves no TIME_WAIT.
+	if err := <-readErr; !errors.Is(err, syscall.ECONNRESET) {
+		t.Fatalf("the TCP sink read %v, want a reset", err)
+	}
+
+	closed, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	refusedPort := closed.Addr().(*net.TCPAddr).Port
+	_ = closed.Close()
+	if o, err := send(policyscale.NewFlow(policyscale.SourceIP, 40000, "198.51.100.7", refusedPort)); o != sent {
+		t.Fatalf("refused TCP flow: %v %v, want it counted as sent", o, err)
 	}
 
 	icmp := policyscale.NewFlow(policyscale.SourceIP, 0, "198.51.100.7", 8<<8)
@@ -263,9 +311,8 @@ func TestSenderSendsToASink(t *testing.T) {
 }
 
 func TestTCPFlowsOnly(t *testing.T) {
-	fx := policyscale.Build(policyscale.RuleShapes())
 	var all []*policyscale.Flow
-	for _, sf := range fx.ShapeFlows(policyscale.Egress) {
+	for _, sf := range shapesFixture().ShapeFlows(policyscale.Egress) {
 		all = append(all, sf.Flow)
 	}
 	i := 0
@@ -277,6 +324,74 @@ func TestTCPFlowsOnly(t *testing.T) {
 	for range 50 {
 		if f := next(); f.Protocol != policyscale.ProtocolTCP {
 			t.Fatalf("hold mode drew a protocol %d flow", f.Protocol)
+		}
+	}
+}
+
+// Attempts nobody answers hold a sender for the whole TCP timeout, so the pool grows with the rate.
+func TestSendersFor(t *testing.T) {
+	if n := sendersFor(1000, 5*time.Millisecond); n != 64 {
+		t.Errorf("1,000/s: %d senders, want the floor of 64", n)
+	}
+	if n := sendersFor(20000, 5*time.Millisecond); n < 200 {
+		t.Errorf("20,000/s at 5 ms: %d senders hold only %d attempts a second", n, n*200)
+	}
+}
+
+func TestVerdict(t *testing.T) {
+	second := time.Second
+	for _, tc := range []struct {
+		name   string
+		res    flowsResult
+		dryRun bool
+		want   int
+	}{
+		{"on rate", flowsResult{opened: 990, elapsed: second}, false, 0},
+		{"short", flowsResult{opened: 500, elapsed: second}, false, exitShortfall},
+		{"failures first", flowsResult{opened: 500, failed: 1, elapsed: second}, false, exitFailures},
+		{"skipped flows aren't a shortfall", flowsResult{opened: 600, skipped: 400, elapsed: second}, false, 0},
+		{"unroutable flows aren't either", flowsResult{opened: 600, unroutable: 400, elapsed: second}, false, 0},
+		{"a dry run has no rate", flowsResult{opened: 100, elapsed: second}, true, 0},
+	} {
+		if got, reason := verdict(tc.res, 1000, 0.05, tc.dryRun); got != tc.want {
+			t.Errorf("%s: exit %d (%s), want %d", tc.name, got, reason, tc.want)
+		}
+	}
+}
+
+// The flags a harness gets wrong exit 2 before any flow is sent; a fixture mismatch exits 3 with
+// its summary; a dry run ends with one JSON line on stdout.
+func TestRunExitCodes(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want int
+	}{
+		{[]string{"-rate", "0"}, exitUsage},
+		{[]string{"-concurrency", "-1"}, exitUsage},
+		{[]string{"-mode", "hold", "-dry-run"}, exitUsage},
+		{[]string{"-preset", "nope"}, exitUsage},
+		{[]string{"-no-such-flag"}, exitUsage},
+		{[]string{"-preset", "egress", "-fixture", "000000000000", "-duration", "1ms"}, exitFixture},
+		{[]string{"-preset", "egress", "-dry-run", "-rate", "200", "-duration", "300ms"}, 0},
+	} {
+		var stdout bytes.Buffer
+		if got := run(tc.args, &stdout, io.Discard); got != tc.want {
+			t.Errorf("%v: exit %d, want %d", tc.args, got, tc.want)
+			continue
+		}
+		if tc.want == exitUsage {
+			continue
+		}
+		var s summary
+		if err := json.Unmarshal(stdout.Bytes(), &s); err != nil {
+			t.Errorf("%v: summary %q: %v", tc.args, stdout.String(), err)
+			continue
+		}
+		if s.Exit != tc.want || s.Fingerprint == "" {
+			t.Errorf("%v: summary %+v", tc.args, s)
+		}
+		if tc.want == 0 && (s.DryRun == nil || s.DryRun.Matching == 0) {
+			t.Errorf("%v: dry-run summary %+v", tc.args, s.DryRun)
 		}
 	}
 }

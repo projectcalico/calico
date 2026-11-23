@@ -15,10 +15,10 @@
 package main
 
 import (
+	"io"
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
 	"time"
 
@@ -97,58 +97,44 @@ func TestParsePorts(t *testing.T) {
 	}
 }
 
-// Hold mode against listen mode on loopback: every connection opens, stays open through several
-// writes, and the listener sees each of them.
+// Hold mode against listen mode on loopback: every connection opens, stays open, and is written
+// to every interval, which is what keeps it alive in conntrack.
 func TestHoldAgainstListen(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	listeners, err := listen("127.0.0.1", []int{0})
 	if err != nil {
 		t.Fatal(err)
 	}
-	port := ln.Addr().(*net.TCPAddr).Port
-	_ = ln.Close()
-
-	type listenResult struct {
-		accepted, open uint64
-		err            error
-	}
+	port := listeners[0].Addr().(*net.TCPAddr).Port
 	listened := make(chan listenResult, 1)
-	go func() {
-		a, o, err := runListen("127.0.0.1", []int{port}, 3*time.Second)
-		listened <- listenResult{a, o, err}
-	}()
-	// Wait for the listener.
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		c, err := net.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
-		if err == nil {
-			_ = c.Close()
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("listener never came up: %v", err)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	go func() { listened <- serveListeners(listeners, 3*time.Second, nil, io.Discard) }()
 
 	fx := policyscale.Build(policyscale.EgressAllowList())
-	const n = 50
+	const (
+		n        = 50
+		interval = 100 * time.Millisecond
+		duration = time.Second
+	)
+	payload := []byte("hold")
 	res := runHold(fx.NewSampler(1, policyscale.FlowModel{Direction: policyscale.Egress}).Next, holdConfig{
 		connections: n,
 		rate:        1000,
-		duration:    time.Second,
+		duration:    duration,
 		dialTimeout: time.Second,
-		interval:    100 * time.Millisecond,
-		payload:     []byte("hold"),
+		interval:    interval,
+		payload:     payload,
 		port:        port,
 		shards:      4,
 		targets:     []net.IP{net.ParseIP("127.0.0.1")},
-	})
+	}, nil, io.Discard)
 	if res.opened != n || res.openAtEnd != n || res.failed != 0 || res.closed != 0 {
 		t.Fatalf("hold: %+v", res)
 	}
 	lr := <-listened
-	// The probe connection above plus the held ones.
-	if lr.err != nil || lr.accepted != n+1 {
+	if lr.accepted != n {
 		t.Fatalf("listen: %+v", lr)
+	}
+	// Each connection was open for most of the second, so it was written to several times.
+	if min := uint64(n * len(payload) * 3); lr.bytes < min {
+		t.Fatalf("the sink read %d bytes, want at least %d from %d connections written every %s", lr.bytes, min, n, interval)
 	}
 }
