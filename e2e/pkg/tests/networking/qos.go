@@ -40,7 +40,7 @@ import (
 // bandwidth annotations produce the expected throughput limits on real traffic.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("QoS"),
+	describe.Covers(describe.AreaQoS),
 	describe.RunsAnywhere(),
 	"QoS Controls",
 	func() {

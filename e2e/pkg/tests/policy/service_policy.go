@@ -37,7 +37,7 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("NetworkPolicy"),
+	describe.Covers(describe.AreaNetworkPolicy),
 	framework.WithConformance(),
 	"service network policy",
 	func() {

@@ -48,7 +48,7 @@ const (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("IPAM"),
+	describe.Covers(describe.AreaIPAM),
 	describe.Requires(describe.CalicoIPAM),
 	describe.Requires(describe.RoutableIPPools),
 	describe.WithSerial(), // Modifies global IPAMConfiguration state.

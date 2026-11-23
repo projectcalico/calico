@@ -36,35 +36,6 @@ func WithTeam(team Team) any {
 	return framework.WithLabel(fmt.Sprintf("Team:%s", team))
 }
 
-// features is the set of high level features that are tested by the e2e tests.
-// Every suite must cover at least one of these.
-//
-// If you are unsure which feature to use, please ask!
-var features = map[string]bool{
-	"NetworkPolicy":   true,
-	"Tiered-Policy":   true,
-	"IPPool":          true,
-	"IPAM":            true,
-	"AutoHEPs":        true,
-	"Host-Protection": true,
-	"HostPorts":       true,
-	"OwnerReferences": true,
-	"MTU":             true,
-	"Maglev":          true,
-	"BGPPeer":         true,
-	"IPIP":            true,
-	"Tiered-RBAC":     true,
-	"Pods":            true,
-	"QoS":             true,
-	"Datapath":        true,
-	"IngressGateway":  true,
-	"Istio":           true,
-	"KubeVirt":        true,
-	"Wireguard":       true,
-	"Flow-Logs":       true,
-	"Windows":         true,
-}
-
 // Import of framework functions to keep imports in test files simpler.
 var (
 	WithSerial     = framework.WithSerial

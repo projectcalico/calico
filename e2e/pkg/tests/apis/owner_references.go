@@ -32,7 +32,7 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("OwnerReferences"),
+	describe.Covers(describe.AreaOwnerReferences),
 	describe.RunsAnywhere(),
 	"OwnerReference tests",
 	func() {

@@ -46,7 +46,7 @@ import (
 // local_pref) using a local BIRD container on the Docker network.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("KubeVirt"),
+	describe.Covers(describe.AreaKubeVirt),
 	describe.Requires(describe.KubeVirt),
 	describe.Requires(describe.MockVirt),
 	"KubeVirt live migration (MockVirt)",

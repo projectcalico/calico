@@ -131,7 +131,7 @@ func withPacketSizeServer(pod *v1.Pod) {
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("Datapath"),
+	describe.Covers(describe.AreaDatapath),
 	describe.Requires(describe.RapidClientImage),
 	"Packet Size Verification",
 	func() {

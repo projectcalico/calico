@@ -50,7 +50,7 @@ const (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("IngressGateway"),
+	describe.Covers(describe.AreaIngressGateway),
 	describe.WithSerial(),
 	describe.Requires(describe.Operator),
 	describe.Requires(describe.Goldmane),

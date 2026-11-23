@@ -42,7 +42,7 @@ import (
 // PRECONDITIONS:
 var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 	describe.WithSerial(),
-	describe.Covers("AutoHEPs"),
+	describe.Covers(describe.AreaAutoHEPs),
 	describe.Requires(describe.AutoHEPs),
 	// Ordered so the slow auto HEP toggle runs once per container, not per spec.
 	ginkgo.Ordered,

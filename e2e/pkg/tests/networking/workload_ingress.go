@@ -256,7 +256,7 @@ var ingressScenarioTable = []ingressScenario{
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("Datapath"),
+	describe.Covers(describe.AreaDatapath),
 	describe.RunsAnywhere(),
 	"Workload Ingress Datapath",
 	func() {

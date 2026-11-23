@@ -40,7 +40,7 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("Pods"),
+	describe.Covers(describe.AreaPods),
 	describe.RunsAnywhere(),
 	"Pod Termination Grace Period",
 	func() {

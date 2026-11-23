@@ -40,9 +40,9 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("NetworkPolicy"),
+	describe.Covers(describe.AreaNetworkPolicy),
 	describe.RunsAnywhere(),
-	describe.Covers("Windows"),
+	describe.Covers(describe.AreaWindows),
 	"Calico NetworkPolicy",
 	func() {
 		// Define variables common across all tests.

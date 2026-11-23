@@ -33,7 +33,7 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("IPPool"),
+	describe.Covers(describe.AreaIPPool),
 	describe.Requires(describe.Operator),
 
 	// Validation on non-Calico CNI clusters forces IP pools to use the 'all()' node selector.

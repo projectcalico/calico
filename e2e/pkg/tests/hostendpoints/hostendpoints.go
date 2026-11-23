@@ -52,7 +52,7 @@ import (
 // 4. Test the connectivity from clients on other nodes to the hostnetworked pod.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("Host-Protection"),
+	describe.Covers(describe.AreaHostProtection),
 	describe.RunsAnywhere(),
 	describe.WithSerial(),
 	"host endpoint tests",

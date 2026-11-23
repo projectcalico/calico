@@ -37,7 +37,7 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("IPIP"),
+	describe.Covers(describe.AreaIPIP),
 	describe.Requires(describe.NoEncap),
 	describe.Requires(describe.BGP),
 	describe.Requires(describe.Operator),

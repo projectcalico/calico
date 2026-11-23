@@ -29,7 +29,7 @@ const hostport = 8080
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("HostPorts"),
+	describe.Covers(describe.AreaHostPorts),
 	describe.Requires(describe.HostPorts),
 	describe.WithSerial(),
 	"HostPorts tests",

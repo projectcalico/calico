@@ -28,7 +28,7 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("MTU"),
+	describe.Covers(describe.AreaMTU),
 	describe.Requires(describe.CalicoMTU),
 	describe.Requires(describe.Operator),
 	"Automatic MTU tests",

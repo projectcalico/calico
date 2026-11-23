@@ -197,13 +197,3 @@ func Requires(c Capability) any {
 func RunsAnywhere() any {
 	return []any{}
 }
-
-// Covers marks a spec as exercising a feature, for suite includes and for the
-// per-feature views on the CI dashboard. The value must be in the coverage
-// list, so a typo can't create a feature nobody looks at.
-func Covers(feature string) any {
-	if !features[feature] {
-		framework.Failf("%s is not a supported feature", feature)
-	}
-	return framework.WithLabel("Covers:" + feature)
-}

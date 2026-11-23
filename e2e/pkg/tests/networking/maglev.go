@@ -56,7 +56,7 @@ func init() {
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("Maglev"),
+	describe.Covers(describe.AreaMaglev),
 	describe.Requires(describe.BPFDSR),
 	describe.Requires(describe.ExternalNode),
 	describe.Requires(describe.BPF),

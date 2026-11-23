@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/projectcalico/calico/e2e/pkg/cilanes"
+	"github.com/projectcalico/calico/e2e/pkg/describe"
 )
 
 const (
@@ -81,6 +82,51 @@ func TestRepoConfigsAreValid(t *testing.T) {
 			}
 		}
 	})
+}
+
+// coversArea matches the area in a Covers: label inside a label expression.
+var coversArea = regexp.MustCompile(`Covers:([A-Za-z0-9-]+)`)
+
+// unknownAreas returns the Covers: areas named in exprs that aren't in
+// describe.Areas. A suite selecting a misspelled area would select nothing
+// and fail no check of its own.
+func unknownAreas(exprs []string) []string {
+	var unknown []string
+	for _, e := range exprs {
+		for _, m := range coversArea.FindAllStringSubmatch(e, -1) {
+			if !describe.IsArea(describe.Area(m[1])) {
+				unknown = append(unknown, m[1])
+			}
+		}
+	}
+	return unknown
+}
+
+// TestConfigsCoverKnownAreas checks every Covers: label a config includes or
+// excludes against the areas specs can declare, so the YAML side is held to
+// the same list as describe.Covers.
+func TestConfigsCoverKnownAreas(t *testing.T) {
+	eachConfig(t, func(t *testing.T, rel string, cfg *Config) {
+		var exprs []string
+		for _, e := range cfg.Include.Labels {
+			exprs = append(exprs, e.Label)
+		}
+		for _, e := range cfg.Exclude.Labels {
+			exprs = append(exprs, e.Label)
+		}
+		if bad := unknownAreas(exprs); len(bad) > 0 {
+			t.Errorf("Covers: areas not in describe.Areas: %v", bad)
+		}
+	})
+}
+
+// TestUnknownAreasCatchesATypo proves the area check rejects a near miss and
+// accepts the real name, so TestConfigsCoverKnownAreas can't pass vacuously.
+func TestUnknownAreasCatchesATypo(t *testing.T) {
+	got := unknownAreas([]string{"sig-calico && (Covers:TieredRBAC || Covers:Tiered-RBAC)"})
+	if !slices.Equal(got, []string{"TieredRBAC"}) {
+		t.Errorf("want only the misspelled TieredRBAC flagged, got %v", got)
+	}
 }
 
 // TestThereIsOnePolicyFile keeps CI-wide label exclusions in one place, which

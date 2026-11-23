@@ -51,7 +51,7 @@ import (
 //   - At least 2 schedulable worker nodes
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("KubeVirt"),
+	describe.Covers(describe.AreaKubeVirt),
 	describe.Requires(describe.KubeVirt),
 	"KubeVirt IP persistence",
 	func() {

@@ -74,7 +74,7 @@ const (
 // PRECONDITIONS: The tiered RBAC webhook or Calico API server must be installed.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("Tiered-RBAC"),
+	describe.Covers(describe.AreaTieredRBAC),
 	describe.RunsAnywhere(),
 	"Tiered RBAC",
 	func() {
@@ -1351,7 +1351,7 @@ func tieredPolicyPassthrough(ctx context.Context, cs kubernetes.Interface) (*rba
 // PRECONDITIONS: The tiered RBAC webhook or Calico API server must be installed.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("Tiered-RBAC"),
+	describe.Covers(describe.AreaTieredRBAC),
 	describe.RunsAnywhere(),
 	"Tiered RBAC with tier-prefixed names",
 	func() {

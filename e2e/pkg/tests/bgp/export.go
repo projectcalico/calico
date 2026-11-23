@@ -34,7 +34,7 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("BGPPeer"),
+	describe.Covers(describe.AreaBGPPeer),
 	describe.Requires(describe.BGPRouting),
 	describe.Requires(describe.BGP),
 	describe.Requires(describe.Operator),

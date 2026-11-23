@@ -59,7 +59,7 @@ const (
 var _ = describe.CalicoDescribe(
 	describe.WithSerial(),
 	describe.WithTeam(describe.Core),
-	describe.Covers("Istio"),
+	describe.Covers(describe.AreaIstio),
 	describe.Requires(describe.Istio),
 	// Creates the operator.tigera.io Istio CR and waits for its TigeraStatus, so it
 	// needs an operator to reconcile it -- on a manifest install it would block

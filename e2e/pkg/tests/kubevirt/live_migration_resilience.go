@@ -62,7 +62,7 @@ const (
 //     spec here is the real-KubeVirt, user-initiated counterpart.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("KubeVirt"),
+	describe.Covers(describe.AreaKubeVirt),
 	describe.Requires(describe.KubeVirt),
 	describe.Requires(describe.RealKubeVirt),
 	"KubeVirt live migration resilience",

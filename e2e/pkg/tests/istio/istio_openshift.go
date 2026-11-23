@@ -47,7 +47,7 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithSerial(),
 	describe.WithTeam(describe.Core),
-	describe.Covers("Istio"),
+	describe.Covers(describe.AreaIstio),
 	describe.Requires(describe.Istio),
 	describe.Requires(describe.OpenShift),
 	"Istio OpenShift Platform Configuration",

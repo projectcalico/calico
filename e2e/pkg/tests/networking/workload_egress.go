@@ -61,7 +61,7 @@ type egressScenario struct {
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("Datapath"),
+	describe.Covers(describe.AreaDatapath),
 	describe.RunsAnywhere(),
 	"Workload Egress Datapath",
 	func() {

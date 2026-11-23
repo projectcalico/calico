@@ -53,7 +53,7 @@ import (
 // PRECONDITIONS:
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("Flow-Logs"),
+	describe.Covers(describe.AreaFlowLogs),
 	describe.Requires(describe.Goldmane),
 	"staged network policy",
 	func() {

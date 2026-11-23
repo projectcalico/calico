@@ -41,7 +41,7 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers("IPAM"),
+	describe.Covers(describe.AreaIPAM),
 	describe.Requires(describe.CalicoIPAM),
 	describe.WithSerial(), // Modifies global state, so run serially.
 	"IPAM GC",
