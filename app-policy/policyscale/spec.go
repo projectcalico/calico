@@ -69,11 +69,12 @@ type BaselineParams struct {
 	// DenyRules and AllowRules are spread at random over the rule slots; every other rule is a Pass.
 	DenyRules  int
 	AllowRules int
-	// IPSetRefFraction is the fraction of rules that reference an IP set. A referencing rule pairs
-	// the reference with a negated reference to the sentinel set (which holds the denied flow's
-	// addresses) so that it reaches the set lookup whatever order the engine evaluates criteria in
-	// and still misses when the referenced set is absent. Rules with no reference are guarded by a
-	// destination port no generated flow uses (BaselineGuardPort).
+	// IPSetRefFraction is the fraction of rules that reference an IP set. A rule whose set is left
+	// out of the store pairs the reference with a negated reference to the sentinel set (which
+	// holds the denied flow's addresses), so that it still misses when the engine skips the absent
+	// set. A rule whose set is present needs no such guard, and has none: Felix would fold it into
+	// the positive reference, leaving one set lookup per rule. Rules with no reference are guarded
+	// by a destination port no generated flow uses (BaselineGuardPort).
 	IPSetRefFraction float64
 	// MissingIPSets is how many referenced sets to leave out of the store, reproducing the
 	// "IPSet not found" warning storm seen when the store is out of sync.
