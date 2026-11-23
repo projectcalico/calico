@@ -27,6 +27,7 @@ type BlockAffinityInterface interface {
 	Create(ctx context.Context, blockAffinity *projectcalicov3.BlockAffinity, opts v1.CreateOptions) (*projectcalicov3.BlockAffinity, error)
 	Update(ctx context.Context, blockAffinity *projectcalicov3.BlockAffinity, opts v1.UpdateOptions) (*projectcalicov3.BlockAffinity, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
+	DeleteWithResult(ctx context.Context, name string, opts v1.DeleteOptions) (v1.APIResult, error)
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.BlockAffinity, error)
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.BlockAffinityList, error)

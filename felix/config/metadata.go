@@ -30,7 +30,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
-	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	v1 "k8s.io/apiextensions-api/pkg/apis/apiextensions/v1"
 
 	lcconfig "github.com/projectcalico/calico/libcalico-go/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"

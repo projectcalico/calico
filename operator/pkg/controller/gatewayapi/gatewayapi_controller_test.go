@@ -29,11 +29,12 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	apiextenv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextenv1 "k8s.io/apiextensions-api/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	gapi "sigs.k8s.io/gateway-api/apis/v1"
 	"sigs.k8s.io/yaml" // gopkg.in/yaml.v2 didn't parse all the fields but this package did
@@ -619,7 +620,19 @@ var _ = Describe("Gateway API controller tests", func() {
 		Expect(err).Should(HaveOccurred())
 	})
 
-	It("writes back defaults to the GatewayAPI CR", func() {
+	It("defaults GatewayClasses in memory and writes back only CRDManagement", func() {
+		var gatewayAPIPatches []string
+		c = interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
+			Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				if _, ok := obj.(*operatorv1.GatewayAPI); ok {
+					data, err := patch.Data(obj)
+					Expect(err).NotTo(HaveOccurred())
+					gatewayAPIPatches = append(gatewayAPIPatches, string(data))
+				}
+				return cl.Patch(ctx, obj, patch, opts...)
+			},
+		})
+		r.client = c
 		Expect(c.Create(ctx, installation)).NotTo(HaveOccurred())
 
 		By("applying the GatewayAPI CR to the fake cluster")
@@ -632,20 +645,17 @@ var _ = Describe("Gateway API controller tests", func() {
 		_, err := r.Reconcile(ctx, reconcile.Request{})
 		Expect(err).NotTo(HaveOccurred())
 
-		By("re-reading the GatewayAPI")
-		err = c.Get(ctx, utils.DefaultEnterpriseInstanceKey, gwapi)
+		By("checking that GatewayClasses is never written back")
+		Expect(gatewayAPIPatches).NotTo(ContainElement(ContainSubstring("gatewayClasses")))
+		Expect(c.Get(ctx, utils.DefaultEnterpriseInstanceKey, gwapi)).NotTo(HaveOccurred())
+		Expect(gwapi.Spec.GatewayClasses).To(BeNil())
+
+		By("checking that readers get the default GatewayClass")
+		got, _, err := GetGatewayAPI(ctx, c)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(got.Spec.GatewayClasses).To(Equal([]operatorv1.GatewayClassSpec{{Name: gatewayapi.GatewayClassName}}))
 
-		By("checking default GatewayClasses")
-		Expect(gwapi.Spec.GatewayClasses).To(HaveLen(1))
-		Expect(gwapi.Spec.GatewayClasses[0].Name).To(Equal("tigera-gateway-class"))
-		Expect(gwapi.Spec.GatewayClasses[0].EnvoyProxyRef).To(BeNil())
-		Expect(gwapi.Spec.GatewayClasses[0].GatewayKind).To(BeNil())
-		Expect(gwapi.Spec.GatewayClasses[0].GatewayDeployment).To(BeNil())
-		Expect(gwapi.Spec.GatewayClasses[0].GatewayDaemonSet).To(BeNil())
-		Expect(gwapi.Spec.GatewayClasses[0].GatewayService).To(BeNil())
-
-		By("checking default CRDManagement")
+		By("checking the inferred CRDManagement is written back")
 		Expect(gwapi.Spec.CRDManagement).NotTo(BeNil())
 		Expect(*gwapi.Spec.CRDManagement).To(Equal(operatorv1.CRDManagementReconcile))
 	})

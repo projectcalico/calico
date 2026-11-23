@@ -20,15 +20,16 @@ import (
 	"fmt"
 	"io"
 
-	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextv1 "k8s.io/apiextensions-api/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectcalico/calico/operator/pkg/render/common/helm"
 )
 
 var (
@@ -73,8 +74,6 @@ type ResourceOpts struct {
 func (r *ResourceOpts) GetResources(scheme *runtime.Scheme) (*IstioResources, error) {
 	var crds []client.Object
 
-	actionConfig := new(action.Configuration)
-
 	baseChart, err := loader.LoadArchive(bytes.NewReader(baseTgz))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load istio-base chart: %w", err)
@@ -92,15 +91,9 @@ func (r *ResourceOpts) GetResources(scheme *runtime.Scheme) (*IstioResources, er
 		return nil, fmt.Errorf("failed to load ztunnel chart: %w", err)
 	}
 
-	client := action.NewInstall(actionConfig)
-	client.DryRun = true
-	client.ClientOnly = true
-	client.Namespace = r.Namespace
-	client.ReleaseName = r.ReleaseName
-
 	res := &IstioResources{}
 	baseOptions, _ := toMap(r.BaseOpts)
-	rel, err := client.Run(baseChart, baseOptions)
+	rel, err := helm.Render(baseChart, baseOptions, r.ReleaseName, r.Namespace, false)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +104,7 @@ func (r *ResourceOpts) GetResources(scheme *runtime.Scheme) (*IstioResources, er
 	res.CRDs = append(res.CRDs, crds...)
 
 	istiodOptions, _ := toMap(r.IstiodOpts)
-	rel, err = client.Run(istiodChart, istiodOptions)
+	rel, err = helm.Render(istiodChart, istiodOptions, r.ReleaseName, r.Namespace, false)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +115,7 @@ func (r *ResourceOpts) GetResources(scheme *runtime.Scheme) (*IstioResources, er
 	res.CRDs = append(res.CRDs, crds...)
 
 	cniOptions, _ := toMap(r.IstioCNIOpts)
-	rel, err = client.Run(cniChart, cniOptions)
+	rel, err = helm.Render(cniChart, cniOptions, r.ReleaseName, r.Namespace, false)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +126,7 @@ func (r *ResourceOpts) GetResources(scheme *runtime.Scheme) (*IstioResources, er
 	res.CRDs = append(res.CRDs, crds...)
 
 	ztunnelOptions, _ := toMap(r.ZTunnelOpts)
-	rel, err = client.Run(ztunnelChart, ztunnelOptions)
+	rel, err = helm.Render(ztunnelChart, ztunnelOptions, r.ReleaseName, r.Namespace, false)
 	if err != nil {
 		return nil, err
 	}

@@ -385,6 +385,7 @@
 [sig-node] Probing container should mark readiness on pods to false and disable liveness probes while pod is in progress of terminating [NodeConformance]
 [sig-node] Probing container should mark readiness on pods to false while pod is in progress of terminating when a pod has a readiness probe [NodeConformance]
 [sig-node] Probing container should not be ready with an exec readiness probe timeout [NodeConformance]
+[sig-node] Probing container should not run liveness or readiness probes before startup probe succeeds after container restart [NodeConformance]
 [sig-node] Probing container should override timeoutGracePeriodSeconds when LivenessProbe field is set [NodeConformance]
 [sig-node] Probing container should override timeoutGracePeriodSeconds when StartupProbe field is set [NodeConformance]
 [sig-node] Probing container with readiness probe should not be ready before initial delay and never restart [Conformance] [NodeConformance]

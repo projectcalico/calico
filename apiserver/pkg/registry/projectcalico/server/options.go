@@ -153,11 +153,18 @@ func (o Options) GetStorage(
 	indexers *cache.Indexers,
 ) (registry.DryRunnableStorage, factory.DestroyFunc, error) {
 	if o.storageType == StorageTypeEtcd {
+		// Built the way upstream's defaultStoreKeyFuncs does. Production uses the
+		// calico storage type, not this one.
+		reverseKeyFunc := registry.NoNamespaceReverseKeyFunc(resourcePrefix)
+		if scopeStrategy.NamespaceScoped() {
+			reverseKeyFunc = registry.NamespaceReverseKeyFunc(resourcePrefix)
+		}
 		etcdRESTOpts := o.EtcdOptions.RESTOptions
 		storageInterface, dFunc, err := etcdRESTOpts.Decorator(
 			etcdRESTOpts.StorageConfig,
 			resourcePrefix,
 			keyFunc, /* keyFunc for decorator -- looks to be unused everywhere */
+			reverseKeyFunc,
 			newFunc,
 			newListFunc,
 			getAttrsFunc,

@@ -999,7 +999,7 @@ var _ = Describe("Testing core-controller installation", func() {
 							IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
 							ClusterIP:  "1.2.3.4",
 							Ports: []corev1.ServicePort{
-								{Name: "https", Port: 443, TargetPort: intstr.FromInt(443)},
+								{Name: "https", Port: 443, TargetPort: intstr.FromInt32(443)},
 							},
 						},
 					})
@@ -1136,7 +1136,7 @@ var _ = Describe("Testing core-controller installation", func() {
 								IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol, corev1.IPv6Protocol},
 								ClusterIPs: []string{"1.2.3.4", "fd00::1"},
 								Ports: []corev1.ServicePort{
-									{Name: "https", Port: 443, TargetPort: intstr.FromInt(443)},
+									{Name: "https", Port: 443, TargetPort: intstr.FromInt32(443)},
 								},
 							},
 						})).NotTo(HaveOccurred())
@@ -3335,12 +3335,11 @@ var _ = Describe("AWS VPC CNI annotation admission policy", func() {
 		installation     *operator.Installation
 	)
 
-	awsNode := func(sa, deprecatedSA string) *appsv1.DaemonSet {
+	awsNode := func(sa string) *appsv1.DaemonSet {
 		return &appsv1.DaemonSet{
 			ObjectMeta: metav1.ObjectMeta{Name: "aws-node", Namespace: metav1.NamespaceSystem},
 			Spec: appsv1.DaemonSetSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
-				ServiceAccountName:       sa,
-				DeprecatedServiceAccount: deprecatedSA,
+				ServiceAccountName: sa,
 			}}},
 		}
 	}
@@ -3394,13 +3393,12 @@ var _ = Describe("AWS VPC CNI annotation admission policy", func() {
 			}
 		},
 		Entry("Calico CNI, no aws-node DaemonSet", &operator.CNISpec{Type: operator.PluginCalico}, nil, ""),
-		Entry("Calico CNI, aws-node as another account", &operator.CNISpec{Type: operator.PluginCalico}, awsNode("custom-cni", ""), ""),
+		Entry("Calico CNI, aws-node as another account", &operator.CNISpec{Type: operator.PluginCalico}, awsNode("custom-cni"), ""),
 		Entry("no CNI set", nil, nil, ""),
-		Entry("AWS VPC CNI, aws-node", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode("aws-node", ""), ""),
-		Entry("AWS VPC CNI, aws-node in the deprecated field", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode("", "aws-node"), ""),
+		Entry("AWS VPC CNI, aws-node", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode("aws-node"), ""),
 		Entry("AWS VPC CNI, no aws-node DaemonSet (renamed)", &operator.CNISpec{Type: operator.PluginAmazonVPC}, nil, "no kube-system/aws-node DaemonSet"),
-		Entry("AWS VPC CNI, another account", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode("custom-cni", ""), `service account "custom-cni"`),
-		Entry("AWS VPC CNI, no account named, so default", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode("", ""), `service account "default"`),
+		Entry("AWS VPC CNI, another account", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode("custom-cni"), `service account "custom-cni"`),
+		Entry("AWS VPC CNI, no account named, so default", &operator.CNISpec{Type: operator.PluginAmazonVPC}, awsNode(""), `service account "default"`),
 	)
 
 	It("should install the policy in its own set", func() {
