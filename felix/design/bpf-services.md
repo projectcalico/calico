@@ -576,6 +576,29 @@ service it programs, and otherwise picks one no frontend entry uses.
   stable across such an outage, so retaining it is safe. Every other
   service still drops to zero.
 
+### LoadBalancer services with no endpoints
+
+When a LoadBalancer service has no ready backends, kube-proxy normally rejects
+traffic to the VIP and may generate an ICMP port-unreachable response. This is
+undesirable for load-balancer setups where the VIP should stay routable so that
+another node can handle the traffic.
+
+The service annotation
+`lb.projectcalico.org/no-endpoints-action: Forward` opts a LoadBalancer VIP
+into this behavior. Felix adds the VIP and service-port tuple to the
+no-endpoints chain and allows traffic from local workloads to continue through
+normal routing. The BPF proxy carries the equivalent `NAT_NO_BACKEND_FORWARD`
+lookup result and `NAT_FLG_NO_BACKEND_FORWARD` frontend flag. The default, an
+unknown annotation value, and traffic from external interfaces retain the
+normal no-endpoints handling.
+
+This exception is limited to workload traffic. It applies to the iptables and
+nftables rule-generation path; BPF uses the NAT lookup result and frontend
+flag. The kube-proxy ordering and `ChainInsertMode=Append` setting must be
+considered because kube-proxy can reject the packet before Felix's exception is
+reached. The behavior should be validated separately on nftables, where
+kube-proxy rules in another table may still reject the packet.
+
 ### Review notes
 
 - A change to Kubernetes Service/Endpoint semantics (new field,
