@@ -81,9 +81,10 @@ var KnownDifferences = []KnownDifference{
 	},
 	{
 		Difference: SCTPPorts,
-		Where:      []Where{Iptables, Nftables},
+		Where:      []Where{Iptables, Nftables, BPF},
 		Why: "The flow-log collector reads no ports from SCTP packets it logs, so it works out the " +
-			"pending verdict of an SCTP flow with ports of zero.",
+			"pending verdict of an SCTP flow with ports of zero. BPF reads no SCTP ports either, so " +
+			"there a rule with SCTP ports never matches, enforced or pending.",
 		Generated: true,
 	},
 	{
