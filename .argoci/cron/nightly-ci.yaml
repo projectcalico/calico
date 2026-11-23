@@ -101,6 +101,7 @@ includes:
   - path: .argoci/modules/20-node.yaml
   - path: .argoci/modules/20-node-kind.yaml
   - path: .argoci/modules/45-nft-bench.yaml
+  - path: .argoci/modules/46-policy-eval-bench.yaml
   - path: .argoci/modules/20-gateway-conformance.yaml
   - path: .argoci/modules/20-felix.yaml
   - path: .argoci/modules/40-openstack.yaml
