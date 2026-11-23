@@ -462,9 +462,9 @@ func (pr *gatewayAPIImplementationComponent) ObjectsBeforeOverrides() ([]client.
 	// Helm-rendered envoy-gateway controller in calico-system.
 	objs = append(objs, pr.controllerObjects()...)
 
-	// Render each GatewayClass declared on the CR. The controller patches in
-	// the default [{Name: "tigera-gateway-class"}] when Spec.GatewayClasses is
-	// nil, so this loop is the single source of truth for what gets emitted.
+	// Render each GatewayClass declared on the CR. The controller defaults a nil
+	// Spec.GatewayClasses to [{Name: "tigera-gateway-class"}] in memory, so this
+	// loop is the single source of truth for what gets emitted.
 	for i := range pr.cfg.GatewayAPI.Spec.GatewayClasses {
 		className := pr.cfg.GatewayAPI.Spec.GatewayClasses[i].Name
 		proxy := pr.envoyProxyConfig(className, common.CalicoNamespace, pr.cfg.CustomEnvoyProxies[className], &(pr.cfg.GatewayAPI.Spec.GatewayClasses[i]))
