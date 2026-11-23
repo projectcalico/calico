@@ -66,22 +66,21 @@ steps:
 
   - name: felix-static-checks
     env:
-      - name: CALICO_IMAGE_TAR
-        value: /cache/calico-image/calico.tar
       - name: CALICO_BUILD_DIR
         value: /cache/calico-build
-      - name: BUILD_CACHE_GROUP
-        value: calico
-    depends: [build-calico-image, check-go]
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    depends: [build-calico-binary, check-go, go-cache]
     timeout: 30m
     requests: {cpu: 4000m, memory: 6Gi}
-    services:
-      - docker
     cache:
       - {name: calico-build, mode: read, path: /cache/calico-build}
-      - {name: calico-image, mode: read, path: /cache/calico-image}
+      - {name: go, mode: read, path: /cache/go}
     commands: |
-      .argoci/scripts/load-cached-images calico
+      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" felix-static-checks) || exit 1; eval "$go_env"
       .semaphore/scripts/load-felix-prereqs.sh
       cd felix
       make static-checks
@@ -262,15 +261,21 @@ steps:
 
   - name: felix-build-windows
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    depends: [go-cache]
     jobSize: large
     requests: {cpu: 7000m, memory: 8Gi}
-    services:
-      - docker
+    cache:
+      - {name: go, mode: read, path: /cache/go}
     commands: |
+      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" felix-build-windows) || exit 1; eval "$go_env"
       cd felix
-      make bin/calico-felix.exe fv/win-fv.exe
+      # REMOTE_DEPS= because the FV binary does not need the images it lists.
+      make REMOTE_DEPS= bin/calico-felix.exe fv/win-fv.exe
       artifact push workflow fv/win-fv.exe
 
   # Kubeadm on Azure VMs, installed from this commit's images.

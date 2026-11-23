@@ -3,11 +3,10 @@ version: condensed-module
 
 defaults:
   timeout: 1h
-  services:
-    - docker
 
 steps:
   - name: operator-ci
+    services: [docker]
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
@@ -22,9 +21,18 @@ steps:
       artifact push job report --destination test-results || true
 
   # Pure Go, so cross-compiling is all the per-architecture coverage it needs.
+  # go-cache's builds are amd64, so these take only its modules.
   - name: operator-build
-    depends: [check-go]
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    depends: [check-go, go-cache]
     requests: {cpu: 5000m, memory: 8Gi}
+    cache:
+      - {name: go, mode: read, path: /cache/go}
     matrix:
       - name: arm64
         env: [{name: ARCH, value: arm64}]
@@ -33,12 +41,14 @@ steps:
       - name: s390x
         env: [{name: ARCH, value: s390x}]
     commands: |
+      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" operator-build) || exit 1; eval "$go_env"
       cd operator
       make build ARCH=$ARCH
 
   # Every image the FV installs must reach the local registry first; a missing
   # producer shows up as calico-node stuck in Init.
   - name: operator-fv
+    services: [docker]
     env:
       - name: CALICO_IMAGE_TAR
         value: /cache/calico-image/calico.tar
