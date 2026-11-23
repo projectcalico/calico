@@ -7,7 +7,7 @@ User=root
 ExecStartPre=/usr/bin/mkdir -p /var/run/calico
 ExecStart=/usr/bin/calico-felix
 KillMode=process
-Restart=on-failure
+Restart=always
 LimitNOFILE=32000
 
 [Install]
