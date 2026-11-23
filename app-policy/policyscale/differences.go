@@ -86,8 +86,8 @@ var knownDifferences = []KnownDifference{
 		Where:      []Where{Nftables},
 		Why: "Felix renders a negated ICMP type and code for nftables as icmp type != T code != C, which " +
 			"would exclude a packet only when both differ, where iptables, BPF and the evaluator exclude " +
-			"only the exact pair (EV-7634). nft rejects that rule, so it never loads (EV-7640, " +
-			"ICMPTypeAndCodeRules); the difference shows once nftables loads it.",
+			"only the exact pair. nft rejects that rule, so it never loads (see ICMPTypeAndCodeRules); " +
+			"the difference shows once nftables loads it.",
 		Generated: true,
 	},
 	{
@@ -126,7 +126,7 @@ var knownDifferences = []KnownDifference{
 		Where:      []Where{Nftables},
 		Why: "Felix renders an ICMP type-and-code match for nftables as icmp type T code C, and the " +
 			"negated one as icmp type != T code != C, which nft rejects. Felix then can't program its " +
-			"table at all, and exits (EV-7640).",
+			"table at all, and exits.",
 		Generated:  true,
 		WholeRules: true,
 	},
@@ -134,7 +134,7 @@ var knownDifferences = []KnownDifference{
 		Difference: ProtocolNamesOnBPF,
 		Where:      []Where{BPF},
 		Why: "BPF doesn't know the protocol names ICMPv6 and UDPLite, so a rule that names either never " +
-			"matches there, enforced or pending (EV-7633).",
+			"matches there, enforced or pending; fixed by projectcalico/calico#14706.",
 		Generated: true,
 	},
 	{
