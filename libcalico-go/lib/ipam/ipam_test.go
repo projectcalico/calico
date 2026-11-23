@@ -4460,7 +4460,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		Entry("Assign 1 IPv6 from a configured pool", net.ParseIP("fd80:24e2:f998:72d6::"), "test-host", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, nil),
 
 		// Test 3: Assign 1 IPv4 from a non-configured pool - expect an error returned.
-		Entry("Assign 1 IPv4 from a non-configured pool", net.ParseIP("1.1.1.1"), "test-host", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, errors.New("The provided IP address is not in a configured pool\n")),
+		Entry("Assign 1 IPv4 from a non-configured pool", net.ParseIP("1.1.1.1"), "test-host", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, ErrNotInPool),
 
 		// Test 4: Assign 1 IPv4 from a configured pool twice:
 		// - Expect no error returned while assigning the IP for the first time.
