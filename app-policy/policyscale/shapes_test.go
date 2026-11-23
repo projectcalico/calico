@@ -428,7 +428,7 @@ func TestUnparsedProtocolsMarked(t *testing.T) {
 // its fields is split into several, which the rules still pick by one label: together they hold
 // exactly the set's members.
 func TestLargeSetsAreSplit(t *testing.T) {
-	fx := Build(Baseline())
+	fx := baselineFixture()
 	byLabel := map[string][]string{}
 	largest := 0
 	for _, obj := range fx.Resources(ResourceOptions{}) {
