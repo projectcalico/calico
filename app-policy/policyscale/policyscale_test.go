@@ -104,8 +104,9 @@ func TestMissingSets(t *testing.T) {
 		t.Errorf("store sets: got %d, want %d", got, 3709-8)
 	}
 	// Every resource is still rendered: a cluster never has a missing set.
-	if got := countKind(fx.Resources(ResourceOptions{}), v3.KindGlobalNetworkSet); got != 3709 {
-		t.Errorf("rendered sets: got %d, want 3709", got)
+	// The largest set is rendered as six network sets.
+	if got := countKind(fx.Resources(ResourceOptions{}), v3.KindGlobalNetworkSet); got != 3709+5 {
+		t.Errorf("rendered sets: got %d, want %d", got, 3709+5)
 	}
 }
 
@@ -264,7 +265,7 @@ func TestResourcesValidateAndRoundTrip(t *testing.T) {
 	if got := countKind(objs, v3.KindGlobalNetworkPolicy); got != 294+301 {
 		t.Errorf("policies: %d", got)
 	}
-	if got := countKind(objs, v3.KindGlobalNetworkSet); got != 3708+3862 {
+	if got := countKind(objs, v3.KindGlobalNetworkSet); got != 3708+3862+5 { // The largest set is split in six.
 		t.Errorf("sets: %d", got)
 	}
 
@@ -379,7 +380,7 @@ func TestStagedResources(t *testing.T) {
 	if got := countKind(objs, v3.KindTier); got != 1 {
 		t.Errorf("tiers: %d", got)
 	}
-	if got := countKind(objs, v3.KindGlobalNetworkSet); got != 3708+3862 {
+	if got := countKind(objs, v3.KindGlobalNetworkSet); got != 3708+3862+5 { // The largest set is split in six.
 		t.Errorf("sets: %d", got)
 	}
 	staged := 0
