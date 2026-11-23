@@ -34,6 +34,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 
 	"github.com/projectcalico/calico/app-policy/policyscale"
@@ -58,21 +59,16 @@ func run() (err error) {
 		direction = flag.String("direction", "egress", "direction of the printed flows: ingress or egress")
 		miss      = flag.Float64("miss-fraction", 0.1, "fraction of printed flows that match no rule; not used by the shapes preset")
 		repeat    = flag.Float64("repeat-fraction", 0.5, "fraction of printed flows that repeat an earlier one with a new source port; not used by the shapes preset")
+		overDst   = flag.String("override-dst", "", "with -flows: give each flow this destination before working out its expected trace, as flowgen -override-dst sends it")
+		printFP   = flag.Bool("fingerprint", false, "print the fingerprint of the policy set and exit; every rendered object carries it in the "+policyscale.FixtureLabel+" label")
+		prefixes  = flag.Bool("prefixes", false, "print the address ranges the policy set's flows use, one per line, and exit: the routes a sink needs and the sources an ingress run spoofs")
 	)
+	flag.Usage = usage
 	flag.Parse()
 
-	var spec policyscale.Spec
-	switch *preset {
-	case "baseline":
-		spec = policyscale.Baseline()
-	case "egress":
-		spec = policyscale.EgressAllowList()
-	case "composite":
-		spec = policyscale.Composite()
-	case "shapes":
-		spec = policyscale.RuleShapes()
-	default:
-		return fmt.Errorf("unknown preset %q", *preset)
+	spec, err := policyscale.Preset(*preset, *seed)
+	if err != nil {
+		return err
 	}
 	var dir policyscale.Direction
 	switch *direction {
@@ -83,13 +79,27 @@ func run() (err error) {
 	default:
 		return fmt.Errorf("unknown direction %q", *direction)
 	}
-	spec.Seed = *seed
+	var dst net.IP
+	if *overDst != "" {
+		if dst = net.ParseIP(*overDst); dst == nil {
+			return fmt.Errorf("bad -override-dst %q", *overDst)
+		}
+	}
 	spec.Profile = *profile
-	spec = policyscale.ScaleFromEnv(spec)
 	if err := spec.Validate(); err != nil {
 		return err
 	}
 	fx := policyscale.Build(spec)
+	switch {
+	case *printFP:
+		fmt.Println(fx.Fingerprint())
+		return nil
+	case *prefixes:
+		for _, p := range fx.Prefixes() {
+			fmt.Println(p)
+		}
+		return nil
+	}
 
 	var w io.Writer = os.Stdout
 	if *out != "-" {
@@ -103,8 +113,8 @@ func run() (err error) {
 	bw := bufio.NewWriter(w)
 	defer func() { err = errors.Join(err, bw.Flush()) }()
 
-	fmt.Fprintf(os.Stderr, "%s: %d ingress rules in %d policies, %d egress rules in %d policies, %d IP sets with %d members\n",
-		*preset, fx.Rules(policyscale.Ingress), fx.Policies(policyscale.Ingress),
+	fmt.Fprintf(os.Stderr, "%s (fingerprint %s): %d ingress rules in %d policies, %d egress rules in %d policies, %d IP sets with %d members\n",
+		*preset, fx.Fingerprint(), fx.Rules(policyscale.Ingress), fx.Policies(policyscale.Ingress),
 		fx.Rules(policyscale.Egress), fx.Policies(policyscale.Egress), fx.IPSets(), fx.IPSetMembers())
 
 	if *flows == 0 {
@@ -131,6 +141,9 @@ func run() (err error) {
 	s := fx.NewSampler(*seed, policyscale.FlowModel{Direction: dir, MissFraction: *miss, RepeatFraction: *repeat})
 	for i := 0; i < *flows; i++ {
 		f := s.Next()
+		if dst != nil {
+			f.DstIP = dst
+		}
 		pw.printf("%d\t%s\t%d\t%s\t%d\t%v\n", f.Protocol, f.SrcIP, f.SrcPort, f.DstIP, f.DstPort, expect(f))
 	}
 	return pw.err
@@ -146,4 +159,17 @@ func (p *printer) printf(format string, args ...any) {
 	if p.err == nil {
 		_, p.err = fmt.Fprintf(p.w, format, args...)
 	}
+}
+
+func usage() {
+	out := flag.CommandLine.Output()
+	_, _ = fmt.Fprintf(out, `Usage: policyscale [flags]
+
+Renders a generated policy set as Calico resources, or prints flows with the traces a cluster with
+that set reports for them. The preset, -seed and the POLICYSCALE_POLICIES,
+POLICYSCALE_RULES_PER_POLICY and POLICYSCALE_IPSETS environment variables (which scale the egress
+allow-list) decide the set; flowgen must run with the same ones.
+
+`)
+	flag.PrintDefaults()
 }
