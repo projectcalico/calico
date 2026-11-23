@@ -77,8 +77,8 @@ func TestEvaluateAgreesWithOracle(t *testing.T) {
 
 // differentialCorpus draws the flows a fixture is checked with, in every direction it has rules
 // for: the denied flow, a flow aimed at every stride-th rule, and sampled flows following a flow
-// model. Aimed flows are also replayed as UDP (no generated rule names a protocol, so the verdict
-// must not change), and a few with an invalid protocol and with a nil address.
+// model. Aimed flows are also replayed as UDP, and a few with an invalid protocol and with a nil
+// address.
 func differentialCorpus(fx *policyscale.Fixture, seed int64, sampled, stride int) []corpusFlow {
 	var corpus []corpusFlow
 	for _, dir := range []policyscale.Direction{policyscale.Ingress, policyscale.Egress} {
