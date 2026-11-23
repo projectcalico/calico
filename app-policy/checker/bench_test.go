@@ -16,15 +16,16 @@ package checker
 
 // Benchmark for Evaluate() at the scale observed in a large production deployment:
 // hundreds of "baseline" policies that apply to every endpoint, and thousands of IP
-// sets. All data is synthetic; the scale parameters and the IP set size distribution
-// are anonymized measurements taken from the deployment's diagnostics.
+// sets. The policy set is policyscale's Baseline preset, built from anonymized
+// measurements of the deployment's diagnostics; policyscale also renders it as Calico
+// resources, so this number and a node-level run describe the same set.
 //
 // Run with:
 //
 //	go test ./app-policy/checker/ -run '^$' -bench BenchmarkEvaluateBaselinePolicyScale \
 //	    -benchmem -benchtime 100x -cpu 1
 //
-// The MissingSets variants delete some referenced IP sets from the store, so every
+// The MissingSets variants leave some referenced IP sets out of the store, so every
 // evaluation looks up sets that are not there — the condition behind the "IPSet not
 // found" logs seen in production when the policy store is out of sync. Those lookups
 // are aggregated into one line per interval, so the variants measure what that leaves
@@ -36,10 +37,7 @@ package checker
 // deployment pays the log write on top of the formatting cost measured here.
 
 import (
-	"fmt"
 	"io"
-	"math/rand"
-	"net"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -47,111 +45,64 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/app-policy/policyscale"
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/hack/perf/perfdoc"
 	"github.com/projectcalico/calico/lib/logrusr"
 	log "github.com/projectcalico/calico/lib/std/log"
-)
-
-// baselinePolicyScaleParams describes a policy store dominated by "baseline" policies:
-// every policy applies to the endpoint, and almost every rule is a Pass. The defaults
-// are the anonymized per-node scale measured in a large production deployment.
-type baselinePolicyScaleParams struct {
-	seed             int64
-	numPolicies      int
-	rulesPerPolicy   int
-	numDenyRules     int     // Rules with a "deny" action, spread at random; the rest are "pass".
-	numAllowRules    int     // As numDenyRules, but "allow".
-	ipsetRefFraction float64 // Fraction of rules that reference an IP set.
-	numMissingIPSets int     // Referenced IP sets to delete from the store ("IPSet not found" storm).
-}
-
-func defaultBaselinePolicyScaleParams() baselinePolicyScaleParams {
-	return baselinePolicyScaleParams{
-		seed:             20200,
-		numPolicies:      294,
-		rulesPerPolicy:   68,
-		numDenyRules:     10,
-		numAllowRules:    1,
-		ipsetRefFraction: 0.242, // ~4,838 IP set references across 294*68 rules.
-	}
-}
-
-// ipSetSizeHistogram is the per-node IP set size distribution measured in the same
-// deployment: 3,708 sets, ~256k members in total, dominated by tiny sets with a long
-// tail of large ones.
-var ipSetSizeHistogram = []struct{ numSets, minSize, maxSize int }{
-	{4, 0, 0},
-	{3035, 1, 9},
-	{446, 10, 99},
-	{64, 100, 999},
-	{158, 1000, 9999},
-	{1, 54566, 54566},
-}
-
-// The benchmark flow. TEST-NET addresses; generated IP set members and rule CIDRs all
-// come from 10.0.0.0/8, so no rule ever matches on address and the walk covers the
-// whole policy set.
-const (
-	benchSourceIP   = "192.0.2.10"
-	benchDestIP     = "198.51.100.20"
-	benchSourcePort = 45000
-	benchDestPort   = 8080
-
-	// benchSentinelIPSetID is a set containing the flow's addresses; see makeScaleRule.
-	benchSentinelIPSetID = "s:bench-sentinel"
 )
 
 // benchTraceSink prevents the compiler from eliminating the Evaluate call.
 var benchTraceSink []*calc.RuleID
 
 func BenchmarkEvaluateBaselinePolicyScale(b *testing.B) {
-	missingSetsParams := func() baselinePolicyScaleParams {
-		p := defaultBaselinePolicyScaleParams()
-		p.numMissingIPSets = 8
-		return p
+	missingSetsSpec := func() policyscale.Spec {
+		spec := policyscale.Baseline()
+		spec.Baseline.MissingIPSets = 8
+		return spec
 	}
 
 	b.Run("AllSetsPresent", func(b *testing.B) {
 		benchEvaluateBaselinePolicyScale(b, benchRun{
-			params: defaultBaselinePolicyScaleParams(), logLevel: logrus.WarnLevel,
+			spec: policyscale.Baseline(), logLevel: logrus.WarnLevel,
 		})
 	})
 	b.Run("MissingSets", func(b *testing.B) {
 		benchEvaluateBaselinePolicyScale(b, benchRun{
-			params: missingSetsParams(), logLevel: logrus.WarnLevel,
+			spec: missingSetsSpec(), logLevel: logrus.WarnLevel,
 		})
 	})
 	// As MissingSets but with warnings disabled, so the aggregator drops each miss at its
 	// level gate: what separates this from MissingSets is the aggregator's bookkeeping.
 	b.Run("MissingSetsLogsOff", func(b *testing.B) {
 		benchEvaluateBaselinePolicyScale(b, benchRun{
-			params: missingSetsParams(), logLevel: logrus.ErrorLevel,
+			spec: missingSetsSpec(), logLevel: logrus.ErrorLevel,
 		})
 	})
 	// As MissingSets but writing a line per miss, which is what this call site did before
 	// it was aggregated: what separates this from MissingSets is what aggregation saves.
 	b.Run("MissingSetsUnaggregated", func(b *testing.B) {
 		benchEvaluateBaselinePolicyScale(b, benchRun{
-			params: missingSetsParams(), logLevel: logrus.WarnLevel, unaggregated: true,
+			spec: missingSetsSpec(), logLevel: logrus.WarnLevel, unaggregated: true,
 		})
 	})
 	// Fixed per-Evaluate overhead: the first rule of the first policy matches, so the
 	// walk short-circuits immediately.
 	b.Run("MatchEarly", func(b *testing.B) {
 		benchEvaluateBaselinePolicyScale(b, benchRun{
-			params: defaultBaselinePolicyScaleParams(), logLevel: logrus.WarnLevel, matchEarly: true,
+			spec: policyscale.Baseline(), logLevel: logrus.WarnLevel, matchEarly: true,
 		})
 	})
 }
 
-// benchRun is one variant: the store to evaluate against, and how the logging that the
-// evaluation provokes is set up.
+// benchRun is one variant: the policy set to evaluate against, and how the logging that
+// the evaluation provokes is set up.
 type benchRun struct {
-	params baselinePolicyScaleParams
+	spec policyscale.Spec
 
 	// Level the log backend is set to. The missing-set line is reported at Warn, so
 	// anything above that closes its level gate.
@@ -165,8 +116,15 @@ type benchRun struct {
 }
 
 func benchEvaluateBaselinePolicyScale(b *testing.B, run benchRun) {
-	p := run.params
+	fx := policyscale.Build(run.spec)
+	for _, engine := range benchEngines {
+		b.Run(engine.name, func(b *testing.B) {
+			benchEvaluateBaselinePolicyScaleWith(b, run, fx, engine)
+		})
+	}
+}
 
+func benchEvaluateBaselinePolicyScaleWith(b *testing.B, run benchRun, fx *policyscale.Fixture, engine benchEngine) {
 	logger := logrus.StandardLogger()
 	restoreLogging := withBenchLogging(run.logLevel)
 	oldMissingIPSets := missingIPSets
@@ -175,17 +133,12 @@ func benchEvaluateBaselinePolicyScale(b *testing.B, run benchRun) {
 		missingIPSets = oldMissingIPSets
 	}()
 
-	store, ep, expectedMisses := buildBaselinePolicyStore(p)
+	store, ep := engine.newStore(fx), fx.Endpoint()
+	expectedMisses := fx.MissingSetReferences()
 	if run.matchEarly {
 		addMatchEarlyPolicy(store, ep)
 	}
-	flow := &MockFlow{
-		SourceIP:   net.ParseIP(benchSourceIP),
-		DestIP:     net.ParseIP(benchDestIP),
-		SourcePort: benchSourcePort,
-		DestPort:   benchDestPort,
-		Protocol:   6, // TCP
-	}
+	flow := fx.DeniedFlow(policyscale.Ingress)
 
 	// Pre-flight outside the timed loop: prove the walk is the intended one and that the
 	// number of missing-set lookups matches the analytic count, so misses/op is exact.
@@ -220,17 +173,23 @@ func benchEvaluateBaselinePolicyScale(b *testing.B, run benchRun) {
 	}
 
 	b.ReportAllocs()
+	rec := perfdoc.Start(b)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		benchTraceSink, _ = Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
 	}
 	b.StopTimer()
 	b.ReportMetric(float64(expectedMisses), "misses/op")
-	rulesWalked := p.numPolicies * p.rulesPerPolicy
+	rulesWalked := fx.Rules(policyscale.Ingress)
 	if run.matchEarly {
 		rulesWalked = 1
 	}
-	b.ReportMetric(float64(rulesWalked), "rules/op")
+	reportEngineCase(b, rec, fx, engineCase{
+		engine:     engine.name,
+		dir:        policyscale.Ingress,
+		rulesPerOp: rulesWalked,
+		fields:     map[string]any{"misses_per_op": expectedMisses},
+	})
 }
 
 // newMissingIPSetsLogger builds a stand-in for the checker's missing-IP-set logger that
@@ -242,123 +201,6 @@ func newMissingIPSetsLogger(target log.Logger) *log.AggregatingLogger {
 		opts = append(opts, log.OptLogger(target))
 	}
 	return log.NewAggregatingLogger("IPSet not found", "ipsets", opts...)
-}
-
-// buildBaselinePolicyStore builds a policy store at the given scale, plus an endpoint
-// whose single "perimeter" tier applies every policy. It returns the number of rule
-// references to deleted (missing) IP sets, which is exactly the number of missing-set
-// lookups one Evaluate of a non-matching flow makes.
-func buildBaselinePolicyStore(p baselinePolicyScaleParams) (*policystore.PolicyStore, *proto.WorkloadEndpoint, int) {
-	rng := rand.New(rand.NewSource(p.seed))
-	store := policystore.NewPolicyStore()
-	setIDs := makeScaleIPSets(rng, store)
-
-	// Pick the rule slots that get the few non-Pass actions.
-	numRules := p.numPolicies * p.rulesPerPolicy
-	specialAction := map[int]string{}
-	for len(specialAction) < p.numDenyRules {
-		specialAction[rng.Intn(numRules)] = "deny"
-	}
-	for n := 0; n < p.numAllowRules; {
-		slot := rng.Intn(numRules)
-		if _, ok := specialAction[slot]; !ok {
-			specialAction[slot] = "allow"
-			n++
-		}
-	}
-
-	tier := &proto.TierInfo{Name: "perimeter", DefaultAction: "Deny"}
-	var referencedIDs []string
-	refCount := map[string]int{}
-	ruleIdx := 0
-	for i := 0; i < p.numPolicies; i++ {
-		policyID := &proto.PolicyID{Name: fmt.Sprintf("policy-%03d", i), Kind: v3.KindGlobalNetworkPolicy}
-		policy := &proto.Policy{Tier: tier.Name}
-		for j := 0; j < p.rulesPerPolicy; j++ {
-			action := specialAction[ruleIdx]
-			if action == "" {
-				action = "pass"
-			}
-			rule, refID := makeScaleRule(rng, setIDs, action, p.ipsetRefFraction)
-			policy.InboundRules = append(policy.InboundRules, rule)
-			if refID != "" {
-				if refCount[refID] == 0 {
-					referencedIDs = append(referencedIDs, refID)
-				}
-				refCount[refID]++
-			}
-			ruleIdx++
-		}
-		store.PolicyByID[types.ProtoToPolicyID(policyID)] = policy
-		tier.IngressPolicies = append(tier.IngressPolicies, policyID)
-	}
-
-	// Delete some referenced sets to reproduce the "IPSet not found" storm.
-	rng.Shuffle(len(referencedIDs), func(a, b int) {
-		referencedIDs[a], referencedIDs[b] = referencedIDs[b], referencedIDs[a]
-	})
-	expectedMisses := 0
-	for _, id := range referencedIDs[:p.numMissingIPSets] {
-		delete(store.IPSetByID, id)
-		expectedMisses += refCount[id]
-	}
-
-	ep := &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{tier}}
-	return store, ep, expectedMisses
-}
-
-// makeScaleIPSets populates the store with NET-type IP sets (the dominant type in the
-// measured deployment: selector and networkset derived sets) following the measured
-// size histogram. Members are unique /32s from 10.0.0.0/8.
-func makeScaleIPSets(rng *rand.Rand, store *policystore.PolicyStore) []string {
-	sentinel := policystore.NewIPSet(proto.IPSetUpdate_NET)
-	sentinel.AddString(benchSourceIP + "/32")
-	sentinel.AddString(benchDestIP + "/32")
-	store.IPSetByID[benchSentinelIPSetID] = sentinel
-
-	var ids []string
-	member := 0
-	for _, bucket := range ipSetSizeHistogram {
-		for i := 0; i < bucket.numSets; i++ {
-			id := fmt.Sprintf("s:bench-%04d", len(ids))
-			s := policystore.NewIPSet(proto.IPSetUpdate_NET)
-			size := bucket.minSize + rng.Intn(bucket.maxSize-bucket.minSize+1)
-			for j := 0; j < size; j++ {
-				s.AddString(fmt.Sprintf("10.%d.%d.%d/32", member>>16&0xff, member>>8&0xff, member&0xff))
-				member++
-			}
-			store.IPSetByID[id] = s
-			ids = append(ids, id)
-		}
-	}
-	return ids
-}
-
-// makeScaleRule builds a rule that never matches the benchmark flow. It returns the
-// referenced IP set ID, or "" for a rule with no reference.
-//
-// A rule that references an IP set must reach the set lookup whatever order match()
-// evaluates criteria in, and must still miss when the referenced set is absent from
-// the store (an absent set is skipped rather than treated as a non-match). Both hold
-// by pairing the reference with a negated reference to benchSentinelIPSetID, which
-// contains the flow's addresses: if the referenced set is present the lookup misses
-// and evaluation stops there; if it is absent the sentinel makes the rule miss.
-func makeScaleRule(rng *rand.Rand, setIDs []string, action string, refFraction float64) (*proto.Rule, string) {
-	rule := &proto.Rule{Action: action}
-	if rng.Float64() < refFraction {
-		id := setIDs[rng.Intn(len(setIDs))]
-		if rng.Intn(2) == 0 {
-			rule.SrcIpSetIds = []string{id}
-			rule.NotSrcIpSetIds = []string{benchSentinelIPSetID}
-		} else {
-			rule.DstIpSetIds = []string{id}
-			rule.NotDstIpSetIds = []string{benchSentinelIPSetID}
-		}
-		return rule, id
-	}
-	// No IP set reference: guard with a non-matching destination port.
-	rule.DstPorts = []*proto.PortRange{{First: 65001, Last: 65001}}
-	return rule, ""
 }
 
 // addMatchEarlyPolicy prepends a policy whose first rule matches any flow.
