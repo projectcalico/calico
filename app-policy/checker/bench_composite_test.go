@@ -25,11 +25,14 @@ package checker
 //	    -benchmem -benchtime 20x -cpu 1
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/app-policy/policyscale"
+	"github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/hack/perf/perfdoc"
 )
 
@@ -37,57 +40,83 @@ func BenchmarkEvaluateComposite(b *testing.B) {
 	fx := policyscale.Build(policyscale.ScaleFromEnv(policyscale.Composite()))
 	target := fx.EgressTarget()
 
+	// The rule a case's walk must end on, so that rules/op is the walk actually timed. Matching
+	// no rule at all, the walk visits every rule and ends at the tier's default action.
+	missAll := walkEnd{index: tierDefaultActionIndex, action: rules.RuleActionDeny}
 	for _, c := range []struct {
 		name        string
 		dir         policyscale.Direction
 		flow        *policyscale.Flow
 		rulesWalked int
+		end         walkEnd
 	}{
 		// Matches no ingress rule, so the walk covers the whole baseline tier.
-		{"IngressMissAll", policyscale.Ingress, fx.DeniedFlow(policyscale.Ingress), fx.Rules(policyscale.Ingress)},
+		{"IngressMissAll", policyscale.Ingress, fx.DeniedFlow(policyscale.Ingress), fx.Rules(policyscale.Ingress), missAll},
 		// Matches no egress rule, on the most popular port, so every rule carrying that port
 		// checks the address too.
-		{"EgressMissAll", policyscale.Egress, fx.DeniedFlow(policyscale.Egress), fx.Rules(policyscale.Egress)},
+		{"EgressMissAll", policyscale.Egress, fx.DeniedFlow(policyscale.Egress), fx.Rules(policyscale.Egress), missAll},
 		// Matches the allow-list's target rule, two thirds of the way down, on a port few rules
 		// carry.
-		{"EgressTailPort", policyscale.Egress, egressFlow(target.AddrInCIDR, target.TailPort), target.RulesWalked},
+		{"EgressTailPort", policyscale.Egress, egressFlow(target.AddrInCIDR, target.TailPort), target.RulesWalked,
+			walkEnd{policy: target.Policy, index: target.RuleIndex, action: rules.RuleActionAllow}},
 	} {
 		b.Run(c.name, func(b *testing.B) {
 			for _, engine := range benchEngines {
 				b.Run(engine.name, func(b *testing.B) {
-					benchEvaluateFlows(b, fx, engine, c.dir, []*policyscale.Flow{c.flow}, c.rulesWalked)
+					benchEvaluateFlows(b, fx, engine, c.dir, []*policyscale.Flow{c.flow}, c.rulesWalked, &c.end)
 				})
 			}
 		})
 	}
 }
 
+// walkEnd is the one entry a trace must hold for the walk to have gone where a case says: a rule
+// that decides the flow, or the tier's default action after every rule. An empty policy matches
+// any.
+type walkEnd struct {
+	policy string
+	index  int
+	action rules.RuleAction
+}
+
+func (w walkEnd) String() string {
+	return fmt.Sprintf("%s[%d]=%v", w.policy, w.index, w.action)
+}
+
+func (w walkEnd) matches(trace []*calc.RuleID) bool {
+	return len(trace) == 1 && trace[0].Index == w.index && trace[0].Action == w.action &&
+		(w.policy == "" || trace[0].Name == w.policy)
+}
+
 // benchEvaluateFlows times the pending evaluation of the given flows, one after the other, as one
-// op. Before the timed loop it checks every trace against the fixture's oracle, so a change to the
-// fixture can't silently turn the walk being timed into a different one.
-func benchEvaluateFlows(b *testing.B, fx *policyscale.Fixture, engine benchEngine, dir policyscale.Direction, flows []*policyscale.Flow, rulesPerOp int) {
+// op. Before the timed loop it checks every trace against the fixture's oracle, and against end
+// when given, so a change to the fixture can't silently turn the walk being timed into a different
+// one.
+func benchEvaluateFlows(b *testing.B, fx *policyscale.Fixture, engine benchEngine, dir policyscale.Direction, flows []*policyscale.Flow, rulesPerOp int, end *walkEnd) {
 	restoreLogging := withBenchLogging(logrus.WarnLevel)
 	defer restoreLogging()
 
-	store, ep := engine.newStore(fx), fx.Endpoint()
+	store, ep := engine.load(fx)
 	oracle := oracleEvaluator(fx)
 	rd := ruleDir(dir)
 	for _, f := range flows {
-		got, err := Evaluate(StagedAsEnforced, rd, store, ep, f)
+		got, err := engine.evaluate(StagedAsEnforced, rd, store, ep, f)
 		if err != nil {
 			b.Fatalf("%v: evaluation failed: %v", f, err)
 		}
 		if want, _ := oracle(StagedAsEnforced, rd, store, ep, f); !sameTrace(got, want) {
 			b.Fatalf("%v: trace %s, the oracle expects %s", f, formatTrace(got), formatTrace(want))
 		}
+		if end != nil && !end.matches(got) {
+			b.Fatalf("%v: trace %s doesn't end where the case's walk does, %s", f, formatTrace(got), end)
+		}
 	}
 
 	b.ReportAllocs()
 	rec := perfdoc.Start(b)
-	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, f := range flows {
-			benchTraceSink, _ = Evaluate(StagedAsEnforced, rd, store, ep, f)
+			benchTraceSink, _ = engine.evaluate(StagedAsEnforced, rd, store, ep, f)
 		}
 	}
 	b.StopTimer()

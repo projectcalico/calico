@@ -133,7 +133,7 @@ func benchEvaluateBaselinePolicyScaleWith(b *testing.B, run benchRun, fx *policy
 		missingIPSets = oldMissingIPSets
 	}()
 
-	store, ep := engine.newStore(fx), fx.Endpoint()
+	store, ep := engine.load(fx)
 	expectedMisses := fx.MissingSetReferences()
 	if run.matchEarly {
 		addMatchEarlyPolicy(store, ep)
@@ -147,7 +147,7 @@ func benchEvaluateBaselinePolicyScaleWith(b *testing.B, run benchRun, fx *policy
 	counter := &ipsetMissCounter{Logger: log.Default()}
 	missingIPSets = newMissingIPSetsLogger(counter)
 
-	trace, err := Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
+	trace, err := engine.evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
 	if err != nil {
 		b.Fatalf("pre-flight Evaluate failed: %v", err)
 	}
@@ -174,9 +174,8 @@ func benchEvaluateBaselinePolicyScaleWith(b *testing.B, run benchRun, fx *policy
 
 	b.ReportAllocs()
 	rec := perfdoc.Start(b)
-	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		benchTraceSink, _ = Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
+		benchTraceSink, _ = engine.evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
 	}
 	b.StopTimer()
 	b.ReportMetric(float64(expectedMisses), "misses/op")

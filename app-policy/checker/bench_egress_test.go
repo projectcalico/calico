@@ -92,12 +92,12 @@ func benchEvaluateEgressAllowList(b *testing.B, fx *policyscale.Fixture, c egres
 			restoreLogging := withBenchLogging(log.WarnLevel)
 			defer restoreLogging()
 
-			store, ep := engine.newStore(fx), fx.Endpoint()
+			store, ep := engine.load(fx)
 			target := fx.EgressTarget()
 
 			// Pre-flight outside the timed loop: prove the walk is the one the case intends, so
 			// that a fixture change cannot silently turn a full walk into an early exit.
-			trace, err := Evaluate(EnforcedOnly, rules.RuleDirEgress, store, ep, c.flow)
+			trace, err := engine.evaluate(EnforcedOnly, rules.RuleDirEgress, store, ep, c.flow)
 			if err != nil {
 				b.Fatalf("evaluation failed: %v", err)
 			}
@@ -111,9 +111,8 @@ func benchEvaluateEgressAllowList(b *testing.B, fx *policyscale.Fixture, c egres
 
 			b.ReportAllocs()
 			rec := perfdoc.Start(b)
-			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				benchTraceSink, _ = Evaluate(EnforcedOnly, rules.RuleDirEgress, store, ep, c.flow)
+				benchTraceSink, _ = engine.evaluate(EnforcedOnly, rules.RuleDirEgress, store, ep, c.flow)
 			}
 			b.StopTimer()
 			reportEngineCase(b, rec, fx, engineCase{engine: engine.name, dir: policyscale.Egress, rulesPerOp: c.rulesWalked})
