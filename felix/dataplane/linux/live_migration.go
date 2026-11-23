@@ -739,7 +739,7 @@ func (f *liveMigrationFSM) doIPAMOwnerSwap() {
 }
 
 func (m *liveMigrationMonitor) CompleteDeferredWork() error {
-	// Nothing to do; state changes are forwarded in ResolveUpdateBatch.
+	// Nothing to do; route modifier updates are forwarded in ResolveUpdateBatch.
 	return nil
 }
 

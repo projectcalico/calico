@@ -2536,6 +2536,38 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					})
 				})
 
+				Context("when an endpoint with elevated routes is shadowed and then restored", func() {
+					// Same interface name, and an ID that sorts first, so it takes preference.
+					shadowingID := proto.WorkloadEndpointID{
+						OrchestratorId: "k8s",
+						WorkloadId:     "pod-10",
+						EndpointId:     "endpoint-id-10",
+					}
+
+					JustBeforeEach(func() {
+						epMgr.OnRouteModifierUpdate(
+							types.ProtoToWorkloadEndpointID(&wlEPID1),
+							&wepRouteModifier{mode: wepRouteModeElevated},
+						)
+						applyUpdates(epMgr)
+						routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
+
+						epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+							Id:       &shadowingID,
+							Endpoint: wlEPUpdate.Endpoint,
+						})
+						applyUpdates(epMgr)
+						routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
+
+						epMgr.OnUpdate(&proto.WorkloadEndpointRemove{Id: &shadowingID})
+						applyUpdates(epMgr)
+					})
+
+					It("should restore its elevated routes", func() {
+						routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
+					})
+				})
+
 				Context("when routes are elevated with a route-programmed callback", func() {
 					var programmedCIDRs []ip.CIDR
 

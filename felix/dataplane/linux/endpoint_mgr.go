@@ -808,7 +808,6 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 		delete(m.activeWlIDToChains, id)
 		m.removeWorkloadARPChains(id)
-		delete(m.wepRouteModifiers, id)
 		if oldWorkload != nil {
 			m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
 			// Remove any routes from the routing table.  The RouteTable will remove any
@@ -919,6 +918,10 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				removeActiveWorkload(logCxt, oldWorkload, id)
 				delete(m.pendingWlEpUpdates, id)
 				delete(m.shadowedWlEndpoints, id)
+
+				// Only here, not in removeActiveWorkload, because a workload that is only being
+				// shadowed still needs its route modifier when it becomes active again.
+				delete(m.wepRouteModifiers, id)
 
 				if oldWorkload != nil {
 					// Check for another endpoint with the same interface name,
@@ -1085,8 +1088,10 @@ func (m *endpointManager) calculateRoutes(
 	}
 
 	routePriority := m.cfg.normalRoutePriority
+	var onProgrammed func(ip.CIDR)
 	if routeModifier.mode == wepRouteModeElevated {
 		routePriority = m.cfg.elevatedRoutePriority
+		onProgrammed = routeModifier.onProgrammed
 		logCxt.WithField("priority", routePriority).Debug(
 			"Endpoint up, adding routes with elevated priority")
 	} else {
@@ -1102,8 +1107,8 @@ func (m *endpointManager) calculateRoutes(
 			},
 			DestMAC: mac,
 		}
-		if routeModifier.onProgrammed != nil {
-			target.OnProgrammed = func() { routeModifier.onProgrammed(cidr) }
+		if onProgrammed != nil {
+			target.OnProgrammed = func() { onProgrammed(cidr) }
 		}
 		routeTargets = append(routeTargets, target)
 	}
