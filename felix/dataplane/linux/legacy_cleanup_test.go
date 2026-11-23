@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
 )
@@ -73,5 +74,28 @@ var _ = Describe("Legacy iptables cleanup tables", func() {
 		}
 		opts := iptables.TableOptions{LookPathOverride: testutils.LookPathAll}
 		Expect(legacyIPTablesCleanupTables(4, featureDetector, opts, opts)).To(BeEmpty())
+	})
+})
+
+var _ = Describe("Legacy ipsets cleanup", func() {
+	var realModuleLoaded func() bool
+
+	BeforeEach(func() {
+		realModuleLoaded = environment.IPSetModuleLoaded
+	})
+
+	AfterEach(func() {
+		environment.IPSetModuleLoaded = realModuleLoaded
+	})
+
+	It("sweeps the kernel IP sets when the ip_set module is loaded", func() {
+		environment.IPSetModuleLoaded = func() bool { return true }
+		Expect(legacyIPSetsCleanup(ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil), nil)).To(HaveLen(1))
+	})
+
+	// Every resync would fail to list the sets and, after its retries, panic Felix.
+	It("builds nothing when the ip_set module isn't loaded", func() {
+		environment.IPSetModuleLoaded = func() bool { return false }
+		Expect(legacyIPSetsCleanup(ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil), nil)).To(BeEmpty())
 	})
 })

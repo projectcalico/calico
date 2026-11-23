@@ -431,6 +431,17 @@ var LegacyIPTablesModulesLoaded = func(ipVersion uint8) bool {
 	return true
 }
 
+// IPSetModuleLoaded reports whether the kernel's ip_set module is loaded (or built in). Unlike
+// running the ipset binary, stat'ing sysfs autoloads nothing. A var so tests can fake it.
+var IPSetModuleLoaded = func() bool {
+	const path = "/sys/module/ip_set"
+	if _, err := os.Stat(path); err != nil {
+		log.WithField("file", path).Info("ip_set kernel module not loaded on this host")
+		return false
+	}
+	return true
+}
+
 // GetIptablesBackend attempts to detect the iptables backend being used where Felix is running.
 // This code is duplicating the detection method found at
 // https://github.com/kubernetes-sigs/iptables-wrappers/blob/master/iptables-wrapper-installer.sh#L107
