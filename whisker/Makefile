@@ -8,7 +8,7 @@ ARCHES             = amd64 arm64
 
 # Configure variables used by ci/cd common targets from lib.Makefile.
 BUILD_IMAGES=whisker
-BUILD_IMAGE_NAME=node:22.15
+BUILD_IMAGE_NAME=node:22.23
 
 ###############################################################################
 # include ../lib.Makefile
