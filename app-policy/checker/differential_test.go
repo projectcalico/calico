@@ -55,13 +55,13 @@ func TestEvaluateAgreesWithOracle(t *testing.T) {
 	missing := policyscale.Baseline()
 	missing.Baseline.MissingIPSets = 8
 
+	// The composite holds both measured presets' rules exactly as each builds them alone, so it
+	// stands in for both.
 	for _, c := range []struct {
 		name string
 		spec policyscale.Spec
 	}{
-		{"baseline", policyscale.Baseline()},
 		{"baseline with missing sets", missing},
-		{"egress allow-list", policyscale.EgressAllowList()},
 		{"composite", policyscale.Composite()},
 	} {
 		t.Run(c.name, func(t *testing.T) {

@@ -610,7 +610,9 @@ func nameFlows(rule string, flows []ShapeFlow) []ShapeFlow {
 	return flows
 }
 
-func (k *shapeKey) hit(name string, f *Flow) ShapeFlow  { return ShapeFlow{Name: name, Flow: f, Hit: true} }
+func (k *shapeKey) hit(name string, f *Flow) ShapeFlow {
+	return ShapeFlow{Name: name, Flow: f, Hit: true}
+}
 func (k *shapeKey) miss(name string, f *Flow) ShapeFlow { return ShapeFlow{Name: name, Flow: f} }
 
 func (k *shapeKey) bothFamilies(flows func(fam int) []ShapeFlow) []ShapeFlow {
