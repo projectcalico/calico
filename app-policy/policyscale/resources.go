@@ -72,9 +72,7 @@ func (o *ResourceOptions) defaults() {
 // With Staged set the policies are rendered as StagedGlobalNetworkPolicy instead, which is what a
 // cluster run wants; see ResourceOptions.Staged.
 //
-// Two departures from the proto the engine sees, both forced by the v3 API: a rule with ports
-// carries protocol TCP, since ports require a protocol (every generated flow is TCP, so verdicts
-// are unchanged), and policy names carry the tier prefix.
+// Policy names carry the tier prefix, which the proto the engine sees doesn't.
 func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 	opts.defaults()
 	var out []runtime.Object
@@ -161,10 +159,6 @@ func (fx *Fixture) ruleResource(r *ruleModel, setLabelKey string) v3.Rule {
 	rule := v3.Rule{Action: v3.Action(capitalise(r.action))}
 	rule.Protocol = r.protocol.resource()
 	rule.NotProtocol = r.notProtocol.resource()
-	if len(r.dstPorts) > 0 && rule.Protocol == nil {
-		tcp := numorstring.ProtocolFromString("TCP")
-		rule.Protocol = &tcp
-	}
 	if r.ipVersion != 0 {
 		v := r.ipVersion
 		rule.IPVersion = &v

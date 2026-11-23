@@ -155,6 +155,14 @@ func TestEgressTargetAndOracle(t *testing.T) {
 		t.Errorf("denied flow: got %v, want %v", denied, wantDenied)
 	}
 
+	// The rules carry the protocol the API requires with ports, so a UDP copy of the aimed flow
+	// meets the tier default, on a cluster as in the store.
+	udp := *fx.MatchingFlow(Egress, tgt.Ordinal)
+	udp.Protocol = ProtocolUDP
+	if got := fx.Expect(Egress, &udp); !equalVerdicts(got, wantDenied) {
+		t.Errorf("UDP copy of the aimed flow: got %v, want %v", got, wantDenied)
+	}
+
 	// A flow aimed at any rule is matched by that rule or an earlier one, never a later one.
 	for _, ordinal := range []int{0, 1, 4000, 18661} {
 		f := fx.MatchingFlow(Egress, ordinal)
