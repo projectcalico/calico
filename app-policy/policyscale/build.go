@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/netip"
+	"slices"
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -27,7 +28,8 @@ import (
 
 const (
 	// SentinelIPSetID names the set that holds the denied flow's addresses. Baseline rules that
-	// reference an IP set also carry a negated reference to it; see BaselineParams.
+	// reference a set left out of the store also carry a negated reference to it; see
+	// BaselineParams.
 	SentinelIPSetID = "policyscale-sentinel"
 
 	baselineIPSetPrefix = "policyscale-base-"
@@ -260,6 +262,23 @@ func (fx *Fixture) buildBaseline(rng *rand.Rand, p BaselineParams) {
 		fx.sets[id].missing = true
 		fx.missingRefs += refCount[id]
 	}
+	guarded := false
+	for _, pol := range tier.policies[Ingress] {
+		for _, r := range pol.rules {
+			if r.srcSet != "" && !fx.sets[r.srcSet].missing {
+				r.notSrcSet = ""
+			}
+			if r.dstSet != "" && !fx.sets[r.dstSet].missing {
+				r.notDstSet = ""
+			}
+			guarded = guarded || r.notSrcSet != "" || r.notDstSet != ""
+		}
+	}
+	if !guarded {
+		// Felix sends only the sets rules reference.
+		delete(fx.sets, SentinelIPSetID)
+		fx.setOrder = slices.DeleteFunc(fx.setOrder, func(id string) bool { return id == SentinelIPSetID })
+	}
 }
 
 // makeBaselineIPSets adds the sentinel set and the NET sets the baseline rules reference,
@@ -458,7 +477,12 @@ func (p *policyModel) buildProto(tier string, dir Direction) {
 }
 
 func (r *ruleModel) proto() *proto.Rule {
-	pr := &proto.Rule{Action: r.action}
+	action := r.action
+	if action == "pass" {
+		// The name Felix sends for the API's Pass.
+		action = "next-tier"
+	}
+	pr := &proto.Rule{Action: action}
 	for _, port := range r.dstPorts {
 		pr.DstPorts = append(pr.DstPorts, &proto.PortRange{First: port, Last: port})
 	}

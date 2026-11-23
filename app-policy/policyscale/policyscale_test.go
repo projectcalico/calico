@@ -36,9 +36,9 @@ func TestPresetScale(t *testing.T) {
 		ingressPolicies, egressPol int
 		sets                       int
 	}{
-		{"baseline", Baseline(), 294 * 68, 0, 294, 0, 3708 + 1},
+		{"baseline", Baseline(), 294 * 68, 0, 294, 0, 3708},
 		{"egress", EgressAllowList(), 0, 301 * 62, 0, 301, 3862},
-		{"composite", Composite(), 294 * 68, 301 * 62, 294, 301, 3708 + 1 + 3862},
+		{"composite", Composite(), 294 * 68, 301 * 62, 294, 301, 3708 + 3862},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -264,7 +264,7 @@ func TestResourcesValidateAndRoundTrip(t *testing.T) {
 	if got := countKind(objs, v3.KindGlobalNetworkPolicy); got != 294+301 {
 		t.Errorf("policies: %d", got)
 	}
-	if got := countKind(objs, v3.KindGlobalNetworkSet); got != 3709+3862 {
+	if got := countKind(objs, v3.KindGlobalNetworkSet); got != 3708+3862 {
 		t.Errorf("sets: %d", got)
 	}
 
@@ -279,7 +279,7 @@ func TestResourcesValidateAndRoundTrip(t *testing.T) {
 		case *v3.GlobalNetworkPolicy:
 			validate = strings.HasSuffix(o.Name, "-000") || strings.HasSuffix(o.Name, "-001") || o.Name == fx.EgressTarget().Policy
 		case *v3.GlobalNetworkSet:
-			validate = o.Name == SentinelIPSetID || strings.HasSuffix(o.Name, "-0000") || len(o.Spec.Nets) > 50000
+			validate = strings.HasSuffix(o.Name, "-0000") || len(o.Spec.Nets) > 50000
 		}
 		if !validate {
 			continue
@@ -379,7 +379,7 @@ func TestStagedResources(t *testing.T) {
 	if got := countKind(objs, v3.KindTier); got != 1 {
 		t.Errorf("tiers: %d", got)
 	}
-	if got := countKind(objs, v3.KindGlobalNetworkSet); got != 3709+3862 {
+	if got := countKind(objs, v3.KindGlobalNetworkSet); got != 3708+3862 {
 		t.Errorf("sets: %d", got)
 	}
 	staged := 0
