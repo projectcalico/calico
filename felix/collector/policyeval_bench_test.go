@@ -17,8 +17,8 @@
 package collector
 
 // BenchmarkCollectorPolicyEval measures the pending-policy evaluation inside a real collector, on
-// policyscale's Composite set: the main-loop time a node pays per flow, which the engine
-// benchmarks in app-policy/checker leave out. The collector is wired for evaluation only (a
+// policyscale's Composite set: the main-loop time a node pays per flow, which a benchmark of the
+// evaluation engine alone leaves out. The collector is wired for evaluation only (a
 // lookups cache that knows one local workload, a policy store loaded with the set and that
 // workload's endpoint, no readers and no reporters) and its methods are called directly, so the
 // timed loop is exactly the work the main loop would do.
@@ -29,12 +29,17 @@ package collector
 //   - Sweep: one full re-evaluation sweep over a fixed population of live flows.
 //
 // ns/flow is main-loop time per flow and flows/s the rate one goroutine could sustain at that
-// cost; evals/flow and verdicts/s come from the collector's own evaluation counter.
+// cost; evals/flow and verdicts/s come from the collector's own evaluation counter. The cases time
+// the evaluation inline on the main loop, as the collector does it today.
 //
 //	go test ./felix/collector/ -run '^$' -bench BenchmarkCollectorPolicyEval -benchmem -benchtime 10x -cpu 1
+//
+// Scaled up through POLICYSCALE_POLICIES and friends, a run can outlast go test's default
+// 10-minute timeout (about 9.5 minutes at 10,000 policies and 10x); pass -timeout.
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -80,37 +85,39 @@ func BenchmarkCollectorPolicyEval(b *testing.B) {
 			before := policyEvalCount(policyEvalInitial)
 			b.ReportAllocs()
 			rec := perfdoc.Start(b)
-			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				for _, f := range flows[i*benchNewFlowBatch : (i+1)*benchNewFlowBatch] {
 					pb.c.handleCtInfo(f.ct)
 				}
 			}
 			b.StopTimer()
-			pb.report(b, rec, dir, benchNewFlowBatch, policyEvalCount(policyEvalInitial)-before)
+			pb.report(b, rec, dir, flows, benchNewFlowBatch, policyEvalCount(policyEvalInitial)-before, nil)
 		})
 	}
 	b.Run("Sweep", func(b *testing.B) {
 		pb := newPolicyEvalBench(b, fx)
-		for _, f := range pb.uniqueFlows(policyscale.Egress, benchSweepFlows, 2) {
+		flows := pb.uniqueFlows(policyscale.Egress, benchSweepFlows, 2)
+		for _, f := range flows {
 			pb.c.handleCtInfo(f.ct)
 		}
 		if got := len(pb.c.epStats); got != benchSweepFlows {
 			b.Fatalf("expected %d live flows, got %d", benchSweepFlows, got)
 		}
-		// A sweep skips flows evaluated in the last policyEvalMinInterval; let the newest pass it.
-		time.Sleep(2 * pb.c.policyEvalMinInterval)
+		// A sweep skips a flow evaluated less than this long ago, and back-to-back sweeps of a
+		// fast evaluation would skip some, so each sweep re-evaluates every live flow only with
+		// no minimum at all.
+		pb.c.policyEvalMinInterval = 0
 		before := policyEvalCount(policyEvalRecalc)
 		b.ReportAllocs()
 		rec := perfdoc.Start(b)
-		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			pb.c.snapshotFlowsForRecalc()
 			for !pb.c.processRecalcBatch(time.Hour) {
 			}
 		}
 		b.StopTimer()
-		pb.report(b, rec, policyscale.Egress, benchSweepFlows, policyEvalCount(policyEvalRecalc)-before)
+		live := len(pb.c.epStats)
+		pb.report(b, rec, policyscale.Egress, flows, benchSweepFlows, policyEvalCount(policyEvalRecalc)-before, &live)
 	})
 }
 
@@ -159,6 +166,8 @@ func newPolicyEvalBench(b *testing.B, fx *policyscale.Fixture) *policyEvalBench 
 type benchFlow struct {
 	ct   clttypes.ConntrackInfo
 	flow *policyscale.Flow
+	// unmatched is whether the flow matches no rule, so its evaluation walks every rule.
+	unmatched bool
 }
 
 // uniqueFlows draws n flows from the sampler, with the local workload as source (egress) or
@@ -170,10 +179,18 @@ func (pb *policyEvalBench) uniqueFlows(dir policyscale.Direction, n int, seed in
 	flows := make([]benchFlow, 0, n)
 	for len(flows) < n {
 		f := s.Next()
+		aimed := pb.fx.Expect(dir, f)
 		if dir == policyscale.Egress {
 			f.SrcIP = utils.MustParseIP(benchLocalIP).IP
 		} else {
 			f.DstIP = utils.MustParseIP(benchLocalIP).IP
+		}
+		// A flow aimed at a rule on the local side's address no longer matches it from the local
+		// workload's address. Kept, it would be a miss the traffic model didn't ask for, so draw
+		// again.
+		verdict := pb.fx.Expect(dir, f)
+		if !slices.Equal(verdict, aimed) {
+			continue
 		}
 		var src, dst [16]byte
 		copy(src[:], f.SrcIP.To16())
@@ -184,16 +201,18 @@ func (pb *policyEvalBench) uniqueFlows(dir policyscale.Direction, n int, seed in
 		}
 		seen[*t] = struct{}{}
 		flows = append(flows, benchFlow{
-			ct:   clttypes.ConntrackInfo{Tuple: *t, Counters: clttypes.ConntrackCounters{Packets: 1, Bytes: 64}},
-			flow: f,
+			ct:        clttypes.ConntrackInfo{Tuple: *t, Counters: clttypes.ConntrackCounters{Packets: 1, Bytes: 64}},
+			flow:      f,
+			unmatched: len(verdict) == 1 && verdict[0].Index == policyscale.TierDefaultIndex,
 		})
 	}
 	return flows
 }
 
-// checkTraces pushes a sample of flows through a scratch collector and checks each one's pending
-// trace against the fixture's oracle, so the benchmark is known to time real, correct evaluations
-// rather than, say, flows whose endpoint the policy store doesn't know.
+// checkTraces pushes a sample of flows through the benchmark's collector, checks each one's
+// pending trace against the fixture's oracle, and then forgets the flows again. That way the
+// benchmark is known to time real, correct evaluations rather than, say, flows whose endpoint the
+// policy store doesn't know.
 func (pb *policyEvalBench) checkTraces(b *testing.B) {
 	for _, dir := range []policyscale.Direction{policyscale.Egress, policyscale.Ingress} {
 		for _, f := range pb.uniqueFlows(dir, 20, 99) {
@@ -217,29 +236,42 @@ func (pb *policyEvalBench) checkTraces(b *testing.B) {
 }
 
 // report converts the timed loop into the collector's numbers and, when CI asks for perf
-// documents, writes one for the case.
-func (pb *policyEvalBench) report(b *testing.B, rec *perfdoc.Recorder, dir policyscale.Direction, flowsPerOp int, evals float64) {
+// documents, writes one for the case. timed holds the flows the loop pushed or swept; live is the
+// population a sweep covers, nil for the new-flow cases, whose population grows with b.N.
+func (pb *policyEvalBench) report(b *testing.B, rec *perfdoc.Recorder, dir policyscale.Direction, timed []benchFlow, flowsPerOp int, evals float64, live *int) {
 	flows := float64(b.N * flowsPerOp)
 	seconds := b.Elapsed().Seconds()
 	nsPerFlow := seconds * 1e9 / flows
+	unmatched := 0
+	for _, f := range timed {
+		if f.unmatched {
+			unmatched++
+		}
+	}
 	b.ReportMetric(nsPerFlow, "ns/flow")
 	b.ReportMetric(flows/seconds, "flows/s")
 	b.ReportMetric(evals/flows, "evals/flow")
 	b.ReportMetric(evals/seconds, "verdicts/s")
-	rec.Finish(os.Getenv(policyscale.PerfArtifactsEnvVar), policyscale.PerfFamily, b.Name(), map[string]any{
-		"test_name":        "policy_eval_collector",
-		"case":             b.Name(),
-		"direction":        dir.String(),
-		"flows_per_op":     flowsPerOp,
-		"ns_per_flow":      nsPerFlow,
-		"flows_per_s":      flows / seconds,
-		"evals_per_flow":   evals / flows,
-		"verdicts_per_s":   evals / seconds,
-		"scale_live_flows": len(pb.c.epStats),
-		"scale_policies":   pb.fx.Policies(dir),
-		"scale_rules":      pb.fx.Rules(dir),
-		"scale_ipsets":     pb.fx.IPSets(),
-	})
+	b.ReportMetric(float64(unmatched)/float64(len(timed)), "unmatched")
+	fields := map[string]any{
+		"test_name":          "policy_eval_collector",
+		"case":               b.Name(),
+		"engine":             "Interpreted",
+		"direction":          dir.String(),
+		"flows_per_op":       flowsPerOp,
+		"ns_per_flow":        nsPerFlow,
+		"flows_per_s":        flows / seconds,
+		"evals_per_flow":     evals / flows,
+		"verdicts_per_s":     evals / seconds,
+		"unmatched_fraction": float64(unmatched) / float64(len(timed)),
+		"scale_policies":     pb.fx.Policies(dir),
+		"scale_rules":        pb.fx.Rules(dir),
+		"scale_ipsets":       pb.fx.IPSets(),
+	}
+	if live != nil {
+		fields["scale_live_flows"] = *live
+	}
+	rec.Finish(os.Getenv(policyscale.PerfArtifactsEnvVar), policyscale.PerfFamily, b.Name(), fields)
 }
 
 func policyEvalCount(reason policyEvalReason) float64 {
