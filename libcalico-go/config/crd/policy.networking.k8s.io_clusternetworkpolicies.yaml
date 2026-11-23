@@ -3,7 +3,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     api-approved.kubernetes.io: https://github.com/kubernetes-sigs/network-policy-api/pull/347
-    policy.networking.k8s.io/bundle-version: v0.3.0
+    policy.networking.k8s.io/bundle-version: v0.3.1
     policy.networking.k8s.io/channel: standard
   name: clusternetworkpolicies.policy.networking.k8s.io
 spec:
@@ -12,8 +12,6 @@ spec:
     kind: ClusterNetworkPolicy
     listKind: ClusterNetworkPolicyList
     plural: clusternetworkpolicies
-    shortNames:
-      - cnp
     singular: clusternetworkpolicy
   scope: Cluster
   versions:
