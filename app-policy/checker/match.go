@@ -349,7 +349,9 @@ func matchHTTPPaths(paths []*proto.HTTPMatch_PathMatch, reqPath *string) bool {
 	}
 	normalizedReq, ok := normalizeHTTPPath(*reqPath)
 	if !ok {
-		log.WithField("reqPath", *reqPath).Debug("HTTP Path could not be normalized; not matched.")
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithField("reqPath", *reqPath).Debug("HTTP Path could not be normalized; not matched.")
+		}
 		return false
 	}
 	for _, pathMatch := range paths {
