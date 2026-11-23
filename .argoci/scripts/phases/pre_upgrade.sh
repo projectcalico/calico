@@ -35,7 +35,7 @@ else
   _seed_rc=0
   # The appended marker config gates the run on a hashrelease whose binary
   # knows the phase.
-  E2E_UPGRADE_PHASE=seed E2E_UPGRADE_FROM="${RELEASE_STREAM}" STERN_CHECK=DISABLED \
+  E2E_UPGRADE_PHASE=seed E2E_UPGRADE_FROM="${RELEASE_STREAM}" STERN_CHECK=DISABLED SANDCAT=DISABLED \
     E2E_TEST_CONFIG="${E2E_TEST_CONFIG:-} e2e/config/upgrade/scenarios.yaml" \
     bash "$(dirname "${BASH_SOURCE[0]}")/run_tests.sh" || _seed_rc=$?
 

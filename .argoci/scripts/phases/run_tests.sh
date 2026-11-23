@@ -338,7 +338,9 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   sandcat_inline=()
   sandcat_xtrace=""
   [[ $- == *x* ]] && sandcat_xtrace=1 && set +x
-  if sandcat_env=$(SANDCAT_TOTAL_BUDGET="${SANDCAT_TOTAL_BUDGET:-10m}" "${sandcat_sh}" inline-env \
+  # A second run in one job must disable it: sandcat's job artifacts are
+  # write-once, so the later run's push fails.
+  if [[ "${SANDCAT:-}" != "DISABLED" ]] && sandcat_env=$(SANDCAT_TOTAL_BUDGET="${SANDCAT_TOTAL_BUDGET:-10m}" "${sandcat_sh}" inline-env \
       --kubeconfig "${BZ_LOCAL_DIR}/kubeconfig" --source-dir "$(pwd)"); then
     eval "${sandcat_env}"
     export SANDCAT_GEMINI_KEY="${SANDCAT_INLINE_GEMINI_KEY}"
@@ -411,12 +413,14 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   mkdir -p "${REPORT_DIR}"
   cp report/junit.xml "${REPORT_DIR}/junit.xml" 2>/dev/null || true
 
-  ("${sandcat_sh}" push-specs --spec-dir report/sandcat) || true
-  ("${sandcat_sh}" analyze \
-    --report report/report.json \
-    --log-file "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" \
-    --kubeconfig "${BZ_LOCAL_DIR}/kubeconfig" \
-    --source-dir "$(pwd)") || true
+  if [[ "${SANDCAT:-}" != "DISABLED" ]]; then
+    ("${sandcat_sh}" push-specs --spec-dir report/sandcat) || true
+    ("${sandcat_sh}" analyze \
+      --report report/report.json \
+      --log-file "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" \
+      --kubeconfig "${BZ_LOCAL_DIR}/kubeconfig" \
+      --source-dir "$(pwd)") || true
+  fi
   popd || exit
 
   check_component_logs
