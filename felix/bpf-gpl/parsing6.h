@@ -113,17 +113,26 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v6_offset(struct cali_tc_ct
 
 	int hdr;
 
+	/* Any next header that the walk below doesn't step over is the transport
+	 * protocol, whatever its number, as on IPv4. Policy and conntrack key on it.
+	 */
 	switch (ip_hdr(ctx)->nexthdr) {
-	case IPPROTO_TCP:
-	case IPPROTO_UDP:
-	case IPPROTO_ICMPV6:
-		ctx->ipheader_len = ctx->state->ihl = IP_SIZE;
-		ctx->state->ip_proto = ip_hdr(ctx)->nexthdr;
-		goto out;
+	case NEXTHDR_HOP:
+	case NEXTHDR_ROUTING:
+	case NEXTHDR_FRAGMENT:
+	case NEXTHDR_DEST:
+	case NEXTHDR_GRE:
+	case NEXTHDR_ESP:
+	case NEXTHDR_AUTH:
+	case NEXTHDR_MOBILITY:
+		hdr = ip_hdr(ctx)->nexthdr;
+		break;
 	case NEXTHDR_NONE:
 		goto deny;
 	default:
-		hdr = ip_hdr(ctx)->nexthdr;
+		ctx->ipheader_len = ctx->state->ihl = IP_SIZE;
+		ctx->state->ip_proto = ip_hdr(ctx)->nexthdr;
+		goto out;
 	}
 
 	CALI_DEBUG("ip->nexthdr %d IPv6 options!", ip_hdr(ctx)->nexthdr);
@@ -158,14 +167,21 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v6_offset(struct cali_tc_ct
 		}
 
 		switch(opt.nexthdr) {
-			case IPPROTO_TCP:
-			case IPPROTO_UDP:
-			case IPPROTO_ICMPV6:
+			case NEXTHDR_HOP:
+			case NEXTHDR_ROUTING:
+			case NEXTHDR_FRAGMENT:
+			case NEXTHDR_DEST:
+			case NEXTHDR_GRE:
+			case NEXTHDR_ESP:
+			case NEXTHDR_AUTH:
+			case NEXTHDR_MOBILITY:
+				break;
+			case NEXTHDR_NONE:
+				goto deny;
+			default:
 				ctx->ipheader_len = ctx->state->ihl = len;
 				ctx->state->ip_proto = opt.nexthdr;
 				goto out;
-			case NEXTHDR_NONE:
-				goto deny;
 		}
 
 
