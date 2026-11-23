@@ -139,7 +139,7 @@ func TestEgressTargetAndOracle(t *testing.T) {
 	}
 
 	denied := fx.Expect(Egress, fx.DeniedFlow(Egress))
-	wantDenied := []Verdict{{Kind: v3.KindGlobalNetworkPolicy, Tier: "perimeter", Policy: "egress-000", Index: TierDefaultIndex, Action: "deny"}}
+	wantDenied := []Verdict{{Kind: v3.KindGlobalNetworkPolicy, Tier: "perimeter", Policy: "egress-300", Index: TierDefaultIndex, Action: "deny"}}
 	if !equalVerdicts(denied, wantDenied) {
 		t.Errorf("denied flow: got %v, want %v", denied, wantDenied)
 	}
@@ -161,7 +161,7 @@ func TestEgressTargetAndOracle(t *testing.T) {
 func TestBaselineOracle(t *testing.T) {
 	fx := Build(Baseline())
 	denied := fx.Expect(Ingress, fx.DeniedFlow(Ingress))
-	wantDenied := []Verdict{{Kind: v3.KindGlobalNetworkPolicy, Tier: "perimeter", Policy: "policy-000", Index: TierDefaultIndex, Action: "deny"}}
+	wantDenied := []Verdict{{Kind: v3.KindGlobalNetworkPolicy, Tier: "perimeter", Policy: "policy-293", Index: TierDefaultIndex, Action: "deny"}}
 	if !equalVerdicts(denied, wantDenied) {
 		t.Errorf("denied flow: got %v, want %v", denied, wantDenied)
 	}

@@ -19,7 +19,6 @@ import (
 	"net"
 	"net/netip"
 	"slices"
-	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
@@ -50,8 +49,9 @@ func (v Verdict) String() string {
 // from the generator's own model of each rule rather than from the proto the engine reads, so that
 // the two are independent. It reproduces the engine's tier walk: policies of a tier in order,
 // first matching rule decides; Allow or Deny ends the evaluation; Pass moves to the next tier; a
-// tier none of whose policies matched applies its default action; and with no profiles on the
-// endpoint, an evaluation that gets past every tier is denied.
+// tier none of whose policies matched applies its default action, reported against the tier's
+// last policy, with anything but Pass denying; and with no profiles on the endpoint, an evaluation
+// that gets past every tier is denied.
 func (fx *Fixture) Expect(dir Direction, f *Flow) []Verdict {
 	var trace []Verdict
 	for _, t := range fx.tiers {
@@ -75,8 +75,12 @@ func (fx *Fixture) Expect(dir Direction, f *Flow) []Verdict {
 			}
 		}
 		if !matched {
-			action := strings.ToLower(t.defaultAction)
-			trace = append(trace, Verdict{Kind: v3.KindGlobalNetworkPolicy, Tier: t.name, Policy: policies[0].name, Index: TierDefaultIndex, Action: action})
+			action := "deny"
+			if t.defaultAction == string(v3.Pass) {
+				action = "pass"
+			}
+			last := policies[len(policies)-1]
+			trace = append(trace, Verdict{Kind: v3.KindGlobalNetworkPolicy, Tier: t.name, Policy: last.name, Index: TierDefaultIndex, Action: action})
 			if action != "pass" {
 				return trace
 			}
