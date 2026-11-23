@@ -49,7 +49,9 @@ type ShapesParams struct {
 	// on a cluster for pending verdicts equal to enforced ones wants none.
 	Staged bool
 	// LeaveOut drops the rules that can expose these differences from the set, for a dataplane
-	// that can't apply them; see LeaveOutAt.
+	// that can't apply them; see LeaveOutAt. It takes only differences that a whole rule is
+	// marked with. The others are marked on single flows, which ShapeFlows leaves out, and Build
+	// panics on them here rather than keep rules the caller expects gone.
 	LeaveOut []Difference
 }
 
@@ -162,13 +164,15 @@ type shapeBuilder struct {
 	fx   *Fixture
 	p    ShapesParams
 	next int
+	// ruleDifferences are the differences a whole rule is marked with, the ones LeaveOut takes.
+	ruleDifferences map[Difference]bool
 }
 
 func (fx *Fixture) buildShapes(p ShapesParams) {
 	if p.PeerIPv4.Bits() > 24 || p.PeerIPv6.Bits() > 120 {
 		panic("policyscale: rule-shape peer pools need at least 256 addresses")
 	}
-	b := &shapeBuilder{fx: fx, p: p}
+	b := &shapeBuilder{fx: fx, p: p, ruleDifferences: map[Difference]bool{}}
 	var stagedTier *tierModel
 	if p.Staged {
 		stagedTier = fx.tier(shapesStagedTier, string(v3.Pass))
@@ -205,6 +209,11 @@ func (fx *Fixture) buildShapes(p ShapesParams) {
 				ShapeFlow{Name: fmt.Sprintf("icmp v%d echo matches nothing", fam), Flow: k.icmpWith(fam, echoType(fam), 0, k.outside(fam))})
 		}
 		fx.shapeUnmatched[dir] = unmatched
+	}
+	for _, d := range p.LeaveOut {
+		if !b.ruleDifferences[d] {
+			panic(fmt.Sprintf("policyscale: ShapesParams.LeaveOut can't leave out %s: no whole rule is marked with it; leave its flows out with ShapeFlows", d))
+		}
 	}
 	fx.tagUnparsedProtocols()
 }
@@ -252,6 +261,9 @@ func (b *shapeBuilder) buildTier(t *tierModel, dir Direction) {
 	var pol *policyModel
 	i := 0
 	for _, s := range b.shapes(dir) {
+		for _, d := range s.differences {
+			b.ruleDifferences[d] = true
+		}
 		if slices.ContainsFunc(s.differences, func(d Difference) bool { return slices.Contains(b.p.LeaveOut, d) }) {
 			continue
 		}
