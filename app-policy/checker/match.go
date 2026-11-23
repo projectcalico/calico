@@ -690,8 +690,8 @@ func matchNet(dir string, nets []string, ip net.IP) bool {
 	return false
 }
 
-// matchNotNet checks if the IP is not within the CIDRs of its IP family. It returns false if the
-// IP matches, true otherwise.
+// matchNotNet checks if the IP is not within the CIDRs. It returns false if the IP matches, true
+// otherwise.
 func matchNotNet(dir string, nets []string, ip net.IP) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
@@ -704,13 +704,7 @@ func matchNotNet(dir string, nets []string, ip net.IP) bool {
 		return true
 	}
 
-	version := ipVersionOf(ip)
-	inFamily := false
 	for _, n := range nets {
-		if !cidrInFamily(n, version) {
-			continue
-		}
-		inFamily = true
 		_, ipn, err := net.ParseCIDR(n)
 		if err != nil {
 			// Don't match CIDRs if they are malformed. This case should generally be weeded out by
@@ -722,10 +716,7 @@ func matchNotNet(dir string, nets []string, ip net.IP) bool {
 			return false
 		}
 	}
-	// The dataplanes don't render the rule at all for an IP family that none of its negated
-	// CIDRs belong to, rather than render it without the negation. A positive list needs no such
-	// care, because a CIDR never contains an address of the other family.
-	return inFamily
+	return true
 }
 
 // ipVersionOf returns the IP version of the address, or IPVersion_ANY for a nil or malformed one.
@@ -737,19 +728,6 @@ func ipVersionOf(addr net.IP) proto.IPVersion {
 		return proto.IPVersion_IPV6
 	}
 	return proto.IPVersion_ANY
-}
-
-// cidrInFamily reports whether the CIDR belongs to the given IP family, telling the families apart
-// the way the dataplanes do when they render a rule once per family with only that family's
-// CIDRs. An address of unknown family keeps every CIDR.
-func cidrInFamily(cidr string, version proto.IPVersion) bool {
-	switch version {
-	case proto.IPVersion_IPV4:
-		return !strings.Contains(cidr, ":")
-	case proto.IPVersion_IPV6:
-		return strings.Contains(cidr, ":")
-	}
-	return true
 }
 
 // matchIPVersionAndICMP checks the rule's IP version and ICMP criteria. Few rules have either, so
