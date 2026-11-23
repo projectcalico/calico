@@ -73,7 +73,23 @@ func makeTuple(src, dst net.IP, proto uint8, srcPort, dstPort uint16) tuple.Tupl
 	var src16, dst16 [16]byte
 	copy(src16[:], src.To16())
 	copy(dst16[:], dst.To16())
+	if proto == protoICMP || proto == protoICMPv6 {
+		dstPort = icmpTypeCodeAsDstPort(dstPort)
+	}
 	return tuple.Make(src16, dst16, int(proto), int(srcPort), int(dstPort))
+}
+
+const (
+	protoICMP   = 1
+	protoICMPv6 = 58
+)
+
+// icmpTypeCodeAsDstPort converts the ICMP type and code that the BPF programs leave in the
+// destination port field, type in the low byte, to the order the iptables and nftables
+// dataplanes report them in, type in the high byte. ICMP flows then have the same destination
+// port whichever dataplane reported them, and policy evaluation reads the type and code from it.
+func icmpTypeCodeAsDstPort(bpfDstPort uint16) uint16 {
+	return bpfDstPort<<8 | bpfDstPort>>8
 }
 
 func (c *CollectorPolicyListener) run() {

@@ -58,6 +58,19 @@ ut: protobuf
 	$(DOCKER_GO_BUILD) /bin/bash -c "gotestsum --junitfile report/app_policy_ut.xml -- -v -race ./..."
 
 ###############################################################################
+# Benchmarks
+###############################################################################
+## Run the policy evaluation engine benchmarks, five times each. Each case writes one hack/perf
+## document under artifacts/perf at the repo root, with medians over the five runs, which
+## send-perf-results publishes to Lens.
+.PHONY: bench-policy-eval
+bench-policy-eval:
+	mkdir -p $(REPO_ROOT)/artifacts/perf
+	$(call run_with_env,POLICY_EVAL_PERF_ARTIFACTS_DIR=$(BUILD_REPO_ROOT)/artifacts/perf,\
+		go test ./checker/ -run '^$$' -bench '^BenchmarkEvaluate(BaselinePolicyScale|EgressAllowList|Composite|RuleShapes)$$' \
+		-benchmem -benchtime 20x -count 5 -cpu 1)
+
+###############################################################################
 # CI
 ###############################################################################
 

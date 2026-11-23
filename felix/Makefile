@@ -605,6 +605,15 @@ ut-watch: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Watching go UTs for changes...
 	$(DOCKER_GO_BUILD) ginkgo watch -r -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
+## Run the collector's pending-policy evaluation benchmark, five times each. Each case writes one
+## hack/perf document under artifacts/perf at the repo root, with medians over the five runs,
+## which send-perf-results publishes to Lens.
+.PHONY: bench-policy-eval
+bench-policy-eval:
+	mkdir -p $(REPO_ROOT)/artifacts/perf
+	$(call run_with_env,CGO_ENABLED=0 POLICY_EVAL_PERF_ARTIFACTS_DIR=$(BUILD_REPO_ROOT)/artifacts/perf,\
+		go test ./collector/ -run '^$$' -bench '^BenchmarkCollectorPolicyEval$$' -benchmem -benchtime 10x -count 5 -cpu 1 -timeout 60m)
+
 # bin/nft.test is the compiled felix/nftables test binary. The "Felix: nftables
 # dataplane benchmark" CI job runs it on the host (as root, against a real nft)
 # to publish the dataplane-programming benchmarks to Lens. Built statically (no

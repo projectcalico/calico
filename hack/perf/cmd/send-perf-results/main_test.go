@@ -405,3 +405,27 @@ func TestCommittedTemplatesHaveMappings(t *testing.T) {
 		}
 	}
 }
+
+// An ArgoCI run after a merge carries the merged PR's number too, but it builds the branch: it
+// must publish as a branch run, or a new family's index is never created and nothing is sent.
+func TestOnlyArgoCIPRRunsArePRRuns(t *testing.T) {
+	for _, tc := range []struct {
+		refType string
+		wantPR  bool
+	}{
+		{"PR", true},
+		{"MERGE", false},
+		{"NIGHTLY", false},
+		{"TAG", false},
+	} {
+		t.Run(tc.refType, func(t *testing.T) {
+			t.Setenv("SEMAPHORE_GIT_PR_NUMBER", "")
+			t.Setenv("CI_GIT_REF_TYPE", tc.refType)
+			t.Setenv("CI_GIT_PR_NUMBER", "14651")
+			_, isPR := ciMetadata()[fieldPRNumber]
+			if isPR != tc.wantPR {
+				t.Errorf("ref type %s: PR run = %v, want %v", tc.refType, isPR, tc.wantPR)
+			}
+		})
+	}
+}
