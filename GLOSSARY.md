@@ -64,7 +64,7 @@ Code: `api/pkg/apis/projectcalico/v3/` (`NetworkPolicy`).
 _Avoid_: bare "v3", CRD (that is one way a resource is stored, not what it is)
 
 **Backing API group**:
-The API group in which a KDD cluster stores Calico resources as CRDs: `crd.projectcalico.org/v1` or `projectcalico.org/v3`. `CALICO_API_GROUP` picks one, and with no setting the library discovers it from the API server.
+The API group in which a KDD cluster stores Calico resources as CRDs: `crd.projectcalico.org/v1` or `projectcalico.org/v3`.
 Code: `libcalico-go/lib/backend/k8s/resources/apigroups.go` (`BackingAPIGroup`), `libcalico-go/lib/backend/k8s/discovery.go` (`BackendAPIGroup`, `UsingV3CRDs`), `operator/pkg/apigroup/apigroup.go`.
 _Avoid_: API version, bare "v1 CRDs", bare "v3 CRDs", "v1 CRD group", "v3 CRD group"
 

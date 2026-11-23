@@ -269,11 +269,6 @@ The operator install named in the `active-operator` ConfigMap. Other operator in
 Code: `operator/pkg/active/active.go`.
 _Avoid_: leader (that is leader election)
 
-**`CALICO_API_GROUP` (operator)**:
-Setting the `CALICO_API_GROUP` variable on Calico workloads to `crd.projectcalico.org/v1` or `projectcalico.org/v3`.
-Code: `operator/pkg/apigroup/apigroup.go`.
-_Avoid_: UseV3CRDs
-
 **APIService cutover**:
 Holding the `projectcalico.org/v3` APIService on its old backend until the replacement is ready. It is not the kube-controllers APIService handover.
 Code: `operator/pkg/controller/apiserver/cutover.go`.
