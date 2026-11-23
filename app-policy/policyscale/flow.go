@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -42,8 +42,7 @@ const (
 	ProtocolUDPLite = 136
 )
 
-// Flow is an L4 flow with no L7 attributes, as the collector presents flows to the engine. It
-// satisfies checker.Flow.
+// Flow is an L4 flow with no L7 attributes, as the collector presents flows to the engine.
 type Flow struct {
 	SrcIP, DstIP     net.IP
 	SrcPort, DstPort int
@@ -182,6 +181,7 @@ func (s *Sampler) Next() *Flow {
 		f.SrcPort = s.ephemeralPort()
 		return &f
 	}
+	// The sampler keeps its own copy for later repeats, so a caller may change the flow it gets.
 	var f *Flow
 	if rules := s.fx.Rules(s.model.Direction); rules == 0 || s.rng.Float64() < s.model.MissFraction {
 		f = s.fx.DeniedFlow(s.model.Direction)
@@ -189,10 +189,11 @@ func (s *Sampler) Next() *Flow {
 		f = s.fx.MatchingFlow(s.model.Direction, s.rng.Intn(rules))
 	}
 	f.SrcPort = s.ephemeralPort()
+	kept := *f
 	if len(s.recent) < s.model.RecentWindow {
-		s.recent = append(s.recent, f)
+		s.recent = append(s.recent, &kept)
 	} else {
-		s.recent[s.rng.Intn(len(s.recent))] = f
+		s.recent[s.rng.Intn(len(s.recent))] = &kept
 	}
 	return f
 }
