@@ -1,0 +1,55 @@
+#!/bin/bash
+# Points the go-build containers on a createVM machine at the Go caches the
+# go-cache step built on its shared disk (vm-go-cache runs it). A pod step gets
+# the same from `goCache: read`.
+#
+# The disk holds the caches as go left them, mounted read-only, and they are
+# read in place, with anything new kept locally:
+#   - build outputs through gocacheprog, which reads the shared cache and keeps
+#     what the step adds in a local directory;
+#   - modules through a local module cache whose module directories link to the
+#     shared ones and whose download cache is real directories of linked files,
+#     so a module go-cache never fetched is downloaded alongside them. Go sees
+#     it at /go/pkg/mod, the go-build container's path, which go-cache built
+#     with: a package's source path is part of its build cache key, so any
+#     other path misses every module package. GO_LOCAL_MOD puts it elsewhere on
+#     a machine that mounts it there in the container.
+# The exports it prints are for the caller to eval:
+#
+#   go_env=$(restore-go-cache <step>) || exit 1; eval "$go_env"
+set -euo pipefail
+
+step=${1:?usage: restore-go-cache <step> [cache-dir]}
+dir=${2:-/cache/go}
+
+if [ ! -d "${dir}/mod" ]; then
+  echo "restore-go-cache: no Go caches in ${dir}" >&2
+  exit 1
+fi
+start=$(date +%s)
+local_mod="${GO_LOCAL_MOD:-/go/pkg/mod}"
+mkdir -p "${local_mod}"
+# Unpacked modules are named <path>@<version>; go never writes into one. One
+# already there, as in an image's own module cache, is the same files.
+( cd "${dir}/mod" && find . -path ./cache -prune -o -type d -name '*@*' -prune -print ) |
+  while read -r module; do
+    module=${module#./}
+    if [ -d "${local_mod}/${module}" ] && [ ! -L "${local_mod}/${module}" ]; then continue; fi
+    mkdir -p "${local_mod}/$(dirname "${module}")"
+    ln -sfn "${dir}/mod/${module}" "${local_mod}/${module}"
+  done
+if [ -d "${dir}/mod/cache" ]; then
+  cp -rs --remove-destination "${dir}/mod/cache" "${local_mod}/"
+  # cp gives the directories the shared ones' read-only mode. chmod -R leaves
+  # the links, and so the shared files, alone.
+  chmod -R u+w "${local_mod}/cache"
+  # go takes this lock for writing, so it cannot be the shared one.
+  rm -f "${local_mod}/cache/lock"
+fi
+if [ -d "${dir}/build" ]; then
+  # Under GOCACHE: the go command moves, rather than copies, a cached file it
+  # installs from anywhere else, which would empty the local cache.
+  echo "export GOCACHEPROG='gocacheprog -v -ro ${dir}/build -dir ${GOCACHE:-${CI_HOME}/${CI_GIT_DIR}/.go-pkg-cache}/prog'"
+fi
+echo "export GOMODCACHE='${local_mod}'"
+echo "restore-go-cache: ${step} reads the Go caches in place from ${dir} (linked in $(( $(date +%s) - start ))s)" >&2

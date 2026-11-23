@@ -65,6 +65,14 @@ go-vet: operator-charts
 	$(MAKE) -C felix clone-libbpf
 	$(DOCKER_GO_BUILD) go vet --tags fvtests ./...
 
+# Compiles what go-vet does without running its checks, to fill a build cache:
+# every package and its tests, and what only tests import. `go list -export`
+# compiles for export data and never links, which go build would for every main
+# package, against a libbpf this only has the headers of.
+go-compile-all: operator-charts
+	$(MAKE) -C felix clone-libbpf
+	$(DOCKER_GO_BUILD) go list --tags fvtests -export -test -deps ./... >/dev/null
+
 update-x-libraries:
 	$(DOCKER_GO_BUILD) sh -c "go get golang.org/x/... && go mod tidy"
 
