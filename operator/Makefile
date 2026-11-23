@@ -190,17 +190,18 @@ FV_TEST_TIMEOUT ?= 60m
 # UT_DIR/FV_DIR to those packages as well.
 GINKGO_FOCUS ?=
 GINKGO_FOCUS_ARG = $(if $(GINKGO_FOCUS),-ginkgo.focus="$(GINKGO_FOCUS)")
-ENVTEST_K8S_VERSION?=1.34.x
 
 # gotestsum, rather than the ginkgo CLI, because it writes one JUnit report from the
 # directory it runs in. Ginkgo resolves its report path against each suite instead,
 # which scatters the reports through the package tree where CI cannot collect them.
 .PHONY: ut
-ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
+# UPDATE_EXPECTED_DATA=true rewrites the chart rendering golden files.
+UPDATE_EXPECTED_DATA ?= false
+ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES) setup-envtest
 	-mkdir -p .go-pkg-cache report
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.22 && \
-	export KUBEBUILDER_ASSETS=$$(setup-envtest use $(ENVTEST_K8S_VERSION) --bin-dir /tmp/envtest-bins -p path) && \
+	export KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_CONTAINER_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1) && \
+	export UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) && \
 	gotestsum --format testname --junitfile report/operator_ut.xml -- $(UT_DIR)/... $(GO_TEST_ARGS) $(GINKGO_FOCUS_ARG)'
 
 ## Run the functional tests against a local kind cluster.
