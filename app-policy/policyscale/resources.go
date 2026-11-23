@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -17,6 +17,8 @@ package policyscale
 import (
 	"fmt"
 	"io"
+	"net/netip"
+	"slices"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -25,9 +27,11 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// ResourceOptions control how a fixture is rendered as Calico resources.
+// ResourceOptions control how a fixture is rendered as Calico resources. The zero value is safe
+// to apply to a live cluster: the policies are staged, and apply only to endpoints labelled for
+// them.
 type ResourceOptions struct {
-	// Selector chooses the endpoints the policies apply to. Default: all().
+	// Selector chooses the endpoints the policies apply to. Default: TargetSelector.
 	Selector string
 	// SetLabelKey is the label that ties a GlobalNetworkSet to the rules that select it.
 	// Default: policyscale.projectcalico.org/set.
@@ -35,25 +39,32 @@ type ResourceOptions struct {
 	// TierOrder is the order of the generated tier(s); consecutive tiers count up from it.
 	// Default 100.
 	TierOrder float64
-	// Staged renders the policies as StagedGlobalNetworkPolicy instead of GlobalNetworkPolicy.
-	// Felix sends staged policies to the collector's policy store, so they are evaluated for the
-	// pending verdict exactly as enforced ones are, but a tier whose policies are all staged
-	// programs no enforcement rules and ends in pass rather than drop. That is what makes the
-	// reference set safe to apply to a live cluster: the endpoint it selects keeps working while
-	// the collector does the full evaluation the benchmarks measure.
-	Staged bool
+	// Enforced renders the fixture's enforced policies as GlobalNetworkPolicy. Otherwise every
+	// policy is rendered as StagedGlobalNetworkPolicy: Felix still evaluates staged policies for
+	// the pending verdict exactly as enforced ones, but a tier whose policies are all staged
+	// programs no enforcement rules and ends in pass rather than drop, so the endpoints the set
+	// selects keep working. A cluster then reports the staged kinds; see AsStaged.
+	Enforced bool
 }
 
 const (
-	defaultSelector    = "all()"
+	// TargetLabel marks the endpoints a policy set rendered with the default selector applies to.
+	TargetLabel = "policyscale.projectcalico.org/target"
+	// TargetSelector is the default selector: endpoints labelled TargetLabel=true.
+	TargetSelector = TargetLabel + " == 'true'"
+
 	defaultSetLabelKey = "policyscale.projectcalico.org/set"
-	defaultTierOrder   = 100
-	apiVersion         = v3.GroupVersionCurrent
+	// maxNetsPerNetworkSet keeps a GlobalNetworkSet, with the field list server-side apply records
+	// for it, well under the API server's request limit; a bigger set is split over several that
+	// carry its label.
+	maxNetsPerNetworkSet = 10000
+	defaultTierOrder     = 100
+	apiVersion           = v3.GroupVersionCurrent
 )
 
 func (o *ResourceOptions) defaults() {
 	if o.Selector == "" {
-		o.Selector = defaultSelector
+		o.Selector = TargetSelector
 	}
 	if o.SetLabelKey == "" {
 		o.SetLabelKey = defaultSetLabelKey
@@ -64,17 +75,10 @@ func (o *ResourceOptions) defaults() {
 }
 
 // Resources renders the fixture as the Calico resources that apply the same policy set on a
-// cluster: one Tier per generated tier, one GlobalNetworkPolicy per policy (named tier.policy, in
-// tier order), and one GlobalNetworkSet per IP set the store holds, labelled so that the rules'
-// selectors pick it. Sets marked missing are rendered too: on a cluster nothing is ever "not
-// found", and leaving them out would change the verdicts.
-//
-// With Staged set the policies are rendered as StagedGlobalNetworkPolicy instead, which is what a
-// cluster run wants; see ResourceOptions.Staged.
-//
-// Two departures from the proto the engine sees, both forced by the v3 API: a rule with ports
-// carries protocol TCP, since ports require a protocol (every generated flow is TCP, so verdicts
-// are unchanged), and policy names carry the tier prefix.
+// cluster: one Tier per generated tier, one policy per policy of the fixture, under the same name
+// and in tier order, and the GlobalNetworkSets that hold the IP sets' members, labelled so that
+// the rules' selectors pick them. Sets marked missing are rendered too: on a cluster nothing is
+// ever "not found", and leaving them out would change the verdicts.
 func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 	opts.defaults()
 	var out []runtime.Object
@@ -97,7 +101,7 @@ func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 		policyOrder := float64(0)
 		for dir, policies := range t.policies {
 			for _, p := range policies {
-				name := t.name + "." + p.name
+				name := p.name
 				order := policyOrder
 				policyOrder++
 				rules := make([]v3.Rule, len(p.rules))
@@ -111,7 +115,7 @@ func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 				} else {
 					types, ingress = []v3.PolicyType{v3.PolicyTypeIngress}, rules
 				}
-				if opts.Staged {
+				if p.staged || !opts.Enforced {
 					out = append(out, &v3.StagedGlobalNetworkPolicy{
 						TypeMeta:   metav1.TypeMeta{Kind: v3.KindStagedGlobalNetworkPolicy, APIVersion: apiVersion},
 						ObjectMeta: metav1.ObjectMeta{Name: name},
@@ -149,27 +153,52 @@ func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 			// Felix makes these from named ports and services, which are rendered on the rules.
 			continue
 		}
-		out = append(out, &v3.GlobalNetworkSet{
-			TypeMeta: metav1.TypeMeta{Kind: v3.KindGlobalNetworkSet, APIVersion: apiVersion},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   id,
-				Labels: map[string]string{opts.SetLabelKey: id},
-			},
-			Spec: v3.GlobalNetworkSetSpec{Nets: s.members},
-		})
+		for i := 0; i == 0 || i*maxNetsPerNetworkSet < len(s.members); i++ {
+			name := id
+			if i > 0 {
+				name = fmt.Sprintf("%s-%d", id, i)
+			}
+			out = append(out, &v3.GlobalNetworkSet{
+				TypeMeta: metav1.TypeMeta{Kind: v3.KindGlobalNetworkSet, APIVersion: apiVersion},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   name,
+					Labels: map[string]string{opts.SetLabelKey: id},
+				},
+				Spec: v3.GlobalNetworkSetSpec{Nets: s.members[i*maxNetsPerNetworkSet : min(len(s.members), (i+1)*maxNetsPerNetworkSet)]},
+			})
+		}
 	}
 	return out
+}
+
+// EndpointLabels returns the labels of the sets that hold one of the given addresses. An endpoint
+// at those addresses that carries them is picked by the same rule selectors as its addresses are.
+// No rule needs that to find a named port: none keys a named port on its own side's set.
+func (fx *Fixture) EndpointLabels(opts ResourceOptions, addrs ...netip.Addr) map[string]string {
+	opts.defaults()
+	labels := map[string]string{}
+	for _, id := range fx.setOrder {
+		s := fx.sets[id]
+		if s.isIPPort() {
+			continue
+		}
+		for _, a := range addrs {
+			if !slices.Contains(s.members, netip.PrefixFrom(a, a.BitLen()).String()) {
+				continue
+			}
+			if other, ok := labels[opts.SetLabelKey]; ok && other != id {
+				panic(fmt.Sprintf("policyscale: %s is in sets %s and %s, and an endpoint carries one label value", a, other, id))
+			}
+			labels[opts.SetLabelKey] = id
+		}
+	}
+	return labels
 }
 
 func (fx *Fixture) ruleResource(r *ruleModel, setLabelKey string) v3.Rule {
 	rule := v3.Rule{Action: v3.Action(capitalise(r.action))}
 	rule.Protocol = r.protocol.resource()
 	rule.NotProtocol = r.notProtocol.resource()
-	if len(r.dstPorts) > 0 && rule.Protocol == nil {
-		// Adding one here would make the cluster reject flows of other protocols that the
-		// oracle and the engine's store accept.
-		panic("a rule with ports has no protocol in the model")
-	}
 	if r.ipVersion != 0 {
 		v := r.ipVersion
 		rule.IPVersion = &v
@@ -181,6 +210,13 @@ func (fx *Fixture) ruleResource(r *ruleModel, setLabelKey string) v3.Rule {
 	}
 	rule.Destination.Ports = append(rule.Destination.Ports, portResources(r.dstPortRanges)...)
 	rule.Source.Ports = portResources(r.srcPortRanges)
+	rule.Source.NotPorts = portResources(r.notSrcPortRanges)
+	if np, ok := fx.namedPortBySet[r.srcNamedPortSet]; ok {
+		rule.Source.Ports = append(rule.Source.Ports, namedPort(np.Name))
+	}
+	if np, ok := fx.namedPortBySet[r.notSrcNamedPortSet]; ok {
+		rule.Source.NotPorts = append(rule.Source.NotPorts, namedPort(np.Name))
+	}
 	rule.Destination.NotPorts = portResources(r.notDstPortRanges)
 	if np, ok := fx.namedPortBySet[r.dstNamedPortSet]; ok {
 		rule.Destination.Ports = append(rule.Destination.Ports, namedPort(np.Name))
@@ -267,6 +303,24 @@ func capitalise(action string) string {
 		return ""
 	}
 	return string(action[0]-'a'+'A') + action[1:]
+}
+
+// AsStaged returns the trace as a cluster reports it when the policies are rendered staged: with
+// the staged kind of every policy.
+func AsStaged(trace []Verdict) []Verdict {
+	out := make([]Verdict, len(trace))
+	for i, v := range trace {
+		if k, ok := stagedKinds[v.Kind]; ok {
+			v.Kind = k
+		}
+		out[i] = v
+	}
+	return out
+}
+
+var stagedKinds = map[string]string{
+	v3.KindGlobalNetworkPolicy: v3.KindStagedGlobalNetworkPolicy,
+	v3.KindNetworkPolicy:       v3.KindStagedNetworkPolicy,
 }
 
 // WriteYAML writes Resources as a multi-document YAML stream, ready for kubectl apply -f.

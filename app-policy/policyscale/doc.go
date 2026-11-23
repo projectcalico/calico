@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,11 +15,13 @@
 // Package policyscale generates the large synthetic policy sets used to benchmark and test the
 // user-mode policy engine in app-policy/checker and its caller in Felix's flow-log collector.
 //
-// One generator, two outputs. A Fixture built from a Spec can be materialised as a
+// One generator, three outputs. A Fixture built from a Spec can be materialised as a
 // policystore.PolicyStore plus a proto.WorkloadEndpoint (what the engine and the collector
-// evaluate against, in unit tests and Go benchmarks) or as Calico resources (Tier,
-// GlobalNetworkPolicy, GlobalNetworkSet) that apply the same policy set to a real cluster. Both
-// come from the same model, so a number measured at the engine level, at the collector level and
+// evaluate against, in unit tests and Go benchmarks), as the ToDataplane updates Felix would send
+// to load it, or as Calico resources (Tier, StagedGlobalNetworkPolicy or GlobalNetworkPolicy,
+// GlobalNetworkSet) that apply the same policy set to a real cluster, staged by default. All
+// three come from the same model, and a test checks that Felix makes of the resources exactly the
+// policies the store holds, so a number measured at the engine level, at the collector level and
 // on a node all describe the same policy set.
 //
 // The presets are the two rule-set shapes measured in production diagnostics from a large
@@ -32,8 +34,8 @@
 //     rules, each matching a destination address (a CIDR for ~75%, a selector-derived IP set for
 //     ~25%) and a handful of destination ports drawn from the measured port distribution. See
 //     DefaultEgress.
-//   - Composite: both applied to one endpoint, the reference set the PMREQ-954 targets are quoted
-//     against.
+//   - Composite: both applied to one endpoint, the reference set the pending-evaluation targets
+//     are quoted against.
 //   - RuleShapes: small rather than large, a rule for each kind of criterion the engine checks, in
 //     both directions, with flows of both IP families aimed at each. See ShapesParams.
 //

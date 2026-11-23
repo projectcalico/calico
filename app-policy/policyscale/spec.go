@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -42,10 +42,17 @@ type Spec struct {
 	Baseline *BaselineParams
 	Egress   *EgressParams
 	Shapes   *ShapesParams
+	// Profile names a profile on the endpoint that allows everything, as the namespace profile
+	// kns.<namespace> of every Kubernetes pod does; a flow that gets past every tier ends there.
+	// Empty leaves the endpoint with no profile.
+	Profile string
 }
 
-// DefaultSeed is the seed the presets use; it is the one the original benchmarks were written
-// with, so their numbers stay comparable.
+// DefaultProfile is the presets' profile: that of a pod in the default namespace.
+const DefaultProfile = "kns.default"
+
+// DefaultSeed is the seed the presets use; engine numbers are comparable across runs only with
+// the same seed.
 const DefaultSeed = 20200
 
 // SizeBucket is one bucket of an IP set size histogram: Sets sets of between MinSize and MaxSize
@@ -63,11 +70,12 @@ type BaselineParams struct {
 	// DenyRules and AllowRules are spread at random over the rule slots; every other rule is a Pass.
 	DenyRules  int
 	AllowRules int
-	// IPSetRefFraction is the fraction of rules that reference an IP set. A referencing rule pairs
-	// the reference with a negated reference to the sentinel set (which holds the denied flow's
-	// addresses) so that it reaches the set lookup whatever order the engine evaluates criteria in
-	// and still misses when the referenced set is absent. Rules with no reference are guarded by a
-	// destination port no generated flow uses (BaselineGuardPort).
+	// IPSetRefFraction is the fraction of rules that reference an IP set. A rule whose set is left
+	// out of the store pairs the reference with a negated reference to the sentinel set (which
+	// holds the denied flow's addresses), so that it still misses when the engine skips the absent
+	// set. A rule whose set is present needs no such guard, and has none: Felix would fold it into
+	// the positive reference, leaving one set lookup per rule. Rules with no reference are guarded
+	// by a destination port no generated flow uses (BaselineGuardPort).
 	IPSetRefFraction float64
 	// MissingIPSets is how many referenced sets to leave out of the store, reproducing the
 	// "IPSet not found" warning storm seen when the store is out of sync.
@@ -168,14 +176,40 @@ func DefaultEgress() EgressParams {
 // Baseline is the baseline preset on its own.
 func Baseline() Spec {
 	p := DefaultBaseline()
-	return Spec{Seed: DefaultSeed, Baseline: &p}
+	return Spec{Seed: DefaultSeed, Baseline: &p, Profile: DefaultProfile}
 }
 
 // EgressAllowList is the egress allow-list preset on its own.
 func EgressAllowList() Spec {
 	p := DefaultEgress()
-	return Spec{Seed: DefaultSeed, Egress: &p}
+	return Spec{Seed: DefaultSeed, Egress: &p, Profile: DefaultProfile}
 }
+
+// Validate reports a Spec that Build can't turn into a faithful policy set: a policy with more
+// rules than the API takes, or an egress allow-list with more rules than distinct CIDRs to give
+// them, which would make later rules repeat earlier rules' destinations.
+func (s Spec) Validate() error {
+	if b := s.Baseline; b != nil && b.RulesPerPolicy > maxRulesPerPolicy {
+		return fmt.Errorf("policyscale: %d rules per baseline policy, more than the API's %d", b.RulesPerPolicy, maxRulesPerPolicy)
+	}
+	if e := s.Egress; e != nil {
+		if e.RulesPerPolicy > maxRulesPerPolicy {
+			return fmt.Errorf("policyscale: %d rules per egress policy, more than the API's %d", e.RulesPerPolicy, maxRulesPerPolicy)
+		}
+		if n := e.Policies * e.RulesPerPolicy; n > egressCIDRPool {
+			return fmt.Errorf("policyscale: %d egress rules, more than the %d distinct CIDRs they draw from", n, egressCIDRPool)
+		}
+	}
+	return nil
+}
+
+const (
+	// maxRulesPerPolicy is the most rules the API takes in one direction of a policy.
+	maxRulesPerPolicy = 1024
+	// egressCIDRPool is the number of /28s in 10.0.0.0/9, from which egress rules draw their
+	// destination CIDRs once there are too many for /24s.
+	egressCIDRPool = 1 << 19
+)
 
 // ScaleFromEnv returns spec with its egress dimensions overridden by the POLICYSCALE_POLICIES,
 // POLICYSCALE_RULES_PER_POLICY and POLICYSCALE_IPSETS environment variables where set, so that
@@ -200,10 +234,10 @@ func ScaleFromEnv(spec Spec) Spec {
 
 // Composite applies both presets to one endpoint: the baseline set governs its ingress
 // evaluations and the allow-list its egress evaluations. This is the reference set the
-// PMREQ-954 targets are quoted against.
+// pending-evaluation targets are quoted against.
 func Composite() Spec {
 	b, e := DefaultBaseline(), DefaultEgress()
-	return Spec{Seed: DefaultSeed, Baseline: &b, Egress: &e}
+	return Spec{Seed: DefaultSeed, Baseline: &b, Egress: &e, Profile: DefaultProfile}
 }
 
 // Preset returns the named preset's Spec with the seed given and any scaling from the
