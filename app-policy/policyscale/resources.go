@@ -157,10 +157,9 @@ func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 	return out
 }
 
-// EndpointLabels returns the labels an endpoint at the given addresses needs on a cluster: the
-// label of each set that holds one of its addresses. A rule picks a set by that label, and with it
-// the endpoints that carry it; Felix finds a named port on the endpoints the rule's selector picks,
-// so without the label a rule that keys on the endpoint's set doesn't see its named ports.
+// EndpointLabels returns the labels of the sets that hold one of the given addresses. An endpoint
+// at those addresses that carries them is picked by the same rule selectors as its addresses are.
+// No rule needs that to find a named port: none keys a named port on its own side's set.
 func (fx *Fixture) EndpointLabels(opts ResourceOptions, addrs ...netip.Addr) map[string]string {
 	opts.defaults()
 	labels := map[string]string{}

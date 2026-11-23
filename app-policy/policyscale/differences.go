@@ -29,6 +29,7 @@ const (
 	SCTPPorts                  Difference = "sctp-ports"
 	UnparsedProtocolsOnBPF     Difference = "unparsed-protocols-on-bpf"
 	ICMPTypeAndCodeRules       Difference = "icmp-type-and-code-rules"
+	ProtocolNamesOnBPF         Difference = "protocol-names-on-bpf"
 	DoNotTrackOrPreDNATPolicy  Difference = "do-not-track-or-pre-dnat-policy"
 	HostEndpoints              Difference = "host-endpoints"
 	NoProfileMatched           Difference = "no-profile-matched"
@@ -124,9 +125,16 @@ var knownDifferences = []KnownDifference{
 		Where:      []Where{Nftables},
 		Why: "Felix renders an ICMP type-and-code match for nftables as icmp type T code C, and the " +
 			"negated one as icmp type != T code != C, which nft rejects. Felix then can't program its " +
-			"table at all, and exits.",
+			"table at all, and exits (EV-7640).",
 		Generated:  true,
 		WholeRules: true,
+	},
+	{
+		Difference: ProtocolNamesOnBPF,
+		Where:      []Where{BPF},
+		Why: "BPF doesn't know the protocol names ICMPv6 and UDPLite, so a rule that names either never " +
+			"matches there, enforced or pending (EV-7633).",
+		Generated: true,
 	},
 	{
 		Difference: DoNotTrackOrPreDNATPolicy,
