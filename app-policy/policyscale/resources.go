@@ -79,13 +79,17 @@ func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 	opts.defaults()
 	var out []runtime.Object
 
+	fingerprint := Fingerprint(fx.Spec)
 	for i, t := range fx.tiers {
 		order := opts.TierOrder + float64(i)
 		action := v3.Action(t.defaultAction)
 		out = append(out, &v3.Tier{
-			TypeMeta:   metav1.TypeMeta{Kind: v3.KindTier, APIVersion: apiVersion},
-			ObjectMeta: metav1.ObjectMeta{Name: t.name},
-			Spec:       v3.TierSpec{Order: &order, DefaultAction: &action},
+			TypeMeta: metav1.TypeMeta{Kind: v3.KindTier, APIVersion: apiVersion},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        t.name,
+				Annotations: map[string]string{FingerprintAnnotation: fingerprint},
+			},
+			Spec: v3.TierSpec{Order: &order, DefaultAction: &action},
 		})
 	}
 

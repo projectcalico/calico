@@ -15,6 +15,7 @@
 package policyscale
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 )
@@ -203,4 +204,25 @@ func ScaleFromEnv(spec Spec) Spec {
 func Composite() Spec {
 	b, e := DefaultBaseline(), DefaultEgress()
 	return Spec{Seed: DefaultSeed, Baseline: &b, Egress: &e}
+}
+
+// Preset returns the named preset's Spec with the seed given and any scaling from the
+// environment applied. Every tool that renders a policy set or sends traffic at one builds its
+// Spec here, so that the same name, seed and environment always give the same fixture.
+func Preset(name string, seed int64) (Spec, error) {
+	var spec Spec
+	switch name {
+	case "baseline":
+		spec = Baseline()
+	case "egress":
+		spec = EgressAllowList()
+	case "composite":
+		spec = Composite()
+	case "shapes":
+		spec = RuleShapes()
+	default:
+		return Spec{}, fmt.Errorf("unknown preset %q: want baseline, egress, composite or shapes", name)
+	}
+	spec.Seed = seed
+	return ScaleFromEnv(spec), nil
 }

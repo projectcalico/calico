@@ -49,26 +49,20 @@ func main() {
 		miss      = flag.Float64("miss-fraction", 0.1, "fraction of printed flows that match no rule")
 		repeat    = flag.Float64("repeat-fraction", 0.5, "fraction of printed flows that repeat an earlier one with a new source port")
 		overDst   = flag.String("override-dst", "", "with -flows: replace each flow's destination with this address before working out its expected verdict, matching flowgen -override-dst")
+		printFP   = flag.Bool("fingerprint", false, "print the fingerprint of the policy set and exit; the rendered tiers carry it in the "+policyscale.FingerprintAnnotation+" annotation, and flowgen -fixture checks it")
 	)
 	flag.Parse()
 
-	var spec policyscale.Spec
-	switch *preset {
-	case "baseline":
-		spec = policyscale.Baseline()
-	case "egress":
-		spec = policyscale.EgressAllowList()
-	case "composite":
-		spec = policyscale.Composite()
-	case "shapes":
-		spec = policyscale.RuleShapes()
-	default:
-		fmt.Fprintf(os.Stderr, "unknown preset %q\n", *preset)
+	spec, err := policyscale.Preset(*preset, *seed)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
-	spec.Seed = *seed
-	spec = policyscale.ScaleFromEnv(spec)
 	fx := policyscale.Build(spec)
+	if *printFP {
+		fmt.Println(policyscale.Fingerprint(fx.Spec))
+		return
+	}
 
 	w := os.Stdout
 	if *out != "-" {
@@ -83,8 +77,8 @@ func main() {
 	bw := bufio.NewWriter(w)
 	defer bw.Flush()
 
-	fmt.Fprintf(os.Stderr, "%s: %d ingress rules in %d policies, %d egress rules in %d policies, %d IP sets with %d members\n",
-		*preset, fx.Rules(policyscale.Ingress), fx.Policies(policyscale.Ingress),
+	fmt.Fprintf(os.Stderr, "%s (fingerprint %s): %d ingress rules in %d policies, %d egress rules in %d policies, %d IP sets with %d members\n",
+		*preset, policyscale.Fingerprint(fx.Spec), fx.Rules(policyscale.Ingress), fx.Policies(policyscale.Ingress),
 		fx.Rules(policyscale.Egress), fx.Policies(policyscale.Egress), fx.IPSets(), fx.IPSetMembers())
 
 	if *flows > 0 {
