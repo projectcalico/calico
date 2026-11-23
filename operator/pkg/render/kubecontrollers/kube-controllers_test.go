@@ -330,6 +330,24 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		Expect(d.Spec.Template.Spec.DNSPolicy).To(BeEmpty())
 	})
 
+	It("should leave the objects it shares with es-calico-kube-controllers while terminating", func() {
+		cfg.Terminating = true
+		cfg.ManagedClusterWatchBinding = true
+		cfg.Installation.KubernetesProvider = operatorv1.ProviderOpenShift
+		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
+		Expect(component.ResolveImages(nil)).To(BeNil())
+		toCreate, toDelete := component.Objects()
+		Expect(toCreate).To(BeEmpty())
+
+		Expect(rtest.GetResource(toDelete, kubecontrollers.KubeController, common.CalicoNamespace, "apps", "v1", "Deployment")).NotTo(BeNil())
+		Expect(rtest.GetResource(toDelete, kubecontrollers.KubeControllerRole, "", "rbac.authorization.k8s.io", "v1", "ClusterRole")).NotTo(BeNil())
+		Expect(rtest.GetResource(toDelete, kubecontrollers.KubeControllerRoleBinding, "", "rbac.authorization.k8s.io", "v1", "ClusterRoleBinding")).NotTo(BeNil())
+
+		Expect(rtest.GetResource(toDelete, kubecontrollers.KubeControllerServiceAccount, common.CalicoNamespace, "", "v1", "ServiceAccount")).To(BeNil())
+		Expect(rtest.GetResource(toDelete, kubecontrollers.ManagedClustersWatchRoleBindingName, "", "rbac.authorization.k8s.io", "v1", "ClusterRoleBinding")).To(BeNil())
+		Expect(rtest.GetResource(toDelete, "calico-kube-controllers-endpoint-controller", "", "rbac.authorization.k8s.io", "v1", "ClusterRoleBinding")).To(BeNil())
+	})
+
 	It("should render resourcerequirements", func() {
 		rr := &corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
