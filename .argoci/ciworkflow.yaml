@@ -17,6 +17,17 @@ notifications:
 # Generated from the Go import graph; every `dependsOn:` name resolves here.
 dependencies: .argoci/depstree.yaml
 
+# Hands go-cache's build and module caches to the go-build steps. Shared: each
+# name is one writer's disk, mounted read-only by its readers, so a name must
+# never gain a second writer, a retry, or a `when`.
+cache:
+  strategy: shared
+  size: 32Gi
+  storageClass: premium-rwo
+  # A PR's next run starts go-cache from what its last one built. Go's caches are
+  # content-addressed, so what is stale goes unused rather than wrong.
+  persist: [go]
+
 # A promotion runs at the source run's commit, so an old build republishes
 # itself rather than master.
 promotions:
@@ -60,8 +71,12 @@ promotions:
 # uses the public one — falling back to the source repositories on any error,
 # since go does not retry a download that breaks mid-stream.
 globalPrologue: |
-  mkdir -p /go/src/github.com/projectcalico
-  ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+  # A go-build step is checked out there already; linking it onto itself would
+  # leave a stray link inside the tree.
+  if [ "${CI_HOME}/${CI_GIT_DIR}" != /go/src/github.com/projectcalico/calico ]; then
+    mkdir -p /go/src/github.com/projectcalico
+    ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+  fi
   export GOPROXY="${GOPROXY:-https://proxy.golang.org|direct}"
   # Anonymous Docker Hub pulls are rate limited. The daemon is up by now on any
   # step that has one. A VM step never gets the credentials: the bundle is loaded
@@ -438,6 +453,7 @@ includes:
         - ^\.semaphore/collect-artifacts$
         - ^\.semaphore/scripts/load-felix-prereqs\.sh$
         - ^\.argoci/scripts/load-cached-images$
+        - ^\.argoci/scripts/vm-go-cache$
         - ^\.argoci/scripts/vm-fleet-setup\.sh$
         - ^\.argoci/scripts/felix-fv-plan$
         - ^hack/cmd/felix-fv-memo/
@@ -466,12 +482,12 @@ includes:
   - path: .argoci/modules/20-typha.yaml
     changes:
       dependsOn: [typha]
-      in: ['^\.argoci/modules/20-typha\.yaml$']
+      in: ['^\.argoci/modules/20-typha\.yaml$', '^\.argoci/scripts/(vm-go-cache|load-cached-images)$']
 
   - path: .argoci/modules/20-cni-plugin.yaml
     changes:
       dependsOn: [cni-plugin]
-      in: ['^\.argoci/modules/20-cni-plugin\.yaml$']
+      in: ['^\.argoci/modules/20-cni-plugin\.yaml$', '^\.argoci/scripts/(vm-go-cache|load-cached-images)$']
 
   # The FV drivers are shell and PowerShell rather than Go, so the generated
   # component does not reach them and they are listed here.
@@ -512,6 +528,7 @@ includes:
         - ^whisker/
         - ^\.argoci/modules/20-e2e\.yaml$
         - ^\.argoci/scripts/sandcat/
+        - ^\.argoci/scripts/(vm-go-cache|load-cached-images)$
 
   - path: .argoci/modules/20-manifest-install.yaml
     changes:
@@ -525,6 +542,7 @@ includes:
         - ^operator/pkg/controller/migration/
         - ^Makefile$
         - ^\.argoci/modules/20-manifest-install\.yaml$
+        - ^\.argoci/scripts/(vm-go-cache|load-cached-images)$
 
   - path: .argoci/modules/20-kubevirt-live-migration.yaml
     changes:
@@ -532,3 +550,4 @@ includes:
       in:
         - ^e2e/pkg/
         - ^\.argoci/modules/20-kubevirt-live-migration\.yaml$
+        - ^\.argoci/scripts/(vm-go-cache|load-cached-images)$

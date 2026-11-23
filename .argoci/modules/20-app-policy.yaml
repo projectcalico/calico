@@ -12,13 +12,14 @@ defaults:
 steps:
   - name: app-policy-ci
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
       - name: NATIVE_GO_BUILD
         value: "true"
-    depends: [check-go]
+    depends: [check-go, go-cache]
     requests: {cpu: 4500m, memory: 4.5Gi}
+    cache:
+      - {name: go, mode: read, path: /cache/go}
     commands: |
+      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" app-policy-ci) || exit 1; eval "$go_env"
       cd app-policy
       make ci
     epilogue: |
