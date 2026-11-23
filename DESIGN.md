@@ -9,7 +9,9 @@ and in each component's `CLAUDE.md` (or `AGENTS.md`).
 
 If you're looking for *how* to do something in this repo, look in
 `CLAUDE.md`. If you're looking for *what the code promises*, look
-here or in the matching component's `DESIGN.md`.
+here or in the matching component's `DESIGN.md`. For the words to
+use, look in [`GLOSSARY.md`](GLOSSARY.md) and the `GLOSSARY.md`
+beside each component's design doc.
 
 ## 1. Calico in one paragraph
 
