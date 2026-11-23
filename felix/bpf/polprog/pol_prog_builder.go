@@ -1312,8 +1312,12 @@ func protocolToNumber(protocol *proto.Protocol) uint8 {
 			pcol = 17
 		case "icmp":
 			pcol = 1
+		case "icmpv6":
+			pcol = 58
 		case "sctp":
 			pcol = 132
+		case "udplite":
+			pcol = 136
 		}
 	case *proto.Protocol_Number:
 		pcol = uint8(p.Number)
@@ -1384,12 +1388,16 @@ func protocolToName(protocol *proto.Protocol) string {
 		switch p.Number {
 		case 6:
 			pcol = "tcp"
-		case 11:
+		case 17:
 			pcol = "udp"
 		case 1:
 			pcol = "icmp"
+		case 58:
+			pcol = "icmpv6"
 		case 132:
 			pcol = "sctp"
+		case 136:
+			pcol = "udplite"
 		}
 	}
 	return pcol
