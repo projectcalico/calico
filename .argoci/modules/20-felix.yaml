@@ -151,7 +151,7 @@ steps:
         - /cache/calico-image/calico.tar:calico-build/calico.tar
         - /cache/calico-build/calico-cgo-amd64:calico-build/calico-cgo-amd64
         - /cache/calico-build/calico-race-amd64:calico-build/calico-race-amd64
-        - /cache/calico-build/libbpf-amd64.tar.zst:calico-build/libbpf-amd64.tar.zst
+        - /cache/calico-build/libbpf-amd64.tar:calico-build/libbpf-amd64.tar
       source: |
         set -euo pipefail
         trap 'artifact push job "${repo:-.}/felix/report" --destination test-results || true' EXIT

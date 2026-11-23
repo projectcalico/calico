@@ -325,7 +325,8 @@ steps:
       test -f "felix/bpf-gpl/.libbpf-${LIBBPF_VERSION}" || { echo "libbpf version marker felix/bpf-gpl/.libbpf-${LIBBPF_VERSION} missing" >&2; exit 1; }
       out=/cache/calico-build
       cp cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64 "$out/"
-      tar --use-compress-program="zstd -3" -cf "$out/libbpf-amd64.tar.zst" -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
+      # Uncompressed: the go-build image has no zstd.
+      tar -cf "$out/libbpf-amd64.tar" -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
       # docker/calico/Dockerfile's image, as one stage: rootless buildkit writes an
       # empty tar for a multi-stage build. The tree is what its first two stages
       # assemble.
@@ -546,7 +547,7 @@ steps:
     cache:
       - {name: calico-build, mode: read, path: /cache/calico-build}
     commands: |
-      tar --use-compress-program="zstd -d" -xf /cache/calico-build/libbpf-amd64.tar.zst -C felix/bpf-gpl
+      tar -xf /cache/calico-build/libbpf-amd64.tar -C felix/bpf-gpl
       make -C e2e build
       make bin/ginkgo
       make -C e2e/images/rapidclient build

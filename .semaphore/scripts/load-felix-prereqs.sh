@@ -40,7 +40,10 @@ fetch_artifact() {
 }
 
 # libbpf first: the cgo and race binaries below are built against it.
-if have_credentials; then
+if [ -n "${CALICO_BUILD_DIR:-}" ]; then
+  # Uncompressed there, since the go-build image that writes it has no zstd.
+  tar -xf "${CALICO_BUILD_DIR}/libbpf-${ARCH}.tar" -C felix/bpf-gpl
+elif have_credentials; then
   fetch_artifact "libbpf-${ARCH}.tar.zst" "/tmp/libbpf-${ARCH}.tar.zst"
   tar --use-compress-program="zstd -d" -xf "/tmp/libbpf-${ARCH}.tar.zst" -C felix/bpf-gpl
 else

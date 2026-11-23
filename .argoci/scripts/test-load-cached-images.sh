@@ -70,7 +70,8 @@ STUB
 chmod +x "$stub_dir"/*
 export PATH="$stub_dir:$PATH" STUB_LOG="$stub_log"
 export CALICO_S3_HOST=s3.example.com S3_WORKFLOW_DIR=s3://test-bucket/ci/workflow/1
-unset CALICO_S3_ACCESS_KEY CALICO_S3_SECRET_KEY
+# An ArgoCI pod sets these; the cases set them only where they want them.
+unset CALICO_S3_ACCESS_KEY CALICO_S3_SECRET_KEY CI_ARTIFACT_STORAGE CALICO_BUILD_DIR CALICO_IMAGE_TAR
 
 run() {
   : >"$stub_log"
@@ -193,10 +194,11 @@ rm -f "$calico_marker"
 # 6c. Felix prereqs from a local build directory: copied, not downloaded.
 build_dir="$work/calico-build"
 mkdir -p "$build_dir"
-touch "$build_dir/libbpf-amd64.tar.zst" "$build_dir/calico-cgo-amd64" "$build_dir/calico-race-amd64"
+touch "$build_dir/libbpf-amd64.tar" "$build_dir/calico-cgo-amd64" "$build_dir/calico-race-amd64"
 out=$(CALICO_BUILD_DIR="$build_dir" run "$repo_root/.semaphore/scripts/load-felix-prereqs.sh" 2>&1)
 rc=$?
 check "felix prereqs from a build dir RC=0" [ "$rc" = 0 ]
+check "felix prereqs from a build dir unpack libbpf uncompressed" grep -q "^tar -xf $build_dir/libbpf-amd64.tar -C felix/bpf-gpl" "$stub_log"
 check "felix prereqs from a build dir download nothing" test "$(grep -c -E '^(artifact|s3cmd|curl) ' "$stub_log")" = 0
 check "felix prereqs from a build dir build nothing" test "$(grep -c '^make ' "$stub_log")" = 0
 
