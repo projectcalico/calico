@@ -34,9 +34,15 @@
 //     DefaultEgress.
 //   - Composite: both applied to one endpoint, the reference set the PMREQ-954 targets are quoted
 //     against.
+//   - RuleShapes: small rather than large, a rule for each kind of criterion the engine checks, in
+//     both directions, with flows of both IP families aimed at each. See ShapesParams.
 //
 // The fixture also knows the answer. Fixture.Expect computes the verdict the engine must reach
 // for a flow from the generator's own model of each rule, independently of the engine's matching
 // code, so it serves as the oracle for differential tests; MatchingFlow, DeniedFlow and Sampler
 // produce flows that exercise the walk at chosen depths or following a configurable flow model.
+//
+// The oracle answers with what the dataplanes enforce. Where the engine is known to differ from
+// them, or one dataplane from the others, the case is listed in KnownDifferences, and the
+// rule-shape preset marks the flows that can expose it so a test can leave them out.
 package policyscale

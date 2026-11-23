@@ -98,7 +98,7 @@ func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 				policyOrder++
 				rules := make([]v3.Rule, len(p.rules))
 				for i, r := range p.rules {
-					rules[i] = r.resource(opts.SetLabelKey)
+					rules[i] = fx.ruleResource(r, opts.SetLabelKey)
 				}
 				var types []v3.PolicyType
 				var ingress, egress []v3.Rule
@@ -141,6 +141,10 @@ func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 
 	for _, id := range fx.setOrder {
 		s := fx.sets[id]
+		if s.isIPPort() {
+			// Felix makes these from named ports and services, which are rendered on the rules.
+			continue
+		}
 		out = append(out, &v3.GlobalNetworkSet{
 			TypeMeta: metav1.TypeMeta{Kind: v3.KindGlobalNetworkSet, APIVersion: apiVersion},
 			ObjectMeta: metav1.ObjectMeta{
@@ -153,23 +157,97 @@ func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 	return out
 }
 
-func (r *ruleModel) resource(setLabelKey string) v3.Rule {
+func (fx *Fixture) ruleResource(r *ruleModel, setLabelKey string) v3.Rule {
 	rule := v3.Rule{Action: v3.Action(capitalise(r.action))}
-	if len(r.dstPorts) > 0 {
+	rule.Protocol = r.protocol.resource()
+	rule.NotProtocol = r.notProtocol.resource()
+	if len(r.dstPorts) > 0 && rule.Protocol == nil {
 		tcp := numorstring.ProtocolFromString("TCP")
 		rule.Protocol = &tcp
-		for _, p := range r.dstPorts {
-			rule.Destination.Ports = append(rule.Destination.Ports, numorstring.SinglePort(uint16(p)))
-		}
+	}
+	if r.ipVersion != 0 {
+		v := r.ipVersion
+		rule.IPVersion = &v
+	}
+	rule.ICMP = r.icmp.resource()
+	rule.NotICMP = r.notICMP.resource()
+	for _, p := range r.dstPorts {
+		rule.Destination.Ports = append(rule.Destination.Ports, numorstring.SinglePort(uint16(p)))
+	}
+	rule.Destination.Ports = append(rule.Destination.Ports, portResources(r.dstPortRanges)...)
+	rule.Source.Ports = portResources(r.srcPortRanges)
+	rule.Destination.NotPorts = portResources(r.notDstPortRanges)
+	if np, ok := fx.namedPortBySet[r.dstNamedPortSet]; ok {
+		rule.Destination.Ports = append(rule.Destination.Ports, namedPort(np.Name))
+	}
+	if np, ok := fx.namedPortBySet[r.notDstNamedPortSet]; ok {
+		rule.Destination.NotPorts = append(rule.Destination.NotPorts, namedPort(np.Name))
+	}
+	if svc, ok := fx.serviceBySet[r.dstServiceSet]; ok {
+		rule.Destination.Services = &v3.ServiceMatch{Name: svc.Name, Namespace: svc.Namespace}
 	}
 	if r.dstNet.IsValid() {
 		rule.Destination.Nets = []string{r.dstNet.String()}
 	}
+	rule.Destination.Nets = append(rule.Destination.Nets, prefixStrings(r.dstNets)...)
+	rule.Destination.NotNets = prefixStrings(r.notDstNets)
+	rule.Source.Nets = prefixStrings(r.srcNets)
+	rule.Source.NotNets = prefixStrings(r.notSrcNets)
 	rule.Source.Selector = setSelector(setLabelKey, r.srcSet)
 	rule.Source.NotSelector = setSelector(setLabelKey, r.notSrcSet)
 	rule.Destination.Selector = setSelector(setLabelKey, r.dstSet)
 	rule.Destination.NotSelector = setSelector(setLabelKey, r.notDstSet)
 	return rule
+}
+
+func (p *protocolModel) resource() *numorstring.Protocol {
+	if p == nil {
+		return nil
+	}
+	var out numorstring.Protocol
+	if p.name != "" {
+		out = numorstring.ProtocolFromString(p.name)
+	} else {
+		out = numorstring.ProtocolFromInt(uint8(p.number))
+	}
+	return &out
+}
+
+func (m *icmpModel) resource() *v3.ICMPFields {
+	if m == nil {
+		return nil
+	}
+	typ := m.typ
+	f := &v3.ICMPFields{Type: &typ}
+	if m.hasCode {
+		code := m.code
+		f.Code = &code
+	}
+	return f
+}
+
+func portResources(ranges []portRange) []numorstring.Port {
+	var out []numorstring.Port
+	for _, r := range ranges {
+		if r.first == r.last {
+			out = append(out, numorstring.SinglePort(uint16(r.first)))
+			continue
+		}
+		p, err := numorstring.PortFromRange(uint16(r.first), uint16(r.last))
+		if err != nil {
+			panic(err)
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+func namedPort(name string) numorstring.Port {
+	p, err := numorstring.NamedPort(name)
+	if err != nil {
+		panic(err)
+	}
+	return p
 }
 
 func setSelector(key, setID string) string {

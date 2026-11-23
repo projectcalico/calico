@@ -38,7 +38,7 @@ import (
 
 func main() {
 	var (
-		preset    = flag.String("preset", "composite", "policy set to render: baseline, egress or composite")
+		preset    = flag.String("preset", "composite", "policy set to render: baseline, egress, composite or shapes")
 		seed      = flag.Int64("seed", policyscale.DefaultSeed, "generator seed")
 		selector  = flag.String("selector", "policyscale.projectcalico.org/target == 'true'", "endpoint selector the policies apply to")
 		staged    = flag.Bool("staged", true, "render StagedGlobalNetworkPolicy rather than GlobalNetworkPolicy; staged policies are evaluated for the pending verdict but program no enforcement rules, so the set is safe to apply to a live cluster")
@@ -58,6 +58,8 @@ func main() {
 		spec = policyscale.EgressAllowList()
 	case "composite":
 		spec = policyscale.Composite()
+	case "shapes":
+		spec = policyscale.RuleShapes()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown preset %q\n", *preset)
 		os.Exit(2)
@@ -88,8 +90,16 @@ func main() {
 		if *direction == "ingress" {
 			dir = policyscale.Ingress
 		}
-		s := fx.NewSampler(*seed, policyscale.FlowModel{Direction: dir, MissFraction: *miss, RepeatFraction: *repeat})
 		fmt.Fprintln(bw, "protocol\tsrc\tsport\tdst\tdport\texpected")
+		if spec.Shapes != nil {
+			// The shape preset's flows are the point of it: print each one aimed at its rules.
+			for _, sf := range fx.ShapeFlows(dir) {
+				f := sf.Flow
+				fmt.Fprintf(bw, "%d\t%s\t%d\t%s\t%d\t%v\t%s %v\n", f.Protocol, f.SrcIP, f.SrcPort, f.DstIP, f.DstPort, fx.Expect(dir, f), sf.Name, sf.Differences)
+			}
+			return
+		}
+		s := fx.NewSampler(*seed, policyscale.FlowModel{Direction: dir, MissFraction: *miss, RepeatFraction: *repeat})
 		for i := 0; i < *flows; i++ {
 			f := s.Next()
 			fmt.Fprintf(bw, "%d\t%s\t%d\t%s\t%d\t%v\n", f.Protocol, f.SrcIP, f.SrcPort, f.DstIP, f.DstPort, fx.Expect(dir, f))

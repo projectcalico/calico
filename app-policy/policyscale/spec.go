@@ -40,6 +40,7 @@ type Spec struct {
 	Seed     int64
 	Baseline *BaselineParams
 	Egress   *EgressParams
+	Shapes   *ShapesParams
 }
 
 // DefaultSeed is the seed the presets use; it is the one the original benchmarks were written

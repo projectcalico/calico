@@ -37,7 +37,7 @@ func (fx *Fixture) LoadStore(store *policystore.PolicyStore) {
 		if s.missing {
 			continue
 		}
-		set := policystore.NewIPSet(proto.IPSetUpdate_NET)
+		set := policystore.NewIPSet(s.protoType())
 		for _, m := range s.members {
 			set.AddString(m)
 		}
@@ -63,7 +63,7 @@ func (fx *Fixture) Updates() []*proto.ToDataplane {
 			continue
 		}
 		updates = append(updates, &proto.ToDataplane{Payload: &proto.ToDataplane_IpsetUpdate{
-			IpsetUpdate: &proto.IPSetUpdate{Id: id, Type: proto.IPSetUpdate_NET, Members: s.members},
+			IpsetUpdate: &proto.IPSetUpdate{Id: id, Type: s.protoType(), Members: s.members},
 		}})
 	}
 	for _, t := range fx.tiers {
@@ -94,4 +94,11 @@ func (fx *Fixture) Endpoint() *proto.WorkloadEndpoint {
 		ep.Tiers = append(ep.Tiers, ti)
 	}
 	return ep
+}
+
+func (s *ipSetModel) protoType() proto.IPSetUpdate_IPSetType {
+	if s.isIPPort() {
+		return proto.IPSetUpdate_IP_AND_PORT
+	}
+	return proto.IPSetUpdate_NET
 }

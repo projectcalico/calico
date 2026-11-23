@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/netip"
 	"slices"
+	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
@@ -47,7 +48,7 @@ func (v Verdict) String() string {
 
 // Expect returns the trace the engine must report for the flow in the given direction, computed
 // from the generator's own model of each rule rather than from the proto the engine reads, so that
-// the two are independent. It reproduces the engine's tier walk: policies of a tier in order,
+// the two are independent. It follows what the dataplanes enforce: policies of a tier in order,
 // first matching rule decides; Allow or Deny ends the evaluation; Pass moves to the next tier; a
 // tier none of whose policies matched applies its default action, reported against the tier's
 // last policy, with anything but Pass denying; and with no profiles on the endpoint, an evaluation
@@ -89,11 +90,17 @@ func (fx *Fixture) Expect(dir Direction, f *Flow) []Verdict {
 	return append(trace, Verdict{Kind: v3.KindProfile, Tier: ProfileName, Policy: ProfileName, Index: TierDefaultIndex, Action: "deny"})
 }
 
-// ruleMatches evaluates a rule's criteria against the flow. The criteria are the ones the
-// generator emits; each mirrors the engine's semantics for that field:
+// ruleMatches evaluates a rule's criteria against the flow, the way the dataplanes render them:
 //   - a protocol outside 1..255 matches no rule;
-//   - a port list matches when it lists the flow's destination port;
-//   - a CIDR matches when it contains the destination address;
+//   - a rule for one IP version, explicit or taken from an ICMP protocol name, matches only flows
+//     of that family;
+//   - ICMP type and code criteria, negated or not, match only ICMP packets of the flow's family,
+//     whose type and code the flow carries in its destination port; a negated type and code
+//     excludes only packets that have both;
+//   - port lists and named ports match when either lists the port; a named port or service is an
+//     IP+port set holding the address, protocol and port;
+//   - a CIDR list keeps only the entries of the flow's family, and a list with none left drops the
+//     rule from that family;
 //   - a positive IP set reference requires the address to be a member; a negated one requires it
 //     not to be; a reference to a set the store does not hold is skipped, as the engine skips it;
 //   - an address that is not an IP (nil) is a member of no set and inside no CIDR.
@@ -101,19 +108,143 @@ func (fx *Fixture) ruleMatches(r *ruleModel, f *Flow) bool {
 	if f.Protocol < 1 || f.Protocol > 255 {
 		return false
 	}
-	if len(r.dstPorts) > 0 && !slices.Contains(r.dstPorts, int32(f.DstPort)) {
+	family := flowFamily(f)
+	if v := r.effectiveIPVersion(); v != 0 && v != family {
 		return false
 	}
+	if r.protocol != nil && f.Protocol != r.protocol.num() {
+		return false
+	}
+	if r.notProtocol != nil && f.Protocol == r.notProtocol.num() {
+		return false
+	}
+	if !icmpMatches(r, f, family) {
+		return false
+	}
+	if !fx.dstPortMatches(r, f) || !portInRanges(r.srcPortRanges, f.SrcPort, true) {
+		return false
+	}
+	if portInRanges(r.notDstPortRanges, f.DstPort, false) || fx.ipPortSetHolds(r.notDstNamedPortSet, f.DstIP, f.Protocol, f.DstPort, false) {
+		return false
+	}
+	dstNets := r.dstNets
 	if r.dstNet.IsValid() {
-		a, ok := toAddr(f.DstIP)
-		if !ok || !r.dstNet.Contains(a) {
-			return false
-		}
+		dstNets = append([]netip.Prefix{r.dstNet}, dstNets...)
+	}
+	if !netsMatch(r.srcNets, f.SrcIP, family, false) || !netsMatch(r.notSrcNets, f.SrcIP, family, true) ||
+		!netsMatch(dstNets, f.DstIP, family, false) || !netsMatch(r.notDstNets, f.DstIP, family, true) {
+		return false
+	}
+	if r.dstServiceSet != "" && !fx.ipPortSetHolds(r.dstServiceSet, f.DstIP, f.Protocol, f.DstPort, true) {
+		return false
 	}
 	return fx.setAllows(r.srcSet, f.SrcIP, true) &&
 		fx.setAllows(r.notSrcSet, f.SrcIP, false) &&
 		fx.setAllows(r.dstSet, f.DstIP, true) &&
 		fx.setAllows(r.notDstSet, f.DstIP, false)
+}
+
+// effectiveIPVersion is the rule's IP version, or the one its ICMP protocol name implies.
+func (r *ruleModel) effectiveIPVersion() int {
+	if r.ipVersion != 0 || r.protocol == nil {
+		return r.ipVersion
+	}
+	switch strings.ToLower(r.protocol.name) {
+	case "icmp":
+		return 4
+	case "icmpv6":
+		return 6
+	}
+	return 0
+}
+
+func icmpMatches(r *ruleModel, f *Flow, family int) bool {
+	if r.icmp == nil && r.notICMP == nil {
+		return true
+	}
+	if !(f.Protocol == ProtocolICMP && family == 4) && !(f.Protocol == ProtocolICMPv6 && family == 6) {
+		return false
+	}
+	typ, code := ICMPTypeCode(f)
+	if r.icmp != nil && (typ != r.icmp.typ || r.icmp.hasCode && code != r.icmp.code) {
+		return false
+	}
+	if r.notICMP != nil && typ == r.notICMP.typ && (!r.notICMP.hasCode || code == r.notICMP.code) {
+		return false
+	}
+	return true
+}
+
+// dstPortMatches applies the rule's destination ports and named port: with either present, the
+// flow's port must be listed or be the named port on the destination address.
+func (fx *Fixture) dstPortMatches(r *ruleModel, f *Flow) bool {
+	if len(r.dstPorts) == 0 && len(r.dstPortRanges) == 0 && r.dstNamedPortSet == "" {
+		return true
+	}
+	return slices.Contains(r.dstPorts, int32(f.DstPort)) ||
+		portInRanges(r.dstPortRanges, f.DstPort, false) ||
+		fx.ipPortSetHolds(r.dstNamedPortSet, f.DstIP, f.Protocol, f.DstPort, false)
+}
+
+// portInRanges reports whether the port is in one of the ranges, or ifEmpty when there are none.
+func portInRanges(ranges []portRange, port int, ifEmpty bool) bool {
+	if len(ranges) == 0 {
+		return ifEmpty
+	}
+	for _, r := range ranges {
+		if int32(port) >= r.first && int32(port) <= r.last {
+			return true
+		}
+	}
+	return false
+}
+
+// ipPortSetHolds reports whether the IP+port set holds the address, protocol and port. A set the
+// store doesn't hold reports ifMissing, matching how the engine treats each kind of reference.
+func (fx *Fixture) ipPortSetHolds(setID string, ip net.IP, protocol, port int, ifMissing bool) bool {
+	if setID == "" {
+		return false
+	}
+	s := fx.sets[setID]
+	if s.missing {
+		return ifMissing
+	}
+	a, ok := toAddr(ip)
+	if !ok {
+		return false
+	}
+	_, held := s.ipPorts[ipPortMember{addr: a, protocol: protocol, port: port}]
+	return held
+}
+
+// netsMatch applies a CIDR list as the dataplanes render it: only the entries of the flow's
+// family are kept, and a list with none left drops the rule from that family. A flow whose family
+// isn't known keeps every entry.
+func netsMatch(nets []netip.Prefix, ip net.IP, family int, negated bool) bool {
+	if len(nets) == 0 {
+		return true
+	}
+	kept := nets
+	if family != 0 {
+		kept = nil
+		for _, n := range nets {
+			if n.Addr().Is4() == (family == 4) {
+				kept = append(kept, n)
+			}
+		}
+		if len(kept) == 0 {
+			return false
+		}
+	}
+	a, ok := toAddr(ip)
+	contained := false
+	for _, n := range kept {
+		if ok && n.Contains(a) {
+			contained = true
+			break
+		}
+	}
+	return contained != negated
 }
 
 // setAllows reports whether a (possibly negated) reference to a set lets the address through.
@@ -131,6 +262,33 @@ func (fx *Fixture) setAllows(setID string, ip net.IP, positive bool) bool {
 	}
 	_, member := s.addrs[a]
 	return member == positive
+}
+
+// flowFamily returns 4 or 6 for the family of the flow's addresses, destination first, or 0 when
+// neither is an IP address.
+func flowFamily(f *Flow) int {
+	for _, ip := range []net.IP{f.DstIP, f.SrcIP} {
+		if a, ok := toAddr(ip); ok {
+			if a.Is4() {
+				return 4
+			}
+			return 6
+		}
+	}
+	return 0
+}
+
+// num is the protocol's number, from its name when it has one.
+func (p *protocolModel) num() int {
+	if p.name == "" {
+		return p.number
+	}
+	return protocolNumbers[strings.ToLower(p.name)]
+}
+
+var protocolNumbers = map[string]int{
+	"icmp": ProtocolICMP, "tcp": ProtocolTCP, "udp": ProtocolUDP,
+	"icmpv6": ProtocolICMPv6, "sctp": ProtocolSCTP, "udplite": ProtocolUDPLite,
 }
 
 func toAddr(ip net.IP) (netip.Addr, bool) {

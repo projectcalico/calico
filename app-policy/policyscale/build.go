@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/netip"
+	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -57,6 +58,13 @@ type Fixture struct {
 
 	missingRefs  int
 	egressTarget *EgressTarget
+
+	shapeRules     [2][]*ShapeRule
+	shapeUnmatched [2][]ShapeFlow
+	namedPorts     []NamedPort
+	services       []Service
+	namedPortBySet map[string]NamedPort
+	serviceBySet   map[string]Service
 }
 
 // EgressTarget describes the one egress rule a matching flow is built to hit when
@@ -92,24 +100,71 @@ type ruleModel struct {
 	dstPorts                             []int32
 	dstNet                               netip.Prefix
 	srcSet, notSrcSet, dstSet, notDstSet string
+
+	// The criteria below are used by the rule-shape preset; see shapes.go.
+	protocol, notProtocol *protocolModel
+	ipVersion             int // 0 for either family, else 4 or 6.
+	icmp, notICMP         *icmpModel
+	srcPortRanges         []portRange
+	dstPortRanges         []portRange
+	notDstPortRanges      []portRange
+	srcNets, notSrcNets   []netip.Prefix
+	dstNets, notDstNets   []netip.Prefix
+	// IP+port sets: a named port on the destination, its negation, and a destination service.
+	dstNamedPortSet, notDstNamedPortSet string
+	dstServiceSet                       string
+
+	// shape is set on the rules the rule-shape preset builds.
+	shape *ShapeRule
 }
+
+// protocolModel is a rule's protocol as the API spells it: a name, or a number when name is empty.
+type protocolModel struct {
+	name   string
+	number int
+}
+
+// icmpModel is a rule's ICMP type, and code when hasCode is set.
+type icmpModel struct {
+	typ, code int
+	hasCode   bool
+}
+
+type portRange struct{ first, last int32 }
 
 type ipSetModel struct {
 	id      string
-	members []string // CIDR strings, as the store and the resources take them.
+	members []string // CIDR strings, or "ip,proto:port" for an IP+port set, as the store takes them.
 	addrs   map[netip.Addr]struct{}
+	// ipPorts holds the members of an IP+port set, which is the kind of set Felix sends for named
+	// ports and service matches.
+	ipPorts map[ipPortMember]struct{}
 	missing bool
+}
+
+type ipPortMember struct {
+	addr     netip.Addr
+	protocol int
+	port     int
 }
 
 // Build materialises a Spec. Each preset draws from its own generator seeded with Spec.Seed, so a
 // preset builds the same rules whether it is used alone or in a composite.
 func Build(spec Spec) *Fixture {
-	fx := &Fixture{Spec: spec, sets: map[string]*ipSetModel{}}
+	fx := &Fixture{
+		Spec:           spec,
+		sets:           map[string]*ipSetModel{},
+		namedPortBySet: map[string]NamedPort{},
+		serviceBySet:   map[string]Service{},
+	}
 	if spec.Baseline != nil {
 		fx.buildBaseline(rand.New(rand.NewSource(spec.Seed)), *spec.Baseline)
 	}
 	if spec.Egress != nil {
 		fx.buildEgress(rand.New(rand.NewSource(spec.Seed)), *spec.Egress)
+	}
+	if spec.Shapes != nil {
+		fx.buildShapes(*spec.Shapes)
 	}
 	for _, t := range fx.tiers {
 		for dir, policies := range t.policies {
@@ -344,6 +399,26 @@ func (fx *Fixture) addSet(id string, members []string) {
 	fx.setOrder = append(fx.setOrder, id)
 }
 
+// addIPPortSet adds an IP+port set holding the given members.
+func (fx *Fixture) addIPPortSet(id string, members []ipPortMember) {
+	if _, ok := fx.sets[id]; ok {
+		return
+	}
+	s := &ipSetModel{id: id, ipPorts: make(map[ipPortMember]struct{}, len(members))}
+	for _, m := range members {
+		s.ipPorts[m] = struct{}{}
+		s.members = append(s.members, fmt.Sprintf("%s,%s:%d", m.addr, l4ProtocolName[m.protocol], m.port))
+	}
+	fx.sets[id] = s
+	fx.setOrder = append(fx.setOrder, id)
+}
+
+// isIPPort reports whether the set is an IP+port set rather than a set of CIDRs.
+func (s *ipSetModel) isIPPort() bool { return s.ipPorts != nil }
+
+// l4ProtocolName is how Felix spells the protocol of an IP+port set member.
+var l4ProtocolName = map[int]string{ProtocolTCP: "tcp", ProtocolUDP: "udp", ProtocolSCTP: "sctp"}
+
 func (p *policyModel) buildProto(tier string, dir Direction) {
 	protoRules := make([]*proto.Rule, len(p.rules))
 	for i, r := range p.rules {
@@ -366,6 +441,39 @@ func (r *ruleModel) proto() *proto.Rule {
 	if r.dstNet.IsValid() {
 		pr.DstNet = []string{r.dstNet.String()}
 	}
+	pr.Protocol = r.protocol.proto()
+	pr.NotProtocol = r.notProtocol.proto()
+	pr.IpVersion = r.protoIPVersion()
+	if r.icmp != nil {
+		if r.icmp.hasCode {
+			pr.Icmp = &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: int32(r.icmp.typ), Code: int32(r.icmp.code)}}
+		} else {
+			pr.Icmp = &proto.Rule_IcmpType{IcmpType: int32(r.icmp.typ)}
+		}
+	}
+	if r.notICMP != nil {
+		if r.notICMP.hasCode {
+			pr.NotIcmp = &proto.Rule_NotIcmpTypeCode{NotIcmpTypeCode: &proto.IcmpTypeAndCode{Type: int32(r.notICMP.typ), Code: int32(r.notICMP.code)}}
+		} else {
+			pr.NotIcmp = &proto.Rule_NotIcmpType{NotIcmpType: int32(r.notICMP.typ)}
+		}
+	}
+	pr.SrcPorts = append(pr.SrcPorts, protoPortRanges(r.srcPortRanges)...)
+	pr.DstPorts = append(pr.DstPorts, protoPortRanges(r.dstPortRanges)...)
+	pr.NotDstPorts = protoPortRanges(r.notDstPortRanges)
+	pr.SrcNet = prefixStrings(r.srcNets)
+	pr.NotSrcNet = prefixStrings(r.notSrcNets)
+	pr.DstNet = append(pr.DstNet, prefixStrings(r.dstNets)...)
+	pr.NotDstNet = prefixStrings(r.notDstNets)
+	if r.dstNamedPortSet != "" {
+		pr.DstNamedPortIpSetIds = []string{r.dstNamedPortSet}
+	}
+	if r.notDstNamedPortSet != "" {
+		pr.NotDstNamedPortIpSetIds = []string{r.notDstNamedPortSet}
+	}
+	if r.dstServiceSet != "" {
+		pr.DstIpPortSetIds = []string{r.dstServiceSet}
+	}
 	if r.srcSet != "" {
 		pr.SrcIpSetIds = []string{r.srcSet}
 	}
@@ -379,6 +487,55 @@ func (r *ruleModel) proto() *proto.Rule {
 		pr.NotDstIpSetIds = []string{r.notDstSet}
 	}
 	return pr
+}
+
+// proto returns the protocol as Felix sends it: names lower case, as the v1 data model has them.
+func (p *protocolModel) proto() *proto.Protocol {
+	switch {
+	case p == nil:
+		return nil
+	case p.name != "":
+		return &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: strings.ToLower(p.name)}}
+	default:
+		return &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: int32(p.number)}}
+	}
+}
+
+// protoIPVersion returns the IP version as Felix sends it, which takes it from the protocol name
+// when the rule doesn't give one: ICMP is IPv4 and ICMPv6 is IPv6.
+func (r *ruleModel) protoIPVersion() proto.IPVersion {
+	v := r.ipVersion
+	if v == 0 && r.protocol != nil {
+		switch strings.ToLower(r.protocol.name) {
+		case "icmp":
+			v = 4
+		case "icmpv6":
+			v = 6
+		}
+	}
+	switch v {
+	case 4:
+		return proto.IPVersion_IPV4
+	case 6:
+		return proto.IPVersion_IPV6
+	}
+	return proto.IPVersion_ANY
+}
+
+func protoPortRanges(ranges []portRange) []*proto.PortRange {
+	var out []*proto.PortRange
+	for _, r := range ranges {
+		out = append(out, &proto.PortRange{First: r.first, Last: r.last})
+	}
+	return out
+}
+
+func prefixStrings(prefixes []netip.Prefix) []string {
+	var out []string
+	for _, p := range prefixes {
+		out = append(out, p.String())
+	}
+	return out
 }
 
 // Tiers returns the tier names in evaluation order.
