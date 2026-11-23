@@ -15,6 +15,7 @@
 package policyscale
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -373,16 +374,38 @@ func TestEndpointLabels(t *testing.T) {
 // A dataplane that can't apply a kind of rule gets a set without it; the rules left keep
 // alternating between allow and deny, and no flow is aimed at a rule that isn't there.
 func TestShapesLeaveOut(t *testing.T) {
-	p := DefaultShapes()
-	p.LeaveOut = LeaveOutAt(Nftables)
-	fx := Build(Spec{Seed: DefaultSeed, Shapes: &p})
-	for _, dir := range []Direction{Ingress, Egress} {
-		for _, r := range fx.ShapeRules(dir) {
-			if strings.Contains(r.Name, "type and code") {
-				t.Errorf("%v rule %q should have been left out", dir, r.Name)
+	all := Build(RuleShapes())
+	for _, leaveOut := range [][]Difference{LeaveOutAt(Nftables), {ProtocolNamesOnBPF}} {
+		p := DefaultShapes()
+		p.LeaveOut = leaveOut
+		fx := Build(Spec{Seed: DefaultSeed, Shapes: &p})
+		for _, dir := range []Direction{Ingress, Egress} {
+			if len(fx.ShapeRules(dir)) == len(all.ShapeRules(dir)) {
+				t.Errorf("%v: no %v rule was left out", leaveOut, dir)
+			}
+			n := 0
+			for _, r := range fx.ShapeRules(dir) {
+				for _, f := range r.Flows {
+					if slices.ContainsFunc(f.Differences, func(d Difference) bool { return slices.Contains(leaveOut, d) }) {
+						t.Errorf("%v: %v rule %q should have been left out", leaveOut, dir, r.Name)
+						break
+					}
+				}
+				if r.Tier != p.Tier {
+					continue
+				}
+				_, rule, _ := fx.ruleAt(dir, ordinalOf(fx, dir, r))
+				if want := []string{"allow", "deny"}[n%2]; rule.action != want {
+					t.Errorf("%v: %v rule %q is %s, want %s", leaveOut, dir, r.Name, rule.action, want)
+				}
+				n++
 			}
 		}
 	}
+
+	p := DefaultShapes()
+	p.LeaveOut = LeaveOutAt(Nftables)
+	fx := Build(Spec{Seed: DefaultSeed, Shapes: &p})
 	for _, o := range fx.Resources(ResourceOptions{Enforced: true}) {
 		gnp, ok := o.(*v3.GlobalNetworkPolicy)
 		if !ok {
@@ -396,6 +419,23 @@ func TestShapesLeaveOut(t *testing.T) {
 	}
 	if len(LeaveOutAt(Iptables, BPF)) != 0 {
 		t.Errorf("iptables and BPF apply every rule, got %v", LeaveOutAt(Iptables, BPF))
+	}
+}
+
+// LeaveOut drops whole rules, so it refuses a difference that is marked on single flows rather
+// than ignore it; ShapeFlows leaves those flows out.
+func TestShapesLeaveOutRefusesFlowDifferences(t *testing.T) {
+	for _, d := range []Difference{SCTPPorts, NegatedICMPTypeAndCode, OneFamilyNegatedCIDRs, UnparsedProtocolsOnBPF, HostEndpoints} {
+		p := DefaultShapes()
+		p.LeaveOut = []Difference{d}
+		func() {
+			defer func() {
+				if r := recover(); r == nil || !strings.Contains(fmt.Sprint(r), string(d)) {
+					t.Errorf("LeaveOut %s: got panic %v, want one that names it", d, r)
+				}
+			}()
+			Build(Spec{Seed: DefaultSeed, Shapes: &p})
+		}()
 	}
 }
 
