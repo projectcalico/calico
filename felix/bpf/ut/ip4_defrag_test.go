@@ -26,11 +26,15 @@ import (
 	. "github.com/onsi/gomega"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	conntrackv4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	mapsbpf "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 )
 
@@ -872,4 +876,126 @@ func TestIP4FragReplyReverseNATToWorkload(t *testing.T) {
 		Expect(srcOf(res.dataOut)).To(Equal(ipv4.DstIP.String()),
 			"the tail must get the same reverse NAT as the first fragment")
 	})
+}
+
+// TestIP4FragExtLocalReplyFromWorkload checks that a fragmented reply to an external client of a local service records its entry.
+func TestIP4FragExtLocalReplyFromWorkload(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer resetCTMap(ctMap)
+	defer cleanupMap(ipfragsFwdMap)
+	defer resetMap(natMap)
+	defer resetMap(natBEMap)
+	defer resetRTMap(rtMap)
+
+	bpfIfaceName = "FREL"
+	defer func() { bpfIfaceName = "" }()
+
+	resetCTMap(ctMap)
+	cleanupMap(ipfragsFwdMap)
+	resetRTMap(rtMap)
+
+	hostIP = node1ip
+
+	// An external client reaches a NodePort whose backend is a local pod.
+	_, ipv4, l4, _, pktReq, err := testPacketUDPDefaultNP(node1ip)
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+
+	backendIP := net.IPv4(8, 8, 8, 8)
+	backendPort := uint16(666)
+	Expect(natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(layers.IPProtocolUDP)).AsBytes(),
+		nat.NewNATValue(0, 1, 1, 0).AsBytes(),
+	)).To(Succeed())
+	Expect(natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(backendIP, backendPort).AsBytes(),
+	)).To(Succeed())
+	Expect(rtMap.Update(
+		routes.NewKey(ip.CIDRFromNetIP(backendIP).(ip.V4CIDR)).AsBytes(),
+		routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes(),
+	)).To(Succeed())
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktReq)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).NotTo(Equal("TC_ACT_SHOT"))
+		pktReq = res.dataOut
+	})
+
+	ct, err := conntrack.LoadMapMem(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	rev, ok := ct[conntrack.NewKey(uint8(layers.IPProtocolUDP), ipv4.SrcIP, uint16(udp.SrcPort), backendIP.To4(), backendPort)]
+	Expect(ok).To(BeTrue())
+	Expect(rev.Flags()&conntrackv4.FlagExtLocal).NotTo(BeZero(), "the flow must be EXT_LOCAL")
+
+	skbMark = tcdefs.MarkSeen
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktReq)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).NotTo(Equal("TC_ACT_SHOT"))
+	})
+
+	// The backend's reply, fragmented by the pod.
+	ipHdr := *ipv4Default
+	ipHdr.SrcIP, ipHdr.DstIP = backendIP, ipv4.SrcIP
+	ipHdr.Id = 0x7661
+	ipHdr.Protocol = layers.IPProtocolUDP
+	ipHdr.Flags = layers.IPv4MoreFragments
+	ipHdr.FragOffset = 0
+	firstData := make([]byte, 40)
+	tailData := bytes.Repeat([]byte{0xab}, 16)
+	ipHdr.Length = uint16(20 + 8 + len(firstData))
+	udpR := &layers.UDP{SrcPort: layers.UDPPort(backendPort), DstPort: udp.SrcPort}
+	udpR.Length = uint16(8 + len(firstData) + len(tailData))
+	_ = udpR.SetNetworkLayerForChecksum(&ipHdr)
+
+	first := gopacket.NewSerializeBuffer()
+	Expect(gopacket.SerializeLayers(first, gopacket.SerializeOptions{ComputeChecksums: true},
+		ethDefault, &ipHdr, udpR, gopacket.Payload(firstData))).To(Succeed())
+
+	ipHdr.Flags = 0
+	ipHdr.FragOffset = uint16((8 + len(firstData)) / 8)
+	ipHdr.Length = uint16(20 + len(tailData))
+	tail := gopacket.NewSerializeBuffer()
+	Expect(gopacket.SerializeLayers(tail, gopacket.SerializeOptions{ComputeChecksums: true},
+		ethDefault, &ipHdr, gopacket.Payload(tailData))).To(Succeed())
+
+	// Without the FIB lookup mark (before 6.10), EXT_LOCAL replies skip the FIB to use netfilter routing.
+	kernVer, err := environment.GetKernelVersionReader()
+	Expect(err).NotTo(HaveOccurred())
+	kv, err := environment.GetKernelVersion(kernVer)
+	Expect(err).NotTo(HaveOccurred())
+	fibHasMark := kv.Compare(environment.MustParseVersion("6.10.0")) >= 0
+
+	const extToSvcMark = 0x10000000
+	expectPath := func(res bpfRunResult) {
+		if fibHasMark {
+			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		} else {
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+			Expect(skbMark & extToSvcMark).To(Equal(uint32(extToSvcMark)))
+		}
+	}
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(first.Bytes())
+		Expect(err).NotTo(HaveOccurred())
+		expectPath(res)
+
+		count := 0
+		_ = ipfragsFwdMap.Iter(func(k, v []byte) mapsbpf.IteratorAction {
+			count++
+			return mapsbpf.IterNone
+		})
+		Expect(count).To(Equal(1), "the first fragment must record its entry")
+
+		skbMark = 0
+		res, err = bpfrun(tail.Bytes())
+		Expect(err).NotTo(HaveOccurred())
+		expectPath(res)
+	}, withExtToSvcMark(extToSvcMark))
 }
