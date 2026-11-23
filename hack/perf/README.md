@@ -45,6 +45,7 @@ performance work, and comparing dataplanes/branches over time.
 hack/perf/
 ├── cmd/send-perf-results/main.go     The tool that pushes JSON docs to ES.
 ├── index-templates/<family>.json     One ES index template per family.
+├── perfdoc/                          Writes those JSON docs from Go benchmarks.
 └── README.md                         (this file)
 ```
 
