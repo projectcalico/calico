@@ -16,6 +16,7 @@ package policyscale
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -346,5 +347,79 @@ func TestKnownDifferencesIsACopy(t *testing.T) {
 	first[0].Difference, first[0].Where[0] = "changed", BPF
 	if again := KnownDifferences(); again[0].Difference == "changed" || again[0].Where[0] == BPF {
 		t.Errorf("a caller's change reached the list: %v", again[0])
+	}
+}
+
+// A peer endpoint carries the label of its rule's set, so that a rule keyed on that set finds the
+// named ports the endpoint declares; the local endpoint and the address no rule names are in no set.
+func TestEndpointLabels(t *testing.T) {
+	p := DefaultShapes()
+	fx := Build(Spec{Seed: DefaultSeed, Shapes: &p})
+	key := "policyscale.projectcalico.org/set"
+
+	peer4, peer6 := p.PeerIPv4.Addr().Next(), p.PeerIPv6.Addr().Next()
+	got := fx.EndpointLabels(ResourceOptions{}, peer4, peer6)
+	if got[key] != "shape-peer-0" || len(got) != 1 {
+		t.Errorf("first peer: got %v, want %s=shape-peer-0", got, key)
+	}
+	if got := fx.EndpointLabels(ResourceOptions{}, p.LocalIPv4, p.LocalIPv6); len(got) != 0 {
+		t.Errorf("local endpoint: got %v, want no labels", got)
+	}
+	if got := fx.EndpointLabels(ResourceOptions{SetLabelKey: "k"}, peer4); got["k"] != "shape-peer-0" {
+		t.Errorf("custom label key: got %v", got)
+	}
+}
+
+// A dataplane that can't apply a kind of rule gets a set without it; the rules left keep
+// alternating between allow and deny, and no flow is aimed at a rule that isn't there.
+func TestShapesLeaveOut(t *testing.T) {
+	p := DefaultShapes()
+	p.LeaveOut = LeaveOutAt(Nftables)
+	fx := Build(Spec{Seed: DefaultSeed, Shapes: &p})
+	for _, dir := range []Direction{Ingress, Egress} {
+		for _, r := range fx.ShapeRules(dir) {
+			if strings.Contains(r.Name, "type and code") {
+				t.Errorf("%v rule %q should have been left out", dir, r.Name)
+			}
+		}
+	}
+	for _, o := range fx.Resources(ResourceOptions{Enforced: true}) {
+		gnp, ok := o.(*v3.GlobalNetworkPolicy)
+		if !ok {
+			continue
+		}
+		for _, r := range append(gnp.Spec.Ingress, gnp.Spec.Egress...) {
+			if (r.ICMP != nil && r.ICMP.Code != nil) || (r.NotICMP != nil && r.NotICMP.Code != nil) {
+				t.Errorf("policy %s still has an ICMP type and code rule", gnp.Name)
+			}
+		}
+	}
+	if len(LeaveOutAt(Iptables, BPF)) != 0 {
+		t.Errorf("iptables and BPF apply every rule, got %v", LeaveOutAt(Iptables, BPF))
+	}
+}
+
+// Every SCTP and UDP-Lite flow is marked, so that a test against BPF can leave them all out.
+func TestUnparsedProtocolsMarked(t *testing.T) {
+	fx := Build(RuleShapes())
+	for _, dir := range []Direction{Ingress, Egress} {
+		seen := 0
+		for _, f := range fx.ShapeFlows(dir) {
+			unparsed := f.Flow.Protocol == ProtocolSCTP || f.Flow.Protocol == ProtocolUDPLite
+			if unparsed {
+				seen++
+			}
+			if unparsed != slices.Contains(f.Differences, UnparsedProtocolsOnBPF) {
+				t.Errorf("%v flow %q: protocol %d, differences %v", dir, f.Name, f.Flow.Protocol, f.Differences)
+			}
+		}
+		if seen == 0 {
+			t.Errorf("%v: no SCTP or UDP-Lite flows to check", dir)
+		}
+		for _, f := range fx.ShapeFlows(dir, DifferencesAt(BPF)...) {
+			if f.Flow.Protocol == ProtocolSCTP || f.Flow.Protocol == ProtocolUDPLite {
+				t.Errorf("%v flow %q should be left out on BPF", dir, f.Name)
+			}
+		}
 	}
 }

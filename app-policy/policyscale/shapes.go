@@ -47,6 +47,9 @@ type ShapesParams struct {
 	// policy and the last one are staged. It is for testing the evaluator's scopes; a set compared
 	// on a cluster for pending verdicts equal to enforced ones wants none.
 	Staged bool
+	// LeaveOut drops the rules that can expose these differences from the set, for a dataplane
+	// that can't apply them; see LeaveOutAt.
+	LeaveOut []Difference
 }
 
 // shapesStagedTier is the tier of staged policies alone that ShapesParams.Staged adds.
@@ -198,6 +201,24 @@ func (fx *Fixture) buildShapes(p ShapesParams) {
 		}
 		fx.shapeUnmatched[dir] = unmatched
 	}
+	fx.tagUnparsedProtocols()
+}
+
+// tagUnparsedProtocols marks every flow of a protocol whose transport header BPF doesn't parse.
+func (fx *Fixture) tagUnparsedProtocols() {
+	tag := func(flows []ShapeFlow) {
+		for i, f := range flows {
+			if f.Flow.Protocol == ProtocolSCTP || f.Flow.Protocol == ProtocolUDPLite {
+				flows[i].Differences = append(flows[i].Differences, UnparsedProtocolsOnBPF)
+			}
+		}
+	}
+	for _, dir := range []Direction{Ingress, Egress} {
+		for _, r := range fx.shapeRules[dir] {
+			tag(r.Flows)
+		}
+		tag(fx.shapeUnmatched[dir])
+	}
 }
 
 // buildPassTier adds a policy with a Pass rule and a policy whose rule no aimed flow reaches, so
@@ -224,9 +245,16 @@ func (b *shapeBuilder) buildPassTier(t *tierModel, dir Direction) {
 
 func (b *shapeBuilder) buildTier(t *tierModel, dir Direction) {
 	var pol *policyModel
-	for i, s := range b.shapes(dir) {
+	i := 0
+	for _, s := range b.shapes(dir) {
+		if slices.ContainsFunc(s.differences, func(d Difference) bool { return slices.Contains(b.p.LeaveOut, d) }) {
+			continue
+		}
 		k := b.key(dir)
 		r, flows := s.build(k)
+		for j := range flows {
+			flows[j].Differences = append(flows[j].Differences, s.differences...)
+		}
 		r.action = "allow"
 		if i%2 == 1 {
 			r.action = "deny"
@@ -238,12 +266,15 @@ func (b *shapeBuilder) buildTier(t *tierModel, dir Direction) {
 		r.shape = &ShapeRule{Name: s.name, Direction: dir, Tier: t.name, Policy: pol.name, Index: len(pol.rules), Flows: nameFlows(s.name, flows)}
 		pol.rules = append(pol.rules, r)
 		b.fx.shapeRules[dir] = append(b.fx.shapeRules[dir], r.shape)
+		i++
 	}
 }
 
 type shape struct {
 	name  string
 	build func(k *shapeKey) (*ruleModel, []ShapeFlow)
+	// differences are the ones the rule itself can expose, whichever flow meets it.
+	differences []Difference
 }
 
 // shapes lists the rules of the main tier. Every rule carries a key, its own peer address or its
@@ -256,7 +287,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 
 	// protocolShape matches one protocol, by name or number, keyed on the peer.
 	protocolShape := func(name string, p *protocolModel, protocol, other int, ipVersion int) shape {
-		return shape{name, func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		return shape{name: name, build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: p, ipVersion: ipVersion}
 			k.keyed(r)
 			var flows []ShapeFlow
@@ -272,7 +303,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 		}}
 	}
 	notProtocolShape := func(name string, p *protocolModel, protocol, other int) shape {
-		return shape{name, func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		return shape{name: name, build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{notProtocol: p}
 			k.keyed(r)
 			var flows []ShapeFlow
@@ -290,7 +321,11 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 	// requests; echo and node information queries for IPv6), so that a functional test can send
 	// every flow: the dataplanes drop or accept other types before policy, and log no flow.
 	icmpShape := func(name string, fam int, positive, negated *icmpModel, hits, misses, nftDiffer [][2]int) shape {
-		return shape{name, func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		var differences []Difference
+		if (positive != nil && positive.hasCode) || (negated != nil && negated.hasCode) {
+			differences = []Difference{ICMPTypeAndCodeRules}
+		}
+		return shape{name: name, differences: differences, build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			protoName := "ICMP"
 			if fam == 6 {
 				protoName = "ICMPv6"
@@ -315,7 +350,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 		}}
 	}
 	ipVersionShape := func(name string, version int) shape {
-		return shape{name, func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		return shape{name: name, build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: tcp, ipVersion: version}
 			k.keyed(r)
 			return r, []ShapeFlow{
@@ -325,7 +360,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 		}}
 	}
 	cidrShape := func(name string, fam int) shape {
-		return shape{name, func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		return shape{name: name, build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{}
 			k.peerNets(r, []netip.Prefix{netip.PrefixFrom(k.peer(fam), k.peer(fam).BitLen())}, false)
 			return r, []ShapeFlow{
@@ -339,7 +374,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 	// has CIDRs of one family only, as the API requires, so a flow of the other family shows the
 	// evaluator's known difference.
 	negatedCIDRShape := func(name string, fam int) shape {
-		return shape{name, func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		return shape{name: name, build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: tcp, dstPortRanges: []portRange{{int32(k.port), int32(k.port)}}}
 			k.peerNets(r, []netip.Prefix{netip.PrefixFrom(k.peer(fam), k.peer(fam).BitLen())}, true)
 			other := k.miss(fmt.Sprintf("tcp v%d, the other family", 10-fam), k.flowWith(10-fam, ProtocolTCP, shapeSPort, k.port, k.outside(10-fam)))
@@ -384,7 +419,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 			[][2]int{{128, 0}, {139, 0}}, [][2]int{{128, 1}}, [][2]int{{128, 0}}),
 		ipVersionShape("IPv4 only", 4),
 		ipVersionShape("IPv6 only", 6),
-		{"destination port range", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		{name: "destination port range", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: tcp, dstPortRanges: []portRange{{int32(k.port), int32(k.port + 2)}}}
 			k.keyed(r)
 			return r, k.bothFamilies(func(fam int) []ShapeFlow {
@@ -394,7 +429,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 				}
 			})
 		}},
-		{"source port range", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		{name: "source port range", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: tcp, srcPortRanges: []portRange{{int32(k.sport), int32(k.sport + 9)}}}
 			k.keyed(r)
 			return r, k.bothFamilies(func(fam int) []ShapeFlow {
@@ -404,7 +439,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 				}
 			})
 		}},
-		{"negated destination port", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		{name: "negated destination port", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: tcp, notDstPortRanges: []portRange{{int32(k.port), int32(k.port)}}}
 			k.keyed(r)
 			return r, k.bothFamilies(func(fam int) []ShapeFlow {
@@ -414,7 +449,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 				}
 			})
 		}},
-		{"SCTP destination port", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		{name: "SCTP destination port", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: byName("SCTP"), dstPortRanges: []portRange{{int32(k.port), int32(k.port)}}}
 			k.keyed(r)
 			return r, k.bothFamilies(func(fam int) []ShapeFlow {
@@ -427,7 +462,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 		cidrShape("CIDR IPv6", 6),
 		negatedCIDRShape("negated CIDR IPv4", 4),
 		negatedCIDRShape("negated CIDR IPv6", 6),
-		{"negated IP set", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		{name: "negated IP set", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: tcp, dstPortRanges: []portRange{{int32(k.port), int32(k.port)}}}
 			k.peerSetRef(r, true)
 			return r, k.bothFamilies(func(fam int) []ShapeFlow {
@@ -437,7 +472,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 				}
 			})
 		}},
-		{"named port", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		{name: "named port", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: tcp, dstNamedPortSet: k.namedPort(false, k.port)}
 			if dir == Ingress {
 				// The named port is on the local endpoint, which every ingress flow reaches.
@@ -454,7 +489,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 		// Felix finds a negated named port only on the endpoints the same side's selector picks,
 		// so this rule and the negated source named port are keyed on a port range of their own
 		// rather than on the peer's set, which no endpoint carries the label of.
-		{"negated named port", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		{name: "negated named port", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: tcp, dstPortRanges: []portRange{{int32(k.port), int32(k.port + 1)}}, notDstNamedPortSet: k.namedPort(false, k.port)}
 			return r, k.bothFamilies(func(fam int) []ShapeFlow {
 				return []ShapeFlow{
@@ -463,7 +498,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 				}
 			})
 		}},
-		{"negated source port", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		{name: "negated source port", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: tcp, notSrcPortRanges: []portRange{{int32(k.sport), int32(k.sport)}}}
 			k.keyed(r)
 			return r, k.bothFamilies(func(fam int) []ShapeFlow {
@@ -473,7 +508,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 				}
 			})
 		}},
-		{"source named port", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		{name: "source named port", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: tcp, srcNamedPortSet: k.namedPort(true, k.sport)}
 			return r, k.bothFamilies(func(fam int) []ShapeFlow {
 				return []ShapeFlow{
@@ -482,7 +517,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 				}
 			})
 		}},
-		{"negated source named port", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		{name: "negated source named port", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: tcp, dstPortRanges: []portRange{{int32(k.port), int32(k.port)}}, notSrcNamedPortSet: k.namedPort(true, k.sport)}
 			return r, k.bothFamilies(func(fam int) []ShapeFlow {
 				return []ShapeFlow{
@@ -493,7 +528,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 		}},
 	}
 	if dir == Egress {
-		shapes = append(shapes, shape{"destination service", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		shapes = append(shapes, shape{name: "destination service", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{dstServiceSet: k.service()}
 			return r, k.bothFamilies(func(fam int) []ShapeFlow {
 				return []ShapeFlow{
