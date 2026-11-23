@@ -206,7 +206,7 @@ type parsedPolicies struct {
 	byKey map[model.PolicyKey]*calc.ParsedRules
 }
 
-func (p *parsedPolicies) OnPolicyActive(k model.PolicyKey, r *calc.ParsedRules)   { p.byKey[k] = r }
+func (p *parsedPolicies) OnPolicyActive(k model.PolicyKey, r *calc.ParsedRules)    { p.byKey[k] = r }
 func (p *parsedPolicies) OnPolicyInactive(model.PolicyKey)                         {}
 func (p *parsedPolicies) OnProfileActive(model.ProfileRulesKey, *calc.ParsedRules) {}
 func (p *parsedPolicies) OnProfileInactive(model.ProfileRulesKey)                  {}
