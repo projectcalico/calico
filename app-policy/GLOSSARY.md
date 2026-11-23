@@ -31,6 +31,7 @@ _Avoid_: L7 policy, sidecar policy
 **Check provider**:
 A pluggable evaluator that decides whether it handles a `CheckRequest` and returns the verdict.
 Code: `app-policy/checker/provider.go` (`CheckProvider`).
+_Avoid_: checker (that is the package, not one provider)
 
 **Policy scope**:
 Whether an evaluation ignores staged policies (`EnforcedOnly`) or treats them as enforced (`StagedAsEnforced`). The `StagedAsEnforced` result is what Goldmane records as the pending policy trace.

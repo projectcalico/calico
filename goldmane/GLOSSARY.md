@@ -75,10 +75,12 @@ _Avoid_: policy hits, as a name for the whole list
 **Policy trace cache**:
 A two-generation cache that decodes interned policy-trace strings into their hits. Felix and Goldmane share it through the types package.
 Code: `goldmane/pkg/types/policy_trace_cache.go` (`policyTraceCache`).
+_Avoid_: nothing known
 
 **Flow conversion contract**:
 The mapping Felix applies when it turns a flow log into a Goldmane Flow, including which fields drop and which use `-` placeholders.
 Code: `felix/collector/goldmane/client.go` (`ConvertFlowlogToGoldmane`).
+_Avoid_: nothing known
 
 ### Aggregation and storage
 
@@ -115,6 +117,7 @@ _Avoid_: sink (that is the emission output)
 **Backfill**:
 Sending a new stream the ring's history from its start time, before live rollover data.
 Code: `goldmane/pkg/storage/bucket_ring.go` (`Backfill`).
+_Avoid_: nothing known
 
 ### Reconnect replay and dedup
 
@@ -153,10 +156,12 @@ _Avoid_: sink for the flow intake
 **Emitter**:
 The sink that POSTs NDJSON flow batches to `PUSH_URL` over mTLS and records its progress in a ConfigMap.
 Code: `goldmane/pkg/emitter/emitter.go` (`Emitter`).
+_Avoid_: push, publish
 
 **Flow collection**:
 A batch of Goldmane Flows aggregated over the emission window and handed to the sink as one unit.
 Code: `goldmane/pkg/storage/utils.go` (`FlowCollection`).
+_Avoid_: emitted flows, aggregated flow for emission
 
 **Emit delay**:
 How many buckets behind the ring head a bucket must be before it can be emitted, set by `EMIT_AFTER_SECONDS`.
@@ -171,7 +176,9 @@ _Avoid_: buckets to aggregate, aggregation window
 **Emitter state**:
 The ConfigMap `calico-system/flow-emitter-state`, which holds the end time of the latest emitted bucket so a restart does not emit it again.
 Code: `goldmane/pkg/emitter/emitter.go` (`latestTimestamp`).
+_Avoid_: latestTimestamp
 
 **File config**:
 The JSON file at `FILE_CONFIG_PATH` with an `emitFlows` field, watched so the sink can be enabled or disabled without a restart.
 Code: `goldmane/pkg/daemon/config.go` (`goldmaneFileConfig`).
+_Avoid_: goldmaneFileConfig

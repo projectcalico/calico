@@ -96,6 +96,7 @@ _Avoid_: router
 **filterOut**:
 A handler's return flag that stops later handlers in the same dispatcher list from seeing the update. It never affects handlers upstream.
 Code: `felix/dispatcher/dispatcher.go` (`UpdateHandler`).
+_Avoid_: filter (it means several things)
 
 **Local endpoint**:
 A workload or host endpoint whose key hostname equals Felix's own hostname. The calculation graph emits endpoint updates only for these.
@@ -110,10 +111,12 @@ _Avoid_: enabled policy
 **Active IP set**:
 An IP set referenced by at least one rule of an active policy or profile. Felix reports the count as `felix_active_local_selectors`.
 Code: `felix/calc/calc_graph.go` (`NewCalculationGraph`).
+_Avoid_: active selector
 
 **Policy match**:
 The active rules calculator's event that one policy's selector matches one local endpoint.
 Code: `felix/calc/active_rules_calculator.go` (`PolicyMatchListener`).
+_Avoid_: bare match (a selector can match many kinds of thing)
 
 **Parsed rule**:
 A policy's or profile's rule with its selectors and named ports replaced by IP set IDs, ready for a dataplane driver to program.
@@ -123,6 +126,7 @@ _Avoid_: compiled rule
 **IP set data**:
 The calc graph's description of one IP set: a selector, optionally with a named port, or a service.
 Code: `felix/calc/rule_scanner.go` (`IPSetData`).
+_Avoid_: ipset (that is the kernel's set, not the calc graph's description of one)
 
 **IP set member index**:
 The calculation node that computes the members of every active selector and named-port IP set, treating network sets as endpoints. Its type is `SelectorAndNamedPortIndex`. A member stays in a set while any contributor provides it.
@@ -132,6 +136,7 @@ _Avoid_: named port index, label inheritance index (that is a different node tha
 **IP set member**:
 One entry of a calc-graph IP set: an IP, a CIDR, or an IP, port and protocol triple.
 Code: `felix/labelindex/ipsetmember/ip_set_member.go` (`IPSetMember`).
+_Avoid_: contribution
 
 **Overlap suppression**:
 Dropping an IP set's CIDR member when a wider member of the same set already covers it, applied only in nftables mode.
@@ -146,10 +151,12 @@ _Avoid_: parent, unqualified
 **Endpoint computed data**:
 Per-workload-endpoint data computed by calculation nodes and applied onto the outgoing workload endpoint message, rather than stored on the resource.
 Code: `felix/calc/event_sequencer.go` (`EndpointComputedData`).
+_Avoid_: nothing known
 
 **Tier info**:
 One tier's ordered ingress and egress policy IDs for one endpoint.
 Code: `felix/calc/policy_sorter.go` (`TierInfo`).
+_Avoid_: filteredTiers
 
 **Pending buffer**:
 An event sequencer map or set holding the latest unflushed change for each object, so at most one update per object goes out per flush.
@@ -174,10 +181,12 @@ _Avoid_: readiness (that is health)
 **Config source**:
 Where a parameter value came from: environment variable, config file, or one of the three FelixConfiguration sources (global, selector-scoped, per-host). A higher source overrides a lower one.
 Code: `felix/config/config_params.go` (`Source`).
+_Avoid_: priority
 
 **Local-only parameter**:
 A parameter tagged `local`, which Felix ignores when its value arrives from the datastore.
 Code: `felix/config/config_params.go` (`Source`).
+_Avoid_: local source, bare local (it means several things)
 
 **Selector-scoped FelixConfiguration**:
 A FelixConfiguration that is neither `default` nor `node.<name>` and applies to the nodes its node selector matches. When several match, the oldest wins.
@@ -187,6 +196,7 @@ _Avoid_: per-node-selector config
 **Dataplane connector**:
 The daemon object that forwards calc-graph output to the dataplane driver and passes status back from it.
 Code: `felix/daemon/daemon.go` (`DataplaneConnector`).
+_Avoid_: glue logic, dataplane driver (that is the other end of the connector)
 
 **Calc-graph FV**:
 A unit test, despite the name, that drives the assembled graph from datastore states to emitted messages. It uses test expanders, which generate variants of each state sequence.
@@ -281,6 +291,7 @@ _Avoid_: sync, flush
 **Resolution pass**:
 The loop that calls `ResolveUpdateBatch` on every manager that implements it, before any `CompleteDeferredWork`, so managers can hand state to each other.
 Code: `felix/dataplane/linux/int_dataplane.go` (`UpdateBatchResolver`).
+_Avoid_: resolve update batch, resync (that is a different thing)
 
 **In-sync gate**:
 The condition that admits the first `apply()`: the datastore is in-sync and the interface monitor has reported every existing interface. Until both hold, Felix writes nothing to the kernel.
@@ -290,6 +301,7 @@ _Avoid_: apply gate
 **Dataplane in-sync**:
 The message the dataplane sends back to the calc graph side after its first clean `apply()`. Always say "datastore in-sync" or "dataplane in-sync".
 Code: `felix/proto/felixbackend.proto` (`DataplaneInSync`).
+_Avoid_: bare in-sync (say datastore in-sync or dataplane in-sync)
 
 **Refresh timer**:
 A periodic timer that queues a resync on a set of reconciling drivers (routes or IP sets) even when nothing is known to be wrong.
@@ -304,6 +316,7 @@ _Avoid_: full sync
 **Must and background resync**:
 The two priorities in the IP sets driver's incremental resync queue. Must-priority work drains before the first writes.
 Code: `felix/ipsets/resync_queue.go` (`ResyncQueue`).
+_Avoid_: bare resync (it means several things)
 
 **Logical table**:
 A netfilter table name (filter, nat, mangle or raw) as managers see it through the `Table` interface. In nftables mode all logical tables live in the root table.
@@ -313,14 +326,17 @@ _Avoid_: table, unqualified
 **Root table**:
 The single nftables table per IP family (`calico`, or `calico-arp`) that holds every logical table's chains, sets and maps.
 Code: `felix/nftables/table.go` (`NftablesTable`).
+_Avoid_: NftablesTable, table on its own (a logical table is not the root table)
 
 **Shared tables**:
 The kernel tables filter, nat, mangle and raw, which Calico shares with other software, with one copy for each iptables backend.
 Code: `felix/rules/rulesdefs/rulesdefs.go` (`RuleHashPrefix`).
+_Avoid_: legacy copies, nftables copies, legacy (reserved for the iptables-legacy backend)
 
 **Rule insertion and full chain update**:
 The two `Table` write modes: hook a Felix rule into a kernel-owned chain, or replace the contents of a Felix-owned chain.
 Code: `felix/iptables/table.go` (`InsertOrAppendRules`).
+_Avoid_: nothing known
 
 **Rule hash**:
 A deterministic hash of a rendered rule, stored in the rule's comment after the `cali:` prefix. Felix uses it to recognize its own rules and to detect drift.
@@ -335,6 +351,7 @@ _Avoid_: dispatch map
 **Per-endpoint chain**:
 One of the `cali-tw-`, `cali-fw-`, `cali-th-` or `cali-fh-` chains, holding the policy jumps for one endpoint and direction.
 Code: `felix/rules/rule_defs.go` (`WorkloadToEndpointPfx`).
+_Avoid_: dispatch chain (that routes to these chains, and is a different thing)
 
 **Policy group**:
 A run of consecutive policies in one tier and direction, programmed as a shared `cali-gi-` or `cali-go-` chain when it holds more than one policy.
@@ -344,14 +361,17 @@ _Avoid_: policy set
 **Static chains**:
 Chains rendered from config alone, not from any endpoint or policy, such as `cali-INPUT` and `cali-FORWARD`.
 Code: `felix/rules/rule_defs.go` (`StaticFilterTableChains`).
+_Avoid_: top-level static chains
 
 **Endpoint mark**:
 A per-endpoint value kept in the `*tables` mark bits so later chains remember which endpoint a packet arrived from.
 Code: `felix/rules/epmark.go` (`DefaultEPMarkManager`).
+_Avoid_: EndpointMarkMapper, bare mark (it means several things)
 
 **Mark bits**:
 The packet mark bits that Felix allocates to its `*tables` features from the configured mark mask, excluding the fixed bits the BPF dataplane uses.
 Code: `felix/dataplane/driver.go` (`StartDataplaneDriver`) and `felix/markbits/mark_bits.go` (`MarkBitsManager`).
+_Avoid_: bare mark (it means several things), skb mark (that is the whole mark field)
 
 **Route class**:
 The producer category of a desired route (local workload, VXLAN, IPIP, no-encap, WireGuard, blackhole). When two producers want the same route key, the lowest class wins.
@@ -361,22 +381,27 @@ _Avoid_: ownership, for a route class
 **Route key**:
 The kernel route-table key a route is indexed by: CIDR, TOS and priority.
 Code: `felix/routetable/defs.go` (`RouteKey`).
+_Avoid_: bare CIDR (a route key also has TOS and priority)
 
 **Route target**:
 The desired route for one route key: type, gateway, source, MAC, protocol, multipath and MTU.
 Code: `felix/routetable/defs.go` (`Target`).
+_Avoid_: route (that is the kernel's entry, and the target is the desired one)
 
 **InterfaceNone**:
 The pseudo-interface name for routes with no outbound interface, such as blackhole, throw and unreachable routes.
 Code: `felix/routetable/defs.go` (`InterfaceNone`).
+_Avoid_: nothing known
 
 **Ownership policy**:
 The route table's classifier that decides whether a kernel route or interface belongs to Felix.
 Code: `felix/routetable/route_table.go` (`OwnershipPolicy`).
+_Avoid_: RouteClass (that is the producer key, a different thing), bare ownership (it means several things)
 
 **Route cleanup grace period**:
 The delay before Felix deletes an owned route on an interface it has no endpoint for yet, which covers the race with the CNI plugin.
 Code: `felix/routetable/route_table.go` (`graceInfo`).
+_Avoid_: graceInfo
 
 **Route syncer**:
 Anything implementing `SyncerInterface` that `apply()` drives in parallel: the route tables and the WireGuard driver.
@@ -386,6 +411,7 @@ _Avoid_: syncer, unqualified
 **Class view**:
 A route table wrapper pinned to one route class and handed to a single producer.
 Code: `felix/routetable/interface.go` (`ClassView`).
+_Avoid_: route table (that is the whole table, not one class's view)
 
 **Calico route proto**:
 The netlink route protocol number 80, which Felix stamps on routes with no Calico interface: blackhole, same-subnet and tunnel routes.
@@ -395,22 +421,27 @@ _Avoid_: DeviceRouteProtocol (a separate setting that applies to routes on Calic
 **IP set ID and IP set name**:
 The ID is the calc graph's identifier for a set. The name is the truncated, prefixed kernel name derived from it, such as `cali40...`.
 Code: `felix/ipsets/ipset_defs.go` (`IPSetMetadata`).
+_Avoid_: bare name (the ID and the kernel name differ)
 
 **Main IP set and temp IP set**:
 The set under its real kernel name, and the temporary copy used to swap in a rewrite.
 Code: `felix/ipsets/ipset_defs.go` (`IPSetMetadata`).
+_Avoid_: nothing known
 
 **Host endpoint resolution**:
 Mapping each host endpoint to the interfaces it covers, either by interface name or by the expected IP addresses.
 Code: `felix/dataplane/linux/endpoint_mgr.go` (`endpointManager`).
+_Avoid_: nothing known
 
 **`shadowedWlEndpoints`**:
 A local workload endpoint that Felix ignores because another endpoint claims the same interface name.
 Code: `felix/dataplane/linux/endpoint_mgr.go` (`endpointManager`).
+_Avoid_: nothing known
 
 **`liveMigrationFSM`**:
 The per-workload state machine (base, target, live, time-wait) driven by the endpoint's live migration role, gratuitous ARP and timers.
 Code: `felix/dataplane/linux/live_migration.go` (`liveMigrationFSM`).
+_Avoid_: liveMigrationMonitor
 
 **Proxy neighbor manager**:
 The manager that answers ARP and NDP for no-encap pod and LoadBalancer addresses on host NICs from userspace. Abbreviated PNM.
@@ -430,6 +461,7 @@ _Avoid_: fast path, for this
 **Cleanup-only table**:
 A `Table` built only to remove another backend's or kube-proxy's leftover state, never to program rules.
 Code: `felix/generictables/table.go` (`CleanupTable`).
+_Avoid_: CleanupOnly
 
 **Foreign-table sweep**:
 The removal of Calico state, and of kube-proxy's rules, from kernel tables that Felix no longer programs, run through cleanup-only tables.
@@ -488,14 +520,17 @@ _Avoid_: map, unqualified
 **Verifier**:
 The kernel's static checker. It rejects any BPF program it cannot prove terminates and accesses memory safely, which is why Calico splits large programs into chained pieces.
 Code: `felix/bpf/polprog/pol_prog_builder.go` (`Builder`).
+_Avoid_: bare verification
 
 **BTF**:
 BPF Type Format, the type information embedded in a compiled BPF object. The loader uses it to create maps with typed keys and values.
 Code: `felix/bpf-gpl/CLAUDE.md`.
+_Avoid_: nothing known
 
 **skb**:
 The kernel's socket buffer, the structure that represents one packet in the kernel's network stack. TC programs receive it, and its mark field carries signals to other programs and to `*tables`.
 Code: `felix/bpf-gpl/types.h` (`cali_tc_ctx`).
+_Avoid_: sk_buff, packet (it is the kernel's buffer structure, not the bytes on the wire)
 
 **Program type**:
 The kernel's category for a BPF program, which fixes where it may attach and which context it receives. Calico uses the TC classifier type, XDP and cgroup socket-address programs.
@@ -550,6 +585,7 @@ _Avoid_: attach type
 **`EndpointType` (BPF)**:
 The class of an attach point that selects its program variant: workload, host, L3 device, NAT interface or loopback.
 Code: `felix/bpf/tc/defs/defs.go` (`EndpointType`).
+_Avoid_: attach type (that is the TC, TCX or netkit mechanism), bare endpoint (see the qualifier)
 
 **Data interface**:
 An interface that BPF mode treats as a host endpoint without a HostEndpoint resource, because it matches `BPFDataIfacePattern`: the main interface, tunnels and similar.
@@ -564,14 +600,17 @@ _Avoid_: main program
 **Main program**:
 The generic per-packet program the preamble tail-calls. It does the conntrack and NAT lookups and chooses what runs next.
 Code: `felix/bpf-gpl/tc.c` (`calico_tc_main`).
+_Avoid_: SubProgTCMain
 
 **Generic sub-program**:
 One of the endpoint-independent programs in the generic jump map, indexed by `enum cali_jump_index`, such as the post-policy and slow-path programs. Always qualify "sub-program".
 Code: `felix/bpf/hook/map.go` (`SubProg`).
+_Avoid_: bare sub-program (it could mean a policy sub-program)
 
 **Policy program**:
 The per-interface, per-direction program Felix compiles from active policy and loads into the policy jump map.
 Code: `felix/dataplane/linux/bpf_ep_mgr.go` (`loadPolicyProgram`).
+_Avoid_: rules program, bare sub-program (it could mean a generic sub-program)
 
 **Policy sub-program**:
 One slice of a policy program too large for one verifier pass, chained to the next by tail calls. A chain holds at most 24 per hook.
@@ -581,6 +620,7 @@ _Avoid_: sub-program, unqualified
 **Default policy program**:
 A compile-time allow-all or deny-all policy that holds an interface's policy slot until Felix loads the generated policy program.
 Code: `felix/bpf-gpl/policy_default.c` (`calico_tc_allow`).
+_Avoid_: CALI_TC_DEF_POLICY, policy program (that is the generated one)
 
 **Tail call**:
 A jump from one BPF program into another through a jump map slot. It never returns, and the kernel caps a chain at 33 programs.
@@ -605,10 +645,12 @@ _Avoid_: per-endpoint programs map
 **Jump index**:
 A slot number in a jump map. Felix allocates policy and filter indices per interface and returns them when the interface goes away.
 Code: `felix/dataplane/linux/bpf_ep_mgr.go` (`bpfInterfaceJumpIndices`).
+_Avoid_: policyIdx, filterIdx
 
 **Continuation**:
 The two jump indices (`skb->cb[0]` for allow, `skb->cb[1]` for deny) that a caller writes before entering the policy program, telling it where to go next.
 Code: `felix/bpf-gpl/jump.h` (`__CALI_JUMP_TO_POLICY`).
+_Avoid_: allow/deny jump
 
 **Fast path and debug path**:
 The two builds of each generic sub-program: one without log statements and one with them, loaded at different indices. `PROG_PATH` picks one per packet.
@@ -638,22 +680,27 @@ _Avoid_: globals flags
 **`prog_flags`**:
 Load-time flags in a frozen read-only section (`struct prog_flags`), currently only `no_trace_printk`.
 Code: `felix/bpf-gpl/globals.h` (`prog_flags`).
+_Avoid_: globals (they are a separate section)
 
 **State map**:
 A two-slot per-CPU array (`cali_state`). Slot 0 holds the per-packet state and slot 1 holds the copied globals plus header scratch space.
 Code: `felix/bpf-gpl/jump.h` (`cali_state`).
+_Avoid_: per-CPU state
 
 **ifstate map**:
 The hash (`cali_iface`) from interface index to interface flags (ready, workload endpoint, host endpoint, encapsulation kind) and per-direction policy indices.
 Code: `felix/bpf-gpl/ifstate.h` (`cali_iface`) and `felix/bpf/ifstate/map.go` (`MapParams`).
+_Avoid_: iface map, interface state map
 
 **`ifaceReadiness`**:
 Whether a workload endpoint's programs are attached for an IP family, mirrored into the ifstate map's ready flags.
 Code: `felix/dataplane/linux/bpf_ep_mgr.go` (`ifaceReadiness`).
+_Avoid_: bare ready (it means several things)
 
 **Attach gap**:
 The window between an interface appearing and its programs attaching. `*tables` drop rules plus `fib_approve` keep it closed.
 Code: `felix/bpf-gpl/fib_common.h` (`fib_approve`).
+_Avoid_: nothing known
 
 **skb mark**:
 The bits of the packet mark in `0x1FF00000` that carry signals between BPF programs and `*tables`.
@@ -663,14 +710,17 @@ _Avoid_: mark bits (that is the `*tables` allocation)
 **Bypass mark**:
 The skb mark `CALI_SKB_MARK_BYPASS`, set once both conntrack legs are approved, so later BPF programs skip policy.
 Code: `felix/bpf-gpl/cali_bpf.h` (`CALI_SKB_MARK_BYPASS`).
+_Avoid_: bare bypass (the `BYPASS_FWD` and `BYPASS_XDP` codes are separate values)
 
 **Fallthrough**:
 Handing a packet that has no BPF conntrack entry to the kernel's own conntrack, by setting `CALI_SKB_MARK_FALLTHROUGH`.
 Code: `felix/bpf-gpl/cali_bpf.h` (`CALI_SKB_MARK_FALLTHROUGH`).
+_Avoid_: bypass (that is the opposite: skip policy and keep the flow in BPF)
 
 **SkipFIB**:
 Skipping the BPF FIB (route) lookup and letting the host network stack route the packet, requested by a mark or a conntrack flag.
 Code: `felix/bpf-gpl/cali_bpf.h` (`CALI_SKB_MARK_SKIP_FIB`).
+_Avoid_: SKIP_FIB
 
 **Forward-or-defer decision**:
 Whether BPF forwards a packet itself or hands it to the host network stack. A flow needing full source-port SNAT is always deferred to `*tables`.
@@ -685,6 +735,7 @@ _Avoid_: conntrack, unqualified, near `*tables`
 **Conntrack entry type**:
 One of `NORMAL` (the single entry of a non-NAT flow), `NAT_FWD` (a pre-NAT stub) or `NAT_REV` (the post-NAT tracking entry).
 Code: `felix/bpf/conntrack/v4/map.go` (`TypeNATReverse`).
+_Avoid_: bare conntrack (say BPF conntrack or kernel conntrack)
 
 **Tracking entry**:
 The entry that holds a flow's state. For a flow with NAT it is the `NAT_REV` entry, otherwise the normal entry.
@@ -699,42 +750,52 @@ _Avoid_: side
 **`CALI_CT_LEG_APPROVED`**:
 The flag `CALI_CT_LEG_APPROVED`, set when the policy program on that leg's side allowed the flow.
 Code: `felix/bpf-gpl/conntrack_types.h` (`CALI_CT_LEG_APPROVED`).
+_Avoid_: bypass mark (that is set once both legs are approved)
 
 **Opener leg**:
 The leg that started the flow, marked `CALI_CT_LEG_OPENER`.
 Code: `felix/bpf-gpl/conntrack_types.h` (`CALI_CT_LEG_OPENER`).
+_Avoid_: bare forward (`NAT_FWD` is an entry type, not a direction)
 
 **Forwarding hint**:
 A leg's recorded interface index, which the opposite direction reads to redirect a packet without a FIB lookup.
 Code: `felix/bpf-gpl/conntrack_types.h` (`ifindex_fwd`).
+_Avoid_: ifindex_fwd
 
 **`calico_ct_result_type`**:
 The outcome of a conntrack lookup (`CALI_CT_*`), such as a new flow, a mid-flow miss or an established flow with its bypass and NAT variants.
 Code: `felix/bpf-gpl/conntrack_types.h` (`calico_ct_result_type`).
+_Avoid_: nothing known
 
 **Conntrack flags**:
 Per-flow decisions stored at entry creation and read on the established-flow path (`CALI_CT_FLAG_*`), such as `SVC_SELF`, `MAGLEV`, `SKIP_FIB` and `NP_FWD`.
 Code: `felix/bpf-gpl/conntrack_types.h` (`CALI_CT_FLAG_SKIP_FIB`).
+_Avoid_: leg flags (the `CALI_CT_LEG_*` flags are separate)
 
 **Scan verdict**:
 An entry scanner's answer for one conntrack entry: `OK`, `Delete` or `SendRST`.
 Code: `felix/bpf/conntrack/scanner.go` (`ScanVerdict`).
+_Avoid_: policy verdict (that is allow or deny)
 
 **NAT frontend map**:
 The map (`cali_v4_nat_fe`) from a service's virtual address, port, protocol and source CIDR to a service ID and backend count.
 Code: `felix/bpf-gpl/nat_types.h` (`calico_nat_key`) and `felix/bpf/nat/maps.go` (`FrontendMap`).
+_Avoid_: frontend map
 
 **NAT backend map**:
 The map (`cali_v4_nat_be`) from a service ID and ordinal to one backend's address and port.
 Code: `felix/bpf-gpl/nat_types.h` (`calico_nat_dest`) and `felix/bpf/nat/maps.go` (`BackendMap`).
+_Avoid_: backend map, bare backend (see the qualifier)
 
 **Service ID**:
 A per-service number that indexes the service's block of the backend map, shared with its derived NodePort and LoadBalancer frontends.
 Code: `felix/design/bpf-services.md`.
+_Avoid_: svcID
 
 **Affinity map**:
 The map (`cali_v4_nat_aff`) recording which backend a client was given, for services with session affinity.
 Code: `felix/bpf/nat/maps.go` (`AffinityMap`).
+_Avoid_: block affinity (that is an IPAM term), session affinity (that is the Service setting)
 
 **Maglev LUT**:
 The per-service consistent-hash lookup table (`cali_v4_mglv`), generated in userspace and read by the Maglev sub-program.
@@ -749,30 +810,37 @@ _Avoid_: reverse-SNAT map
 **Routes map**:
 The longest-prefix-match trie (`cali_v4_routes`) from CIDR to route flags (`CALI_RT_*`) and next hop or interface index. Not the kernel's routing table.
 Code: `felix/bpf-gpl/routes.h` (`cali_rt_key`) and `felix/bpf/routes/map.go` (`MapParameters`).
+_Avoid_: BPF route table, routing table (that is the kernel's)
 
 **ARP map**:
 An LRU cache (`cali_v4_arp`) of layer-2 headers keyed by IP address and interface index, used by the NodePort return-encapsulation path.
 Code: `felix/bpf-gpl/arp.h` (`arp_key`) and `felix/bpf/arp/map.go` (`MapParams`).
+_Avoid_: neighbor table (that is the kernel's)
 
 **Allowed source prefixes**:
 The trie (`cali_v4_sprefix`) of interface index and CIDR pairs that a workload may use as a source address beyond its own IPs.
 Code: `felix/bpf/allowsources/map.go` (`MapParameters`).
+_Avoid_: sprefix, allow-sources
 
 **Failsafes map**:
 The map (`cali_v4_fsafes`) of failsafe ports that BPF always allows on host endpoints.
 Code: `felix/bpf/failsafes/failsafes_map.go` (`MapParams`).
+_Avoid_: calico_failsafe_ports
 
 **IP fragment maps**:
 The three maps used for IPv4 reassembly: `cali_v4_frags` (reassembly), `cali_v4_frgtmp` (per-CPU scratch space) and `cali_v4_frgfwd` (forwarding by fragment ID).
 Code: `felix/bpf-gpl/ip_v4_fragment.h`.
+_Avoid_: nothing known
 
 **QoS maps**:
 `cali_qos`, a packet-rate token bucket guarded by a spinlock, and `cali_qos_conn`, for connection limits.
 Code: `felix/bpf-gpl/qos.h`.
+_Avoid_: nothing known
 
 **Event ring buffer**:
 The BPF ring buffer (`cali_rb_evnt`) through which programs send typed events to Felix.
 Code: `felix/bpf-gpl/ringbuf.h` and `felix/bpf/events/events.go` (`Events`).
+_Avoid_: perf events
 
 **Policy-verdict event**:
 The event (`EVENT_POLICY_VERDICT`) that a BPF program sends to Felix on the ring buffer for each allowed new flow and each deny. It is the BPF dataplane's only flow-level output.
@@ -782,6 +850,7 @@ _Avoid_: flow log (the aggregated record that Felix and Goldmane produce)
 **Map version**:
 An integer suffixed to a pinned map's name when its layout changes, so old and new layouts never share one pinned file.
 Code: `felix/bpf/maps/maps.go` (`VersionedName`).
+_Avoid_: bare version (v1, v2 and v3 name API versions)
 
 **Pin**:
 A file under `/sys/fs/bpf` that keeps a map or link alive across Felix restarts.
@@ -791,14 +860,17 @@ _Avoid_: pinned map, for the file
 **Kernel lockdown**:
 A kernel mode (confidentiality) in which tracing is off, so Felix loads program builds without trace-printk logging (`_notrace`).
 Code: `felix/bpf/lockdown.go`.
+_Avoid_: nothing known
 
 **RPF**:
 Reverse-path filtering, enforced inside the BPF programs for workload and host endpoints while the kernel's `rp_filter` is relaxed.
 Code: `felix/bpf-gpl/rpf.h` (`wep_rpf_check`).
+_Avoid_: rp_filter (that is the kernel's setting, which stays relaxed)
 
 **`bpfNetworkBootstrap`**:
 The mode in which the `ebpf-bootstrap` init container programs the API server's Service into the NAT maps before Felix starts, so Felix can reach the API server through BPF.
 Code: `felix/bpf/proxy/syncer.go` (`bpfNetworkBootstrap`).
+_Avoid_: ebpf-bootstrap (that is the init container)
 
 ## Words that need a qualifier
 

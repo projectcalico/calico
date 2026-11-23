@@ -84,18 +84,22 @@ _Avoid_: derived CRD
 **KVPair**:
 A typed model key, its value (nil means deleted), a revision, and an optional UID and TTL.
 Code: `libcalico-go/lib/backend/model/keys.go` (`KVPair`).
+_Avoid_: update (that is a KVPair plus an update type), key-value pair (a KVPair also carries a revision, UID and TTL)
 
 **Model key**:
 A parsed datastore key that renders a unique default path. It is either a v1-model key or a `ResourceKey`.
 Code: `libcalico-go/lib/backend/model/keys.go` (`Key`).
+_Avoid_: datastore key (that is the rendered default path), v1 key (only one of the two kinds)
 
 **ResourceKey**:
 The model key for a v3 resource: kind, namespace and name.
 Code: `libcalico-go/lib/backend/model/resource.go` (`ResourceKey`).
+_Avoid_: v3 key
 
 **Default path**:
 The `/calico/...` etcd key string for a model key, also Typha's wire encoding of keys.
 Code: `libcalico-go/lib/backend/model/keys.go` (`KeyToDefaultPath`).
+_Avoid_: etcd key (the path is only a string rendering, and the Kubernetes datastore stores nothing at it), key path
 
 **v1 model**:
 The internal key and value shapes in `libcalico-go/lib/backend/model`, such as `PolicyKey`, `WorkloadEndpointKey` and `HostConfigKey`, which update processors produce. It is not an API version anyone can request.
@@ -115,6 +119,7 @@ _Avoid_: v1 updates, v1 model stream, "v1 model" for the whole stream
 **Pass-through kind**:
 A v3 kind in a syncer's resource list that has no update processor, so the syncer forwards it as a v3 `ResourceKey` instead of converting it to the v1 model. BGPConfiguration, BGPPeer, BGPFilter and LiveMigration are examples; the `DataplanePassthru` calculation node is a different thing.
 Code: `libcalico-go/lib/backend/syncersv1/felixsyncer/felixsyncerv1.go` (`New`), `libcalico-go/lib/backend/syncersv1/bgpsyncer/bgpsyncer.go` (`New`), `libcalico-go/lib/backend/watchersyncer/watchersyncer.go` (`ResourceType`), `felix/calc/dataplane_passthru.go` (`DataplanePassthru`).
+_Avoid_: DataplanePassthru (that is a calculation node), passthrough (that is also an operator render component)
 
 **Syncer type**:
 The name a client sends in its hello message to pick the stream it receives. It is `felix`, `bgp`, `tunnel-ip-allocation` or `node-status`.
@@ -134,10 +139,12 @@ _Avoid_: converter, translator
 **SyncerCallbacks**:
 The consumer interface of a datastore syncer: `OnStatusUpdated` and `OnUpdates`.
 Code: `libcalico-go/lib/backend/api/api.go` (`SyncerCallbacks`).
+_Avoid_: nothing known
 
 **Sync status**:
 `WaitForDatastore`, `ResyncInProgress` or `InSync`.
 Code: `libcalico-go/lib/backend/api/api.go` (`SyncStatus`).
+_Avoid_: syncer status, bare in-sync (that is only one of the three values)
 
 **Datastore in-sync**:
 The sync status reached once every watcher cache has delivered its initial list. Consumers hold off kernel writes and deletions until they see it.
@@ -152,6 +159,7 @@ _Avoid_: bare "resync"
 **Dedupe buffer**:
 A queue between a datastore syncer (or sync client) and its consumer that replaces a queued value when a newer one arrives for the same key. It bounds in-flight data to the size of the datastore, and it may reorder updates for different keys.
 Code: `libcalico-go/lib/backend/syncersv1/dedupebuffer/dedupe_buffer.go` (`DedupeBuffer`).
+_Avoid_: cache (Typha's snapshot cache is a different thing), queue (it replaces entries rather than only queuing them)
 
 **Sync client**:
 `SyncerClient`, the client end of the Typha protocol, presenting the same `SyncerCallbacks` as a local datastore syncer.
@@ -161,6 +169,7 @@ _Avoid_: Typha client
 **ClusterInformation**:
 The `default` singleton holding CalicoVersion, ClusterGUID and `DatastoreReady`.
 Code: `libcalico-go/lib/clientv3/client.go` (`EnsureInitialized`).
+_Avoid_: ClusterInfo (the kubectl short name), cluster info
 
 **Datastore ready flag**:
 `ClusterInformation.spec.datastoreReady`, delivered to Felix as `ReadyFlagKey`. When it is false Felix restarts and CNI is blocked.
@@ -175,14 +184,17 @@ _Avoid_: bare "lock" (a Go mutex)
 **Dry run**:
 A context flag asking the backend to validate a write without persisting it, and to refuse if it cannot.
 Code: `libcalico-go/lib/backend/api/dryrun.go` (`WithDryRun`).
+_Avoid_: nothing known
 
 **Calico validation**:
 libcalico-go's semantic validation of v3 resources, applied by clientv3 and by the Calico apiserver's dry-run `Store`. The admission webhooks and the Felix and Typha `ValidationFilter`s apply it too.
 Code: `libcalico-go/lib/validator/v3/validator.go` (`Validate`).
+_Avoid_: schema validation (CRD OpenAPI and CEL validation are separate), validator
 
 **FelixConfiguration**:
 The v3 resource behind Felix's global, selector-scoped and per-host datastore config sources. A selector-scoped FelixConfiguration applies only to hosts whose Node labels match its selector.
 Code: `felix/config/config_params.go` (`Source`).
+_Avoid_: FelixConfig, felix config (that is every parameter from every source, not this resource)
 
 **v1-to-v3 CRD migration**:
 The move of Calico resources from `crd.projectcalico.org/v1` CRDs to `projectcalico.org/v3` CRDs, triggered and reported by the `DatastoreMigration` resource named `v1-to-v3` and run by the kube-controllers migration controller. It is not the etcd-to-KDD migration that `calicoctl` runs.
@@ -251,6 +263,7 @@ _Avoid_: policyDir
 **Live migration**:
 Moving a KubeVirt or OpenStack VM between hosts. IPAM, Felix and BIRD track an active and an alternate owner and a route priority during the move.
 Code: `felix/calc/live_migration_calculator.go` (`LiveMigrationCalculator`), `libcalico-go/lib/backend/model/block.go` (`ActiveOwnerAttrs`).
+_Avoid_: migration (that is also CRD migration, etcd-to-KDD migration and Flannel migration)
 
 ### Policy
 
@@ -294,6 +307,7 @@ _Avoid_: ACL entry, filter
 **Entity rule**:
 The source or destination match block of a rule.
 Code: `api/pkg/apis/projectcalico/v3/policy_common.go` (`EntityRule`).
+_Avoid_: nothing known
 
 **Policy rule action**:
 A rule's `Allow`, `Deny`, `Log` or `Pass`. `Pass` continues evaluation at the next tier.
@@ -313,6 +327,7 @@ _Avoid_: label selector (that is the Kubernetes construct), matcher
 **Named port**:
 A port that a rule references by name and that resolves to IP-port members.
 Code: `felix/calc/rule_scanner.go` (`RuleScanner`).
+_Avoid_: port name (that is only the name string, not the resolved IP-port members)
 
 **Network set** (netset):
 A named set of CIDRs that rules can select. NetworkSet is namespaced, GlobalNetworkSet is cluster-wide.
@@ -332,6 +347,7 @@ _Avoid_: dry-run policy, preview policy, pending policy
 **Staged action**:
 `Set`, `Delete`, `Learn` or `Ignore`: what a staged policy would do to its enforced counterpart.
 Code: `api/pkg/apis/projectcalico/v3/policy_common.go` (`StagedAction`).
+_Avoid_: policy rule action (that is Allow, Deny, Log or Pass)
 
 **Pending policy trace**:
 The part of a policy trace computed with staged policies treated as enforced. In the protobuf it is `pending_policies`, and Dikastes computes it with `StagedAsEnforced`.
@@ -341,6 +357,7 @@ _Avoid_: staged trace; bare "pending" (staged policy is the resource, and pendin
 **Performance hint**:
 The policy field whose `AssumeNeededOnEveryNode` value makes Felix program the policy on a node where nothing local selects it.
 Code: `api/pkg/apis/projectcalico/v3/networkpolicy.go` (`PolicyPerformanceHint`).
+_Avoid_: nothing known
 
 **Untracked policy**:
 Policy evaluated without connection tracking, in the `*tables` raw table or in BPF-mode XDP. The model field is `DoNotTrack`.
@@ -364,6 +381,7 @@ _Avoid_: tiered policy resource
 **Tier wildcard**:
 The RBAC resource name `<tier>.*`, which grants access to every policy in one tier.
 Code: `apiserver/pkg/registry/projectcalico/authorizer/authorizer.go` (`NewTierAuthorizer`).
+_Avoid_: nothing known
 
 **Tier authorizer**:
 The check run before a tiered policy operation: the user needs GET on the tier, and access to the tier-scoped resource for the policy's name or for the tier wildcard. The Calico apiserver and the admission webhooks' tiered RBAC hook both run it.
@@ -383,6 +401,7 @@ _Avoid_: sidecar mode
 **Workload credentials**:
 Per-pod `{Uid, Workload, Namespace, ServiceAccount}` that pod2daemon writes and Felix's binder attaches to gRPC peers.
 Code: `pod2daemon/binder/auth.go` (`Credentials`).
+_Avoid_: nodeagent (except in the frozen socket path), udsuspver
 
 ### IPAM
 
@@ -416,10 +435,12 @@ _Avoid_: bare "stale affinity" (that is the unconfirmed-affinity error)
 **Affinity type**:
 Whether a block affinity belongs to a `host` or is `virtual`. The LoadBalancer controller owns the virtual ones.
 Code: `libcalico-go/lib/ipam/ipam_types.go` (`AffinityType`).
+_Avoid_: virtual on its own (the IPAM GC also uses it for stopped VMs)
 
 **Strict affinity**:
 The IPAMConfiguration setting that forbids borrowing, so a host allocates only from blocks affine to it. Windows requires it, and the operator will not proceed without it.
 Code: `libcalico-go/lib/ipam/ipam_types.go` (`IPAMConfig`, `StrictAffinity`), `operator/pkg/controller/installation/windows_controller.go`.
+_Avoid_: strict mode (other settings use that word)
 
 **Borrowing**:
 Allocating from a block affine to another node, or from an unaffine block.
@@ -454,10 +475,12 @@ _Avoid_: lease, claim; bare "allocation" for the IPAM GC's `allocation` struct (
 **Allocation type attribute**:
 The `type` attribute (`ipipTunnelAddress`, `vxlanTunnelAddress`, `wireguardTunnelAddress`, LoadBalancer) that classifies non-pod allocations.
 Code: `libcalico-go/lib/backend/model/block.go` (`IPAMBlockAttributeType`).
+_Avoid_: allocation type, bare allocation (it means several things)
 
 **Intended use**:
 The use a request asks for (Workload, Tunnel or LoadBalancer), checked against each pool's `allowedUses`.
 Code: `libcalico-go/lib/ipam/ipam_types.go` (`IntendedUse`).
+_Avoid_: allowed uses (that is the pool's side of the check)
 
 **IP reservation**:
 A resource listing addresses inside pools that are never allocated.
@@ -521,6 +544,7 @@ _Avoid_: vxlan tunnel
 **CrossSubnet**:
 The encapsulation mode that encapsulates only when the next hop is outside the node's subnet.
 Code: `confd/pkg/backends/calico/bgp_processor.go` (`poolUsesIPIP`).
+_Avoid_: cross subnet
 
 **No-encap pool**:
 A pool with `ipipMode` and `vxlanMode` both Never. Felix calls the derived state `NoEncapNeeded`; the proto field `no_encap_enabled` is frozen.
@@ -535,6 +559,7 @@ _Avoid_: encrypted overlay
 **BGP**:
 The routing protocol BIRD speaks to distribute workload routes, configured by confd.
 Code: `node/filesystem/etc/calico/confd/templates/bird.cfg.template`.
+_Avoid_: BIRD (that is the daemon, not the protocol)
 
 **Node-to-node mesh**:
 The default BGP topology, in which every non-route-reflector node peers with every other.
@@ -559,6 +584,7 @@ _Avoid_: block owner, route owner
 **programClusterRoutes**:
 The BGPConfiguration and FelixConfiguration field pair naming which pool encapsulation modes BIRD and Felix each program. The operator's `clusterRoutingMode` sets both.
 Code: `api/pkg/apis/projectcalico/v3/bgpconfig.go` (`ProgramClusterRoutes`), `operator/pkg/controller/installation/bgpconfig.go`.
+_Avoid_: clusterRoutingMode (that is the operator's setting, which sets both), routing mode
 
 **Blackhole block route**:
 A route to a local IPAM block with a `blackhole` target, so that unknown addresses in the block drop. Felix programs it through `routeManager`, and BIRD's static protocol exports it, which gives BIRD a route to advertise for the block even when no workload route exists inside it.
@@ -568,6 +594,7 @@ _Avoid_: IPAM-block drop route, bare "static route" (several things are called t
 **Route protocol**:
 The kernel route's `proto` label. BIRD uses 12 (`RTPROT_BIRD`). Felix uses `DeviceRouteProtocol`, and substitutes the Calico route proto, 80, when that setting has its default of 3.
 Code: `felix/dataplane/linux/dataplanedefs/dataplane_defs.go` (`DefaultRouteProto`), `felix/dataplane/linux/route_mgr.go` (`calculateRouteProtocol`), `felix/config/config_params.go` (`DeviceRouteProtocol`).
+_Avoid_: routing protocol (that is BGP), route source (that is a different setting)
 
 **Route priority**:
 How a route ranks against others for the same prefix. It appears as Felix's route priority, the kernel metric (lower wins), BGP local preference (higher wins), and BIRD's separate `preference` attribute. Felix gives ordinary workload routes a normal route priority (default 1024) and a live-migrating workload's current home the lower metric of an elevated route (default 512), and both values must match across BGPConfiguration and FelixConfiguration.
@@ -582,14 +609,17 @@ _Avoid_: priority route
 **Route source**:
 Felix's and confd's `RouteSource` setting: routes come from WEP IPs or from IPAM blocks.
 Code: `felix/config/config_params.go` (`RouteSource`).
+_Avoid_: route origin (that is `LearnedFrom` in CalicoNodeStatus), route protocol (that is the kernel label)
 
 **Service advertisement**:
 Advertising Service cluster, external and LoadBalancer IPs over BGP, from CIDRs in BGPConfiguration.
 Code: `confd/pkg/backends/calico/routes.go` (`advertiseThisService`).
+_Avoid_: static route (the BIRD and confd word for several different routes)
 
 **BGP syncer**:
 The datastore syncer behind the `bgp` syncer type, which feeds confd the IPPool, BGPConfiguration, Node, BGPPeer and BGPFilter resources and this node's block affinities.
 Code: `libcalico-go/lib/backend/syncersv1/bgpsyncer/bgpsyncer.go` (`New`).
+_Avoid_: bare syncer (name the syncer type)
 
 ### Dataplane
 
@@ -608,6 +638,7 @@ _Avoid_: backend
 **Dataplane API**:
 The `ToDataplane` and `FromDataplane` protobuf stream between Felix's calculation graph and a dataplane driver, including an external one.
 Code: `felix/proto/felixbackend.proto` (`ToDataplane`).
+_Avoid_: felixbackend (that is the proto file name), Policy Sync API (a different stream)
 
 **`*tables`**:
 iptables or nftables, the Linux dataplanes that render rules rather than BPF programs.
@@ -627,6 +658,7 @@ _Avoid_: refresh, full sync, bare "resync"
 **Restart exit code**:
 The exit code 129, which asks a supervisor (runit, `calico-felix-wrapper` or `cmdwrapper.WrapSelf`) to relaunch a component.
 Code: `pkg/cmdwrapper/cmdwrapper.go` (`RestartReturnCode`).
+_Avoid_: config-change restart (that is the reason for the restart, not the code)
 
 **Config-change restart**:
 A component exiting with the restart exit code to apply a change it cannot hot-reload, then relying on its init system or restart wrapper to start it again. Felix exits when a parameter it cannot hot-reload, the encapsulation state or datastore readiness changes, and kube-controllers restarts the whole process when its running config changes, never one controller alone.
@@ -655,6 +687,7 @@ _Avoid_: aggregated flow, bare "flow"
 **Flow key**:
 The identity of a Goldmane Flow: source and destination name, namespace and endpoint type, destination port, service, protocol, reporter, action and policy trace. Source and destination IP addresses never enter it.
 Code: `goldmane/proto/api.proto` (`FlowKey`), `goldmane/pkg/types/flow.go` (`FlowKey`).
+_Avoid_: FlowMeta (that is Felix's flow log key), flow meta
 
 **Reporter (src/dst)**:
 Which end of the connection measured the flow.
@@ -664,6 +697,7 @@ _Avoid_: bare "reporter"
 **Flow endpoint type**:
 `WorkloadEndpoint`, `HostEndpoint`, `NetworkSet` or `Network` (named `pub` or `pvt`) for each side of a flow.
 Code: `goldmane/proto/api.proto` (`EndpointType`).
+_Avoid_: bare endpoint (WorkloadEndpoint, HostEndpoint and others are all called that)
 
 **Policy trace** and **policy hit**:
 The ordered list of policy rules that acted on a flow (an enforced list and a pending list), and one entry in it.
@@ -672,6 +706,7 @@ Code: `goldmane/proto/api.proto` (`PolicyTrace`).
 **End-of-tier hit**:
 A policy hit of kind `EndOfTier`, whose `trigger` names the first policy that selected the flow in that tier.
 Code: `goldmane/proto/api.proto` (`PolicyHit`, `EndOfTier`).
+_Avoid_: implicit deny (a hit of kind `EndOfTier` is not a rule), default deny (it is not a default-deny policy)
 
 **Filter hints**:
 The distinct values of one flow field, such as destination names, that match a filter, which clients use for autocomplete. Whisker-backend derives them only from flows the [visibility filter](whisker-backend/GLOSSARY.md#visibility-filter) admits.
@@ -681,10 +716,12 @@ _Avoid_: filters
 **Query filter**:
 The `Filter` message that narrows a `List`, `Stream` or `FilterHints` request to Goldmane, which Whisker-backend builds from the `Filters` in a flows request. It is not a visibility filter.
 Code: `goldmane/proto/api.proto` (`Filter`), `whisker-backend/pkg/apis/v1/flows.go` (`Filters`).
+_Avoid_: visibility filter (that is whisker-backend's), bare filter (it means several things)
 
 **FlowCollector API**:
 `goldmane.FlowCollector/Connect`, the bidirectional stream Felix reports flows on, over TCP to Goldmane or over the local socket `/var/run/calico/flows/flows.sock`.
 Code: `goldmane/proto/api.proto` (`FlowCollector`), `felix/collector/local/server.go` (`SocketDir`).
+_Avoid_: Policy Sync API (that is a different stream)
 
 **Flow log dispatcher**:
 A Felix collector output (`GoldmaneReporter` or `LocalSocketReporter`) that sends flow logs to one destination.
@@ -748,6 +785,7 @@ _Avoid_: bare "webhook", the authorizer
 **calicoctl**:
 The CLI that reads and writes Calico resources directly through libcalico-go, bypassing apiserver tier RBAC.
 Code: `calicoctl/calicoctl/commands/command.go`.
+_Avoid_: calico ctl, kubectl-calico (an invocation name for the same binary), Calico CLI
 
 **Goldmane**:
 The cluster-wide flow aggregation and query service that Felix reports flows to.
@@ -777,6 +815,7 @@ _Avoid_: volume plugin
 **key-cert-provisioner**:
 The init container that creates a key and CSR, submits a Kubernetes CSR, and writes the signed certificate.
 Code: `key-cert-provisioner/pkg/keycert/run.go` (`Run`).
+_Avoid_: operator CSR signer (that is the other side of the CSR)
 
 **Combined binary**:
 The `calico/calico` image and binary that runs most components as `calico component <name>`, and the CNI plugin by `argv[0]`.

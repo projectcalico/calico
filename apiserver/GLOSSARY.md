@@ -45,36 +45,44 @@ _Avoid_: storage backend
 **Storage type**:
 The setting naming which storage backs the registry. Only `calico`, the resource store, is used.
 Code: `apiserver/pkg/registry/projectcalico/server/options.go` (`StorageType`).
+_Avoid_: backend, datastore type (that is the client's `DATASTORE_TYPE` setting)
 
 **`Store` (dry run)**:
 The registry store wrapper that sends a server-side dry run to the datastore as a dry run, so the CRD schema, CEL rules and Calico validation still apply.
 Code: `apiserver/pkg/registry/projectcalico/util/dryrun_store.go` (`Store`).
+_Avoid_: registry store (that is the store it wraps)
 
 **ClusterInformation read-only rule**:
 Through the Calico apiserver, ClusterInformation can be read but not written.
 Code: `apiserver/pkg/registry/projectcalico/clusterinformation/storage.go`.
+_Avoid_: nothing known
 
 **Protocol shield**:
 The serializer wrapper that restricts negotiated media types to JSON and YAML.
 Code: `apiserver/pkg/apiserver/protocolshield.go` (`protocolShieldSerializer`).
+_Avoid_: nothing known
 
 ### Tier authorization
 
 **Tier selector**:
 The label requirement on `projectcalico.org/tier` that list and watch calls get, narrowing them to the tiers the user may read.
 Code: `apiserver/pkg/registry/projectcalico/util/rbac.go` (`EnsureTierSelector`).
+_Avoid_: filter (it means several things)
 
 **Watch manager**:
 The object that cancels open policy watches when a tier is added, so clients re-watch and see the new tier's policies.
 Code: `apiserver/pkg/registry/projectcalico/util/watch_manager.go` (`WatchManager`).
+_Avoid_: manager (it means several things in Calico)
 
 **Calico resource lister**:
 A syncer-backed cache of tiers that tier authorization reads.
 Code: `apiserver/pkg/apiserver/apiserver.go` (`CalicoResourceLister`).
+_Avoid_: cache (it means several things)
 
 **RBAC calculator**:
 Computes the permissions a user holds per resource type, verb, namespace and tier.
 Code: `apiserver/pkg/rbac/calculator.go` (`Calculator`).
+_Avoid_: tier authorizer (that is the consumer of the calculator, not the calculator)
 
 ### Admission webhooks
 

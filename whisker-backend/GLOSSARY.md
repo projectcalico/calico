@@ -30,6 +30,7 @@ _Avoid_: backend, unqualified; upstream (that is the package name)
 **Streaming flows backend**:
 A flows backend that can also return a stream of flows. The Goldmane upstream implements it.
 Code: `whisker-backend/pkg/apis/v1/backend.go` (`StreamingFlowsBackend`).
+_Avoid_: backend on its own (it means several things)
 
 **FlowResponse**:
 The JSON form of one Goldmane Flow that whisker-backend returns. Whisker's UI types call the same record a flow log, which is not Felix's flow log.
@@ -54,3 +55,4 @@ _Avoid_: staged actions
 **Proxy prefix**:
 The `/whisker-backend/` path prefix that the Whisker nginx container strips before proxying a request to whisker-backend.
 Code: `whisker/docker-image/default.conf`.
+_Avoid_: nothing known

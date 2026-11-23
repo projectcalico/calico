@@ -62,16 +62,19 @@ _Avoid_: aggregation (on its own; LoadBalancer service aggregation is a differen
 **krt_tunnel**:
 A route attribute that exists only in Calico's fork of BIRD. It makes the kernel protocol send a route out of `tunl0`.
 Code: `confd/pkg/backends/calico/bgp_processor.go` (`krt_tunnel`).
+_Avoid_: nothing known
 
 ### Route priority
 
 **Normal route priority**:
 The kernel metric Felix gives ordinary workload routes, 1024 by default. BGPConfiguration and FelixConfiguration must carry the same value.
 Code: `confd/pkg/backends/calico/bgp_processor.go` (`getNormalRoutePriority`), `api/pkg/apis/projectcalico/v3/bgpconfig.go` (`IPv4NormalRoutePriority`).
+_Avoid_: preference (BIRD's separate attribute)
 
 **Override preference**:
 The BIRD `preference` of 200 given to a BGP-learned elevated route, so that it beats a local workload route for the same address.
 Code: `confd/pkg/backends/calico/bgp_processor.go` (`birdOverridePreference`).
+_Avoid_: higher than normal priority route, priority (the kernel metric, a separate attribute)
 
 ### Cluster routes and pools
 
@@ -83,6 +86,7 @@ _Avoid_: pool class
 **Cluster-route handover**:
 The window during a live `programClusterRoutes` change in which BIRD has withdrawn its cluster routes and Felix has not yet restarted to program them.
 Code: `design/cluster-route-programming/DESIGN.md`.
+_Avoid_: bare handover or cutover (name the subject)
 
 **Leftover BIRD routes**:
 Routes BIRD installed in the kernel and left in place when it exited. Felix removes the ones on the IPIP device when it owns the cluster routes for IPIP pools.
@@ -104,10 +108,12 @@ _Avoid_: full mesh peer
 **Global peer**:
 A BGPPeer with neither `node` nor `nodeSelector`, so it applies to every node.
 Code: `confd/pkg/backends/calico/client.go` (`GlobalBGPPeerKey`).
+_Avoid_: bare global (it means several things), peer type (that is eBGP or iBGP)
 
 **Node-specific peer**:
 A BGPPeer applied to the nodes named by `node` or `nodeSelector`.
 Code: `confd/pkg/backends/calico/client.go` (`NodeBGPPeerKey`).
+_Avoid_: node peer, peer type (that is eBGP or iBGP)
 
 **Local workload peer**:
 A BGP peering to a workload on this node, chosen by a BGPPeer's `localWorkloadSelector` and found through endpoint status files.
@@ -117,10 +123,12 @@ _Avoid_: local peer
 **Reverse peering**:
 The peering confd adds on the peer node's side for symmetry, unless the BGPPeer sets `reversePeering` to Manual.
 Code: `confd/pkg/backends/calico/client.go` (`updatePeersV1`).
+_Avoid_: implicit reverse peering
 
 **v1 peering**:
 A peering rendered into confd's cache as a `/calico/bgp/v1/global` or `/calico/bgp/v1/host/<node>` peer key.
 Code: `confd/pkg/backends/calico/client.go` (`updatePeersV1`).
+_Avoid_: bare v1 (it also means the v1 model and the legacy API)
 
 ### Client and templates
 
@@ -147,10 +155,12 @@ _Avoid_: reject rule (that is a `*tables` rule)
 **Route generator**:
 The watcher of Services and EndpointSlices that advertises a per-service route from this node.
 Code: `confd/pkg/backends/calico/routes.go` (`routeGenerator`).
+_Avoid_: rg
 
 **Template resource**:
 One `conf.d` TOML entry that ties a template to its destination file and the keys it watches. It also carries the `check_cmd` and `reload_cmd`.
 Code: `confd/pkg/resource/template/resource.go` (`TemplateResource`).
+_Avoid_: TemplateResourceConfig, template (that is the file the resource points at)
 
 **Stage file**:
 The temporary rendered file that BIRD checks before it replaces the destination file.
@@ -165,6 +175,7 @@ _Avoid_: datastore revision
 **BirdBGPConfig**:
 The per-IP-family structure of peers, filters, communities and pool statements that the templates render, with `BirdBGPPeer` for each peer.
 Code: `confd/pkg/backends/types/bird_bgp_config.go` (`BirdBGPConfig`, `BirdBGPPeer`).
+_Avoid_: BGPConfiguration (that is the v3 resource)
 
 ## Words that need a qualifier
 

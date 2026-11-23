@@ -124,14 +124,17 @@ _Avoid_: sync, for a workqueue pass
 **Prime**:
 Setting a ResourceCache entry without queuing an update, used to seed state that is already in the datastore.
 Code: `kube-controllers/pkg/cache/cache.go` (`Prime`).
+_Avoid_: nothing known
 
 **syncToDatastore**:
 The worker step that writes or deletes one key so the datastore matches the ResourceCache.
 Code: `kube-controllers/pkg/controllers/namespace/namespace_controller.go` (`syncToDatastore`).
+_Avoid_: syncToCalico
 
 **processNextItem**:
 The worker loop that pops one workqueue key, handles it, and marks it done.
 Code: `kube-controllers/pkg/controllers/tier/tier_controller.go` (`processNextItem`).
+_Avoid_: processNextWorkItem
 
 **Dropped key**:
 A workqueue key given up after `maxRetries` failures. Only the periodic informer resync brings it back.
@@ -141,6 +144,7 @@ _Avoid_: failed key
 **Kick**:
 A non-blocking send on a channel that coalesces many triggers into one pending pass.
 Code: `kube-controllers/pkg/controllers/node/controller.go` (`kick`).
+_Avoid_: fullScanNextSync
 
 **Full pass**:
 One pass over every object, requested by a kick instead of handling keys one at a time. The IP pool controller's `reconcileKey` is the single key that stands for a full pass.
@@ -162,10 +166,12 @@ _Avoid_: config, unqualified
 **ENABLED_CONTROLLERS**:
 The environment variable listing the controllers to run. When set, it overrides the controller list in the KubeControllersConfiguration. `profile` is accepted as an alias for `namespace`.
 Code: `kube-controllers/pkg/config/config.go` (`EnvEnabledControllers`).
+_Avoid_: reconciler (that is the controller-runtime word)
 
 **Status file**:
 The readiness file `/status/status.json`, read by the `check-status` command alongside the HTTP health aggregator.
 Code: `kube-controllers/pkg/status/status.go`.
+_Avoid_: nothing known
 
 ### IP pool and tier controllers
 
@@ -177,10 +183,12 @@ _Avoid_: cascading delete (that is Kubernetes owner references)
 **Pool sort category**:
 The precedence (active, terminating, disabled, new) deciding which of several overlapping pools stays allocatable.
 Code: `kube-controllers/pkg/controllers/ippool/pool_controller.go` (`poolSortCategory`).
+_Avoid_: nothing known
 
 **AddressSpaceNearlyFull**:
 The IP pool condition set at 80 percent use for pools of 32 or more addresses.
 Code: `kube-controllers/pkg/controllers/ippool/nearly_full.go` (`reconcileNearlyFull`).
+_Avoid_: nothing known
 
 ### IPAM GC and node sub-controllers
 
@@ -197,12 +205,14 @@ _Avoid_: node deletion controller
 **WorkloadEndpointData**:
 The subset of a WorkloadEndpoint (pod name, namespace, labels, service account) that the pod controller owns.
 Code: `kube-controllers/pkg/converter/pod_converter.go` (`WorkloadEndpointData`).
+_Avoid_: nothing known
 
 ### LoadBalancer controller
 
 **Calico-managed LoadBalancer**:
 A Service whose LoadBalancer address Calico assigns from Calico IPAM, selected by the `calico` load balancer class and steered by the `projectcalico.org/ipv4pools` and `ipv6pools` annotations.
 Code: `kube-controllers/pkg/controllers/loadbalancer/loadbalancer_controller.go` (`loadBalancerController`).
+_Avoid_: bare LoadBalancer (any Service of that type, whoever assigns the address)
 
 **Orphaned LoadBalancer addresses**:
 Addresses in Calico IPAM under a LoadBalancer handle that no Service holds. The LoadBalancer controller releases them when it syncs IPAM.
@@ -224,6 +234,7 @@ _Avoid_: state
 **Conflict**:
 A `projectcalico.org/v3` resource that already exists with a different spec from its `crd.projectcalico.org/v1` source.
 Code: `kube-controllers/pkg/controllers/migration/registry.go`.
+_Avoid_: ResourceMismatch
 
 **Migration order**:
 The integer group assigned to each kind, deciding which kinds are copied first (tiers first, IPAM late).
@@ -233,6 +244,7 @@ _Avoid_: priority
 **Resource migrator**:
 The per-kind step that lists the v1 resources, converts them, creates the v3 resources and compares specs.
 Code: `kube-controllers/pkg/controllers/migration/migrators/migrator.go` (`ResourceMigrator`).
+_Avoid_: migration (it means several things; say v1-to-v3 CRD migration)
 
 **APIService handover**:
 Removing the `v3.projectcalico.org` APIService that points at the Calico apiserver, saving it for rollback, and letting kube-aggregator register the CRD-backed one. The operator's APIService cutover is a different mechanism.

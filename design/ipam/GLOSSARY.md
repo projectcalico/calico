@@ -54,18 +54,22 @@ Terms defined in the [root glossary](../../GLOSSARY.md) that apply in this compo
 **Ordinal**:
 An address's index within its block.
 Code: `libcalico-go/lib/backend/model/block.go` (`IPToOrdinal`).
+_Avoid_: index (that also names an index into other tables)
 
 **Sequence number**:
 A block-level write counter, with a per-ordinal copy, that lets a release detect and skip a stale request. Every release path passes it in `ReleaseOptions`.
 Code: `libcalico-go/lib/backend/model/block.go` (`SequenceNumber`), `libcalico-go/lib/ipam/ipam_types.go` (`ReleaseOptions`).
+_Avoid_: nothing known
 
 **Allocation attribute**:
 The record kept for one allocated ordinal: its handle, active owner attributes, alternate owner attributes and release time.
 Code: `libcalico-go/lib/backend/model/block.go` (`AllocationAttribute`).
+_Avoid_: bare allocation (it means several things)
 
 **Active owner and alternate owner**:
 The pod using an address now, and the other pod that holds it during a KubeVirt live migration. The active owner's attributes serialize under the JSON name `secondary`.
 Code: `libcalico-go/lib/backend/model/block.go` (`ActiveOwnerAttrs`, `AlternateOwnerAttrs`).
+_Avoid_: secondary (the JSON name of the active owner's attributes)
 
 **Pool qualification**:
 The rule that decides which pools one request may draw addresses from and which empty affine blocks a node may keep. `PoolClaim` is its exported form.
@@ -75,10 +79,12 @@ _Avoid_: pool selection, pool eligibility
 **Pool resolution**:
 Turning the pool names and CIDRs a request names into CIDRs, and nothing more. It runs before pool qualification.
 Code: `libcalico-go/lib/ipam/pool_qualification.go` (`ResolvePools`).
+_Avoid_: pool qualification (that is the later step)
 
 **Block affinity state**:
 Where a block affinity is in its life. It is `pending` while being claimed and `confirmed` once it holds, and `pendingDeletion` while being released. A pending affinity is treated as absent, and no other host may claim a block whose affinity is `pendingDeletion`.
 Code: `libcalico-go/lib/backend/model/block_affinity.go` (`BlockAffinityState`).
+_Avoid_: confirmed on its own (it also means a confirmed leak), stale affinity (a different thing)
 
 **In cooldown**:
 The state of an address after release and before deallocation. It stays in the block's allocations with its release time set for the pool's cooldown period, and it still counts as in use; the accounting reports it separately as cooling.
@@ -93,6 +99,7 @@ _Avoid_: cold, expired
 **Cooldown expiry**:
 The moment an address goes from in cooldown to cooled down.
 Code: `libcalico-go/lib/ipam/ipam_block.go` (`garbageCollect`).
+_Avoid_: bare GC (it means several things)
 
 **Write-folded deallocation**:
 Deallocation of cooled-down addresses that is saved only when a write path updates the block. A read computes the same result and discards it.
@@ -102,6 +109,7 @@ _Avoid_: read-time GC, the IPAM GC (that is the controller)
 **VM handle**:
 The handle of the form `<network>.vmi.<namespace>.<vm>`, which persists across the pods of one KubeVirt VM.
 Code: `libcalico-go/lib/ipam/vmipam/ipam_kubevirt.go` (`CreateVMHandleID`).
+_Avoid_: bare handle (it means several things)
 
 **Windows-reserved handle**:
 The literal handle `windows-reserved-ipam-handle`, which holds the first three and the last address of each Windows block.
@@ -111,6 +119,7 @@ _Avoid_: reservation (that is the IP reservation resource)
 **`LabelHostnameHash`**:
 The hashed-hostname label on a block affinity that KDD host lookups use. `UpgradeHost` stamps it at node startup.
 Code: `api/pkg/apis/projectcalico/v3/constants.go` (`LabelHostnameHash`), `libcalico-go/lib/ipam/ipam.go` (`UpgradeHost`).
+_Avoid_: nothing known
 
 **Unreferenced**:
 The accounting predicate that is true for an allocation whose owner no longer refers to it, at this instant. It becomes a leak only once the IPAM GC controller's grace period has passed.
@@ -152,6 +161,7 @@ _Avoid_: abandoned sandbox
 **Address-not-ours error**:
 The CNI error code that says a requested or handed-over address does not belong to the pod. It is the only error that leads the plugin to request a fresh address.
 Code: `cni-plugin/pkg/types/types.go` (`ErrCodeAddressNotOurs`).
+_Avoid_: nothing known
 
 **Kept addresses**:
 The addresses a WorkloadEndpoint for another sandbox still lists. A stale DEL or a failed ADD must not release them.
@@ -161,6 +171,7 @@ _Avoid_: protected addresses
 **Keep-aware release**:
 Releasing only the addresses a WorkloadEndpoint no longer lists, so kept addresses stay allocated.
 Code: `cni-plugin/pkg/k8s/ipam_keep.go` (`failedAddCleanup`, `releaseUnusedAddresses`).
+_Avoid_: bare release (it means several things)
 
 **IPAM lock**:
 A best-effort lock file held for the host across a calico-ipam ADD or release.
@@ -170,18 +181,22 @@ _Avoid_: mutex
 **Lock then clock**:
 The rule that the allocation timeout starts only after the IPAM lock is held.
 Code: `design/ipam/ipam-cni.md`.
+_Avoid_: nothing known
 
 **IPAM annotations**:
 The pod and namespace annotations that steer allocation, such as `ipAddrs` and `ipv4pools`. The full list is in the IPAM CNI design document.
 Code: `cni-plugin/pkg/k8s/k8s.go` (`applyIPAMAnnotations`), `design/ipam/ipam-cni.md`.
+_Avoid_: nothing known
 
 **Single-network mode**:
 The Windows mode that limits a node to one HNS network and one IPAM block.
 Code: `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`WindowsUseSingleNetwork`).
+_Avoid_: WindowsUseSingleNetwork, single-HNS-network mode
 
 **Sandbox lookups**:
 The Kubernetes clients and the Pod and Namespace objects that the `calico` network plugin passes on the context to in-process IPAM.
 Code: `cni-plugin/internal/pkg/utils/sandbox_lookups.go` (`SandboxLookups`).
+_Avoid_: container (it is the pause sandbox)
 
 ### IPAM GC controller
 
@@ -198,6 +213,7 @@ _Avoid_: dirty scan
 **Allocation verdict**:
 The IPAM GC controller's judgment of one allocation: in use, owner gone, or unused.
 Code: `kube-controllers/pkg/controllers/node/ipam.go` (`judgeAllocation`).
+_Avoid_: valid and leak (the words in `allocationIsValid`)
 
 **Candidate leak**:
 An allocation judged not in use whose grace timer is running.
@@ -217,14 +233,17 @@ _Avoid_: stale sandbox
 **Handle tracker**:
 The per-handle check that makes a handle's release all-or-none: the controller confirms a leak only when every allocation under the handle is a confirmed leak.
 Code: `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`handleTracker`).
+_Avoid_: bare tracker (the accounting tracker is a separate thing)
 
 **Empty-block grace**:
 The rule that the controller must see a block empty on two syncs, spanning the grace period, before it releases the block's affinity.
 Code: `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`blockReleaseTracker`).
+_Avoid_: two-observation rule
 
 **Last affine block**:
 The one affine block a node keeps even when empty. The controller never releases it.
 Code: `kube-controllers/pkg/controllers/node/ipam.go` (`releaseUnusedBlocks`).
+_Avoid_: nothing known
 
 **Stopped-VM bucket**:
 The in-memory pseudo-node under which the controller files the addresses of stopped KubeVirt VMs that no node holds.
@@ -234,6 +253,7 @@ _Avoid_: virtual node (that clashes with the virtual affinity type)
 **VM recreation grace period**:
 The five-minute minimum on the leak grace period for KubeVirt VM allocations.
 Code: `kube-controllers/pkg/controllers/node/ipam.go` (`vmRecreationGracePeriod`).
+_Avoid_: vmRecreationGracePeriod
 
 **`garbageCollectColdIPs`**:
 The pass that persists deallocation for blocks whose addresses have cooled down but that no write path has touched.
@@ -248,6 +268,7 @@ _Avoid_: knode, cnode
 **IPAM feed**:
 The building block that feeds the accounting tracker from the datastore syncer.
 Code: `kube-controllers/pkg/controllers/utils/ipam_feed.go` (`IPAMFeed`).
+_Avoid_: IPAM cache, shared tracker
 
 ## Words that need a qualifier
 

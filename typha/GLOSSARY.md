@@ -61,6 +61,7 @@ _Avoid_: crumb, snapshot (on its own)
 **Handshake**:
 The opening exchange on a new connection: the client's hello, the server's hello, and, when compression is on, a decoder restart and an acknowledgement.
 Code: `typha/pkg/syncserver/sync_server.go` (`doHandshake`), `typha/pkg/syncproto/sync_proto.go` (`MsgClientHello`, `MsgServerHello`).
+_Avoid_: hello (that is only one message of the exchange)
 
 **Decoder restart**:
 The point in the stream where the encoding changes. Typha sends nothing in the new encoding until the client acknowledges it.
@@ -70,10 +71,12 @@ _Avoid_: reset
 **Modern policy keys**:
 The client capability flag meaning the client keys policies by kind, namespace and name with no tier in the key. Typha rejects a client that does not set it.
 Code: `typha/pkg/syncproto/sync_proto.go` (`SupportsModernPolicyKeys`).
+_Avoid_: LegacyPolicyKey (that is the older form with a tier in the key)
 
 **Serialized update**:
 The wire form of one syncer update, with the key written as its default path and the value as JSON.
 Code: `typha/pkg/syncproto/sync_proto.go` (`SerializedUpdate`).
+_Avoid_: bare update (the in-process form is a KVPair plus an update type)
 
 **Fall behind**:
 A client falls behind when its current Breadcrumb is more than `MaxFallBehind` older than the latest one. Typha disconnects it once the grace period has passed.
@@ -83,10 +86,12 @@ _Avoid_: lag (without the threshold)
 **Fall-behind disconnect**:
 The disconnect Typha applies to a client that fell behind. It is one kind of connection shedding.
 Code: `typha/pkg/syncserver/sync_server.go` (`connection`).
+_Avoid_: too far behind, lag (it has no threshold)
 
 **`NewClientFallBehindGracePeriod`**:
 The extra time after a new client's snapshot send during which the client is not disconnected for falling behind.
 Code: `typha/pkg/syncserver/sync_server.go` (`NewClientFallBehindGracePeriod`).
+_Avoid_: lag (it has no threshold)
 
 **Connection shedding**:
 Typha dropping client connections on purpose: to rebalance clients across Typhas, to meet a lower connection limit, or at shutdown. A fall-behind disconnect is shedding too.
@@ -101,10 +106,12 @@ _Avoid_: load balancing
 **Max connections**:
 The dynamic per-Typha connection limit that the rebalancer sets, counted separately for each syncer type.
 Code: `typha/pkg/syncserver/sync_server.go` (`MaxConns`).
+_Avoid_: MaxConns
 
 **Graceful shutdown**:
 On SIGTERM, Typha drops its connections one at a time, spread across 95 percent of the shutdown timeout and capped by `ShutdownConnectionDropIntervalMaxSecs`, before it exits.
 Code: `typha/pkg/syncserver/sync_server.go` (`handleGracefulShutDown`).
+_Avoid_: graceful restart (that is BIRD's)
 
 **Syncer client**:
 The client end of the Typha protocol. It presents the same callbacks interface as a local datastore syncer, so a consumer cannot tell which it is using.
@@ -114,6 +121,7 @@ _Avoid_: Typha client (ambiguous with discovery)
 **Typha discovery**:
 Resolving Typha addresses from the `calico-typha` Kubernetes Service, or from an explicit address setting.
 Code: `typha/pkg/discovery/discovery.go` (`Discoverer`).
+_Avoid_: rebalancer (that adjusts connection limits, not addresses)
 
 **`ValidationFilter` (Typha)**:
 The pipeline stage that validates each KVPair and replaces an invalid value with a delete. Felix's calculation graph has its own validation filter with the same name.

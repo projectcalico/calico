@@ -31,15 +31,19 @@ _Avoid_: resource helper (that is the implementation type)
 **Migrate export**:
 The step that writes an etcdv3 datastore to a YAML export file, holding its v3 resources and IPAM data plus the cluster GUID.
 Code: `calicoctl/calicoctl/commands/datastore/migrate/export.go` (`Export`).
+_Avoid_: datastore migration (say etcd-to-KDD migration)
 
 **Migrate import**:
 The step that reads the export file and loads it into the Kubernetes datastore, refusing to run if Calico resources already exist there.
 Code: `calicoctl/calicoctl/commands/datastore/migrate/import.go` (`Import`).
+_Avoid_: datastore migration (say etcd-to-KDD migration)
 
 **Version mismatch**:
 calicoctl refusing to run against a cluster whose ClusterInformation `CalicoVersion` differs from its own, unless `--allow-version-mismatch` is set.
 Code: `calicoctl/calicoctl/commands/common/version_mismatch.go` (`CheckVersionMismatch`).
+_Avoid_: version skew
 
 **IPAM commands**:
 The `calicoctl ipam` subcommand group for inspecting and changing IPAM state, from the integrity report of `check` to the pool `split`.
 Code: `calicoctl/calicoctl/commands/ipam_command.go`.
+_Avoid_: IPAM GC (that is the kube-controllers code, not these commands)

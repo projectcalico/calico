@@ -42,50 +42,62 @@ _Avoid_: backend (on its own), policy-only mode
 **Autodetection method**:
 The rule, set by `IP_AUTODETECTION_METHOD`, that picks the Calico node address from the host's interfaces: `first-found`, `interface=`, `cidr=`, `can-reach=`, `skip-interface=` or `kubernetes-internal-ip`.
 Code: `node/pkg/lifecycle/startup/autodetection/autodetection_methods.go` (`AUTODETECTION_METHOD_FIRST`, `AUTODETECTION_METHOD_CAN_REACH`).
+_Avoid_: autodetect, detection method
 
 **Default pools**:
 The IP pools startup creates when none exist, from the `CALICO_IPV4POOL_*` and `CALICO_IPV6POOL_*` settings and the kubeadm cluster configuration.
 Code: `node/pkg/lifecycle/startup/startup.go` (`configureIPPools`).
+_Avoid_: default IP pool
 
 **Node name file**:
 The file `/var/lib/calico/nodename`. Startup writes the v3.Node name it chose, which in a Kubernetes cluster is the node name, and rc.local, health and later starts read it. Its modification time starts the BIRD startup readiness window.
 Code: `node/pkg/lifecycle/utils/utils.go` (`NodenameFromFile`, `DetermineNodeName`).
+_Avoid_: nodename file, node name on its own (that is the Kubernetes Node)
 
 **Shutdown timestamp file**:
 The file `/var/lib/calico/shutdownTS`. Shutdown writes it, and complete-startup removes it once startup succeeds.
 Code: `node/pkg/lifecycle/utils/utils.go` (`defaultShutdownTimestampFileLinux`).
+_Avoid_: shutdownTS
 
 **Complete-startup**:
 The node-services task that waits for Felix and BIRD to be ready, then clears the Kubernetes `NetworkUnavailable` condition on the node.
 Code: `node/pkg/lifecycle/startup/startup.go` (`ManageNodeCondition`, `MarkNetworkAvailable`).
+_Avoid_: startup on its own (that is the earlier init step)
 
 **Monitor-addresses**:
 The node-services task that re-runs autodetection every poll interval and updates the Node resource when the Calico node address changes.
 Code: `node/pkg/lifecycle/startup/startup.go` (`MonitorIPAddressSubnetsWithContext`).
+_Avoid_: address monitor
 
 **Tunnel IP allocator**:
 The node-services task that keeps each enabled tunnel address allocated, and releases it when its tunnel is disabled.
 Code: `node/pkg/allocateip/allocateip.go` (`Run`, `reconcileTunnelAddrs`).
+_Avoid_: allocateip
 
 **Status reporter**:
 The node-services task that fills the CalicoNodeStatus resource from BIRD's control socket.
 Code: `node/pkg/status/nodestatus.go` (`RunWithContext`).
+_Avoid_: reporter (it means several things)
 
 **BIRD control socket**:
 The Unix socket, `/var/run/calico/bird.ctl` for IPv4 and `bird6.ctl` for IPv6, through which health, the status reporter and calicoctl query BIRD.
 Code: `node/pkg/health/bird/bird.go` (`GetPeers`, `GRInProgress`).
+_Avoid_: bird.ctl, BIRD socket
 
 **Graceful restart**:
 BIRD's restart handling. The `bird` runit service starts BIRD with `-R`, and the kernel protocol persists routes, so a BIRD restart does not withdraw them.
 Code: `node/filesystem/etc/service/available/bird/run`.
+_Avoid_: GR
 
 **BIRD startup readiness window**:
 The period after calico-node starts, counted from the node name file's modification time, in which BIRD reports ready only when every peering is Established and no graceful restart is running. After the window, one Established peering is enough.
 Code: `node/pkg/health/health.go` (`checkBIRDReady`).
+_Avoid_: nothing known
 
 **NetworkUnavailable condition**:
 The Kubernetes node condition that calico-node sets true at shutdown and clears once Felix and BIRD are ready.
 Code: `node/pkg/lifecycle/utils/utils.go` (`SetNodeNetworkUnavailableCondition`), `node/pkg/lifecycle/shutdown/shutdown.go` (`Run`).
+_Avoid_: taint (that is a different node mechanism)
 
 ## Words that need a qualifier
 

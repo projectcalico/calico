@@ -55,6 +55,7 @@ _Avoid_: reconcile (that is the controller's job)
 **`SetCreateOnly`**:
 A component handler mode that creates missing objects and never corrects existing ones.
 Code: `operator/pkg/controller/utils/component.go` (`SetCreateOnly`).
+_Avoid_: nothing known
 
 **Render precondition**:
 The `Ready()` check on a component render implementation. When it returns false, the handler skips that component for this reconcile.
@@ -69,14 +70,17 @@ _Avoid_: handler normalization
 **Passthrough**:
 A component render implementation that returns a fixed object list unchanged.
 Code: `operator/pkg/render/passthru.go` (`NewCreationPassthrough`).
+_Avoid_: NewDeletionPassthrough, pass-through kind (that is a syncer term)
 
 **Overridable**:
 A component render implementation whose workloads take user overrides after any modifier from a variant.
 Code: `operator/pkg/render/component.go` (`Overridable`).
+_Avoid_: bare override (it means several things)
 
 **Override target**:
 One object (kind, namespace and name) plus the override struct applied to it.
 Code: `operator/pkg/render/common/components/override_targets.go`.
+_Avoid_: route target (that is a Felix term)
 
 **Overrides**:
 User-supplied Deployment and DaemonSet fields, such as `CalicoNodeDaemonSet` and `TyphaDeployment`, applied onto rendered workloads.
@@ -86,6 +90,7 @@ _Avoid_: override, unqualified
 **Ignore annotation**:
 The annotation `unsupported.operator.tigera.io/ignore`. It stops the handler managing an object and raises a status warning.
 Code: `operator/pkg/controller/utils/utils.go`.
+_Avoid_: nothing known
 
 ### Variants and extensions
 
@@ -102,18 +107,22 @@ _Avoid_: plugin
 **Controller phase**:
 The extension phase with cluster access, run through `ExtendInputs`. It does the side-effecting work a render hook cannot, such as rejecting unsupported config or creating certificates.
 Code: `operator/pkg/extensions/doc.go`.
+_Avoid_: reconciler
 
 **Render phase**:
 The extension phase made of pure hooks (`Modify`) that adjust a component render implementation's objects.
 Code: `operator/pkg/extensions/component.go` (`Modifier`).
+_Avoid_: bare render (it means several things)
 
 **Modifier**:
 A function that post-processes a component render implementation's objects for a variant. `Decorate` wraps a component so its modifier runs before user overrides.
 Code: `operator/pkg/extensions/component.go` (`Decorate`).
+_Avoid_: ComponentModifier, ComponentExtension
 
 **`WithDerive`**:
 A modifier that runs after overrides and builds objects copied from overridden ones.
 Code: `operator/pkg/extensions/component.go` (`WithDerive`).
+_Avoid_: nothing known
 
 ### Status
 
@@ -125,6 +134,7 @@ _Avoid_: component
 **TigeraStatus**:
 The cluster-scoped resource that reports one status area's conditions, named per controller.
 Code: `operator/api/v1/tigerastatus_types.go` (`TigeraStatus`).
+_Avoid_: status area (that is the area it reports on, not the resource)
 
 **Status manager**:
 The per-controller object that tracks registered workloads and conditions and writes one TigeraStatus.
@@ -134,10 +144,12 @@ _Avoid_: manager, unqualified
 **Degraded, Progressing and Available**:
 The three independent TigeraStatus condition types. `Ready` on the resource's status repeats Available.
 Code: `operator/api/v1/tigerastatus_types.go` (`TigeraStatusDegraded`).
+_Avoid_: Ready (that repeats Available)
 
 **Status warning**:
 A keyed message appended to the TigeraStatus `message` that does not mark the status area degraded.
 Code: `operator/pkg/controller/status/status.go`.
+_Avoid_: degraded (a status warning does not degrade the area)
 
 **Auxiliary controller**:
 A controller with no CRD of its own: the kube-proxy monitor, pod IP recovery and, as a status-only case, the IP pool controller.
@@ -169,6 +181,7 @@ _Avoid_: CA, unqualified
 **Truth namespace**:
 The namespace where a key pair's source copy lives, as opposed to the application namespace it is copied into.
 Code: `operator/pkg/render/certificatemanagement/certificatemanagement.go`.
+_Avoid_: source of truth namespace
 
 **`CertificateManagement` (Installation)**:
 The Installation `certificateManagement` setting under which pods obtain certificates through CSRs to a user-run signer instead of the operator CA.
@@ -195,6 +208,7 @@ _Avoid_: override
 **Recorded defaults**:
 The values the operator filled in for unset Installation fields, stored in `status.defaults`.
 Code: `operator/api/v1/installation_types.go` (`InstallationStatus`).
+_Avoid_: defaults
 
 **Computed spec**:
 The effective Installation spec the operator renders from, which merges the spec with the recorded defaults and the overlay.
@@ -214,6 +228,7 @@ _Avoid_: annotation tracking
 **Declaration**:
 The set of fields the operator owns on one resource, each with its conflict policy.
 Code: `operator/pkg/controller/managedfields/declaration.go`.
+_Avoid_: conflict policy (that is one part of a declaration)
 
 ### Images
 
@@ -230,10 +245,12 @@ _Avoid_: component name
 **ImageSet**:
 A resource named `<variant>-<release>` that pins image digests. The operator resolves it into every component render implementation before rendering.
 Code: `operator/api/v1/imageset_types.go` (`ImageSet`).
+_Avoid_: image override (that is the Installation's override keys)
 
 **Combined calico image**:
 The single `calico/calico` image that most Go components run a subcommand of.
 Code: `operator/pkg/components/combined.go`.
+_Avoid_: nothing known
 
 ### Lifecycle and migrations
 
@@ -255,18 +272,22 @@ _Avoid_: leader (that is leader election)
 **`CALICO_API_GROUP` (operator)**:
 Setting the `CALICO_API_GROUP` variable on Calico workloads to `crd.projectcalico.org/v1` or `projectcalico.org/v3`.
 Code: `operator/pkg/apigroup/apigroup.go`.
+_Avoid_: UseV3CRDs
 
 **APIService cutover**:
 Holding the `projectcalico.org/v3` APIService on its old backend until the replacement is ready. It is not the kube-controllers APIService handover.
 Code: `operator/pkg/controller/apiserver/cutover.go`.
+_Avoid_: handover (that is the kube-controllers APIService removal)
 
 **Namespace migration**:
 Moving a manifest install from `kube-system` to `calico-system` node by node, gated by the node migration label.
 Code: `operator/pkg/controller/migration/namespace_migration.go` (`CoreNamespaceMigration`).
+_Avoid_: migration on its own (it means several things)
 
 **Node migration label**:
 The label `projectcalico.org/operator-node-migration`, set to `pre-operator` or `migrated`, that decides which calico-node runs on a node.
 Code: `operator/pkg/controller/migration/namespace_migration.go`.
+_Avoid_: bare migration (it means several things)
 
 **Install conversion**:
 Building an Installation from an existing manifest install.
@@ -276,6 +297,7 @@ _Avoid_: adoption
 **Field-ownership migration**:
 Moving a configuration resource's field ownership from annotation tracking to server-side apply.
 Code: `operator/pkg/controller/managedfields/migrate.go`.
+_Avoid_: migration on its own (it means several things)
 
 ## Words that need a qualifier
 

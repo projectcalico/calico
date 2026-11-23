@@ -44,14 +44,17 @@ _Avoid_: CNI config (that also means the conflist file)
 **Feature control**:
 The NetConf switches that unlock `ipAddrsNoIpam` and `floatingIPs`.
 Code: `cni-plugin/pkg/types/types.go` (`FeatureControl`).
+_Avoid_: feature_control, feature flags
 
 **WEP identifiers**:
 The node name, orchestrator, pod, container ID and interface name that together name a WorkloadEndpoint.
 Code: `cni-plugin/internal/pkg/utils/utils.go` (`WEPIdentifiers`).
+_Avoid_: epIDs, wepIDs
 
 **WEP name prefix**:
 A WorkloadEndpoint name without its interface part, used to list every endpoint a pod already has.
 Code: `cni-plugin/pkg/plugin/plugin.go` (`CalculateWorkloadEndpointName`).
+_Avoid_: workload name prefix
 
 **CNI dataplane**:
 The pluggable piece of the network plugin that creates the host and container interfaces and routes for one sandbox. Three exist: Linux, Windows and gRPC.
@@ -61,6 +64,7 @@ _Avoid_: Felix dataplane, dataplane (on its own)
 **gRPC CNI dataplane**:
 The CNI dataplane selected by `dataplane_options.type` set to `grpc`, which passes ADD and DEL to an external server that sets up the interfaces.
 Code: `cni-plugin/pkg/dataplane/grpc/proto/cnibackend.proto` (`CniDataplane`).
+_Avoid_: dataplane driver (that is Felix's layer)
 
 **Readiness gates**:
 The NetConf list of HTTP URLs that the plugin polls before ADD proceeds.
@@ -70,7 +74,9 @@ _Avoid_: readinessGates (that is a Pod field)
 **`ForEndpointReadyWithTimeout`**:
 The ADD step, on when `policy_setup_timeout_seconds` is positive, that holds the pod's start until Felix writes the endpoint status file.
 Code: `cni-plugin/pkg/wait/wait.go` (`ForEndpointReadyWithTimeout`), `cni-plugin/pkg/types/types.go` (`PolicySetupTimeoutSeconds`).
+_Avoid_: nothing known
 
 **Device type**:
 The NetConf choice of interface pair for a pod: a veth pair, or a netkit pair on kernels that support it.
 Code: `cni-plugin/pkg/types/types.go` (`DeviceTypeNetkit`).
+_Avoid_: interface type
