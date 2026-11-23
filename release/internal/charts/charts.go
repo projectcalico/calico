@@ -17,6 +17,7 @@
 package charts
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"net/url"
@@ -61,7 +62,7 @@ const (
 	ProjectCalicoV3CRDsChart = "projectcalico.org.v3"
 )
 
-var RepoURL = docs.URL(DirName)
+var DefaultRepoURL = docs.URL(DirName)
 
 var ChartsURL = func(c Chart) string {
 	return github.DefaultRepo().DownloadURL(c.ProductVersion)
@@ -102,6 +103,9 @@ type Chart struct {
 	Names []string
 
 	BaseDir string
+
+	// Empty means DefaultRepoURL.
+	RepoURL string
 }
 
 func (c Chart) validate() error {
@@ -122,6 +126,10 @@ func (c Chart) validate() error {
 		errs = append(errs, fmt.Errorf("no chart directory specified"))
 	}
 	return errors.Join(errs...)
+}
+
+func (c Chart) Repo() string {
+	return cmp.Or(c.RepoURL, DefaultRepoURL)
 }
 
 func (c Chart) Version() string {

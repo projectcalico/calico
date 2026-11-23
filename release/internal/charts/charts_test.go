@@ -818,6 +818,21 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+func TestChartRepo(t *testing.T) {
+	for _, tc := range []struct {
+		name, repo, want string
+	}{
+		{name: "an unset repo is the default", want: DefaultRepoURL},
+		{name: "a set repo is kept", repo: "https://staging.example.com/charts", want: "https://staging.example.com/charts"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := (Chart{RepoURL: tc.repo}).Repo(); got != tc.want {
+				t.Errorf("Repo() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // The digest ref must name the resolved version, not the bare suffix.
 func TestPublishRefsNameTheResolvedVersion(t *testing.T) {
 	// A suffix is what makes the resolved version differ from the product one.
