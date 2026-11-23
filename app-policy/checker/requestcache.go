@@ -81,6 +81,10 @@ type requestCache struct {
 	// is a value the data plane can send, so resolution needs its own flag.
 	protocol         int
 	protocolResolved bool
+
+	// Memoized IP version of the flow; IPVersion_ANY when neither address parses.
+	ipVersion         proto.IPVersion
+	ipVersionResolved bool
 }
 
 // flowSide identifies which end of the flow an identity belongs to.
@@ -201,6 +205,17 @@ func (r *requestCache) GetProtocol() int {
 		}
 	}
 	return r.protocol
+}
+
+// getIPVersion returns the flow's IP version, memoized across the request.
+func (r *requestCache) getIPVersion() proto.IPVersion {
+	if !r.ipVersionResolved {
+		r.ipVersionResolved = true
+		if r.ipVersion = ipVersionOf(r.GetDestIP()); r.ipVersion == proto.IPVersion_ANY {
+			r.ipVersion = ipVersionOf(r.GetSourceIP())
+		}
+	}
+	return r.ipVersion
 }
 
 // getDstIPProtoPortStr returns the destination "<IP>,<protocol>:<port>" key used for
