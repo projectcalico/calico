@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+
+kind: cluster
+
+needs:
+  - cloud/aws.yaml
+
+provides: []
+
+upstream:
+  - group: "EKS control plane cannot reach the pod network"
+    link: "https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks"
+    patterns:
+      - 'both.pod.and.service.Proxy\b'
+      - 'proxy.through.a.service.and.a.pod'
+      - 'replica.with.a.public.image'
+      - 'DNS.for.ExternalName.services'
+      - 'DNS.for.pods.for.Hostname'
+      - 'DNS.for.pods.for.Subdomain'
+      - 'DNS.for.services'
+      - 'DNS.for.the.cluster'
+      - 'qualified.names.for.services'
+  - group: "EKS pod networking limits, see CORE-6725"
+    patterns:
+      - 'DNS.should.provide./etc/hosts'

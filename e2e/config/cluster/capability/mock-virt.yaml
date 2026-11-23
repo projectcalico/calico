@@ -1,0 +1,9 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# MockVirt simulates KubeVirt without a guest OS.
+
+kind: cluster
+
+provides:
+  - KubeVirt
+  - MockVirt

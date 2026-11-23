@@ -29,14 +29,14 @@ import (
 // ones whose clusters use VXLAN, where the precondition fails every case.
 func TestSuitesRequiringBGPCarryTheLabel(t *testing.T) {
 	for _, path := range testFilesCalling(t, "RequireBGPEnabled") {
-		if !fileContains(t, path, "RequiresBGP") {
-			t.Errorf("%s: requires BGP but the suite has no describe.RequiresBGP label", path)
+		if !fileContains(t, path, "describe.Requires(describe.BGP)") {
+			t.Errorf("%s: requires BGP but the suite has no Requires:BGP label", path)
 		}
 	}
 }
 
-// The precondition belongs in RequireBGPEnabled, which names the label a lane
-// should exclude. An inline assertion just reports that BGP is off.
+// The precondition belongs in RequireBGPEnabled, which names the capability a lane
+// must not provide. An inline assertion just reports that BGP is off.
 func TestNoInlineBGPPreconditions(t *testing.T) {
 	fset := token.NewFileSet()
 	err := filepath.WalkDir("../tests", func(path string, d fs.DirEntry, err error) error {

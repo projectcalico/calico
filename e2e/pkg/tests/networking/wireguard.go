@@ -44,8 +44,8 @@ const defaultFelixMetricsPort = 9091
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("Wireguard"),
-	describe.WithCategory(describe.Networking),
+	describe.Covers(describe.AreaWireguard),
+	describe.Requires(describe.WireGuard),
 	describe.WithSerial(),
 	"WireGuard tests",
 	func() {

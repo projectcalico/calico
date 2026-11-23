@@ -46,9 +46,9 @@ import (
 // local_pref) using a local BIRD container on the Docker network.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("KubeVirt"),
-	describe.RequiresMockVirt(),
-	describe.WithCategory(describe.Networking),
+	describe.Covers(describe.AreaKubeVirt),
+	describe.Requires(describe.KubeVirt),
+	describe.Requires(describe.MockVirt),
 	"KubeVirt live migration (MockVirt)",
 	func() {
 		f := utils.NewDefaultFramework("calico-kubevirt-mockvirt")
@@ -57,7 +57,7 @@ var _ = describe.CalicoDescribe(
 
 		BeforeEach(func() {
 			if !isMockVirtDeployed(f) {
-				framework.Failf("MockVirt is not deployed in this cluster, so the lane should exclude the RequiresMockVirt label")
+				framework.Failf("MockVirt is not deployed in this cluster, so the lane must not provide MockVirt")
 			}
 			// Double migration needs 3 workers: source, first target, second target.
 			utils.RequireNodeCount(f, 3)

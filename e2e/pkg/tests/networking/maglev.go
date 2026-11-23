@@ -56,12 +56,12 @@ func init() {
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("Maglev"),
-	describe.WithCategory(describe.Networking),
-	describe.WithExternalNode(),
-	describe.WithDataplane(describe.BPF),
+	describe.Covers(describe.AreaMaglev),
+	describe.Requires(describe.BPFDSR),
+	describe.Requires(describe.ExternalNode),
+	describe.Requires(describe.BPF),
 	describe.WithSerial(),
-	describe.RequiresAWS(),
+	describe.Requires(describe.AWS),
 	"Maglev load balancing tests",
 	func() {
 		var (
@@ -116,7 +116,6 @@ var _ = describe.CalicoDescribe(
 				ipVer = "IPv6"
 			}
 			return func() {
-				maglevTests.SkipUnsupportedIPVersion(isIPv6)
 				// Ensure we have at least 3 nodes for the test
 				Expect(len(nodeNames)).Should(BeNumerically(">=", 3), "Need at least 3 nodes for this test")
 
@@ -181,9 +180,8 @@ var _ = describe.CalicoDescribe(
 			}
 		}
 
-		It("test service ip load balancing behavior before and after maglev annotation (IPv4)", makeMaglevTest(false))
-		It("test service ip load balancing behavior before and after maglev annotation (IPv6)", makeMaglevTest(true))
-
+		framework.It("test service ip load balancing behavior before and after maglev annotation (IPv4)", describe.Requires(describe.IPv4), makeMaglevTest(false))
+		framework.It("test service ip load balancing behavior before and after maglev annotation (IPv6)", describe.Requires(describe.IPv6), makeMaglevTest(true))
 	})
 
 type MaglevTests struct {
@@ -257,18 +255,6 @@ func (m *MaglevTests) parseBackendResponse(output string) (string, error) {
 	}
 
 	return backendName, nil
-}
-
-func (m *MaglevTests) SkipUnsupportedIPVersion(isIPv6 bool) {
-	if isIPv6 {
-		if len(m.nodeNameToIPv6) == 0 {
-			Skip("IPv6 is not configured, skipping")
-		}
-	} else {
-		if len(m.nodeNameToIPv4) == 0 {
-			Skip("IPv4 is not configured, skipping")
-		}
-	}
 }
 
 func (m *MaglevTests) DeployBackendPods(numPods int, nodes []string) map[string]string {

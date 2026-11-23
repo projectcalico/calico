@@ -36,12 +36,12 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("BGPPeer"),
-	describe.RequiresBGP(),
-	describe.RequiresOperator(),
-	describe.RequiresV3CRDs(),
-	describe.WithCategory(describe.Networking),
-	describe.RequiresBGPMesh(),
+	describe.Covers(describe.AreaBGPPeer),
+	describe.Requires(describe.BGPRouting),
+	describe.Requires(describe.BGP),
+	describe.Requires(describe.Operator),
+	describe.Requires(describe.V3CRDs),
+	describe.Requires(describe.BGPMesh),
 	describe.WithSerial(),
 	"BGPPeer",
 	func() {

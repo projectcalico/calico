@@ -79,6 +79,10 @@ type ingressScenario struct {
 	hostNetworked bool
 	// dest describes how the client connects: "clusterIP", "svcNodePort", "node1NodePort", or "node0NodePort".
 	dest string
+
+	// requires names what the cluster must have beyond the suite's own requirements.
+	requires []describe.Capability
+
 	// Per-dataplane expectations. xtablesExpect covers both iptables and
 	// nftables dataplanes, which have identical SNAT behavior.
 	bpfExpect     ingressExpectation
@@ -127,6 +131,7 @@ var ingressScenarioTable = []ingressScenario{
 		srcNode:       "node1",
 		hostNetworked: true,
 		dest:          "clusterIP",
+		requires:      []describe.Capability{describe.HostNetworkServices},
 		bpfExpect:     noSNAT,
 		xtablesExpect: noSNAT,
 		ipvsExpect:    snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
@@ -160,6 +165,7 @@ var ingressScenarioTable = []ingressScenario{
 		srcNode:       "node1",
 		hostNetworked: false,
 		dest:          "svcNodePort",
+		requires:      []describe.Capability{describe.NodePortAcrossNodes},
 		bpfExpect:     noSNAT,
 		xtablesExpect: snatNoWorkingPolicy,
 		ipvsExpect:    snatNoWorkingPolicy,
@@ -193,6 +199,7 @@ var ingressScenarioTable = []ingressScenario{
 		srcNode:       "node1",
 		hostNetworked: true,
 		dest:          "node1NodePort",
+		requires:      []describe.Capability{describe.HostNetworkServices},
 		bpfExpect:     noSNAT,
 		xtablesExpect: noSNAT,
 		ipvsExpect:    snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
@@ -215,6 +222,7 @@ var ingressScenarioTable = []ingressScenario{
 		srcNode:       "node0",
 		hostNetworked: true,
 		dest:          "node1NodePort",
+		requires:      []describe.Capability{describe.NodePortAcrossNodes, describe.HostNetworkServices},
 		bpfExpect:     noSNAT,
 		xtablesExpect: snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
 		ipvsExpect:    snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
@@ -248,8 +256,8 @@ var ingressScenarioTable = []ingressScenario{
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("Datapath"),
-	describe.WithCategory(describe.Networking),
+	describe.Covers(describe.AreaDatapath),
+	describe.RunsAnywhere(),
 	"Workload Ingress Datapath",
 	func() {
 		// Topology used by this suite:
@@ -605,14 +613,14 @@ var _ = describe.CalicoDescribe(
 					runStandardIngressTest(s)
 				})
 			} else {
-				It(name, func() {
+				It(name, append(requirements(s.requires), func() {
 					runStandardIngressTest(s)
-				})
+				})...)
 			}
 		}
 
 		// External node scenarios run from a machine outside the cluster via SSH.
-		framework.Context("external node", describe.WithExternalNode(), func() {
+		framework.Context("external node", describe.Requires(describe.ExternalNode), func() {
 			for _, scenario := range ingressScenarioTable {
 				s := scenario // capture loop variable
 				if s.srcNode != "external" {
@@ -627,6 +635,15 @@ var _ = describe.CalicoDescribe(
 		})
 	},
 )
+
+// requirements turns a scenario's capabilities into the arguments It takes.
+func requirements(caps []describe.Capability) []any {
+	args := make([]any, 0, len(caps)+1)
+	for _, c := range caps {
+		args = append(args, describe.Requires(c))
+	}
+	return args
+}
 
 // ingressCreateDenyAllPolicy creates a NetworkPolicy that denies all ingress to
 // every pod in the test namespace.

@@ -28,7 +28,28 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf/bpf.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/wireguard.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: ENABLE_WIREGUARD
         value: "true"
       - name: GOOGLE_MACHINE_TYPE
@@ -80,7 +101,23 @@ steps:
           - name: CLUSTER_MODE
             value: ""
           - name: E2E_TEST_CONFIG
-            value: e2e/config/bpf/aks-bpf-nobgp.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/bpf.yaml
+              cluster/cni/provider.yaml
+              cluster/platform/aks.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
       - name: stable-1-none-
         env:
           - name: K8S_VERSION
@@ -90,7 +127,24 @@ steps:
           - name: CLUSTER_MODE
             value: ""
           - name: E2E_TEST_CONFIG
-            value: e2e/config/bpf/aks-bpf.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/bpf.yaml
+              cluster/cni/calico.yaml
+              cluster/platform/aks.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-aws-encap
@@ -118,13 +172,56 @@ steps:
           - name: USE_VXLAN
             value: "true"
           - name: E2E_TEST_CONFIG
-            value: e2e/config/bpf/bpf-encap-v3crd-extnode-aws.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/bpf.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/cloud/aws.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
       - name: "false"
         env:
           - name: USE_VXLAN
             value: "false"
           - name: E2E_TEST_CONFIG
-            value: e2e/config/bpf/bpf-v3crd-extnode-aws.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/bpf.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/routing/bgp-mesh.yaml
+              cluster/cloud/aws.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-aws-single-subnet-dual-ip-family
@@ -140,11 +237,6 @@ steps:
         value: "3"
       - name: CLUSTER_ROUTING_MODE
         value: Felix
-      # This run picks its tests with a config rather than a focus/skip pair:
-      # e2e/config/bpf-aws-single-subnet.yaml holds the same selection the
-      # focus/skip used to give, Maglev tests included.
-      - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf-aws-single-subnet.yaml
       # Maglev needs DSR, and this is the one run whose cluster otherwise suits
       # it: BPF, an external node, one subnet, no encapsulation.
       - name: ENABLE_BPF_DSR
@@ -168,10 +260,61 @@ steps:
     matrix:
       - name: "true"
         env:
+          - name: E2E_TEST_CONFIG
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/aggregated.yaml
+              cluster/dataplane/bpf.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp-felix-routes.yaml
+              cluster/routing/no-encap.yaml
+              cluster/cloud/aws.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/dual-stack.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/wireguard.yaml
+              cluster/capability/bpf-dsr.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
           - name: ENABLE_WIREGUARD
             value: "true"
       - name: "false"
         env:
+          - name: E2E_TEST_CONFIG
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/aggregated.yaml
+              cluster/dataplane/bpf.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp-felix-routes.yaml
+              cluster/routing/no-encap.yaml
+              cluster/cloud/aws.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/dual-stack.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/bpf-dsr.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
           - name: ENABLE_WIREGUARD
             value: "false"
     commands: |
@@ -182,7 +325,30 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf/bpf-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/routing/no-encap.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/bpf-dsr.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: BGP_STATUS
         value: Enabled
       - name: CLUSTER_NODES
@@ -209,7 +375,29 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf/bpf-v3crd-extnode.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/external-node.yaml
+          cluster/capability/bpf-dsr.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: BPF_NETWORK_BOOTSTRAP
         value: Enabled
       - name: CLUSTER_NODES
@@ -256,7 +444,27 @@ steps:
           - name: USE_VXLAN
             value: "true"
           - name: E2E_TEST_CONFIG
-            value: e2e/config/bpf/bpf-encap-extnode.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/aggregated.yaml
+              cluster/dataplane/bpf.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
       - name: false-netkit
         env:
           - name: USE_VXLAN
@@ -264,7 +472,28 @@ steps:
           - name: LINUX_POD_INTERFACE_TYPE
             value: Netkit
           - name: E2E_TEST_CONFIG
-            value: e2e/config/bpf/bpf-extnode.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/aggregated.yaml
+              cluster/dataplane/bpf.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/routing/bgp-mesh.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-aks-w-aks-cni
@@ -273,7 +502,23 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf/aks-bpf-nobgp.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/provider.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: CLUSTER_NODES
         value: "3"
       - name: ENABLE_EXTERNAL_NODE
@@ -297,7 +542,24 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf/aks-bpf.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: AZ_CREATE_MODE
         value: AKS
       - name: AZ_NETWORK_PLUGIN
@@ -324,7 +586,23 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf/aks-bpf-encap-nobgp.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/provider.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: AZ_CREATE_MODE
         value: AKS
       - name: AZ_NETWORK_PLUGIN
@@ -361,7 +639,28 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf/kops-bpf-extnode-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/kops.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/external-node.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: K8S_VERSION
         value: stable-3
       - name: PROVISIONER
@@ -390,7 +689,28 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf/eks-bpf-encap-extnode-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/external-node.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: PROVISIONER
         value: aws-eks
     matrix:
@@ -426,7 +746,30 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf/eks-xtables-encap-extnode-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/external-node.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
+          cluster/capability/ambient-policy.yaml
       - name: PROVISIONER
         value: aws-eks
     matrix:
@@ -446,7 +789,25 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf/bpf-nobgp-extnode-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/provider.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/external-node.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: AWS_K8S_CNI_VERSION
         value: NA
       - name: CLUSTER_NODES
@@ -474,7 +835,27 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf/eks-bpf-encap-extnode-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/eks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/external-node.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: CLUSTER_NODES
         value: "3"
       - name: ENABLE_EXTERNAL_NODE
@@ -564,7 +945,28 @@ steps:
           - name: DATAPLANE
             value: CalicoBPF
           - name: E2E_TEST_CONFIG
-            value: e2e/config/bpf/bpf-encap-extnode-aws.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/aggregated.yaml
+              cluster/dataplane/bpf.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/cloud/aws.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/dual-stack.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
       - name: dual-calicoiptables
         env:
           - name: IP_FAMILY
@@ -572,7 +974,30 @@ steps:
           - name: DATAPLANE
             value: CalicoIptables
           - name: E2E_TEST_CONFIG
-            value: e2e/config/bpf/xtables-encap-extnode-aws.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/aggregated.yaml
+              cluster/dataplane/iptables.yaml
+              cluster/cni/calico.yaml
+              cluster/routing/bgp.yaml
+              cluster/cloud/aws.yaml
+              cluster/platform/self-managed.yaml
+              cluster/ip-family/dual-stack.yaml
+              cluster/capability/host-ports.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/istio.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
+              cluster/capability/ambient-policy.yaml
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-kops-w-calico-cni-ipv6
@@ -614,7 +1039,26 @@ steps:
           - name: IP_FAMILY
             value: ipv6
           - name: E2E_TEST_CONFIG
-            value: e2e/config/bpf/kops-bpf-encap-nobgp-extnode-aws.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/bpf.yaml
+              cluster/cni/calico.yaml
+              cluster/cloud/aws.yaml
+              cluster/platform/kops.yaml
+              cluster/ip-family/ipv6.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
       - name: calicoiptables-ipv6
         env:
           - name: DATAPLANE
@@ -622,7 +1066,28 @@ steps:
           - name: IP_FAMILY
             value: ipv6
           - name: E2E_TEST_CONFIG
-            value: e2e/config/bpf/kops-xtables-encap-nobgp-extnode-aws.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/v3-crds.yaml
+              cluster/dataplane/iptables.yaml
+              cluster/cni/calico.yaml
+              cluster/cloud/aws.yaml
+              cluster/platform/kops.yaml
+              cluster/ip-family/ipv6.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/istio.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
+              cluster/capability/ambient-policy.yaml
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-kops-w-calico-cni-ipv4
@@ -658,7 +1123,26 @@ steps:
           - name: IP_FAMILY
             value: ipv4
           - name: E2E_TEST_CONFIG
-            value: e2e/config/bpf/kops-bpf-encap-nobgp-extnode-aws.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/aggregated.yaml
+              cluster/dataplane/bpf.yaml
+              cluster/cni/calico.yaml
+              cluster/cloud/aws.yaml
+              cluster/platform/kops.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
       - name: calicoiptables-ipv4
         env:
           - name: DATAPLANE
@@ -666,7 +1150,28 @@ steps:
           - name: IP_FAMILY
             value: ipv4
           - name: E2E_TEST_CONFIG
-            value: e2e/config/bpf/kops-xtables-encap-nobgp-extnode-aws.yaml
+            value: >-
+              ci-base.yaml
+              suite/calico.yaml
+              suite/network-conformance.yaml
+              suite/network-policy.yaml
+              cluster/install/operator.yaml
+              cluster/capability/goldmane.yaml
+              cluster/api/aggregated.yaml
+              cluster/dataplane/iptables.yaml
+              cluster/cni/calico.yaml
+              cluster/cloud/aws.yaml
+              cluster/platform/kops.yaml
+              cluster/ip-family/ipv4.yaml
+              cluster/capability/calico-mtu.yaml
+              cluster/capability/external-node.yaml
+              cluster/capability/istio.yaml
+              cluster/capability/node-port-across-nodes.yaml
+              cluster/capability/rapidclient-image.yaml
+              cluster/capability/host-network-services.yaml
+              cluster/capability/host-endpoint-cross-node.yaml
+              cluster/capability/connection-limits.yaml
+              cluster/capability/ambient-policy.yaml
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-mini-scale-runs
@@ -692,7 +1197,30 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf/bpf-extnode-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/routing/no-encap.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/external-node.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: CLUSTER_NODES
         value: "3"
       - name: ENABLE_EXTERNAL_NODE
@@ -720,7 +1248,32 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf/xtables-extnode-aws.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/iptables.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/routing/no-encap.yaml
+          cluster/cloud/aws.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/external-node.yaml
+          cluster/capability/istio.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
+          cluster/capability/ambient-policy.yaml
       - name: CLUSTER_NODES
         value: "3"
       - name: DATAPLANE
@@ -772,7 +1325,23 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/bpf/aks-bpf-encap-nobgp.yaml
+        value: >-
+          ci-base.yaml
+          suite/calico.yaml
+          suite/network-conformance.yaml
+          suite/network-policy.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/v3-crds.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/provider.yaml
+          cluster/platform/aks.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: AZ_CREATE_MODE
         value: AKS
       - name: AZ_NETWORK_PLUGIN
@@ -823,7 +1392,27 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/gcp/kubevirt.yaml
+        value: >-
+          ci-base.yaml
+          suite/kubevirt.yaml
+          cluster/install/operator.yaml
+          cluster/capability/goldmane.yaml
+          cluster/api/aggregated.yaml
+          cluster/dataplane/bpf.yaml
+          cluster/cni/calico.yaml
+          cluster/routing/bgp.yaml
+          cluster/routing/bgp-mesh.yaml
+          cluster/routing/no-encap.yaml
+          cluster/platform/self-managed.yaml
+          cluster/ip-family/ipv4.yaml
+          cluster/capability/host-ports.yaml
+          cluster/capability/calico-mtu.yaml
+          cluster/capability/kubevirt.yaml
+          cluster/capability/node-port-across-nodes.yaml
+          cluster/capability/rapidclient-image.yaml
+          cluster/capability/host-network-services.yaml
+          cluster/capability/host-endpoint-cross-node.yaml
+          cluster/capability/connection-limits.yaml
       - name: K8S_VERSION
         value: stable-1.35
       - name: NUM_KUBEVIRT_VMS

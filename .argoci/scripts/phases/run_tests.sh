@@ -397,9 +397,11 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
         E2E_JUNIT_REPORT=junit.xml" \
     |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
 
-  # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
+  # Copy every JUnit file, the capability check's included, to REPORT_DIR so
+  # the epilogue publishes them. The check's file is the only one when it stops
+  # the lane before Ginkgo starts.
   mkdir -p "${REPORT_DIR}"
-  cp report/junit.xml "${REPORT_DIR}/junit.xml" 2>/dev/null || true
+  cp report/*.xml "${REPORT_DIR}/" 2>/dev/null || true
 
   ("${sandcat_sh}" push-specs --spec-dir report/sandcat) || true
   ("${sandcat_sh}" analyze \

@@ -28,9 +28,9 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("MTU"),
-	describe.WithCategory(describe.Networking),
-	describe.RequiresOperator(),
+	describe.Covers(describe.AreaMTU),
+	describe.Requires(describe.CalicoMTU),
+	describe.Requires(describe.Operator),
 	"Automatic MTU tests",
 	func() {
 		// Determine platform and thus expected MTU.

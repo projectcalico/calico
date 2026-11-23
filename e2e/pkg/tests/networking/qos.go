@@ -40,8 +40,8 @@ import (
 // bandwidth annotations produce the expected throughput limits on real traffic.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("QoS"),
-	describe.WithCategory(describe.Networking),
+	describe.Covers(describe.AreaQoS),
+	describe.RunsAnywhere(),
 	"QoS Controls",
 	func() {
 		f := utils.NewDefaultFramework("calico-qos")
@@ -271,7 +271,7 @@ var _ = describe.CalicoDescribe(
 		// Verifies that the qos.projectcalico.org/ingressMaxConnections annotation
 		// caps concurrent TCP connections to a workload, and that closing one frees
 		// a slot. Egress uses the same counter and is covered by the FV suite.
-		It("should limit concurrent connections with QoS annotations", func() {
+		It("should limit concurrent connections with QoS annotations", describe.Requires(describe.ConnectionLimits), func() {
 			const (
 				connLimitPort = 8080
 				maxConns      = 3

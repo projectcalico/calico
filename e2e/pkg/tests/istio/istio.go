@@ -59,12 +59,12 @@ const (
 var _ = describe.CalicoDescribe(
 	describe.WithSerial(),
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("Istio"),
-	describe.WithCategory(describe.Networking),
+	describe.Covers(describe.AreaIstio),
+	describe.Requires(describe.Istio),
 	// Creates the operator.tigera.io Istio CR and waits for its TigeraStatus, so it
 	// needs an operator to reconcile it -- on a manifest install it would block
 	// until istioEnableTimeout instead of skipping.
-	describe.RequiresOperator(),
+	describe.Requires(describe.Operator),
 	"Istio Ambient Mode",
 	func() {
 		f := utils.NewDefaultFramework("istio-ambient")
@@ -86,7 +86,7 @@ var _ = describe.CalicoDescribe(
 		// 4. Traffic unencrypted when ambient label is not applied
 		// 5. Calico NetworkPolicy enforcement with Istio active
 		// 6. Full disable lifecycle restores baseline
-		ginkgo.It("should encrypt traffic with ambient mode and enforce Calico NetworkPolicy", func(ctx context.Context) {
+		ginkgo.It("should encrypt traffic with ambient mode and enforce Calico NetworkPolicy", describe.Requires(describe.AmbientPolicy), func(ctx context.Context) {
 			ginkgo.By("Setting up connection tester with a client and two servers")
 			checker := conncheck.NewConnectionTester(f)
 			ginkgo.DeferCleanup(checker.Stop)

@@ -37,11 +37,10 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("IPIP"),
-	describe.WithCategory(describe.Networking),
-	describe.RequiresNoEncap(),
-	describe.RequiresBGP(),
-	describe.RequiresOperator(),
+	describe.Covers(describe.AreaIPIP),
+	describe.Requires(describe.NoEncap),
+	describe.Requires(describe.BGP),
+	describe.Requires(describe.Operator),
 	describe.WithSerial(),
 	"IP-in-IP tests",
 	func() {

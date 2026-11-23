@@ -41,10 +41,9 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("IPAM"),
-	describe.RequiresCalicoIPAM(),
+	describe.Covers(describe.AreaIPAM),
+	describe.Requires(describe.CalicoIPAM),
 	describe.WithSerial(), // Modifies global state, so run serially.
-	describe.WithCategory(describe.Networking),
 	"IPAM GC",
 	func() {
 		var cli ctrlclient.Client

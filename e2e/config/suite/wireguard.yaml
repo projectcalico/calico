@@ -1,0 +1,9 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# The encryption specs only. Widening a managed-platform WireGuard lane past
+# this means a manual run per platform to learn what its CNI can pass.
+
+kind: suite
+
+include:
+  - Covers:Wireguard

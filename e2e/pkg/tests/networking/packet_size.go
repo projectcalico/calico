@@ -131,8 +131,8 @@ func withPacketSizeServer(pod *v1.Pod) {
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("Datapath"),
-	describe.WithCategory(describe.Networking),
+	describe.Covers(describe.AreaDatapath),
+	describe.Requires(describe.RapidClientImage),
 	"Packet Size Verification",
 	func() {
 		f := utils.NewDefaultFramework("packet-size")
@@ -243,7 +243,7 @@ var _ = describe.CalicoDescribe(
 			// External-client entry is gated by the ExternalNode label so pipelines
 			// without EXT_IP/EXT_KEY/EXT_USER configured filter it out rather than
 			// failing hard.
-			framework.Context("external client", describe.WithExternalNode(), func() {
+			framework.Context("external client", describe.Requires(describe.ExternalNode), func() {
 				DescribeTable("using UDP and TCP",
 					runPacketTest,
 					Entry("external to nodeport", pktClientExt, pktTargetNodePort, false),
