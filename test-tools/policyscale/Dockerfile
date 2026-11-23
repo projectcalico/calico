@@ -12,16 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG CALICO_BASE
-
-FROM scratch AS source
+# Alpine rather than the Calico base: a scale test execs into these pods through a shell, sets
+# POLICYSCALE_* with env, and a sink pod configures its routes with ip.
+FROM alpine:3.21
 
 ARG TARGETARCH
 
-COPY bin/test-tools/policyscale-${TARGETARCH} /usr/bin/policyscale
-COPY bin/test-tools/flowgen-${TARGETARCH} /usr/bin/flowgen
-
-FROM ${CALICO_BASE}
+RUN apk add --no-cache iproute2
 
 ARG GIT_VERSION=unknown
 
@@ -42,6 +39,7 @@ LABEL summary="Calico policy-set generator and load generator for scale testing"
 LABEL vendor="Project Calico"
 LABEL version="${GIT_VERSION}"
 
-COPY --from=source / /
+COPY bin/test-tools/policyscale-${TARGETARCH} /usr/bin/policyscale
+COPY bin/test-tools/flowgen-${TARGETARCH} /usr/bin/flowgen
 
 ENTRYPOINT ["/usr/bin/flowgen"]

@@ -17,7 +17,6 @@ default: build image
 ###############################################################################
 CONTAINER_CREATED=.container.created-$(ARCH)
 BINARIES=./bin/test-tools/policyscale-$(ARCH) ./bin/test-tools/flowgen-$(ARCH)
-SRC_FILES=$(shell find ../../hack/cmd/policyscale ../../hack/cmd/flowgen ../../app-policy -name '*.go')
 
 ###############################################################################
 # Include ../../lib.Makefile
@@ -25,6 +24,9 @@ SRC_FILES=$(shell find ../../hack/cmd/policyscale ../../hack/cmd/flowgen ../../a
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
 include ../../lib.Makefile
+
+# No debug info: it is a third of the binaries' size, and nobody debugs these in a pod.
+LDFLAGS += -s -w
 
 ###############################################################################
 ## Clean enough that a new release build will be clean
@@ -42,10 +44,14 @@ clean:
 .PHONY: build
 ## Build the binaries for the current architecture
 build: $(BINARIES)
-bin/test-tools/policyscale-%: $(SRC_FILES)
+# The binaries link much of the repo, so they always build and the Go build cache decides what
+# is stale.
+bin/test-tools/policyscale-%: FORCE
 	$(call build_binary, ../../hack/cmd/policyscale, $@)
-bin/test-tools/flowgen-%: $(SRC_FILES)
+bin/test-tools/flowgen-%: FORCE
 	$(call build_binary, ../../hack/cmd/flowgen, $@)
+.PHONY: FORCE
+FORCE:
 
 ###############################################################################
 # Building the image
