@@ -23,13 +23,13 @@ import (
 // The composite holds each measured preset's policies exactly as the preset builds them alone, so
 // tests and benchmarks of the composite stand in for both.
 func TestCompositeHoldsEachPresetUnchanged(t *testing.T) {
-	composite := Build(Composite())
+	composite := compositeFixture()
 	for _, c := range []struct {
 		dir   Direction
 		alone *Fixture
 	}{
-		{Ingress, Build(Baseline())},
-		{Egress, Build(EgressAllowList())},
+		{Ingress, baselineFixture()},
+		{Egress, egressFixture()},
 	} {
 		got, want := composite.tiers[0].policies[c.dir], c.alone.tiers[0].policies[c.dir]
 		if len(got) == 0 || len(got) != len(want) {
