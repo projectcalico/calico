@@ -1,0 +1,16 @@
+# Pods that must keep their IPs across the upgrade. A Calico upgrade restarts
+# calico-node, not workloads, so a changed IP means IPAM state was lost.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: live
+spec:
+  replicas: 3
+  selector:
+    matchLabels: {app: live}
+  template:
+    metadata:
+      labels: {app: live}
+    spec:
+      containers:
+      - {name: live, image: registry.k8s.io/e2e-test-images/agnhost:2.47, args: [pause]}
