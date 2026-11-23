@@ -4,6 +4,8 @@ This file is **operational guidance** for agents working in this repo: build com
 
 For **vocabulary**, read [`GLOSSARY.md`](../GLOSSARY.md) at the repo root and the `GLOSSARY.md` beside the component you are working in, before writing code, comments, docs, commit messages or PR descriptions. Use the canonical word each entry gives.
 
+**Never coin a term yourself.** When a concept has no name in the glossaries or the code, ask the user to name it, and offer one or two candidates. Check the chosen name against the root and component glossaries for collisions, then add its entry to the right `GLOSSARY.md` in the same PR.
+
 ## Gotchas
 
 - **NEVER** run `make ci` or `make cd` — in any component or at the root.

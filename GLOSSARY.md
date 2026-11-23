@@ -4,6 +4,8 @@ This file fixes the vocabulary the monorepo uses: one canonical word per concept
 
 A term listed under `_Avoid_` is not a rename order. Existing identifiers keep their names until you are editing that code anyway; the glossary governs new code, new comments, commit messages, and PR descriptions.
 
+Agents never coin a term. A new term is named by a person, checked against these glossaries for collisions, and added here or in the component glossary by the PR that introduces it.
+
 Each entry ends with a code anchor: a repo-relative path and, where one exists, the symbol that defines the term.
 
 ## Structure terms
