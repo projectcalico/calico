@@ -2,6 +2,8 @@
 
 This file is **operational guidance** for agents working in this repo: build commands, test invocation, debugging, conventions, and the process rules every PR follows. For **architecture, invariants, and review criteria**, see [`DESIGN.md`](../DESIGN.md) at the repo root, and the per-component `DESIGN.md` files it links to. Do not look here for architecture; look there.
 
+For **vocabulary**, read [`GLOSSARY.md`](../GLOSSARY.md) at the repo root and the `GLOSSARY.md` beside the component you are working in, before writing code, comments, docs, commit messages or PR descriptions. Use the canonical word each entry gives.
+
 ## Gotchas
 
 - **NEVER** run `make ci` or `make cd` — in any component or at the root.
