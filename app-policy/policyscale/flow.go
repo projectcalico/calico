@@ -34,7 +34,12 @@ const (
 	// BaselineDestPort is the denied ingress flow's destination port; no baseline rule uses it.
 	BaselineDestPort = 8080
 
-	ProtocolTCP = 6
+	ProtocolICMP    = 1
+	ProtocolTCP     = 6
+	ProtocolUDP     = 17
+	ProtocolICMPv6  = 58
+	ProtocolSCTP    = 132
+	ProtocolUDPLite = 136
 )
 
 // Flow is an L4 flow with no L7 attributes, as the collector presents flows to the engine. It
@@ -59,6 +64,12 @@ func (f *Flow) GetDestLabels() map[string]string   { return nil }
 
 func (f *Flow) String() string {
 	return fmt.Sprintf("%d %s:%d->%s:%d", f.Protocol, f.SrcIP, f.SrcPort, f.DstIP, f.DstPort)
+}
+
+// ICMPTypeCode returns the ICMP type and code an ICMP flow carries, in the high and low byte of
+// its destination port, which is where the flow-log collector keeps them.
+func ICMPTypeCode(f *Flow) (typ, code int) {
+	return f.DstPort >> 8 & 0xff, f.DstPort & 0xff
 }
 
 // NewFlow builds a TCP flow.
@@ -91,6 +102,15 @@ func (fx *Fixture) MatchingFlow(dir Direction, ordinal int) *Flow {
 	f := fx.DeniedFlow(dir)
 	_, r, ok := fx.ruleAt(dir, ordinal)
 	if !ok {
+		return f
+	}
+	if r.shape != nil {
+		for _, sf := range r.shape.Flows {
+			if sf.Hit && len(sf.Differences) == 0 {
+				c := *sf.Flow
+				return &c
+			}
+		}
 		return f
 	}
 	if len(r.dstPorts) > 0 {

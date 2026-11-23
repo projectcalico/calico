@@ -106,11 +106,22 @@ func TestMissingSets(t *testing.T) {
 }
 
 func TestDeterministic(t *testing.T) {
-	a, b := render(t, Build(Composite())), render(t, Build(Composite()))
+	// Every preset at a fraction of its size: the same code paths, without rendering tens of
+	// megabytes three times.
+	small := func() Spec {
+		spec := Composite()
+		spec.Baseline.Policies, spec.Baseline.DenyRules = 20, 3
+		spec.Baseline.SizeHistogram = []SizeBucket{{40, 1, 9}, {5, 10, 99}, {1, 1000, 1000}}
+		spec.Egress.Policies, spec.Egress.IPSets = 20, 50
+		shapes := DefaultShapes()
+		spec.Shapes = &shapes
+		return spec
+	}
+	a, b := render(t, Build(small())), render(t, Build(small()))
 	if !bytes.Equal(a, b) {
 		t.Fatal("two builds of the same spec rendered differently")
 	}
-	other := Composite()
+	other := small()
 	other.Seed++
 	if bytes.Equal(a, render(t, Build(other))) {
 		t.Fatal("a different seed rendered the same resources")
