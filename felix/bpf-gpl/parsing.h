@@ -205,7 +205,9 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 		ctx->state->icmp_type = icmp_hdr(ctx)->type;
 		ctx->state->icmp_code = icmp_hdr(ctx)->code;
 		break;
-#endif
+	/* Calico's IPIP overlay is IPv4 only. Over IPv6, protocol 4 is a user's own
+	 * IPv4-in-IPv6 traffic, which goes through policy like any other protocol.
+	 */
 	case IPPROTO_IPIP:
 		if (CALI_F_L3_DEV) {
 			// IPIP should never be sent down the tunnel.
@@ -237,6 +239,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 			deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 			goto deny;
 		}
+#endif
 	default:
 		CALI_DEBUG("Unknown protocol (%d), unable to extract ports",
 					(int)ctx->state->ip_proto);
