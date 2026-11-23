@@ -255,6 +255,9 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 	}
 	// icmpShape builds an ICMP rule of one family. hits and misses are type/code pairs; pairs in
 	// nftDiffer are where nftables' negated type and code disagrees with the other dataplanes.
+	// The types are ones conntrack accepts as the start of a flow (echo, timestamp and information
+	// requests; echo and node information queries for IPv6), so that a functional test can send
+	// every flow: the dataplanes drop or accept other types before policy, and log no flow.
 	icmpShape := func(name string, fam int, positive, negated *icmpModel, hits, misses, nftDiffer [][2]int) shape {
 		return shape{name, func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			protoName := "ICMP"
@@ -333,21 +336,21 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 		notProtocolShape("not protocol TCP by name", byName("TCP"), ProtocolTCP, ProtocolUDP),
 		notProtocolShape("not protocol 17", byNumber(ProtocolUDP), ProtocolUDP, ProtocolTCP),
 		icmpShape("ICMP type", 4, &icmpModel{typ: 8}, nil,
-			[][2]int{{8, 0}}, [][2]int{{0, 0}, {3, 1}}, nil),
-		icmpShape("ICMP type and code", 4, &icmpModel{typ: 3, code: 1, hasCode: true}, nil,
-			[][2]int{{3, 1}}, [][2]int{{3, 3}, {8, 0}}, nil),
+			[][2]int{{8, 0}}, [][2]int{{13, 0}}, nil),
+		icmpShape("ICMP type and code", 4, &icmpModel{typ: 8, code: 1, hasCode: true}, nil,
+			[][2]int{{8, 1}}, [][2]int{{8, 0}, {13, 1}}, nil),
 		icmpShape("ICMPv6 type", 6, &icmpModel{typ: 128}, nil,
-			[][2]int{{128, 0}}, [][2]int{{129, 0}, {1, 4}}, nil),
-		icmpShape("ICMPv6 type and code", 6, &icmpModel{typ: 1, code: 4, hasCode: true}, nil,
-			[][2]int{{1, 4}}, [][2]int{{1, 3}, {128, 0}}, nil),
+			[][2]int{{128, 0}}, [][2]int{{139, 0}}, nil),
+		icmpShape("ICMPv6 type and code", 6, &icmpModel{typ: 128, code: 1, hasCode: true}, nil,
+			[][2]int{{128, 1}}, [][2]int{{128, 0}, {139, 1}}, nil),
 		icmpShape("negated ICMP type", 4, nil, &icmpModel{typ: 8},
-			[][2]int{{0, 0}, {3, 1}}, [][2]int{{8, 0}}, nil),
-		icmpShape("negated ICMP type and code", 4, nil, &icmpModel{typ: 3, code: 1, hasCode: true},
-			[][2]int{{3, 3}, {8, 0}, {0, 1}}, [][2]int{{3, 1}}, [][2]int{{3, 3}, {0, 1}}),
+			[][2]int{{13, 0}, {15, 0}}, [][2]int{{8, 0}}, nil),
+		icmpShape("negated ICMP type and code", 4, nil, &icmpModel{typ: 8, code: 1, hasCode: true},
+			[][2]int{{8, 0}, {13, 1}, {13, 0}}, [][2]int{{8, 1}}, [][2]int{{8, 0}, {13, 1}}),
 		icmpShape("negated ICMPv6 type", 6, nil, &icmpModel{typ: 128},
-			[][2]int{{129, 0}}, [][2]int{{128, 0}}, nil),
-		icmpShape("negated ICMPv6 type and code", 6, nil, &icmpModel{typ: 1, code: 4, hasCode: true},
-			[][2]int{{1, 3}, {128, 0}}, [][2]int{{1, 4}}, [][2]int{{1, 3}}),
+			[][2]int{{139, 0}}, [][2]int{{128, 0}}, nil),
+		icmpShape("negated ICMPv6 type and code", 6, nil, &icmpModel{typ: 128, code: 1, hasCode: true},
+			[][2]int{{128, 0}, {139, 0}}, [][2]int{{128, 1}}, [][2]int{{128, 0}}),
 		ipVersionShape("IPv4 only", 4),
 		ipVersionShape("IPv6 only", 6),
 		{"destination port range", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
