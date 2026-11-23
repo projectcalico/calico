@@ -22,6 +22,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -224,20 +226,85 @@ type CleanupProvider interface {
 	AddCleanup(func())
 }
 
+// stuckBPFLog is a bpf-log container that we failed to stop.  While it is still
+// listed in 'docker ps', its bpftool may still hold the kernel's trace_pipe, which
+// allows only one reader, so starting another bpf-log container would fail.
+var stuckBPFLog *containers.Container
+
+// RunBPFLog starts a container that copies the kernel's BPF trace log into the
+// test's log.  The trace log is diagnostics only, so failing to start or stop the
+// container logs an error but does not fail the test.  Returns nil if the
+// container could not be started.
 func RunBPFLog(cp CleanupProvider, byteLimit int) *containers.Container {
 	if byteLimit == 0 {
 		byteLimit = DefaultBPFLogByteLimit
 	}
-	c := containers.Run("bpf-log",
+	if stuckBPFLog != nil {
+		if stuckBPFLog.ListedInDockerPS() {
+			log.WithField("container", stuckBPFLog.Name).Warn(
+				"BPF trace logs are unavailable for this test: an earlier bpf-log container " +
+					"that could not be stopped may still hold the trace pipe.")
+			return nil
+		}
+		log.WithField("container", stuckBPFLog.Name).Info("Stuck bpf-log container has gone.")
+		stuckBPFLog = nil
+	}
+	c, err := containers.RunMayFail("bpf-log",
 		containers.RunOpts{
 			AutoRemove:       true,
 			IgnoreEmptyLines: true,
 			LogLimitBytes:    byteLimit,
 		}, "--privileged",
 		utils.Config.FelixImage, "/usr/bin/bpftool", "prog", "tracelog")
-	cp.AddCleanup(c.Stop)
+	if err != nil {
+		log.WithError(err).Warn("BPF trace logs are unavailable for this test: failed to start bpf-log container.")
+		return nil
+	}
+	cp.AddCleanup(func() {
+		if err := c.StopMayFail(); err != nil {
+			log.WithError(err).WithField("container", c.Name).Error(
+				"Failed to stop bpf-log container; later tests may have no BPF trace logs.")
+			logStuckBPFLogDiags(c.Name)
+			stuckBPFLog = c
+		}
+	})
 	cp.AddCleanup(c.StopLogs)
 	return c
+}
+
+// logStuckBPFLogDiags logs the kernel state of the processes in a bpf-log
+// container that would not stop, to help find out why they did not exit.
+func logStuckBPFLogDiags(name string) {
+	logCxt := log.WithField("container", name)
+	// Bound every command: reading a stuck process's /proc files can block too.
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	inspectCmd := exec.CommandContext(ctx, "docker", "inspect", "--format={{.State.Pid}}", name)
+	inspectCmd.WaitDelay = time.Second
+	out, err := inspectCmd.CombinedOutput()
+	if err != nil {
+		logCxt.WithError(err).WithField("output", string(out)).Error("Failed to get PID of stuck bpf-log container.")
+		return
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil || pid <= 0 {
+		logCxt.WithError(err).WithField("output", string(out)).Error("Failed to get PID of stuck bpf-log container.")
+		return
+	}
+	// The container's PID 1 is docker-init; bpftool is its child.
+	const script = `for p in "$1" $(cat /proc/"$1"/task/*/children); do
+  echo "=== PID $p: $(timeout 2 tr '\0' ' ' < /proc/"$p"/cmdline)"
+  timeout 2 grep -E '^(State|SigPnd|ShdPnd|SigBlk|SigCgt):' /proc/"$p"/status
+  echo "wchan: $(timeout 2 cat /proc/"$p"/wchan)"
+  echo "kernel stack:"
+  timeout 2 cat /proc/"$p"/stack
+done`
+	// A privileged container in the host PID namespace can read the kernel stack without sudo.
+	diagsCmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--privileged", "--pid=host",
+		utils.Config.BusyboxImage, "sh", "-c", script, "sh", strconv.Itoa(pid))
+	diagsCmd.WaitDelay = time.Second
+	out, err = diagsCmd.CombinedOutput()
+	logCxt.WithError(err).WithField("pid", pid).Errorf("Kernel state of stuck bpf-log container:\n%s", out)
 }
 
 func (kds *K8sDatastoreInfra) runK8sApiserver() {
