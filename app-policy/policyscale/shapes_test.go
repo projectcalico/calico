@@ -214,3 +214,29 @@ func TestShapeFlowDifferences(t *testing.T) {
 		t.Errorf("flows marked with unlisted differences %v", used)
 	}
 }
+
+// Conntrack starts a flow only on ICMP request types; the dataplanes drop or accept the other
+// types before policy and log no flow, so a functional test could send no other aimed flow.
+func TestShapeICMPFlowsUseRequestTypes(t *testing.T) {
+	fx := Build(RuleShapes())
+	requests := map[int][]int{ProtocolICMP: {8, 13, 15, 17}, ProtocolICMPv6: {128, 139}}
+	for _, dir := range []Direction{Ingress, Egress} {
+		for _, f := range fx.ShapeFlows(dir) {
+			if f.Flow.Protocol != ProtocolICMP && f.Flow.Protocol != ProtocolICMPv6 {
+				continue
+			}
+			if typ, _ := ICMPTypeCode(f.Flow); !slices.Contains(requests[f.Flow.Protocol], typ) {
+				t.Errorf("%s %s: ICMP type %d starts no flow", dir, f.Name, typ)
+			}
+		}
+	}
+}
+
+// BPF parses no SCTP header, so it enforces and reports SCTP flows with ports of zero.
+func TestSCTPPortsDifferOnEveryDataplane(t *testing.T) {
+	for _, w := range []Where{Iptables, Nftables, BPF} {
+		if !slices.Contains(DifferencesAt(w), SCTPPorts) {
+			t.Errorf("%s: SCTP ports not listed", w)
+		}
+	}
+}
