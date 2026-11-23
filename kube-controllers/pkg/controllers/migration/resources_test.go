@@ -231,3 +231,24 @@ func TestConvertIPAMHandle_WrongKeyType(t *testing.T) {
 		t.Fatal("expected error for wrong key type")
 	}
 }
+
+func TestConvertIPAMHandle_UppercaseHandleID(t *testing.T) {
+	kvp := &model.KVPair{
+		Key: model.IPAMHandleKey{HandleID: "k8s-pod-network.MyUppercaseHandle"},
+		Value: &model.IPAMHandle{
+			HandleID: "k8s-pod-network.MyUppercaseHandle",
+			Block:    map[string]int{"10.0.0.0/26": 1},
+		},
+	}
+
+	handle, err := convertIPAMHandle(kvp)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if handle.Name != "k8s-pod-network.myuppercasehandle" {
+		t.Errorf("expected lowercased name k8s-pod-network.myuppercasehandle, got %s", handle.Name)
+	}
+	if handle.Spec.HandleID != "k8s-pod-network.MyUppercaseHandle" {
+		t.Errorf("expected original HandleID k8s-pod-network.MyUppercaseHandle, got %s", handle.Spec.HandleID)
+	}
+}
