@@ -19,6 +19,7 @@ import (
 	"io"
 	"net/netip"
 	"slices"
+	"strconv"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -83,17 +84,13 @@ func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 	opts.defaults()
 	var out []runtime.Object
 
-	fingerprint := Fingerprint(fx.Spec)
 	for i, t := range fx.tiers {
 		order := opts.TierOrder + float64(i)
 		action := v3.Action(t.defaultAction)
 		out = append(out, &v3.Tier{
-			TypeMeta: metav1.TypeMeta{Kind: v3.KindTier, APIVersion: apiVersion},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        t.name,
-				Annotations: map[string]string{FingerprintAnnotation: fingerprint},
-			},
-			Spec: v3.TierSpec{Order: &order, DefaultAction: &action},
+			TypeMeta:   metav1.TypeMeta{Kind: v3.KindTier, APIVersion: apiVersion},
+			ObjectMeta: metav1.ObjectMeta{Name: t.name},
+			Spec:       v3.TierSpec{Order: &order, DefaultAction: &action},
 		})
 	}
 
@@ -166,6 +163,20 @@ func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 				},
 				Spec: v3.GlobalNetworkSetSpec{Nets: s.members[i*maxNetsPerNetworkSet : min(len(s.members), (i+1)*maxNetsPerNetworkSet)]},
 			})
+		}
+	}
+
+	fingerprint := fx.Fingerprint()
+	for _, o := range out {
+		m := o.(metav1.Object)
+		labels := m.GetLabels()
+		if labels == nil {
+			labels = map[string]string{}
+		}
+		labels[FixtureLabel] = fingerprint
+		m.SetLabels(labels)
+		if _, ok := o.(*v3.Tier); ok {
+			m.SetAnnotations(map[string]string{ObjectsAnnotation: strconv.Itoa(len(out))})
 		}
 	}
 	return out
