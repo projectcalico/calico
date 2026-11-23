@@ -9,9 +9,21 @@ schedule: 30 0 * * *
 
 timeout: 6h
 
+# The modules hand go-cache's caches and the calico build over shared disks;
+# each scheduled run gets its own.
+cache:
+  strategy: shared
+  size: 32Gi
+  storageClass: premium-rwo
+
 globalPrologue: |
-  mkdir -p /go/src/github.com/projectcalico
-  ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+  # A go-build step is checked out there already; linking it onto itself would
+  # leave a stray link inside the tree. A VM's user can't write there, and
+  # vm-go-cache bind-mounts the checkout instead.
+  if [ "${CI_HOME}/${CI_GIT_DIR}" != /go/src/github.com/projectcalico/calico ] &&
+     mkdir -p /go/src/github.com/projectcalico 2>/dev/null; then
+    ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+  fi
   export GOPROXY="${GOPROXY:-https://proxy.golang.org|direct}"
   # Anonymous Docker Hub pulls are rate limited. The daemon is up by now on any
   # step that has one. A VM step never gets the credentials: the bundle is loaded
