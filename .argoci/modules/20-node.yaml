@@ -6,30 +6,31 @@ defaults:
 
 steps:
   - name: node-static-checks
-    env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-    depends: [check-go]
+    depends: [check-go, go-cache]
     requests: {cpu: 6000m, memory: 3.75Gi}
     useGoBuild: true
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
+    cache:
+      - {name: go, mode: read, path: /cache/go}
     commands: |
+      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" node-static-checks) || exit 1; eval "$go_env"
       make -C node static-checks DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
 
   - name: node-ut
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
       # etcd and kube-apiserver run as processes in the pod.
       - name: NATIVE_GO_BUILD
         value: "true"
-    depends: [check-go]
+    depends: [check-go, go-cache]
     requests: {cpu: 4250m, memory: 6Gi}
     useGoBuild: true
     # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
+    cache:
+      - {name: go, mode: read, path: /cache/go}
     commands: |
+      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" node-ut) || exit 1; eval "$go_env"
       cd node
       make ut
     epilogue: |
