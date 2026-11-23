@@ -1200,6 +1200,7 @@ func TestTierDefaultActionNamesLastPolicyInScope(t *testing.T) {
 		name          string
 		policies      []*proto.PolicyID
 		defaultAction string
+		wantAction    rules.RuleAction
 		wantEnforced  *proto.PolicyID
 		wantPending   *proto.PolicyID
 	}{
@@ -1207,6 +1208,7 @@ func TestTierDefaultActionNamesLastPolicyInScope(t *testing.T) {
 			name:          "enforced policies only",
 			policies:      policyIDs(allowDNS, allowHTTPS, allowMonitoring),
 			defaultAction: "Deny",
+			wantAction:    rules.RuleActionDeny,
 			wantEnforced:  allowMonitoring,
 			wantPending:   allowMonitoring,
 		},
@@ -1214,6 +1216,16 @@ func TestTierDefaultActionNamesLastPolicyInScope(t *testing.T) {
 			name:          "default action pass",
 			policies:      policyIDs(allowDNS, allowHTTPS, allowMonitoring),
 			defaultAction: "Pass",
+			wantAction:    rules.RuleActionPass,
+			wantEnforced:  allowMonitoring,
+			wantPending:   allowMonitoring,
+		},
+		{
+			// A tier Felix has policies for but no Tier resource.
+			name:          "no default action",
+			policies:      policyIDs(allowDNS, allowHTTPS, allowMonitoring),
+			defaultAction: "",
+			wantAction:    rules.RuleActionDeny,
 			wantEnforced:  allowMonitoring,
 			wantPending:   allowMonitoring,
 		},
@@ -1221,6 +1233,7 @@ func TestTierDefaultActionNamesLastPolicyInScope(t *testing.T) {
 			name:          "staged policy first",
 			policies:      policyIDs(stagedFirst, allowDNS, allowMonitoring),
 			defaultAction: "Deny",
+			wantAction:    rules.RuleActionDeny,
 			wantEnforced:  allowMonitoring,
 			wantPending:   allowMonitoring,
 		},
@@ -1230,6 +1243,7 @@ func TestTierDefaultActionNamesLastPolicyInScope(t *testing.T) {
 			name:          "staged policy last",
 			policies:      policyIDs(allowDNS, allowMonitoring, stagedLast),
 			defaultAction: "Deny",
+			wantAction:    rules.RuleActionDeny,
 			wantEnforced:  allowMonitoring,
 			wantPending:   stagedLast,
 		},
@@ -1264,9 +1278,39 @@ func TestTierDefaultActionNamesLastPolicyInScope(t *testing.T) {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(trace).NotTo(BeEmpty())
 					Expect(trace[0]).To(Equal(calc.NewRuleID(scope.want.Kind, "tier1", scope.want.Name, scope.want.Namespace,
-						tierDefaultActionIndex, dir, ruleActionFromStr(tc.defaultAction))), "scope %v, direction %v", scope.PolicyScope, dir)
+						tierDefaultActionIndex, dir, tc.wantAction)), "scope %v, direction %v", scope.PolicyScope, dir)
 				}
 			}
+		})
+	}
+}
+
+// A tier with no default action, which Felix sends for a tier whose policies it has but not the
+// Tier resource itself, denies at its end as the dataplanes do, rather than failing the request.
+func TestTierWithNoDefaultActionDenies(t *testing.T) {
+	noMatch := &proto.PolicyID{Name: "no-match", Kind: v3.KindGlobalNetworkPolicy}
+	allow := &proto.PolicyID{Name: "allow", Kind: v3.KindGlobalNetworkPolicy}
+
+	for _, tc := range []struct {
+		name     string
+		policies []*proto.PolicyID
+		want     int32
+	}{
+		{"no policy matches", policyIDs(noMatch), PERMISSION_DENIED},
+		{"a later policy allows", policyIDs(noMatch, allow), OK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			store := policystore.NewPolicyStore()
+			store.PolicyByID[types.ProtoToPolicyID(noMatch)] = &proto.Policy{}
+			store.PolicyByID[types.ProtoToPolicyID(allow)] = &proto.Policy{InboundRules: []*proto.Rule{{Action: "allow"}}}
+			store.Endpoint = &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{{Name: "tier1", IngressPolicies: tc.policies}}}
+			flow := &MockFlow{Protocol: 6, DestPort: 80}
+
+			st := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
+			Expect(st.Code).To(Equal(tc.want))
+			_, err := Evaluate(StagedAsEnforced, rules.RuleDirIngress, store, store.Endpoint, flow)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	}
 }

@@ -251,11 +251,16 @@ func checkTiers(scope PolicyScope, store *policystore.PolicyStore, ep *proto.Wor
 		// Done evaluating policies in the tier. If no policy rules have matched, apply tier's default action.
 		if lastInScope != nil && action == NO_MATCH {
 			log.Debugf("No policy matched. Tier default action %v applies.", tier.DefaultAction)
+			// As in the dataplanes, anything but Pass denies. That includes an empty default
+			// action, which a tier has when Felix has its policies but not the tier itself.
+			tierAction := rules.RuleActionDeny
+			if tier.DefaultAction == string(v3.Pass) {
+				tierAction = rules.RuleActionPass
+			}
 			trace = append(trace, calc.NewRuleID(lastInScope.Kind, tier.GetName(), lastInScope.Name, lastInScope.Namespace,
-				tierDefaultActionIndex, dir, ruleActionFromStr(tier.DefaultAction)))
-			// If the default action is anything beside Pass, then apply tier default deny action.
-			// Otherwise, continue to next tier or profiles.
-			if tier.DefaultAction != string(v3.Pass) {
+				tierDefaultActionIndex, dir, tierAction))
+			// Pass continues to the next tier, or to the profiles.
+			if tierAction != rules.RuleActionPass {
 				s.Code = PERMISSION_DENIED
 				return
 			}
@@ -353,22 +358,6 @@ func actionFromString(s string) Action {
 		panic(&InvalidDataFromDataPlane{"got bad action"})
 	}
 	return a
-}
-
-// ruleActionFromStr converts a string to a rules.RuleAction. It panics if the string is not a
-// valid action.
-func ruleActionFromStr(s string) rules.RuleAction {
-	switch strings.ToLower(s) {
-	case "allow":
-		return rules.RuleActionAllow
-	case "deny":
-		return rules.RuleActionDeny
-	case "pass":
-		return rules.RuleActionPass
-	default:
-		log.Errorf("Got bad action %v", s)
-		panic(&InvalidDataFromDataPlane{"got bad action"})
-	}
 }
 
 // handlePanic recovers from a panic and sets the status to INVALID_ARGUMENT if the panic was due
