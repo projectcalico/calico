@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/netip"
 	"slices"
+	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
@@ -42,10 +43,20 @@ type ShapesParams struct {
 	// RulesPerPolicy spreads the rules over several policies, so that a tier's default action has
 	// several policies it could be reported against.
 	RulesPerPolicy int
+	// Staged makes some of the policies staged, so that the pending and the enforced verdicts
+	// differ: a tier of staged policies alone comes first, and in the other tiers every third
+	// policy and the last one are staged. It is for testing the evaluator's scopes; a set compared
+	// on a cluster for pending verdicts equal to enforced ones wants none.
+	Staged bool
 	// LeaveOut drops the rules that can expose these differences from the set, for a dataplane
-	// that can't apply them; see LeaveOutAt.
+	// that can't apply them; see LeaveOutAt. It takes only differences that a whole rule is
+	// marked with. The others are marked on single flows, which ShapeFlows leaves out, and Build
+	// panics on them here rather than keep rules the caller expects gone.
 	LeaveOut []Difference
 }
+
+// shapesStagedTier is the tier of staged policies alone that ShapesParams.Staged adds.
+const shapesStagedTier = "shapes-staged"
 
 // DefaultShapes returns the rule-shape preset's defaults.
 func DefaultShapes() ShapesParams {
@@ -63,7 +74,7 @@ func DefaultShapes() ShapesParams {
 // RuleShapes is the rule-shape preset on its own.
 func RuleShapes() Spec {
 	p := DefaultShapes()
-	return Spec{Seed: DefaultSeed, Shapes: &p}
+	return Spec{Seed: DefaultSeed, Shapes: &p, Profile: DefaultProfile}
 }
 
 // ShapeRule is one rule of the rule-shape preset, with the flows aimed at it.
@@ -97,7 +108,8 @@ type NamedPort struct {
 }
 
 // Service is a service the rule-shape preset's rules match on. On a cluster it must exist, with
-// the endpoints at Addrs behind Port.
+// the endpoints at Addrs behind Port, and be dual-stack (ipFamilyPolicy: RequireDualStack): a
+// single-stack service has endpoints of one family only, so the other family's flows miss it.
 type Service struct {
 	Name, Namespace string
 	Protocol        string
@@ -118,6 +130,9 @@ func (fx *Fixture) ShapeFlows(dir Direction, exclude ...Difference) []ShapeFlow 
 	add := func(flows []ShapeFlow) {
 		for _, f := range flows {
 			if !slices.ContainsFunc(f.Differences, func(d Difference) bool { return slices.Contains(exclude, d) }) {
+				// The caller may change what it gets back; the fixture's own flows stay as built.
+				flow := *f.Flow
+				f.Flow, f.Differences = &flow, slices.Clone(f.Differences)
 				out = append(out, f)
 			}
 		}
@@ -149,18 +164,43 @@ type shapeBuilder struct {
 	fx   *Fixture
 	p    ShapesParams
 	next int
+	// ruleDifferences are the differences a whole rule is marked with, the ones LeaveOut takes.
+	ruleDifferences map[Difference]bool
 }
 
 func (fx *Fixture) buildShapes(p ShapesParams) {
 	if p.PeerIPv4.Bits() > 24 || p.PeerIPv6.Bits() > 120 {
 		panic("policyscale: rule-shape peer pools need at least 256 addresses")
 	}
-	b := &shapeBuilder{fx: fx, p: p}
+	b := &shapeBuilder{fx: fx, p: p, ruleDifferences: map[Difference]bool{}}
+	var stagedTier *tierModel
+	if p.Staged {
+		stagedTier = fx.tier(shapesStagedTier, string(v3.Pass))
+	}
 	passTier := fx.tier(p.PassTier, string(v3.Pass))
 	tier := fx.tier(p.Tier, string(v3.Deny))
 	for _, dir := range []Direction{Ingress, Egress} {
+		if stagedTier != nil {
+			// No aimed flow reaches the rule, so the tier ends every flow's walk with its
+			// default, in the pending scope only.
+			stagedTier.policies[dir] = append(stagedTier.policies[dir], &policyModel{
+				name:   fmt.Sprintf("shape-staged-%s", dirShort(dir)),
+				staged: true,
+				rules: []*ruleModel{{
+					action: "deny", protocol: &protocolModel{name: "TCP"}, dstPorts: []int32{BaselineGuardPort},
+				}},
+			})
+		}
 		b.buildPassTier(passTier, dir)
 		b.buildTier(tier, dir)
+		if p.Staged {
+			for _, t := range []*tierModel{passTier, tier} {
+				policies := t.policies[dir]
+				for i, pol := range policies {
+					pol.staged = i%3 == 1 || i == len(policies)-1
+				}
+			}
+		}
 		var unmatched []ShapeFlow
 		k := b.key(dir)
 		for _, fam := range []int{4, 6} {
@@ -169,6 +209,11 @@ func (fx *Fixture) buildShapes(p ShapesParams) {
 				ShapeFlow{Name: fmt.Sprintf("icmp v%d echo matches nothing", fam), Flow: k.icmpWith(fam, echoType(fam), 0, k.outside(fam))})
 		}
 		fx.shapeUnmatched[dir] = unmatched
+	}
+	for _, d := range p.LeaveOut {
+		if !b.ruleDifferences[d] {
+			panic(fmt.Sprintf("policyscale: ShapesParams.LeaveOut can't leave out %s: no whole rule is marked with it; leave its flows out with ShapeFlows", d))
+		}
 	}
 	fx.tagUnparsedProtocols()
 }
@@ -216,6 +261,9 @@ func (b *shapeBuilder) buildTier(t *tierModel, dir Direction) {
 	var pol *policyModel
 	i := 0
 	for _, s := range b.shapes(dir) {
+		for _, d := range s.differences {
+			b.ruleDifferences[d] = true
+		}
 		if slices.ContainsFunc(s.differences, func(d Difference) bool { return slices.Contains(b.p.LeaveOut, d) }) {
 			continue
 		}
@@ -256,7 +304,11 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 
 	// protocolShape matches one protocol, by name or number, keyed on the peer.
 	protocolShape := func(name string, p *protocolModel, protocol, other int, ipVersion int) shape {
-		return shape{name: name, build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		var differences []Difference
+		if n := strings.ToLower(p.name); n == "icmpv6" || n == "udplite" {
+			differences = []Difference{ProtocolNamesOnBPF}
+		}
+		return shape{name: name, differences: differences, build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: p, ipVersion: ipVersion}
 			k.keyed(r)
 			var flows []ShapeFlow
@@ -293,6 +345,10 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 		var differences []Difference
 		if (positive != nil && positive.hasCode) || (negated != nil && negated.hasCode) {
 			differences = []Difference{ICMPTypeAndCodeRules}
+		}
+		if fam == 6 {
+			// The rule names the protocol ICMPv6.
+			differences = append(differences, ProtocolNamesOnBPF)
 		}
 		return shape{name: name, differences: differences, build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			protoName := "ICMP"
@@ -442,7 +498,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 			})
 		}},
 		{name: "named port", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
-			r := &ruleModel{protocol: tcp, dstNamedPortSet: k.namedPort()}
+			r := &ruleModel{protocol: tcp, dstNamedPortSet: k.namedPort(false, k.port)}
 			if dir == Ingress {
 				// The named port is on the local endpoint, which every ingress flow reaches.
 				k.keyed(r)
@@ -455,13 +511,43 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 				}
 			})
 		}},
+		// Felix finds a negated named port only on the endpoints the same side's selector picks,
+		// so this rule and the negated source named port are keyed on a port range of their own
+		// rather than on the peer's set, which no endpoint carries the label of.
 		{name: "negated named port", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
-			r := &ruleModel{protocol: tcp, notDstNamedPortSet: k.namedPort()}
-			k.keyed(r)
+			r := &ruleModel{protocol: tcp, dstPortRanges: []portRange{{int32(k.port), int32(k.port + 1)}}, notDstNamedPortSet: k.namedPort(false, k.port)}
 			return r, k.bothFamilies(func(fam int) []ShapeFlow {
 				return []ShapeFlow{
 					k.hit(fmt.Sprintf("tcp v%d to another port", fam), k.flow(fam, ProtocolTCP, k.port+1)),
 					k.miss(fmt.Sprintf("tcp v%d to the named port", fam), k.flow(fam, ProtocolTCP, k.port)),
+				}
+			})
+		}},
+		{name: "negated source port", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+			r := &ruleModel{protocol: tcp, notSrcPortRanges: []portRange{{int32(k.sport), int32(k.sport)}}}
+			k.keyed(r)
+			return r, k.bothFamilies(func(fam int) []ShapeFlow {
+				return []ShapeFlow{
+					k.hit(fmt.Sprintf("tcp v%d from another port", fam), k.flowWith(fam, ProtocolTCP, k.sport+1, k.port, k.peer(fam))),
+					k.miss(fmt.Sprintf("tcp v%d from the port", fam), k.flowWith(fam, ProtocolTCP, k.sport, k.port, k.peer(fam))),
+				}
+			})
+		}},
+		{name: "source named port", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+			r := &ruleModel{protocol: tcp, srcNamedPortSet: k.namedPort(true, k.sport)}
+			return r, k.bothFamilies(func(fam int) []ShapeFlow {
+				return []ShapeFlow{
+					k.hit(fmt.Sprintf("tcp v%d from the named port", fam), k.flowWith(fam, ProtocolTCP, k.sport, k.port, k.peer(fam))),
+					k.miss(fmt.Sprintf("tcp v%d from another port", fam), k.flowWith(fam, ProtocolTCP, k.sport+1, k.port, k.peer(fam))),
+				}
+			})
+		}},
+		{name: "negated source named port", build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+			r := &ruleModel{protocol: tcp, dstPortRanges: []portRange{{int32(k.port), int32(k.port)}}, notSrcNamedPortSet: k.namedPort(true, k.sport)}
+			return r, k.bothFamilies(func(fam int) []ShapeFlow {
+				return []ShapeFlow{
+					k.hit(fmt.Sprintf("tcp v%d from another port", fam), k.flowWith(fam, ProtocolTCP, k.sport+1, k.port, k.peer(fam))),
+					k.miss(fmt.Sprintf("tcp v%d from the named port", fam), k.flowWith(fam, ProtocolTCP, k.sport, k.port, k.peer(fam))),
 				}
 			})
 		}},
@@ -567,17 +653,18 @@ func (k *shapeKey) peerNets(r *ruleModel, nets []netip.Prefix, negated bool) {
 	}
 }
 
-// namedPort adds a TCP named port on the flow's destination, which is the peer for egress and the
-// local endpoint for ingress, and returns the IP+port set Felix would make of it.
-func (k *shapeKey) namedPort() string {
+// namedPort adds a TCP named port on the flow's destination, or its source, and returns the IP+port
+// set Felix would make of it. The peer is the destination of an egress flow and the source of an
+// ingress one; the local endpoint is the other end.
+func (k *shapeKey) namedPort(onSource bool, port int) string {
 	addrs := []netip.Addr{k.peer4, k.peer6}
-	if k.dir == Ingress {
+	if (k.dir == Ingress) != onSource {
 		addrs = []netip.Addr{k.local(4), k.local(6)}
 	}
-	np := NamedPort{Name: fmt.Sprintf("np-%d", k.idx), Protocol: "TCP", Port: k.port, Addrs: addrs}
+	np := NamedPort{Name: fmt.Sprintf("np-%d", k.idx), Protocol: "TCP", Port: port, Addrs: addrs}
 	k.b.fx.namedPorts = append(k.b.fx.namedPorts, np)
 	id := fmt.Sprintf("shape-named-port-%d", k.idx)
-	k.b.fx.addIPPortSet(id, ipPortMembers(addrs, ProtocolTCP, k.port))
+	k.b.fx.addIPPortSet(id, ipPortMembers(addrs, ProtocolTCP, port))
 	k.b.fx.namedPortBySet[id] = np
 	return id
 }
