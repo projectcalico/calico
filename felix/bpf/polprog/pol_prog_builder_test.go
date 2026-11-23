@@ -533,3 +533,30 @@ func TestProgramSplitRandomPolicies(t *testing.T) {
 func expectValidSubPrograms(progs []asm.Insns, polMapIdx, stride int, desc string) {
 	ExpectWithOffset(1, CheckSubPrograms(progs, polMapIdx, stride)).NotTo(HaveOccurred(), desc)
 }
+
+// A rule can name its protocol with any name the API accepts, in any case. A name the program
+// can't turn into a number becomes 0, which no packet carries, so the rule would silently never
+// match.
+func TestProtocolToNumberCoversEveryAPIName(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		num  uint8
+	}{
+		{"TCP", 6},
+		{"UDP", 17},
+		{"ICMP", 1},
+		{"ICMPv6", 58},
+		{"SCTP", 132},
+		{"UDPLite", 136},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			for _, spelling := range []string{tc.name, strings.ToLower(tc.name), strings.ToUpper(tc.name)} {
+				p := &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: spelling}}
+				Expect(protocolToNumber(p)).To(Equal(tc.num), "protocol name %q", spelling)
+			}
+			n := &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: int32(tc.num)}}
+			Expect(protocolToName(n)).To(Equal(strings.ToLower(tc.name)), "protocol number %d", tc.num)
+		})
+	}
+}

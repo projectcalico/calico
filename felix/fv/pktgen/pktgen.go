@@ -15,6 +15,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"math"
 	"net"
 	"strconv"
@@ -32,6 +33,9 @@ Usage:
   pktgen <ip_src> <ip_dst> <proto> [--ip-id=<ip_id>] [--port-src=<port_src>] [--port-dst=<port_dst>]
          [--tcp-syn] [--tcp-ack] [--tcp-fin] [--tcp-rst] [--tcp-ack-no=<ack_no>] [--tcp-seq-no=<seq_no>]
 		 [--ip-dnf=[y|n]] [--payload-size=<size>] [--udp-sock]
+		 [--icmp-type=<type>] [--icmp-code=<code>] [--icmp-id=<id>]
+
+<proto> is one of tcp, udp, icmp, icmp6, sctp (sent as an INIT chunk) or udplite.
 `
 
 func main() {
@@ -125,11 +129,27 @@ func main() {
 		proto = layers.IPProtocolUDP
 	case "tcp":
 		proto = layers.IPProtocolTCP
+	case "icmp":
+		proto = layers.IPProtocolICMPv4
+	case "icmp6":
+		proto = layers.IPProtocolICMPv6
+	case "sctp":
+		proto = layers.IPProtocolSCTP
+	case "udplite":
+		proto = layers.IPProtocolUDPLite
 	default:
 		log.Fatal("unsupported protocol")
 	}
 
+	icmpType := uint8(intArg(args, "--icmp-type", 0, math.MaxUint8))
+	icmpCode := uint8(intArg(args, "--icmp-code", 0, math.MaxUint8))
+	icmpID := uint16(intArg(args, "--icmp-id", 1, math.MaxUint16))
+
 	payload := make([]byte, payloadSize)
+	if proto == layers.IPProtocolSCTP {
+		// An INIT chunk is the whole packet: anything after it would be read as another chunk.
+		payload = nil
+	}
 
 	var iphdr gopacket.SerializableLayer
 	if family == 4 {
@@ -153,7 +173,7 @@ func main() {
 			HopLimit:   64,
 			SrcIP:      ipsrc,
 			DstIP:      ipdst,
-			NextHeader: layers.IPProtocolUDP,
+			NextHeader: proto,
 		}
 
 	}
@@ -234,9 +254,58 @@ func main() {
 		}
 	}
 
+	addLength := func(n int) {
+		if family == 4 {
+			iphdr.(*layers.IPv4).Length += uint16(n)
+		} else {
+			iphdr.(*layers.IPv6).Length += uint16(n)
+		}
+	}
+	l4Layers := []gopacket.SerializableLayer{l4}
+
+	switch proto {
+	case layers.IPProtocolICMPv4:
+		l4Layers = []gopacket.SerializableLayer{&layers.ICMPv4{
+			TypeCode: layers.CreateICMPv4TypeCode(icmpType, icmpCode),
+			Id:       icmpID,
+			Seq:      1,
+		}}
+		addLength(8 + len(payload))
+	case layers.IPProtocolICMPv6:
+		icmp := &layers.ICMPv6{TypeCode: layers.CreateICMPv6TypeCode(icmpType, icmpCode)}
+		if err := icmp.SetNetworkLayerForChecksum(iphdr.(gopacket.NetworkLayer)); err != nil {
+			log.WithError(err).Fatal("cannot checksum icmp6")
+		}
+		// The identifier and sequence number follow the header for echo requests; conntrack reads
+		// the identifier from there for every type it tracks.
+		l4Layers = []gopacket.SerializableLayer{icmp, &layers.ICMPv6Echo{Identifier: icmpID, SeqNumber: 1}}
+		addLength(8 + len(payload))
+	case layers.IPProtocolSCTP:
+		l4Layers = []gopacket.SerializableLayer{
+			&layers.SCTP{SrcPort: layers.SCTPPort(sport), DstPort: layers.SCTPPort(dport)},
+			&layers.SCTPInit{
+				SCTPChunk:                      layers.SCTPChunk{Type: layers.SCTPChunkTypeInit},
+				InitiateTag:                    1,
+				AdvertisedReceiverWindowCredit: 65535,
+				OutboundStreams:                1,
+				InboundStreams:                 1,
+				InitialTSN:                     1,
+			},
+		}
+		addLength(12 + 20)
+	case layers.IPProtocolUDPLite:
+		// gopacket can't serialise UDP-Lite, so the datagram goes in as payload, with its checksum
+		// worked out here over the whole datagram (a checksum coverage of 0).
+		datagram := udpLiteDatagram(ipsrc, ipdst, sport, dport, payload)
+		l4Layers = nil
+		payload = datagram
+		addLength(len(datagram))
+	}
+
 	pkt := gopacket.NewSerializeBuffer()
-	err = gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-		iphdr, l4, gopacket.Payload(payload))
+	toSerialize := append([]gopacket.SerializableLayer{iphdr}, l4Layers...)
+	toSerialize = append(toSerialize, gopacket.Payload(payload))
+	err = gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true}, toSerialize...)
 
 	if err != nil {
 		log.WithError(err).Fatal("failed to serialized packet")
@@ -316,4 +385,61 @@ func main() {
 	if err := unix.Sendto(s, pkt.Bytes(), 0, addr); err != nil {
 		log.WithError(err).Fatal("failed to send packet")
 	}
+}
+
+func intArg(args map[string]interface{}, name string, def, max int) int {
+	if args[name] == nil {
+		return def
+	}
+	v, err := strconv.Atoi(args[name].(string))
+	if err != nil {
+		log.WithError(err).Fatalf("%s not a number", name)
+	}
+	if v < 0 || v > max {
+		log.Fatalf("%s should be between 0 and %d", name, max)
+	}
+	return v
+}
+
+// udpLiteDatagram returns a UDP-Lite header and payload, with the checksum covering all of it.
+//
+// The pseudo-header carries UDP's protocol number, not UDP-Lite's: conntrack checks a UDP-Lite
+// checksum that way, and drops a packet whose checksum it rejects as invalid, before policy.
+func udpLiteDatagram(src, dst net.IP, sport, dport uint16, payload []byte) []byte {
+	d := make([]byte, 8+len(payload))
+	binary.BigEndian.PutUint16(d[0:2], sport)
+	binary.BigEndian.PutUint16(d[2:4], dport)
+	// Bytes 4:6 are the checksum coverage, 0 for the whole datagram.
+	copy(d[8:], payload)
+
+	var pseudo []byte
+	if v4 := src.To4(); v4 != nil && dst.To4() != nil {
+		pseudo = append(pseudo, v4...)
+		pseudo = append(pseudo, dst.To4()...)
+		pseudo = append(pseudo, 0, byte(layers.IPProtocolUDP))
+		pseudo = binary.BigEndian.AppendUint16(pseudo, uint16(len(d)))
+	} else {
+		pseudo = append(pseudo, src.To16()...)
+		pseudo = append(pseudo, dst.To16()...)
+		pseudo = binary.BigEndian.AppendUint32(pseudo, uint32(len(d)))
+		pseudo = append(pseudo, 0, 0, 0, byte(layers.IPProtocolUDP))
+	}
+	var sum uint32
+	for _, b := range [][]byte{pseudo, d} {
+		for i := 0; i+1 < len(b); i += 2 {
+			sum += uint32(binary.BigEndian.Uint16(b[i : i+2]))
+		}
+		if len(b)%2 == 1 {
+			sum += uint32(b[len(b)-1]) << 8
+		}
+	}
+	for sum > 0xffff {
+		sum = (sum >> 16) + (sum & 0xffff)
+	}
+	csum := ^uint16(sum)
+	if csum == 0 {
+		csum = 0xffff
+	}
+	binary.BigEndian.PutUint16(d[6:8], csum)
+	return d
 }

@@ -903,6 +903,7 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *internalapi.WorkloadEndpoint) (*i
 			Containers: []v1.Container{{
 				Name:  wep.Spec.Endpoint,
 				Image: "ignore",
+				Ports: containerPortsFromWep(wep),
 			}},
 			NodeName: wep.Spec.Node,
 		},
@@ -938,6 +939,20 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *internalapi.WorkloadEndpoint) (*i
 	}
 	log.WithField("name", name).Debug("Getting WorkloadEndpoint")
 	return kds.calicoClient.WorkloadEndpoints().Get(context.Background(), wep.Namespace, name, options.GetOptions{})
+}
+
+// containerPortsFromWep declares the endpoint's named ports on its pod: on Kubernetes, Felix takes
+// a workload's named ports from its containers.
+func containerPortsFromWep(wep *internalapi.WorkloadEndpoint) []v1.ContainerPort {
+	var ports []v1.ContainerPort
+	for _, p := range wep.Spec.Ports {
+		ports = append(ports, v1.ContainerPort{
+			Name:          p.Name,
+			ContainerPort: int32(p.Port),
+			Protocol:      v1.Protocol(strings.ToUpper(p.Protocol.String())),
+		})
+	}
+	return ports
 }
 
 func (kds *K8sDatastoreInfra) UpdateWorkload(wep *internalapi.WorkloadEndpoint) (*internalapi.WorkloadEndpoint, error) {

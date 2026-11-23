@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -1590,4 +1591,146 @@ func (c *entryCounter) Levels() []logrus.Level { return logrus.AllLevels }
 func (c *entryCounter) Fire(e *logrus.Entry) error {
 	c.entries = append(c.entries, e)
 	return nil
+}
+
+// ICMP type and code criteria, and their negations, decide a rule the way the dataplanes do:
+// they only ever match ICMP packets of the flow's own IP family. The flow carries the type in the
+// high byte of its destination port and the code in the low byte.
+func TestMatchICMP(t *testing.T) {
+	v4 := net.ParseIP("10.0.0.1")
+	v6 := net.ParseIP("fd00::1")
+	icmpType := func(t int32) *proto.Rule { return &proto.Rule{Icmp: &proto.Rule_IcmpType{IcmpType: t}} }
+	icmpTypeCode := func(t, c int32) *proto.Rule {
+		return &proto.Rule{Icmp: &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: t, Code: c}}}
+	}
+	notICMPType := func(t int32) *proto.Rule {
+		return &proto.Rule{NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: t}}
+	}
+	notICMPTypeCode := func(t, c int32) *proto.Rule {
+		return &proto.Rule{NotIcmp: &proto.Rule_NotIcmpTypeCode{NotIcmpTypeCode: &proto.IcmpTypeAndCode{Type: t, Code: c}}}
+	}
+
+	testCases := []struct {
+		title       string
+		rule        *proto.Rule
+		addr        net.IP
+		protocol    int
+		icmpType    int
+		icmpCode    int
+		expectMatch bool
+	}{
+		{"no ICMP criteria", &proto.Rule{}, v4, 6, 0, 0, true},
+		{"type matches", icmpType(8), v4, 1, 8, 0, true},
+		{"type matches any code", icmpType(3), v4, 1, 3, 13, true},
+		{"type differs", icmpType(8), v4, 1, 3, 1, false},
+		{"type and code match", icmpTypeCode(3, 1), v4, 1, 3, 1, true},
+		{"type matches, code differs", icmpTypeCode(3, 1), v4, 1, 3, 3, false},
+		{"code matches, type differs", icmpTypeCode(3, 1), v4, 1, 8, 1, false},
+		{"negated type matches", notICMPType(8), v4, 1, 8, 0, false},
+		{"negated type differs", notICMPType(8), v4, 1, 3, 1, true},
+		{"negated type and code match", notICMPTypeCode(3, 1), v4, 1, 3, 1, false},
+		{"negated type and code, code differs", notICMPTypeCode(3, 1), v4, 1, 3, 3, true},
+		{"negated type and code, type differs", notICMPTypeCode(3, 1), v4, 1, 8, 1, true},
+		{"ICMPv6 type matches", icmpType(128), v6, 58, 128, 0, true},
+		{"ICMPv6 type differs", icmpType(128), v6, 58, 129, 0, false},
+		{"ICMPv6 type and code match", icmpTypeCode(1, 4), v6, 58, 1, 4, true},
+		{"ICMPv6 negated type", notICMPType(128), v6, 58, 128, 0, false},
+		{"ICMP criteria never match TCP", icmpType(0), v4, 6, 0, 0, false},
+		{"negated ICMP criteria never match TCP", notICMPType(8), v4, 6, 0, 80, false},
+		{"negated ICMP criteria never match UDP over IPv6", notICMPType(128), v6, 17, 0, 53, false},
+		{"ICMPv4 criteria never match ICMPv6 packets", icmpType(8), v4, 58, 8, 0, false},
+		{"ICMPv6 criteria never match ICMPv4 over IPv6", icmpType(128), v6, 1, 128, 0, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
+			flow := &MockFlow{
+				SourceIP: tc.addr,
+				DestIP:   tc.addr,
+				Protocol: tc.protocol,
+				DestPort: tc.icmpType<<8 | tc.icmpCode,
+			}
+			req := NewRequestCache(policystore.NewPolicyStore(), flow)
+			Expect(matchICMP(tc.rule, req)).To(Equal(tc.expectMatch))
+		})
+	}
+}
+
+// A rule restricted to one IP version doesn't match flows of the other. A flow whose addresses
+// don't parse has no version, so only rules for either version match it.
+func TestMatchIPVersion(t *testing.T) {
+	v4 := net.ParseIP("10.0.0.1")
+	v6 := net.ParseIP("fd00::1")
+	testCases := []struct {
+		title       string
+		version     proto.IPVersion
+		addr        net.IP
+		expectMatch bool
+	}{
+		{"any version, IPv4 flow", proto.IPVersion_ANY, v4, true},
+		{"any version, IPv6 flow", proto.IPVersion_ANY, v6, true},
+		{"IPv4 rule, IPv4 flow", proto.IPVersion_IPV4, v4, true},
+		{"IPv4 rule, IPv6 flow", proto.IPVersion_IPV4, v6, false},
+		{"IPv6 rule, IPv6 flow", proto.IPVersion_IPV6, v6, true},
+		{"IPv6 rule, IPv4 flow", proto.IPVersion_IPV6, v4, false},
+		{"IPv4 rule, IPv4 flow in 16-byte form", proto.IPVersion_IPV4, v4.To16(), true},
+		{"any version, no addresses", proto.IPVersion_ANY, nil, true},
+		{"IPv4 rule, no addresses", proto.IPVersion_IPV4, nil, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
+			flow := &MockFlow{SourceIP: tc.addr, DestIP: tc.addr, Protocol: 6}
+			req := NewRequestCache(policystore.NewPolicyStore(), flow)
+			Expect(matchIPVersion(&proto.Rule{IpVersion: tc.version}, req)).To(Equal(tc.expectMatch))
+		})
+	}
+}
+
+// A negated CIDR list of one IP family matches every address of the other family. The dataplanes
+// leave such a rule out of the other family's tables, so a pending verdict can differ from the
+// enforced one here; but application layer policy relies on the rule to deny requests from outside
+// the listed networks, whichever family they come from.
+func TestNegatedCIDRsOfOneFamilyMatchTheOtherFamily(t *testing.T) {
+	RegisterTestingT(t)
+	rule := &proto.Rule{NotSrcNet: []string{"10.0.0.0/8", "192.168.0.0/16"}}
+	for src, want := range map[string]bool{
+		"10.1.2.3":    false,
+		"172.16.0.1":  true,
+		"fd00::1":     true,
+		"2001:db8::1": true,
+	} {
+		flow := &MockFlow{SourceIP: net.ParseIP(src), DestIP: net.ParseIP(src), Protocol: 6}
+		req := NewRequestCache(policystore.NewPolicyStore(), flow)
+		Expect(matchSrcNet(rule, req)).To(Equal(want), "source %s", src)
+	}
+}
+
+// A rule with any one of IP version, ICMP or negated ICMP criteria gets them checked: only a rule
+// with none of the three skips the checks.
+func TestMatchChecksIPVersionAndICMPCriteria(t *testing.T) {
+	testCases := []struct {
+		title string
+		rule  *proto.Rule
+	}{
+		{"IP version only", &proto.Rule{Action: "allow", IpVersion: proto.IPVersion_IPV6}},
+		{"ICMP type only", &proto.Rule{Action: "allow", Icmp: &proto.Rule_IcmpType{IcmpType: 3}}},
+		{"negated ICMP type only", &proto.Rule{Action: "allow", NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 8}}},
+	}
+	echoRequest := &MockFlow{
+		SourceIP: net.ParseIP("10.0.0.1"),
+		DestIP:   net.ParseIP("10.0.0.2"),
+		Protocol: 1,
+		DestPort: 8 << 8,
+	}
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
+			req := NewRequestCache(policystore.NewPolicyStore(), echoRequest)
+			Expect(match("", tc.rule, req)).To(BeFalse())
+			Expect(match("", &proto.Rule{Action: "allow"}, req)).To(BeTrue())
+		})
+	}
 }
