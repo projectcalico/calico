@@ -50,6 +50,15 @@ func (fx *Fixture) LoadStore(store *policystore.PolicyStore) {
 			}
 		}
 	}
+	if fx.Spec.Profile != "" {
+		store.ProfileByID[types.ProtoToProfileID(&proto.ProfileID{Name: fx.Spec.Profile})] = fx.profile()
+	}
+}
+
+// profile is the endpoint's profile, which allows everything.
+func (fx *Fixture) profile() *proto.Profile {
+	allow := func() []*proto.Rule { return []*proto.Rule{{Action: "allow"}} }
+	return &proto.Profile{InboundRules: allow(), OutboundRules: allow()}
 }
 
 // Updates returns the fixture as the dataplane messages Felix would send to load it into a store
@@ -75,6 +84,11 @@ func (fx *Fixture) Updates() []*proto.ToDataplane {
 			}
 		}
 	}
+	if fx.Spec.Profile != "" {
+		updates = append(updates, &proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileUpdate{
+			ActiveProfileUpdate: &proto.ActiveProfileUpdate{Id: &proto.ProfileID{Name: fx.Spec.Profile}, Profile: fx.profile()},
+		}})
+	}
 	return updates
 }
 
@@ -83,6 +97,9 @@ func (fx *Fixture) Updates() []*proto.ToDataplane {
 // endpoint, so a test may prepend a policy without disturbing other users of the fixture.
 func (fx *Fixture) Endpoint() *proto.WorkloadEndpoint {
 	ep := &proto.WorkloadEndpoint{State: "active", Name: "policyscale0"}
+	if fx.Spec.Profile != "" {
+		ep.ProfileIds = []string{fx.Spec.Profile}
+	}
 	for _, t := range fx.tiers {
 		ti := &proto.TierInfo{Name: t.name, DefaultAction: t.defaultAction}
 		for _, p := range t.policies[Ingress] {

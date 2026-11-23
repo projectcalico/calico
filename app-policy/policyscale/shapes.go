@@ -68,7 +68,7 @@ func DefaultShapes() ShapesParams {
 // RuleShapes is the rule-shape preset on its own.
 func RuleShapes() Spec {
 	p := DefaultShapes()
-	return Spec{Seed: DefaultSeed, Shapes: &p}
+	return Spec{Seed: DefaultSeed, Shapes: &p, Profile: DefaultProfile}
 }
 
 // ShapeRule is one rule of the rule-shape preset, with the flows aimed at it.

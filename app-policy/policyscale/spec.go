@@ -41,7 +41,14 @@ type Spec struct {
 	Baseline *BaselineParams
 	Egress   *EgressParams
 	Shapes   *ShapesParams
+	// Profile names a profile on the endpoint that allows everything, as the namespace profile
+	// kns.<namespace> of every Kubernetes pod does; a flow that gets past every tier ends there.
+	// Empty leaves the endpoint with no profile.
+	Profile string
 }
+
+// DefaultProfile is the presets' profile: that of a pod in the default namespace.
+const DefaultProfile = "kns.default"
 
 // DefaultSeed is the seed the presets use; it is the one the original benchmarks were written
 // with, so their numbers stay comparable.
@@ -167,13 +174,13 @@ func DefaultEgress() EgressParams {
 // Baseline is the baseline preset on its own.
 func Baseline() Spec {
 	p := DefaultBaseline()
-	return Spec{Seed: DefaultSeed, Baseline: &p}
+	return Spec{Seed: DefaultSeed, Baseline: &p, Profile: DefaultProfile}
 }
 
 // EgressAllowList is the egress allow-list preset on its own.
 func EgressAllowList() Spec {
 	p := DefaultEgress()
-	return Spec{Seed: DefaultSeed, Egress: &p}
+	return Spec{Seed: DefaultSeed, Egress: &p, Profile: DefaultProfile}
 }
 
 // ScaleFromEnv returns spec with its egress dimensions overridden by the POLICYSCALE_POLICIES,
@@ -202,5 +209,5 @@ func ScaleFromEnv(spec Spec) Spec {
 // PMREQ-954 targets are quoted against.
 func Composite() Spec {
 	b, e := DefaultBaseline(), DefaultEgress()
-	return Spec{Seed: DefaultSeed, Baseline: &b, Egress: &e}
+	return Spec{Seed: DefaultSeed, Baseline: &b, Egress: &e, Profile: DefaultProfile}
 }

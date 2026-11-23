@@ -29,6 +29,8 @@ const (
 	SCTPPorts                  Difference = "sctp-ports"
 	DoNotTrackOrPreDNATPolicy  Difference = "do-not-track-or-pre-dnat-policy"
 	HostEndpoints              Difference = "host-endpoints"
+	NoProfileMatched           Difference = "no-profile-matched"
+	NumericICMPWithoutVersion  Difference = "numeric-icmp-without-ip-version"
 )
 
 // Where is a place a difference shows: in the evaluator itself, against every dataplane, or on one
@@ -52,10 +54,19 @@ type KnownDifference struct {
 	Generated bool
 }
 
-// KnownDifferences is every case where the pending verdict is known to differ from what a
+// KnownDifferences returns every case where the pending verdict is known to differ from what a
 // dataplane enforces. It is the one list the differential tests and the functional tests leave
-// out, so a fix removes its entry here and both start covering the case.
-var KnownDifferences = []KnownDifference{
+// out, so a fix removes its entry and both start covering the case. Each call returns a new copy.
+func KnownDifferences() []KnownDifference {
+	out := make([]KnownDifference, len(knownDifferences))
+	for i, d := range knownDifferences {
+		d.Where = slices.Clone(d.Where)
+		out[i] = d
+	}
+	return out
+}
+
+var knownDifferences = []KnownDifference{
 	{
 		Difference: OneFamilyNegatedCIDRs,
 		Where:      []Where{Evaluator},
@@ -75,9 +86,17 @@ var KnownDifferences = []KnownDifference{
 	{
 		Difference: NegatedICMPWithoutProtocol,
 		Where:      []Where{Iptables, BPF},
-		Why: "A rule with negated ICMP criteria and no ICMP protocol: iptables renders the ICMP match " +
-			"without the protocol, and BPF applies it to the low byte of any destination port. The " +
-			"evaluator matches no packet but ICMP with it.",
+		Why: "A rule with negated ICMP criteria and no ICMP protocol: iptables refuses it, so the " +
+			"update that carries it isn't programmed, and BPF applies it to the low byte of any " +
+			"destination port, or the whole port for a type and code. The evaluator and nftables " +
+			"match only ICMP with it.",
+	},
+	{
+		Difference: NumericICMPWithoutVersion,
+		Where:      []Where{Iptables, Nftables},
+		Why: "A rule with an ICMP type or code on protocol 1 or 58 given as a number, and no IP " +
+			"version, is rendered for both families, and iptables and nftables refuse the other " +
+			"family's rule, so the update that carries it isn't programmed.",
 	},
 	{
 		Difference: SCTPPorts,
@@ -99,6 +118,13 @@ var KnownDifferences = []KnownDifference{
 		Where:      []Where{Iptables, Nftables, BPF},
 		Why:        "Pending verdicts are worked out for workload endpoints only.",
 	},
+	{
+		Difference: NoProfileMatched,
+		Where:      []Where{Evaluator},
+		Why: "When a flow gets past every tier and no profile matches it, the dataplane reports a " +
+			"deny by no profile, at index 0. The evaluator reports nothing when the endpoint has " +
+			"profiles, and a deny under the profile tier's own name, at index -1, when it has none.",
+	},
 }
 
 // DifferencesAt returns the differences that show at any of the given places. A test that compares
@@ -106,7 +132,7 @@ var KnownDifferences = []KnownDifference{
 // on a dataplane passes Evaluator and that dataplane.
 func DifferencesAt(where ...Where) []Difference {
 	var out []Difference
-	for _, d := range KnownDifferences {
+	for _, d := range knownDifferences {
 		for _, w := range d.Where {
 			if slices.Contains(where, w) {
 				out = append(out, d.Difference)
