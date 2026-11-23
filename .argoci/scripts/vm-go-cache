@@ -75,5 +75,9 @@ log "${step} pulled ${image} in $(( $(date +%s) - start ))s"
 # into it and for gocacheprog.
 GO_LOCAL_MOD="${HOME}/go/pkg/mod" GOCACHE=/go-cache \
   "$repo/.argoci/scripts/restore-go-cache" "$step" /cache/go | grep '^export GOCACHEPROG='
-echo "export EXTRA_DOCKER_ARGS='-v /cache/go:/cache/go:ro -e GOCACHEPROG'"
+# gocacheprog's own directory goes in too, for a recipe that runs its own
+# container without make's /go-cache mount.
+prog="${repo}/.go-pkg-cache/prog"
+mkdir -p "$prog"
+echo "export EXTRA_DOCKER_ARGS='-v /cache/go:/cache/go:ro -v ${prog}:/go-cache/prog -e GOCACHEPROG'"
 echo "cd '${repo}'"
