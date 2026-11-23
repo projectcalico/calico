@@ -46,7 +46,7 @@ func migrationRBACObjects() []client.Object {
 				{
 					APIGroups: []string{"apiregistration.k8s.io"},
 					Resources: []string{"apiservices"},
-					Verbs:     []string{"get", "list", "watch", "create", "delete"},
+					Verbs:     []string{"get", "list", "watch", "create", "update", "delete"},
 				},
 				{
 					APIGroups: []string{"apiextensions.k8s.io"},

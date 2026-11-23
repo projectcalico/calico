@@ -196,8 +196,8 @@ webhooks:
           - stagednetworkpolicies
           - stagedglobalnetworkpolicies
         scope: '*'
-  # Blocks user writes to ClusterInformation, which is managed by Calico system components.
-  # This mirrors the write protection provided by the aggregated API server.
+  # Blocks user writes to ClusterInformation, which is managed by Calico system components. Users may
+  # only flip spec.datastoreReady, which calicoctl uses to lock the datastore, subject to RBAC.
   - name: cluster-info.api.projectcalico.org
     admissionReviewVersions:
       - v1

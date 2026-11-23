@@ -15,12 +15,17 @@
 package clusterinfo
 
 import (
+	"encoding/json"
 	"testing"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/admission/v1"
 	authv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 )
 
 func TestAdmit(t *testing.T) {
@@ -136,6 +141,106 @@ func TestIsAllowedUser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.username, func(t *testing.T) {
 			assert.Equal(t, tt.allowed, w.isAllowedUser(tt.username))
+		})
+	}
+}
+
+// clusterInfoUpdateCase is one user update to ClusterInformation. edit turns
+// the stored object into the one the user submits.
+type clusterInfoUpdateCase struct {
+	name        string
+	edit        func(ci *apiv3.ClusterInformation)
+	expectAllow bool
+}
+
+// storedClusterInfo returns an unlocked ClusterInformation as Calico writes it.
+func storedClusterInfo() *apiv3.ClusterInformation {
+	return &apiv3.ClusterInformation{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "default",
+			Annotations: map[string]string{"migration.projectcalico.org/migrated-by": "uid-1"},
+		},
+		Spec: apiv3.ClusterInformationSpec{
+			ClusterGUID:    "guid-1",
+			ClusterType:    "k8s,kdd",
+			CalicoVersion:  "v3.33.1",
+			DatastoreReady: ptr.To(true),
+		},
+	}
+}
+
+// rawObject serializes a ClusterInformation the way it arrives in an
+// admission request.
+func rawObject(t *testing.T, ci *apiv3.ClusterInformation) runtime.RawExtension {
+	t.Helper()
+	data, err := json.Marshal(ci)
+	require.NoError(t, err)
+	return runtime.RawExtension{Raw: data}
+}
+
+// TestAdmitDatastoreReadyOnly verifies that a user outside the allowlist can
+// lock or unlock the datastore, but only when the update changes nothing else.
+func TestAdmitDatastoreReadyOnly(t *testing.T) {
+	w := &webhook{namespace: "calico-system"}
+
+	cases := []clusterInfoUpdateCase{
+		{
+			name:        "locking the datastore is allowed",
+			edit:        func(ci *apiv3.ClusterInformation) { ci.Spec.DatastoreReady = ptr.To(false) },
+			expectAllow: true,
+		},
+		{
+			name: "locking while changing the cluster GUID is denied",
+			edit: func(ci *apiv3.ClusterInformation) {
+				ci.Spec.DatastoreReady = ptr.To(false)
+				ci.Spec.ClusterGUID = "guid-2"
+			},
+		},
+		{
+			name: "locking while changing the Calico version is denied",
+			edit: func(ci *apiv3.ClusterInformation) {
+				ci.Spec.DatastoreReady = ptr.To(false)
+				ci.Spec.CalicoVersion = "v9.9.9"
+			},
+		},
+		{
+			name: "locking while removing an annotation is denied",
+			edit: func(ci *apiv3.ClusterInformation) {
+				ci.Spec.DatastoreReady = ptr.To(false)
+				ci.Annotations = nil
+			},
+		},
+		{
+			name: "locking while adding a label is denied",
+			edit: func(ci *apiv3.ClusterInformation) {
+				ci.Spec.DatastoreReady = ptr.To(false)
+				ci.Labels = map[string]string{"owner": "me"}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Build the update the user submits from the stored object.
+			stored := storedClusterInfo()
+			submitted := storedClusterInfo()
+			tc.edit(submitted)
+			ar := v1.AdmissionReview{
+				Request: &v1.AdmissionRequest{
+					UID:       "test-uid",
+					Operation: v1.Update,
+					Name:      "default",
+					UserInfo:  authv1.UserInfo{Username: "kubernetes-admin"},
+					OldObject: rawObject(t, stored),
+					Object:    rawObject(t, submitted),
+				},
+			}
+
+			resp := w.admit(ar)
+			assert.Equal(t, tc.expectAllow, resp.Allowed)
+			if !tc.expectAllow {
+				assert.Equal(t, metav1.StatusReasonMethodNotAllowed, resp.Result.Reason)
+			}
 		})
 	}
 }

@@ -492,8 +492,9 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *migrationv
 		}
 	}
 
-	// Prechecks ran on the pass that took the lock, so skip them when we
+	// Prechecks ran on the pass that recorded the lock, so skip them when we
 	// re-enter Pending after the drain requeue.
+	recordedThisPass := false
 	if dm.Status.DatastoreLockedAt == nil {
 		wait, err := m.runPendingPrechecks(logCtx, dm)
 		if err != nil {
@@ -504,14 +505,29 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *migrationv
 			return requeueAfter(m.waitingPollInterval)
 		}
 
-		// Lock v1 before the APIService goes away. Otherwise v3 resolves to
-		// empty CRDs while components still believe the datastore is writable.
-		if err := m.lockV1Datastore(logCtx); err != nil {
-			return err
-		}
+		// Record the lock before taking it. If the CR is deleted between the two
+		// writes, the abort still sees the record and unlocks v1.
 		now := metav1.Now()
 		dm.Status.DatastoreLockedAt = &now
 		dm.Status.Message = "Waiting for in-flight datastore writes to drain"
+		if err := m.updateStatus(dm); err != nil {
+			return err
+		}
+		recordedThisPass = true
+	}
+
+	// Lock v1 before the APIService goes away. Otherwise v3 resolves to empty
+	// CRDs while components still believe the datastore is writable. Every
+	// Pending pass makes this call, so a lock that failed gets retried.
+	locked, err := m.lockV1Datastore(logCtx)
+	if err != nil {
+		return err
+	}
+	if locked && !recordedThisPass {
+		// A retry took the lock after the recorded time, so restart the drain at
+		// the current time. Otherwise writes made before the lock could miss it.
+		now := metav1.Now()
+		dm.Status.DatastoreLockedAt = &now
 		if err := m.updateStatus(dm); err != nil {
 			return err
 		}
@@ -715,7 +731,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *migratio
 
 	// Step 1: Lock v1 first, in case we resumed into Migrating without Pending
 	// having taken the lock.
-	if err := m.lockV1Datastore(logCtx); err != nil {
+	if _, err := m.lockV1Datastore(logCtx); err != nil {
 		return err
 	}
 
@@ -1042,26 +1058,30 @@ func (m *migrationController) nudgeTerminatingCRD(crdClient dynamic.ResourceInte
 func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *migrationv1.DatastoreMigration) error {
 	logCtx.Info("Migration incomplete, aborting and restoring pre-migration state")
 
-	if dm.Status.StartedAt == nil {
-		// Only the Migrating phase creates v3 resources and locks v1, so steps 1
-		// and 2 have nothing to undo.
-		logCtx.Info("Migration never started, skipping v3 resource cleanup and v1 ClusterInformation restore")
-	} else {
-		// Step 1: Delete v3 resources created during migration. Best-effort, since
-		// they go inert once the APIService is restored.
+	// Step 1: Delete v3 resources created during migration. Only the Migrating
+	// phase creates them, so there is nothing to delete before it starts. This is
+	// best-effort, since they go inert once the APIService is restored.
+	if dm.Status.StartedAt != nil {
 		m.cleanupPartialV3Resources(logCtx, dm)
+	} else {
+		logCtx.Info("Migration never started, skipping v3 resource cleanup")
+	}
 
-		// Step 2: Restore v1 ClusterInformation to DatastoreReady=true so components
-		// reading from crd.projectcalico.org/v1 resume normal operation.
+	// Step 2: Restore v1 ClusterInformation to DatastoreReady=true so components
+	// reading from crd.projectcalico.org/v1 resume normal operation. Pending takes
+	// the lock before Migrating starts, so this runs whenever the lock was taken.
+	if v1LockTaken(dm) {
 		// This is the only unlock: nothing on the success path clears the v1 lock,
 		// so giving up here leaves the datastore locked with no CR left to retry from.
-		if err := m.setV1ClusterInfoReady(logCtx, true); err != nil {
+		if _, err := m.setV1ClusterInfoReady(logCtx, true); err != nil {
 			var doesNotExist cerrors.ErrorResourceDoesNotExist
 			if !errors.As(err, &doesNotExist) {
 				return fmt.Errorf("restoring v1 ClusterInformation: %w", err)
 			}
 			logCtx.WithError(err).Info("No v1 ClusterInformation to restore")
 		}
+	} else {
+		logCtx.Info("Datastore was never locked, skipping v1 ClusterInformation restore")
 	}
 
 	// Step 3: Undo whatever this migration did to the v3 ClusterInformation.
@@ -1074,6 +1094,14 @@ func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *migrationv1.
 	}
 
 	return m.removeFinalizer(dm)
+}
+
+// v1LockTaken reports whether this migration locked the v1 datastore, so abort
+// knows whether there is a lock to undo. DatastoreLockedAt records the lock from
+// v3.32.2 onward. A CR written by v3.32.0 or v3.32.1, which locked v1 on entering
+// Migrating, only has StartedAt set.
+func v1LockTaken(dm *migrationv1.DatastoreMigration) bool {
+	return dm.Status.DatastoreLockedAt != nil || dm.Status.StartedAt != nil
 }
 
 // cleanupPartialV3Resources deletes v3 resources that this migration created.
@@ -1270,12 +1298,14 @@ func isAutomanagedAPIService(apiSvc *apiregv1.APIService) bool {
 // lockV1Datastore sets DatastoreReady=false on the v1 ClusterInformation, so
 // components pause and retain cached dataplane state. Every failure here,
 // including not-found, has to be retried: migrating while v1 is still writable
-// loses the IPAM allocations CNI makes in the meantime.
-func (m *migrationController) lockV1Datastore(logCtx *logrus.Entry) error {
-	if err := m.setV1ClusterInfoReady(logCtx, false); err != nil {
-		return fmt.Errorf("locking v1 ClusterInformation: %w", err)
+// loses the IPAM allocations CNI makes in the meantime. It reports whether this
+// call took the lock, as opposed to finding v1 already locked.
+func (m *migrationController) lockV1Datastore(logCtx *logrus.Entry) (bool, error) {
+	changed, err := m.setV1ClusterInfoReady(logCtx, false)
+	if err != nil {
+		return false, fmt.Errorf("locking v1 ClusterInformation: %w", err)
 	}
-	return nil
+	return changed, nil
 }
 
 // lockV3Datastore creates or updates the v3 ClusterInformation with
@@ -1400,24 +1430,25 @@ func (m *migrationController) unlockV3CRDDatastore(logCtx *logrus.Entry) error {
 }
 
 // setV1ClusterInfoReady sets DatastoreReady on the v1 ClusterInformation via the
-// libcalico-go backend client.
-func (m *migrationController) setV1ClusterInfoReady(logCtx *logrus.Entry, ready bool) error {
+// libcalico-go backend client. It reports whether it wrote a change, which is
+// false when the flag already had the requested value.
+func (m *migrationController) setV1ClusterInfoReady(logCtx *logrus.Entry, ready bool) (bool, error) {
 	key := model.ResourceKey{
 		Kind: apiv3.KindClusterInformation,
 		Name: clusterInfoName,
 	}
 	kvp, err := m.backendClient.Get(m.ctx, key, "")
 	if err != nil {
-		return fmt.Errorf("getting v1 ClusterInformation: %w", err)
+		return false, fmt.Errorf("getting v1 ClusterInformation: %w", err)
 	}
 
 	ci, ok := kvp.Value.(*apiv3.ClusterInformation)
 	if !ok {
-		return fmt.Errorf("unexpected type for v1 ClusterInformation: %T", kvp.Value)
+		return false, fmt.Errorf("unexpected type for v1 ClusterInformation: %T", kvp.Value)
 	}
 	if ci.Spec.DatastoreReady != nil && *ci.Spec.DatastoreReady == ready {
 		logCtx.WithField("ready", ready).Debug("v1 ClusterInformation already at desired state")
-		return nil
+		return false, nil
 	}
 
 	// Write a copy so a failed update doesn't leave what Get returned claiming
@@ -1428,10 +1459,10 @@ func (m *migrationController) setV1ClusterInfoReady(logCtx *logrus.Entry, ready 
 	updated.Value = ci
 	_, err = m.backendClient.Update(m.ctx, &updated)
 	if err != nil {
-		return fmt.Errorf("updating v1 ClusterInformation: %w", err)
+		return false, fmt.Errorf("updating v1 ClusterInformation: %w", err)
 	}
 	logCtx.WithField("ready", ready).Info("Updated v1 ClusterInformation DatastoreReady")
-	return nil
+	return true, nil
 }
 
 func (m *migrationController) setFailedStatus(dm *migrationv1.DatastoreMigration, message string) {

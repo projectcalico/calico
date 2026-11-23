@@ -15,13 +15,16 @@
 package clusterinfo
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/admission/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
@@ -58,10 +61,10 @@ func RegisterHook(handleFn utils.HandleFn) {
 	http.HandleFunc("/cluster-info", handleFn(handler))
 }
 
-// admit checks whether the admission request should be allowed. It blocks Create, Update, and
-// Delete operations on ClusterInformation unless the request originates from an allowed Calico
-// system service account. This mirrors the write protection that the Calico API server provides
-// when running in aggregated API mode.
+// admit checks whether the admission request should be allowed. Calico system service accounts
+// may make any write. Anyone else may only flip spec.datastoreReady, which is how
+// `calicoctl datastore migrate lock` and `unlock` work, and RBAC decides who can do that. This
+// matches API server mode, where calicoctl writes the v1 ClusterInformation CRD under RBAC alone.
 func (w *webhook) admit(ar v1.AdmissionReview) *v1.AdmissionResponse {
 	logCtx := logrus.WithFields(logrus.Fields{
 		"uid":       ar.Request.UID,
@@ -76,15 +79,55 @@ func (w *webhook) admit(ar v1.AdmissionReview) *v1.AdmissionResponse {
 		return &v1.AdmissionResponse{Allowed: true}
 	}
 
+	// Anyone else gets through only with an update that locks or unlocks the
+	// datastore and changes nothing else.
+	if ar.Request.Operation == v1.Update {
+		onlyLock, err := onlyDatastoreReadyChanged(ar.Request.OldObject.Raw, ar.Request.Object.Raw)
+		if err != nil {
+			logCtx.WithError(err).Warn("Failed to decode ClusterInformation update, denying it")
+		} else if onlyLock {
+			logCtx.Info("Allowing ClusterInformation update that only changes datastoreReady")
+			return &v1.AdmissionResponse{Allowed: true}
+		}
+	}
+
 	logCtx.Info("Denying write to ClusterInformation")
 	return &v1.AdmissionResponse{
 		Allowed: false,
 		Result: &metav1.Status{
 			Status:  metav1.StatusFailure,
-			Message: fmt.Sprintf("ClusterInformation is a read-only resource (user: %s)", ar.Request.UserInfo.Username),
+			Message: fmt.Sprintf("ClusterInformation is read-only apart from spec.datastoreReady (user: %s)", ar.Request.UserInfo.Username),
 			Reason:  metav1.StatusReasonMethodNotAllowed,
 		},
 	}
+}
+
+// onlyDatastoreReadyChanged reports whether an update to ClusterInformation changes
+// spec.datastoreReady and nothing else. Labels, annotations, finalizers and owner references must
+// stay as they were, since the migration controller keeps its lock markers in annotations.
+func onlyDatastoreReadyChanged(oldRaw, newRaw []byte) (bool, error) {
+	if len(oldRaw) == 0 || len(newRaw) == 0 {
+		return false, fmt.Errorf("update is missing the old or new object")
+	}
+	oldCI := &apiv3.ClusterInformation{}
+	if err := json.Unmarshal(oldRaw, oldCI); err != nil {
+		return false, fmt.Errorf("decoding old ClusterInformation: %w", err)
+	}
+	newCI := &apiv3.ClusterInformation{}
+	if err := json.Unmarshal(newRaw, newCI); err != nil {
+		return false, fmt.Errorf("decoding new ClusterInformation: %w", err)
+	}
+
+	// Blank out datastoreReady on both sides, so any remaining difference in
+	// the spec is a change to a protected field.
+	oldSpec, newSpec := oldCI.Spec, newCI.Spec
+	oldSpec.DatastoreReady, newSpec.DatastoreReady = nil, nil
+	sameSpec := equality.Semantic.DeepEqual(oldSpec, newSpec)
+	sameMeta := equality.Semantic.DeepEqual(oldCI.Labels, newCI.Labels) &&
+		equality.Semantic.DeepEqual(oldCI.Annotations, newCI.Annotations) &&
+		equality.Semantic.DeepEqual(oldCI.Finalizers, newCI.Finalizers) &&
+		equality.Semantic.DeepEqual(oldCI.OwnerReferences, newCI.OwnerReferences)
+	return sameSpec && sameMeta, nil
 }
 
 // isAllowedUser returns true if the given username corresponds to a Calico system service account
