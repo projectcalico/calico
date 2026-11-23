@@ -132,7 +132,7 @@ func TestHoldAgainstListen(t *testing.T) {
 
 	fx := policyscale.Build(policyscale.EgressAllowList())
 	const n = 50
-	res := runHold(fx.NewSampler(1, policyscale.FlowModel{Direction: policyscale.Egress}), holdConfig{
+	res := runHold(fx.NewSampler(1, policyscale.FlowModel{Direction: policyscale.Egress}).Next, holdConfig{
 		connections: n,
 		rate:        1000,
 		duration:    time.Second,

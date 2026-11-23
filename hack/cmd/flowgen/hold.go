@@ -61,11 +61,11 @@ type holdResult struct {
 	opened, openAtEnd, failed, closed uint64
 }
 
-// runHold opens cfg.connections TCP connections at cfg.rate per second to the sampler's
-// destinations (or the targets in turn), on cfg.port when set, and keeps them open until the run
-// ends, writing the payload on each every interval so that conntrack and the collector see them
-// active. A connection the peer closes is counted and not replaced.
-func runHold(sampler *policyscale.Sampler, cfg holdConfig) holdResult {
+// runHold opens cfg.connections TCP connections at cfg.rate per second to the destinations of the
+// flows draw returns (or the targets in turn), on cfg.port when set, and keeps them open until the
+// run ends, writing the payload on each every interval so that conntrack and the collector see
+// them active. A connection the peer closes is counted and not replaced.
+func runHold(draw func() *policyscale.Flow, cfg holdConfig) holdResult {
 	raiseFileLimit()
 	dst := destination(cfg.targets)
 	if cfg.port > 0 {
@@ -142,7 +142,7 @@ run:
 			}
 			tick++
 			for ; n > 0 && queued < cfg.connections; n-- {
-				work <- sampler.Next()
+				work <- draw()
 				queued++
 			}
 			if queued == cfg.connections && work != nil {
