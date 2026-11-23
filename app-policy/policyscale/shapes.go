@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/netip"
 	"slices"
+	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
@@ -287,7 +288,11 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 
 	// protocolShape matches one protocol, by name or number, keyed on the peer.
 	protocolShape := func(name string, p *protocolModel, protocol, other int, ipVersion int) shape {
-		return shape{name: name, build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+		var differences []Difference
+		if n := strings.ToLower(p.name); n == "icmpv6" || n == "udplite" {
+			differences = []Difference{ProtocolNamesOnBPF}
+		}
+		return shape{name: name, differences: differences, build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			r := &ruleModel{protocol: p, ipVersion: ipVersion}
 			k.keyed(r)
 			var flows []ShapeFlow
@@ -324,6 +329,10 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 		var differences []Difference
 		if (positive != nil && positive.hasCode) || (negated != nil && negated.hasCode) {
 			differences = []Difference{ICMPTypeAndCodeRules}
+		}
+		if fam == 6 {
+			// The rule names the protocol ICMPv6.
+			differences = append(differences, ProtocolNamesOnBPF)
 		}
 		return shape{name: name, differences: differences, build: func(k *shapeKey) (*ruleModel, []ShapeFlow) {
 			protoName := "ICMP"
