@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests for restore-go-cache: a pod reads the shared caches in place through the
-# exports it prints.
+# Tests for restore-go-cache: a machine's go-build containers read the shared
+# caches in place through the exports it prints.
 set -u
 cd "$(dirname "$0")/../../.." || exit 1
 script="$PWD/.argoci/scripts/restore-go-cache"

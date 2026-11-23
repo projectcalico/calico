@@ -7,10 +7,12 @@ defaults:
 
 steps:
   - name: cni-plugin-ci
-    depends: [build-calico-image, check-go, go-cache]
+    depends: [build-calico-image, check-go]
     cache:
       - {name: calico-image, mode: read, path: /cache/calico-image}
     checkout: true
+    goCache: read
+    reports: [cni-plugin/report:test-results]
     runOnVM:
       createVM:
         # The cache disk's project and zone: a disk attaches only to a machine
@@ -20,20 +22,16 @@ steps:
         zones: [us-central1-a]
         vmImageProject: unique-caldron-775
       project: tigera-cc-dev
-      env: [CI_WORKFLOW_NAME]
       put:
         - /cache/calico-image/calico.tar:calico-build/calico.tar
       source: |
         set -euo pipefail
-        # Nothing sets CI on the machine, and the Makefiles key their CI behaviour
-        # (read-only go.mod, keeping a failed suite's namespaces) on it.
-        export CI=true
-        reports() {
-          # Skipped specs are reported as failures otherwise.
+        # Before the reports are pushed: skipped specs are reported as failures
+        # otherwise.
+        strip_skipped() {
           python3 "${repo:-.}/hack/strip-skipped-tests.py" "${repo:-.}"/cni-plugin/report/*.xml 2>/dev/null || true
-          artifact push job "${repo:-.}/cni-plugin/report" --destination test-results || true
         }
-        trap reports EXIT
+        trap strip_skipped EXIT
         go_env=$(.argoci/scripts/vm-go-cache cni-plugin-ci) || exit 1
         eval "$go_env"
         repo=$PWD

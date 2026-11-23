@@ -6,18 +6,14 @@ defaults:
   # In the build image, with NATIVE_GO_BUILD running each recipe in place rather
   # than in a nested container.
   useGoBuild: true
-  # The image ships tools under /go/bin, which the default /go volume hides.
-  workspaceVolumes: none
 
 steps:
   - name: e2e-test-set-drift
     env:
       - name: NATIVE_GO_BUILD
         value: "true"
-    depends: [check-go, go-cache]
+    depends: [check-go]
     requests: {cpu: 5500m, memory: 6Gi}
-    cache:
-      - {name: go, mode: read, path: /cache/go}
+    goCache: read
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" e2e-test-set-drift) || exit 1; eval "$go_env"
       make -C e2e check-test-set

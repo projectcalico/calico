@@ -6,23 +6,16 @@ defaults:
   # In the build image, with NATIVE_GO_BUILD running each recipe in place rather
   # than in a nested container.
   useGoBuild: true
-  # The image ships tools under /go/bin, which the default /go volume hides.
-  workspaceVolumes: none
 
 steps:
   - name: e2e-ut
     env:
       - name: NATIVE_GO_BUILD
         value: "true"
-    depends: [check-go, go-cache]
+    depends: [check-go]
     requests: {cpu: 4250m, memory: 5Gi}
-    cache:
-      - {name: go, mode: read, path: /cache/go}
+    goCache: read
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" e2e-ut) || exit 1; eval "$go_env"
       cd e2e
       make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/e2e"
-      artifact push job report --destination test-results || true
+    reports: [e2e/report:test-results]

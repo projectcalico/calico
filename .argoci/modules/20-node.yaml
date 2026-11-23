@@ -6,15 +6,11 @@ defaults:
 
 steps:
   - name: node-static-checks
-    depends: [check-go, go-cache]
+    depends: [check-go]
     requests: {cpu: 6000m, memory: 3.75Gi}
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
-    cache:
-      - {name: go, mode: read, path: /cache/go}
+    goCache: read
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" node-static-checks) || exit 1; eval "$go_env"
       make -C node static-checks DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
 
   - name: node-ut
@@ -22,21 +18,14 @@ steps:
       # etcd and kube-apiserver run as processes in the pod.
       - name: NATIVE_GO_BUILD
         value: "true"
-    depends: [check-go, go-cache]
+    depends: [check-go]
     requests: {cpu: 4250m, memory: 6Gi}
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
-    cache:
-      - {name: go, mode: read, path: /cache/go}
+    goCache: read
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" node-ut) || exit 1; eval "$go_env"
       cd node
       make ut
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/node"
-      artifact push job report --destination test-results || true
+    reports: [node/report:test-results]
 
   # Emulated, so each of these is closer to twenty minutes than two.
   - name: node-build

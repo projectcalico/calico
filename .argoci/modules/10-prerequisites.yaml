@@ -14,8 +14,6 @@ steps:
     jobSize: medium
     requests: {cpu: 3500m, memory: 1Gi}
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     changes:
       in:
         - ^.*\.ya?ml$
@@ -33,13 +31,9 @@ steps:
         value: "true"
     useGoBuild: true
     # go-cache compiles exactly what go vet does, so the vet is mostly cache hits.
-    depends: [go-cache]
     jobSize: large
     requests: {cpu: 14000m, memory: 16Gi}
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
-    cache:
-      - {name: go, mode: read, path: /cache/go}
+    goCache: read
     changes:
       in:
         - ^go\.mod$
@@ -53,7 +47,6 @@ steps:
         - ^\.argoci/config\.yaml$
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" check-go) || exit 1; eval "$go_env"
       # `useGoBuild` steps take their image tag from config.yaml rather than from
       # the toolchain the Makefiles build with.
       want=$(make --no-print-directory -s -f metadata.mk --eval 'print: ; @echo $(GO_BUILD_VER)' print)
@@ -72,8 +65,7 @@ steps:
       make check-dirty
 
   # Every module's downloads and a compile of every package, written straight to
-  # the shared go cache disk, where the go-build steps read them in place
-  # (restore-go-cache).
+  # the shared go cache disk, where the `goCache: read` steps read them in place.
   - name: go-cache
     env:
       - name: NATIVE_GO_BUILD
@@ -82,32 +74,16 @@ steps:
     jobSize: large
     # Nearly every Go step waits on this one, and the compile scales with cores.
     requests: {cpu: 9000m, memory: 10Gi}
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     changes:
       in:
         - ^\.argoci/scripts/(restore|vm)-go-cache$
         - ^\.argoci/modules/10-prerequisites\.yaml$
-    cache:
-      - {name: go, mode: write, path: /cache/go}
+    goCache: write
     commands: |
-      # Built at the go-build container's repo and module paths, which are in every
-      # build output's cache key. goBuildCheckoutDir puts the repo there.
+      # Built at the go-build container's repo path, which is in every build
+      # output's cache key. goBuildCheckoutDir puts the repo there.
       if [ "$PWD" != /go/src/github.com/projectcalico/calico ]; then
         echo "go-cache: checked out at $PWD, not the go-build path; readers will miss its build cache" >&2
-      fi
-      mkdir -p /cache/go/mod /go/pkg
-      # Set aside, not merged: the image's own modules are not on the shared disk.
-      if [ -e /go/pkg/mod ] && [ ! -L /go/pkg/mod ]; then mv /go/pkg/mod /go/pkg/mod.image; fi
-      ln -sfn /cache/go/mod /go/pkg/mod
-      export GOCACHE=/cache/go/build GOMODCACHE=/go/pkg/mod
-      # The disk comes from the PR's last snapshot, and no build output survives a
-      # toolchain change: kept, they fill the disk alongside the rebuild.
-      toolchain=$(make -s --no-print-directory -f metadata.mk --eval='print-go-build-ver: ; @echo $(GO_BUILD_VER)' print-go-build-ver)
-      if [ "$(cat /cache/go/build-toolchain 2>/dev/null)" != "$toolchain" ]; then
-        echo "go-cache: build cache is not from go-build ${toolchain}; starting it empty"
-        find /cache/go/build -mindepth 1 -delete 2>/dev/null || true
-        echo "$toolchain" >/cache/go/build-toolchain
       fi
       s=$(date +%s)
       # Alongside the compile, which fetches what it needs itself: the other
@@ -170,8 +146,6 @@ steps:
     jobSize: small
     requests: {cpu: 2000m, memory: 1Gi}
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     changes:
       in:
         - ^networking-calico/
@@ -190,7 +164,6 @@ steps:
     jobSize: small
     requests: {cpu: 2250m, memory: 548Mi}
     useGoBuild: true
-    workspaceVolumes: none
     changes:
       in:
         - ^.*$
@@ -210,8 +183,6 @@ steps:
         value: "true"
     requests: {cpu: 1500m, memory: 2Gi}
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     changes:
       in:
         - ^.*\.pb\.go$
@@ -269,8 +240,6 @@ steps:
     jobSize: small
     requests: {cpu: 2000m, memory: 5.5Gi}
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     changes:
       in:
         - ^charts/
@@ -289,8 +258,6 @@ steps:
         value: "true"
     requests: {cpu: 2000m, memory: 2Gi}
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     changes:
       in:
         - ^hack/thirdparty/
@@ -319,17 +286,13 @@ steps:
     useGoBuild: true
     jobSize: large
     requests: {cpu: 7000m, memory: 8Gi}
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     changes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
-    depends: [go-cache]
+    goCache: read
     cache:
       - {name: calico-build, mode: write, path: /cache/calico-build}
-      - {name: go, mode: read, path: /cache/go}
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" build-calico-binary) || exit 1; eval "$go_env"
       make -C cmd/calico build build-cgo build-race bin/LICENSE
       make -C pod2daemon build
       test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || make -C felix libbpf
@@ -547,20 +510,17 @@ steps:
       - name: NATIVE_GO_BUILD
         value: "true"
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     timeout: 1h
     jobSize: large
     requests: {cpu: 7000m, memory: 8Gi}
-    depends: [build-calico-binary, go-cache]
+    depends: [build-calico-binary]
     changes:
       dependsOn: [e2e]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    goCache: read
     cache:
       - {name: calico-build, mode: read, path: /cache/calico-build}
-      - {name: go, mode: read, path: /cache/go}
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" build-e2e-binaries) || exit 1; eval "$go_env"
       tar -xf /cache/calico-build/libbpf-amd64.tar -C felix/bpf-gpl
       make -C e2e build
       make bin/ginkgo
@@ -568,18 +528,6 @@ steps:
       # Uncompressed: the go-build image has no zstd.
       tar -cf /tmp/e2e-binaries.tar e2e/bin bin/ginkgo e2e/images/rapidclient/bin
       artifact push workflow /tmp/e2e-binaries.tar
-
-  # The nightly repeats the CI module list; this catches the two drifting.
-  - name: check-cron-coverage
-    jobSize: small
-    requests: {cpu: 1500m, memory: 548Mi}
-    changes:
-      in:
-        - ^\.argoci/ciworkflow\.yaml$
-        - ^\.argoci/cron/nightly-ci\.yaml$
-        - ^\.argoci/scripts/test_scripts/check-cron-coverage\.sh$
-    commands: |
-      ./.argoci/scripts/test_scripts/check-cron-coverage.sh
 
   # Fetched here, in a pod, so the PR read token never reaches the e2e VMs.
   - name: sandcat-pr-context

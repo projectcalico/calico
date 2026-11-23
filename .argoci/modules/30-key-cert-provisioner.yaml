@@ -6,23 +6,16 @@ defaults:
   # In the build image, with NATIVE_GO_BUILD running each recipe in place rather
   # than in a nested container.
   useGoBuild: true
-  # The image ships tools under /go/bin, which the default /go volume hides.
-  workspaceVolumes: none
 
 steps:
   - name: key-cert-provisioner-ci
     env:
       - name: NATIVE_GO_BUILD
         value: "true"
-    depends: [check-go, go-cache]
+    depends: [check-go]
     requests: {cpu: 3750m, memory: 3Gi}
-    cache:
-      - {name: go, mode: read, path: /cache/go}
+    goCache: read
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" key-cert-provisioner-ci) || exit 1; eval "$go_env"
       cd key-cert-provisioner
       make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/key-cert-provisioner"
-      artifact push job report --destination test-results || true
+    reports: [key-cert-provisioner/report:test-results]

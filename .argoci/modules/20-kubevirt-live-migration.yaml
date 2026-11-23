@@ -17,7 +17,6 @@ steps:
       - build-third-party-images
       - build-e2e-binaries
       - check-go
-      - go-cache
     env:
       - name: E2E_TEST_CONFIG
         value: e2e/config/kind/kubevirt.yaml
@@ -33,6 +32,8 @@ steps:
     cache:
       - {name: calico-image, mode: read, path: /cache/calico-image}
     checkout: true
+    goCache: read
+    reports: [report:test-results]
     runOnVM:
       createVM:
         # The cache disk's project and zone: a disk attaches only to a machine
@@ -43,20 +44,13 @@ steps:
         project: tigera-cc-dev
         zones: [us-central1-a]
         vmImageProject: unique-caldron-775
-        # Past the step's timeout, which bounds the machine anyway.
-        maxRunDuration: 2h15m
       project: tigera-cc-dev
-      env: [CI_WORKFLOW_NAME, E2E_TEST_CONFIG, EXTRA_VALUES_FILES, KUBEVIRT_RELEASE_URL, BIRD_BGPPEER_CONTAINER_NAME]
       put:
         - /cache/calico-image/calico.tar:calico-build/calico.tar
       source: |
         set -euo pipefail
-        # Nothing sets CI on the machine, and the Makefiles key their CI behaviour
-        # (read-only go.mod, keeping a failed suite's namespaces) on it.
-        export CI=true
         finish() {
           local rc=$?
-          artifact push job report --destination test-results || true
           if [ "$rc" != 0 ]; then
             # The script pushes its own bundle.
             .semaphore/collect-kind-diags || true
@@ -65,10 +59,6 @@ steps:
         }
         # The snapshot tool is only in the CI image.
         snapshot_kind_cluster() {
-          # The machine's own account can read the registry; the artifact key's can't.
-          curl -sf -H 'Metadata-Flavor: Google' \
-            http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token |
-            jq -r .access_token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
           docker run --rm --network host -v "$PWD:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4 \
             kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz
           artifact push job kind-snapshot.tar.gz --destination kind-snapshot.tar.gz

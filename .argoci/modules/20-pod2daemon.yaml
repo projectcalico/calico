@@ -4,23 +4,16 @@ version: condensed-module
 defaults:
   timeout: 1h
   useGoBuild: true
-  # The image ships tools under /go/bin, which the default /go volume hides.
-  workspaceVolumes: none
 
 steps:
   - name: pod2daemon-ci
     env:
       - name: NATIVE_GO_BUILD
         value: "true"
-    depends: [check-go, go-cache]
+    depends: [check-go]
     requests: {cpu: 2750m, memory: 2Gi}
-    cache:
-      - {name: go, mode: read, path: /cache/go}
+    goCache: read
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" pod2daemon-ci) || exit 1; eval "$go_env"
       cd pod2daemon
       make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/pod2daemon"
-      artifact push job report --destination test-results || true
+    reports: [pod2daemon/report:test-results]

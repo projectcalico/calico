@@ -37,6 +37,4 @@ steps:
       .argoci/scripts/load-cached-images calico
       cd kube-controllers
       make ${KC_TARGET}
-    epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}/kube-controllers"
-      artifact push job report --destination test-results || true
+    reports: [kube-controllers/report:test-results]

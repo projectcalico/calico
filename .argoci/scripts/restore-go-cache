@@ -1,8 +1,10 @@
 #!/bin/bash
-# Points a step at the Go caches the go-cache step built on its shared disk.
+# Points the go-build containers on a createVM machine at the Go caches the
+# go-cache step built on its shared disk (vm-go-cache runs it). A pod step gets
+# the same from `goCache: read`.
 #
-# On a pod that disk holds the caches as go left them, mounted read-only, and
-# they are read in place, with anything new kept locally:
+# The disk holds the caches as go left them, mounted read-only, and they are
+# read in place, with anything new kept locally:
 #   - build outputs through gocacheprog, which reads the shared cache and keeps
 #     what the step adds in a local directory;
 #   - modules through a local module cache whose module directories link to the

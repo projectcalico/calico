@@ -35,7 +35,6 @@ steps:
       - build-e2e-binaries
       - check-go
       - sandcat-pr-context
-      - go-cache
     matrix:
       # Pinned rather than defaulted: from v3.33 the default gives Felix the
       # IPIP routes, and these tests need BGP to be the only routing mechanism.
@@ -75,6 +74,8 @@ steps:
     cache:
       - {name: calico-image, mode: read, path: /cache/calico-image}
     checkout: true
+    goCache: read
+    reports: [report:test-results]
     runOnVM:
       createVM:
         # The cache disk's zone, since a disk attaches only to a machine in its
@@ -92,37 +93,19 @@ steps:
         project: tigera-cc-dev
         zones: [us-central1-a]
         vmImageProject: unique-caldron-775
-        # Past the step's timeout, which bounds the machine anyway.
-        maxRunDuration: 2h15m
       project: tigera-cc-dev
+      # The secrets; the step's and each lane's own env goes across by itself.
       env:
-        - CI_WORKFLOW_NAME
-        - E2E_RUN_WRAPPER
-        - SANDCAT_TOTAL_BUDGET
         - SANDCAT_GEMINI_KEY
         - SANDCAT_BIN_DOWNLOAD_TOKEN
         - SANDCAT_DB_URL
         - SANDCAT_DB_TOKEN
-        - E2E_TARGET
-        - EXTRA_VALUES_FILES
-        - KIND_CALICO_API_GROUP
-        - E2E_TEST_CONFIG
-        - SANDCAT_SKIP
       put:
         - /cache/calico-image/calico.tar:calico-build/calico.tar
       source: |
         set -euo pipefail
-        # Nothing sets CI on the machine, and the Makefiles key their CI behaviour
-        # (read-only go.mod, keeping a failed suite's namespaces) on it.
-        export CI=true
-        # Every lane forwards every name; one a lane leaves unset arrives empty,
-        # and an empty variable would override a Makefile's ?= default.
-        for var in EXTRA_VALUES_FILES KIND_CALICO_API_GROUP E2E_TEST_CONFIG SANDCAT_SKIP; do
-          [ -n "${!var:-}" ] || unset "$var"
-        done
         finish() {
           local rc=$?
-          artifact push job report --destination test-results || true
           if [ "$rc" != 0 ]; then
             # The script pushes its own bundle.
             .semaphore/collect-kind-diags || true
@@ -131,10 +114,6 @@ steps:
         }
         # The snapshot tool is only in the CI image.
         snapshot_kind_cluster() {
-          # The machine's own account can read the registry; the artifact key's can't.
-          curl -sf -H 'Metadata-Flavor: Google' \
-            http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token |
-            jq -r .access_token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
           docker run --rm --network host -v "$PWD:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4 \
             kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz
           artifact push job kind-snapshot.tar.gz --destination kind-snapshot.tar.gz

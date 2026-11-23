@@ -15,24 +15,18 @@ steps:
     commands: |
       cd operator
       make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/operator"
-      artifact push job report --destination test-results || true
+    reports: [operator/report:test-results]
 
   # Pure Go, so cross-compiling is all the per-architecture coverage it needs.
   # go-cache's builds are amd64, so these take only its modules.
   - name: operator-build
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     env:
       - name: NATIVE_GO_BUILD
         value: "true"
-    depends: [check-go, go-cache]
+    depends: [check-go]
     requests: {cpu: 5000m, memory: 8Gi}
-    cache:
-      - {name: go, mode: read, path: /cache/go}
+    goCache: read
     matrix:
       - name: arm64
         env: [{name: ARCH, value: arm64}]
@@ -41,7 +35,6 @@ steps:
       - name: s390x
         env: [{name: ARCH, value: s390x}]
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" operator-build) || exit 1; eval "$go_env"
       cd operator
       make build ARCH=$ARCH
 
@@ -69,6 +62,4 @@ steps:
       .argoci/scripts/load-cached-images calico node whisker
       cd operator
       make fv
-    epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}/operator"
-      artifact push job report --destination test-results || true
+    reports: [operator/report:test-results]

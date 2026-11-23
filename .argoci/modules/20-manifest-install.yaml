@@ -18,10 +18,11 @@ steps:
       - build-third-party-images
       - build-e2e-binaries
       - check-go
-      - go-cache
     cache:
       - {name: calico-image, mode: read, path: /cache/calico-image}
     checkout: true
+    goCache: read
+    reports: [report:test-results]
     runOnVM:
       createVM:
         # The cache disk's project and zone: a disk attaches only to a machine
@@ -33,17 +34,12 @@ steps:
         zones: [us-central1-a]
         vmImageProject: unique-caldron-775
       project: tigera-cc-dev
-      env: [CI_WORKFLOW_NAME]
       put:
         - /cache/calico-image/calico.tar:calico-build/calico.tar
       source: |
         set -euo pipefail
-        # Nothing sets CI on the machine, and the Makefiles key their CI behaviour
-        # (read-only go.mod, keeping a failed suite's namespaces) on it.
-        export CI=true
         finish() {
           local rc=$?
-          artifact push job report --destination test-results || true
           if [ "$rc" != 0 ]; then
             # The script pushes its own bundle. This lane's kubeconfig is not the
             # one the script would find.

@@ -7,10 +7,12 @@ defaults:
 
 steps:
   - name: typha-ci
-    depends: [build-calico-image, check-go, go-cache]
+    depends: [build-calico-image, check-go]
     cache:
       - {name: calico-image, mode: read, path: /cache/calico-image}
     checkout: true
+    goCache: read
+    reports: [typha/report:test-results, felix/report:test-results-felix]
     runOnVM:
       createVM:
         # The cache disk's project and zone: a disk attaches only to a machine
@@ -20,22 +22,12 @@ steps:
         zones: [us-central1-a]
         vmImageProject: unique-caldron-775
       project: tigera-cc-dev
-      env: [CI_WORKFLOW_NAME]
       put:
         - /cache/calico-image/calico.tar:calico-build/calico.tar
       source: |
         set -euo pipefail
-        # Nothing sets CI on the machine, and the Makefiles key their CI behaviour
-        # (read-only go.mod, keeping a failed suite's namespaces) on it.
-        export CI=true
-        reports() {
-          artifact push job "${repo:-.}/typha/report" --destination test-results || true
-          artifact push job "${repo:-.}/felix/report" --destination test-results-felix || true
-        }
-        trap reports EXIT
         go_env=$(.argoci/scripts/vm-go-cache typha-ci) || exit 1
         eval "$go_env"
-        repo=$PWD
         export CALICO_IMAGE_TAR="$HOME/calico-build/calico.tar"
         .argoci/scripts/load-cached-images calico
         cd typha

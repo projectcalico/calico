@@ -6,23 +6,16 @@ defaults:
   # In the build image, with NATIVE_GO_BUILD running each recipe in place rather
   # than in a nested container.
   useGoBuild: true
-  # The image ships tools under /go/bin, which the default /go volume hides.
-  workspaceVolumes: none
 
 steps:
   - name: apiserver-ci
     env:
       - name: NATIVE_GO_BUILD
         value: "true"
-    depends: [check-go, go-cache]
+    depends: [check-go]
     requests: {cpu: 4500m, memory: 6Gi}
-    cache:
-      - {name: go, mode: read, path: /cache/go}
+    goCache: read
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" apiserver-ci) || exit 1; eval "$go_env"
       cd apiserver
       make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/apiserver"
-      artifact push job report --destination test-results || true
+    reports: [apiserver/report:test-results]

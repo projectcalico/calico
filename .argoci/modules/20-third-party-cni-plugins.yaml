@@ -15,15 +15,11 @@ steps:
   # go-cache's builds are amd64, so these take only its modules.
   - name: third-party-cni-plugins-build
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     env:
       - name: NATIVE_GO_BUILD
         value: "true"
-    depends: [go-cache]
     requests: {cpu: 2750m, memory: 2Gi}
-    cache:
-      - {name: go, mode: read, path: /cache/go}
+    goCache: read
     matrix:
       - name: arm64
         env: [{name: ARCH, value: arm64}]
@@ -32,6 +28,5 @@ steps:
       - name: s390x
         env: [{name: ARCH, value: s390x}]
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" third-party-cni-plugins-build) || exit 1; eval "$go_env"
       cd third_party/cni-plugins
       make build ARCH=$ARCH

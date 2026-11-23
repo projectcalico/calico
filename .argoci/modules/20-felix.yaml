@@ -71,16 +71,13 @@ steps:
       - name: NATIVE_GO_BUILD
         value: "true"
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
-    depends: [build-calico-binary, check-go, go-cache]
+    depends: [build-calico-binary, check-go]
     timeout: 30m
     requests: {cpu: 4000m, memory: 6Gi}
+    goCache: read
     cache:
       - {name: calico-build, mode: read, path: /cache/calico-build}
-      - {name: go, mode: read, path: /cache/go}
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" felix-static-checks) || exit 1; eval "$go_env"
       .semaphore/scripts/load-felix-prereqs.sh
       cd felix
       make static-checks
@@ -130,12 +127,14 @@ steps:
   # On a VM because the suite loads ip6_tables, which a pod cannot.
   - name: felix-k8sfv
     tiers: []
-    depends: [build-calico-image, check-go, go-cache]
+    depends: [build-calico-image, check-go]
     timeout: 45m
     cache:
       - {name: calico-build, mode: read, path: /cache/calico-build}
       - {name: calico-image, mode: read, path: /cache/calico-image}
     checkout: true
+    goCache: read
+    reports: [felix/report:test-results]
     runOnVM:
       createVM:
         # The cache disk's project and zone: a disk attaches only to a machine
@@ -145,7 +144,7 @@ steps:
         zones: [us-central1-a]
         vmImageProject: unique-caldron-775
       project: tigera-cc-dev
-      env: [CI_WORKFLOW_NAME, NO_LIBBPF_CLONE]
+      env: [NO_LIBBPF_CLONE]
       put:
         - /cache/calico-image/calico.tar:calico-build/calico.tar
         - /cache/calico-build/calico-cgo-amd64:calico-build/calico-cgo-amd64
@@ -153,13 +152,8 @@ steps:
         - /cache/calico-build/libbpf-amd64.tar:calico-build/libbpf-amd64.tar
       source: |
         set -euo pipefail
-        # Nothing sets CI on the machine, and the Makefiles key their CI behaviour
-        # (read-only go.mod, keeping a failed suite's namespaces) on it.
-        export CI=true
-        trap 'artifact push job "${repo:-.}/felix/report" --destination test-results || true' EXIT
         go_env=$(.argoci/scripts/vm-go-cache felix-k8sfv) || exit 1
         eval "$go_env"
-        repo=$PWD
         export CALICO_IMAGE_TAR="$HOME/calico-build/calico.tar" CALICO_BUILD_DIR="$HOME/calico-build"
         .argoci/scripts/load-cached-images calico
         .semaphore/scripts/load-felix-prereqs.sh
@@ -267,15 +261,10 @@ steps:
       - name: NATIVE_GO_BUILD
         value: "true"
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
-    depends: [go-cache]
     jobSize: large
     requests: {cpu: 7000m, memory: 8Gi}
-    cache:
-      - {name: go, mode: read, path: /cache/go}
+    goCache: read
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" felix-build-windows) || exit 1; eval "$go_env"
       cd felix
       # REMOTE_DEPS= because the FV binary does not need the images it lists.
       make REMOTE_DEPS= bin/calico-felix.exe fv/win-fv.exe

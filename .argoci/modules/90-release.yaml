@@ -17,24 +17,17 @@ steps:
       git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
       cd release
       make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/release"
-      artifact push job report --destination test-results || true
+    reports: [release/report:test-results]
 
   # Needs docker: `bin/release` splices its own flags into a nested `docker run`.
   - name: release-build
     env:
       - name: NATIVE_GO_BUILD
         value: "true"
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
-    depends: [check-go, go-cache]
+    depends: [check-go]
     requests: {cpu: 2750m, memory: 2Gi}
-    cache:
-      - {name: go, mode: read, path: /cache/go}
+    goCache: read
     commands: |
-      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" release-build) || exit 1; eval "$go_env"
       cd release
       make build
       # A promotion is a separate run with its own artifact namespace, so the
