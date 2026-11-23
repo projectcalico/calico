@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/netip"
+	"slices"
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -27,7 +28,8 @@ import (
 
 const (
 	// SentinelIPSetID names the set that holds the denied flow's addresses. Baseline rules that
-	// reference an IP set also carry a negated reference to it; see BaselineParams.
+	// reference a set left out of the store also carry a negated reference to it; see
+	// BaselineParams.
 	SentinelIPSetID = "policyscale-sentinel"
 
 	baselineIPSetPrefix = "policyscale-base-"
@@ -88,6 +90,9 @@ type tierModel struct {
 type policyModel struct {
 	name  string
 	rules []*ruleModel
+	// staged policies are left out of the enforced verdict, and count as enforced in the pending
+	// one.
+	staged bool
 
 	id     *proto.PolicyID
 	policy *proto.Policy
@@ -101,21 +106,29 @@ type ruleModel struct {
 	dstNet                               netip.Prefix
 	srcSet, notSrcSet, dstSet, notDstSet string
 
-	// The criteria below are used by the rule-shape preset; see shapes.go.
+	// The criteria below are used by the rule-shape preset.
 	protocol, notProtocol *protocolModel
 	ipVersion             int // 0 for either family, else 4 or 6.
 	icmp, notICMP         *icmpModel
 	srcPortRanges         []portRange
+	notSrcPortRanges      []portRange
 	dstPortRanges         []portRange
 	notDstPortRanges      []portRange
 	srcNets, notSrcNets   []netip.Prefix
 	dstNets, notDstNets   []netip.Prefix
 	// IP+port sets: a named port on the destination, its negation, and a destination service.
 	dstNamedPortSet, notDstNamedPortSet string
+	srcNamedPortSet, notSrcNamedPortSet string
 	dstServiceSet                       string
 
 	// shape is set on the rules the rule-shape preset builds.
 	shape *ShapeRule
+}
+
+func (r *ruleModel) hasPorts() bool {
+	return len(r.dstPorts) > 0 || len(r.srcPortRanges) > 0 || len(r.notSrcPortRanges) > 0 ||
+		len(r.dstPortRanges) > 0 || len(r.notDstPortRanges) > 0 ||
+		r.dstNamedPortSet != "" || r.notDstNamedPortSet != "" || r.srcNamedPortSet != "" || r.notSrcNamedPortSet != ""
 }
 
 // protocolModel is a rule's protocol as the API spells it: a name, or a number when name is empty.
@@ -123,6 +136,11 @@ type protocolModel struct {
 	name   string
 	number int
 }
+
+// tcpProtocol is the protocol of the presets' port rules. The API only takes ports alongside a
+// protocol, so the model carries it too: a rendered rule and the store's copy must reject the same
+// flows.
+func tcpProtocol() *protocolModel { return &protocolModel{name: "TCP"} }
 
 // icmpModel is a rule's ICMP type, and code when hasCode is set.
 type icmpModel struct {
@@ -151,6 +169,9 @@ type ipPortMember struct {
 // Build materialises a Spec. Each preset draws from its own generator seeded with Spec.Seed, so a
 // preset builds the same rules whether it is used alone or in a composite.
 func Build(spec Spec) *Fixture {
+	if err := spec.Validate(); err != nil {
+		panic(err)
+	}
 	fx := &Fixture{
 		Spec:           spec,
 		sets:           map[string]*ipSetModel{},
@@ -169,6 +190,14 @@ func Build(spec Spec) *Fixture {
 	for _, t := range fx.tiers {
 		for dir, policies := range t.policies {
 			for _, p := range policies {
+				for i, r := range p.rules {
+					// The API takes ports only alongside a protocol, so a rule without one
+					// couldn't be rendered, and adding one would make the cluster reject flows
+					// the store accepts.
+					if r.hasPorts() && r.protocol == nil {
+						panic(fmt.Sprintf("policyscale: rule %d of %s/%s has ports but no protocol", i, t.name, p.name))
+					}
+				}
 				p.buildProto(t.name, Direction(dir))
 			}
 		}
@@ -214,7 +243,7 @@ func (fx *Fixture) buildBaseline(rng *rand.Rand, p BaselineParams) {
 					r.dstSet, r.notDstSet = refID, SentinelIPSetID
 				}
 			} else {
-				r.dstPorts = []int32{BaselineGuardPort}
+				r.protocol, r.dstPorts = tcpProtocol(), []int32{BaselineGuardPort}
 			}
 			pol.rules = append(pol.rules, r)
 			if refID != "" {
@@ -235,6 +264,23 @@ func (fx *Fixture) buildBaseline(rng *rand.Rand, p BaselineParams) {
 	for _, id := range referencedIDs[:min(p.MissingIPSets, len(referencedIDs))] {
 		fx.sets[id].missing = true
 		fx.missingRefs += refCount[id]
+	}
+	guarded := false
+	for _, pol := range tier.policies[Ingress] {
+		for _, r := range pol.rules {
+			if r.srcSet != "" && !fx.sets[r.srcSet].missing {
+				r.notSrcSet = ""
+			}
+			if r.dstSet != "" && !fx.sets[r.dstSet].missing {
+				r.notDstSet = ""
+			}
+			guarded = guarded || r.notSrcSet != "" || r.notDstSet != ""
+		}
+	}
+	if !guarded {
+		// Felix sends only the sets rules reference.
+		delete(fx.sets, SentinelIPSetID)
+		fx.setOrder = slices.DeleteFunc(fx.setOrder, func(id string) bool { return id == SentinelIPSetID })
 	}
 }
 
@@ -271,8 +317,8 @@ func (fx *Fixture) buildEgress(rng *rand.Rand, p EgressParams) {
 	}
 
 	tier := fx.tier(p.Tier, "Deny")
-	// Rule CIDRs are /24s while the set fits the /24 pool, so the reference presets are unchanged;
-	// past that they are /28s from the same range. The wide form is keyed on the rule count, not on
+	// Rule CIDRs are /24s while the set fits the /24 pool, and /28s from the same range past
+	// that. The wide form is keyed on the rule count, not on
 	// how many CIDRs end up being used, so a fixture's addressing never depends on the RNG.
 	wide := numRules+1 > egressCIDRPool24
 	nextCIDR := 0
@@ -282,7 +328,7 @@ func (fx *Fixture) buildEgress(rng *rand.Rand, p EgressParams) {
 		for j := 0; j < p.RulesPerPolicy; j++ {
 			// All rules are Pass bar the target: a rule's action is only consulted once it
 			// matches, so the action mix does not affect the walk.
-			r := &ruleModel{action: "pass", dstPorts: makeEgressRulePorts(rng, p)}
+			r := &ruleModel{action: "pass", protocol: tcpProtocol(), dstPorts: makeEgressRulePorts(rng, p)}
 			if rng.Float64() < p.IPSetRuleFraction {
 				r.dstSet = setIDs[rng.Intn(len(setIDs))]
 			} else {
@@ -424,7 +470,7 @@ func (p *policyModel) buildProto(tier string, dir Direction) {
 	for i, r := range p.rules {
 		protoRules[i] = r.proto()
 	}
-	p.id = &proto.PolicyID{Name: p.name, Kind: v3.KindGlobalNetworkPolicy}
+	p.id = &proto.PolicyID{Name: p.name, Kind: p.kind()}
 	p.policy = &proto.Policy{Tier: tier}
 	if dir == Egress {
 		p.policy.OutboundRules = protoRules
@@ -434,7 +480,12 @@ func (p *policyModel) buildProto(tier string, dir Direction) {
 }
 
 func (r *ruleModel) proto() *proto.Rule {
-	pr := &proto.Rule{Action: r.action}
+	action := r.action
+	if action == "pass" {
+		// The name Felix sends for the API's Pass.
+		action = "next-tier"
+	}
+	pr := &proto.Rule{Action: action}
 	for _, port := range r.dstPorts {
 		pr.DstPorts = append(pr.DstPorts, &proto.PortRange{First: port, Last: port})
 	}
@@ -471,6 +522,13 @@ func (r *ruleModel) proto() *proto.Rule {
 	if r.notDstNamedPortSet != "" {
 		pr.NotDstNamedPortIpSetIds = []string{r.notDstNamedPortSet}
 	}
+	pr.NotSrcPorts = protoPortRanges(r.notSrcPortRanges)
+	if r.srcNamedPortSet != "" {
+		pr.SrcNamedPortIpSetIds = []string{r.srcNamedPortSet}
+	}
+	if r.notSrcNamedPortSet != "" {
+		pr.NotSrcNamedPortIpSetIds = []string{r.notSrcNamedPortSet}
+	}
 	if r.dstServiceSet != "" {
 		pr.DstIpPortSetIds = []string{r.dstServiceSet}
 	}
@@ -487,6 +545,13 @@ func (r *ruleModel) proto() *proto.Rule {
 		pr.NotDstIpSetIds = []string{r.notDstSet}
 	}
 	return pr
+}
+
+func (p *policyModel) kind() string {
+	if p.staged {
+		return v3.KindStagedGlobalNetworkPolicy
+	}
+	return v3.KindGlobalNetworkPolicy
 }
 
 // proto returns the protocol as Felix sends it: names lower case, as the v1 data model has them.
@@ -571,6 +636,7 @@ func (fx *Fixture) Rules(dir Direction) int {
 // store; MissingIPSets says how many of those are left out.
 func (fx *Fixture) IPSets() int { return len(fx.setOrder) }
 
+// MissingIPSets returns how many of the referenced sets are left out of the store.
 func (fx *Fixture) MissingIPSets() int {
 	n := 0
 	for _, id := range fx.setOrder {

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,10 +14,11 @@
 
 // policyscale renders one of the app-policy/policyscale presets as Calico resources, for applying
 // the benchmark policy sets to a cluster, or prints flows drawn from its flow model with the
-// verdict the engine must reach for each, for driving and checking a node-level run.
+// trace the endpoint's pending policies must report for each, for driving and checking a
+// node-level run.
 //
 //	go run ./hack/cmd/policyscale -preset composite > composite.yaml
-//	kubectl label pod flowgen-target policyscale.projectcalico.org/target=true
+//	kubectl label pod <pod> policyscale.projectcalico.org/target=true
 //	kubectl apply --server-side -f composite.yaml
 //
 // The policies are staged by default, so they are evaluated for the pending verdict without
@@ -29,24 +30,34 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/projectcalico/calico/app-policy/policyscale"
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run() (err error) {
 	var (
 		preset    = flag.String("preset", "composite", "policy set to render: baseline, egress, composite or shapes")
-		seed      = flag.Int64("seed", policyscale.DefaultSeed, "generator seed")
-		selector  = flag.String("selector", "policyscale.projectcalico.org/target == 'true'", "endpoint selector the policies apply to")
+		seed      = flag.Int64("seed", policyscale.DefaultSeed, "generator seed; the shapes preset has no random choices")
+		selector  = flag.String("selector", policyscale.TargetSelector, "endpoint selector the policies apply to")
+		profile   = flag.String("profile", policyscale.DefaultProfile, "the endpoint's namespace profile, kns.<namespace>, which allows what gets past every tier; empty for an endpoint with none")
 		staged    = flag.Bool("staged", true, "render StagedGlobalNetworkPolicy rather than GlobalNetworkPolicy; staged policies are evaluated for the pending verdict but program no enforcement rules, so the set is safe to apply to a live cluster")
 		out       = flag.String("out", "-", "output file, - for stdout")
-		flows     = flag.Int("flows", 0, "instead of resources, print this many flows with their expected verdicts")
+		flows     = flag.Int("flows", 0, "instead of resources, print this many flows with their expected traces; the shapes preset prints every flow aimed at its rules")
 		direction = flag.String("direction", "egress", "direction of the printed flows: ingress or egress")
-		miss      = flag.Float64("miss-fraction", 0.1, "fraction of printed flows that match no rule")
-		repeat    = flag.Float64("repeat-fraction", 0.5, "fraction of printed flows that repeat an earlier one with a new source port")
+		miss      = flag.Float64("miss-fraction", 0.1, "fraction of printed flows that match no rule; not used by the shapes preset")
+		repeat    = flag.Float64("repeat-fraction", 0.5, "fraction of printed flows that repeat an earlier one with a new source port; not used by the shapes preset")
 	)
 	flag.Parse()
 
@@ -61,54 +72,78 @@ func main() {
 	case "shapes":
 		spec = policyscale.RuleShapes()
 	default:
-		fmt.Fprintf(os.Stderr, "unknown preset %q\n", *preset)
-		os.Exit(2)
+		return fmt.Errorf("unknown preset %q", *preset)
+	}
+	var dir policyscale.Direction
+	switch *direction {
+	case "ingress":
+		dir = policyscale.Ingress
+	case "egress":
+		dir = policyscale.Egress
+	default:
+		return fmt.Errorf("unknown direction %q", *direction)
 	}
 	spec.Seed = *seed
+	spec.Profile = *profile
 	spec = policyscale.ScaleFromEnv(spec)
+	if err := spec.Validate(); err != nil {
+		return err
+	}
 	fx := policyscale.Build(spec)
 
-	w := os.Stdout
+	var w io.Writer = os.Stdout
 	if *out != "-" {
 		f, err := os.Create(*out)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return err
 		}
-		defer f.Close()
+		defer func() { err = errors.Join(err, f.Close()) }()
 		w = f
 	}
 	bw := bufio.NewWriter(w)
-	defer bw.Flush()
+	defer func() { err = errors.Join(err, bw.Flush()) }()
 
 	fmt.Fprintf(os.Stderr, "%s: %d ingress rules in %d policies, %d egress rules in %d policies, %d IP sets with %d members\n",
 		*preset, fx.Rules(policyscale.Ingress), fx.Policies(policyscale.Ingress),
 		fx.Rules(policyscale.Egress), fx.Policies(policyscale.Egress), fx.IPSets(), fx.IPSetMembers())
 
-	if *flows > 0 {
-		dir := policyscale.Egress
-		if *direction == "ingress" {
-			dir = policyscale.Ingress
-		}
-		fmt.Fprintln(bw, "protocol\tsrc\tsport\tdst\tdport\texpected")
-		if spec.Shapes != nil {
-			// The shape preset's flows are the point of it: print each one aimed at its rules.
-			for _, sf := range fx.ShapeFlows(dir) {
-				f := sf.Flow
-				fmt.Fprintf(bw, "%d\t%s\t%d\t%s\t%d\t%v\t%s %v\n", f.Protocol, f.SrcIP, f.SrcPort, f.DstIP, f.DstPort, fx.Expect(dir, f), sf.Name, sf.Differences)
-			}
-			return
-		}
-		s := fx.NewSampler(*seed, policyscale.FlowModel{Direction: dir, MissFraction: *miss, RepeatFraction: *repeat})
-		for i := 0; i < *flows; i++ {
-			f := s.Next()
-			fmt.Fprintf(bw, "%d\t%s\t%d\t%s\t%d\t%v\n", f.Protocol, f.SrcIP, f.SrcPort, f.DstIP, f.DstPort, fx.Expect(dir, f))
-		}
-		return
+	if *flows == 0 {
+		return fx.WriteYAML(bw, policyscale.ResourceOptions{Selector: *selector, Enforced: !*staged})
 	}
+	// The traces are what the cluster's flow logs report, which name the kinds the policies are
+	// rendered with.
+	expect := func(f *policyscale.Flow) []policyscale.Verdict {
+		if *staged {
+			return policyscale.AsStaged(fx.Expect(dir, f))
+		}
+		return fx.Expect(dir, f)
+	}
+	pw := &printer{w: bw}
+	if spec.Shapes != nil {
+		pw.printf("protocol\tsrc\tsport\tdst\tdport\texpected\tflow\tdifferences\n")
+		for _, sf := range fx.ShapeFlows(dir) {
+			f := sf.Flow
+			pw.printf("%d\t%s\t%d\t%s\t%d\t%v\t%s\t%v\n", f.Protocol, f.SrcIP, f.SrcPort, f.DstIP, f.DstPort, expect(f), sf.Name, sf.Differences)
+		}
+		return pw.err
+	}
+	pw.printf("protocol\tsrc\tsport\tdst\tdport\texpected\n")
+	s := fx.NewSampler(*seed, policyscale.FlowModel{Direction: dir, MissFraction: *miss, RepeatFraction: *repeat})
+	for i := 0; i < *flows; i++ {
+		f := s.Next()
+		pw.printf("%d\t%s\t%d\t%s\t%d\t%v\n", f.Protocol, f.SrcIP, f.SrcPort, f.DstIP, f.DstPort, expect(f))
+	}
+	return pw.err
+}
 
-	if err := fx.WriteYAML(bw, policyscale.ResourceOptions{Selector: *selector, Staged: *staged}); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+// printer keeps the first write error, so a long run of prints is checked once at the end.
+type printer struct {
+	w   io.Writer
+	err error
+}
+
+func (p *printer) printf(format string, args ...any) {
+	if p.err == nil {
+		_, p.err = fmt.Fprintf(p.w, format, args...)
 	}
 }

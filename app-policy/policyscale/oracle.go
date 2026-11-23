@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -25,7 +25,7 @@ import (
 )
 
 // Verdict is one entry of the rule trace the engine is expected to report: a Pass on the way, or
-// the final Allow or Deny. It carries the fields of calc.RuleID that identify a rule.
+// the final Allow or Deny, with the fields that identify the rule in a flow log.
 type Verdict struct {
 	Kind   string // GlobalNetworkPolicy, or Profile for the end-of-profiles deny.
 	Tier   string
@@ -35,28 +35,53 @@ type Verdict struct {
 }
 
 const (
-	// TierDefaultIndex is the index the engine reports for a tier's default action, and for the
-	// deny that ends an evaluation with no matching profile.
+	// TierDefaultIndex is the index reported for a tier's default action.
 	TierDefaultIndex = -1
-	// ProfileName is the tier and policy name the engine reports for that deny.
+	// ProfileName is the tier a profile's verdict is reported under.
 	ProfileName = "__PROFILE__"
+	// NoMatchName is the name the dataplane reports for the deny when no profile matches, or the
+	// endpoint has none.
+	NoMatchName = "__NO_MATCH__"
 )
 
 func (v Verdict) String() string {
 	return fmt.Sprintf("%s/%s/%s[%d]=%s", v.Kind, v.Tier, v.Policy, v.Index, v.Action)
 }
 
-// Expect returns the trace the engine must report for the flow in the given direction, computed
-// from the generator's own model of each rule rather than from the proto the engine reads, so that
-// the two are independent. It follows what the dataplanes enforce: policies of a tier in order,
-// first matching rule decides; Allow or Deny ends the evaluation; Pass moves to the next tier; a
-// tier none of whose policies matched applies its default action, reported against the tier's
-// last policy, with anything but Pass denying; and with no profiles on the endpoint, an evaluation
-// that gets past every tier is denied.
+// Scope selects the policies a trace counts, as the pending and the enforced verdicts do.
+type Scope int
+
+const (
+	// PendingScope counts staged policies as enforced: the trace a flow log's pending policies
+	// report.
+	PendingScope Scope = iota
+	// EnforcedScope leaves staged policies out, and with them a tier that has no other policy: the
+	// trace the dataplane enforces.
+	EnforcedScope
+)
+
+// Expect returns the pending trace for the flow; see ExpectIn.
 func (fx *Fixture) Expect(dir Direction, f *Flow) []Verdict {
+	return fx.ExpectIn(PendingScope, dir, f)
+}
+
+// ExpectIn returns the trace the engine must report for the flow in the given direction and
+// scope, computed from the generator's own model of each rule rather than from the proto the
+// engine reads, so that the two are independent. It follows what the dataplanes enforce: policies
+// of a tier in order, first matching rule decides; Allow or Deny ends the evaluation; Pass moves to
+// the next tier; a tier none of whose policies matched applies its default action, reported
+// against the tier's last policy in scope, with anything but Pass denying; and a flow that gets
+// past every tier ends in the endpoint's profile, which allows, or with none, in the deny the
+// dataplane reports when no profile matches.
+func (fx *Fixture) ExpectIn(scope Scope, dir Direction, f *Flow) []Verdict {
 	var trace []Verdict
 	for _, t := range fx.tiers {
-		policies := t.policies[dir]
+		var policies []*policyModel
+		for _, p := range t.policies[dir] {
+			if scope == PendingScope || !p.staged {
+				policies = append(policies, p)
+			}
+		}
 		if len(policies) == 0 {
 			continue
 		}
@@ -68,7 +93,7 @@ func (fx *Fixture) Expect(dir Direction, f *Flow) []Verdict {
 					continue
 				}
 				matched = true
-				trace = append(trace, Verdict{Kind: v3.KindGlobalNetworkPolicy, Tier: t.name, Policy: p.name, Index: i, Action: r.action})
+				trace = append(trace, Verdict{Kind: p.kind(), Tier: t.name, Policy: p.name, Index: i, Action: r.action})
 				if r.action == "pass" {
 					break Tier
 				}
@@ -81,13 +106,16 @@ func (fx *Fixture) Expect(dir Direction, f *Flow) []Verdict {
 				action = "pass"
 			}
 			last := policies[len(policies)-1]
-			trace = append(trace, Verdict{Kind: v3.KindGlobalNetworkPolicy, Tier: t.name, Policy: last.name, Index: TierDefaultIndex, Action: action})
+			trace = append(trace, Verdict{Kind: last.kind(), Tier: t.name, Policy: last.name, Index: TierDefaultIndex, Action: action})
 			if action != "pass" {
 				return trace
 			}
 		}
 	}
-	return append(trace, Verdict{Kind: v3.KindProfile, Tier: ProfileName, Policy: ProfileName, Index: TierDefaultIndex, Action: "deny"})
+	if fx.Spec.Profile != "" {
+		return append(trace, Verdict{Kind: v3.KindProfile, Tier: ProfileName, Policy: fx.Spec.Profile, Index: 0, Action: "allow"})
+	}
+	return append(trace, Verdict{Kind: v3.KindProfile, Tier: ProfileName, Policy: NoMatchName, Index: 0, Action: "deny"})
 }
 
 // ruleMatches evaluates a rule's criteria against the flow, the way the dataplanes render them:
@@ -102,7 +130,9 @@ func (fx *Fixture) Expect(dir Direction, f *Flow) []Verdict {
 //   - a CIDR list keeps only the entries of the flow's family, and a list with none left drops the
 //     rule from that family;
 //   - a positive IP set reference requires the address to be a member; a negated one requires it
-//     not to be; a reference to a set the store does not hold is skipped, as the engine skips it;
+//     not to be;
+//   - a reference to a set the store doesn't hold, which a node never sees, is handled as the
+//     engine handles it: a NET set or service is skipped, and a named port matches nothing;
 //   - an address that is not an IP (nil) is a member of no set and inside no CIDR.
 func (fx *Fixture) ruleMatches(r *ruleModel, f *Flow) bool {
 	if f.Protocol < 1 || f.Protocol > 255 {
@@ -121,10 +151,11 @@ func (fx *Fixture) ruleMatches(r *ruleModel, f *Flow) bool {
 	if !icmpMatches(r, f, family) {
 		return false
 	}
-	if !fx.dstPortMatches(r, f) || !portInRanges(r.srcPortRanges, f.SrcPort, true) {
+	if !fx.dstPortMatches(r, f) || !fx.srcPortMatches(r, f) {
 		return false
 	}
-	if portInRanges(r.notDstPortRanges, f.DstPort, false) || fx.ipPortSetHolds(r.notDstNamedPortSet, f.DstIP, f.Protocol, f.DstPort, false) {
+	if portInRanges(r.notDstPortRanges, f.DstPort, false) || fx.ipPortSetHolds(r.notDstNamedPortSet, f.DstIP, f.Protocol, f.DstPort, false) ||
+		portInRanges(r.notSrcPortRanges, f.SrcPort, false) || fx.ipPortSetHolds(r.notSrcNamedPortSet, f.SrcIP, f.Protocol, f.SrcPort, false) {
 		return false
 	}
 	dstNets := r.dstNets
@@ -162,7 +193,8 @@ func icmpMatches(r *ruleModel, f *Flow, family int) bool {
 	if r.icmp == nil && r.notICMP == nil {
 		return true
 	}
-	if !(f.Protocol == ProtocolICMP && family == 4) && !(f.Protocol == ProtocolICMPv6 && family == 6) {
+	icmpOfFamily := f.Protocol == ProtocolICMP && family == 4 || f.Protocol == ProtocolICMPv6 && family == 6
+	if !icmpOfFamily {
 		return false
 	}
 	typ, code := ICMPTypeCode(f)
@@ -186,6 +218,15 @@ func (fx *Fixture) dstPortMatches(r *ruleModel, f *Flow) bool {
 		fx.ipPortSetHolds(r.dstNamedPortSet, f.DstIP, f.Protocol, f.DstPort, false)
 }
 
+// srcPortMatches is dstPortMatches for the source port and the named port on the source address.
+func (fx *Fixture) srcPortMatches(r *ruleModel, f *Flow) bool {
+	if len(r.srcPortRanges) == 0 && r.srcNamedPortSet == "" {
+		return true
+	}
+	return portInRanges(r.srcPortRanges, f.SrcPort, false) ||
+		fx.ipPortSetHolds(r.srcNamedPortSet, f.SrcIP, f.Protocol, f.SrcPort, false)
+}
+
 // portInRanges reports whether the port is in one of the ranges, or ifEmpty when there are none.
 func portInRanges(ranges []portRange, port int, ifEmpty bool) bool {
 	if len(ranges) == 0 {
@@ -200,7 +241,8 @@ func portInRanges(ranges []portRange, port int, ifEmpty bool) bool {
 }
 
 // ipPortSetHolds reports whether the IP+port set holds the address, protocol and port. A set the
-// store doesn't hold reports ifMissing, matching how the engine treats each kind of reference.
+// store doesn't hold reports ifMissing: the engine's handling of each kind of reference, since a
+// node is always sent the sets its rules reference. No preset leaves an IP+port set out.
 func (fx *Fixture) ipPortSetHolds(setID string, ip net.IP, protocol, port int, ifMissing bool) bool {
 	if setID == "" {
 		return false
