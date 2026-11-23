@@ -144,6 +144,25 @@ steps:
       find /cache/go/build -mindepth 2 -type d -empty -delete
       du -sh /cache/go/build /cache/go/mod
 
+  # Copies go-cache's disk to GCS for the steps that still build in docker, which
+  # restore it in the global prologue. Streamed as the disk lays it out, so
+  # nothing is unpacked here. Only a branch build stores: a PR's copy would only
+  # ever be read by that PR.
+  - name: go-cache-store
+    when: GIT_REF_TYPE != 'PR' && GIT_REF_TYPE != 'TAG'
+    depends: [go-cache]
+    timeout: 30m
+    jobSize: small
+    requests: {cpu: 1500m, memory: 548Mi}
+    cache:
+      - {name: go, mode: read, path: /cache/go}
+    commands: |
+      cd /cache/go
+      artifact cache store "go-cache-build-${CI_GIT_BRANCH}" build & build=$!
+      artifact cache store "go-cache-mod-${CI_GIT_BRANCH}" mod & mods=$!
+      wait "$build"
+      wait "$mods"
+
   - name: check-python
     env:
       - name: NATIVE_PYTHON
@@ -293,16 +312,8 @@ steps:
   # The calico binary, and the cgo and race builds and libbpf the Felix lanes
   # take. It stages the image's build context rather than building the image:
   # the image goes through buildkit, so nothing here needs docker.
-  #
-  # Still the writer of the calico GCS build cache the docker steps restore, so
-  # it builds from that rather than go-cache: a step reading go-cache keeps only
-  # its misses locally, which is not a cache to hand on.
   - name: build-calico-binary
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-      - name: STORE_BUILD_CACHE
-        value: "true"
       - name: NATIVE_GO_BUILD
         value: "true"
     useGoBuild: true
@@ -313,9 +324,12 @@ steps:
     changes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    depends: [go-cache]
     cache:
       - {name: calico-build, mode: write, path: /cache/calico-build}
+      - {name: go, mode: read, path: /cache/go}
     commands: |
+      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" build-calico-binary) || exit 1; eval "$go_env"
       make -C cmd/calico build build-cgo build-race bin/LICENSE
       make -C pod2daemon build
       test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || make -C felix libbpf
