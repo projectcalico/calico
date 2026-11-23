@@ -84,9 +84,10 @@ var knownDifferences = []KnownDifference{
 	{
 		Difference: NegatedICMPTypeAndCode,
 		Where:      []Where{Nftables},
-		Why: "nftables renders a negated ICMP type and code as type != T and code != C, so it excludes a " +
-			"packet only when both differ. iptables, BPF and the evaluator exclude only a packet that has " +
-			"both.",
+		Why: "Felix renders a negated ICMP type and code for nftables as icmp type != T code != C, which " +
+			"would exclude a packet only when both differ, where iptables, BPF and the evaluator exclude " +
+			"only the exact pair (EV-7634). nft rejects that rule, so it never loads (EV-7640, " +
+			"ICMPTypeAndCodeRules); the difference shows once nftables loads it.",
 		Generated: true,
 	},
 	{
