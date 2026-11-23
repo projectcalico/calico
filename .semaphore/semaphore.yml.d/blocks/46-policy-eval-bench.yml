@@ -31,7 +31,7 @@
 # empty, so the condition keeps this block off them.
 - name: "Policy evaluation benchmark: publish"
   run:
-    when: "branch =~ '^(master|release-.*)$' and ${CHANGE_IN(app-policy/checker,felix/collector,non-go:/hack/perf/)}"
+    when: "branch =~ '^(master|release-.*)$' and pull_request !~ '.+' and ${CHANGE_IN(app-policy/checker,felix/collector,non-go:/hack/perf/)}"
   dependencies:
     - Prerequisites
   task:
