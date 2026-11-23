@@ -144,7 +144,7 @@ func awaitSwap(t *testing.T, calls chan swapCall) swapCall {
 }
 
 // testFSM creates a liveMigrationFSM in the given state, wired to a monitor for
-// pendingUpdates capture.
+// pendingModifiers capture.
 func testFSM(state liveMigrationState) (*liveMigrationFSM, *liveMigrationMonitor) {
 	m := newTestMonitor(testConvergenceTime)
 	id := types.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "test-pod", EndpointId: "ep"}
@@ -276,11 +276,11 @@ func TestFSMTransitionTable(t *testing.T) {
 
 			g.Expect(fsm.currentState).To(Equal(tt.wantState), "FSM state")
 			if tt.wantState != tt.from {
-				g.Expect(m.pendingUpdates).To(HaveLen(1), "should emit one update")
-				g.Expect(m.pendingUpdates).To(HaveKey(fsm.id))
-				g.Expect(modeOf(m.pendingUpdates[fsm.id])).To(Equal(tt.wantMode), "emitted mode")
+				g.Expect(m.pendingModifiers).To(HaveLen(1), "should emit one update")
+				g.Expect(m.pendingModifiers).To(HaveKey(fsm.id))
+				g.Expect(modeOf(m.pendingModifiers[fsm.id])).To(Equal(tt.wantMode), "emitted mode")
 			} else {
-				g.Expect(m.pendingUpdates).To(BeEmpty(), "should not emit any updates")
+				g.Expect(m.pendingModifiers).To(BeEmpty(), "should not emit any updates")
 			}
 		})
 	}
@@ -961,14 +961,14 @@ func TestLiveMigrationCompletionOutcomes(t *testing.T) {
 				g.Expect(completionCount(o)-countsBefore[o]).To(Equal(wantIncrease), "count for outcome %s", o)
 			}
 
-			g.Expect(m.pendingUpdates).To(HaveLen(1))
+			g.Expect(m.pendingModifiers).To(HaveLen(1))
 			if tt.wantOutcome == liveMigrationOutcomeAborted {
 				g.Expect(fsm.routeReporter).To(BeNil())
-				g.Expect(m.pendingUpdates[fsm.id]).To(BeNil())
+				g.Expect(m.pendingModifiers[fsm.id]).To(BeNil())
 			} else {
 				g.Expect(fsm.routeReporter).NotTo(BeNil())
 				g.Expect(fsm.routeReporter.garpDetectedAt).To(Equal(fsm.garpDetectedAt))
-				g.Expect(m.pendingUpdates[fsm.id].onProgrammed).NotTo(BeNil())
+				g.Expect(m.pendingModifiers[fsm.id].onProgrammed).NotTo(BeNil())
 			}
 		})
 	}
@@ -985,12 +985,12 @@ func TestLiveMigrationCompletionOutcomes(t *testing.T) {
 		g.Expect(fsm.currentState).To(Equal(liveMigrationStateTimeWait))
 		g.Expect(completionCount(liveMigrationOutcomeCompletedWithGARP)).To(Equal(countAfterLive))
 		g.Expect(fsm.routeReporter).To(BeIdenticalTo(reporter))
-		g.Expect(m.pendingUpdates[fsm.id].onProgrammed).NotTo(BeNil())
+		g.Expect(m.pendingModifiers[fsm.id].onProgrammed).NotTo(BeNil())
 
 		fsm.handleInput(liveMigrationInputTimerPop)
 		g.Expect(fsm.currentState).To(Equal(liveMigrationStateBase))
 		g.Expect(fsm.routeReporter).To(BeNil())
-		g.Expect(m.pendingUpdates[fsm.id]).To(BeNil())
+		g.Expect(m.pendingModifiers[fsm.id]).To(BeNil())
 	})
 }
 
