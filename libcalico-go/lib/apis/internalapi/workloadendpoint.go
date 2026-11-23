@@ -76,6 +76,8 @@ type WorkloadEndpointSpec struct {
 	InterfaceName string `json:"interfaceName,omitempty" validate:"interface"`
 	// MAC is the MAC address of the endpoint interface.
 	MAC string `json:"mac,omitempty" validate:"omitempty,mac"`
+	// Netns is the path of the workload's network namespace, as seen by the CNI plugin.
+	Netns string `json:"netns,omitempty"`
 	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
 	Ports []WorkloadEndpointPort `json:"ports,omitempty" validate:"dive,omitempty"`
 	// AllowSpoofedSourcePrefixes is a list of CIDRs that the endpoint should be able to send traffic from,

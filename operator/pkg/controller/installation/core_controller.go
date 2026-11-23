@@ -242,6 +242,14 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		}
 	}
 
+	// Watch the policy protecting the CNI plugin's pod annotations, which gates Felix's networkStatusNetns.
+	vapAPIVersion := opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindValidatingPolicy)
+	for _, obj := range admission.ValidatingPolicyObjects(vapAPIVersion, admission.ProtectCNIAnnotationsName) {
+		if err = utils.AddClusterWatch(c, obj, &handler.EnqueueRequestForObject{}); err != nil {
+			return fmt.Errorf("tigera-installation-controller failed to watch %T: %w", obj, err)
+		}
+	}
+
 	// Watch for changes to IPPool.
 	err = c.WatchObject(&v3.IPPool{}, &handler.EnqueueRequestForObject{})
 	if err != nil {
@@ -1534,6 +1542,12 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	if err = r.updateMutatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetCNIAnnotations); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Felix only trusts the network-status annotation once the policy above protects it.
+	if _, err := r.fieldManager.Apply(ctx, r.declareNetworkStatusNetns(ctx, defaulted)); err != nil {
+		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating resource", err, reqLogger)
 		return reconcile.Result{}, err
 	}
 

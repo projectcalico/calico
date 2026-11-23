@@ -422,6 +422,7 @@ components:
       - ^felix/collector/utils/[^/]*\.go$
       - ^felix/config/[^/]*\.go$
       - ^felix/conntrack/[^/]*\.go$
+      - ^felix/cri/[^/]*\.go$
       - ^felix/daemon/[^/]*\.go$
       - ^felix/dataplane/[^/]*\.go$
       - ^felix/dataplane/common/[^/]*\.go$
@@ -453,6 +454,7 @@ components:
       - ^felix/multidict/[^/]*\.go$
       - ^felix/netlinkshim/[^/]*\.go$
       - ^felix/netlinkshim/handlemgr/[^/]*\.go$
+      - ^felix/netns/[^/]*\.go$
       - ^felix/nfnetlink/[^/]*\.go$
       - ^felix/nfnetlink/nfnl/[^/]*\.go$
       - ^felix/nfnetlink/pkt/[^/]*\.go$
@@ -1458,6 +1460,7 @@ components:
       - ^felix/collector/utils/[^/]*\.go$
       - ^felix/config/[^/]*\.go$
       - ^felix/conntrack/[^/]*\.go$
+      - ^felix/cri/[^/]*\.go$
       - ^felix/daemon/[^/]*\.go$
       - ^felix/dataplane/[^/]*\.go$
       - ^felix/dataplane/common/[^/]*\.go$
@@ -1489,6 +1492,7 @@ components:
       - ^felix/multidict/[^/]*\.go$
       - ^felix/netlinkshim/[^/]*\.go$
       - ^felix/netlinkshim/handlemgr/[^/]*\.go$
+      - ^felix/netns/[^/]*\.go$
       - ^felix/nfnetlink/[^/]*\.go$
       - ^felix/nfnetlink/nfnl/[^/]*\.go$
       - ^felix/nfnetlink/pkt/[^/]*\.go$
