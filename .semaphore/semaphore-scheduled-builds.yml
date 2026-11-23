@@ -2259,7 +2259,7 @@ blocks:
   # empty, so the condition keeps this block off them.
   - name: "Policy evaluation benchmark: publish"
     run:
-      when: "branch =~ '^(master|release-.*)$' and true"
+      when: "branch =~ '^(master|release-.*)$' and pull_request !~ '.+' and true"
     dependencies:
       - Prerequisites
     task:
