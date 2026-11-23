@@ -180,3 +180,64 @@ func TestPolicyVerdictEvents(t *testing.T) {
 		})
 	}
 }
+
+// For ICMP, the event carries the type and code in the post-NAT destination port, type in the low
+// byte, and leaves the pre-NAT destination port at zero. The collector depends on that layout to
+// read the type and code.
+func TestPolicyVerdictEventsICMP(t *testing.T) {
+	RegisterTestingT(t)
+
+	evnts, err := events.New(events.SourceRingBuffer, 1<<20)
+	Expect(err).NotTo(HaveOccurred())
+	defer evnts.Close()
+
+	defer func() { bpfIfaceName = "" }()
+	hostIP = node1ip
+
+	allowAll := polprog.Rules{
+		Tiers: []polprog.Tier{{
+			Name: "base tier",
+			Policies: []polprog.Policy{{
+				Name:  "allow all",
+				Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Allow"}, MatchID: 0x1234}},
+			}},
+		}},
+	}
+
+	for i, typeCode := range []layers.ICMPv4TypeCode{
+		layers.CreateICMPv4TypeCode(layers.ICMPv4TypeEchoRequest, 0),
+		layers.CreateICMPv4TypeCode(layers.ICMPv4TypeEchoRequest, 3),
+	} {
+		t.Run(typeCode.String(), func(t *testing.T) {
+			_, ipv4, _, _, pktBytes, err := testPacketV4(nil, nil, &layers.ICMPv4{TypeCode: typeCode, Id: 0x77, Seq: 1}, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			bpfIfaceName = fmt.Sprintf("FLI%d", i)
+			skbMark = tcdefs.MarkSeen
+			resetCTMap(ctMap)
+
+			runBpfTest(t, "calico_to_workload_ep", &allowAll, func(bpfrun bpfProgRunFn) {
+				res, err := bpfrun(pktBytes)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+			}, withFlowLogs())
+
+			var evnt events.Event
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				evnt, err = evnts.Next()
+			}()
+			Eventually(done, "5s").Should(BeClosed())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(evnt.Type()).To(Equal(events.TypePolicyVerdict))
+
+			fl := events.ParsePolicyVerdict(evnt.Data(), false)
+			Expect(fl.IPProto).To(Equal(uint8(1)))
+			Expect(fl.PostNATDstAddr.Equal(ipv4.DstIP)).To(BeTrue())
+			Expect(fl.PostNATDstPort).To(Equal(uint16(typeCode.Code())<<8 | uint16(typeCode.Type())))
+			Expect(fl.DstPort).To(Equal(uint16(0)))
+			Expect(fl.SrcPort).To(Equal(uint16(0)))
+		})
+	}
+}
