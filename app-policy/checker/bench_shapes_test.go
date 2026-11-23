@@ -43,7 +43,7 @@ func BenchmarkEvaluateRuleShapes(b *testing.B) {
 		b.Run(dir.String(), func(b *testing.B) {
 			for _, engine := range benchEngines {
 				b.Run(engine.name, func(b *testing.B) {
-					benchEvaluateFlows(b, fx, engine, dir, flows, 0)
+					benchEvaluateFlows(b, fx, engine, dir, flows, 0, nil)
 				})
 			}
 		})
