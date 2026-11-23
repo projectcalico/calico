@@ -12,12 +12,13 @@ defaults:
 steps:
   - name: tools-ci
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
       - name: NATIVE_GO_BUILD
         value: "true"
-    depends: [check-go]
+    depends: [check-go, go-cache]
     requests: {cpu: 3750m, memory: 3Gi}
+    cache:
+      - {name: go, mode: read, path: /cache/go}
     commands: |
+      go_env=$("${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/restore-go-cache" tools-ci) || exit 1; eval "$go_env"
       cd hack
       make ci
