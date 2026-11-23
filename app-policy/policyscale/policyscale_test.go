@@ -17,6 +17,7 @@ package policyscale_test
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -460,15 +461,19 @@ func equalVerdicts(a, b []Verdict) bool {
 // egressOrdinal and baselineOrdinal recover a rule's position in the walk from its verdict, using
 // the presets' policy naming and rule counts.
 func egressOrdinal(v Verdict) int {
-	var n int
-	fmt.Sscanf(v.Policy, "egress-%d", &n)
-	return n*62 + v.Index
+	return policyNumber(v.Policy, "egress-")*62 + v.Index
 }
 
 func baselineOrdinal(v Verdict) int {
-	var n int
-	fmt.Sscanf(v.Policy, "policy-%d", &n)
-	return n*68 + v.Index
+	return policyNumber(v.Policy, "policy-")*68 + v.Index
+}
+
+func policyNumber(name, prefix string) int {
+	n, err := strconv.Atoi(strings.TrimPrefix(name, prefix))
+	if err != nil {
+		panic(fmt.Sprintf("policy %q isn't named %sN", name, prefix))
+	}
+	return n
 }
 
 // With no profile on the endpoint, the walk ends as the dataplane reports it: a deny by no profile
@@ -492,4 +497,43 @@ func TestExpectWithNoProfile(t *testing.T) {
 		return
 	}
 	t.Fatal("no aimed flow reached a pass rule")
+}
+
+// Each variable scales its own dimension of the egress allow-list, and leaves the rest of the
+// preset alone; one that doesn't parse changes nothing.
+func TestScaleFromEnv(t *testing.T) {
+	t.Setenv("POLICYSCALE_POLICIES", "1000")
+	t.Setenv("POLICYSCALE_RULES_PER_POLICY", "20")
+	t.Setenv("POLICYSCALE_IPSETS", "nonsense")
+	spec := ScaleFromEnv(Composite())
+	e, d := spec.Egress, DefaultEgress()
+	if e.Policies != 1000 || e.RulesPerPolicy != 20 || e.IPSets != d.IPSets || e.MembersPerSet != d.MembersPerSet ||
+		spec.Baseline.Policies != DefaultBaseline().Policies {
+		t.Errorf("scaled spec: egress %+v, baseline policies %d", *e, spec.Baseline.Policies)
+	}
+	if got := ScaleFromEnv(Baseline()); got.Egress != nil || got.Baseline.Policies != DefaultBaseline().Policies {
+		t.Errorf("a spec with no egress allow-list changed: %+v", got)
+	}
+}
+
+// A Spec Build can't make faithful is refused: too many rules for one policy, or for the CIDRs the
+// egress rules draw from.
+func TestValidate(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		scale func(*Spec)
+		ok    bool
+	}{
+		{"presets", func(*Spec) {}, true},
+		{"10,000 policies of 52 rules", func(s *Spec) { s.Egress.Policies, s.Egress.RulesPerPolicy = 10000, 52 }, true},
+		{"10,000 policies of 120 rules", func(s *Spec) { s.Egress.Policies, s.Egress.RulesPerPolicy = 10000, 120 }, false},
+		{"1,025 egress rules in a policy", func(s *Spec) { s.Egress.Policies, s.Egress.RulesPerPolicy = 10, 1025 }, false},
+		{"1,025 baseline rules in a policy", func(s *Spec) { s.Baseline.RulesPerPolicy = 1025 }, false},
+	} {
+		spec := Composite()
+		c.scale(&spec)
+		if err := spec.Validate(); (err == nil) != c.ok {
+			t.Errorf("%s: Validate() = %v", c.name, err)
+		}
+	}
 }

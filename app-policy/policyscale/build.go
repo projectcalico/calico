@@ -169,6 +169,9 @@ type ipPortMember struct {
 // Build materialises a Spec. Each preset draws from its own generator seeded with Spec.Seed, so a
 // preset builds the same rules whether it is used alone or in a composite.
 func Build(spec Spec) *Fixture {
+	if err := spec.Validate(); err != nil {
+		panic(err)
+	}
 	fx := &Fixture{
 		Spec:           spec,
 		sets:           map[string]*ipSetModel{},
