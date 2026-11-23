@@ -124,6 +124,11 @@ type protocolModel struct {
 	number int
 }
 
+// tcpProtocol is the protocol of the presets' port rules. The API only takes ports alongside a
+// protocol, so the model carries it too: a rendered rule and the store's copy must reject the same
+// flows.
+func tcpProtocol() *protocolModel { return &protocolModel{name: "TCP"} }
+
 // icmpModel is a rule's ICMP type, and code when hasCode is set.
 type icmpModel struct {
 	typ, code int
@@ -214,7 +219,7 @@ func (fx *Fixture) buildBaseline(rng *rand.Rand, p BaselineParams) {
 					r.dstSet, r.notDstSet = refID, SentinelIPSetID
 				}
 			} else {
-				r.dstPorts = []int32{BaselineGuardPort}
+				r.protocol, r.dstPorts = tcpProtocol(), []int32{BaselineGuardPort}
 			}
 			pol.rules = append(pol.rules, r)
 			if refID != "" {
@@ -282,7 +287,7 @@ func (fx *Fixture) buildEgress(rng *rand.Rand, p EgressParams) {
 		for j := 0; j < p.RulesPerPolicy; j++ {
 			// All rules are Pass bar the target: a rule's action is only consulted once it
 			// matches, so the action mix does not affect the walk.
-			r := &ruleModel{action: "pass", dstPorts: makeEgressRulePorts(rng, p)}
+			r := &ruleModel{action: "pass", protocol: tcpProtocol(), dstPorts: makeEgressRulePorts(rng, p)}
 			if rng.Float64() < p.IPSetRuleFraction {
 				r.dstSet = setIDs[rng.Intn(len(setIDs))]
 			} else {

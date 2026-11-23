@@ -162,8 +162,9 @@ func (fx *Fixture) ruleResource(r *ruleModel, setLabelKey string) v3.Rule {
 	rule.Protocol = r.protocol.resource()
 	rule.NotProtocol = r.notProtocol.resource()
 	if len(r.dstPorts) > 0 && rule.Protocol == nil {
-		tcp := numorstring.ProtocolFromString("TCP")
-		rule.Protocol = &tcp
+		// Adding one here would make the cluster reject flows of other protocols that the
+		// oracle and the engine's store accept.
+		panic("a rule with ports has no protocol in the model")
 	}
 	if r.ipVersion != 0 {
 		v := r.ipVersion
