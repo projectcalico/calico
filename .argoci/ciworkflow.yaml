@@ -407,6 +407,20 @@ includes:
         - ^hack/perf/
         - ^\.argoci/modules/45-nft-bench\.yaml$
 
+  # `felix/collector` is that package's own import closure, which takes in the
+  # policy engine in app-policy; `app-policy` adds the generator the benchmarks use.
+  # The closures leave out test files, where the collector benchmark and its helpers
+  # live, and the Makefiles, which hold the bench targets.
+  - path: .argoci/modules/46-policy-eval-bench.yaml
+    changes:
+      dependsOn: [app-policy, felix/collector]
+      in:
+        - ^felix/collector/(?:[^/]+/)*[^/]*_test\.go$
+        - ^app-policy/Makefile$
+        - ^felix/Makefile$
+        - ^hack/perf/
+        - ^\.argoci/modules/46-policy-eval-bench\.yaml$
+
   - path: .argoci/modules/20-gateway-conformance.yaml
     changes:
       in:

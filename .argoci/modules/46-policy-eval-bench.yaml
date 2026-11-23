@@ -1,0 +1,74 @@
+# Pending-policy evaluation benchmarks, engine and collector, for trend tracking
+# rather than as a gate. PRs run them without credentials, with the documents in
+# the job's artifacts; merges to master and the nightly run them again and publish
+# to Lens, so the Lens credentials only meet code that is already on master. A step
+# here rather than a publish workflow of its own, so that merges gate on the same
+# import closure as PRs.
+version: condensed-module
+
+defaults:
+  timeout: 45m
+  # In the build image, with NATIVE_GO_BUILD running each recipe in place rather
+  # than in a nested container.
+  useGoBuild: true
+  # The image ships tools under /go/bin, which the default /go volume hides.
+  workspaceVolumes: none
+  env:
+    - name: BUILD_CACHE_GROUP
+      value: calico
+    - name: NATIVE_GO_BUILD
+      value: "true"
+
+steps:
+  - name: policy-eval-bench
+    when: GIT_REF_TYPE == 'PR'
+    depends: [check-go]
+    # The benchmarks run on one CPU; a fixed request keeps the numbers free of steps
+    # that come from the node rather than the code.
+    requests: {cpu: 2000m, memory: 4Gi}
+    commands: |
+      make -C app-policy bench-policy-eval
+      make -C felix bench-policy-eval
+    epilogue: |
+      # Epilogues don't inherit the commands' `cd` or exports.
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job artifacts/perf || true
+
+  - name: policy-eval-bench-publish
+    when: (GIT_REF_TYPE == 'MERGE' || GIT_REF_TYPE == 'NIGHTLY') && GIT_BRANCH == 'master'
+    depends: [check-go]
+    requests: {cpu: 2000m, memory: 4Gi}
+    # Naming the keys limits what is exposed; a bare bundle name would inject
+    # every key in it.
+    secretBundles:
+      - name: banzai-secrets
+        keys:
+          - name: LENS_ELASTICSEARCH_USER
+          - name: LENS_ELASTICSEARCH_TOKEN
+    commands: |
+      # Belt and braces with the `when:` above.  CI_GIT_BRANCH is the base ref, so
+      # it reads "master" for a PR into master as well.
+      case "${CI_GIT_REF_TYPE}" in
+        MERGE) export PERF_ENV=merge ;;
+        NIGHTLY) export PERF_ENV=nightly ;;
+        *)
+          echo "[ERROR] refusing to publish: ref type '${CI_GIT_REF_TYPE}' is not a merge or the nightly" >&2
+          exit 1
+          ;;
+      esac
+      if [ "${CI_GIT_BRANCH}" != master ]; then
+        echo "[ERROR] refusing to publish from branch '${CI_GIT_BRANCH}' (expected master)" >&2
+        exit 1
+      fi
+      make -C app-policy bench-policy-eval
+      make -C felix bench-policy-eval
+      make bin/send-perf-results
+      # The user comes from the secret too, so rotating to another account keeps
+      # publishing.
+      export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+      export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
+      export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
+      ./bin/send-perf-results --require-publication --dir artifacts/perf
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job artifacts/perf || true

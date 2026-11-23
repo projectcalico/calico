@@ -45,6 +45,7 @@ performance work, and comparing dataplanes/branches over time.
 hack/perf/
 ├── cmd/send-perf-results/main.go     The tool that pushes JSON docs to ES.
 ├── index-templates/<family>.json     One ES index template per family.
+├── perfdoc/                          Writes those JSON docs from Go benchmarks.
 └── README.md                         (this file)
 ```
 
@@ -207,7 +208,8 @@ already supplied a value (producer wins):
 - **`ci_run_id`** -- from `SEMAPHORE_JOB_ID`, `CI_JOB_ID` or
   `CI_WORKFLOW_NAME`.
 - **`pr_number`** -- from `SEMAPHORE_GIT_PR_NUMBER` or `CI_GIT_PR_NUMBER`, if
-  set.
+  set.  Under ArgoCI only a `PR` ref type counts: a merge run also names the
+  merged PR, but builds the branch.
 - **`env`** -- `ci` if any of those run IDs is set, else `dev`; override with
   `PERF_ENV`.  Filter dashboards to `env != dev` to keep dev runs out of trend
   data.
