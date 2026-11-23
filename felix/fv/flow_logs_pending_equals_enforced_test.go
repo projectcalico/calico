@@ -378,8 +378,8 @@ func waitForPolicies(f *infrastructure.Felix, locals []*workload.Workload, polic
 		}
 		var dumps []string
 		if infrastructure.NFTMode() {
-			for _, table := range []string{"ip", "ip6"} {
-				d, _ := f.ExecOutput("nft", "list", "chains", table, "calico")
+			for _, family := range []string{"ip", "ip6"} {
+				d, _ := f.ExecOutput("nft", "list", "chains", family)
 				dumps = append(dumps, d)
 			}
 		} else {
