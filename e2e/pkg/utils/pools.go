@@ -23,6 +23,7 @@ import (
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	corev1 "k8s.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -44,6 +45,19 @@ func ReadPodNetwork(cli ctrlclient.Client) (PodNetwork, error) {
 	pools := &v3.IPPoolList{}
 	if err := cli.List(ctx, pools); err != nil {
 		return PodNetwork{}, fmt.Errorf("listing IPPools: %w", err)
+	}
+	// With no pools at all, another CNI's IPAM (e.g. Azure or VPC CNI) hands out
+	// pod addresses, so the pods themselves are the only record of the families.
+	if len(pools.Items) == 0 {
+		pods := &corev1.PodList{}
+		if err := cli.List(ctx, pods); err != nil {
+			return PodNetwork{}, fmt.Errorf("no IPPools found; listing pods to find pod IP families: %w", err)
+		}
+		families, err := podFamilies(pods.Items)
+		if err != nil {
+			return PodNetwork{}, err
+		}
+		return PodNetwork{Families: families, EncapDevices: map[IPFamily]string{}}, nil
 	}
 	families, err := poolFamilies(pools.Items)
 	if err != nil {
@@ -81,6 +95,32 @@ func poolFamilies(pools []v3.IPPool) ([]IPFamily, error) {
 			return nil, fmt.Errorf("no IPPools found")
 		}
 		return nil, fmt.Errorf("no IPPool assigns pod addresses automatically: %s", strings.Join(skipped, ", "))
+	}
+	return families, nil
+}
+
+// podFamilies skips host-networked pods, whose addresses are the node's and say
+// nothing about what the pod network hands out.
+func podFamilies(pods []corev1.Pod) ([]IPFamily, error) {
+	have := map[IPFamily]bool{}
+	for _, p := range pods {
+		if p.Spec.HostNetwork || p.Status.Phase != corev1.PodRunning {
+			continue
+		}
+		for _, ip := range p.Status.PodIPs {
+			if fam, ok := FamilyOf(ip.IP); ok {
+				have[fam] = true
+			}
+		}
+	}
+	var families []IPFamily
+	for _, f := range allIPFamilies {
+		if have[f] {
+			families = append(families, f)
+		}
+	}
+	if len(families) == 0 {
+		return nil, fmt.Errorf("no IPPools found, and no running pod-network pod has an IP to read the pod IP families from")
 	}
 	return families, nil
 }
