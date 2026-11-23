@@ -46,3 +46,8 @@ workflows:
     workflowFile: .argoci/publish/e2e-openstack-image.yaml
     runWhen:
       alwaysRunOnMerge: true
+
+  - name: policy-eval-bench
+    workflowFile: .argoci/publish/policy-eval-bench.yaml
+    runWhen:
+      alwaysRunOnMerge: true
