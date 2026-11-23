@@ -152,7 +152,7 @@ func TestPublishStopsAtTheFirstFailure(t *testing.T) {
 
 // A handler with its own rules rejects a bad upload before anything is sent.
 func TestPublishRejectsASourcelessUploadToADestinationThatNeedsOne(t *testing.T) {
-	err := Publish([]Upload{{Handler: S3{URI: "s3://bucket/charts/"}}})
+	err := Publish([]Upload{{Handler: S3{URL: parseURL(t, "s3://bucket/charts/")}}})
 	if err == nil || !strings.Contains(err.Error(), "no source") {
 		t.Errorf("expected a missing source to be rejected, got %v", err)
 	}
@@ -221,8 +221,8 @@ func TestUploadLabel(t *testing.T) {
 		up   Upload
 		want string
 	}{
-		{"names itself", Upload{Name: "chart index", Handler: S3{URI: "s3://b/charts/"}}, "chart index"},
-		{"falls back to the destination", Upload{Handler: S3{URI: "s3://b/charts/"}}, "s3://b/charts/"},
+		{"names itself", Upload{Name: "chart index", Handler: S3{URL: parseURL(t, "s3://b/charts/")}}, "chart index"},
+		{"falls back to the destination", Upload{Handler: S3{URL: parseURL(t, "s3://b/charts/")}}, "s3://b/charts/"},
 		{"a preparer falls back to its kind", Upload{Handler: Preparer{Kind: "metadata"}}, "metadata"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -238,7 +238,7 @@ func TestUploadLabel(t *testing.T) {
 func TestPublishSkipsValidationOfASkippedUpload(t *testing.T) {
 	d := &fakeDest{name: "s3://bucket/rpms/"}
 	if err := Publish([]Upload{
-		{Handler: S3{URI: "s3://bucket/rpms/"}, Skip: true},
+		{Handler: S3{URL: parseURL(t, "s3://bucket/rpms/")}, Skip: true},
 		{Source: dirWith(t, "x"), Handler: d},
 	}); err != nil {
 		t.Fatalf("Publish: %v", err)
@@ -278,7 +278,7 @@ func TestNode(t *testing.T) {
 	})
 
 	t.Run("validates the destination", func(t *testing.T) {
-		n := Node(Upload{Name: "x", Handler: S3{URI: "s3://bucket/"}})
+		n := Node(Upload{Name: "x", Handler: S3{URL: parseURL(t, "s3://bucket/")}})
 		if err := n.Validate(); err == nil {
 			t.Error("Validate() = nil, want an error for an upload with no source")
 		}

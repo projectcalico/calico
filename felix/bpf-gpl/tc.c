@@ -73,7 +73,8 @@
 static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool decap)
 {
 #ifndef IPVER6
-	if (CALI_F_TO_HOST && ip_is_frag(ip_hdr(ctx))) {
+	/* Later fragments have no L4 header; they take the first fragment's ports and verdict. */
+	if (ip_is_frag(ip_hdr(ctx))) {
 		/* For fragments, we need to skip the FIB lookup as we may not be able to
 		 * forward because of smaller MTU on the next hop. We need to ensure that
 		 * all or none of the fragments go through Linux stack for correct

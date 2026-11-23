@@ -18,25 +18,22 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
-const BaseURL = "https://docs.tigera.io"
-
-var (
-	BaseArtifactsURL = "https://raw.githubusercontent.com/projectcalico/calico"
-	ProductSlug      = "calico"
-)
+var baseURL = url.URL{Scheme: "https", Host: "docs.tigera.io"}
 
 type Site struct {
 	Version version.Version
 }
 
-func (d Site) URL() (string, error) {
+func (d Site) URL(path ...string) string {
 	stream := strings.TrimPrefix(d.Version.PrimaryStream(), "v")
-	return url.JoinPath(BaseURL, ProductSlug, stream)
+	paths := append([]string{stream}, path...)
+	return URL(paths...)
 }
 
-func (d Site) DownloadsURL() (string, error) {
-	return url.JoinPath(BaseArtifactsURL, d.Version.String())
+func URL(path ...string) string {
+	return baseURL.JoinPath(append([]string{defaults.ProductSlug}, path...)...).String()
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.yaml.in/yaml/v3"
 
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/registry"
 )
 
@@ -44,7 +45,7 @@ func TestBuildMetadata(t *testing.T) {
 		if err := BuildMetadata(&record{body: []byte("version: v3.30.0\n")}, dir); err != nil {
 			t.Fatal(err)
 		}
-		got, err := os.ReadFile(filepath.Join(dir, metadataFileName))
+		got, err := os.ReadFile(filepath.Join(dir, MetadataFileName))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -63,7 +64,7 @@ func TestBuildMetadata(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			wantErrContains(t, BuildMetadata(tc.rec, dir), tc.want)
-			if _, err := os.Stat(filepath.Join(dir, metadataFileName)); !errors.Is(err, os.ErrNotExist) {
+			if _, err := os.Stat(filepath.Join(dir, MetadataFileName)); !errors.Is(err, os.ErrNotExist) {
 				t.Errorf("stat metadata = %v, want it not to exist", err)
 			}
 		})
@@ -305,8 +306,11 @@ func TestDescribeArtifacts(t *testing.T) {
 		}
 	})
 
-	t.Run("leaves out the metadata file", func(t *testing.T) {
-		got, err := describe(ArtifactFile{Name: metadataFileName, Path: write(metadataFileName, "version: v3.30.0"), URL: "https://example.com/" + metadataFileName})
+	t.Run("leaves out the metadata and sums files", func(t *testing.T) {
+		got, err := describe(
+			ArtifactFile{Name: MetadataFileName, Path: write(MetadataFileName, "version: v3.30.0"), URL: "https://example.com/" + MetadataFileName},
+			ArtifactFile{Name: SumsFileName, Path: write(SumsFileName, "sums"), URL: "https://example.com/" + SumsFileName},
+		)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -318,6 +322,62 @@ func TestDescribeArtifacts(t *testing.T) {
 	t.Run("fails on a file it cannot read", func(t *testing.T) {
 		_, err := describe(ArtifactFile{Name: "missing.tgz", Path: filepath.Join(dir, "missing.tgz"), URL: "https://example.com/missing.tgz"})
 		wantErrContains(t, err, "missing.tgz")
+	})
+}
+
+func TestArtifacts(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"release.tgz":    "hello",
+		"notes.md":       "notes",
+		MetadataFileName: "version: v3.30.0",
+		SumsFileName:     "sums",
+		"charts/a.tgz":   "chart",
+	} {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	names := func(artifacts []Artifact) []string {
+		var out []string
+		for _, a := range artifacts {
+			out = append(out, a.Name)
+		}
+		return out
+	}
+
+	t.Run("describes the top-level files at the base URL, without the metadata and sums", func(t *testing.T) {
+		got, err := Artifacts(dir, "https://example.com/v3.30.0", fsutil.DirFiles)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff([]string{"notes.md", "release.tgz"}, names(got)); diff != "" {
+			t.Errorf("names (-want +got):\n%s", diff)
+		}
+		for _, a := range got {
+			if want := "https://example.com/v3.30.0/" + a.Name; a.URL != want {
+				t.Errorf("%s url = %q, want %q", a.Name, a.URL, want)
+			}
+		}
+	})
+
+	t.Run("describes only what the filters pick", func(t *testing.T) {
+		got, err := Artifacts(dir, "https://example.com", fsutil.DirFiles, fsutil.Include("release.tgz"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff([]string{"release.tgz"}, names(got)); diff != "" {
+			t.Errorf("names (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("fails on a missing dir", func(t *testing.T) {
+		_, err := Artifacts(filepath.Join(dir, "missing"), "https://example.com", fsutil.DirFiles)
+		wantErrContains(t, err, "list artifacts")
 	})
 }
 

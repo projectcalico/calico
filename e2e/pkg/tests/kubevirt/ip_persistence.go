@@ -17,6 +17,7 @@ package kubevirt
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -27,6 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -405,36 +407,60 @@ var _ = describe.CalicoDescribe(
 				targetPodName, targetNode, sourcePod.Name, sourceNode)
 		})
 
-		// Test 6: assigning a static IP via the cni.projectcalico.org/ipAddrs annotation
-		// on the VM spec template. The annotation propagates through VMI to the
-		// virt-launcher pod, where the Calico CNI plugin honours it. After a live
-		// migration the same static IP must survive on the new pod.
-		It("should assign static IP via annotation and preserve it across migration", func() {
+		// Test 6: the ipAddrs and hwAddr annotations are how a VM migrated in from
+		// another platform keeps its primary-NIC identity, so both must hold from
+		// first boot and through live migration.
+		It("should assign static IP and MAC via annotation and preserve them across migration", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), singleMigrationTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
-			vmName := "e2e-static-ip"
+			vmName := "e2e-static-ip-mac"
+
+			// KubeMacPool (on by default in OpenShift Virtualization) would swap
+			// the requested MAC for one from its pool; this label opts the
+			// namespace out.
+			_, err := f.ClientSet.CoreV1().Namespaces().Patch(ctx, ns, types.MergePatchType,
+				[]byte(`{"metadata":{"labels":{"mutatevirtualmachines.kubemacpool.io":"ignore"}}}`),
+				metav1.PatchOptions{})
+			Expect(err).NotTo(HaveOccurred(), "labelling the namespace to opt out of KubeMacPool")
 
 			// Pick an unallocated static IP from the cluster's IPPool.
 			lcgc := newLibcalicoClient(f)
 			staticIP := pickUnallocatedIP(ctx, lcgc)
-			logrus.Infof("Using static IP %s for VM %s", staticIP, vmName)
+			staticMAC := randomLocalMAC()
+			logrus.Infof("Using static IP %s and MAC %s for VM %s", staticIP, staticMAC, vmName)
 
 			vm := &kubeVirtVM{
 				name:      vmName,
 				namespace: ns,
 				annotations: map[string]string{
 					"cni.projectcalico.org/ipAddrs": fmt.Sprintf("[%q]", staticIP),
+					"cni.projectcalico.org/hwAddr":  staticMAC,
 				},
 			}
 
 			vm.Create(ctx, cli)
 			DeferCleanup(func() { vm.Delete(cli) })
 
-			// 1. Verify the VM gets the exact static IP.
+			// 1. Verify the VM gets the exact static IP and MAC.
 			ip, sourceNode := vm.WaitForRunningWithIP(ctx, cli)
 			Expect(ip).To(Equal(staticIP),
 				"VM should receive the static IP from the annotation")
+
+			// With bridge binding KubeVirt builds the domain NIC from the pod
+			// interface, so the VMI's reported MAC is the one the CNI set. Eventually
+			// because VMI status can report the IP before the MAC.
+			Eventually(func() (string, error) {
+				vmi := &kubevirtv1.VirtualMachineInstance{}
+				if err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: vmName}, vmi); err != nil {
+					return "", err
+				}
+				if len(vmi.Status.Interfaces) == 0 {
+					return "", fmt.Errorf("no interfaces yet")
+				}
+				return strings.ToLower(vmi.Status.Interfaces[0].MAC), nil
+			}, 30*time.Second, 2*time.Second).Should(Equal(staticMAC),
+				"VM should receive the static MAC from the annotation")
 
 			// 2. Verify the IPAM handle exists for this IP.
 			handleID := vmipam.CreateVMHandleID("k8s-pod-network", ns, vmName)
@@ -443,15 +469,15 @@ var _ = describe.CalicoDescribe(
 			Expect(ips).To(HaveLen(1))
 			Expect(ips[0].String()).To(Equal(staticIP))
 
-			// 3. Migrate and verify the static IP survives.
+			// 3. Migrate.
 			vmim := newVMIMigration(vmName+"-mig", ns, vmName)
 			err = cli.Create(ctx, vmim)
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
 			expectMigrationSuccess(ctx, cli, vmim)
 
-			// 4. Verify IP preserved and VM moved to a different node.
-			var postIP, postNode string
+			// 4. Verify IP and MAC preserved and VM moved to a different node.
+			var postIP, postMAC, postNode string
 			Eventually(func() error {
 				vmi := &kubevirtv1.VirtualMachineInstance{}
 				if err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: vmName}, vmi); err != nil {
@@ -460,17 +486,27 @@ var _ = describe.CalicoDescribe(
 				if len(vmi.Status.Interfaces) == 0 || vmi.Status.Interfaces[0].IP == "" {
 					return fmt.Errorf("no IP yet")
 				}
+				if vmi.Status.Interfaces[0].MAC == "" {
+					return fmt.Errorf("no MAC yet")
+				}
 				if vmi.Status.NodeName == sourceNode {
 					return fmt.Errorf("VMI still on source node")
 				}
 				postIP = vmi.Status.Interfaces[0].IP
+				postMAC = vmi.Status.Interfaces[0].MAC
 				postNode = vmi.Status.NodeName
 				return nil
 			}, 30*time.Second, 2*time.Second).Should(Succeed())
 
 			Expect(postIP).To(Equal(staticIP),
 				"Static IP should survive live migration")
+			Expect(strings.ToLower(postMAC)).To(Equal(staticMAC),
+				"Static MAC should survive live migration")
 			Expect(postNode).NotTo(Equal(sourceNode))
+			// The guest keeps its MAC whatever the target pod got, so only the
+			// target pod's own interface shows the CNI honoured hwAddr there.
+			Expect(vm.launcherPodMAC(ctx, f, postNode)).To(Equal(staticMAC),
+				"the target virt-launcher pod's eth0 should carry the hwAddr MAC")
 
 			// 5. Verify IPAM handle still holds the same IP after migration.
 			postIPs, err := lcgc.IPAM().IPsByHandle(ctx, handleID)

@@ -24,9 +24,10 @@ import (
 	"slices"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/docs"
 	"github.com/projectcalico/calico/release/internal/github"
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
@@ -37,10 +38,11 @@ const (
 	Step        = "charts"
 	buildStep   = Step + "-build"
 	PublishStep = Step + "-publish"
+	IndexStep   = "helm-index"
 )
 
 const (
-	chartsDirName  = "charts"
+	DirName        = "charts"
 	indexFileName  = "index.yaml"
 	valuesFileName = "values.yaml"
 
@@ -59,25 +61,10 @@ const (
 	ProjectCalicoV3CRDsChart = "projectcalico.org.v3"
 )
 
-var RepoURL = func() (string, error) {
-	return RepoURLAt(docs.BaseURL + "/" + docs.ProductSlug)
-}
+var RepoURL = docs.URL(DirName)
 
-// RepoURLAt is the Helm repository a site serves under base.
-func RepoURLAt(base string) (string, error) {
-	url, err := url.JoinPath(base, chartsDirName)
-	if err != nil {
-		return "", fmt.Errorf("charts repo URL: %w", err)
-	}
-	return url, nil
-}
-
-var ChartsURL = func(c Chart) (string, error) {
-	url, err := github.DownloadURL(defaults.Organization(), defaults.Repo(), c.ProductVersion)
-	if err != nil {
-		return "", fmt.Errorf("charts download URL: %w", err)
-	}
-	return url, nil
+var ChartsURL = func(c Chart) string {
+	return github.DefaultRepo().DownloadURL(c.ProductVersion)
 }
 
 // All is the set a release ships. It is a var so a product shipping a
@@ -157,7 +144,7 @@ func FileName(chart, chartVersion string) string {
 
 // Dir returns the output dir with the charts directory appended.
 var Dir = func(outputDir string) string {
-	return filepath.Join(outputDir, chartsDirName)
+	return filepath.Join(outputDir, DirName)
 }
 
 // OutputDir is where a release's charts are built under outputDir.
@@ -168,6 +155,26 @@ var OutputDir = func(outputDir string) string {
 // IndexDir is where a chart index sit under outputDir.
 var IndexDir = func(outputDir string) string {
 	return Dir(outputDir)
+}
+
+type IndexOptions struct {
+	OutputDir string
+	Handler   distribution.S3
+	Skip      bool
+}
+
+// IndexUpload waits for the GitHub release the index links to, and the
+// images its charts pull.
+func IndexUpload(o IndexOptions) distribution.Upload {
+	h := o.Handler.At(DirName, "") // empty element to ensure trailing slash
+	h.CachePolicy = distribution.MutableCachePolicy
+	return distribution.Upload{
+		Name:     IndexStep,
+		Source:   IndexFilePath(IndexDir(o.OutputDir)),
+		Skip:     o.Skip,
+		Requires: []string{images.Step, github.ReleaseStep},
+		Handler:  h,
+	}
 }
 
 // versionedDir keeps one release's charts apart from another's, for a directory
@@ -376,7 +383,8 @@ func calicoChartEdits(productVersion, productRegistry string) []ValueEdit {
 // ValueEditsFor points the operator and product charts at the versions a
 // release pins.
 var ValueEditsFor = func(productVersion, productRegistry, operatorImage, operatorVersion, operatorRegistry string) []ValueEdit {
-	return append(slices.Clone(calicoChartEdits(productVersion, productRegistry)),
+	return append(
+		slices.Clone(calicoChartEdits(productVersion, productRegistry)),
 		operatorChartEdits(productVersion, productRegistry, operatorImage, operatorVersion, operatorRegistry)...,
 	)
 }

@@ -8,9 +8,14 @@ defaults:
 
 steps:
   - name: check-yaml
+    env:
+      - name: NATIVE_PYTHON
+        value: "true"
     jobSize: medium
     requests: {cpu: 3500m, memory: 1Gi}
-    services: [docker]
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     changes:
       in:
         - ^.*\.ya?ml$
@@ -62,12 +67,19 @@ steps:
       make check-dirty
 
   - name: check-python
+    env:
+      - name: NATIVE_PYTHON
+        value: "true"
     jobSize: small
-    requests: {cpu: 2000m, memory: 0.75Gi}
-    services: [docker]
+    requests: {cpu: 2000m, memory: 1Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     changes:
       in:
         - ^networking-calico/
+        # bin/uv's recipe.
+        - ^Makefile$
         - ^lib\.Makefile$
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$
@@ -96,8 +108,13 @@ steps:
       make check-mockery-config
 
   - name: check-protobufs
-    requests: {cpu: 1500m, memory: 1Gi}
-    services: [docker]
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    requests: {cpu: 1500m, memory: 2Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     changes:
       in:
         - ^.*\.pb\.go$
@@ -149,9 +166,14 @@ steps:
   # A chart can change what it renders without any committed manifest changing,
   # which a diff of the tree cannot see.
   - name: check-helm-charts
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     jobSize: small
-    requests: {cpu: 2000m, memory: 1Gi}
-    services: [docker]
+    requests: {cpu: 2000m, memory: 5.5Gi}
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     changes:
       in:
         - ^charts/
@@ -165,8 +187,13 @@ steps:
   # Regenerating the patches must be a no-op. metadata.mk is in the trigger
   # because `go mod tidy`'s output depends on the toolchain.
   - name: check-thirdparty-dep-patches
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     requests: {cpu: 2000m, memory: 2Gi}
-    services: [docker]
+    useGoBuild: true
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
     changes:
       in:
         - ^hack/thirdparty/

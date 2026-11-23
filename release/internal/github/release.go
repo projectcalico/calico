@@ -16,7 +16,6 @@ package github
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -45,26 +44,6 @@ type Asset struct {
 
 func (a Asset) Name() string { return filepath.Base(a.Path) }
 
-type Repo struct {
-	Org  string
-	Name string
-}
-
-func (r Repo) validate() error {
-	var errs []error
-	if r.Org == "" {
-		errs = append(errs, fmt.Errorf("no github organization specified"))
-	}
-	if r.Name == "" {
-		errs = append(errs, fmt.Errorf("no github repository specified"))
-	}
-	return errors.Join(errs...)
-}
-
-func (r Repo) String() string {
-	return r.Org + "/" + r.Name
-}
-
 // Releases reads and writes a repository's GitHub releases.
 type Releases struct {
 	repo Repo
@@ -84,8 +63,8 @@ type ReleaseService interface {
 }
 
 func NewReleases(repo Repo, svc ReleaseService) (*Releases, error) {
-	if err := repo.validate(); err != nil {
-		return nil, err
+	if err := repo.Validate(); err != nil {
+		return nil, fmt.Errorf("new releases: %w", err)
 	}
 	return &Releases{repo: repo, svc: svc}, nil
 }
@@ -97,7 +76,7 @@ func Client(r command.CommandRunner) *github.Client {
 // Get returns the release for a tag. exists is false with a nil error when no
 // release carries the tag.
 func (r *Releases) Get(ctx context.Context, tag string) (*github.RepositoryRelease, bool, error) {
-	rel, resp, err := r.svc.GetReleaseByTag(ctx, r.repo.Org, r.repo.Name, tag)
+	rel, resp, err := r.svc.GetReleaseByTag(ctx, r.repo.Owner, r.repo.Name, tag)
 	if err != nil {
 		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			return nil, false, nil
@@ -107,27 +86,43 @@ func (r *Releases) Get(ctx context.Context, tag string) (*github.RepositoryRelea
 	return rel, true, nil
 }
 
-// CreateDraft creates a draft release for a tag, returning the existing one if
-// a draft already carries it. A published release is an error: a release
+type CreateOptions struct {
+	Tag        string
+	Name       string
+	Body       string
+	Draft      bool
+	Prerelease bool
+}
+
+// Create creates a release for a tag, returning the existing one if a draft
+// already carries it. A published release is an error: a release
 // nobody can unpublish must not be modified.
-func (r *Releases) CreateDraft(ctx context.Context, tag, name, body string) (*github.RepositoryRelease, error) {
-	switch existing, found, err := r.forTag(ctx, tag); {
+func (r *Releases) Create(ctx context.Context, o CreateOptions) (*github.RepositoryRelease, error) {
+	switch existing, found, err := r.forTag(ctx, o.Tag); {
 	case err != nil:
 		return nil, err
 	case found && !existing.GetDraft():
-		return nil, fmt.Errorf("%s release %s is already published; refusing to modify it", r.repo, tag)
+		return nil, fmt.Errorf("%s release %s is already published; refusing to modify it", r.repo, o.Tag)
+	case found && existing.GetPrerelease() != o.Prerelease:
+		edit := &github.RepositoryRelease{Prerelease: github.Bool(o.Prerelease)}
+		if _, _, err := r.svc.EditRelease(ctx, r.repo.Owner, r.repo.Name, existing.GetID(), edit); err != nil {
+			return nil, fmt.Errorf("updating %s draft %s: %w", r.repo, o.Tag, err)
+		}
+		existing.Prerelease = edit.Prerelease
+		return existing, nil
 	case found:
 		return existing, nil
 	}
 
-	rel, _, err := r.svc.CreateRelease(ctx, r.repo.Org, r.repo.Name, &github.RepositoryRelease{
-		TagName: github.String(tag),
-		Name:    github.String(name),
-		Body:    github.String(body),
-		Draft:   github.Bool(true),
+	rel, _, err := r.svc.CreateRelease(ctx, r.repo.Owner, r.repo.Name, &github.RepositoryRelease{
+		TagName:    github.String(o.Tag),
+		Name:       github.String(o.Name),
+		Body:       github.String(o.Body),
+		Draft:      github.Bool(o.Draft),
+		Prerelease: github.Bool(o.Prerelease),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("creating %s release %s: %w", r.repo, tag, err)
+		return nil, fmt.Errorf("creating %s release %s: %w", r.repo, o.Tag, err)
 	}
 	return rel, nil
 }
@@ -173,7 +168,7 @@ func (r *Releases) reconcile(ctx context.Context, attached []*github.ReleaseAsse
 		if got.GetState() == assetStateUploaded && int64(got.GetSize()) == a.Size {
 			return true, nil
 		}
-		if _, err := r.svc.DeleteReleaseAsset(ctx, r.repo.Org, r.repo.Name, got.GetID()); err != nil {
+		if _, err := r.svc.DeleteReleaseAsset(ctx, r.repo.Owner, r.repo.Name, got.GetID()); err != nil {
 			return false, fmt.Errorf("removing incomplete asset %s: %w", a.Name(), err)
 		}
 		return false, nil
@@ -181,8 +176,8 @@ func (r *Releases) reconcile(ctx context.Context, attached []*github.ReleaseAsse
 	return false, nil
 }
 
-// UploadAsset attaches one file. GitHub rejects a name it already holds, so a
-// re-run clears what it is replacing with DeleteAssets first.
+// UploadAsset attaches one file. GitHub rejects a name the release already
+// holds, so the caller removes an existing asset first.
 func (r *Releases) UploadAsset(ctx context.Context, releaseID int64, path string) error {
 	name := filepath.Base(path)
 	f, err := os.Open(path)
@@ -191,7 +186,7 @@ func (r *Releases) UploadAsset(ctx context.Context, releaseID int64, path string
 	}
 	defer func() { _ = f.Close() }()
 
-	if _, _, err := r.svc.UploadReleaseAsset(ctx, r.repo.Org, r.repo.Name, releaseID,
+	if _, _, err := r.svc.UploadReleaseAsset(ctx, r.repo.Owner, r.repo.Name, releaseID,
 		&github.UploadOptions{Name: name}, f); err != nil {
 		return fmt.Errorf("uploading %s: %w", name, err)
 	}
@@ -202,7 +197,7 @@ func (r *Releases) assets(ctx context.Context, releaseID int64) ([]*github.Relea
 	var out []*github.ReleaseAsset
 	opts := &github.ListOptions{PerPage: pageSize}
 	for {
-		page, resp, err := r.svc.ListReleaseAssets(ctx, r.repo.Org, r.repo.Name, releaseID, opts)
+		page, resp, err := r.svc.ListReleaseAssets(ctx, r.repo.Owner, r.repo.Name, releaseID, opts)
 		if err != nil {
 			return nil, fmt.Errorf("listing assets of %s release %d: %w", r.repo, releaseID, err)
 		}
@@ -221,7 +216,7 @@ func (r *Releases) forTag(ctx context.Context, tag string) (*github.RepositoryRe
 	}
 	opts := &github.ListOptions{PerPage: pageSize}
 	for {
-		page, resp, err := r.svc.ListReleases(ctx, r.repo.Org, r.repo.Name, opts)
+		page, resp, err := r.svc.ListReleases(ctx, r.repo.Owner, r.repo.Name, opts)
 		if err != nil {
 			return nil, false, fmt.Errorf("listing %s releases: %w", r.repo, err)
 		}
@@ -252,7 +247,7 @@ func (r *Releases) Publish(ctx context.Context, tag string, latest bool) error {
 	if latest {
 		edit.MakeLatest = github.String("true")
 	}
-	if _, _, err := r.svc.EditRelease(ctx, r.repo.Org, r.repo.Name, rel.GetID(), edit); err != nil {
+	if _, _, err := r.svc.EditRelease(ctx, r.repo.Owner, r.repo.Name, rel.GetID(), edit); err != nil {
 		return fmt.Errorf("publishing %s release %s: %w", r.repo, tag, err)
 	}
 	return nil
@@ -260,7 +255,7 @@ func (r *Releases) Publish(ctx context.Context, tag string, latest bool) error {
 
 // LatestTag is the tag GitHub serves as the latest release
 func (r *Releases) LatestTag(ctx context.Context) (string, error) {
-	rel, resp, err := r.svc.GetLatestRelease(ctx, r.repo.Org, r.repo.Name)
+	rel, resp, err := r.svc.GetLatestRelease(ctx, r.repo.Owner, r.repo.Name)
 	if err != nil {
 		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			return "", nil

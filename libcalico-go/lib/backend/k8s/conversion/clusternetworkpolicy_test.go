@@ -575,6 +575,30 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 		Expect(gnp.Spec.Egress).To(HaveLen(0))
 	})
 
+	// Policy views read a policy's last-updated time from its managed fields.
+	It("should keep the managed fields of a ClusterNetworkPolicy", func() {
+		updated := metav1.NewTime(metav1.Now().Rfc3339Copy().Time)
+		managedFields := []metav1.ManagedFieldsEntry{{Manager: "kubectl", Operation: metav1.ManagedFieldsOperationUpdate, Time: &updated}}
+		cnp := clusternetpol.ClusterNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:          "test.policy",
+				UID:           types.UID("30316465-6365-4463-ad63-3564622d3638"),
+				ManagedFields: managedFields,
+			},
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Priority: 500,
+				Tier:     clusternetpol.AdminTier,
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
+					Namespaces: &metav1.LabelSelector{},
+				},
+			},
+		}
+
+		gnp := convertToGNP(&cnp, nil)
+
+		Expect(gnp.ManagedFields).To(Equal(managedFields))
+	})
+
 	It("should parse an ClusterNetworkPolicy with Namespaces subject and multiple peers", func() {
 		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
