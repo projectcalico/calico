@@ -17,6 +17,7 @@ package ut_test
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"runtime"
 	"testing"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/proto"
 )
 
@@ -780,4 +782,94 @@ func TestIP4FragFromHostPortPolicy(t *testing.T) {
 			Expect(count).To(BeZero(), "the last fragment should remove the fragment entry")
 		})
 	}
+}
+
+// TestIP4FragReplyReverseNATToWorkload checks that every fragment of a service
+// reply gets the reverse NAT that to-WEP applies to the first fragment.
+func TestIP4FragReplyReverseNATToWorkload(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer resetCTMap(ctMap)
+	defer cleanupMap(ipfragsFwdMap)
+	defer resetMap(natMap)
+	defer resetMap(natBEMap)
+
+	bpfIfaceName = "FRRN"
+	defer func() { bpfIfaceName = "" }()
+
+	resetCTMap(ctMap)
+	cleanupMap(ipfragsFwdMap)
+
+	_, ipv4, l4, _, pktReq, err := testPacketUDPDefault()
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+
+	backendIP := net.IPv4(8, 8, 8, 8)
+	backendPort := uint16(666)
+	Expect(natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(layers.IPProtocolUDP)).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
+	)).To(Succeed())
+	Expect(natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(backendIP, backendPort).AsBytes(),
+	)).To(Succeed())
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	defer resetRTMap(rtMap)
+	Expect(rtMap.Update(rtKey, rtVal)).To(Succeed())
+
+	// The client's request to the service creates the NAT conntrack entries.
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktReq)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).NotTo(Equal("TC_ACT_SHOT"))
+	})
+
+	// The backend's reply, fragmented by the host on its way to the client.
+	ipHdr := *ipv4
+	ipHdr.SrcIP, ipHdr.DstIP = backendIP, ipv4.SrcIP
+	ipHdr.Id = 0x7660
+	ipHdr.Protocol = layers.IPProtocolUDP
+	ipHdr.Flags = layers.IPv4MoreFragments
+	firstData := make([]byte, 40)
+	tailData := bytes.Repeat([]byte{0xab}, 16)
+	ipHdr.Length = uint16(20 + 8 + len(firstData))
+	udpR := &layers.UDP{SrcPort: layers.UDPPort(backendPort), DstPort: udp.SrcPort}
+	udpR.Length = uint16(8 + len(firstData) + len(tailData))
+	_ = udpR.SetNetworkLayerForChecksum(&ipHdr)
+
+	first := gopacket.NewSerializeBuffer()
+	Expect(gopacket.SerializeLayers(first, gopacket.SerializeOptions{ComputeChecksums: true},
+		ethDefault, &ipHdr, udpR, gopacket.Payload(firstData))).To(Succeed())
+
+	ipHdr.Flags = 0
+	ipHdr.FragOffset = uint16((8 + len(firstData)) / 8)
+	ipHdr.Length = uint16(20 + len(tailData))
+	tail := gopacket.NewSerializeBuffer()
+	Expect(gopacket.SerializeLayers(tail, gopacket.SerializeOptions{ComputeChecksums: true},
+		ethDefault, &ipHdr, gopacket.Payload(tailData))).To(Succeed())
+
+	srcOf := func(pkt []byte) string {
+		p := gopacket.NewPacket(pkt, layers.LayerTypeEthernet, gopacket.Default)
+		ip, ok := p.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
+		Expect(ok).To(BeTrue())
+		return ip.SrcIP.String()
+	}
+
+	skbMark = tcdefs.MarkSeen
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(first.Bytes())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).NotTo(Equal("TC_ACT_SHOT"))
+		Expect(srcOf(res.dataOut)).To(Equal(ipv4.DstIP.String()))
+
+		res, err = bpfrun(tail.Bytes())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).NotTo(Equal("TC_ACT_SHOT"))
+		Expect(srcOf(res.dataOut)).To(Equal(ipv4.DstIP.String()),
+			"the tail must get the same reverse NAT as the first fragment")
+	})
 }
