@@ -17,6 +17,8 @@ package policyscale
 import (
 	"fmt"
 	"io"
+	"net/netip"
+	"slices"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -155,6 +157,31 @@ func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 		})
 	}
 	return out
+}
+
+// EndpointLabels returns the labels an endpoint at the given addresses needs on a cluster: the
+// label of each set that holds one of its addresses. A rule picks a set by that label, and with it
+// the endpoints that carry it; Felix finds a named port on the endpoints the rule's selector picks,
+// so without the label a rule that keys on the endpoint's set doesn't see its named ports.
+func (fx *Fixture) EndpointLabels(opts ResourceOptions, addrs ...netip.Addr) map[string]string {
+	opts.defaults()
+	labels := map[string]string{}
+	for _, id := range fx.setOrder {
+		s := fx.sets[id]
+		if s.isIPPort() {
+			continue
+		}
+		for _, a := range addrs {
+			if !slices.Contains(s.members, netip.PrefixFrom(a, a.BitLen()).String()) {
+				continue
+			}
+			if other, ok := labels[opts.SetLabelKey]; ok && other != id {
+				panic(fmt.Sprintf("policyscale: %s is in sets %s and %s, and an endpoint carries one label value", a, other, id))
+			}
+			labels[opts.SetLabelKey] = id
+		}
+	}
+	return labels
 }
 
 func (fx *Fixture) ruleResource(r *ruleModel, setLabelKey string) v3.Rule {
