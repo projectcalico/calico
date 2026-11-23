@@ -257,25 +257,30 @@ func TestAbortBeforeMigrationStartsLeavesClusterInfoAlone(t *testing.T) {
 }
 
 // lockedAbortCase is one phase that holds the v1 lock before Migrating starts.
+// apiServiceSaved says whether the phase has already saved the aggregated
+// APIService to the CR and deleted it.
 type lockedAbortCase struct {
-	name  string
-	phase migrationv1.DatastoreMigrationPhase
+	name            string
+	phase           migrationv1.DatastoreMigrationPhase
+	apiServiceSaved bool
 }
 
 // TestAbortUnlocksV1BeforeMigrationStarts verifies that aborting after Pending
-// has locked v1, but before Migrating, unlocks v1 and deletes no v3 resources.
-// TestAbortBeforeMigrationStartsLeavesClusterInfoAlone is the negative case,
-// where the lock was never taken.
+// has locked v1, but before Migrating, unlocks v1, deletes no v3 resources and
+// leaves the aggregated APIService in place. The negative case, where Pending
+// never took the lock, is covered by the test above.
 func TestAbortUnlocksV1BeforeMigrationStarts(t *testing.T) {
 	cases := []lockedAbortCase{
 		{name: "draining in Pending", phase: migrationv1.DatastoreMigrationPhasePending},
-		{name: "waiting on conflicts", phase: migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution},
+		{name: "waiting on conflicts", phase: migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution, apiServiceSaved: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			g := NewWithT(t)
 			ctx := context.Background()
 
+			// Build a migration that has locked v1 but hasn't reached Migrating,
+			// so StartedAt is unset.
 			lockedAt := metav1.Now()
 			dm := &migrationv1.DatastoreMigration{
 				ObjectMeta: metav1.ObjectMeta{
@@ -289,18 +294,34 @@ func TestAbortUnlocksV1BeforeMigrationStarts(t *testing.T) {
 					DatastoreLockedAt: &lockedAt,
 				},
 			}
+			if tc.apiServiceSaved {
+				dm.Annotations = map[string]string{savedAPIServiceAnnotation: savedAPIServiceJSON(t)}
+			}
+
+			// Seed a locked v1 and a v3 tier the abort must leave alone. The
+			// APIService is still registered until Pending saves and deletes it.
 			objects := []rtclient.Object{dm, migratedTier("security", "migration-f")}
 			m, rt := newFakeController(t, objects, []*unstructured.Unstructured{
 				crdObj("tiers.crd.projectcalico.org", "crd.projectcalico.org"),
 			})
 			v1ClusterInfo(g, m).Spec.DatastoreReady = ptr.To(false)
+			if !tc.apiServiceSaved {
+				_, err := m.apiregClient.APIServices().Create(ctx, newAggregatedAPIServiceObj(), metav1.CreateOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+			}
 
+			// Delete the migration to trigger the abort, then reconcile it.
 			g.Expect(rt.Delete(ctx, dm)).To(Succeed())
 			g.Expect(m.reconcile()).To(Succeed())
 
+			// The abort finishes, unlocks v1, leaves the v3 tier, and the
+			// aggregated APIService is registered again.
 			g.Expect(kerrors.IsNotFound(rt.Get(ctx, dmKey, &migrationv1.DatastoreMigration{}))).To(BeTrue(), "finalizer should have been removed")
 			g.Expect(v1ClusterInfo(g, m).Spec.DatastoreReady).To(Equal(ptr.To(true)), "abort should unlock the v1 datastore")
 			g.Expect(tierNames(g, rt)).To(ConsistOf("security"), "no v3 resources exist to clean up before Migrating")
+			apiSvc, err := m.apiregClient.APIServices().Get(ctx, apiServiceName, metav1.GetOptions{})
+			g.Expect(err).NotTo(HaveOccurred(), "the aggregated APIService should be registered after the abort")
+			g.Expect(apiSvc.Spec.Service).NotTo(BeNil(), "the APIService should point at the aggregated API server")
 		})
 	}
 }
