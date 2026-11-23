@@ -1077,6 +1077,7 @@ func TestCheckTiersPolicyScope(t *testing.T) {
 	stagedNoMatch := &proto.PolicyID{Name: "staged-no-match", Kind: v3.KindStagedGlobalNetworkPolicy}
 	enforcedAllow := &proto.PolicyID{Name: "allow", Kind: v3.KindGlobalNetworkPolicy}
 	enforcedNoMatch := &proto.PolicyID{Name: "no-match", Kind: v3.KindGlobalNetworkPolicy}
+	enforcedPass := &proto.PolicyID{Name: "pass", Kind: v3.KindGlobalNetworkPolicy}
 	notInStore := &proto.PolicyID{Name: "not-in-store", Kind: v3.KindGlobalNetworkPolicy}
 
 	for _, tc := range []struct {
@@ -1123,6 +1124,14 @@ func TestCheckTiersPolicyScope(t *testing.T) {
 			wantPending: PERMISSION_DENIED,
 		},
 		{
+			// What is in scope is worked out afresh for each tier: the earlier tier's policy
+			// mustn't make the staged-only tier apply its default action when enforcing.
+			name:        "a staged-only tier after a passing tier is skipped when enforcing",
+			tiers:       tierInfos(policyIDs(enforcedPass), policyIDs(stagedNoMatch)),
+			wantEnforce: OK,
+			wantPending: PERMISSION_DENIED,
+		},
+		{
 			name: "a policy missing from the store fails the evaluation",
 			// Its verdict is unknowable, so fail closed rather than hand the request on to the rest
 			// of the tier.
@@ -1163,11 +1172,145 @@ func TestCheckTiersPolicyScope(t *testing.T) {
 				store.PolicyByID[types.ProtoToPolicyID(enforcedAllow)] = &proto.Policy{
 					InboundRules: []*proto.Rule{{Action: "allow"}},
 				}
+				store.PolicyByID[types.ProtoToPolicyID(enforcedPass)] = &proto.Policy{
+					InboundRules: []*proto.Rule{{Action: "pass"}},
+				}
 
 				st := checkStore(scope.PolicyScope, store, store.Endpoint, rules.RuleDirIngress,
 					&MockFlow{Protocol: 6, DestPort: 80})
 				Expect(st.Code).To(Equal(scope.want), "scope %v", scope.PolicyScope)
 			}
+		})
+	}
+}
+
+// When nothing in a tier matches, the trace reports the tier's default action against the last of
+// the tier's policies in scope. Felix reports the enforced verdict against the tier's last enforced
+// policy, so with no staged policies the pending and enforced flow logs name the same policy.
+func TestTierDefaultActionNamesLastPolicyInScope(t *testing.T) {
+	RegisterTestingT(t)
+
+	allowDNS := &proto.PolicyID{Name: "allow-dns", Kind: v3.KindGlobalNetworkPolicy}
+	allowHTTPS := &proto.PolicyID{Name: "allow-https", Namespace: "ns1", Kind: v3.KindNetworkPolicy}
+	allowMonitoring := &proto.PolicyID{Name: "allow-monitoring", Kind: v3.KindGlobalNetworkPolicy}
+	stagedFirst := &proto.PolicyID{Name: "staged-first", Kind: v3.KindStagedGlobalNetworkPolicy}
+	stagedLast := &proto.PolicyID{Name: "staged-last", Namespace: "ns1", Kind: v3.KindStagedNetworkPolicy}
+
+	for _, tc := range []struct {
+		name          string
+		policies      []*proto.PolicyID
+		defaultAction string
+		wantAction    rules.RuleAction
+		wantEnforced  *proto.PolicyID
+		wantPending   *proto.PolicyID
+	}{
+		{
+			name:          "enforced policies only",
+			policies:      policyIDs(allowDNS, allowHTTPS, allowMonitoring),
+			defaultAction: "Deny",
+			wantAction:    rules.RuleActionDeny,
+			wantEnforced:  allowMonitoring,
+			wantPending:   allowMonitoring,
+		},
+		{
+			name:          "default action pass",
+			policies:      policyIDs(allowDNS, allowHTTPS, allowMonitoring),
+			defaultAction: "Pass",
+			wantAction:    rules.RuleActionPass,
+			wantEnforced:  allowMonitoring,
+			wantPending:   allowMonitoring,
+		},
+		{
+			// A tier Felix has policies for but no Tier resource.
+			name:          "no default action",
+			policies:      policyIDs(allowDNS, allowHTTPS, allowMonitoring),
+			defaultAction: "",
+			wantAction:    rules.RuleActionDeny,
+			wantEnforced:  allowMonitoring,
+			wantPending:   allowMonitoring,
+		},
+		{
+			name:          "staged policy first",
+			policies:      policyIDs(stagedFirst, allowDNS, allowMonitoring),
+			defaultAction: "Deny",
+			wantAction:    rules.RuleActionDeny,
+			wantEnforced:  allowMonitoring,
+			wantPending:   allowMonitoring,
+		},
+		{
+			// The pending verdict treats staged policies as enforced, so a staged policy last in
+			// the tier is the one named.
+			name:          "staged policy last",
+			policies:      policyIDs(allowDNS, allowMonitoring, stagedLast),
+			defaultAction: "Deny",
+			wantAction:    rules.RuleActionDeny,
+			wantEnforced:  allowMonitoring,
+			wantPending:   stagedLast,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			store := policystore.NewPolicyStore()
+			for _, id := range tc.policies {
+				// A rule for UDP only, so a TCP flow matches nothing in the tier.
+				rule := &proto.Rule{Action: "allow", Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 17}}}
+				store.PolicyByID[types.ProtoToPolicyID(id)] = &proto.Policy{
+					Tier:          "tier1",
+					Namespace:     id.Namespace,
+					InboundRules:  []*proto.Rule{rule},
+					OutboundRules: []*proto.Rule{rule},
+				}
+			}
+			ep := &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{{
+				Name:            "tier1",
+				IngressPolicies: tc.policies,
+				EgressPolicies:  tc.policies,
+				DefaultAction:   tc.defaultAction,
+			}}}
+			flow := &MockFlow{Protocol: 6, DestPort: 80}
+
+			for _, dir := range []rules.RuleDir{rules.RuleDirIngress, rules.RuleDirEgress} {
+				for _, scope := range []struct {
+					PolicyScope
+					want *proto.PolicyID
+				}{{EnforcedOnly, tc.wantEnforced}, {StagedAsEnforced, tc.wantPending}} {
+					trace, err := Evaluate(scope.PolicyScope, dir, store, ep, flow)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(trace).NotTo(BeEmpty())
+					Expect(trace[0]).To(Equal(calc.NewRuleID(scope.want.Kind, "tier1", scope.want.Name, scope.want.Namespace,
+						tierDefaultActionIndex, dir, tc.wantAction)), "scope %v, direction %v", scope.PolicyScope, dir)
+				}
+			}
+		})
+	}
+}
+
+// A tier with no default action, which Felix sends for a tier whose policies it has but not the
+// Tier resource itself, denies at its end as the dataplanes do, rather than failing the request.
+func TestTierWithNoDefaultActionDenies(t *testing.T) {
+	noMatch := &proto.PolicyID{Name: "no-match", Kind: v3.KindGlobalNetworkPolicy}
+	allow := &proto.PolicyID{Name: "allow", Kind: v3.KindGlobalNetworkPolicy}
+
+	for _, tc := range []struct {
+		name     string
+		policies []*proto.PolicyID
+		want     int32
+	}{
+		{"no policy matches", policyIDs(noMatch), PERMISSION_DENIED},
+		{"a later policy allows", policyIDs(noMatch, allow), OK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			store := policystore.NewPolicyStore()
+			store.PolicyByID[types.ProtoToPolicyID(noMatch)] = &proto.Policy{}
+			store.PolicyByID[types.ProtoToPolicyID(allow)] = &proto.Policy{InboundRules: []*proto.Rule{{Action: "allow"}}}
+			store.Endpoint = &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{{Name: "tier1", IngressPolicies: tc.policies}}}
+			flow := &MockFlow{Protocol: 6, DestPort: 80}
+
+			st := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
+			Expect(st.Code).To(Equal(tc.want))
+			_, err := Evaluate(StagedAsEnforced, rules.RuleDirIngress, store, store.Endpoint, flow)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	}
 }
