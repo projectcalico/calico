@@ -176,10 +176,27 @@ func ciMetadata() map[string]any {
 		fieldCIRunID:     runID,
 		fieldEnv:         env,
 	}
-	if pr := firstEnv("SEMAPHORE_GIT_PR_NUMBER", "CI_GIT_PR_NUMBER"); pr != "" && pr != "none" {
+	if pr := prNumber(); pr != "" {
 		m[fieldPRNumber] = pr
 	}
 	return m
+}
+
+// prNumber returns the PR this run builds, or "" for a branch build. ArgoCI sets
+// CI_GIT_PR_NUMBER on the run after a merge too, naming the PR just merged, so there only a
+// PR ref type counts.
+func prNumber() string {
+	pr := os.Getenv("SEMAPHORE_GIT_PR_NUMBER")
+	if pr == "" {
+		if refType := os.Getenv("CI_GIT_REF_TYPE"); refType != "" && refType != "PR" {
+			return ""
+		}
+		pr = os.Getenv("CI_GIT_PR_NUMBER")
+	}
+	if pr == "none" {
+		return ""
+	}
+	return pr
 }
 
 // publish applies the index templates and sends every document under dir, returning the
