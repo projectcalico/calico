@@ -250,7 +250,7 @@ func TestSampler(t *testing.T) {
 
 func TestResourcesValidateAndRoundTrip(t *testing.T) {
 	fx := Build(Composite())
-	opts := ResourceOptions{Selector: "policyscale.projectcalico.org/target == 'true'"}
+	opts := ResourceOptions{Selector: "policyscale.projectcalico.org/target == 'true'", Enforced: true}
 	objs := fx.Resources(opts)
 	if got := countKind(objs, v3.KindTier); got != 1 {
 		t.Errorf("tiers: %d", got)
@@ -271,7 +271,7 @@ func TestResourcesValidateAndRoundTrip(t *testing.T) {
 		case *v3.Tier:
 			validate = true
 		case *v3.GlobalNetworkPolicy:
-			validate = strings.HasSuffix(o.Name, "-000") || strings.HasSuffix(o.Name, "-001") || o.Name == "perimeter."+fx.EgressTarget().Policy
+			validate = strings.HasSuffix(o.Name, "-000") || strings.HasSuffix(o.Name, "-001") || o.Name == fx.EgressTarget().Policy
 		case *v3.GlobalNetworkSet:
 			validate = o.Name == SentinelIPSetID || strings.HasSuffix(o.Name, "-0000") || len(o.Spec.Nets) > 50000
 		}
@@ -295,7 +295,7 @@ func TestResourcesValidateAndRoundTrip(t *testing.T) {
 	if err := yaml.Unmarshal(docs[1], &gnp); err != nil {
 		t.Fatal(err)
 	}
-	if gnp.Name != "perimeter.policy-000" || gnp.Spec.Tier != "perimeter" || gnp.Spec.Selector != opts.Selector {
+	if gnp.Name != "policy-000" || gnp.Spec.Tier != "perimeter" || gnp.Spec.Selector != opts.Selector {
 		t.Errorf("first policy: %+v", gnp.ObjectMeta)
 	}
 	if len(gnp.Spec.Types) != 1 || gnp.Spec.Types[0] != v3.PolicyTypeIngress || len(gnp.Spec.Ingress) != 68 {
@@ -313,7 +313,7 @@ func TestResourcesValidateAndRoundTrip(t *testing.T) {
 func TestWideCIDRPool(t *testing.T) {
 	ruleNets := func(fx *Fixture) []string {
 		var nets []string
-		for _, o := range fx.Resources(ResourceOptions{}) {
+		for _, o := range fx.Resources(ResourceOptions{Enforced: true}) {
 			gnp, ok := o.(*v3.GlobalNetworkPolicy)
 			if !ok {
 				continue
@@ -362,7 +362,7 @@ func TestWideCIDRPool(t *testing.T) {
 // verdict but programming no enforcement rules.
 func TestStagedResources(t *testing.T) {
 	fx := Build(Composite())
-	objs := fx.Resources(ResourceOptions{Staged: true})
+	objs := fx.Resources(ResourceOptions{})
 	if got := countKind(objs, v3.KindStagedGlobalNetworkPolicy); got != 294+301 {
 		t.Errorf("staged policies: %d, want %d", got, 294+301)
 	}
@@ -398,7 +398,7 @@ func TestStagedResources(t *testing.T) {
 	}
 
 	// The enforced and staged renderings differ only in kind and stagedAction.
-	enforced := fx.Resources(ResourceOptions{})
+	enforced := fx.Resources(ResourceOptions{Enforced: true})
 	if len(enforced) != len(objs) {
 		t.Fatalf("object counts differ: %d enforced, %d staged", len(enforced), len(objs))
 	}

@@ -46,17 +46,39 @@ func (v Verdict) String() string {
 	return fmt.Sprintf("%s/%s/%s[%d]=%s", v.Kind, v.Tier, v.Policy, v.Index, v.Action)
 }
 
-// Expect returns the trace the engine must report for the flow in the given direction, computed
-// from the generator's own model of each rule rather than from the proto the engine reads, so that
-// the two are independent. It follows what the dataplanes enforce: policies of a tier in order,
-// first matching rule decides; Allow or Deny ends the evaluation; Pass moves to the next tier; a
-// tier none of whose policies matched applies its default action, reported against the tier's
-// last policy, with anything but Pass denying; and with no profiles on the endpoint, an evaluation
-// that gets past every tier is denied.
+// Scope selects the policies a trace counts, as the pending and the enforced verdicts do.
+type Scope int
+
+const (
+	// PendingScope counts staged policies as enforced: the trace a flow log's pending policies
+	// report.
+	PendingScope Scope = iota
+	// EnforcedScope leaves staged policies out, and with them a tier that has no other policy: the
+	// trace the dataplane enforces.
+	EnforcedScope
+)
+
+// Expect returns the pending trace for the flow; see ExpectIn.
 func (fx *Fixture) Expect(dir Direction, f *Flow) []Verdict {
+	return fx.ExpectIn(PendingScope, dir, f)
+}
+
+// ExpectIn returns the trace the engine must report for the flow in the given direction and
+// scope, computed from the generator's own model of each rule rather than from the proto the
+// engine reads, so that the two are independent. It follows what the dataplanes enforce: policies
+// of a tier in order, first matching rule decides; Allow or Deny ends the evaluation; Pass moves to
+// the next tier; a tier none of whose policies matched applies its default action, reported
+// against the tier's last policy in scope, with anything but Pass denying; and with no profiles on
+// the endpoint, an evaluation that gets past every tier is denied.
+func (fx *Fixture) ExpectIn(scope Scope, dir Direction, f *Flow) []Verdict {
 	var trace []Verdict
 	for _, t := range fx.tiers {
-		policies := t.policies[dir]
+		var policies []*policyModel
+		for _, p := range t.policies[dir] {
+			if scope == PendingScope || !p.staged {
+				policies = append(policies, p)
+			}
+		}
 		if len(policies) == 0 {
 			continue
 		}
@@ -68,7 +90,7 @@ func (fx *Fixture) Expect(dir Direction, f *Flow) []Verdict {
 					continue
 				}
 				matched = true
-				trace = append(trace, Verdict{Kind: v3.KindGlobalNetworkPolicy, Tier: t.name, Policy: p.name, Index: i, Action: r.action})
+				trace = append(trace, Verdict{Kind: p.kind(), Tier: t.name, Policy: p.name, Index: i, Action: r.action})
 				if r.action == "pass" {
 					break Tier
 				}
@@ -81,7 +103,7 @@ func (fx *Fixture) Expect(dir Direction, f *Flow) []Verdict {
 				action = "pass"
 			}
 			last := policies[len(policies)-1]
-			trace = append(trace, Verdict{Kind: v3.KindGlobalNetworkPolicy, Tier: t.name, Policy: last.name, Index: TierDefaultIndex, Action: action})
+			trace = append(trace, Verdict{Kind: last.kind(), Tier: t.name, Policy: last.name, Index: TierDefaultIndex, Action: action})
 			if action != "pass" {
 				return trace
 			}
