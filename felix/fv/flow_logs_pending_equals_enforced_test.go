@@ -16,7 +16,6 @@ package fv_test
 
 import (
 	"fmt"
-	"maps"
 	"net"
 	"net/netip"
 	"slices"
@@ -31,6 +30,10 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calico/app-policy/policyscale"
@@ -39,6 +42,8 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -46,24 +51,27 @@ import (
 
 // With no staged policies, the pending verdict Felix works out for a flow must name exactly the
 // policies, rules and actions the dataplane enforced for it. The policies are the policyscale
-// rule-shape preset, one rule for each kind of criterion, applied as enforced policy to one
-// workload; every flow the preset aims at a rule is sent between that workload and a peer workload
-// of its own, and every flow log must report the same pending and enforced policies, which must
-// also be what the preset's oracle expects. Rule shapes with a known difference between the two,
-// listed in policyscale.KnownDifferences for the dataplane under test, are left out.
+// rule-shape preset, one rule for each kind of criterion, applied as enforced policy to a local
+// workload; every flow the preset aims at a rule is sent between a local workload and a peer
+// workload of its own, and every flow log record must report the same pending and enforced
+// policies, which must also be what the preset's oracle expects. Rule shapes with a known
+// difference between the two on the dataplane under test, listed in policyscale's known
+// differences, are left out.
 var _ = infrastructure.DatastoreDescribe(
 	"_BPF-SAFE_ pending policies equal enforced policies with no staged policies",
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes},
 	func(getInfra infrastructure.InfraFactory) {
 		const (
 			localLabel   = "pending-equals-enforced"
-			profileAllow = "__PROFILE__|pro:kns.default|allow|0"
+			profileAllow = "__PROFILE__|pro:" + policyscale.DefaultProfile + "|allow|0"
 		)
 		var (
-			infra infrastructure.DatastoreInfra
-			tc    infrastructure.TopologyContainers
-			fx    *policyscale.Fixture
-			byIP  map[netip.Addr]*workload.Workload
+			infra    infrastructure.DatastoreInfra
+			tc       infrastructure.TopologyContainers
+			fx       *policyscale.Fixture
+			policies []*api.GlobalNetworkPolicy
+			byIP     map[netip.Addr]*workload.Workload
+			locals   []*workload.Workload
 		)
 
 		dataplane := policyscale.Iptables
@@ -73,6 +81,10 @@ var _ = infrastructure.DatastoreDescribe(
 		case infrastructure.NFTMode():
 			dataplane = policyscale.Nftables
 		}
+		// The size of the plan on each dataplane today, less a margin: a plan much smaller than
+		// this has lost rule shapes.
+		minRules, minFlows := map[policyscale.Where]int{policyscale.Iptables: 70, policyscale.Nftables: 62, policyscale.BPF: 70},
+			map[policyscale.Where]int{policyscale.Iptables: 250, policyscale.Nftables: 220, policyscale.BPF: 235}
 
 		BeforeEach(func() {
 			infra = getInfra()
@@ -88,28 +100,33 @@ var _ = infrastructure.DatastoreDescribe(
 			tc, c = infrastructure.StartNNodeTopology(2, opts, infra)
 			infra.AddDefaultAllow()
 
-			// The policies select a workload on the first node; every peer address the preset
-			// uses is a workload of its own on the second node.
+			// The policies select the local workloads on the first node; every peer address the
+			// preset uses is a workload of its own on the second node.
 			shapes := policyscale.DefaultShapes()
 			shapes.LocalIPv4 = netip.MustParseAddr("10.65.0.10")
 			shapes.LocalIPv6 = netip.MustParseAddr("dead:beef::10")
 			shapes.PeerIPv4 = netip.MustParsePrefix("10.65.1.0/24")
 			shapes.PeerIPv6 = netip.MustParsePrefix("dead:beef::1:0/120")
 			shapes.LeaveOut = policyscale.LeaveOutAt(dataplane)
-			fx = policyscale.Build(policyscale.Spec{Seed: policyscale.DefaultSeed, Shapes: &shapes})
-
-			resourceOpts := policyscale.ResourceOptions{Selector: fmt.Sprintf("%s == 'true'", localLabel)}
+			fx = policyscale.Build(policyscale.Spec{
+				Seed:    policyscale.DefaultSeed,
+				Shapes:  &shapes,
+				Profile: policyscale.DefaultProfile,
+			})
 
 			byIP = map[netip.Addr]*workload.Workload{}
-			addWorkload := func(felix *infrastructure.Felix, name string, v4, v6 netip.Addr, labels map[string]string) *workload.Workload {
-				infrastructure.AssignIP(name, v4.String(), felix.Hostname, c)
-				infrastructure.AssignIP(name, v6.String(), felix.Hostname, c)
-				w := workload.New(felix, name, "default", v4.String(), "8055", "tcp",
-					workload.WithIPv6Address(v6.String()))
-				maps.Copy(labels, fx.EndpointLabels(resourceOpts, v4, v6))
+			addWorkload := func(felix *infrastructure.Felix, name string, labels map[string]string, addrs ...netip.Addr) *workload.Workload {
+				var wopts []workload.Opt
+				for _, a := range addrs {
+					infrastructure.AssignIP(name, a.String(), felix.Hostname, c)
+				}
+				if len(addrs) > 1 {
+					wopts = append(wopts, workload.WithIPv6Address(addrs[1].String()))
+				}
+				w := workload.New(felix, name, "default", addrs[0].String(), "8055", "tcp", wopts...)
 				w.WorkloadEndpoint.Labels = labels
 				for _, np := range fx.NamedPorts() {
-					if slices.Contains(np.Addrs, v4) || slices.Contains(np.Addrs, v6) {
+					if slices.ContainsFunc(addrs, func(a netip.Addr) bool { return slices.Contains(np.Addrs, a) }) {
 						w.WorkloadEndpoint.Spec.Ports = append(w.WorkloadEndpoint.Spec.Ports, internalapi.WorkloadEndpointPort{
 							Name:     np.Name,
 							Port:     uint16(np.Port),
@@ -119,15 +136,20 @@ var _ = infrastructure.DatastoreDescribe(
 				}
 				Expect(w.Start(infra)).To(Succeed())
 				w.ConfigureInInfra(infra)
-				byIP[v4], byIP[v6] = w, w
+				for _, a := range addrs {
+					byIP[a] = w
+				}
 				return w
 			}
-			addWorkload(tc.Felixes[0], "local", shapes.LocalIPv4, shapes.LocalIPv6,
-				map[string]string{localLabel: "true"})
+			// A flow log record doesn't tell the IP families apart, and holds one pending verdict,
+			// so each family's flows go to a local workload of their own.
+			locals = []*workload.Workload{
+				addWorkload(tc.Felixes[0], "local-v4", map[string]string{localLabel: "true"}, shapes.LocalIPv4),
+				addWorkload(tc.Felixes[0], "local-v6", map[string]string{localLabel: "true"}, shapes.LocalIPv6),
+			}
 			for _, offset := range peerOffsets(fx, shapes) {
-				addWorkload(tc.Felixes[1], fmt.Sprintf("peer-%d", offset),
-					nthAddr(shapes.PeerIPv4, offset), nthAddr(shapes.PeerIPv6, offset),
-					map[string]string{"peer": strconv.Itoa(offset)})
+				addWorkload(tc.Felixes[1], fmt.Sprintf("peer-%d", offset), map[string]string{"peer": strconv.Itoa(offset)},
+					nthAddr(shapes.PeerIPv4, offset), nthAddr(shapes.PeerIPv6, offset))
 			}
 
 			ensureRoutesProgrammed(tc.Felixes)
@@ -135,29 +157,42 @@ var _ = infrastructure.DatastoreDescribe(
 				ensureAllNodesBPFProgramsAttached(tc.Felixes)
 			}
 
-			applyResources(c, fx.Resources(resourceOpts))
+			createServiceEndpointSlices(infra, fx.Services())
+			objs := fx.Resources(policyscale.ResourceOptions{
+				Selector: fmt.Sprintf("%s == 'true'", localLabel),
+				Enforced: true,
+			})
+			applyResources(c, objs)
+			policies = nil
+			for _, o := range objs {
+				if gnp, ok := o.(*api.GlobalNetworkPolicy); ok {
+					policies = append(policies, gnp)
+				}
+			}
+			waitForPolicies(tc.Felixes[0], locals, policies)
 		})
 
 		It("reports the enforced policies as the pending ones for every flow of the rule-shape preset", func() {
-			excluded := policyscale.DifferencesAt(policyscale.Evaluator, dataplane)
+			// The builds this runs against know every protocol name on BPF, so rules that name
+			// ICMPv6 and UDPLite are checked there too.
+			excluded := slices.DeleteFunc(policyscale.DifferencesAt(policyscale.Evaluator, dataplane),
+				func(d policyscale.Difference) bool { return d == policyscale.ProtocolNamesOnBPF })
 
 			plan := newPendingPlan()
+			rules := 0
 			for _, dir := range []policyscale.Direction{policyscale.Ingress, policyscale.Egress} {
+				rules += len(fx.ShapeRules(dir))
 				for _, sf := range fx.ShapeFlows(dir, excluded...) {
-					if strings.HasPrefix(sf.Name, "destination service:") {
-						// A service match needs a Kubernetes Service and its endpoint slices,
-						// which the test doesn't create; with no service, the rule matches
-						// nothing, enforced or pending.
-						continue
-					}
 					plan.add(fx, dir, sf, byIP, profileAllow)
 				}
 			}
 			Expect(plan.conflicts).To(BeEmpty(),
 				"flows that would share a flow log record but expect different verdicts")
-			log.Infof("Sending %d flows, expecting %d flow log records", len(plan.flows), len(plan.records))
+			Expect(rules).To(BeNumerically(">=", minRules[dataplane]), "rules in the preset")
+			Expect(len(plan.flows)).To(BeNumerically(">=", minFlows[dataplane]), "flows planned")
+			log.Infof("Sending %d flows for %d rules, expecting %d flow log records", len(plan.flows), rules, len(plan.records))
 
-			var mismatches []string
+			var mismatches, earlyPending []string
 			for attempt := 1; ; attempt++ {
 				for _, f := range tc.Felixes {
 					f.FlowServerReset()
@@ -187,16 +222,24 @@ var _ = infrastructure.DatastoreDescribe(
 				}
 
 				var converged bool
-				mismatches, converged = plan.compare(records)
+				var pendingOnly []string
+				mismatches, pendingOnly, converged = plan.compare(records)
 				if converged || attempt == 5 {
 					log.Infof("Compared %d flow log records on attempt %d", len(records), attempt)
 					break
 				}
-				// The dataplane hasn't caught up with every policy yet: the enforced verdicts
-				// still differ from the oracle's. Try again with fresh connections.
+				// The dataplane hasn't caught up with every policy yet: some enforced verdicts still
+				// differ from the oracle's. Pending verdicts that differed even where the enforced
+				// one was right are kept, since a retry could hide them.
+				earlyPending = append(earlyPending, pendingOnly...)
 				log.Infof("Attempt %d: the dataplane doesn't enforce the oracle's verdicts yet:\n%s",
 					attempt, strings.Join(mismatches, "\n"))
 				time.Sleep(3 * time.Second)
+			}
+			if len(earlyPending) > 0 {
+				log.Warnf("Pending policies that differed from correct enforced ones before the dataplane caught up:\n%s",
+					strings.Join(earlyPending, "\n"))
+				AddReportEntry("pending policies that differed before the dataplane caught up", earlyPending)
 			}
 			Expect(mismatches).To(BeEmpty(), "%d flow log records with pending policies that differ from "+
 				"the enforced ones, or with enforced policies that differ from the oracle's:\n%s",
@@ -267,6 +310,99 @@ func applyResources(c client.Interface, objs []runtime.Object) {
 			Fail(fmt.Sprintf("the preset rendered a %T, which the test doesn't create", o))
 		}
 	}
+}
+
+// createServiceEndpointSlices makes the endpoint slices Felix builds a service match from. Felix
+// needs no Service object for that.
+func createServiceEndpointSlices(infra infrastructure.DatastoreInfra, services []policyscale.Service) {
+	kc := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+	for _, svc := range services {
+		ns := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: svc.Namespace}}
+		if _, err := kc.CoreV1().Namespaces().Create(utils.Ctx, ns, metav1.CreateOptions{}); !apierrors.IsAlreadyExists(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
+		port := int32(svc.Port)
+		protocol := v1.Protocol(strings.ToUpper(svc.Protocol))
+		byFamily := map[discovery.AddressType][]string{}
+		for _, a := range svc.Addrs {
+			family := discovery.AddressTypeIPv4
+			if a.Is6() {
+				family = discovery.AddressTypeIPv6
+			}
+			byFamily[family] = append(byFamily[family], a.String())
+		}
+		for family, addrs := range byFamily {
+			eps := &discovery.EndpointSlice{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      strings.ToLower(fmt.Sprintf("%s-%s", svc.Name, family)),
+					Namespace: svc.Namespace,
+					Labels:    map[string]string{discovery.LabelServiceName: svc.Name},
+				},
+				AddressType: family,
+				Endpoints:   []discovery.Endpoint{{Addresses: addrs}},
+				Ports:       []discovery.EndpointPort{{Port: &port, Protocol: &protocol}},
+			}
+			_, err := kc.DiscoveryV1().EndpointSlices(svc.Namespace).Create(utils.Ctx, eps, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+	}
+}
+
+// waitForPolicies waits until the first node's dataplane has every policy for the local
+// workloads, in both IP families, so that the first flows sent meet all of them.
+func waitForPolicies(f *infrastructure.Felix, locals []*workload.Workload, policies []*api.GlobalNetworkPolicy) {
+	hook := func(p *api.GlobalNetworkPolicy) string {
+		if slices.Contains(p.Spec.Types, api.PolicyTypeEgress) {
+			return "egress"
+		}
+		return "ingress"
+	}
+	missing := func() []string {
+		var out []string
+		if BPFMode() {
+			for _, w := range locals {
+				args := []string{"calico-bpf", "policy", "dump", w.InterfaceName}
+				if strings.Contains(w.IP, ":") {
+					args = []string{"calico-bpf", "-6", "policy", "dump", w.InterfaceName}
+				}
+				for _, h := range []string{"ingress", "egress"} {
+					dump, _ := f.ExecOutput(append(args, h)...)
+					for _, p := range policies {
+						if hook(p) == h && !strings.Contains(dump, "Policy: GlobalNetworkPolicy "+p.Name) {
+							out = append(out, fmt.Sprintf("%s %s %s", w.Name, h, p.Name))
+						}
+					}
+				}
+			}
+			return out
+		}
+		var dumps []string
+		if infrastructure.NFTMode() {
+			for _, table := range []string{"ip", "ip6"} {
+				d, _ := f.ExecOutput("nft", "list", "chains", table, "calico")
+				dumps = append(dumps, d)
+			}
+		} else {
+			for _, save := range []string{"iptables-save", "ip6tables-save"} {
+				d, _ := f.ExecOutput(save, "-t", "filter")
+				dumps = append(dumps, d)
+			}
+		}
+		for _, p := range policies {
+			prefix := rules.PolicyInboundPfx
+			if hook(p) == "egress" {
+				prefix = rules.PolicyOutboundPfx
+			}
+			chain := rules.PolicyChainName(prefix, &types.PolicyID{Name: p.Name, Kind: api.KindGlobalNetworkPolicy}, infrastructure.NFTMode())
+			for i, d := range dumps {
+				if !strings.Contains(d, chain) {
+					out = append(out, fmt.Sprintf("%s (table %d)", chain, i))
+				}
+			}
+		}
+		return out
+	}
+	Eventually(missing, "60s", "1s").Should(BeEmpty(), "policies the dataplane doesn't have yet")
 }
 
 func flushConntrack(f *infrastructure.Felix) {
@@ -416,13 +552,16 @@ func sameExpectations(a, b []*plannedRecord) bool {
 
 // verdictStrings renders the oracle's trace as flow log policy strings.
 func verdictStrings(trace []policyscale.Verdict) []string {
+	kinds := map[string]string{
+		api.KindGlobalNetworkPolicy:       "gnp",
+		api.KindStagedGlobalNetworkPolicy: "sgnp",
+		api.KindProfile:                   "pro",
+	}
 	var out []string
 	for i, v := range trace {
-		if v.Kind == api.KindProfile {
-			out = append(out, fmt.Sprintf("%d|%s|pro:%s|%s|%d", i, v.Tier, v.Policy, v.Action, v.Index))
-			continue
-		}
-		out = append(out, fmt.Sprintf("%d|%s|gnp:%s.%s|%s|%d", i, v.Tier, v.Tier, v.Policy, v.Action, v.Index))
+		kind, ok := kinds[v.Kind]
+		Expect(ok).To(BeTrue(), "no flow log name for a %s", v.Kind)
+		out = append(out, fmt.Sprintf("%d|%s|%s:%s|%s|%d", i, v.Tier, kind, v.Policy, v.Action, v.Index))
 	}
 	return out
 }
@@ -550,27 +689,31 @@ func keyOfRecord(r flowlog.FlowLog) pendingRecordKey {
 	}
 }
 
-// compare checks every flow log record that belongs to a planned flow. A record's enforced
-// policies differing from the oracle's means the dataplane hasn't caught up with the policies yet,
-// so the result is only final, converged, once none does; a record whose pending policies differ
-// from its enforced ones, or are empty, is a mismatch either way.
-func (p *pendingPlan) compare(records []flowlog.FlowLog) (mismatches []string, converged bool) {
+// compare checks every flow log record from the test's workloads against the plan. A record's
+// enforced policies differing from the oracle's, a planned record missing, or a record the plan
+// didn't expect (as when the dataplane took another action) means the dataplane hasn't caught up
+// with the policies yet, so the result is only final, converged, once there are none. A record
+// whose pending policies are empty or differ from its enforced ones is a mismatch either way;
+// pendingOnly lists those whose enforced policies were right.
+func (p *pendingPlan) compare(records []flowlog.FlowLog) (mismatches, pendingOnly []string, converged bool) {
 	converged = true
-	var unplanned []string
 	for _, r := range records {
 		key := keyOfRecord(r)
+		enforced, pending := sortedPolicies(r.FlowEnforcedPolicySet), sortedPolicies(r.FlowPendingPolicySet)
 		planned, ok := p.records[key]
 		if !ok {
-			unplanned = append(unplanned, fmt.Sprintf("%v enforced=%v pending=%v",
-				key, sortedPolicies(r.FlowEnforcedPolicySet), sortedPolicies(r.FlowPendingPolicySet)))
+			mismatches = append(mismatches, fmt.Sprintf("- %v: no flow sent should produce this record\n    enforced: %v\n    pending:  %v",
+				key, enforced, pending))
+			converged = false
 			continue
 		}
-		enforced, pending := sortedPolicies(r.FlowEnforcedPolicySet), sortedPolicies(r.FlowPendingPolicySet)
 		var problems []string
-		if !slices.Equal(enforced, planned.expected) {
+		enforcedRight := slices.Equal(enforced, planned.expected)
+		if !enforcedRight {
 			problems = append(problems, "enforced policies differ from the oracle's")
 			converged = false
 		}
+		pendingWrong := len(pending) == 0 || !slices.Equal(pending, enforced)
 		if len(pending) == 0 {
 			problems = append(problems, "no pending policies")
 		} else if !slices.Equal(pending, enforced) {
@@ -579,8 +722,12 @@ func (p *pendingPlan) compare(records []flowlog.FlowLog) (mismatches []string, c
 		if len(problems) == 0 {
 			continue
 		}
-		mismatches = append(mismatches, fmt.Sprintf("- %v: %s\n    flows:    %q\n    enforced: %v\n    pending:  %v\n    oracle:   %v",
-			key, strings.Join(problems, "; "), planned.flows, enforced, pending, planned.expected))
+		m := fmt.Sprintf("- %v: %s\n    flows:    %q\n    enforced: %v\n    pending:  %v\n    oracle:   %v",
+			key, strings.Join(problems, "; "), planned.flows, enforced, pending, planned.expected)
+		mismatches = append(mismatches, m)
+		if enforcedRight && pendingWrong {
+			pendingOnly = append(pendingOnly, m)
+		}
 	}
 	// A missing record means the dataplane dropped the flow before it reached policy, or hasn't
 	// logged it yet.
@@ -588,15 +735,9 @@ func (p *pendingPlan) compare(records []flowlog.FlowLog) (mismatches []string, c
 		mismatches = append(mismatches, "- no flow log record: "+m)
 		converged = false
 	}
-	if len(unplanned) > 0 {
-		sort.Strings(unplanned)
-		log.Infof("Flow log records for flows the test didn't plan:\n%s", strings.Join(slices.Compact(unplanned), "\n"))
-		if !converged {
-			mismatches = append(mismatches, "Flow log records for flows the test didn't plan:\n"+strings.Join(slices.Compact(unplanned), "\n"))
-		}
-	}
 	sort.Strings(mismatches)
-	return slices.Compact(mismatches), converged
+	sort.Strings(pendingOnly)
+	return slices.Compact(mismatches), slices.Compact(pendingOnly), converged
 }
 
 func sortedPolicies(s flowlog.FlowPolicySet) []string {
