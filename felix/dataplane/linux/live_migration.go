@@ -62,7 +62,8 @@ var (
 		Name: "felix_live_migration_completions_total",
 		Help: "Number of live migrations to this host that have finished, by outcome: " +
 			"completed_with_garp (Felix saw the VM's GARP/RARP), completed_no_garp (the migration " +
-			"completed without Felix seeing a GARP/RARP), or aborted.",
+			"completed without Felix seeing a GARP/RARP), or aborted (the workload was deleted " +
+			"before the migration completed).",
 	}, []string{"outcome"})
 )
 
@@ -426,7 +427,7 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 		switch f.currentState {
 		case liveMigrationStateTarget:
 			f.stopGARPDetection()
-			f.recordCompletion(next)
+			f.recordCompletion(input, next)
 		case liveMigrationStateTimeWait:
 			f.stopElevatedRoutingTimer()
 		}
@@ -453,20 +454,26 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 }
 
 // recordCompletion is called when the FSM leaves the Target state, i.e. when the migration of
-// the workload to this host has either completed or been aborted.  It counts the outcome and, for
-// a completion, creates the reporter that the endpoint managers call as they write the
-// workload's elevated-priority routes.
-func (f *liveMigrationFSM) recordCompletion(next liveMigrationState) {
-	if next == liveMigrationStateBase {
+// the workload to this host has either completed or been aborted.  It counts the outcome and, if
+// the workload's routes are to be elevated, creates the reporter that the endpoint managers call
+// as they write them.
+func (f *liveMigrationFSM) recordCompletion(input liveMigrationInput, next liveMigrationState) {
+	// The outcome depends on the input, not on the next state.  A Source input also leads to Base,
+	// with no route elevation, but it still means that the migration to this host succeeded: a
+	// workload only becomes a migration source when the VM is running in it, whereas after a
+	// failed migration the target workload is deleted.
+	switch {
+	case input == liveMigrationInputDeleted:
 		countLiveMigrationCompletions.WithLabelValues(liveMigrationOutcomeAborted).Inc()
 		return
-	}
-	if f.garpDetectedAt.IsZero() {
+	case f.garpDetectedAt.IsZero():
 		countLiveMigrationCompletions.WithLabelValues(liveMigrationOutcomeCompletedNoGARP).Inc()
-	} else {
+	default:
 		countLiveMigrationCompletions.WithLabelValues(liveMigrationOutcomeCompletedWithGARP).Inc()
 	}
-	f.routeReporter = newLiveMigrationRouteReporter(f.logCtx, f.garpDetectedAt)
+	if next != liveMigrationStateBase {
+		f.routeReporter = newLiveMigrationRouteReporter(f.logCtx, f.garpDetectedAt)
+	}
 }
 
 func (f *liveMigrationFSM) notifyStateChange(next liveMigrationState) {

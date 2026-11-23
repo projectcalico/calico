@@ -929,7 +929,8 @@ func TestLiveMigrationCompletionOutcomes(t *testing.T) {
 		{"GARP processed", true, liveMigrationInputGARPDetected, liveMigrationStateLive, liveMigrationOutcomeCompletedWithGARP},
 		{"GARP detected but overtaken by completion", true, liveMigrationInputNoRole, liveMigrationStateTimeWait, liveMigrationOutcomeCompletedWithGARP},
 		{"no GARP detected", false, liveMigrationInputNoRole, liveMigrationStateTimeWait, liveMigrationOutcomeCompletedNoGARP},
-		{"re-migrated away", true, liveMigrationInputSource, liveMigrationStateBase, liveMigrationOutcomeAborted},
+		{"re-migrated away after GARP", true, liveMigrationInputSource, liveMigrationStateBase, liveMigrationOutcomeCompletedWithGARP},
+		{"re-migrated away without GARP", false, liveMigrationInputSource, liveMigrationStateBase, liveMigrationOutcomeCompletedNoGARP},
 		{"workload deleted", false, liveMigrationInputDeleted, liveMigrationStateBase, liveMigrationOutcomeAborted},
 	}
 	allOutcomes := []string{
@@ -962,7 +963,8 @@ func TestLiveMigrationCompletionOutcomes(t *testing.T) {
 			}
 
 			g.Expect(m.pendingModifiers).To(HaveLen(1))
-			if tt.wantOutcome == liveMigrationOutcomeAborted {
+			if tt.wantState == liveMigrationStateBase {
+				// No route elevation, so no reporter, whatever the outcome.
 				g.Expect(fsm.routeReporter).To(BeNil())
 				g.Expect(m.pendingModifiers[fsm.id]).To(BeNil())
 			} else {
@@ -994,10 +996,10 @@ func TestLiveMigrationCompletionOutcomes(t *testing.T) {
 	})
 }
 
-// TestGARPDetectionTimeSurvivesAbortedReport covers the case where the main loop never processes
+// TestGARPDetectionTimeSurvivesUnprocessedReport covers the case where the main loop never processes
 // the GARP, because the migration's completion overtakes it: the GARP must still count, and be
 // timed from when it was detected.
-func TestGARPDetectionTimeSurvivesAbortedReport(t *testing.T) {
+func TestGARPDetectionTimeSurvivesUnprocessedReport(t *testing.T) {
 	g := NewWithT(t)
 	m := newTestMonitor(testConvergenceTime)
 	fakeHandle := newFakeGARPHandle(buildGARPPacketBytes(t))

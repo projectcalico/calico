@@ -58,6 +58,19 @@ const (
 	wepRouteModeElevated
 )
 
+func (m wepRouteMode) String() string {
+	switch m {
+	case wepRouteModeNormal:
+		return "Normal"
+	case wepRouteModeSuppressed:
+		return "Suppressed"
+	case wepRouteModeElevated:
+		return "Elevated"
+	default:
+		return fmt.Sprintf("wepRouteMode(%d)", int(m))
+	}
+}
+
 type wepRouteModifier struct {
 	mode wepRouteMode
 
@@ -506,7 +519,11 @@ func (m *endpointManager) OnRouteModifierUpdate(id types.WorkloadEndpointID, mod
 		log.WithField("id", id).Debug("Delete route modifier")
 		delete(m.wepRouteModifiers, id)
 	} else {
-		log.WithFields(log.Fields{"id": id, "mod": *mod}).Debug("Route modifier update")
+		log.WithFields(log.Fields{
+			"id":              id,
+			"mode":            mod.mode,
+			"hasOnProgrammed": mod.onProgrammed != nil,
+		}).Debug("Route modifier update")
 		m.wepRouteModifiers[id] = *mod
 	}
 
@@ -1086,8 +1103,7 @@ func (m *endpointManager) calculateRoutes(
 			DestMAC: mac,
 		}
 		if routeModifier.onProgrammed != nil {
-			onRouteProgrammed := routeModifier.onProgrammed
-			target.OnProgrammed = func() { onRouteProgrammed(cidr) }
+			target.OnProgrammed = func() { routeModifier.onProgrammed(cidr) }
 		}
 		routeTargets = append(routeTargets, target)
 	}
