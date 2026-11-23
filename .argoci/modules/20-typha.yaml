@@ -25,6 +25,9 @@ steps:
         - /cache/calico-image/calico.tar:calico-build/calico.tar
       source: |
         set -euo pipefail
+        # Nothing sets CI on the machine, and the Makefiles key their CI behaviour
+        # (read-only go.mod, keeping a failed suite's namespaces) on it.
+        export CI=true
         reports() {
           artifact push job "${repo:-.}/typha/report" --destination test-results || true
           artifact push job "${repo:-.}/felix/report" --destination test-results-felix || true

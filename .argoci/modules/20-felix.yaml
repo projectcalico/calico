@@ -145,7 +145,7 @@ steps:
         zones: [us-central1-a]
         vmImageProject: unique-caldron-775
       project: tigera-cc-dev
-      env: [CI_WORKFLOW_NAME]
+      env: [CI_WORKFLOW_NAME, NO_LIBBPF_CLONE]
       put:
         - /cache/calico-image/calico.tar:calico-build/calico.tar
         - /cache/calico-build/calico-cgo-amd64:calico-build/calico-cgo-amd64
@@ -153,6 +153,9 @@ steps:
         - /cache/calico-build/libbpf-amd64.tar:calico-build/libbpf-amd64.tar
       source: |
         set -euo pipefail
+        # Nothing sets CI on the machine, and the Makefiles key their CI behaviour
+        # (read-only go.mod, keeping a failed suite's namespaces) on it.
+        export CI=true
         trap 'artifact push job "${repo:-.}/felix/report" --destination test-results || true' EXIT
         go_env=$(.argoci/scripts/vm-go-cache felix-k8sfv) || exit 1
         eval "$go_env"

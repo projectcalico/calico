@@ -4,8 +4,9 @@ version: condensed-module
 
 defaults:
   tiers: []
-  # Longer than the default hour: a cluster plus a conformance suite.
-  timeout: 1h30m
+  # A cluster plus a suite that may itself take 90m (E2E_TIMEOUT): the margin is
+  # what lets the script's own failure handling run before the deadline.
+  timeout: 2h
 
 steps:
   - name: e2e-kind
@@ -94,6 +95,8 @@ steps:
         project: tigera-cc-dev
         zones: [us-central1-a]
         vmImageProject: unique-caldron-775
+        # Past the step's timeout, which bounds the machine anyway.
+        maxRunDuration: 2h15m
       project: tigera-cc-dev
       env:
         - CI_WORKFLOW_NAME
@@ -112,6 +115,9 @@ steps:
         - /cache/calico-image/calico.tar:calico-build/calico.tar
       source: |
         set -euo pipefail
+        # Nothing sets CI on the machine, and the Makefiles key their CI behaviour
+        # (read-only go.mod, keeping a failed suite's namespaces) on it.
+        export CI=true
         # Every lane forwards every name; one a lane leaves unset arrives empty,
         # and an empty variable would override a Makefile's ?= default.
         for var in EXTRA_VALUES_FILES KIND_CALICO_API_GROUP E2E_TEST_CONFIG SANDCAT_SKIP; do
@@ -128,7 +134,8 @@ steps:
         }
         # The snapshot tool is only in the CI image.
         snapshot_kind_cluster() {
-          docker login -u _json_key --password-stdin https://gcr.io < "${CI_ARTIFACT_SA_KEY_FILE}"
+          # Where runOnVM puts the artifact key; CI_ARTIFACT_SA_KEY_FILE is the pod's path.
+          docker login -u _json_key --password-stdin https://gcr.io < "$HOME/.argoci/artifacts-sa.json"
           docker run --rm --network host -v "$PWD:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4 \
             kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz
           artifact push job kind-snapshot.tar.gz --destination kind-snapshot.tar.gz
