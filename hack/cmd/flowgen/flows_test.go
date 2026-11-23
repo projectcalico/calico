@@ -109,13 +109,13 @@ func TestScaledFixtureHasAnotherFingerprint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	unscaled := policyscale.Fingerprint(policyscale.Build(spec).Spec)
+	unscaled := policyscale.Build(spec).Fingerprint()
 	t.Setenv("POLICYSCALE_POLICIES", "500")
 	spec, err = policyscale.Preset("egress", policyscale.DefaultSeed)
 	if err != nil {
 		t.Fatal(err)
 	}
-	scaled := policyscale.Fingerprint(policyscale.Build(spec).Spec)
+	scaled := policyscale.Build(spec).Fingerprint()
 	if checkFixture(scaled, unscaled) == nil {
 		t.Fatalf("scaling the preset kept fingerprint %s", scaled)
 	}

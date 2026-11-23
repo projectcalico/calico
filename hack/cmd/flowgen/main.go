@@ -74,7 +74,7 @@ func main() {
 		mode        = flag.String("mode", "flows", "flows: open short flows at -rate. hold: open -connections long-lived TCP connections at -rate and keep them open for the run. listen: accept TCP connections on -listen-ports and hold them, reading and discarding data")
 		preset      = flag.String("preset", "composite", "policy set the cluster has applied: baseline, egress, composite or shapes")
 		seed        = flag.Int64("seed", policyscale.DefaultSeed, "generator seed; must match the applied policy set")
-		fixture     = flag.String("fixture", "", "fingerprint of the applied policy set, from its tiers' "+policyscale.FingerprintAnnotation+" annotation or `policyscale -fingerprint`; flowgen refuses to run if its own fixture differs")
+		fixture     = flag.String("fixture", "", "fingerprint of the applied policy set, from its objects' "+policyscale.FixtureLabel+" label; flowgen refuses to run if its own fixture differs")
 		rate        = flag.Int("rate", 1000, "new flows per second to open")
 		duration    = flag.Duration("duration", 30*time.Second, "how long to run; with -mode hold or listen, 0 runs until interrupted")
 		protocol    = flag.String("protocol", "fixture", "fixture: send each flow with the protocol the fixture gave it. tcp or udp: send every flow with that protocol, which changes the verdict of flows generated with another")
@@ -123,7 +123,7 @@ func main() {
 		os.Exit(2)
 	}
 	fx := policyscale.Build(spec)
-	fingerprint := policyscale.Fingerprint(fx.Spec)
+	fingerprint := fx.Fingerprint()
 	if err := checkFixture(*fixture, fingerprint); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)

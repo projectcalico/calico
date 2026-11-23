@@ -258,5 +258,6 @@ func Preset(name string, seed int64) (Spec, error) {
 		return Spec{}, fmt.Errorf("unknown preset %q: want baseline, egress, composite or shapes", name)
 	}
 	spec.Seed = seed
-	return ScaleFromEnv(spec), nil
+	spec = ScaleFromEnv(spec)
+	return spec, spec.Validate()
 }

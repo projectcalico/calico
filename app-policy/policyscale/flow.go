@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"net/netip"
 )
 
 // The addresses and ports the denied flows use. TEST-NET addresses: generated IP set members and
@@ -200,4 +201,22 @@ func (s *Sampler) Next() *Flow {
 
 func (s *Sampler) ephemeralPort() int {
 	return 32768 + s.rng.Intn(28232)
+}
+
+// Prefixes returns the address ranges the fixture's flows and rules use. A sink that answers the
+// generated destinations needs routes for them, and an ingress run that sends from the generated
+// sources must be allowed to use them.
+func (fx *Fixture) Prefixes() []netip.Prefix {
+	var out []netip.Prefix
+	if fx.Spec.Baseline != nil || fx.Spec.Egress != nil {
+		// Rule CIDRs and set members, then the TEST-NETs the denied and spread flows use.
+		out = append(out, netip.MustParsePrefix("10.0.0.0/8"))
+	}
+	if p := fx.Spec.Shapes; p != nil {
+		out = append(out, netip.PrefixFrom(p.LocalIPv4, 32), p.PeerIPv4, netip.PrefixFrom(p.LocalIPv6, 128), p.PeerIPv6)
+	}
+	for _, a := range []string{SourceIP, DeniedDestIP, UnlistedIP} {
+		out = append(out, netip.PrefixFrom(netip.MustParseAddr(a), 24).Masked())
+	}
+	return out
 }
