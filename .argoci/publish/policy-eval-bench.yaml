@@ -16,7 +16,9 @@ defaults:
 
 steps:
   - name: publish-policy-eval-bench
-    when: GIT_BRANCH == 'master'
+    # Registered with alwaysRunOnMerge only, so this never runs for a PR; the ref type
+    # says so again here, since GIT_BRANCH alone is a PR's base branch too.
+    when: GIT_REF_TYPE == 'MERGE' && GIT_BRANCH == 'master'
     changes:
       in:
         - ^app-policy/
@@ -36,10 +38,10 @@ steps:
           - name: LENS_ELASTICSEARCH_USER
           - name: LENS_ELASTICSEARCH_TOKEN
     commands: |
-      # Belt and braces with the `when:` above.  CI_GIT_BRANCH is the base ref,
-      # so on a merge it is the branch merged into.
-      if [ "${CI_GIT_BRANCH}" != "master" ]; then
-        echo "[ERROR] refusing to publish from branch '${CI_GIT_BRANCH}' (expected master)" >&2
+      # Belt and braces with the `when:` above.  CI_GIT_BRANCH is the base ref, so
+      # it reads "master" for a PR into master as well as for a merge.
+      if [ "${CI_GIT_REF_TYPE}" != MERGE ] || [ "${CI_GIT_BRANCH}" != master ]; then
+        echo "[ERROR] refusing to publish: ref type '${CI_GIT_REF_TYPE}', branch '${CI_GIT_BRANCH}' (expected a merge to master)" >&2
         exit 1
       fi
       make -C app-policy bench-policy-eval
