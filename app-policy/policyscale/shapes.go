@@ -106,7 +106,8 @@ type NamedPort struct {
 }
 
 // Service is a service the rule-shape preset's rules match on. On a cluster it must exist, with
-// the endpoints at Addrs behind Port.
+// the endpoints at Addrs behind Port, and be dual-stack (ipFamilyPolicy: RequireDualStack): a
+// single-stack service has endpoints of one family only, so the other family's flows miss it.
 type Service struct {
 	Name, Namespace string
 	Protocol        string
@@ -127,6 +128,9 @@ func (fx *Fixture) ShapeFlows(dir Direction, exclude ...Difference) []ShapeFlow 
 	add := func(flows []ShapeFlow) {
 		for _, f := range flows {
 			if !slices.ContainsFunc(f.Differences, func(d Difference) bool { return slices.Contains(exclude, d) }) {
+				// The caller may change what it gets back; the fixture's own flows stay as built.
+				flow := *f.Flow
+				f.Flow, f.Differences = &flow, slices.Clone(f.Differences)
 				out = append(out, f)
 			}
 		}

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -106,7 +106,7 @@ type ruleModel struct {
 	dstNet                               netip.Prefix
 	srcSet, notSrcSet, dstSet, notDstSet string
 
-	// The criteria below are used by the rule-shape preset; see shapes.go.
+	// The criteria below are used by the rule-shape preset.
 	protocol, notProtocol *protocolModel
 	ipVersion             int // 0 for either family, else 4 or 6.
 	icmp, notICMP         *icmpModel
@@ -317,8 +317,8 @@ func (fx *Fixture) buildEgress(rng *rand.Rand, p EgressParams) {
 	}
 
 	tier := fx.tier(p.Tier, "Deny")
-	// Rule CIDRs are /24s while the set fits the /24 pool, so the reference presets are unchanged;
-	// past that they are /28s from the same range. The wide form is keyed on the rule count, not on
+	// Rule CIDRs are /24s while the set fits the /24 pool, and /28s from the same range past
+	// that. The wide form is keyed on the rule count, not on
 	// how many CIDRs end up being used, so a fixture's addressing never depends on the RNG.
 	wide := numRules+1 > egressCIDRPool24
 	nextCIDR := 0
@@ -636,6 +636,7 @@ func (fx *Fixture) Rules(dir Direction) int {
 // store; MissingIPSets says how many of those are left out.
 func (fx *Fixture) IPSets() int { return len(fx.setOrder) }
 
+// MissingIPSets returns how many of the referenced sets are left out of the store.
 func (fx *Fixture) MissingIPSets() int {
 	n := 0
 	for _, id := range fx.setOrder {

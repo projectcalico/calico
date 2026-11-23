@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -51,8 +51,8 @@ type Spec struct {
 // DefaultProfile is the presets' profile: that of a pod in the default namespace.
 const DefaultProfile = "kns.default"
 
-// DefaultSeed is the seed the presets use; it is the one the original benchmarks were written
-// with, so their numbers stay comparable.
+// DefaultSeed is the seed the presets use; engine numbers are comparable across runs only with
+// the same seed.
 const DefaultSeed = 20200
 
 // SizeBucket is one bucket of an IP set size histogram: Sets sets of between MinSize and MaxSize
@@ -234,7 +234,7 @@ func ScaleFromEnv(spec Spec) Spec {
 
 // Composite applies both presets to one endpoint: the baseline set governs its ingress
 // evaluations and the allow-list its egress evaluations. This is the reference set the
-// PMREQ-954 targets are quoted against.
+// pending-evaluation targets are quoted against.
 func Composite() Spec {
 	b, e := DefaultBaseline(), DefaultEgress()
 	return Spec{Seed: DefaultSeed, Baseline: &b, Egress: &e, Profile: DefaultProfile}

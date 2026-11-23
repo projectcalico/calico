@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -318,7 +318,7 @@ func TestResourcesValidateAndRoundTrip(t *testing.T) {
 }
 
 // Past the /24 pool the builder hands out /28s; every rule CIDR must still be unique, and the
-// reference presets must not have moved.
+// reference presets keep their /24s.
 func TestWideCIDRPool(t *testing.T) {
 	ruleNets := func(fx *Fixture) []string {
 		var nets []string
