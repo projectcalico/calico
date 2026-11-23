@@ -237,6 +237,11 @@ Code: `operator/pkg/components/combined.go`.
 
 ### Lifecycle and migrations
 
+**Datastore migration watch**:
+The operator's watch on the DatastoreMigration resource, together with its lookup of the API group the cluster serves, used while the v1-to-v3 CRD migration runs.
+Code: `operator/pkg/controller/migration/datastoremigration/version.go` (`WatchObject`, `ServedGroupVersion`).
+_Avoid_: served API group watch
+
 **Staged teardown**:
 The Installation controller's ordered deletion, driven by one finalizer per controller plus `tigera.io/operator-cleanup`, so each feature's objects go before the RBAC they depend on.
 Code: `operator/pkg/render/finalizers.go`.

@@ -204,6 +204,11 @@ Code: `kube-controllers/pkg/converter/pod_converter.go` (`WorkloadEndpointData`)
 A Service whose LoadBalancer address Calico assigns from Calico IPAM, selected by the `calico` load balancer class and steered by the `projectcalico.org/ipv4pools` and `ipv6pools` annotations.
 Code: `kube-controllers/pkg/controllers/loadbalancer/loadbalancer_controller.go` (`loadBalancerController`).
 
+**Orphaned LoadBalancer addresses**:
+Addresses in Calico IPAM under a LoadBalancer handle that no Service holds. The LoadBalancer controller releases them when it syncs IPAM.
+Code: `kube-controllers/pkg/controllers/loadbalancer/loadbalancer_controller.go` (`syncIPAM`).
+_Avoid_: leak (that is a workload address past its grace period), unclaimed addresses
+
 ### v1-to-v3 CRD migration
 
 **DatastoreMigration**:
