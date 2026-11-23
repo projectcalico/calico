@@ -27,6 +27,8 @@ const (
 	NegatedICMPTypeAndCode     Difference = "negated-icmp-type-and-code"
 	NegatedICMPWithoutProtocol Difference = "negated-icmp-without-protocol"
 	SCTPPorts                  Difference = "sctp-ports"
+	UnparsedProtocolsOnBPF     Difference = "unparsed-protocols-on-bpf"
+	ICMPTypeAndCodeRules       Difference = "icmp-type-and-code-rules"
 	DoNotTrackOrPreDNATPolicy  Difference = "do-not-track-or-pre-dnat-policy"
 	HostEndpoints              Difference = "host-endpoints"
 )
@@ -50,6 +52,9 @@ type KnownDifference struct {
 	// Generated reports whether the rule-shape preset builds flows that can expose it. The others
 	// are listed for tests that build their own policies or endpoints.
 	Generated bool
+	// WholeRules reports that the dataplane can't apply the rules at all, so a test leaves them out
+	// of the policy set (see ShapesParams.LeaveOut) rather than only skipping their flows.
+	WholeRules bool
 }
 
 // KnownDifferences is every case where the pending verdict is known to differ from what a
@@ -88,6 +93,23 @@ var KnownDifferences = []KnownDifference{
 		Generated: true,
 	},
 	{
+		Difference: UnparsedProtocolsOnBPF,
+		Where:      []Where{BPF},
+		Why: "BPF parses no transport header for protocols other than TCP, UDP, ICMP and ICMPv6. It logs " +
+			"their flows, SCTP and UDP-Lite among them, with protocol 0, and with no pending policies " +
+			"on the source side.",
+		Generated: true,
+	},
+	{
+		Difference: ICMPTypeAndCodeRules,
+		Where:      []Where{Nftables},
+		Why: "Felix renders an ICMP type-and-code match for nftables as icmp type T code C, and the " +
+			"negated one as icmp type != T code != C, which nft rejects. Felix then can't program its " +
+			"table at all, and exits.",
+		Generated:  true,
+		WholeRules: true,
+	},
+	{
 		Difference: DoNotTrackOrPreDNATPolicy,
 		Where:      []Where{Iptables, Nftables, BPF},
 		Why: "When a DoNotTrack or PreDNAT policy that selects a workload is last in a tier, the enforced " +
@@ -112,6 +134,18 @@ func DifferencesAt(where ...Where) []Difference {
 				out = append(out, d.Difference)
 				break
 			}
+		}
+	}
+	return out
+}
+
+// LeaveOutAt returns the differences at any of the given places whose rules a dataplane can't
+// apply, for ShapesParams.LeaveOut.
+func LeaveOutAt(where ...Where) []Difference {
+	var out []Difference
+	for _, d := range KnownDifferences {
+		if d.WholeRules && slices.ContainsFunc(d.Where, func(w Where) bool { return slices.Contains(where, w) }) {
+			out = append(out, d.Difference)
 		}
 	}
 	return out
