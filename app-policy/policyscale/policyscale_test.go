@@ -68,8 +68,12 @@ func TestPresetScale(t *testing.T) {
 			if got := len(store.IPSetByID); got != c.sets {
 				t.Errorf("store IP sets: got %d, want %d", got, c.sets)
 			}
-			if got := len(fx.Updates()); got != c.sets+c.ingressPolicies+c.egressPol {
+			// The sets, the policies, and the endpoint's profile.
+			if got := len(fx.Updates()); got != c.sets+c.ingressPolicies+c.egressPol+1 {
 				t.Errorf("updates: got %d", got)
+			}
+			if got := len(store.ProfileByID); got != 1 {
+				t.Errorf("store profiles: got %d", got)
 			}
 		})
 	}
@@ -204,8 +208,10 @@ func TestBaselineOracle(t *testing.T) {
 		switch got[0].Action {
 		case "pass":
 			passes++
-			// A pass with no further tier and no profiles ends in the profile deny.
-			if len(got) != 2 || got[1].Kind != v3.KindProfile || got[1].Action != "deny" {
+			// A pass with no further tier ends in the endpoint's profile, which allows, as the
+			// namespace profile of a Kubernetes pod does.
+			want := Verdict{Kind: v3.KindProfile, Tier: ProfileName, Policy: DefaultProfile, Index: 0, Action: "allow"}
+			if len(got) != 2 || got[1] != want {
 				t.Errorf("pass trace for rule %d: %v", ordinal, got)
 			}
 		default:
@@ -462,4 +468,27 @@ func baselineOrdinal(v Verdict) int {
 	var n int
 	fmt.Sscanf(v.Policy, "policy-%d", &n)
 	return n*68 + v.Index
+}
+
+// With no profile on the endpoint, the walk ends as the dataplane reports it: a deny by no profile
+// at all, index 0.
+func TestExpectWithNoProfile(t *testing.T) {
+	spec := Baseline()
+	spec.Profile = ""
+	fx := Build(spec)
+	if ep := fx.Endpoint(); len(ep.ProfileIds) != 0 {
+		t.Fatalf("endpoint profiles %v", ep.ProfileIds)
+	}
+	for ordinal := 0; ordinal < fx.Rules(Ingress); ordinal += 97 {
+		got := fx.Expect(Ingress, fx.MatchingFlow(Ingress, ordinal))
+		if got[0].Action != "pass" {
+			continue
+		}
+		want := Verdict{Kind: v3.KindProfile, Tier: ProfileName, Policy: NoMatchName, Index: 0, Action: "deny"}
+		if len(got) != 2 || got[1] != want {
+			t.Fatalf("pass trace for rule %d: %v, want it to end in %v", ordinal, got, want)
+		}
+		return
+	}
+	t.Fatal("no aimed flow reached a pass rule")
 }

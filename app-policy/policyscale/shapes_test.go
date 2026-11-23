@@ -204,7 +204,7 @@ func TestShapeFlowDifferences(t *testing.T) {
 			}
 		}
 	}
-	for _, kd := range KnownDifferences {
+	for _, kd := range KnownDifferences() {
 		if kd.Generated != used[kd.Difference] {
 			t.Errorf("%s: generated %v but marked on flows %v", kd.Difference, kd.Generated, used[kd.Difference])
 		}
@@ -334,5 +334,14 @@ func TestExpectScopes(t *testing.T) {
 		if stagedDecides == 0 {
 			t.Errorf("%s: no aimed flow is decided differently in the two scopes", dir)
 		}
+	}
+}
+
+// The list is a copy each time, so one test changing it can't change what another excludes.
+func TestKnownDifferencesIsACopy(t *testing.T) {
+	first := KnownDifferences()
+	first[0].Difference, first[0].Where[0] = "changed", BPF
+	if again := KnownDifferences(); again[0].Difference == "changed" || again[0].Where[0] == BPF {
+		t.Errorf("a caller's change reached the list: %v", again[0])
 	}
 }

@@ -35,11 +35,13 @@ type Verdict struct {
 }
 
 const (
-	// TierDefaultIndex is the index the engine reports for a tier's default action, and for the
-	// deny that ends an evaluation with no matching profile.
+	// TierDefaultIndex is the index reported for a tier's default action.
 	TierDefaultIndex = -1
-	// ProfileName is the tier and policy name the engine reports for that deny.
+	// ProfileName is the tier a profile's verdict is reported under.
 	ProfileName = "__PROFILE__"
+	// NoMatchName is the name the dataplane reports for the deny when no profile matches, or the
+	// endpoint has none.
+	NoMatchName = "__NO_MATCH__"
 )
 
 func (v Verdict) String() string {
@@ -68,8 +70,9 @@ func (fx *Fixture) Expect(dir Direction, f *Flow) []Verdict {
 // engine reads, so that the two are independent. It follows what the dataplanes enforce: policies
 // of a tier in order, first matching rule decides; Allow or Deny ends the evaluation; Pass moves to
 // the next tier; a tier none of whose policies matched applies its default action, reported
-// against the tier's last policy in scope, with anything but Pass denying; and with no profiles on
-// the endpoint, an evaluation that gets past every tier is denied.
+// against the tier's last policy in scope, with anything but Pass denying; and a flow that gets
+// past every tier ends in the endpoint's profile, which allows, or with none, in the deny the
+// dataplane reports when no profile matches.
 func (fx *Fixture) ExpectIn(scope Scope, dir Direction, f *Flow) []Verdict {
 	var trace []Verdict
 	for _, t := range fx.tiers {
@@ -109,7 +112,10 @@ func (fx *Fixture) ExpectIn(scope Scope, dir Direction, f *Flow) []Verdict {
 			}
 		}
 	}
-	return append(trace, Verdict{Kind: v3.KindProfile, Tier: ProfileName, Policy: ProfileName, Index: TierDefaultIndex, Action: "deny"})
+	if fx.Spec.Profile != "" {
+		return append(trace, Verdict{Kind: v3.KindProfile, Tier: ProfileName, Policy: fx.Spec.Profile, Index: 0, Action: "allow"})
+	}
+	return append(trace, Verdict{Kind: v3.KindProfile, Tier: ProfileName, Policy: NoMatchName, Index: 0, Action: "deny"})
 }
 
 // ruleMatches evaluates a rule's criteria against the flow, the way the dataplanes render them:
