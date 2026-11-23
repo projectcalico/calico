@@ -57,7 +57,7 @@ Code: `libcalico-go/lib/backend/model/block.go` (`IPToOrdinal`).
 _Avoid_: index (that also names an index into other tables)
 
 **Sequence number**:
-A block-level write counter, with a per-ordinal copy, that lets a release detect and skip a stale request. Every release path passes it in `ReleaseOptions`.
+A block-level write counter, with a per-ordinal copy.
 Code: `libcalico-go/lib/backend/model/block.go` (`SequenceNumber`), `libcalico-go/lib/ipam/ipam_types.go` (`ReleaseOptions`).
 _Avoid_: nothing known
 
@@ -77,22 +77,22 @@ Code: `libcalico-go/lib/ipam/pool_qualification.go` (`poolQualification`, `PoolC
 _Avoid_: pool selection, pool eligibility
 
 **Pool resolution**:
-Turning the pool names and CIDRs a request names into CIDRs, and nothing more. It runs before pool qualification.
+Turning the pool names and CIDRs a request names into CIDRs, and nothing more.
 Code: `libcalico-go/lib/ipam/pool_qualification.go` (`ResolvePools`).
 _Avoid_: pool qualification (that is the later step)
 
 **Block affinity state**:
-Where a block affinity is in its life. It is `pending` while being claimed and `confirmed` once it holds, and `pendingDeletion` while being released. A pending affinity is treated as absent, and no other host may claim a block whose affinity is `pendingDeletion`.
+Where a block affinity is in its life: `pending` while being claimed, `confirmed` once it holds, and `pendingDeletion` while being released.
 Code: `libcalico-go/lib/backend/model/block_affinity.go` (`BlockAffinityState`).
 _Avoid_: confirmed on its own (it also means a confirmed leak), stale affinity (a different thing)
 
 **In cooldown**:
-The state of an address after release and before deallocation. It stays in the block's allocations with its release time set for the pool's cooldown period, and it still counts as in use; the accounting reports it separately as cooling.
+The state of an address after release and before deallocation. It still counts as in use.
 Code: `libcalico-go/lib/backend/model/block.go` (`ReleasedAt`), `libcalico-go/lib/ipam/ipam_types.go` (`IPCooldownSeconds`).
 _Avoid_: cooling, pending release, quarantine
 
 **Cooled down**:
-The state of an address whose cooldown has ended. It is eligible for deallocation, which moves its ordinal to the block's unallocated queue.
+The state of an address whose cooldown has ended.
 Code: `libcalico-go/lib/ipam/ipam_block.go` (`garbageCollect`).
 _Avoid_: cold, expired
 
@@ -102,7 +102,7 @@ Code: `libcalico-go/lib/ipam/ipam_block.go` (`garbageCollect`).
 _Avoid_: bare GC (it means several things)
 
 **Write-folded deallocation**:
-Deallocation of cooled-down addresses that is saved only when a write path updates the block. A read computes the same result and discards it.
+Deallocation of cooled-down addresses that is saved only as part of a block write.
 Code: `libcalico-go/lib/ipam/ipam_block.go` (`blockFromBackend`).
 _Avoid_: read-time GC, the IPAM GC (that is the controller)
 
@@ -117,24 +117,24 @@ Code: `libcalico-go/lib/ipam/accounting/allocation.go` (`WindowsReservedHandle`)
 _Avoid_: reservation (that is the IP reservation resource)
 
 **`LabelHostnameHash`**:
-The hashed-hostname label on a block affinity that KDD host lookups use. `UpgradeHost` stamps it at node startup.
+The hashed-hostname label on a block affinity.
 Code: `api/pkg/apis/projectcalico/v3/constants.go` (`LabelHostnameHash`), `libcalico-go/lib/ipam/ipam.go` (`UpgradeHost`).
 _Avoid_: nothing known
 
 **Unreferenced**:
-The accounting predicate that is true for an allocation whose owner no longer refers to it, at this instant. It becomes a leak only once the IPAM GC controller's grace period has passed.
+The accounting predicate that is true for an allocation whose owner no longer refers to it, at this instant. It is not yet a leak.
 Code: `libcalico-go/lib/ipam/accounting/references.go` (`Unreferenced`).
 _Avoid_: leak (before the grace period), orphan
 
 ### calico-ipam
 
 **calico-ipam**:
-The Calico IPAM plugin program, selected when the CNI configuration's `ipam.type` is `calico-ipam`. It allocates from Calico IP pools.
+The Calico IPAM plugin program, which allocates from Calico IP pools.
 Code: `cni-plugin/cmd/calico/calico.go` (`main`).
 _Avoid_: the IPAM (that also means the library)
 
 **In-process IPAM**:
-Running calico-ipam's code inside the `calico` network plugin's process instead of exec'ing it, so the runtime killing the plugin also stops IPAM.
+Running calico-ipam's code inside the `calico` network plugin's process instead of exec'ing it.
 Code: `cni-plugin/pkg/ipamplugin/in_process.go` (`inProcessExec`).
 _Avoid_: embedded IPAM
 
@@ -154,17 +154,17 @@ Code: `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`transferFromPriorSandbox`), `
 _Avoid_: reallocate (no release happens), reuse, transfer
 
 **Superseded sandbox**:
-A sandbox the runtime gave up on while its ADD was still running, after a newer sandbox took the address. calico-ipam fails that ADD with `ErrCodeSandboxSuperseded`.
+A sandbox the runtime gave up on while its ADD was still running, after a newer sandbox took the address.
 Code: `cni-plugin/pkg/types/types.go` (`ErrCodeSandboxSuperseded`).
 _Avoid_: abandoned sandbox
 
 **Address-not-ours error**:
-The CNI error code that says a requested or handed-over address does not belong to the pod. It is the only error that leads the plugin to request a fresh address.
+The CNI error code that says a requested or handed-over address does not belong to the pod.
 Code: `cni-plugin/pkg/types/types.go` (`ErrCodeAddressNotOurs`).
 _Avoid_: nothing known
 
 **Kept addresses**:
-The addresses a WorkloadEndpoint for another sandbox still lists. A stale DEL or a failed ADD must not release them.
+The addresses a WorkloadEndpoint for another sandbox still lists.
 Code: `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`keepAddresses`).
 _Avoid_: protected addresses
 
@@ -178,13 +178,8 @@ A best-effort lock file held for the host across a calico-ipam ADD or release.
 Code: `cni-plugin/internal/pkg/utils/ipam_lock.go` (`AcquireIPAMLockBestEffort`, `WithIPAMLock`).
 _Avoid_: mutex
 
-**Lock then clock**:
-The rule that the allocation timeout starts only after the IPAM lock is held.
-Code: `design/ipam/ipam-cni.md`.
-_Avoid_: nothing known
-
 **IPAM annotations**:
-The pod and namespace annotations that steer allocation, such as `ipAddrs` and `ipv4pools`. The full list is in the IPAM CNI design document.
+The pod and namespace annotations for requesting addresses and pools, such as `ipAddrs` and `ipv4pools`. The full list is in the IPAM CNI design document.
 Code: `cni-plugin/pkg/k8s/k8s.go` (`applyIPAMAnnotations`), `design/ipam/ipam-cni.md`.
 _Avoid_: nothing known
 
@@ -194,14 +189,14 @@ Code: `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`WindowsUseSingleNetwork`).
 _Avoid_: WindowsUseSingleNetwork, single-HNS-network mode
 
 **Sandbox lookups**:
-The Kubernetes clients and the Pod and Namespace objects that the `calico` network plugin passes on the context to in-process IPAM.
+The Kubernetes clients and the Pod and Namespace objects for a sandbox, held for in-process IPAM.
 Code: `cni-plugin/internal/pkg/utils/sandbox_lookups.go` (`SandboxLookups`).
 _Avoid_: container (it is the pause sandbox)
 
 ### IPAM GC controller
 
 **Full sync**:
-An IPAM GC pass that scans every node. Between full syncs, an incremental sync checks only the dirty nodes.
+An IPAM GC pass that scans every node.
 Code: `kube-controllers/pkg/controllers/node/ipam.go` (`fullSyncRequired`).
 _Avoid_: full scan
 
@@ -216,32 +211,32 @@ Code: `kube-controllers/pkg/controllers/node/ipam.go` (`judgeAllocation`).
 _Avoid_: valid and leak (the words in `allocationIsValid`)
 
 **Candidate leak**:
-An allocation judged not in use whose grace timer is running.
+An allocation judged not in use that has not yet been confirmed as a leak.
 Code: `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`isCandidateLeak`).
 _Avoid_: orphan
 
 **Confirmed leak**:
-An allocation the IPAM GC controller will release: its grace period has passed, or its owner is gone from a node that no longer exists.
+A leak whose grace period has passed, or whose owner is gone from a node that no longer exists.
 Code: `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`isConfirmedLeak`, `markConfirmedLeak`).
 _Avoid_: stale allocation
 
 **Replaced sandbox**:
-An allocation whose handle names a container ID other than the one in the pod's `cni.projectcalico.org/containerID` annotation. Only the IPAM GC controller uses this term.
+An allocation whose handle names a container ID other than the one in the pod's `cni.projectcalico.org/containerID` annotation.
 Code: `kube-controllers/pkg/controllers/node/ipam.go` (`fromReplacedSandbox`).
 _Avoid_: stale sandbox
 
 **Handle tracker**:
-The per-handle check that makes a handle's release all-or-none: the controller confirms a leak only when every allocation under the handle is a confirmed leak.
+The per-handle tracker of leak state in the IPAM GC controller.
 Code: `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`handleTracker`).
 _Avoid_: bare tracker (the accounting tracker is a separate thing)
 
 **Empty-block grace**:
-The rule that the controller must see a block empty on two syncs, spanning the grace period, before it releases the block's affinity.
+The grace the IPAM GC controller gives an empty block before releasing its affinity.
 Code: `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`blockReleaseTracker`).
 _Avoid_: two-observation rule
 
 **Last affine block**:
-The one affine block a node keeps even when empty. The controller never releases it.
+The one affine block a node keeps even when empty.
 Code: `kube-controllers/pkg/controllers/node/ipam.go` (`releaseUnusedBlocks`).
 _Avoid_: nothing known
 
@@ -251,7 +246,7 @@ Code: `kube-controllers/pkg/controllers/node/ipam.go` (`stoppedVMNode`).
 _Avoid_: virtual node (that clashes with the virtual affinity type)
 
 **VM recreation grace period**:
-The five-minute minimum on the leak grace period for KubeVirt VM allocations.
+The minimum leak grace period for KubeVirt VM allocations.
 Code: `kube-controllers/pkg/controllers/node/ipam.go` (`vmRecreationGracePeriod`).
 _Avoid_: vmRecreationGracePeriod
 
@@ -261,7 +256,7 @@ Code: `kube-controllers/pkg/controllers/node/ipam.go` (`garbageCollectColdIPs`, 
 _Avoid_: cold-IP GC, cold IPs
 
 **`kubernetesNodesByCalicoName`**:
-The controller's lookup from a v3.Node name to the Kubernetes Node, which it needs because allocations record the v3.Node name.
+The controller's lookup from a v3.Node name to the Kubernetes Node.
 Code: `kube-controllers/pkg/controllers/node/ipam.go` (`kubernetesNodesByCalicoName`).
 _Avoid_: knode, cnode
 

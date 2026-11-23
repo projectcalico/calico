@@ -53,7 +53,7 @@ Code: `goldmane/pkg/storage/diachronic_flow.go` (`Window`).
 _Avoid_: bucket (that is the ring slot)
 
 **Flow IP set**:
-The best-effort set of up to 100 distinct source or destination IP addresses on a Goldmane Flow.
+The best-effort set of distinct source or destination IP addresses on a Goldmane Flow.
 Code: `goldmane/pkg/storage/diachronic_flow.go` (`MaxIPsPerFlow`).
 _Avoid_: IP set (that is the dataplane object)
 
@@ -63,7 +63,7 @@ Code: `goldmane/proto/api.proto` (`Reporter`).
 _Avoid_: reporter for the reporting node (see reporter address)
 
 **Reporter address**:
-The IP address of the Felix connection that reported a flow, with the port removed so it survives reconnects. It keys dedup and the `source` metric label. It is an IP address, not a node name.
+The IP address of the Felix connection that reported a flow, without the port. It is an IP address, not a node name.
 Code: `goldmane/pkg/server/flow_collector_service.go` (`flowCollectorService`).
 _Avoid_: node scope, scope, who, client
 
@@ -73,19 +73,19 @@ Code: `goldmane/proto/api.proto` (`PolicyTrace`).
 _Avoid_: policy hits, as a name for the whole list
 
 **Policy trace cache**:
-A two-generation cache that decodes interned policy-trace strings into their hits. Felix and Goldmane share it through the types package.
+A two-generation cache that decodes interned policy-trace strings into their hits.
 Code: `goldmane/pkg/types/policy_trace_cache.go` (`policyTraceCache`).
 _Avoid_: nothing known
 
 **Flow conversion contract**:
-The mapping Felix applies when it turns a flow log into a Goldmane Flow, including which fields drop and which use `-` placeholders.
+The mapping from a Felix flow log to a Goldmane Flow.
 Code: `felix/collector/goldmane/client.go` (`ConvertFlowlogToGoldmane`).
 _Avoid_: nothing known
 
 ### Aggregation and storage
 
 **Aggregation window**:
-The duration one aggregation bucket covers, 15 seconds by default.
+The duration one aggregation bucket covers.
 Code: `goldmane/pkg/daemon/daemon.go` (`AggregationWindow`).
 _Avoid_: flush interval (that is Felix's)
 
@@ -95,12 +95,12 @@ Code: `goldmane/pkg/storage/bucket.go` (`AggregationBucket`).
 _Avoid_: window (that is a Diachronic Flow's counters for the bucket)
 
 **Bucket ring**:
-The fixed ring of 242 aggregation buckets, including one future bucket, that moves forward each aggregation window. It is in memory only.
+The fixed ring of aggregation buckets that holds Goldmane's recent flows, in memory only.
 Code: `goldmane/pkg/storage/bucket_ring.go` (`BucketRing`).
 _Avoid_: storage, ring buffer
 
 **Rollover**:
-Advancing the ring head by one bucket: the oldest bucket is recycled, streams are fed, and an emission may be built.
+Advancing the ring head by one bucket.
 Code: `goldmane/pkg/storage/bucket_ring.go` (`Rollover`).
 _Avoid_: flush
 
@@ -110,51 +110,51 @@ Code: `goldmane/pkg/goldmane/goldmane.go` (`Goldmane`).
 _Avoid_: the aggregator
 
 **Flow intake**:
-The engine's inbound path: the flow collector service receives a flow, hands it to the engine, and the engine batches it into a bucket.
+The engine's inbound path for flows from reporters.
 Code: `goldmane/pkg/server/flow_collector_service.go` (`Sink`).
 _Avoid_: sink (that is the emission output)
 
 **Backfill**:
-Sending a new stream the ring's history from its start time, before live rollover data.
+Sending a new stream the ring's history from its start time.
 Code: `goldmane/pkg/storage/bucket_ring.go` (`Backfill`).
 _Avoid_: nothing known
 
 ### Reconnect replay and dedup
 
 **Reconnect replay**:
-A Felix flow client re-sending its cached flows after it reconnects, which Goldmane must not count twice.
+A Felix flow client re-sending its cached flows after it reconnects.
 Code: `goldmane/pkg/client/client.go` (`FlowClient`).
 _Avoid_: resync
 
 **Replay cache**:
-The client-side cache of flows sent in the last 5 minutes, re-sent after a reconnect.
+The client-side cache of recently sent flows.
 Code: `goldmane/pkg/internal/flowcache/timed_cache.go` (`ExpiringFlowCache`).
 _Avoid_: flow cache, unqualified
 
 **Emission claim**:
-A per-bucket record of flow ID, start, end and reporter address, used to drop a flow that a reporting node replays into a bucket it already reported.
+A per-bucket record of a flow's ID, start, end and reporter address.
 Code: `goldmane/pkg/storage/bucket.go` (`emissionKey`).
 _Avoid_: claim, unqualified (IPAM also has block claims)
 
 **Dedup window**:
-How many buckets back from the ring head keep their emission claims. It is the replay expiry divided by the aggregation window, plus two.
+How many buckets back from the ring head keep their emission claims.
 Code: `goldmane/pkg/storage/bucket_ring.go` (`dedupWindowBuckets`).
 _Avoid_: replay horizon
 
 ### Emitting
 
 **Emit**:
-Goldmane handing aggregated flows to its sink on rollover. The `EMIT_AFTER_SECONDS` setting uses the same word. A Felix sending a flow to Goldmane is a report, not an emit.
+Goldmane handing aggregated flows to its sink. A Felix sending a flow to Goldmane is a report, not an emit.
 Code: `goldmane/pkg/storage/bucket_ring.go` (`EmitFlowCollections`).
 _Avoid_: push, publish
 
 **Sink**:
-The optional downstream that receives flow collections on rollover. In practice it is the emitter.
+The optional downstream that receives flow collections. In practice it is the emitter.
 Code: `goldmane/pkg/storage/sink.go` (`Sink`).
 _Avoid_: sink for the flow intake
 
 **Emitter**:
-The sink that POSTs NDJSON flow batches to `PUSH_URL` over mTLS and records its progress in a ConfigMap.
+The sink that POSTs NDJSON flow batches to an external endpoint over mTLS.
 Code: `goldmane/pkg/emitter/emitter.go` (`Emitter`).
 _Avoid_: push, publish
 
@@ -164,21 +164,21 @@ Code: `goldmane/pkg/storage/utils.go` (`FlowCollection`).
 _Avoid_: emitted flows, aggregated flow for emission
 
 **Emit delay**:
-How many buckets behind the ring head a bucket must be before it can be emitted, set by `EMIT_AFTER_SECONDS`.
+How many buckets behind the ring head a bucket must be before it can be emitted.
 Code: `goldmane/pkg/daemon/daemon.go` (`EmitAfterSeconds`).
 _Avoid_: push index, settling time
 
 **Emission window**:
-How many buckets are merged into one flow collection, set by `EMITTER_AGGREGATION_WINDOW` (5 minutes by default). Both it and the emit delay must be multiples of the aggregation window.
+How many buckets are merged into one flow collection.
 Code: `goldmane/pkg/daemon/daemon.go` (`EmitterAggregationWindow`).
 _Avoid_: buckets to aggregate, aggregation window
 
 **Emitter state**:
-The ConfigMap `calico-system/flow-emitter-state`, which holds the end time of the latest emitted bucket so a restart does not emit it again.
+The ConfigMap `calico-system/flow-emitter-state`, which holds the end time of the latest emitted bucket.
 Code: `goldmane/pkg/emitter/emitter.go` (`latestTimestamp`).
 _Avoid_: latestTimestamp
 
 **File config**:
-The JSON file at `FILE_CONFIG_PATH` with an `emitFlows` field, watched so the sink can be enabled or disabled without a restart.
+The JSON file with an `emitFlows` field that enables or disables the sink.
 Code: `goldmane/pkg/daemon/config.go` (`goldmaneFileConfig`).
 _Avoid_: goldmaneFileConfig

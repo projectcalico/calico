@@ -39,37 +39,37 @@ Code: `typha/pkg/daemon/daemon.go` (`syncerPipeline`).
 _Avoid_: pipeline (on its own)
 
 **Snapshot cache**:
-The per-syncer-type store of serialized KVPairs that turns syncer updates into Breadcrumbs. The Go type is `snapcache.Cache`.
+The per-syncer-type store of serialized KVPairs, published as Breadcrumbs. The Go type is `snapcache.Cache`.
 Code: `typha/pkg/snapcache/cache.go` (`Cache`).
 _Avoid_: SnapshotCache (that is the binary snapshot cache's type name), cache (on its own)
 
 **Binary snapshot cache**:
-The sync server's store of binary snapshots, one per syncer type and compression algorithm, shared by every client that connects while it is current. The Go type is `syncserver.SnapshotCache`.
+The sync server's store of binary snapshots, one per syncer type and compression algorithm. The Go type is `syncserver.SnapshotCache`.
 Code: `typha/pkg/syncserver/snap_precalc.go` (`SnapshotCache`).
 _Avoid_: SnapshotCache, snapshot cache (that is the Breadcrumb store)
 
 **Binary snapshot**:
-One Breadcrumb's KVPairs pre-encoded as a gob stream, optionally compressed, and ending in a decoder restart. Typha sends it to each new client.
+One Breadcrumb's KVPairs pre-encoded as a gob stream, optionally compressed, and ending in a decoder restart.
 Code: `typha/pkg/syncserver/snap_precalc.go` (`SnapshotCache`).
 _Avoid_: cached snapshot, snapshot (on its own)
 
 **Breadcrumb**:
-One immutable point-in-time snapshot of the snapshot cache, plus the deltas since the previous Breadcrumb and a link to the next. A client receives a full snapshot, then each later Breadcrumb's deltas in order.
+One immutable point-in-time snapshot of the snapshot cache, plus the deltas since the previous Breadcrumb and a link to the next.
 Code: `typha/pkg/snapcache/cache.go` (`Breadcrumb`).
 _Avoid_: crumb, snapshot (on its own)
 
 **Handshake**:
-The opening exchange on a new connection: the client's hello, the server's hello, and, when compression is on, a decoder restart and an acknowledgement.
+The opening message exchange on a new connection, made up of the client's hello and the server's hello.
 Code: `typha/pkg/syncserver/sync_server.go` (`doHandshake`), `typha/pkg/syncproto/sync_proto.go` (`MsgClientHello`, `MsgServerHello`).
 _Avoid_: hello (that is only one message of the exchange)
 
 **Decoder restart**:
-The point in the stream where the encoding changes. Typha sends nothing in the new encoding until the client acknowledges it.
+The point in the stream where the encoding changes.
 Code: `typha/pkg/syncproto/sync_proto.go` (`MsgDecoderRestart`).
 _Avoid_: reset
 
 **Modern policy keys**:
-The client capability flag meaning the client keys policies by kind, namespace and name with no tier in the key. Typha rejects a client that does not set it.
+The client capability flag meaning the client keys policies by kind, namespace and name with no tier in the key.
 Code: `typha/pkg/syncproto/sync_proto.go` (`SupportsModernPolicyKeys`).
 _Avoid_: LegacyPolicyKey (that is the older form with a tier in the key)
 
@@ -79,7 +79,7 @@ Code: `typha/pkg/syncproto/sync_proto.go` (`SerializedUpdate`).
 _Avoid_: bare update (the in-process form is a KVPair plus an update type)
 
 **Fall behind**:
-A client falls behind when its current Breadcrumb is more than `MaxFallBehind` older than the latest one. Typha disconnects it once the grace period has passed.
+A client falls behind when its current Breadcrumb is more than `MaxFallBehind` older than the latest one.
 Code: `typha/pkg/syncserver/sync_server.go` (`MaxFallBehind`).
 _Avoid_: lag (without the threshold)
 
@@ -89,37 +89,37 @@ Code: `typha/pkg/syncserver/sync_server.go` (`connection`).
 _Avoid_: too far behind, lag (it has no threshold)
 
 **`NewClientFallBehindGracePeriod`**:
-The extra time after a new client's snapshot send during which the client is not disconnected for falling behind.
+The grace period during which a newly connected client is exempt from the fall-behind disconnect.
 Code: `typha/pkg/syncserver/sync_server.go` (`NewClientFallBehindGracePeriod`).
 _Avoid_: lag (it has no threshold)
 
 **Connection shedding**:
-Typha dropping client connections on purpose: to rebalance clients across Typhas, to meet a lower connection limit, or at shutdown. A fall-behind disconnect is shedding too.
+Typha dropping client connections on purpose. A fall-behind disconnect is shedding too.
 Code: `typha/pkg/syncserver/sync_server.go` (`governNumberOfConnections`).
 _Avoid_: load balancing (the Service does that)
 
 **Connection rebalancing**:
-Connection shedding driven by the rebalancer, so each Typha holds roughly its share of clients between `MaxConnectionsLowerLimit` and `MaxConnectionsUpperLimit`.
+Connection shedding driven by the rebalancer.
 Code: `typha/pkg/k8s/rebalance.go` (`CalculateMaxConnLimit`).
 _Avoid_: load balancing
 
 **Max connections**:
-The dynamic per-Typha connection limit that the rebalancer sets, counted separately for each syncer type.
+The per-Typha connection limit, counted separately for each syncer type.
 Code: `typha/pkg/syncserver/sync_server.go` (`MaxConns`).
 _Avoid_: MaxConns
 
 **Graceful shutdown**:
-On SIGTERM, Typha drops its connections one at a time, spread across 95 percent of the shutdown timeout and capped by `ShutdownConnectionDropIntervalMaxSecs`, before it exits.
+Typha's orderly exit, in which it drops its client connections before the process ends.
 Code: `typha/pkg/syncserver/sync_server.go` (`handleGracefulShutDown`).
 _Avoid_: graceful restart (that is BIRD's)
 
 **Syncer client**:
-The client end of the Typha protocol. It presents the same callbacks interface as a local datastore syncer, so a consumer cannot tell which it is using.
+The client end of the Typha protocol, with the same callbacks interface as a local datastore syncer.
 Code: `typha/pkg/syncclient/sync_client.go` (`SyncerClient`).
 _Avoid_: Typha client (ambiguous with discovery)
 
 **Typha discovery**:
-Resolving Typha addresses from the `calico-typha` Kubernetes Service, or from an explicit address setting.
+Finding the addresses of the Typha instances a client can connect to.
 Code: `typha/pkg/discovery/discovery.go` (`Discoverer`).
 _Avoid_: rebalancer (that adjusts connection limits, not addresses)
 

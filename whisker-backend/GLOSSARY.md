@@ -23,7 +23,7 @@ Terms defined in the [root glossary](../GLOSSARY.md) that apply in this componen
 - [Query filter](../GLOSSARY.md#query-filter)
 
 **Flows backend**:
-The interface whisker-backend reads flows from. An upstream that can also stream implements the streaming variant, and watch requests are rejected for one that does not.
+The interface whisker-backend reads flows from.
 Code: `whisker-backend/pkg/apis/v1/backend.go` (`FlowsBackend`).
 _Avoid_: backend, unqualified; upstream (that is the package name)
 
@@ -38,12 +38,12 @@ Code: `whisker-backend/pkg/apis/v1/flows.go` (`FlowResponse`).
 _Avoid_: flow log
 
 **List-or-stream**:
-One endpoint that returns a JSON list, or a server-sent event stream when the `watch` query parameter is set.
+An endpoint kind that returns either a JSON list or a server-sent event stream.
 Code: `lib/httpmachinery/pkg/apiutil/handler.go` (`NewJSONListOrEventStreamHandler`).
 _Avoid_: watch
 
 **Visibility filter**:
-The per-request `FlowFilter` that decides whether the current user may see a flow and redacts the policy hits on an admitted flow that the user may not view. No filter is installed unless the process is given a `FlowFilterFactory`.
+The per-request `FlowFilter` that limits which flows, and which policy hits on them, the current user may see.
 Code: `whisker-backend/pkg/auth/filter.go` (`FlowFilter`).
 _Avoid_: RBAC filter, filter (a query filter is a different thing)
 
@@ -53,6 +53,6 @@ Code: `whisker-backend/pkg/apis/v1/flows.go` (`PendingActions`).
 _Avoid_: staged actions
 
 **Proxy prefix**:
-The `/whisker-backend/` path prefix that the Whisker nginx container strips before proxying a request to whisker-backend.
+The `/whisker-backend/` path prefix on requests from the Whisker UI to whisker-backend.
 Code: `whisker/docker-image/default.conf`.
 _Avoid_: nothing known

@@ -58,12 +58,12 @@ Code: `libcalico-go/lib/backend/k8s/client.go` (`NewKubeClientForConfig`).
 _Avoid_: CRD mode
 
 **Felix syncer**:
-The datastore syncer behind the `felix` syncer type. It carries ClusterInformation and FelixConfiguration always, and with `isLeader` set it adds policies, tiers, network sets, IP pools, Nodes, Profiles, endpoints, BGP configuration, IPAM blocks and the rest of Felix's inputs.
+The datastore syncer behind the `felix` syncer type, which carries Felix's inputs, from ClusterInformation and FelixConfiguration to policies, endpoints, IP pools and IPAM blocks.
 Code: `libcalico-go/lib/backend/syncersv1/felixsyncer/felixsyncerv1.go` (`New`).
 _Avoid_: bare syncer (name the syncer type)
 
 **Tunnel IP allocation syncer**:
-The datastore syncer behind the `tunnel-ip-allocation` syncer type, which carries IPPool and one Node for calico-node's tunnel address allocator.
+The datastore syncer behind the `tunnel-ip-allocation` syncer type, which carries IPPool and one Node.
 Code: `libcalico-go/lib/backend/syncersv1/tunnelipsyncer/tunnelipsyncer.go` (`New`).
 _Avoid_: bare syncer (name the syncer type)
 
@@ -73,22 +73,22 @@ Code: `libcalico-go/lib/backend/syncersv1/nodestatussyncer/nodestatussyncer.go` 
 _Avoid_: bare syncer (name the syncer type)
 
 **Watcher cache**:
-The loop inside a datastore syncer that lists one resource type, then watches it and forwards changes. A watcher cache that cannot watch re-lists on a timer instead.
+The per-resource-type component inside a datastore syncer that lists, watches and forwards changes.
 Code: `libcalico-go/lib/backend/watchersyncer/watchercache.go` (`watcherCache`).
 _Avoid_: informer (that is client-go's), cache (on its own)
 
 **Polling state**:
-The watcher cache state in which the cache cannot watch, re-lists periodically, and still counts as in-sync.
+The watcher cache state for a resource type that cannot be watched, so it is polled instead.
 Code: `libcalico-go/lib/backend/watchersyncer/watchercache.go` (`listTriggeredPolling`, `watchTriggeredPolling`).
 _Avoid_: listTriggeredPolling, watchTriggeredPolling
 
 **`crdInstalled`**:
-The watcher cache state in which the CRD for its kind is absent. The cache counts as in-sync and delivers no data.
+The watcher cache state in which the CRD for its kind is absent.
 Code: `libcalico-go/lib/backend/watchersyncer/watchercache.go` (`crdInstalled`).
 _Avoid_: nothing known
 
 **`ConflictResolvingCacheUpdateProcessor`**:
-An update processor for kinds whose v1-model key cannot be derived from the v3 name. When two v3 resources map to one v1 key, it keeps the one with the lowest name.
+An update processor for kinds whose v1-model key cannot be derived from the v3 name.
 Code: `libcalico-go/lib/backend/syncersv1/updateprocessors/conflictresolvingcacheproc.go` (`NewConflictResolvingCacheUpdateProcessor`).
 _Avoid_: conflict (the migration controller uses that word for a different thing)
 
@@ -103,7 +103,7 @@ Code: `libcalico-go/lib/backend/model/felixconfig.go` (`GlobalConfigKey`, `HostC
 _Avoid_: nothing known
 
 **`EnsureInitialized`**:
-The first-run step that creates ClusterInformation (version, cluster GUID, `DatastoreReady`) and the protected tiers.
+The first-run initialization of the datastore: ClusterInformation (version, cluster GUID, `DatastoreReady`) and the protected tiers.
 Code: `libcalico-go/lib/clientv3/client.go` (`EnsureInitialized`).
 _Avoid_: nothing known
 

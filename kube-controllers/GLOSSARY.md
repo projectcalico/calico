@@ -55,7 +55,7 @@ Code: `kube-controllers/pkg/controllers/controller/controller.go` (`Controller`)
 _Avoid_: reconciler
 
 **Feed-driven controller**:
-A controller that subscribes to the DataFeed through `RegisterWith`, queues updates to its own goroutine, and coalesces bursts with a kick. The node controller's sub-controllers, the LoadBalancer controller and the policy name migrator are feed-driven.
+A controller that is driven by updates from the DataFeed. The node controller's sub-controllers, the LoadBalancer controller and the policy name migrator are feed-driven.
 Code: `kube-controllers/pkg/controllers/node/hostendpoints.go` (`RegisterWith`).
 _Avoid_: data feed consumer, syncer, watcher
 
@@ -80,19 +80,19 @@ Code: `kube-controllers/pkg/controllers/node/controller.go` (`NodeController`).
 _Avoid_: controller, unqualified
 
 **Controller control**:
-The object that registers each enabled controller by name, starts it, and exits the process when the running config changes.
+The object that registers and starts the enabled controllers.
 Code: `kube-controllers/pkg/kubecontrollers/run.go` (`controllerControl`).
 _Avoid_: controller manager
 
 **Deferred CRD controller**:
-A wrapper that starts an inner controller only once a named CRD is established, and stops it if the CRD goes away. "Deferred" here is unrelated to the KubeVirt deferred informers in `libcalico-go`.
+A wrapper around an inner controller that depends on a named CRD. "Deferred" here is unrelated to the KubeVirt deferred informers in `libcalico-go`.
 Code: `kube-controllers/pkg/controllers/controller/deferred.go` (`DeferredCRDController`).
 _Avoid_: lazy controller
 
 ### Feed and caches
 
 **DataFeed**:
-The single shared datastore syncer that streams Calico resources and IPAM blocks to registered handlers, one update handler and one status handler per key type.
+The single shared datastore syncer that streams Calico resources and IPAM blocks to the controllers.
 Code: `kube-controllers/pkg/controllers/utils/syncer.go` (`DataFeed`).
 _Avoid_: the syncer, data feed (two words)
 
@@ -102,17 +102,17 @@ Code: `kube-controllers/pkg/controllers/node/hostendpoints.go` (`RegisterWith`).
 _Avoid_: watch
 
 **IPAMFeed**:
-The component that keeps one shared `accounting.Tracker` of pool usage current from the DataFeed, so every IPAM reader sees the same counts.
+The component that holds one shared `accounting.Tracker` of pool usage.
 Code: `kube-controllers/pkg/controllers/utils/ipam_feed.go` (`IPAMFeed`).
 _Avoid_: IPAM cache
 
 **ResourceCache**:
-The desired-state cache whose changed keys feed the workqueue of a mirroring controller.
+The desired-state cache used by the mirroring controllers.
 Code: `kube-controllers/pkg/cache/cache.go` (`ResourceCache`).
 _Avoid_: informer cache, Calico cache
 
 **Periodic reconciler**:
-The ResourceCache's periodic diff of its contents against a datastore list, run every `RECONCILER_PERIOD`.
+The ResourceCache's periodic diff of its contents against a datastore list.
 Code: `kube-controllers/pkg/cache/cache.go` (`performDatastoreSync`).
 _Avoid_: reconcile (that means one workqueue pass)
 
@@ -122,7 +122,7 @@ Code: `kube-controllers/pkg/controllers/ippool/pool_controller.go` (`reconcileKe
 _Avoid_: sync, for a workqueue pass
 
 **Prime**:
-Setting a ResourceCache entry without queuing an update, used to seed state that is already in the datastore.
+Setting a ResourceCache entry without queuing an update.
 Code: `kube-controllers/pkg/cache/cache.go` (`Prime`).
 _Avoid_: nothing known
 
@@ -132,12 +132,12 @@ Code: `kube-controllers/pkg/controllers/namespace/namespace_controller.go` (`syn
 _Avoid_: syncToCalico
 
 **processNextItem**:
-The worker loop that pops one workqueue key, handles it, and marks it done.
+The worker loop of a workqueue controller.
 Code: `kube-controllers/pkg/controllers/tier/tier_controller.go` (`processNextItem`).
 _Avoid_: processNextWorkItem
 
 **Dropped key**:
-A workqueue key given up after `maxRetries` failures. Only the periodic informer resync brings it back.
+A workqueue key that a controller has given up on.
 Code: `kube-controllers/pkg/controllers/ippool/pool_controller.go` (`maxRetries`).
 _Avoid_: failed key
 
@@ -147,58 +147,53 @@ Code: `kube-controllers/pkg/controllers/node/controller.go` (`kick`).
 _Avoid_: fullScanNextSync
 
 **Full pass**:
-One pass over every object, requested by a kick instead of handling keys one at a time. The IP pool controller's `reconcileKey` is the single key that stands for a full pass.
+One pass over every object, as opposed to one workqueue key at a time.
 Code: `kube-controllers/pkg/controllers/ippool/pool_controller.go` (`reconcileKey`).
 _Avoid_: resync
 
 **Start-of-day pass**:
-Work a controller runs once after its informers and the DataFeed are in sync and before its workers start.
+Work a controller runs once at startup.
 Code: `kube-controllers/pkg/controllers/ippool/pool_controller.go` (`Run`).
 _Avoid_: initial sync
 
 ### Configuration and restart
 
 **RunConfig**:
-The effective configuration after merging environment variables over the `default` KubeControllersConfiguration. Its status counterpart is `status.runningConfig`.
+The effective configuration kube-controllers runs with. Its status counterpart is `status.runningConfig`.
 Code: `kube-controllers/pkg/config/runconfig.go` (`RunConfig`).
 _Avoid_: config, unqualified
 
-**ENABLED_CONTROLLERS**:
-The environment variable listing the controllers to run. When set, it overrides the controller list in the KubeControllersConfiguration. `profile` is accepted as an alias for `namespace`.
-Code: `kube-controllers/pkg/config/config.go` (`EnvEnabledControllers`).
-_Avoid_: reconciler (that is the controller-runtime word)
-
 **Status file**:
-The readiness file `/status/status.json`, read by the `check-status` command alongside the HTTP health aggregator.
+The readiness file `/status/status.json`.
 Code: `kube-controllers/pkg/status/status.go`.
 _Avoid_: nothing known
 
 ### IP pool and tier controllers
 
 **Finalizer-guarded deletion**:
-Deletion held up by a finalizer that a controller removes once dependents are gone. The IP pool finalizer waits for the pool's blocks to be released, and the tier finalizer waits for every policy in the tier to be deleted by the user.
+Deletion held up by a finalizer until dependents are gone.
 Code: `kube-controllers/pkg/controllers/ippool/pool_controller.go` (`IPPoolFinalizer`) and `api/pkg/apis/projectcalico/v3/tier.go` (`TierFinalizer`).
 _Avoid_: cascading delete (that is Kubernetes owner references)
 
 **Pool sort category**:
-The precedence (active, terminating, disabled, new) deciding which of several overlapping pools stays allocatable.
+The precedence category of an IP pool: active, terminating, disabled or new.
 Code: `kube-controllers/pkg/controllers/ippool/pool_controller.go` (`poolSortCategory`).
 _Avoid_: nothing known
 
 **AddressSpaceNearlyFull**:
-The IP pool condition set at 80 percent use for pools of 32 or more addresses.
+An IP pool condition reporting that the pool's address space is nearly used up.
 Code: `kube-controllers/pkg/controllers/ippool/nearly_full.go` (`reconcileNearlyFull`).
 _Avoid_: nothing known
 
 ### IPAM GC and node sub-controllers
 
 **Auto host endpoint**:
-A host endpoint that kube-controllers creates and owns, from the node's auto-create setting or from a template.
+A host endpoint that kube-controllers creates and owns.
 Code: `kube-controllers/pkg/controllers/node/hostendpoints.go` (`autoHostEndpointController`, `isAutoHostEndpoint`).
 _Avoid_: auto-HEP
 
 **Node deleter**:
-The sub-controller that deletes Calico Nodes whose Kubernetes Node is gone. It and the node label controller run only in etcdv3 mode, because a KDD Calico Node is a Kubernetes Node.
+The sub-controller that deletes Calico Nodes whose Kubernetes Node is gone.
 Code: `kube-controllers/pkg/controllers/node/node_deleter.go` (`nodeDeleter`).
 _Avoid_: node deletion controller
 
@@ -210,12 +205,12 @@ _Avoid_: nothing known
 ### LoadBalancer controller
 
 **Calico-managed LoadBalancer**:
-A Service whose LoadBalancer address Calico assigns from Calico IPAM, selected by the `calico` load balancer class and steered by the `projectcalico.org/ipv4pools` and `ipv6pools` annotations.
+A Service of type LoadBalancer whose address Calico assigns from Calico IPAM.
 Code: `kube-controllers/pkg/controllers/loadbalancer/loadbalancer_controller.go` (`loadBalancerController`).
 _Avoid_: bare LoadBalancer (any Service of that type, whoever assigns the address)
 
 **Orphaned LoadBalancer addresses**:
-Addresses in Calico IPAM under a LoadBalancer handle that no Service holds. The LoadBalancer controller releases them when it syncs IPAM.
+Addresses in Calico IPAM under a LoadBalancer handle that no Service holds.
 Code: `kube-controllers/pkg/controllers/loadbalancer/loadbalancer_controller.go` (`syncIPAM`).
 _Avoid_: leak (that is a workload address past its grace period), unclaimed addresses
 
@@ -227,7 +222,7 @@ Code: `kube-controllers/pkg/apis/migration/v1/types.go` (`DatastoreMigration`).
 _Avoid_: APIServerToCRDs (that is its Go spec type)
 
 **Migration phase**:
-One of Pending, Migrating, WaitingForConflictResolution, Converged, Complete or Failed. A Failed migration is retried by deleting and recreating the DatastoreMigration.
+One of Pending, Migrating, WaitingForConflictResolution, Converged, Complete or Failed.
 Code: `kube-controllers/pkg/apis/migration/v1/types.go` (`DatastoreMigrationPhase`).
 _Avoid_: state
 
@@ -237,27 +232,27 @@ Code: `kube-controllers/pkg/controllers/migration/registry.go`.
 _Avoid_: ResourceMismatch
 
 **Migration order**:
-The integer group assigned to each kind, deciding which kinds are copied first (tiers first, IPAM late).
+The integer group assigned to each kind in the migration.
 Code: `kube-controllers/pkg/controllers/migration/resources.go` (`NewMigrators`).
 _Avoid_: priority
 
 **Resource migrator**:
-The per-kind step that lists the v1 resources, converts them, creates the v3 resources and compares specs.
+The per-kind migrator of one resource kind from `crd.projectcalico.org/v1` to `projectcalico.org/v3`.
 Code: `kube-controllers/pkg/controllers/migration/migrators/migrator.go` (`ResourceMigrator`).
 _Avoid_: migration (it means several things; say v1-to-v3 CRD migration)
 
 **APIService handover**:
-Removing the `v3.projectcalico.org` APIService that points at the Calico apiserver, saving it for rollback, and letting kube-aggregator register the CRD-backed one. The operator's APIService cutover is a different mechanism.
+Replacing the `v3.projectcalico.org` APIService that points at the Calico apiserver with the CRD-backed one. The operator's APIService cutover is a different mechanism.
 Code: `kube-controllers/pkg/controllers/migration/controller.go`.
 _Avoid_: APIService swap
 
 **Drain period**:
-The wait after locking `crd.projectcalico.org/v1` and before removing the APIService, letting in-flight IPAM writes finish.
+The wait during the migration that lets in-flight IPAM writes finish.
 Code: `kube-controllers/pkg/controllers/migration/controller.go`.
 _Avoid_: drain (that is a node drain in the Flannel migration)
 
 **Migration rollout window**:
-The time between locking `crd.projectcalico.org/v1` and every component restarting in `projectcalico.org/v3` mode. The v1 ClusterInformation stays locked after convergence, so components not yet restarted block CNI operations.
+The time between locking `crd.projectcalico.org/v1` and every component restarting in `projectcalico.org/v3` mode.
 Code: `kube-controllers/pkg/controllers/migration/controller.go`.
 _Avoid_: CNI freeze
 
@@ -274,6 +269,6 @@ Code: `kube-controllers/pkg/controllers/networkpolicy/policymigrate.go` (`Migrat
 _Avoid_: v3 name, bare name
 
 **Flannel migration**:
-The node-by-node move of a Flannel cluster to Calico VXLAN. The Flannel migration controller must be the only controller enabled.
+The node-by-node move of a Flannel cluster to Calico VXLAN.
 Code: `kube-controllers/pkg/controllers/flannelmigration/migration_controller.go`.
 _Avoid_: migration, unqualified

@@ -34,12 +34,12 @@ Code: `calicoctl/calicoctl/commands/datastore/migrate/export.go` (`Export`).
 _Avoid_: datastore migration (say etcd-to-KDD migration)
 
 **Migrate import**:
-The step that reads the export file and loads it into the Kubernetes datastore, refusing to run if Calico resources already exist there.
+The step that reads the export file and loads it into the Kubernetes datastore.
 Code: `calicoctl/calicoctl/commands/datastore/migrate/import.go` (`Import`).
 _Avoid_: datastore migration (say etcd-to-KDD migration)
 
 **Version mismatch**:
-calicoctl refusing to run against a cluster whose ClusterInformation `CalicoVersion` differs from its own, unless `--allow-version-mismatch` is set.
+The condition where a cluster's ClusterInformation `CalicoVersion` differs from calicoctl's own version.
 Code: `calicoctl/calicoctl/commands/common/version_mismatch.go` (`CheckVersionMismatch`).
 _Avoid_: version skew
 

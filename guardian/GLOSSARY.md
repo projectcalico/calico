@@ -17,12 +17,12 @@ The top layer of Guardian.
 ## Terms
 
 **Guardian**:
-The agent in a cluster that holds one mTLS tunnel to a management cluster. It forwards connections from the cluster up the tunnel, and proxies requests that arrive down the tunnel to a configured set of targets.
+The agent in a cluster that holds one mTLS tunnel to a management cluster.
 Code: `guardian/pkg/daemon/daemon.go` (`Run`).
 _Avoid_: tunnel client, agent, the tunnel
 
 **Management cluster**:
-The cluster at the far end of Guardian's tunnel. Its address is the `VoltronURL` setting, and its server is not in this repository.
+The cluster at the far end of Guardian's tunnel. Its server is not in this repository.
 Code: `guardian/pkg/config/config.go` (`VoltronURL`).
 _Avoid_: remote cluster
 
@@ -32,16 +32,16 @@ Code: `guardian/pkg/tunnel/dial.go` (`Session`).
 _Avoid_: connection
 
 **Upstream path**:
-The path from the cluster to the management cluster: Guardian listens locally, and forwards each accepted connection through the tunnel.
+The path from the cluster to the management cluster.
 Code: `guardian/pkg/server/server.go` (`ListenAndServeCluster`).
 _Avoid_: outbound, cluster listener
 
 **Downstream path**:
-The path from the management cluster to the cluster: HTTP requests that arrive down the tunnel are served by the proxy.
+The path from the management cluster to the cluster.
 Code: `guardian/pkg/server/server.go` (`ListenAndServeManagementCluster`).
 _Avoid_: inbound, management cluster listener
 
 **Target**:
-A path prefix mapped to a destination URL, with token, CA and mTLS options. The proxy sends a request to the target whose prefix it matches.
+A path prefix mapped to a destination URL, with token, CA and mTLS options.
 Code: `guardian/pkg/server/target.go` (`Target`).
 _Avoid_: route

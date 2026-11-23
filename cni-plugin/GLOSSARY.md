@@ -32,7 +32,7 @@ Terms defined in the [root glossary](../GLOSSARY.md) that apply in this componen
 - [Endpoint status file](../GLOSSARY.md#endpoint-status-file)
 
 **Network plugin**:
-The `calico` CNI program that kubelet invokes for a pod's network. It creates the WorkloadEndpoint, calls an IPAM plugin, then calls a CNI dataplane.
+The `calico` CNI program that kubelet invokes for a pod's network.
 Code: `cni-plugin/pkg/plugin/plugin.go` (`Main`).
 _Avoid_: the CNI (ambiguous), main CNI
 
@@ -62,17 +62,17 @@ Code: `cni-plugin/pkg/dataplane/dataplane.go` (`Dataplane`, `GetDataplane`).
 _Avoid_: Felix dataplane, dataplane (on its own)
 
 **gRPC CNI dataplane**:
-The CNI dataplane selected by `dataplane_options.type` set to `grpc`, which passes ADD and DEL to an external server that sets up the interfaces.
+The CNI dataplane that hands ADD and DEL to an external server, which sets up the interfaces.
 Code: `cni-plugin/pkg/dataplane/grpc/proto/cnibackend.proto` (`CniDataplane`).
 _Avoid_: dataplane driver (that is Felix's layer)
 
 **Readiness gates**:
-The NetConf list of HTTP URLs that the plugin polls before ADD proceeds.
+The NetConf list of HTTP URLs that gate a pod's network setup.
 Code: `cni-plugin/pkg/types/types.go` (`ReadinessGates`), `cni-plugin/pkg/plugin/plugin.go` (`pollEndpointReadiness`).
 _Avoid_: readinessGates (that is a Pod field)
 
 **`ForEndpointReadyWithTimeout`**:
-The ADD step, on when `policy_setup_timeout_seconds` is positive, that holds the pod's start until Felix writes the endpoint status file.
+The ADD step that holds a pod's start until Felix writes the endpoint status file.
 Code: `cni-plugin/pkg/wait/wait.go` (`ForEndpointReadyWithTimeout`), `cni-plugin/pkg/types/types.go` (`PolicySetupTimeoutSeconds`).
 _Avoid_: nothing known
 

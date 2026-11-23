@@ -43,12 +43,12 @@ Code: `operator/pkg/render/component.go` (`Component`).
 _Avoid_: component, unqualified; renderer
 
 **Component handler**:
-The applier that takes one component render implementation and creates, updates or deletes its objects against the cluster, merging with current state and registering its workloads with a status manager.
+The applier that creates, updates or deletes a component render implementation's objects against the cluster.
 Code: `operator/pkg/controller/utils/component.go` (`ComponentHandler`).
 _Avoid_: renderer (the handler applies, it does not render)
 
 **CreateOrUpdateOrDelete**:
-The component handler entry point that applies a component render implementation and registers its workloads with the status manager.
+The component handler's entry point for applying a component render implementation.
 Code: `operator/pkg/controller/utils/component.go` (`CreateOrUpdateOrDelete`).
 _Avoid_: reconcile (that is the controller's job)
 
@@ -58,7 +58,7 @@ Code: `operator/pkg/controller/utils/component.go` (`SetCreateOnly`).
 _Avoid_: nothing known
 
 **Render precondition**:
-The `Ready()` check on a component render implementation. When it returns false, the handler skips that component for this reconcile.
+The `Ready()` check on a component render implementation.
 Code: `operator/pkg/render/component.go` (`Ready`).
 _Avoid_: ready (TigeraStatus has its own Ready)
 
@@ -73,7 +73,7 @@ Code: `operator/pkg/render/passthru.go` (`NewCreationPassthrough`).
 _Avoid_: NewDeletionPassthrough, pass-through kind (that is a syncer term)
 
 **Overridable**:
-A component render implementation whose workloads take user overrides after any modifier from a variant.
+A component render implementation whose workloads accept user overrides.
 Code: `operator/pkg/render/component.go` (`Overridable`).
 _Avoid_: bare override (it means several things)
 
@@ -88,24 +88,24 @@ Code: `operator/api/v1/installation_types.go` (`InstallationSpec`).
 _Avoid_: override, unqualified
 
 **Ignore annotation**:
-The annotation `unsupported.operator.tigera.io/ignore`. It stops the handler managing an object and raises a status warning.
+The annotation `unsupported.operator.tigera.io/ignore`, which marks an object as unmanaged by the operator.
 Code: `operator/pkg/controller/utils/utils.go`.
 _Avoid_: nothing known
 
 ### Variants and extensions
 
 **Variant**:
-The product the operator runs as, fixed for the life of the process. A change of variant restarts the operator.
+The product the operator runs as, fixed for the life of the process.
 Code: `operator/api/v1/installation_types.go` (`ProductVariant`).
 _Avoid_: flavor, edition
 
 **Extension**:
-A variant's per-controller hook set. Core code never branches on the variant; it calls the extension.
+A variant's per-controller hook set.
 Code: `operator/pkg/extensions/extensions.go` (`Set`).
 _Avoid_: plugin
 
 **Controller phase**:
-The extension phase with cluster access, run through `ExtendInputs`. It does the side-effecting work a render hook cannot, such as rejecting unsupported config or creating certificates.
+The extension phase with cluster access, run through `ExtendInputs`.
 Code: `operator/pkg/extensions/doc.go`.
 _Avoid_: reconciler
 
@@ -115,12 +115,12 @@ Code: `operator/pkg/extensions/component.go` (`Modifier`).
 _Avoid_: bare render (it means several things)
 
 **Modifier**:
-A function that post-processes a component render implementation's objects for a variant. `Decorate` wraps a component so its modifier runs before user overrides.
+A function that post-processes a component render implementation's objects for a variant.
 Code: `operator/pkg/extensions/component.go` (`Decorate`).
 _Avoid_: ComponentModifier, ComponentExtension
 
 **`WithDerive`**:
-A modifier that runs after overrides and builds objects copied from overridden ones.
+A modifier that builds objects derived from overridden ones.
 Code: `operator/pkg/extensions/component.go` (`WithDerive`).
 _Avoid_: nothing known
 
@@ -137,7 +137,7 @@ Code: `operator/api/v1/tigerastatus_types.go` (`TigeraStatus`).
 _Avoid_: status area (that is the area it reports on, not the resource)
 
 **Status manager**:
-The per-controller object that tracks registered workloads and conditions and writes one TigeraStatus.
+The per-controller object that writes one TigeraStatus.
 Code: `operator/pkg/controller/status/status.go` (`StatusManager`).
 _Avoid_: manager, unqualified
 
@@ -159,7 +159,7 @@ _Avoid_: CR-less controller
 ### Certificates and trust
 
 **Operator CA**:
-The CA secret the operator holds, plus the trusted bundle built from it. The certificate manager issues, loads and preserves key pairs against it.
+The CA secret the operator holds, plus the trusted bundle built from it.
 Code: `operator/pkg/controller/certificatemanager/certificatemanager.go` (`CertificateManager`).
 _Avoid_: certificate management (that is a different feature), signer
 
@@ -169,12 +169,12 @@ Code: `operator/pkg/tls/certificatemanagement/interface.go` (`KeyPairInterface`)
 _Avoid_: cert, unqualified
 
 **BYO certificate**:
-A key pair the user supplied. The operator preserves it and never re-signs it.
+A key pair the user supplied.
 Code: `operator/pkg/tls/certificatemanagement/keypair.go`.
 _Avoid_: user-provided certificate
 
 **Trusted bundle**:
-A ConfigMap of CA certificates mounted into pods so they can verify their peers.
+A ConfigMap of CA certificates.
 Code: `operator/pkg/tls/certificatemanagement/interface.go` (`TrustedBundle`).
 _Avoid_: CA, unqualified
 
@@ -191,7 +191,7 @@ _Avoid_: certificate manager
 ### Installation spec and defaults
 
 **Installation**:
-The `operator.tigera.io/v1` resource named `default` that declares the desired Calico install. An Installation named `overlay` can be merged over it, and the operator also writes selected fields on shared Calico configuration resources.
+The `operator.tigera.io/v1` resource named `default` that declares the desired Calico install.
 Code: `operator/api/v1/installation_types.go` (`Installation`).
 _Avoid_: install CR, the config
 
@@ -211,12 +211,12 @@ Code: `operator/api/v1/installation_types.go` (`InstallationStatus`).
 _Avoid_: defaults
 
 **Computed spec**:
-The effective Installation spec the operator renders from, which merges the spec with the recorded defaults and the overlay.
+The effective Installation spec the operator renders from.
 Code: `operator/api/v1/installation_types.go` (`InstallationStatus`).
 _Avoid_: defaulted spec
 
 **`IPPool` (Installation)**:
-An entry of `Installation.spec.calicoNetwork.ipPools`. The IP pool controller turns it into a `projectcalico.org/v3` IPPool.
+An entry of `Installation.spec.calicoNetwork.ipPools`.
 Code: `operator/api/v1/installation_types.go` (`IPPool`).
 _Avoid_: IPPool, unqualified
 
@@ -238,12 +238,12 @@ Code: `operator/pkg/components/references.go` (`Component`).
 _Avoid_: component, unqualified
 
 **Image key**:
-The image's own name, used to look up a variant-supplied build of that image.
+The image's own name.
 Code: `operator/pkg/components/imagefor.go` (`ImageFor`).
 _Avoid_: component name
 
 **ImageSet**:
-A resource named `<variant>-<release>` that pins image digests. The operator resolves it into every component render implementation before rendering.
+A resource named `<variant>-<release>` that pins image digests.
 Code: `operator/api/v1/imageset_types.go` (`ImageSet`).
 _Avoid_: image override (that is the Installation's override keys)
 
@@ -255,17 +255,17 @@ _Avoid_: nothing known
 ### Lifecycle and migrations
 
 **Datastore migration watch**:
-The operator's watch on the DatastoreMigration resource, together with its lookup of the API group the cluster serves, used while the v1-to-v3 CRD migration runs.
+The operator's watch on the DatastoreMigration resource, together with its lookup of the API group the cluster serves.
 Code: `operator/pkg/controller/migration/datastoremigration/version.go` (`WatchObject`, `ServedGroupVersion`).
 _Avoid_: served API group watch
 
 **Staged teardown**:
-The Installation controller's ordered deletion, driven by one finalizer per controller plus `tigera.io/operator-cleanup`, so each feature's objects go before the RBAC they depend on.
+The Installation controller's ordered deletion of the install.
 Code: `operator/pkg/render/finalizers.go`.
 _Avoid_: graceful termination
 
 **Active operator**:
-The operator install named in the `active-operator` ConfigMap. Other operator installs stand down.
+The operator install named in the `active-operator` ConfigMap.
 Code: `operator/pkg/active/active.go`.
 _Avoid_: leader (that is leader election)
 
@@ -275,12 +275,12 @@ Code: `operator/pkg/controller/apiserver/cutover.go`.
 _Avoid_: handover (that is the kube-controllers APIService removal)
 
 **Namespace migration**:
-Moving a manifest install from `kube-system` to `calico-system` node by node, gated by the node migration label.
+Moving a manifest install from `kube-system` to `calico-system` node by node.
 Code: `operator/pkg/controller/migration/namespace_migration.go` (`CoreNamespaceMigration`).
 _Avoid_: migration on its own (it means several things)
 
 **Node migration label**:
-The label `projectcalico.org/operator-node-migration`, set to `pre-operator` or `migrated`, that decides which calico-node runs on a node.
+The label `projectcalico.org/operator-node-migration`, set to `pre-operator` or `migrated`.
 Code: `operator/pkg/controller/migration/namespace_migration.go`.
 _Avoid_: bare migration (it means several things)
 

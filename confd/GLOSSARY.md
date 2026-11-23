@@ -50,7 +50,7 @@ Code: `node/filesystem/etc/calico/confd/templates/bird_ipam.cfg.template` (`cali
 _Avoid_: import filter (it is an export filter), kernel filter
 
 **BGP export filter**:
-The shared function every peer's export filter calls to choose what this node advertises. It also rejects routes that leave through Felix-programmed tunnel interfaces, so iBGP does not re-advertise them.
+The shared function every peer's export filter calls to choose what this node advertises.
 Code: `node/filesystem/etc/calico/confd/templates/bird_ipam.cfg.template` (`calico_export_to_bgp_peers`), `confd/pkg/backends/calico/bgp_processor.go` (`IBGPExportFilterForTunnelRoutes`).
 _Avoid_: BGPFilter (that is the resource)
 
@@ -67,29 +67,29 @@ _Avoid_: nothing known
 ### Route priority
 
 **Normal route priority**:
-The kernel metric Felix gives ordinary workload routes, 1024 by default. BGPConfiguration and FelixConfiguration must carry the same value.
+The kernel metric Felix gives ordinary workload routes.
 Code: `confd/pkg/backends/calico/bgp_processor.go` (`getNormalRoutePriority`), `api/pkg/apis/projectcalico/v3/bgpconfig.go` (`IPv4NormalRoutePriority`).
 _Avoid_: preference (BIRD's separate attribute)
 
 **Override preference**:
-The BIRD `preference` of 200 given to a BGP-learned elevated route, so that it beats a local workload route for the same address.
+The BIRD `preference` of 200 given to a BGP-learned elevated route.
 Code: `confd/pkg/backends/calico/bgp_processor.go` (`birdOverridePreference`).
 _Avoid_: higher than normal priority route, priority (the kernel metric, a separate attribute)
 
 ### Cluster routes and pools
 
 **Pool encapsulation mode**:
-Which encapsulation an IP pool uses, worked out from its `ipipMode` and `vxlanMode`: IPIP when `ipipMode` is Always or CrossSubnet, VXLAN when `vxlanMode` is, otherwise no-encap. "Pool encap mode" is the short form.
+Which encapsulation an IP pool uses: IPIP, VXLAN or no-encap. "Pool encap mode" is the short form.
 Code: `confd/pkg/backends/calico/bgp_processor.go` (`poolUsesIPIP`, `poolUsesVXLAN`).
 _Avoid_: pool class
 
 **Cluster-route handover**:
-The window during a live `programClusterRoutes` change in which BIRD has withdrawn its cluster routes and Felix has not yet restarted to program them.
+The state during a live `programClusterRoutes` change in which BIRD has withdrawn its cluster routes and Felix has not yet programmed them.
 Code: `design/cluster-route-programming/DESIGN.md`.
 _Avoid_: bare handover or cutover (name the subject)
 
 **Leftover BIRD routes**:
-Routes BIRD installed in the kernel and left in place when it exited. Felix removes the ones on the IPIP device when it owns the cluster routes for IPIP pools.
+Routes BIRD installed in the kernel and left in place when it exited.
 Code: `felix/routetable/ownershippol/main_route_table_policy.go` (`OwnBIRDIPIPRoutes`).
 _Avoid_: orphan routes
 
@@ -101,7 +101,7 @@ Code: `confd/pkg/backends/calico/bgp_processor.go` (`peerType`).
 _Avoid_: peer type, peer kind
 
 **Mesh peer**:
-A peering to every other node that is not a route reflector, generated while the node-to-node mesh is on.
+A peering to every other node that is not a route reflector.
 Code: `confd/pkg/backends/calico/bgp_processor.go` (`processMeshPeers`).
 _Avoid_: full mesh peer
 
@@ -116,12 +116,12 @@ Code: `confd/pkg/backends/calico/client.go` (`NodeBGPPeerKey`).
 _Avoid_: node peer, peer type (that is eBGP or iBGP)
 
 **Local workload peer**:
-A BGP peering to a workload on this node, chosen by a BGPPeer's `localWorkloadSelector` and found through endpoint status files.
+A BGP peering to a workload on this node, selected by a BGPPeer's `localWorkloadSelector`.
 Code: `confd/pkg/backends/calico/local_bgp_peer_watcher.go` (`LocalBGPPeerWatcher`).
 _Avoid_: local peer
 
 **Reverse peering**:
-The peering confd adds on the peer node's side for symmetry, unless the BGPPeer sets `reversePeering` to Manual.
+The peering on the peer node's side that mirrors a BGPPeer.
 Code: `confd/pkg/backends/calico/client.go` (`updatePeersV1`).
 _Avoid_: implicit reverse peering
 
@@ -133,17 +133,17 @@ _Avoid_: bare v1 (it also means the v1 model and the legacy API)
 ### Client and templates
 
 **Confd key space**:
-The keys confd's cache holds for the templates to read: `/calico/bgp/v1/...`, `/calico/staticroutes` and `/calico/rejectcidrs`. It is not the v1 model.
+The keys confd's cache holds: `/calico/bgp/v1/...`, `/calico/staticroutes` and `/calico/rejectcidrs`. It is not the v1 model.
 Code: `confd/pkg/backends/calico/client.go` (`updateGlobalRoutes`), `libcalico-go/lib/backend/syncersv1/updateprocessors/bgpnodeprocessor.go` (`NewBGPNodeUpdateProcessor`).
 _Avoid_: v1 model, etcd v1 path
 
 **Data-source readiness**:
-The per-source flag that the syncer, the route generator and the local BGP peer watcher must all set before confd renders any template.
+The per-source flag that records whether one source of confd's data (the syncer, the route generator or the local BGP peer watcher) has finished its initial sync.
 Code: `confd/pkg/backends/calico/client.go` (`sourceReady`).
 _Avoid_: in-sync (that is the syncer alone), full sync
 
 **Advertised service route**:
-A service CIDR that confd injects into the key space so BIRD advertises it.
+A service CIDR that BIRD advertises.
 Code: `confd/pkg/backends/calico/client.go` (`updateGlobalRoutes`).
 _Avoid_: static route
 
@@ -163,17 +163,17 @@ Code: `confd/pkg/resource/template/resource.go` (`TemplateResource`).
 _Avoid_: TemplateResourceConfig, template (that is the file the resource points at)
 
 **Stage file**:
-The temporary rendered file that BIRD checks before it replaces the destination file.
+The temporary rendered copy of a template's destination file.
 Code: `confd/pkg/resource/template/resource.go` (`TemplateResource`).
 _Avoid_: candidate config
 
 **Cache revision**:
-A confd-internal counter that rises on every cache update. The template processor uses it to decide when to re-render.
+A confd-internal counter that rises on every cache update.
 Code: `confd/pkg/backends/calico/client.go` (`revisionsByPrefix`).
 _Avoid_: datastore revision
 
 **BirdBGPConfig**:
-The per-IP-family structure of peers, filters, communities and pool statements that the templates render, with `BirdBGPPeer` for each peer.
+The per-IP-family structure of peers, filters, communities and pool statements, with `BirdBGPPeer` for each peer.
 Code: `confd/pkg/backends/types/bird_bgp_config.go` (`BirdBGPConfig`, `BirdBGPPeer`).
 _Avoid_: BGPConfiguration (that is the v3 resource)
 

@@ -29,12 +29,12 @@ Code: `app-policy/checker/alp_check_provider.go` (`ALPCheckProvider`).
 _Avoid_: L7 policy, sidecar policy
 
 **Check provider**:
-A pluggable evaluator that decides whether it handles a `CheckRequest` and returns the verdict.
+A pluggable evaluator of a `CheckRequest` that returns a verdict.
 Code: `app-policy/checker/provider.go` (`CheckProvider`).
 _Avoid_: checker (that is the package, not one provider)
 
 **Policy scope**:
-Whether an evaluation ignores staged policies (`EnforcedOnly`) or treats them as enforced (`StagedAsEnforced`). The `StagedAsEnforced` result is what Goldmane records as the pending policy trace.
+Whether an evaluation ignores staged policies (`EnforcedOnly`) or treats them as enforced (`StagedAsEnforced`).
 Code: `app-policy/checker/check.go` (`PolicyScope`).
 _Avoid_: pending verdict
 
@@ -44,12 +44,12 @@ Code: `app-policy/policystore/store.go` (`PolicyStore`).
 _Avoid_: policy cache
 
 **Current store and pending store**:
-The policy store that requests read from, and the policy store the policy sync client rebuilds after a reconnect until Felix reports in-sync. Requests keep reading the current store during the rebuild. The pending store has nothing to do with staged policy.
+The policy store that requests read from, and the separate policy store that the policy sync client builds up. The pending store has nothing to do with staged policy.
 Code: `app-policy/policystore/store.go` (`policyStoreManager`).
 _Avoid_: pending policy (that means a staged policy)
 
 **Policy sync client**:
-The Dikastes side of the Policy Sync API. It subscribes to Felix, applies each update to the pending store or current store, and sends statistics back with `Report`. Its package is named `syncher`.
+The Dikastes side of the Policy Sync API. Its package is named `syncher`.
 Code: `app-policy/syncher/syncserver.go` (`SyncClient`).
 _Avoid_: syncher, sync server
 
@@ -59,6 +59,6 @@ Code: `felix/policysync/server.go` (`Server`).
 _Avoid_: nodeagent
 
 **In-sync**:
-The point at which Felix has sent the whole initial policy snapshot to the policy sync client. The pending store becomes the current store at that point.
+The point at which Felix has sent the whole initial policy snapshot to the policy sync client.
 Code: `app-policy/policystore/store.go` (`OnInSync`).
 _Avoid_: ready, synced
