@@ -61,38 +61,52 @@ func TestIPNetLongPrefixMembers(t *testing.T) {
 // Host addresses and a longer prefix can share the bitmap node. Removing one kind of member must
 // leave the other's addresses in the set.
 func TestIPNetLongPrefixAndHostMembersOverlap(t *testing.T) {
-	RegisterTestingT(t)
+	for _, tc := range []struct {
+		name string
+		// block is the bitmap node's own prefix and long a member below it. host is inside long,
+		// otherHost is outside it, inLong is inside long but not a host member, and outside is
+		// in block but in neither.
+		block, long, host, otherHost, inLong, outside, hostLen string
+	}{
+		{"IPv4", "10.0.0.0/24", "10.0.0.128/28", "10.0.0.130", "10.0.0.5", "10.0.0.135", "10.0.0.200", "/32"},
+		{"IPv6", "fd00::/120", "fd00::80/124", "fd00::82", "fd00::5", "fd00::87", "fd00::c8", "/128"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			hostLen := tc.hostLen
 
-	uut := NewIPSet(proto.IPSetUpdate_NET)
-	uut.AddString("10.0.0.0/24")
-	uut.AddString("10.0.0.128/28")
-	uut.AddString("10.0.0.130/32")
-	uut.AddString("10.0.0.5/32")
+			uut := NewIPSet(proto.IPSetUpdate_NET)
+			uut.AddString(tc.block)
+			uut.AddString(tc.long)
+			uut.AddString(tc.host + hostLen)
+			uut.AddString(tc.otherHost + hostLen)
 
-	uut.RemoveString("10.0.0.0/24")
-	Expect(uut.Contains("10.0.0.130")).To(BeTrue())
-	Expect(uut.Contains("10.0.0.135")).To(BeTrue())
-	Expect(uut.Contains("10.0.0.5")).To(BeTrue())
-	Expect(uut.Contains("10.0.0.6")).To(BeFalse())
-	Expect(uut.Contains("10.0.0.200")).To(BeFalse())
+			uut.RemoveString(tc.block)
+			Expect(uut.Contains(tc.host)).To(BeTrue())
+			Expect(uut.Contains(tc.inLong)).To(BeTrue())
+			Expect(uut.Contains(tc.otherHost)).To(BeTrue())
+			Expect(uut.Contains(tc.outside)).To(BeFalse())
 
-	// The /28 still covers the host address taken out of the bitmap.
-	uut.RemoveString("10.0.0.130/32")
-	Expect(uut.Contains("10.0.0.130")).To(BeTrue())
-	Expect(uut.Contains("10.0.0.5")).To(BeTrue())
+			// The long prefix still covers the host address taken out of the bitmap.
+			uut.RemoveString(tc.host + hostLen)
+			Expect(uut.Contains(tc.host)).To(BeTrue())
+			Expect(uut.Contains(tc.otherHost)).To(BeTrue())
 
-	uut.AddString("10.0.0.130/32")
-	uut.RemoveString("10.0.0.128/28")
-	Expect(uut.Contains("10.0.0.130")).To(BeTrue())
-	Expect(uut.Contains("10.0.0.135")).To(BeFalse())
-	Expect(uut.Contains("10.0.0.5")).To(BeTrue())
+			uut.AddString(tc.host + hostLen)
+			uut.RemoveString(tc.long)
+			Expect(uut.Contains(tc.host)).To(BeTrue())
+			Expect(uut.Contains(tc.inLong)).To(BeFalse())
+			Expect(uut.Contains(tc.otherHost)).To(BeTrue())
 
-	uut.RemoveString("10.0.0.130/32")
-	uut.RemoveString("10.0.0.5/32")
-	Expect(uut.Contains("10.0.0.130")).To(BeFalse())
-	Expect(uut.Contains("10.0.0.5")).To(BeFalse())
-	internals := uut.(ipNetSet)
-	Expect(internals.v4.children).To(Equal([2]*trieNode{nil, nil}))
+			uut.RemoveString(tc.host + hostLen)
+			uut.RemoveString(tc.otherHost + hostLen)
+			Expect(uut.Contains(tc.host)).To(BeFalse())
+			Expect(uut.Contains(tc.otherHost)).To(BeFalse())
+			internals := uut.(ipNetSet)
+			Expect(internals.v4.children).To(Equal([2]*trieNode{nil, nil}))
+			Expect(internals.v6.children).To(Equal([2]*trieNode{nil, nil}))
+		})
+	}
 }
 
 func BenchmarkIPNetSetContains(b *testing.B) {
