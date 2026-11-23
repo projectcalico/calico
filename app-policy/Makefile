@@ -60,14 +60,15 @@ ut: protobuf
 ###############################################################################
 # Benchmarks
 ###############################################################################
-## Run the policy evaluation engine benchmarks. Each case writes a hack/perf document under
-## artifacts/perf at the repo root, which send-perf-results publishes to Lens.
+## Run the policy evaluation engine benchmarks, five times each. Each case writes one hack/perf
+## document under artifacts/perf at the repo root, with medians over the five runs, which
+## send-perf-results publishes to Lens.
 .PHONY: bench-policy-eval
 bench-policy-eval:
 	mkdir -p $(REPO_ROOT)/artifacts/perf
 	$(call run_with_env,POLICY_EVAL_PERF_ARTIFACTS_DIR=$(BUILD_REPO_ROOT)/artifacts/perf,\
 		go test ./checker/ -run '^$$' -bench '^BenchmarkEvaluate(BaselinePolicyScale|EgressAllowList|Composite|RuleShapes)$$' \
-		-benchmem -benchtime 20x -cpu 1)
+		-benchmem -benchtime 20x -count 5 -cpu 1)
 
 ###############################################################################
 # CI
