@@ -15,6 +15,7 @@
 package policyscale
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 )
@@ -183,6 +184,32 @@ func EgressAllowList() Spec {
 	p := DefaultEgress()
 	return Spec{Seed: DefaultSeed, Egress: &p, Profile: DefaultProfile}
 }
+
+// Validate reports a Spec that Build can't turn into a faithful policy set: a policy with more
+// rules than the API takes, or an egress allow-list with more rules than distinct CIDRs to give
+// them, which would make later rules repeat earlier rules' destinations.
+func (s Spec) Validate() error {
+	if b := s.Baseline; b != nil && b.RulesPerPolicy > maxRulesPerPolicy {
+		return fmt.Errorf("policyscale: %d rules per baseline policy, more than the API's %d", b.RulesPerPolicy, maxRulesPerPolicy)
+	}
+	if e := s.Egress; e != nil {
+		if e.RulesPerPolicy > maxRulesPerPolicy {
+			return fmt.Errorf("policyscale: %d rules per egress policy, more than the API's %d", e.RulesPerPolicy, maxRulesPerPolicy)
+		}
+		if n := e.Policies * e.RulesPerPolicy; n > egressCIDRPool {
+			return fmt.Errorf("policyscale: %d egress rules, more than the %d distinct CIDRs they draw from", n, egressCIDRPool)
+		}
+	}
+	return nil
+}
+
+const (
+	// maxRulesPerPolicy is the most rules the API takes in one direction of a policy.
+	maxRulesPerPolicy = 1024
+	// egressCIDRPool is the number of /28s in 10.0.0.0/9, from which egress rules draw their
+	// destination CIDRs once there are too many for /24s.
+	egressCIDRPool = 1 << 19
+)
 
 // ScaleFromEnv returns spec with its egress dimensions overridden by the POLICYSCALE_POLICIES,
 // POLICYSCALE_RULES_PER_POLICY and POLICYSCALE_IPSETS environment variables where set, so that

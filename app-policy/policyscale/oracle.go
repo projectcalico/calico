@@ -191,7 +191,8 @@ func icmpMatches(r *ruleModel, f *Flow, family int) bool {
 	if r.icmp == nil && r.notICMP == nil {
 		return true
 	}
-	if !(f.Protocol == ProtocolICMP && family == 4) && !(f.Protocol == ProtocolICMPv6 && family == 6) {
+	icmpOfFamily := f.Protocol == ProtocolICMP && family == 4 || f.Protocol == ProtocolICMPv6 && family == 6
+	if !icmpOfFamily {
 		return false
 	}
 	typ, code := ICMPTypeCode(f)
