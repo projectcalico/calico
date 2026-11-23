@@ -113,6 +113,15 @@ certs:
 # needed to run itself and Calico. If disabled, you must manage these resources out-of-band.
 manageCRDs: true
 
+# Whether to render the pre-delete hook Job, which deletes the Installation and waits for the operator
+# to remove Calico before the operator itself is removed. Argo CD 3.3 and later runs this hook whenever
+# the Application is deleted, even when the delete keeps the Application's resources, so set this to
+# false when Argo CD manages the chart. Before an uninstall that is meant to remove Calico, set it back
+# to true and let Argo CD refresh the Application (or run helm upgrade) first: without the Job, the
+# operator can be removed before the Installation, which is then left terminating.
+preDeleteHook:
+  enabled: true
+
 # Whether to run the tigera/operator in zap development logging mode. When true, the operator
 # logs at debug level using a human-readable console encoder and emits stacktraces on warnings.
 # Intended for development and debugging; leave disabled in production.

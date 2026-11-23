@@ -1,3 +1,7 @@
+{{- /* A missing key means enabled: helm upgrade --reuse-values renders with the previous chart's values. */ -}}
+{{- /* The string "false" also disables it, as values templated by GitOps tools often arrive as strings. */ -}}
+{{- $enabled := dig "preDeleteHook" "enabled" true .Values.AsMap -}}
+{{- if and $enabled (ne (lower (toString $enabled)) "false") -}}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -7,9 +11,9 @@ metadata:
     helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
     {{- include "tigera-operator.labels" (dict "context" .) | nindent 4 }}
   annotations:
-    # Mark this Job as a pre-deletion hook. This will only be executed as part
-    # of helm uninstall, in order to ensure the Installation is cleaned up prior to
-    # tearing down the operator.
+    # Mark this Job as a pre-deletion hook, so the Installation is cleaned up before the operator
+    # is torn down. Helm runs it on helm uninstall; Argo CD 3.3 and later also runs it when the
+    # Application is deleted.
     helm.sh/hook: pre-delete
     helm.sh/hook-weight: "-5"
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
@@ -36,3 +40,4 @@ spec:
       - name: cleanup-job
         image: {{ template "tigera-operator.image" .Values.tigeraOperator}}
         args: ["-pre-delete"]
+{{- end }}
