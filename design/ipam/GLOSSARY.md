@@ -1,0 +1,263 @@
+# IPAM glossary
+
+This file extends the [root GLOSSARY.md](../../GLOSSARY.md). The headline IPAM words (IP pool, block, block affinity, borrowing, handle, IP reservation, cooldown, leak) are defined there. This file covers the IPAM library, the calico-ipam plugin and the IPAM GC controller, which [DESIGN.md](DESIGN.md) and its sibling documents describe.
+
+## Building blocks
+
+Top layer of IPAM.
+
+| Building block | Code | Responsible for |
+|---|---|---|
+| IPAM library | `libcalico-go/lib/ipam/interface.go` (`Interface`), `libcalico-go/lib/ipam/ipam.go` (`ipamClient`) | The public IPAM API that every caller uses: the CNI plugin, calico-node, calicoctl, kube-controllers. |
+| calico-ipam | `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`add`, `del`) | Allocating and releasing a pod's addresses when kubelet runs the CNI plugin. |
+| IPAM GC controller | `kube-controllers/pkg/controllers/node/ipam.go` (`IPAMController`) | Releasing leaked allocations, empty blocks and the IPAM state of deleted nodes, and reporting IPAM metrics. |
+| Accounting tracker | `libcalico-go/lib/ipam/accounting/tracker.go` (`Tracker`) | Incremental per-pool and per-block counts, shared by the IPAM GC controller and `calicoctl ipam`. |
+
+Layers inside the IPAM library, calico-ipam and the IPAM GC controller.
+
+| Building block | Code | Responsible for |
+|---|---|---|
+| Assign state | `libcalico-go/lib/ipam/ipam.go` (`blockAssignState`) | One `AutoAssign` request: walk the affine blocks, then claim a new block or borrow. |
+| Pool qualification | `libcalico-go/lib/ipam/pool_qualification.go` (`poolQualification`, `qualifyPools`) | Deciding which pools a request may draw from and which empty affine blocks a node keeps. |
+| Pool claim | `libcalico-go/lib/ipam/pool_qualification.go` (`PoolClaim`) | The exported form of the pool qualification rule (`MayUse`), for callers outside the package. |
+| Block reader and writer | `libcalico-go/lib/ipam/ipam_block_reader_writer.go` (`blockReaderWriter`) | Every compare-and-swap read and write of blocks, affinities and handles, including the affinity state machine. |
+| Allocation block | `libcalico-go/lib/ipam/ipam_block.go` (`allocationBlock`) | In-memory block operations: assign, release, ownership updates, deallocation. |
+| Allocation handle | `libcalico-go/lib/ipam/ipam_handle.go` (`allocationHandle`) | Per-handle, per-block counts mirrored into the IPAMHandle resource. |
+| Address filter | `libcalico-go/lib/ipam/addr_filter.go` (`addrFilter`) | Skipping reserved addresses at block and ordinal granularity. |
+| Reserved IPs | `libcalico-go/lib/ipam/accounting/reserved.go` (`ReservedIPs`) | The one implementation of reserved-set arithmetic. |
+| VM handle helpers | `libcalico-go/lib/ipam/vmipam/ipam_kubevirt.go` (`CreateVMHandleID`, `EnsureActiveVMOwnerAttrs`) | VM-scoped handles and owner attributes for KubeVirt address persistence. |
+| Network plugin hand-off | `cni-plugin/pkg/ipamplugin/in_process.go` (`inProcessExec`) | Running calico-ipam inside the `calico` process, and exec'ing any other IPAM plugin. |
+| Sandbox handover step | `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`transferFromPriorSandbox`) | Moving an address the pod already holds onto the new sandbox's handle. |
+| Release step | `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`ReleaseSandbox`, `releaseUnlisted`, `releaseHandle`) | Releasing by sandbox handle and legacy workload handle, or only the unlisted addresses. |
+| Sync pass | `kube-controllers/pkg/controllers/node/ipam.go` (`syncIPAM`) | One GC pass: check allocations, release known leaks, release cooled-down addresses, release unused blocks, release nodes. |
+| Allocation classifier | `kube-controllers/pkg/controllers/node/ipam.go` (`checkAllocations`, `judgeAllocation`) | Giving each allocation a verdict. |
+| Allocation state | `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`allocationState`, `handleTracker`, `blockReleaseTracker`) | Allocations by node, the dirty-node set, the per-handle leak check and the empty-block rule. |
+| IPAM feed | `kube-controllers/pkg/controllers/utils/ipam_feed.go` (`IPAMFeed`) | Feeding the accounting tracker from the datastore syncer. |
+
+## Terms
+
+Terms defined in the [root glossary](../../GLOSSARY.md) that apply in this component:
+
+- [Affinity to a missing node](../../GLOSSARY.md#affinity-to-a-missing-node)
+- [Affinity type](../../GLOSSARY.md#affinity-type)
+- [Allocation](../../GLOSSARY.md#allocation)
+- [Intended use](../../GLOSSARY.md#intended-use)
+- [IPAM GC controller](../../GLOSSARY.md#ipam-gc-controller)
+- [Legacy workload handle](../../GLOSSARY.md#legacy-workload-handle)
+- [Lent addresses](../../GLOSSARY.md#lent-addresses)
+- [Pool containing the block](../../GLOSSARY.md#pool-containing-the-block)
+- [Sandbox handle](../../GLOSSARY.md#sandbox-handle)
+- [Strict affinity](../../GLOSSARY.md#strict-affinity)
+
+### IPAM library
+
+**Ordinal**:
+An address's index within its block.
+Code: `libcalico-go/lib/backend/model/block.go` (`IPToOrdinal`).
+
+**Sequence number**:
+A block-level write counter, with a per-ordinal copy, that lets a release detect and skip a stale request. Every release path passes it in `ReleaseOptions`.
+Code: `libcalico-go/lib/backend/model/block.go` (`SequenceNumber`), `libcalico-go/lib/ipam/ipam_types.go` (`ReleaseOptions`).
+
+**Allocation attribute**:
+The record kept for one allocated ordinal: its handle, active owner attributes, alternate owner attributes and release time.
+Code: `libcalico-go/lib/backend/model/block.go` (`AllocationAttribute`).
+
+**Active owner and alternate owner**:
+The pod using an address now, and the other pod that holds it during a KubeVirt live migration. The active owner's attributes serialize under the JSON name `secondary`.
+Code: `libcalico-go/lib/backend/model/block.go` (`ActiveOwnerAttrs`, `AlternateOwnerAttrs`).
+
+**Pool qualification**:
+The rule that decides which pools one request may draw addresses from and which empty affine blocks a node may keep. `PoolClaim` is its exported form.
+Code: `libcalico-go/lib/ipam/pool_qualification.go` (`poolQualification`, `PoolClaim`).
+_Avoid_: pool selection, pool eligibility
+
+**Pool resolution**:
+Turning the pool names and CIDRs a request names into CIDRs, and nothing more. It runs before pool qualification.
+Code: `libcalico-go/lib/ipam/pool_qualification.go` (`ResolvePools`).
+
+**Block affinity state**:
+Where a block affinity is in its life. It is `pending` while being claimed and `confirmed` once it holds, and `pendingDeletion` while being released. A pending affinity is treated as absent, and no other host may claim a block whose affinity is `pendingDeletion`.
+Code: `libcalico-go/lib/backend/model/block_affinity.go` (`BlockAffinityState`).
+
+**In cooldown**:
+The state of an address after release and before deallocation. It stays in the block's allocations with its release time set for the pool's cooldown period, and it still counts as in use; the accounting reports it separately as cooling.
+Code: `libcalico-go/lib/backend/model/block.go` (`ReleasedAt`), `libcalico-go/lib/ipam/ipam_types.go` (`IPCooldownSeconds`).
+_Avoid_: cooling, pending release, quarantine
+
+**Cooled down**:
+The state of an address whose cooldown has ended. It is eligible for deallocation, which moves its ordinal to the block's unallocated queue.
+Code: `libcalico-go/lib/ipam/ipam_block.go` (`garbageCollect`).
+_Avoid_: cold, expired
+
+**Cooldown expiry**:
+The moment an address goes from in cooldown to cooled down.
+Code: `libcalico-go/lib/ipam/ipam_block.go` (`garbageCollect`).
+
+**Write-folded deallocation**:
+Deallocation of cooled-down addresses that is saved only when a write path updates the block. A read computes the same result and discards it.
+Code: `libcalico-go/lib/ipam/ipam_block.go` (`blockFromBackend`).
+_Avoid_: read-time GC, the IPAM GC (that is the controller)
+
+**VM handle**:
+The handle of the form `<network>.vmi.<namespace>.<vm>`, which persists across the pods of one KubeVirt VM.
+Code: `libcalico-go/lib/ipam/vmipam/ipam_kubevirt.go` (`CreateVMHandleID`).
+
+**Windows-reserved handle**:
+The literal handle `windows-reserved-ipam-handle`, which holds the first three and the last address of each Windows block.
+Code: `libcalico-go/lib/ipam/accounting/allocation.go` (`WindowsReservedHandle`).
+_Avoid_: reservation (that is the IP reservation resource)
+
+**`LabelHostnameHash`**:
+The hashed-hostname label on a block affinity that KDD host lookups use. `UpgradeHost` stamps it at node startup.
+Code: `api/pkg/apis/projectcalico/v3/constants.go` (`LabelHostnameHash`), `libcalico-go/lib/ipam/ipam.go` (`UpgradeHost`).
+
+**Unreferenced**:
+The accounting predicate that is true for an allocation whose owner no longer refers to it, at this instant. It becomes a leak only once the IPAM GC controller's grace period has passed.
+Code: `libcalico-go/lib/ipam/accounting/references.go` (`Unreferenced`).
+_Avoid_: leak (before the grace period), orphan
+
+### calico-ipam
+
+**calico-ipam**:
+The Calico IPAM plugin program, selected when the CNI configuration's `ipam.type` is `calico-ipam`. It allocates from Calico IP pools.
+Code: `cni-plugin/cmd/calico/calico.go` (`main`).
+_Avoid_: the IPAM (that also means the library)
+
+**In-process IPAM**:
+Running calico-ipam's code inside the `calico` network plugin's process instead of exec'ing it, so the runtime killing the plugin also stops IPAM.
+Code: `cni-plugin/pkg/ipamplugin/in_process.go` (`inProcessExec`).
+_Avoid_: embedded IPAM
+
+**Sandbox**:
+One pod sandbox, identified by its CNI container ID, that kubelet asked the plugin to network. A pod can have several over its life.
+Code: `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`transferFromPriorSandbox`).
+_Avoid_: container
+
+**Prior sandbox**:
+An earlier sandbox of the same pod, whose handle may still hold addresses the new sandbox needs.
+Code: `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`transferFromPriorSandbox`).
+_Avoid_: old sandbox, previous sandbox, earlier sandbox, stale sandbox
+
+**Sandbox handover**:
+Moving an address a pod holds under a prior sandbox's handle onto the new sandbox's handle without releasing it.
+Code: `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`transferFromPriorSandbox`), `libcalico-go/lib/ipam/ipam.go` (`MoveIPToHandle`).
+_Avoid_: reallocate (no release happens), reuse, transfer
+
+**Superseded sandbox**:
+A sandbox the runtime gave up on while its ADD was still running, after a newer sandbox took the address. calico-ipam fails that ADD with `ErrCodeSandboxSuperseded`.
+Code: `cni-plugin/pkg/types/types.go` (`ErrCodeSandboxSuperseded`).
+_Avoid_: abandoned sandbox
+
+**Address-not-ours error**:
+The CNI error code that says a requested or handed-over address does not belong to the pod. It is the only error that leads the plugin to request a fresh address.
+Code: `cni-plugin/pkg/types/types.go` (`ErrCodeAddressNotOurs`).
+
+**Kept addresses**:
+The addresses a WorkloadEndpoint for another sandbox still lists. A stale DEL or a failed ADD must not release them.
+Code: `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`keepAddresses`).
+_Avoid_: protected addresses
+
+**Keep-aware release**:
+Releasing only the addresses a WorkloadEndpoint no longer lists, so kept addresses stay allocated.
+Code: `cni-plugin/pkg/k8s/ipam_keep.go` (`failedAddCleanup`, `releaseUnusedAddresses`).
+
+**IPAM lock**:
+A best-effort lock file held for the host across a calico-ipam ADD or release.
+Code: `cni-plugin/internal/pkg/utils/ipam_lock.go` (`AcquireIPAMLockBestEffort`, `WithIPAMLock`).
+_Avoid_: mutex
+
+**Lock then clock**:
+The rule that the allocation timeout starts only after the IPAM lock is held.
+Code: `design/ipam/ipam-cni.md`.
+
+**IPAM annotations**:
+The pod and namespace annotations that steer allocation, such as `ipAddrs` and `ipv4pools`. The full list is in the IPAM CNI design document.
+Code: `cni-plugin/pkg/k8s/k8s.go` (`applyIPAMAnnotations`), `design/ipam/ipam-cni.md`.
+
+**Single-network mode**:
+The Windows mode that limits a node to one HNS network and one IPAM block.
+Code: `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`WindowsUseSingleNetwork`).
+
+**Sandbox lookups**:
+The Kubernetes clients and the Pod and Namespace objects that the `calico` network plugin passes on the context to in-process IPAM.
+Code: `cni-plugin/internal/pkg/utils/sandbox_lookups.go` (`SandboxLookups`).
+
+### IPAM GC controller
+
+**Full sync**:
+An IPAM GC pass that scans every node. Between full syncs, an incremental sync checks only the dirty nodes.
+Code: `kube-controllers/pkg/controllers/node/ipam.go` (`fullSyncRequired`).
+_Avoid_: full scan
+
+**Incremental sync**:
+An IPAM GC pass that checks only the nodes whose allocations changed since the last pass, the dirty nodes.
+Code: `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`allocationState`, `iterDirty`).
+_Avoid_: dirty scan
+
+**Allocation verdict**:
+The IPAM GC controller's judgment of one allocation: in use, owner gone, or unused.
+Code: `kube-controllers/pkg/controllers/node/ipam.go` (`judgeAllocation`).
+
+**Candidate leak**:
+An allocation judged not in use whose grace timer is running.
+Code: `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`isCandidateLeak`).
+_Avoid_: orphan
+
+**Confirmed leak**:
+An allocation the IPAM GC controller will release: its grace period has passed, or its owner is gone from a node that no longer exists.
+Code: `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`isConfirmedLeak`, `markConfirmedLeak`).
+_Avoid_: stale allocation
+
+**Replaced sandbox**:
+An allocation whose handle names a container ID other than the one in the pod's `cni.projectcalico.org/containerID` annotation. Only the IPAM GC controller uses this term.
+Code: `kube-controllers/pkg/controllers/node/ipam.go` (`fromReplacedSandbox`).
+_Avoid_: stale sandbox
+
+**Handle tracker**:
+The per-handle check that makes a handle's release all-or-none: the controller confirms a leak only when every allocation under the handle is a confirmed leak.
+Code: `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`handleTracker`).
+
+**Empty-block grace**:
+The rule that the controller must see a block empty on two syncs, spanning the grace period, before it releases the block's affinity.
+Code: `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`blockReleaseTracker`).
+
+**Last affine block**:
+The one affine block a node keeps even when empty. The controller never releases it.
+Code: `kube-controllers/pkg/controllers/node/ipam.go` (`releaseUnusedBlocks`).
+
+**Stopped-VM bucket**:
+The in-memory pseudo-node under which the controller files the addresses of stopped KubeVirt VMs that no node holds.
+Code: `kube-controllers/pkg/controllers/node/ipam.go` (`stoppedVMNode`).
+_Avoid_: virtual node (that clashes with the virtual affinity type)
+
+**VM recreation grace period**:
+The five-minute minimum on the leak grace period for KubeVirt VM allocations.
+Code: `kube-controllers/pkg/controllers/node/ipam.go` (`vmRecreationGracePeriod`).
+
+**`garbageCollectColdIPs`**:
+The pass that persists deallocation for blocks whose addresses have cooled down but that no write path has touched.
+Code: `kube-controllers/pkg/controllers/node/ipam.go` (`garbageCollectColdIPs`, `coldBlocks`).
+_Avoid_: cold-IP GC, cold IPs
+
+**`kubernetesNodesByCalicoName`**:
+The controller's lookup from a v3.Node name to the Kubernetes Node, which it needs because allocations record the v3.Node name.
+Code: `kube-controllers/pkg/controllers/node/ipam.go` (`kubernetesNodesByCalicoName`).
+_Avoid_: knode, cnode
+
+**IPAM feed**:
+The building block that feeds the accounting tracker from the datastore syncer.
+Code: `kube-controllers/pkg/controllers/utils/ipam_feed.go` (`IPAMFeed`).
+
+## Words that need a qualifier
+
+| Word | Meanings in play | Say |
+|---|---|---|
+| allocation | one assigned ordinal and its attribute, the model's `Allocations` slots, the GC's tracked allocation | allocation, ordinal slot, tracked allocation |
+| claim | claiming a block affinity, `PoolClaim`, a handover timestamp | block claim, pool qualification, handover timestamp |
+| IPAMConfig | the library's config type, the stored `IPAMConfig`, the CNI network configuration's `ipam` section | IPAMConfiguration, internal IPAMConfig, the `ipam` section of the network configuration |
+| reserved | an IP reservation, the Windows-reserved handle, the accounting tracker's reserved classes | IP reservation, Windows-reserved handle, reserved class |
+| stale | the unconfirmed-affinity error, an affinity to a missing node, a stale sandbox | stale affinity error, affinity to a missing node, prior sandbox |
+| virtual | the virtual affinity type | virtual affinity |
+| host and node | the v3.Node name in IPAM calls (`AffinityConfig.Host`, `MaxBlocksPerHost`), the Kubernetes node name | v3.Node name, node name |
+| GC | the library's deallocation of cooled-down addresses, the IPAM GC controller | deallocation, IPAM GC controller |

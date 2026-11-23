@@ -2,6 +2,8 @@
 
 Operational guidance for the operator, which builds out of this directory. Repo-wide rules live in the root `.claude/CLAUDE.md`.
 
+For vocabulary, read [`operator/GLOSSARY.md`](./GLOSSARY.md) and the root [`GLOSSARY.md`](../GLOSSARY.md). "Component" has many meanings in the operator; the glossary's qualifier table says which word to use for each.
+
 ## Project Overview
 
 Kubernetes operator (built with operator-sdk/controller-runtime) that manages the lifecycle of Calico and Calico Enterprise installations. Each component (compliance, networking, apiserver, etc.) gets its own CRD, controller, and status manager. New components default to the `calico-system` namespace. Controllers interact through the Kubernetes API.
