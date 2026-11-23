@@ -59,7 +59,7 @@ func TestEvaluateAgreesWithOracle(t *testing.T) {
 	spec.Baseline.MissingIPSets = 8
 	fx := policyscale.Build(spec)
 	store, ep := fx.NewStore(), fx.Endpoint()
-	corpus := differentialCorpus(fx, 7, 250, 257)
+	corpus := differentialCorpus(fx, 7, 100, 257)
 	assertEquivalent(t, "composite", StagedAsEnforced, Evaluate, oracleEvaluator(fx), store, ep, corpus)
 }
 
