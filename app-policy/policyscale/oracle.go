@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -25,7 +25,7 @@ import (
 )
 
 // Verdict is one entry of the rule trace the engine is expected to report: a Pass on the way, or
-// the final Allow or Deny. It carries the fields of calc.RuleID that identify a rule.
+// the final Allow or Deny, with the fields that identify the rule in a flow log.
 type Verdict struct {
 	Kind   string // GlobalNetworkPolicy, or Profile for the end-of-profiles deny.
 	Tier   string
@@ -130,7 +130,9 @@ func (fx *Fixture) ExpectIn(scope Scope, dir Direction, f *Flow) []Verdict {
 //   - a CIDR list keeps only the entries of the flow's family, and a list with none left drops the
 //     rule from that family;
 //   - a positive IP set reference requires the address to be a member; a negated one requires it
-//     not to be; a reference to a set the store does not hold is skipped, as the engine skips it;
+//     not to be;
+//   - a reference to a set the store doesn't hold, which a node never sees, is handled as the
+//     engine handles it: a NET set or service is skipped, and a named port matches nothing;
 //   - an address that is not an IP (nil) is a member of no set and inside no CIDR.
 func (fx *Fixture) ruleMatches(r *ruleModel, f *Flow) bool {
 	if f.Protocol < 1 || f.Protocol > 255 {
@@ -239,7 +241,8 @@ func portInRanges(ranges []portRange, port int, ifEmpty bool) bool {
 }
 
 // ipPortSetHolds reports whether the IP+port set holds the address, protocol and port. A set the
-// store doesn't hold reports ifMissing, matching how the engine treats each kind of reference.
+// store doesn't hold reports ifMissing: the engine's handling of each kind of reference, since a
+// node is always sent the sets its rules reference. No preset leaves an IP+port set out.
 func (fx *Fixture) ipPortSetHolds(setID string, ip net.IP, protocol, port int, ifMissing bool) bool {
 	if setID == "" {
 		return false
