@@ -109,10 +109,7 @@ func newMigrateLockCommand() *cobra.Command {
 		Use:   "lock",
 		Short: "Lock the datastore to prevent changes during migration",
 		Long: `Lock the datastore to prevent changes during a migration. Run this before
-exporting so nothing changes while the migration is in progress.
-
-Not supported when Calico uses native projectcalico.org/v3 CRDs. In that mode
-only Calico components can write ClusterInformation.`,
+exporting so nothing changes while the migration is in progress.`,
 		Example: `  calicoctl datastore migrate lock`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			config, _ := cmd.Flags().GetString("config")
@@ -126,12 +123,9 @@ only Calico components can write ClusterInformation.`,
 
 func newMigrateUnlockCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "unlock",
-		Short: "Unlock the datastore to allow changes after migration",
-		Long: `Unlock the datastore to allow changes again once a migration is complete.
-
-Not supported when Calico uses native projectcalico.org/v3 CRDs. In that mode
-only Calico components can write ClusterInformation.`,
+		Use:     "unlock",
+		Short:   "Unlock the datastore to allow changes after migration",
+		Long:    `Unlock the datastore to allow changes again once a migration is complete.`,
 		Example: `  calicoctl datastore migrate unlock`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			config, _ := cmd.Flags().GetString("config")

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,16 +30,7 @@ func Unlock(config string, allowVersionMismatch bool) error {
 		return err
 	}
 
-	// Native v3 CRD mode rejects user writes to ClusterInformation, so say so
-	// up front instead of surfacing the webhook's denial.
-	cfg, err := clientmgr.LoadClientConfig(config)
-	if err != nil {
-		return err
-	}
-	if err := checkLockSupported(cfg, "unlock"); err != nil {
-		return err
-	}
-	client, err := clientmgr.NewClientFromConfig(cfg)
+	client, err := clientmgr.NewClient(config)
 	if err != nil {
 		return err
 	}
@@ -51,7 +42,7 @@ func Unlock(config string, allowVersionMismatch bool) error {
 		return fmt.Errorf("error retrieving ClusterInformation for unlocking: %s", err)
 	}
 
-	// Change the Datastore to ready in order to unlock it.
+	// Change the Datastore to not ready in order to lock it.
 	t := true
 	clusterinfo.Spec.DatastoreReady = &t
 
