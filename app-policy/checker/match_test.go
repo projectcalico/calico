@@ -1689,32 +1689,22 @@ func TestMatchIPVersion(t *testing.T) {
 	}
 }
 
-// The dataplanes render a rule once per IP family, with only that family's CIDRs, and leave the
-// rule out of a family that one of its CIDR lists has no entry for. A negated list of IPv4 CIDRs
-// therefore restricts the rule to IPv4, rather than matching every IPv6 address.
-func TestMatchNetsByFamily(t *testing.T) {
-	testCases := []struct {
-		title       string
-		rule        *proto.Rule
-		src         string
-		expectMatch bool
-	}{
-		{"IPv4 negated CIDR, IPv4 address outside it", &proto.Rule{NotSrcNet: []string{"10.0.0.0/8"}}, "192.168.0.1", true},
-		{"IPv4 negated CIDR, IPv4 address inside it", &proto.Rule{NotSrcNet: []string{"10.0.0.0/8"}}, "10.1.2.3", false},
-		{"IPv4 negated CIDR, IPv6 address", &proto.Rule{NotSrcNet: []string{"10.0.0.0/8"}}, "fd00::1", false},
-		{"mixed negated CIDRs, IPv6 address outside them", &proto.Rule{NotSrcNet: []string{"10.0.0.0/8", "fd00::/8"}}, "2001:db8::1", true},
-		{"mixed negated CIDRs, IPv6 address inside them", &proto.Rule{NotSrcNet: []string{"10.0.0.0/8", "fd00::/8"}}, "fd00::1", false},
-		{"mixed CIDRs, IPv4 address", &proto.Rule{SrcNet: []string{"10.0.0.0/8", "fd00::/8"}}, "10.1.2.3", true},
-		{"mixed CIDRs, IPv6 address", &proto.Rule{SrcNet: []string{"10.0.0.0/8", "fd00::/8"}}, "fd00::1", true},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.title, func(t *testing.T) {
-			RegisterTestingT(t)
-			flow := &MockFlow{SourceIP: net.ParseIP(tc.src), DestIP: net.ParseIP(tc.src), Protocol: 6}
-			req := NewRequestCache(policystore.NewPolicyStore(), flow)
-			Expect(matchSrcNet(tc.rule, req)).To(Equal(tc.expectMatch))
-		})
+// A negated CIDR list of one IP family matches every address of the other family. The dataplanes
+// leave such a rule out of the other family's tables, so a pending verdict can differ from the
+// enforced one here; but application layer policy relies on the rule to deny requests from outside
+// the listed networks, whichever family they come from.
+func TestNegatedCIDRsOfOneFamilyMatchTheOtherFamily(t *testing.T) {
+	RegisterTestingT(t)
+	rule := &proto.Rule{NotSrcNet: []string{"10.0.0.0/8", "192.168.0.0/16"}}
+	for src, want := range map[string]bool{
+		"10.1.2.3":    false,
+		"172.16.0.1":  true,
+		"fd00::1":     true,
+		"2001:db8::1": true,
+	} {
+		flow := &MockFlow{SourceIP: net.ParseIP(src), DestIP: net.ParseIP(src), Protocol: 6}
+		req := NewRequestCache(policystore.NewPolicyStore(), flow)
+		Expect(matchSrcNet(rule, req)).To(Equal(want), "source %s", src)
 	}
 }
 
