@@ -276,9 +276,7 @@ func RunBPFLog(cp CleanupProvider, byteLimit int) *containers.Container {
 // container that would not stop, to help find out why they did not exit.
 func logStuckBPFLogDiags(name string) {
 	logCxt := log.WithField("container", name)
-	// Bound every command: the processes we inspect are stuck in the kernel and
-	// reading their /proc files could block too.  WaitDelay stops us waiting on
-	// the output pipe if a child of sudo outlives the context's kill.
+	// Bound every command: reading a stuck process's /proc files can block too.
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	inspectCmd := exec.CommandContext(ctx, "docker", "inspect", "--format={{.State.Pid}}", name)
@@ -301,7 +299,9 @@ func logStuckBPFLogDiags(name string) {
   echo "kernel stack:"
   timeout 2 cat /proc/"$p"/stack
 done`
-	diagsCmd := exec.CommandContext(ctx, "sudo", "-n", "sh", "-c", script, "sh", strconv.Itoa(pid))
+	// A privileged container in the host PID namespace can read the kernel stack without sudo.
+	diagsCmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--privileged", "--pid=host",
+		utils.Config.BusyboxImage, "sh", "-c", script, "sh", strconv.Itoa(pid))
 	diagsCmd.WaitDelay = time.Second
 	out, err = diagsCmd.CombinedOutput()
 	logCxt.WithError(err).WithField("pid", pid).Errorf("Kernel state of stuck bpf-log container:\n%s", out)
