@@ -817,6 +817,12 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 	signal.Notify(signalChan, syscall.SIGINT)
 	signal.Notify(signalChan, syscall.SIGHUP)
 
+	manageShutdown(signalChan, failureReportChan, driverCmd, stopSignalChans)
+}
+
+// manageShutdown blocks until Felix has a reason to stop, shuts it down and
+// exits the process.
+func manageShutdown(signalChan <-chan os.Signal, failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- *sync.WaitGroup) {
 	// Start a background thread to tell us when the dataplane driver stops.
 	// If the driver stops unexpectedly, we'll terminate this process.
 	// If this process needs to stop, we'll kill the driver and then wait
@@ -928,12 +934,19 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 				logCxt.Warning("Ignoring SIGHUP because we're already shutting down")
 				continue
 			}
+			if reason == reasonConfigChanged || reason == reasonEncapChanged {
+				// Felix was healthy, so the stop request wins over the restart.
+				exitWithCustomRC(0, "Signal received while shutting down, exiting immediately")
+				return
+			}
 			logCxt.WithField("signal", sig).Fatal(
 				"Signal received while shutting down, exiting immediately")
 		}
 	}
 
-	logCxt.Fatal("Exiting immediately")
+	// A requested stop is not a failure.  An init system that reads the exit
+	// code, such as systemd, would record anything else as a crash.
+	exitWithCustomRC(0, "Exiting after shutdown signal")
 }
 
 func exitWithCustomRC(rc int, message string) {
@@ -943,8 +956,11 @@ func exitWithCustomRC(rc int, message string) {
 		"rc":                    rc,
 		logrusr.FieldForceFlush: true,
 	}).Info(message)
-	os.Exit(rc)
+	osExit(rc)
 }
+
+// osExit is a variable so that tests can observe the exit code.
+var osExit = os.Exit
 
 var ErrNotReady = errors.New("datastore is not ready or has not been initialised")
 
