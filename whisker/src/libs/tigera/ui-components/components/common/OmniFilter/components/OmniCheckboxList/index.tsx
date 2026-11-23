@@ -41,7 +41,11 @@ const CheckBoxListItem: React.FC<{
                 onClick={(e) => {
                     // issue with Chakra checkbox when in a react-window list inside a popover inside another popover
                     e.stopPropagation();
-                    checkboxRef.current?.click();
+                    // a click inside the label already toggles the input natively
+                    const label = checkboxRef.current?.closest('label');
+                    if (!label?.contains(e.target as Node)) {
+                        checkboxRef.current?.click();
+                    }
                 }}
             >
                 <Checkbox
