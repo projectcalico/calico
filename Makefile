@@ -180,7 +180,7 @@ ARGOCI_DEPS_FILE=.argoci/depstree.yaml
 
 # Subpackages a CI lane gates on by themselves, narrower than their component.
 # They get a depstree entry but no deps.txt.
-ARGOCI_DEPS_SUBPACKAGES=felix/nftables test-tools/mocknode
+ARGOCI_DEPS_SUBPACKAGES=felix/collector felix/nftables test-tools/mocknode
 
 # Each job starts its own go-build container, so it is sized from the CPU a CI
 # step was given where there is one; nproc counts the node's cores instead.
