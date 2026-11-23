@@ -31,12 +31,14 @@ Before writing code (Copilot coding agent) or reviewing a PR
 
 ## Doc update rule
 
-The repo-wide doc-update rule and its exemptions
+The repo-wide rule
 ([`.github/copilot-instructions.md` → Documentation map](../copilot-instructions.md),
-mirrored in [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md)) apply.
-For the syncer, "changes how it works" means: a change to the
-interfaces or semantics in `libcalico-go/lib/backend/api`, to the
-`watchersyncer` machinery's guarantees, to the syncersv1
-syncer/consumer pairings, or to the dedupebuffer's contract.
-Update [`design/syncer/DESIGN.md`](../../design/syncer/DESIGN.md)
-in the same PR.
+mirrored in [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md)) applies;
+**the default is no edit**. For the syncer the usual candidates for
+it are a change to the interfaces or semantics in
+`libcalico-go/lib/backend/api`, to the `watchersyncer` machinery's
+guarantees, to the syncersv1 syncer/consumer pairings, or to the
+dedupebuffer's contract — candidates, not triggers on their own. A
+warranted edit goes in
+[`design/syncer/DESIGN.md`](../../design/syncer/DESIGN.md) in the
+same PR.

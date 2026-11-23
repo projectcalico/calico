@@ -113,8 +113,3 @@ are ephemeral pod IPs from EndpointSlices; identity here means
 - Client-side timeout changes follow the same doctrine as the
   server's ([`server.md`](./server.md)): at scale, premature
   give-up is worse than slow success.
-
-## Keep this doc in sync
-
-A PR that changes client behaviour, discovery/selection, or the
-TLS identity model must update this file in the same PR.

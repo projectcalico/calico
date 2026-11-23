@@ -301,9 +301,3 @@ Prometheus metrics (port 9093) cover the cache (crumb sequence,
 sizes, update counts), per-syncer connection counts/latencies,
 ping RTT, and the snapshot counters mentioned above. SIGUSR1
 dumps a heap profile; `DebugPort` enables pprof.
-
-## Keep this doc in sync
-
-A PR that changes the pipeline stages, cache semantics, snapshot
-mechanism, timeout/disconnect behaviour, or connection governance
-must update this file in the same PR.

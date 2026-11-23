@@ -151,13 +151,12 @@ Cross-cutting:
 - **Review notes are the checklist.** Each sub-design embeds
   per-section review notes; respect them at write-time, apply
   them at review-time.
-- **Update rule.** A change to how Typha works — its pipeline,
-  cache semantics, wire protocol, connection management,
-  discovery, or any documented invariant — must update the
-  relevant sub-design (and this index if the table or overview
-  changes) in the same PR. Exemptions: bug fix restoring
-  documented behaviour, mechanical refactor, comment/log edits,
-  dependency bumps. If in doubt, update.
+- **Update rule.** A warranted edit goes in the sub-design covering
+  the area; this index is edited when the sub-design table, an
+  `applies to` scope, or §1's architecture overview changes. The
+  path-scoped
+  [`typha.instructions.md`](../.github/instructions/typha.instructions.md)
+  file wires the rule into Copilot's automated review.
 - **Tests run under plain `go test`/ginkgo.** All Typha tests,
   including the FV suite (`typha/fv-tests/`), run in-process with
   no containers.

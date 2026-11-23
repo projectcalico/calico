@@ -200,9 +200,8 @@ Two hard rules fall out of Typha's pass-through role:
   "upgrading the datamodel" cases in `sync_proto.go` walked
   through explicitly in the PR.
 
-## Keep this doc in sync
+## Siblings that move with this doc
 
-A PR that changes the wire protocol — messages, handshake,
-encoding, negotiation, or version-skew behaviour — must update
-this file (and the doc comment in `sync_proto.go`, which is the
-symbol-level source of truth) in the same PR.
+- The protocol doc comment in `pkg/syncproto/sync_proto.go` — the
+  symbol-level source of truth — whenever a message, the
+  handshake, or negotiation changes.

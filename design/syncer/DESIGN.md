@@ -191,13 +191,3 @@ never sees the disconnect.
 - A change to the API's semantics (new `SyncStatus`, new
   guarantee, new optional callback interface) affects every
   consumer listed above *and* the Typha protocol — check each.
-
-## Keep this doc in sync
-
-A PR that changes the Syncer API's semantics — the interfaces in
-`libcalico-go/lib/backend/api`, the `watchersyncer` machinery's
-guarantees, the syncersv1 syncer/consumer pairings, or the
-dedupebuffer's contract — must update this file in the same PR.
-Exemptions: bug fix restoring documented behaviour, mechanical
-refactor, comment/log edits, dependency bumps. If in doubt,
-update.

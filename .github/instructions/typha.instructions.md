@@ -41,13 +41,14 @@ design, and code.
 
 ## Doc update rule
 
-The repo-wide doc-update rule and its exemptions
+The repo-wide rule
 ([`.github/copilot-instructions.md` → Documentation map](../copilot-instructions.md),
-mirrored in [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md)) apply.
-For Typha, "changes how it works" means: a wire-protocol or
-handshake change; a change to cache/pipeline semantics, snapshot
-handling, timeouts, or connection governance; or a change to
-client discovery/reconnection behaviour. Update the relevant
-sub-design under [`typha/design/`](../../typha/design/) (and the
-index [`typha/DESIGN.md`](../../typha/DESIGN.md) if the table or
-overview changes) in the same PR.
+mirrored in [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md)) applies;
+**the default is no edit**. For Typha the usual candidates for it are
+a wire-protocol or handshake change; a change to cache/pipeline
+semantics, snapshot handling, timeouts, or connection governance; or
+a change to client discovery/reconnection behaviour — candidates, not
+triggers on their own. A warranted edit goes in the matching
+sub-design under [`typha/design/`](../../typha/design/) in the same
+PR, and in the doc comment in `typha/pkg/syncproto/sync_proto.go`
+too if the wire protocol changes.
