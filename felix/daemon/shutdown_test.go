@@ -48,7 +48,7 @@ var _ = Describe("manageShutdown", func() {
 		DeferCleanup(func() { logger.ExitFunc = oldLogExit })
 	})
 
-	DescribeTable("exits zero when asked to stop",
+	DescribeTable("exits with status 0 when asked to stop",
 		func(sig os.Signal) {
 			signalChan := make(chan os.Signal, 1)
 			signalChan <- sig
@@ -60,12 +60,38 @@ var _ = Describe("manageShutdown", func() {
 		Entry("by SIGINT", syscall.SIGINT),
 	)
 
-	It("exits non-zero on a fatal error", func() {
+	It("exits with status 1 on a fatal error", func() {
 		failureReportChan := make(chan string, 1)
 		failureReportChan <- reasonFatalError
 		go manageShutdown(make(chan os.Signal), failureReportChan, nil, nil)
 
-		Eventually(exitCodes, "10s").Should(Receive(Not(Equal(0))))
+		Eventually(exitCodes, "10s").Should(Receive(Equal(1)))
+	})
+
+	It("exits with status 0 when SIGTERM arrives during a config-change shutdown", func() {
+		signalChan := make(chan os.Signal, 2)
+		signalChan <- syscall.SIGHUP
+		signalChan <- syscall.SIGTERM
+		go manageShutdown(signalChan, make(chan string), nil, nil)
+
+		Eventually(exitCodes, "5s").Should(Receive(Equal(0)))
+		// The delayed config-change exit still fires.  Wait for it so that
+		// it can't reach the real exit function after this spec.
+		Eventually(exitCodes, "10s").Should(Receive(Equal(configChangedRC)))
+	})
+
+	It("still fails when SIGTERM arrives during a fatal-error shutdown", func() {
+		// Unbuffered, so the send returns only once the shutdown has begun
+		// and the signal can't be picked up as the reason for it.
+		failureReportChan := make(chan string)
+		signalChan := make(chan os.Signal, 1)
+		go manageShutdown(signalChan, failureReportChan, nil, nil)
+		failureReportChan <- reasonFatalError
+		signalChan <- syscall.SIGTERM
+
+		Eventually(exitCodes, "5s").Should(Receive(Equal(1)))
+		// As above, wait out the delayed exit.
+		Eventually(exitCodes, "10s").Should(Receive(Equal(1)))
 	})
 
 	It("exits with the config-change code on SIGHUP", func() {

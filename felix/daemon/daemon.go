@@ -934,6 +934,11 @@ func manageShutdown(signalChan <-chan os.Signal, failureReportChan <-chan string
 				logCxt.Warning("Ignoring SIGHUP because we're already shutting down")
 				continue
 			}
+			if reason == reasonConfigChanged || reason == reasonEncapChanged {
+				// Felix was healthy, so the stop request wins over the restart.
+				exitWithCustomRC(0, "Signal received while shutting down, exiting immediately")
+				return
+			}
 			logCxt.WithField("signal", sig).Fatal(
 				"Signal received while shutting down, exiting immediately")
 		}
