@@ -1591,3 +1591,23 @@ func (c *entryCounter) Fire(e *logrus.Entry) error {
 	c.entries = append(c.entries, e)
 	return nil
 }
+
+// A request path that can't be normalized fails every rule with HTTP paths that the walk reaches,
+// so with debug logging off the check must cost no more than the normalization itself.
+func TestUnnormalizablePathCheckDoesNotAllocate(t *testing.T) {
+	RegisterTestingT(t)
+	oldLevel := logrus.GetLevel()
+	logrus.SetLevel(logrus.InfoLevel)
+	t.Cleanup(func() { logrus.SetLevel(oldLevel) })
+
+	paths := []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/public"}}}
+	reqPath := "/admin%00/../public"
+	_, ok := normalizeHTTPPath(reqPath)
+	Expect(ok).To(BeFalse())
+	Expect(matchHTTPPaths(paths, &reqPath)).To(BeFalse())
+
+	normalizeAllocs := testing.AllocsPerRun(100, func() { normalizeHTTPPath(reqPath) })
+	matchAllocs := testing.AllocsPerRun(100, func() { matchHTTPPaths(paths, &reqPath) })
+	// Building a log entry costs several allocations; the race detector adds a stray one at times.
+	Expect(matchAllocs).To(BeNumerically("<=", normalizeAllocs+2))
+}
