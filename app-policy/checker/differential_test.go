@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,11 +16,10 @@ package checker
 
 // Differential tests for Evaluate.
 //
-// Two evaluators are run over the same corpus and must agree on every trace. Today the second
-// evaluator is the policyscale oracle, which answers from the generator's model of each rule
-// rather than from the proto the engine reads. A change that adds a second implementation of the
-// walk (compiled policies, a verdict cache, evaluation on another goroutine) runs it through the
-// same harness against Evaluate, and through the named cases below, before it is switched on.
+// Two evaluators are run over the same corpus and must agree on every trace. The second one is the
+// policyscale oracle, which answers from the generator's model of each rule rather than from the
+// proto the engine reads. Another implementation of the walk can be checked the same way against
+// Evaluate, and against the named cases below.
 
 import (
 	"fmt"
@@ -52,27 +51,16 @@ func TestEvaluateAgreesWithOracle(t *testing.T) {
 	restoreLogging := withBenchLogging(logrus.ErrorLevel)
 	defer restoreLogging()
 
-	missing := policyscale.Baseline()
-	missing.Baseline.MissingIPSets = 8
-
 	// The composite holds both measured presets' rules exactly as each builds them alone, so it
-	// stands in for both.
-	for _, c := range []struct {
-		name string
-		spec policyscale.Spec
-	}{
-		{"baseline with missing sets", missing},
-		{"composite", policyscale.Composite()},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			fx := policyscale.Build(c.spec)
-			store, ep := fx.NewStore(), fx.Endpoint()
-			corpus := differentialCorpus(fx, 7, 250, 257)
-			for _, scope := range []PolicyScope{StagedAsEnforced, EnforcedOnly} {
-				assertEquivalent(t, fmt.Sprintf("%s scope %d", c.name, scope), scope, Evaluate, oracleEvaluator(fx), store, ep, corpus)
-			}
-		})
-	}
+	// stands in for both; with a few of its sets left out of the store, it covers rules whose set
+	// is missing as well as those whose set is present. It has no staged policies, so the two
+	// scopes would give the same traces: the rule-shape test checks the scopes.
+	spec := policyscale.Composite()
+	spec.Baseline.MissingIPSets = 8
+	fx := policyscale.Build(spec)
+	store, ep := fx.NewStore(), fx.Endpoint()
+	corpus := differentialCorpus(fx, 7, 250, 257)
+	assertEquivalent(t, "composite", StagedAsEnforced, Evaluate, oracleEvaluator(fx), store, ep, corpus)
 }
 
 // differentialCorpus draws the flows a fixture is checked with, in every direction it has rules
@@ -140,11 +128,15 @@ func assertEquivalent(t *testing.T, name string, scope PolicyScope, a, b evaluat
 }
 
 // oracleEvaluator answers from the fixture's model. Only flows the fixture generated are meaningful
-// to it, and it ignores the scope: the generated sets hold no staged policies.
+// to it.
 func oracleEvaluator(fx *policyscale.Fixture) evaluator {
-	return func(_ PolicyScope, dir rules.RuleDir, _ *policystore.PolicyStore, _ *proto.WorkloadEndpoint, flow Flow) ([]*calc.RuleID, error) {
+	return func(scope PolicyScope, dir rules.RuleDir, _ *policystore.PolicyStore, _ *proto.WorkloadEndpoint, flow Flow) ([]*calc.RuleID, error) {
+		oracleScope := policyscale.PendingScope
+		if scope == EnforcedOnly {
+			oracleScope = policyscale.EnforcedScope
+		}
 		var trace []*calc.RuleID
-		for _, v := range fx.Expect(policyDir(dir), flow.(*policyscale.Flow)) {
+		for _, v := range fx.ExpectIn(oracleScope, policyDir(dir), flow.(*policyscale.Flow)) {
 			trace = append(trace, calc.NewRuleID(v.Kind, v.Tier, v.Policy, "", v.Index, dir, actionFromOracle(v.Action)))
 		}
 		return trace, nil
@@ -193,8 +185,11 @@ func sameRuleID(a, b *calc.RuleID) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
+	// The collector prints IndexStr and the flow-log name, so an evaluator that builds its RuleIDs
+	// some other way must fill them in as NewRuleID does.
 	return a.Kind == b.Kind && a.Tier == b.Tier && a.Name == b.Name && a.Namespace == b.Namespace &&
-		a.Index == b.Index && a.Direction == b.Direction && a.Action == b.Action
+		a.Index == b.Index && a.Direction == b.Direction && a.Action == b.Action &&
+		a.IndexStr == b.IndexStr && a.GetFlowLogPolicyName() == b.GetFlowLogPolicyName()
 }
 
 func formatTrace(trace []*calc.RuleID) string {
@@ -436,6 +431,75 @@ func namedCases() []namedCase {
 		store, ep := build("Deny", policy("p", allow(&proto.Rule{})))
 		ep.Tiers[0].IngressPolicies = append([]*proto.PolicyID{{Name: "ghost", Kind: v3.KindGlobalNetworkPolicy}}, ep.Tiers[0].IngressPolicies...)
 		cases = append(cases, namedCase{name: "missing policy fails", scope: StagedAsEnforced, dir: ingress, store: store, ep: ep, flow: tcp(otherIP, otherIP, 80), wantErr: true})
+	}
+
+	// A tier's default action is reported against its last policy in scope: with several
+	// policies, whatever the default; and in the pending scope a staged policy last in the tier is
+	// the one named, while the enforced scope names the last enforced policy.
+	{
+		noMatch := func(name string) func() (*proto.PolicyID, *proto.Policy) {
+			return policy(name, allow(&proto.Rule{DstPorts: []*proto.PortRange{{First: 1, Last: 1}}}))
+		}
+		store, ep := build("Deny", noMatch("p1"), noMatch("p2"), noMatch("p3"))
+		add("deny names the last of several policies", StagedAsEnforced, store, ep, tcp(otherIP, otherIP, 80),
+			ruleID(v3.KindGlobalNetworkPolicy, "p3", tierDefaultActionIndex, rules.RuleActionDeny))
+		store, ep = build("Pass", noMatch("p1"), noMatch("p2"), noMatch("p3"))
+		add("pass names the last of several policies", StagedAsEnforced, store, ep, tcp(otherIP, otherIP, 80),
+			ruleID(v3.KindGlobalNetworkPolicy, "p3", tierDefaultActionIndex, rules.RuleActionPass), profileDeny)
+		store, ep = build("", noMatch("p1"), noMatch("p2"))
+		add("no default action denies", EnforcedOnly, store, ep, tcp(otherIP, otherIP, 80),
+			ruleID(v3.KindGlobalNetworkPolicy, "p2", tierDefaultActionIndex, rules.RuleActionDeny))
+		stagedNoMatch := func(name string) func() (*proto.PolicyID, *proto.Policy) {
+			return stagedPolicy(name, allow(&proto.Rule{DstPorts: []*proto.PortRange{{First: 1, Last: 1}}}))
+		}
+		store, ep = build("Deny", noMatch("e1"), stagedNoMatch("s2"))
+		add("staged policy last, pending scope", StagedAsEnforced, store, ep, tcp(otherIP, otherIP, 80),
+			ruleID(v3.KindStagedGlobalNetworkPolicy, "s2", tierDefaultActionIndex, rules.RuleActionDeny))
+		add("staged policy last, enforced scope", EnforcedOnly, store, ep, tcp(otherIP, otherIP, 80),
+			ruleID(v3.KindGlobalNetworkPolicy, "e1", tierDefaultActionIndex, rules.RuleActionDeny))
+	}
+
+	// Profiles: each is checked in order, and the first matching rule decides, named after the
+	// profile. When none matches, the evaluator reports nothing for them, where the dataplane
+	// reports a deny by no profile; see policyscale.NoProfileMatched.
+	{
+		profile := func(name string, rs ...*proto.Rule) func(*policystore.PolicyStore, *proto.WorkloadEndpoint) {
+			return func(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint) {
+				store.ProfileByID[types.ProtoToProfileID(&proto.ProfileID{Name: name})] = &proto.Profile{InboundRules: rs}
+				ep.ProfileIds = append(ep.ProfileIds, name)
+			}
+		}
+		profileRule := func(name string, index int, action rules.RuleAction) *calc.RuleID {
+			return calc.NewRuleID(v3.KindProfile, profileStr, name, "", index, ingress, action)
+		}
+		passFirst := func(profiles ...func(*policystore.PolicyStore, *proto.WorkloadEndpoint)) (*policystore.PolicyStore, *proto.WorkloadEndpoint) {
+			store, ep := build("Deny", policy("p", pass(&proto.Rule{})))
+			for _, p := range profiles {
+				p(store, ep)
+			}
+			return store, ep
+		}
+		passed := ruleID(v3.KindGlobalNetworkPolicy, "p", 0, rules.RuleActionPass)
+		store, ep := passFirst(profile("prof", allow(&proto.Rule{DstPorts: []*proto.PortRange{{First: 1, Last: 1}}}), deny(&proto.Rule{})))
+		add("profile denies at its second rule", StagedAsEnforced, store, ep, tcp(otherIP, otherIP, 80), passed, profileRule("prof", 1, rules.RuleActionDeny))
+		store, ep = passFirst(profile("none", allow(&proto.Rule{DstPorts: []*proto.PortRange{{First: 1, Last: 1}}})), profile("all", allow(&proto.Rule{})))
+		add("second profile allows", StagedAsEnforced, store, ep, tcp(otherIP, otherIP, 80), passed, profileRule("all", 0, rules.RuleActionAllow))
+		store, ep = passFirst(profile("none", allow(&proto.Rule{DstPorts: []*proto.PortRange{{First: 1, Last: 1}}})))
+		add("no profile matches", StagedAsEnforced, store, ep, tcp(otherIP, otherIP, 80), passed)
+	}
+
+	// Namespaced policies carry their namespace into the trace, staged or not.
+	{
+		store, ep := build("Deny")
+		np := &proto.PolicyID{Name: "np", Namespace: "ns1", Kind: v3.KindNetworkPolicy}
+		snp := &proto.PolicyID{Name: "snp", Namespace: "ns1", Kind: v3.KindStagedNetworkPolicy}
+		store.PolicyByID[types.ProtoToPolicyID(np)] = &proto.Policy{Namespace: "ns1", Tier: tier, InboundRules: []*proto.Rule{allow(&proto.Rule{DstPorts: []*proto.PortRange{{First: 80, Last: 80}}})}}
+		store.PolicyByID[types.ProtoToPolicyID(snp)] = &proto.Policy{Namespace: "ns1", Tier: tier}
+		ep.Tiers[0].IngressPolicies = []*proto.PolicyID{np, snp}
+		add("namespaced policy allows", EnforcedOnly, store, ep, tcp(otherIP, otherIP, 80),
+			calc.NewRuleID(v3.KindNetworkPolicy, tier, "np", "ns1", 0, ingress, rules.RuleActionAllow))
+		add("namespaced staged policy names the tier default", StagedAsEnforced, store, ep, tcp(otherIP, otherIP, 81),
+			calc.NewRuleID(v3.KindStagedNetworkPolicy, tier, "snp", "ns1", tierDefaultActionIndex, ingress, rules.RuleActionDeny))
 	}
 
 	return cases
