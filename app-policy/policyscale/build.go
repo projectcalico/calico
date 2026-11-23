@@ -118,11 +118,21 @@ type ruleModel struct {
 	shape *ShapeRule
 }
 
+func (r *ruleModel) hasPorts() bool {
+	return len(r.dstPorts) > 0 || len(r.srcPortRanges) > 0 || len(r.dstPortRanges) > 0 || len(r.notDstPortRanges) > 0 ||
+		r.dstNamedPortSet != "" || r.notDstNamedPortSet != ""
+}
+
 // protocolModel is a rule's protocol as the API spells it: a name, or a number when name is empty.
 type protocolModel struct {
 	name   string
 	number int
 }
+
+// tcpProtocol is the protocol of the presets' port rules. The API only takes ports alongside a
+// protocol, so the model carries it too: a rendered rule and the store's copy must reject the same
+// flows.
+func tcpProtocol() *protocolModel { return &protocolModel{name: "TCP"} }
 
 // icmpModel is a rule's ICMP type, and code when hasCode is set.
 type icmpModel struct {
@@ -169,6 +179,14 @@ func Build(spec Spec) *Fixture {
 	for _, t := range fx.tiers {
 		for dir, policies := range t.policies {
 			for _, p := range policies {
+				for i, r := range p.rules {
+					// The API takes ports only alongside a protocol, so a rule without one
+					// couldn't be rendered, and adding one would make the cluster reject flows
+					// the store accepts.
+					if r.hasPorts() && r.protocol == nil {
+						panic(fmt.Sprintf("policyscale: rule %d of %s/%s has ports but no protocol", i, t.name, p.name))
+					}
+				}
 				p.buildProto(t.name, Direction(dir))
 			}
 		}
@@ -214,7 +232,7 @@ func (fx *Fixture) buildBaseline(rng *rand.Rand, p BaselineParams) {
 					r.dstSet, r.notDstSet = refID, SentinelIPSetID
 				}
 			} else {
-				r.dstPorts = []int32{BaselineGuardPort}
+				r.protocol, r.dstPorts = tcpProtocol(), []int32{BaselineGuardPort}
 			}
 			pol.rules = append(pol.rules, r)
 			if refID != "" {
@@ -282,7 +300,7 @@ func (fx *Fixture) buildEgress(rng *rand.Rand, p EgressParams) {
 		for j := 0; j < p.RulesPerPolicy; j++ {
 			// All rules are Pass bar the target: a rule's action is only consulted once it
 			// matches, so the action mix does not affect the walk.
-			r := &ruleModel{action: "pass", dstPorts: makeEgressRulePorts(rng, p)}
+			r := &ruleModel{action: "pass", protocol: tcpProtocol(), dstPorts: makeEgressRulePorts(rng, p)}
 			if rng.Float64() < p.IPSetRuleFraction {
 				r.dstSet = setIDs[rng.Intn(len(setIDs))]
 			} else {
