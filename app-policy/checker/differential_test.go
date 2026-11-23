@@ -27,7 +27,7 @@ import (
 	"testing"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/app-policy/policyscale"
 	"github.com/projectcalico/calico/app-policy/policystore"
@@ -49,7 +49,7 @@ type corpusFlow struct {
 }
 
 func TestEvaluateAgreesWithOracle(t *testing.T) {
-	_, restoreLogging := withBenchLogging(log.ErrorLevel)
+	restoreLogging := withBenchLogging(logrus.ErrorLevel)
 	defer restoreLogging()
 
 	missing := policyscale.Baseline()
@@ -226,7 +226,7 @@ type namedCase struct {
 }
 
 func TestEvaluateNamedCases(t *testing.T) {
-	_, restoreLogging := withBenchLogging(log.ErrorLevel)
+	restoreLogging := withBenchLogging(logrus.ErrorLevel)
 	defer restoreLogging()
 	runNamedCases(t, Evaluate)
 }
