@@ -534,9 +534,8 @@ func expectValidSubPrograms(progs []asm.Insns, polMapIdx, stride int, desc strin
 	ExpectWithOffset(1, CheckSubPrograms(progs, polMapIdx, stride)).NotTo(HaveOccurred(), desc)
 }
 
-// A rule can name its protocol with any name the API accepts, in any case. A name the program
-// can't turn into a number becomes 0, which no packet carries, so the rule would silently never
-// match.
+// Felix gets a rule's protocol name lowercased from the API's spelling. A name the program can't
+// turn into a number becomes 0, which no packet carries, so the rule would silently never match.
 func TestProtocolToNumberCoversEveryAPIName(t *testing.T) {
 	for _, tc := range []struct {
 		name string
