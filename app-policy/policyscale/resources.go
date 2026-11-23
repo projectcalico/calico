@@ -54,6 +54,10 @@ const (
 	TargetSelector = TargetLabel + " == 'true'"
 
 	defaultSetLabelKey = "policyscale.projectcalico.org/set"
+	// maxNetsPerNetworkSet keeps a GlobalNetworkSet, with the field list server-side apply records
+	// for it, well under the API server's request limit; a bigger set is split over several that
+	// carry its label.
+	maxNetsPerNetworkSet = 10000
 	defaultTierOrder   = 100
 	apiVersion         = v3.GroupVersionCurrent
 )
@@ -145,14 +149,20 @@ func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 			// Felix makes these from named ports and services, which are rendered on the rules.
 			continue
 		}
-		out = append(out, &v3.GlobalNetworkSet{
-			TypeMeta: metav1.TypeMeta{Kind: v3.KindGlobalNetworkSet, APIVersion: apiVersion},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   id,
-				Labels: map[string]string{opts.SetLabelKey: id},
-			},
-			Spec: v3.GlobalNetworkSetSpec{Nets: s.members},
-		})
+		for i := 0; i == 0 || i*maxNetsPerNetworkSet < len(s.members); i++ {
+			name := id
+			if i > 0 {
+				name = fmt.Sprintf("%s-%d", id, i)
+			}
+			out = append(out, &v3.GlobalNetworkSet{
+				TypeMeta: metav1.TypeMeta{Kind: v3.KindGlobalNetworkSet, APIVersion: apiVersion},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   name,
+					Labels: map[string]string{opts.SetLabelKey: id},
+				},
+				Spec: v3.GlobalNetworkSetSpec{Nets: s.members[i*maxNetsPerNetworkSet : min(len(s.members), (i+1)*maxNetsPerNetworkSet)]},
+			})
+		}
 	}
 	return out
 }

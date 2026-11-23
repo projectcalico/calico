@@ -423,3 +423,32 @@ func TestUnparsedProtocolsMarked(t *testing.T) {
 		}
 	}
 }
+
+// A network set big enough to pass the API server's request limit once server-side apply records
+// its fields is split into several, which the rules still pick by one label: together they hold
+// exactly the set's members.
+func TestLargeSetsAreSplit(t *testing.T) {
+	fx := Build(Baseline())
+	byLabel := map[string][]string{}
+	largest := 0
+	for _, obj := range fx.Resources(ResourceOptions{}) {
+		gns, ok := obj.(*v3.GlobalNetworkSet)
+		if !ok {
+			continue
+		}
+		largest = max(largest, len(gns.Spec.Nets))
+		id := gns.Labels[defaultSetLabelKey]
+		byLabel[id] = append(byLabel[id], gns.Spec.Nets...)
+	}
+	if largest > maxNetsPerNetworkSet {
+		t.Errorf("largest network set has %d nets, more than %d", largest, maxNetsPerNetworkSet)
+	}
+	for _, id := range fx.setOrder {
+		if !slices.Equal(byLabel[id], fx.sets[id].members) {
+			t.Errorf("set %s: the network sets labelled for it hold %d nets, the set %d", id, len(byLabel[id]), len(fx.sets[id].members))
+		}
+	}
+	if len(fx.sets[fx.setOrder[len(fx.setOrder)-1]].members) <= maxNetsPerNetworkSet {
+		t.Fatal("the baseline's largest set no longer needs splitting; the test checks nothing")
+	}
+}
