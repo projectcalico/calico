@@ -129,7 +129,7 @@ func NewManager(opts ...Option) (*CalicoManager, error) {
 		gitRef:           true,
 		githubRelease:    true,
 		imageRegistries:  defaultRegistries,
-		helmRepoURL:      charts.RepoURL,
+		helmRepoURL:      charts.DefaultRepoURL,
 		helmRegistries:   registry.DefaultHelmRegistries,
 		operatorRegistry: registry.DefaultOperatorRegistry,
 		operatorImage:    registry.OperatorImage,
@@ -706,6 +706,7 @@ func (r *CalicoManager) chart() charts.Chart {
 		ChartVersion:   r.chartVersion,
 		Names:          charts.All(),
 		BaseDir:        charts.OutputDir(r.uploadDir()),
+		RepoURL:        r.helmRepoURL,
 	}
 }
 

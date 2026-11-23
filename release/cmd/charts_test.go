@@ -67,7 +67,7 @@ var (
 	// there the two URLs coincide.
 	chartsCLICheckDownloadURL = func(t *testing.T, url string) {
 		t.Helper()
-		if repo := charts.RepoURL; url == repo {
+		if repo := charts.DefaultRepoURL; url == repo {
 			t.Errorf("expected the download url to differ from the repository url %q", repo)
 		}
 		if !strings.Contains(url, chartsCLITestVersion) {
@@ -173,7 +173,7 @@ func TestChartsBuildBuildsTheIndexByDefault(t *testing.T) {
 	if !r.ran("--merge") {
 		t.Error("expected the published index to be merged rather than replaced")
 	}
-	if repo := charts.RepoURL; !r.ran(repo) {
+	if repo := charts.DefaultRepoURL; !r.ran(repo) {
 		t.Errorf("expected the index at %q to be downloaded", repo)
 	}
 	indexDir := chartsCLIIndexDir(cfg)
