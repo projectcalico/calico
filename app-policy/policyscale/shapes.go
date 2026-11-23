@@ -42,7 +42,15 @@ type ShapesParams struct {
 	// RulesPerPolicy spreads the rules over several policies, so that a tier's default action has
 	// several policies it could be reported against.
 	RulesPerPolicy int
+	// Staged makes some of the policies staged, so that the pending and the enforced verdicts
+	// differ: a tier of staged policies alone comes first, and in the other tiers every third
+	// policy and the last one are staged. It is for testing the evaluator's scopes; a set compared
+	// on a cluster for pending verdicts equal to enforced ones wants none.
+	Staged bool
 }
+
+// shapesStagedTier is the tier of staged policies alone that ShapesParams.Staged adds.
+const shapesStagedTier = "shapes-staged"
 
 // DefaultShapes returns the rule-shape preset's defaults.
 func DefaultShapes() ShapesParams {
@@ -153,11 +161,34 @@ func (fx *Fixture) buildShapes(p ShapesParams) {
 		panic("policyscale: rule-shape peer pools need at least 256 addresses")
 	}
 	b := &shapeBuilder{fx: fx, p: p}
+	var stagedTier *tierModel
+	if p.Staged {
+		stagedTier = fx.tier(shapesStagedTier, string(v3.Pass))
+	}
 	passTier := fx.tier(p.PassTier, string(v3.Pass))
 	tier := fx.tier(p.Tier, string(v3.Deny))
 	for _, dir := range []Direction{Ingress, Egress} {
+		if stagedTier != nil {
+			// No aimed flow reaches the rule, so the tier ends every flow's walk with its
+			// default, in the pending scope only.
+			stagedTier.policies[dir] = append(stagedTier.policies[dir], &policyModel{
+				name:   fmt.Sprintf("shape-staged-%s", dirShort(dir)),
+				staged: true,
+				rules: []*ruleModel{{
+					action: "deny", protocol: &protocolModel{name: "TCP"}, dstPorts: []int32{BaselineGuardPort},
+				}},
+			})
+		}
 		b.buildPassTier(passTier, dir)
 		b.buildTier(tier, dir)
+		if p.Staged {
+			for _, t := range []*tierModel{passTier, tier} {
+				policies := t.policies[dir]
+				for i, pol := range policies {
+					pol.staged = i%3 == 1 || i == len(policies)-1
+				}
+			}
+		}
 		var unmatched []ShapeFlow
 		k := b.key(dir)
 		for _, fam := range []int{4, 6} {

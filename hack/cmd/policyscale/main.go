@@ -107,7 +107,7 @@ func main() {
 		return
 	}
 
-	if err := fx.WriteYAML(bw, policyscale.ResourceOptions{Selector: *selector, Staged: *staged}); err != nil {
+	if err := fx.WriteYAML(bw, policyscale.ResourceOptions{Selector: *selector, Enforced: !*staged}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

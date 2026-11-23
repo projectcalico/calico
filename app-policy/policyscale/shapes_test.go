@@ -162,7 +162,7 @@ func ordinalOf(fx *Fixture, dir Direction, r *ShapeRule) int {
 func TestShapeResourcesValidate(t *testing.T) {
 	fx := Build(RuleShapes())
 	for _, staged := range []bool{false, true} {
-		for _, obj := range fx.Resources(ResourceOptions{Staged: staged}) {
+		for _, obj := range fx.Resources(ResourceOptions{Enforced: !staged}) {
 			if err := validator.Validate(obj); err != nil {
 				t.Errorf("staged=%v: %T %v: %v", staged, obj, obj, err)
 			}
@@ -237,6 +237,102 @@ func TestSCTPPortsDifferOnEveryDataplane(t *testing.T) {
 	for _, w := range []Where{Iptables, Nftables, BPF} {
 		if !slices.Contains(DifferencesAt(w), SCTPPorts) {
 			t.Errorf("%s: SCTP ports not listed", w)
+		}
+	}
+}
+
+// A set rendered with the zero options is safe on a live cluster: every policy is staged, and
+// applies only to endpoints labelled for it.
+func TestDefaultRenderingIsStagedAndTargeted(t *testing.T) {
+	for _, obj := range Build(RuleShapes()).Resources(ResourceOptions{}) {
+		switch p := obj.(type) {
+		case *v3.GlobalNetworkPolicy:
+			t.Errorf("%s rendered enforced", p.Name)
+		case *v3.StagedGlobalNetworkPolicy:
+			if p.Spec.Selector != TargetSelector {
+				t.Errorf("%s selects %q", p.Name, p.Spec.Selector)
+			}
+		}
+	}
+}
+
+// A cluster reports a policy by the name and kind it was rendered with, so those must be the
+// fixture's: the traces Expect gives are then the ones a cluster's flow logs carry.
+func TestRenderedPoliciesKeepTheFixturesNamesAndKinds(t *testing.T) {
+	p := DefaultShapes()
+	p.Staged = true
+	fx := Build(Spec{Seed: DefaultSeed, Shapes: &p})
+	kinds := map[string]string{}
+	for _, tm := range fx.tiers {
+		for _, policies := range tm.policies {
+			for _, pol := range policies {
+				kinds[pol.name] = pol.kind()
+			}
+		}
+	}
+	for _, enforced := range []bool{true, false} {
+		rendered := 0
+		for _, obj := range fx.Resources(ResourceOptions{Enforced: enforced}) {
+			var name, kind string
+			switch o := obj.(type) {
+			case *v3.GlobalNetworkPolicy:
+				name, kind = o.Name, o.Kind
+			case *v3.StagedGlobalNetworkPolicy:
+				name, kind = o.Name, o.Kind
+			default:
+				continue
+			}
+			rendered++
+			want, ok := kinds[name]
+			if !ok {
+				t.Errorf("rendered policy %s isn't in the fixture", name)
+				continue
+			}
+			if !enforced {
+				want = v3.KindStagedGlobalNetworkPolicy
+			}
+			if kind != want {
+				t.Errorf("enforced=%v: %s rendered as %s, want %s", enforced, name, kind, want)
+			}
+		}
+		if rendered != len(kinds) {
+			t.Errorf("enforced=%v: rendered %d policies of %d", enforced, rendered, len(kinds))
+		}
+	}
+	trace := AsStaged([]Verdict{{Kind: v3.KindGlobalNetworkPolicy}, {Kind: v3.KindStagedGlobalNetworkPolicy}, {Kind: v3.KindProfile}})
+	if trace[0].Kind != v3.KindStagedGlobalNetworkPolicy || trace[1].Kind != v3.KindStagedGlobalNetworkPolicy || trace[2].Kind != v3.KindProfile {
+		t.Errorf("AsStaged: %v", trace)
+	}
+}
+
+// In the enforced scope staged policies count for nothing, and a tier of them alone is skipped;
+// in the pending scope they count as enforced, and a tier's default names its last policy either
+// way.
+func TestExpectScopes(t *testing.T) {
+	p := DefaultShapes()
+	p.Staged = true
+	fx := Build(Spec{Seed: DefaultSeed, Shapes: &p})
+	for _, dir := range []Direction{Ingress, Egress} {
+		denied := fx.DeniedFlow(dir)
+		pending, enforced := fx.ExpectIn(PendingScope, dir, denied), fx.ExpectIn(EnforcedScope, dir, denied)
+		if len(pending) != 3 || pending[0].Tier != shapesStagedTier || pending[0].Kind != v3.KindStagedGlobalNetworkPolicy {
+			t.Errorf("%s pending: %v", dir, pending)
+		}
+		if len(enforced) != 2 || enforced[0].Tier != p.PassTier || enforced[0].Kind != v3.KindGlobalNetworkPolicy ||
+			enforced[0].Policy == pending[1].Policy || enforced[1].Policy == pending[2].Policy {
+			t.Errorf("%s enforced: %v (pending %v)", dir, enforced, pending)
+		}
+		stagedDecides := 0
+		for _, sf := range fx.ShapeFlows(dir) {
+			if slices.ContainsFunc(fx.ExpectIn(EnforcedScope, dir, sf.Flow), func(v Verdict) bool { return v.Kind == v3.KindStagedGlobalNetworkPolicy }) {
+				t.Errorf("%s %s: enforced trace names a staged policy", dir, sf.Name)
+			}
+			if sf.Hit && !slices.Equal(fx.ExpectIn(EnforcedScope, dir, sf.Flow), fx.ExpectIn(PendingScope, dir, sf.Flow)[1:]) {
+				stagedDecides++
+			}
+		}
+		if stagedDecides == 0 {
+			t.Errorf("%s: no aimed flow is decided differently in the two scopes", dir)
 		}
 	}
 }

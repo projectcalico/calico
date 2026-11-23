@@ -88,6 +88,9 @@ type tierModel struct {
 type policyModel struct {
 	name  string
 	rules []*ruleModel
+	// staged policies are left out of the enforced verdict, and count as enforced in the pending
+	// one.
+	staged bool
 
 	id     *proto.PolicyID
 	policy *proto.Policy
@@ -442,7 +445,7 @@ func (p *policyModel) buildProto(tier string, dir Direction) {
 	for i, r := range p.rules {
 		protoRules[i] = r.proto()
 	}
-	p.id = &proto.PolicyID{Name: p.name, Kind: v3.KindGlobalNetworkPolicy}
+	p.id = &proto.PolicyID{Name: p.name, Kind: p.kind()}
 	p.policy = &proto.Policy{Tier: tier}
 	if dir == Egress {
 		p.policy.OutboundRules = protoRules
@@ -505,6 +508,13 @@ func (r *ruleModel) proto() *proto.Rule {
 		pr.NotDstIpSetIds = []string{r.notDstSet}
 	}
 	return pr
+}
+
+func (p *policyModel) kind() string {
+	if p.staged {
+		return v3.KindStagedGlobalNetworkPolicy
+	}
+	return v3.KindGlobalNetworkPolicy
 }
 
 // proto returns the protocol as Felix sends it: names lower case, as the v1 data model has them.
