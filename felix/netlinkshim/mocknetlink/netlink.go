@@ -50,19 +50,13 @@ func New() *MockNetlinkDataplane {
 		ExistingTables:  set.From(unix.RT_TABLE_MAIN, 253, 255),
 		NameToLink:      map[string]*MockLink{},
 		RouteKeyToRoute: map[string]netlink.Route{},
+		// The kernel's default rules; IPv6 has no rule for the "default" table.
 		Rules: []netlink.Rule{
-			{
-				Priority: 0,
-				Table:    255,
-			},
-			{
-				Priority: 32766,
-				Table:    254,
-			},
-			{
-				Priority: 32767,
-				Table:    253,
-			},
+			{Family: unix.AF_INET, Priority: 0, Table: 255},
+			{Family: unix.AF_INET, Priority: 32766, Table: 254},
+			{Family: unix.AF_INET, Priority: 32767, Table: 253},
+			{Family: unix.AF_INET6, Priority: 0, Table: 255},
+			{Family: unix.AF_INET6, Priority: 32766, Table: 254},
 		},
 		SetStrictCheckErr: ErrSimulated,
 		NeighsByFamily:    map[int]map[NeighKey]*netlink.Neigh{},
@@ -434,18 +428,28 @@ func (d *MockNetlinkDataplane) AddIface(idx int, name string, up bool, running b
 }
 
 func (d *MockNetlinkDataplane) DelIface(name string) {
+	if link, ok := d.NameToLink[name]; ok {
+		d.onLinkDeletedLockHeld(link.LinkAttrs.Index)
+	}
 	delete(d.NameToLink, name)
 }
 
 func (d *MockNetlinkDataplane) SetIface(name string, up bool, running bool) {
 	link, ok := d.NameToLink[name]
 	ExpectWithOffset(1, ok).To(BeTrue(), "SetIface called with unknown interface "+name)
+	wasUp := link.LinkAttrs.Flags&net.FlagUp != 0
 	if up {
 		link.LinkAttrs.Flags |= net.FlagUp
 		link.LinkAttrs.RawFlags |= syscall.IFF_UP
+		if !wasUp {
+			d.onLinkUpLockHeld(link.LinkAttrs.Index)
+		}
 	} else {
 		link.LinkAttrs.Flags &^= net.FlagUp
 		link.LinkAttrs.RawFlags &^= syscall.IFF_UP
+		if wasUp {
+			d.onLinkDownLockHeld(link.LinkAttrs.Index)
+		}
 	}
 	if running {
 		link.LinkAttrs.RawFlags |= syscall.IFF_RUNNING
@@ -613,13 +617,107 @@ func (d *MockNetlinkDataplane) LinkDel(link netlink.Link) error {
 		return ErrSimulated
 	}
 
-	if _, ok := d.NameToLink[link.Attrs().Name]; !ok {
+	ml, ok := d.NameToLink[link.Attrs().Name]
+	if !ok {
 		return ErrLinkNotFound
 	}
 
+	d.onLinkDeletedLockHeld(ml.LinkAttrs.Index)
 	delete(d.NameToLink, link.Attrs().Name)
 	d.DeletedLinks.Add(link.Attrs().Name)
 	return nil
+}
+
+const deadNextHopFlags = unix.RTNH_F_DEAD | unix.RTNH_F_LINKDOWN
+
+// onLinkDownLockHeld mimics the kernel: routes via the link are flushed,
+// except that a multi-path route only marks the next hop dead until all its
+// next hops are dead.  Neighbours on the link are flushed, even permanent ones.
+func (d *MockNetlinkDataplane) onLinkDownLockHeld(ifIndex int) {
+	for key, r := range d.RouteKeyToRoute {
+		if len(r.MultiPath) == 0 {
+			if r.LinkIndex == ifIndex {
+				delete(d.RouteKeyToRoute, key)
+			}
+			continue
+		}
+		r.MultiPath = cloneNextHops(r.MultiPath)
+		allDead := true
+		for _, nh := range r.MultiPath {
+			if nh.LinkIndex == ifIndex {
+				nh.Flags |= deadNextHopFlags
+			}
+			if nh.Flags&unix.RTNH_F_DEAD == 0 {
+				allDead = false
+			}
+		}
+		if allDead {
+			delete(d.RouteKeyToRoute, key)
+		} else {
+			d.RouteKeyToRoute[key] = r
+		}
+	}
+	d.flushNeighsLockHeld(ifIndex, false)
+}
+
+func (d *MockNetlinkDataplane) onLinkUpLockHeld(ifIndex int) {
+	for key, r := range d.RouteKeyToRoute {
+		r.MultiPath = cloneNextHops(r.MultiPath)
+		for _, nh := range r.MultiPath {
+			if nh.LinkIndex == ifIndex {
+				nh.Flags &^= deadNextHopFlags
+			}
+		}
+		d.RouteKeyToRoute[key] = r
+	}
+}
+
+// onLinkDeletedLockHeld mimics the kernel: IPv4 drops any multi-path route
+// that uses the link, whereas IPv6 drops only the next hop, collapsing the
+// route to a single-path route if one next hop remains.
+func (d *MockNetlinkDataplane) onLinkDeletedLockHeld(ifIndex int) {
+	for key, r := range d.RouteKeyToRoute {
+		if len(r.MultiPath) == 0 {
+			if r.LinkIndex == ifIndex {
+				delete(d.RouteKeyToRoute, key)
+			}
+			continue
+		}
+		remaining := slices.DeleteFunc(slices.Clone(r.MultiPath), func(nh *netlink.NexthopInfo) bool {
+			return nh.LinkIndex == ifIndex
+		})
+		switch {
+		case len(remaining) == len(r.MultiPath):
+			continue
+		case r.Family == unix.AF_INET || len(remaining) == 0:
+			delete(d.RouteKeyToRoute, key)
+		case len(remaining) == 1:
+			r.MultiPath = nil
+			r.LinkIndex = remaining[0].LinkIndex
+			r.Gw = remaining[0].Gw
+			r.Flags = remaining[0].Flags
+			d.RouteKeyToRoute[key] = r
+		default:
+			r.MultiPath = remaining
+			d.RouteKeyToRoute[key] = r
+		}
+	}
+	d.flushNeighsLockHeld(ifIndex, true)
+}
+
+// flushNeighsLockHeld removes the link's ARP/NDP entries and, if
+// includeFDB, its FDB entries; permanent FDB entries survive link down.
+func (d *MockNetlinkDataplane) flushNeighsLockHeld(ifIndex int, includeFDB bool) {
+	for family, neighs := range d.NeighsByFamily {
+		if family == unix.AF_BRIDGE && !includeFDB {
+			continue
+		}
+		for key, n := range neighs {
+			if n.LinkIndex == ifIndex {
+				delete(neighs, key)
+			}
+		}
+	}
 }
 
 func (d *MockNetlinkDataplane) BridgeVniAdd(link netlink.Link, vni uint32) error {
@@ -756,8 +854,9 @@ func (d *MockNetlinkDataplane) LinkSetUp(link netlink.Link) error {
 		return ErrSimulated
 	}
 	if link, ok := d.NameToLink[link.Attrs().Name]; ok {
-		if d.ImmediateLinkUp {
+		if d.ImmediateLinkUp && link.LinkAttrs.Flags&net.FlagUp == 0 {
 			link.LinkAttrs.Flags |= net.FlagUp
+			d.onLinkUpLockHeld(link.LinkAttrs.Index)
 		}
 		link.LinkAttrs.RawFlags |= syscall.IFF_RUNNING
 		d.NameToLink[link.Attrs().Name] = link
@@ -848,7 +947,23 @@ func (d *MockNetlinkDataplane) RuleList(family int) ([]netlink.Rule, error) {
 		return nil, ErrSimulated
 	}
 
-	return d.Rules, nil
+	var rules []netlink.Rule
+	for _, r := range d.Rules {
+		if family == netlink.FAMILY_ALL || r.Family == family {
+			rules = append(rules, r)
+		}
+	}
+	return rules, nil
+}
+
+// ruleReadback returns the rule as the kernel would report it.
+func ruleReadback(rule *netlink.Rule) netlink.Rule {
+	r := *rule
+	if r.Mark != 0 && r.Mask == nil {
+		mask := uint32(0xffffffff)
+		r.Mask = &mask
+	}
+	return r
 }
 
 func (d *MockNetlinkDataplane) RuleAdd(rule *netlink.Rule) error {
@@ -862,13 +977,14 @@ func (d *MockNetlinkDataplane) RuleAdd(rule *netlink.Rule) error {
 		return ErrSimulated
 	}
 
+	r := ruleReadback(rule)
 	for _, existing := range d.Rules {
-		if reflect.DeepEqual(existing, *rule) {
+		if reflect.DeepEqual(existing, r) {
 			return ErrAlreadyExists
 		}
 	}
 
-	d.Rules = append(d.Rules, *rule)
+	d.Rules = append(d.Rules, r)
 	d.AddedRules = append(d.AddedRules, *rule)
 	return nil
 }
@@ -884,10 +1000,11 @@ func (d *MockNetlinkDataplane) RuleDel(rule *netlink.Rule) error {
 		return ErrSimulated
 	}
 
+	r := ruleReadback(rule)
 	var offset int
 	for idx, existing := range d.Rules {
-		log.Debugf("Compare rule %#v against %#v", existing, *rule)
-		if reflect.DeepEqual(existing, *rule) {
+		log.Debugf("Compare rule %#v against %#v", existing, r)
+		if reflect.DeepEqual(existing, r) {
 			offset++
 			continue
 		}
@@ -972,14 +1089,13 @@ func (d *MockNetlinkDataplane) RouteListFiltered(family int, filter *netlink.Rou
 	var routes []netlink.Route
 	for _, route := range d.RouteKeyToRoute {
 		log.Debugf("Maybe include route: %v", route)
+		if family != netlink.FAMILY_ALL && route.Family != family {
+			continue
+		}
 		if filter != nil && filterMask&netlink.RT_FILTER_OIF != 0 && route.LinkIndex != filter.LinkIndex {
 			// Filtering by interface and link indices do not match.
 			log.Debug("Does not match link")
 			continue
-		}
-		if route.Table == 0 {
-			// Mimic the kernel - the route table will be filled in.
-			route.Table = unix.RT_TABLE_MAIN
 		}
 		if (filter == nil || filterMask&netlink.RT_FILTER_TABLE == 0) && route.Table != unix.RT_TABLE_MAIN {
 			// Not filtering by table and does not match main table.
@@ -991,6 +1107,7 @@ func (d *MockNetlinkDataplane) RouteListFiltered(family int, filter *netlink.Rou
 			log.Debugf("Does not match table %d", filter.Table)
 			continue
 		}
+		route.MultiPath = cloneNextHops(route.MultiPath)
 		routes = append(routes, route)
 	}
 
@@ -1004,15 +1121,13 @@ func (d *MockNetlinkDataplane) RouteListFiltered(family int, filter *netlink.Rou
 	return routes, nil
 }
 
+// AddMockRoute injects a route as if another process had programmed it.  It
+// skips RouteAdd's validation so that tests can inject routes the kernel
+// would reject (for example, routes via interfaces that are down).
 func (d *MockNetlinkDataplane) AddMockRoute(route *netlink.Route) {
-	key := KeyForRoute(route)
-	r := *route
+	r := kernelReadback(route)
 	d.ExistingTables.Add(r.Table)
-	if r.Table == 0 {
-		// Table 0 is "unspecified", which gets defaulted to the main table.
-		r.Table = unix.RT_TABLE_MAIN
-	}
-	d.RouteKeyToRoute[key] = r
+	d.RouteKeyToRoute[KeyForRoute(&r)] = r
 }
 
 func (d *MockNetlinkDataplane) RemoveMockRoute(route *netlink.Route) {
@@ -1031,19 +1146,17 @@ func (d *MockNetlinkDataplane) RouteAdd(route *netlink.Route) error {
 	}
 	key := KeyForRoute(route)
 	log.WithField("routeKey", key).Info("Mock dataplane: RouteUpdate called")
+	r := kernelReadback(route)
+	if err := d.validateRouteLockHeld(&r); err != nil {
+		return err
+	}
 	d.AddedRouteKeys.Add(key)
-	d.ExistingTables.Add(route.Table)
+	d.ExistingTables.Add(r.Table)
 	if _, ok := d.RouteKeyToRoute[key]; ok {
 		return ErrAlreadyExists
-	} else {
-		r := *route
-		if r.Table == 0 {
-			// Table 0 is "unspecified", which gets defaulted to the main table.
-			r.Table = unix.RT_TABLE_MAIN
-		}
-		d.RouteKeyToRoute[key] = r
-		return nil
 	}
+	d.RouteKeyToRoute[key] = r
+	return nil
 }
 
 func (d *MockNetlinkDataplane) RouteReplace(route *netlink.Route) error {
@@ -1057,22 +1170,21 @@ func (d *MockNetlinkDataplane) RouteReplace(route *netlink.Route) error {
 	}
 	key := KeyForRoute(route)
 	log.WithField("routeKey", key).Info("Mock dataplane: RouteReplace called")
+	r := kernelReadback(route)
+	if err := d.validateRouteLockHeld(&r); err != nil {
+		return err
+	}
 	d.AddedRouteKeys.Add(key)
-	d.ExistingTables.Add(route.Table)
+	d.ExistingTables.Add(r.Table)
 	if _, ok := d.RouteKeyToRoute[key]; ok {
 		d.UpdatedRouteKeys.Add(key)
-	} else {
-		d.AddedRouteKeys.Add(key)
-	}
-	r := *route
-	if r.Table == 0 {
-		// Table 0 is "unspecified", which gets defaulted to the main table.
-		r.Table = unix.RT_TABLE_MAIN
 	}
 	d.RouteKeyToRoute[key] = r
 	return nil
 }
 
+// RouteDel mimics the kernel's matching: priority 0 is a wildcard that
+// matches the lowest-priority route to the destination.
 func (d *MockNetlinkDataplane) RouteDel(route *netlink.Route) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
@@ -1084,15 +1196,155 @@ func (d *MockNetlinkDataplane) RouteDel(route *netlink.Route) error {
 	}
 	key := KeyForRoute(route)
 	log.WithField("routeKey", key).Info("Mock dataplane: RouteDel called")
+	if route.Priority == 0 {
+		if matchKey := d.lowestPriorityMatchLockHeld(route); matchKey != "" {
+			key = matchKey
+		}
+	}
 	d.DeletedRouteKeys.Add(key)
+	if _, ok := d.RouteKeyToRoute[key]; !ok {
+		return unix.ESRCH
+	}
+	delete(d.RouteKeyToRoute, key)
 	// Route was deleted, but is planned on being re-added
-	if _, ok := d.RouteKeyToRoute[key]; ok {
-		delete(d.RouteKeyToRoute, key)
-		d.UpdatedRouteKeys.Add(key)
-		return nil
-	} else {
+	d.UpdatedRouteKeys.Add(key)
+	return nil
+}
+
+func (d *MockNetlinkDataplane) lowestPriorityMatchLockHeld(route *netlink.Route) string {
+	req := kernelReadback(route)
+	bestKey := ""
+	bestPriority := 0
+	for key, r := range d.RouteKeyToRoute {
+		if r.Family != req.Family || r.Table != req.Table || r.Tos != req.Tos ||
+			!ip.IPNetsEqual(r.Dst, req.Dst) {
+			continue
+		}
+		if bestKey == "" || r.Priority < bestPriority {
+			bestKey, bestPriority = key, r.Priority
+		}
+	}
+	return bestKey
+}
+
+// kernelReadback returns the route as the kernel would report it after
+// programming it via the netlink library: the library fills in defaults for
+// unset fields and the kernel normalises some fields for IPv6.
+func kernelReadback(route *netlink.Route) netlink.Route {
+	r := *route
+	r.Family = routeFamily(route)
+	if r.Table == 0 {
+		r.Table = unix.RT_TABLE_MAIN
+	}
+	if r.Type == 0 {
+		r.Type = unix.RTN_UNICAST
+	}
+	if r.Protocol == 0 {
+		r.Protocol = unix.RTPROT_BOOT
+	}
+	if r.Dst == nil {
+		if r.Family == unix.AF_INET6 {
+			r.Dst = &net.IPNet{IP: net.IPv6zero, Mask: net.CIDRMask(0, 128)}
+		} else {
+			r.Dst = &net.IPNet{IP: net.IPv4zero.To4(), Mask: net.CIDRMask(0, 32)}
+		}
+	}
+	if len(r.MultiPath) > 0 {
+		r.MultiPath = cloneNextHops(r.MultiPath)
+		// Flags are reported per next hop.
+		r.Flags = 0
+	}
+	if r.Family == unix.AF_INET6 {
+		r.Dst = &net.IPNet{IP: r.Dst.IP.Mask(r.Dst.Mask), Mask: r.Dst.Mask}
+		// IPv6 routes have no scope.
+		r.Scope = netlink.SCOPE_UNIVERSE
+		if r.Priority == 0 {
+			r.Priority = 1024
+		}
+		if routeTypeHasNoDevice(r.Type) {
+			r.LinkIndex = 1 // Reported as "dev lo".
+		}
+	}
+	return r
+}
+
+// cloneNextHops deep-copies next hops so that neither the caller nor the
+// mock can mutate the other's copy.
+func cloneNextHops(nhs []*netlink.NexthopInfo) []*netlink.NexthopInfo {
+	if nhs == nil {
 		return nil
 	}
+	out := make([]*netlink.NexthopInfo, 0, len(nhs))
+	for _, nh := range nhs {
+		nhCopy := *nh
+		out = append(out, &nhCopy)
+	}
+	return out
+}
+
+func routeFamily(route *netlink.Route) int {
+	if route.Dst != nil {
+		if route.Dst.IP.To4() != nil {
+			return unix.AF_INET
+		}
+		return unix.AF_INET6
+	}
+	if route.Family == unix.AF_INET6 {
+		return unix.AF_INET6
+	}
+	return unix.AF_INET
+}
+
+func routeTypeHasNoDevice(t int) bool {
+	switch t {
+	case unix.RTN_BLACKHOLE, unix.RTN_THROW, unix.RTN_PROHIBIT, unix.RTN_UNREACHABLE:
+		return true
+	}
+	return false
+}
+
+// validateRouteLockHeld returns the errors that the kernel returns for routes
+// that it refuses to program.  It doesn't model the checks that depend on
+// other routes or on addresses (unreachable gateway, non-local source).
+func (d *MockNetlinkDataplane) validateRouteLockHeld(r *netlink.Route) error {
+	if r.Family == unix.AF_INET && !r.Dst.IP.Equal(r.Dst.IP.Mask(r.Dst.Mask)) {
+		return unix.EINVAL
+	}
+	if len(r.MultiPath) > 0 {
+		for _, nh := range r.MultiPath {
+			if r.Family == unix.AF_INET6 && nh.Gw == nil {
+				return unix.EINVAL
+			}
+			if err := d.checkRouteLinkLockHeld(nh.LinkIndex); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if routeTypeHasNoDevice(r.Type) || r.LinkIndex == 0 {
+		return nil
+	}
+	return d.checkRouteLinkLockHeld(r.LinkIndex)
+}
+
+func (d *MockNetlinkDataplane) checkRouteLinkLockHeld(ifIndex int) error {
+	link := d.linkByIndexLockHeld(ifIndex)
+	if link == nil {
+		return unix.ENODEV
+	}
+	if link.LinkAttrs.Flags&net.FlagUp == 0 {
+		return unix.ENETDOWN
+	}
+	return nil
+}
+
+func (d *MockNetlinkDataplane) linkByIndexLockHeld(ifIndex int) *MockLink {
+	for _, link := range d.NameToLink {
+		if link.LinkAttrs.Index == ifIndex {
+			return link
+		}
+	}
+	return nil
 }
 
 // AddNeighs allows test code to add neighbours to the mock dataplane
@@ -1345,12 +1597,12 @@ func (d *MockNetlinkDataplane) LinkSetNoMaster(link netlink.Link) error {
 	return ErrLinkNotFound
 }
 
+// KeyForRoute returns the mock's key for the route, which matches the
+// kernel's notion of route identity: two routes with the same key replace
+// each other.
 func KeyForRoute(route *netlink.Route) string {
-	table := route.Table
-	if table == 0 {
-		table = unix.RT_TABLE_MAIN
-	}
-	key := fmt.Sprintf("%v-%v-%v", table, route.Dst, route.Priority)
+	r := kernelReadback(route)
+	key := fmt.Sprintf("%v-%v-%v-%v", r.Table, r.Dst, r.Tos, r.Priority)
 	log.WithField("routeKey", key).Debug("Calculated route key")
 	return key
 }

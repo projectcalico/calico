@@ -79,13 +79,13 @@ var (
 	ipnet_4    = cidr_4.ToIPNet()
 	// ipnet_5    = cidr_5.ToIPNet()
 	// ipnet_6    = cidr_6.ToIPNet()
-	routekey_cidr_local = fmt.Sprintf("%d-%s-0", tableIndex, cidr_local)
-	// routekey_1 = fmt.Sprintf("%d-%s-0", tableIndex, cidr_1)
-	// routekey_2 = fmt.Sprintf("%d-%s-0", tableIndex, cidr_2)
-	// routekey_3 = fmt.Sprintf("%d-%s-0", tableIndex, cidr_3)
-	routekey_4 = fmt.Sprintf("%d-%s-0", tableIndex, cidr_4)
-	// routekey_5 = fmt.Sprintf("%d-%s-0", tableIndex, cidr_5)
-	routekey_6 = fmt.Sprintf("%d-%s-0", tableIndex, cidr_6)
+	routekey_cidr_local = routeKey(cidr_local)
+	// routekey_1 = routeKey(cidr_1)
+	// routekey_2 = routeKey(cidr_2)
+	// routekey_3 = routeKey(cidr_3)
+	routekey_4 = routeKey(cidr_4)
+	// routekey_5 = routeKey(cidr_5)
+	routekey_6 = routeKey(cidr_6)
 
 	ipv6_int1 = ip.FromString("2001:db8::192:168:0:0")
 	ipv6_int2 = ip.FromString("2001:db8::192:168:10:0")
@@ -110,14 +110,19 @@ var (
 	ipnetV6_4    = cidrV6_4.ToIPNet()
 	// ipnetV6_5    = cidrV6_5.ToIPNet()
 	// ipnetV6_6    = cidrV6_6.ToIPNet()
-	routekey_cidrV6_local = fmt.Sprintf("%d-%s-1024", tableIndex, cidrV6_local)
-	// routekeyV6_1 = fmt.Sprintf("%d-%s-1024", tableIndex, cidrV6_1)
-	// routekeyV6_2 = fmt.Sprintf("%d-%s-1024", tableIndex, cidrV6_2)
-	// routekeyV6_3 = fmt.Sprintf("%d-%s-1024", tableIndex, cidrV6_3)
-	routekeyV6_4 = fmt.Sprintf("%d-%s-1024", tableIndex, cidrV6_4)
-	// routekeyV6_5 = fmt.Sprintf("%d-%s-0", tableIndex, cidr_5)
-	routekeyV6_6 = fmt.Sprintf("%d-%s-1024", tableIndex, cidrV6_6)
+	routekey_cidrV6_local = routeKey(cidrV6_local)
+	// routekeyV6_1 = routeKey(cidrV6_1)
+	// routekeyV6_2 = routeKey(cidrV6_2)
+	// routekeyV6_3 = routeKey(cidrV6_3)
+	routekeyV6_4 = routeKey(cidrV6_4)
+	// routekeyV6_5 = routeKey(cidr_5)
+	routekeyV6_6 = routeKey(cidrV6_6)
 )
+
+func routeKey(cidr ip.CIDR) string {
+	dst := cidr.ToIPNet()
+	return mocknetlink.KeyForRoute(&netlink.Route{Table: tableIndex, Dst: &dst})
+}
 
 func mustGeneratePrivateKey() wgtypes.Key {
 	key, err := wgtypes.GeneratePrivateKey()
@@ -522,6 +527,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 					incorrectRule.Priority = rulePriority + 10
 					incorrectRule.Table = tableIndex
 					incorrectRule.Mark = firewallMark + 10
+					incorrectRule.Mask = ptr.To(uint32(0xffffffff))
 					incorrectRule.Invert = false
 					err := rrDataplane.RuleAdd(incorrectRule)
 					Expect(err).ToNot(HaveOccurred())
@@ -540,6 +546,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 					incorrectRuleV6.Priority = rulePriority + 10
 					incorrectRuleV6.Table = tableIndex
 					incorrectRuleV6.Mark = firewallMark + 10
+					incorrectRuleV6.Mask = ptr.To(uint32(0xffffffff))
 					incorrectRuleV6.Invert = false
 					err := rrDataplaneV6.RuleAdd(incorrectRuleV6)
 					Expect(err).ToNot(HaveOccurred())
@@ -1388,9 +1395,9 @@ func describeEnableTests(enableV4, enableV6 bool) {
 							if enableV4 {
 								// Update the mock routing table dataplane so that it knows about the wireguard interface.
 								rtDataplane.NameToLink[ifaceName] = link
-								routekey_1 = fmt.Sprintf("%d-%s-0", tableIndex, cidr_1)
-								routekey_2 = fmt.Sprintf("%d-%s-0", tableIndex, cidr_2)
-								routekey_3 = fmt.Sprintf("%d-%s-0", tableIndex, cidr_3)
+								routekey_1 = routeKey(cidr_1)
+								routekey_2 = routeKey(cidr_2)
+								routekey_3 = routeKey(cidr_3)
 
 								wg.RouteUpdate(hostname, cidr_local)
 								wg.RouteUpdate(peer1, cidr_1)
@@ -1403,9 +1410,9 @@ func describeEnableTests(enableV4, enableV6 bool) {
 							if enableV6 {
 								// Update the mock routing table dataplane so that it knows about the wireguard interface.
 								rtDataplaneV6.NameToLink[ifaceNameV6] = linkV6
-								routekeyV6_1 = fmt.Sprintf("%d-%s-1024", tableIndex, cidrV6_1)
-								routekeyV6_2 = fmt.Sprintf("%d-%s-1024", tableIndex, cidrV6_2)
-								routekeyV6_3 = fmt.Sprintf("%d-%s-1024", tableIndex, cidrV6_3)
+								routekeyV6_1 = routeKey(cidrV6_1)
+								routekeyV6_2 = routeKey(cidrV6_2)
+								routekeyV6_3 = routeKey(cidrV6_3)
 
 								wgV6.RouteUpdate(hostname, cidrV6_local)
 								wgV6.RouteUpdate(peer1, cidrV6_1)
@@ -1518,7 +1525,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Dst:       &ipnetV6_1,
 									Type:      syscall.RTN_UNICAST,
 									Protocol:  FelixRouteProtocol,
-									Scope:     netlink.SCOPE_LINK,
+									Scope:     netlink.SCOPE_UNIVERSE,
 									Table:     tableIndex,
 									Priority:  1024,
 								}))
@@ -1528,7 +1535,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Dst:       &ipnetV6_2,
 									Type:      syscall.RTN_UNICAST,
 									Protocol:  FelixRouteProtocol,
-									Scope:     netlink.SCOPE_LINK,
+									Scope:     netlink.SCOPE_UNIVERSE,
 									Table:     tableIndex,
 									Priority:  1024,
 								}))
@@ -1538,7 +1545,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Dst:       &ipnetV6_3,
 									Type:      syscall.RTN_UNICAST,
 									Protocol:  FelixRouteProtocol,
-									Scope:     netlink.SCOPE_LINK,
+									Scope:     netlink.SCOPE_UNIVERSE,
 									Table:     tableIndex,
 									Priority:  1024,
 								}))
@@ -2145,7 +2152,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Dst:       &ipnetV6_3,
 									Type:      syscall.RTN_UNICAST,
 									Protocol:  FelixRouteProtocol,
-									Scope:     netlink.SCOPE_LINK,
+									Scope:     netlink.SCOPE_UNIVERSE,
 									Table:     tableIndex,
 									Priority:  1024,
 								}))
@@ -2332,7 +2339,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									Dst:       &ipnetV6_3,
 									Type:      syscall.RTN_UNICAST,
 									Protocol:  FelixRouteProtocol,
-									Scope:     netlink.SCOPE_LINK,
+									Scope:     netlink.SCOPE_UNIVERSE,
 									Table:     tableIndex,
 									Priority:  1024,
 								}))
@@ -2515,7 +2522,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 
 							It("should reprogram the route to peer3 only", func() {
 								if enableV4 {
-									routekey_4 := fmt.Sprintf("%d-%s-0", tableIndex, cidr_4)
+									routekey_4 := routeKey(cidr_4)
 									Expect(rtDataplane.UpdatedRouteKeys).To(HaveLen(1))
 									Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(0))
 									Expect(rtDataplane.UpdatedRouteKeys).To(HaveKey(routekey_4))
@@ -2530,7 +2537,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 									}))
 								}
 								if enableV6 {
-									routekeyV6_4 := fmt.Sprintf("%d-%s-1024", tableIndex, cidrV6_4)
+									routekeyV6_4 := routeKey(cidrV6_4)
 									Expect(rtDataplaneV6.UpdatedRouteKeys).To(HaveLen(1))
 									Expect(rtDataplaneV6.DeletedRouteKeys).To(HaveLen(0))
 									Expect(rtDataplaneV6.UpdatedRouteKeys).To(HaveKey(routekeyV6_4))
@@ -2540,7 +2547,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 										Dst:       &ipnetV6_4,
 										Type:      syscall.RTN_UNICAST,
 										Protocol:  FelixRouteProtocol,
-										Scope:     netlink.SCOPE_LINK,
+										Scope:     netlink.SCOPE_UNIVERSE,
 										Table:     tableIndex,
 										Priority:  1024,
 									}))
@@ -2763,9 +2770,9 @@ func describeEnableTests(enableV4, enableV6 bool) {
 					// We expect the link to exist.
 					link = wgDataplane.NameToLink[ifaceName]
 					Expect(link).ToNot(BeNil())
-					routekey_1 = fmt.Sprintf("%d-%s-0", tableIndex, cidr_1)
-					routekey_2 = fmt.Sprintf("%d-%s-0", tableIndex, cidr_2)
-					routekey_3 = fmt.Sprintf("%d-%s-0", tableIndex, cidr_3)
+					routekey_1 = routeKey(cidr_1)
+					routekey_2 = routeKey(cidr_2)
+					routekey_3 = routeKey(cidr_3)
 
 					// Set the interface to be up
 					wgDataplane.SetIface(ifaceName, true, true)
@@ -2819,9 +2826,9 @@ func describeEnableTests(enableV4, enableV6 bool) {
 					// We expect the link to exist.
 					linkV6 = wgDataplaneV6.NameToLink[ifaceNameV6]
 					Expect(linkV6).ToNot(BeNil())
-					routekeyV6_1 = fmt.Sprintf("%d-%s-1024", tableIndex, cidrV6_1)
-					routekeyV6_2 = fmt.Sprintf("%d-%s-1024", tableIndex, cidrV6_2)
-					routekeyV6_3 = fmt.Sprintf("%d-%s-1024", tableIndex, cidrV6_3)
+					routekeyV6_1 = routeKey(cidrV6_1)
+					routekeyV6_2 = routeKey(cidrV6_2)
+					routekeyV6_3 = routeKey(cidrV6_3)
 
 					// Set the interface to be up
 					wgDataplaneV6.SetIface(ifaceNameV6, true, true)
@@ -3533,6 +3540,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 						Family: 2,
 						Table:  tableIndex,
 						Mark:   firewallMark,
+						Mask:   ptr.To(uint32(0xffffffff)),
 						Invert: true,
 					},
 					{
@@ -3582,6 +3590,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 						Family: 10,
 						Table:  tableIndex,
 						Mark:   firewallMark,
+						Mask:   ptr.To(uint32(0xffffffff)),
 						Invert: true,
 					},
 					{
