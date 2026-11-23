@@ -87,9 +87,22 @@ func (c *Container) StopLogs() {
 }
 
 func (c *Container) Stop() {
+	if err := c.stop(); err != nil {
+		log.WithError(err).WithField("container", c.Name).Panic("Failed to stop container")
+	}
+}
+
+// StopMayFail is like Stop, but it returns an error instead of panicking if the
+// container cannot be stopped.  Only for best-effort helper containers whose
+// failure to stop should not fail the test.
+func (c *Container) StopMayFail() error {
+	return c.stop()
+}
+
+func (c *Container) stop() error {
 	if c == nil {
 		log.Info("Stop no-op because nil container")
-		return
+		return nil
 	}
 
 	logCxt := log.WithField("container", c.Name)
@@ -97,16 +110,20 @@ func (c *Container) Stop() {
 	if c.runCmd == nil {
 		logCxt.Info("Stop no-op because container is not running")
 		c.mutex.Unlock()
-		return
+		return nil
 	}
 	c.mutex.Unlock()
 
 	logCxt.Info("Stopping...")
 
 	// Ask docker to stop the container.
-	withTimeoutPanic(logCxt, 30*time.Second, c.execDockerStop)
+	if err := withTimeout(30*time.Second, "'docker stop'", c.execDockerStop); err != nil {
+		return err
+	}
 	// Shut down the docker run process (if needed).
-	withTimeoutPanic(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Interrupt) })
+	if err := withTimeout(5*time.Second, "'docker run' to be signalled", func() { c.signalDockerRun(os.Interrupt) }); err != nil {
+		return err
+	}
 
 	// Wait for the container to exit, then escalate to killing it.
 	startTime := time.Now()
@@ -115,9 +132,10 @@ func (c *Container) Stop() {
 			// Container has stopped.  Make sure the docker CLI command is dead (it should be already)
 			// and wait for its log.
 			logCxt.Info("Container stopped (no longer listed in 'docker ps')")
-			withTimeoutPanic(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
-			withTimeoutPanic(logCxt, 10*time.Second, func() { c.logFinished.Wait() })
-			return
+			if err := withTimeout(5*time.Second, "'docker run' to be signalled", func() { c.signalDockerRun(os.Kill) }); err != nil {
+				return err
+			}
+			return withTimeout(10*time.Second, "container logs to finish", func() { c.logFinished.Wait() })
 		}
 		if time.Since(startTime) > 2*time.Second {
 			logCxt.Info("Container didn't stop, asking docker to kill it")
@@ -126,19 +144,28 @@ func (c *Container) Stop() {
 			// was blocked so we kill the CLI command too.
 			err := exec.Command("docker", "kill", c.Name).Run()
 			logCxt.WithError(err).Info("Ran 'docker kill'")
-			withTimeoutPanic(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
+			if err := withTimeout(5*time.Second, "'docker run' to be signalled", func() { c.signalDockerRun(os.Kill) }); err != nil {
+				return err
+			}
 			break
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	c.WaitNotRunning(60 * time.Second)
-	withTimeoutPanic(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
-	withTimeoutPanic(logCxt, 10*time.Second, func() { c.logFinished.Wait() })
+	if err := c.waitNotRunning(60 * time.Second); err != nil {
+		return err
+	}
+	if err := withTimeout(5*time.Second, "'docker run' to be signalled", func() { c.signalDockerRun(os.Kill) }); err != nil {
+		return err
+	}
+	if err := withTimeout(10*time.Second, "container logs to finish", func() { c.logFinished.Wait() }); err != nil {
+		return err
+	}
 
 	logCxt.Info("Container stopped")
+	return nil
 }
 
-func withTimeoutPanic(logCxt *log.Entry, t time.Duration, f func()) {
+func withTimeout(t time.Duration, what string, f func()) error {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -147,9 +174,9 @@ func withTimeoutPanic(logCxt *log.Entry, t time.Duration, f func()) {
 
 	select {
 	case <-done:
-		return
+		return nil
 	case <-time.After(t):
-		logCxt.Panic("Timeout!")
+		return fmt.Errorf("timed out after %v waiting for %s", t, what)
 	}
 }
 
@@ -216,8 +243,21 @@ func UniqueName(namePrefix string) string {
 
 const maxContainerStartRetries = 3
 
-func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) {
-	c = &Container{
+func RunWithFixedName(name string, opts RunOpts, args ...string) *Container {
+	c, err := runWithFixedName(name, opts, args...)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	return c
+}
+
+// RunMayFail is like Run, but it returns an error instead of failing the test if
+// the container fails to start.  Only for best-effort helper containers whose
+// failure to start should not fail the test.
+func RunMayFail(namePrefix string, opts RunOpts, args ...string) (*Container, error) {
+	return runWithFixedName(UniqueName(namePrefix), opts, args...)
+}
+
+func runWithFixedName(name string, opts RunOpts, args ...string) (*Container, error) {
+	c := &Container{
 		Name:             name,
 		ignoreEmptyLines: opts.IgnoreEmptyLines,
 		logLimitBytes:    opts.LogLimitBytes,
@@ -265,18 +305,26 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 		if opts.WithStdinPipe {
 			var err error
 			c.Stdin, err = c.runCmd.StdinPipe()
-			Expect(err).NotTo(HaveOccurred())
+			if err != nil {
+				return nil, fmt.Errorf("failed to get stdin pipe for container %s: %w", c.Name, err)
+			}
 		}
 
 		// Get the command's output pipes, so we can merge those into the test's own logging.
 		stdout, err := c.runCmd.StdoutPipe()
-		Expect(err).NotTo(HaveOccurred())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get stdout pipe for container %s: %w", c.Name, err)
+		}
 		stderr, err := c.runCmd.StderrPipe()
-		Expect(err).NotTo(HaveOccurred())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get stderr pipe for container %s: %w", c.Name, err)
+		}
 
 		// Start the container running.
 		err = c.runCmd.Start()
-		Expect(err).NotTo(HaveOccurred())
+		if err != nil {
+			return nil, fmt.Errorf("failed to run 'docker run' for container %s: %w", c.Name, err)
+		}
 
 		// Merge container's output into our own logging.
 		c.logFinished.Add(2)
@@ -292,17 +340,34 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 		}
 		log.WithError(lastErr).WithField("container", c.Name).Warn("Container failed to start")
 	}
-	Expect(lastErr).NotTo(HaveOccurred(), fmt.Sprintf("Container %s failed to start after %d attempts", c.Name, maxContainerStartRetries))
+	if lastErr != nil {
+		return nil, fmt.Errorf("container %s failed to start after %d attempts: %w", c.Name, maxContainerStartRetries, lastErr)
+	}
 
 	// Fill in rest of container struct.
-	c.IP = c.GetIP()
-	c.IPPrefix = c.GetIPPrefix()
-	c.IPv6 = c.GetIPv6()
-	c.IPv6Prefix = c.GetIPv6Prefix()
-	c.Hostname = c.GetHostname()
+	for _, f := range []struct {
+		field  *string
+		format string
+	}{
+		{&c.IP, inspectFormatIP},
+		{&c.IPPrefix, inspectFormatIPPrefix},
+		{&c.IPv6, inspectFormatIPv6},
+		{&c.IPv6Prefix, inspectFormatIPv6Prefix},
+		{&c.Hostname, inspectFormatHostname},
+	} {
+		out, err := c.dockerInspect(f.format)
+		if err != nil {
+			// The container may be running; stop it, since the caller never gets it to clean up.
+			if stopErr := c.stop(); stopErr != nil {
+				log.WithError(stopErr).WithField("container", c.Name).Warn("Failed to stop container after failed start")
+			}
+			return nil, err
+		}
+		*f.field = strings.TrimSpace(out)
+	}
 	c.binaries = set.New[string]()
 	log.WithField("container", c).Info("Container now running")
-	return
+	return c, nil
 }
 
 func (c *Container) WatchStderrFor(re *regexp.Regexp) chan struct{} {
@@ -518,14 +583,30 @@ func (c *Container) DisableRaceDetector() {
 }
 
 func (c *Container) DockerInspect(format string) string {
+	out, err := c.dockerInspect(format)
+	Expect(err).NotTo(HaveOccurred())
+	return out
+}
+
+func (c *Container) dockerInspect(format string) (string, error) {
 	inspectCmd := utils.Command("docker", "inspect",
 		"--format="+format,
 		c.Name,
 	)
 	outputBytes, err := inspectCmd.CombinedOutput()
-	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to run %q", inspectCmd))
-	return string(outputBytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to run %q: %w", inspectCmd, err)
+	}
+	return string(outputBytes), nil
 }
+
+const (
+	inspectFormatIP         = "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}"
+	inspectFormatIPPrefix   = "{{range .NetworkSettings.Networks}}{{.IPPrefixLen}}{{end}}"
+	inspectFormatIPv6       = "{{range .NetworkSettings.Networks}}{{.GlobalIPv6Address}}{{end}}"
+	inspectFormatIPv6Prefix = "{{range .NetworkSettings.Networks}}{{.GlobalIPv6PrefixLen}}{{end}}"
+	inspectFormatHostname   = "{{.Config.Hostname}}"
+)
 
 func (c *Container) GetID() string {
 	output := c.DockerInspect("{{.Id}}")
@@ -533,27 +614,27 @@ func (c *Container) GetID() string {
 }
 
 func (c *Container) GetIP() string {
-	output := c.DockerInspect("{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}")
+	output := c.DockerInspect(inspectFormatIP)
 	return strings.TrimSpace(output)
 }
 
 func (c *Container) GetIPPrefix() string {
-	output := c.DockerInspect("{{range .NetworkSettings.Networks}}{{.IPPrefixLen}}{{end}}")
+	output := c.DockerInspect(inspectFormatIPPrefix)
 	return strings.TrimSpace(output)
 }
 
 func (c *Container) GetIPv6() string {
-	output := c.DockerInspect("{{range .NetworkSettings.Networks}}{{.GlobalIPv6Address}}{{end}}")
+	output := c.DockerInspect(inspectFormatIPv6)
 	return strings.TrimSpace(output)
 }
 
 func (c *Container) GetIPv6Prefix() string {
-	output := c.DockerInspect("{{range .NetworkSettings.Networks}}{{.GlobalIPv6PrefixLen}}{{end}}")
+	output := c.DockerInspect(inspectFormatIPv6Prefix)
 	return strings.TrimSpace(output)
 }
 
 func (c *Container) GetHostname() string {
-	output := c.DockerInspect("{{.Config.Hostname}}")
+	output := c.DockerInspect(inspectFormatHostname)
 	return strings.TrimSpace(output)
 }
 
@@ -705,14 +786,21 @@ func (c *Container) ListedInDockerPS() bool {
 }
 
 func (c *Container) WaitNotRunning(timeout time.Duration) {
+	if err := c.waitNotRunning(timeout); err != nil {
+		log.Panic("Timed out waiting for container not to be listed.")
+	}
+}
+
+func (c *Container) waitNotRunning(timeout time.Duration) error {
 	log.Info("Wait for container not to be listed in docker ps")
 	start := time.Now()
 	for c.ListedInDockerPS() {
 		if time.Since(start) > timeout {
-			log.Panic("Timed out waiting for container not to be listed.")
+			return fmt.Errorf("timed out after %v waiting for container %s not to be listed in 'docker ps'", timeout, c.Name)
 		}
 		time.Sleep(1000 * time.Millisecond)
 	}
+	return nil
 }
 
 func (c *Container) CopyFileIntoContainer(hostPath, containerPath string) error {
