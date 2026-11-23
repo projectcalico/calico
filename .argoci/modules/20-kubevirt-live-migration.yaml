@@ -65,8 +65,10 @@ steps:
         }
         # The snapshot tool is only in the CI image.
         snapshot_kind_cluster() {
-          # Where runOnVM puts the artifact key; CI_ARTIFACT_SA_KEY_FILE is the pod's path.
-          docker login -u _json_key --password-stdin https://gcr.io < "$HOME/.argoci/artifacts-sa.json"
+          # The machine's own account can read the registry; the artifact key's can't.
+          curl -sf -H 'Metadata-Flavor: Google' \
+            http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token |
+            jq -r .access_token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
           docker run --rm --network host -v "$PWD:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4 \
             kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz
           artifact push job kind-snapshot.tar.gz --destination kind-snapshot.tar.gz
