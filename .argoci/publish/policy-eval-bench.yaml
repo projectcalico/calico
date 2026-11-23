@@ -1,0 +1,58 @@
+# Publishes the pending-policy evaluation benchmarks to the Lens trend store. On
+# merge to master rather than from the PR build, so the Lens credentials only meet
+# code that is already on master; PRs run the same benchmarks without them, in
+# .argoci/modules/46-policy-eval-bench.yaml.
+version: condensed
+generateName: policy-eval-bench-
+timeout: 1h
+
+notifications:
+  slack:
+    channel: ci-notifications-os
+    when: changed
+
+defaults:
+  timeout: 45m
+
+steps:
+  - name: publish-policy-eval-bench
+    # Registered with alwaysRunOnMerge only, so this never runs for a PR; the ref type
+    # says so again here, since GIT_BRANCH alone is a PR's base branch too.
+    when: GIT_REF_TYPE == 'MERGE' && GIT_BRANCH == 'master'
+    changes:
+      in:
+        - ^app-policy/
+        - ^felix/calc/
+        - ^felix/collector/
+        - ^hack/perf/
+        - ^\.argoci/publish/policy-eval-bench\.yaml$
+    services: [docker]
+    # A fixed size, so that a step in the trend comes from the code rather than the
+    # node.
+    requests: {cpu: 2000m, memory: 4Gi}
+    # Naming the keys limits what is exposed; a bare bundle name would inject
+    # every key in it.
+    secretBundles:
+      - name: banzai-secrets
+        keys:
+          - name: LENS_ELASTICSEARCH_USER
+          - name: LENS_ELASTICSEARCH_TOKEN
+    commands: |
+      # Belt and braces with the `when:` above.  CI_GIT_BRANCH is the base ref, so
+      # it reads "master" for a PR into master as well as for a merge.
+      if [ "${CI_GIT_REF_TYPE}" != MERGE ] || [ "${CI_GIT_BRANCH}" != master ]; then
+        echo "[ERROR] refusing to publish: ref type '${CI_GIT_REF_TYPE}', branch '${CI_GIT_BRANCH}' (expected a merge to master)" >&2
+        exit 1
+      fi
+      make -C app-policy bench-policy-eval
+      make -C felix bench-policy-eval
+      make bin/send-perf-results
+      # The user comes from the secret too, so rotating to another account keeps
+      # publishing.
+      export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+      export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
+      export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
+      ./bin/send-perf-results --dir artifacts/perf
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job artifacts/perf || true

@@ -2226,6 +2226,77 @@ blocks:
         always:
           commands:
             - artifact push job artifacts/perf || true
+  # PR pipelines run the benchmarks without secrets; their documents go to the job's
+  # artifacts only.
+  - name: "Policy evaluation benchmark"
+    run:
+      when: "pull_request =~ '.+' and true"
+    dependencies:
+      - Prerequisites
+    task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
+      jobs:
+        - name: "Policy evaluation benchmark"
+          execution_time_limit:
+            minutes: 30
+          commands:
+            # The engine and collector benchmarks of the pending-policy evaluation, on the
+            # policyscale sets. Both run in go-build, and each case writes a hack/perf document
+            # under artifacts/perf. A few iterations per case give a stable steady-state number;
+            # this is trend tracking, not a per-PR gate.
+            - make -C app-policy bench-policy-eval
+            - make -C felix bench-policy-eval
+      epilogue:
+        always:
+          commands:
+            - artifact push job artifacts/perf || true
+  # Branch pipelines (master's scheduled builds, pushes to release branches) run them
+  # again with the Lens credentials and publish what they measured themselves. This
+  # project exposes banzai-secrets to forked PRs, and on a PR pipeline `branch` is
+  # empty, so the condition keeps this block off them.
+  - name: "Policy evaluation benchmark: publish"
+    run:
+      when: "branch =~ '^(master|release-.*)$' and pull_request !~ '.+' and true"
+    dependencies:
+      - Prerequisites
+    task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
+      secrets:
+        - name: banzai-secrets
+      jobs:
+        - name: "Policy evaluation benchmark: publish"
+          execution_time_limit:
+            minutes: 30
+          commands:
+            # Belt and braces with the `when:` above. On a PR pipeline SEMAPHORE_GIT_BRANCH
+            # is the PR's target branch, so check the ref type and the PR number first.
+            - |
+              if [ "$SEMAPHORE_GIT_REF_TYPE" != "branch" ] || [ -n "$SEMAPHORE_GIT_PR_NUMBER" ]; then
+                echo "not a branch push (ref_type=${SEMAPHORE_GIT_REF_TYPE} pr=${SEMAPHORE_GIT_PR_NUMBER}); not publishing" >&2
+                exit 1
+              fi
+              case "$SEMAPHORE_GIT_BRANCH" in
+                master|release-*) ;;
+                *) echo "branch ${SEMAPHORE_GIT_BRANCH} is not master or a release branch; not publishing" >&2; exit 1 ;;
+              esac
+            - make -C app-policy bench-policy-eval
+            - make -C felix bench-policy-eval
+            - make bin/send-perf-results
+            # send-perf-results no-ops if the creds are unset.
+            - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+            - export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
+            - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
+            - ./bin/send-perf-results --dir artifacts/perf
+      epilogue:
+        always:
+          commands:
+            - artifact push job artifacts/perf || true
   - name: Mock node
     run:
       when: "true"

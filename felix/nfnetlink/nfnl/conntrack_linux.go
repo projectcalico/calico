@@ -317,9 +317,10 @@ const (
 )
 
 const (
-	ICMP_PROTO = 1
-	TCP_PROTO  = 6
-	UDP_PROTO  = 17
+	ICMP_PROTO   = 1
+	ICMPV6_PROTO = 58
+	TCP_PROTO    = 6
+	UDP_PROTO    = 17
 )
 
 // TCP Conntrack States
