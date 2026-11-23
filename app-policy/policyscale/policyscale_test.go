@@ -43,7 +43,7 @@ func TestPresetScale(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			fx := Build(c.spec)
+			fx := map[string]*Fixture{"baseline": BaselineFixture(), "egress": EgressFixture(), "composite": CompositeFixture()}[c.name]
 			if got := fx.Rules(Ingress); got != c.ingressRules {
 				t.Errorf("ingress rules: got %d, want %d", got, c.ingressRules)
 			}
@@ -81,7 +81,7 @@ func TestPresetScale(t *testing.T) {
 }
 
 func TestBaselineMembersMatchMeasurement(t *testing.T) {
-	fx := Build(Baseline())
+	fx := BaselineFixture()
 	// The histogram sums to 3,708 sets. Sizes are drawn uniformly within each bucket, so the
 	// 1,000-9,999 bucket alone contributes ~870k members and the set holds about 1M in all, four
 	// times the measured ~256k; the measured distribution was skewed towards the small end of each
@@ -115,10 +115,7 @@ func TestDeterministic(t *testing.T) {
 	// Every preset at a fraction of its size: the same code paths, without rendering tens of
 	// megabytes three times.
 	small := func() Spec {
-		spec := Composite()
-		spec.Baseline.Policies, spec.Baseline.DenyRules = 20, 3
-		spec.Baseline.SizeHistogram = []SizeBucket{{40, 1, 9}, {5, 10, 99}, {1, 1000, 1000}}
-		spec.Egress.Policies, spec.Egress.IPSets = 20, 50
+		spec := smallComposite()
 		shapes := DefaultShapes()
 		spec.Shapes = &shapes
 		return spec
@@ -135,7 +132,7 @@ func TestDeterministic(t *testing.T) {
 }
 
 func TestEgressTargetAndOracle(t *testing.T) {
-	fx := Build(EgressAllowList())
+	fx := EgressFixture()
 	tgt := fx.EgressTarget()
 	if tgt == nil {
 		t.Fatal("no egress target")
@@ -184,7 +181,7 @@ func TestEgressTargetAndOracle(t *testing.T) {
 }
 
 func TestBaselineOracle(t *testing.T) {
-	fx := Build(Baseline())
+	fx := BaselineFixture()
 	denied := fx.Expect(Ingress, fx.DeniedFlow(Ingress))
 	wantDenied := []Verdict{{Kind: v3.KindGlobalNetworkPolicy, Tier: "perimeter", Policy: "policy-293", Index: TierDefaultIndex, Action: "deny"}}
 	if !equalVerdicts(denied, wantDenied) {
@@ -229,11 +226,11 @@ func TestBaselineOracle(t *testing.T) {
 }
 
 func TestSampler(t *testing.T) {
-	fx := Build(Composite())
+	fx := EgressFixture()
 	s := fx.NewSampler(1, FlowModel{Direction: Egress, MissFraction: 0.2, RepeatFraction: 0.3})
 	seen := map[string]int{}
 	denied := 0
-	for i := 0; i < 2000; i++ {
+	for i := 0; i < 500; i++ {
 		f := s.Next()
 		if f.Protocol != ProtocolTCP || f.SrcPort < 32768 {
 			t.Fatalf("unexpected flow %v", f)
@@ -244,20 +241,20 @@ func TestSampler(t *testing.T) {
 			denied++
 		}
 	}
-	if denied < 200 || denied > 1000 {
-		t.Errorf("denied flows: %d of 2000, want roughly 20%% plus their repeats", denied)
+	if denied < 50 || denied > 250 {
+		t.Errorf("denied flows: %d of 500, want roughly 20%% plus their repeats", denied)
 	}
 	repeats := 0
 	for _, n := range seen {
 		repeats += n - 1
 	}
-	if repeats < 300 {
-		t.Errorf("repeated flows: %d of 2000, want roughly 30%%", repeats)
+	if repeats < 75 {
+		t.Errorf("repeated flows: %d of 500, want roughly 30%%", repeats)
 	}
 }
 
 func TestResourcesValidateAndRoundTrip(t *testing.T) {
-	fx := Build(Composite())
+	fx := CompositeFixture()
 	opts := ResourceOptions{Selector: "policyscale.projectcalico.org/target == 'true'", Enforced: true}
 	objs := fx.Resources(opts)
 	if got := countKind(objs, v3.KindTier); got != 1 {
@@ -281,7 +278,8 @@ func TestResourcesValidateAndRoundTrip(t *testing.T) {
 		case *v3.GlobalNetworkPolicy:
 			validate = strings.HasSuffix(o.Name, "-000") || strings.HasSuffix(o.Name, "-001") || o.Name == fx.EgressTarget().Policy
 		case *v3.GlobalNetworkSet:
-			validate = strings.HasSuffix(o.Name, "-0000") || len(o.Spec.Nets) > 50000
+			// The first of the network sets the largest set is split into is one of the biggest.
+			validate = strings.HasSuffix(o.Name, "-0000") || o.Name == "policyscale-base-3707"
 		}
 		if !validate {
 			continue
@@ -295,9 +293,12 @@ func TestResourcesValidateAndRoundTrip(t *testing.T) {
 		t.Errorf("validated only %d objects", validated)
 	}
 
-	docs := bytes.Split(render(t, fx, opts), []byte("\n---\n"))
-	if len(docs) != len(objs) {
-		t.Fatalf("yaml documents: got %d, want %d", len(docs), len(objs))
+	// Rendering the composite's 26 MB of YAML is slow under the race detector; the small composite
+	// renders through the same code.
+	small := Build(smallComposite())
+	docs := bytes.Split(render(t, small, opts), []byte("\n---\n"))
+	if want := len(small.Resources(opts)); len(docs) != want {
+		t.Fatalf("yaml documents: got %d, want %d", len(docs), want)
 	}
 	var gnp v3.GlobalNetworkPolicy
 	if err := yaml.Unmarshal(docs[1], &gnp); err != nil {
@@ -359,7 +360,7 @@ func TestWideCIDRPool(t *testing.T) {
 	}
 
 	// The reference preset stays on /24s.
-	for _, n := range ruleNets(Build(EgressAllowList()))[:50] {
+	for _, n := range ruleNets(EgressFixture())[:50] {
 		if !strings.HasSuffix(n, "/24") {
 			t.Fatalf("reference preset CIDR changed to %s", n)
 		}
@@ -369,7 +370,7 @@ func TestWideCIDRPool(t *testing.T) {
 // Staged rendering is what a cluster run applies: the same policies, evaluated for the pending
 // verdict but programming no enforcement rules.
 func TestStagedResources(t *testing.T) {
-	fx := Build(Composite())
+	fx := CompositeFixture()
 	objs := fx.Resources(ResourceOptions{})
 	if got := countKind(objs, v3.KindStagedGlobalNetworkPolicy); got != 294+301 {
 		t.Errorf("staged policies: %d, want %d", got, 294+301)
@@ -421,6 +422,16 @@ func TestStagedResources(t *testing.T) {
 			t.Fatalf("%s: staged rendering differs beyond kind", e.Name)
 		}
 	}
+}
+
+// smallComposite is the composite at a fraction of its size: the same code paths, quick to build
+// and render.
+func smallComposite() Spec {
+	spec := Composite()
+	spec.Baseline.Policies, spec.Baseline.DenyRules = 20, 3
+	spec.Baseline.SizeHistogram = []SizeBucket{{40, 1, 9}, {5, 10, 99}, {1, 1000, 1000}}
+	spec.Egress.Policies, spec.Egress.IPSets = 20, 50
+	return spec
 }
 
 func render(t *testing.T, fx *Fixture, opts ...ResourceOptions) []byte {

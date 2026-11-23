@@ -58,8 +58,8 @@ const (
 	// for it, well under the API server's request limit; a bigger set is split over several that
 	// carry its label.
 	maxNetsPerNetworkSet = 10000
-	defaultTierOrder   = 100
-	apiVersion         = v3.GroupVersionCurrent
+	defaultTierOrder     = 100
+	apiVersion           = v3.GroupVersionCurrent
 )
 
 func (o *ResourceOptions) defaults() {
