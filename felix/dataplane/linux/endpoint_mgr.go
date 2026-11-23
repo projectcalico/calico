@@ -46,16 +46,28 @@ type hepListener interface {
 	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
 }
 
-type liveMigrationListener interface {
-	OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState, onRouteProgrammed func(ip.CIDR))
+// wepRouteMode, wepRouteModifier and wepRouteModifierListener provide a way for other dataplane
+// components to tell us when the route programming for a WEP should be modified in some way.
+// Currently the options are for the normal route to be suppressed, or for the route to be
+// programmed at higher than usual priority - both of which are used during live migration.
+type wepRouteMode int
+
+const (
+	wepRouteModeNormal wepRouteMode = iota
+	wepRouteModeSuppressed
+	wepRouteModeElevated
+)
+
+type wepRouteModifier struct {
+	mode wepRouteMode
+
+	// onProgrammed, when non-nil, is called after each elevated route is written to the kernel.
+	// (And hence is only relevant when mode is wepRouteModeElevated.)
+	onProgrammed func(ip.CIDR)
 }
 
-type liveMigrationStatus struct {
-	state liveMigrationState
-
-	// onRouteProgrammed, when non-nil, is to be called after writing each of the workload's
-	// elevated-priority routes into the kernel.
-	onRouteProgrammed func(ip.CIDR)
+type wepRouteModifierListener interface {
+	OnRouteModifierUpdate(id types.WorkloadEndpointID, mod *wepRouteModifier)
 }
 
 type endpointManagerCallbacks struct {
@@ -173,10 +185,12 @@ type endpointManager struct {
 
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
-	pendingWlEpUpdates         map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
-	pendingIfaceUpdates        map[string]ifacemonitor.State
-	pendingLiveMigrationStates map[types.WorkloadEndpointID]liveMigrationStatus
-	dirtyPolicyIDs             set.Set[types.PolicyID]
+	pendingWlEpUpdates  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
+	pendingIfaceUpdates map[string]ifacemonitor.State
+	dirtyPolicyIDs      set.Set[types.PolicyID]
+
+	// Route modifiers, updated/deleted by calls to OnRouteModifierUpdate.
+	wepRouteModifiers map[types.WorkloadEndpointID]wepRouteModifier
 
 	// Active state, updated in CompleteDeferredWork.
 	activeWlEndpoints                map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -358,10 +372,11 @@ func newEndpointManagerWithShims(
 
 		// Pending updates, we store these up as OnUpdate is called, then process them
 		// in CompleteDeferredWork and transfer the important data to the activeXYX fields.
-		pendingWlEpUpdates:         map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		pendingIfaceUpdates:        map[string]ifacemonitor.State{},
-		pendingLiveMigrationStates: map[types.WorkloadEndpointID]liveMigrationStatus{},
-		dirtyPolicyIDs:             set.New[types.PolicyID](),
+		pendingWlEpUpdates:  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		pendingIfaceUpdates: map[string]ifacemonitor.State{},
+		dirtyPolicyIDs:      set.New[types.PolicyID](),
+
+		wepRouteModifiers: map[types.WorkloadEndpointID]wepRouteModifier{},
 
 		activeUpIfaces: set.New[string](),
 
@@ -486,23 +501,15 @@ func (m *endpointManager) OnUpdate(protoBufMsg any) {
 	}
 }
 
-func (m *endpointManager) OnLiveMigrationStateUpdate(
-	id types.WorkloadEndpointID,
-	state liveMigrationState,
-	onRouteProgrammed func(ip.CIDR),
-) {
-	log.WithFields(log.Fields{
-		"id":    id,
-		"state": state,
-	}).Debug("Live migration state update")
-	if state == liveMigrationStateBase {
-		delete(m.pendingLiveMigrationStates, id)
+func (m *endpointManager) OnRouteModifierUpdate(id types.WorkloadEndpointID, mod *wepRouteModifier) {
+	if mod == nil {
+		log.WithField("id", id).Debug("Delete route modifier")
+		delete(m.wepRouteModifiers, id)
 	} else {
-		m.pendingLiveMigrationStates[id] = liveMigrationStatus{
-			state:             state,
-			onRouteProgrammed: onRouteProgrammed,
-		}
+		log.WithFields(log.Fields{"id": id, "mod": *mod}).Debug("Route modifier update")
+		m.wepRouteModifiers[id] = *mod
 	}
+
 	// Mark the endpoint dirty so CompleteDeferredWork re-evaluates its routes.
 	// Only if there isn't already a pending WEP update, to avoid clobbering a
 	// more recent proto with stale activeWlEndpoints data.
@@ -784,7 +791,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 		delete(m.activeWlIDToChains, id)
 		m.removeWorkloadARPChains(id)
-		delete(m.pendingLiveMigrationStates, id)
+		delete(m.wepRouteModifiers, id)
 		if oldWorkload != nil {
 			m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
 			// Remove any routes from the routing table.  The RouteTable will remove any
@@ -1017,9 +1024,10 @@ func (m *endpointManager) calculateRoutes(
 ) (
 	routeTargets []routetable.Target,
 ) {
-	lmStatus, hasLMState := m.pendingLiveMigrationStates[id]
-	if hasLMState && lmStatus.state == liveMigrationStateTarget {
-		logCxt.Debug("Live migration target, suppressing routes")
+	// Note, we rely here on the zero value of the `mode` field being `wepRouteModeNormal`.
+	routeModifier := m.wepRouteModifiers[id]
+	if routeModifier.mode == wepRouteModeSuppressed {
+		logCxt.Debug("Suppressing routes")
 		return
 	}
 
@@ -1060,11 +1068,10 @@ func (m *endpointManager) calculateRoutes(
 	}
 
 	routePriority := m.cfg.normalRoutePriority
-	if hasLMState {
-		// Live or TimeWait: use elevated priority.
+	if routeModifier.mode == wepRouteModeElevated {
 		routePriority = m.cfg.elevatedRoutePriority
 		logCxt.WithField("priority", routePriority).Debug(
-			"Endpoint up, adding routes with elevated priority for live migration")
+			"Endpoint up, adding routes with elevated priority")
 	} else {
 		logCxt.Debug("Endpoint up, adding routes")
 	}
@@ -1078,8 +1085,8 @@ func (m *endpointManager) calculateRoutes(
 			},
 			DestMAC: mac,
 		}
-		if lmStatus.onRouteProgrammed != nil {
-			onRouteProgrammed := lmStatus.onRouteProgrammed
+		if routeModifier.onProgrammed != nil {
+			onRouteProgrammed := routeModifier.onProgrammed
 			target.OnProgrammed = func() { onRouteProgrammed(cidr) }
 		}
 		routeTargets = append(routeTargets, target)
