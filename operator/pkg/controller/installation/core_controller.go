@@ -2034,9 +2034,6 @@ func awsVPCAnnotationsUnprotected(ctx context.Context, c client.Client, cni *ope
 
 	sa := ds.Spec.Template.Spec.ServiceAccountName
 	if sa == "" {
-		sa = ds.Spec.Template.Spec.DeprecatedServiceAccount //nolint:staticcheck // Ignore SA1019: older DaemonSets may only set the legacy field.
-	}
-	if sa == "" {
 		sa = "default"
 	}
 	if sa == awsNodeName {
