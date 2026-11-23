@@ -942,15 +942,23 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *internalapi.WorkloadEndpoint) (*i
 }
 
 // containerPortsFromWep declares the endpoint's named ports on its pod: on Kubernetes, Felix takes
-// a workload's named ports from its containers.
+// a workload's named ports from its containers. A pod can only declare TCP, UDP and SCTP ports,
+// whether the endpoint names the protocol or gives its number.
 func containerPortsFromWep(wep *internalapi.WorkloadEndpoint) []v1.ContainerPort {
 	var ports []v1.ContainerPort
 	for _, p := range wep.Spec.Ports {
-		ports = append(ports, v1.ContainerPort{
-			Name:          p.Name,
-			ContainerPort: int32(p.Port),
-			Protocol:      v1.Protocol(strings.ToUpper(p.Protocol.String())),
-		})
+		var protocol v1.Protocol
+		switch strings.ToUpper(p.Protocol.String()) {
+		case "TCP", "6":
+			protocol = v1.ProtocolTCP
+		case "UDP", "17":
+			protocol = v1.ProtocolUDP
+		case "SCTP", "132":
+			protocol = v1.ProtocolSCTP
+		default:
+			ginkgo.Fail(fmt.Sprintf("a pod can't declare named port %q with protocol %s", p.Name, p.Protocol.String()))
+		}
+		ports = append(ports, v1.ContainerPort{Name: p.Name, ContainerPort: int32(p.Port), Protocol: protocol})
 	}
 	return ports
 }
