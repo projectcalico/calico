@@ -292,7 +292,7 @@ func (r *NetLinkConntrackReader) ConntrackInfoChan() <-chan []types.ConntrackInf
 
 func extractTupleFromNflogTuple(nflogTuple nfnetlink.NflogPacketTuple) tuple.Tuple {
 	var l4Src, l4Dst int
-	if nflogTuple.Proto == 1 {
+	if isICMP(nflogTuple.Proto) {
 		l4Src = nflogTuple.L4Src.Id
 		l4Dst = int(uint16(nflogTuple.L4Dst.Type)<<8 | uint16(nflogTuple.L4Dst.Code))
 	} else {
@@ -304,7 +304,7 @@ func extractTupleFromNflogTuple(nflogTuple nfnetlink.NflogPacketTuple) tuple.Tup
 
 func extractTupleFromCtEntryTuple(ctTuple nfnetlink.CtTuple) tuple.Tuple {
 	var l4Src, l4Dst int
-	if ctTuple.ProtoNum == 1 {
+	if isICMP(ctTuple.ProtoNum) {
 		l4Src = ctTuple.L4Src.Id
 		l4Dst = int(uint16(ctTuple.L4Dst.Type)<<8 | uint16(ctTuple.L4Dst.Code))
 	} else {
@@ -312,4 +312,11 @@ func extractTupleFromCtEntryTuple(ctTuple nfnetlink.CtTuple) tuple.Tuple {
 		l4Dst = ctTuple.L4Dst.Port
 	}
 	return tuple.Make(ctTuple.Src, ctTuple.Dst, ctTuple.ProtoNum, l4Src, l4Dst)
+}
+
+// isICMP reports whether the protocol is ICMP or ICMPv6. Their tuples carry the echo identifier
+// as the source port, and the type and code as the destination port, so that flows of different
+// types stay apart and policy evaluation can check a rule's ICMP criteria.
+func isICMP(proto int) bool {
+	return proto == nfnl.ICMP_PROTO || proto == nfnl.ICMPV6_PROTO
 }
