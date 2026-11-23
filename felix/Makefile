@@ -47,6 +47,8 @@ GENERATED_FILES=proto/felixbackend.pb.go bpf/asm/opcode_string.go routetable/rou
 GENERATED_DOCS_FILES=docs/config-params.json docs/config-params.md
 
 FV_SRC_FILES:=$(shell find fv -type f -name '*.go' -print)
+# Packages only the FV tests import, which felix's own dependencies leave out.
+FV_SRC_FILES+=$(wildcard ../app-policy/policyscale/*.go)
 EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/calico/pod2daemon:rw
 
 # Extra static-checks prerequisites; must be set before the include because
