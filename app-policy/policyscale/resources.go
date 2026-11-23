@@ -170,6 +170,13 @@ func (fx *Fixture) ruleResource(r *ruleModel, setLabelKey string) v3.Rule {
 	}
 	rule.Destination.Ports = append(rule.Destination.Ports, portResources(r.dstPortRanges)...)
 	rule.Source.Ports = portResources(r.srcPortRanges)
+	rule.Source.NotPorts = portResources(r.notSrcPortRanges)
+	if np, ok := fx.namedPortBySet[r.srcNamedPortSet]; ok {
+		rule.Source.Ports = append(rule.Source.Ports, namedPort(np.Name))
+	}
+	if np, ok := fx.namedPortBySet[r.notSrcNamedPortSet]; ok {
+		rule.Source.NotPorts = append(rule.Source.NotPorts, namedPort(np.Name))
+	}
 	rule.Destination.NotPorts = portResources(r.notDstPortRanges)
 	if np, ok := fx.namedPortBySet[r.dstNamedPortSet]; ok {
 		rule.Destination.Ports = append(rule.Destination.Ports, namedPort(np.Name))

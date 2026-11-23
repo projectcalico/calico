@@ -438,7 +438,7 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 			})
 		}},
 		{"named port", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
-			r := &ruleModel{protocol: tcp, dstNamedPortSet: k.namedPort()}
+			r := &ruleModel{protocol: tcp, dstNamedPortSet: k.namedPort(false, k.port)}
 			if dir == Ingress {
 				// The named port is on the local endpoint, which every ingress flow reaches.
 				k.keyed(r)
@@ -451,13 +451,43 @@ func (b *shapeBuilder) shapes(dir Direction) []shape {
 				}
 			})
 		}},
+		// Felix finds a negated named port only on the endpoints the same side's selector picks,
+		// so this rule and the negated source named port are keyed on a port range of their own
+		// rather than on the peer's set, which no endpoint carries the label of.
 		{"negated named port", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
-			r := &ruleModel{protocol: tcp, notDstNamedPortSet: k.namedPort()}
-			k.keyed(r)
+			r := &ruleModel{protocol: tcp, dstPortRanges: []portRange{{int32(k.port), int32(k.port + 1)}}, notDstNamedPortSet: k.namedPort(false, k.port)}
 			return r, k.bothFamilies(func(fam int) []ShapeFlow {
 				return []ShapeFlow{
 					k.hit(fmt.Sprintf("tcp v%d to another port", fam), k.flow(fam, ProtocolTCP, k.port+1)),
 					k.miss(fmt.Sprintf("tcp v%d to the named port", fam), k.flow(fam, ProtocolTCP, k.port)),
+				}
+			})
+		}},
+		{"negated source port", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+			r := &ruleModel{protocol: tcp, notSrcPortRanges: []portRange{{int32(k.sport), int32(k.sport)}}}
+			k.keyed(r)
+			return r, k.bothFamilies(func(fam int) []ShapeFlow {
+				return []ShapeFlow{
+					k.hit(fmt.Sprintf("tcp v%d from another port", fam), k.flowWith(fam, ProtocolTCP, k.sport+1, k.port, k.peer(fam))),
+					k.miss(fmt.Sprintf("tcp v%d from the port", fam), k.flowWith(fam, ProtocolTCP, k.sport, k.port, k.peer(fam))),
+				}
+			})
+		}},
+		{"source named port", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+			r := &ruleModel{protocol: tcp, srcNamedPortSet: k.namedPort(true, k.sport)}
+			return r, k.bothFamilies(func(fam int) []ShapeFlow {
+				return []ShapeFlow{
+					k.hit(fmt.Sprintf("tcp v%d from the named port", fam), k.flowWith(fam, ProtocolTCP, k.sport, k.port, k.peer(fam))),
+					k.miss(fmt.Sprintf("tcp v%d from another port", fam), k.flowWith(fam, ProtocolTCP, k.sport+1, k.port, k.peer(fam))),
+				}
+			})
+		}},
+		{"negated source named port", func(k *shapeKey) (*ruleModel, []ShapeFlow) {
+			r := &ruleModel{protocol: tcp, dstPortRanges: []portRange{{int32(k.port), int32(k.port)}}, notSrcNamedPortSet: k.namedPort(true, k.sport)}
+			return r, k.bothFamilies(func(fam int) []ShapeFlow {
+				return []ShapeFlow{
+					k.hit(fmt.Sprintf("tcp v%d from another port", fam), k.flowWith(fam, ProtocolTCP, k.sport+1, k.port, k.peer(fam))),
+					k.miss(fmt.Sprintf("tcp v%d from the named port", fam), k.flowWith(fam, ProtocolTCP, k.sport, k.port, k.peer(fam))),
 				}
 			})
 		}},
@@ -563,17 +593,18 @@ func (k *shapeKey) peerNets(r *ruleModel, nets []netip.Prefix, negated bool) {
 	}
 }
 
-// namedPort adds a TCP named port on the flow's destination, which is the peer for egress and the
-// local endpoint for ingress, and returns the IP+port set Felix would make of it.
-func (k *shapeKey) namedPort() string {
+// namedPort adds a TCP named port on the flow's destination, or its source, and returns the IP+port
+// set Felix would make of it. The peer is the destination of an egress flow and the source of an
+// ingress one; the local endpoint is the other end.
+func (k *shapeKey) namedPort(onSource bool, port int) string {
 	addrs := []netip.Addr{k.peer4, k.peer6}
-	if k.dir == Ingress {
+	if (k.dir == Ingress) != onSource {
 		addrs = []netip.Addr{k.local(4), k.local(6)}
 	}
-	np := NamedPort{Name: fmt.Sprintf("np-%d", k.idx), Protocol: "TCP", Port: k.port, Addrs: addrs}
+	np := NamedPort{Name: fmt.Sprintf("np-%d", k.idx), Protocol: "TCP", Port: port, Addrs: addrs}
 	k.b.fx.namedPorts = append(k.b.fx.namedPorts, np)
 	id := fmt.Sprintf("shape-named-port-%d", k.idx)
-	k.b.fx.addIPPortSet(id, ipPortMembers(addrs, ProtocolTCP, k.port))
+	k.b.fx.addIPPortSet(id, ipPortMembers(addrs, ProtocolTCP, port))
 	k.b.fx.namedPortBySet[id] = np
 	return id
 }
