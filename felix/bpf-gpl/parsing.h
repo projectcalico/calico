@@ -138,12 +138,14 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 	case IPPROTO_TCP:
 		ctx->state->sport = bpf_ntohs(tcp_hdr(ctx)->source);
 		ctx->state->dport = bpf_ntohs(tcp_hdr(ctx)->dest);
+		ctx->state->pre_nat_sport = ctx->state->sport;
 		ctx->state->pre_nat_dport = ctx->state->dport;
 		CALI_DEBUG("TCP; ports: s=%d d=%d", ctx->state->sport, ctx->state->dport);
 		break;
 	case IPPROTO_UDP:
 		ctx->state->sport = bpf_ntohs(udp_hdr(ctx)->source);
 		ctx->state->dport = bpf_ntohs(udp_hdr(ctx)->dest);
+		ctx->state->pre_nat_sport = ctx->state->sport;
 		ctx->state->pre_nat_dport = ctx->state->dport;
 		CALI_DEBUG("UDP; ports: s=%d d=%d", ctx->state->sport, ctx->state->dport);
 		if (ctx->state->dport == VXLAN_PORT) {

@@ -80,7 +80,8 @@ struct cali_tc_state {
 		__u32 icmp_un;
 	};
 	__u16 ihl;
-	__u16 unused;
+	/* Pre-NAT source port; set when the L4 header is parsed. */
+	__u16 pre_nat_sport;
 	/* Return code from the policy program CALI_POL_DENY/ALLOW etc. */
 	__s32 pol_rc;
 	/* Source port of the packet; updated on the CALI_CT_ESTABLISHED_SNAT path or when doing encap.
@@ -121,11 +122,8 @@ struct cali_tc_state {
 	/* Result of the NAT calculation.  Zeroed if there is no DNAT. */
 	struct calico_nat_dest nat_dest; /* 8 bytes */
 	__u64 prog_start_time;
-	/* Temporary store for the MASQ source when policing
-	 * pod->service->self. We use it to restore ip_src to create
-	 * appropriate conntrack entry.
-	 */
-	DECLARE_IP_ADDR(ip_src_masq);
+	/* Source IP from the IP header, before NAT or MASQ-to-self policing rewrites ip_src. */
+	DECLARE_IP_ADDR(pre_nat_ip_src);
 
 	__u32 nat_svc_id;
 
