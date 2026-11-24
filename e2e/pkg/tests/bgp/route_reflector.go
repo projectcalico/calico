@@ -30,8 +30,8 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/area"
+	"github.com/projectcalico/calico/e2e/pkg/capability"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
-	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
@@ -41,10 +41,10 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.Covers(area.BGPPeer),
-	describe.Requires(platform.BGPRouting),
-	describe.Requires(platform.BGP),
-	describe.Requires(platform.Operator),
-	describe.Requires(platform.V3CRDs),
+	describe.Requires(capability.BGPRouting),
+	describe.Requires(capability.BGP),
+	describe.Requires(capability.Operator),
+	describe.Requires(capability.V3CRDs),
 	describe.WithDisruptive(),
 	describe.WithSerial(),
 	"Route reflectors",

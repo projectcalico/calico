@@ -34,8 +34,8 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/area"
+	"github.com/projectcalico/calico/e2e/pkg/capability"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
-	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
@@ -54,7 +54,7 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.Covers(area.KubeVirt),
-	describe.Requires(platform.KubeVirt),
+	describe.Requires(capability.KubeVirt),
 	"KubeVirt IP persistence",
 	func() {
 		f := utils.NewDefaultFramework("calico-kubevirt-ip")

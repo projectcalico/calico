@@ -28,8 +28,8 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/area"
+	"github.com/projectcalico/calico/e2e/pkg/capability"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
-	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 )
@@ -50,8 +50,8 @@ var _ = describe.CalicoDescribe(
 	describe.WithSerial(),
 	describe.WithTeam(describe.Core),
 	describe.Covers(area.Istio),
-	describe.Requires(platform.Istio),
-	describe.Requires(platform.OpenShift),
+	describe.Requires(capability.Istio),
+	describe.Requires(capability.OpenShift),
 	"Istio OpenShift Platform Configuration",
 	func() {
 		f := utils.NewDefaultFramework("istio-openshift")

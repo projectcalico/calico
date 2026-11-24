@@ -35,19 +35,18 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/projectcalico/calico/e2e/pkg/platform"
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 func TestEveryCapabilityHasAProbe(t *testing.T) {
-	for _, c := range platform.All {
+	for _, c := range All {
 		if probes[c] == nil {
 			t.Errorf("capability %s has no probe, so a lane declaring it can't be checked", c)
 		}
 	}
 	for c := range probes {
-		if !slices.Contains(platform.All, c) {
-			t.Errorf("probe for %s, which isn't in platform.All, never runs", c)
+		if !slices.Contains(All, c) {
+			t.Errorf("probe for %s, which isn't in All, never runs", c)
 		}
 	}
 }
@@ -55,12 +54,12 @@ func TestEveryCapabilityHasAProbe(t *testing.T) {
 func TestCheckFailsOnADeclaredCapabilityTheClusterLacks(t *testing.T) {
 	cluster := fakeCluster(t, operatorInstall(operatorv1.LinuxDataplaneIptables))
 
-	result := Check(context.Background(), cluster, Declarations{platform.BPF: {"cluster/dataplane/bpf.yaml"}})
+	result := Check(context.Background(), cluster, Declarations{BPF: {"cluster/dataplane/bpf.yaml"}})
 
 	if !result.Failed() {
 		t.Fatalf("expected failure, got:\n%s", result.Summary())
 	}
-	want := Miss{Capability: platform.BPF, DeclaredBy: []string{"cluster/dataplane/bpf.yaml"}, Saw: "Linux dataplane is Iptables"}
+	want := Miss{Capability: BPF, DeclaredBy: []string{"cluster/dataplane/bpf.yaml"}, Saw: "Linux dataplane is Iptables"}
 	if len(result.Missing) != 1 || !slices.Equal(result.Missing[0].DeclaredBy, want.DeclaredBy) || result.Missing[0].Saw != want.Saw {
 		t.Errorf("missing = %+v, want [%+v]", result.Missing, want)
 	}
@@ -69,7 +68,7 @@ func TestCheckFailsOnADeclaredCapabilityTheClusterLacks(t *testing.T) {
 func TestCheckPassesWhenTheClusterHasWhatItDeclares(t *testing.T) {
 	cluster := fakeCluster(t, operatorInstall(operatorv1.LinuxDataplaneIptables))
 
-	result := Check(context.Background(), cluster, Declarations{platform.Xtables: {"cluster/dataplane/iptables.yaml"}})
+	result := Check(context.Background(), cluster, Declarations{Xtables: {"cluster/dataplane/iptables.yaml"}})
 
 	if result.Failed() {
 		t.Errorf("expected pass, got:\n%s", result.Summary())
@@ -84,10 +83,10 @@ func TestCheckReportsUndeclaredCapabilitiesWithoutFailing(t *testing.T) {
 	if result.Failed() {
 		t.Errorf("an undeclared capability failed the check:\n%s", result.Summary())
 	}
-	if !slices.Contains(result.Undeclared, platform.BPF) {
+	if !slices.Contains(result.Undeclared, BPF) {
 		t.Errorf("undeclared = %v, want it to include BPF", result.Undeclared)
 	}
-	if slices.Contains(result.Undeclared, platform.Xtables) {
+	if slices.Contains(result.Undeclared, Xtables) {
 		t.Errorf("undeclared = %v, but the cluster runs BPF, not xtables", result.Undeclared)
 	}
 }
@@ -95,12 +94,12 @@ func TestCheckReportsUndeclaredCapabilitiesWithoutFailing(t *testing.T) {
 func TestCheckLeavesInstallationCapabilitiesUncheckedWithoutAnInstallation(t *testing.T) {
 	cluster := fakeCluster(t)
 
-	result := Check(context.Background(), cluster, Declarations{platform.BPF: {"cluster/dataplane/bpf.yaml"}})
+	result := Check(context.Background(), cluster, Declarations{BPF: {"cluster/dataplane/bpf.yaml"}})
 
 	if result.Failed() {
 		t.Errorf("a manifest install failed a capability it can't check:\n%s", result.Summary())
 	}
-	if !slices.ContainsFunc(result.Unchecked, func(s Skip) bool { return s.Capability == platform.BPF }) {
+	if !slices.ContainsFunc(result.Unchecked, func(s Skip) bool { return s.Capability == BPF }) {
 		t.Errorf("unchecked = %+v, want it to include BPF", result.Unchecked)
 	}
 }
@@ -108,12 +107,12 @@ func TestCheckLeavesInstallationCapabilitiesUncheckedWithoutAnInstallation(t *te
 func TestCheckLeavesTheCloudUncheckedOnNodesWithoutAProviderID(t *testing.T) {
 	cluster := fakeCluster(t, node("a", "aws:///us-west-2a/i-1"), node("b", ""))
 
-	result := Check(context.Background(), cluster, Declarations{platform.AWS: {"cluster/cloud/aws.yaml"}})
+	result := Check(context.Background(), cluster, Declarations{AWS: {"cluster/cloud/aws.yaml"}})
 
 	if result.Failed() {
 		t.Errorf("a node with no cloud provider failed the AWS declaration:\n%s", result.Summary())
 	}
-	if !slices.ContainsFunc(result.Unchecked, func(s Skip) bool { return s.Capability == platform.AWS }) {
+	if !slices.ContainsFunc(result.Unchecked, func(s Skip) bool { return s.Capability == AWS }) {
 		t.Errorf("unchecked = %+v, want it to include AWS", result.Unchecked)
 	}
 }
@@ -121,7 +120,7 @@ func TestCheckLeavesTheCloudUncheckedOnNodesWithoutAProviderID(t *testing.T) {
 func TestCheckFailsAnOperatorDeclarationWithoutAnInstallation(t *testing.T) {
 	cluster := fakeCluster(t)
 
-	result := Check(context.Background(), cluster, Declarations{platform.Operator: {"cluster/install/operator.yaml"}})
+	result := Check(context.Background(), cluster, Declarations{Operator: {"cluster/install/operator.yaml"}})
 
 	if !result.Failed() {
 		t.Errorf("expected failure, got:\n%s", result.Summary())
@@ -147,10 +146,10 @@ func TestDeclarationsFromNamesEveryFileThatDeclaresACapability(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if got := decls[platform.BPF]; !slices.Equal(got, []string{bpf, dsr}) {
+	if got := decls[BPF]; !slices.Equal(got, []string{bpf, dsr}) {
 		t.Errorf("BPF declared by %v, want both files", got)
 	}
-	if got := decls[platform.PolicyTiers]; !slices.Equal(got, []string{bpf}) {
+	if got := decls[PolicyTiers]; !slices.Equal(got, []string{bpf}) {
 		t.Errorf("PolicyTiers declared by %v, want only %s", got, bpf)
 	}
 }
@@ -158,8 +157,8 @@ func TestDeclarationsFromNamesEveryFileThatDeclaresACapability(t *testing.T) {
 func TestWriteJUnitTagsUndeclaredCapabilitiesAndFailsOnMissingOnes(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "junit-capability.xml")
 	result := &Result{
-		Missing:    []Miss{{Capability: platform.BPF, DeclaredBy: []string{"cluster/dataplane/bpf.yaml"}, Saw: "Linux dataplane is Iptables"}},
-		Undeclared: []platform.Capability{platform.BGP, platform.AWS},
+		Missing:    []Miss{{Capability: BPF, DeclaredBy: []string{"cluster/dataplane/bpf.yaml"}, Saw: "Linux dataplane is Iptables"}},
+		Undeclared: []Capability{BGP, AWS},
 	}
 
 	if err := WriteJUnit(path, result, time.Second); err != nil {
@@ -202,7 +201,7 @@ func TestWriteJUnitFailsACheckThatCouldNotRun(t *testing.T) {
 // probeCase is one cluster state and what a probe should make of it.
 type probeCase struct {
 	name        string
-	capability  platform.Capability
+	capability  Capability
 	objects     []ctrlclient.Object
 	groups      []string
 	wantPresent bool
@@ -210,37 +209,37 @@ type probeCase struct {
 
 func TestProbes(t *testing.T) {
 	cases := []probeCase{
-		{name: "calico-apiserver is aggregated", capability: platform.AggregatedAPI, objects: []ctrlclient.Object{calicoAPIService(true)}, wantPresent: true},
-		{name: "CRD-served API isn't aggregated", capability: platform.AggregatedAPI, objects: []ctrlclient.Object{calicoAPIService(false)}},
-		{name: "CRD-served API is V3CRDs", capability: platform.V3CRDs, objects: []ctrlclient.Object{calicoAPIService(false)}, wantPresent: true},
-		{name: "calico-apiserver isn't V3CRDs", capability: platform.V3CRDs, objects: []ctrlclient.Object{calicoAPIService(true)}},
-		{name: "unencapsulated pool", capability: platform.NoEncap, objects: []ctrlclient.Object{ipPool("a", "", v3.VXLANModeNever)}, wantPresent: true},
-		{name: "IPIP pool", capability: platform.NoEncap, objects: []ctrlclient.Object{ipPool("a", v3.IPIPModeAlways, "")}},
-		{name: "mesh with IPIP", capability: platform.BGPMesh, objects: []ctrlclient.Object{iptablesInstall(), ipPool("a", v3.IPIPModeAlways, "")}, wantPresent: true},
-		{name: "mesh beside VXLAN", capability: platform.BGPMesh, objects: []ctrlclient.Object{iptablesInstall(), ipPool("a", "", v3.VXLANModeAlways)}},
-		{name: "BIRD routing", capability: platform.BGPRouting, objects: []ctrlclient.Object{iptablesInstall(), felixConfig(felixDefaults)}, wantPresent: true},
-		{name: "Felix routing", capability: platform.BGPRouting, objects: []ctrlclient.Object{iptablesInstall(), felixConfig(felixProgramsRoutes)}},
-		{name: "BPF with DSR", capability: platform.BPFDSR, objects: []ctrlclient.Object{operatorInstall(operatorv1.LinuxDataplaneBPF), felixConfig(externalServiceMode("dsr"))}, wantPresent: true},
-		{name: "BPF with tunnel", capability: platform.BPFDSR, objects: []ctrlclient.Object{operatorInstall(operatorv1.LinuxDataplaneBPF), felixConfig(externalServiceMode("Tunnel"))}},
-		{name: "VPP has no tiers", capability: platform.PolicyTiers, objects: []ctrlclient.Object{operatorInstall(operatorv1.LinuxDataplaneVPP)}},
-		{name: "BPF has tiers", capability: platform.PolicyTiers, objects: []ctrlclient.Object{operatorInstall(operatorv1.LinuxDataplaneBPF)}, wantPresent: true},
-		{name: "WireGuard v6 only", capability: platform.WireGuard, objects: []ctrlclient.Object{felixConfig(wireGuardV6On)}, wantPresent: true},
-		{name: "WireGuard off", capability: platform.WireGuard, objects: []ctrlclient.Object{felixConfig(felixDefaults)}},
-		{name: "Goldmane available", capability: platform.Goldmane, objects: []ctrlclient.Object{goldmaneStatus(operatorv1.ConditionTrue)}, wantPresent: true},
-		{name: "Goldmane degraded", capability: platform.Goldmane, objects: []ctrlclient.Object{goldmaneStatus(operatorv1.ConditionFalse)}},
-		{name: "every node on AWS", capability: platform.AWS, objects: []ctrlclient.Object{node("a", "aws:///us-west-2a/i-1"), node("b", "aws:///us-west-2a/i-2")}, wantPresent: true},
-		{name: "one node off AWS", capability: platform.AWS, objects: []ctrlclient.Object{node("a", "aws:///us-west-2a/i-1"), node("b", "kind://docker/kind/b")}},
-		{name: "dual-stack nodes have IPv6", capability: platform.IPv6, objects: []ctrlclient.Object{nodeWithIPs("a", "10.0.0.1", "fd00::1")}, wantPresent: true},
-		{name: "IPv4-only nodes lack IPv6", capability: platform.IPv6, objects: []ctrlclient.Object{nodeWithIPs("a", "10.0.0.1")}},
-		{name: "IPv6-only nodes lack IPv4", capability: platform.IPv4, objects: []ctrlclient.Object{nodeWithIPs("a", "fd00::1")}},
-		{name: "IPv4 on every node", capability: platform.IPv4, objects: []ctrlclient.Object{nodeWithIPs("a", "10.0.0.1"), nodeWithIPs("b", "10.0.0.2", "fd00::2")}, wantPresent: true},
-		{name: "OpenShift served", capability: platform.OpenShift, groups: []string{"config.openshift.io"}, wantPresent: true},
-		{name: "OpenShift not served", capability: platform.OpenShift, groups: []string{"apps"}},
-		{name: "KubeVirt served", capability: platform.KubeVirt, groups: []string{"kubevirt.io"}, wantPresent: true},
-		{name: "KubeVirt not served", capability: platform.KubeVirt, groups: []string{"apps"}},
-		{name: "MockVirt simulates", capability: platform.MockVirt, objects: []ctrlclient.Object{kubeVirt(true)}, wantPresent: true},
-		{name: "real KubeVirt isn't MockVirt", capability: platform.MockVirt, objects: []ctrlclient.Object{kubeVirt(false)}},
-		{name: "real KubeVirt", capability: platform.RealKubeVirt, objects: []ctrlclient.Object{kubeVirt(false)}, wantPresent: true},
+		{name: "calico-apiserver is aggregated", capability: AggregatedAPI, objects: []ctrlclient.Object{calicoAPIService(true)}, wantPresent: true},
+		{name: "CRD-served API isn't aggregated", capability: AggregatedAPI, objects: []ctrlclient.Object{calicoAPIService(false)}},
+		{name: "CRD-served API is V3CRDs", capability: V3CRDs, objects: []ctrlclient.Object{calicoAPIService(false)}, wantPresent: true},
+		{name: "calico-apiserver isn't V3CRDs", capability: V3CRDs, objects: []ctrlclient.Object{calicoAPIService(true)}},
+		{name: "unencapsulated pool", capability: NoEncap, objects: []ctrlclient.Object{ipPool("a", "", v3.VXLANModeNever)}, wantPresent: true},
+		{name: "IPIP pool", capability: NoEncap, objects: []ctrlclient.Object{ipPool("a", v3.IPIPModeAlways, "")}},
+		{name: "mesh with IPIP", capability: BGPMesh, objects: []ctrlclient.Object{iptablesInstall(), ipPool("a", v3.IPIPModeAlways, "")}, wantPresent: true},
+		{name: "mesh beside VXLAN", capability: BGPMesh, objects: []ctrlclient.Object{iptablesInstall(), ipPool("a", "", v3.VXLANModeAlways)}},
+		{name: "BIRD routing", capability: BGPRouting, objects: []ctrlclient.Object{iptablesInstall(), felixConfig(felixDefaults)}, wantPresent: true},
+		{name: "Felix routing", capability: BGPRouting, objects: []ctrlclient.Object{iptablesInstall(), felixConfig(felixProgramsRoutes)}},
+		{name: "BPF with DSR", capability: BPFDSR, objects: []ctrlclient.Object{operatorInstall(operatorv1.LinuxDataplaneBPF), felixConfig(externalServiceMode("dsr"))}, wantPresent: true},
+		{name: "BPF with tunnel", capability: BPFDSR, objects: []ctrlclient.Object{operatorInstall(operatorv1.LinuxDataplaneBPF), felixConfig(externalServiceMode("Tunnel"))}},
+		{name: "VPP has no tiers", capability: PolicyTiers, objects: []ctrlclient.Object{operatorInstall(operatorv1.LinuxDataplaneVPP)}},
+		{name: "BPF has tiers", capability: PolicyTiers, objects: []ctrlclient.Object{operatorInstall(operatorv1.LinuxDataplaneBPF)}, wantPresent: true},
+		{name: "WireGuard v6 only", capability: WireGuard, objects: []ctrlclient.Object{felixConfig(wireGuardV6On)}, wantPresent: true},
+		{name: "WireGuard off", capability: WireGuard, objects: []ctrlclient.Object{felixConfig(felixDefaults)}},
+		{name: "Goldmane available", capability: Goldmane, objects: []ctrlclient.Object{goldmaneStatus(operatorv1.ConditionTrue)}, wantPresent: true},
+		{name: "Goldmane degraded", capability: Goldmane, objects: []ctrlclient.Object{goldmaneStatus(operatorv1.ConditionFalse)}},
+		{name: "every node on AWS", capability: AWS, objects: []ctrlclient.Object{node("a", "aws:///us-west-2a/i-1"), node("b", "aws:///us-west-2a/i-2")}, wantPresent: true},
+		{name: "one node off AWS", capability: AWS, objects: []ctrlclient.Object{node("a", "aws:///us-west-2a/i-1"), node("b", "kind://docker/kind/b")}},
+		{name: "dual-stack nodes have IPv6", capability: IPv6, objects: []ctrlclient.Object{nodeWithIPs("a", "10.0.0.1", "fd00::1")}, wantPresent: true},
+		{name: "IPv4-only nodes lack IPv6", capability: IPv6, objects: []ctrlclient.Object{nodeWithIPs("a", "10.0.0.1")}},
+		{name: "IPv6-only nodes lack IPv4", capability: IPv4, objects: []ctrlclient.Object{nodeWithIPs("a", "fd00::1")}},
+		{name: "IPv4 on every node", capability: IPv4, objects: []ctrlclient.Object{nodeWithIPs("a", "10.0.0.1"), nodeWithIPs("b", "10.0.0.2", "fd00::2")}, wantPresent: true},
+		{name: "OpenShift served", capability: OpenShift, groups: []string{"config.openshift.io"}, wantPresent: true},
+		{name: "OpenShift not served", capability: OpenShift, groups: []string{"apps"}},
+		{name: "KubeVirt served", capability: KubeVirt, groups: []string{"kubevirt.io"}, wantPresent: true},
+		{name: "KubeVirt not served", capability: KubeVirt, groups: []string{"apps"}},
+		{name: "MockVirt simulates", capability: MockVirt, objects: []ctrlclient.Object{kubeVirt(true)}, wantPresent: true},
+		{name: "real KubeVirt isn't MockVirt", capability: MockVirt, objects: []ctrlclient.Object{kubeVirt(false)}},
+		{name: "real KubeVirt", capability: RealKubeVirt, objects: []ctrlclient.Object{kubeVirt(false)}, wantPresent: true},
 	}
 
 	for _, tc := range cases {

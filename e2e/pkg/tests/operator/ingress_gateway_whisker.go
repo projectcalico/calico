@@ -32,8 +32,8 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/projectcalico/calico/e2e/pkg/area"
+	"github.com/projectcalico/calico/e2e/pkg/capability"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
-	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
@@ -54,8 +54,8 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.Covers(area.IngressGateway),
 	describe.WithSerial(),
-	describe.Requires(platform.Operator),
-	describe.Requires(platform.Goldmane),
+	describe.Requires(capability.Operator),
+	describe.Requires(capability.Goldmane),
 	"whisker access via calico ingress gateway",
 	func() {
 		f := utils.NewDefaultFramework("ingress-gateway-whisker")

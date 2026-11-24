@@ -31,7 +31,6 @@ import (
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectcalico/calico/e2e/pkg/platform"
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
@@ -58,48 +57,48 @@ func unchecked(format string, args ...any) finding {
 // only when the API failed in a way that says nothing about the capability.
 type probe func(ctx context.Context, c *Cluster) (finding, error)
 
-// probes holds one probe per capability in platform.All.
-var probes = map[platform.Capability]probe{
-	platform.Operator:      probeOperator,
-	platform.CalicoCNI:     fromInstallation(cniIs(operatorv1.PluginCalico)),
-	platform.CalicoIPAM:    fromInstallation(ipamIs(operatorv1.IPAMPluginCalico)),
-	platform.AzureIPAM:     fromInstallation(ipamIs(operatorv1.IPAMPluginAzureVNET)),
-	platform.AggregatedAPI: probeCalicoAPIService(true),
-	platform.V3CRDs:        probeCalicoAPIService(false),
-	platform.BGP:           fromInstallation(bgpEnabled),
-	platform.BGPRouting:    probeBGPRouting,
-	platform.BGPMesh:       probeBGPMesh,
-	platform.NoEncap:       probeNoEncap,
-	platform.BPF:           fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneBPF)),
-	platform.BPFDSR:        probeBPFDSR,
-	platform.Xtables:       fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneIptables, operatorv1.LinuxDataplaneNftables)),
-	platform.PolicyTiers:   fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneIptables, operatorv1.LinuxDataplaneNftables, operatorv1.LinuxDataplaneBPF)),
-	platform.DoNotTrack:    fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneIptables, operatorv1.LinuxDataplaneNftables, operatorv1.LinuxDataplaneBPF)),
-	platform.WireGuard:     probeWireGuard,
-	platform.HostPorts:     fromInstallation(hostPortsEnabled),
-	platform.CalicoMTU:     probeCalicoMTU,
-	platform.AutoHEPs:      onTrust("a lane choice: the specs turn auto host endpoints on themselves"),
-	platform.Goldmane:      probeGoldmane,
-	platform.AWS:           nodeProviderIs("aws://"),
-	platform.Azure:         nodeProviderIs("azure://"),
-	platform.RKE2:          everyNode("runs an RKE2 kubelet", runsRKE2),
-	platform.OpenShift:     probeOpenShift,
-	platform.RHEL:          everyNode("runs RHEL", runsRHEL),
-	platform.IPv4:          everyNode("has an IPv4 internal address", hasInternalIP(false)),
-	platform.IPv6:          everyNode("has an IPv6 internal address", hasInternalIP(true)),
-	platform.KubeVirt:      probeKubeVirt,
-	platform.RealKubeVirt:  kubeVirtSimulated(false),
-	platform.MockVirt:      kubeVirtSimulated(true),
-	platform.Istio:         probeIstio,
-	platform.ExternalNode:  probeExternalNode,
+// probes holds one probe per capability in All.
+var probes = map[Capability]probe{
+	Operator:      probeOperator,
+	CalicoCNI:     fromInstallation(cniIs(operatorv1.PluginCalico)),
+	CalicoIPAM:    fromInstallation(ipamIs(operatorv1.IPAMPluginCalico)),
+	AzureIPAM:     fromInstallation(ipamIs(operatorv1.IPAMPluginAzureVNET)),
+	AggregatedAPI: probeCalicoAPIService(true),
+	V3CRDs:        probeCalicoAPIService(false),
+	BGP:           fromInstallation(bgpEnabled),
+	BGPRouting:    probeBGPRouting,
+	BGPMesh:       probeBGPMesh,
+	NoEncap:       probeNoEncap,
+	BPF:           fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneBPF)),
+	BPFDSR:        probeBPFDSR,
+	Xtables:       fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneIptables, operatorv1.LinuxDataplaneNftables)),
+	PolicyTiers:   fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneIptables, operatorv1.LinuxDataplaneNftables, operatorv1.LinuxDataplaneBPF)),
+	DoNotTrack:    fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneIptables, operatorv1.LinuxDataplaneNftables, operatorv1.LinuxDataplaneBPF)),
+	WireGuard:     probeWireGuard,
+	HostPorts:     fromInstallation(hostPortsEnabled),
+	CalicoMTU:     probeCalicoMTU,
+	AutoHEPs:      onTrust("a lane choice: the specs turn auto host endpoints on themselves"),
+	Goldmane:      probeGoldmane,
+	AWS:           nodeProviderIs("aws://"),
+	Azure:         nodeProviderIs("azure://"),
+	RKE2:          everyNode("runs an RKE2 kubelet", runsRKE2),
+	OpenShift:     probeOpenShift,
+	RHEL:          everyNode("runs RHEL", runsRHEL),
+	IPv4:          everyNode("has an IPv4 internal address", hasInternalIP(false)),
+	IPv6:          everyNode("has an IPv6 internal address", hasInternalIP(true)),
+	KubeVirt:      probeKubeVirt,
+	RealKubeVirt:  kubeVirtSimulated(false),
+	MockVirt:      kubeVirtSimulated(true),
+	Istio:         probeIstio,
+	ExternalNode:  probeExternalNode,
 
-	platform.RoutableIPPools:       onTrust("a cloud network property: routing a pool's addresses depends on the VPC, not Calico"),
-	platform.NodePortAcrossNodes:   onTrust("a cloud network property: the platform's security groups decide it"),
-	platform.HostNetworkServices:   onTrust("seen only by running traffic from a host-networked pod"),
-	platform.HostEndpointCrossNode: onTrust("seen only by running traffic through a host endpoint policy"),
-	platform.RapidClientImage:      onTrust("whether a node can pull the image is seen only by scheduling it"),
-	platform.ConnectionLimits:      onTrust("seen only by opening connections past the limit"),
-	platform.AmbientPolicy:         onTrust("seen only by running traffic through ambient mode"),
+	RoutableIPPools:       onTrust("a cloud network property: routing a pool's addresses depends on the VPC, not Calico"),
+	NodePortAcrossNodes:   onTrust("a cloud network property: the platform's security groups decide it"),
+	HostNetworkServices:   onTrust("seen only by running traffic from a host-networked pod"),
+	HostEndpointCrossNode: onTrust("seen only by running traffic through a host endpoint policy"),
+	RapidClientImage:      onTrust("whether a node can pull the image is seen only by scheduling it"),
+	ConnectionLimits:      onTrust("seen only by opening connections past the limit"),
+	AmbientPolicy:         onTrust("seen only by running traffic through ambient mode"),
 }
 
 // probeOperator passes when tigera-operator manages Calico, which is exactly

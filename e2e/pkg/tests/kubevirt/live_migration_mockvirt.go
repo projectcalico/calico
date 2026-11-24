@@ -32,8 +32,8 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/area"
+	"github.com/projectcalico/calico/e2e/pkg/capability"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
-	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/bgp"
 	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
@@ -49,8 +49,8 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.Covers(area.KubeVirt),
-	describe.Requires(platform.KubeVirt),
-	describe.Requires(platform.MockVirt),
+	describe.Requires(capability.KubeVirt),
+	describe.Requires(capability.MockVirt),
 	"KubeVirt live migration (MockVirt)",
 	func() {
 		f := utils.NewDefaultFramework("calico-kubevirt-mockvirt")

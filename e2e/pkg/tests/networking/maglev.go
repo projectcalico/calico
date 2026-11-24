@@ -37,8 +37,8 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/e2e/pkg/area"
+	"github.com/projectcalico/calico/e2e/pkg/capability"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
-	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
@@ -59,11 +59,11 @@ func init() {
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.Covers(area.Maglev),
-	describe.Requires(platform.BPFDSR),
-	describe.Requires(platform.ExternalNode),
-	describe.Requires(platform.BPF),
+	describe.Requires(capability.BPFDSR),
+	describe.Requires(capability.ExternalNode),
+	describe.Requires(capability.BPF),
 	describe.WithSerial(),
-	describe.Requires(platform.AWS),
+	describe.Requires(capability.AWS),
 	"Maglev load balancing tests",
 	func() {
 		var (
@@ -182,8 +182,8 @@ var _ = describe.CalicoDescribe(
 			}
 		}
 
-		framework.It("test service ip load balancing behavior before and after maglev annotation (IPv4)", describe.Requires(platform.IPv4), makeMaglevTest(false))
-		framework.It("test service ip load balancing behavior before and after maglev annotation (IPv6)", describe.Requires(platform.IPv6), makeMaglevTest(true))
+		framework.It("test service ip load balancing behavior before and after maglev annotation (IPv4)", describe.Requires(capability.IPv4), makeMaglevTest(false))
+		framework.It("test service ip load balancing behavior before and after maglev annotation (IPv6)", describe.Requires(capability.IPv6), makeMaglevTest(true))
 	})
 
 type MaglevTests struct {

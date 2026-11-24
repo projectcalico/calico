@@ -17,7 +17,7 @@ package describe
 import (
 	"k8s.io/kubernetes/test/e2e/framework"
 
-	"github.com/projectcalico/calico/e2e/pkg/platform"
+	"github.com/projectcalico/calico/e2e/pkg/capability"
 )
 
 // requiresKey is the label key specs declare preconditions under.
@@ -25,7 +25,7 @@ const requiresKey = "Requires"
 
 // Requires marks a spec as needing a capability. A lane selects the spec only
 // if its cluster fragments provide every capability the spec requires.
-func Requires(c platform.Capability) any {
+func Requires(c capability.Capability) any {
 	return framework.WithLabel(requiresKey + ":" + string(c))
 }
 

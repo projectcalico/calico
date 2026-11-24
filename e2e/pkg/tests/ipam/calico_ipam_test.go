@@ -50,7 +50,7 @@ func TestSuitesReadingCalicoIPAMCarryTheLabel(t *testing.T) {
 			if s.labelled || !callsCalicoIPAMCheck(s.body) {
 				continue
 			}
-			t.Errorf("%s: suite reads Calico IPAM state, so it needs describe.Requires(platform.CalicoIPAM)", fset.Position(s.body.Pos()))
+			t.Errorf("%s: suite reads Calico IPAM state, so it needs describe.Requires(capability.CalicoIPAM)", fset.Position(s.body.Pos()))
 		}
 	})
 }
@@ -114,7 +114,7 @@ func calicoIPAMSuites(f *ast.File) []calicoIPAMSuite {
 func requiresCalicoIPAM(call *ast.CallExpr) bool {
 	return isSelector(call.Fun, "describe", "Requires") &&
 		len(call.Args) == 1 &&
-		isSelector(call.Args[0], "platform", "CalicoIPAM")
+		isSelector(call.Args[0], "capability", "CalicoIPAM")
 }
 
 func callsCalicoIPAMCheck(body ast.Node) bool {

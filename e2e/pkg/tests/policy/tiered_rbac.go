@@ -36,8 +36,8 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/area"
+	"github.com/projectcalico/calico/e2e/pkg/capability"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
-	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 )
@@ -492,7 +492,7 @@ var _ = describe.CalicoDescribe(
 		//
 		// Requires the aggregated API server because this test verifies GET-path
 		// tier RBAC, which the admission webhook cannot enforce.
-		framework.Context("resource-name exact match", describe.Requires(platform.AggregatedAPI), func() {
+		framework.Context("resource-name exact match", describe.Requires(capability.AggregatedAPI), func() {
 			BeforeEach(func() { requireCalicoAPIServer(f.ClientConfig()) })
 			It("should allow access to the named policy but deny access to others", func() {
 				cli := newImpersonatedClient(rbacExactNameUser)
@@ -555,7 +555,7 @@ var _ = describe.CalicoDescribe(
 		//
 		// Requires the aggregated API server because this test verifies LIST-path
 		// tier RBAC, which the admission webhook cannot enforce.
-		framework.Context("list via tier RBAC", describe.Requires(platform.AggregatedAPI), func() {
+		framework.Context("list via tier RBAC", describe.Requires(capability.AggregatedAPI), func() {
 			BeforeEach(func() { requireCalicoAPIServer(f.ClientConfig()) })
 			It("should allow listing policies in the permitted tier", func() {
 				By("Creating a policy in the test tier")
@@ -633,7 +633,7 @@ var _ = describe.CalicoDescribe(
 		//
 		// Requires the aggregated API server because this test verifies GET-path
 		// tier RBAC, which the admission webhook cannot enforce.
-		framework.Context("old-style vs new-style name disambiguation", describe.Requires(platform.AggregatedAPI), func() {
+		framework.Context("old-style vs new-style name disambiguation", describe.Requires(capability.AggregatedAPI), func() {
 			BeforeEach(func() { requireCalicoAPIServer(f.ClientConfig()) })
 			const bareName = "rbac-test-disambig"
 
@@ -873,7 +873,7 @@ var _ = describe.CalicoDescribe(
 
 		// The passthrough is what grants tiered policy verbs to every authenticated user, so its
 		// verb list is the boundary between what the webhook gates and what plain RBAC gates.
-		framework.Context("operator-rendered passthrough", describe.Requires(platform.Operator), func() {
+		framework.Context("operator-rendered passthrough", describe.Requires(capability.Operator), func() {
 			It("should grant the tiered policy write verbs and no read verbs in v3 CRD mode", func() {
 				cr, ok := tieredPolicyPassthrough(ctx, f.ClientSet)
 				Expect(ok).To(BeTrue(), "expected the operator to render the %s ClusterRole", tieredPolicyPassthroughRole)

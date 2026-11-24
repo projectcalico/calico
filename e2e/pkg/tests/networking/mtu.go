@@ -22,8 +22,8 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/e2e/pkg/area"
+	"github.com/projectcalico/calico/e2e/pkg/capability"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
-	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 )
@@ -31,8 +31,8 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.Covers(area.MTU),
-	describe.Requires(platform.CalicoMTU),
-	describe.Requires(platform.Operator),
+	describe.Requires(capability.CalicoMTU),
+	describe.Requires(capability.Operator),
 	"Automatic MTU tests",
 	func() {
 		// Determine platform and thus expected MTU.

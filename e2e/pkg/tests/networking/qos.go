@@ -30,8 +30,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/e2e/pkg/area"
+	"github.com/projectcalico/calico/e2e/pkg/capability"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
-	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
@@ -273,7 +273,7 @@ var _ = describe.CalicoDescribe(
 		// Verifies that the qos.projectcalico.org/ingressMaxConnections annotation
 		// caps concurrent TCP connections to a workload, and that closing one frees
 		// a slot. Egress uses the same counter and is covered by the FV suite.
-		It("should limit concurrent connections with QoS annotations", describe.Requires(platform.ConnectionLimits), func() {
+		It("should limit concurrent connections with QoS annotations", describe.Requires(capability.ConnectionLimits), func() {
 			const (
 				connLimitPort = 8080
 				maxConns      = 3

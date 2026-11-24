@@ -27,8 +27,8 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/area"
+	"github.com/projectcalico/calico/e2e/pkg/capability"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
-	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
@@ -36,10 +36,10 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.Covers(area.IPPool),
-	describe.Requires(platform.Operator),
+	describe.Requires(capability.Operator),
 
 	// Validation on non-Calico CNI clusters forces IP pools to use the 'all()' node selector.
-	describe.Requires(platform.CalicoCNI),
+	describe.Requires(capability.CalicoCNI),
 
 	// Mutates the default Installation, which every other spec shares.
 	describe.WithSerial(),

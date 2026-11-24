@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package platform names the capabilities a lane's cluster can provide, which
-// specs require and cluster fragments declare.
-package platform
+package capability
 
 // Capability is something a lane's cluster has. The same string is the suffix
 // of the Requires: label a spec carries and an entry in a cluster fragment's
 // provides: list, and the two are compared by equality. Each one has a probe
-// in e2e/pkg/capability that confirms a lane declaring it really has it.
+// in probes.go that confirms a lane declaring it really has it.
 type Capability string
 
 const (

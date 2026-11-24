@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package capability confirms, before any spec runs, that a lane's cluster has
-// the capabilities its config fragments declare. An over-declared lane would
-// otherwise fail every affected spec for one unrelated reason.
+// Package capability names what a lane's cluster can provide, which specs
+// require and config fragments declare. Before any spec runs, it confirms the
+// cluster has what the lane declares.
 package capability
 
 import (
@@ -23,13 +23,12 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/testconfig"
 )
 
 // Declarations maps each capability a lane declares to the config files that
 // declared it, so a failure can name the fragment to fix.
-type Declarations map[platform.Capability][]string
+type Declarations map[Capability][]string
 
 // DeclarationsFrom loads each config on its own and records which of them
 // provides each capability. Loading them merged would lose that.
@@ -41,7 +40,7 @@ func DeclarationsFrom(paths []string) (Declarations, error) {
 			return nil, err
 		}
 		for _, c := range cfg.Provides {
-			decls[platform.Capability(c)] = append(decls[platform.Capability(c)], p)
+			decls[Capability(c)] = append(decls[Capability(c)], p)
 		}
 	}
 	return decls, nil
@@ -55,7 +54,7 @@ type Result struct {
 
 	// Undeclared is every capability the cluster has that no fragment
 	// declared. It's a lead for a human, never a failure.
-	Undeclared []platform.Capability
+	Undeclared []Capability
 
 	// Unchecked is every capability whose probe couldn't decide, such as an
 	// Installation read on a manifest install.
@@ -73,14 +72,14 @@ func CouldNotRun(err error) *Result {
 
 // Miss is a declared capability the check couldn't confirm.
 type Miss struct {
-	Capability platform.Capability
+	Capability Capability
 	DeclaredBy []string
 	Saw        string
 }
 
 // Skip is a capability the check couldn't decide either way.
 type Skip struct {
-	Capability platform.Capability
+	Capability Capability
 	Why        string
 }
 
@@ -97,7 +96,7 @@ func Check(ctx context.Context, cluster *Cluster, decls Declarations) *Result {
 
 	// A declaration no spec can require is a typo, so fail it.
 	for c, files := range decls {
-		if !slices.Contains(platform.All, c) {
+		if !slices.Contains(All, c) {
 			result.Missing = append(result.Missing, Miss{
 				Capability: c,
 				DeclaredBy: files,
@@ -107,7 +106,7 @@ func Check(ctx context.Context, cluster *Cluster, decls Declarations) *Result {
 	}
 
 	// Probe every capability, declared or not, and sort each outcome.
-	for _, c := range platform.All {
+	for _, c := range All {
 		files, declared := decls[c]
 		found, err := probes[c](ctx, cluster)
 
