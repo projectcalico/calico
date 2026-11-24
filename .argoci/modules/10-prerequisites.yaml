@@ -473,27 +473,95 @@ steps:
         node/dist/windows/*.tar cni-plugin/dist/windows/*.tar
       artifact push workflow /tmp/windows-images.tar.zst
 
-  # One tarball, since every kind lane wants all four.
-  - name: build-third-party-images
-    services: [docker]
+  # The third-party images' binaries, and a build context per image. The images
+  # go through buildkit, so nothing here needs docker.
+  - name: build-third-party-binaries
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    useGoBuild: true
     timeout: 1h
-    requests: {cpu: 3500m, memory: 3.5Gi}
-    changes:
+    jobSize: large
+    requests: {cpu: 7000m, memory: 8Gi}
+    changes: &third-party-changes
       dependsOn: [third_party]
       in:
         - '^third_party/'
+        - '^\.argoci/scripts/(stage-third-party-images|merge-image-tars)$'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
+    cache:
+      - {name: third-party-build, mode: write, path: /cache/third-party-build}
     commands: |
-      make -C third_party/envoy-gateway image
-      make -C third_party/envoy-proxy image
-      make -C third_party/envoy-ratelimit image
-      make -C third_party/cni-plugins image
-      docker save \
-        calico/envoy-gateway:latest-amd64 \
-        calico/envoy-proxy:latest-amd64 \
-        calico/envoy-ratelimit:latest-amd64 \
-        calico/third-party-cni-plugins:latest-amd64 \
-        -o /tmp/third-party-images.tar
+      make -C third_party/envoy-gateway build
+      make -C third_party/envoy-ratelimit build
+      make -C third_party/cni-plugins build
+      make bin/crane
+      .argoci/scripts/stage-third-party-images /cache/third-party-build
+
+  - name: build-envoy-gateway-image
+    depends: [build-third-party-binaries]
+    changes: *third-party-changes
+    cache:
+      - {name: third-party-build, mode: read, path: /cache/third-party-build}
+      - {name: envoy-gateway-image, mode: write, path: /cache/envoy-gateway-image}
+    buildkit:
+      context: /cache/third-party-build/envoy-gateway
+      buildArgsFile: build-args
+      tag: calico/envoy-gateway:latest-amd64
+      tar: /cache/envoy-gateway-image/image.tar
+
+  - name: build-envoy-proxy-image
+    depends: [build-third-party-binaries]
+    changes: *third-party-changes
+    cache:
+      - {name: third-party-build, mode: read, path: /cache/third-party-build}
+      - {name: envoy-proxy-image, mode: write, path: /cache/envoy-proxy-image}
+    buildkit:
+      context: /cache/third-party-build/envoy-proxy
+      buildArgsFile: build-args
+      tag: calico/envoy-proxy:latest-amd64
+      tar: /cache/envoy-proxy-image/image.tar
+
+  - name: build-envoy-ratelimit-image
+    depends: [build-third-party-binaries]
+    changes: *third-party-changes
+    cache:
+      - {name: third-party-build, mode: read, path: /cache/third-party-build}
+      - {name: envoy-ratelimit-image, mode: write, path: /cache/envoy-ratelimit-image}
+    buildkit:
+      context: /cache/third-party-build/envoy-ratelimit
+      buildArgsFile: build-args
+      tag: calico/envoy-ratelimit:latest-amd64
+      tar: /cache/envoy-ratelimit-image/image.tar
+
+  - name: build-cni-plugins-image
+    depends: [build-third-party-binaries]
+    changes: *third-party-changes
+    cache:
+      - {name: third-party-build, mode: read, path: /cache/third-party-build}
+      - {name: cni-plugins-image, mode: write, path: /cache/cni-plugins-image}
+    buildkit:
+      context: /cache/third-party-build/cni-plugins
+      buildArgsFile: build-args
+      tag: calico/third-party-cni-plugins:latest-amd64
+      tar: /cache/cni-plugins-image/image.tar
+
+  # One tarball, since every kind lane wants all four.
+  - name: build-third-party-images
+    depends: [build-envoy-gateway-image, build-envoy-proxy-image, build-envoy-ratelimit-image, build-cni-plugins-image]
+    changes: *third-party-changes
+    requests: {cpu: 2000m, memory: 1Gi}
+    cache:
+      - {name: envoy-gateway-image, mode: read, path: /cache/envoy-gateway-image}
+      - {name: envoy-proxy-image, mode: read, path: /cache/envoy-proxy-image}
+      - {name: envoy-ratelimit-image, mode: read, path: /cache/envoy-ratelimit-image}
+      - {name: cni-plugins-image, mode: read, path: /cache/cni-plugins-image}
+    commands: |
+      .argoci/scripts/merge-image-tars /tmp/third-party-images.tar \
+        /cache/envoy-gateway-image/image.tar \
+        /cache/envoy-proxy-image/image.tar \
+        /cache/envoy-ratelimit-image/image.tar \
+        /cache/cni-plugins-image/image.tar
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/third-party-images.tar
       artifact push workflow /tmp/third-party-images.tar.zst
 

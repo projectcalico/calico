@@ -1,0 +1,38 @@
+#!/bin/bash
+# Merges docker-loadable image tars into one, which `docker load` loads every
+# image from, without a docker daemon to load and re-save them through.
+#
+#   merge-image-tars <out.tar> <image.tar>...
+#
+# Blobs are content-addressed, so the trees overlay without conflict; the
+# indexes listing each tar's images are concatenated.
+set -euo pipefail
+
+out=${1:?usage: merge-image-tars <out.tar> <image.tar>...}
+shift
+[ "$#" -gt 0 ] || { echo "merge-image-tars: no tars to merge" >&2; exit 1; }
+
+dir=$(mktemp -d)
+trap 'rm -rf "$dir"' EXIT
+n=0
+for tar in "$@"; do
+  mkdir "$dir/$n"
+  tar -xf "$tar" -C "$dir/$n"
+  [ -f "$dir/$n/manifest.json" ] || { echo "merge-image-tars: $tar has no manifest.json" >&2; exit 1; }
+  n=$((n + 1))
+done
+
+mkdir "$dir/merged"
+for ((i = 0; i < n; i++)); do
+  (cd "$dir/$i" && find . -path ./manifest.json -prune -o -path ./index.json -prune -o -path ./repositories -prune -o -type f -print) |
+    while read -r f; do
+      [ -e "$dir/merged/$f" ] && continue
+      mkdir -p "$dir/merged/$(dirname "$f")"
+      cp "$dir/$i/$f" "$dir/merged/$f"
+    done
+done
+jq -s 'add' "$dir"/[0-9]*/manifest.json >"$dir/merged/manifest.json"
+if ls "$dir"/[0-9]*/index.json >/dev/null 2>&1; then
+  jq -s '.[0] + {manifests: (map(.manifests // []) | add)}' "$dir"/[0-9]*/index.json >"$dir/merged/index.json"
+fi
+tar -cf "$out" -C "$dir/merged" .
