@@ -350,7 +350,7 @@ _Avoid_: rule ID, hash comment
 
 #### Dispatch chain
 A chain tree that sends a packet to its endpoint's per-endpoint chain by interface name.
-Code: `felix/rules/dispatch.go` (`DispatchChains`).
+Code: `felix/rules/dispatch.go` (`WorkloadDispatchChains`, `HostDispatchChains`).
 _Avoid_: dispatch map
 
 #### Per-endpoint chain

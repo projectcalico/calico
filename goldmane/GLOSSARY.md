@@ -33,7 +33,10 @@ The storage layer, one layer down.
 Terms defined in the [root glossary](../GLOSSARY.md) that apply in this component:
 
 - [End-of-tier hit](../GLOSSARY.md#end-of-tier-hit)
+- [Enforced policy trace](../GLOSSARY.md#enforced-policy-trace)
 - [Filter hints](../GLOSSARY.md#filter-hints)
+- [Policy hit](../GLOSSARY.md#policy-hit)
+- [Policy trace](../GLOSSARY.md#policy-trace)
 - [Flow endpoint type](../GLOSSARY.md#flow-endpoint-type)
 - [Flow key](../GLOSSARY.md#flow-key)
 - [Goldmane Flow](../GLOSSARY.md#goldmane-flow)
@@ -66,11 +69,6 @@ _Avoid_: reporter for the reporting node (see reporter address)
 The IP address of the Felix connection that reported a flow, without the port. It is an IP address, not a Calico Node name.
 Code: `goldmane/pkg/server/flow_collector_service.go` (`flowCollectorService`).
 _Avoid_: node scope, scope, who, client
-
-#### Policy trace
-The ordered policy rules that acted on a flow, held as an enforced list and a pending list, each hit carrying tier, kind, index and action.
-Code: `goldmane/proto/api.proto` (`PolicyTrace`).
-_Avoid_: policy hits, as a name for the whole list
 
 #### Policy trace cache
 A two-generation cache that decodes interned policy-trace strings into their hits.

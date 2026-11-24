@@ -38,7 +38,7 @@ Layers inside the IPAM library, calico-ipam and the IPAM GC controller.
 
 Terms defined in the [root glossary](../../GLOSSARY.md) that apply in this component:
 
-- [Affinity to a missing node](../../GLOSSARY.md#affinity--affine-to-a-missing-node)
+- [Affinity / affine to a missing node](../../GLOSSARY.md#affinity--affine-to-a-missing-node)
 - [Affinity type](../../GLOSSARY.md#affinity-type)
 - [Allocation](../../GLOSSARY.md#allocation)
 - [Intended use](../../GLOSSARY.md#intended-use)
