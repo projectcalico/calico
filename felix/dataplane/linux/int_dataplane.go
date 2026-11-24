@@ -1382,7 +1382,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
-	dp.liveMigrationMonitor.registerListener(epManager)
+	dp.liveMigrationMonitor.registerRouteModifierListener(epManager)
 	if mainTablePolV4 != nil {
 		mainTablePolV4.IsWorkloadBGPPeerIface = epManager.ifaceIsForLocalBGPPeer
 	}
@@ -1628,7 +1628,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			nil, // arpMaps
 		)
 		dp.RegisterManager(epManagerV6)
-		dp.liveMigrationMonitor.registerListener(epManagerV6)
+		dp.liveMigrationMonitor.registerRouteModifierListener(epManagerV6)
 		if mainTablePolV6 != nil {
 			mainTablePolV6.IsWorkloadBGPPeerIface = epManagerV6.ifaceIsForLocalBGPPeer
 		}
