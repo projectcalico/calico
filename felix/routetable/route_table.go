@@ -770,9 +770,16 @@ func (r *RouteTable) recalculateDesiredKernelRoute(routeKey RouteKey) {
 	if bestTarget.Protocol != 0 {
 		proto = bestTarget.Protocol
 	}
+	scope := bestTarget.RouteScope()
+	if r.ipVersion == 6 {
+		// IPv6 routes have no scope; the kernel ignores the requested scope
+		// and reports RT_SCOPE_UNIVERSE, so asking for any other scope would
+		// never match on resync.
+		scope = netlink.SCOPE_UNIVERSE
+	}
 	kernRoute := kernelRoute{
 		Type:     bestTarget.RouteType(),
-		Scope:    bestTarget.RouteScope(),
+		Scope:    scope,
 		Src:      src,
 		OnLink:   bestTarget.Flags()&unix.RTNH_F_ONLINK != 0,
 		Protocol: proto,
