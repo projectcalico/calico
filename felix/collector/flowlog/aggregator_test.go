@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"slices"
 	"sort"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -612,20 +611,31 @@ var _ = Describe("Flow log aggregator tests", func() {
 			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy := muNoConn1Rule1AllowUpdateWithEndpointMeta
 
 			messagesC := make(chan []*FlowLog, 1)
+			feedDone := make(chan struct{})
 
-			time.AfterFunc(2*time.Second, func() {
+			// Run FeedUpdate and GetAndCalibrate concurrently so the race detector can see any
+			// unsynchronised access to the flowEntry. Either may take the aggregator lock first.
+			go func() {
 				defer GinkgoRecover()
+				defer close(feedDone)
 				Expect(ca.FeedUpdate(&muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)).NotTo(HaveOccurred())
-			})
-
-			// ok GetAndCalibrate is a little after feedupdate because feedupdate has some preprocesssing
-			// before it accesses flowstore
-			time.AfterFunc(2*time.Second+10*time.Millisecond, func() {
+			}()
+			go func() {
 				messagesC <- ca.GetAndCalibrate()
-			})
+			}()
 
 			var messages []*FlowLog
 			Eventually(messagesC, "5s").Should(Receive(&messages))
+			if len(messages) == 0 {
+				// GetAndCalibrate took the lock before FeedUpdate added the entry. Poll until the
+				// entry is exported, without waiting on feedDone first, so that this read is still
+				// ordered against FeedUpdate only by the aggregator's lock.
+				Eventually(func() []*FlowLog {
+					messages = ca.GetAndCalibrate()
+					return messages
+				}, "5s").ShouldNot(BeEmpty())
+			}
+			Eventually(feedDone, "5s").Should(BeClosed())
 			Expect(len(messages)).Should(Equal(1))
 
 			message := messages[0]
