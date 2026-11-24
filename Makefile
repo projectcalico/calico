@@ -82,6 +82,8 @@ go-compile-all: operator-charts
 	$(DOCKER_GO_BUILD) sh -c "$(GO_COMPILE_CGO_FLAGS) go list --tags fvtests -export -test -deps ./..." >/dev/null
 	$(DOCKER_GO_BUILD) sh -c 'CGO_ENABLED=0 go list -export -deps ./...' >/dev/null
 	$(DOCKER_GO_BUILD) sh -c "$(GO_COMPILE_CGO_FLAGS) go list -race -export -test -deps ./..." >/dev/null
+	# Its own module, built into the calico image.
+	$(MAKE) -C pod2daemon compile-registrar
 
 update-x-libraries:
 	$(DOCKER_GO_BUILD) sh -c "go get golang.org/x/... && go mod tidy"
