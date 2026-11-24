@@ -303,15 +303,14 @@ format_batch_for_log() {
 
 # The functions below run inside a batch's subshell and share its variables.
 
-# check_spot_failure sets spot_check to preempted, after-failure (preempted, but
+# check_spot_failure [<failed epoch>] sets spot_check to preempted, after-failure (preempted, but
 # only once the failure had happened, so not its cause), not or check-failed,
 # and preempt_at.  Only a VM created as spot can have been preempted.
 check_spot_failure() {
   spot_check=not
   preempt_at=""
   [ "$attempt_model" = SPOT ] || return 0
-  local check_rc=0 failed
-  failed=$(date +%s)
+  local check_rc=0 failed="${1:-$(date +%s)}"
   echo "$prefix Checking whether GCE preempted spot VM $vm_name..."
   preempt_at="$(vm_preemption_check "$vm_name" "$zone" "$attempt_created" "$failed")" || check_rc=$?
   # The latest check settles whether a failure may have been a preemption.
@@ -401,7 +400,9 @@ run_batch_attempt() {
   run_batch "$my_dir/on-test-vm" "$batch" "$vm_name" "$log_file"
   rc=$?
   if [ $rc != 0 ]; then
-    check_spot_failure
+    # The verdict can reach us a poll after the tests end, by which time a
+    # preemption may have followed a genuine failure.
+    check_spot_failure "$(stat -c %Y "$log_file" 2>/dev/null || date +%s)"
     if [ "$spot_check" = preempted ]; then
       attempt_result=preempted
       return
@@ -666,10 +667,24 @@ for batch in "${batches[@]}"; do
     done_marker="$artifacts_dir/.batch-${batch_formatted}.done"
     # Polled, not slept, because a preemption retry moves the deadline.
     while true; do
-      [ ! -f "$done_marker" ] || exit 0
-      read -r wd_deadline wd_start wd_model wd_created wd_type < "$watchdog_file"
-      [ "$(date +%s)" -lt "$wd_deadline" ] || break
-      sleep 15
+      while true; do
+        [ ! -f "$done_marker" ] || exit 0
+        read -r wd_deadline wd_start wd_model wd_created wd_type < "$watchdog_file"
+        [ "$(date +%s)" -lt "$wd_deadline" ] || break
+        sleep 15
+      done
+      # A hung spot batch may really be a preempted one.  Its VM isn't failing
+      # afresh, so a VM still RUNNING settles the check at once.
+      wd_preempt_at=""
+      if [ "$wd_model" = SPOT ] &&
+        wd_preempt_at="$(vm_preemption_check "$vm_name" "$zone" "$wd_created" $(( $(date +%s) - 60 )))"; then
+        # The batch may have found the preemption too, and begun its retry.
+        read -r _ wd_now_start _ < "$watchdog_file"
+        [ "$wd_now_start" = "$wd_start" ] || continue
+      else
+        wd_preempt_at=""
+      fi
+      break
     done
     wd_elapsed=$(( $(date +%s) - wd_start ))
     if [ "$batch" = "ut" ]; then
@@ -681,10 +696,7 @@ for batch in "${batches[@]}"; do
     echo
     echo "===== WATCHDOG: batch $batch approaching job timeout (${JOB_TIMEOUT_MINUTES}m) ====="
 
-    # A hung spot batch may really be a preempted one.  Its VM isn't failing
-    # afresh, so a VM still RUNNING settles the check at once.
-    if [ "$wd_model" = SPOT ] &&
-      wd_preempt_at="$(vm_preemption_check "$vm_name" "$zone" "$wd_created" $(( $(date +%s) - 60 )))"; then
+    if [ -n "$wd_preempt_at" ]; then
       echo "  Spot VM $vm_name was PREEMPTED at $wd_preempt_at; killing batch $batch (pid $pid)"
       # Recorded before the kill, because reaping the batch kills this watchdog
       # too.  The logs are set aside after the reap, once nothing writes them.
@@ -870,8 +882,7 @@ for i in "${!batches[@]}"; do
         summary+=( "Test batch $batch PREEMPTED at $preempt_at; retried on on-demand VM: FAILED${log_note}" )
         preempt_retried_fail=$((preempt_retried_fail + 1)) ;;
       genuine-fail)
-        summary+=( "Test batch $batch had already FAILED when its spot VM was preempted at $preempt_at; not retried${log_note}" )
-        preempt_not_retried=$((preempt_not_retried + 1)) ;;
+        summary+=( "Test batch $batch had already FAILED when its spot VM was preempted at $preempt_at; not retried${log_note}" ) ;;
       passed-uncollected)
         summary+=( "Test batch $batch SUCCEEDED; its spot VM was preempted at $preempt_at before artifacts were collected, and there was no rerun" ) ;;
       check-failed)
