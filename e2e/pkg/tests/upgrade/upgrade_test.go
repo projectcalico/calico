@@ -89,6 +89,15 @@ func TestEvaluate(t *testing.T) {
 	}
 }
 
+func TestEvaluateUpgradeStartsAtWarmUp(t *testing.T) {
+	_, w := testWindow()
+	warm := w.Start.Add(-windowPad)
+	problems, err := evaluate(pattern(repeat("o", 250)), testProbe(AlwaysAllowed), warm, w)
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("got problems=%v err=%v, want a clean pass", problems, err)
+	}
+}
+
 func TestWarmedUp(t *testing.T) {
 	lines := pattern("xxooooooooo" + "ooo")
 	at, ok := warmedUp(lines, Allowed)

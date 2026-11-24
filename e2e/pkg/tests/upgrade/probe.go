@@ -209,6 +209,11 @@ func evaluate(lines []probeLine, p Probe, warmAt time.Time, w Window) ([]string,
 		if s.want == Any {
 			continue
 		}
+		// The warm-up already showed Before holding, and the upgrade can start
+		// within windowPad of it, leaving the before slice empty.
+		if len(s.lines) == 0 && s == slices[0] {
+			continue
+		}
 		if len(s.lines) == 0 {
 			return nil, &Inconclusive{fmt.Sprintf("no probe lines %s the upgrade (%s to %s)", s.name, s.from.Format(time.RFC3339), s.to.Format(time.RFC3339))}
 		}
