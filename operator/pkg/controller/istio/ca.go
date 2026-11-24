@@ -263,7 +263,7 @@ func currentSigner(cacerts, selfSigned *corev1.Secret) signer {
 	}
 	s.ca, s.roots = ca, ca.Roots
 	// LoadCA has parsed this bundle already.
-	s.trust, _ = istio.ParseCACertificates(secret.Data[istio.RootCertKey])
+	s.trust, _ = istio.ParseCACertificates(istio.RootBundle(secret.Data))
 	return s
 }
 

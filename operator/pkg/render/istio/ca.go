@@ -15,6 +15,8 @@ import (
 	"math/big"
 	"sort"
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -54,6 +56,9 @@ const (
 	operatorCAKeyBits    = 2048
 	operatorCAValidity   = 3650 * 24 * time.Hour
 	operatorCANamePrefix = "tigera-operator-istio-ca"
+
+	// tlsRootCertKey holds the roots in the kubernetes.io/tls layout.
+	tlsRootCertKey = "ca.crt"
 
 	pemTypeCertificate = "CERTIFICATE"
 )
@@ -132,14 +137,20 @@ func (c *CA) SecretData() map[string][]byte {
 }
 
 // LoadCA reads a CA from Secret data in Istio's plug-in layout (ca-cert.pem,
-// ca-key.pem, cert-chain.pem, root-cert.pem). It is accepted only when the
-// private key matches the certificate, the certificate is a CA and it chains to
-// a root in the supplied roots.
+// ca-key.pem, cert-chain.pem, root-cert.pem) or the kubernetes.io/tls layout
+// (tls.crt, tls.key, ca.crt). It is accepted only when the private key matches
+// the certificate, the certificate is a CA and it chains to a root in the
+// supplied roots.
 func LoadCA(data map[string][]byte) (*CA, error) {
-	certPEM, keyPEM, chainPEM, rootPEM := data[CACertKey], data[CAKeyKey], data[CertChainKey], data[RootCertKey]
-	certKey, keyKey, rootKey := CACertKey, CAKeyKey, RootCertKey
+	certKey, keyKey, rootKey := caKeys(data)
+	certPEM, keyPEM, rootPEM := data[certKey], data[keyKey], data[rootKey]
+	var chainPEM []byte
+	if certKey == CACertKey {
+		chainPEM = data[CertChainKey]
+	}
 	if len(certPEM) == 0 || len(keyPEM) == 0 || len(rootPEM) == 0 {
-		return nil, fmt.Errorf("expected keys %s, %s and %s (with %s)", CACertKey, CAKeyKey, RootCertKey, CertChainKey)
+		return nil, fmt.Errorf("expected keys %s, %s and %s (with %s), or %s, %s and %s",
+			CACertKey, CAKeyKey, RootCertKey, CertChainKey, corev1.TLSCertKey, corev1.TLSPrivateKeyKey, tlsRootCertKey)
 	}
 
 	certs, err := ParseCertificates(certPEM)
@@ -333,4 +344,20 @@ func parsePrivateKey(pemData []byte) (crypto.Signer, error) {
 func publicKeysEqual(a, b crypto.PublicKey) bool {
 	eq, ok := a.(interface{ Equal(crypto.PublicKey) bool })
 	return ok && eq.Equal(b)
+}
+
+// caKeys are the keys of the layout a CA Secret uses. istiod reads the
+// kubernetes.io/tls layout whenever tls.crt is present, and the operator must
+// read the same certificate istiod signs with.
+func caKeys(data map[string][]byte) (cert, key, root string) {
+	if _, ok := data[corev1.TLSCertKey]; ok {
+		return corev1.TLSCertKey, corev1.TLSPrivateKeyKey, tlsRootCertKey
+	}
+	return CACertKey, CAKeyKey, RootCertKey
+}
+
+// RootBundle is the root bundle of CA Secret data in either layout.
+func RootBundle(data map[string][]byte) []byte {
+	_, _, root := caKeys(data)
+	return data[root]
 }

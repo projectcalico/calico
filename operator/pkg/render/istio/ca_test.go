@@ -166,6 +166,41 @@ var _ = Describe("Istio CA", func() {
 			Expect(ca.Roots[0].Raw).To(Equal(root.cert.Raw))
 		})
 
+		It("accepts the kubernetes.io/tls layout, with intermediates in tls.crt", func() {
+			data := map[string][]byte{
+				"tls.crt": append(append([]byte{}, intermediate.certPEM...), root.certPEM...),
+				"tls.key": intermediate.keyPEM,
+				"ca.crt":  root.certPEM,
+			}
+			ca, err := istio.LoadCA(data)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ca.CertPEM).To(Equal(intermediate.certPEM))
+			Expect(ca.Chain).To(HaveLen(2))
+			Expect(ca.Roots).To(HaveLen(1))
+			Expect(ca.Roots[0].Raw).To(Equal(root.cert.Raw))
+			Expect(istio.RootBundle(data)).To(Equal(root.certPEM))
+		})
+
+		It("reads the kubernetes.io/tls layout when both are present, as istiod does", func() {
+			data := map[string][]byte{
+				istio.CACertKey:   other.certPEM,
+				istio.CAKeyKey:    other.keyPEM,
+				istio.RootCertKey: other.certPEM,
+				"tls.crt":         intermediate.certPEM,
+				"tls.key":         intermediate.keyPEM,
+				"ca.crt":          root.certPEM,
+			}
+			ca, err := istio.LoadCA(data)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ca.CertPEM).To(Equal(intermediate.certPEM))
+			Expect(ca.Roots[0].Raw).To(Equal(root.cert.Raw))
+			Expect(istio.RootBundle(data)).To(Equal(root.certPEM))
+
+			delete(data, "ca.crt")
+			_, err = istio.LoadCA(data)
+			Expect(err).To(MatchError(ContainSubstring("tls.crt, tls.key and ca.crt")))
+		})
+
 		It("takes as its roots only those the CA chains to", func() {
 			ca, err := istio.LoadCA(map[string][]byte{
 				istio.CACertKey:   root.certPEM,

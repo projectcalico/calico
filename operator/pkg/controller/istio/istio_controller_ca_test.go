@@ -692,6 +692,30 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectNotDegraded()
 		})
 
+		It("leaves a kubernetes.io/tls cacerts the operator did not create alone, and publishes its roots", func() {
+			root := newTestCert("hand-made-root", nil, true)
+			intermediate := newTestCert("hand-made-intermediate", root, true)
+			handMade := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: istio.CACertsSecretName, Namespace: istio.IstioNamespace},
+				Type:       corev1.SecretTypeTLS,
+				Data: map[string][]byte{
+					corev1.TLSCertKey:       intermediate.certPEM,
+					corev1.TLSPrivateKeyKey: intermediate.keyPEM,
+					"ca.crt":                root.certPEM,
+				},
+			}
+			Expect(cli.Create(ctx, handMade)).NotTo(HaveOccurred())
+			reconcileIstio()
+			reconcileIstio()
+
+			cacerts := getSecret(cacertsKey)
+			Expect(cacerts.Data).To(Equal(handMade.Data))
+			Expect(cacerts.Labels).NotTo(HaveKey(istio.CACertsLabel))
+			Expect(cacerts.OwnerReferences).To(BeEmpty())
+			expectPublished(root.cert)
+			expectNotDegraded()
+		})
+
 		It("goes Degraded and keeps a cacerts the operator did not create when it is not a usable CA", func() {
 			root := newTestCert("hand-made-root", nil, true)
 			handMade := &corev1.Secret{
