@@ -155,7 +155,7 @@ steps:
     env:
       - name: JOB_TIMEOUT_MINUTES
         value: "60"
-      # STANDARD puts every lane back on demand.  A preempted batch reruns once
+      # STANDARD runs every lane on demand.  A preempted batch reruns once
       # on an on-demand VM.
       - name: VM_PROVISIONING_MODEL
         value: SPOT

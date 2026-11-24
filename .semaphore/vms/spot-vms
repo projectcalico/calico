@@ -154,6 +154,9 @@ vm_wait_gone() {
 # step's remaining time was budgeted for one create.  <create args> must not
 # carry a machine type, boot disk type or provisioning model, and should carry
 # the labels that mark the VM as on demand.  Prints the type it got.
+#
+# With VM_REPLACE_DEADLINE (an epoch) set, no type is tried after it: a
+# replacement that comes too late is no use to the caller.
 create_on_demand_replacement() {
   local vm="$1" zone="$2" first="$3"
   shift 3
@@ -164,6 +167,10 @@ create_on_demand_replacement() {
     i=$((i + 1))
     if [ "$i" -gt 1 ] && [ "$type" = "$first" ]; then
       continue
+    fi
+    if [ -n "${VM_REPLACE_DEADLINE:-}" ] && [ "$(date +%s)" -ge "$VM_REPLACE_DEADLINE" ]; then
+      echo "Out of time to replace ${vm}." >&2
+      return 1
     fi
     if gcloud --quiet compute instances create "$vm" --zone="$zone" \
       --machine-type="$type" --boot-disk-type="$(boot_disk_type_for "$type")" \

@@ -205,17 +205,17 @@ declare -A vm_replaced
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
   [ -z "${vm_zone[$vm_name]:-}" ] || continue
-  if [ "$vm_provisioning_model" = SPOT ] && [ ${#vm_zone[@]} -gt 0 ]; then
-    first_vm=( "${!vm_zone[@]}" )
-    vm_z="${vm_zone[${first_vm[0]}]}"
-    # shellcheck disable=SC2054 # the comma is gcloud's label separator
-    if replaced_type="$(create_on_demand_replacement "$vm_name" "$vm_z" "$vm_machine_type" \
-      "${vm_base_create_args[@]}" --labels=ci-provisioning=standard,ci-spot-fallback=true)"; then
-      echo "  $vm_name -> $vm_z (spot VM gone before its batch started; replaced with on-demand ${replaced_type})"
-      vm_zone["$vm_name"]="$vm_z"
-      vm_replaced["$vm_name"]="$replaced_type"
-      continue
-    fi
+  if [ "$vm_provisioning_model" = SPOT ]; then
+    for vm_z in $(printf '%s\n' "${vm_zone[@]}" | sort -u); do
+      # shellcheck disable=SC2054 # the comma is gcloud's label separator
+      if replaced_type="$(create_on_demand_replacement "$vm_name" "$vm_z" "$vm_machine_type" \
+        "${vm_base_create_args[@]}" --labels=ci-provisioning=standard,ci-spot-fallback=true)"; then
+        echo "  $vm_name -> $vm_z (spot VM gone before its batch started; replaced with on-demand ${replaced_type})"
+        vm_zone["$vm_name"]="$vm_z"
+        vm_replaced["$vm_name"]="$replaced_type"
+        continue 2
+      fi
+    done
   fi
   echo "ERROR: could not determine the zone of VM $vm_name after bulk create." 1>&2
   exit 1
@@ -277,13 +277,14 @@ fi
 
 # attempt_deadline <attempt start epoch> prints when the watchdog kills that
 # attempt: a retry gets a fresh JOB_TIMEOUT_MINUTES, but never past the step's
-# own deadline.
+# own deadline, less time for the watchdog's captures, the summary and the
+# step's epilogue.
 attempt_deadline() {
   # With the watchdog off, only the step deadline limits an attempt.
   local deadline=$(( $1 + 365 * 24 * 3600 )) step_deadline
   [ "$watchdog_seconds" -le 0 ] || deadline=$(( $1 + watchdog_seconds ))
   if [ -n "${FV_STEP_TIMEOUT_MINUTES:-}" ]; then
-    step_deadline=$(( script_start + (FV_STEP_TIMEOUT_MINUTES - 5) * 60 ))
+    step_deadline=$(( script_start + (FV_STEP_TIMEOUT_MINUTES - 15) * 60 ))
     [ "$step_deadline" -ge "$deadline" ] || deadline=$step_deadline
   fi
   echo "$deadline"
@@ -357,7 +358,6 @@ run_batch_attempt() {
   rc=1
   attempt_result=fail
   check_failed=false
-  : > "$conf_log_file"
   for attempt in $(seq 1 "$VM_CONFIGURE_ATTEMPTS"); do
     echo "$prefix Configuring test VM $vm_name (attempt $attempt). Redirecting log to $conf_log_file."
     if env ZONE="$zone" "${my_dir}/configure-test-vm" "$vm_name" >> "$conf_log_file" 2>&1; then
@@ -463,9 +463,9 @@ run_batch_attempt() {
       echo "$prefix Batch $batch had already FAILED when its VM was preempted; not retrying."
       write_preempt_record genuine-fail
     elif [ "$spot_check" = preempted ]; then
-      # The results went with the VM.
-      attempt_result=preempted
-      return
+      # A rerun could only turn a pass into a flaky failure.
+      echo "$prefix Test batch $batch SUCCEEDED, but its artifacts went with the preempted VM; not rerunning."
+      write_preempt_record passed-uncollected
     fi
   fi
 
@@ -538,7 +538,8 @@ find_preempt_retry_blocker() {
   fi
   attempt_created=$(date +%s)
   # shellcheck disable=SC2054 # the comma is gcloud's label separator
-  if ! retry_type="$(create_on_demand_replacement "$vm_name" "$zone" "$attempt_type" "${vm_base_create_args[@]}" \
+  if ! retry_type="$(VM_REPLACE_DEADLINE=$(( $(attempt_deadline "$(date +%s)") - preempt_retry_batch_seconds - 300 )) \
+    create_on_demand_replacement "$vm_name" "$zone" "$attempt_type" "${vm_base_create_args[@]}" \
     --labels=ci-provisioning=standard,ci-preempt-retry=true 2>>"$conf_log_file.retry")"; then
     blocker=no-capacity
   fi
@@ -625,15 +626,11 @@ for batch in "${batches[@]}"; do
     attempt_start="$batch_start"
     attempt_args=( "${vm_create_args[@]}" )
     retried=false
+    : > "$conf_log_file"
     while true; do
       run_batch_attempt
       [ "$attempt_result" = preempted ] || break
       find_preempt_retry_blocker
-      if [ -n "$blocker" ] && [ "$rc" = 0 ]; then
-        echo "$prefix Test batch $batch SUCCEEDED, but its artifacts went with the preempted VM; not rerun ($blocker)."
-        write_preempt_record passed-uncollected
-        break
-      fi
       [ -z "$blocker" ] || fail_preempted_batch "$blocker"
 
       # The replacement is on demand, so it can't be preempted in turn.
@@ -664,7 +661,8 @@ for batch in "${batches[@]}"; do
         sed -i 's/outcome=retried$/outcome=retried-fail/' "$preempt_file"
       fi
     fi
-    if [ $rc = 0 ] && [ -n "${BATCH_MEMO_PREFIX:-}" ]; then
+    # Whatever reports a preempted collection left are partial.
+    if [ $rc = 0 ] && [ -n "${BATCH_MEMO_PREFIX:-}" ] && ! grep -qs 'outcome=passed-uncollected$' "$preempt_file"; then
       batch_memo_record "$artifacts_dir" "$batch"
     fi
 
@@ -714,6 +712,9 @@ for batch in "${batches[@]}"; do
       break
     done
     wd_elapsed=$(( $(date +%s) - wd_start ))
+    wd_limit="job timeout ${JOB_TIMEOUT_MINUTES}m"
+    [ "$wd_deadline" -ge $(( wd_start + watchdog_seconds )) ] ||
+      wd_limit="step deadline, FV_STEP_TIMEOUT_MINUTES ${FV_STEP_TIMEOUT_MINUTES}m"
     if [ "$batch" = "ut" ]; then
       report_type="ut"
     else
@@ -721,7 +722,7 @@ for batch in "${batches[@]}"; do
     fi
 
     echo
-    echo "===== WATCHDOG: batch $batch approaching job timeout (${JOB_TIMEOUT_MINUTES}m) ====="
+    echo "===== WATCHDOG: batch $batch approaching its deadline (${wd_limit}) ====="
 
     if [ -n "$wd_preempt_at" ]; then
       echo "  Spot VM $vm_name was PREEMPTED at $wd_preempt_at; killing batch $batch (pid $pid)"
@@ -783,9 +784,9 @@ for batch in "${batches[@]}"; do
 <testsuites>
   <testsuite name="batch-${batch}" tests="1" failures="1" errors="0" time="$wd_elapsed">
     <testcase name="batch ${batch} completion" classname="ci.watchdog" time="$wd_elapsed">
-      <failure message="Batch ${batch} timed out after ${wd_elapsed}s (job timeout ${JOB_TIMEOUT_MINUTES}m)">
-The watchdog killed batch ${batch} because it was still running when the job
-approached its ${JOB_TIMEOUT_MINUTES}-minute timeout. Check the batch log file
+      <failure message="Batch ${batch} timed out after ${wd_elapsed}s (${wd_limit})">
+The watchdog killed batch ${batch} because it was still running as it neared
+its deadline (${wd_limit}). Check the batch log file
 for details on which test was hung.
       </failure>
     </testcase>

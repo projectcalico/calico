@@ -172,6 +172,11 @@ fresh
 create_on_demand_replacement vm z c4d >/dev/null 2>&1
 check "no capacity anywhere fails" [ $? = 1 -a "$(wc -l <"$STUB_STATE/creates")" = 3 ]
 
+fresh
+echo ok >"$STUB_STATE/create-c3d"
+VM_REPLACE_DEADLINE=$((now - 1)) create_on_demand_replacement vm z c3d >/dev/null 2>&1
+check "nothing is tried past the deadline" [ $? = 1 -a ! -f "$STUB_STATE/creates" ]
+
 # Capacity scores.
 fresh
 echo '{"recommendations":[{"scores":{"obtainability":0.9,"estimatedUptime":"3600s"}}]}' >"$STUB_STATE/advice-c3d-us-central1-a"
