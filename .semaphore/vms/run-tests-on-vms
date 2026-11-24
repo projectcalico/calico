@@ -199,23 +199,18 @@ done < <(gcloud --quiet compute instances list \
               --format='csv[no-heading](name,zone.basename())')
 
 # Fail fast if any expected VM is missing from the map; the rest of the script
-# relies on knowing every VM's zone.  A missing spot VM was preempted, and is
-# replaced on demand beside a VM that survived.
-declare -A vm_replaced
+# relies on knowing every VM's zone.  A spot VM already preempted is found by
+# its preemption, and its batch retries it like any other.
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
   [ -z "${vm_zone[$vm_name]:-}" ] || continue
-  if [ "$vm_provisioning_model" = SPOT ]; then
-    for vm_z in $(printf '%s\n' "${vm_zone[@]}" | sort -u); do
-      # shellcheck disable=SC2054 # the comma is gcloud's label separator
-      if replaced_type="$(create_on_demand_replacement "$vm_name" "$vm_z" "$vm_machine_type" \
-        "${vm_base_create_args[@]}" --labels=ci-provisioning=standard,ci-spot-fallback=true)"; then
-        echo "  $vm_name -> $vm_z (spot VM gone before its batch started; replaced with on-demand ${replaced_type})"
-        vm_zone["$vm_name"]="$vm_z"
-        vm_replaced["$vm_name"]="$replaced_type"
-        continue 2
-      fi
-    done
+  if [ "$vm_provisioning_model" = SPOT ] &&
+    vm_z="$(gcloud --quiet compute operations list \
+      --filter="operationType=compute.instances.preempted AND targetLink~'/instances/${vm_name}\$'" \
+      --format='value(zone.basename())' | head -1)" && [ -n "$vm_z" ]; then
+    vm_zone["$vm_name"]="$vm_z"
+    echo "  $vm_name -> $vm_z (spot VM already preempted; its batch will rerun on demand)"
+    continue
   fi
   echo "ERROR: could not determine the zone of VM $vm_name after bulk create." 1>&2
   exit 1
@@ -223,7 +218,7 @@ done
 
 for vm_name in "${!vm_zone[@]}"; do
   label_boot_disk "$vm_name" "${vm_zone[$vm_name]}" &
-  if [ "$vm_provisioning_model" = SPOT ] && [ -z "${vm_replaced[$vm_name]:-}" ]; then
+  if [ "$vm_provisioning_model" = SPOT ]; then
     label_capacity "$vm_name" "${vm_zone[$vm_name]}" "$vm_machine_type" &
   fi
 done
@@ -365,7 +360,7 @@ run_batch_attempt() {
       break
     fi
     # A preemption must not use up a setup attempt.
-    check_spot_failure
+    check_spot_failure "$(date +%s)"
     if [ "$spot_check" = preempted ]; then
       attempt_result=preempted
       return
@@ -582,8 +577,12 @@ for batch in "${batches[@]}"; do
   # sees its own VM's zone.
   zone="${vm_zone[$vm_name]}"
   export ZONE="$zone"
-  # A preempted spot VM is gone; its batch finds out why and retries.
-  vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")" || vm_ip=""
+  if [ "$vm_provisioning_model" = SPOT ]; then
+    # A preempted spot VM is gone; its batch finds out why and retries.
+    vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")" || vm_ip=""
+  else
+    vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
+  fi
   batch_formatted="$(format_batch_for_log "$batch")"
   log_file="$artifacts_dir/test-$batch_formatted.log"
   failed_log_file="$artifacts_dir/test-$batch_formatted-FAILED.log"
@@ -595,11 +594,7 @@ for batch in "${batches[@]}"; do
   watchdog_file="$artifacts_dir/.batch-${batch_formatted}.watchdog"
   rm -f "$preempt_file"
   batch_start=$(date +%s)
-  if [ -n "${vm_replaced[$vm_name]:-}" ]; then
-    write_watchdog_file "$watchdog_file" "$batch_start" STANDARD "$fleet_created" "${vm_replaced[$vm_name]}"
-  else
-    write_watchdog_file "$watchdog_file" "$batch_start" "$vm_provisioning_model" "$fleet_created" "$vm_machine_type"
-  fi
+  write_watchdog_file "$watchdog_file" "$batch_start" "$vm_provisioning_model" "$fleet_created" "$vm_machine_type"
 
   # Run the configuration, test, and, teardown in a subshell so we can
   # background it.
@@ -619,10 +614,6 @@ for batch in "${batches[@]}"; do
     attempt_model="$vm_provisioning_model"
     attempt_type="$vm_machine_type"
     attempt_created="$fleet_created"
-    if [ -n "${vm_replaced[$vm_name]:-}" ]; then
-      attempt_model=STANDARD
-      attempt_type="${vm_replaced[$vm_name]}"
-    fi
     attempt_start="$batch_start"
     attempt_args=( "${vm_create_args[@]}" )
     retried=false
@@ -971,7 +962,8 @@ for l in "${preempt_lines[@]}"; do
   echo "$l"
 done
 
-if [ $final_result = 0 ] && [ -n "${BATCH_MEMO_PREFIX:-}" ]; then
+if [ $final_result = 0 ] && [ -n "${BATCH_MEMO_PREFIX:-}" ] &&
+  ! printf '%s\n' "${preempt_lines[@]}" | grep -q ' outcome=passed-uncollected$'; then
   batch_memo_record_lane "$artifacts_dir" "${all_batches[@]}"
 fi
 if [ -n "${BATCH_MEMO_LANE:-}" ]; then
