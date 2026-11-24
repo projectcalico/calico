@@ -210,9 +210,7 @@ type settings struct {
 	// index builds the repository index over the charts once they are packaged.
 	index *index
 
-	// repoURL is the Helm repository holding the index to merge with, and
-	// chartURL is where that index tells clients to download charts from.
-	repoURL  string
+	// chartURL is where the index tells clients to download charts from.
 	chartURL string
 
 	// indexDir is where the built index lands.
@@ -240,7 +238,6 @@ func (s *settings) Helm(args []string, env []string, logPath string) (string, er
 
 // index is where a build writes its repository index.
 type index struct {
-	repoURL  string
 	chartURL string
 	dir      string
 }
@@ -310,16 +307,17 @@ func WithEnv(env ...string) BuildOption {
 }
 
 // WithIndex builds the repository index after packaging and leaves it in dir.
-// repoURL holds the index to merge with; chartURL is where it sends clients.
+// It merges with the index the chart's repo serves; chartURL is where it
+// sends clients.
 //
 // helm indexes a whole directory, so the charts are staged under tmpDir to
 // index this release alone, and only the finished index reaches dir.
-func WithIndex(repoURL, chartURL, dir, tmpDir string) BuildOption {
+func WithIndex(chartURL, dir, tmpDir string) BuildOption {
 	return buildSetting(func(s *settings) error {
-		if repoURL == "" || chartURL == "" || dir == "" || tmpDir == "" {
-			return fmt.Errorf("an index needs a repository url, a chart url, a directory and a temp dir")
+		if chartURL == "" || dir == "" || tmpDir == "" {
+			return fmt.Errorf("an index needs a chart url, a directory and a temp dir")
 		}
-		s.index = &index{repoURL: repoURL, chartURL: chartURL, dir: dir}
+		s.index = &index{chartURL: chartURL, dir: dir}
 		s.tmpDir = tmpDir
 		return nil
 	})

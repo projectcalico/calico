@@ -136,6 +136,7 @@ func testChart(t *testing.T) Chart {
 		ProductVersion: "v3.30.0",
 		Names:          []string{"chart-one", "chart-two"},
 		BaseDir:        filepath.Join(dir, "output"),
+		RepoURL:        testRepoURL,
 	}
 }
 
@@ -312,7 +313,7 @@ func TestBuildIndexMergesThePublishedIndex(t *testing.T) {
 	indexDir := filepath.Join(t.TempDir(), "index")
 
 	if err := Build(c, WithRunner(f),
-		WithIndex(testRepoURL, testChartURL, indexDir, filepath.Join(c.RepoRoot, "tmp"))); err != nil {
+		WithIndex(testChartURL, indexDir, filepath.Join(c.RepoRoot, "tmp"))); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 
@@ -364,7 +365,7 @@ func TestBuildIndexUsesUTC(t *testing.T) {
 	f := newFakeRunner(nil)
 
 	if err := Build(c, WithRunner(f),
-		WithIndex(testRepoURL, testChartURL, filepath.Join(t.TempDir(), "index"), t.TempDir())); err != nil {
+		WithIndex(testChartURL, filepath.Join(t.TempDir(), "index"), t.TempDir())); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	if !hasEnv(f.callsTo(helmBinary)[0].Env, "TZ=UTC") {
@@ -381,7 +382,7 @@ func TestBuildIndexIsRepeatable(t *testing.T) {
 
 	for i := range 2 {
 		if err := Build(c, WithRunner(newFakeRunner(nil)),
-			WithIndex(testRepoURL, testChartURL, indexDir, tmp)); err != nil {
+			WithIndex(testChartURL, indexDir, tmp)); err != nil {
 			t.Fatalf("Build run %d: %v", i, err)
 		}
 	}
@@ -396,7 +397,7 @@ func TestBuildIndexLogsBesideTheCharts(t *testing.T) {
 	logs := filepath.Join(t.TempDir(), "logs")
 
 	if err := Build(c, WithRunner(f), WithLogsDir(logs),
-		WithIndex(testRepoURL, testChartURL, filepath.Join(t.TempDir(), "index"), t.TempDir())); err != nil {
+		WithIndex(testChartURL, filepath.Join(t.TempDir(), "index"), t.TempDir())); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	want := filepath.Join(logs, buildStep, "index.log")
@@ -406,15 +407,14 @@ func TestBuildIndexLogsBesideTheCharts(t *testing.T) {
 }
 
 func TestBuildIndexRejectsMissingLocations(t *testing.T) {
-	for _, tc := range []struct{ name, repoURL, chartURL, indexDir string }{
-		{"no repo url", "", testChartURL, "index"},
-		{"no chart url", testRepoURL, "", "index"},
-		{"no index dir", testRepoURL, testChartURL, ""},
+	for _, tc := range []struct{ name, chartURL, indexDir string }{
+		{"no chart url", "", "index"},
+		{"no index dir", testChartURL, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testChart(t)
 			if err := Build(c, WithRunner(newFakeRunner(nil)),
-				WithIndex(tc.repoURL, tc.chartURL, tc.indexDir, t.TempDir())); err == nil {
+				WithIndex(tc.chartURL, tc.indexDir, t.TempDir())); err == nil {
 				t.Fatal("expected an index build missing a location to be rejected")
 			}
 		})
@@ -764,7 +764,7 @@ func TestBuildLeavesTheIndexWhereAsked(t *testing.T) {
 	indexDir := filepath.Join(c.BaseDir, "charts")
 
 	if err := Build(c, WithRunner(newFakeRunner(nil)),
-		WithIndex(testRepoURL, testChartURL, indexDir, filepath.Join(c.RepoRoot, "tmp"))); err != nil {
+		WithIndex(testChartURL, indexDir, filepath.Join(c.RepoRoot, "tmp"))); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(indexDir, indexFileName)); err != nil {
@@ -875,7 +875,7 @@ func TestBuildIndexDropsStaleCharts(t *testing.T) {
 
 	f := newFakeRunner(nil)
 	if err := Build(c, WithRunner(f),
-		WithIndex(testRepoURL, testChartURL, filepath.Join(t.TempDir(), "index"), tmp)); err != nil {
+		WithIndex(testChartURL, filepath.Join(t.TempDir(), "index"), tmp)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	if slices.Contains(f.staged, filepath.Base(stale)) {
