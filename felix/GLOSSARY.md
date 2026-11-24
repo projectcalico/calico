@@ -253,7 +253,7 @@ Managers and reconciling drivers:
 
 ### Terms
 
-#### Dataplane driver
+#### Felix dataplane driver
 The Felix building block behind the `DataplaneDriver` send and receive interface, which is the process boundary between the calc graph side and whichever dataplane runs. It is in-process (`InternalDataplane`, which runs the iptables, nftables and BPF modes) or an external process.
 Code: `felix/dataplane/driver_defs.go` (`DataplaneDriver`), `felix/dataplane/linux/int_dataplane.go` (`InternalDataplane`).
 _Avoid_: dataplane implementation, dataplane backend, bare "driver"
@@ -901,7 +901,7 @@ These extend the [root table](../GLOSSARY.md#words-that-need-a-qualifier) with m
 | in-sync | the syncer's end of snapshot, the dataplane's first-clean-apply reply, the interface monitor's report, the in-sync gate | datastore in-sync, dataplane in-sync, interface monitor in-sync, in-sync gate |
 | resync | the syncer's snapshot phase, a reconciling driver's read-back | datastore resync, dataplane resync |
 | flush | the graph's deferred work, the event sequencer's emission | graph flush, sequencer flush |
-| dataplane driver | the `DataplaneDriver` process boundary, the mode selector, the reconciling layer, an external driver process | dataplane driver, driver selector, reconciling driver, external dataplane driver |
+| dataplane driver | the `DataplaneDriver` process boundary, the mode selector, the reconciling layer, an external driver process | Felix dataplane driver, driver selector, reconciling driver, external dataplane driver |
 | node | a calculation node, a trie node in the longest-prefix route lookup, a host, the Node resource | calculation node, trie node, host, Node |
 | sub-program | a generic sub-program, a policy sub-program | generic sub-program, policy sub-program |
 | attach type | the `BPFAttachType` setting, the `hook.AttachType` tuple, the kernel's expected attach type | attach mechanism, object variant |

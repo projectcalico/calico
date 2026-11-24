@@ -9,18 +9,18 @@ Top layer of the CNI plugin binary.
 | Building block | Code | Responsible for |
 |---|---|---|
 | Name dispatcher | `cni-plugin/cmd/calico/calico.go` (`main`) | Choosing the `calico` network plugin or the calico-ipam plugin from the binary's name. |
-| Network plugin | `cni-plugin/pkg/plugin/plugin.go` (`cmdAdd`, `cmdDel`) | Parsing NetConf, finding or creating the WorkloadEndpoint, calling an IPAM plugin, then a CNI dataplane. |
+| Network plugin | `cni-plugin/pkg/plugin/plugin.go` (`cmdAdd`, `cmdDel`) | Parsing NetConf, finding or creating the WorkloadEndpoint, calling an IPAM plugin, then a CNI dataplane driver. |
 | Kubernetes ADD and DEL | `cni-plugin/pkg/k8s/k8s.go` (`CmdAddK8s`, `CmdDelK8s`) | The Kubernetes path: IPAM annotations, address handover across sandboxes, the WorkloadEndpoint write, the policy wait. |
-| CNI dataplane | `cni-plugin/pkg/dataplane/dataplane.go` (`Dataplane`) | Creating the host and container interfaces and routes for one sandbox. |
+| CNI dataplane driver | `cni-plugin/pkg/dataplane/dataplane.go` (`Dataplane`) | Creating the host and container interfaces and routes for one sandbox. |
 | Endpoint wait | `cni-plugin/pkg/wait/wait.go` (`ForEndpointReadyWithTimeout`) | Holding ADD until Felix writes the endpoint's status file. |
 
 Layers inside the network plugin and its helpers.
 
 | Building block | Code | Responsible for |
 |---|---|---|
-| Linux CNI dataplane | `cni-plugin/pkg/dataplane/linux/dataplane_linux.go` (`DoNetworking`) | A veth pair or a netkit pair between the host and the container namespace. |
-| Windows CNI dataplane | `cni-plugin/pkg/dataplane/windows/dataplane_windows.go` (`DoNetworking`) | Windows HNS networks and endpoints. |
-| gRPC CNI dataplane | `cni-plugin/pkg/dataplane/grpc/grpc_dataplane.go` (`NewGrpcDataplane`) | Handing interface setup to an external dataplane over gRPC. |
+| Linux CNI dataplane driver | `cni-plugin/pkg/dataplane/linux/dataplane_linux.go` (`DoNetworking`) | A veth pair or a netkit pair between the host and the container namespace. |
+| Windows CNI dataplane driver | `cni-plugin/pkg/dataplane/windows/dataplane_windows.go` (`DoNetworking`) | Windows HNS networks and endpoints. |
+| gRPC CNI dataplane driver | `cni-plugin/pkg/dataplane/grpc/grpc_dataplane.go` (`NewGrpcDataplane`) | Handing interface setup to an external dataplane over gRPC. |
 | Platform shims | `cni-plugin/internal/pkg/utils/network_windows.go` (`EnsureVXLANTunnelAddr`, `CheckForSpuriousDockerAdd`, `RegisterDeletedWep`) | Windows-only VXLAN tunnel address and duplicate-ADD handling. The Linux versions do nothing. |
 | Host-local IPAM support | `cni-plugin/internal/pkg/utils/utils.go` (`ReplaceHostLocalIPAMPodCIDRs`) | Substituting the node's pod CIDRs for `usePodCidr` when a non-Calico IPAM plugin is in use. |
 
@@ -30,6 +30,11 @@ Terms defined in the [root glossary](../GLOSSARY.md) that apply in this componen
 
 - [Endpoint status directory](../GLOSSARY.md#endpoint-status-directory)
 - [Endpoint status file](../GLOSSARY.md#endpoint-status-file)
+
+### IPAM plugin
+The CNI plugin the network plugin calls to assign and release a pod's addresses: calico-ipam, or another such as host-local.
+Code: `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`Main`).
+_Avoid_: bare "IPAM"
 
 ### Network plugin
 The `calico` CNI program that kubelet invokes for a pod's network.
@@ -56,15 +61,15 @@ A WorkloadEndpoint name without its interface part, used to list every endpoint 
 Code: `cni-plugin/pkg/plugin/plugin.go` (`CalculateWorkloadEndpointName`).
 _Avoid_: workload name prefix
 
-### CNI dataplane
+### CNI dataplane driver
 The pluggable piece of the network plugin that creates the host and container interfaces and routes for one sandbox. Three exist: Linux, Windows and gRPC.
 Code: `cni-plugin/pkg/dataplane/dataplane.go` (`Dataplane`, `GetDataplane`).
 _Avoid_: Felix dataplane, dataplane (on its own)
 
-### gRPC CNI dataplane
-The CNI dataplane that hands ADD and DEL to an external server, which sets up the interfaces.
+### gRPC CNI dataplane driver
+The CNI dataplane driver that hands ADD and DEL to an external server, which sets up the interfaces.
 Code: `cni-plugin/pkg/dataplane/grpc/proto/cnibackend.proto` (`CniDataplane`).
-_Avoid_: dataplane driver (that is Felix's layer)
+_Avoid_: bare "dataplane driver"
 
 ### Readiness gates
 The NetConf list of HTTP URLs that gate a pod's network setup.
