@@ -446,7 +446,7 @@ var _ = Describe("Istio Component Rendering", func() {
 		It("publishes only its own root and the trust domain", func() {
 			cfg.OwnRoots = []*x509.Certificate{newTestCert("ignored", nil, true).cert}
 
-			cm, err := rtest.GetResourceOfType[*corev1.ConfigMap](renderObjects(), istio.TrustAnchorsConfigMapName, istio.IstioNamespace)
+			cm, err := rtest.GetResourceOfType[*corev1.ConfigMap](renderObjects(), istio.TrustExportConfigMapName, istio.IstioNamespace)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cm.Data).To(HaveLen(2))
 			Expect(cm.Data[istio.RootCertKey]).To(Equal(string(ca.CertPEM)))
@@ -480,11 +480,11 @@ var _ = Describe("Istio Component Rendering", func() {
 			_, err := rtest.GetResourceOfType[*corev1.Secret](objs, istio.CACertsSecretName, istio.IstioNamespace)
 			Expect(err).To(HaveOccurred())
 			Expect(istiodHashOf(objs)).To(Equal(rmeta.SecretsAnnotationHash(current)))
-			_, err = rtest.GetResourceOfType[*corev1.ConfigMap](objs, istio.TrustAnchorsConfigMapName, istio.IstioNamespace)
+			_, err = rtest.GetResourceOfType[*corev1.ConfigMap](objs, istio.TrustExportConfigMapName, istio.IstioNamespace)
 			Expect(err).To(HaveOccurred())
 
 			cfg.OwnRoots = ca.Roots
-			cm, err := rtest.GetResourceOfType[*corev1.ConfigMap](renderObjects(), istio.TrustAnchorsConfigMapName, istio.IstioNamespace)
+			cm, err := rtest.GetResourceOfType[*corev1.ConfigMap](renderObjects(), istio.TrustExportConfigMapName, istio.IstioNamespace)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cm.Data[istio.RootCertKey]).To(Equal(string(ca.CertPEM)))
 		})
@@ -578,7 +578,7 @@ var _ = Describe("Istio Component Rendering", func() {
 				Expect(pemBlockCount(bundle)).To(Equal(3))
 				Expect(bundle).To(Equal(istio.ComposeRootBundle(ca.Roots, []*x509.Certificate{retiring.cert, incoming.cert})))
 
-				cm, err := rtest.GetResourceOfType[*corev1.ConfigMap](objs, istio.TrustAnchorsConfigMapName, istio.IstioNamespace)
+				cm, err := rtest.GetResourceOfType[*corev1.ConfigMap](objs, istio.TrustExportConfigMapName, istio.IstioNamespace)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cm.Data[istio.RootCertKey]).To(Equal(string(istio.ComposeRootBundle(ca.Roots, []*x509.Certificate{retiring.cert, incoming.cert}))))
 			})

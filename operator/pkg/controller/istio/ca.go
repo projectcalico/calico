@@ -177,7 +177,7 @@ func selfSignedFingerprints(secret *corev1.Secret) string {
 // went, so its existence does not prove that nothing was lost.
 func (r *ReconcileIstio) checkLostSigner(ctx context.Context, current *signer, desired *istio.CA) error {
 	cm := &corev1.ConfigMap{}
-	if err := r.Get(ctx, types.NamespacedName{Name: istio.TrustAnchorsConfigMapName, Namespace: istio.IstioNamespace}, cm); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: istio.TrustExportConfigMapName, Namespace: istio.IstioNamespace}, cm); err != nil {
 		if errors.IsNotFound(err) {
 			return nil
 		}
@@ -196,7 +196,7 @@ func (r *ReconcileIstio) checkLostSigner(ctx context.Context, current *signer, d
 			current.roots = published
 			current.problem = fmt.Sprintf("Secret %s/%s is missing, and ConfigMap %s/%s publishes roots the desired CA does not hold. "+
 				"Restore the Secret, or delete the ConfigMap to move to the new root at once, which interrupts mTLS until workload certificates renew",
-				istio.IstioNamespace, istio.CACertsSecretName, istio.IstioNamespace, istio.TrustAnchorsConfigMapName)
+				istio.IstioNamespace, istio.CACertsSecretName, istio.IstioNamespace, istio.TrustExportConfigMapName)
 			return nil
 		}
 	}

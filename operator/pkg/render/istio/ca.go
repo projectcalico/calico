@@ -29,9 +29,9 @@ const (
 	// longer trusts its root, with the fingerprints of that root, so a Secret
 	// istiod writes again with a new root does not read as retired.
 	SelfSignedCARetiredAnnotation = "operator.tigera.io/istio-ca-retired"
-	// TrustAnchorsConfigMapName publishes this cluster's own roots and trust domain
-	// for its peers to read.
-	TrustAnchorsConfigMapName = "istio-trust-anchors"
+	// TrustExportConfigMapName publishes this cluster's own roots and trust domain
+	// for its peers to read. It is not what this cluster trusts.
+	TrustExportConfigMapName = "istio-trust-export"
 
 	// Keys of Istio's plug-in CA layout, used by cacerts and by the operator CA Secret.
 	CACertKey    = "ca-cert.pem"

@@ -371,7 +371,7 @@ func (c *IstioComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Obj
 		objs = append(objs, c.cacertsSecret())
 	}
 	if roots := c.ownRoots(); len(roots) > 0 {
-		objs = append(objs, c.trustAnchorsConfigMap(roots))
+		objs = append(objs, c.trustExportConfigMap(roots))
 	}
 
 	// Append Istio resources in order: Base, Istiod, CNI, ZTunnel
@@ -473,11 +473,11 @@ func (c *IstioComponent) ownRoots() []*x509.Certificate {
 	return c.cfg.OwnRoots
 }
 
-func (c *IstioComponent) trustAnchorsConfigMap(roots []*x509.Certificate) *corev1.ConfigMap {
+func (c *IstioComponent) trustExportConfigMap(roots []*x509.Certificate) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      TrustAnchorsConfigMapName,
+			Name:      TrustExportConfigMapName,
 			Namespace: c.cfg.IstioNamespace,
 		},
 		Data: map[string]string{

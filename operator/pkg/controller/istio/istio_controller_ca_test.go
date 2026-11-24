@@ -98,7 +98,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 	operatorNS := common.OperatorNamespace()
 	cacertsKey := types.NamespacedName{Name: istio.CACertsSecretName, Namespace: istio.IstioNamespace}
 	operatorCAKey := types.NamespacedName{Name: istio.OperatorCASecretName, Namespace: operatorNS}
-	anchorsKey := types.NamespacedName{Name: istio.TrustAnchorsConfigMapName, Namespace: istio.IstioNamespace}
+	anchorsKey := types.NamespacedName{Name: istio.TrustExportConfigMapName, Namespace: istio.IstioNamespace}
 
 	BeforeEach(func() {
 		scheme = runtime.NewScheme()
@@ -753,7 +753,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			secretAbsent(cacertsKey)
 			Expect(istiodHash()).To(Equal(hash))
 			Expect(getConfigMap(anchorsKey).Data[istio.RootCertKey]).To(ContainSubstring(string(istio.EncodeCertificates(oldRoot))))
-			expectDegradedMentioning(istio.IstioNamespace+"/"+istio.CACertsSecretName+" is missing", istio.TrustAnchorsConfigMapName)
+			expectDegradedMentioning(istio.IstioNamespace+"/"+istio.CACertsSecretName+" is missing", istio.TrustExportConfigMapName)
 
 			Expect(cli.Delete(ctx, getConfigMap(anchorsKey))).NotTo(HaveOccurred())
 			mockStatus.Calls = nil
@@ -780,7 +780,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			secretAbsent(cacertsKey)
 			Expect(istiodHash()).To(Equal(hash))
 			Expect(getConfigMap(anchorsKey).Data[istio.RootCertKey]).To(ContainSubstring(string(istio.EncodeCertificates(oldRoot))))
-			expectDegradedMentioning(istio.IstioNamespace+"/"+istio.CACertsSecretName+" is missing", istio.TrustAnchorsConfigMapName)
+			expectDegradedMentioning(istio.IstioNamespace+"/"+istio.CACertsSecretName+" is missing", istio.TrustExportConfigMapName)
 		})
 
 		It("ignores istio-ca-secret once an operator-rendered cacerts exists", func() {
