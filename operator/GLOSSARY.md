@@ -10,7 +10,7 @@ The top layer of the operator process.
 |---|---|---|
 | Daemon | `operator/pkg/daemon/daemon.go` (`Run`) | Resolves the variant, builds the extensions, starts the controller-runtime manager and adds the controllers. |
 | Controller registry | `operator/internal/controller/controllers.go` (`AddToManager`) | Registers each kubebuilder reconciler shell, which calls the matching `Add` in `operator/pkg/controller/<name>`. |
-| Controllers | `operator/pkg/controller/` | One controller per feature or per status area. See the second table. |
+| Controllers | `operator/pkg/controller/` | One controller per feature, each reporting one controller status. See the second table. |
 | Component handler | `operator/pkg/controller/utils/component.go` (`ComponentHandler`) | Applies one component render implementation's objects to the cluster. |
 | Status manager | `operator/pkg/controller/status/status.go` (`StatusManager`) | Watches registered workloads and CSRs and writes one TigeraStatus. |
 | Certificate manager | `operator/pkg/controller/certificatemanager/certificatemanager.go` (`CertificateManager`) | The operator CA: signs key pairs, preserves BYO certificates and builds trusted bundles. |
@@ -68,7 +68,7 @@ The per-object fix-ups the component handler makes as it applies objects: standa
 Code: `operator/pkg/controller/utils/component.go` (`ComponentHandler`).
 _Avoid_: handler normalization
 
-#### Passthrough
+#### Passthrough component
 A component render implementation that returns a fixed object list unchanged.
 Code: `operator/pkg/render/passthru.go` (`NewCreationPassthrough`).
 _Avoid_: NewDeletionPassthrough, pass-through kind (that is a syncer term)
@@ -127,15 +127,15 @@ _Avoid_: nothing known
 
 ### Status
 
-#### Status area
-The unit that one TigeraStatus reports on, such as `calico`, `apiserver` or `ippools`. Each status area has one controller and one status manager. The API calls it a functional area.
+#### Controller status
+The unit that one TigeraStatus reports on, such as `calico`, `apiserver` or `ippools`: one per operator controller, written by its status manager. The API calls it a functional area.
 Code: `operator/api/v1/tigerastatus_types.go` (`TigeraStatus`).
-_Avoid_: component
+_Avoid_: status area, functional area, component
 
 #### TigeraStatus
-The cluster-scoped resource that reports one status area's conditions, named per controller.
+The cluster-scoped resource that carries one controller status's conditions, named after the controller.
 Code: `operator/api/v1/tigerastatus_types.go` (`TigeraStatus`).
-_Avoid_: status area (that is the area it reports on, not the resource)
+_Avoid_: status area
 
 #### Status manager
 The per-controller object that writes one TigeraStatus.
@@ -148,7 +148,7 @@ Code: `operator/api/v1/tigerastatus_types.go` (`TigeraStatusDegraded`).
 _Avoid_: Ready (that repeats Available)
 
 #### Status warning
-A keyed message appended to the TigeraStatus `message` that does not mark the status area degraded.
+A keyed message appended to the TigeraStatus `message` that does not mark the controller status degraded.
 Code: `operator/pkg/controller/status/status.go`.
 _Avoid_: degraded (a status warning does not degrade the area)
 
@@ -294,7 +294,7 @@ _Avoid_: migration on its own (it means several things)
 
 | Word | Meanings | Say |
 |---|---|---|
-| component | A separately running program; a component render implementation (`operator/pkg/render/component.go` (`Component`)); an image component (`operator/pkg/components/references.go` (`Component`)); a status area with its own TigeraStatus (`operator/DESIGN.md`); the Installation `ComponentName` enum (`operator/api/v1/installation_types.go`); image keys (`operator/pkg/render/component.go` (`ComponentNameNode`)); the `app.kubernetes.io/component` label (`operator/pkg/controller/utils/component.go`); a `calico component <name>` subcommand (`cmd/calico/component.go` (`newComponentCommand`)); a workload found in a manifest install (`operator/pkg/controller/migration/convert/components.go`); a UI component, such as Whisker, served through the Calico Ingress Gateway (`operator/pkg/uigateway/uigateway.go` (`Config`)); the `ComponentAvailable` and `ComponentDegraded` status conditions (`operator/api/v1/tigerastatus_types.go`) | Bare "component" means a running program only. Otherwise: component render implementation, image component, status area, image key, workload name, component subcommand, UI component. |
+| component | A separately running program; a component render implementation (`operator/pkg/render/component.go` (`Component`)); an image component (`operator/pkg/components/references.go` (`Component`)); a controller status with its own TigeraStatus (`operator/DESIGN.md`); the Installation `ComponentName` enum (`operator/api/v1/installation_types.go`); image keys (`operator/pkg/render/component.go` (`ComponentNameNode`)); the `app.kubernetes.io/component` label (`operator/pkg/controller/utils/component.go`); a `calico component <name>` subcommand (`cmd/calico/component.go` (`newComponentCommand`)); a workload found in a manifest install (`operator/pkg/controller/migration/convert/components.go`); a UI component, such as Whisker, served through the Calico Ingress Gateway (`operator/pkg/uigateway/uigateway.go` (`Config`)); the `ComponentAvailable` and `ComponentDegraded` status conditions (`operator/api/v1/tigerastatus_types.go`) | Bare "component" means a running program only. Otherwise: component render implementation, image component, controller status, image key, workload name, component subcommand, UI component. |
 | override | Workload overrides on the Installation; the overlay merge; image override keys; the `Override` conflict policy | "overrides" for workload overrides; "overlay merge", "image key", "`Override` conflict policy". |
 | migration | Namespace migration; install conversion; the v1-to-v3 CRD migration; field-ownership migration | The full name each time. |
 | manager | Status manager; certificate manager; field manager; the controller-runtime manager | The qualified name each time. |
