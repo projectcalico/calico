@@ -2463,11 +2463,11 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
 				})
 
-				Context("when live migration state becomes Target", func() {
+				Context("when routes are suppressed", func() {
 					JustBeforeEach(func() {
-						epMgr.OnLiveMigrationStateUpdate(
+						epMgr.OnRouteModifierUpdate(
 							types.ProtoToWorkloadEndpointID(&wlEPID1),
-							liveMigrationStateTarget,
+							&wepRouteModifier{mode: wepRouteModeSuppressed},
 						)
 						applyUpdates(epMgr)
 					})
@@ -2476,11 +2476,11 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						routeTable.checkRoutes("cali12345-ab", nil)
 					})
 
-					Context("when live migration state becomes Live", func() {
+					Context("when routes are elevated", func() {
 						JustBeforeEach(func() {
-							epMgr.OnLiveMigrationStateUpdate(
+							epMgr.OnRouteModifierUpdate(
 								types.ProtoToWorkloadEndpointID(&wlEPID1),
-								liveMigrationStateLive,
+								&wepRouteModifier{mode: wepRouteModeElevated},
 							)
 							applyUpdates(epMgr)
 						})
@@ -2489,11 +2489,11 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
 						})
 
-						Context("when live migration state becomes TimeWait", func() {
+						Context("when routes are elevated again", func() {
 							JustBeforeEach(func() {
-								epMgr.OnLiveMigrationStateUpdate(
+								epMgr.OnRouteModifierUpdate(
 									types.ProtoToWorkloadEndpointID(&wlEPID1),
-									liveMigrationStateTimeWait,
+									&wepRouteModifier{mode: wepRouteModeElevated},
 								)
 								applyUpdates(epMgr)
 							})
@@ -2502,11 +2502,11 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 								routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
 							})
 
-							Context("when live migration state becomes Base", func() {
+							Context("when the route modifier is removed", func() {
 								JustBeforeEach(func() {
-									epMgr.OnLiveMigrationStateUpdate(
+									epMgr.OnRouteModifierUpdate(
 										types.ProtoToWorkloadEndpointID(&wlEPID1),
-										liveMigrationStateBase,
+										nil,
 									)
 									applyUpdates(epMgr)
 								})
@@ -2519,30 +2519,107 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					})
 				})
 
-				Context("when endpoint is removed while in live migration", func() {
+				Context("when endpoint is removed while its routes are elevated", func() {
 					JustBeforeEach(func() {
-						epMgr.OnLiveMigrationStateUpdate(
+						epMgr.OnRouteModifierUpdate(
 							types.ProtoToWorkloadEndpointID(&wlEPID1),
-							liveMigrationStateLive,
+							&wepRouteModifier{mode: wepRouteModeElevated},
 						)
 						applyUpdates(epMgr)
 						epMgr.OnUpdate(&proto.WorkloadEndpointRemove{Id: &wlEPID1})
 						applyUpdates(epMgr)
 					})
 
-					It("should remove routes and clean up live migration state", func() {
+					It("should remove routes and clean up the route modifier", func() {
 						routeTable.checkRoutes("cali12345-ab", nil)
-						Expect(epMgr.pendingLiveMigrationStates).To(BeEmpty())
+						Expect(epMgr.wepRouteModifiers).To(BeEmpty())
+					})
+				})
+
+				Context("when an endpoint with elevated routes is shadowed and then restored", func() {
+					// Same interface name, and an ID that sorts first, so it takes preference.
+					shadowingID := proto.WorkloadEndpointID{
+						OrchestratorId: "k8s",
+						WorkloadId:     "pod-10",
+						EndpointId:     "endpoint-id-10",
+					}
+
+					JustBeforeEach(func() {
+						epMgr.OnRouteModifierUpdate(
+							types.ProtoToWorkloadEndpointID(&wlEPID1),
+							&wepRouteModifier{mode: wepRouteModeElevated},
+						)
+						applyUpdates(epMgr)
+						routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
+
+						epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+							Id:       &shadowingID,
+							Endpoint: wlEPUpdate.Endpoint,
+						})
+						applyUpdates(epMgr)
+						routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
+
+						epMgr.OnUpdate(&proto.WorkloadEndpointRemove{Id: &shadowingID})
+						applyUpdates(epMgr)
+					})
+
+					It("should restore its elevated routes", func() {
+						routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
+					})
+				})
+
+				Context("when routes are elevated with a route-programmed callback", func() {
+					var programmedCIDRs []ip.CIDR
+
+					JustBeforeEach(func() {
+						programmedCIDRs = nil
+						epMgr.OnRouteModifierUpdate(
+							types.ProtoToWorkloadEndpointID(&wlEPID1),
+							&wepRouteModifier{
+								mode:         wepRouteModeElevated,
+								onProgrammed: func(cidr ip.CIDR) { programmedCIDRs = append(programmedCIDRs, cidr) },
+							},
+						)
+						applyUpdates(epMgr)
+					})
+
+					It("should attach a callback to the elevated routes that reports their CIDR", func() {
+						targets := routeTable.currentRoutes["cali12345-ab"]
+						Expect(targets).To(HaveLen(1))
+						Expect(targets[0].OnProgrammed).NotTo(BeNil())
+
+						targets[0].OnProgrammed()
+						Expect(programmedCIDRs).To(Equal([]ip.CIDR{targets[0].CIDR}))
+
+						// Func values defeat DeepEqual, so compare the rest of the target without
+						// it.
+						targetWithoutCallback := targets[0]
+						targetWithoutCallback.OnProgrammed = nil
+						Expect([]routetable.Target{targetWithoutCallback}).To(Equal(expectedRouteTarget(elevatedPriority)))
+					})
+
+					Context("when the route modifier is removed", func() {
+						JustBeforeEach(func() {
+							epMgr.OnRouteModifierUpdate(
+								types.ProtoToWorkloadEndpointID(&wlEPID1),
+								nil,
+							)
+							applyUpdates(epMgr)
+						})
+
+						It("should revert to normal priority routes without a callback", func() {
+							routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
+						})
 					})
 				})
 			})
 
-			Context("when live migration state arrives before endpoint", func() {
+			Context("when a route modifier arrives before the endpoint", func() {
 				JustBeforeEach(func() {
-					// Live migration state update arrives but WEP isn't active yet.
-					epMgr.OnLiveMigrationStateUpdate(
+					// The route modifier arrives but the WEP isn't active yet.
+					epMgr.OnRouteModifierUpdate(
 						types.ProtoToWorkloadEndpointID(&wlEPID1),
-						liveMigrationStateTarget,
+						&wepRouteModifier{mode: wepRouteModeSuppressed},
 					)
 					// Now the WEP arrives.
 					epMgr.OnUpdate(wlEPUpdate)
@@ -2550,7 +2627,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					applyUpdates(epMgr)
 				})
 
-				It("should suppress routes for the target", func() {
+				It("should suppress routes", func() {
 					routeTable.checkRoutes("cali12345-ab", nil)
 				})
 			})
