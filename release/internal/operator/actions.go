@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/env"
 	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 )
@@ -43,7 +44,7 @@ func Build(o Operator, variants []Variant, hashrelease bool, opts ...BuildOption
 	})
 }
 
-func Publish(o Operator, variants []Variant, hashrelease bool, opts ...PublishOption) error {
+func Publish(o Operator, variants []Variant, recordsDir string, hashrelease bool, opts ...PublishOption) error {
 	s, err := newSettings(PublishStep, o, validatePublish, opts)
 	if err != nil {
 		return err
@@ -51,16 +52,17 @@ func Publish(o Operator, variants []Variant, hashrelease bool, opts ...PublishOp
 	if s.resolve == nil {
 		s.resolve = registry.ResolveDigest
 	}
+	// A dry run pushes nothing, so there is nothing to record.
+	writeStep := PublishStep
 	if s.dryRun {
-		// A dry run pushes nothing, so there is nothing to record.
-		s.refs = nil
+		writeStep = ""
+	}
+	if err := s.useRecordsDir(recordsDir, writeStep); err != nil {
+		return err
 	}
 	vars := []string{s.latch()}
 
-	var recorded registry.RecordedDigests
-	if s.resume != nil {
-		recorded = registry.DigestsByRepo(s.resume.published)
-	}
+	recorded := registry.DigestsByRepo(s.recordedRefs)
 	return eachVariant(variants, func(v Variant) error {
 		done, err := s.published(v, recorded)
 		if err != nil {
@@ -78,9 +80,9 @@ func Publish(o Operator, variants []Variant, hashrelease bool, opts ...PublishOp
 	})
 }
 
-// Published fails unless every variant is in the registry at a digest the
-// WithResume record holds, so a run that skips the publish can rely on it.
-func Published(o Operator, variants []Variant, opts ...PublishOption) error {
+// Published fails unless every variant is in the registry at a digest recorded
+// under recordsDir.
+func Published(o Operator, variants []Variant, recordsDir string, opts ...PublishOption) error {
 	s, err := newSettings(PublishStep, o, validatePublish, opts)
 	if err != nil {
 		return err
@@ -88,10 +90,10 @@ func Published(o Operator, variants []Variant, opts ...PublishOption) error {
 	if s.resolve == nil {
 		s.resolve = registry.ResolveDigest
 	}
-	var recorded registry.RecordedDigests
-	if s.resume != nil {
-		recorded = registry.DigestsByRepo(s.resume.published)
+	if err := s.useRecordsDir(recordsDir, ""); err != nil {
+		return err
 	}
+	recorded := registry.DigestsByRepo(s.recordedRefs)
 	var missing []string
 	err = eachVariant(variants, func(v Variant) error {
 		done, err := s.published(v, recorded)
@@ -104,20 +106,43 @@ func Published(o Operator, variants []Variant, opts ...PublishOption) error {
 		return err
 	}
 	if len(missing) > 0 {
-		return s.Errorf("not published by an earlier run: %s", strings.Join(missing, ", "))
+		return s.Errorf("not published: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+// useRecordsDir reads the publish record, and writes one under writeStep when
+// that is set.
+func (s *settings) useRecordsDir(recordsDir, writeStep string) error {
+	if recordsDir == "" {
+		return nil
+	}
+	var err error
+	if s.recordedRefs, err = outputs.ReadRefs(recordsDir, PublishStep); err != nil {
+		return s.Errorf("read published operator refs: %w", err)
+	}
+	if writeStep == "" {
+		return nil
+	}
+	if s.refs, err = outputs.NewRefsWriter(recordsDir, writeStep); err != nil {
+		return s.Errorf("%w", err)
 	}
 	return nil
 }
 
 // Resolve records an operator an earlier run published. Only the first
 // registry must hold each variant's release tag.
-func Resolve(o Operator, variants []Variant, opts ...ResolveOption) error {
+func Resolve(o Operator, variants []Variant, recordsDir string, opts ...ResolveOption) error {
 	s, err := newSettings(ResolveStep, o, validateResolve, opts)
 	if err != nil {
 		return err
 	}
 	if s.resolve == nil {
 		s.resolve = registry.ResolveDigest
+	}
+	// A resolve reaches the registry, so it records what it finds.
+	if err := s.useRecordsDir(recordsDir, ResolveStep); err != nil {
+		return err
 	}
 	var refs, missing []string
 	var errs []error
@@ -147,10 +172,6 @@ func PublishBranchTag(o Operator, variants []Variant, branch string, opts ...Pub
 	}
 	if branch == "" {
 		return s.Errorf("no branch specified")
-	}
-	// A ref names the version it published at, and this retags at the branch.
-	if s.refs != nil {
-		return s.Errorf("a branch tag records nothing")
 	}
 	// No manifest refers to another variant under a branch tag.
 	variants = Narrow(variants, []string{standardVariant})
@@ -290,9 +311,7 @@ func (s settings) published(v Variant, recorded registry.RecordedDigests) (bool,
 		}
 		got, exists, err := s.resolve(t.ref())
 		if err != nil {
-			// A failed lookup says nothing about what is published.
-			s.Logger().WithError(err).WithField("image", t.ref()).Warn("Could not resolve digest, will publish")
-			return false, nil
+			return false, s.Errorf("resolving %s: %w", t.ref(), err)
 		}
 		if !exists {
 			return false, nil
@@ -300,7 +319,7 @@ func (s settings) published(v Variant, recorded registry.RecordedDigests) (bool,
 		if _, known := digests[got]; known {
 			continue
 		}
-		if s.resume.force {
+		if s.force {
 			return false, nil
 		}
 		return false, s.Errorf(

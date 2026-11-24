@@ -68,9 +68,11 @@ only the verbs it needs. For example, `images` has `Build`, `Publish` and
 
 The **flow** (`pkg/manager/calico`) builds step values from flags into a plan of
 named nodes (`internal/plan`). Every node validates before any node runs, a
-failure rolls back the finished nodes newest first, and a node runs only after
-the nodes it `Requires`. `--plan` lists the nodes and runs only their checks,
-warning on a failure rather than exiting.
+failure rolls back the finished nodes newest first, and a node runs only once
+the nodes it `Requires` are done: earlier in this run, or, when off, by an
+earlier run its `Done` check confirms. Outside `--local`, a node's `Done` must
+also pass straight after its own `Do`. `--plan` lists the nodes and runs only
+their checks, warning on a failure rather than exiting.
 The manager predates the step packages and still does some work itself.
 New behaviour goes into a step package; the manager keeps only building
 values and choosing order.

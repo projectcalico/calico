@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -69,6 +68,33 @@ func oneRegistryOperator() Operator {
 	o.Registries = []string{"quay.io/a"}
 	o.Image = "operator"
 	return o
+}
+
+// recordsWith returns a records directory holding refs as the publish record.
+func recordsWith(t testing.TB, refs ...string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if len(refs) == 0 {
+		return dir
+	}
+	w, err := outputs.NewRefsWriter(dir, PublishStep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Add(refs...); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// recordedRefs is what a run left in dir's publish or resolve record.
+func recordedRefs(t testing.TB, dir, step string) []string {
+	t.Helper()
+	refs, err := outputs.ReadRefs(dir, step)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return refs
 }
 
 func envValue(vars []string, name string) (string, bool) {
@@ -429,7 +455,7 @@ func TestProductEnv(t *testing.T) {
 		o := testOperator()
 		o.Registries = []string{"localhost:5000"}
 		f := &command.Recorder{}
-		if err := Publish(o, oneVariant(), false, WithRunner(f)); err != nil {
+		if err := Publish(o, oneVariant(), "", false, WithRunner(f)); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if got, ok := envValue(f.Calls()[0].Env, "OPERATOR_IMAGE_REGISTRY"); ok {
@@ -466,7 +492,7 @@ func TestVerbs(t *testing.T) {
 	t.Run("report every variant's error", func(t *testing.T) {
 		f := failingRunner(fmt.Errorf("boom"))
 		variants := []Variant{{Name: standardVariant}, {Name: "alt", Image: "operator-alt"}}
-		err := Publish(testOperator(), variants, false, WithRunner(f))
+		err := Publish(testOperator(), variants, t.TempDir(), false, WithRunner(f))
 
 		if err := err; err == nil {
 			t.Fatal("expected an error, got nil")
@@ -483,7 +509,7 @@ func TestVerbs(t *testing.T) {
 	})
 
 	t.Run("publish records every variant", func(t *testing.T) {
-		rec := &fakeRecorder{}
+		records := recordsWith(t)
 		variants := []Variant{
 			{Name: standardVariant},
 			{Name: "alt", Image: "operator-alt"},
@@ -497,7 +523,7 @@ func TestVerbs(t *testing.T) {
 			"quay.io/a/operator-alt:v1.44.0":       "sha256:alt",
 			"quay.io/b/operator-alt:v1.44.0-arm64": "sha256:alt-arm64",
 		}
-		err := Publish(o, variants, false, WithRunner(&command.Recorder{}), WithRecord(rec),
+		err := Publish(o, variants, records, false, WithRunner(&command.Recorder{}),
 			WithResolver(resolve.resolve), WithArches("arm64"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -510,34 +536,35 @@ func TestVerbs(t *testing.T) {
 			"quay.io/a/operator-alt:v1.44.0@sha256:alt",
 			"quay.io/b/operator-alt:v1.44.0-arm64@sha256:alt-arm64",
 		}
-		if diff := cmp.Diff(want, rec.refs); diff != "" {
+		if diff := cmp.Diff(want, recordedRefs(t, records, PublishStep)); diff != "" {
 			t.Errorf("refs mismatch (-want +got):\n%s", diff)
 		}
 	})
 
 	t.Run("publish records what a failed push left", func(t *testing.T) {
-		rec := &fakeRecorder{}
+		records := recordsWith(t)
 		resolve := fakeResolver{"quay.io/a/operator:v1.44.0": "sha256:a"}
-		err := Publish(oneRegistryOperator(), oneVariant(), false, WithRunner(failingRunner(fmt.Errorf("boom"))),
-			WithRecord(rec), WithResolver(resolve.resolve))
+		err := Publish(oneRegistryOperator(), oneVariant(), records, false,
+			WithRunner(failingRunner(fmt.Errorf("boom"))), WithResolver(resolve.resolve))
 		if err == nil {
 			t.Fatal("expected an error, got nil")
 		}
-		if diff := cmp.Diff([]string{"quay.io/a/operator:v1.44.0@sha256:a"}, rec.refs); diff != "" {
+		want := []string{"quay.io/a/operator:v1.44.0@sha256:a"}
+		if diff := cmp.Diff(want, recordedRefs(t, records, PublishStep)); diff != "" {
 			t.Errorf("refs mismatch (-want +got):\n%s", diff)
 		}
 	})
 
 	t.Run("dry run records nothing", func(t *testing.T) {
-		rec := &fakeRecorder{}
+		records := recordsWith(t)
 		resolve := fakeResolver{"quay.io/a/operator:v1.44.0": "sha256:a"}
-		err := Publish(oneRegistryOperator(), oneVariant(), false, WithRunner(&command.Recorder{}), WithDryRun(true),
-			WithRecord(rec), WithResolver(resolve.resolve))
+		err := Publish(oneRegistryOperator(), oneVariant(), records, false,
+			WithRunner(&command.Recorder{}), WithDryRun(true), WithResolver(resolve.resolve))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(rec.refs) != 0 {
-			t.Errorf("refs = %v, want none", rec.refs)
+		if got := recordedRefs(t, records, PublishStep); len(got) != 0 {
+			t.Errorf("refs = %v, want none", got)
 		}
 	})
 
@@ -545,7 +572,7 @@ func TestVerbs(t *testing.T) {
 		hook := logtest.NewGlobal()
 		t.Cleanup(hook.Reset)
 		resolve := fakeResolver{"quay.io/a/operator:v1.44.0": "sha256:a"}
-		if err := Publish(oneRegistryOperator(), oneVariant(), false, WithRunner(&command.Recorder{}), WithDryRun(true),
+		if err := Publish(oneRegistryOperator(), oneVariant(), t.TempDir(), false, WithRunner(&command.Recorder{}), WithDryRun(true),
 			WithResolver(resolve.resolve)); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -600,19 +627,25 @@ func TestVerbs(t *testing.T) {
 			{
 				name: "publish needs registries",
 				o:    func(o Operator) Operator { o.Registries = nil; return o },
-				run:  func(o Operator) error { return Publish(o, oneVariant(), false, WithRunner(&command.Recorder{})) },
+				run: func(o Operator) error {
+					return Publish(o, oneVariant(), t.TempDir(), false, WithRunner(&command.Recorder{}))
+				},
 				want: "no operator registries specified",
 			},
 			{
 				name: "publish needs a version",
 				o:    func(o Operator) Operator { o.Version = ""; return o },
-				run:  func(o Operator) error { return Publish(o, oneVariant(), false, WithRunner(&command.Recorder{})) },
+				run: func(o Operator) error {
+					return Publish(o, oneVariant(), t.TempDir(), false, WithRunner(&command.Recorder{}))
+				},
 				want: "no version specified",
 			},
 			{
 				name: "publish needs a repository root",
 				o:    func(o Operator) Operator { o.RepoRoot = ""; return o },
-				run:  func(o Operator) error { return Publish(o, oneVariant(), false, WithRunner(&command.Recorder{})) },
+				run: func(o Operator) error {
+					return Publish(o, oneVariant(), t.TempDir(), false, WithRunner(&command.Recorder{}))
+				},
 				want: "no repository root specified",
 			},
 		} {
@@ -642,7 +675,7 @@ func TestVerbs(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				f := &command.Recorder{}
 				opts := append([]PublishOption{WithRunner(f)}, tc.opts...)
-				if err := Publish(testOperator(), oneVariant(), false, opts...); err != nil {
+				if err := Publish(testOperator(), oneVariant(), "", false, opts...); err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
 
@@ -695,6 +728,7 @@ func TestVerbs(t *testing.T) {
 		for _, tc := range []struct {
 			name      string
 			published []string
+			resolve   registry.DigestResolver
 			force     bool
 			wantRuns  int
 			wantErr   string
@@ -719,14 +753,26 @@ func TestVerbs(t *testing.T) {
 				force:     true,
 				wantRuns:  1,
 			},
+			{
+				name:      "a failed lookup fails rather than publishing over the record",
+				published: []string{"quay.io/a/operator@sha256:a", "quay.io/a/operator-alt@sha256:alt"},
+				resolve:   func(string) (string, bool, error) { return "", false, errors.New("registry down") },
+				wantErr:   "registry down",
+			},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
+				if tc.resolve == nil {
+					tc.resolve = resolve.resolve
+				}
 				f := &command.Recorder{}
-				err := Publish(oneRegistryOperator(), variants, false, WithRunner(f),
-					WithResolver(resolve.resolve), WithResume(tc.published, tc.force))
+				err := Publish(oneRegistryOperator(), variants, recordsWith(t, tc.published...), false,
+					WithRunner(f), WithResolver(tc.resolve), WithForce(tc.force))
 				if tc.wantErr != "" {
 					if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 						t.Fatalf("err = %v, want it to contain %q", err, tc.wantErr)
+					}
+					if len(f.Calls()) != 0 {
+						t.Errorf("ran %v", targets(f))
 					}
 					return
 				}
@@ -748,18 +794,6 @@ func (f fakeResolver) resolve(ref string) (string, bool, error) {
 	return digest, ok, nil
 }
 
-type fakeRecorder struct {
-	mu   sync.Mutex
-	refs []string
-}
-
-func (r *fakeRecorder) Add(refs ...string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.refs = append(r.refs, refs...)
-	return nil
-}
-
 func TestResolve(t *testing.T) {
 	twoRegistries := func() Operator {
 		o := oneRegistryOperator()
@@ -770,20 +804,20 @@ func TestResolve(t *testing.T) {
 	variants := []Variant{{Name: standardVariant}, {Name: "alt", Image: "operator-alt"}}
 
 	t.Run("records what exists and needs only the first registry", func(t *testing.T) {
-		rec := &fakeRecorder{}
+		records := recordsWith(t)
 		f := &command.Recorder{}
 		resolve := fakeResolver{
 			"quay.io/a/operator:v1.44.0":       "sha256:a",
 			"quay.io/a/operator:v1.44.0-arm64": "sha256:a-arm64",
 			"quay.io/a/operator-alt:v1.44.0":   "sha256:alt",
 		}
-		err := Resolve(twoRegistries(), variants, WithRunner(f), WithRecord(rec),
+		err := Resolve(twoRegistries(), variants, records, WithRunner(f),
 			WithResolver(resolve.resolve), WithArches("arm64"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		want := []string{"quay.io/a/operator:v1.44.0@sha256:a", "quay.io/a/operator:v1.44.0-arm64@sha256:a-arm64", "quay.io/a/operator-alt:v1.44.0@sha256:alt"}
-		if diff := cmp.Diff(want, rec.refs); diff != "" {
+		if diff := cmp.Diff(want, recordedRefs(t, records, ResolveStep)); diff != "" {
 			t.Errorf("refs mismatch (-want +got):\n%s", diff)
 		}
 		if len(f.Calls()) != 0 {
@@ -792,9 +826,9 @@ func TestResolve(t *testing.T) {
 	})
 
 	t.Run("reports a missing release tag after recording the rest", func(t *testing.T) {
-		rec := &fakeRecorder{}
+		records := recordsWith(t)
 		resolve := fakeResolver{"quay.io/a/operator-alt:v1.44.0": "sha256:alt"}
-		err := Resolve(twoRegistries(), variants, WithRecord(rec), WithResolver(resolve.resolve))
+		err := Resolve(twoRegistries(), variants, records, WithResolver(resolve.resolve))
 		missing, ok := images.OnlyMissing(err)
 		if !ok {
 			t.Fatalf("got %v, want only missing images", err)
@@ -802,13 +836,14 @@ func TestResolve(t *testing.T) {
 		if diff := cmp.Diff([]string{"quay.io/a/operator:v1.44.0"}, missing); diff != "" {
 			t.Errorf("missing mismatch (-want +got):\n%s", diff)
 		}
-		if diff := cmp.Diff([]string{"quay.io/a/operator-alt:v1.44.0@sha256:alt"}, rec.refs); diff != "" {
+		want := []string{"quay.io/a/operator-alt:v1.44.0@sha256:alt"}
+		if diff := cmp.Diff(want, recordedRefs(t, records, ResolveStep)); diff != "" {
 			t.Errorf("refs mismatch (-want +got):\n%s", diff)
 		}
 	})
 
 	t.Run("a failed lookup is not a missing image", func(t *testing.T) {
-		err := Resolve(twoRegistries(), oneVariant(), WithResolver(func(string) (string, bool, error) {
+		err := Resolve(twoRegistries(), oneVariant(), t.TempDir(), WithResolver(func(string) (string, bool, error) {
 			return "", false, fmt.Errorf("unauthorized")
 		}))
 		if err == nil {
@@ -829,6 +864,7 @@ func TestPublished(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		published []string
+		resolve   registry.DigestResolver
 		wantErr   string
 	}{
 		{
@@ -838,22 +874,31 @@ func TestPublished(t *testing.T) {
 		{
 			name:      "a variant the record lacks is not",
 			published: []string{"quay.io/a/operator@sha256:a"},
-			wantErr:   "not published by an earlier run: alt",
+			wantErr:   "not published: alt",
 		},
 		{
 			name:    "nothing is published without a record",
-			wantErr: "not published by an earlier run: standard, alt",
+			wantErr: "not published: standard, alt",
 		},
 		{
 			name:      "a tag that moved fails",
 			published: []string{"quay.io/a/operator@sha256:old", "quay.io/a/operator-alt@sha256:alt"},
 			wantErr:   "Pass --force",
 		},
+		{
+			name:      "a failed lookup fails rather than reading as unpublished",
+			published: []string{"quay.io/a/operator@sha256:a", "quay.io/a/operator-alt@sha256:alt"},
+			resolve:   func(string) (string, bool, error) { return "", false, errors.New("registry down") },
+			wantErr:   "registry down",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.resolve == nil {
+				tc.resolve = resolve.resolve
+			}
 			f := &command.Recorder{}
-			err := Published(oneRegistryOperator(), variants, WithRunner(f),
-				WithResolver(resolve.resolve), WithResume(tc.published, false))
+			err := Published(oneRegistryOperator(), variants, recordsWith(t, tc.published...),
+				WithRunner(f), WithResolver(tc.resolve))
 			if len(f.Calls()) != 0 {
 				t.Errorf("ran %v", targets(f))
 			}
@@ -883,10 +928,6 @@ func TestPublishBranchTag(t *testing.T) {
 			// The chain retags local images under IMAGETAG, so it needs no version.
 			{name: "no version", branch: "release-v3.33"},
 			{name: "no branch", version: "v1.44.0", wantErr: true},
-			{
-				name: "with a recorder", version: "v1.44.0", branch: "release-v3.33",
-				opts: []PublishOption{WithRecord(&fakeRecorder{})}, wantErr: true,
-			},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				o := testOperator()
@@ -962,7 +1003,7 @@ func verbs() []struct {
 			return Build(o, oneVariant(), false, WithRunner(f), WithValidation(false))
 		}},
 		{name: "publish", run: func(o Operator, f *command.Recorder) error {
-			return Publish(o, oneVariant(), false, WithRunner(f))
+			return Publish(o, oneVariant(), "", false, WithRunner(f))
 		}},
 		{name: "branch tag", run: func(o Operator, f *command.Recorder) error {
 			return PublishBranchTag(o, oneVariant(), "release-v3.33", WithRunner(f))

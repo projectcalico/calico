@@ -24,7 +24,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/operatorimages"
-	"github.com/projectcalico/calico/release/internal/steps"
 )
 
 var imagesSubCommands = func(cfg *Config) []*cli.Command {
@@ -99,19 +98,12 @@ var (
 			if err != nil {
 				return err
 			}
-			published, w, err := publishRecord(records, images.PublishStep, !c.Bool(localFlag.Name))
-			if err != nil {
-				return err
-			}
-			var refs steps.RefRecorder
-			if w != nil {
-				refs = w
-			}
 			opts := []images.PublishOption{
 				images.WithRunner(commandRunner),
 				images.WithRegistries(c.StringSlice(registryFlag.Name)...),
 				images.WithArches(c.StringSlice(archFlag.Name)...),
 				images.WithLogsDir(cfg.LogsDir),
+				images.WithForce(c.Bool(forceFlag.Name)),
 			}
 			if from := c.String(fromRegistryFlag.Name); from != "" {
 				opts = append(opts, images.WithRetag(from,
@@ -120,17 +112,11 @@ var (
 			if scan != nil {
 				opts = append(opts, images.WithScan(scan))
 			}
-			if refs != nil {
-				opts = append(opts, images.WithRecord(refs))
-			}
-			if len(published) > 0 {
-				opts = append(opts, images.WithResume(published, c.Bool(forceFlag.Name)))
-			}
 
 			return images.Publish(
 				cfg.RepoRootDir, ver.String(),
 				images.NarrowVariants(images.PublishVariants, dirs),
-				!c.Bool(localFlag.Name), registryDigestResolver, opts...,
+				records, !c.Bool(localFlag.Name), registryDigestResolver, opts...,
 			)
 		}
 	}

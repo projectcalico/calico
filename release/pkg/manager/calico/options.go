@@ -80,8 +80,7 @@ func WithVersion(ver string) Option {
 }
 
 // WithOperator builds or publishes the operator in the step after the plan's
-// checks. A nil Do leaves the operator off. Done lets a run that skips the
-// operator rely on an earlier run's.
+// checks. A nil Do leaves the operator off.
 func WithOperator(o operator.Driver) Option {
 	return func(r *CalicoManager) error {
 		r.operator = o

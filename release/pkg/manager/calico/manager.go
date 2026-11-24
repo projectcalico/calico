@@ -421,7 +421,12 @@ func (r *CalicoManager) buildPlan() []plan.Node {
 			Do:   r.buildBinaries,
 			Done: r.binariesBuilt,
 		},
-		plan.Node{Name: charts.Step, When: func() bool { return r.helmCharts }, Do: r.BuildHelm},
+		plan.Node{
+			Name: charts.Step,
+			When: func() bool { return r.helmCharts },
+			Do:   r.BuildHelm,
+			Done: func() error { return charts.Built(r.chart()) },
+		},
 		plan.Node{
 			Name: manifests.Step,
 			When: func() bool {
@@ -430,7 +435,12 @@ func (r *CalicoManager) buildPlan() []plan.Node {
 			Do:   r.buildManifests,
 			Done: manifests.Archive(r.manifestsRoot()).Present,
 		},
-		plan.Node{Name: archives.WindowsStep, When: func() bool { return r.windowsArchive }, Do: r.buildWindowsArchive},
+		plan.Node{
+			Name: archives.WindowsStep,
+			When: func() bool { return r.windowsArchive },
+			Do:   r.buildWindowsArchive,
+			Done: func() error { return archives.WindowsBuilt(r.archive()) },
+		},
 		plan.Node{
 			Name:     archives.Step,
 			When:     func() bool { return r.tarball },
@@ -439,7 +449,8 @@ func (r *CalicoManager) buildPlan() []plan.Node {
 				_, err := r.archiveSources()
 				return err
 			},
-			Do: r.buildReleaseTar,
+			Do:   r.buildReleaseTar,
+			Done: func() error { return archives.Built(r.archive()) },
 		},
 	)
 	return nodes
@@ -518,6 +529,17 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 		Artifacts:       artifacts,
 		Components:      components,
 	}, dir)
+}
+
+func (r *CalicoManager) metadataRequires() []string {
+	req := []string{images.Step}
+	if r.operator.Do != nil {
+		req = append(req, operator.Step)
+	}
+	if r.helmCharts {
+		req = append(req, charts.Step)
+	}
+	return req
 }
 
 // A detached HEAD, as CI often checks out, has no branch to record.
@@ -726,9 +748,10 @@ func (r *CalicoManager) modifyHelmChartsValues(calicoVersion, operatorVersion st
 
 func (r *CalicoManager) hashreleaseUpload() distribution.Upload {
 	return distribution.Upload{
-		Name:   distribution.HashreleasePublishStep,
-		Source: r.uploadDir(),
-		Skip:   !r.publishHashrelease,
+		Name:     distribution.HashreleasePublishStep,
+		Source:   r.uploadDir(),
+		Skip:     !r.publishHashrelease,
+		Requires: []string{outputs.ChecksumStep, outputs.MetadataStep},
 		Handler: distribution.HashreleaseServer{
 			Release:     &r.hashrelease,
 			Config:      &r.hashreleaseConfig,
@@ -815,7 +838,11 @@ func (r *CalicoManager) publishPlan() []plan.Node {
 func (r *CalicoManager) uploads() []distribution.Upload {
 	// The registries go first: metadata records the digests they produce
 	uploads := []distribution.Upload{
-		{Handler: distribution.Publisher{Kind: images.Step, Action: r.imagesAction()}, Requires: r.beforeImagesPublish()},
+		// images are never off: a skip resolves the earlier run's digests from the registry instead.
+		{
+			Handler:  distribution.Publisher{Kind: images.Step, Action: r.imagesAction()},
+			Requires: r.beforeImagesPublish(),
+		},
 		{
 			Handler: distribution.Publisher{Kind: charts.Step, Action: r.publishHelmCharts},
 			Skip:    !r.helmCharts,
@@ -827,18 +854,9 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 	}
 	uploads = append(
 		uploads,
-		distribution.Upload{
-			Handler: distribution.Preparer{Kind: outputs.MetadataStep, Action: r.buildMetadata},
-			Done:    func() error { return fsutil.FilePresent(filepath.Join(r.uploadDir(), outputs.MetadataFileName)) },
-		},
-		// After metadata, so the sums cover it. Both destinations ship the
-		// same directory, so neither can own this.
-		distribution.Upload{
-			Handler: distribution.Preparer{Kind: outputs.ChecksumStep, Action: r.writeChecksums},
-			Done:    func() error { return fsutil.FilePresent(filepath.Join(r.uploadDir(), outputs.SumsFileName)) },
-		},
+		outputs.MetadataUpload(r.uploadDir(), r.buildMetadata, r.metadataRequires()...),
+		outputs.ChecksumUpload(r.runner, r.uploadDir(), github.AssetsFilter...),
 	)
-
 	if r.isHashRelease {
 		return append(uploads, r.hashreleaseUpload())
 	}
@@ -860,11 +878,6 @@ func (r *CalicoManager) beforeImagesPublish() []string {
 
 func (r *CalicoManager) buildMetadata() error {
 	return r.BuildMetadata(r.uploadDir())
-}
-
-// Users verify a download with: sha256sum -c --ignore-missing SHA256SUMS
-func (r *CalicoManager) writeChecksums() error {
-	return outputs.SHA256Sums(r.runner, r.uploadDir(), github.AssetsFilter...)
 }
 
 // Check general prerequisites for cutting and publishing a release.
@@ -1202,33 +1215,15 @@ func (r *CalicoManager) buildContainerImages() error {
 }
 
 func (r *CalicoManager) publishContainerImages() error {
-	if !r.images {
-		logrus.Info("Skipping image publish")
-		return nil
-	}
-	refs, err := outputs.NewRefsWriter(r.recordsDir, images.PublishStep)
-	if err != nil {
-		return fmt.Errorf("image publish refs writer: %w", err)
-	}
-	// An earlier run of this release records what it published, so a resume
-	// skips the units already done.
-	published, err := outputs.ReadRefs(r.recordsDir, images.PublishStep)
-	if err != nil {
-		return fmt.Errorf("read published image refs: %w", err)
-	}
 	opts := []images.PublishOption{
 		images.WithRunner(r.runner),
 		images.WithRegistries(r.imageRegistries...),
 		images.WithArches(r.architectures...),
 		images.WithLogsDir(r.logsDir),
-		images.WithRecord(refs),
 		images.WithDependencies(r.dependencies()...),
 	}
 	if scan := r.scanRequest(); scan != nil {
 		opts = append(opts, images.WithScan(scan))
-	}
-	if len(published) > 0 {
-		opts = append(opts, images.WithResume(published, false))
 	}
 	if r.retagImages {
 		opts = append(opts, images.WithRetag(r.fromRegistry, r.fromTag, !r.gitRef))
@@ -1236,7 +1231,7 @@ func (r *CalicoManager) publishContainerImages() error {
 	if err := images.Publish(
 		r.repoRoot, r.calicoVersion.String(),
 		images.NarrowVariants(images.PublishVariants, r.imageReleaseDirs),
-		!r.planOptions.Local, r.digestResolver(), opts...,
+		r.recordsDir, !r.planOptions.Local, r.digestResolver(), opts...,
 	); err != nil {
 		return fmt.Errorf("publish images: %w", err)
 	}
@@ -1260,18 +1255,14 @@ func (r *CalicoManager) resolveOperator() ([]string, error) {
 	if !r.isHashRelease || r.includesOperator() {
 		return nil, nil
 	}
-	refs, err := outputs.NewRefsWriter(r.recordsDir, operator.ResolveStep)
-	if err != nil {
-		return nil, fmt.Errorf("operator resolve refs writer: %w", err)
-	}
-	err = operator.Resolve(
+	err := operator.Resolve(
 		r.operatorConfig(),
 		operator.Variants(),
+		r.recordsDir,
 		operator.WithRunner(r.runner),
 		operator.WithArches(r.architectures...),
 		operator.WithLogsDir(r.logsDir),
 		operator.WithResolver(r.digestResolver()),
-		operator.WithRecord(refs),
 	)
 	return r.checkResolved(r.operatorImage, false, err)
 }
@@ -1295,25 +1286,20 @@ func (r *CalicoManager) checkResolved(component string, included bool, err error
 }
 
 func (r *CalicoManager) resolveContainerImages() error {
-	refs, err := outputs.NewRefsWriter(r.recordsDir, images.ResolveStep)
-	if err != nil {
-		return fmt.Errorf("resolve image refs writer: %w", err)
-	}
 	opts := []images.ResolveOption{
 		images.WithRunner(r.runner),
 		images.WithRegistries(r.imageRegistries...),
 		images.WithArches(r.architectures...),
 		images.WithLogsDir(r.logsDir),
-		images.WithRecord(refs),
 		images.WithDependencies(r.dependencies()...),
 	}
 	if scan := r.scanRequest(); scan != nil {
 		opts = append(opts, images.WithScan(scan))
 	}
-	err = images.Resolve(
+	err := images.Resolve(
 		r.repoRoot, r.calicoVersion.String(),
 		images.NarrowVariants(images.PublishVariants, r.imageReleaseDirs),
-		r.digestResolver(),
+		r.recordsDir, r.digestResolver(),
 		opts...,
 	)
 	// A dry run pushes nothing, so images it built are never in the registry.
@@ -1393,7 +1379,7 @@ func (r *CalicoManager) publishBranchTag() error {
 	if err := images.Publish(
 		r.repoRoot, branch,
 		images.NarrowVariants(variants, r.imageReleaseDirs),
-		!r.planOptions.Local, r.digestResolver(),
+		"", !r.planOptions.Local, r.digestResolver(),
 		images.WithRunner(r.runner),
 		images.WithRegistries(registry),
 		images.WithArches(r.architectures...),
@@ -1474,27 +1460,11 @@ func (r *CalicoManager) operatorConfig() operator.Operator {
 }
 
 func (r *CalicoManager) publishHelmCharts() error {
-	chart := r.chart()
-	refs, err := outputs.NewRefsWriter(r.recordsDir, charts.PublishStep)
-	if err != nil {
-		return fmt.Errorf("chart publish refs writer: %w", err)
-	}
-	// An earlier run of this release records what it published, so a resume
-	// skips the charts already done.
-	published, err := outputs.ReadRefs(r.recordsDir, charts.PublishStep)
-	if err != nil {
-		return fmt.Errorf("read published chart refs: %w", err)
-	}
-	opts := []charts.PublishOption{
+	return charts.Publish(r.chart(), r.helmRegistries, r.recordsDir, !r.planOptions.Local,
 		charts.WithRunner(r.runner),
 		charts.WithLogsDir(r.logsDir),
 		charts.WithResolver(r.digestResolver()),
-		charts.WithRecord(refs),
-	}
-	if len(published) > 0 {
-		opts = append(opts, charts.WithResume(published, false))
-	}
-	return charts.Publish(chart, r.helmRegistries, !r.planOptions.Local, opts...)
+	)
 }
 
 func (r *CalicoManager) buildReleaseNotes() error {

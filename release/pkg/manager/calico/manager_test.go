@@ -1148,11 +1148,11 @@ func TestResolveContainerImages(t *testing.T) {
 		return refs
 	}
 
-	t.Run("records the images as resolved", func(t *testing.T) {
+	t.Run("an images-off run resolves instead of publishing", func(t *testing.T) {
 		f := newFakeRunner()
 		m := withoutImages(t, f)
-		if err := m.resolveContainerImages(); err != nil {
-			t.Fatalf("resolveContainerImages: %v", err)
+		if err := m.imagesAction()(); err != nil {
+			t.Fatalf("imagesAction: %v", err)
 		}
 		if len(readRefs(t, m, images.ResolveStep)) == 0 {
 			t.Errorf("nothing recorded under %s", images.ResolveStep)
@@ -1547,7 +1547,6 @@ func TestPublishBranchTag(t *testing.T) {
 			version       string
 			branch        string
 			trailer       string
-			images        bool
 			isHashRelease bool
 			wantPublish   bool
 			wantBranchTag bool
@@ -1559,7 +1558,6 @@ func TestPublishBranchTag(t *testing.T) {
 				name:          "hashrelease also pushes the branch tag",
 				version:       "v3.33.0-" + dev + "-1-gabcdef123456",
 				branch:        prefix + "-v3.33",
-				images:        true,
 				isHashRelease: true,
 				wantPublish:   true,
 				wantBranchTag: true,
@@ -1569,7 +1567,6 @@ func TestPublishBranchTag(t *testing.T) {
 				name:          "early preview keeps its stream suffix",
 				version:       "v3.33.0-1.0-" + dev + "-1-gabcdef123456",
 				branch:        prefix + "-v3.33-1",
-				images:        true,
 				isHashRelease: true,
 				wantPublish:   true,
 				wantBranchTag: true,
@@ -1579,7 +1576,6 @@ func TestPublishBranchTag(t *testing.T) {
 				name:          "hashrelease on the default branch tags it",
 				version:       "v3.34.0-" + dev + "-1-gabcdef123456",
 				branch:        "master",
-				images:        true,
 				isHashRelease: true,
 				wantPublish:   true,
 				wantBranchTag: true,
@@ -1589,7 +1585,6 @@ func TestPublishBranchTag(t *testing.T) {
 				name:          "hashrelease on any other branch has no branch tag",
 				version:       "v3.34.0-" + dev + "-1-gabcdef123456",
 				branch:        "fix-foo",
-				images:        true,
 				isHashRelease: true,
 				wantPublish:   true,
 				wantBranchTag: false,
@@ -1599,7 +1594,6 @@ func TestPublishBranchTag(t *testing.T) {
 				version:       "v3.33.1",
 				branch:        "build-v3.33.1",
 				trailer:       prefix + "-v3.33-2\n",
-				images:        true,
 				isHashRelease: false,
 				wantPublish:   true,
 				wantBranchTag: true,
@@ -1609,7 +1603,6 @@ func TestPublishBranchTag(t *testing.T) {
 				name:          "official release on a release branch tags it",
 				version:       "v3.33.1",
 				branch:        prefix + "-v3.33",
-				images:        true,
 				isHashRelease: false,
 				wantPublish:   true,
 				wantBranchTag: true,
@@ -1620,7 +1613,6 @@ func TestPublishBranchTag(t *testing.T) {
 				version:       "v3.33.1",
 				branch:        "build-v3.33.1",
 				prefix:        prefix,
-				images:        true,
 				isHashRelease: false,
 				wantPublish:   true,
 				wantErr:       true,
@@ -1629,19 +1621,10 @@ func TestPublishBranchTag(t *testing.T) {
 				// An unset prefix would silently tag images "-v3.33".
 				name:          "missing branch prefix is an error",
 				version:       "v3.33.0-" + dev + "-1-gabcdef123456",
-				images:        true,
 				isHashRelease: true,
 				prefix:        "",
 				wantPublish:   true,
 				wantErr:       true,
-			},
-			{
-				name:          "images disabled publishes nothing",
-				version:       "v3.33.0-" + dev + "-1-gabcdef123456",
-				images:        false,
-				isHashRelease: true,
-				wantPublish:   false,
-				wantBranchTag: false,
 			},
 		}
 
@@ -1656,7 +1639,6 @@ func TestPublishBranchTag(t *testing.T) {
 					branchPrefix = prefix
 				}
 				r, root := imageManager(t, f, "")
-				r.images = tt.images
 				r.isHashRelease = tt.isHashRelease
 				// A hashrelease reads its registry from its own source tree.
 				r.hashrelease.Source = root
@@ -2129,9 +2111,10 @@ func TestPublishNodes(t *testing.T) {
 	})
 
 	t.Run("every required step is an earlier node", func(t *testing.T) {
+		op := operator.Driver{Do: func() error { return nil }}
 		for _, r := range []*CalicoManager{
-			{calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir()},
-			{isHashRelease: true, calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir()},
+			{calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir(), operator: op, helmCharts: true},
+			{isHashRelease: true, calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir(), operator: op, helmCharts: true},
 		} {
 			before := map[string]bool{}
 			for _, n := range r.publishPlan() {
@@ -2142,6 +2125,58 @@ func TestPublishNodes(t *testing.T) {
 				}
 				before[n.Name] = true
 			}
+		}
+	})
+
+	t.Run("an upload requires the steps whose output it reads", func(t *testing.T) {
+		requires := func(r *CalicoManager, name string) []string {
+			for _, n := range r.publishPlan() {
+				if n.Name == name {
+					return n.Requires
+				}
+			}
+			t.Fatalf("no %s node", name)
+			return nil
+		}
+		for _, tc := range []struct {
+			name string
+			r    *CalicoManager
+			node string
+			want []string
+		}{
+			{
+				name: "metadata reads the image records",
+				r:    &CalicoManager{calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir()},
+				node: outputs.MetadataStep,
+				want: []string{images.Step},
+			},
+			{
+				name: "metadata reads the operator and chart records when they publish",
+				r: &CalicoManager{
+					calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir(),
+					operator: operator.Driver{Do: func() error { return nil }}, helmCharts: true,
+				},
+				node: outputs.MetadataStep,
+				want: []string{images.Step, operator.Step, charts.Step},
+			},
+			{
+				name: "checksums cover the metadata",
+				r:    &CalicoManager{calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir()},
+				node: outputs.ChecksumStep,
+				want: []string{outputs.MetadataStep},
+			},
+			{
+				name: "a hashrelease ships the metadata and checksums",
+				r:    &CalicoManager{isHashRelease: true, calicoVersion: testVersion(t, "v3.30.0"), outputDir: t.TempDir()},
+				node: distribution.HashreleasePublishStep,
+				want: []string{outputs.ChecksumStep, outputs.MetadataStep},
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				if diff := cmp.Diff(tc.want, requires(tc.r, tc.node)); diff != "" {
+					t.Errorf("requires (-want +got):\n%s", diff)
+				}
+			})
 		}
 	})
 
