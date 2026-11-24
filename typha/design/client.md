@@ -28,8 +28,9 @@ handshake ([`protocol.md`](./protocol.md)).
 ## The client (`pkg/syncclient`)
 
 `SyncerClient` runs the client side of the protocol: hello
-exchange, decoder restarts (rebuilding its gob decoder, with
-snappy when negotiated, and ACKing before the server continues),
+exchange, decoder restarts (swapping its decompressor and gob
+decoder for the algorithm the server chose, rejecting one it
+didn't advertise, and ACKing before the server continues),
 prompt `MsgPong` replies, and decoding `MsgKVs` back into
 `[]api.Update` batches for `OnUpdates`. Per-message read/write
 deadlines protect it from a hung server; the server's pings are

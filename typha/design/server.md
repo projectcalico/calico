@@ -11,8 +11,9 @@ You may obtain a copy of the License at
 # Typha server
 
 Applies to: `typha/pkg/daemon/**`, `typha/pkg/calc/**`,
-`typha/pkg/snapcache/**`, `typha/pkg/syncserver/**`,
-`typha/pkg/k8s/**`, `typha/pkg/config/**`.
+`typha/pkg/validator/**`, `typha/pkg/snapcache/**`,
+`typha/pkg/syncserver/**`, `typha/pkg/k8s/**`,
+`typha/pkg/config/**`.
 
 The server side of Typha is a pipeline from the datastore to many
 TCP connections:
@@ -71,9 +72,13 @@ syncer → SyncerCallbacksDecoupler → ValidationFilter
 - `calc.ValidationFilter` validates each value and **nils out
   invalid ones** (treating them as deletions) rather than
   dropping batches or passing garbage on. One bad resource in
-  the datastore must not take out every Felix. (Felix runs an
-  equivalent `ValidationFilter` in `felix/calc`, so the
-  direct-datastore path behaves the same.)
+  the datastore must not take out every Felix. v1-model values
+  are checked by `pkg/validator/v1` (dataplane validity, not API
+  validation); v3 resources by the API validator, which in etcd
+  mode also applies CRD schema defaults in place, as the API
+  server would on admission. (Felix runs an equivalent
+  `ValidationFilter` in `felix/calc`, so the direct-datastore
+  path behaves the same.)
 - `calc.NodeCounter` (felix pipeline only) counts Node resources
   in passing; the connection governor uses it (below).
 
@@ -91,9 +96,9 @@ requested in its handshake.
 - Don't add buffering to the decouplers "for throughput" — the
   no-queue backpressure is a design choice; queues here just move
   the backlog somewhere it can't be coalesced.
-- `ValidationFilter` must alter values only to `nil` — never
-  "fix up" a value (see the pass-through rule in
-  [`protocol.md`](./protocol.md)).
+- `ValidationFilter` may nil out a value and, in etcd mode, apply
+  CRD defaults; it must never otherwise "fix up" a value (see the
+  pass-through rule in [`protocol.md`](./protocol.md)).
 
 ## The breadcrumb cache (`pkg/snapcache`)
 
@@ -171,22 +176,22 @@ sees is still a valid syncer stream:
 `syncserver.Server` accepts connections (TLS if configured —
 mutual authentication is covered in [`client.md`](./client.md))
 and runs a small goroutine set per connection: a reader (drains
-client messages onto a channel), and — once the handshake is done
-— a KV-sender following the breadcrumb trail and a pinger. The
+client messages onto a channel), and — once the snapshot has been
+sent — a KV-sender following the breadcrumb trail and a pinger. The
 per-connection context ties them together: any of them failing
 cancels the lot, and the client is expected to reconnect
 (possibly to another Typha).
 
 Liveness is application-level: the server pings every
 `PingInterval` (10s) and drops the connection if no pong arrives
-within `PongTimeout`. The pinger is a separate goroutine writing
-through the same lock as the KV-sender, so a client that stops
-reading eventually fails the write deadline or the pong check
-even mid-snapshot. Two deliberate wrinkles, both from load
-testing:
+within `PongTimeout` (which also bounds each decoder-restart ACK
+wait). The pinger writes through the same lock as the KV-sender.
+Mid-snapshot only the write deadline protects the server; the
+pong check starts with the delta stream. Two deliberate wrinkles,
+both from load testing:
 
-- Write deadlines are only reset when they've decayed below the
-  configured `WriteTimeout` (with 10% slack) — per-message
+- Write deadlines are only reset when they've decayed below
+  `ServerWriteTimeoutSecs` (with 10% slack) — per-message
   `SetWriteDeadline` showed up in profiles.
 - While streaming the shared snapshot, a write timeout with
   partial progress is retried, not fatal; only a stalled write
@@ -206,8 +211,9 @@ sequencing):
   minutes of wall clock on typical Typha CPU allocations).
 - **Shared path** (`snap_precalc.go`): the first arriving client
   triggers a background goroutine that serializes the current
-  crumb once into an in-memory buffer as a self-contained
-  snappy-compressed gob stream; every client that arrives while
+  crumb once per compression algorithm into an in-memory buffer,
+  as a self-contained compressed gob stream ending in
+  `MsgDecoderRestart`; every client that arrives while
   that snapshot is "active" replays the same bytes
   (`multireadbuf` lets readers stream while the writer is still
   appending). Once written, the snapshot stays active for
@@ -216,7 +222,8 @@ sequencing):
   collapses to one serialization plus N byte-copies.
 
 `typha_snapshots_generated` vs `typha_snapshots_reused` and the
-raw/compressed size metrics monitor this mechanism.
+raw/compressed size metrics (labelled by syncer and compression)
+monitor this mechanism.
 
 ### Slow clients: fall-behind and the grace period
 
@@ -266,7 +273,7 @@ somewhere less loaded (see [`client.md`](./client.md)).
 
 Graceful shutdown (SIGTERM) is the same mechanism with a
 deadline: drain connections one at a time, pacing the drops to
-finish just inside `ShutdownTimeout` (default 300s), so a Typha
+finish within `ShutdownTimeout` (default 300s), so a Typha
 rolling upgrade sheds clients gradually instead of dumping them
 on the survivors at once.
 

@@ -3,6 +3,10 @@ applyTo:
   - "libcalico-go/lib/backend/api/**"
   - "libcalico-go/lib/backend/watchersyncer/**"
   - "libcalico-go/lib/backend/syncersv1/**"
+  - "typha/pkg/syncclient/**"
+  - "typha/pkg/syncclientutils/**"
+  - "typha/pkg/calc/validation_filter.go"
+  - "felix/calc/validation_filter.go"
 ---
 
 # Syncer API
@@ -11,8 +15,9 @@ The Syncer API's contract — the callback interface, the consumer
 algorithm, the eventual-consistency guarantees, and review
 criteria — lives in the cross-component design
 [`design/syncer/DESIGN.md`](../../design/syncer/DESIGN.md). The
-API is consumed by Felix's calc graph, confd, and the `node`
-helpers, and is fanned out over the network by Typha, so the
+API is consumed by Felix's calc graph, confd, the `node` helpers,
+kube-controllers and the apiserver, and is fanned out over the
+network by Typha, so the
 design lives at the repo level rather than under any one
 component.
 

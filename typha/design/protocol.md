@@ -41,15 +41,14 @@ sequenceDiagram
     C->>T: connect (TCP/TLS)
     C->>T: MsgClientHello (hostname, syncer type, supported features)
     T->>C: MsgServerHello (version, syncer type, server features)
-    alt client supports decoder restart + snappy
-        T->>C: MsgDecoderRestart (compression=snappy)
+    alt client supports decoder restart and shares an algorithm
+        T->>C: MsgDecoderRestart (compression=zstd, else snappy)
         C-->>T: MsgACK (decoder re-created)
-        Note over T: restart encoder: snappy-compressed gob
-        T->>C: shared pre-serialized snapshot (MsgKVs × n)
-        T->>C: MsgDecoderRestart (baked into the canned stream)
+        T->>C: cached compressed snapshot (MsgKVs × n), written verbatim
+        T->>C: MsgDecoderRestart (embedded in the cached stream)
         C-->>T: MsgACK
-        Note over T: restart encoder for the live stream
-    else legacy client
+        Note over T: fresh compressed stream for deltas
+    else no decoder restart, or no common algorithm
         T->>C: MsgKVs × n (per-connection snapshot, uncompressed)
     end
     T->>C: MsgSyncStatus (InSync)
@@ -125,25 +124,31 @@ blocked the obvious "serialize the snapshot once, replay the
 bytes to every client" optimisation, and is why the protocol has
 `MsgDecoderRestart`/`MsgACK`:
 
-- `MsgDecoderRestart` tells the client to drain and discard its
-  decoder and build a fresh one with the parameters in the
-  message (currently just `CompressionAlgorithm`).
+- `MsgDecoderRestart` is the last message of the old stream: the
+  server closes the stream straight after it. The client discards
+  its decompressor and gob decoder and builds fresh ones for the
+  algorithm named in the message.
 - The client replies `MsgACK` **before** the server sends any
   data in the new format. This ordering is mandatory: an
   un-restarted decoder may eagerly buffer bytes it can't parse.
 
 The server uses this twice per modern connection (see diagram):
-once after the handshake to switch to compressed gob, and once
-more at the end of the shared snapshot — the canned snapshot is a
-self-contained gob+snappy byte stream generated once and replayed
-verbatim to every concurrently-connecting client, so each
-client's decoder must be reset around it.
+once after the handshake to hand the connection to the cached
+snapshot — a self-contained compressed gob stream, generated once
+per syncer type and algorithm and replayed verbatim to every
+concurrently-connecting client — and once at its end, which the
+cached stream carries itself. Each client's decoder must be reset
+around the canned bytes.
 
-Compression is snappy (negotiated via
-`SupportedCompressionAlgorithms`; in prototyping it cut bandwidth
-4–5× for <10% CPU). It's a pass-through `Writer`; the only
-subtlety is that output must be explicitly flushed to reach the
-client.
+Only the server→client stream is compressed; client messages are
+small. The client advertises its algorithms in
+`SupportedCompressionAlgorithms` and the server picks the first in
+its own preference order: zstd (roughly half snappy's output — see
+[`compression-analysis.md`](../docs/compression-analysis.md)),
+then snappy for older clients. Streams carry no terminator, so the
+restart boundary rests on the `syncproto.Compressor`/`Decompressor`
+contract: a stream ends on its last byte of data, and a
+decompressor never reads past it.
 
 ## Version skew and upgrading the datamodel
 
@@ -163,9 +168,11 @@ datamodels. The package comment spells out the cases; in brief:
 
 Two hard rules fall out of Typha's pass-through role:
 
-- **Typha must not transform values** — parse, validate,
-  re-serialize, nothing else — without a deliberate version-skew
-  design and a good reason. Felix config is especially prone:
+- **Typha must not transform values** — parse, validate (which,
+  in etcd mode, applies CRD schema defaults as the API server
+  would), re-serialize, nothing else — without a deliberate
+  version-skew design and a good reason. Felix config is
+  especially prone:
   Felix restarts itself when its config "changes", so Typha must
   deliver exactly the config Felix would have loaded itself, or
   a Typha upgrade triggers a fleet-wide Felix restart loop.
@@ -191,6 +198,11 @@ Two hard rules fall out of Typha's pass-through role:
 - **No new-format bytes before the `MsgACK`** when restarting
   the decoder, and the server must hold off pings while waiting
   for the ACK (the pinger writes to the same stream).
+- **Peers are untrusted across compression.** The client drops
+  the connection if a restart names an algorithm it didn't
+  advertise, and its zstd decoder caps the frame window (encoders
+  stay well under the cap); the server never decompresses client
+  data.
 - A change to `SerializedUpdate` fields or to `WouldBeNoOp` is a
   change to the dedupe and version-skew behaviour — think
   through both upgrade directions, and remember `WouldBeNoOp`

@@ -22,7 +22,8 @@ every backend can honour.
 The API is cross-component: it is defined in
 `libcalico-go/lib/backend/api`, implemented by the syncers in
 `libcalico-go/lib/backend/syncersv1/`, consumed by Felix's
-calculation graph, confd, and the `node` helpers, and extended
+calculation graph, confd, the `node` helpers, kube-controllers and
+the apiserver, and extended
 over the network by Typha. This doc is the authoritative
 statement of the API's contract; the consumers document their own
 side:
@@ -56,7 +57,7 @@ does not exist** (deleted, or its value failed to parse).
 
 `OnStatusUpdated` reports the state of the stream as a whole —
 whether the consumer can trust its local picture of the
-datastore. `SyncStatus` progresses:
+datastore. `SyncStatus` values:
 
 - `WaitForDatastore` — not yet connected (or datastore not ready).
 - `ResyncInProgress` — the syncer is (re)downloading existing
@@ -64,6 +65,16 @@ datastore. `SyncStatus` progresses:
   with any concurrent changes.
 - `InSync` — all existing keys have been sent; the consumer now
   has the full picture.
+
+The status is not monotonic: after `InSync` it can drop back to
+`ResyncInProgress` (a full resync, e.g. an expired watch) or to
+`WaitForDatastore` (a prolonged disconnect, or a Typha reconnect).
+A resource type whose API isn't installed counts as empty and
+`InSync`.
+
+Optional extensions, detected by type assertion on the callbacks:
+`SyncerParseFailCallbacks` and `SyncFailCallbacks` (in
+`api.go`), and Typha's `syncclient.RestartAwareCallbacks`.
 
 ## The consumer algorithm
 
@@ -79,10 +90,9 @@ datastore:
    recent) point in time.
 4. Keep applying updates. After `InSync`, act on each update
    immediately: the map plus the update *is* the current state.
-5. A later `OnStatusUpdated(ResyncInProgress)` means the syncer
-   lost confidence in the stream (e.g. a datastore reconnect); the
-   consumer may want to stop trusting its map until the next
-   `InSync`.
+5. A later `ResyncInProgress` or `WaitForDatastore` means the
+   syncer lost confidence in the stream; the consumer may want to
+   stop trusting its map until the next `InSync`.
 
 Tracking completeness matters because a consumer shouldn't do
 anything disruptive on a partial picture — Felix, for example,
@@ -126,13 +136,14 @@ purpose is stats-style bookkeeping without retaining objects
 (e.g. Felix's `calc/stats_collector.go`). **Don't drive
 correctness from it** — decide existence from nil/non-nil, not
 the update type. `UpdateTypeKVNew/Updated` can even carry a `nil`
-value (failed validation downstream), so the type may disagree
-with the value. Intermediaries that coalesce updates must rewrite
-the type so that the *sequence* of types a consumer sees remains
-consistent (a consumer that has seen `New` for a key must next
-see `Updated` or `Deleted`, never another `New`) — Typha's cache
-does exactly this; see
-[`typha/design/server.md`](../../typha/design/server.md).
+value (failed validation in Typha or the consumer), so the type
+may disagree with the value. Intermediaries that coalesce updates
+must rewrite the type so that the *sequence* of types a consumer
+sees remains consistent (a consumer that has seen `New` for a key
+must next see `Updated` or `Deleted`, never another `New`) — the
+`dedupebuffer` rewrites per key against what it has delivered,
+and Typha's cache sends snapshot entries as `New` (see
+[`typha/design/server.md`](../../typha/design/server.md)).
 
 ## Implementations
 
@@ -143,12 +154,15 @@ reflector) and merges the streams, computing the overall
 `SyncStatus`. The `watchercache`'s per-key revision map is where
 `UpdateType`s are minted: `KVNew` vs `KVUpdated` by whether the
 key was already announced, same-revision events swallowed, and
-`KVDeleted` only for previously-announced keys — a consumer never
-sees a deletion without an earlier `KVNew` (per connection). The
-per-purpose syncers in
+`KVDeleted` only for previously-announced keys, so the
+`watchersyncer` never emits a deletion without an earlier `KVNew`
+(intermediaries may still forward deletions for keys whose
+earlier update they nil'd). The per-purpose syncers in
 `libcalico-go/lib/backend/syncersv1/` compose it with a resource
-list and a set of `updateprocessors` that convert v3 resources
-into the v1 key/value model the consumers use:
+list and, per resource, an optional `updateprocessor` that
+converts the v3 resource into v1 model keys. Unprocessed
+resources are delivered as v3 `ResourceKey`s, so consumers see a
+mix of both:
 
 | Syncer | Consumer |
 |---|---|
@@ -160,19 +174,25 @@ into the v1 key/value model the consumers use:
 These four correspond one-to-one with Typha's `SyncerType`s
 (`typha/pkg/syncproto`): Typha runs each syncer once and fans it
 out, so consumers get the same streams without the datastore
-seeing one watcher per node. Consumers use
+seeing one watcher per node. confd and the `node` helpers use
 `typha/pkg/syncclientutils.MustStartSyncerClientIfTyphaConfigured`
-to connect via Typha when configured and fall back to running the
-syncer in-process otherwise — the callbacks see the same API
-either way.
+to connect via Typha when configured and run the syncer
+in-process otherwise; Felix wires the Typha client itself. The
+callbacks see the same API either way.
+
+kube-controllers (`controllers/utils.DataFeed`) and the apiserver
+also use `watchersyncer` directly, with their own resource lists,
+never via Typha.
 
 `libcalico-go/lib/backend/syncersv1/dedupebuffer` is a
 `SyncerCallbacks` adaptor that sits between a syncer (or Typha
 client) and a slow consumer: it coalesces repeated updates to the
-same key while queueing, and it can absorb a Typha reconnection
-(`OnTyphaConnectionRestarted`) by replaying the difference between
-the old and new snapshots as updates/deletions, so the consumer
-never sees the disconnect.
+same key while queueing, and it absorbs a Typha reconnection
+(`OnTyphaConnectionRestarted`): the new snapshot passes through
+(already-delivered keys as `KVUpdated`), and at `InSync` it
+synthesizes deletions for delivered keys the new snapshot lacked.
+The consumer sees the status drop back, but no spurious
+delete/re-create.
 
 ## Review notes
 

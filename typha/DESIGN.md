@@ -99,7 +99,8 @@ The two design centrepieces:
 - **Shared serialization**: KVs are serialized once, in the
   cache, not per client. When many clients connect at once, the
   whole compressed snapshot byte-stream is also generated once
-  and shared (`pkg/syncserver/snap_precalc.go`).
+  per syncer type and compression algorithm, and shared
+  (`pkg/syncserver/snap_precalc.go`).
 
 Key orientation files: `pkg/daemon/daemon.go`,
 `pkg/snapcache/cache.go`, `pkg/syncserver/sync_server.go`,
@@ -131,7 +132,7 @@ and review notes. A PR that touches files across multiple
 | Topic | Applies to | Status |
 |---|---|---|
 | [protocol](./design/protocol.md) — wire protocol, handshake, compression, version skew | `typha/pkg/syncproto/**` (and any change to what goes on the wire) | ✅ exists |
-| [server](./design/server.md) — daemon pipeline, breadcrumb cache, sync server, connection management | `typha/pkg/daemon/**`, `typha/pkg/calc/**`, `typha/pkg/snapcache/**`, `typha/pkg/syncserver/**`, `typha/pkg/k8s/**`, `typha/pkg/config/**` | ✅ exists |
+| [server](./design/server.md) — daemon pipeline, breadcrumb cache, sync server, connection management | `typha/pkg/daemon/**`, `typha/pkg/calc/**`, `typha/pkg/validator/**`, `typha/pkg/snapcache/**`, `typha/pkg/syncserver/**`, `typha/pkg/k8s/**`, `typha/pkg/config/**` | ✅ exists |
 | [client](./design/client.md) — client library, discovery, reconnection | `typha/pkg/syncclient/**`, `typha/pkg/discovery/**`, `typha/pkg/syncclientutils/**`, `typha/pkg/tlsutils/**` | ✅ exists |
 
 Cross-cutting:

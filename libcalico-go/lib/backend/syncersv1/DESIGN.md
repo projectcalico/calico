@@ -12,8 +12,8 @@ You may obtain a copy of the License at
 
 This directory holds the per-purpose Syncer implementations
 (`felixsyncer`, `bgpsyncer`, `tunnelipsyncer`,
-`nodestatussyncer`), the `updateprocessors` that convert v3
-resources to the v1 key/value model, and the `dedupebuffer`
+`nodestatussyncer`), the `updateprocessors` that convert some v3
+resources to v1 model keys, and the `dedupebuffer`
 callback adaptor.
 
 The Syncer API's contract — the callback interface, the consumer

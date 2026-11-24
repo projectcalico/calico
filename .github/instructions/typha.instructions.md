@@ -14,7 +14,7 @@ the per-topic sub-designs under
   `typha/pkg/syncproto/**` and any change to what goes on the
   wire.
 - [`server.md`](../../typha/design/server.md) —
-  `typha/pkg/{daemon,calc,snapcache,syncserver,k8s,config}/**`.
+  `typha/pkg/{daemon,calc,validator,snapcache,syncserver,k8s,config}/**`.
 - [`client.md`](../../typha/design/client.md) —
   `typha/pkg/{syncclient,discovery,syncclientutils,tlsutils}/**`.
 
