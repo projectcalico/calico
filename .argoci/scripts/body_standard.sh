@@ -16,8 +16,11 @@ cd "${BZ_HOME}"
 
 source "${PHASES}/provision.sh"
 source "${PHASES}/install.sh"
-source "${PHASES}/configure.sh"
-source "${PHASES}/migrate.sh"
+# Seed images as part of setting up the downlevel cluster: upgrade scenarios
+# start workloads before the upgrade, and the kubeadm nodes can't pull them.
 source "${PHASES}/seed_images.sh"
+source "${PHASES}/configure.sh"
+source "${PHASES}/pre_upgrade.sh"
+source "${PHASES}/migrate.sh"
 source "${PHASES}/load_images.sh"
 source "${PHASES}/run_tests.sh"
