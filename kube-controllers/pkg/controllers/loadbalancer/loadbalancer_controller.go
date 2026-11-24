@@ -313,6 +313,10 @@ func (c *loadBalancerController) handleUpdate(update any) {
 }
 
 func (c *loadBalancerController) handleBlockUpdate(kvp model.KVPair) {
+	if kvp.Value == nil {
+		c.allocationTracker.deleteBlock(kvp.Key.String())
+		return
+	}
 	block, ok := kvp.Value.(*model.AllocationBlock)
 	if !ok {
 		log.WithField("key", kvp.Key.String()).Errorf("unexpected type for AllocationBlock value: %T", kvp.Value)
