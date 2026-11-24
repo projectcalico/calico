@@ -711,9 +711,20 @@ _Avoid_: bare "reporter"
 Code: `goldmane/proto/api.proto` (`EndpointType`).
 _Avoid_: bare endpoint (WorkloadEndpoint, HostEndpoint and others are all called that)
 
-#### Policy trace and policy hit
-The ordered list of policy rules that acted on a flow (an enforced list and a pending list), and one entry in it.
+#### Policy trace
+The record, on a flow, of which policy rules acted on it. It has two parts: the enforced policy trace and the pending policy trace.
 Code: `goldmane/proto/api.proto` (`PolicyTrace`).
+_Avoid_: bare "policy trace" for the enforced part alone
+
+#### Enforced policy trace
+The part of a policy trace computed with only enforced policy. In the protobuf it is `enforced_policies`.
+Code: `goldmane/proto/api.proto` (`PolicyTrace`).
+_Avoid_: policy trace, when only the enforced part is meant
+
+#### Policy hit
+One entry in a policy trace: the tier, policy, rule and action that acted on the flow.
+Code: `goldmane/proto/api.proto` (`PolicyHit`).
+_Avoid_: policy match, rule hit
 
 #### End-of-tier hit
 A policy hit of kind `EndOfTier`, whose `trigger` names the first policy that selected the flow in that tier.
