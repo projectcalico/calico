@@ -88,7 +88,7 @@ The disconnect Typha applies to a client that fell behind. It is one kind of con
 Code: `typha/pkg/syncserver/sync_server.go` (`connection`).
 _Avoid_: too far behind, lag (it has no threshold)
 
-### New client fallback grace period
+### New client fall-behind grace period
 The grace period during which a newly connected client is exempt from the fall-behind disconnect.
 Code: `typha/pkg/syncserver/sync_server.go` (`NewClientFallBehindGracePeriod`).
 _Avoid_: lag (it has no threshold)
