@@ -16,7 +16,4 @@ steps:
     commands: |
       cd calicoctl
       make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/calicoctl"
-      artifact push job report --destination test-results || true
+    reports: [calicoctl/report:test-results]

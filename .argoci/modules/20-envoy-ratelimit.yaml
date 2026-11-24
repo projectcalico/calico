@@ -17,7 +17,6 @@ steps:
   - name: envoy-ratelimit-build
     requests: {cpu: 2500m, memory: 1Gi}
     useGoBuild: true
-    workspaceVolumes: none
     matrix:
       - name: arm64
         env: [{name: ARCH, value: arm64}]

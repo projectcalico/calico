@@ -6,19 +6,14 @@ defaults:
   # In the build image, with NATIVE_GO_BUILD running each recipe in place rather
   # than in a nested container.
   useGoBuild: true
-  # The image ships tools under /go/bin, which the default /go volume hides.
-  workspaceVolumes: none
 
 steps:
-  # Compiles the same e2e.test as build-e2e-binaries, so it reads that step's
-  # cache; Go, not the restored files, decides what is stale.
   - name: e2e-test-set-drift
     env:
-      - name: BUILD_CACHE_GROUP
-        value: e2e
       - name: NATIVE_GO_BUILD
         value: "true"
     depends: [check-go]
     requests: {cpu: 5500m, memory: 6Gi}
+    goCache: read
     commands: |
       make -C e2e check-test-set

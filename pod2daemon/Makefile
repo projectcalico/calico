@@ -113,7 +113,8 @@ clean-registrar:
 ## Run the tests in a container. Useful for CI, Mac dev
 ut: $(SRC_FILES)
 	mkdir -p report
-	$(DOCKER_RUN) --privileged $(CALICO_BUILD) sh -c 'set -o pipefail && cd /go/src/$(PACKAGE_NAME) && go test -v ./... | go-junit-report > ./report/tests.xml'
+	$(if $(DOCKER_GO_BUILD_RECURSIVE),$(DOCKER_RUN) --privileged $(CALICO_BUILD)) \
+		sh -c 'set -o pipefail && go test -v ./... | go-junit-report > ./report/tests.xml'
 
 fv st:
 	@echo "No FVs or STs available"
