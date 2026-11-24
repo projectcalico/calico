@@ -29,7 +29,7 @@ Layers inside the IPAM library, calico-ipam and the IPAM GC controller.
 | Network plugin hand-off | `cni-plugin/pkg/ipamplugin/in_process.go` (`inProcessExec`) | Running calico-ipam inside the `calico` process, and exec'ing any other IPAM plugin. |
 | Sandbox handover step | `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`transferFromPriorSandbox`) | Moving an address the pod already holds onto the new sandbox's handle. |
 | Release step | `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`ReleaseSandbox`, `releaseUnlisted`, `releaseHandle`) | Releasing by sandbox handle and legacy workload handle, or only the unlisted addresses. |
-| Sync pass | `kube-controllers/pkg/controllers/node/ipam.go` (`syncIPAM`) | One GC pass: check allocations, release known leaks, release cooled-down addresses, release unused blocks, release nodes. |
+| Sync pass | `kube-controllers/pkg/controllers/node/ipam.go` (`syncIPAM`) | One GC pass: check allocations, release known leaks, deallocate cold IPs, release unused blocks, release nodes. |
 | Allocation classifier | `kube-controllers/pkg/controllers/node/ipam.go` (`checkAllocations`, `judgeAllocation`) | Giving each allocation a verdict. |
 | Allocation state | `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`allocationState`, `handleTracker`, `blockReleaseTracker`) | Allocations by node, the dirty-node set, the per-handle leak check and the empty-block rule. |
 | IPAM feed | `kube-controllers/pkg/controllers/utils/ipam_feed.go` (`IPAMFeed`) | Feeding the accounting tracker from the datastore syncer. |
@@ -86,25 +86,25 @@ Where a block affinity is in its life: `pending` while being claimed, `confirmed
 Code: `libcalico-go/lib/backend/model/block_affinity.go` (`BlockAffinityState`).
 _Avoid_: confirmed on its own (it also means a confirmed leak), stale affinity (a different thing)
 
-#### In cooldown
-The state of an address after release and before deallocation. It still counts as in use.
-Code: `libcalico-go/lib/backend/model/block.go` (`ReleasedAt`), `libcalico-go/lib/ipam/ipam_types.go` (`IPCooldownSeconds`).
-_Avoid_: cooling, pending release, quarantine
+#### Cooling (in cooldown)
+The state of a released address during its cooldown period. It still counts as in use.
+Code: `libcalico-go/lib/backend/model/block.go` (`ReleasedAt`).
+_Avoid_: pending release, quarantine
 
-#### Cooled down
-The state of an address whose cooldown has ended.
-Code: `libcalico-go/lib/ipam/ipam_block.go` (`garbageCollect`).
-_Avoid_: cold, expired
+#### Cold IP
+An address whose cooldown period has ended but that is still stored as allocated, because no deallocation has been saved for its block.
+Code: `libcalico-go/lib/ipam/ipam_block.go` (`garbageCollect`), `kube-controllers/pkg/controllers/node/ipam.go` (`coldBlocks`).
+_Avoid_: cooled-down address, expired address
 
-#### Cooldown expiry
-The moment an address goes from in cooldown to cooled down.
-Code: `libcalico-go/lib/ipam/ipam_block.go` (`garbageCollect`).
-_Avoid_: bare GC (it means several things)
+#### Deallocation
+Turning a cold IP into a free address in its block.
+Code: `libcalico-go/lib/ipam/ipam_block.go` (`garbageCollect`, `blockFromBackend`).
+_Avoid_: write-folded deallocation, release (that starts the cooldown), read-time GC
 
-#### Write-folded deallocation
-Deallocation of cooled-down addresses that is saved only as part of a block write.
-Code: `libcalico-go/lib/ipam/ipam_block.go` (`blockFromBackend`).
-_Avoid_: read-time GC, the IPAM GC (that is the controller)
+#### Free address
+An address in a block that is not in use: never allocated, or deallocated.
+Code: `libcalico-go/lib/backend/model/block.go` (`Unallocated`).
+_Avoid_: available, unallocated
 
 #### VM handle
 The handle of the form `<network>.vmi.<namespace>.<vm>`, which persists across the pods of one KubeVirt VM.
@@ -250,10 +250,10 @@ The minimum leak grace period for KubeVirt VM allocations.
 Code: `kube-controllers/pkg/controllers/node/ipam.go` (`vmRecreationGracePeriod`).
 _Avoid_: vmRecreationGracePeriod
 
-#### Cold IP release
-The pass that persists deallocation for blocks whose addresses have cooled down but that no write path has touched.
+#### Cold IP deallocation
+The IPAM GC controller pass that deallocates cold IPs in blocks that nothing else has written.
 Code: `kube-controllers/pkg/controllers/node/ipam.go` (`garbageCollectColdIPs`, `coldBlocks`).
-_Avoid_: cold-IP GC, cold IPs
+_Avoid_: cold IP release, cold-IP GC
 
 #### `kubernetesNodesByCalicoName`
 The controller's lookup from a Calico Node name to the Kubernetes Node object.
@@ -276,4 +276,4 @@ _Avoid_: IPAM cache, shared tracker
 | stale | the unconfirmed-affinity error, an affinity to a missing node, a stale sandbox | stale affinity error, affinity to a missing node, prior sandbox |
 | virtual | the virtual affinity type | virtual affinity |
 | host and node | the Calico Node name in IPAM calls (`AffinityConfig.Host`, `MaxBlocksPerHost`), the Kubernetes Node name | Calico Node name, Kubernetes Node name |
-| GC | the library's deallocation of cooled-down addresses, the IPAM GC controller | deallocation, IPAM GC controller |
+| GC | the library's deallocation of cold IPs, the IPAM GC controller | deallocation, IPAM GC controller |

@@ -432,7 +432,7 @@ _Avoid_: chunk, subnet, bare "block"
 #### Pool containing the block
 The IP pool whose CIDR contains the block's CIDR.
 Code: `libcalico-go/lib/ipam/accounting/pool.go` (`poolFor`).
-_Avoid_: the pool that claims the block, the pool that owns the block
+_Avoid_: the pool that claims the block
 
 #### Block affinity
 A host's or virtual owner's claim on a block, in state `pending`, `confirmed` or `pendingDeletion`.
@@ -504,10 +504,15 @@ The cluster IPAM singleton: StrictAffinity, MaxBlocksPerHost, AutoAllocateBlocks
 Code: `libcalico-go/lib/ipam/ipam_types.go` (`IPAMConfig`), `api/pkg/apis/projectcalico/v3/ipamconfig.go` (`KindIPAMConfiguration`).
 _Avoid_: bare "IPAMConfig"
 
-#### Cooldown
-The period after release and before deallocation in which an address stays in `Allocations` with `ReleasedAt` set. A released address is "in cooldown", then "cooled down".
-Code: `libcalico-go/lib/ipam/ipam_block.go` (`garbageCollect`).
-_Avoid_: pending release, quarantine, cold
+#### Release
+An owner giving up an allocated address, which starts its cooldown period.
+Code: `libcalico-go/lib/ipam/ipam.go` (`ReleaseIPs`).
+_Avoid_: deallocate (that ends the cooldown), free
+
+#### Cooldown period
+The length of time a released address stays cooling before it can be deallocated.
+Code: `libcalico-go/lib/ipam/ipam_types.go` (`IPCooldownSeconds`).
+_Avoid_: cooldown expiry, pending release, quarantine
 
 #### Leak
 An allocation whose owner no longer uses it, either a candidate leak or a confirmed leak.
@@ -898,7 +903,7 @@ Each word below means several things in the code. Use the phrase in the last col
 | reserved | IPReservation; the Windows-reserved handle (`libcalico-go/lib/ipam/accounting/allocation.go`); accounting's `reservedClass` (`libcalico-go/lib/ipam/accounting/tracker.go`); the BPF skb-mark range | "IP reservation", "Windows-reserved addresses". |
 | render | Operator manifest generation; confd template rendering; Felix `*tables` rule rendering (`felix/rules/rule_defs.go`) | Name which. |
 | operator | A person running Calico; the tigera-operator | "Administrator" for the person; "the operator" for the program. |
-| GC | IPAM library read-time deallocation (`libcalico-go/lib/ipam/ipam_block.go`); the IPAM GC; cold-IP GC (`kube-controllers/pkg/controllers/node/ipam.go`); the LoadBalancer controller's "garbage collection for leaked IP addresses" (`kube-controllers/pkg/controllers/loadbalancer/loadbalancer_controller.go`); kernel cleanup | "The IPAM GC" is the kube-controllers one. Otherwise "read-time GC" (also "write-folded deallocation"), "unclaimed LoadBalancer IPs". |
+| GC | the IPAM library's deallocation of cold IPs (`libcalico-go/lib/ipam/ipam_block.go`); the IPAM GC; cold IP deallocation (`kube-controllers/pkg/controllers/node/ipam.go`); the LoadBalancer controller's "garbage collection for leaked IP addresses" (`kube-controllers/pkg/controllers/loadbalancer/loadbalancer_controller.go`); kernel cleanup | "The IPAM GC" is the kube-controllers one. Otherwise "read-time GC" (also "write-folded deallocation"), "unclaimed LoadBalancer IPs". |
 | release | Releasing an IP; a product release; BIRD withdrawing a route | Name which. |
 | FV | Felix calc-graph FV, which is unit tests (`felix/calc/calc_graph_fv_test.go`); Felix FV; Goldmane FV; operator FV | Name the suite. |
 | variant | The operator's product variant (`operator/api/v1/installation_types.go`); the BPF object variant `hook.AttachType` (`felix/bpf/hook/load.go`); `_notrace` and `_DEBUG` builds | "Product variant", "BPF object variant". |
