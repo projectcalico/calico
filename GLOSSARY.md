@@ -653,9 +653,24 @@ Code: `felix/dataplane/driver.go` (`StartDataplaneDriver`), `operator/api/v1/ins
 _Avoid_: data plane, dataplane backend
 
 #### Dataplane mode
-Which dataplane a Felix runs.
-Code: `felix/DESIGN.md`.
+Which dataplane Felix programs: iptables mode, nftables mode or BPF mode on Linux, or the Windows dataplane. The code that implements a mode is its dataplane driver, such as the nftables dataplane driver.
+Code: `felix/config/config_params.go` (`NFTablesMode`, `BPFEnabled`).
 _Avoid_: backend
+
+#### iptables mode
+The dataplane mode in which Felix renders policy as iptables rules and programs them with the iptables tools.
+Code: `felix/iptables/table.go` (`Table`).
+_Avoid_: legacy mode, netfilter mode
+
+#### nftables mode
+The dataplane mode in which Felix renders policy as nftables tables and programs nftables directly.
+Code: `felix/config/config_params.go` (`NFTablesMode`).
+_Avoid_: nftables backend
+
+#### BPF mode
+The dataplane mode in which Felix attaches BPF programs to interfaces instead of rendering netfilter rules.
+Code: `felix/config/config_params.go` (`BPFEnabled`).
+_Avoid_: eBPF dataplane, when the mode is meant
 
 #### Dataplane API
 The `ToDataplane` and `FromDataplane` protobuf stream between Felix's calculation graph and a dataplane driver, including an external one.
@@ -668,9 +683,9 @@ Code: `felix/design/bpf-overview.md`.
 _Avoid_: legacy dataplane, netfilter dataplane
 
 #### iptables backend
-Which iptables binary family Felix uses, legacy or nft (`IptablesBackend`).
+The kernel interface the iptables tools use in iptables mode: `legacy` (x_tables), `nft` (nf_tables, through iptables' compatibility layer) or `auto`. It is not a dataplane mode, and `nft` is not nftables mode.
 Code: `felix/config/config_params.go` (`IptablesBackend`).
-_Avoid_: "nftables backend", for nftables mode
+_Avoid_: iptables kernel API, "nftables backend"
 
 #### Dataplane resync
 Felix's full reconciliation against kernel state.
