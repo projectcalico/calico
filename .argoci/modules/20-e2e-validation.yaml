@@ -10,3 +10,10 @@ steps:
     requests: {cpu: 1750m, memory: 548Mi}
     commands: |
       ./.argoci/scripts/test_scripts/e2e-validation.sh
+
+  # The CI's own loader scripts, against stubbed tools.
+  - name: argoci-scripts-test
+    jobSize: small
+    requests: {cpu: 500m, memory: 548Mi}
+    commands: |
+      ./.argoci/scripts/test-load-cached-images.sh
