@@ -136,13 +136,13 @@ steps:
   # FELIX_TEST_GROUP is parsed for the Ubuntu release, dataplane and UTs, not
   # just a label.
   #
-  # The timeout outlasts JOB_TIMEOUT_MINUTES by up to 15 minutes of VM creation
-  # retries, plus slack so the fleet's own watchdog can capture a hung VM's
-  # console first.
+  # The timeout leaves room for a preempted spot batch to rerun in full on
+  # demand, after up to 15 minutes of VM creation retries.  The fleet's own
+  # watchdog fires first, so it can capture a hung VM's console.
   - name: felix-fv
     tiers: []
     depends: [felix-build]
-    timeout: 1h30m
+    timeout: 2h30m
     requests: {cpu: 2000m, memory: 4Gi}
     secretBundles:
       - name: google-service-account-for-gce
@@ -155,6 +155,18 @@ steps:
     env:
       - name: JOB_TIMEOUT_MINUTES
         value: "60"
+      # STANDARD puts every lane back on demand.  A preempted batch reruns once
+      # on an on-demand VM.
+      - name: VM_PROVISIONING_MODEL
+        value: SPOT
+      # C3D first: the best spot capacity and uptime in us-central1 on 24 Nov
+      # 2026.
+      - name: VM_SPOT_MACHINE_TYPES
+        value: c3d-highcpu-4 c4d-highcpu-4 c3-highcpu-4
+      # The step timeout less the setup before the fleet starts; a preempted
+      # batch reruns only if this leaves time for it.
+      - name: FV_STEP_TIMEOUT_MINUTES
+        value: "135"
     matrix:
       - name: iptables-2204
         env:
