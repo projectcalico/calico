@@ -220,8 +220,10 @@ type settings struct {
 
 	resolve registry.DigestResolver
 
-	// resume is the record an earlier run left, and how to check it.
-	resume *resume
+	// recordedRefs is what an earlier run published, which a resume skips.
+	recordedRefs []string
+
+	force bool
 
 	steps.Step
 }
@@ -235,12 +237,6 @@ type index struct {
 	repoURL  string
 	chartURL string
 	dir      string
-}
-
-// resume is what an interrupted run left behind, and whether to override it.
-type resume struct {
-	published []string
-	force     bool
 }
 
 // A step's options. Option reaches every step; the per-step interfaces let a
@@ -331,16 +327,6 @@ func WithModifiedValues(edits []ValueEdit) BuildOption {
 	})
 }
 
-func WithRecord(rec steps.RefRecorder) PublishOption {
-	return publishSetting(func(s *settings) error {
-		if rec == nil {
-			return fmt.Errorf("no recorder to record published charts")
-		}
-		s.refs = rec
-		return nil
-	})
-}
-
 func WithResolver(resolve registry.DigestResolver) PublishOption {
 	return publishSetting(func(s *settings) error {
 		if resolve == nil {
@@ -351,11 +337,11 @@ func WithResolver(resolve registry.DigestResolver) PublishOption {
 	})
 }
 
-// WithResume skips the charts an earlier run already published. Without force,
-// a digest that disagrees with the record is an error: the tag moved under us.
-func WithResume(published []string, force bool) PublishOption {
+// WithForce accepts a digest that disagrees with the record, which otherwise
+// fails the publish: the tag moved under us.
+func WithForce(force bool) PublishOption {
 	return publishSetting(func(s *settings) error {
-		s.resume = &resume{published: published, force: force}
+		s.force = force
 		return nil
 	})
 }

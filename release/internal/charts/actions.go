@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/env"
 	"github.com/projectcalico/calico/release/internal/fsutil"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/yamledit"
@@ -53,7 +54,7 @@ func Build(chart Chart, opts ...BuildOption) error {
 	if err := s.build(); err != nil {
 		return err
 	}
-	if err := s.verify(); err != nil {
+	if err := s.present(); err != nil {
 		return err
 	}
 	s.Logger().Info("Finished building helm charts")
@@ -72,7 +73,7 @@ func Build(chart Chart, opts ...BuildOption) error {
 }
 
 // Publish pushes every built chart to every registry. confirm latches the push.
-func Publish(chart Chart, registries []string, confirm bool, opts ...PublishOption) error {
+func Publish(chart Chart, registries []string, recordsDir string, confirm bool, opts ...PublishOption) error {
 	s, err := newSettings(PublishStep, chart, opts)
 	if err != nil {
 		return err
@@ -81,18 +82,27 @@ func Publish(chart Chart, registries []string, confirm bool, opts ...PublishOpti
 		return s.Errorf("no registries to publish to")
 	}
 	s.registries, s.confirm = registries, confirm
-	if !confirm {
-		// A dry run pushes nothing, so a record would name unpublished charts.
-		s.refs = nil
+	if s.recordedRefs, err = outputs.ReadRefs(recordsDir, PublishStep); err != nil {
+		return s.Errorf("read published chart refs: %w", err)
+	}
+	// A dry run pushes nothing, so a record would name unpublished charts.
+	if confirm {
+		if s.refs, err = outputs.NewRefsWriter(recordsDir, PublishStep); err != nil {
+			return s.Errorf("%w", err)
+		}
 	}
 
 	// Fail before pushing, rather than leaving a registry half updated.
 	if err := s.present(); err != nil {
 		return err
 	}
-	units, err := s.pending()
+	units, done, err := s.pending()
 	if err != nil {
 		return err
+	}
+	for _, u := range done {
+		s.Logger().WithFields(logrus.Fields{"chart": u.chart, "registry": u.registry}).
+			Info("Already published, skipping")
 	}
 	if len(units) == 0 {
 		s.Logger().Info("Every chart is already published")
@@ -115,6 +125,43 @@ func Publish(chart Chart, registries []string, confirm bool, opts ...PublishOpti
 		return pushErr
 	}
 	s.Logger().Info("Finished publishing helm charts")
+	return nil
+}
+
+// Built fails unless every chart is on disk.
+func Built(chart Chart, opts ...BuildOption) error {
+	s, err := newSettings(buildStep, chart, opts)
+	if err != nil {
+		return err
+	}
+	return s.present()
+}
+
+// Pushed fails unless every chart is in every registry at a digest recorded
+// under recordsDir.
+func Pushed(chart Chart, registries []string, recordsDir string, opts ...PublishOption) error {
+	s, err := newSettings(PublishStep, chart, opts)
+	if err != nil {
+		return err
+	}
+	if len(registries) == 0 {
+		return s.Errorf("no registries to check")
+	}
+	s.registries = registries
+	if s.recordedRefs, err = outputs.ReadRefs(recordsDir, PublishStep); err != nil {
+		return s.Errorf("read published chart refs: %w", err)
+	}
+	todo, _, err := s.pending()
+	if err != nil {
+		return err
+	}
+	var missing []string
+	for _, u := range todo {
+		missing = append(missing, u.repo())
+	}
+	if len(missing) > 0 {
+		return s.Errorf("not published: %s", strings.Join(missing, ", "))
+	}
 	return nil
 }
 
@@ -161,17 +208,6 @@ func (s settings) build() error {
 		return s.Errorf("building helm charts: %w", err)
 	}
 	return nil
-}
-
-// A chart missing here means the target and the list have drifted apart.
-func (s settings) verify() error {
-	var errs []error
-	for _, chart := range s.Names {
-		if _, err := os.Stat(s.path(chart)); err != nil {
-			errs = append(errs, fmt.Errorf("chart %s was not built: %w", chart, err))
-		}
-	}
-	return errors.Join(errs...)
 }
 
 func (s settings) resetTree() {
@@ -256,32 +292,30 @@ func (s settings) present() error {
 	return errors.Join(errs...)
 }
 
-// pending drops the charts an earlier run published, so an interrupted release
-// resumes on what is left.
-func (s settings) pending() ([]unit, error) {
+// pending splits the charts into those still to publish and those the resume
+// record and the registry both show as published.
+func (s settings) pending() (todo, done []unit, err error) {
 	units := s.units()
-	if s.resume == nil || len(s.resume.published) == 0 {
-		return units, nil
+	if len(s.recordedRefs) == 0 {
+		return units, nil, nil
 	}
 
-	recorded := registry.DigestsByRepo(s.resume.published)
+	recorded := registry.DigestsByRepo(s.recordedRefs)
 
-	done, err := steps.Go(units, func(u unit) (bool, error) {
+	published, err := steps.Go(units, func(u unit) (bool, error) {
 		return s.published(u, recorded)
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	var out []unit
 	for i, u := range units {
-		if done[i] {
-			s.Logger().WithFields(map[string]any{"chart": u.chart, "registry": u.registry}).
-				Info("Already published, skipping")
-			continue
+		if published[i] {
+			done = append(done, u)
+		} else {
+			todo = append(todo, u)
 		}
-		out = append(out, u)
 	}
-	return out, nil
+	return todo, done, nil
 }
 
 func (s settings) published(u unit, recorded registry.RecordedDigests) (bool, error) {
@@ -300,12 +334,13 @@ func (s settings) published(u unit, recorded registry.RecordedDigests) (bool, er
 	if _, known := digests[got]; known {
 		return true, nil
 	}
-	if s.resume.force {
+	if s.force {
 		return false, nil
 	}
 	return false, s.Errorf(
 		"%s is published at %s; this release recorded %s. Pass --force to republish over it",
-		ref, got, strings.Join(slices.Sorted(maps.Keys(digests)), ", "))
+		ref, got, strings.Join(slices.Sorted(maps.Keys(digests)), ", "),
+	)
 }
 
 // Failures are collected, not stopped at: one chart failing must not hide the

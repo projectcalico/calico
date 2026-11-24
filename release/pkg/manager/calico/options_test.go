@@ -70,17 +70,27 @@ func TestNewManager(t *testing.T) {
 		}
 	})
 
+	t.Run("an operator with nothing to do is off", func(t *testing.T) {
+		m, err := NewManager(append(requiredOpts(), WithOperator(operator.Driver{}))...)
+		if err != nil {
+			t.Fatalf("NewManager: %v", err)
+		}
+		if m.operator.Do != nil {
+			t.Error("operator is on")
+		}
+	})
+
 	skip := map[string]bool{operator.Step: true, images.Step: true}
 	m, err := NewManager(append(requiredOpts(),
-		WithOperator(func() error { return nil }),
+		WithOperator(operator.Driver{Do: func() error { return nil }}),
 		WithPlanOptions(plan.Options{Skip: skip}),
 	)...)
 	if err != nil {
 		t.Fatalf("NewManager: %v", err)
 	}
-	t.Run("skipping the operator turns it off", func(t *testing.T) {
-		if m.operator != nil {
-			t.Error("operator is still on")
+	t.Run("skipping the operator keeps it configured", func(t *testing.T) {
+		if m.operator.Do == nil {
+			t.Error("operator is no longer configured")
 		}
 	})
 	t.Run("skipping images turns them off but keeps their step", func(t *testing.T) {
