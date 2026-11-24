@@ -42,72 +42,72 @@ Terms defined in the [root glossary](../GLOSSARY.md) that apply in this componen
 - [Syncer output](../GLOSSARY.md#syncer-output)
 - [v3.Node name](../GLOSSARY.md#v3node-name)
 
-**projectcalico.org/v3 CRDs**:
+### projectcalico.org/v3 CRDs
 Calico resources stored as CRDs in the `projectcalico.org/v3` API group, with no apiserver in front of them.
 Code: `libcalico-go/lib/backend/k8s/resources/apigroups.go` (`BackingAPIGroupV3`).
 _Avoid_: v3 CRDs (without the group), CRD mode
 
-**crd.projectcalico.org/v1 CRDs**:
+### crd.projectcalico.org/v1 CRDs
 Calico resources stored as CRDs in the `crd.projectcalico.org/v1` API group. This is the storage behind the aggregated v3 API.
 Code: `libcalico-go/lib/backend/k8s/resources/apigroups.go` (`BackingAPIGroupV1`).
 _Avoid_: v1 CRDs (without the group), v1 API
 
-**Storage kind**:
+### Storage kind
 How KDD holds one kind: CRD-backed, stored as a custom resource, or derived, computed from a core Kubernetes object and never stored.
 Code: `libcalico-go/lib/backend/k8s/client.go` (`NewKubeClientForConfig`).
 _Avoid_: CRD mode
 
-**Felix syncer**:
+### Felix syncer
 The datastore syncer behind the `felix` syncer type, which carries Felix's inputs, from ClusterInformation and FelixConfiguration to policies, endpoints, IP pools and IPAM blocks.
 Code: `libcalico-go/lib/backend/syncersv1/felixsyncer/felixsyncerv1.go` (`New`).
 _Avoid_: bare syncer (name the syncer type)
 
-**Tunnel IP allocation syncer**:
+### Tunnel IP allocation syncer
 The datastore syncer behind the `tunnel-ip-allocation` syncer type, which carries IPPool and one Node.
 Code: `libcalico-go/lib/backend/syncersv1/tunnelipsyncer/tunnelipsyncer.go` (`New`).
 _Avoid_: bare syncer (name the syncer type)
 
-**Node status syncer**:
+### Node status syncer
 The datastore syncer behind the `node-status` syncer type, which carries CalicoNodeStatus only.
 Code: `libcalico-go/lib/backend/syncersv1/nodestatussyncer/nodestatussyncer.go` (`New`).
 _Avoid_: bare syncer (name the syncer type)
 
-**Watcher cache**:
+### Watcher cache
 The per-resource-type component inside a datastore syncer that lists, watches and forwards changes.
 Code: `libcalico-go/lib/backend/watchersyncer/watchercache.go` (`watcherCache`).
 _Avoid_: informer (that is client-go's), cache (on its own)
 
-**Polling mode**:
+### Polling mode
 The watcher cache state for a resource type that cannot be watched, so it is polled instead.
 Code: `libcalico-go/lib/backend/watchersyncer/watchercache.go` (`listTriggeredPolling`, `watchTriggeredPolling`).
 _Avoid_: listTriggeredPolling, watchTriggeredPolling
 
-**`crdInstalled`**:
+### `crdInstalled`
 The watcher cache state in which the CRD for its kind is absent.
 Code: `libcalico-go/lib/backend/watchersyncer/watchercache.go` (`crdInstalled`).
 _Avoid_: nothing known
 
-**`ConflictResolvingCacheUpdateProcessor`**:
+### `ConflictResolvingCacheUpdateProcessor`
 An update processor for kinds whose v1-model key cannot be derived from the v3 name.
 Code: `libcalico-go/lib/backend/syncersv1/updateprocessors/conflictresolvingcacheproc.go` (`NewConflictResolvingCacheUpdateProcessor`).
 _Avoid_: conflict (the migration controller uses that word for a different thing)
 
-**Config update processor**:
+### Config update processor
 An update processor that expands one FelixConfiguration or ClusterInformation resource into one v1-model key per field, either global or per node.
 Code: `libcalico-go/lib/backend/syncersv1/updateprocessors/configurationprocessor.go` (`NewConfigUpdateProcessor`).
 _Avoid_: config fan-out (Typha's fan-out is a different thing)
 
-**Per-field config keys**:
+### Per-field config keys
 The v1-model keys a config update processor emits, one for each field of a configuration resource.
 Code: `libcalico-go/lib/backend/model/felixconfig.go` (`GlobalConfigKey`, `HostConfigKey`).
 _Avoid_: nothing known
 
-**`EnsureInitialized`**:
+### `EnsureInitialized`
 The first-run initialization of the datastore: ClusterInformation (version, cluster GUID, `DatastoreReady`) and the protected tiers.
 Code: `libcalico-go/lib/clientv3/client.go` (`EnsureInitialized`).
 _Avoid_: nothing known
 
-**Policy key**:
+### Policy key
 The v1-model key for a policy, made of kind, namespace and name.
 Code: `libcalico-go/lib/backend/model/policy.go` (`PolicyKey`).
 _Avoid_: LegacyPolicyKey (that is the older form with a tier in the key)

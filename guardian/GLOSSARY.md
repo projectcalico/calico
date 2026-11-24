@@ -16,32 +16,32 @@ The top layer of Guardian.
 
 ## Terms
 
-**Guardian**:
+### Guardian
 The agent in a cluster that holds one mTLS tunnel to a management cluster.
 Code: `guardian/pkg/daemon/daemon.go` (`Run`).
 _Avoid_: tunnel client, agent, the tunnel
 
-**Management cluster**:
+### Management cluster
 The cluster at the far end of Guardian's tunnel. Its server is not in this repository.
 Code: `guardian/pkg/config/config.go` (`VoltronURL`).
 _Avoid_: remote cluster
 
-**Tunnel session**:
+### Tunnel session
 One yamux session over mTLS to the management cluster, on which either side opens streams.
 Code: `guardian/pkg/tunnel/dial.go` (`Session`).
 _Avoid_: connection
 
-**Upstream path**:
+### Upstream path
 The path from the cluster to the management cluster.
 Code: `guardian/pkg/server/server.go` (`ListenAndServeCluster`).
 _Avoid_: outbound, cluster listener
 
-**Downstream path**:
+### Downstream path
 The path from the management cluster to the cluster.
 Code: `guardian/pkg/server/server.go` (`ListenAndServeManagementCluster`).
 _Avoid_: inbound, management cluster listener
 
-**Target**:
+### Target
 A path prefix mapped to a destination URL, with token, CA and mTLS options.
 Code: `guardian/pkg/server/target.go` (`Target`).
 _Avoid_: route

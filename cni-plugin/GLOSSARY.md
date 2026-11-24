@@ -31,52 +31,52 @@ Terms defined in the [root glossary](../GLOSSARY.md) that apply in this componen
 - [Endpoint status directory](../GLOSSARY.md#endpoint-status-directory)
 - [Endpoint status file](../GLOSSARY.md#endpoint-status-file)
 
-**Network plugin**:
+### Network plugin
 The `calico` CNI program that kubelet invokes for a pod's network.
 Code: `cni-plugin/pkg/plugin/plugin.go` (`Main`).
 _Avoid_: the CNI (ambiguous), main CNI
 
-**NetConf**:
+### NetConf
 The CNI network configuration JSON that the plugin parses on every call.
 Code: `cni-plugin/pkg/types/types.go` (`NetConf`).
 _Avoid_: CNI config (that also means the conflist file)
 
-**Feature control**:
+### Feature control
 The NetConf switches that unlock `ipAddrsNoIpam` and `floatingIPs`.
 Code: `cni-plugin/pkg/types/types.go` (`FeatureControl`).
 _Avoid_: feature_control, feature flags
 
-**WEP identifiers**:
+### WEP identifiers
 The node name, orchestrator, pod, container ID and interface name that together name a WorkloadEndpoint.
 Code: `cni-plugin/internal/pkg/utils/utils.go` (`WEPIdentifiers`).
 _Avoid_: epIDs, wepIDs
 
-**WEP name prefix**:
+### WEP name prefix
 A WorkloadEndpoint name without its interface part, used to list every endpoint a pod already has.
 Code: `cni-plugin/pkg/plugin/plugin.go` (`CalculateWorkloadEndpointName`).
 _Avoid_: workload name prefix
 
-**CNI dataplane**:
+### CNI dataplane
 The pluggable piece of the network plugin that creates the host and container interfaces and routes for one sandbox. Three exist: Linux, Windows and gRPC.
 Code: `cni-plugin/pkg/dataplane/dataplane.go` (`Dataplane`, `GetDataplane`).
 _Avoid_: Felix dataplane, dataplane (on its own)
 
-**gRPC CNI dataplane**:
+### gRPC CNI dataplane
 The CNI dataplane that hands ADD and DEL to an external server, which sets up the interfaces.
 Code: `cni-plugin/pkg/dataplane/grpc/proto/cnibackend.proto` (`CniDataplane`).
 _Avoid_: dataplane driver (that is Felix's layer)
 
-**Readiness gates**:
+### Readiness gates
 The NetConf list of HTTP URLs that gate a pod's network setup.
 Code: `cni-plugin/pkg/types/types.go` (`ReadinessGates`), `cni-plugin/pkg/plugin/plugin.go` (`pollEndpointReadiness`).
 _Avoid_: readinessGates (that is a Pod field)
 
-**Endpoint readiness wait**:
+### Endpoint readiness wait
 The ADD step that holds a pod's start until Felix writes the endpoint status file.
 Code: `cni-plugin/pkg/wait/wait.go` (`ForEndpointReadyWithTimeout`), `cni-plugin/pkg/types/types.go` (`PolicySetupTimeoutSeconds`).
 _Avoid_: nothing known
 
-**Device type**:
+### Device type
 The NetConf choice of interface pair for a pod: a veth pair, or a netkit pair on kernels that support it.
 Code: `cni-plugin/pkg/types/types.go` (`DeviceTypeNetkit`).
 _Avoid_: interface type

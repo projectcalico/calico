@@ -34,67 +34,67 @@ Terms defined in the [root glossary](../GLOSSARY.md) that apply in this componen
 - [Calico node address](../GLOSSARY.md#calico-node-address)
 - [Tunnel address](../GLOSSARY.md#tunnel-address)
 
-**Networking backend**:
+### Networking backend
 The calico-node networking mode, one of `bird`, `vxlan` or `none`.
 Code: `node/filesystem/etc/rc.local`.
 _Avoid_: backend (on its own), policy-only mode
 
-**IP autodetection method**:
+### IP autodetection method
 The rule for choosing the Calico node address from the host's interfaces: `first-found`, `interface=`, `cidr=`, `can-reach=`, `skip-interface=` or `kubernetes-internal-ip`.
 Code: `node/pkg/lifecycle/startup/autodetection/autodetection_methods.go` (`AUTODETECTION_METHOD_FIRST`, `AUTODETECTION_METHOD_CAN_REACH`).
 _Avoid_: autodetect, detection method
 
-**Default pools**:
+### Default pools
 The IP pools that calico-node creates at first startup.
 Code: `node/pkg/lifecycle/startup/startup.go` (`configureIPPools`).
 _Avoid_: default IP pool
 
-**Node name file**:
+### Node name file
 The file `/var/lib/calico/nodename`, which holds the v3.Node name for this host. In a Kubernetes cluster that is the node name.
 Code: `node/pkg/lifecycle/utils/utils.go` (`NodenameFromFile`, `DetermineNodeName`).
 _Avoid_: nodename file, node name on its own (that is the Kubernetes Node)
 
-**Shutdown timestamp file**:
+### Shutdown timestamp file
 The file `/var/lib/calico/shutdownTS`, written at shutdown.
 Code: `node/pkg/lifecycle/utils/utils.go` (`defaultShutdownTimestampFileLinux`).
 _Avoid_: shutdownTS
 
-**Complete-startup**:
+### Complete-startup
 The node-services task that marks the node's network available.
 Code: `node/pkg/lifecycle/startup/startup.go` (`ManageNodeCondition`, `MarkNetworkAvailable`).
 _Avoid_: startup on its own (that is the earlier init step)
 
-**Monitor-addresses**:
+### Monitor-addresses
 The node-services task that keeps the Node resource's Calico node address current.
 Code: `node/pkg/lifecycle/startup/startup.go` (`MonitorIPAddressSubnetsWithContext`).
 _Avoid_: address monitor
 
-**Tunnel IP allocator**:
+### Tunnel IP allocator
 The node-services task that manages the node's tunnel addresses.
 Code: `node/pkg/allocateip/allocateip.go` (`Run`, `reconcileTunnelAddrs`).
 _Avoid_: allocateip
 
-**Status reporter**:
+### Status reporter
 The node-services task that fills the CalicoNodeStatus resource from BIRD's control socket.
 Code: `node/pkg/status/nodestatus.go` (`RunWithContext`).
 _Avoid_: reporter (it means several things)
 
-**BIRD control socket**:
+### BIRD control socket
 The Unix socket, `/var/run/calico/bird.ctl` for IPv4 and `bird6.ctl` for IPv6, on which BIRD answers queries.
 Code: `node/pkg/health/bird/bird.go` (`GetPeers`, `GRInProgress`).
 _Avoid_: bird.ctl, BIRD socket
 
-**Graceful restart**:
+### Graceful restart
 BIRD's ability to restart without withdrawing its routes.
 Code: `node/filesystem/etc/service/available/bird/run`.
 _Avoid_: GR
 
-**BIRD startup readiness window**:
+### BIRD startup readiness window
 The period after calico-node starts in which BIRD's readiness check is stricter than it is afterward.
 Code: `node/pkg/health/health.go` (`checkBIRDReady`).
 _Avoid_: nothing known
 
-**NetworkUnavailable condition**:
+### NetworkUnavailable condition
 The Kubernetes node condition that reports whether the node's network is unavailable, set by calico-node.
 Code: `node/pkg/lifecycle/utils/utils.go` (`SetNodeNetworkUnavailableCondition`), `node/pkg/lifecycle/shutdown/shutdown.go` (`Run`).
 _Avoid_: taint (that is a different node mechanism)

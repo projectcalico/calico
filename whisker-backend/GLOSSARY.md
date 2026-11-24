@@ -22,37 +22,37 @@ Terms defined in the [root glossary](../GLOSSARY.md) that apply in this componen
 - [Filter hints](../GLOSSARY.md#filter-hints)
 - [Query filter](../GLOSSARY.md#query-filter)
 
-**Flows backend**:
+### Flows backend
 The interface whisker-backend reads flows from.
 Code: `whisker-backend/pkg/apis/v1/backend.go` (`FlowsBackend`).
 _Avoid_: backend, unqualified; upstream (that is the package name)
 
-**Streaming flows backend**:
+### Streaming flows backend
 A flows backend that can also return a stream of flows. The Goldmane upstream implements it.
 Code: `whisker-backend/pkg/apis/v1/backend.go` (`StreamingFlowsBackend`).
 _Avoid_: backend on its own (it means several things)
 
-**FlowResponse**:
+### FlowResponse
 The JSON form of one Goldmane Flow that whisker-backend returns. Whisker's UI types call the same record a flow log, which is not Felix's flow log.
 Code: `whisker-backend/pkg/apis/v1/flows.go` (`FlowResponse`).
 _Avoid_: flow log
 
-**List-or-stream**:
+### List-or-stream
 An endpoint kind that returns either a JSON list or a server-sent event stream.
 Code: `lib/httpmachinery/pkg/apiutil/handler.go` (`NewJSONListOrEventStreamHandler`).
 _Avoid_: watch
 
-**Visibility filter**:
+### Visibility filter
 The per-request `FlowFilter` that limits which flows, and which policy hits on them, the current user may see.
 Code: `whisker-backend/pkg/auth/filter.go` (`FlowFilter`).
 _Avoid_: RBAC filter, filter (a query filter is a different thing)
 
-**Pending actions**:
+### Pending actions
 The actions that staged policies would have taken on a flow, from Goldmane's pending policy trace.
 Code: `whisker-backend/pkg/apis/v1/flows.go` (`PendingActions`).
 _Avoid_: staged actions
 
-**Proxy prefix**:
+### Proxy prefix
 The `/whisker-backend/` path prefix on requests from the Whisker UI to whisker-backend.
 Code: `whisker/docker-image/default.conf`.
 _Avoid_: nothing known
