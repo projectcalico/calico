@@ -8,7 +8,7 @@ The top layer of the whisker-backend process.
 
 | Building block | Code | Responsible for |
 |---|---|---|
-| App | `whisker-backend/cmd/whiskerbackend/app.go` (`Run`) | Builds the HTTPS server that exposes `/flows` and `/flows-filter-hints`. |
+| whisker-backend server | `whisker-backend/cmd/whiskerbackend/app.go` (`Run`) | The HTTPS server that exposes `/flows` and `/flows-filter-hints`. |
 | Flows handler | `whisker-backend/pkg/handlers/v1/flows.go` (`NewFlows`) | Serves a list or an event stream of flows and filter hints, applying the visibility filter. |
 | Flows backend | `whisker-backend/pkg/apis/v1/backend.go` (`FlowsBackend`) | The interface the handler reads flows from, so it does not depend on one upstream. |
 | Goldmane upstream | `whisker-backend/pkg/upstream/goldmane/backend.go` (`Backend`) | Implements the flows backend by calling Goldmane's `Flows` gRPC service. |
