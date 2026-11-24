@@ -198,34 +198,49 @@ func (e ErrLostEvents) Num() int {
 }
 
 // ParsePolicyVerdict converts a bpf event data and converts to go structure
+// Policy verdict event offsets: the event is the start of the BPF state after its event header.
+const (
+	evtHdrSize    = unsafe.Offsetof(state.State{}.SrcAddr)
+	offsetSrcAddr = unsafe.Offsetof(state.State{}.SrcAddr) - evtHdrSize
+	// The event reports the pre-NAT destination.
+	offsetDstAddr        = unsafe.Offsetof(state.State{}.PreNATDstAddr) - evtHdrSize
+	offsetPostNATDstAddr = unsafe.Offsetof(state.State{}.PostNATDstAddr) - evtHdrSize
+	offsetNATTunSrcAddr  = unsafe.Offsetof(state.State{}.TunIP) - evtHdrSize
+	offsetPolicyRC       = unsafe.Offsetof(state.State{}.PolicyRC) - evtHdrSize
+	offsetSrcPort        = unsafe.Offsetof(state.State{}.SrcPort) - evtHdrSize
+	offsetDstPort        = unsafe.Offsetof(state.State{}.PreNATDstPort) - evtHdrSize
+	offsetPostNATDstPort = unsafe.Offsetof(state.State{}.PostNATDstPort) - evtHdrSize
+	offsetIPProto        = unsafe.Offsetof(state.State{}.IPProto) - evtHdrSize
+	offsetIPSize         = unsafe.Offsetof(state.State{}.IPSize) - evtHdrSize
+	offsetRulesHit       = unsafe.Offsetof(state.State{}.RulesHit) - evtHdrSize
+	offsetRuleIDs        = unsafe.Offsetof(state.State{}.RuleIDs) - evtHdrSize
+)
+
 func ParsePolicyVerdict(data []byte, isIPv6 bool) PolicyVerdict {
 	fl := PolicyVerdict{
-		PolicyRC:       state.PolicyResult(binary.LittleEndian.Uint32(data[84:88])),
-		SrcPort:        binary.LittleEndian.Uint16(data[88:90]),
-		DstPort:        binary.LittleEndian.Uint16(data[92:94]),
-		PostNATDstPort: binary.LittleEndian.Uint16(data[94:96]),
-		IPProto:        uint8(data[96]),
-		IPSize:         binary.BigEndian.Uint16(data[98:100]),
-		RulesHit:       binary.LittleEndian.Uint32(data[100:104]),
+		PolicyRC:       state.PolicyResult(binary.LittleEndian.Uint32(data[offsetPolicyRC : offsetPolicyRC+4])),
+		SrcPort:        binary.LittleEndian.Uint16(data[offsetSrcPort : offsetSrcPort+2]),
+		DstPort:        binary.LittleEndian.Uint16(data[offsetDstPort : offsetDstPort+2]),
+		PostNATDstPort: binary.LittleEndian.Uint16(data[offsetPostNATDstPort : offsetPostNATDstPort+2]),
+		IPProto:        data[offsetIPProto],
+		IPSize:         binary.BigEndian.Uint16(data[offsetIPSize : offsetIPSize+2]),
+		RulesHit:       binary.LittleEndian.Uint32(data[offsetRulesHit : offsetRulesHit+4]),
 	}
 
 	if fl.RulesHit > state.MaxRuleIDs {
 		fl.RulesHit = state.MaxRuleIDs
 	}
 
+	ipLen := uintptr(4)
 	if isIPv6 {
-		fl.SrcAddr = net.IP(data[0:16])
-		fl.DstAddr = net.IP(data[32:48])
-		fl.PostNATDstAddr = net.IP(data[48:64])
-		fl.NATTunSrcAddr = net.IP(data[64:80])
-	} else {
-		fl.SrcAddr = net.IP(data[0:4])
-		fl.DstAddr = net.IP(data[32:36])
-		fl.PostNATDstAddr = net.IP(data[48:52])
-		fl.NATTunSrcAddr = net.IP(data[64:68])
+		ipLen = 16
 	}
+	fl.SrcAddr = net.IP(data[offsetSrcAddr : offsetSrcAddr+ipLen])
+	fl.DstAddr = net.IP(data[offsetDstAddr : offsetDstAddr+ipLen])
+	fl.PostNATDstAddr = net.IP(data[offsetPostNATDstAddr : offsetPostNATDstAddr+ipLen])
+	fl.NATTunSrcAddr = net.IP(data[offsetNATTunSrcAddr : offsetNATTunSrcAddr+ipLen])
 
-	off := 104
+	off := offsetRuleIDs
 	for i := 0; i < int(fl.RulesHit); i++ {
 		fl.RuleIDs[i] = binary.LittleEndian.Uint64(data[off : off+8])
 		off += 8
