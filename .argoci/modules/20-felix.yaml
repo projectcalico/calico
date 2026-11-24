@@ -137,7 +137,8 @@ steps:
   # just a label.
   #
   # The timeout leaves room for a preempted spot batch to rerun in full on
-  # demand, after up to 15 minutes of VM creation retries.  The fleet's own
+  # demand, after one spot pass and up to 15 minutes of on-demand creation
+  # retries.  The fleet's own
   # watchdog fires first, so it can capture a hung VM's console.
   - name: felix-fv
     tiers: []

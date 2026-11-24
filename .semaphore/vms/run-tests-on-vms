@@ -206,8 +206,11 @@ for batch in "${batches[@]}"; do
   [ -z "${vm_zone[$vm_name]:-}" ] || continue
   if [ "$vm_provisioning_model" = SPOT ] &&
     vm_z="$(gcloud --quiet compute operations list \
-      --filter="operationType=compute.instances.preempted AND targetLink~'/instances/${vm_name}\$'" \
-      --format='value(zone.basename())' | head -1)" && [ -n "$vm_z" ]; then
+      --filter="operationType=compute.instances.preempted AND targetLink~'/instances/${vm_name}\$' AND zone~'/zones/${region}-'" \
+      --format='value(insertTime,zone.basename())' |
+      while read -r op_at op_z; do
+        [ "$(date -d "$op_at" +%s 2>/dev/null || echo 0)" -lt "$fleet_created" ] || { echo "$op_z"; break; }
+      done)" && [ -n "$vm_z" ]; then
     vm_zone["$vm_name"]="$vm_z"
     echo "  $vm_name -> $vm_z (spot VM already preempted; its batch will rerun on demand)"
     continue
@@ -692,7 +695,7 @@ for batch in "${batches[@]}"; do
       # A hung spot batch may really be a preempted one.  Its VM isn't failing
       # afresh, so a VM still RUNNING settles the check at once.
       wd_preempt_at=""
-      if [ "$wd_model" = SPOT ] &&
+      if [ "$wd_model" = SPOT ] && [ ! -s "$preempt_file" ] &&
         wd_preempt_at="$(vm_preemption_check "$vm_name" "$zone" "$wd_created" $(( $(date +%s) - 60 )))"; then
         # The batch may have found the preemption too, and begun its retry.
         read -r _ wd_now_start _ < "$watchdog_file"
