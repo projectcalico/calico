@@ -38,13 +38,17 @@ for i in 1 2 3; do
 done
 log "${step} pulled ${image} in $(( $(date +%s) - start ))s"
 
-# The container mounts the machine's module cache at /go/pkg/mod and its build
-# cache at /go-cache; the shared disk goes in at the same path, for the links
-# into it and for gocacheprog.
-GO_LOCAL_MOD="${HOME}/go/pkg/mod" GOCACHE=/go-cache \
-  "$repo/.argoci/scripts/restore-go-cache" "$step" /cache/go | grep '^export GOCACHEPROG='
-# gocacheprog's own directory goes in too, for a recipe that runs its own
-# container without make's /go-cache mount.
+# The container mounts the machine's module cache at /go/pkg/mod, where go-cache
+# built with it, and its build cache at /go-cache; the shared disk goes in at
+# the same path, for the links into it and for gocacheprog.
+start=$(date +%s)
+argoci-go-cache-link "${HOME}/go/pkg/mod"
+log "${step} linked the shared modules in $(( $(date +%s) - start ))s"
+# Under GOCACHE: go moves, rather than copies, a cached file it installs from
+# anywhere else, which would empty the local cache. gocacheprog's directory is
+# mounted on its own too, for a recipe that runs its own container without
+# make's /go-cache mount.
+echo "export GOCACHEPROG='gocacheprog -v -ro /cache/go/build -dir /go-cache/prog'"
 prog="${repo}/.go-pkg-cache/prog"
 mkdir -p "$prog"
 echo "export EXTRA_DOCKER_ARGS='-v /cache/go:/cache/go:ro -v ${prog}:/go-cache/prog -e GOCACHEPROG'"

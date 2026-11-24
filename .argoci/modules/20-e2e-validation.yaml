@@ -16,5 +16,4 @@ steps:
     jobSize: small
     requests: {cpu: 500m, memory: 548Mi}
     commands: |
-      ./.argoci/scripts/test_scripts/restore-go-cache_test.sh
       ./.argoci/scripts/test-load-cached-images.sh

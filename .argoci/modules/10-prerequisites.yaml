@@ -76,7 +76,7 @@ steps:
     requests: {cpu: 9000m, memory: 10Gi}
     changes:
       in:
-        - ^\.argoci/scripts/(restore|vm)-go-cache$
+        - ^\.argoci/scripts/vm-go-cache$
         - ^\.argoci/modules/10-prerequisites\.yaml$
     goCache: write
     commands: |
@@ -113,11 +113,6 @@ steps:
         exit 1
       fi
       kill "$progress" 2>/dev/null || true
-      # Go trims only what has gone unused for days, so the snapshot would carry
-      # every output any run ever made. A hit refreshes an entry's mtime once it is
-      # an hour old, so anything older than that before this run began went unused.
-      find /cache/go/build -mindepth 2 -type f ! -newermt "@$(( s - 3600 ))" -delete
-      find /cache/go/build -mindepth 2 -type d -empty -delete
       du -sh /cache/go/build /cache/go/mod
 
   # Copies go-cache's disk to GCS for the steps that still build in docker, which
