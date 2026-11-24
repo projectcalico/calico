@@ -50,7 +50,10 @@ arg() { local a; for a in "${@:2}"; do [[ "$a" == "--$1="* ]] && echo "${a#*=}";
 case "$*" in
   *"instances bulk create"*)
     type=$(arg machine-type "$@")
-    echo "create $type" >>"$state/calls"
+    spot=""
+    [[ "$*" != *"--provisioning-model=SPOT"* ]] || spot=" spot"
+    echo "create $type$spot" >>"$state/calls"
+    for a in "$@"; do [[ "$a" != --labels=ci-provisioning=* ]] || echo "${a#--labels=}" >>"$state/provisioning-labels"; done
     echo "$type $(arg boot-disk-type "$@")" >>"$state/disks"
     n=$(( $(cat "$state/n-$type" 2>/dev/null || echo 0) + 1 ))
     echo "$n" >"$state/n-$type"
@@ -177,6 +180,31 @@ check "failure banner reports the attempts" output_has "no capacity or quota aft
 run 1 "c4d stockout" "n4d stockout" "c3 stockout" "n4 stockout"
 check "no backoff that would end past the deadline" \
   [ "$rc" = 1 -a "$(calls)" = "create c4d create n4d create c3 create n4" ]
+
+export VM_PROVISIONING_MODEL=SPOT VM_SPOT_MACHINE_TYPES="c3d c4d"
+
+run 15 "c3d ok"
+check "spot: the first spot type with capacity is used" \
+  [ "$rc" = 0 -a "$vm_machine_type" = c3d -a "$vm_provisioning_model" = SPOT -a "$(calls)" = "create c3d spot" ]
+check "spot: labelled as spot" [ "$(cat "$STUB_STATE/provisioning-labels")" = ci-provisioning=spot ]
+check "spot: the summary says spot" grep -qF "Test VMs: 2 × spot c3d" <<<"$vm_create_summary"
+
+run 15 "c3d stockout" "c4d reject,ok"
+check "spot: one pass, any error, then on-demand without waiting" \
+  [ "$rc" = 0 -a "$vm_machine_type" = c4d -a "$vm_provisioning_model" = STANDARD -a "$(calls)" = "create c3d spot create c4d spot create c4d" ]
+check "spot: the on-demand fleet is labelled as such" \
+  [ "$(tail -1 "$STUB_STATE/provisioning-labels")" = ci-provisioning=standard ]
+check "spot: the summary records the spot failures" \
+  grep -qF "earlier failures: c3d spot: VM_MIN_COUNT_NOT_REACHED ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS,c4d spot: REQUEST_REJECTED" <<<"$vm_create_summary"
+
+run 0 "c3d stockout" "c4d stockout,stockout"
+check "spot: the on-demand window starts after the spot pass" \
+  [ "$rc" = 1 -a "$(calls)" = "create c3d spot create c4d spot create c4d" ]
+
+unset VM_PROVISIONING_MODEL VM_SPOT_MACHINE_TYPES
+run 15 "c4d ok"
+check "on-demand by default, and labelled as such" \
+  [ "$vm_provisioning_model" = STANDARD -a "$(calls)" = "create c4d" -a "$(cat "$STUB_STATE/provisioning-labels")" = ci-provisioning=standard ]
 
 if [ "$fails" -gt 0 ]; then
   echo "$fails check(s) FAILED"
