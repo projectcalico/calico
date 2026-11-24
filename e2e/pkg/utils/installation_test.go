@@ -29,7 +29,7 @@ import (
 // ones whose clusters use VXLAN, where the precondition fails every case.
 func TestSuitesRequiringBGPCarryTheLabel(t *testing.T) {
 	for _, path := range testFilesCalling(t, "RequireBGPEnabled") {
-		if !fileContains(t, path, "describe.Requires(describe.BGP)") {
+		if !fileContains(t, path, "describe.Requires(platform.BGP)") {
 			t.Errorf("%s: requires BGP but the suite has no Requires:BGP label", path)
 		}
 	}

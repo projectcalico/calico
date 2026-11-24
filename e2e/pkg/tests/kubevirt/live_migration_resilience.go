@@ -33,7 +33,9 @@ import (
 	migrationsv1alpha1 "kubevirt.io/api/migrations/v1alpha1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
@@ -62,9 +64,9 @@ const (
 //     spec here is the real-KubeVirt, user-initiated counterpart.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaKubeVirt),
-	describe.Requires(describe.KubeVirt),
-	describe.Requires(describe.RealKubeVirt),
+	describe.Covers(area.KubeVirt),
+	describe.Requires(platform.KubeVirt),
+	describe.Requires(platform.RealKubeVirt),
 	"KubeVirt live migration resilience",
 	func() {
 		f := utils.NewDefaultFramework("calico-kubevirt-resilience")

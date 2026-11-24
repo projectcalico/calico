@@ -23,13 +23,13 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/testconfig"
 )
 
 // Declarations maps each capability a lane declares to the config files that
 // declared it, so a failure can name the fragment to fix.
-type Declarations map[describe.Capability][]string
+type Declarations map[platform.Capability][]string
 
 // DeclarationsFrom loads each config on its own and records which of them
 // provides each capability. Loading them merged would lose that.
@@ -41,7 +41,7 @@ func DeclarationsFrom(paths []string) (Declarations, error) {
 			return nil, err
 		}
 		for _, c := range cfg.Provides {
-			decls[describe.Capability(c)] = append(decls[describe.Capability(c)], p)
+			decls[platform.Capability(c)] = append(decls[platform.Capability(c)], p)
 		}
 	}
 	return decls, nil
@@ -55,7 +55,7 @@ type Result struct {
 
 	// Undeclared is every capability the cluster has that no fragment
 	// declared. It's a lead for a human, never a failure.
-	Undeclared []describe.Capability
+	Undeclared []platform.Capability
 
 	// Unchecked is every capability whose probe couldn't decide, such as an
 	// Installation read on a manifest install.
@@ -73,14 +73,14 @@ func CouldNotRun(err error) *Result {
 
 // Miss is a declared capability the check couldn't confirm.
 type Miss struct {
-	Capability describe.Capability
+	Capability platform.Capability
 	DeclaredBy []string
 	Saw        string
 }
 
 // Skip is a capability the check couldn't decide either way.
 type Skip struct {
-	Capability describe.Capability
+	Capability platform.Capability
 	Why        string
 }
 
@@ -97,7 +97,7 @@ func Check(ctx context.Context, cluster *Cluster, decls Declarations) *Result {
 
 	// A declaration no spec can require is a typo, so fail it.
 	for c, files := range decls {
-		if !slices.Contains(describe.Capabilities, c) {
+		if !slices.Contains(platform.All, c) {
 			result.Missing = append(result.Missing, Miss{
 				Capability: c,
 				DeclaredBy: files,
@@ -107,7 +107,7 @@ func Check(ctx context.Context, cluster *Cluster, decls Declarations) *Result {
 	}
 
 	// Probe every capability, declared or not, and sort each outcome.
-	for _, c := range describe.Capabilities {
+	for _, c := range platform.All {
 		files, declared := decls[c]
 		found, err := probes[c](ctx, cluster)
 

@@ -31,6 +31,7 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
@@ -40,9 +41,9 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaNetworkPolicy),
+	describe.Covers(area.NetworkPolicy),
 	describe.RunsAnywhere(),
-	describe.Covers(describe.AreaWindows),
+	describe.Covers(area.Windows),
 	"Calico NetworkPolicy",
 	func() {
 		// Define variables common across all tests.

@@ -33,6 +33,7 @@ import (
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	"k8s.io/utils/ptr"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
@@ -40,7 +41,7 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaPods),
+	describe.Covers(area.Pods),
 	describe.RunsAnywhere(),
 	"Pod Termination Grace Period",
 	func() {

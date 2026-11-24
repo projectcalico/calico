@@ -33,7 +33,9 @@ import (
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
@@ -72,13 +74,13 @@ type hepScenario struct {
 }
 
 // requires names what the cluster needs for the deny to be observable.
-func (s hepScenario) requires(applyOnForward bool) []describe.Capability {
+func (s hepScenario) requires(applyOnForward bool) []platform.Capability {
 	applies := s.aofFalsePolicyApplies
 	if applyOnForward {
 		applies = s.aofTruePolicyApplies
 	}
 	if s.podCrossNode && applies {
-		return []describe.Capability{describe.HostEndpointCrossNode}
+		return []platform.Capability{platform.HostEndpointCrossNode}
 	}
 	return nil
 }
@@ -201,7 +203,7 @@ var hepScenarioTable = []hepScenario{
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaHostProtection),
+	describe.Covers(area.HostProtection),
 	describe.RunsAnywhere(),
 	describe.WithSerial(), // Creates cluster-scoped HEPs and GNPs.
 	"Host Endpoint Datapath",
@@ -511,7 +513,7 @@ var _ = describe.CalicoDescribe(
 		}
 
 		// Xtables-only scenarios — only valid on iptables/nftables dataplanes.
-		framework.Context("xtables-only", describe.Requires(describe.Xtables), func() {
+		framework.Context("xtables-only", describe.Requires(platform.Xtables), func() {
 			for _, scenario := range hepScenarioTable {
 				if !scenario.tablesDataplaneOnly {
 					continue

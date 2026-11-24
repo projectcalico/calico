@@ -30,7 +30,9 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -41,8 +43,8 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaIPAM),
-	describe.Requires(describe.CalicoIPAM),
+	describe.Covers(area.IPAM),
+	describe.Requires(platform.CalicoIPAM),
 	describe.WithSerial(), // Modifies global state, so run serially.
 	"IPAM GC",
 	func() {

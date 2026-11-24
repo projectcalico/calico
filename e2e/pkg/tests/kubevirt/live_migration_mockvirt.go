@@ -31,7 +31,9 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/bgp"
 	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
@@ -46,9 +48,9 @@ import (
 // local_pref) using a local BIRD container on the Docker network.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaKubeVirt),
-	describe.Requires(describe.KubeVirt),
-	describe.Requires(describe.MockVirt),
+	describe.Covers(area.KubeVirt),
+	describe.Requires(platform.KubeVirt),
+	describe.Requires(platform.MockVirt),
 	"KubeVirt live migration (MockVirt)",
 	func() {
 		f := utils.NewDefaultFramework("calico-kubevirt-mockvirt")

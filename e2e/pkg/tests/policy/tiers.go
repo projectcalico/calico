@@ -27,7 +27,9 @@ import (
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
@@ -37,9 +39,9 @@ import (
 // DOCS_URL: https://docs.tigera.io/calico/latest/network-policy/policy-tiers/
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaTieredPolicy),
-	describe.Requires(describe.PolicyTiers),
-	describe.Covers(describe.AreaWindows),
+	describe.Covers(area.TieredPolicy),
+	describe.Requires(platform.PolicyTiers),
+	describe.Covers(area.Windows),
 	"Tiered policy tests",
 	func() {
 		var cli ctrlclient.Client

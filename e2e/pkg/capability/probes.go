@@ -31,7 +31,7 @@ import (
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
@@ -58,48 +58,48 @@ func unchecked(format string, args ...any) finding {
 // only when the API failed in a way that says nothing about the capability.
 type probe func(ctx context.Context, c *Cluster) (finding, error)
 
-// probes holds one probe per capability in describe.Capabilities.
-var probes = map[describe.Capability]probe{
-	describe.Operator:      probeOperator,
-	describe.CalicoCNI:     fromInstallation(cniIs(operatorv1.PluginCalico)),
-	describe.CalicoIPAM:    fromInstallation(ipamIs(operatorv1.IPAMPluginCalico)),
-	describe.AzureIPAM:     fromInstallation(ipamIs(operatorv1.IPAMPluginAzureVNET)),
-	describe.AggregatedAPI: probeCalicoAPIService(true),
-	describe.V3CRDs:        probeCalicoAPIService(false),
-	describe.BGP:           fromInstallation(bgpEnabled),
-	describe.BGPRouting:    probeBGPRouting,
-	describe.BGPMesh:       probeBGPMesh,
-	describe.NoEncap:       probeNoEncap,
-	describe.BPF:           fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneBPF)),
-	describe.BPFDSR:        probeBPFDSR,
-	describe.Xtables:       fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneIptables, operatorv1.LinuxDataplaneNftables)),
-	describe.PolicyTiers:   fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneIptables, operatorv1.LinuxDataplaneNftables, operatorv1.LinuxDataplaneBPF)),
-	describe.DoNotTrack:    fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneIptables, operatorv1.LinuxDataplaneNftables, operatorv1.LinuxDataplaneBPF)),
-	describe.WireGuard:     probeWireGuard,
-	describe.HostPorts:     fromInstallation(hostPortsEnabled),
-	describe.CalicoMTU:     probeCalicoMTU,
-	describe.AutoHEPs:      onTrust("a lane choice: the specs turn auto host endpoints on themselves"),
-	describe.Goldmane:      probeGoldmane,
-	describe.AWS:           nodeProviderIs("aws://"),
-	describe.Azure:         nodeProviderIs("azure://"),
-	describe.RKE2:          everyNode("runs an RKE2 kubelet", runsRKE2),
-	describe.OpenShift:     probeOpenShift,
-	describe.RHEL:          everyNode("runs RHEL", runsRHEL),
-	describe.IPv4:          everyNode("has an IPv4 internal address", hasInternalIP(false)),
-	describe.IPv6:          everyNode("has an IPv6 internal address", hasInternalIP(true)),
-	describe.KubeVirt:      probeKubeVirt,
-	describe.RealKubeVirt:  kubeVirtSimulated(false),
-	describe.MockVirt:      kubeVirtSimulated(true),
-	describe.Istio:         probeIstio,
-	describe.ExternalNode:  probeExternalNode,
+// probes holds one probe per capability in platform.All.
+var probes = map[platform.Capability]probe{
+	platform.Operator:      probeOperator,
+	platform.CalicoCNI:     fromInstallation(cniIs(operatorv1.PluginCalico)),
+	platform.CalicoIPAM:    fromInstallation(ipamIs(operatorv1.IPAMPluginCalico)),
+	platform.AzureIPAM:     fromInstallation(ipamIs(operatorv1.IPAMPluginAzureVNET)),
+	platform.AggregatedAPI: probeCalicoAPIService(true),
+	platform.V3CRDs:        probeCalicoAPIService(false),
+	platform.BGP:           fromInstallation(bgpEnabled),
+	platform.BGPRouting:    probeBGPRouting,
+	platform.BGPMesh:       probeBGPMesh,
+	platform.NoEncap:       probeNoEncap,
+	platform.BPF:           fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneBPF)),
+	platform.BPFDSR:        probeBPFDSR,
+	platform.Xtables:       fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneIptables, operatorv1.LinuxDataplaneNftables)),
+	platform.PolicyTiers:   fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneIptables, operatorv1.LinuxDataplaneNftables, operatorv1.LinuxDataplaneBPF)),
+	platform.DoNotTrack:    fromInstallation(dataplaneIn(operatorv1.LinuxDataplaneIptables, operatorv1.LinuxDataplaneNftables, operatorv1.LinuxDataplaneBPF)),
+	platform.WireGuard:     probeWireGuard,
+	platform.HostPorts:     fromInstallation(hostPortsEnabled),
+	platform.CalicoMTU:     probeCalicoMTU,
+	platform.AutoHEPs:      onTrust("a lane choice: the specs turn auto host endpoints on themselves"),
+	platform.Goldmane:      probeGoldmane,
+	platform.AWS:           nodeProviderIs("aws://"),
+	platform.Azure:         nodeProviderIs("azure://"),
+	platform.RKE2:          everyNode("runs an RKE2 kubelet", runsRKE2),
+	platform.OpenShift:     probeOpenShift,
+	platform.RHEL:          everyNode("runs RHEL", runsRHEL),
+	platform.IPv4:          everyNode("has an IPv4 internal address", hasInternalIP(false)),
+	platform.IPv6:          everyNode("has an IPv6 internal address", hasInternalIP(true)),
+	platform.KubeVirt:      probeKubeVirt,
+	platform.RealKubeVirt:  kubeVirtSimulated(false),
+	platform.MockVirt:      kubeVirtSimulated(true),
+	platform.Istio:         probeIstio,
+	platform.ExternalNode:  probeExternalNode,
 
-	describe.RoutableIPPools:       onTrust("a cloud network property: routing a pool's addresses depends on the VPC, not Calico"),
-	describe.NodePortAcrossNodes:   onTrust("a cloud network property: the platform's security groups decide it"),
-	describe.HostNetworkServices:   onTrust("seen only by running traffic from a host-networked pod"),
-	describe.HostEndpointCrossNode: onTrust("seen only by running traffic through a host endpoint policy"),
-	describe.RapidClientImage:      onTrust("whether a node can pull the image is seen only by scheduling it"),
-	describe.ConnectionLimits:      onTrust("seen only by opening connections past the limit"),
-	describe.AmbientPolicy:         onTrust("seen only by running traffic through ambient mode"),
+	platform.RoutableIPPools:       onTrust("a cloud network property: routing a pool's addresses depends on the VPC, not Calico"),
+	platform.NodePortAcrossNodes:   onTrust("a cloud network property: the platform's security groups decide it"),
+	platform.HostNetworkServices:   onTrust("seen only by running traffic from a host-networked pod"),
+	platform.HostEndpointCrossNode: onTrust("seen only by running traffic through a host endpoint policy"),
+	platform.RapidClientImage:      onTrust("whether a node can pull the image is seen only by scheduling it"),
+	platform.ConnectionLimits:      onTrust("seen only by opening connections past the limit"),
+	platform.AmbientPolicy:         onTrust("seen only by running traffic through ambient mode"),
 }
 
 // probeOperator passes when tigera-operator manages Calico, which is exactly

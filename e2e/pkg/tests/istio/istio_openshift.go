@@ -27,7 +27,9 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 )
@@ -47,9 +49,9 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithSerial(),
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaIstio),
-	describe.Requires(describe.Istio),
-	describe.Requires(describe.OpenShift),
+	describe.Covers(area.Istio),
+	describe.Requires(platform.Istio),
+	describe.Requires(platform.OpenShift),
 	"Istio OpenShift Platform Configuration",
 	func() {
 		f := utils.NewDefaultFramework("istio-openshift")

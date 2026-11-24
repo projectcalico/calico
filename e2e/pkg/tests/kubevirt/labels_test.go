@@ -55,7 +55,7 @@ func TestEveryKubeVirtSuiteRequiresKubeVirt(t *testing.T) {
 					return true
 				}
 			}
-			t.Errorf("%s: suite has no describe.Requires(describe.KubeVirt) label", fset.Position(call.Pos()))
+			t.Errorf("%s: suite has no describe.Requires(platform.KubeVirt) label", fset.Position(call.Pos()))
 			return true
 		})
 	}

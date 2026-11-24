@@ -31,7 +31,9 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
@@ -50,10 +52,10 @@ const (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaIngressGateway),
+	describe.Covers(area.IngressGateway),
 	describe.WithSerial(),
-	describe.Requires(describe.Operator),
-	describe.Requires(describe.Goldmane),
+	describe.Requires(platform.Operator),
+	describe.Requires(platform.Goldmane),
 	"whisker access via calico ingress gateway",
 	func() {
 		f := utils.NewDefaultFramework("ingress-gateway-whisker")

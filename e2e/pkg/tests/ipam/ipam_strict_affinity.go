@@ -33,7 +33,9 @@ import (
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
@@ -48,9 +50,9 @@ const (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaIPAM),
-	describe.Requires(describe.CalicoIPAM),
-	describe.Requires(describe.RoutableIPPools),
+	describe.Covers(area.IPAM),
+	describe.Requires(platform.CalicoIPAM),
+	describe.Requires(platform.RoutableIPPools),
 	describe.WithSerial(), // Modifies global IPAMConfiguration state.
 	"IPAM StrictAffinity",
 	func() {

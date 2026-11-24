@@ -31,7 +31,9 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
@@ -42,8 +44,8 @@ import (
 // PRECONDITIONS:
 var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 	describe.WithSerial(),
-	describe.Covers(describe.AreaAutoHEPs),
-	describe.Requires(describe.AutoHEPs),
+	describe.Covers(area.AutoHEPs),
+	describe.Requires(platform.AutoHEPs),
 	// Ordered so the slow auto HEP toggle runs once per container, not per spec.
 	ginkgo.Ordered,
 	"auto host endpoint tests",

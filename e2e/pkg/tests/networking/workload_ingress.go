@@ -31,7 +31,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
@@ -81,7 +83,7 @@ type ingressScenario struct {
 	dest string
 
 	// requires names what the cluster must have beyond the suite's own requirements.
-	requires []describe.Capability
+	requires []platform.Capability
 
 	// Per-dataplane expectations. xtablesExpect covers both iptables and
 	// nftables dataplanes, which have identical SNAT behavior.
@@ -131,7 +133,7 @@ var ingressScenarioTable = []ingressScenario{
 		srcNode:       "node1",
 		hostNetworked: true,
 		dest:          "clusterIP",
-		requires:      []describe.Capability{describe.HostNetworkServices},
+		requires:      []platform.Capability{platform.HostNetworkServices},
 		bpfExpect:     noSNAT,
 		xtablesExpect: noSNAT,
 		ipvsExpect:    snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
@@ -165,7 +167,7 @@ var ingressScenarioTable = []ingressScenario{
 		srcNode:       "node1",
 		hostNetworked: false,
 		dest:          "svcNodePort",
-		requires:      []describe.Capability{describe.NodePortAcrossNodes},
+		requires:      []platform.Capability{platform.NodePortAcrossNodes},
 		bpfExpect:     noSNAT,
 		xtablesExpect: snatNoWorkingPolicy,
 		ipvsExpect:    snatNoWorkingPolicy,
@@ -199,7 +201,7 @@ var ingressScenarioTable = []ingressScenario{
 		srcNode:       "node1",
 		hostNetworked: true,
 		dest:          "node1NodePort",
-		requires:      []describe.Capability{describe.HostNetworkServices},
+		requires:      []platform.Capability{platform.HostNetworkServices},
 		bpfExpect:     noSNAT,
 		xtablesExpect: noSNAT,
 		ipvsExpect:    snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
@@ -222,7 +224,7 @@ var ingressScenarioTable = []ingressScenario{
 		srcNode:       "node0",
 		hostNetworked: true,
 		dest:          "node1NodePort",
-		requires:      []describe.Capability{describe.NodePortAcrossNodes, describe.HostNetworkServices},
+		requires:      []platform.Capability{platform.NodePortAcrossNodes, platform.HostNetworkServices},
 		bpfExpect:     noSNAT,
 		xtablesExpect: snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
 		ipvsExpect:    snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
@@ -256,7 +258,7 @@ var ingressScenarioTable = []ingressScenario{
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaDatapath),
+	describe.Covers(area.Datapath),
 	describe.RunsAnywhere(),
 	"Workload Ingress Datapath",
 	func() {
@@ -620,7 +622,7 @@ var _ = describe.CalicoDescribe(
 		}
 
 		// External node scenarios run from a machine outside the cluster via SSH.
-		framework.Context("external node", describe.Requires(describe.ExternalNode), func() {
+		framework.Context("external node", describe.Requires(platform.ExternalNode), func() {
 			for _, scenario := range ingressScenarioTable {
 				s := scenario // capture loop variable
 				if s.srcNode != "external" {
@@ -637,7 +639,7 @@ var _ = describe.CalicoDescribe(
 )
 
 // requirements turns a scenario's capabilities into the arguments It takes.
-func requirements(caps []describe.Capability) []any {
+func requirements(caps []platform.Capability) []any {
 	args := make([]any, 0, len(caps)+1)
 	for _, c := range caps {
 		args = append(args, describe.Requires(c))

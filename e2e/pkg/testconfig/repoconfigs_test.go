@@ -22,8 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/cilanes"
-	"github.com/projectcalico/calico/e2e/pkg/describe"
 )
 
 const (
@@ -88,13 +88,13 @@ func TestRepoConfigsAreValid(t *testing.T) {
 var coversArea = regexp.MustCompile(`Covers:([A-Za-z0-9-]+)`)
 
 // unknownAreas returns the Covers: areas named in exprs that aren't in
-// describe.Areas. A suite selecting a misspelled area would select nothing
+// area.All. A suite selecting a misspelled area would select nothing
 // and fail no check of its own.
 func unknownAreas(exprs []string) []string {
 	var unknown []string
 	for _, e := range exprs {
 		for _, m := range coversArea.FindAllStringSubmatch(e, -1) {
-			if !describe.IsArea(describe.Area(m[1])) {
+			if !area.IsKnown(area.Area(m[1])) {
 				unknown = append(unknown, m[1])
 			}
 		}
@@ -115,7 +115,7 @@ func TestConfigsCoverKnownAreas(t *testing.T) {
 			exprs = append(exprs, e.Label)
 		}
 		if bad := unknownAreas(exprs); len(bad) > 0 {
-			t.Errorf("Covers: areas not in describe.Areas: %v", bad)
+			t.Errorf("Covers: areas not in area.All: %v", bad)
 		}
 	})
 }

@@ -34,7 +34,9 @@ import (
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
@@ -52,7 +54,7 @@ import (
 // 4. Test the connectivity from clients on other nodes to the hostnetworked pod.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaHostProtection),
+	describe.Covers(area.HostProtection),
 	describe.RunsAnywhere(),
 	describe.WithSerial(),
 	"host endpoint tests",
@@ -256,7 +258,7 @@ var _ = describe.CalicoDescribe(
 		})
 
 		Context("doNotTrack policy", func() {
-			It("should deny connections to the specified port in a doNotTrack deny policy", describe.Requires(describe.DoNotTrack), func() {
+			It("should deny connections to the specified port in a doNotTrack deny policy", describe.Requires(platform.DoNotTrack), func() {
 				By("asserting connections do not work initially", func() {
 					checker.ExpectFailure(client1, hepServer1.ServiceDomain().Port(hepPort1))
 					checker.ExpectFailure(client1, hepServer1.ServiceDomain().Port(hepPort2))
@@ -333,7 +335,7 @@ var _ = describe.CalicoDescribe(
 				checker.Execute()
 			})
 
-			It("should deny connections from specified source addresses in a doNotTrack deny policy (DoS mitigation)", describe.Requires(describe.ExternalNode), describe.Requires(describe.DoNotTrack), func() {
+			It("should deny connections from specified source addresses in a doNotTrack deny policy (DoS mitigation)", describe.Requires(platform.ExternalNode), describe.Requires(platform.DoNotTrack), func() {
 				extClient := externalnode.MustNewClient()
 
 				// Wrap the external node as a conncheck Client so the probes

@@ -39,7 +39,9 @@ import (
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
@@ -53,8 +55,8 @@ import (
 // PRECONDITIONS:
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaFlowLogs),
-	describe.Requires(describe.Goldmane),
+	describe.Covers(area.FlowLogs),
+	describe.Requires(platform.Goldmane),
 	"staged network policy",
 	func() {
 		var (

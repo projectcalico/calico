@@ -33,7 +33,9 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
@@ -51,8 +53,8 @@ import (
 //   - At least 2 schedulable worker nodes
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaKubeVirt),
-	describe.Requires(describe.KubeVirt),
+	describe.Covers(area.KubeVirt),
+	describe.Requires(platform.KubeVirt),
 	"KubeVirt IP persistence",
 	func() {
 		f := utils.NewDefaultFramework("calico-kubevirt-ip")

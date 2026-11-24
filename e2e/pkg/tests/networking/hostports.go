@@ -20,7 +20,9 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 )
@@ -29,8 +31,8 @@ const hostport = 8080
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaHostPorts),
-	describe.Requires(describe.HostPorts),
+	describe.Covers(area.HostPorts),
+	describe.Requires(platform.HostPorts),
 	describe.WithSerial(),
 	"HostPorts tests",
 	func() {

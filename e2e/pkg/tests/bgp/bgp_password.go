@@ -31,7 +31,9 @@ import (
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
@@ -39,11 +41,11 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaBGPPeer),
-	describe.Requires(describe.BGPRouting),
-	describe.Requires(describe.BGP),
-	describe.Requires(describe.Operator),
-	describe.Requires(describe.V3CRDs),
+	describe.Covers(area.BGPPeer),
+	describe.Requires(platform.BGPRouting),
+	describe.Requires(platform.BGP),
+	describe.Requires(platform.Operator),
+	describe.Requires(platform.V3CRDs),
 	describe.WithSerial(),
 	"BGP password",
 	func() {

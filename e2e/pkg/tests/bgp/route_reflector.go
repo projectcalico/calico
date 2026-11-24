@@ -29,7 +29,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
@@ -38,11 +40,11 @@ import (
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaBGPPeer),
-	describe.Requires(describe.BGPRouting),
-	describe.Requires(describe.BGP),
-	describe.Requires(describe.Operator),
-	describe.Requires(describe.V3CRDs),
+	describe.Covers(area.BGPPeer),
+	describe.Requires(platform.BGPRouting),
+	describe.Requires(platform.BGP),
+	describe.Requires(platform.Operator),
+	describe.Requires(platform.V3CRDs),
 	describe.WithDisruptive(),
 	describe.WithSerial(),
 	"Route reflectors",

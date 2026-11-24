@@ -29,7 +29,9 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 
+	"github.com/projectcalico/calico/e2e/pkg/area"
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/platform"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
@@ -131,8 +133,8 @@ func withPacketSizeServer(pod *v1.Pod) {
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.Covers(describe.AreaDatapath),
-	describe.Requires(describe.RapidClientImage),
+	describe.Covers(area.Datapath),
+	describe.Requires(platform.RapidClientImage),
 	"Packet Size Verification",
 	func() {
 		f := utils.NewDefaultFramework("packet-size")
@@ -243,7 +245,7 @@ var _ = describe.CalicoDescribe(
 			// External-client entry is gated by the ExternalNode label so pipelines
 			// without EXT_IP/EXT_KEY/EXT_USER configured filter it out rather than
 			// failing hard.
-			framework.Context("external client", describe.Requires(describe.ExternalNode), func() {
+			framework.Context("external client", describe.Requires(platform.ExternalNode), func() {
 				DescribeTable("using UDP and TCP",
 					runPacketTest,
 					Entry("external to nodeport", pktClientExt, pktTargetNodePort, false),
