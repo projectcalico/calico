@@ -619,7 +619,7 @@ func TestLiveMigrationScenarios(t *testing.T) {
 func TestLiveMigrationTimer(t *testing.T) {
 	t.Run("timer fires and delivers workload ID to channel", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(t, 50 * time.Millisecond)
+		m := newTestMonitor(t, 50*time.Millisecond)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		drainUpdates(m) // drain
@@ -645,7 +645,7 @@ func TestLiveMigrationTimer(t *testing.T) {
 	})
 
 	t.Run("stopElevatedRoutingTimer prevents channel delivery", func(t *testing.T) {
-		m := newTestMonitor(t, 500 * time.Millisecond)
+		m := newTestMonitor(t, 500*time.Millisecond)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		drainUpdates(m)
@@ -868,7 +868,7 @@ func TestGARPRaceWithTargetExit(t *testing.T) {
 func TestTimerPopRaceWithTimeWaitExit(t *testing.T) {
 	g := NewWithT(t)
 	// Short convergence so episode 1's timer fires promptly.
-	m := newTestMonitor(t, 10 * time.Millisecond)
+	m := newTestMonitor(t, 10*time.Millisecond)
 
 	// Episode 1: drive to TimeWait via the missed-GARP path; the timer fires
 	// and its pop parks on timerC.  The timer goroutine parks in a select both
