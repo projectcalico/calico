@@ -9,6 +9,10 @@ defaults:
 steps:
   - name: kube-controllers-ci
     env:
+      - name: CALICO_IMAGE_TAR
+        value: /cache/calico-image/calico.tar
+      - name: CALICO_BUILD_DIR
+        value: /cache/calico-build
       - name: BUILD_CACHE_GROUP
         value: calico
     requests: {cpu: 5750m, memory: 5.5Gi}
@@ -26,10 +30,11 @@ steps:
             value: ut-no-prereqs
           - name: CALICO_API_GROUP
             value: projectcalico.org/v3
+    cache:
+      - {name: calico-build, mode: read, path: /cache/calico-build}
+      - {name: calico-image, mode: read, path: /cache/calico-image}
     commands: |
       .argoci/scripts/load-cached-images calico
       cd kube-controllers
       make ${KC_TARGET}
-    epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}/kube-controllers"
-      artifact push job report --destination test-results || true
+    reports: [kube-controllers/report:test-results]

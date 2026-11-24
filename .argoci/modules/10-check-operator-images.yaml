@@ -7,8 +7,6 @@ defaults:
   # In the build image, with NATIVE_GO_BUILD running each recipe in place rather
   # than in a nested container.
   useGoBuild: true
-  # The image ships tools under /go/bin, which the default /go volume hides.
-  workspaceVolumes: none
 
 steps:
   - name: check-operator-images
