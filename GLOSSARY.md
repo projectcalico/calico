@@ -806,9 +806,14 @@ Code: `node/filesystem/etc/service/available/bird/run`.
 _Avoid_: the router
 
 #### calico-node
-The per-host pod and image running Felix, confd, BIRD and node-services under runit, plus the startup sequence.
+The per-host pod running Felix, confd, BIRD and node-services under runit, plus the startup sequence.
 Code: `node/filesystem/etc/rc.local`.
 _Avoid_: node agent, the node
+
+#### calico/node image
+The image the calico-node pod runs.
+Code: `node/Dockerfile`.
+_Avoid_: node image, bare "node"
 
 #### Operator
 The tigera-operator deployment that installs and reconciles Calico from an Installation.
@@ -871,9 +876,14 @@ Code: `key-cert-provisioner/pkg/keycert/run.go` (`Run`).
 _Avoid_: operator CSR signer (that is the other side of the CSR)
 
 #### Combined binary
-The `calico/calico` image and binary that runs most components as `calico component <name>`, and the CNI plugin by `argv[0]`.
+The `calico` binary that runs most components as `calico component <name>`, and the CNI plugin by the name it is invoked as.
 Code: `cmd/calico/component.go` (`newComponentCommand`), `cmd/calico/main.go` (`dispatch`).
 _Avoid_: "component", for the subcommand alone
+
+#### Combined image
+The `calico/calico` image that ships the combined binary. "calico/calico image" is also fine.
+Code: `operator/pkg/components/combined.go`.
+_Avoid_: combined calico image
 
 ## Words that need a qualifier
 

@@ -1,6 +1,6 @@
 # Operator glossary
 
-Extends the [Calico glossary](../GLOSSARY.md). Terms here apply inside `operator/`. The operator's design rules are in [DESIGN.md](DESIGN.md).
+Extends the [Calico glossary](../GLOSSARY.md). Terms here apply inside `operator/`. The [combined image](../GLOSSARY.md#combined-image) is defined in the root. The operator's design rules are in [DESIGN.md](DESIGN.md).
 
 ## Building blocks
 
@@ -247,11 +247,6 @@ _Avoid_: component name
 A resource named `<variant>-<release>` that pins image digests.
 Code: `operator/api/v1/imageset_types.go` (`ImageSet`).
 _Avoid_: image override (that is the Installation's override keys)
-
-#### Combined calico image
-The single `calico/calico` image that most Go components run a subcommand of.
-Code: `operator/pkg/components/combined.go`.
-_Avoid_: nothing known
 
 ### Lifecycle and migrations
 
