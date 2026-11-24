@@ -277,9 +277,14 @@ _Avoid_: migration (that is also CRD migration, etcd-to-KDD migration and Flanne
 Felix's policy calculation (the calculation graph, IP set member index, label parents) is in [felix/GLOSSARY.md](felix/GLOSSARY.md). Dikastes terms (check providers, policy scope, the policy store) are in [app-policy/GLOSSARY.md](app-policy/GLOSSARY.md).
 
 #### Network policy
-A Calico policy resource selecting endpoints with ordered ingress and egress rules. NetworkPolicy is namespaced, GlobalNetworkPolicy is cluster-wide.
+A policy resource, in any API group, that selects endpoints and allows or denies their traffic: Calico network policy, Kubernetes network policy and the Kubernetes admin network policies.
 Code: `libcalico-go/lib/backend/model/policy.go` (`PolicyKey`).
 _Avoid_: ACL, firewall rule
+
+#### Calico network policy
+A `projectcalico.org/v3` NetworkPolicy or GlobalNetworkPolicy: a tiered policy with ordered ingress and egress rules. NetworkPolicy is namespaced; GlobalNetworkPolicy is cluster-wide.
+Code: `libcalico-go/lib/backend/model/policy.go` (`PolicyKey`).
+_Avoid_: bare "policy" when the API group matters, Calico policy
 
 #### Policy name
 The `metadata.name` of a policy resource. A policy's tier is the separate `spec.tier` field.
@@ -347,7 +352,7 @@ Code: `felix/proto/felixbackend.proto` (`IPSetUpdate`).
 _Avoid_: ipset (that is the tool), address group
 
 #### Staged policy
-A policy evaluated for reporting only and never enforced.
+A StagedNetworkPolicy, StagedGlobalNetworkPolicy or StagedKubernetesNetworkPolicy: a policy evaluated for reporting only and never enforced. It is a separate kind, not a mode of Calico network policy.
 Code: `api/pkg/apis/projectcalico/v3/policy_common.go` (`StagedAction`).
 _Avoid_: dry-run policy, preview policy, pending policy
 
@@ -862,7 +867,7 @@ Each word below means several things in the code. Use the phrase in the last col
 | endpoint | WEP, HEP; Kubernetes Endpoints and EndpointSlices; HTTP endpoints; VTEP; the WireGuard "endpoint" (a node) (`felix/wireguard/wireguard.go`); a BPF attach point, of which one endpoint has several (`felix/bpf/tc/attach.go`); `httpmachinery` `Endpoint` (`lib/httpmachinery/pkg/apiutil/types.go`) | Name which. "WireGuard peer" for the WireGuard case. |
 | node | The Calico Node object; the Kubernetes Node object; the host; calico-node, the per-host pod; calico/node, the node image; Node.js, the JavaScript runtime; a calculation node (`felix/design/calc-graph.md`); a trie node `IPTrieNode` (`felix/calc/iplpm.go`); Goldmane's "node", meaning a peer IP (`goldmane/pkg/server/flow_collector_service.go`); knode and cnode in the IPAM GC (`kube-controllers/pkg/controllers/node/ipam.go`) | "Calico Node object", "Kubernetes Node object", "Calico Node name", "Kubernetes Node name", "calico-node", "calico/node", "Node.js", "host", "calculation node", "trie node", "reporter address". |
 | block | The IPAM block; a BPF backend-map range; a mark-bit range; the verb | "IPAM block". |
-| policy | Calico policy; a BPF policy program; policy direction; `OwnershipPolicy` (`felix/routetable/route_table.go`); `clusterRoutePolicy` (`confd/pkg/backends/calico/bgp_processor.go`); Kubernetes traffic policy; policy-based routing | Name which. A bare "policy" means a Calico network policy. |
+| policy | network policy in any API group; a BPF policy program; policy direction; `OwnershipPolicy` (`felix/routetable/route_table.go`); `clusterRoutePolicy` (`confd/pkg/backends/calico/bgp_processor.go`); Kubernetes traffic policy; policy-based routing | Name which. A bare "policy" means network policy in general; say "Calico network policy" or "Kubernetes network policy" when the API group matters. |
 | rule | A Calico rule; a `*tables` rule; an ip rule (`felix/routerule/route_rule.go`); a BGPFilter rule; a BIRD filter statement | "Calico rule", "`*tables` rule", "ip rule", "BGPFilter rule". |
 | table | A netfilter logical table (`felix/nftables/table_layer.go`); the nft root table (`felix/dataplane/linux/int_dataplane.go`); `iptables.Table` (`felix/iptables/table.go`); a routing table (`felix/routetable/route_table.go`); the BPF conntrack table; the Maglev lookup table (`felix/bpf/nat/maps.go`); a BIRD table | "Logical table", "root table", "routing table", "BPF conntrack table". |
 | map | A BPF map; the jump map (programs); an nft map; a Go map; the dispatch map (`felix/rules/rule_defs.go`) | "BPF map", "jump map", "nft map". |
