@@ -33,7 +33,7 @@ Terms defined in the [root glossary](../GLOSSARY.md) that apply in this componen
 - [Calico apiserver](../GLOSSARY.md#calico-apiserver)
 - [Tier authorizer](../GLOSSARY.md#tier-authorizer)
 - [Tier wildcard](../GLOSSARY.md#tier-wildcard)
-- [Tier-scoped resource](../GLOSSARY.md#tier-scoped-resource)
+- [Tier-scoped resource](../GLOSSARY.md#tier-scoped-pseudo-resource)
 
 ### Serving the v3 API
 

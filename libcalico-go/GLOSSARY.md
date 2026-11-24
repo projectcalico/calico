@@ -13,7 +13,7 @@ Top layer of the datastore client library.
 | etcdv3 backend | `libcalico-go/lib/backend/etcdv3/etcdv3.go` (`etcdV3Client`) | Storing KVPairs at their default paths in etcd. |
 | Syncer framework | `libcalico-go/lib/backend/watchersyncer/watchersyncer.go` (`watcherSyncer`) | Merging one watcher cache per resource type into a single syncer. |
 | Syncer definitions | `libcalico-go/lib/backend/syncersv1/` | The resource list and update processors for each consumer: Felix, BGP, tunnel IP allocation and node status. |
-| clientv3 | `libcalico-go/lib/clientv3/resources.go` (`resources`) | The v3 resource API: validate, default, convert to a KVPair, call the backend client. |
+| clientv3 | `libcalico-go/lib/clientv3/resources.go` (`resources`) | The v3 resource API client: validate, default, convert to a KVPair, call the backend client. |
 | Validator | `libcalico-go/lib/validator/v3/validator.go` (`Validate`) | Struct-tag validation of v3 resources. |
 
 Layers inside the KDD backend and the syncer framework.

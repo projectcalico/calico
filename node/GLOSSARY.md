@@ -39,7 +39,7 @@ The calico-node networking mode, one of `bird`, `vxlan` or `none`.
 Code: `node/filesystem/etc/rc.local`.
 _Avoid_: backend (on its own), policy-only mode
 
-**Autodetection method**:
+**IP autodetection method**:
 The rule for choosing the Calico node address from the host's interfaces: `first-found`, `interface=`, `cidr=`, `can-reach=`, `skip-interface=` or `kubernetes-internal-ip`.
 Code: `node/pkg/lifecycle/startup/autodetection/autodetection_methods.go` (`AUTODETECTION_METHOD_FIRST`, `AUTODETECTION_METHOD_CAN_REACH`).
 _Avoid_: autodetect, detection method

@@ -188,7 +188,7 @@ A context flag asking the backend to validate a write without persisting it.
 Code: `libcalico-go/lib/backend/api/dryrun.go` (`WithDryRun`).
 _Avoid_: nothing known
 
-**Calico validation**:
+**Calico golang validation**:
 libcalico-go's semantic validation of v3 resources.
 Code: `libcalico-go/lib/validator/v3/validator.go` (`Validate`).
 _Avoid_: schema validation (CRD OpenAPI and CEL validation are separate), validator
@@ -366,7 +366,7 @@ Policy evaluated without connection tracking, in the `*tables` raw table or in B
 Code: `libcalico-go/lib/backend/model/policy.go` (`DoNotTrack`), `felix/bpf/polprog/pol_prog_builder.go` (`XDP`).
 _Avoid_: stateless policy
 
-**Pre-DNAT policy** and **forward policy**:
+**Pre-DNAT policy** and **forward policy (AOF)**:
 Host endpoint policy applied before DNAT, and host endpoint policy applied to forwarded traffic.
 Code: `felix/rules/rule_defs.go` (`HostEndpointToFilterChains`), `felix/bpf/polprog/pol_prog_builder.go` (`HostPreDnatTiers`, `HostForwardTiers`).
 
@@ -375,7 +375,7 @@ A port Felix always allows so that a broken cluster stays reachable.
 Code: `felix/bpf/failsafes/failsafes.go`.
 _Avoid_: bare "failsafe"
 
-**Tier-scoped resource**:
+**Tier-scoped pseudo-resource**:
 The RBAC pseudo-resource `tier.<resource>`, for example `tier.networkpolicies`, that rules grant to give access to policy within a tier.
 Code: `apiserver/pkg/registry/projectcalico/authorizer/authorizer.go` (`NewTierAuthorizer`).
 _Avoid_: tiered policy resource
@@ -400,7 +400,7 @@ The Policy Sync mode a client asks for: `per-pod-policies`, which streams the po
 Code: `app-policy/syncher/syncserver.go` (`WithSubscriptionType`, `DefaultSubscriptionType`).
 _Avoid_: sidecar mode
 
-**Workload credentials**:
+**Policy sync workload credentials**:
 Per-pod `{Uid, Workload, Namespace, ServiceAccount}` that pod2daemon writes and Felix's binder attaches to gRPC peers.
 Code: `pod2daemon/binder/auth.go` (`Credentials`).
 _Avoid_: nodeagent (except in the frozen socket path), udsuspver
@@ -410,7 +410,7 @@ _Avoid_: nodeagent (except in the frozen socket path), udsuspver
 The IPAM library, calico-ipam and IPAM GC internals are in [design/ipam/GLOSSARY.md](design/ipam/GLOSSARY.md). The calico network plugin's terms are in [cni-plugin/GLOSSARY.md](cni-plugin/GLOSSARY.md).
 
 **IP pool**:
-A v3 IPPool: a CIDR Calico may allocate from, with a block size, allowed uses, selectors and encapsulation. The operator's `Installation.spec.calicoNetwork.ipPools[]` entry is an [`IPPool` (Installation)](operator/GLOSSARY.md#ippool-installation).
+A v3 IPPool: a CIDR Calico may allocate from, with a block size, allowed uses, selectors and encapsulation. The operator's `Installation.spec.calicoNetwork.ipPools[]` entry is an [`IPPool` (Installation)](operator/GLOSSARY.md#installation-spec-ippool).
 Code: `libcalico-go/lib/ipam/pool_qualification.go` (`qualifyPools`), `operator/api/v1/installation_types.go` (`IPPool`).
 _Avoid_: subnet, address pool
 
@@ -429,7 +429,7 @@ A host's or virtual owner's claim on a block, in state `pending`, `confirmed` or
 Code: `libcalico-go/lib/backend/model/block_affinity.go` (`BlockAffinityState`), `api/pkg/apis/projectcalico/v3/blockaffinity.go` (`BlockAffinitySpec`).
 _Avoid_: block ownership, block lease
 
-**Affinity to a missing node**:
+**Affinity / affine to a missing node**:
 A block affinity whose node is not in the node list the accounting tracker was given.
 Code: `libcalico-go/lib/ipam/accounting/counts.go` (`StaleAffinity`), `libcalico-go/lib/ipam/accounting/tracker.go` (`AddNodes`).
 _Avoid_: bare "stale affinity" (that is the unconfirmed-affinity error)

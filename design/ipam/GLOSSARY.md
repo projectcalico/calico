@@ -38,7 +38,7 @@ Layers inside the IPAM library, calico-ipam and the IPAM GC controller.
 
 Terms defined in the [root glossary](../../GLOSSARY.md) that apply in this component:
 
-- [Affinity to a missing node](../../GLOSSARY.md#affinity-to-a-missing-node)
+- [Affinity to a missing node](../../GLOSSARY.md#affinity--affine-to-a-missing-node)
 - [Affinity type](../../GLOSSARY.md#affinity-type)
 - [Allocation](../../GLOSSARY.md#allocation)
 - [Intended use](../../GLOSSARY.md#intended-use)
@@ -230,7 +230,7 @@ The per-handle tracker of leak state in the IPAM GC controller.
 Code: `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`handleTracker`).
 _Avoid_: bare tracker (the accounting tracker is a separate thing)
 
-**Empty-block grace**:
+**Empty-block grace period**:
 The grace the IPAM GC controller gives an empty block before releasing its affinity.
 Code: `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`blockReleaseTracker`).
 _Avoid_: two-observation rule

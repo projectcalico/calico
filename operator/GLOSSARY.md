@@ -215,7 +215,7 @@ The effective Installation spec the operator renders from.
 Code: `operator/api/v1/installation_types.go` (`InstallationStatus`).
 _Avoid_: defaulted spec
 
-**`IPPool` (Installation)**:
+**Installation spec IPPool**:
 An entry of `Installation.spec.calicoNetwork.ipPools`.
 Code: `operator/api/v1/installation_types.go` (`IPPool`).
 _Avoid_: IPPool, unqualified

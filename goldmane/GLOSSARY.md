@@ -109,7 +109,7 @@ The `Goldmane` struct and its main loop, which takes in flows, aggregates them i
 Code: `goldmane/pkg/goldmane/goldmane.go` (`Goldmane`).
 _Avoid_: the aggregator
 
-**Flow intake**:
+**Flow ingestion**:
 The engine's inbound path for flows from reporters.
 Code: `goldmane/pkg/server/flow_collector_service.go` (`Sink`).
 _Avoid_: sink (that is the emission output)
