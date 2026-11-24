@@ -15,14 +15,17 @@
 
 set -ex
 
-# The Semaphore agent image ships a pip-installed setuptools that breaks the
-# DevStack install, so take it out of the way there.  Guarded because this is a
-# property of that image, not of DevStack: a fresh machine has neither the
-# offending setuptools nor pip itself, and the script runs with `set -e`, so
-# elsewhere (for example the GCE VM used by the scheduled scale run) `sudo pip`
-# would abort the bootstrap before it started.
+# The Semaphore agent image ships pip-installed setuptools and wheel that break
+# the DevStack install, so take them out of the way there.  DevStack's venv uses
+# --system-site-packages, so it sees the image's wheel, whose requirement on a
+# newer packaging conflicts with the packaging pinned by upper-constraints, and
+# legacy setup.py builds then fail.  Guarded because this is a property of that
+# image, not of DevStack: a fresh machine has neither the offending packages nor
+# pip itself, and the script runs with `set -e`, so elsewhere (for example the
+# GCE VM used by the scheduled scale run) `sudo pip` would abort the bootstrap
+# before it started.
 if getent group semaphore >/dev/null 2>&1; then
-    sudo pip uninstall -y setuptools
+    sudo pip uninstall -y setuptools wheel
     sudo rm -rf /usr/local/lib/python3.8/dist-packages/setuptools-*.dist-info
     sudo find / -name "*setuptools*" || true
     sudo pip list || true
