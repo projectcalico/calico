@@ -47,7 +47,7 @@ Code: `cni-plugin/pkg/types/types.go` (`FeatureControl`).
 _Avoid_: feature_control, feature flags
 
 ### WEP identifiers
-The node name, orchestrator, pod, container ID and interface name that together name a WorkloadEndpoint.
+The Calico Node name, orchestrator, pod, container ID and interface name that together name a WorkloadEndpoint.
 Code: `cni-plugin/internal/pkg/utils/utils.go` (`WEPIdentifiers`).
 _Avoid_: epIDs, wepIDs
 

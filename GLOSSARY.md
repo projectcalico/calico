@@ -222,23 +222,28 @@ A Calico-managed host interface used to apply policy to traffic entering or leav
 Code: `felix/proto/felixbackend.proto` (`HostEndpointUpdate`).
 _Avoid_: bare "endpoint", node interface
 
-#### Node
-The Calico resource for one host, carrying its BGP spec, tunnel addresses and WireGuard key. Write "Kubernetes Node" for the Kubernetes object and "host" for the machine.
+#### Calico Node object
+The Calico resource for one host, carrying its BGP spec, tunnel addresses and WireGuard key. Write "Kubernetes Node object" for the Kubernetes object and "host" for the machine.
 Code: `libcalico-go/lib/apis/internalapi/node.go` (`Node`).
-_Avoid_: bare "node"
+_Avoid_: bare "node", v3.Node, Calico Node resource
 
-#### Node name
-The name of the Kubernetes Node. A v3.Node records it in its `k8s` orchestrator reference.
+#### Kubernetes Node object
+The Kubernetes `v1.Node` object for one machine in the cluster.
+Code: `libcalico-go/lib/backend/k8s/resources/node.go` (`K8sNodeToCalico`).
+_Avoid_: bare "node", v1.Node in prose
+
+#### Kubernetes Node name
+The name of the Kubernetes Node object. A Calico Node object records it in its `k8s` orchestrator reference.
 Code: `libcalico-go/lib/backend/model/workloadendpoint.go` (`WorkloadEndpointKey`), `libcalico-go/lib/apis/internalapi/node.go` (`OrchRef`).
 _Avoid_: hostname, host (these name the machine)
 
-#### v3.Node name
-The name of the Calico Node resource. It almost always equals the node name, though in some etcdv3 clusters it differs. The model key fields `Hostname` (workload endpoints, host config), `Host` (block affinities, BGP nodes) and `Node` (v3 specs) all hold it, and IPAM calls it the host.
+#### Calico Node name
+The name of the Calico Node object. It almost always equals the Kubernetes Node name, though in some etcdv3 clusters it differs. The model key fields `Hostname` (workload endpoints, host config), `Host` (block affinities, BGP nodes) and `Node` (v3 specs) all hold it, and IPAM calls it the host.
 Code: `libcalico-go/lib/backend/model/workloadendpoint.go` (`WorkloadEndpointKey`), `libcalico-go/lib/backend/model/block_affinity.go` (`BlockAffinityKey`), `libcalico-go/lib/backend/model/bgp_node.go` (`BGPNodeKey`).
-_Avoid_: node name, when the Calico Node is meant; hostname, host
+_Avoid_: v3.Node name; Kubernetes Node name, when the Calico Node object is meant; hostname, host
 
 #### Calico node address
-The primary address recorded on a Calico Node resource, in `Node.spec.bgp.ipv4Address` or `ipv6Address`, with its prefix. It is not one of the Kubernetes Node's own internal or external IPs.
+The primary address recorded on a Calico Node object, in `Node.spec.bgp.ipv4Address` or `ipv6Address`, with its prefix. It is not one of the Kubernetes Node object's own internal or external IPs.
 Code: `node/pkg/lifecycle/startup/startup.go` (`configureIPsAndSubnets`), `libcalico-go/lib/backend/syncersv1/updateprocessors/bgpnodeprocessor.go`.
 _Avoid_: BGP IP, NodeIP, node IP, bare "node address", host address
 
@@ -855,7 +860,7 @@ Each word below means several things in the code. Use the phrase in the last col
 | conntrack | The BPF conntrack table `cali_v4_ct` (`felix/bpf-gpl/conntrack_types.h`); kernel netfilter conntrack (`felix/bpf-gpl/cali_bpf.h`); Felix's route-table conntrack cleanup (`felix/routetable/conntrack_owner_tracker.go`) | "BPF conntrack" or "kernel conntrack". |
 | syncer | The datastore syncer (`libcalico-go/lib/backend/api/api.go`); Felix route syncers (`felix/routetable/interface.go`); the BPF service syncer (`felix/bpf/proxy/syncer.go`); the kube-controllers DataFeed (`kube-controllers/pkg/controllers/utils/syncer.go`); `syncIPAM` in two controllers (`kube-controllers/pkg/controllers/node/ipam.go`, `kube-controllers/pkg/controllers/loadbalancer/loadbalancer_controller.go`) | "Datastore syncer", "route syncer", "BPF service syncer", "DataFeed". |
 | endpoint | WEP, HEP; Kubernetes Endpoints and EndpointSlices; HTTP endpoints; VTEP; the WireGuard "endpoint" (a node) (`felix/wireguard/wireguard.go`); a BPF attach point, of which one endpoint has several (`felix/bpf/tc/attach.go`); `httpmachinery` `Endpoint` (`lib/httpmachinery/pkg/apiutil/types.go`) | Name which. "WireGuard peer" for the WireGuard case. |
-| node | The Calico Node; the Kubernetes Node; the host; a calculation node (`felix/design/calc-graph.md`); a trie node `IPTrieNode` (`felix/calc/iplpm.go`); Goldmane's "node", meaning a peer IP (`goldmane/pkg/server/flow_collector_service.go`); knode and cnode in the IPAM GC (`kube-controllers/pkg/controllers/node/ipam.go`) | "Node" (Calico), "node name" (the Kubernetes Node's name), "v3.Node name", "Kubernetes Node", "host", "calculation node", "trie node", "reporter address". |
+| node | The Calico Node object; the Kubernetes Node object; the host; calico-node, the per-host pod; calico/node, the node image; Node.js, the JavaScript runtime; a calculation node (`felix/design/calc-graph.md`); a trie node `IPTrieNode` (`felix/calc/iplpm.go`); Goldmane's "node", meaning a peer IP (`goldmane/pkg/server/flow_collector_service.go`); knode and cnode in the IPAM GC (`kube-controllers/pkg/controllers/node/ipam.go`) | "Calico Node object", "Kubernetes Node object", "Calico Node name", "Kubernetes Node name", "calico-node", "calico/node", "Node.js", "host", "calculation node", "trie node", "reporter address". |
 | block | The IPAM block; a BPF backend-map range; a mark-bit range; the verb | "IPAM block". |
 | policy | Calico policy; a BPF policy program; policy direction; `OwnershipPolicy` (`felix/routetable/route_table.go`); `clusterRoutePolicy` (`confd/pkg/backends/calico/bgp_processor.go`); Kubernetes traffic policy; policy-based routing | Name which. A bare "policy" means a Calico network policy. |
 | rule | A Calico rule; a `*tables` rule; an ip rule (`felix/routerule/route_rule.go`); a BGPFilter rule; a BIRD filter statement | "Calico rule", "`*tables` rule", "ip rule", "BGPFilter rule". |

@@ -256,7 +256,7 @@ Code: `kube-controllers/pkg/controllers/node/ipam.go` (`garbageCollectColdIPs`, 
 _Avoid_: cold-IP GC, cold IPs
 
 #### `kubernetesNodesByCalicoName`
-The controller's lookup from a v3.Node name to the Kubernetes Node.
+The controller's lookup from a Calico Node name to the Kubernetes Node object.
 Code: `kube-controllers/pkg/controllers/node/ipam.go` (`kubernetesNodesByCalicoName`).
 _Avoid_: knode, cnode
 
@@ -275,5 +275,5 @@ _Avoid_: IPAM cache, shared tracker
 | reserved | an IP reservation, the Windows-reserved handle, the accounting tracker's reserved classes | IP reservation, Windows-reserved handle, reserved class |
 | stale | the unconfirmed-affinity error, an affinity to a missing node, a stale sandbox | stale affinity error, affinity to a missing node, prior sandbox |
 | virtual | the virtual affinity type | virtual affinity |
-| host and node | the v3.Node name in IPAM calls (`AffinityConfig.Host`, `MaxBlocksPerHost`), the Kubernetes node name | v3.Node name, node name |
+| host and node | the Calico Node name in IPAM calls (`AffinityConfig.Host`, `MaxBlocksPerHost`), the Kubernetes Node name | Calico Node name, Kubernetes Node name |
 | GC | the library's deallocation of cooled-down addresses, the IPAM GC controller | deallocation, IPAM GC controller |

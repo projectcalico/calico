@@ -37,10 +37,10 @@ Terms defined in the [root glossary](../GLOSSARY.md) that apply in this componen
 - [Datastore syncer](../GLOSSARY.md#datastore-syncer)
 - [Dedupe buffer](../GLOSSARY.md#dedupe-buffer)
 - [etcd-to-KDD migration](../GLOSSARY.md#etcd-to-kdd-migration)
-- [Node name](../GLOSSARY.md#node-name)
+- [Kubernetes Node name](../GLOSSARY.md#kubernetes-node-name)
 - [Pass-through kind](../GLOSSARY.md#pass-through-kind)
 - [Syncer output](../GLOSSARY.md#syncer-output)
-- [v3.Node name](../GLOSSARY.md#v3node-name)
+- [Calico Node name](../GLOSSARY.md#calico-node-name)
 
 ### projectcalico.org/v3 CRDs
 Calico resources stored as CRDs in the `projectcalico.org/v3` API group, with no apiserver in front of them.
@@ -119,4 +119,4 @@ _Avoid_: LegacyPolicyKey (that is the older form with a tier in the key)
 | v1 | the v1 model, the legacy v1 API types, the crd.projectcalico.org/v1 API group, `ClientV1` resource clients | v1 model, legacy v1 API, crd.projectcalico.org/v1 CRDs |
 | v3 | the v3 API types, the projectcalico.org/v3 API group as CRDs, the aggregated v3 API | v3 resource, projectcalico.org/v3 CRDs, aggregated v3 API |
 | cache | watcher cache, snapshot cache, binary snapshot cache, an update processor's own cache | name which |
-| node | a calculation node, the Kubernetes Node, the v3.Node, the machine | node name, v3.Node name, host |
+| node | a calculation node, the Kubernetes Node object, the Calico Node object, the machine | Kubernetes Node name, Calico Node name, host |

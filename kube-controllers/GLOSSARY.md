@@ -23,11 +23,11 @@ The controllers `controllerControl` starts, one layer down.
 |---|---|---|
 | IP pool controller | `kube-controllers/pkg/controllers/ippool/pool_controller.go` (`IPPoolController`) | Pool finalizer, the `Allocatable` condition from CIDR overlap, and the `AddressSpaceNearlyFull` condition. |
 | Tier controller | `kube-controllers/pkg/controllers/tier/tier_controller.go` (`TierController`) | Tier finalizer and the Terminating condition until no policy references the tier. |
-| Node controller | `kube-controllers/pkg/controllers/node/controller.go` (`NodeController`) | Owns four sub-controllers and fans Kubernetes Node and Pod deletes out to them. |
+| Node controller | `kube-controllers/pkg/controllers/node/controller.go` (`NodeController`) | Owns four sub-controllers and fans Kubernetes Node object and Pod deletes out to them. |
 | IPAM GC controller | `kube-controllers/pkg/controllers/node/ipam.go` (`IPAMController`) | The IPAM GC code: leak detection and empty-block release. A sub-controller of the node controller. |
 | Auto host endpoint controller | `kube-controllers/pkg/controllers/node/hostendpoints.go` (`autoHostEndpointController`) | Creates, updates and removes automatic host endpoints. A sub-controller. |
-| Node label controller | `kube-controllers/pkg/controllers/node/labels.go` (`nodeLabelController`) | Copies Kubernetes Node labels onto the Calico Node in etcdv3 mode. A sub-controller. |
-| Node deleter | `kube-controllers/pkg/controllers/node/node_deleter.go` (`nodeDeleter`) | Deletes Calico Nodes whose Kubernetes Node is gone, in etcdv3 mode. A sub-controller. |
+| Node label controller | `kube-controllers/pkg/controllers/node/labels.go` (`nodeLabelController`) | Copies Kubernetes Node object labels onto the Calico Node object in etcdv3 mode. A sub-controller. |
+| Node deleter | `kube-controllers/pkg/controllers/node/node_deleter.go` (`nodeDeleter`) | Deletes Calico Node objects whose Kubernetes Node object is gone, in etcdv3 mode. A sub-controller. |
 | LoadBalancer controller | `kube-controllers/pkg/controllers/loadbalancer/loadbalancer_controller.go` (`loadBalancerController`) | Allocates and releases Service LoadBalancer addresses from Calico IPAM and writes Service status. |
 | Migration controller | `kube-controllers/pkg/controllers/migration/controller.go` | Runs the phase machine of the v1-to-v3 CRD migration. |
 | Policy name migrator | `kube-controllers/pkg/controllers/networkpolicy/policy_name_migrator.go` (`policyMigrator`) | Renames policies whose stored policy name differs from their API policy name. |
@@ -193,7 +193,7 @@ Code: `kube-controllers/pkg/controllers/node/hostendpoints.go` (`autoHostEndpoin
 _Avoid_: auto-HEP
 
 #### Node deleter
-The sub-controller that deletes Calico Nodes whose Kubernetes Node is gone.
+The sub-controller that deletes Calico Node objects whose Kubernetes Node object is gone.
 Code: `kube-controllers/pkg/controllers/node/node_deleter.go` (`nodeDeleter`).
 _Avoid_: node deletion controller
 

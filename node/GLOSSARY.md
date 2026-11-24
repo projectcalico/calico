@@ -11,7 +11,7 @@ Top layer of calico-node.
 | rc.local | `node/filesystem/etc/rc.local` | The container's init script: it runs startup, allocates tunnel addresses and enables the runit services the networking backend needs. |
 | Runit services | `node/filesystem/etc/service/available/` | One supervised process each for `felix`, `bird`, `bird6`, `confd` and `node-services`. |
 | Node command | `node/pkg/node/command.go` (`NewCommand`) | The `calico component node` command tree: init, startup, shutdown, node-services, allocate-tunnel-addrs, health and status. |
-| Startup | `node/pkg/lifecycle/startup/startup.go` (`Run`) | Choosing the node name, setting the Calico node address and AS number, and creating the default pools and default configuration. |
+| Startup | `node/pkg/lifecycle/startup/startup.go` (`Run`) | Choosing the Calico Node name, setting the Calico node address and AS number, and creating the default pools and default configuration. |
 | Node services | `node/pkg/nodeservices/nodeservices.go` (`Run`) | Running complete-startup, the tunnel IP allocator, the status reporter, monitor-addresses and the CNI token monitor in one process. |
 | Health | `node/pkg/health/health.go` (`RunOutput`, `checkBIRDReady`) | Readiness and liveness checks for Felix and BIRD. |
 | Shutdown | `node/pkg/lifecycle/shutdown/shutdown.go` (`Run`) | Writing the shutdown timestamp file and setting `NetworkUnavailable` to true. |
@@ -49,10 +49,10 @@ The IP pools that calico-node creates at first startup.
 Code: `node/pkg/lifecycle/startup/startup.go` (`configureIPPools`).
 _Avoid_: default IP pool
 
-### Node name file
-The file `/var/lib/calico/nodename`, which holds the v3.Node name for this host. In a Kubernetes cluster that is the node name.
+### Calico Node name file
+The file `/var/lib/calico/nodename`, which holds the Calico Node name for this host. In a Kubernetes cluster that is the Kubernetes Node name.
 Code: `node/pkg/lifecycle/utils/utils.go` (`NodenameFromFile`, `DetermineNodeName`).
-_Avoid_: nodename file, node name on its own (that is the Kubernetes Node)
+_Avoid_: nodename file
 
 ### Shutdown timestamp file
 The file `/var/lib/calico/shutdownTS`, written at shutdown.
@@ -104,5 +104,5 @@ _Avoid_: taint (that is a different node mechanism)
 | Word | Meanings in play | Say |
 |---|---|---|
 | backend | the networking backend, the datastore backend | networking backend, datastore backend |
-| node | the Kubernetes Node, the v3.Node, the machine | node name, v3.Node name, host |
+| node | the Kubernetes Node object, the Calico Node object, the machine | Kubernetes Node name, Calico Node name, host |
 | component | a `calico component <name>` subcommand, a runit service | subcommand, runit service |

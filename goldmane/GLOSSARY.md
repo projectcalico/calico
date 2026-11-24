@@ -63,7 +63,7 @@ Code: `goldmane/proto/api.proto` (`Reporter`).
 _Avoid_: reporter for the reporting node (see reporter address)
 
 #### Reporter address
-The IP address of the Felix connection that reported a flow, without the port. It is an IP address, not a node name.
+The IP address of the Felix connection that reported a flow, without the port. It is an IP address, not a Calico Node name.
 Code: `goldmane/pkg/server/flow_collector_service.go` (`flowCollectorService`).
 _Avoid_: node scope, scope, who, client
 
