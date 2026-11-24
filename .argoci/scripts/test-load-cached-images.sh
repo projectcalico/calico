@@ -2,7 +2,7 @@
 # Smoke tests for load-cached-images and load-felix-prereqs.sh, focused on the
 # build-from-source fallback that keeps a credential-less (read-only) build
 # going when the workflow cache is empty.
-# Not run in CI; run manually:
+# Run in CI by argoci-scripts-test, or by hand:
 #   .argoci/scripts/test-load-cached-images.sh
 #
 # make, docker, zstd, tar, curl and s3cmd are stubbed on PATH, so nothing is
@@ -70,7 +70,8 @@ STUB
 chmod +x "$stub_dir"/*
 export PATH="$stub_dir:$PATH" STUB_LOG="$stub_log"
 export CALICO_S3_HOST=s3.example.com S3_WORKFLOW_DIR=s3://test-bucket/ci/workflow/1
-unset CALICO_S3_ACCESS_KEY CALICO_S3_SECRET_KEY
+# An ArgoCI pod sets these; the cases set them only where they want them.
+unset CALICO_S3_ACCESS_KEY CALICO_S3_SECRET_KEY CI_ARTIFACT_STORAGE CALICO_BUILD_DIR CALICO_IMAGE_TAR
 
 run() {
   : >"$stub_log"
@@ -176,6 +177,30 @@ out=$(CALICO_S3_ACCESS_KEY=AKID CALICO_S3_SECRET_KEY=SECRET \
 rc=$?
 check "felix prereqs credentialed RC=0" [ "$rc" = 0 ]
 check "felix prereqs credentialed build nothing" test "$(grep -c '^make ' "$stub_log")" = 0
+
+# 6b. A local image tar ArgoCI already put on the machine is loaded in place:
+#     no download, and the marker is touched so make does not rebuild it.
+calico_marker="$repo_root/cmd/calico/.image.created-amd64"
+rm -f "$calico_marker"
+out=$(CI_ARTIFACT_STORAGE=gs://bucket/run CALICO_IMAGE_TAR="$work/calico.tar" \
+  run "$repo_root/.argoci/scripts/load-cached-images" calico 2>&1)
+rc=$?
+check "local image tar RC=0" [ "$rc" = 0 ]
+check "local image tar is loaded" grep -q "^docker load -i $work/calico.tar" "$stub_log"
+check "local image tar is not downloaded" test "$(grep -c '^artifact pull workflow calico-image' "$stub_log")" = 0
+check "local image tar touches the marker" test -f "$calico_marker"
+rm -f "$calico_marker"
+
+# 6c. Felix prereqs from a local build directory: copied, not downloaded.
+build_dir="$work/calico-build"
+mkdir -p "$build_dir"
+touch "$build_dir/libbpf-amd64.tar" "$build_dir/calico-cgo-amd64" "$build_dir/calico-race-amd64"
+out=$(CALICO_BUILD_DIR="$build_dir" run "$repo_root/.semaphore/scripts/load-felix-prereqs.sh" 2>&1)
+rc=$?
+check "felix prereqs from a build dir RC=0" [ "$rc" = 0 ]
+check "felix prereqs from a build dir unpack libbpf uncompressed" grep -q "^tar -xf $build_dir/libbpf-amd64.tar -C felix/bpf-gpl" "$stub_log"
+check "felix prereqs from a build dir download nothing" test "$(grep -c -E '^(artifact|s3cmd|curl) ' "$stub_log")" = 0
+check "felix prereqs from a build dir build nothing" test "$(grep -c '^make ' "$stub_log")" = 0
 
 # 7. Missing libbpf.a after the fetch is a hard error, not a silent pass.
 $created_libbpf && rm -f "$libbpf_a"
