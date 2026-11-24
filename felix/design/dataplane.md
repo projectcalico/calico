@@ -810,23 +810,18 @@ Not everything is duplicated per family. Some components are
 deliberately **single instances that feed the per-family managers**.
 The live migration monitor (`dataplane/linux/live_migration.go`) is
 the model: one FSM per workload, driven by GARP detection and timers
-that have nothing to do with IP family, whose state changes are then
+that have nothing to do with IP family, whose route modifiers are then
 pushed into the endpoint managers — which own the per-family route
 programming.
 
 For those components the dual-stack trap is not "did you duplicate
 the code" but **"did you fan out to every family's manager"**. A
 singleton holding a *single* reference to its downstream manager
-silently serves IPv4 only, and nothing fails loudly: the IPv6
-manager simply never learns the state, so its routes keep their
-default behaviour. That was CORE-12806 — the live migration
-monitor's `listener` field was assigned the IPv4 endpoint manager
-only, so IPv6 workload routes were never suppressed on a migration
-target nor elevated after cutover, and IPv6 traffic to a migrating
-VM could black-hole for the duration of the migration. Prefer a list
-plus an explicit registration call (`registerListener`) over a
-single-valued field: a missing family then shows up as a missing
-call at the construction site in `int_dataplane.go`, alongside the
+serves IPv4 only and fails silently — the IPv6 manager never learns
+the state, so its routes keep their default behaviour. Prefer a list
+plus an explicit registration call (`registerRouteModifierListener`) over a
+single-valued field: a missing family then shows up as a missing call
+at the construction site in `int_dataplane.go`, alongside the
 `RegisterManager` call it belongs with.
 
 ### Review notes for this section
