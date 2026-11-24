@@ -157,10 +157,9 @@ check "gives up at the deadline" [ $? = 1 ]
 export VM_MACHINE_TYPES="c4d n4d c3"
 fresh
 echo ok >"$STUB_STATE/create-c3d"
-type=$(create_on_demand_replacement vm z c3d --labels=x 2>/dev/null)
+type=$(create_on_demand_replacement vm z c3d --labels=ci-provisioning=standard 2>/dev/null)
 check "the preempted type is tried first" [ $? = 0 -a "$type" = c3d ]
-check "  as on-demand, marked as a retry" \
-  grep -q -- "--labels=ci-provisioning=standard,ci-preempt-retry=true" "$STUB_STATE/calls"
+check "  with the caller's labels" grep -q -- "--labels=ci-provisioning=standard" "$STUB_STATE/calls"
 check "  with no provisioning model" bash -c "! grep -q -- --provisioning-model '$STUB_STATE/calls'"
 
 fresh

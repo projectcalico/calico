@@ -50,12 +50,13 @@ record_capacity_scores() {
     return 0
   fi
   tmp="$(mktemp -d)"
+  # From a file in the private temp dir, so the token never shows in ps.
+  printf 'Authorization: Bearer %s\nContent-Type: application/json\n' "$token" >"$tmp/headers"
   for type in "$@"; do
     for zone in $zones; do
       i=$((i + 1))
       echo "$type $zone" >"$tmp/$i.key"
-      curl -sS --max-time 10 -X POST \
-        -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' \
+      curl -sS --max-time 10 -X POST -H @"$tmp/headers" \
         "https://compute.googleapis.com/compute/beta/projects/${project}/regions/${region}/advice/capacity" \
         -d "{\"size\":${count},\"instanceProperties\":{\"scheduling\":{\"provisioningModel\":\"SPOT\"}},\"instanceFlexibilityPolicy\":{\"instanceSelections\":{\"s\":{\"machineTypes\":[\"${type}\"]}}},\"distributionPolicy\":{\"targetShape\":\"ANY_SINGLE_ZONE\",\"zones\":[{\"zone\":\"zones/${zone}\"}]}}" \
         >"$tmp/$i.json" 2>"$tmp/$i.err" &
@@ -150,8 +151,8 @@ vm_wait_gone() {
 # Recreates <vm> as on-demand in the same zone, trying the preempted VM's type
 # first and then the rest of VM_MACHINE_TYPES, once each with no waiting: the
 # step's remaining time was budgeted for one create.  <create args> must not
-# carry a machine type, boot disk type or provisioning model.  Prints the type
-# it got.
+# carry a machine type, boot disk type or provisioning model, and should carry
+# the labels that mark the VM as on demand.  Prints the type it got.
 create_on_demand_replacement() {
   local vm="$1" zone="$2" first="$3"
   shift 3
@@ -165,7 +166,7 @@ create_on_demand_replacement() {
     fi
     if gcloud --quiet compute instances create "$vm" --zone="$zone" \
       --machine-type="$type" --boot-disk-type="$(boot_disk_type_for "$type")" \
-      "$@" --labels=ci-provisioning=standard,ci-preempt-retry=true >&2; then
+      "$@" >&2; then
       echo "$type"
       return 0
     fi
