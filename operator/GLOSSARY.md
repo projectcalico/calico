@@ -270,10 +270,15 @@ Holding the `projectcalico.org/v3` APIService on its old backend until the repla
 Code: `operator/pkg/controller/apiserver/cutover.go`.
 _Avoid_: handover (that is the kube-controllers APIService removal)
 
-#### Namespace migration
-Moving a manifest install from `kube-system` to `calico-system` node by node.
+#### Manifest to operator migration
+Bringing a manifest install under the operator. It has two parts: install conversion, then the namespace move.
+Code: `operator/pkg/controller/migration/convert/convert.go` (`Convert`), `operator/pkg/controller/migration/namespace_migration.go` (`CoreNamespaceMigration`).
+_Avoid_: bare "migration", namespace migration
+
+#### Namespace move
+The part of the manifest to operator migration that moves workloads from `kube-system` to `calico-system` node by node.
 Code: `operator/pkg/controller/migration/namespace_migration.go` (`CoreNamespaceMigration`).
-_Avoid_: migration on its own (it means several things)
+_Avoid_: namespace migration
 
 #### Node migration label
 The label `projectcalico.org/operator-node-migration`, set to `pre-operator` or `migrated`.
@@ -281,7 +286,7 @@ Code: `operator/pkg/controller/migration/namespace_migration.go`.
 _Avoid_: bare migration (it means several things)
 
 #### Install conversion
-Building an Installation from an existing manifest install.
+The part of the manifest to operator migration that builds an Installation from the existing manifest install.
 Code: `operator/pkg/controller/migration/convert/convert.go` (`Convert`).
 _Avoid_: adoption
 
@@ -296,7 +301,7 @@ _Avoid_: migration on its own (it means several things)
 |---|---|---|
 | component | A separately running program; a component render implementation (`operator/pkg/render/component.go` (`Component`)); an image component (`operator/pkg/components/references.go` (`Component`)); a controller status with its own TigeraStatus (`operator/DESIGN.md`); the Installation `ComponentName` enum (`operator/api/v1/installation_types.go`); image keys (`operator/pkg/render/component.go` (`ComponentNameNode`)); the `app.kubernetes.io/component` label (`operator/pkg/controller/utils/component.go`); a `calico component <name>` subcommand (`cmd/calico/component.go` (`newComponentCommand`)); a workload found in a manifest install (`operator/pkg/controller/migration/convert/components.go`); a UI component, such as Whisker, served through the Calico Ingress Gateway (`operator/pkg/uigateway/uigateway.go` (`Config`)); the `ComponentAvailable` and `ComponentDegraded` status conditions (`operator/api/v1/tigerastatus_types.go`) | Bare "component" means a running program only. Otherwise: component render implementation, image component, controller status, image key, workload name, component subcommand, UI component. |
 | override | Workload overrides on the Installation; the overlay merge; image override keys; the `Override` conflict policy | "overrides" for workload overrides; "overlay merge", "image key", "`Override` conflict policy". |
-| migration | Namespace migration; install conversion; the v1-to-v3 CRD migration; field-ownership migration | The full name each time. |
+| migration | The manifest to operator migration (install conversion, then the namespace move); the v1-to-v3 CRD migration; field-ownership migration | The full name each time. |
 | manager | Status manager; certificate manager; field manager; the controller-runtime manager | The qualified name each time. |
 | ready | `render.Component.Ready()`; TigeraStatus `Ready`, which equals Available; `ReadyToMonitor` on the status manager | "render precondition" for `Ready()`. |
 | certificate management | The operator CA (`CertificateManager`); the Installation `certificateManagement` setting; the render `CertificateManagement` component | "operator CA" and "`CertificateManagement` (Installation)". |
