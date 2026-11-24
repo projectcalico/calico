@@ -17,7 +17,6 @@ steps:
   - name: envoy-gateway-build
     requests: {cpu: 5250m, memory: 4.5Gi}
     useGoBuild: true
-    workspaceVolumes: none
     matrix:
       - name: arm64
         env: [{name: ARCH, value: arm64}]

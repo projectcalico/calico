@@ -17,6 +17,17 @@ notifications:
 # Generated from the Go import graph; every `dependsOn:` name resolves here.
 dependencies: .argoci/depstree.yaml
 
+# Hands go-cache's build and module caches to the go-build steps. Shared: each
+# name is one writer's disk, mounted read-only by its readers, so a name must
+# never gain a second writer, a retry, or a `when`.
+cache:
+  strategy: shared
+  size: 32Gi
+  storageClass: premium-rwo
+  # A PR's next run starts go-cache from what its last one built. Go's caches are
+  # content-addressed, so what is stale goes unused rather than wrong.
+  persist: [go]
+
 # A promotion runs at the source run's commit, so an old build republishes
 # itself rather than master.
 promotions:
@@ -60,8 +71,13 @@ promotions:
 # uses the public one — falling back to the source repositories on any error,
 # since go does not retry a download that breaks mid-stream.
 globalPrologue: |
-  mkdir -p /go/src/github.com/projectcalico
-  ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+  # A go-build step is checked out there already; linking it onto itself would
+  # leave a stray link inside the tree. A VM's user can't write there, and
+  # vm-go-cache bind-mounts the checkout instead.
+  if [ "${CI_HOME}/${CI_GIT_DIR}" != /go/src/github.com/projectcalico/calico ] &&
+     mkdir -p /go/src/github.com/projectcalico 2>/dev/null; then
+    ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+  fi
   export GOPROXY="${GOPROXY:-https://proxy.golang.org|direct}"
   # Anonymous Docker Hub pulls are rate limited. The daemon is up by now on any
   # step that has one. A VM step never gets the credentials: the bundle is loaded
@@ -77,28 +93,24 @@ globalPrologue: |
   # host, so what is restored is what the build reads.
   export LOCAL_GO_PKG_CACHE="${CI_HOME}/${CI_GIT_DIR}/.go-pkg-cache"
   export GOCACHE="${LOCAL_GO_PKG_CACHE}"
-  # Keyed on the target branch, so a PR builds on what its branch last built. A
-  # miss just builds cold.
+  # A step that builds in docker can't read go-cache's disk, so it restores the
+  # copy go-cache-store makes of it, as the disk lays it out: build/ renamed to
+  # the build cache, mod/ landing as the module cache. Keyed on the target
+  # branch, so a PR builds on what its branch last built. A miss just builds cold.
   #
   # Modules are cached relative to GOPATH because $HOME differs between pods and
   # VMs, and it must be the directory the docker builds mount modules from.
   GO_MOD_ROOT="${GOPATH:-${HOME}/go}"
   export GO_MOD_ROOT="${GO_MOD_ROOT%%:*}"
   if [ -n "${BUILD_CACHE_GROUP:-}" ]; then
-    mkdir -p "${GO_MOD_ROOT}"
-    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache restore "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) & build=$!
-    ( cd "${GO_MOD_ROOT}" && artifact cache restore "go-mod-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) & mods=$!
+    # Next to the build cache, so the rename doesn't cross filesystems.
+    __restore="${CI_HOME}/${CI_GIT_DIR}/.go-cache-restore"
+    mkdir -p "${__restore}" "${GO_MOD_ROOT}/pkg"
+    ( cd "${__restore}" && artifact cache restore "go-cache-build-${CI_GIT_BRANCH}" &&
+      rm -rf "${LOCAL_GO_PKG_CACHE}" && mv build "${LOCAL_GO_PKG_CACHE}" ) & build=$!
+    ( cd "${GO_MOD_ROOT}/pkg" && artifact cache restore "go-cache-mod-${CI_GIT_BRANCH}" ) & mods=$!
     wait "$build" "$mods" || true
-  fi
-
-# Only a passing branch build is worth handing to the next run; a PR's cache
-# would only ever be read by that PR.
-globalEpilogue: |
-  if [ "${STORE_BUILD_CACHE:-}" = true ] && [ "${CI_STEP_EXIT_CODE:-1}" = 0 ] &&
-     [ "${CI_POD_STOPPED:-false}" != true ] && [ "${CI_GIT_REF_TYPE}" != PR ] && [ "${CI_GIT_REF_TYPE}" != TAG ]; then
-    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache store "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" .go-pkg-cache ) & build=$!
-    ( cd "${GO_MOD_ROOT}" && artifact cache store "go-mod-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" pkg/mod ) & mods=$!
-    wait "$build" "$mods" || true
+    rm -rf "${__restore}"
   fi
 
 defaults:
@@ -438,6 +450,7 @@ includes:
         - ^\.semaphore/collect-artifacts$
         - ^\.semaphore/scripts/load-felix-prereqs\.sh$
         - ^\.argoci/scripts/load-cached-images$
+        - ^\.argoci/scripts/vm-go-cache$
         - ^\.argoci/scripts/vm-fleet-setup\.sh$
         - ^\.argoci/scripts/felix-fv-plan$
         - ^hack/cmd/felix-fv-memo/
@@ -466,12 +479,12 @@ includes:
   - path: .argoci/modules/20-typha.yaml
     changes:
       dependsOn: [typha]
-      in: ['^\.argoci/modules/20-typha\.yaml$']
+      in: ['^\.argoci/modules/20-typha\.yaml$', '^\.argoci/scripts/(vm-go-cache|load-cached-images)$']
 
   - path: .argoci/modules/20-cni-plugin.yaml
     changes:
       dependsOn: [cni-plugin]
-      in: ['^\.argoci/modules/20-cni-plugin\.yaml$']
+      in: ['^\.argoci/modules/20-cni-plugin\.yaml$', '^\.argoci/scripts/(vm-go-cache|load-cached-images)$']
 
   # The FV drivers are shell and PowerShell rather than Go, so the generated
   # component does not reach them and they are listed here.
@@ -512,6 +525,7 @@ includes:
         - ^whisker/
         - ^\.argoci/modules/20-e2e\.yaml$
         - ^\.argoci/scripts/sandcat/
+        - ^\.argoci/scripts/(vm-go-cache|load-cached-images)$
 
   - path: .argoci/modules/20-manifest-install.yaml
     changes:
@@ -525,6 +539,7 @@ includes:
         - ^operator/pkg/controller/migration/
         - ^Makefile$
         - ^\.argoci/modules/20-manifest-install\.yaml$
+        - ^\.argoci/scripts/(vm-go-cache|load-cached-images)$
 
   - path: .argoci/modules/20-kubevirt-live-migration.yaml
     changes:
@@ -532,3 +547,4 @@ includes:
       in:
         - ^e2e/pkg/
         - ^\.argoci/modules/20-kubevirt-live-migration\.yaml$
+        - ^\.argoci/scripts/(vm-go-cache|load-cached-images)$
