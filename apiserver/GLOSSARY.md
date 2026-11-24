@@ -47,11 +47,6 @@ The kind of storage that backs the registry. Only `calico`, the resource store, 
 Code: `apiserver/pkg/registry/projectcalico/server/options.go` (`StorageType`).
 _Avoid_: backend, datastore type (that is the client's `DATASTORE_TYPE` setting)
 
-#### `Store` (dry run)
-The registry store wrapper that handles server-side dry runs.
-Code: `apiserver/pkg/registry/projectcalico/util/dryrun_store.go` (`Store`).
-_Avoid_: registry store (that is the store it wraps)
-
 #### ClusterInformation read-only rule
 Through the Calico apiserver, ClusterInformation can be read but not written.
 Code: `apiserver/pkg/registry/projectcalico/clusterinformation/storage.go`.

@@ -23,7 +23,7 @@ Terms defined in the [root glossary](../GLOSSARY.md) that apply in this componen
 - [etcd-to-KDD migration](../GLOSSARY.md#etcd-to-kdd-migration)
 - [Policy name migration](../GLOSSARY.md#policy-name-migration)
 
-### ResourceManager
+### calicoctl resource manager
 The per-kind adapter that gives calicoctl commands create, read, update and delete operations, table headings and templates for one resource kind.
 Code: `calicoctl/calicoctl/resourcemgr/resourcemgr.go` (`ResourceManager`).
 _Avoid_: resource helper (that is the implementation type)

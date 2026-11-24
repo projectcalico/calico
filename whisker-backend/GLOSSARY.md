@@ -32,7 +32,7 @@ A flows backend that can also return a stream of flows. The Goldmane upstream im
 Code: `whisker-backend/pkg/apis/v1/backend.go` (`StreamingFlowsBackend`).
 _Avoid_: backend on its own (it means several things)
 
-### FlowResponse
+### Flow response
 The JSON form of one Goldmane Flow that whisker-backend returns. Whisker's UI types call the same record a flow log, which is not Felix's flow log.
 Code: `whisker-backend/pkg/apis/v1/flows.go` (`FlowResponse`).
 _Avoid_: flow log

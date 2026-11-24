@@ -93,11 +93,6 @@ A fan-out that calls the handlers registered for an update's key type.
 Code: `felix/dispatcher/dispatcher.go` (`Dispatcher`).
 _Avoid_: router
 
-#### filterOut
-A handler's return flag that hides an update from later handlers in the same dispatcher list.
-Code: `felix/dispatcher/dispatcher.go` (`UpdateHandler`).
-_Avoid_: filter (it means several things)
-
 #### Local endpoint
 A workload or host endpoint whose key hostname equals Felix's own hostname.
 Code: `felix/calc/calc_graph.go` (`endpointHostnameFilter`).
@@ -393,7 +388,7 @@ The desired route for one route key: type, gateway, source, MAC, protocol, multi
 Code: `felix/routetable/defs.go` (`Target`).
 _Avoid_: route (that is the kernel's entry, and the target is the desired one)
 
-#### InterfaceNone
+#### No-interface route
 The pseudo-interface name for routes with no outbound interface, such as blackhole, throw and unreachable routes.
 Code: `felix/routetable/defs.go` (`InterfaceNone`).
 _Avoid_: nothing known
@@ -448,12 +443,12 @@ Mapping each host endpoint to the interfaces it covers, either by interface name
 Code: `felix/dataplane/linux/endpoint_mgr.go` (`endpointManager`).
 _Avoid_: nothing known
 
-#### `shadowedWlEndpoints`
+#### Shadowed workload endpoint
 A local workload endpoint that Felix ignores because another endpoint claims the same interface name.
 Code: `felix/dataplane/linux/endpoint_mgr.go` (`endpointManager`).
 _Avoid_: nothing known
 
-#### `liveMigrationFSM`
+#### Live migration state machine
 The per-workload state machine with the states base, target, live and time-wait.
 Code: `felix/dataplane/linux/live_migration.go` (`liveMigrationFSM`).
 _Avoid_: liveMigrationMonitor
@@ -597,7 +592,7 @@ The tuple of hook, IP family, endpoint type, log level, to-host drop and DSR tha
 Code: `felix/bpf/hook/load.go` (`AttachType`).
 _Avoid_: attach type
 
-#### `EndpointType` (BPF)
+#### Attach point type
 The class of an attach point: workload, host, L3 device, NAT interface or loopback.
 Code: `felix/bpf/tc/defs/defs.go` (`EndpointType`).
 _Avoid_: attach type (that is the TC, TCX or netkit mechanism), bare endpoint (see the qualifier)
@@ -697,11 +692,6 @@ The compile-time constants (`CALI_F_*`) that pick an object variant (host or wor
 Code: `felix/bpf-gpl/cali_bpf.h` (`CALI_COMPILE_FLAGS`).
 _Avoid_: globals flags
 
-#### `prog_flags`
-Load-time flags in a frozen read-only section (`struct prog_flags`), currently only `no_trace_printk`.
-Code: `felix/bpf-gpl/globals.h` (`prog_flags`).
-_Avoid_: globals (they are a separate section)
-
 #### State map
 A two-slot per-CPU array (`cali_state`). Slot 0 holds the per-packet state and slot 1 holds the copied globals plus header scratch space.
 Code: `felix/bpf-gpl/jump.h` (`cali_state`).
@@ -712,7 +702,7 @@ The hash (`cali_iface`) from interface index to interface flags (ready, workload
 Code: `felix/bpf-gpl/ifstate.h` (`cali_iface`) and `felix/bpf/ifstate/map.go` (`MapParams`).
 _Avoid_: iface map, interface state map
 
-#### `ifaceReadiness`
+#### Interface readiness
 Whether a workload endpoint's programs are attached for an IP family.
 Code: `felix/dataplane/linux/bpf_ep_mgr.go` (`ifaceReadiness`).
 _Avoid_: bare ready (it means several things)
@@ -737,7 +727,7 @@ Handing a packet to the kernel's own conntrack, marked with `CALI_SKB_MARK_FALLT
 Code: `felix/bpf-gpl/cali_bpf.h` (`CALI_SKB_MARK_FALLTHROUGH`).
 _Avoid_: bypass (that is the opposite: skip policy and keep the flow in BPF)
 
-#### SkipFIB
+#### FIB lookup skip
 Skipping the BPF FIB (route) lookup and letting the host network stack route the packet.
 Code: `felix/bpf-gpl/cali_bpf.h` (`CALI_SKB_MARK_SKIP_FIB`).
 _Avoid_: SKIP_FIB
@@ -767,11 +757,6 @@ One direction of a conntrack entry (`a_to_b` or `b_to_a`), with its counters, TC
 Code: `felix/bpf-gpl/conntrack_types.h` (`calico_ct_leg`).
 _Avoid_: side
 
-#### `CALI_CT_LEG_APPROVED`
-The conntrack leg flag meaning the policy program on that leg's side allowed the flow.
-Code: `felix/bpf-gpl/conntrack_types.h` (`CALI_CT_LEG_APPROVED`).
-_Avoid_: bypass mark (that is set once both legs are approved)
-
 #### Opener leg
 The leg that started the flow, marked `CALI_CT_LEG_OPENER`.
 Code: `felix/bpf-gpl/conntrack_types.h` (`CALI_CT_LEG_OPENER`).
@@ -782,7 +767,7 @@ A leg's recorded interface index.
 Code: `felix/bpf-gpl/conntrack_types.h` (`ifindex_fwd`).
 _Avoid_: ifindex_fwd
 
-#### `calico_ct_result_type`
+#### Conntrack lookup result
 The outcome of a conntrack lookup (`CALI_CT_*`), such as a new flow, a mid-flow miss or an established flow with its bypass and NAT variants.
 Code: `felix/bpf-gpl/conntrack_types.h` (`calico_ct_result_type`).
 _Avoid_: nothing known
@@ -887,7 +872,7 @@ Reverse-path filtering, enforced inside the BPF programs for workload and host e
 Code: `felix/bpf-gpl/rpf.h` (`wep_rpf_check`).
 _Avoid_: rp_filter (that is the kernel's setting, which stays relaxed)
 
-#### `bpfNetworkBootstrap`
+#### BPF network bootstrap
 The mode in which the `ebpf-bootstrap` init container programs the API server's Service into the NAT maps.
 Code: `felix/bpf/proxy/syncer.go` (`bpfNetworkBootstrap`).
 _Avoid_: ebpf-bootstrap (that is the init container)

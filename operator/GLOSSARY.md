@@ -48,12 +48,7 @@ The applier that creates, updates or deletes a component render implementation's
 Code: `operator/pkg/controller/utils/component.go` (`ComponentHandler`).
 _Avoid_: renderer (the handler applies, it does not render)
 
-#### CreateOrUpdateOrDelete
-The component handler's entry point for applying a component render implementation.
-Code: `operator/pkg/controller/utils/component.go` (`CreateOrUpdateOrDelete`).
-_Avoid_: reconcile (that is the controller's job)
-
-#### `SetCreateOnly`
+#### Create-only handler
 A component handler mode that creates missing objects and never corrects existing ones.
 Code: `operator/pkg/controller/utils/component.go` (`SetCreateOnly`).
 _Avoid_: nothing known
@@ -120,7 +115,7 @@ A function that post-processes a component render implementation's objects for a
 Code: `operator/pkg/extensions/component.go` (`Decorate`).
 _Avoid_: ComponentModifier, ComponentExtension
 
-#### `WithDerive`
+#### Derived objects
 A modifier that builds objects derived from overridden ones.
 Code: `operator/pkg/extensions/component.go` (`WithDerive`).
 _Avoid_: nothing known
@@ -306,5 +301,5 @@ _Avoid_: migration on its own (it means several things)
 | ready | `render.Component.Ready()`; TigeraStatus `Ready`, which equals Available; `ReadyToMonitor` on the status manager | "render precondition" for `Ready()`. |
 | certificate management | The operator CA (`CertificateManager`); the Installation `certificateManagement` setting; the render `CertificateManagement` component | "operator CA" and "`CertificateManagement` (Installation)". |
 | Inputs | `render.Inputs`; `controller.Inputs` | "render inputs" and "controller inputs". |
-| IPPool | An entry of `Installation.spec.calicoNetwork.ipPools`; the `projectcalico.org/v3` IPPool | "`IPPool` (Installation)" and "IPPool". |
+| IPPool | An entry of `Installation.spec.calicoNetwork.ipPools`; the `projectcalico.org/v3` IPPool | "Installation spec IPPool" and "IPPool". |
 | UI component | A UI workload that an ingress gateway fronts, such as Whisker | Name the workload. |

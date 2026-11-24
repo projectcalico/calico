@@ -93,7 +93,7 @@ A parsed datastore key that renders a unique default path. It is either a v1-mod
 Code: `libcalico-go/lib/backend/model/keys.go` (`Key`).
 _Avoid_: datastore key (that is the rendered default path), v1 key (only one of the two kinds)
 
-#### ResourceKey
+#### v3 resource key
 The model key for a v3 resource: kind, namespace and name.
 Code: `libcalico-go/lib/backend/model/resource.go` (`ResourceKey`).
 _Avoid_: v3 key
@@ -138,7 +138,7 @@ A `SyncerUpdateProcessor` that converts one v3 KVPair into zero or more v1-model
 Code: `libcalico-go/lib/backend/watchersyncer/watchersyncer.go` (`SyncerUpdateProcessor`).
 _Avoid_: converter, translator
 
-#### SyncerCallbacks
+#### Syncer callbacks
 The consumer interface of a datastore syncer: `OnStatusUpdated` and `OnUpdates`.
 Code: `libcalico-go/lib/backend/api/api.go` (`SyncerCallbacks`).
 _Avoid_: nothing known
@@ -425,7 +425,7 @@ _Avoid_: nodeagent (except in the frozen socket path), udsuspver
 The IPAM library, calico-ipam and IPAM GC internals are in [design/ipam/GLOSSARY.md](design/ipam/GLOSSARY.md). The calico network plugin's terms are in [cni-plugin/GLOSSARY.md](cni-plugin/GLOSSARY.md).
 
 #### IP pool
-A v3 IPPool: a CIDR Calico may allocate from, with a block size, allowed uses, selectors and encapsulation. The operator's `Installation.spec.calicoNetwork.ipPools[]` entry is an [`IPPool` (Installation)](operator/GLOSSARY.md#installation-spec-ippool).
+A v3 IPPool: a CIDR Calico may allocate from, with a block size, allowed uses, selectors and encapsulation. The operator's `Installation.spec.calicoNetwork.ipPools[]` entry is an [Installation spec IPPool](operator/GLOSSARY.md#installation-spec-ippool).
 Code: `libcalico-go/lib/ipam/pool_qualification.go` (`qualifyPools`), `operator/api/v1/installation_types.go` (`IPPool`).
 _Avoid_: subnet, address pool
 
@@ -524,7 +524,7 @@ An allocation whose owner no longer uses it, either a candidate leak or a confir
 Code: `kube-controllers/pkg/controllers/node/ipam_allocation.go` (`markConfirmedLeak`).
 _Avoid_: orphan, stale allocation, dangling IP
 
-#### `Unreferenced`
+#### Unreferenced allocation
 The accounting predicate that an allocation has no referrer, before any grace period.
 Code: `libcalico-go/lib/ipam/accounting/references.go` (`Unreferenced`).
 _Avoid_: leak
@@ -915,7 +915,7 @@ Each word below means several things in the code. Use the phrase in the last col
 | staged / pending | Staged policy (`api/pkg/apis/projectcalico/v3/policy_common.go`); the pending policy trace (`goldmane/proto/api.proto`, `whisker-backend/pkg/apis/v1/flows.go`); Dikastes's pending store (`app-policy/policystore/store.go`); a pending block affinity (`api/pkg/apis/projectcalico/v3/blockaffinity.go`); `EventSequencer` pending buffers (`felix/calc/event_sequencer.go`); a manager's pending state (`felix/dataplane/linux/endpoint_mgr.go`); migration phase Pending (`kube-controllers/pkg/apis/migration/v1/types.go`) | "Staged policy" for the resource; "pending policy trace"; "pending store"; "pending affinity"; "pending buffer". |
 | backend | The datastore client `api.Client` (`libcalico-go/lib/backend/api/api.go`); the v1 model (`libcalico-go/lib/backend/syncersv1/updateprocessors/rules.go`); the backing API group (`libcalico-go/lib/backend/k8s/discovery.go`); the iptables backend (`felix/config/config_params.go`); "nftables backend" for the mode (`felix/design/dataplane.md`); a service's backend pod (`felix/bpf/nat/maps.go`); the networking backend (`node/filesystem/etc/rc.local`); whisker-backend; the flows backend (`whisker-backend/pkg/apis/v1/backend.go`) | "Backend client", "backing API group", "iptables backend", "service backend", "networking backend", "flows backend". |
 | cache / SnapshotCache | Typha `snapcache.Cache` (`typha/pkg/snapcache/cache.go`); `syncserver.SnapshotCache` and binary snapshots (`typha/pkg/syncserver/snap_precalc.go`); the watcher cache (`libcalico-go/lib/backend/watchersyncer/watchercache.go`); update-processor caches (`libcalico-go/lib/backend/syncersv1/updateprocessors/conflictresolvingcacheproc.go`); the confd client cache; the kube-controllers ResourceCache (`kube-controllers/pkg/cache/cache.go`); Felix's lookups cache (`felix/calc/lookups_cache.go`); Goldmane's replay cache (`goldmane/pkg/internal/flowcache/timed_cache.go`) | Always qualify. In Typha, "snapshot cache" or "binary snapshot cache". |
-| ValidationFilter | Typha's (`typha/pkg/calc/validation_filter.go`) and Felix's (`felix/calc/validation_filter.go`), same name and role | "`ValidationFilter` (Typha)", "`ValidationFilter` (Felix)". |
+| ValidationFilter | Typha's (`typha/pkg/calc/validation_filter.go`) and Felix's (`felix/calc/validation_filter.go`), same name and role | "Typha validation filter", "Felix validation filter". |
 | sub-program | The BPF generic sub-program in the generic jump map (`felix/bpf/hook/map.go`); a policy sub-program, a chained slice of a policy program (`felix/bpf/jump/map.go`) | Always "generic sub-program" or "policy sub-program". |
 | XDP | BPF-mode XDP running untracked host endpoint policy (`felix/bpf-gpl/xdp.c`); iptables-mode XDP acceleration through `xdpState` (`felix/dataplane/linux/xdp_state.go`) | "BPF-mode XDP" or "iptables-mode XDP". |
 | conntrack | The BPF conntrack table `cali_v4_ct` (`felix/bpf-gpl/conntrack_types.h`); kernel netfilter conntrack (`felix/bpf-gpl/cali_bpf.h`); Felix's route-table conntrack cleanup (`felix/routetable/conntrack_owner_tracker.go`) | "BPF conntrack" or "kernel conntrack". |

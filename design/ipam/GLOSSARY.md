@@ -250,11 +250,6 @@ The IPAM GC controller pass that deallocates cold IPs in blocks that nothing els
 Code: `kube-controllers/pkg/controllers/node/ipam.go` (`garbageCollectColdIPs`, `coldBlocks`).
 _Avoid_: cold IP release, cold-IP GC
 
-#### `kubernetesNodesByCalicoName`
-The controller's lookup from a Calico Node name to the Kubernetes Node object.
-Code: `kube-controllers/pkg/controllers/node/ipam.go` (`kubernetesNodesByCalicoName`).
-_Avoid_: knode, cnode
-
 #### IPAM feed
 The building block that feeds the accounting tracker from the datastore syncer.
 Code: `kube-controllers/pkg/controllers/utils/ipam_feed.go` (`IPAMFeed`).

@@ -101,17 +101,12 @@ The single shared datastore syncer that streams Calico resources and IPAM blocks
 Code: `kube-controllers/pkg/controllers/utils/syncer.go` (`DataFeed`).
 _Avoid_: the syncer, data feed (two words)
 
-#### RegisterWith
-The method by which a feed-driven controller subscribes to the DataFeed for keys and sync status.
-Code: `kube-controllers/pkg/controllers/node/hostendpoints.go` (`RegisterWith`).
-_Avoid_: watch
-
 #### IPAMFeed
 The component that holds one shared `accounting.Tracker` of pool usage.
 Code: `kube-controllers/pkg/controllers/utils/ipam_feed.go` (`IPAMFeed`).
 _Avoid_: IPAM cache
 
-#### ResourceCache
+#### Desired-state cache
 The desired-state cache used by the mirroring controllers.
 Code: `kube-controllers/pkg/cache/cache.go` (`ResourceCache`).
 _Avoid_: informer cache, Calico cache
@@ -130,16 +125,6 @@ _Avoid_: sync, for a workqueue pass
 Setting a ResourceCache entry without queuing an update.
 Code: `kube-controllers/pkg/cache/cache.go` (`Prime`).
 _Avoid_: nothing known
-
-#### syncToDatastore
-The worker step that writes or deletes one key so the datastore matches the ResourceCache.
-Code: `kube-controllers/pkg/controllers/namespace/namespace_controller.go` (`syncToDatastore`).
-_Avoid_: syncToCalico
-
-#### processNextItem
-The worker loop of a workqueue controller.
-Code: `kube-controllers/pkg/controllers/tier/tier_controller.go` (`processNextItem`).
-_Avoid_: processNextWorkItem
 
 #### Dropped key
 A workqueue key that a controller has given up on.
@@ -163,7 +148,7 @@ _Avoid_: initial sync
 
 ### Configuration and restart
 
-#### RunConfig
+#### Running configuration
 The effective configuration kube-controllers runs with. Its status counterpart is `status.runningConfig`.
 Code: `kube-controllers/pkg/config/runconfig.go` (`RunConfig`).
 _Avoid_: config, unqualified

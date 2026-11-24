@@ -82,12 +82,12 @@ The watcher cache state for a resource type that cannot be watched, so it is pol
 Code: `libcalico-go/lib/backend/watchersyncer/watchercache.go` (`listTriggeredPolling`, `watchTriggeredPolling`).
 _Avoid_: listTriggeredPolling, watchTriggeredPolling
 
-### `crdInstalled`
+### CRD-absent mode
 The watcher cache state in which the CRD for its kind is absent.
 Code: `libcalico-go/lib/backend/watchersyncer/watchercache.go` (`crdInstalled`).
 _Avoid_: nothing known
 
-### `ConflictResolvingCacheUpdateProcessor`
+### Conflict-resolving update processor
 An update processor for kinds whose v1-model key cannot be derived from the v3 name.
 Code: `libcalico-go/lib/backend/syncersv1/updateprocessors/conflictresolvingcacheproc.go` (`NewConflictResolvingCacheUpdateProcessor`).
 _Avoid_: conflict (the migration controller uses that word for a different thing)
@@ -102,7 +102,7 @@ The v1-model keys a config update processor emits, one for each field of a confi
 Code: `libcalico-go/lib/backend/model/felixconfig.go` (`GlobalConfigKey`, `HostConfigKey`).
 _Avoid_: nothing known
 
-### `EnsureInitialized`
+### Datastore initialization
 The first-run initialization of the datastore: ClusterInformation (version, cluster GUID, `DatastoreReady`) and the protected tiers.
 Code: `libcalico-go/lib/clientv3/client.go` (`EnsureInitialized`).
 _Avoid_: nothing known

@@ -88,7 +88,7 @@ The disconnect Typha applies to a client that fell behind. It is one kind of con
 Code: `typha/pkg/syncserver/sync_server.go` (`connection`).
 _Avoid_: too far behind, lag (it has no threshold)
 
-### `NewClientFallBehindGracePeriod`
+### New client fallback grace period
 The grace period during which a newly connected client is exempt from the fall-behind disconnect.
 Code: `typha/pkg/syncserver/sync_server.go` (`NewClientFallBehindGracePeriod`).
 _Avoid_: lag (it has no threshold)
@@ -123,7 +123,7 @@ Finding the addresses of the Typha instances a client can connect to.
 Code: `typha/pkg/discovery/discovery.go` (`Discoverer`).
 _Avoid_: rebalancer (that adjusts connection limits, not addresses)
 
-### `ValidationFilter` (Typha)
+### Typha validation filter
 The pipeline stage that validates each KVPair and replaces an invalid value with a delete. Felix's calculation graph has its own validation filter with the same name.
 Code: `typha/pkg/calc/validation_filter.go` (`ValidationFilter`).
 _Avoid_: validator (on its own)

@@ -172,7 +172,7 @@ A confd-internal counter that rises on every cache update.
 Code: `confd/pkg/backends/calico/client.go` (`revisionsByPrefix`).
 _Avoid_: datastore revision
 
-#### BirdBGPConfig
+#### BIRD BGP model
 The per-IP-family structure of peers, filters, communities and pool statements, with `BirdBGPPeer` for each peer.
 Code: `confd/pkg/backends/types/bird_bgp_config.go` (`BirdBGPConfig`, `BirdBGPPeer`).
 _Avoid_: BGPConfiguration (that is the v3 resource)
