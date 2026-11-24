@@ -50,7 +50,7 @@ type Upload struct {
 	// Requires names steps whose output this upload reads.
 	Requires []string
 
-	// Done is called to verify that the upload has been completed successfully.
+	// Done becomes the node's plan.Node.Done, so it must only read.
 	Done func() error
 }
 

@@ -215,14 +215,12 @@ type settings struct {
 
 	resolve registry.DigestResolver
 
-	resume *resume
+	// recordedRefs is what an earlier run published, which a resume skips.
+	recordedRefs []string
+
+	force bool
 
 	steps.Step
-}
-
-type resume struct {
-	published []string
-	force     bool
 }
 
 type (
@@ -304,16 +302,6 @@ func WithDryRun(dryRun bool) PublishOption {
 	})
 }
 
-func WithRecord(rec steps.RefRecorder) LookupOption {
-	return lookupSetting(func(s *settings) error {
-		if rec == nil {
-			return fmt.Errorf("no recorder given")
-		}
-		s.refs = rec
-		return nil
-	})
-}
-
 func WithResolver(resolve registry.DigestResolver) LookupOption {
 	return lookupSetting(func(s *settings) error {
 		if resolve == nil {
@@ -324,9 +312,11 @@ func WithResolver(resolve registry.DigestResolver) LookupOption {
 	})
 }
 
-func WithResume(published []string, force bool) PublishOption {
+// WithForce republishes a variant whose published digest is not one the record
+// holds; without it that difference is an error.
+func WithForce(force bool) PublishOption {
 	return publishSetting(func(s *settings) error {
-		s.resume = &resume{published: published, force: force}
+		s.force = force
 		return nil
 	})
 }

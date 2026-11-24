@@ -23,6 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/fsutil"
 )
 
@@ -32,8 +33,18 @@ const (
 	ChecksumStep = "checksums"
 )
 
+// ChecksumUpload requires the metadata step, so the sums cover the metadata.
+func ChecksumUpload(r command.CommandRunner, dir string, filters ...fsutil.FileFilter) distribution.Upload {
+	return distribution.Upload{
+		Handler:  distribution.Preparer{Kind: ChecksumStep, Action: func() error { return SHA256Sums(r, dir, filters...) }},
+		Requires: []string{MetadataStep},
+		Done:     func() error { return fsutil.FilePresent(filepath.Join(dir, SumsFileName)) },
+	}
+}
+
 // SHA256Sums replaces dir's sums file, covering the files the filters pick.
-// Names stay relative to dir, so it verifies wherever the assets land.
+// Names stay relative to dir, so it verifies wherever the assets land:
+// sha256sum -c --ignore-missing SHA256SUMS
 func SHA256Sums(r command.CommandRunner, dir string, filters ...fsutil.FileFilter) error {
 	path := filepath.Join(dir, SumsFileName)
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {

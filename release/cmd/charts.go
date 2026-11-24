@@ -83,24 +83,16 @@ var chartsPublishAction = func(cfg *Config) func(context.Context, *cli.Command) 
 		}
 		confirm := !c.Bool(localFlag.Name)
 
-		opts := []charts.PublishOption{
-			charts.WithRunner(commandRunner),
-			charts.WithLogsDir(cfg.LogsDir),
-			charts.WithResolver(registryDigestResolver),
-		}
 		records, err := recordsDir(cfg, c, pin, chart.ProductVersion)
 		if err != nil {
 			return err
 		}
-		published, w, err := publishRecord(records, charts.PublishStep, confirm)
-		if err != nil {
-			return err
-		}
-		opts = append(opts, charts.WithResume(published, c.Bool(forceFlag.Name)))
-		if w != nil {
-			opts = append(opts, charts.WithRecord(w))
-		}
-		return charts.Publish(*chart, registries, confirm, opts...)
+		return charts.Publish(*chart, registries, records, confirm,
+			charts.WithRunner(commandRunner),
+			charts.WithLogsDir(cfg.LogsDir),
+			charts.WithResolver(registryDigestResolver),
+			charts.WithForce(c.Bool(forceFlag.Name)),
+		)
 	}
 }
 

@@ -305,21 +305,14 @@ func operatorBuild(c *cli.Command, o operator.Operator, variants []operator.Vari
 	}
 }
 
-// operatorPublished reads the record without writing it, as it runs before any
-// step does.
 func operatorPublished(c *cli.Command, o operator.Operator, variants []operator.Variant, recordsDir string) func() error {
 	if !c.Bool(operatorFlagName) {
 		return nil
 	}
 	return func() error {
-		published, _, err := publishRecord(recordsDir, operator.PublishStep, false)
-		if err != nil {
-			return err
-		}
-		return operator.Published(o, variants,
+		return operator.Published(o, variants, recordsDir,
 			operator.WithArches(c.StringSlice(archFlag.Name)...),
-			operator.WithResolver(registryDigestResolver),
-			operator.WithResume(published, false))
+			operator.WithResolver(registryDigestResolver))
 	}
 }
 
@@ -328,11 +321,7 @@ func operatorPublish(c *cli.Command, o operator.Operator, variants []operator.Va
 		return nil
 	}
 	return func() error {
-		opts, err := operatorPublishOptions(c, recordsDir, logsDir)
-		if err != nil {
-			return fmt.Errorf("operator publish options: %w", err)
-		}
-		return operator.Publish(o, variants, hashrelease, opts...)
+		return operator.Publish(o, variants, recordsDir, hashrelease, operatorPublishOptions(c, logsDir)...)
 	}
 }
 

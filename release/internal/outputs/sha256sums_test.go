@@ -23,8 +23,35 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/fsutil"
 )
+
+func TestChecksumUpload(t *testing.T) {
+	t.Run("requires the metadata the sums cover", func(t *testing.T) {
+		u := ChecksumUpload(nil, t.TempDir())
+		if diff := cmp.Diff([]string{MetadataStep}, u.Requires); diff != "" {
+			t.Errorf("requires (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("is done once its action writes the sums", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "a.tgz"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		u := ChecksumUpload(&command.Recorder{}, dir, fsutil.DirFiles)
+		if err := u.Done(); err == nil {
+			t.Fatal("done before the sums were written")
+		}
+		if err := u.Handler.(distribution.Preparer).Action(); err != nil {
+			t.Fatalf("action: %v", err)
+		}
+		if err := u.Done(); err != nil {
+			t.Errorf("not done after the action: %v", err)
+		}
+	})
+}
 
 func TestSHA256Sums(t *testing.T) {
 	reply := func(command.Call) (string, error) { return "abc  a.tgz\ndef  metadata.yaml", nil }

@@ -119,11 +119,10 @@ func (s settings) linkFrom(src, dest string, filters []fsutil.FileFilter) (int, 
 	return len(found), fsutil.LinkOrCopyFiles(src, dest, found)
 }
 
-// Built fails unless every binary the archive takes is on disk, so a run that
-// skips the build can rely on an earlier one.
+// Built fails unless every binary the archive takes is on disk.
 func Built(repoRoot string) error {
 	var errs []error
-	for _, src := range archived(repoRoot) {
+	for _, src := range builtSources(repoRoot) {
 		if err := src.Present(); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", src.Name(), err))
 		}

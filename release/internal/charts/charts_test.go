@@ -126,6 +126,12 @@ func resolvesPerChart(digests map[string]string) registry.DigestResolver {
 	}
 }
 
+// resolvesAny keeps the registry out of a test that asserts on pushes rather
+// than on digests.
+func resolvesAny() registry.DigestResolver {
+	return func(string) (string, bool, error) { return "sha256:aaa", true, nil }
+}
+
 // testChart is a neutral fixture: the package takes the chart list as data, so
 // no product's real chart names belong here.
 func testChart(t *testing.T) Chart {
@@ -428,13 +434,32 @@ func publishable(t *testing.T) Chart {
 	return c
 }
 
+func TestBuilt(t *testing.T) {
+	c := testChart(t)
+
+	t.Run("names a chart that is not on disk", func(t *testing.T) {
+		writeCharts(t, c, "chart-one")
+		err := Built(c)
+		if err == nil || !strings.Contains(err.Error(), "chart chart-two not built") {
+			t.Errorf("Built() = %v, want it to name chart-two", err)
+		}
+	})
+
+	t.Run("passes once every chart is on disk", func(t *testing.T) {
+		writeCharts(t, c, c.Names...)
+		if err := Built(c); err != nil {
+			t.Errorf("Built() = %v", err)
+		}
+	})
+}
+
 // Each push names its own file: pushing one chart repeatedly would pass a
 // count-only check.
 func TestPublishPushesEveryChartToEveryRegistry(t *testing.T) {
 	c := publishable(t)
 	f := newFakeRunner(nil)
 
-	if err := Publish(c, []string{"quay.test/charts", "docker.test/charts"}, true, WithRunner(f)); err != nil {
+	if err := Publish(c, []string{"quay.test/charts", "docker.test/charts"}, t.TempDir(), true, WithRunner(f), WithResolver(resolvesAny())); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 
@@ -453,7 +478,7 @@ func TestPublishRetriesAFailedPush(t *testing.T) {
 	c := publishable(t)
 	f := newFakeRunner(map[string]int{"chart-one-v3.30.0.tgz oci://quay.test/charts": 1})
 
-	if err := Publish(c, []string{"quay.test/charts"}, true, WithRunner(f)); err != nil {
+	if err := Publish(c, []string{"quay.test/charts"}, t.TempDir(), true, WithRunner(f), WithResolver(resolvesAny())); err != nil {
 		t.Fatalf("expected the retry to recover the push: %v", err)
 	}
 	if got := len(f.pushes()); got != 3 {
@@ -465,7 +490,7 @@ func TestPublishReportsFailureAfterRetriesExhausted(t *testing.T) {
 	c := publishable(t)
 	f := newFakeRunner(map[string]int{"chart-one-v3.30.0.tgz oci://quay.test/charts": 99})
 
-	err := Publish(c, []string{"quay.test/charts"}, true, WithRunner(f))
+	err := Publish(c, []string{"quay.test/charts"}, t.TempDir(), true, WithRunner(f), WithResolver(resolvesAny()))
 	if err == nil {
 		t.Fatal("expected the publish to fail")
 	}
@@ -484,7 +509,7 @@ func TestPublishFailsBeforePushingWhenAChartIsMissing(t *testing.T) {
 	}
 	f := newFakeRunner(nil)
 
-	if err := Publish(c, []string{"quay.test/charts"}, true, WithRunner(f)); err == nil {
+	if err := Publish(c, []string{"quay.test/charts"}, t.TempDir(), true, WithRunner(f), WithResolver(resolvesAny())); err == nil {
 		t.Fatal("expected a publish with a missing chart to fail")
 	}
 	if got := f.pushes(); len(got) != 0 {
@@ -493,7 +518,7 @@ func TestPublishFailsBeforePushingWhenAChartIsMissing(t *testing.T) {
 }
 
 func TestPublishRejectsNoRegistries(t *testing.T) {
-	if err := Publish(publishable(t), nil, true, WithRunner(newFakeRunner(nil))); err == nil {
+	if err := Publish(publishable(t), nil, t.TempDir(), true, WithRunner(newFakeRunner(nil))); err == nil {
 		t.Fatal("expected a publish with no registries to be rejected")
 	}
 }
@@ -503,7 +528,7 @@ func TestPublishLogsPerChartAndRegistry(t *testing.T) {
 	f := newFakeRunner(nil)
 	logs := filepath.Join(t.TempDir(), "logs")
 
-	if err := Publish(c, []string{"quay.test/charts"}, true, WithRunner(f), WithLogsDir(logs)); err != nil {
+	if err := Publish(c, []string{"quay.test/charts"}, t.TempDir(), true, WithRunner(f), WithResolver(resolvesAny()), WithLogsDir(logs)); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	// A chart goes to several registries, so the slug carries both.
@@ -513,31 +538,44 @@ func TestPublishLogsPerChartAndRegistry(t *testing.T) {
 	}
 }
 
-// recorder collects the refs a publish records.
-type recorder struct {
-	mu   sync.Mutex
-	refs []string
+// recordsWith returns a records directory holding refs as the publish record.
+func recordsWith(t testing.TB, refs ...string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if len(refs) == 0 {
+		return dir
+	}
+	w, err := outputs.NewRefsWriter(dir, PublishStep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Add(refs...); err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }
 
-func (r *recorder) Add(refs ...string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.refs = append(r.refs, refs...)
-	return nil
+// recordedRefs is what a run left in dir's publish record.
+func recordedRefs(t testing.TB, dir string) []string {
+	t.Helper()
+	refs, err := outputs.ReadRefs(dir, PublishStep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return refs
 }
 
 // A resolver answering every chart alike could not catch a mismatched digest.
 func TestPublishRecordsWhatItPushed(t *testing.T) {
 	c := publishable(t)
-	rec := &recorder{}
+	records := recordsWith(t)
 
-	err := Publish(c, []string{"quay.test/charts"}, true,
+	err := Publish(c, []string{"quay.test/charts"}, records, true,
 		WithRunner(newFakeRunner(nil)),
 		WithResolver(resolvesPerChart(map[string]string{
 			"chart-one": "sha256:aaa",
 			"chart-two": "sha256:bbb",
-		})),
-		WithRecord(rec))
+		})))
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -546,26 +584,25 @@ func TestPublishRecordsWhatItPushed(t *testing.T) {
 		"quay.test/charts/chart-one:v3.30.0@sha256:aaa",
 		"quay.test/charts/chart-two:v3.30.0@sha256:bbb",
 	}
-	if !slices.Equal(rec.refs, want) {
-		t.Errorf("recorded refs:\n got %v\nwant %v", rec.refs, want)
+	if got := recordedRefs(t, records); !slices.Equal(got, want) {
+		t.Errorf("recorded refs:\n got %v\nwant %v", got, want)
 	}
 }
 
 func TestPublishDryRunPushesAndRecordsNothing(t *testing.T) {
 	c := publishable(t)
 	f := newFakeRunner(nil)
-	rec := &recorder{}
+	records := recordsWith(t)
 
-	if err := Publish(c, []string{"quay.test/charts"}, false,
-		WithRunner(f), WithResolver(resolvesPerChart(map[string]string{"chart-one": "sha256:aaa"})),
-		WithRecord(rec)); err != nil {
+	if err := Publish(c, []string{"quay.test/charts"}, records, false,
+		WithRunner(f), WithResolver(resolvesPerChart(map[string]string{"chart-one": "sha256:aaa"}))); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	if got := f.pushes(); len(got) != 0 {
 		t.Errorf("expected a dry run to push nothing, got %v", got)
 	}
-	if len(rec.refs) != 0 {
-		t.Errorf("expected a dry run to record nothing, got %v", rec.refs)
+	if got := recordedRefs(t, records); len(got) != 0 {
+		t.Errorf("expected a dry run to record nothing, got %v", got)
 	}
 }
 
@@ -573,13 +610,13 @@ func TestPublishResumeSkipsChartsAlreadyPublished(t *testing.T) {
 	c := publishable(t)
 	f := newFakeRunner(nil)
 
-	err := Publish(c, []string{"quay.test/charts"}, true,
+	err := Publish(c, []string{"quay.test/charts"},
+		recordsWith(t, "quay.test/charts/chart-one@sha256:aaa"), true,
 		WithRunner(f),
 		WithResolver(resolvesPerChart(map[string]string{
 			"chart-one": "sha256:aaa",
 			"chart-two": "sha256:bbb",
-		})),
-		WithResume([]string{"quay.test/charts/chart-one@sha256:aaa"}, false))
+		})))
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -625,16 +662,8 @@ func TestPushed(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			recordsDir := t.TempDir()
-			w, err := outputs.NewRefsWriter(recordsDir, PublishStep)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := w.Add(tc.recorded...); err != nil {
-				t.Fatal(err)
-			}
 			f := newFakeRunner(nil)
-			err = Pushed(publishable(t), []string{"quay.test/charts"}, recordsDir,
+			err := Pushed(publishable(t), []string{"quay.test/charts"}, recordsWith(t, tc.recorded...),
 				WithRunner(f),
 				WithResolver(resolvesPerChart(tc.digests)))
 			if len(tc.wantErr) == 0 && err != nil {
@@ -660,10 +689,10 @@ func TestPublishResumeFailsOnDigestMismatch(t *testing.T) {
 	c := publishable(t)
 	f := newFakeRunner(nil)
 
-	err := Publish(c, []string{"quay.test/charts"}, true,
+	err := Publish(c, []string{"quay.test/charts"},
+		recordsWith(t, "quay.test/charts/chart-one@sha256:aaa"), true,
 		WithRunner(f),
-		WithResolver(resolvesPerChart(map[string]string{"chart-one": "sha256:zzz"})),
-		WithResume([]string{"quay.test/charts/chart-one@sha256:aaa"}, false))
+		WithResolver(resolvesPerChart(map[string]string{"chart-one": "sha256:zzz"})))
 	if err == nil {
 		t.Fatal("expected a digest mismatch to fail the publish")
 	}
@@ -681,10 +710,11 @@ func TestPublishResumeForceRepublishesOverAMismatch(t *testing.T) {
 	c := publishable(t)
 	f := newFakeRunner(nil)
 
-	err := Publish(c, []string{"quay.test/charts"}, true,
+	err := Publish(c, []string{"quay.test/charts"},
+		recordsWith(t, "quay.test/charts/chart-one@sha256:aaa"), true,
 		WithRunner(f),
 		WithResolver(resolvesPerChart(map[string]string{"chart-one": "sha256:zzz"})),
-		WithResume([]string{"quay.test/charts/chart-one@sha256:aaa"}, true))
+		WithForce(true))
 	if err != nil {
 		t.Fatalf("Publish with force: %v", err)
 	}
@@ -697,10 +727,9 @@ func TestPublishResumePublishesUnrecordedCharts(t *testing.T) {
 	c := publishable(t)
 	f := newFakeRunner(nil)
 
-	err := Publish(c, []string{"quay.test/charts"}, true,
+	err := Publish(c, []string{"quay.test/charts"}, recordsWith(t), true,
 		WithRunner(f),
-		WithResolver(resolvesPerChart(map[string]string{"chart-one": "sha256:aaa"})),
-		WithResume(nil, false))
+		WithResolver(resolvesPerChart(map[string]string{"chart-one": "sha256:aaa"})))
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -761,16 +790,15 @@ func TestPublishResumeJudgesEachChartByItsOwnDigest(t *testing.T) {
 	f := newFakeRunner(nil)
 
 	// chart-one still matches its record; chart-two has moved.
-	err := Publish(c, []string{"quay.test/charts"}, true,
+	records := recordsWith(t,
+		"quay.test/charts/chart-one:v3.30.0@sha256:aaa",
+		"quay.test/charts/chart-two:v3.30.0@sha256:bbb")
+	err := Publish(c, []string{"quay.test/charts"}, records, true,
 		WithRunner(f),
 		WithResolver(resolvesPerChart(map[string]string{
 			"chart-one": "sha256:aaa",
 			"chart-two": "sha256:zzz",
-		})),
-		WithResume([]string{
-			"quay.test/charts/chart-one:v3.30.0@sha256:aaa",
-			"quay.test/charts/chart-two:v3.30.0@sha256:bbb",
-		}, false))
+		})))
 	if err == nil {
 		t.Fatal("expected chart-two's moved digest to fail the publish")
 	}
@@ -785,23 +813,22 @@ func TestPublishResumeJudgesEachChartByItsOwnDigest(t *testing.T) {
 // A failed lookup must not discard the charts that did land.
 func TestPublishRecordsPartialRefsWhenALookupFails(t *testing.T) {
 	c := publishable(t)
-	rec := &recorder{}
+	records := recordsWith(t)
 
-	err := Publish(c, []string{"quay.test/charts"}, true,
+	err := Publish(c, []string{"quay.test/charts"}, records, true,
 		WithRunner(newFakeRunner(nil)),
 		WithResolver(func(ref string) (string, bool, error) {
 			if strings.Contains(ref, "chart-two") {
 				return "", false, fmt.Errorf("registry unreachable")
 			}
 			return "sha256:aaa", true, nil
-		}),
-		WithRecord(rec))
+		}))
 	if err == nil {
 		t.Fatal("expected the failed lookup to be reported")
 	}
 	want := "quay.test/charts/chart-one:v3.30.0@sha256:aaa"
-	if !slices.Contains(rec.refs, want) {
-		t.Errorf("expected %q recorded despite the failure, got %v", want, rec.refs)
+	if got := recordedRefs(t, records); !slices.Contains(got, want) {
+		t.Errorf("expected %q recorded despite the failure, got %v", want, got)
 	}
 }
 
@@ -887,16 +914,14 @@ func TestPublishRefsNameTheResolvedVersion(t *testing.T) {
 	c := testChart(t)
 	c.ChartVersion = "2"
 	writeCharts(t, c, c.Names...)
-	rec := &recorder{}
-	err := Publish(c, []string{"quay.test/charts"}, true,
+	err := Publish(c, []string{"quay.test/charts"}, t.TempDir(), true,
 		WithRunner(newFakeRunner(nil)),
 		WithResolver(func(ref string) (string, bool, error) {
 			if !strings.Contains(ref, ":"+c.Version()) {
 				t.Errorf("ref %q does not name version %q", ref, c.Version())
 			}
 			return "sha256:aaa", true, nil
-		}),
-		WithRecord(rec))
+		}))
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -1056,14 +1081,7 @@ func TestMetadata(t *testing.T) {
 	unpublished := outputs.Digests{Resolve: func(string) (string, bool, error) { return "", false, nil }}
 
 	t.Run("records each chart at the registry and download URL it was published to", func(t *testing.T) {
-		dir := t.TempDir()
-		w, err := outputs.NewRefsWriter(dir, PublishStep)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := w.Add("quay.io/calico/charts/tigera-operator:v3.30.0@" + digest); err != nil {
-			t.Fatal(err)
-		}
+		dir := recordsWith(t, "quay.io/calico/charts/tigera-operator:v3.30.0@"+digest)
 		got, err := Metadata(dir, c, at, outputs.Digests{Resolve: func(string) (string, bool, error) {
 			return "", false, errors.New("must not resolve")
 		}})

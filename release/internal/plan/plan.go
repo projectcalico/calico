@@ -53,7 +53,7 @@ type Node struct {
 type Options struct {
 	// Preview runs every Validate, but no Do, and logs what would run.
 	Preview bool
-	// Local skips Done after Do: a local run changes nothing remote to check.
+	// Local skips Done after Do: a dry-run publish leaves nothing to check.
 	Local bool
 	Skip  map[string]bool
 }
