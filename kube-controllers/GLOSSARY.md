@@ -8,8 +8,8 @@ The top layer of the `calico component kube-controllers` process.
 
 | Building block | Code | Responsible for |
 |---|---|---|
-| Controller control | `kube-controllers/pkg/kubecontrollers/run.go` (`controllerControl`) | Starts each enabled controller by name and restarts the whole process when the running config changes. |
-| Run config controller | `kube-controllers/pkg/config/runconfig.go` (`RunConfigController`) | Watches the `default` KubeControllersConfiguration, merges environment variables over it, and reports the result in status. |
+| Controller group | `kube-controllers/pkg/kubecontrollers/run.go` (`controllerControl`) | Starts each enabled controller by name and restarts the whole process when the running config changes. |
+| Configuration manager | `kube-controllers/pkg/config/runconfig.go` (`RunConfigController`) | Watches the `default` KubeControllersConfiguration, merges environment variables over it, and reports the result in status. |
 | Restart wrapper | `kube-controllers/pkg/kubecontrollers/command.go` (`cmdwrapper.WrapSelf`) | Re-executes the inner process when it exits with the restart return code. |
 | DataFeed | `kube-controllers/pkg/controllers/utils/syncer.go` (`DataFeed`) | One datastore syncer over Calico resources and IPAM blocks, fanned out to registered handlers by key type. |
 | IPAMFeed | `kube-controllers/pkg/controllers/utils/ipam_feed.go` (`IPAMFeed`) | Keeps one shared IPAM accounting tracker current from the DataFeed. |
@@ -50,7 +50,7 @@ Terms defined in the [root glossary](../GLOSSARY.md) that apply in this componen
 ### Controller shapes
 
 #### Controller
-Any object implementing `Run(stopCh)`, registered by name in the controller control. The word does not mean a controller-runtime Reconciler; kube-controllers does not use that framework.
+Any object implementing `Run(stopCh)`, registered by name in the controller group. The word does not mean a controller-runtime Reconciler; kube-controllers does not use that framework.
 Code: `kube-controllers/pkg/controllers/controller/controller.go` (`Controller`).
 _Avoid_: reconciler
 
@@ -70,19 +70,24 @@ Code: `kube-controllers/pkg/controllers/namespace/namespace_controller.go` (`nam
 _Avoid_: Kubernetes-to-Calico sync controllers
 
 #### Policy controller
-The mirroring controller for Kubernetes NetworkPolicies. Some older comments use "policy controller" for all of kube-controllers.
+The mirroring controller for Kubernetes NetworkPolicies.
 Code: `kube-controllers/pkg/controllers/networkpolicy/policy_controller.go` (`policyController`).
 _Avoid_: policy controller for kube-controllers as a whole
 
 #### Sub-controller
-A controller owned and started by the node controller rather than by the controller control.
+A controller owned and started by the node controller rather than by the controller group.
 Code: `kube-controllers/pkg/controllers/node/controller.go` (`NodeController`).
 _Avoid_: controller, unqualified
 
-#### Controller control
-The object that registers and starts the enabled controllers.
+#### Controller group
+The set of enabled controllers that kube-controllers registers, starts and restarts together.
 Code: `kube-controllers/pkg/kubecontrollers/run.go` (`controllerControl`).
-_Avoid_: controller manager
+_Avoid_: controller control, controller manager (that is `ControllerManager`)
+
+#### Configuration manager
+The kube-controllers building block that watches the `default` KubeControllersConfiguration and produces the configuration kube-controllers runs with.
+Code: `kube-controllers/pkg/config/runconfig.go` (`RunConfigController`).
+_Avoid_: run config controller
 
 #### Deferred CRD controller
 A wrapper around an inner controller that depends on a named CRD. "Deferred" here is unrelated to the KubeVirt deferred informers in `libcalico-go`.
