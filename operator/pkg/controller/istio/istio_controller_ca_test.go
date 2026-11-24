@@ -764,6 +764,25 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectNotDegraded()
 		})
 
+		It("holds and goes Degraded when a new istiod creates a self-signed CA after cacerts is deleted during a rotation", func() {
+			reconcileIstio()
+			oldRoot := operatorCA().Roots[0]
+			markIstiodRolled()
+			replaceOperatorCA(newTestCert("new-root", nil, true))
+			reconcileIstio()
+			expectPhase(istio.TransitionDistributeRoot, time.Time{})
+			hash := istiodHash()
+
+			Expect(cli.Delete(ctx, getSecret(cacertsKey))).NotTo(HaveOccurred())
+			createIstioCASecret()
+			reconcileIstio()
+
+			secretAbsent(cacertsKey)
+			Expect(istiodHash()).To(Equal(hash))
+			Expect(getConfigMap(anchorsKey).Data[istio.RootCertKey]).To(ContainSubstring(string(istio.EncodeCertificates(oldRoot))))
+			expectDegradedMentioning(istio.IstioNamespace+"/"+istio.CACertsSecretName+" is missing", istio.TrustAnchorsConfigMapName)
+		})
+
 		It("ignores istio-ca-secret once an operator-rendered cacerts exists", func() {
 			reconcileIstio()
 			cacerts := getSecret(cacertsKey)
