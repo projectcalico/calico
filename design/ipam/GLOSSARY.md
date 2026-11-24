@@ -188,17 +188,7 @@ The Windows mode that limits a node to one HNS network and one IPAM block.
 Code: `cni-plugin/pkg/ipamplugin/ipam_plugin.go` (`WindowsUseSingleNetwork`).
 _Avoid_: WindowsUseSingleNetwork, single-HNS-network mode
 
-#### Sandbox lookups
-The Kubernetes clients and the Pod and Namespace objects for a sandbox, held for in-process IPAM.
-Code: `cni-plugin/internal/pkg/utils/sandbox_lookups.go` (`SandboxLookups`).
-_Avoid_: container (it is the pause sandbox)
-
 ### IPAM GC controller
-
-#### Full sync
-An IPAM GC pass that scans every node.
-Code: `kube-controllers/pkg/controllers/node/ipam.go` (`fullSyncRequired`).
-_Avoid_: full scan
 
 #### Incremental sync
 An IPAM GC pass that checks only the nodes whose allocations changed since the last pass, the dirty nodes.
