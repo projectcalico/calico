@@ -3,18 +3,23 @@ version: condensed-module
 
 defaults:
   timeout: 30m
-  services:
-    - docker
 
 steps:
   - name: third-party-cni-plugins-ci
+    services: [docker]
     requests: {cpu: 2000m, memory: 1.25Gi}
     commands: |
       cd third_party/cni-plugins
       make ci
 
+  # go-cache's builds are amd64, so these take only its modules.
   - name: third-party-cni-plugins-build
+    useGoBuild: true
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     requests: {cpu: 2750m, memory: 2Gi}
+    goCache: read
     matrix:
       - name: arm64
         env: [{name: ARCH, value: arm64}]

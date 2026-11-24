@@ -11,9 +11,10 @@ WINDOWS_IMAGE         ?=$(NODE_IMAGE)-windows
 # using targets within this makefile.
 BUILD_IMAGES ?=$(NODE_IMAGE)
 
-# Paths within the build container for BPF source.
-LIBBPF_CONTAINER_PATH=$(BUILD_REPO_ROOT)/felix/bpf-gpl/libbpf/src/
-BPFGPL_CONTAINER_PATH=$(BUILD_REPO_ROOT)/felix/bpf-gpl/
+# Paths within the build container for BPF source. Spelled as felix's: cgo's
+# flags are part of a package's build cache key, character for character.
+LIBBPF_CONTAINER_PATH=$(BUILD_REPO_ROOT)/felix/bpf-gpl/libbpf/src
+BPFGPL_CONTAINER_PATH=$(BUILD_REPO_ROOT)/felix/bpf-gpl
 LIBBPF_FILE_CREATED=../felix/bpf-gpl/.libbpf-$(LIBBPF_VERSION)
 
 LOCAL_CHECKS = LIBBPF_FILE_CREATED

@@ -32,6 +32,12 @@ cd ../..
 
 fetch_image() {
   local img=$1
+  # ArgoCI keeps the calico image on a cache disk rather than in the artifact
+  # store.
+  if [ "${img}" = calico-image.tar.zst ] && [ -n "${CALICO_IMAGE_TAR:-}" ]; then
+    zstd -3 -T0 -f -o "/tmp/${img}" "${CALICO_IMAGE_TAR}"
+    return
+  fi
   if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
     ( cd /tmp && artifact pull workflow "${img}" ) 2>/dev/null
     return

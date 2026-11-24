@@ -13,8 +13,6 @@ steps:
         value: "true"
     requests: {cpu: 1000m, memory: 3Gi}
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     commands: |
       cd networking-calico
       # Separate invocations: named as two targets, a parallel make would run

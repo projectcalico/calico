@@ -1,0 +1,55 @@
+#!/bin/bash
+# Run on a createVM machine: gives its go-build containers the go-cache step's
+# caches in place, as a pod gets them, from the cache disk the step's
+# `goCache: read` attaches at /cache/go. Go runs only in those containers
+# (make's non-native path), never on the machine. The exports it prints are for
+# the caller to eval, which also moves it into the repo at the go-build path:
+#
+#   go_env=$(.argoci/scripts/vm-go-cache <step>) || exit 1; eval "$go_env"
+#
+# A build output's cache key holds the toolchain, its settings and every source
+# path. The container brings the first two; the repo is bind-mounted at the
+# path the container sees it at, which go-cache built at, so the machine's
+# make and a test binary's own source paths (runtime.Caller) agree with it.
+set -euo pipefail
+
+step=${1:?usage: vm-go-cache <step>}
+checkout=$PWD
+repo=/go/src/github.com/projectcalico/calico
+log() { echo "vm-go-cache: $*" >&2; }
+
+if ! mountpoint -q /cache/go; then
+  log "/cache/go is not mounted; give the step \`goCache: read\`"
+  exit 1
+fi
+
+# A bind mount, not a link: git rev-parse and os.Getwd would see through a link
+# to the checkout's own path.
+sudo mkdir -p "$repo"
+mountpoint -q "$repo" || sudo mount --bind "$checkout" "$repo"
+
+start=$(date +%s)
+# Pulled here because make's own pull, on first docker run, has no retry.
+image=$(make -s --no-print-directory -C "$repo" --eval='print-calico-build: ; @echo $(CALICO_BUILD)' print-calico-build)
+for i in 1 2 3; do
+  docker pull -q "$image" >/dev/null && break
+  [ "$i" -lt 3 ] || { log "could not pull ${image}"; exit 1; }
+  sleep 10
+done
+log "${step} pulled ${image} in $(( $(date +%s) - start ))s"
+
+# The container mounts the machine's module cache at /go/pkg/mod, where go-cache
+# built with it, and its build cache at /go-cache; the shared disk goes in at
+# the same path, for the links into it and for gocacheprog.
+start=$(date +%s)
+argoci-go-cache-link "${HOME}/go/pkg/mod"
+log "${step} linked the shared modules in $(( $(date +%s) - start ))s"
+# Under GOCACHE: go moves, rather than copies, a cached file it installs from
+# anywhere else, which would empty the local cache. gocacheprog's directory is
+# mounted on its own too, for a recipe that runs its own container without
+# make's /go-cache mount.
+echo "export GOCACHEPROG='gocacheprog -v -ro /cache/go/build -dir /go-cache/prog'"
+prog="${repo}/.go-pkg-cache/prog"
+mkdir -p "$prog"
+echo "export EXTRA_DOCKER_ARGS='-v /cache/go:/cache/go:ro -v ${prog}:/go-cache/prog -e GOCACHEPROG'"
+echo "cd '${repo}'"

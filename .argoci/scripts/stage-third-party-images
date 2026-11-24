@@ -1,0 +1,118 @@
+#!/bin/bash
+# Stages a build context per third-party image under <out>/<image>, for
+# buildkit to build without docker. Run from the repo root after each image's
+# `make build`, with crane at bin/crane.
+#
+# Rootless buildkit writes an empty tar for a multi-stage build, so each
+# context is its Dockerfile's final stage, with what the earlier stages
+# assembled staged as files: envoy-gateway's data directory, and the files
+# envoy-proxy copies out of the envoybinary and UBI images. A Dockerfile that
+# no longer has the shape this expects fails the staging rather than building
+# a different image.
+set -euo pipefail
+
+out=${1:?usage: stage-third-party-images <out>}
+arch=amd64
+tp=third_party
+crane=$PWD/bin/crane
+
+make -s --no-print-directory --eval='print-build-args: ; @echo CALICO_BASE=$(CALICO_BASE); echo GIT_VERSION=$(GIT_VERSION)' \
+  print-build-args >"$out/build-args"
+cat "$out/build-args"
+
+fail() { echo "stage-third-party-images: $*" >&2; exit 1; }
+
+# The Dockerfile from its last FROM on, with that FROM's ARG declared first.
+final_stage() {
+  awk '/^FROM /{buf=""} {buf=buf $0 "\n"} END{printf "%s", buf}' "$1" | sed '1i ARG CALICO_BASE'
+}
+
+# Single-stage already: the Dockerfile as it is, beside its bin/.
+for image in envoy-ratelimit cni-plugins; do
+  [ "$(grep -c '^FROM ' "$tp/$image/Dockerfile")" = 1 ] || fail "$image's Dockerfile is no longer single-stage"
+  ctx=$out/$image
+  mkdir -p "$ctx"
+  cp "$tp/$image/Dockerfile" "$ctx/Dockerfile"
+  cp -r "$tp/$image/bin" "$ctx/bin"
+done
+
+# envoy-gateway's first stage only makes /var/lib/eg, owned by the user the image
+# runs as.
+ctx=$out/envoy-gateway
+mkdir -p "$ctx/bin" "$ctx/var/lib/eg"
+chmod 755 "$ctx/var/lib" "$ctx/var/lib/eg"
+cp "$tp/envoy-gateway/bin/envoy-gateway-$arch" "$ctx/bin/"
+grep -q '^COPY --from=source --chown=65532:65532 /var/lib /var/lib$' "$tp/envoy-gateway/Dockerfile" ||
+  fail "envoy-gateway's Dockerfile no longer copies just /var/lib from its first stage"
+final_stage "$tp/envoy-gateway/Dockerfile" |
+  sed 's|^COPY --from=source --chown=65532:65532 /var/lib /var/lib$|COPY --chown=65532:65532 var/lib /var/lib|' >"$ctx/Dockerfile"
+
+# envoy-proxy's first stages copy files out of two images. COPY follows
+# symlinks, so each is copied dereferenced, resolving links inside the image's
+# own tree rather than the host's.
+ctx=$out/envoy-proxy
+rootfs=$ctx/rootfs
+mkdir -p "$rootfs"
+images=$(mktemp -d)
+# An image's tree has read-only directories in it.
+trap 'chmod -R u+w "$images" && rm -rf "$images"' EXIT
+declare -A source_image=(
+  [envoybinary]=$(make -s --no-print-directory -C "$tp/envoy-proxy" --eval='print-envoybinary: ; @echo $(ENVOYBINARY_IMAGE)' print-envoybinary)
+  [ubi]=$(make -s --no-print-directory --eval='print-ubi: ; @echo $(UBI_IMAGE)' print-ubi)
+)
+for name in "${!source_image[@]}"; do
+  mkdir -p "$images/$name"
+  "$crane" export --platform "linux/$arch" "${source_image[$name]}" - | tar -x -C "$images/$name" --no-same-owner
+done
+
+# Resolves path in the tree at root as the image would see it.
+resolve() {
+  local root=$1 path=$2 hops=0 head rest target
+  while :; do
+    head=""
+    rest=${path#/}
+    path=""
+    while [ -n "$rest" ]; do
+      head=${rest%%/*}
+      [ "$head" = "$rest" ] && rest="" || rest=${rest#*/}
+      if [ -L "$root$path/$head" ]; then
+        hops=$((hops + 1))
+        [ "$hops" -lt 40 ] || fail "too many links resolving $2"
+        target=$(readlink "$root$path/$head")
+        case $target in
+          /*) path=$target ;;
+          *) path=$path/$target ;;
+        esac
+        [ -n "$rest" ] && path=$path/$rest
+        continue 2
+      fi
+      path=$path/$head
+    done
+    echo "$path"
+    return
+  done
+}
+
+copies=0
+while read -r from chmod src dst; do
+  [ -n "$src" ] || continue
+  resolved=$(resolve "$images/$from" "$src")
+  [ -f "$images/$from$resolved" ] || fail "$src is not a file in the $from image"
+  mkdir -p "$rootfs$(dirname "$dst")"
+  cp --preserve=mode "$images/$from$resolved" "$rootfs$dst"
+  [ "$chmod" = - ] || chmod "$chmod" "$rootfs$dst"
+  copies=$((copies + 1))
+done < <(sed -nE 's#^COPY --from=(ubi|envoybinary)( --chmod=([0-7]+))? (/[^ ]+) (/[^ ]+)$#\1 \3 \4 \5#p' "$tp/envoy-proxy/Dockerfile" |
+  awk '{ if (NF == 3) print $1, "-", $2, $3; else print }')
+expected=$(grep -c '^COPY --from=\(ubi\|envoybinary\) ' "$tp/envoy-proxy/Dockerfile")
+[ "$copies" = "$expected" ] || fail "staged $copies of envoy-proxy's $expected COPY --from lines"
+grep -q '^COPY --from=source / /$' "$tp/envoy-proxy/Dockerfile" ||
+  fail "envoy-proxy's final stage no longer copies its source stage whole"
+final_stage "$tp/envoy-proxy/Dockerfile" | sed 's|^COPY --from=source / /$|COPY rootfs/ /|' >"$ctx/Dockerfile"
+
+for image in envoy-gateway envoy-proxy envoy-ratelimit cni-plugins; do
+  grep -q -- '--from' "$out/$image/Dockerfile" && fail "$image's staged Dockerfile still copies from another stage"
+  cp "$out/build-args" "$out/$image/build-args"
+  echo "--- $image"
+  cat "$out/$image/Dockerfile"
+done

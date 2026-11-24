@@ -65,6 +65,27 @@ go-vet: operator-charts
 	$(MAKE) -C felix clone-libbpf
 	$(DOCKER_GO_BUILD) go vet --tags fvtests ./...
 
+# Compiles what go-vet does without running its checks, to fill a build cache:
+# every package and its tests, and what only tests import. `go list -export`
+# compiles for export data and never links, which go build would for every main
+# package, against a libbpf this only has the headers of.
+#
+# Once per way the components build: cgo and the race detector each change the
+# standard library's cache keys, and so every package's above it. The static
+# binaries' pass skips tests, which build with cgo, and keeps going past a
+# package only cgo can build (-e). The cgo passes take the
+# libbpf flags felix, e2e, node and cmd/calico build with, which are part of
+# every cgo package's key.
+GO_COMPILE_CGO_FLAGS = CGO_CFLAGS='-I$(BUILD_REPO_ROOT)/felix/bpf-gpl/libbpf/src -I$(BUILD_REPO_ROOT)/felix/bpf-gpl' \
+	CGO_LDFLAGS='-L$(BUILD_REPO_ROOT)/felix/bpf-gpl/libbpf/src/$(ARCH) -lbpf -lelf -lz'
+go-compile-all: operator-charts
+	$(MAKE) -C felix clone-libbpf
+	$(DOCKER_GO_BUILD) sh -c "$(GO_COMPILE_CGO_FLAGS) go list --tags fvtests -export -test -deps ./..." >/dev/null
+	$(DOCKER_GO_BUILD) sh -c 'CGO_ENABLED=0 go list -e -export -deps ./...' >/dev/null
+	$(DOCKER_GO_BUILD) sh -c "$(GO_COMPILE_CGO_FLAGS) go list -race -export -test -deps ./..." >/dev/null
+	# Its own module, built into the calico image.
+	$(MAKE) -C pod2daemon compile-registrar
+
 update-x-libraries:
 	$(DOCKER_GO_BUILD) sh -c "go get golang.org/x/... && go mod tidy"
 

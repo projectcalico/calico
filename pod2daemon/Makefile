@@ -88,6 +88,11 @@ $(BINDIR)/node-driver-registrar-%: clone-registrar-upstream
 	mkdir -p $(dir $@)
 	mv $(REGISTRAR_IMAGE)/$(BINDIR)/csi-node-driver-registrar $@
 
+# Compiles what the binary's build does, without linking, to fill a build cache.
+# Same run, tags and directory as the build: each is part of the cache keys.
+compile-registrar: clone-registrar-upstream
+	$(REGISTRAR_RUN) /bin/bash -c "cd $(REGISTRAR_SRC_DIR) && go list -tags $(TAGS) -export -deps ./cmd/csi-node-driver-registrar >/dev/null"
+
 clone-registrar-upstream:
 	$(call fetch_repo,$(UPSTREAM_REGISTRAR_REPO),$(UPSTREAM_REGISTRAR_TAG),$(REGISTRAR_IMAGE))
 	rm -rf ./$(REGISTRAR_IMAGE)/vendor
@@ -113,7 +118,8 @@ clean-registrar:
 ## Run the tests in a container. Useful for CI, Mac dev
 ut: $(SRC_FILES)
 	mkdir -p report
-	$(DOCKER_RUN) --privileged $(CALICO_BUILD) sh -c 'set -o pipefail && cd /go/src/$(PACKAGE_NAME) && go test -v ./... | go-junit-report > ./report/tests.xml'
+	$(if $(DOCKER_GO_BUILD_RECURSIVE),$(DOCKER_RUN) --privileged $(CALICO_BUILD)) \
+		sh -c 'set -o pipefail && go test -v ./... | go-junit-report > ./report/tests.xml'
 
 fv st:
 	@echo "No FVs or STs available"
