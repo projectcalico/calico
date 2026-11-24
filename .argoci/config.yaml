@@ -10,6 +10,15 @@ requireApproval: true
 # metadata.mk resolves to, and CI fails when the two differ.
 goBuildVersion: 1.27.4-llvm22.1.8-k8s1.38.0-beta.0-1
 
+# useGoBuild steps check out where the go-build container mounts the repo: a
+# package's source path is in its Go build cache key, so go-cache and its readers
+# share entries only at one path.
+goBuildCheckoutDir: /go/src/github.com/projectcalico/calico
+
+# What createVM/runOnVM steps run. It must drive the machine as the node's own
+# account, the one that can attach the cache disk.
+vmToolImage: calico/scratch-utils:v0.8
+
 # New PRs start on `basic-ci`, which skips the costly VM suites. The label holds
 # a pending status, so removing it to run the full suite is what unblocks merge.
 tiers:
