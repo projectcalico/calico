@@ -71,7 +71,7 @@ The NetConf list of HTTP URLs that gate a pod's network setup.
 Code: `cni-plugin/pkg/types/types.go` (`ReadinessGates`), `cni-plugin/pkg/plugin/plugin.go` (`pollEndpointReadiness`).
 _Avoid_: readinessGates (that is a Pod field)
 
-**`ForEndpointReadyWithTimeout`**:
+**Endpoint readiness wait**:
 The ADD step that holds a pod's start until Felix writes the endpoint status file.
 Code: `cni-plugin/pkg/wait/wait.go` (`ForEndpointReadyWithTimeout`), `cni-plugin/pkg/types/types.go` (`PolicySetupTimeoutSeconds`).
 _Avoid_: nothing known

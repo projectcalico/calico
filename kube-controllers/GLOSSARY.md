@@ -197,7 +197,7 @@ The sub-controller that deletes Calico Nodes whose Kubernetes Node is gone.
 Code: `kube-controllers/pkg/controllers/node/node_deleter.go` (`nodeDeleter`).
 _Avoid_: node deletion controller
 
-**WorkloadEndpointData**:
+**Trimmed workload endpoint**:
 The subset of a WorkloadEndpoint (pod name, namespace, labels, service account) that the pod controller owns.
 Code: `kube-controllers/pkg/converter/pod_converter.go` (`WorkloadEndpointData`).
 _Avoid_: nothing known

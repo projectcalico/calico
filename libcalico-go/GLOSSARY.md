@@ -77,7 +77,7 @@ The per-resource-type component inside a datastore syncer that lists, watches an
 Code: `libcalico-go/lib/backend/watchersyncer/watchercache.go` (`watcherCache`).
 _Avoid_: informer (that is client-go's), cache (on its own)
 
-**Polling state**:
+**Polling mode**:
 The watcher cache state for a resource type that cannot be watched, so it is polled instead.
 Code: `libcalico-go/lib/backend/watchersyncer/watchercache.go` (`listTriggeredPolling`, `watchTriggeredPolling`).
 _Avoid_: listTriggeredPolling, watchTriggeredPolling

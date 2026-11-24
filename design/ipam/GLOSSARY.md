@@ -116,7 +116,7 @@ The literal handle `windows-reserved-ipam-handle`, which holds the first three a
 Code: `libcalico-go/lib/ipam/accounting/allocation.go` (`WindowsReservedHandle`).
 _Avoid_: reservation (that is the IP reservation resource)
 
-**`LabelHostnameHash`**:
+**Hostname label**:
 The hashed-hostname label on a block affinity.
 Code: `api/pkg/apis/projectcalico/v3/constants.go` (`LabelHostnameHash`), `libcalico-go/lib/ipam/ipam.go` (`UpgradeHost`).
 _Avoid_: nothing known
@@ -250,7 +250,7 @@ The minimum leak grace period for KubeVirt VM allocations.
 Code: `kube-controllers/pkg/controllers/node/ipam.go` (`vmRecreationGracePeriod`).
 _Avoid_: vmRecreationGracePeriod
 
-**`garbageCollectColdIPs`**:
+**Cold IP release**:
 The pass that persists deallocation for blocks whose addresses have cooled down but that no write path has touched.
 Code: `kube-controllers/pkg/controllers/node/ipam.go` (`garbageCollectColdIPs`, `coldBlocks`).
 _Avoid_: cold-IP GC, cold IPs
