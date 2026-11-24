@@ -194,6 +194,12 @@ func (r *ReconcileIstio) checkLostSigner(ctx context.Context, current *signer, d
 	}
 	published, err := istio.ParseCACertificates([]byte(cm.Data[istio.RootCertKey]))
 	if err != nil {
+		// What the ConfigMap published is unknown, so it is left as it is for
+		// peers, and nothing is rendered that could move on from those roots.
+		current.roots = nil
+		current.problem = fmt.Sprintf("Secret %s/%s is missing, and ConfigMap %s/%s does not parse, so the roots it publishes are unknown: %v. "+
+			"Restore the Secret, or delete the ConfigMap to move to the new root at once, which interrupts mTLS until workload certificates renew",
+			istio.IstioNamespace, istio.CACertsSecretName, istio.IstioNamespace, istio.TrustExportConfigMapName, err)
 		return nil
 	}
 	held := map[string]bool{}

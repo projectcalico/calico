@@ -798,6 +798,28 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectDegradedMentioning(istio.IstioNamespace+"/"+istio.CACertsSecretName+" is missing", istio.TrustExportConfigMapName)
 		})
 
+		It("holds and goes Degraded, leaving the ConfigMap as it is, when the published roots do not parse", func() {
+			corrupt := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: istio.TrustExportConfigMapName, Namespace: istio.IstioNamespace},
+				Data:       map[string]string{istio.RootCertKey: "-----BEGIN CERTIFICATE-----\nnot base64\n-----END CERTIFICATE-----\n"},
+			}
+			Expect(cli.Create(ctx, corrupt)).NotTo(HaveOccurred())
+			createIstioCASecret()
+			reconcileIstio()
+
+			secretAbsent(cacertsKey)
+			Expect(getConfigMap(anchorsKey).Data).To(Equal(corrupt.Data))
+			expectDegradedMentioning(istio.IstioNamespace+"/"+istio.CACertsSecretName+" is missing", istio.TrustExportConfigMapName, "does not parse")
+
+			Expect(cli.Delete(ctx, getConfigMap(anchorsKey))).NotTo(HaveOccurred())
+			mockStatus.Calls = nil
+			reconcileIstio()
+
+			Expect(getSecret(cacertsKey).Labels).To(HaveKeyWithValue(istio.CACertsLabel, string(istio.CASourceSelfSigned)))
+			expectPhase(istio.TransitionDistributeRoot, time.Time{})
+			expectNotDegraded()
+		})
+
 		It("ignores istio-ca-secret once an operator-rendered cacerts exists", func() {
 			reconcileIstio()
 			cacerts := getSecret(cacertsKey)
