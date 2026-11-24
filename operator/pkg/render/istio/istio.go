@@ -385,9 +385,9 @@ func (c *IstioComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Obj
 
 // cacertsHash is the cacerts hash for istiod's pod template. cacerts is only
 // ever replaced by a bundle that validated in full. Without a local CA, the
-// cacerts in the cluster did not validate or the desired CA did not, so istiod
-// keeps the hash it has: a changed hash would roll it onto a CA that does not
-// work.
+// cacerts in the cluster is the user's, or it or the desired CA did not
+// validate, so istiod keeps the hash it has: a changed hash would roll it onto
+// a CA that does not work, or one the operator does not manage.
 func (c *IstioComponent) cacertsHash() string {
 	if c.cfg.LocalCA != nil {
 		return rmeta.SecretsAnnotationHash(c.cacertsSecret())
