@@ -792,7 +792,7 @@ Not everything is duplicated per family. Some components are
 deliberately **single instances that feed the per-family managers**.
 The live migration monitor (`dataplane/linux/live_migration.go`) is
 the model: one FSM per workload, driven by GARP detection and timers
-that have nothing to do with IP family, whose state changes are then
+that have nothing to do with IP family, whose route modifiers are then
 pushed into the endpoint managers — which own the per-family route
 programming.
 
@@ -801,7 +801,7 @@ the code" but **"did you fan out to every family's manager"**. A
 singleton holding a *single* reference to its downstream manager
 serves IPv4 only and fails silently — the IPv6 manager never learns
 the state, so its routes keep their default behaviour. Prefer a list
-plus an explicit registration call (`registerListener`) over a
+plus an explicit registration call (`registerRouteModifierListener`) over a
 single-valued field: a missing family then shows up as a missing call
 at the construction site in `int_dataplane.go`, alongside the
 `RegisterManager` call it belongs with.

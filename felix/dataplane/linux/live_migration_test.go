@@ -28,9 +28,12 @@ import (
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/sirupsen/logrus"
 	logrustest "github.com/sirupsen/logrus/hooks/test"
 
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -41,16 +44,33 @@ import (
 
 var testConvergenceTime = 30 * time.Second
 
-// fakeLiveMigrationListener captures state updates for test assertions.
-type fakeLiveMigrationListener struct {
-	updates []liveMigrationStateUpdate
+// fakeRouteModifierListener captures route modifier updates for test assertions.  It keeps the
+// route-programmed callback of the latest update apart from the updates themselves, so that tests
+// can compare the updates with Equal.
+type fakeRouteModifierListener struct {
+	updates      []routeModifierUpdate
+	onProgrammed func(ip.CIDR)
 }
 
-func (f *fakeLiveMigrationListener) OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState) {
-	f.updates = append(f.updates, liveMigrationStateUpdate{ID: id, State: state})
+type routeModifierUpdate struct {
+	id   types.WorkloadEndpointID
+	mode wepRouteMode
 }
 
-func (f *fakeLiveMigrationListener) drain() []liveMigrationStateUpdate {
+func (f *fakeRouteModifierListener) OnRouteModifierUpdate(
+	id types.WorkloadEndpointID,
+	mod *wepRouteModifier,
+) {
+	update := routeModifierUpdate{id: id, mode: wepRouteModeNormal}
+	f.onProgrammed = nil
+	if mod != nil {
+		update.mode = mod.mode
+		f.onProgrammed = mod.onProgrammed
+	}
+	f.updates = append(f.updates, update)
+}
+
+func (f *fakeRouteModifierListener) drain() []routeModifierUpdate {
 	updates := f.updates
 	f.updates = nil
 	return updates
@@ -58,23 +78,42 @@ func (f *fakeLiveMigrationListener) drain() []liveMigrationStateUpdate {
 
 // newTestMonitor creates a liveMigrationMonitor with a no-op GARP handle factory
 // and a fake listener, preventing tests from opening real AF_PACKET sockets.
-func newTestMonitor(convergenceTime time.Duration) *liveMigrationMonitor {
+//
+// At the end of the test it stops the goroutines of any FSMs that the test left running, so that
+// they can't satisfy a later test's goroutine stack checks.  It then fails the test if any such
+// goroutine is still running, because that would mean an FSM had lost track of one.
+func newTestMonitor(t *testing.T, convergenceTime time.Duration) *liveMigrationMonitor {
 	m := newLiveMigrationMonitor(convergenceTime, &fakeIPAM{})
 	m.newGARPHandle = func(ifaceName string) (garpHandle, error) {
 		return newFakeGARPHandle(), nil
 	}
-	m.registerListener(&fakeLiveMigrationListener{})
+	m.registerRouteModifierListener(&fakeRouteModifierListener{})
+	t.Cleanup(func() {
+		for _, fsm := range m.fsms {
+			stopFSMGoroutines(fsm)
+		}
+		for _, fn := range []string{"detectGARP", "startElevatedRoutingTimer"} {
+			if goroutineRunningIn(fn) {
+				t.Errorf("%s goroutine still running after stopping all FSMs", fn)
+			}
+		}
+	})
 	return m
 }
 
+func stopFSMGoroutines(fsm *liveMigrationFSM) {
+	fsm.stopGARPDetection()
+	fsm.stopElevatedRoutingTimer()
+}
+
 // testListener returns the fake listener from a test monitor.
-func testListener(m *liveMigrationMonitor) *fakeLiveMigrationListener {
-	return m.listeners[0].(*fakeLiveMigrationListener)
+func testListener(m *liveMigrationMonitor) *fakeRouteModifierListener {
+	return m.listeners[0].(*fakeRouteModifierListener)
 }
 
 // drainUpdates resolves the current batch and returns the updates delivered to
 // the fake listener.  This replaces the old PendingUpdates() method in tests.
-func drainUpdates(m *liveMigrationMonitor) []liveMigrationStateUpdate {
+func drainUpdates(m *liveMigrationMonitor) []routeModifierUpdate {
 	_ = m.ResolveUpdateBatch()
 	return testListener(m).drain()
 }
@@ -124,12 +163,16 @@ func awaitSwap(t *testing.T, calls chan swapCall) swapCall {
 }
 
 // testFSM creates a liveMigrationFSM in the given state, wired to a monitor for
-// pendingUpdates capture.
-func testFSM(state liveMigrationState) (*liveMigrationFSM, *liveMigrationMonitor) {
-	m := newTestMonitor(testConvergenceTime)
+// pendingModifiers capture.
+func testFSM(t *testing.T, state liveMigrationState) (*liveMigrationFSM, *liveMigrationMonitor) {
+	m := newTestMonitor(t, testConvergenceTime)
 	id := types.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "test-pod", EndpointId: "ep"}
 	fsm := m.newFSM(id, "test-uid")
 	fsm.currentState = state
+
+	// The monitor's cleanup only knows about the FSMs in m.fsms, which this one is not.  Cleanups
+	// run last-registered first, so this one runs before the monitor's goroutine check.
+	t.Cleanup(func() { stopFSMGoroutines(fsm) })
 	return fsm, m
 }
 
@@ -213,52 +256,54 @@ func TestFSMTransitionTable(t *testing.T) {
 		from      liveMigrationState
 		input     liveMigrationInput
 		wantState liveMigrationState
+		wantMode  wepRouteMode
 	}{
 		// Base state
-		{"Base+Target→Target", liveMigrationStateBase, liveMigrationInputTarget, liveMigrationStateTarget},
-		{"Base+GARPDetected→Base", liveMigrationStateBase, liveMigrationInputGARPDetected, liveMigrationStateBase},
-		{"Base+NoRole→Base", liveMigrationStateBase, liveMigrationInputNoRole, liveMigrationStateBase},
-		{"Base+TimerPop→Base", liveMigrationStateBase, liveMigrationInputTimerPop, liveMigrationStateBase},
-		{"Base+Source→Base", liveMigrationStateBase, liveMigrationInputSource, liveMigrationStateBase},
-		{"Base+Deleted→Base", liveMigrationStateBase, liveMigrationInputDeleted, liveMigrationStateBase},
+		{"Base+Target→Target", liveMigrationStateBase, liveMigrationInputTarget, liveMigrationStateTarget, wepRouteModeSuppressed},
+		{"Base+GARPDetected→Base", liveMigrationStateBase, liveMigrationInputGARPDetected, liveMigrationStateBase, wepRouteModeNormal},
+		{"Base+NoRole→Base", liveMigrationStateBase, liveMigrationInputNoRole, liveMigrationStateBase, wepRouteModeNormal},
+		{"Base+TimerPop→Base", liveMigrationStateBase, liveMigrationInputTimerPop, liveMigrationStateBase, wepRouteModeNormal},
+		{"Base+Source→Base", liveMigrationStateBase, liveMigrationInputSource, liveMigrationStateBase, wepRouteModeNormal},
+		{"Base+Deleted→Base", liveMigrationStateBase, liveMigrationInputDeleted, liveMigrationStateBase, wepRouteModeNormal},
 
 		// Target state
-		{"Target+Target→Target", liveMigrationStateTarget, liveMigrationInputTarget, liveMigrationStateTarget},
-		{"Target+GARPDetected→Live", liveMigrationStateTarget, liveMigrationInputGARPDetected, liveMigrationStateLive},
-		{"Target+NoRole→TimeWait", liveMigrationStateTarget, liveMigrationInputNoRole, liveMigrationStateTimeWait},
-		{"Target+TimerPop→Target", liveMigrationStateTarget, liveMigrationInputTimerPop, liveMigrationStateTarget},
-		{"Target+Source→Base", liveMigrationStateTarget, liveMigrationInputSource, liveMigrationStateBase},
-		{"Target+Deleted→Base", liveMigrationStateTarget, liveMigrationInputDeleted, liveMigrationStateBase},
+		{"Target+Target→Target", liveMigrationStateTarget, liveMigrationInputTarget, liveMigrationStateTarget, wepRouteModeSuppressed},
+		{"Target+GARPDetected→Live", liveMigrationStateTarget, liveMigrationInputGARPDetected, liveMigrationStateLive, wepRouteModeElevated},
+		{"Target+NoRole→TimeWait", liveMigrationStateTarget, liveMigrationInputNoRole, liveMigrationStateTimeWait, wepRouteModeElevated},
+		{"Target+TimerPop→Target", liveMigrationStateTarget, liveMigrationInputTimerPop, liveMigrationStateTarget, wepRouteModeSuppressed},
+		{"Target+Source→Base", liveMigrationStateTarget, liveMigrationInputSource, liveMigrationStateBase, wepRouteModeNormal},
+		{"Target+Deleted→Base", liveMigrationStateTarget, liveMigrationInputDeleted, liveMigrationStateBase, wepRouteModeNormal},
 
 		// Live state
-		{"Live+Target→Live", liveMigrationStateLive, liveMigrationInputTarget, liveMigrationStateLive},
-		{"Live+GARPDetected→Live", liveMigrationStateLive, liveMigrationInputGARPDetected, liveMigrationStateLive},
-		{"Live+NoRole→TimeWait", liveMigrationStateLive, liveMigrationInputNoRole, liveMigrationStateTimeWait},
-		{"Live+TimerPop→Live", liveMigrationStateLive, liveMigrationInputTimerPop, liveMigrationStateLive},
-		{"Live+Source→Base", liveMigrationStateLive, liveMigrationInputSource, liveMigrationStateBase},
-		{"Live+Deleted→Base", liveMigrationStateLive, liveMigrationInputDeleted, liveMigrationStateBase},
+		{"Live+Target→Live", liveMigrationStateLive, liveMigrationInputTarget, liveMigrationStateLive, wepRouteModeElevated},
+		{"Live+GARPDetected→Live", liveMigrationStateLive, liveMigrationInputGARPDetected, liveMigrationStateLive, wepRouteModeElevated},
+		{"Live+NoRole→TimeWait", liveMigrationStateLive, liveMigrationInputNoRole, liveMigrationStateTimeWait, wepRouteModeElevated},
+		{"Live+TimerPop→Live", liveMigrationStateLive, liveMigrationInputTimerPop, liveMigrationStateLive, wepRouteModeElevated},
+		{"Live+Source→Base", liveMigrationStateLive, liveMigrationInputSource, liveMigrationStateBase, wepRouteModeNormal},
+		{"Live+Deleted→Base", liveMigrationStateLive, liveMigrationInputDeleted, liveMigrationStateBase, wepRouteModeNormal},
 
 		// TimeWait state
-		{"TimeWait+Target→TimeWait", liveMigrationStateTimeWait, liveMigrationInputTarget, liveMigrationStateTimeWait},
-		{"TimeWait+GARPDetected→TimeWait", liveMigrationStateTimeWait, liveMigrationInputGARPDetected, liveMigrationStateTimeWait},
-		{"TimeWait+NoRole→TimeWait", liveMigrationStateTimeWait, liveMigrationInputNoRole, liveMigrationStateTimeWait},
-		{"TimeWait+TimerPop→Base", liveMigrationStateTimeWait, liveMigrationInputTimerPop, liveMigrationStateBase},
-		{"TimeWait+Source→Base", liveMigrationStateTimeWait, liveMigrationInputSource, liveMigrationStateBase},
-		{"TimeWait+Deleted→Base", liveMigrationStateTimeWait, liveMigrationInputDeleted, liveMigrationStateBase},
+		{"TimeWait+Target→TimeWait", liveMigrationStateTimeWait, liveMigrationInputTarget, liveMigrationStateTimeWait, wepRouteModeElevated},
+		{"TimeWait+GARPDetected→TimeWait", liveMigrationStateTimeWait, liveMigrationInputGARPDetected, liveMigrationStateTimeWait, wepRouteModeElevated},
+		{"TimeWait+NoRole→TimeWait", liveMigrationStateTimeWait, liveMigrationInputNoRole, liveMigrationStateTimeWait, wepRouteModeElevated},
+		{"TimeWait+TimerPop→Base", liveMigrationStateTimeWait, liveMigrationInputTimerPop, liveMigrationStateBase, wepRouteModeNormal},
+		{"TimeWait+Source→Base", liveMigrationStateTimeWait, liveMigrationInputSource, liveMigrationStateBase, wepRouteModeNormal},
+		{"TimeWait+Deleted→Base", liveMigrationStateTimeWait, liveMigrationInputDeleted, liveMigrationStateBase, wepRouteModeNormal},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
-			fsm, m := testFSM(tt.from)
+			fsm, m := testFSM(t, tt.from)
 			fsm.handleInput(tt.input)
 
 			g.Expect(fsm.currentState).To(Equal(tt.wantState), "FSM state")
 			if tt.wantState != tt.from {
-				g.Expect(m.pendingUpdates).To(HaveLen(1), "should emit one update")
-				g.Expect(m.pendingUpdates[0].State).To(Equal(tt.wantState), "emitted state")
+				g.Expect(m.pendingModifiers).To(HaveLen(1), "should emit one update")
+				g.Expect(m.pendingModifiers).To(HaveKey(fsm.id))
+				g.Expect(modeOf(m.pendingModifiers[fsm.id])).To(Equal(tt.wantMode), "emitted mode")
 			} else {
-				g.Expect(m.pendingUpdates).To(BeEmpty(), "should not emit any updates")
+				g.Expect(m.pendingModifiers).To(BeEmpty(), "should not emit any updates")
 			}
 		})
 	}
@@ -269,18 +314,18 @@ func TestFSMTransitionTable(t *testing.T) {
 func TestMonitorOnUpdate(t *testing.T) {
 	t.Run("WEP with TARGET role creates FSM and emits Target", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0].State).To(Equal(liveMigrationStateTarget))
-		g.Expect(updates[0].ID).To(Equal(wepID1))
+		g.Expect(updates[0].mode).To(Equal(wepRouteModeSuppressed))
+		g.Expect(updates[0].id).To(Equal(wepID1))
 	})
 
 	t.Run("role change TARGET→NO_ROLE drives NoRole input", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		drainUpdates(m) // drain
 
@@ -288,12 +333,12 @@ func TestMonitorOnUpdate(t *testing.T) {
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		// Target + NoRole → TimeWait
-		g.Expect(updates[0].State).To(Equal(liveMigrationStateTimeWait))
+		g.Expect(updates[0].mode).To(Equal(wepRouteModeElevated))
 	})
 
 	t.Run("role change TARGET→SOURCE drives Source input", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		drainUpdates(m)
 
@@ -301,12 +346,12 @@ func TestMonitorOnUpdate(t *testing.T) {
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		// Target + Source → Base
-		g.Expect(updates[0].State).To(Equal(liveMigrationStateBase))
+		g.Expect(updates[0].mode).To(Equal(wepRouteModeNormal))
 	})
 
 	t.Run("same role repeated is no-op", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		drainUpdates(m)
 
@@ -316,14 +361,14 @@ func TestMonitorOnUpdate(t *testing.T) {
 
 	t.Run("unrelated message type is ignored", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		m.OnUpdate(&proto.HostEndpointUpdate{})
 		g.Expect(m.fsms).To(BeEmpty())
 	})
 
 	t.Run("WorkloadEndpointRemove drives Deleted input", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		drainUpdates(m)
 
@@ -331,7 +376,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		// Target + Deleted → Base
-		g.Expect(updates[0].State).To(Equal(liveMigrationStateBase))
+		g.Expect(updates[0].mode).To(Equal(wepRouteModeNormal))
 		// Role and iface name should be cleaned up.
 		g.Expect(m.roles).NotTo(HaveKey(wepID1))
 		g.Expect(m.ifaceNames).NotTo(HaveKey(wepID1))
@@ -339,7 +384,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 
 	t.Run("WorkloadEndpointRemove for unknown WEP is safe", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		// Should not panic; FSM is created at Base, gets Deleted (no-op), cleaned up.
 		m.OnUpdate(wepRemove(wepID1))
 		g.Expect(drainUpdates(m)).To(BeEmpty())
@@ -348,7 +393,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 
 	t.Run("OnUpdate stores interface name", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		g.Expect(m.ifaceNames[wepID1]).To(Equal("cali" + wepID1.EndpointId))
 	})
@@ -357,17 +402,17 @@ func TestMonitorOnUpdate(t *testing.T) {
 func TestMonitorMultipleListeners(t *testing.T) {
 	t.Run("state changes are forwarded to every registered listener", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		// In production the monitor has one listener per IP version; a second
 		// listener here stands in for the IPv6 endpoint manager.
-		second := &fakeLiveMigrationListener{}
-		m.registerListener(second)
+		second := &fakeRouteModifierListener{}
+		m.registerRouteModifierListener(second)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		g.Expect(m.ResolveUpdateBatch()).NotTo(HaveOccurred())
 
-		expected := []liveMigrationStateUpdate{{ID: wepID1, State: liveMigrationStateTarget}}
+		expected := []routeModifierUpdate{{id: wepID1, mode: wepRouteModeSuppressed}}
 		g.Expect(testListener(m).drain()).To(Equal(expected))
 		g.Expect(second.drain()).To(Equal(expected))
 	})
@@ -378,7 +423,7 @@ func TestMonitorMultipleListeners(t *testing.T) {
 func TestFSMLifecycle(t *testing.T) {
 	t.Run("FSM created on first input and cleaned up on return to Base", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		g.Expect(m.fsms).To(HaveLen(1))
 
@@ -389,7 +434,7 @@ func TestFSMLifecycle(t *testing.T) {
 
 	t.Run("multiple inputs to same ID reuse FSM", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		drainUpdates(m)
 
@@ -397,12 +442,12 @@ func TestFSMLifecycle(t *testing.T) {
 		g.Expect(m.fsms).To(HaveLen(1))
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0].State).To(Equal(liveMigrationStateLive))
+		g.Expect(updates[0].mode).To(Equal(wepRouteModeElevated))
 	})
 
 	t.Run("ResolveUpdateBatch drains and clears buffer", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 
 		g.Expect(drainUpdates(m)).To(HaveLen(1))
@@ -411,7 +456,7 @@ func TestFSMLifecycle(t *testing.T) {
 
 	t.Run("stopGARPDetection closes handle when leaving Target", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		// Override so we can hold a reference to verify closure.
 		fakeHandle := newFakeGARPHandle()
@@ -441,7 +486,7 @@ func TestFSMLifecycle(t *testing.T) {
 
 	t.Run("empty interface name skips GARP detection", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		handleCreated := false
 		m.newGARPHandle = func(ifaceName string) (garpHandle, error) {
@@ -469,67 +514,68 @@ func TestFSMLifecycle(t *testing.T) {
 func TestLiveMigrationScenarios(t *testing.T) {
 	t.Run("missed GARP path: TARGET → NO_ROLE", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		expectUpdate(g, m, liveMigrationStateTarget)
+		expectUpdate(g, m, wepRouteModeSuppressed)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
-		expectUpdate(g, m, liveMigrationStateTimeWait)
+		expectUpdate(g, m, wepRouteModeElevated)
 	})
 
 	t.Run("happy path with GARP: TARGET → GARP → NO_ROLE", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		expectUpdate(g, m, liveMigrationStateTarget)
+		expectUpdate(g, m, wepRouteModeSuppressed)
 
 		m.OnGARPDetected(wepID1)
-		expectUpdate(g, m, liveMigrationStateLive)
+		expectUpdate(g, m, wepRouteModeElevated)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
-		expectUpdate(g, m, liveMigrationStateTimeWait)
+		expectUpdate(g, m, wepRouteModeElevated)
 	})
 
 	t.Run("re-migration: TARGET → SOURCE", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		expectUpdate(g, m, liveMigrationStateTarget)
+		expectUpdate(g, m, wepRouteModeSuppressed)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
-		expectUpdate(g, m, liveMigrationStateBase)
+		expectUpdate(g, m, wepRouteModeNormal)
 	})
 
 	t.Run("delete during migration: TARGET → Remove", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		expectUpdate(g, m, liveMigrationStateTarget)
+		expectUpdate(g, m, wepRouteModeSuppressed)
 
 		m.OnUpdate(wepRemove(wepID1))
-		expectUpdate(g, m, liveMigrationStateBase)
+		expectUpdate(g, m, wepRouteModeNormal)
 	})
 
 	t.Run("two independent WEPs", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		m.OnUpdate(wepUpdate(wepID2, proto.LiveMigrationRole_TARGET))
 		updates := drainUpdates(m)
-		g.Expect(updates).To(HaveLen(2))
-		g.Expect(updates[0]).To(Equal(liveMigrationStateUpdate{ID: wepID1, State: liveMigrationStateTarget}))
-		g.Expect(updates[1]).To(Equal(liveMigrationStateUpdate{ID: wepID2, State: liveMigrationStateTarget}))
+		g.Expect(updates).To(ConsistOf(
+			routeModifierUpdate{id: wepID1, mode: wepRouteModeSuppressed},
+			routeModifierUpdate{id: wepID2, mode: wepRouteModeSuppressed},
+		))
 
 		// Drive WEP1 to Live via GARP, WEP2 stays in Target.
 		m.OnGARPDetected(wepID1)
 		updates = drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0]).To(Equal(liveMigrationStateUpdate{ID: wepID1, State: liveMigrationStateLive}))
+		g.Expect(updates[0]).To(Equal(routeModifierUpdate{id: wepID1, mode: wepRouteModeElevated}))
 		// WEP2 FSM should still exist in Target.
 		g.Expect(m.fsms).To(HaveKey(wepID2))
 		g.Expect(m.fsms[wepID2].currentState).To(Equal(liveMigrationStateTarget))
@@ -537,7 +583,7 @@ func TestLiveMigrationScenarios(t *testing.T) {
 
 	t.Run("idempotent role update", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		drainUpdates(m)
@@ -549,19 +595,19 @@ func TestLiveMigrationScenarios(t *testing.T) {
 
 	t.Run("full lifecycle: TARGET → GARP → NO_ROLE → TimerPop", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		expectUpdate(g, m, liveMigrationStateTarget)
+		expectUpdate(g, m, wepRouteModeSuppressed)
 
 		m.OnGARPDetected(wepID1)
-		expectUpdate(g, m, liveMigrationStateLive)
+		expectUpdate(g, m, wepRouteModeElevated)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
-		expectUpdate(g, m, liveMigrationStateTimeWait)
+		expectUpdate(g, m, wepRouteModeElevated)
 
 		m.OnTimerPop(wepID1)
-		expectUpdate(g, m, liveMigrationStateBase)
+		expectUpdate(g, m, wepRouteModeNormal)
 
 		// FSM should be cleaned up.
 		g.Expect(m.fsms).To(BeEmpty())
@@ -573,7 +619,7 @@ func TestLiveMigrationScenarios(t *testing.T) {
 func TestLiveMigrationTimer(t *testing.T) {
 	t.Run("timer fires and delivers workload ID to channel", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(50 * time.Millisecond)
+		m := newTestMonitor(t, 50*time.Millisecond)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		drainUpdates(m) // drain
@@ -594,12 +640,12 @@ func TestLiveMigrationTimer(t *testing.T) {
 		m.OnTimerPop(wepID1)
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0].State).To(Equal(liveMigrationStateBase))
+		g.Expect(updates[0].mode).To(Equal(wepRouteModeNormal))
 		g.Expect(m.fsms).To(BeEmpty())
 	})
 
 	t.Run("stopElevatedRoutingTimer prevents channel delivery", func(t *testing.T) {
-		m := newTestMonitor(500 * time.Millisecond)
+		m := newTestMonitor(t, 500*time.Millisecond)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		drainUpdates(m)
@@ -625,7 +671,7 @@ func TestLiveMigrationTimer(t *testing.T) {
 func TestLiveMigrationGARPChannel(t *testing.T) {
 	t.Run("GARP detection delivers workload ID to channel", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		garpBytes := buildGARPPacketBytes(t)
 		fakeHandle := newFakeGARPHandle(garpBytes)
@@ -635,7 +681,7 @@ func TestLiveMigrationGARPChannel(t *testing.T) {
 
 		// Drive to Target state (triggers startGARPDetection).
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		expectUpdate(g, m, liveMigrationStateTarget)
+		expectUpdate(g, m, wepRouteModeSuppressed)
 
 		// Wait for the detection goroutine to deliver the workload ID.
 		select {
@@ -649,7 +695,7 @@ func TestLiveMigrationGARPChannel(t *testing.T) {
 		m.OnGARPDetected(wepID1)
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0].State).To(Equal(liveMigrationStateLive))
+		g.Expect(updates[0].mode).To(Equal(wepRouteModeElevated))
 	})
 }
 
@@ -662,24 +708,36 @@ func TestLiveMigrationGARPChannel(t *testing.T) {
 // park points - e.g. detectGARP waiting for a packet - show as "chan receive", so these two states
 // are unambiguous.
 func senderParkedIn(fnSubstring string) bool {
+	for _, gr := range goroutineStacksIn(fnSubstring) {
+		if strings.Contains(gr, "[select]") || strings.Contains(gr, "[chan send]") {
+			return true
+		}
+	}
+	return false
+}
+
+// goroutineRunningIn reports whether any goroutine's stack mentions fnSubstring.
+func goroutineRunningIn(fnSubstring string) bool {
+	return len(goroutineStacksIn(fnSubstring)) > 0
+}
+
+// goroutineStacksIn returns the stacks of all goroutines whose stack mentions fnSubstring.
+func goroutineStacksIn(fnSubstring string) []string {
 	// Grow the buffer until the full goroutine dump fits: runtime.Stack truncates (n ==
-	// len(buf)) when the buffer is too small, which could hide the target goroutine and time
-	// out the caller's Eventually.
+	// len(buf)) when the buffer is too small, which could hide the target goroutine.
 	buf := make([]byte, 1<<20)
 	n := runtime.Stack(buf, true)
 	for n == len(buf) {
 		buf = make([]byte, 2*len(buf))
 		n = runtime.Stack(buf, true)
 	}
+	var stacks []string
 	for _, gr := range strings.Split(string(buf[:n]), "\n\n") {
-		if !strings.Contains(gr, fnSubstring) {
-			continue
-		}
-		if strings.Contains(gr, "[select]") || strings.Contains(gr, "[chan send]") {
-			return true
+		if strings.Contains(gr, fnSubstring) {
+			stacks = append(stacks, gr)
 		}
 	}
-	return false
+	return stacks
 }
 
 // garpSenderBlocked reports whether some goroutine is currently parked in detectGARP's
@@ -710,37 +768,37 @@ func timerSenderBlocked() bool {
 // block forever and the test would fail by timeout.
 func TestGARPRaceWithTargetExit(t *testing.T) {
 	tests := []struct {
-		name       string
-		exitInput  func(m *liveMigrationMonitor)
-		wantStates []liveMigrationState
+		name      string
+		exitInput func(m *liveMigrationMonitor)
+		wantModes []wepRouteMode
 	}{
 		{
 			name: "migration completes (NO_ROLE)",
 			exitInput: func(m *liveMigrationMonitor) {
 				m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
 			},
-			wantStates: []liveMigrationState{liveMigrationStateTimeWait},
+			wantModes: []wepRouteMode{wepRouteModeElevated},
 		},
 		{
 			name: "re-migration (SOURCE)",
 			exitInput: func(m *liveMigrationMonitor) {
 				m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
 			},
-			wantStates: []liveMigrationState{liveMigrationStateBase},
+			wantModes: []wepRouteMode{wepRouteModeNormal},
 		},
 		{
 			name: "workload removed",
 			exitInput: func(m *liveMigrationMonitor) {
 				m.OnUpdate(wepRemove(wepID1))
 			},
-			wantStates: []liveMigrationState{liveMigrationStateBase},
+			wantModes: []wepRouteMode{wepRouteModeNormal},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
-			m := newTestMonitor(testConvergenceTime)
+			m := newTestMonitor(t, testConvergenceTime)
 
 			garpBytes := buildGARPPacketBytes(t)
 			fakeHandle := newFakeGARPHandle(garpBytes)
@@ -752,7 +810,7 @@ func TestGARPRaceWithTargetExit(t *testing.T) {
 			// delivers a GARP immediately, so detectGARP commits to the
 			// (blocking) garpC send.
 			m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-			expectUpdate(g, m, liveMigrationStateTarget)
+			expectUpdate(g, m, wepRouteModeSuppressed)
 
 			// Wait until detectGARP is parked in the garpC send.  This pins
 			// the test to the exact interleaving from the field report - the
@@ -778,9 +836,9 @@ func TestGARPRaceWithTargetExit(t *testing.T) {
 			}
 
 			updates := drainUpdates(m)
-			g.Expect(updates).To(HaveLen(len(tt.wantStates)))
-			for i, want := range tt.wantStates {
-				g.Expect(updates[i].State).To(Equal(want))
+			g.Expect(updates).To(HaveLen(len(tt.wantModes)))
+			for i, want := range tt.wantModes {
+				g.Expect(updates[i].mode).To(Equal(want))
 			}
 
 			// The aborted detection must not deliver a stale GARP.
@@ -810,7 +868,7 @@ func TestGARPRaceWithTargetExit(t *testing.T) {
 func TestTimerPopRaceWithTimeWaitExit(t *testing.T) {
 	g := NewWithT(t)
 	// Short convergence so episode 1's timer fires promptly.
-	m := newTestMonitor(10 * time.Millisecond)
+	m := newTestMonitor(t, 10*time.Millisecond)
 
 	// Episode 1: drive to TimeWait via the missed-GARP path; the timer fires
 	// and its pop parks on timerC.  The timer goroutine parks in a select both
@@ -839,8 +897,7 @@ func TestTimerPopRaceWithTimeWaitExit(t *testing.T) {
 
 	// stopElevatedRoutingTimer waits for the timer goroutine to exit before returning, so by
 	// the time the exit update has been processed the goroutine must already be gone -
-	// synchronously, not eventually.  Verify via the FSM's own WaitGroup (a global stack scan
-	// would be polluted by TimeWait timer goroutines leaked by other tests in this package).
+	// synchronously, not eventually.  Verify via the FSM's own WaitGroup.
 	reaped := make(chan struct{})
 	go func() {
 		fsm1.timerWG.Wait()
@@ -874,10 +931,166 @@ func TestTimerPopRaceWithTimeWaitExit(t *testing.T) {
 		// Expected: no delivery.
 	}
 	g.Expect(m.fsms[wepID1].currentState).To(Equal(liveMigrationStateTimeWait))
+}
 
-	// Reap episode 2's timer goroutine rather than leak it into the rest of the
-	// test binary.
-	m.OnUpdate(wepRemove(wepID1))
+// --- Section 5a: Completion outcomes and route programming reports ---
+
+func completionCount(outcome string) float64 {
+	return testutil.ToFloat64(countLiveMigrationCompletions.WithLabelValues(outcome))
+}
+
+func routeProgrammingSampleCount(t *testing.T) uint64 {
+	t.Helper()
+	var m dto.Metric
+	if err := histogramLiveMigrationRouteProgramming.Write(&m); err != nil {
+		t.Fatalf("failed to read histogram: %v", err)
+	}
+	return m.GetHistogram().GetSampleCount()
+}
+
+func TestLiveMigrationCompletionOutcomes(t *testing.T) {
+	tests := []struct {
+		name         string
+		garpDetected bool
+		input        liveMigrationInput
+		wantState    liveMigrationState
+		wantOutcome  string
+	}{
+		{"GARP processed", true, liveMigrationInputGARPDetected, liveMigrationStateLive, liveMigrationOutcomeCompletedWithGARP},
+		{"GARP detected but overtaken by completion", true, liveMigrationInputNoRole, liveMigrationStateTimeWait, liveMigrationOutcomeCompletedWithGARP},
+		{"no GARP detected", false, liveMigrationInputNoRole, liveMigrationStateTimeWait, liveMigrationOutcomeCompletedNoGARP},
+		{"re-migrated away after GARP", true, liveMigrationInputSource, liveMigrationStateBase, liveMigrationOutcomeCompletedWithGARP},
+		{"re-migrated away without GARP", false, liveMigrationInputSource, liveMigrationStateBase, liveMigrationOutcomeCompletedNoGARP},
+		{"workload deleted", false, liveMigrationInputDeleted, liveMigrationStateBase, liveMigrationOutcomeAborted},
+	}
+	allOutcomes := []string{
+		liveMigrationOutcomeCompletedWithGARP,
+		liveMigrationOutcomeCompletedNoGARP,
+		liveMigrationOutcomeAborted,
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			fsm, m := testFSM(t, liveMigrationStateTarget)
+			if tt.garpDetected {
+				fsm.garpDetectedAt = time.Now().Add(-time.Second)
+			}
+			countsBefore := map[string]float64{}
+			for _, o := range allOutcomes {
+				countsBefore[o] = completionCount(o)
+			}
+
+			fsm.handleInput(tt.input)
+
+			g.Expect(fsm.currentState).To(Equal(tt.wantState))
+			for _, o := range allOutcomes {
+				wantIncrease := 0.0
+				if o == tt.wantOutcome {
+					wantIncrease = 1
+				}
+				g.Expect(completionCount(o)-countsBefore[o]).To(Equal(wantIncrease), "count for outcome %s", o)
+			}
+
+			g.Expect(m.pendingModifiers).To(HaveLen(1))
+			if tt.wantState == liveMigrationStateBase {
+				// No route elevation, so no reporter, whatever the outcome.
+				g.Expect(fsm.routeReporter).To(BeNil())
+				g.Expect(m.pendingModifiers[fsm.id]).To(BeNil())
+			} else {
+				g.Expect(fsm.routeReporter).NotTo(BeNil())
+				g.Expect(fsm.routeReporter.garpDetectedAt).To(Equal(fsm.garpDetectedAt))
+				g.Expect(m.pendingModifiers[fsm.id].onProgrammed).NotTo(BeNil())
+			}
+		})
+	}
+
+	t.Run("completion is counted once, and reporting continues through TimeWait", func(t *testing.T) {
+		g := NewWithT(t)
+		fsm, m := testFSM(t, liveMigrationStateTarget)
+		fsm.garpDetectedAt = time.Now()
+		fsm.handleInput(liveMigrationInputGARPDetected)
+		reporter := fsm.routeReporter
+		countAfterLive := completionCount(liveMigrationOutcomeCompletedWithGARP)
+
+		fsm.handleInput(liveMigrationInputNoRole)
+		g.Expect(fsm.currentState).To(Equal(liveMigrationStateTimeWait))
+		g.Expect(completionCount(liveMigrationOutcomeCompletedWithGARP)).To(Equal(countAfterLive))
+		g.Expect(fsm.routeReporter).To(BeIdenticalTo(reporter))
+		g.Expect(m.pendingModifiers[fsm.id].onProgrammed).NotTo(BeNil())
+
+		fsm.handleInput(liveMigrationInputTimerPop)
+		g.Expect(fsm.currentState).To(Equal(liveMigrationStateBase))
+		g.Expect(fsm.routeReporter).To(BeNil())
+		g.Expect(m.pendingModifiers[fsm.id]).To(BeNil())
+	})
+}
+
+// TestGARPDetectionTimeSurvivesUnprocessedReport covers the case where the main loop never processes
+// the GARP, because the migration's completion overtakes it: the GARP must still count, and be
+// timed from when it was detected.
+func TestGARPDetectionTimeSurvivesUnprocessedReport(t *testing.T) {
+	g := NewWithT(t)
+	m := newTestMonitor(t, testConvergenceTime)
+	fakeHandle := newFakeGARPHandle(buildGARPPacketBytes(t))
+	m.newGARPHandle = func(ifaceName string) (garpHandle, error) {
+		return fakeHandle, nil
+	}
+	countBefore := completionCount(liveMigrationOutcomeCompletedWithGARP)
+
+	beforeDetection := time.Now()
+	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
+	expectUpdate(g, m, wepRouteModeSuppressed)
+	g.Eventually(garpSenderBlocked, time.Second, time.Millisecond).Should(BeTrue())
+	afterDetection := time.Now()
+
+	// Simulate the main loop being busy for a while before it processes the completion.
+	time.Sleep(50 * time.Millisecond)
+	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
+	expectUpdate(g, m, wepRouteModeElevated)
+
+	g.Expect(completionCount(liveMigrationOutcomeCompletedWithGARP) - countBefore).To(Equal(1.0))
+	fsm := m.fsms[wepID1]
+	g.Expect(fsm.routeReporter).NotTo(BeNil())
+	g.Expect(fsm.routeReporter.garpDetectedAt).To(BeTemporally(">=", beforeDetection))
+	g.Expect(fsm.routeReporter.garpDetectedAt).To(BeTemporally("<=", afterDetection))
+	g.Expect(testListener(m).onProgrammed).NotTo(BeNil())
+}
+
+func TestLiveMigrationRouteReporter(t *testing.T) {
+	cidrV4 := ip.MustParseCIDROrIP("10.0.0.1/32")
+	cidrV6 := ip.MustParseCIDROrIP("2001:db8::1/128")
+
+	t.Run("each route is observed once, from concurrent callers", func(t *testing.T) {
+		g := NewWithT(t)
+		garpTime := time.Now().Add(-2 * time.Second)
+		r := newLiveMigrationRouteReporter(logrus.WithField("test", t.Name()), garpTime)
+		samplesBefore := routeProgrammingSampleCount(t)
+
+		// As from the IPv4 and IPv6 route tables, with the IPv4 route then rewritten by a
+		// resync.
+		var wg sync.WaitGroup
+		for _, cidr := range []ip.CIDR{cidrV4, cidrV6, cidrV4} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				r.onRouteProgrammed(cidr)
+			}()
+		}
+		wg.Wait()
+
+		g.Expect(routeProgrammingSampleCount(t) - samplesBefore).To(Equal(uint64(2)))
+	})
+
+	t.Run("nothing is observed without a GARP time", func(t *testing.T) {
+		g := NewWithT(t)
+		r := newLiveMigrationRouteReporter(logrus.WithField("test", t.Name()), time.Time{})
+		samplesBefore := routeProgrammingSampleCount(t)
+
+		r.onRouteProgrammed(cidrV4)
+
+		g.Expect(routeProgrammingSampleCount(t)).To(Equal(samplesBefore))
+	})
 }
 
 // --- Section 6: GARP/RARP packet matching ---
@@ -963,11 +1176,19 @@ func TestIsGARPOrRARP(t *testing.T) {
 // --- Test helpers ---
 
 // expectUpdate drains pending updates and checks that exactly one update was emitted with
-// the given state.
-func expectUpdate(g Gomega, m *liveMigrationMonitor, expectedState liveMigrationState) {
+// the given route mode.
+func expectUpdate(g Gomega, m *liveMigrationMonitor, expectedMode wepRouteMode) {
 	updates := drainUpdates(m)
 	g.Expect(updates).To(HaveLen(1), "expected exactly one pending update")
-	g.Expect(updates[0].State).To(Equal(expectedState))
+	g.Expect(updates[0].mode).To(Equal(expectedMode))
+}
+
+// modeOf returns the route mode of a pending update, where nil means no modification.
+func modeOf(mod *wepRouteModifier) wepRouteMode {
+	if mod == nil {
+		return wepRouteModeNormal
+	}
+	return mod.mode
 }
 
 // serializePacket serializes gopacket layers into a gopacket.Packet.
@@ -1085,7 +1306,7 @@ func TestMigrationUIDTracking(t *testing.T) {
 
 	t.Run("UID is in the FSM's log context from creation", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-abc-123"))
 
@@ -1094,7 +1315,7 @@ func TestMigrationUIDTracking(t *testing.T) {
 
 	t.Run("UID is still logged after the LiveMigration is deleted", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-xyz-789"))
 		m.OnGARPDetected(wepID1)
@@ -1109,7 +1330,7 @@ func TestMigrationUIDTracking(t *testing.T) {
 
 	t.Run("a replaced LiveMigration is logged once, without changing the FSM's UID", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-first"))
 		fsm := m.fsms[wepID1]
 
@@ -1125,7 +1346,7 @@ func TestMigrationUIDTracking(t *testing.T) {
 
 	t.Run("source-role and empty UIDs are not treated as a change", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-first"))
 		m.OnGARPDetected(wepID1)
 
@@ -1141,7 +1362,7 @@ func TestMigrationUIDTracking(t *testing.T) {
 
 	t.Run("the next migration's FSM has the next migration's UID", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-first"))
 		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_SOURCE, "uid-away"))
@@ -1155,7 +1376,7 @@ func TestMigrationUIDTracking(t *testing.T) {
 func TestFSMCreation(t *testing.T) {
 	t.Run("inputs other than Target do not create an FSM", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
@@ -1169,7 +1390,7 @@ func TestFSMCreation(t *testing.T) {
 
 	t.Run("a Target input creates the FSM with the given UID", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.executeFSM(wepID1, liveMigrationInputTarget, "uid-abc-123")
 
@@ -1177,14 +1398,14 @@ func TestFSMCreation(t *testing.T) {
 		g.Expect(fsm).NotTo(BeNil())
 		g.Expect(fsm.currentState).To(Equal(liveMigrationStateTarget))
 		g.Expect(fsm.logCtx.Data["migrationUID"]).To(Equal("uid-abc-123"))
-		expectUpdate(g, m, liveMigrationStateTarget)
+		expectUpdate(g, m, wepRouteModeSuppressed)
 	})
 }
 
 func TestVMINameTracking(t *testing.T) {
 	t.Run("VMI name stored from WEP update", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdateWithVMIName(wepID1, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
 		g.Expect(m.vmiNames[wepID1]).To(Equal("my-vmi"))
@@ -1192,7 +1413,7 @@ func TestVMINameTracking(t *testing.T) {
 
 	t.Run("VMI name cleaned up on WEP remove", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdateWithVMIName(wepID1, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
 		g.Expect(m.vmiNames).To(HaveKey(wepID1))
@@ -1203,14 +1424,14 @@ func TestVMINameTracking(t *testing.T) {
 
 	t.Run("empty VMI name is not stored", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		g.Expect(m.vmiNames).NotTo(HaveKey(wepID1))
 	})
 
 	t.Run("IPAM swap skipped when no VMI name", func(t *testing.T) {
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		calls := expectSwap(m)
 
 		wepIDWithNS := types.WorkloadEndpointID{
@@ -1228,7 +1449,7 @@ func TestVMINameTracking(t *testing.T) {
 
 	t.Run("IPAM swap executed on Target to Live transition", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		calls := expectSwap(m)
 
 		// Use a workload ID with namespace/pod format so the parser succeeds.
@@ -1254,7 +1475,7 @@ func TestVMINameTracking(t *testing.T) {
 
 	t.Run("IPAM swap executed on missed GARP path (Target to TimeWait)", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		calls := expectSwap(m)
 
 		wepIDWithNS := types.WorkloadEndpointID{
@@ -1278,7 +1499,7 @@ func TestVMINameTracking(t *testing.T) {
 	})
 
 	t.Run("IPAM swap only called once when going Live then TimeWait", func(t *testing.T) {
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		calls := expectSwap(m)
 
 		wepIDWithNS := types.WorkloadEndpointID{
@@ -1305,7 +1526,7 @@ func TestVMINameTracking(t *testing.T) {
 func TestWEPIPTracking(t *testing.T) {
 	t.Run("WEP IPs stored from update, both families", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdateWithIPs(wepID1, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi", "10.0.0.5/32", "fd00::5/128"))
 		g.Expect(m.wepIPs[wepID1]).To(Equal([]cnet.IP{*cnet.ParseIP("10.0.0.5"), *cnet.ParseIP("fd00::5")}))
@@ -1313,7 +1534,7 @@ func TestWEPIPTracking(t *testing.T) {
 
 	t.Run("WEP IPs cleaned up on WEP remove", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdateWithIPs(wepID1, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi", "10.0.0.5/32"))
 		g.Expect(m.wepIPs).To(HaveKey(wepID1))
@@ -1324,7 +1545,7 @@ func TestWEPIPTracking(t *testing.T) {
 
 	t.Run("only /32 and /128 addresses are recorded", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		m.OnUpdate(wepUpdateWithIPs(wepID1, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi",
 			"10.0.0.5/32", "10.0.1.0/24", "fd00::5/128", "fd00:1::/64"))
@@ -1332,7 +1553,7 @@ func TestWEPIPTracking(t *testing.T) {
 	})
 
 	t.Run("IPAM swap skipped when the WEP has no IPs", func(t *testing.T) {
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 		calls := expectSwap(m)
 
 		wepIDWithNS := types.WorkloadEndpointID{
@@ -1350,7 +1571,7 @@ func TestWEPIPTracking(t *testing.T) {
 
 	t.Run("IPAM swap uses each WEP's own IPs", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newTestMonitor(testConvergenceTime)
+		m := newTestMonitor(t, testConvergenceTime)
 
 		// Two WEPs of the same VM pod: the default pod network and a Multus
 		// secondary on an L2 network.
