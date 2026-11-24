@@ -166,7 +166,7 @@ steps:
       # The step timeout less the setup before the fleet starts; a preempted
       # batch reruns only if this leaves time for it.
       - name: FV_STEP_TIMEOUT_MINUTES
-        value: "140"
+        value: "135"
     matrix:
       - name: iptables-2204
         env:

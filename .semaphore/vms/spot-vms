@@ -22,7 +22,8 @@
 #     obtainability=<0-1|error> uptime=<60s|600s|3600s|error>
 #   FV-PREEMPT run=<id> lane=<l> batch=<b> vm=<name> type=<t> zone=<z>
 #     at=<time> outcome=<retried-pass|retried-fail|no-time|no-capacity|
-#     delete-timeout|genuine-fail|retries-off|check-failed>
+#     delete-timeout|genuine-fail|retries-off|check-failed|watchdog|
+#     passed-uncollected>
 
 spot_run_id() { echo "${CI_WORKFLOW_NAME:-${SEMAPHORE_WORKFLOW_ID:-unknown}}"; }
 spot_lane_id() { echo "${BATCH_MEMO_LANE:-${CI_JOB_LABEL:-unknown}}"; }
