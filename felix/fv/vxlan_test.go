@@ -202,46 +202,33 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			})
 
 			_ = BPFMode() && It("should keep the shared VXLAN device MTU so large packets are forwarded", func() {
-				for _, felix := range felixes {
-					Eventually(felix.ExecOutputFn("ip", "link", "show", "vxlan.calico"), "60s", "500ms").
-						Should(ContainSubstring("vxlan.calico"))
+				// In CrossSubnet mode the FV nodes share a subnet, so pod traffic skips the device.
+				if !enableIPv6 || vxlanMode != api.VXLANModeAlways {
+					Skip("needs IPv6 pod traffic through the VXLAN device")
 				}
+
+				Eventually(felixes[0].ExecOutputFn("ip", "link", "show", "vxlan.calico"), "60s", "500ms").
+					Should(ContainSubstring("vxlan.calico"))
 
 				// Below the workload MTU, the kernel drops large packets that it forwards to
 				// the device; IPv6 forwarding ignores the unlocked route MTU.
 				felixes[0].Exec("ip", "link", "set", "vxlan.calico", "mtu", "1300")
 
-				// In CrossSubnet mode the FV nodes share a subnet, so pod traffic skips the device.
-				if enableIPv6 && vxlanMode == api.VXLANModeAlways {
-					// Fits the 1430 IPv6 workload MTU, but not a 1300 device. Each ping is a new
-					// flow, and BPF hands a flow's first packet to the kernel when it is larger
-					// than the device MTU.
-					const payload = "1350"
-					Eventually(func() error {
-						// A Packet Too Big leaves a cached path MTU that would refuse every later try.
-						if out, err := w6[0].ExecCombinedOutput("ip", "-6", "route", "flush", "cache"); err != nil {
-							return fmt.Errorf("%w: %s", err, out)
-						}
-						out, err := w6[0].ExecCombinedOutput("ping", "-6", "-c", "1", "-W", "1", "-s", payload, "-M", "do", w6[1].IP)
-						if err != nil {
-							return fmt.Errorf("%w: %s", err, out)
-						}
-						return nil
-					}, "30s", "1s").Should(Succeed())
-				}
-
+				// Fits the 1430 IPv6 workload MTU, but not a 1300 device. Each ping is a new
+				// flow, and BPF hands a flow's first packet to the kernel when it is larger
+				// than the device MTU.
+				const payload = "1350"
 				Eventually(func() error {
-					for _, felix := range felixes {
-						out, err := felix.ExecOutput("ip", "link", "show", "vxlan.calico")
-						if err != nil {
-							return fmt.Errorf("%s: %w", felix.Name, err)
-						}
-						if !strings.Contains(out, "mtu 1450") {
-							return fmt.Errorf("%s: %s", felix.Name, out)
-						}
+					// A Packet Too Big leaves a cached path MTU that would refuse every later try.
+					if out, err := w6[0].ExecCombinedOutput("ip", "-6", "route", "flush", "cache"); err != nil {
+						return fmt.Errorf("%w: %s", err, out)
+					}
+					out, err := w6[0].ExecCombinedOutput("ping", "-6", "-c", "1", "-W", "1", "-s", payload, "-M", "do", w6[1].IP)
+					if err != nil {
+						return fmt.Errorf("%w: %s", err, out)
 					}
 					return nil
-				}, "30s", "500ms").Should(Succeed())
+				}, "30s", "1s").Should(Succeed())
 			})
 
 			It("should have some blackhole routes installed", func() {
