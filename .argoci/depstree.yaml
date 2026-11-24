@@ -1932,21 +1932,6 @@ components:
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
       - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
       - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
-  whisker:
-    in:
-      - ^hack/test/certs/
-      - ^lib\.Makefile$
-      - ^metadata\.mk$
-      - ^whisker/
-    exclude:
-      - ^(?:[^/]+/)*AUTHORS[^/]*$
-      - ^(?:[^/]+/)*CONTRIBUTING[^/]*$
-      - ^(?:[^/]+/)*DEVELOPER_GUIDE[^/]*$
-      - ^(?:[^/]+/)*LICENSE[^/]*$
-      - ^(?:[^/]+/)*README[^/]*$
-      - ^(?:[^/]+/)*SECURITY\.md$
-      - ^(?:[^/]+/)*[^/]*\.md$
-      - ^(?:[^/]+/)*\.gitignore$
   whisker-backend:
     in:
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
