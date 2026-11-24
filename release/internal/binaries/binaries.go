@@ -199,6 +199,11 @@ var archived = func(repoRoot string) []archives.DirSource {
 	}
 }
 
+// Separate from archived: a product can build binaries it does not ship.
+var builtSources = func(repoRoot string) []archives.DirSource {
+	return archived(repoRoot)
+}
+
 func archiveLabel(name string, qualifier ...string) string {
 	prefix := name
 	if len(qualifier) > 0 {

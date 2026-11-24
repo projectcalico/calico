@@ -82,11 +82,8 @@ var operatorPublishAction = func(cfg *Config) func(context.Context, *cli.Command
 		if err != nil {
 			return err
 		}
-		opts, err := operatorPublishOptions(c, records, filepath.Join(cfg.LogsDir, o.ProductVersion))
-		if err != nil {
-			return err
-		}
-		return operator.Publish(*o, operatorVariants(c), c.Bool(hashreleaseFlag.Name), opts...)
+		opts := operatorPublishOptions(c, filepath.Join(cfg.LogsDir, o.ProductVersion))
+		return operator.Publish(*o, operatorVariants(c), records, c.Bool(hashreleaseFlag.Name), opts...)
 	}
 }
 
@@ -108,23 +105,15 @@ var operatorBuildOptions = func(c *cli.Command, logsDir string) []operator.Build
 	}
 }
 
-var operatorPublishOptions = func(c *cli.Command, recordsDir, logsDir string) ([]operator.PublishOption, error) {
-	opts := []operator.PublishOption{
+var operatorPublishOptions = func(c *cli.Command, logsDir string) []operator.PublishOption {
+	return []operator.PublishOption{
 		operator.WithRunner(commandRunner),
 		operator.WithLogsDir(logsDir),
 		operator.WithArches(c.StringSlice(archFlag.Name)...),
 		operator.WithDryRun(c.Bool(localFlag.Name)),
 		operator.WithResolver(registryDigestResolver),
+		operator.WithForce(c.Bool(forceFlag.Name)),
 	}
-	published, w, err := publishRecord(recordsDir, operator.PublishStep, !c.Bool(localFlag.Name))
-	if err != nil {
-		return nil, err
-	}
-	opts = append(opts, operator.WithResume(published, c.Bool(forceFlag.Name)))
-	if w != nil {
-		opts = append(opts, operator.WithRecord(w))
-	}
-	return opts, nil
 }
 
 var operatorRegistries = func(c *cli.Command) []string {

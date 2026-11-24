@@ -49,6 +49,9 @@ type Upload struct {
 
 	// Requires names steps whose output this upload reads.
 	Requires []string
+
+	// Done becomes the node's plan.Node.Done, so it must only read.
+	Done func() error
 }
 
 // A handler that finds its own content does not implement this.
