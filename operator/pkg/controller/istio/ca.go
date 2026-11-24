@@ -80,7 +80,7 @@ func (r *ReconcileIstio) resolveSigner(ctx context.Context, in *trustInputs, sel
 	if err != nil {
 		return err
 	}
-	if in.current == nil && current.ca == nil && current.problem == "" && desired != nil {
+	if in.current == nil && current.problem == "" && desired != nil {
 		if err := r.checkLostSigner(ctx, &current, desired); err != nil {
 			return err
 		}
@@ -169,10 +169,12 @@ func selfSignedFingerprints(secret *corev1.Secret) string {
 }
 
 // checkLostSigner tells a fresh install from a mesh whose cacerts was deleted.
-// Roots that this cluster publishes and the desired CA does not hold can still
-// be all that some workloads trust. Rendering the desired CA alone would cut
-// them off, so the signer is reported lost and nothing is rendered; istiod
-// keeps the CA it loaded until a human restores cacerts or accepts the jump.
+// Roots that this cluster publishes and neither the desired CA nor the current
+// signer holds can still be all that some workloads trust. Moving on from the
+// current signer would cut them off, so the signer is reported lost and nothing
+// is rendered until a human restores cacerts or accepts the jump. The current
+// signer may be a self-signed CA that a new istiod pod created after cacerts
+// went, so its existence does not prove that nothing was lost.
 func (r *ReconcileIstio) checkLostSigner(ctx context.Context, current *signer, desired *istio.CA) error {
 	cm := &corev1.ConfigMap{}
 	if err := r.Get(ctx, types.NamespacedName{Name: istio.TrustAnchorsConfigMapName, Namespace: istio.IstioNamespace}, cm); err != nil {
@@ -185,12 +187,12 @@ func (r *ReconcileIstio) checkLostSigner(ctx context.Context, current *signer, d
 	if err != nil {
 		return nil
 	}
-	desiredRoots := map[string]bool{}
-	for _, c := range desired.Roots {
-		desiredRoots[string(c.Raw)] = true
+	held := map[string]bool{}
+	for _, c := range append(append([]*x509.Certificate{}, desired.Roots...), current.roots...) {
+		held[string(c.Raw)] = true
 	}
 	for _, c := range published {
-		if !desiredRoots[string(c.Raw)] {
+		if !held[string(c.Raw)] {
 			current.roots = published
 			current.problem = fmt.Sprintf("Secret %s/%s is missing, and ConfigMap %s/%s publishes roots the desired CA does not hold. "+
 				"Restore the Secret, or delete the ConfigMap to move to the new root at once, which interrupts mTLS until workload certificates renew",
