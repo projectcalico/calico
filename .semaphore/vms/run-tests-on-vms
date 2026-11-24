@@ -199,18 +199,31 @@ done < <(gcloud --quiet compute instances list \
               --format='csv[no-heading](name,zone.basename())')
 
 # Fail fast if any expected VM is missing from the map; the rest of the script
-# relies on knowing every VM's zone.
+# relies on knowing every VM's zone.  A missing spot VM was preempted, and is
+# replaced on demand beside a VM that survived.
+declare -A vm_replaced
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
-  if [ -z "${vm_zone[$vm_name]:-}" ]; then
-    echo "ERROR: could not determine the zone of VM $vm_name after bulk create." 1>&2
-    exit 1
+  [ -z "${vm_zone[$vm_name]:-}" ] || continue
+  if [ "$vm_provisioning_model" = SPOT ] && [ ${#vm_zone[@]} -gt 0 ]; then
+    first_vm=( "${!vm_zone[@]}" )
+    vm_z="${vm_zone[${first_vm[0]}]}"
+    # shellcheck disable=SC2054 # the comma is gcloud's label separator
+    if replaced_type="$(create_on_demand_replacement "$vm_name" "$vm_z" "$vm_machine_type" \
+      "${vm_base_create_args[@]}" --labels=ci-provisioning=standard,ci-spot-fallback=true)"; then
+      echo "  $vm_name -> $vm_z (spot VM gone before its batch started; replaced with on-demand ${replaced_type})"
+      vm_zone["$vm_name"]="$vm_z"
+      vm_replaced["$vm_name"]="$replaced_type"
+      continue
+    fi
   fi
+  echo "ERROR: could not determine the zone of VM $vm_name after bulk create." 1>&2
+  exit 1
 done
 
 for vm_name in "${!vm_zone[@]}"; do
   label_boot_disk "$vm_name" "${vm_zone[$vm_name]}" &
-  if [ "$vm_provisioning_model" = SPOT ]; then
+  if [ "$vm_provisioning_model" = SPOT ] && [ -z "${vm_replaced[$vm_name]:-}" ]; then
     label_capacity "$vm_name" "${vm_zone[$vm_name]}" "$vm_machine_type" &
   fi
 done
@@ -367,13 +380,13 @@ run_batch_attempt() {
       # The zone may be out of spot; on demand is still worth a try.
       if [ "$attempt_model" = SPOT ] &&
         retry_type="$(create_on_demand_replacement "$vm_name" "$zone" "$attempt_type" \
-          "${vm_base_create_args[@]}" --labels=ci-provisioning=standard 2>>"$conf_log_file")"; then
+          "${vm_base_create_args[@]}" --labels=ci-provisioning=standard,ci-spot-fallback=true 2>>"$conf_log_file")"; then
         echo "$prefix No spot replacement for $vm_name; replaced it with on-demand ${retry_type}."
         attempt_model=STANDARD
         attempt_type="$retry_type"
         # shellcheck disable=SC2054 # the comma is gcloud's label separator
         attempt_args=( "${vm_base_create_args[@]}" --machine-type="$retry_type"
-          --boot-disk-type="$(boot_disk_type_for "$retry_type")" --labels=ci-provisioning=standard )
+          --boot-disk-type="$(boot_disk_type_for "$retry_type")" --labels=ci-provisioning=standard,ci-spot-fallback=true )
       else
         echo "$prefix Could not create a replacement for $vm_name."
         break
@@ -526,7 +539,7 @@ find_preempt_retry_blocker() {
   attempt_created=$(date +%s)
   # shellcheck disable=SC2054 # the comma is gcloud's label separator
   if ! retry_type="$(create_on_demand_replacement "$vm_name" "$zone" "$attempt_type" "${vm_base_create_args[@]}" \
-    --labels=ci-provisioning=standard,ci-preempt-retry=true 2>>"$conf_log_file")"; then
+    --labels=ci-provisioning=standard,ci-preempt-retry=true 2>>"$conf_log_file.retry")"; then
     blocker=no-capacity
   fi
 }
@@ -543,6 +556,10 @@ fail_preempted_batch() {
     no-capacity) why="Not retried: no on-demand VM could be created in ${zone}." ;;
   esac
   name="batch ${batch}: spot VM preempted at ${preempt_at} (${zone})"
+  if [ -f "$conf_log_file.retry" ]; then
+    cat "$conf_log_file.retry" >> "$conf_log_file"
+    rm -f "$conf_log_file.retry"
+  fi
   set_aside_preempted_logs
   echo "$prefix Test batch $batch FAILED: ${name}. ${why}"
   write_preempt_record "$outcome"
@@ -564,7 +581,8 @@ for batch in "${batches[@]}"; do
   # sees its own VM's zone.
   zone="${vm_zone[$vm_name]}"
   export ZONE="$zone"
-  vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
+  # A preempted spot VM is gone; its batch finds out why and retries.
+  vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")" || vm_ip=""
   batch_formatted="$(format_batch_for_log "$batch")"
   log_file="$artifacts_dir/test-$batch_formatted.log"
   failed_log_file="$artifacts_dir/test-$batch_formatted-FAILED.log"
@@ -576,7 +594,11 @@ for batch in "${batches[@]}"; do
   watchdog_file="$artifacts_dir/.batch-${batch_formatted}.watchdog"
   rm -f "$preempt_file"
   batch_start=$(date +%s)
-  write_watchdog_file "$watchdog_file" "$batch_start" "$vm_provisioning_model" "$fleet_created" "$vm_machine_type"
+  if [ -n "${vm_replaced[$vm_name]:-}" ]; then
+    write_watchdog_file "$watchdog_file" "$batch_start" STANDARD "$fleet_created" "${vm_replaced[$vm_name]}"
+  else
+    write_watchdog_file "$watchdog_file" "$batch_start" "$vm_provisioning_model" "$fleet_created" "$vm_machine_type"
+  fi
 
   # Run the configuration, test, and, teardown in a subshell so we can
   # background it.
@@ -596,6 +618,10 @@ for batch in "${batches[@]}"; do
     attempt_model="$vm_provisioning_model"
     attempt_type="$vm_machine_type"
     attempt_created="$fleet_created"
+    if [ -n "${vm_replaced[$vm_name]:-}" ]; then
+      attempt_model=STANDARD
+      attempt_type="${vm_replaced[$vm_name]}"
+    fi
     attempt_start="$batch_start"
     attempt_args=( "${vm_create_args[@]}" )
     retried=false
@@ -613,6 +639,7 @@ for batch in "${batches[@]}"; do
       # The replacement is on demand, so it can't be preempted in turn.
       echo "$prefix Retrying batch $batch on on-demand ${retry_type} VM $vm_name in $zone."
       set_aside_preempted_logs
+      mv "$conf_log_file.retry" "$conf_log_file"
       # Only the retry's results count.
       rm -rf "${artifacts_dir:?}/${batch}"
       echo "RUNNER: This is a rerun on an on-demand VM: the spot VM that first ran batch '$batch' was preempted at ${preempt_at} (${zone})." > "$log_file"
@@ -799,6 +826,7 @@ preempt_retried_pass=0
 preempt_retried_fail=0
 preempt_not_retried=0
 preempt_check_failed=0
+preempt_after_failure=0
 batch_outcomes_file="$artifacts_dir/.batch-outcomes"
 : > "$batch_outcomes_file"
 for i in "${!batches[@]}"; do
@@ -882,9 +910,11 @@ for i in "${!batches[@]}"; do
         summary+=( "Test batch $batch PREEMPTED at $preempt_at; retried on on-demand VM: FAILED${log_note}" )
         preempt_retried_fail=$((preempt_retried_fail + 1)) ;;
       genuine-fail)
-        summary+=( "Test batch $batch had already FAILED when its spot VM was preempted at $preempt_at; not retried${log_note}" ) ;;
+        summary+=( "Test batch $batch had already FAILED when its spot VM was preempted at $preempt_at; not retried${log_note}" )
+        preempt_after_failure=$((preempt_after_failure + 1)) ;;
       passed-uncollected)
-        summary+=( "Test batch $batch SUCCEEDED; its spot VM was preempted at $preempt_at before artifacts were collected, and there was no rerun" ) ;;
+        summary+=( "Test batch $batch SUCCEEDED; its spot VM was preempted at $preempt_at before artifacts were collected, and there was no rerun" )
+        preempt_not_retried=$((preempt_not_retried + 1)) ;;
       check-failed)
         summary+=( "Test batch $batch FAILED and could not check whether its spot VM was preempted; not retried${log_note}" )
         preempt_check_failed=$((preempt_check_failed + 1)) ;;
@@ -932,7 +962,8 @@ done
 if [ ${#preempt_lines[@]} -gt 0 ]; then
   echo "  Preempted batches: $((preempt_retried_pass + preempt_retried_fail + preempt_not_retried))" \
     "(retried and passed: $preempt_retried_pass, retried and failed: $preempt_retried_fail, not retried: $preempt_not_retried);" \
-    "failed batches whose preemption check failed: $preempt_check_failed"
+    "failed batches whose preemption check failed: $preempt_check_failed;" \
+    "failed batches preempted only after failing: $preempt_after_failure"
 fi
 echo
 for l in "${preempt_lines[@]}"; do

@@ -58,6 +58,11 @@ bulk_create_vms() {
       codes="${codes:-UNKNOWN}"
       echo "VM creation attempt ${attempt} with ${type} (spot) failed: ${codes//$'\n'/ }"
       failures+=("${type} spot: ${codes//$'\n'/ }")
+      # The insert may still be running, and would take the on-demand VMs' names.
+      if grep -qx OPERATION_TIMEOUT <<<"$codes"; then
+        echo "===== Test VM creation FAILED: the ${type} spot create did not finish =====" >&2
+        return 1
+      fi
     done
     echo "No spot capacity for the fleet; falling back to on-demand."
   fi
@@ -95,7 +100,7 @@ bulk_create_vms() {
   return 1
 }
 
-# Reads bulk_create_vms' locals.
+# Reads its caller's locals.
 bulk_create_vms_succeeded() {
   vm_machine_type="$type"
   vm_boot_disk_type=$(boot_disk_type_for "$type")
