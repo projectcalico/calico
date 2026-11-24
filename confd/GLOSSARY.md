@@ -125,10 +125,10 @@ The peering on the peer node's side that mirrors a BGPPeer.
 Code: `confd/pkg/backends/calico/client.go` (`updatePeersV1`).
 _Avoid_: implicit reverse peering
 
-#### v1 peering
-A peering rendered into confd's cache as a `/calico/bgp/v1/global` or `/calico/bgp/v1/host/<node>` peer key.
+#### Resolved peering
+A concrete peering that confd resolves from BGPPeer selectors for all nodes or for one node, held in confd's cache under a `/calico/bgp/v1/global` or `/calico/bgp/v1/host/<node>` key.
 Code: `confd/pkg/backends/calico/client.go` (`updatePeersV1`).
-_Avoid_: bare v1 (it also means the v1 model and the legacy API)
+_Avoid_: v1 peering (the code's name; v1 is only the key path), rendered peering
 
 ### Client and templates
 
