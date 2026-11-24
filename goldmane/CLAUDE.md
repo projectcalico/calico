@@ -4,6 +4,8 @@ This file is operational guidance for agents working in Goldmane:
 how to build, run tests, debug a running instance, and use
 Goldmane-specific tooling.
 
+For vocabulary, read [`goldmane/GLOSSARY.md`](./GLOSSARY.md) and the root [`GLOSSARY.md`](../GLOSSARY.md).
+
 For architecture, gRPC services, data flow, key concepts,
 configuration surface, and Prometheus metric reference, see
 [`goldmane/DESIGN.md`](./DESIGN.md).
