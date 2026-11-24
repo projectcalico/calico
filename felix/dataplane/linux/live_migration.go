@@ -784,5 +784,5 @@ func (r *liveMigrationRouteReporter) onRouteProgrammed(cidr ip.CIDR) {
 	}
 	sinceGARP := programmedAt.Sub(r.garpDetectedAt)
 	histogramLiveMigrationRouteProgramming.Observe(sinceGARP.Seconds())
-	logCtx.WithField("sinceGARP", sinceGARP).Info("Live migration route programmed")
+	logCtx.WithField("sinceGARP", sinceGARP.Round(time.Microsecond)).Info("Live migration route programmed")
 }
