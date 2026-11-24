@@ -923,7 +923,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.vxlanParentIfaceC = make(chan string, 1)
 		vxlanMTU := config.VXLANMTU
 		if config.BPFEnabled {
-			vxlanMTU = 0
+			vxlanMTU = bpfVXLANDeviceMTU(config)
 		}
 		go dp.vxlanManager.keepVXLANDeviceInSync(
 			context.Background(),
@@ -1537,13 +1537,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				vxlanMgrOps...,
 			)
 			dp.vxlanParentIfaceCV6 = make(chan string, 1)
-			vxlanMTU := config.VXLANMTUV6
-			if config.BPFEnabled {
-				vxlanMTU = 0
-			}
 			go dp.vxlanManagerV6.keepVXLANDeviceInSync(
 				context.Background(),
-				vxlanMTU,
+				config.VXLANMTUV6,
 				dataplaneFeatures.ChecksumOffloadBroken,
 				10*time.Second,
 				dp.vxlanParentIfaceCV6,
@@ -1832,6 +1828,20 @@ func determinePodMTU(config Config) int {
 		log.WithFields(fields).Warn("Configured MTU is larger than detected host interface MTU")
 	}
 	log.WithField("mtu", mtu).Info("Determined pod MTU")
+	return mtu
+}
+
+// bpfVXLANDeviceMTU returns the MTU of the VXLAN device that BPF mode shares
+// between IP families. The kernel still checks it (e.g. when forwarding IPv6),
+// so it fits the larger family.
+func bpfVXLANDeviceMTU(config Config) int {
+	mtu := 0
+	if config.RulesConfig.VXLANEnabled {
+		mtu = config.VXLANMTU
+	}
+	if config.IPv6Enabled && config.RulesConfig.VXLANEnabledV6 && config.VXLANMTUV6 > mtu {
+		mtu = config.VXLANMTUV6
+	}
 	return mtu
 }
 

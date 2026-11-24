@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/environment"
@@ -198,6 +199,36 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					cc.ExpectSome(w6[1], w6[0])
 				}
 				cc.CheckConnectivity()
+			})
+
+			_ = BPFMode() && It("should keep the shared VXLAN device MTU so large packets are forwarded", func() {
+				// In CrossSubnet mode the FV nodes share a subnet, so pod traffic skips the device.
+				if !enableIPv6 || vxlanMode != api.VXLANModeAlways {
+					Skip("needs IPv6 pod traffic through the VXLAN device")
+				}
+
+				Eventually(felixes[0].ExecOutputFn("ip", "link", "show", "vxlan.calico"), "60s", "500ms").
+					Should(ContainSubstring("vxlan.calico"))
+
+				// Below the workload MTU, the kernel drops large packets that it forwards to
+				// the device; IPv6 forwarding ignores the unlocked route MTU.
+				felixes[0].Exec("ip", "link", "set", "vxlan.calico", "mtu", "1300")
+
+				// Fits the 1430 IPv6 workload MTU, but not a 1300 device. Each ping is a new
+				// flow, and BPF hands a flow's first packet to the kernel when it is larger
+				// than the device MTU.
+				const payload = "1350"
+				Eventually(func() error {
+					// A Packet Too Big leaves a cached path MTU that would refuse every later try.
+					if out, err := w6[0].ExecCombinedOutput("ip", "-6", "route", "flush", "cache"); err != nil {
+						return fmt.Errorf("%w: %s", err, out)
+					}
+					out, err := w6[0].ExecCombinedOutput("ping", "-6", "-c", "1", "-W", "1", "-s", payload, "-M", "do", w6[1].IP)
+					if err != nil {
+						return fmt.Errorf("%w: %s", err, out)
+					}
+					return nil
+				}, "30s", "1s").Should(Succeed())
 			})
 
 			It("should have some blackhole routes installed", func() {
@@ -826,10 +857,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// Wait for the VXLAN device to be created.
 				mtuStr := "mtu 1450"
 				mtuStrV6 := "mtu 1430"
-				if BPFMode() {
-					mtuStr = "mtu 1500"
-					mtuStrV6 = "mtu 1500"
-				}
 				for _, felix := range felixes {
 					Eventually(func() string {
 						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
@@ -867,6 +894,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 								return out
 							}, "60s", "500ms").Should(ContainSubstring(mtuStrV6))
 						}
+					}
+				} else {
+					// With IPv4 VXLAN off, the shared device serves IPv6 only and takes its MTU.
+					for _, felix := range felixes {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
+							return out
+						}, "60s", "500ms").Should(ContainSubstring(mtuStrV6))
 					}
 				}
 
@@ -1169,6 +1204,64 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology with masqueraded host t
 			Expect(err).NotTo(HaveOccurred())
 			Expect(port).To(BeNumerically(">=", minMasqPort), "masqueraded source port should be within %s", masqPortRange)
 		}
+	})
+})
+
+var _ = BPFMode() && infrastructure.DatastoreDescribe("_BPF_ _BPF-SAFE_ VXLAN device MTU with IPv6 services", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+	const clusterIP = "dead:beef::abcd:0:0:20"
+
+	var (
+		infra   infrastructure.DatastoreInfra
+		tc      infrastructure.TopologyContainers
+		client  client.Interface
+		w6      [3]*workload.Workload
+		backend *workload.Workload
+	)
+
+	BeforeEach(func() {
+		infra = getInfra(
+			infrastructure.K8sWithDualStack(),
+			infrastructure.K8sWithAPIServerBindAddress("::"),
+			infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16"),
+		)
+		opts := createVXLANBaseTopologyOptions(api.VXLANModeAlways, true, "CalicoIPAM", false)
+		// Keep UDP service traffic on the tc NAT path rather than the socket-level load balancer.
+		opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBTCP)
+		opts.ExtraEnvVars["FELIX_BPFOverlayHostSourceIP"] = "TunnelAddress"
+		tc, client = infrastructure.StartNNodeTopology(3, opts, infra)
+		_, w6, _, _ = setupWorkloads(infra, tc, opts, client, true)
+		assignTunnelAddresses(infra, tc, client)
+
+		backendIP := strings.TrimSuffix(w6[1].IP, "3") + "4"
+		infrastructure.AssignIP("w6-udp", backendIP, tc.Felixes[1].Hostname, client)
+		backend = workload.Run(tc.Felixes[1], "w6-udp", "default", backendIP, "8055", "udp")
+		backend.ConfigureInInfra(infra)
+
+		k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+		svc := k8sService("mtu-udp", clusterIP, backend, 8055, 8055, 0, "udp")
+		_, err := k8sClient.CoreV1().Services(svc.Namespace).Create(context.Background(), svc, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(checkSvcEndpoints(k8sClient, svc), "10s").Should(Equal(1))
+	})
+
+	It("should forward large IPv6 UDP packets to a service across nodes", func() {
+		sendToService := func(sendLen int) error {
+			// A Packet Too Big leaves a cached path MTU that would fragment every later try.
+			if out, err := w6[0].ExecCombinedOutput("ip", "-6", "route", "flush", "cache"); err != nil {
+				return fmt.Errorf("%w: %s", err, out)
+			}
+			res := w6[0].CanConnectTo(clusterIP, "8055", "udp",
+				connectivity.WithSendLen(sendLen), connectivity.WithTimeout(2*time.Second))
+			if !res.HasConnectivity() {
+				return fmt.Errorf("no reply from %s with %d extra bytes", clusterIP, sendLen)
+			}
+			return nil
+		}
+		Eventually(func() error { return sendToService(0) }, "30s", "1s").Should(Succeed())
+
+		// Fits the 1430 IPv6 workload MTU, but not a 1300 device.
+		tc.Felixes[0].Exec("ip", "link", "set", "vxlan.calico", "mtu", "1300")
+		Eventually(func() error { return sendToService(1350) }, "30s", "1s").Should(Succeed())
 	})
 })
 
