@@ -283,11 +283,6 @@ The flag meaning an `apply()` is owed.
 Code: `felix/dataplane/linux/int_dataplane.go` (`dataplaneNeedsSync`).
 _Avoid_: dirty
 
-#### OnUpdate and CompleteDeferredWork
-The two `Manager` phases. `OnUpdate` records the change and marks state dirty without kernel I/O. `CompleteDeferredWork` programs the kernel.
-Code: `felix/dataplane/linux/int_dataplane.go` (`Manager`).
-_Avoid_: sync, flush
-
 #### Resolution pass
 The loop that calls `ResolveUpdateBatch` on every manager that implements it.
 Code: `felix/dataplane/linux/int_dataplane.go` (`UpdateBatchResolver`).
@@ -313,10 +308,15 @@ A reconciling driver's read-back of kernel state to repair drift. Say "datastore
 Code: `felix/routetable/interface.go` (`QueueResync`).
 _Avoid_: full sync
 
-#### Must and background resync
-The two priorities in the IP sets driver's incremental resync queue.
-Code: `felix/ipsets/resync_queue.go` (`ResyncQueue`).
-_Avoid_: bare resync (it means several things)
+#### Must resync
+An IP set queued for a resync that the IP sets driver completes before it trusts the dataplane, such as at start of day or after an error.
+Code: `felix/ipsets/resync_queue.go` (`resyncPriMust`).
+_Avoid_: forced resync
+
+#### Background resync
+An IP set queued for an opportunistic recheck, a time-boxed batch per apply.
+Code: `felix/ipsets/resync_queue.go` (`resyncPriBackground`).
+_Avoid_: rolling resync, bare resync
 
 #### Logical table
 A netfilter table name (filter, nat, mangle or raw) as managers see it through the `Table` interface. In nftables mode all logical tables live in the root table.
@@ -333,9 +333,14 @@ The kernel tables filter, nat, mangle and raw, which Calico shares with other so
 Code: `felix/rules/rulesdefs/rulesdefs.go` (`RuleHashPrefix`).
 _Avoid_: legacy copies, nftables copies, legacy (reserved for the iptables-legacy backend)
 
-#### Rule insertion and full chain update
-The two `Table` write modes: hook a Felix rule into a kernel-owned chain, or replace the contents of a Felix-owned chain.
+#### Rule insertion
+The `Table` write mode that hooks a Felix rule into a kernel-owned chain.
 Code: `felix/iptables/table.go` (`InsertOrAppendRules`).
+_Avoid_: nothing known
+
+#### Full chain update
+The `Table` write mode that replaces the contents of a Felix-owned chain.
+Code: `felix/iptables/table.go` (`UpdateChain`).
 _Avoid_: nothing known
 
 #### Rule hash
@@ -418,13 +423,23 @@ The netlink route protocol number 80, which Felix stamps on routes with no Calic
 Code: `felix/dataplane/linux/dataplanedefs/dataplane_defs.go` (`DefaultRouteProto`).
 _Avoid_: DeviceRouteProtocol (a separate setting that applies to routes on Calico interfaces)
 
-#### IP set ID and IP set name
-The ID is the calc graph's identifier for a set. The name is the truncated, prefixed kernel name derived from it, such as `cali40...`.
+#### IP set ID
+The calc graph's identifier for an IP set.
 Code: `felix/ipsets/ipset_defs.go` (`IPSetMetadata`).
-_Avoid_: bare name (the ID and the kernel name differ)
+_Avoid_: IP set name, when the ID is meant
 
-#### Main IP set and temp IP set
-The set under its real kernel name, and its temporary copy.
+#### IP set name
+The truncated, prefixed kernel name derived from an IP set ID, such as `cali40...`.
+Code: `felix/ipsets/ipset_defs.go` (`IPSetMetadata`).
+_Avoid_: bare name, IP set ID
+
+#### Main IP set
+An IP set under its real kernel name.
+Code: `felix/ipsets/ipset_defs.go` (`IPSetMetadata`).
+_Avoid_: nothing known
+
+#### Temp IP set
+The temporary copy of an IP set, under its own kernel name.
 Code: `felix/ipsets/ipset_defs.go` (`IPSetMetadata`).
 _Avoid_: nothing known
 
@@ -652,10 +667,15 @@ The two jump indices (`skb->cb[0]` for allow, `skb->cb[1]` for deny) that say wh
 Code: `felix/bpf-gpl/jump.h` (`__CALI_JUMP_TO_POLICY`).
 _Avoid_: allow/deny jump
 
-#### Fast path and debug path
-The two builds of each generic sub-program: one without log statements and one with them, loaded at different indices.
-Code: `felix/bpf-gpl/jump.h` (`PROG_PATH`) and `felix/bpf/hook/map.go` (`allocateLayout`).
+#### Fast path
+The build of a generic sub-program without log statements.
+Code: `felix/bpf-gpl/jump.h` (`PROG_PATH`), `felix/bpf/hook/map.go` (`allocateLayout`).
 _Avoid_: fast path, for the established-flow path
+
+#### Debug path
+The build of a generic sub-program with log statements.
+Code: `felix/bpf-gpl/jump.h` (`PROG_PATH`), `felix/bpf/hook/map.go` (`allocateLayout`).
+_Avoid_: trace path
 
 #### Log filter
 A pcap expression compiled to BPF that selects which packets take the debug path.

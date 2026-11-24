@@ -31,7 +31,8 @@ The controllers, one layer down.
 | CSR controller | `operator/pkg/controller/csr/csr_controller.go` | Approves and signs CSRs for the signer `tigera.io/operator-signer`. |
 | Cluster CA controller | `operator/pkg/controller/secrets/cluster_ca_controller.go` | Keeps the operator CA secret in place. |
 | Whisker, Goldmane, Gateway API, Istio and Tiers controllers | `operator/pkg/controller/whisker/`, `operator/pkg/controller/goldmane/`, `operator/pkg/controller/gatewayapi/`, `operator/pkg/controller/istio/`, `operator/pkg/controller/tiers/` | One feature each. |
-| Kube-proxy monitor and pod IP recovery | `operator/pkg/controller/kubeproxy/`, `operator/pkg/controller/podiprecovery/` | Auxiliary controllers: they have no CRD of their own. |
+| Kube-proxy monitor | `operator/pkg/controller/kubeproxy/` | An auxiliary controller: it has no CRD of its own. |
+| Pod IP recovery | `operator/pkg/controller/podiprecovery/` | An auxiliary controller: it has no CRD of its own. |
 
 ## Terms
 

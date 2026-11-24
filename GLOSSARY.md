@@ -702,10 +702,15 @@ A component exiting with the restart exit code to apply a change it cannot hot-r
 Code: `felix/daemon/daemon.go` (`configChangedRC`, `handledConfigChanges`), `kube-controllers/pkg/kubecontrollers/run.go` (`controllerControl`), `kube-controllers/pkg/kubecontrollers/command.go` (`WrapSelf`).
 _Avoid_: reload, config restart, restart-to-apply
 
-#### Health aggregator and health reporter
-The shared liveness and readiness registry, and its named, optionally timed reporters, served on `/liveness` and `/readiness`.
-Code: `libcalico-go/lib/health/health.go` (`HealthAggregator`, `RegisterReporter`).
-_Avoid_: bare "reporter", bare "aggregator"
+#### Health aggregator
+A component's shared liveness and readiness registry, served on `/liveness` and `/readiness`.
+Code: `libcalico-go/lib/health/health.go` (`HealthAggregator`).
+_Avoid_: bare "aggregator"
+
+#### Health reporter
+One named, optionally timed source of liveness and readiness registered with a health aggregator.
+Code: `libcalico-go/lib/health/health.go` (`RegisterReporter`).
+_Avoid_: bare "reporter"
 
 ### Flow logs
 

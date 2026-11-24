@@ -66,10 +66,15 @@ The record kept for one allocated ordinal: its handle, active owner attributes, 
 Code: `libcalico-go/lib/backend/model/block.go` (`AllocationAttribute`).
 _Avoid_: bare allocation (it means several things)
 
-#### Active owner and alternate owner
-The pod using an address now, and the other pod that holds it during a KubeVirt live migration. The active owner's attributes serialize under the JSON name `secondary`.
-Code: `libcalico-go/lib/backend/model/block.go` (`ActiveOwnerAttrs`, `AlternateOwnerAttrs`).
-_Avoid_: secondary (the JSON name of the active owner's attributes)
+#### Active owner
+The pod using an address now. Its attributes serialize under the JSON name `secondary`.
+Code: `libcalico-go/lib/backend/model/block.go` (`ActiveOwnerAttrs`).
+_Avoid_: secondary (the JSON name of its attributes), primary owner
+
+#### Alternate owner
+The other pod that holds an address during a KubeVirt live migration.
+Code: `libcalico-go/lib/backend/model/block.go` (`AlternateOwnerAttrs`).
+_Avoid_: secondary owner
 
 #### Pool qualification
 The rule that decides which pools one request may draw addresses from and which empty affine blocks a node may keep. `PoolClaim` is its exported form.

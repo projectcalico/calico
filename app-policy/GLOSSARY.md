@@ -43,8 +43,13 @@ The in-memory copy of the policies, profiles, IP sets, endpoints, service accoun
 Code: `app-policy/policystore/store.go` (`PolicyStore`).
 _Avoid_: policy cache
 
-### Current store and pending store
-The policy store that requests read from, and the separate policy store that the policy sync client builds up. The pending store has nothing to do with staged policy.
+### Current store
+The policy store that requests are checked against.
+Code: `app-policy/policystore/store.go` (`policyStoreManager`).
+_Avoid_: active store
+
+### Pending store
+The separate policy store that the policy sync client builds up before it replaces the current store. It has nothing to do with staged policy.
 Code: `app-policy/policystore/store.go` (`policyStoreManager`).
 _Avoid_: pending policy (that means a staged policy)
 
