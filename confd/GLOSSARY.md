@@ -10,7 +10,7 @@ Top layer of confd.
 |---|---|---|
 | Calico confd backend | `confd/pkg/backends/calico/client.go` (`client`) | Turning BGP syncer updates into a flat key and value cache, with a revision counter, that the templates read. |
 | BGP config processor | `confd/pkg/backends/calico/bgp_processor.go` (`GetBirdBGPConfig`) | Building the per-IP-family `BirdBGPConfig`: peers, filters, communities and pool statements. |
-| v1 peering computation | `confd/pkg/backends/calico/client.go` (`updatePeersV1`) | Expanding BGPPeer resources, with selectors and reverse peerings, into peering keys in the cache. |
+| Peering resolution | `confd/pkg/backends/calico/client.go` (`updatePeersV1`) | Expanding BGPPeer resources, with selectors and reverse peerings, into peering keys in the cache. |
 | Route generator | `confd/pkg/backends/calico/routes.go` (`routeGenerator`) | Watching Services and EndpointSlices and advertising per-service routes from this node. |
 | Local BGP peer watcher | `confd/pkg/backends/calico/local_bgp_peer_watcher.go` (`LocalBGPPeerWatcher`) | Reading endpoint status files to find the workloads that should be BGP peers. |
 | Template processor | `confd/pkg/resource/template/processor.go` (`watchProcessor`) | Re-rendering each template resource when its watched keys change. |
