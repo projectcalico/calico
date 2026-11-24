@@ -651,9 +651,9 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectNotDegraded()
 		})
 
-		It("migrates a cacerts the operator did not create, from the CA it holds, keeping its other roots until the end", func() {
+		It("leaves a cacerts the operator did not create alone, and publishes only the roots it signs with", func() {
 			root := newTestCert("hand-made-root", nil, true)
-			Expect(cli.Create(ctx, &corev1.Secret{
+			handMade := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: istio.CACertsSecretName, Namespace: istio.IstioNamespace},
 				Data: map[string][]byte{
 					istio.CACertKey:    root.certPEM,
@@ -661,31 +661,20 @@ var _ = Describe("Istio controller certificate authority", func() {
 					istio.CertChainKey: root.certPEM,
 					istio.RootCertKey:  concatPEM(root.certPEM, selfSigned.certPEM),
 				},
-			})).NotTo(HaveOccurred())
+			}
+			Expect(cli.Create(ctx, handMade)).NotTo(HaveOccurred())
+			reconcileIstio()
 			reconcileIstio()
 
 			cacerts := getSecret(cacertsKey)
-			Expect(cacerts.Labels).To(HaveKeyWithValue(istio.CACertsLabel, "unmanaged"))
-			expectSigner(root)
-			state := expectPhase(istio.TransitionDistributeRoot, time.Time{})
-			Expect(state.Retiring[0].Raw).To(Equal(root.cert.Raw))
-			Expect(state.Kept).To(HaveLen(1))
-			Expect(state.Kept[0].Raw).To(Equal(selfSigned.cert.Raw))
-			opRoot := operatorCA().Roots[0]
-			expectBundle(root.cert, opRoot, selfSigned.cert)
-			expectPublished(root.cert, opRoot)
+			Expect(cacerts.Data).To(Equal(handMade.Data))
+			Expect(cacerts.Labels).NotTo(HaveKey(istio.CACertsLabel))
+			Expect(cacerts.Annotations).To(BeEmpty())
+			Expect(cacerts.OwnerReferences).To(BeEmpty())
+			secretAbsent(operatorCAKey)
+			expectPublished(root.cert)
+			mockStatus.AssertNotCalled(GinkgoT(), "SetWarning", caWarningKey, mock.Anything)
 			expectNotDegraded()
-			expectWarningMentioning("phase 1/4", istio.IstioNamespace+"/"+istio.CACertsSecretName, "user-provided")
-
-			advanceTo(istio.TransitionAwaitExpiry)
-			expectBundle(root.cert, opRoot, selfSigned.cert)
-			expectPublished(root.cert, opRoot)
-
-			now = transitionOf().Deadline
-			reconcileIstio()
-			Expect(transitionOf().Phase).To(Equal(istio.TransitionNone))
-			expectBundle(opRoot)
-			expectPublished(opRoot)
 		})
 
 		It("goes Degraded and keeps a cacerts the operator did not create when it is not a usable CA", func() {

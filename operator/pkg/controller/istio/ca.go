@@ -69,6 +69,13 @@ func (r *ReconcileIstio) resolveTrust(ctx context.Context) (*trustInputs, error)
 func (r *ReconcileIstio) resolveSigner(ctx context.Context, in *trustInputs, selfSigned *corev1.Secret) error {
 	recorded := istio.ReadTransition(in.current)
 	current := currentSigner(in.current, selfSigned)
+	if current.source == istio.CASourceUnmanaged && current.ca != nil {
+		// Its root may be shared with other clusters, which would not trust an
+		// operator root, and the Secret belongs to the user, so it is neither
+		// replaced nor owned. Only the roots it signs with are published.
+		in.ownRoots = current.roots
+		return nil
+	}
 	desired, desiredSource, problem, err := r.resolveDesiredCA(ctx)
 	if err != nil {
 		return err
