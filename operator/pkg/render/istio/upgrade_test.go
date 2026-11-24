@@ -74,11 +74,13 @@ var _ = Describe("Istio data plane upgrade order", func() {
 	oldIstiod := func() *appsv1.Deployment {
 		d := rolledOut(desiredDeployment())
 		withImage(&d.Spec.Template.Spec, oldImage)
+		d.Annotations[istio.RenderedImageAnnotation] = oldImage
 		return d
 	}
 	oldDaemonSet := func(name string) *appsv1.DaemonSet {
 		ds := desiredDaemonSet(name)
 		withImage(&ds.Spec.Template.Spec, oldImage)
+		ds.Annotations[istio.RenderedImageAnnotation] = oldImage
 		return ds
 	}
 	hasDaemonSet := func(objs []client.Object, name string) bool {
@@ -168,6 +170,51 @@ var _ = Describe("Istio data plane upgrade order", func() {
 		objs := render()
 		Expect(hasDaemonSet(objs, istio.IstioCNIDaemonSetName)).To(BeTrue())
 		Expect(hasDaemonSet(objs, istio.IstioZTunnelDaemonSetName)).To(BeFalse())
+	})
+
+	It("compares the rendered image, not the live one a webhook rewrote", func() {
+		const digest = "registry.example/rewritten@sha256:0123"
+		istiod := rolledOut(desiredDeployment())
+		withImage(&istiod.Spec.Template.Spec, digest)
+		cni := desiredDaemonSet(istio.IstioCNIDaemonSetName)
+		withImage(&cni.Spec.Template.Spec, digest)
+		cfg.Live = &istio.LiveWorkloads{
+			Istiod:  istiod,
+			CNI:     cni,
+			ZTunnel: oldDaemonSet(istio.IstioZTunnelDaemonSetName),
+		}
+		_, component, err := istio.Istio(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(component.ResolveImages(getCalicoTestImageSet())).To(Succeed())
+		objs, _ := component.Objects()
+		Expect(hasDaemonSet(objs, istio.IstioCNIDaemonSetName)).To(BeTrue())
+		Expect(hasDaemonSet(objs, istio.IstioZTunnelDaemonSetName)).To(BeTrue())
+		Expect(component.DataPlaneHold()).To(BeEmpty())
+	})
+
+	It("treats a live workload without the annotation as running another image", func() {
+		istiod := rolledOut(desiredDeployment())
+		delete(istiod.Annotations, istio.RenderedImageAnnotation)
+		ztunnel := desiredDaemonSet(istio.IstioZTunnelDaemonSetName)
+		delete(ztunnel.Annotations, istio.RenderedImageAnnotation)
+		cfg.Live = &istio.LiveWorkloads{Istiod: istiod, ZTunnel: ztunnel}
+		Expect(hasDaemonSet(render(), istio.IstioZTunnelDaemonSetName)).To(BeFalse())
+	})
+
+	It("says which DaemonSets wait and where the istiod rollout stands", func() {
+		istiod := oldIstiod()
+		istiod.Spec.Replicas = ptr.To[int32](1)
+		istiod.Status = appsv1.DeploymentStatus{ObservedGeneration: 3, Replicas: 2, UpdatedReplicas: 1, AvailableReplicas: 1}
+		cfg.Live = &istio.LiveWorkloads{
+			Istiod:  istiod,
+			CNI:     desiredDaemonSet(istio.IstioCNIDaemonSetName),
+			ZTunnel: oldDaemonSet(istio.IstioZTunnelDaemonSetName),
+		}
+		_, component, err := istio.Istio(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(component.ResolveImages(getCalicoTestImageSet())).To(Succeed())
+		Expect(component.DataPlaneHold()).To(Equal("Istio data plane upgrade of DaemonSet ztunnel waits for Deployment calico-system/istiod to roll out: " +
+			"1 of 1 replicas updated, 1 available, 2 running in total"))
 	})
 
 	It("creates a missing DaemonSet without waiting", func() {

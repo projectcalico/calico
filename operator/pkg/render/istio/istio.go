@@ -231,6 +231,9 @@ func (c *IstioComponent) patchImages() (err error) {
 			container.Image = c.IstioZTunnelImage
 		}
 	}
+	setRenderedImage(c.resources.IstiodDeployment, c.IstioPilotImage)
+	setRenderedImage(c.resources.CNIDaemonSet, c.IstioInstallCNIImage)
+	setRenderedImage(c.resources.ZTunnelDaemonSet, c.IstioZTunnelImage)
 	mapData := c.resources.IstioSidecarInjectorConfigMap.Data
 	for k, v := range mapData {
 		mapData[k] = strings.ReplaceAll(v, istioFakeImageProxyv2, c.IstioProxyv2Image)

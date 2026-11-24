@@ -54,6 +54,8 @@ const IstioName = "istio"
 // fieldOwner names this controller's FelixConfiguration writes in managed fields.
 const fieldOwner = "operator.tigera.io/istio"
 
+const dataPlaneHoldWarningKey = "istio-data-plane-hold"
+
 var (
 	// blank assignment to verify that ReconcileIstio implements reconcile.Reconciler
 	_ reconcile.Reconciler = &ReconcileIstio{}
@@ -319,6 +321,15 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error rendering Calico Istio resources", err, log)
 		return reconcile.Result{}, err
+	}
+
+	// A held data plane leaves nothing unavailable, so without the warning
+	// an istiod rollout that never finishes would hold it unseen.
+	if hold := istioComponent.DataPlaneHold(); hold != "" {
+		reqLogger.Info(hold)
+		r.status.SetWarning(dataPlaneHoldWarningKey, hold)
+	} else {
+		r.status.ClearWarning(dataPlaneHoldWarningKey)
 	}
 
 	_, err = utils.PatchFelixConfiguration(ctx, r.Client, fieldOwner, func(fc *v3.FelixConfiguration) (bool, error) {

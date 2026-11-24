@@ -432,11 +432,15 @@ var _ = Describe("Istio controller tests", func() {
 		downgradeTo := func(image string, annotations map[string]string) {
 			d := getIstiod()
 			d.Spec.Template.Spec.Containers[0].Image = image
-			d.Annotations = annotations
+			d.Annotations = map[string]string{istio.RenderedImageAnnotation: image}
+			for k, v := range annotations {
+				d.Annotations[k] = v
+			}
 			Expect(cli.Update(ctx, d)).To(Succeed())
 			markRolledOut()
 			ds := getZTunnel()
 			ds.Spec.Template.Spec.Containers[0].Image = image
+			ds.Annotations[istio.RenderedImageAnnotation] = image
 			Expect(cli.Update(ctx, ds)).To(Succeed())
 		}
 
@@ -462,6 +466,51 @@ var _ = Describe("Istio controller tests", func() {
 			markRolledOut()
 			reconcileOnce()
 			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(newZTunnel))
+		})
+
+		holdWarning := func() string {
+			msg := ""
+			for _, call := range mockStatus.Calls {
+				switch {
+				case call.Method == "SetWarning" && call.Arguments.String(0) == dataPlaneHoldWarningKey:
+					msg = call.Arguments.String(1)
+				case call.Method == "ClearWarning" && call.Arguments.String(0) == dataPlaneHoldWarningKey:
+					msg = ""
+				}
+			}
+			return msg
+		}
+
+		It("warns while istiod holds the data plane, and clears the warning once it has rolled out", func() {
+			downgradeTo(oldImage, nil)
+			// The surge pod of the new ReplicaSet cannot schedule, so the old pod
+			// stays available and nothing reports as unavailable.
+			reconcileOnce()
+			d := getIstiod()
+			d.Status = appsv1.DeploymentStatus{ObservedGeneration: d.Generation, Replicas: 2, UpdatedReplicas: 1, AvailableReplicas: 1}
+			Expect(cli.Status().Update(ctx, d)).To(Succeed())
+
+			reconcileOnce()
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).To(Equal(oldImage))
+			Expect(holdWarning()).To(And(ContainSubstring(istio.IstioZTunnelDaemonSetName), ContainSubstring("1 of 1 replicas updated, 1 available, 2 running in total")))
+
+			markRolledOut()
+			reconcileOnce()
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).NotTo(Equal(oldImage))
+			Expect(holdWarning()).To(BeEmpty())
+		})
+
+		It("does not hold the data plane when a webhook rewrites the live istiod image", func() {
+			downgradeTo(oldImage, nil)
+			reconcileOnce()
+			d := getIstiod()
+			d.Spec.Template.Spec.Containers[0].Image = "registry.example/pilot@sha256:0123"
+			Expect(cli.Update(ctx, d)).To(Succeed())
+			markRolledOut()
+
+			reconcileOnce()
+			Expect(getZTunnel().Spec.Template.Spec.Containers[0].Image).NotTo(Equal(oldImage))
+			Expect(holdWarning()).To(BeEmpty())
 		})
 
 		It("does not wait for an istiod the operator ignores", func() {
