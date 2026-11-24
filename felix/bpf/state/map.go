@@ -34,64 +34,46 @@ const (
 	MaxRuleIDs           = 32
 )
 
-// State mirrors the IPv4 struct cali_tc_state, padded to the IPv6 size.
-// TestStateLayoutMatchesC checks the c tags against the C layout.
+// State mirrors the part of struct cali_tc_state that IPv4 and IPv6 share, which also
+// carries the policy verdict event. TestStateLayoutMatchesC checks the c tags against C.
 type State struct {
-	eventHeader         uint64 `c:"eventhdr"`
-	SrcAddr             uint32 `c:"ip_src"`
-	SrcAddr1            uint32
-	SrcAddr2            uint32
-	SrcAddr3            uint32
-	DstAddr             uint32 `c:"ip_dst"`
-	DstAddr1            uint32
-	DstAddr2            uint32
-	DstAddr3            uint32
-	PreNATDstAddr       uint32 `c:"pre_nat_ip_dst"`
-	PreNATDstAddr1      uint32
-	PreNATDstAddr2      uint32
-	PreNATDstAddr3      uint32
-	PostNATDstAddr      uint32 `c:"post_nat_ip_dst"`
-	PostNATDstAddr1     uint32
-	PostNATDstAddr2     uint32
-	PostNATDstAddr3     uint32
-	TunIP               uint32 `c:"tun_ip"`
-	TunIP1              uint32
-	TunIP2              uint32
-	TunIP3              uint32
-	ihl                 uint16       `c:"ihl"`
-	PreNATSrcPort       uint16       `c:"pre_nat_sport"`
-	PolicyRC            PolicyResult `c:"pol_rc"`
-	SrcPort             uint16       `c:"sport"`
-	DstPort             uint16       `c:"dport"`
-	PreNATDstPort       uint16       `c:"pre_nat_dport"`
-	PostNATDstPort      uint16       `c:"post_nat_dport"`
-	IPProto             uint8        `c:"ip_proto"`
-	_                   uint8
-	IPSize              uint16             `c:"ip_size"`
-	RulesHit            uint32             `c:"rules_hit"`
-	RuleIDs             [MaxRuleIDs]uint64 `c:"rule_ids"`
-	Flags               uint64             `c:"flags"`
-	ConntrackRC         int16              `c:"ct_result.rc"`
-	ConntrackFwdFlags   uint16             `c:"ct_result.fwd_flags"`
-	ConntrackFlags      uint32             `c:"ct_result.flags"`
-	ConntrackNATIP      uint32             `c:"ct_result.nat_ip"`
-	ConntrackNATsIP     uint32             `c:"ct_result.nat_sip"`
-	ConntrackNATPort    uint16             `c:"ct_result.nat_port"`
-	ConntrackNATsPort   uint16             `c:"ct_result.nat_sport"`
-	ConntrackTunIP      uint32             `c:"ct_result.tun_ip"`
-	ConntrackIfIndexFwd uint32             `c:"ct_result.ifindex_fwd"`
-	ConntrackIfIndexCtd uint32             `c:"ct_result.ifindex_created"`
-	NATDestAddr         uint32             `c:"nat_dest.addr"`
-	NATDestPort         uint16             `c:"nat_dest.port"`
-	_                   [2]byte
-	ProgStartTime       uint64 `c:"prog_start_time"`
-	PreNATSrcAddr       uint32 `c:"pre_nat_ip_src"`
-	PreNATSrcAddr1      uint32
-	PreNATSrcAddr2      uint32
-	PreNATSrcAddr3      uint32
-	NATSvcID            uint32 `c:"nat_svc_id"`
-	// fwd, then padding to the IPv6 size.
-	_ [64]byte
+	eventHeader     uint64 `c:"eventhdr"`
+	SrcAddr         uint32 `c:"ip_src"`
+	SrcAddr1        uint32
+	SrcAddr2        uint32
+	SrcAddr3        uint32
+	DstAddr         uint32 `c:"ip_dst"`
+	DstAddr1        uint32
+	DstAddr2        uint32
+	DstAddr3        uint32
+	PreNATDstAddr   uint32 `c:"pre_nat_ip_dst"`
+	PreNATDstAddr1  uint32
+	PreNATDstAddr2  uint32
+	PreNATDstAddr3  uint32
+	PostNATDstAddr  uint32 `c:"post_nat_ip_dst"`
+	PostNATDstAddr1 uint32
+	PostNATDstAddr2 uint32
+	PostNATDstAddr3 uint32
+	TunIP           uint32 `c:"tun_ip"`
+	TunIP1          uint32
+	TunIP2          uint32
+	TunIP3          uint32
+	ihl             uint16       `c:"ihl"`
+	PreNATSrcPort   uint16       `c:"pre_nat_sport"`
+	PolicyRC        PolicyResult `c:"pol_rc"`
+	SrcPort         uint16       `c:"sport"`
+	DstPort         uint16       `c:"dport"`
+	PreNATDstPort   uint16       `c:"pre_nat_dport"`
+	PostNATDstPort  uint16       `c:"post_nat_dport"`
+	IPProto         uint8        `c:"ip_proto"`
+	_               uint8
+	IPSize          uint16             `c:"ip_size"`
+	RulesHit        uint32             `c:"rules_hit"`
+	RuleIDs         [MaxRuleIDs]uint64 `c:"rule_ids"`
+	Flags           uint64             `c:"flags"`
+	// Members after flags (ct_result on) have different offsets for IPv4 and IPv6, so
+	// State leaves them opaque. Pads to the IPv6 size.
+	_ [136]byte
 }
 
 const expectedSize = 512
