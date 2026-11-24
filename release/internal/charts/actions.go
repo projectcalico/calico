@@ -61,7 +61,7 @@ func Build(chart Chart, opts ...BuildOption) error {
 	if s.index == nil {
 		return nil
 	}
-	s.repoURL, s.chartURL, s.indexDir = s.index.repoURL, s.index.chartURL, s.index.dir
+	s.chartURL, s.indexDir = s.index.chartURL, s.index.dir
 	s.Logger().Info("Building helm index")
 	if err := s.buildIndex(); err != nil {
 		return err
@@ -232,7 +232,7 @@ func (s settings) buildIndex() error {
 }
 
 func (s settings) downloadIndex() (string, error) {
-	indexURL, err := url.JoinPath(s.repoURL, indexFileName)
+	indexURL, err := url.JoinPath(s.Repo(), indexFileName)
 	if err != nil {
 		return "", s.Errorf("constructing helm index url: %w", err)
 	}
