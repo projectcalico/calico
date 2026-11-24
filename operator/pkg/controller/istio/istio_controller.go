@@ -285,7 +285,7 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
-	trust, err := r.resolveTrust(ctx)
+	trust, err := r.resolveTrust(ctx, installationSpec)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading the Istio certificate authority", err, reqLogger)
 		return reconcile.Result{}, err

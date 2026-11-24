@@ -234,6 +234,21 @@ var _ = Describe("Istio controller certificate authority", func() {
 			Expect(getSecret(cacertsKey).Data).To(Equal(cacerts.Data))
 		})
 
+		It("goes Degraded and leaves the CA alone while certificate management is set", func() {
+			Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, installation)).To(Succeed())
+			installation.Spec.CertificateManagement = &operatorv1.CertificateManagement{CACert: []byte("ca"), SignerName: "example.com/signer"}
+			Expect(cli.Update(ctx, installation)).To(Succeed())
+			installation.Status.Computed = installation.Spec.DeepCopy()
+			Expect(cli.Status().Update(ctx, installation)).To(Succeed())
+			reconcileIstio()
+
+			secretAbsent(operatorCAKey)
+			secretAbsent(cacertsKey)
+			Expect(errors.IsNotFound(cli.Get(ctx, anchorsKey, &corev1.ConfigMap{}))).To(BeTrue())
+			Expect(getIstiod().Spec.Template.Annotations).NotTo(HaveKey(istio.CACertsHashAnnotation))
+			expectDegradedMentioning("certificateManagement")
+		})
+
 		It("keeps the CA Secret when the Istio CR is deleted", func() {
 			reconcileIstio()
 

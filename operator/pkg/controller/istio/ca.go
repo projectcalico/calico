@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/render/istio"
@@ -43,7 +44,7 @@ type trustInputs struct {
 // resolveTrust reads the CA Secrets and validates them. It returns an error
 // only for API failures; invalid input is recorded in problems so the rest
 // still renders.
-func (r *ReconcileIstio) resolveTrust(ctx context.Context) (*trustInputs, error) {
+func (r *ReconcileIstio) resolveTrust(ctx context.Context, installation *operatorv1.InstallationSpec) (*trustInputs, error) {
 	in := &trustInputs{}
 
 	current, err := r.getSecret(ctx, istio.CACertsSecretName, istio.IstioNamespace)
@@ -54,6 +55,14 @@ func (r *ReconcileIstio) resolveTrust(ctx context.Context) (*trustInputs, error)
 	selfSigned, err := r.getSecret(ctx, istio.IstioSelfSignedCASecretName, istio.IstioNamespace)
 	if err != nil {
 		return nil, err
+	}
+
+	if installation.CertificateManagement != nil {
+		// Certificate management means every certificate comes from the
+		// cluster's signer, which a mesh root the operator generates would
+		// bypass. Until that is supported, istiod keeps the CA it has.
+		in.problems = append(in.problems, "Installation spec.certificateManagement is set, which the operator-managed Istio CA does not support; istiod keeps signing with the CA it has")
+		return in, nil
 	}
 
 	if err := r.resolveSigner(ctx, in, selfSigned); err != nil {
