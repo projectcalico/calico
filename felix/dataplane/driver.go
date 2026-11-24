@@ -47,6 +47,7 @@ import (
 	extdataplane "github.com/projectcalico/calico/felix/dataplane/external"
 	"github.com/projectcalico/calico/felix/dataplane/inactive"
 	intdataplane "github.com/projectcalico/calico/felix/dataplane/linux"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dpconfig"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -247,7 +248,7 @@ func StartDataplaneDriver(
 			felixNodeZone = felixNode.Labels[coreV1.LabelTopologyZone]
 		}
 
-		dpConfig := intdataplane.Config{
+		dpConfig := dpconfig.Config{
 			Hostname:                                 felixHostname,
 			NodeZone:                                 felixNodeZone,
 			FloatingIPsEnabled:                       strings.EqualFold(configParams.FloatingIPs, string(apiv3.FloatingIPsEnabled)),

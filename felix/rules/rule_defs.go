@@ -490,6 +490,14 @@ var unusedBitsInBPFMode = map[string]bool{
 	"MarkNonCaliEndpoint": true,
 }
 
+// BPFOverlayTunnelID is the tunnel key ID that BPF sets on all overlay devices, so also the VXLAN VNI.
+func (c *Config) BPFOverlayTunnelID() uint32 {
+	if c.IPIPEnabled || c.WireguardEnabled || c.WireguardEnabledV6 {
+		return 1
+	}
+	return uint32(c.VXLANVNI)
+}
+
 func (c *Config) validate() {
 	// Scan for unset iptables mark bits.  We use reflection so that we have a hope of catching
 	// newly-added fields.

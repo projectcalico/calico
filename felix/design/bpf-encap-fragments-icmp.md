@@ -40,7 +40,7 @@ just apply the encap envelope the program has specified.
 Felix therefore creates the VXLAN device in **flow-based** (aka
 "external") mode when BPF is enabled: no fixed VNI, no fixed source,
 no fixed destination. `netlink.Vxlan.FlowBased = true` in
-`felix/dataplane/linux/vxlan_mgr.go`. The BPF program writes the
+`felix/dataplane/linux/vxlan/vxlan_mgr.go`. The BPF program writes the
 tunnel key (destination IP, VNI) via `bpf_skb_set_tunnel_key` before
 redirecting to the device, and the device applies the envelope. On
 ingress, the device decaps and the BPF program reads the original
@@ -48,7 +48,7 @@ key.
 
 A flow-based device is incompatible with a fixed-VNI device. If Felix
 detects a mismatched existing device on startup, it recreates it
-(`vxlanLinksIncompat` in `vxlan_mgr.go`).
+(`vxlanLinksIncompat` in `route_mgr.go`).
 
 ### VNI filter
 
@@ -95,11 +95,11 @@ dualstack:
   v6 local IP on the existing v4 device and programs v6 ARP/neigh
   entries, but does not create or manage its own device.
 - The legacy `vxlan-v6.calico` device is torn down if it exists
-  (`cleanUpVXLANDevice(VXLANIfaceNameV6)` in `int_dataplane.go`).
+  (`vxlan.CleanUpDevice(VXLANIfaceNameV6)` in `int_dataplane.go`).
 
 Constants: `VXLANIfaceNameV4 = "vxlan.calico"`,
 `VXLANIfaceNameV6 = "vxlan-v6.calico"` in
-`felix/dataplane/linux/dataplanedefs/dataplane_defs.go`.
+`felix/dataplane/linux/vxlan/vxlandefs/vxlandefs.go`.
 
 ### MTU and routing
 
@@ -182,7 +182,7 @@ than pinned to a specific device.
   existing device is detected and recreated; otherwise the BPF
   programs and the device disagree on how tunnel keys are set.
 - A new VNI that BPF must receive on `vxlan.calico` must be added to
-  the VNI filter (`vxlanMgrWithVNIFilter`), or the kernel drops it.
+  the VNI filter (`vxlan.WithVNIFilter`), or the kernel drops it.
 - Dualstack work on the VXLAN device must respect the "only one
   device" invariant — setting up a second `vxlan-v6.calico` device
   in BPF mode breaks tunnel-key resolution.
