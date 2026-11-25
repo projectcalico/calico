@@ -51,6 +51,11 @@ steps:
         value: "true"
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
+      # The manifest installer applies the v1-CRD calico.yaml even with
+      # USE_API_SERVER=false, so the tests reach projectcalico.org/v3 through a
+      # calicoctl pod rather than v3 CRDs.
+      - name: CALICOCTL_INSTALL_TYPE
+        value: k8s-pod
       - name: E2E_TEST_CONFIG
         value: e2e/config/iptables/xtables-v3crd-aws.yaml
       - name: PROVISIONER
