@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# stage-operator-image <out> <binary>: lays out operator/build/Dockerfile's image
+# as a single-stage buildkit context in <out>, around an operator binary already
+# built, since rootless buildkit writes an empty tar for a multi-stage build. The
+# CA trust store the Dockerfile copies from ubi-minimal comes from this machine's
+# instead: the go-build image is a RHEL 9 rebuild, with the same layout. A
+# Dockerfile whose earlier stages no
+# longer match what this stages fails here rather than building a different image.
+set -euo pipefail
+
+out=${1:?usage: stage-operator-image <out> <binary>}
+binary=${2:?usage: stage-operator-image <out> <binary>}
+dockerfile=operator/build/Dockerfile
+
+fail() { echo "stage-operator-image: $*" >&2; exit 1; }
+
+# The stages before the last, comments and blank lines aside: what the rootfs
+# below reproduces.
+expected=$(cat <<'EOF'
+ARG CALICO_BASE
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest AS ubi
+FROM scratch AS source
+ARG TARGETARCH
+ARG BINARY_NAME=operator
+COPY --from=ubi /etc/pki /etc/pki/
+COPY --from=ubi /usr/share/pki /usr/share/pki/
+COPY build/_output/LICENSE /licenses/LICENSE
+COPY build/_output/bin/${BINARY_NAME}-${TARGETARCH} /usr/bin/operator
+EOF
+)
+last_from=$(grep -n '^FROM ' "$dockerfile" | tail -n 1 | cut -d: -f1)
+actual=$(head -n "$((last_from - 1))" "$dockerfile" | grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$')
+if [ "$actual" != "$expected" ]; then
+  diff <(echo "$expected") <(echo "$actual") >&2 || true
+  fail "$dockerfile's build stages changed; update what this stages to match"
+fi
+grep -q '^COPY --from=source / /$' "$dockerfile" ||
+  fail "$dockerfile's final stage no longer copies its source stage whole"
+
+rootfs=$out/rootfs
+mkdir -p "$rootfs/etc" "$rootfs/usr/share" "$rootfs/usr/bin" "$rootfs/licenses"
+cp -a /etc/pki "$rootfs/etc/pki"
+cp -a /usr/share/pki "$rootfs/usr/share/pki"
+cp LICENSE.md "$rootfs/licenses/LICENSE"
+cp "$binary" "$rootfs/usr/bin/operator"
+
+# The final stage as written, its FROM's ARG declared first.
+{
+  echo 'ARG CALICO_BASE'
+  tail -n "+$last_from" "$dockerfile" | sed 's|^COPY --from=source / /$|COPY rootfs/ /|'
+} >"$out/Dockerfile"
+grep -q -- '--from' "$out/Dockerfile" && fail "the staged Dockerfile still copies from another stage"
+
+make -s --no-print-directory -C operator --eval='print-build-args: ; @echo CALICO_BASE=$(CALICO_BASE); echo GIT_VERSION=$(GIT_VERSION)' \
+  print-build-args >"$out/build-args"
+cat "$out/Dockerfile" "$out/build-args"
