@@ -36,6 +36,7 @@ import (
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 type Configuration struct {
@@ -419,13 +420,18 @@ func (c *IstioComponent) cacertsSecret() *corev1.Secret {
 	if source == "" {
 		source = CASourceOperatorManaged
 	}
+	labels, annotations := certificatemanagement.TLSSecretMetadata(ca.CertPEM)
+	labels[CACertsLabel] = string(source)
+	for k, v := range c.cfg.Transition.annotations() {
+		annotations[k] = v
+	}
 	return &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        CACertsSecretName,
 			Namespace:   c.cfg.IstioNamespace,
-			Labels:      map[string]string{CACertsLabel: string(source)},
-			Annotations: c.cfg.Transition.annotations(),
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{

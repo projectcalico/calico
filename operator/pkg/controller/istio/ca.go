@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/render/istio"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 // caWarningKey keys the non-Degraded status message for a signer transition in
@@ -364,11 +365,17 @@ func (r *ReconcileIstio) ensureOperatorCA(ctx context.Context, trustDomain strin
 	if err != nil {
 		return nil, err
 	}
+	labels, annotations := certificatemanagement.TLSSecretMetadata(ca.CertPEM)
 	secret = &corev1.Secret{
-		TypeMeta:   metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
-		ObjectMeta: metav1.ObjectMeta{Name: key.Name, Namespace: key.Namespace},
-		Type:       corev1.SecretTypeOpaque,
-		Data:       ca.SecretData(),
+		TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        key.Name,
+			Namespace:   key.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: ca.SecretData(),
 	}
 	log.Info("Generated the operator-managed Istio CA", "secret", key.String())
 	if err := r.Create(ctx, secret); err != nil {

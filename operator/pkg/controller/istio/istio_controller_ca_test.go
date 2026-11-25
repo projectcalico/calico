@@ -50,6 +50,7 @@ import (
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/istio"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 // testCert is a certificate made for a test, with the PEM forms a Secret holds.
@@ -225,6 +226,9 @@ var _ = Describe("Istio controller certificate authority", func() {
 			Expect(ca.Roots[0].Subject.Organization).To(Equal([]string{"cluster.local"}))
 			Expect(caSecret.Data[istio.CertChainKey]).To(Equal(caSecret.Data[istio.CACertKey]))
 			Expect(caSecret.Data[istio.RootCertKey]).To(Equal(caSecret.Data[istio.CACertKey]))
+			Expect(caSecret.Labels).To(HaveKey(certificatemanagement.SignerLabel))
+			Expect(caSecret.Annotations).To(HaveKeyWithValue(certificatemanagement.ExpiryAnnotation,
+				ca.Roots[0].NotAfter.UTC().Format(certificatemanagement.ExpiryFormat)))
 
 			cacerts := getSecret(cacertsKey)
 			Expect(cacerts.Labels).To(HaveKeyWithValue(istio.CACertsLabel, "operatorManaged"))
@@ -420,7 +424,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectSigner(selfSigned)
 			Expect(cacerts.Data[istio.CertChainKey]).To(Equal(selfSigned.certPEM))
 			expectBundle(selfSigned.cert, opRoot)
-			Expect(cacerts.Annotations).To(Equal(map[string]string{
+			Expect(transitionRecord(cacerts)).To(Equal(map[string]string{
 				istio.TransitionPhaseAnnotation: "1",
 				istio.TransitionFromAnnotation:  istio.Fingerprint(selfSigned.cert),
 				istio.TransitionToAnnotation:    istio.Fingerprint(opRoot),
@@ -462,7 +466,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			Expect(cacerts.Data[istio.CACertKey]).To(Equal(op.CertPEM))
 			Expect(cacerts.Data[istio.CAKeyKey]).To(Equal(op.KeyPEM))
 			expectBundle(selfSigned.cert, opRoot)
-			Expect(cacerts.Annotations).To(Equal(map[string]string{
+			Expect(transitionRecord(cacerts)).To(Equal(map[string]string{
 				istio.TransitionPhaseAnnotation: "3",
 				istio.TransitionFromAnnotation:  istio.Fingerprint(selfSigned.cert),
 				istio.TransitionToAnnotation:    istio.Fingerprint(opRoot),
@@ -492,7 +496,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			result = reconcileResult()
 			Expect(result.RequeueAfter).To(BeZero())
 			cacerts = getSecret(cacertsKey)
-			Expect(cacerts.Annotations).To(BeEmpty())
+			Expect(transitionRecord(cacerts)).To(BeEmpty())
 			Expect(cacerts.Data).To(Equal(getSecret(operatorCAKey).Data))
 			expectPublished(opRoot)
 			Expect(istiodHash()).NotTo(Equal(hash))
@@ -646,7 +650,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 		It("rotates the operator-managed root through the same phases when its Secret is deleted", func() {
 			reconcileIstio()
 			old := operatorCA()
-			Expect(getSecret(cacertsKey).Annotations).To(BeEmpty())
+			Expect(transitionRecord(getSecret(cacertsKey))).To(BeEmpty())
 			Expect(cli.Delete(ctx, getSecret(operatorCAKey))).NotTo(HaveOccurred())
 
 			reconcileIstio()
@@ -672,7 +676,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			now = now.Add(wait)
 			reconcileIstio()
 			cacerts = getSecret(cacertsKey)
-			Expect(cacerts.Annotations).To(BeEmpty())
+			Expect(transitionRecord(cacerts)).To(BeEmpty())
 			Expect(cacerts.Data[istio.RootCertKey]).To(Equal(op.CertPEM))
 			expectPublished(op.Roots[0])
 			expectNotDegraded()
@@ -770,7 +774,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			reconcileIstio()
 
 			cacerts := getSecret(cacertsKey)
-			Expect(cacerts.Annotations).To(BeEmpty())
+			Expect(transitionRecord(cacerts)).To(BeEmpty())
 			Expect(cacerts.Data).To(Equal(getSecret(operatorCAKey).Data))
 			expectPublished(operatorCA().Roots[0])
 			expectNotDegraded()
@@ -863,7 +867,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			reconcileIstio()
 
 			Expect(getSecret(cacertsKey).Data).To(Equal(cacerts.Data))
-			Expect(getSecret(cacertsKey).Annotations).To(BeEmpty())
+			Expect(transitionRecord(getSecret(cacertsKey))).To(BeEmpty())
 			Expect(getConfigMap(anchorsKey).Data[istio.RootCertKey]).To(Equal(string(cacerts.Data[istio.CACertKey])))
 			mockStatus.AssertNotCalled(GinkgoT(), "SetWarning", mock.Anything, mock.Anything)
 			expectNotDegraded()
@@ -875,6 +879,18 @@ func concatPEM(parts ...[]byte) []byte {
 	var out []byte
 	for _, p := range parts {
 		out = append(out, p...)
+	}
+	return out
+}
+
+// transitionRecord is the part of a cacerts' annotations that records a signer
+// transition, without the certificate metadata that sits beside it.
+func transitionRecord(s *corev1.Secret) map[string]string {
+	out := map[string]string{}
+	for k, v := range s.Annotations {
+		if strings.HasPrefix(k, "operator.tigera.io/istio-ca-transition-") {
+			out[k] = v
+		}
 	}
 	return out
 }

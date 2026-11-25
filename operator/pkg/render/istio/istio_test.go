@@ -44,6 +44,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
 	"github.com/projectcalico/calico/operator/pkg/render/istio"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 const testClusterID = "0123456789abcdef0123456789abcdef"
@@ -437,6 +438,19 @@ var _ = Describe("Istio Component Rendering", func() {
 			Expect(cacerts.Data[istio.RootCertKey]).To(Equal(istio.ComposeRootBundle(ca.Roots)))
 		})
 
+		It("labels cacerts with the signing certificate's issuer and expiry, alongside the transition record", func() {
+			signer, err := certificatemanagement.ParseCertificate(ca.CertPEM)
+			Expect(err).NotTo(HaveOccurred())
+			cfg.Transition = &istio.SignerTransition{Phase: istio.TransitionDistributeRoot}
+
+			cacerts := cacertsOf(renderObjects())
+			Expect(cacerts.Labels).To(HaveKey(certificatemanagement.SignerLabel))
+			Expect(cacerts.Labels).To(HaveKeyWithValue(istio.CACertsLabel, "operatorManaged"))
+			Expect(cacerts.Annotations).To(HaveKeyWithValue(certificatemanagement.IssuerAnnotation, signer.Issuer.CommonName))
+			Expect(cacerts.Annotations).To(HaveKeyWithValue(certificatemanagement.ExpiryAnnotation, signer.NotAfter.UTC().Format(certificatemanagement.ExpiryFormat)))
+			Expect(cacerts.Annotations).To(HaveKey(istio.TransitionPhaseAnnotation))
+		})
+
 		istiodHashOf := func(objs []client.Object) string {
 			d, err := rtest.GetResourceOfType[*appsv1.Deployment](objs, istio.IstioIstiodDeploymentName, istio.IstioNamespace)
 			Expect(err).NotTo(HaveOccurred())
@@ -556,7 +570,7 @@ var _ = Describe("Istio Component Rendering", func() {
 
 			It("records the phase, the deadline in UTC and both signers' roots on cacerts", func() {
 				cacerts := cacertsOf(renderObjects())
-				Expect(cacerts.Annotations).To(Equal(map[string]string{
+				Expect(transitionRecord(cacerts)).To(Equal(map[string]string{
 					istio.TransitionPhaseAnnotation:    "2",
 					istio.TransitionDeadlineAnnotation: "2026-10-31T19:00:00Z",
 					istio.TransitionFromAnnotation:     istio.Fingerprint(retiring.cert),
@@ -594,7 +608,7 @@ var _ = Describe("Istio Component Rendering", func() {
 
 				cfg.Transition = nil
 				Expect(istiodHashOf(renderObjects())).NotTo(Equal(hash))
-				Expect(cacertsOf(renderObjects()).Annotations).To(BeEmpty())
+				Expect(transitionRecord(cacertsOf(renderObjects()))).To(BeEmpty())
 			})
 		})
 	})
@@ -1329,4 +1343,16 @@ func cniBinDirHostPath(objs []client.Object) string {
 	}
 	Fail("istio-cni-node has no cni-bin-dir hostPath volume")
 	return ""
+}
+
+// transitionRecord is the part of a cacerts' annotations that records a signer
+// transition, without the certificate metadata that sits beside it.
+func transitionRecord(s *corev1.Secret) map[string]string {
+	out := map[string]string{}
+	for k, v := range s.Annotations {
+		if strings.HasPrefix(k, "operator.tigera.io/istio-ca-transition-") {
+			out[k] = v
+		}
+	}
+	return out
 }
