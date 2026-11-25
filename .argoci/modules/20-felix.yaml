@@ -170,9 +170,6 @@ steps:
       # batch reruns only if this leaves time for it.
       - name: FV_STEP_TIMEOUT_MINUTES
         value: "135"
-      # TEMPORARY: exercises the preemption retry on every lane; revert before merge.
-      - name: FV_SIMULATE_PREEMPT_BATCHES
-        value: "1"
     matrix:
       - name: iptables-2204
         env:
