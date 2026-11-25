@@ -16,6 +16,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -25,6 +26,8 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 // Two minutes of fixed interval outlasts a calico-apiserver restart. No Cap:
@@ -38,13 +41,31 @@ var apiRetry = wait.Backoff{
 // RetriableAPIError reports whether err is a transient projectcalico.org/v3 failure.
 // A rolling calico-apiserver drops requests and briefly leaves discovery.
 func RetriableAPIError(err error) bool {
-	if meta.IsNoMatchError(err) || discovery.IsGroupDiscoveryFailedError(err) {
+	if meta.IsNoMatchError(err) {
+		// Only the aggregated API leaves discovery while it rolls. Any other
+		// missing kind is absent for good, e.g. operator.tigera.io on a
+		// manifest install, and retrying it stalls every caller for minutes.
+		return noMatchGroup(err) == v3.SchemeGroupVersion.Group
+	}
+	if discovery.IsGroupDiscoveryFailedError(err) {
 		return true
 	}
 	return apierrors.IsServiceUnavailable(err) ||
 		apierrors.IsInternalError(err) ||
 		apierrors.IsTimeout(err) ||
 		apierrors.IsTooManyRequests(err)
+}
+
+func noMatchGroup(err error) string {
+	var kindErr *meta.NoKindMatchError
+	if errors.As(err, &kindErr) {
+		return kindErr.GroupKind.Group
+	}
+	var resErr *meta.NoResourceMatchError
+	if errors.As(err, &resErr) {
+		return resErr.PartialResource.Group
+	}
+	return ""
 }
 
 // WithRetry wraps c so requests survive a calico-apiserver restart. Conflicts
