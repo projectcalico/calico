@@ -126,10 +126,10 @@ vm_preempted() {
 # didn't, or 2 if GCE couldn't be asked at all.  Only a preemption after <attempt
 # created epoch> counts, so an earlier VM of the same name never matches.
 #
-# A preemption's soft shutdown can kill the tests while the VM still shows
-# RUNNING, and GCE can record the preemption after the failure surfaces, so
-# this polls rather than looking once.  A VM still RUNNING 60s after the
-# failure is past the 30s shutdown window, so it wasn't preempted.
+# GCE can record a preemption after the failure surfaces, so this polls rather
+# than looking once.  A preempted VM leaves RUNNING as the preemption starts
+# (within a second, in a simulated one), so one still RUNNING 10s after the
+# failure wasn't preempted.
 vm_preemption_check() {
   local vm="$1" zone="$2" created="$3" failed="$4"
   local found rc status now list_ok=false
@@ -141,7 +141,7 @@ vm_preemption_check() {
       1) list_ok=true ;;
     esac
     now="$(date +%s)"
-    if [ "$now" -ge $((failed + 60)) ] && [ "$list_ok" = true ]; then
+    if [ "$now" -ge $((failed + 10)) ] && [ "$list_ok" = true ]; then
       status="$(gcloud --quiet compute instances describe "$vm" --zone="$zone" --format='value(status)' 2>/dev/null)" || status=""
       [ "$status" != RUNNING ] || return 1
     fi

@@ -135,13 +135,13 @@ fresh
 echo "$recent" >"$STUB_STATE/ops-2"
 at=$(vm_preemption_check vm z "$created" "$now")
 check "a preemption recorded after the failure is found by polling" [ $? = 0 -a "$at" = "$recent_utc" ]
-check "  without asking about RUNNING inside 60s" [ "$(grep -c 'instances describe' "$STUB_STATE/calls")" = 0 ]
+check "  without asking about RUNNING inside 10s" [ "$(grep -c 'instances describe' "$STUB_STATE/calls")" = 0 ]
 
 fresh
 : >"$STUB_STATE/ops-default"
 echo RUNNING >"$STUB_STATE/status"
-vm_preemption_check vm z "$created" $((now - 61)) >/dev/null
-check "RUNNING 60s after the failure ends the check early" [ $? = 1 -a "$(grep -c sleep "$STUB_STATE/calls")" = 0 ]
+vm_preemption_check vm z "$created" $((now - 11)) >/dev/null
+check "RUNNING 10s after the failure ends the check early" [ $? = 1 -a "$(grep -c sleep "$STUB_STATE/calls")" = 0 ]
 
 # Finding a preemption across a region, as for a VM gone before its zone was
 # known.
