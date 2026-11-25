@@ -357,8 +357,10 @@ run_batch_attempt() {
       configured=true
       break
     fi
-    # A preemption must not use up a setup attempt.
-    check_spot_failure "$(date +%s)"
+    # A preemption must not use up a setup attempt.  A failure dated past the
+    # shutdown window lets a RUNNING VM end the check at once; missing a
+    # preemption here costs only a setup attempt, as the VM is recreated anyway.
+    check_spot_failure "$(( $(date +%s) - 60 ))"
     if [ "$spot_check" = preempted ]; then
       attempt_result=preempted
       return
