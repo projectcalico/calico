@@ -1,0 +1,15 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# iptables: xtables dataplane, encapsulated, no Calico BGP, no external node,
+# manifest install with crd.projectcalico.org/v1 CRDs and no Calico API server;
+# the tests reach projectcalico.org/v3 through a calicoctl pod.
+#
+# Selection scope comes from pipeline.yaml; this file adds only what this
+# lane's cluster shape rules out.
+
+extends: xtables-encap-nobgp.yaml
+
+exclude:
+  labels:
+    - label: RequiresCalicoAPIServer
+      reason: "no aggregated Calico API server (calicoctl mode), so read-path tier RBAC is not enforced"

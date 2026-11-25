@@ -83,6 +83,9 @@ steps:
       # which Kubernetes serves from 1.36; the default stable-3 can't apply them.
       - name: K8S_VERSION
         value: stable-1
+    # Each cell pins its Calico API mode: left unset, 1.36 defaults to v3 CRD mode,
+    # but the manifest installer still applies the v1-CRD calico.yaml. Ubuntu
+    # covers the calicoctl-pod mode, the rest the aggregated API server.
     matrix:
       - name: ubuntu-2404-lts-gcp-kubeadm
         env:
@@ -90,35 +93,55 @@ steps:
             value: ubuntu-2404-lts-amd64
           - name: PROVISIONER
             value: gcp-kubeadm
+          - name: CALICOCTL_INSTALL_TYPE
+            value: k8s-pod
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/iptables/xtables-encap-nobgp-calicoctl.yaml
+          - name: USE_API_SERVER
+            value: "false"
       - name: ubuntu-2204-lts-gcp-kubeadm
         env:
           - name: CLUSTER_IMAGE
             value: ubuntu-2204-lts
           - name: PROVISIONER
             value: gcp-kubeadm
+          - name: CALICOCTL_INSTALL_TYPE
+            value: k8s-pod
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/iptables/xtables-encap-nobgp-calicoctl.yaml
+          - name: USE_API_SERVER
+            value: "false"
       - name: rhel-10-gcp-kubeadm
         env:
           - name: CLUSTER_IMAGE
             value: rhel-10
           - name: PROVISIONER
             value: gcp-kubeadm
+          - name: USE_API_SERVER
+            value: "true"
       - name: centos-stream-9-gcp-kubeadm
         env:
           - name: CLUSTER_IMAGE
             value: centos-stream-9
           - name: PROVISIONER
             value: gcp-kubeadm
+          - name: USE_API_SERVER
+            value: "true"
       - name: rhel-9-gcp-kubeadm
         env:
           - name: CLUSTER_IMAGE
             value: rhel-9
           - name: PROVISIONER
             value: gcp-kubeadm
+          - name: USE_API_SERVER
+            value: "true"
       - name: rocky-linux-8-gcp-kubeadm
         env:
           - name: CLUSTER_IMAGE
             value: rocky-linux-8
           - name: PROVISIONER
             value: gcp-kubeadm
+          - name: USE_API_SERVER
+            value: "true"
     commands: |
       .argoci/scripts/body_standard.sh
