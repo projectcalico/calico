@@ -45,6 +45,17 @@ load_image() {
     local markers=("$@")
     local marker
 
+    # A local image tar (<COMPONENT>_IMAGE_TAR, e.g. CALICO_IMAGE_TAR) is one
+    # ArgoCI already put on this machine, read where it lies.
+    local local_tar_var
+    local_tar_var="$(tr '[:lower:]-' '[:upper:]_' <<<"${component}")_IMAGE_TAR"
+    if [ -n "${component}" ] && [ -n "${!local_tar_var:-}" ]; then
+        echo "Loading ${name} image from ${!local_tar_var}..."
+        docker load -i "${!local_tar_var}"
+        touch_markers "${markers[@]}"
+        return
+    fi
+
     if ! fetch_tarball "${s3_path}"; then
         # Under ArgoCI the producer has already run, so a miss is a real failure.
         if [ -n "${CI_ARTIFACT_STORAGE:-}" ] && was_requested "$component"; then
@@ -65,8 +76,13 @@ load_image() {
     zstd -d --rm -o "${tar_path}" "/tmp/${s3_path}"
     docker load -i "${tar_path}"
     rm -f "${tar_path}"
+    touch_markers "${markers[@]}"
+}
 
-    for marker in "${markers[@]}"; do
+# Make sees the image as built, so it does not build it again.
+touch_markers() {
+    local marker
+    for marker in "$@"; do
         mkdir -p "$(dirname "$marker")"
         touch "$marker"
     done

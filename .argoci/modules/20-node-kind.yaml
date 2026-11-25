@@ -16,9 +16,11 @@ steps:
         keys:
           - name: google-service-account-for-gce-key.json
             as: GCE_SERVICE_ACCOUNT_KEY
+    cache:
+      - {name: calico-image, mode: read, path: /cache/calico-image}
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
+      - name: CALICO_IMAGE_TAR
+        value: /cache/calico-image/calico.tar
       - name: COMPONENT
         value: node
       # In priority order, falling back on a stockout or exhausted quota.  C3

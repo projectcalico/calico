@@ -3,11 +3,10 @@ version: condensed-module
 
 defaults:
   timeout: 1h
-  services:
-    - docker
 
 steps:
   - name: operator-ci
+    services: [docker]
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
@@ -16,15 +15,18 @@ steps:
     commands: |
       cd operator
       make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/operator"
-      artifact push job report --destination test-results || true
+    reports: [operator/report:test-results]
 
   # Pure Go, so cross-compiling is all the per-architecture coverage it needs.
+  # go-cache's builds are amd64, so these take only its modules.
   - name: operator-build
+    useGoBuild: true
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     depends: [check-go]
     requests: {cpu: 5000m, memory: 8Gi}
+    goCache: read
     matrix:
       - name: arm64
         env: [{name: ARCH, value: arm64}]
@@ -39,12 +41,20 @@ steps:
   # Every image the FV installs must reach the local registry first; a missing
   # producer shows up as calico-node stuck in Init.
   - name: operator-fv
+    services: [docker]
     env:
+      - name: CALICO_IMAGE_TAR
+        value: /cache/calico-image/calico.tar
+      - name: CALICO_BUILD_DIR
+        value: /cache/calico-build
       - name: BUILD_CACHE_GROUP
         value: calico
     depends: [build-calico-image, build-node-image, build-whisker-image, check-go]
     timeout: 1h
     requests: {cpu: 3500m, memory: 7Gi}
+    cache:
+      - {name: calico-build, mode: read, path: /cache/calico-build}
+      - {name: calico-image, mode: read, path: /cache/calico-image}
     commands: |
       # The Makefiles call the kubectl they download by full path; the scripts
       # underneath call it by name.
@@ -52,6 +62,4 @@ steps:
       .argoci/scripts/load-cached-images calico node whisker
       cd operator
       make fv
-    epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}/operator"
-      artifact push job report --destination test-results || true
+    reports: [operator/report:test-results]

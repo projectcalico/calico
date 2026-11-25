@@ -29,6 +29,10 @@ steps:
   # configure usually broke here.
   - name: felix-build
     env:
+      - name: CALICO_IMAGE_TAR
+        value: /cache/calico-image/calico.tar
+      - name: CALICO_BUILD_DIR
+        value: /cache/calico-build
       - name: BUILD_CACHE_GROUP
         value: calico
     depends: [build-calico-image, check-go, felix-fv-plan]
@@ -42,6 +46,9 @@ steps:
         keys:
           - name: google-service-account-for-gce-key.json
             as: GCE_SERVICE_ACCOUNT_KEY
+    cache:
+      - {name: calico-build, mode: read, path: /cache/calico-build}
+      - {name: calico-image, mode: read, path: /cache/calico-image}
     commands: |
       artifact pull workflow felix-fv-plan
       if [ "$(cat felix-fv-plan/build)" = skip ]; then
@@ -59,15 +66,18 @@ steps:
 
   - name: felix-static-checks
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-    depends: [build-calico-image, check-go]
+      - name: CALICO_BUILD_DIR
+        value: /cache/calico-build
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    useGoBuild: true
+    depends: [build-calico-binary, check-go]
     timeout: 30m
     requests: {cpu: 4000m, memory: 6Gi}
-    services:
-      - docker
+    goCache: read
+    cache:
+      - {name: calico-build, mode: read, path: /cache/calico-build}
     commands: |
-      .argoci/scripts/load-cached-images calico
       .semaphore/scripts/load-felix-prereqs.sh
       cd felix
       make static-checks
@@ -81,6 +91,10 @@ steps:
     runAsNonRoot: true
     scratchVolumes: [/home/ci]
     env:
+      - name: CALICO_IMAGE_TAR
+        value: /cache/calico-image/calico.tar
+      - name: CALICO_BUILD_DIR
+        value: /cache/calico-build
       - name: BUILD_CACHE_GROUP
         value: calico
       - name: HOME
@@ -93,6 +107,9 @@ steps:
       - fv-tests-guru-github-token
       - gemini-api-key
       - fv-guru-db
+    cache:
+      - {name: calico-build, mode: read, path: /cache/calico-build}
+      - {name: calico-image, mode: read, path: /cache/calico-image}
     commands: |
       .argoci/scripts/load-cached-images calico
       .semaphore/scripts/load-felix-prereqs.sh
@@ -110,35 +127,40 @@ steps:
   # On a VM because the suite loads ip6_tables, which a pod cannot.
   - name: felix-k8sfv
     tiers: []
-    env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
     depends: [build-calico-image, check-go]
     timeout: 45m
-    runOn: vm
-    vm:
-      machineType: e2-standard-4
-    services:
-      - docker
-    commands: |
-      sudo apt-get update -y && sudo apt-get install -y make
-      .argoci/scripts/load-cached-images calico
-      .semaphore/scripts/load-felix-prereqs.sh
-      cd felix
-      make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
-      make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
-    epilogue: |
-      # Absolute: scp resolves a relative remote path against the SSH user's
-      # home, not the checkout.
-      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/felix/report" report || true
-      artifact push job report --destination test-results || true
+    cache:
+      - {name: calico-build, mode: read, path: /cache/calico-build}
+      - {name: calico-image, mode: read, path: /cache/calico-image}
+    checkout: true
+    goCache: read
+    reports: [felix/report:test-results]
+    runOnVM:
+      createVM:
+        # The cache disk's project and zone: a disk attaches only to a machine
+        # in both. A stockout there falls back across families.
+        machineTypes: [e2-standard-4, n2d-standard-4, n2-standard-4, c2d-standard-4]
+        project: tigera-cc-dev
+        zones: [us-central1-a]
+        vmImageProject: unique-caldron-775
+      project: tigera-cc-dev
+      env: [NO_LIBBPF_CLONE]
+      put:
+        - /cache/calico-image/calico.tar:calico-build/calico.tar
+        - /cache/calico-build/calico-cgo-amd64:calico-build/calico-cgo-amd64
+        - /cache/calico-build/calico-race-amd64:calico-build/calico-race-amd64
+        - /cache/calico-build/libbpf-amd64.tar:calico-build/libbpf-amd64.tar
+      source: |
+        set -euo pipefail
+        go_env=$(.argoci/scripts/vm-go-cache felix-k8sfv) || exit 1
+        eval "$go_env"
+        export CALICO_IMAGE_TAR="$HOME/calico-build/calico.tar" CALICO_BUILD_DIR="$HOME/calico-build"
+        .argoci/scripts/load-cached-images calico
+        .semaphore/scripts/load-felix-prereqs.sh
+        cd felix
+        make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+        make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
 
-  # FELIX_TEST_GROUP is parsed for the Ubuntu release, dataplane and UTs, not
-  # just a label.
-  #
-  # The timeout outlasts JOB_TIMEOUT_MINUTES by up to 15 minutes of VM creation
-  # retries, plus slack so the fleet's own watchdog can capture a hung VM's
-  # console first.
   - name: felix-fv
     tiers: []
     depends: [felix-build]
@@ -236,15 +258,16 @@ steps:
 
   - name: felix-build-windows
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    useGoBuild: true
     jobSize: large
     requests: {cpu: 7000m, memory: 8Gi}
-    services:
-      - docker
+    goCache: read
     commands: |
       cd felix
-      make bin/calico-felix.exe fv/win-fv.exe
+      # REMOTE_DEPS= because the FV binary does not need the images it lists.
+      make REMOTE_DEPS= bin/calico-felix.exe fv/win-fv.exe
       artifact push workflow fv/win-fv.exe
 
   # Kubeadm on Azure VMs, installed from this commit's images.
@@ -258,6 +281,10 @@ steps:
     secretBundles:
       - banzai-secrets
     env:
+      - name: CALICO_IMAGE_TAR
+        value: /cache/calico-image/calico.tar
+      - name: CALICO_BUILD_DIR
+        value: /cache/calico-build
       - name: BUILD_CACHE_GROUP
         value: calico
       - name: FV_TYPE
@@ -271,6 +298,9 @@ steps:
       # Hardcoded by the FV script; this only tells the epilogue where to look.
       - name: LOGS_DIR
         value: /home/semaphore/fv.log
+    cache:
+      - {name: calico-build, mode: read, path: /cache/calico-build}
+      - {name: calico-image, mode: read, path: /cache/calico-image}
     commands: |
       export AZURE_SUBSCRIPTION_ID="$AZ_SUBSCRIPTION_ID"
       export AZURE_TENANT_ID="$AZ_TENANT_ID"

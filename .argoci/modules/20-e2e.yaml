@@ -4,17 +4,13 @@ version: condensed-module
 
 defaults:
   tiers: []
-  # Longer than the default hour: a cluster plus a conformance suite.
-  timeout: 1h30m
-  runOn: vm
-  services:
-    - docker
+  # A cluster plus a suite that may itself take 90m (E2E_TIMEOUT): the margin is
+  # what lets the script's own failure handling run before the deadline.
+  timeout: 2h
 
 steps:
   - name: e2e-kind
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
       - name: E2E_RUN_WRAPPER
         value: .argoci/scripts/sandcat/with-inline-diag.sh
       - name: SANDCAT_TOTAL_BUDGET
@@ -30,24 +26,6 @@ steps:
         keys:
           - name: SANDCAT_DB_URL
           - name: SANDCAT_DB_TOKEN
-    vm:
-      # Cheapest first, all families that can attach a hyperdisk. A region can run
-      # short of any one of them.
-      machineTypes:
-        - n4d-standard-8
-        - n4-standard-8
-        - c3d-standard-8
-        - c4d-standard-8
-        - c4-standard-8
-        - c3-standard-8
-      # The artifact store's region, in any zone: capacity runs out zone by zone.
-      zone: us-central1
-      # kind wants tens of thousands of IOPS, which pd-ssd only reaches at about
-      # a terabyte.
-      diskType: hyperdisk-balanced
-      diskSize: 200GB
-      provisionedIops: 10000
-      provisionedThroughput: 200
     depends:
       - build-calico-image
       - build-node-image
@@ -93,42 +71,76 @@ steps:
         env:
           - name: E2E_TARGET
             value: e2e-test-bpf
-    commands: |
-      sudo apt-get update -y && sudo apt-get install -y make jq
-      sudo modprobe sctp
-      # The Makefiles call the kubectl they download by full path; the deploy
-      # script and the tests' connection tester call it by name.
-      export PATH="$(pwd)/hack/test/kind:${PATH}"
-      .argoci/scripts/load-cached-images calico node whisker
-      .argoci/scripts/load-e2e-binaries
-      export E2E_PREBUILT=true
-      mkdir -p artifacts
-      set -o pipefail
-      rc=0
-      make ${E2E_TARGET} 2>&1 | tee artifacts/e2e.log || rc=$?
-      # Here rather than in the epilogue: the cluster and the report are on the VM.
-      if [ "${SANDCAT_SKIP:-}" != true ]; then
-        .argoci/scripts/sandcat/sandcat.sh push-specs --spec-dir report/sandcat || true
-        SANDCAT_REPORT=report/report.json
-        [ -f "${SANDCAT_REPORT}" ] || SANDCAT_REPORT=$(ls -t report/*.xml 2>/dev/null | head -1) || true
-        if [ -n "${SANDCAT_REPORT}" ]; then
-          .argoci/scripts/sandcat/sandcat.sh analyze --report "${SANDCAT_REPORT}" --source-dir "$(pwd)" \
-            --log-file artifacts/e2e.log || true
-        elif [ "${rc}" != 0 ]; then
-          .argoci/scripts/sandcat/sandcat.sh build-failure --logs-dir artifacts --source-dir "$(pwd)" || true
+    cache:
+      - {name: calico-image, mode: read, path: /cache/calico-image}
+    checkout: true
+    goCache: read
+    reports: [report:test-results]
+    runOnVM:
+      createVM:
+        # The cache disk's zone, since a disk attaches only to a machine in its
+        # project and zone. C3 and C3D are the families that boot from a hyperdisk
+        # and can also attach the cache's pd-ssd; N4 and C4 take hyperdisk only.
+        machineTypes:
+          - c3d-standard-8
+          - c3-standard-8
+        # kind wants tens of thousands of IOPS, which pd-ssd only reaches at about
+        # a terabyte.
+        diskType: hyperdisk-balanced
+        diskSize: 200GB
+        provisionedIops: 10000
+        provisionedThroughput: 200
+        project: tigera-cc-dev
+        zones: [us-central1-a]
+        vmImageProject: unique-caldron-775
+      project: tigera-cc-dev
+      # The secrets; the step's and each lane's own env goes across by itself.
+      env:
+        - SANDCAT_GEMINI_KEY
+        - SANDCAT_BIN_DOWNLOAD_TOKEN
+        - SANDCAT_DB_URL
+        - SANDCAT_DB_TOKEN
+      put:
+        - /cache/calico-image/calico.tar:calico-build/calico.tar
+      source: |
+        set -euo pipefail
+        finish() {
+          local rc=$?
+          if [ "$rc" != 0 ]; then
+            # The script pushes its own bundle.
+            .semaphore/collect-kind-diags || true
+            snapshot_kind_cluster || true
+          fi
+        }
+        # The snapshot tool is only in the CI image.
+        snapshot_kind_cluster() {
+          docker run --rm --network host -v "$PWD:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4 \
+            kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz
+          artifact push job kind-snapshot.tar.gz --destination kind-snapshot.tar.gz
+        }
+        trap finish EXIT
+        sudo modprobe sctp
+        go_env=$(.argoci/scripts/vm-go-cache e2e-kind) || exit 1
+        eval "$go_env"
+        # The Makefiles call the kubectl they download by full path; the deploy
+        # script and the tests' connection tester call it by name.
+        export PATH="$(pwd)/hack/test/kind:${PATH}"
+        export CALICO_IMAGE_TAR="$HOME/calico-build/calico.tar"
+        .argoci/scripts/load-cached-images calico node whisker
+        .argoci/scripts/load-e2e-binaries
+        export E2E_PREBUILT=true
+        mkdir -p artifacts
+        rc=0
+        make ${E2E_TARGET} 2>&1 | tee artifacts/e2e.log || rc=$?
+        if [ "${SANDCAT_SKIP:-}" != true ]; then
+          .argoci/scripts/sandcat/sandcat.sh push-specs --spec-dir report/sandcat || true
+          SANDCAT_REPORT=report/report.json
+          [ -f "${SANDCAT_REPORT}" ] || SANDCAT_REPORT=$(ls -t report/*.xml 2>/dev/null | head -1) || true
+          if [ -n "${SANDCAT_REPORT}" ]; then
+            .argoci/scripts/sandcat/sandcat.sh analyze --report "${SANDCAT_REPORT}" --source-dir "$(pwd)" \
+              --log-file artifacts/e2e.log || true
+          elif [ "${rc}" != 0 ]; then
+            .argoci/scripts/sandcat/sandcat.sh build-failure --logs-dir artifacts --source-dir "$(pwd)" || true
+          fi
         fi
-      fi
-      exit "${rc}"
-    epilogue: |
-      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/report" report || true
-      artifact push job report --destination test-results || true
-      if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
-        # Collected where the cluster is; the script pushes its own bundle.
-        sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && .semaphore/collect-kind-diags' || true
-        # The snapshot tool is only in the CI image, and the VM has no registry
-        # credentials of its own.
-        sshOnVirtualMachine 'docker login -u _json_key --password-stdin https://gcr.io < "${CI_ARTIFACT_SA_KEY_FILE}"' || true
-        sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && docker run --rm --network host -v "$PWD:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4 kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz' || true
-        copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/kind-snapshot.tar.gz" kind-snapshot.tar.gz || true
-        artifact push job kind-snapshot.tar.gz --destination kind-snapshot.tar.gz || true
-      fi
+        exit "${rc}"
