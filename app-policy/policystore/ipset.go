@@ -261,9 +261,10 @@ func (n *trieNode) containsIP(ip net.IP, depth uint64) bool {
 	if n.member {
 		return true
 	}
-	if n.bitmap != nil {
-		last := ip[len(ip)-1]
-		return n.bitmap.contains(last)
+	// The bitmap holds only host addresses. A member with a longer prefix than this node's, such as
+	// a /28 under a /24, is a child, so a miss in the bitmap carries on down the trie.
+	if n.bitmap != nil && n.bitmap.contains(ip[len(ip)-1]) {
+		return true
 	}
 	b := getBitAt(ip, depth)
 	next := n.children[b]

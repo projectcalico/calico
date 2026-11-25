@@ -203,11 +203,11 @@ func parseTupleProto(tuple *CtTuple, value []byte) error {
 			tuple.L4Src.Port = int(native.Uint16(attr.Value))
 		case nfnl.CTA_PROTO_DST_PORT:
 			tuple.L4Dst.Port = int(native.Uint16(attr.Value))
-		case nfnl.CTA_PROTO_ICMP_ID:
+		case nfnl.CTA_PROTO_ICMP_ID, nfnl.CTA_PROTO_ICMPV6_ID:
 			tuple.L4Src.Id = int(native.Uint16(attr.Value))
-		case nfnl.CTA_PROTO_ICMP_TYPE:
+		case nfnl.CTA_PROTO_ICMP_TYPE, nfnl.CTA_PROTO_ICMPV6_TYPE:
 			tuple.L4Dst.Type = int(attr.Value[0])
-		case nfnl.CTA_PROTO_ICMP_CODE:
+		case nfnl.CTA_PROTO_ICMP_CODE, nfnl.CTA_PROTO_ICMPV6_CODE:
 			tuple.L4Dst.Code = int(attr.Value[0])
 		default:
 			// Skip attributes we don't care about.
