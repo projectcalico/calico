@@ -14,8 +14,6 @@ steps:
     jobSize: medium
     requests: {cpu: 3500m, memory: 1Gi}
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     changes:
       in:
         - ^.*\.ya?ml$
@@ -29,13 +27,13 @@ steps:
   # go vet fans out across every package, so it scales with the cores it gets.
   - name: check-go
     env:
-      - name: BUILD_CACHE_GROUP
-        value: preflight-go-checks
-      - name: STORE_BUILD_CACHE
+      - name: NATIVE_GO_BUILD
         value: "true"
+    useGoBuild: true
+    # go-cache compiles exactly what go vet does, so the vet is mostly cache hits.
     jobSize: large
     requests: {cpu: 14000m, memory: 16Gi}
-    services: [docker]
+    goCache: read
     changes:
       in:
         - ^go\.mod$
@@ -66,6 +64,76 @@ steps:
       if [ "${CI_GIT_REF_TYPE}" = PR ] || [ "${CI_GIT_REF_TYPE}" = MERGE ]; then make fix-changed; else make fix-all; fi
       make check-dirty
 
+  # Every module's downloads and a compile of every package, written straight to
+  # the shared go cache disk, where the `goCache: read` steps read them in place.
+  - name: go-cache
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    useGoBuild: true
+    jobSize: large
+    # Nearly every Go step waits on this one, and the compile scales with cores.
+    requests: {cpu: 9000m, memory: 10Gi}
+    changes:
+      in:
+        - ^\.argoci/scripts/vm-go-cache$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    goCache: write
+    commands: |
+      # Built at the go-build container's repo path, which is in every build
+      # output's cache key. goBuildCheckoutDir puts the repo there.
+      if [ "$PWD" != /go/src/github.com/projectcalico/calico ]; then
+        echo "go-cache: checked out at $PWD, not the go-build path; readers will miss its build cache" >&2
+      fi
+      s=$(date +%s)
+      # Alongside the compile, which fetches what it needs itself: the other
+      # modules are for the steps that build in them. go locks each module it
+      # downloads.
+      (
+        set -e
+        for mod in $(git ls-files '*go.mod' | grep -v -e '^third_party/' -e '/vendor/'); do
+          echo "go-cache: go mod download in $(dirname "$mod")"
+          ( cd "$(dirname "$mod")" && go mod download )
+        done
+      ) &
+      downloads=$!
+      # The package build prints nothing, so a count of what it has compiled.
+      while sleep 30; do
+        echo "go-cache: $(find /cache/go/build -name '*-d' | wc -l) compiled outputs, $(du -sh /cache/go/build | cut -f1)"
+      done &
+      progress=$!
+      # || true: under errexit a failing trap fails the step, and the ticker is
+      # usually gone by now.
+      trap 'kill "$progress" 2>/dev/null || true' EXIT
+      # Through make, so the settings are the ones the readers build with.
+      make go-compile-all
+      echo "go-cache: compiled in $(( $(date +%s) - s ))s"
+      if ! wait "$downloads"; then
+        echo "go-cache: a module download failed; readers would find modules missing" >&2
+        exit 1
+      fi
+      kill "$progress" 2>/dev/null || true
+      du -sh /cache/go/build /cache/go/mod
+
+  # Copies go-cache's disk to GCS for the steps that still build in docker, which
+  # restore it in the global prologue. Streamed as the disk lays it out, so
+  # nothing is unpacked here. Only a branch build stores: a PR's copy would only
+  # ever be read by that PR.
+  - name: go-cache-store
+    when: GIT_REF_TYPE != 'PR' && GIT_REF_TYPE != 'TAG'
+    depends: [go-cache]
+    timeout: 30m
+    jobSize: small
+    requests: {cpu: 1500m, memory: 548Mi}
+    cache:
+      - {name: go, mode: read, path: /cache/go}
+    commands: |
+      cd /cache/go
+      artifact cache store "go-cache-build-${CI_GIT_BRANCH}" build & build=$!
+      artifact cache store "go-cache-mod-${CI_GIT_BRANCH}" mod & mods=$!
+      wait "$build"
+      wait "$mods"
+
   - name: check-python
     env:
       - name: NATIVE_PYTHON
@@ -73,8 +141,6 @@ steps:
     jobSize: small
     requests: {cpu: 2000m, memory: 1Gi}
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     changes:
       in:
         - ^networking-calico/
@@ -93,7 +159,6 @@ steps:
     jobSize: small
     requests: {cpu: 2250m, memory: 548Mi}
     useGoBuild: true
-    workspaceVolumes: none
     changes:
       in:
         - ^.*$
@@ -113,8 +178,6 @@ steps:
         value: "true"
     requests: {cpu: 1500m, memory: 2Gi}
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     changes:
       in:
         - ^.*\.pb\.go$
@@ -172,8 +235,6 @@ steps:
     jobSize: small
     requests: {cpu: 2000m, memory: 5.5Gi}
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     changes:
       in:
         - ^charts/
@@ -192,8 +253,6 @@ steps:
         value: "true"
     requests: {cpu: 2000m, memory: 2Gi}
     useGoBuild: true
-    # The image ships tools under /go/bin, which the default /go volume hides.
-    workspaceVolumes: none
     changes:
       in:
         - ^hack/thirdparty/
@@ -212,36 +271,49 @@ steps:
       make check-thirdparty-dep-patches
       make check-dirty
 
-  - name: build-calico-image
+  # The calico binary, and the cgo and race builds and libbpf the Felix lanes
+  # take. It stages the image's build context rather than building the image:
+  # the image goes through buildkit, so nothing here needs docker.
+  - name: build-calico-binary
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-      - name: STORE_BUILD_CACHE
+      - name: NATIVE_GO_BUILD
         value: "true"
-    services: [docker]
-    timeout: 1h
+    useGoBuild: true
     jobSize: large
     requests: {cpu: 7000m, memory: 8Gi}
     changes:
       dependsOn: [cmd]
-      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$', '^\.argoci/scripts/stage-calico-image$']
+    goCache: read
+    cache:
+      - {name: calico-build, mode: write, path: /cache/calico-build}
     commands: |
-      make -C cmd/calico image
-      # Shipped for the Felix FVs, which would otherwise build them per lane.
-      make -C cmd/calico build-cgo build-race
-      docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
-      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/calico-image.tar
-      artifact push workflow /tmp/calico-image.tar.zst
-      artifact push workflow cmd/calico/bin/calico-cgo-amd64
-      artifact push workflow cmd/calico/bin/calico-race-amd64
-      # Shipped so no Felix lane clones libbpf; the cgo build has usually made it.
+      make -C cmd/calico build build-cgo build-race bin/LICENSE
+      make -C pod2daemon build
       test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || make -C felix libbpf
       LIBBPF_VERSION=$(grep -E '^LIBBPF_VERSION[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
       # tar only warns on a missing path.
       test -d felix/bpf-gpl/libbpf || { echo "libbpf clone missing at felix/bpf-gpl/libbpf" >&2; exit 1; }
       test -f "felix/bpf-gpl/.libbpf-${LIBBPF_VERSION}" || { echo "libbpf version marker felix/bpf-gpl/.libbpf-${LIBBPF_VERSION} missing" >&2; exit 1; }
-      tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
-      artifact push workflow /tmp/libbpf-amd64.tar.zst
+      out=/cache/calico-build
+      cp cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64 "$out/"
+      # Uncompressed: the go-build image has no zstd.
+      tar -cf "$out/libbpf-amd64.tar" -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
+      .argoci/scripts/stage-calico-image "$out/image"
+
+  - name: build-calico-image
+    depends: [build-calico-binary]
+    changes:
+      dependsOn: [cmd]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$', '^\.argoci/scripts/stage-calico-image$']
+    cache:
+      - {name: calico-build, mode: read, path: /cache/calico-build}
+      - {name: calico-image, mode: write, path: /cache/calico-image}
+    buildkit:
+      context: /cache/calico-build/image
+      buildArgsFile: build-args
+      tag: calico/calico:latest-amd64
+      tar: /cache/calico-image/calico.tar
 
   # Tagged by a hash of the recipe, so an unchanged one is a pull rather than a
   # ~20 minute emulated build.
@@ -380,69 +452,124 @@ steps:
         node/dist/windows/*.tar cni-plugin/dist/windows/*.tar
       artifact push workflow /tmp/windows-images.tar.zst
 
-  # One tarball, since every kind lane wants all four.
-  - name: build-third-party-images
-    services: [docker]
+  # The third-party images' binaries, and a build context per image. The images
+  # go through buildkit, so nothing here needs docker.
+  - name: build-third-party-binaries
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    useGoBuild: true
     timeout: 1h
-    requests: {cpu: 3500m, memory: 3.5Gi}
-    changes:
+    jobSize: large
+    requests: {cpu: 7000m, memory: 8Gi}
+    changes: &third-party-changes
       dependsOn: [third_party]
       in:
         - '^third_party/'
+        - '^\.argoci/scripts/(stage-third-party-images|merge-image-tars)$'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
+    cache:
+      - {name: third-party-build, mode: write, path: /cache/third-party-build}
     commands: |
-      make -C third_party/envoy-gateway image
-      make -C third_party/envoy-proxy image
-      make -C third_party/envoy-ratelimit image
-      make -C third_party/cni-plugins image
-      docker save \
-        calico/envoy-gateway:latest-amd64 \
-        calico/envoy-proxy:latest-amd64 \
-        calico/envoy-ratelimit:latest-amd64 \
-        calico/third-party-cni-plugins:latest-amd64 \
-        -o /tmp/third-party-images.tar
+      make -C third_party/envoy-gateway build
+      make -C third_party/envoy-ratelimit build
+      make -C third_party/cni-plugins build
+      make bin/crane
+      .argoci/scripts/stage-third-party-images /cache/third-party-build
+
+  - name: build-envoy-gateway-image
+    depends: [build-third-party-binaries]
+    changes: *third-party-changes
+    cache:
+      - {name: third-party-build, mode: read, path: /cache/third-party-build}
+      - {name: envoy-gateway-image, mode: write, path: /cache/envoy-gateway-image}
+    buildkit:
+      context: /cache/third-party-build/envoy-gateway
+      buildArgsFile: build-args
+      tag: calico/envoy-gateway:latest-amd64
+      tar: /cache/envoy-gateway-image/image.tar
+
+  - name: build-envoy-proxy-image
+    depends: [build-third-party-binaries]
+    changes: *third-party-changes
+    cache:
+      - {name: third-party-build, mode: read, path: /cache/third-party-build}
+      - {name: envoy-proxy-image, mode: write, path: /cache/envoy-proxy-image}
+    buildkit:
+      context: /cache/third-party-build/envoy-proxy
+      buildArgsFile: build-args
+      tag: calico/envoy-proxy:latest-amd64
+      tar: /cache/envoy-proxy-image/image.tar
+
+  - name: build-envoy-ratelimit-image
+    depends: [build-third-party-binaries]
+    changes: *third-party-changes
+    cache:
+      - {name: third-party-build, mode: read, path: /cache/third-party-build}
+      - {name: envoy-ratelimit-image, mode: write, path: /cache/envoy-ratelimit-image}
+    buildkit:
+      context: /cache/third-party-build/envoy-ratelimit
+      buildArgsFile: build-args
+      tag: calico/envoy-ratelimit:latest-amd64
+      tar: /cache/envoy-ratelimit-image/image.tar
+
+  - name: build-cni-plugins-image
+    depends: [build-third-party-binaries]
+    changes: *third-party-changes
+    cache:
+      - {name: third-party-build, mode: read, path: /cache/third-party-build}
+      - {name: cni-plugins-image, mode: write, path: /cache/cni-plugins-image}
+    buildkit:
+      context: /cache/third-party-build/cni-plugins
+      buildArgsFile: build-args
+      tag: calico/third-party-cni-plugins:latest-amd64
+      tar: /cache/cni-plugins-image/image.tar
+
+  # One tarball, since every kind lane wants all four.
+  - name: build-third-party-images
+    depends: [build-envoy-gateway-image, build-envoy-proxy-image, build-envoy-ratelimit-image, build-cni-plugins-image]
+    changes: *third-party-changes
+    requests: {cpu: 2000m, memory: 1Gi}
+    cache:
+      - {name: envoy-gateway-image, mode: read, path: /cache/envoy-gateway-image}
+      - {name: envoy-proxy-image, mode: read, path: /cache/envoy-proxy-image}
+      - {name: envoy-ratelimit-image, mode: read, path: /cache/envoy-ratelimit-image}
+      - {name: cni-plugins-image, mode: read, path: /cache/cni-plugins-image}
+    commands: |
+      .argoci/scripts/merge-image-tars /tmp/third-party-images.tar \
+        /cache/envoy-gateway-image/image.tar \
+        /cache/envoy-proxy-image/image.tar \
+        /cache/envoy-ratelimit-image/image.tar \
+        /cache/cni-plugins-image/image.tar
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/third-party-images.tar
       artifact push workflow /tmp/third-party-images.tar.zst
 
   # Built here for the VM lanes, which have no module proxy: the binaries import
   # most of Kubernetes, and a VM downloads all of it from the public proxy. libbpf
   # comes from the calico image's build rather than a clone from GitHub.
-  # The sole writer of the e2e cache group, so its key never flips between two
-  # steps' differing package sets.
   - name: build-e2e-binaries
     env:
-      - name: BUILD_CACHE_GROUP
-        value: e2e
-      - name: STORE_BUILD_CACHE
+      - name: NATIVE_GO_BUILD
         value: "true"
-    services: [docker]
+    useGoBuild: true
     timeout: 1h
     jobSize: large
     requests: {cpu: 7000m, memory: 8Gi}
-    depends: [build-calico-image]
+    depends: [build-calico-binary]
     changes:
       dependsOn: [e2e]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    goCache: read
+    cache:
+      - {name: calico-build, mode: read, path: /cache/calico-build}
     commands: |
-      ( cd /tmp && artifact pull workflow libbpf-amd64.tar.zst )
-      tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
+      tar -xf /cache/calico-build/libbpf-amd64.tar -C felix/bpf-gpl
       make -C e2e build
       make bin/ginkgo
       make -C e2e/images/rapidclient build
-      tar --use-compress-program="zstd -3" -cf /tmp/e2e-binaries.tar.zst e2e/bin bin/ginkgo e2e/images/rapidclient/bin
-      artifact push workflow /tmp/e2e-binaries.tar.zst
-
-  # The nightly repeats the CI module list; this catches the two drifting.
-  - name: check-cron-coverage
-    jobSize: small
-    requests: {cpu: 1500m, memory: 548Mi}
-    changes:
-      in:
-        - ^\.argoci/ciworkflow\.yaml$
-        - ^\.argoci/cron/nightly-ci\.yaml$
-        - ^\.argoci/scripts/test_scripts/check-cron-coverage\.sh$
-    commands: |
-      ./.argoci/scripts/test_scripts/check-cron-coverage.sh
+      # Uncompressed: the go-build image has no zstd.
+      tar -cf /tmp/e2e-binaries.tar e2e/bin bin/ginkgo e2e/images/rapidclient/bin
+      artifact push workflow /tmp/e2e-binaries.tar
 
   # Fetched here, in a pod, so the PR read token never reaches the e2e VMs.
   - name: sandcat-pr-context

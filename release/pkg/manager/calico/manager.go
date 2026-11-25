@@ -129,7 +129,7 @@ func NewManager(opts ...Option) (*CalicoManager, error) {
 		gitRef:           true,
 		githubRelease:    true,
 		imageRegistries:  defaultRegistries,
-		helmRepoURL:      charts.RepoURL,
+		helmRepoURL:      charts.DefaultRepoURL,
 		helmRegistries:   registry.DefaultHelmRegistries,
 		operatorRegistry: registry.DefaultOperatorRegistry,
 		operatorImage:    registry.OperatorImage,
@@ -561,6 +561,7 @@ func (r *CalicoManager) chartsMetadata(d outputs.Digests) (*outputs.Charts, erro
 	if len(r.helmRegistries) == 0 {
 		return nil, fmt.Errorf("no helm chart registries specified")
 	}
+	chart := r.chart()
 	at := charts.Published{Registry: r.helmRegistries[0], DownloadURL: r.chartsURL()}
 	switch {
 	case !r.helmIndex:
@@ -571,9 +572,9 @@ func (r *CalicoManager) chartsMetadata(d outputs.Digests) (*outputs.Charts, erro
 		}
 		at.Index = index
 	default:
-		at.Index = r.helmRepoURL
+		at.Index = chart.Repo()
 	}
-	return charts.Metadata(r.recordsDir, r.chart(), at, d)
+	return charts.Metadata(r.recordsDir, chart, at, d)
 }
 
 // Fetch the registry from the calicoctl manifest file.
@@ -683,7 +684,7 @@ func (r *CalicoManager) BuildHelm() error {
 	chart := r.chart()
 	opts := []charts.BuildOption{charts.WithRunner(r.runner)}
 	if r.helmIndex {
-		opts = append(opts, charts.WithIndex(r.helmRepoURL, r.chartsURL(), charts.IndexDir(r.uploadDir()), r.tmpDir))
+		opts = append(opts, charts.WithIndex(r.chartsURL(), charts.IndexDir(r.uploadDir()), r.tmpDir))
 	}
 	if r.isHashRelease {
 		opts = append(opts, charts.WithModifiedValues(charts.ValueEditsFor(r.calicoVersion.String(), r.imageRegistries[0], r.operatorImage, r.operatorVersion, r.operatorRegistry)))
@@ -706,6 +707,7 @@ func (r *CalicoManager) chart() charts.Chart {
 		ChartVersion:   r.chartVersion,
 		Names:          charts.All(),
 		BaseDir:        charts.OutputDir(r.uploadDir()),
+		RepoURL:        r.helmRepoURL,
 	}
 }
 

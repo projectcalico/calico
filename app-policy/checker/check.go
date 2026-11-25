@@ -203,7 +203,9 @@ func checkTiers(scope PolicyScope, store *policystore.PolicyStore, ep *proto.Wor
 	Policy:
 		for i, pID := range policies {
 			if scope == EnforcedOnly && model.KindIsStaged(pID.Kind) {
-				log.Debugf("Staged policy, not enforced, skipping (ordinal=%d, Id=%+v)", i, pID)
+				if log.IsLevelEnabled(log.DebugLevel) {
+					log.Debugf("Staged policy, not enforced, skipping (ordinal=%d, Id=%+v)", i, pID)
+				}
 				continue Policy
 			}
 			policiesInScope++
@@ -224,7 +226,11 @@ func checkTiers(scope PolicyScope, store *policystore.PolicyStore, ep *proto.Wor
 			}
 
 			action, ruleIndex = checkPolicy(policy, dir, request)
-			log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
+			// Boxing an ordinal past 255 allocates, so a tier of many policies would pay for this
+			// line on every policy even with debug logging off.
+			if log.IsLevelEnabled(log.DebugLevel) {
+				log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
+			}
 			switch action {
 			case NO_MATCH:
 				if tierDefaultActionRuleID == nil {

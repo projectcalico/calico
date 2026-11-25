@@ -305,6 +305,30 @@ func TestParseArgoModuleKeepsOnlyLanesThatSelectSpecs(t *testing.T) {
 	Expect(lanes[0].Config).To(Equal("e2e/config/gcp/bpf.yaml"))
 }
 
+const vmModuleFixture = `
+version: condensed-module
+steps:
+  - name: e2e-kind
+    env:
+      - name: E2E_TARGET
+        value: e2e-test
+    runOnVM:
+      source: |
+        make ${E2E_TARGET}
+`
+
+// A step that runs on a VM selects specs from its runOnVM script.
+func TestParseArgoModuleReadsRunOnVMSource(t *testing.T) {
+	RegisterTestingT(t)
+
+	lanes, err := parseArgoModule("20-e2e.yaml", []byte(vmModuleFixture))
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(lanes).To(HaveLen(1))
+	Expect(lanes[0].Name).To(Equal("e2e-kind"))
+	Expect(lanes[0].Config).To(Equal(kindConfig("e2e-test", "")))
+}
+
 const kindModuleFixture = `
 version: condensed-module
 steps:
