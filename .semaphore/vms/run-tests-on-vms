@@ -35,6 +35,10 @@ disk_size=${VM_DISK_SIZE:-20GB}
 
 source "$my_dir/ssh-options"
 source "$my_dir/bulk-create-vms"
+source "$my_dir/spot-vms"
+
+# FV_STEP_TIMEOUT_MINUTES counts from here.
+script_start=$(date +%s)
 
 # shellcheck source=../../felix/.semaphore/batches.sh
 source "$repo_dir/$COMPONENT/.semaphore/batches.sh"
@@ -149,8 +153,35 @@ vm_create_args=(
        --metadata-from-file startup-script="$my_dir/vm-bootstrap.sh"
        --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f "$HOME/.ssh/id_rsa")",enable-guest-attributes=TRUE
 )
+vm_base_create_args=( "${vm_create_args[@]}" )
+
+mkdir -p "$artifacts_dir"
+capacity_scores_file="$artifacts_dir/.capacity-scores"
+rm -f "$capacity_scores_file"
+if [ "${VM_PROVISIONING_MODEL:-STANDARD}" = SPOT ]; then
+  echo "Recording spot capacity scores (record only; nothing acts on them)..."
+  # shellcheck disable=SC2086 # a space-separated list
+  record_capacity_scores "$region" "${#batches[@]}" "$capacity_scores_file" \
+    ${VM_SPOT_MACHINE_TYPES:-$VM_MACHINE_TYPES}
+fi
+
+fleet_created=$(date +%s)
 bulk_create_vms "$names" "$region" "${vm_create_args[@]}"
 vm_create_args+=( --machine-type="$vm_machine_type" --boot-disk-type="$vm_boot_disk_type" )
+if [ "$vm_provisioning_model" = SPOT ]; then
+  vm_create_args+=( --provisioning-model=SPOT --labels=ci-provisioning=spot )
+else
+  vm_create_args+=( --labels=ci-provisioning=standard )
+fi
+
+# Each VM's own score depends on its zone, which the bulk create picks.
+label_capacity() {
+  local cap_labels
+  cap_labels="$(capacity_labels "$capacity_scores_file" "$3" "$2")"
+  [ -n "$cap_labels" ] || return 0
+  gcloud --quiet compute instances add-labels "$1" --zone="$2" --labels="$cap_labels" ||
+    echo "WARNING: could not add the capacity-score labels to $1."
+}
 
 # Since the VMs are spread across the region's zones, we can no longer assume a
 # single zone for the downstream describe/ssh/delete commands.  Build a
@@ -168,17 +199,26 @@ done < <(gcloud --quiet compute instances list \
               --format='csv[no-heading](name,zone.basename())')
 
 # Fail fast if any expected VM is missing from the map; the rest of the script
-# relies on knowing every VM's zone.
+# relies on knowing every VM's zone.  A spot VM already preempted is found by
+# its preemption, and its batch retries it like any other.
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
-  if [ -z "${vm_zone[$vm_name]:-}" ]; then
-    echo "ERROR: could not determine the zone of VM $vm_name after bulk create." 1>&2
-    exit 1
+  [ -z "${vm_zone[$vm_name]:-}" ] || continue
+  if [ "$vm_provisioning_model" = SPOT ] &&
+    preempted="$(vm_preempted "$vm_name" "$fleet_created" region "$region")"; then
+    vm_zone["$vm_name"]="${preempted#* }"
+    echo "  $vm_name -> ${preempted#* } (spot VM already preempted; its batch will rerun on demand)"
+    continue
   fi
+  echo "ERROR: could not determine the zone of VM $vm_name after bulk create." 1>&2
+  exit 1
 done
 
 for vm_name in "${!vm_zone[@]}"; do
   label_boot_disk "$vm_name" "${vm_zone[$vm_name]}" &
+  if [ "$vm_provisioning_model" = SPOT ]; then
+    label_capacity "$vm_name" "${vm_zone[$vm_name]}" "$vm_machine_type" &
+  fi
 done
 wait
 
@@ -228,6 +268,35 @@ else
   watchdog_seconds=$(( (JOB_TIMEOUT_MINUTES - 5) * 60 ))
 fi
 
+# attempt_deadline <attempt start epoch> prints when the watchdog kills that
+# attempt: a retry gets a fresh JOB_TIMEOUT_MINUTES, but never past the step's
+# own deadline, less time for the watchdog's captures, the summary and the
+# step's epilogue.
+attempt_deadline() {
+  # With the watchdog off, only the step deadline limits an attempt.
+  local deadline=$(( $1 + 365 * 24 * 3600 )) step_deadline
+  [ "$watchdog_seconds" -le 0 ] || deadline=$(( $1 + watchdog_seconds ))
+  if [ -n "${FV_STEP_TIMEOUT_MINUTES:-}" ]; then
+    step_deadline=$(( script_start + (FV_STEP_TIMEOUT_MINUTES - 15) * 60 ))
+    [ "$step_deadline" -ge "$deadline" ] || deadline=$step_deadline
+  fi
+  echo "$deadline"
+}
+
+# write_watchdog_file <file> <attempt start> <provisioning model> <created
+# epoch> <machine type> tells the batch's watchdog when to fire and what the
+# VM is.  Replaced whole so the watchdog never reads half of it.
+write_watchdog_file() {
+  echo "$(attempt_deadline "$2") $2 $3 $4 $5" >"$1.tmp" && mv "$1.tmp" "$1"
+}
+
+# A preempted batch reruns only if the step has time for the preemption check
+# (2 min), the wait for GCE to delete the VM (5 min), creating and setting up
+# its replacement (~5 min), and a full batch.  The batch memo keeps no timings,
+# so a full batch is taken as 40 min: the slowest lane took 38 on 24 Nov 2026.
+preempt_retry_overhead_seconds=$(( 12 * 60 ))
+preempt_retry_batch_seconds=$(( 40 * 60 ))
+
 # Format batch name for log files: zero-pad numeric values to 3 digits
 format_batch_for_log() {
   local batch="$1"
@@ -237,6 +306,273 @@ format_batch_for_log() {
   else
     echo "$batch"
   fi
+}
+
+# The functions below run inside a batch's subshell and share its variables.
+
+# check_spot_failure [<failed epoch>] sets spot_check to preempted, after-failure (preempted, but
+# only once the failure had happened, so not its cause), not or check-failed,
+# and preempt_at.  Only a VM created as spot can have been preempted.
+check_spot_failure() {
+  spot_check=not
+  preempt_at=""
+  [ "$attempt_model" = SPOT ] || return 0
+  local check_rc=0 failed="${1:-$(date +%s)}"
+  echo "$prefix Checking whether GCE preempted spot VM $vm_name..."
+  preempt_at="$(vm_preemption_check "$vm_name" "$zone" "$attempt_created" "$failed")" || check_rc=$?
+  # The latest check settles whether a failure may have been a preemption.
+  check_failed=false
+  case "$check_rc" in
+    0)
+      # The check polls past the failure, so it can see a later preemption.
+      # Within the 30s soft shutdown the preemption may still be the cause.
+      if [ "$(date -d "$preempt_at" +%s 2>/dev/null || echo 0)" -gt $((failed + 30)) ]; then
+        spot_check=after-failure
+        echo "$prefix Spot VM $vm_name was preempted at $preempt_at, after the failure; not its cause."
+      else
+        spot_check=preempted
+        echo "$prefix Spot VM $vm_name was PREEMPTED at $preempt_at."
+      fi
+      ;;
+    2)
+      spot_check=check-failed
+      check_failed=true
+      echo "$prefix Could not ask GCE whether spot VM $vm_name was preempted; handling the failure as usual, without a retry."
+      ;;
+    *) echo "$prefix Spot VM $vm_name was not preempted." ;;
+  esac
+}
+
+# run_batch_attempt sets rc and attempt_result: pass, fail, or preempted.  Only
+# a confirmed preemption cuts the attempt short, since the VM and its results
+# are already gone; anything else gets the usual collection and teardown.
+run_batch_attempt() {
+  local attempt configured=false collected=true
+  rc=1
+  attempt_result=fail
+  check_failed=false
+  for attempt in $(seq 1 "$VM_CONFIGURE_ATTEMPTS"); do
+    echo "$prefix Configuring test VM $vm_name (attempt $attempt). Redirecting log to $conf_log_file."
+    if env ZONE="$zone" "${my_dir}/configure-test-vm" "$vm_name" >> "$conf_log_file" 2>&1; then
+      configured=true
+      break
+    fi
+    # A preemption must not use up a setup attempt.  A failure dated past the
+    # shutdown window lets a RUNNING VM end the check at once; missing a
+    # preemption here costs only a setup attempt, as the VM is recreated anyway.
+    check_spot_failure "$(( $(date +%s) - 60 ))"
+    if [ "$spot_check" = preempted ]; then
+      attempt_result=preempted
+      return
+    fi
+    [ "$attempt" -lt "$VM_CONFIGURE_ATTEMPTS" ] || break
+    echo "$prefix Configuration of VM $vm_name FAILED; replacing it with a fresh VM."
+    echo "===== attempt $attempt failed; replacing $vm_name =====" >> "$conf_log_file"
+    gcloud --quiet beta compute instances delete "$vm_name" --zone="$zone" --no-graceful-shutdown >> "$conf_log_file" 2>&1
+    # A spot VM GCE may be deleting would collide with the recreate's name.
+    if [ "$spot_check" != not ]; then
+      vm_wait_gone "$vm_name" "$zone" 300 || echo "$prefix VM $vm_name is still being deleted; recreating anyway."
+    fi
+    attempt_created=$(date +%s)
+    check_failed=false
+    if ! gcloud --quiet compute instances create "$vm_name" --zone="$zone" "${attempt_args[@]}" >> "$conf_log_file" 2>&1; then
+      # The zone may be out of spot; on demand is still worth a try.
+      if [ "$attempt_model" = SPOT ] &&
+        retry_type="$(create_on_demand_replacement "$vm_name" "$zone" "$attempt_type" \
+          "${vm_base_create_args[@]}" --labels=ci-provisioning=standard,ci-spot-fallback=true 2>>"$conf_log_file")"; then
+        echo "$prefix No spot replacement for $vm_name; replaced it with on-demand ${retry_type}."
+        attempt_model=STANDARD
+        attempt_type="$retry_type"
+        # shellcheck disable=SC2054 # the comma is gcloud's label separator
+        attempt_args=( "${vm_base_create_args[@]}" --machine-type="$retry_type"
+          --boot-disk-type="$(boot_disk_type_for "$retry_type")" --labels=ci-provisioning=standard,ci-spot-fallback=true )
+      else
+        echo "$prefix Could not create a replacement for $vm_name."
+        break
+      fi
+    fi
+    label_boot_disk "$vm_name" "$zone" >> "$conf_log_file" 2>&1
+    if [ "$attempt_model" = SPOT ]; then
+      label_capacity "$vm_name" "$zone" "$attempt_type" >> "$conf_log_file" 2>&1
+    fi
+    # vm-ip caches by name and zone, both of which the replacement reuses.
+    rm -f "/tmp/vm_ip_${vm_name}_${zone}"
+    vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
+    write_watchdog_file "$watchdog_file" "$attempt_start" "$attempt_model" "$attempt_created" "$attempt_type"
+  done
+  if [ "$configured" = true ]; then
+    echo "$prefix Configuration of VM $vm_name SUCCEEDED."
+  else
+    echo "$prefix Configuration of VM $vm_name FAILED.  Log file will be uploaded as artifact $conf_log_file. "
+    [ "$check_failed" = false ] || report_check_failed
+    return
+  fi
+
+  echo "$prefix Test batch $batch STARTING (sending logs to $log_file)..."
+  if [ "$attempt_model" = SPOT ]; then
+    maybe_simulate_preemption "$batch" "$vm_name" "$zone" 2>&1 | sed "s/^/$prefix /"
+  fi
+  run_batch "$my_dir/on-test-vm" "$batch" "$vm_name" "$log_file"
+  rc=$?
+  if [ $rc != 0 ]; then
+    # The step log follows this batch's log with a 1s-polling tail; let it print
+    # the attempt's last lines before anything about how the attempt ended.
+    sleep 2
+    # The verdict can reach us a poll after the tests end, by which time a
+    # preemption may have followed a genuine failure.
+    check_spot_failure "$(stat -c %Y "$log_file" 2>/dev/null || date +%s)"
+    if [ "$spot_check" = preempted ]; then
+      attempt_result=preempted
+      return
+    fi
+    [ "$spot_check" != after-failure ] || write_preempt_record genuine-fail
+  fi
+  if [ $rc = 0 ]; then
+    echo "$prefix Test batch $batch SUCCEEDED."
+  else
+    mv "$log_file" "$failed_log_file"
+    echo "$prefix Test batch $batch FAILED.  Log file will be uploaded as artifact $failed_log_file."
+    # Upload alongside the fv-artifacts in GCS (GCS_WORKFLOW_DIR), via gcloud.
+    if [ -n "${GCS_WORKFLOW_DIR:-}" ] && [ -n "${COMPONENT:-}" ]; then
+      failed_log_upload_dir="${GCS_WORKFLOW_DIR}/${COMPONENT}/failed-fv-logs"
+      if [ -n "${JOB_TAG:-}" ]; then
+        failed_log_upload_dir="${failed_log_upload_dir}/${JOB_TAG}"
+      fi
+      gcloud storage cp "$failed_log_file" "${failed_log_upload_dir}/" || true
+    fi
+  fi
+
+  # The SSH-based teardown steps below are wrapped in 'timeout': if the VM
+  # wedged (e.g. a kernel BPF/vmap teardown deadlock that leaves it
+  # SSH-unreachable), these would otherwise hang until the watchdog kills the
+  # whole batch.  Bounding them lets a batch whose tests already finished
+  # proceed straight to the (control-plane) VM delete.  gcloud delete does not
+  # need SSH, so it reclaims a wedged VM regardless.
+  collect_log_file="$artifacts_dir/collect-artifacts-$batch_formatted.log"
+  if timeout 180 "${ssh_cmd[@]}" COMPONENT="${COMPONENT}" "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" >& "$collect_log_file"; then
+    echo "$prefix Remote artifact collection SUCCEEDED"
+  else
+    echo "$prefix Remote artifact collection FAILED (rc=$?)"
+    collected=false
+  fi
+  if timeout 180 scp "${SSH_OPTIONS[@]}" -r -C "ubuntu@${vm_ip}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" >> "$collect_log_file" 2>&1; then
+    echo "$prefix Artifact retrieval SUCCEEDED"
+  else
+    echo "$prefix Artifact retrieval FAILED (rc=$?)"
+    collected=false
+  fi
+  if [ "$collected" = false ]; then
+    check_spot_failure
+    if [ "$spot_check" != not ] && [ "$spot_check" != check-failed ] && [ $rc != 0 ]; then
+      # The tests had already failed, so this is a genuine failure.
+      echo "$prefix Batch $batch had already FAILED when its VM was preempted; not retrying."
+      write_preempt_record genuine-fail
+    elif [ "$spot_check" = preempted ]; then
+      # A rerun could only turn a pass into a flaky failure.
+      echo "$prefix Test batch $batch SUCCEEDED, but its artifacts went with the preempted VM; not rerunning."
+      write_preempt_record passed-uncollected
+    fi
+  fi
+
+  echo "$prefix Deleting test VM $vm_name"
+  if timeout 300 gcloud --quiet beta compute instances delete "$vm_name" --zone="${zone}" --no-graceful-shutdown; then
+    echo "$prefix Deletion of test VM $vm_name SUCCEEDED"
+  else
+    echo "$prefix Deletion of test VM $vm_name FAILED, will retry at end of job. "
+  fi
+  if [ $rc = 0 ]; then
+    attempt_result=pass
+  elif [ "$check_failed" = true ]; then
+    report_check_failed
+  fi
+}
+
+# write_preempt_record <outcome> records the batch's FV-PREEMPT fields, which
+# the end-of-run summary reports.
+write_preempt_record() {
+  echo "run=$(spot_run_id) lane=$(spot_lane_id) batch=${batch} vm=${vm_name} type=${attempt_type} zone=${zone} at=${preempt_at:-unknown} outcome=$1" \
+    > "$preempt_file"
+}
+
+# report_check_failed marks a failed batch as a possible preemption, so it is
+# never an unexplained failure.
+report_check_failed() {
+  local report_type=fv why="GCE could not be asked whether spot VM ${vm_name} (${attempt_type}) was preempted, so the batch was not retried; treat this failure as a possible preemption."
+  [ "$batch" != ut ] || report_type=ut
+  preempt_at=""
+  write_preempt_record check-failed
+  echo "===== ${why} =====" >> "$conf_log_file"
+  if [ -f "$failed_log_file" ]; then
+    echo "===== ${why} =====" >> "$failed_log_file"
+  fi
+  write_preemption_junit "$artifacts_dir/$batch/report/felix_${report_type}_preempted_${batch_formatted}.xml" \
+    "$batch" "batch ${batch}: spot VM preemption check failed (${zone})" "$why"
+}
+
+# set_aside_preempted_logs keeps the preempted attempt's logs under names the
+# failure analyser doesn't read: it only looks at -FAILED batch logs, and falls
+# back to the configure log, which must be the retry's.
+set_aside_preempted_logs() {
+  [ ! -f "$log_file" ] || mv "$log_file" "$artifacts_dir/test-$batch_formatted-PREEMPTED.log"
+  [ ! -f "$conf_log_file" ] || mv "$conf_log_file" "$artifacts_dir/configure-vm-$batch_formatted-PREEMPTED.log"
+}
+
+# find_preempt_retry_blocker sets blocker to why a preempted batch can't rerun
+# on demand (an FV-PREEMPT outcome), or to nothing if it can.  When it can, the
+# on-demand replacement exists on return, and retry_type holds its type.
+find_preempt_retry_blocker() {
+  local remaining
+  blocker=""
+  if [ "${VM_PREEMPT_RETRIES:-1}" = 0 ] || [ -z "${FV_STEP_TIMEOUT_MINUTES:-}" ]; then
+    blocker=retries-off
+    return
+  fi
+  # Measured to the watchdog's deadline, not the step's: the retry gets no more.
+  remaining=$(( $(attempt_deadline "$(date +%s)") - $(date +%s) ))
+  if [ "$remaining" -lt $(( preempt_retry_overhead_seconds + preempt_retry_batch_seconds )) ]; then
+    blocker=no-time
+    return
+  fi
+  # The retry's deadline starts now: the preempted attempt's could fire while
+  # the replacement is still being made.
+  write_watchdog_file "$watchdog_file" "$(date +%s)" STANDARD "$(date +%s)" "$attempt_type"
+  echo "$prefix Waiting for GCE to finish deleting preempted VM $vm_name..."
+  if ! vm_wait_gone "$vm_name" "$zone" 300; then
+    blocker=delete-timeout
+    return
+  fi
+  attempt_created=$(date +%s)
+  # shellcheck disable=SC2054 # the comma is gcloud's label separator
+  if ! retry_type="$(VM_REPLACE_DEADLINE=$(( $(attempt_deadline "$(date +%s)") - preempt_retry_batch_seconds - 300 )) \
+    create_on_demand_replacement "$vm_name" "$zone" "$attempt_type" "${vm_base_create_args[@]}" \
+    --labels=ci-provisioning=standard,ci-preempt-retry=true 2>>"$conf_log_file.retry")"; then
+    blocker=no-capacity
+  fi
+}
+
+# fail_preempted_batch <outcome> reports a preemption the batch can't recover
+# from and ends the batch.
+fail_preempted_batch() {
+  local outcome="$1" why report_type=fv name
+  [ "$batch" != ut ] || report_type=ut
+  case "$outcome" in
+    retries-off) why="Retries are off: VM_PREEMPT_RETRIES is 0 or FV_STEP_TIMEOUT_MINUTES is unset." ;;
+    no-time) why="Not retried: the step has too little time left for a rerun." ;;
+    delete-timeout) why="Not retried: GCE was still deleting the preempted VM after 5 minutes." ;;
+    no-capacity) why="Not retried: no on-demand VM could be created in ${zone}." ;;
+  esac
+  name="batch ${batch}: spot VM preempted at ${preempt_at} (${zone})"
+  if [ -f "$conf_log_file.retry" ]; then
+    cat "$conf_log_file.retry" >> "$conf_log_file"
+    rm -f "$conf_log_file.retry"
+  fi
+  set_aside_preempted_logs
+  echo "$prefix Test batch $batch FAILED: ${name}. ${why}"
+  write_preempt_record "$outcome"
+  write_preemption_junit "$artifacts_dir/$batch/report/felix_${report_type}_preempted_${batch_formatted}.xml" \
+    "$batch" "$name" "Spot VM ${vm_name} (${attempt_type}). ${why}"
+  touch "$done_marker"
+  exit 1
 }
 
 for batch in "${batches[@]}"; do
@@ -251,13 +587,24 @@ for batch in "${batches[@]}"; do
   # sees its own VM's zone.
   zone="${vm_zone[$vm_name]}"
   export ZONE="$zone"
-  vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
+  if [ "$vm_provisioning_model" = SPOT ]; then
+    # A preempted spot VM is gone; its batch finds out why and retries.
+    vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")" || vm_ip=""
+  else
+    vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
+  fi
   batch_formatted="$(format_batch_for_log "$batch")"
   log_file="$artifacts_dir/test-$batch_formatted.log"
   failed_log_file="$artifacts_dir/test-$batch_formatted-FAILED.log"
   ssh_cmd=( env "VM_NAME=$vm_name" "ZONE=$zone" "$my_dir/on-test-vm" )
   prefix="[batch=${batch}]"
   touch "$log_file"
+
+  preempt_file="$artifacts_dir/.batch-${batch_formatted}.preempt"
+  watchdog_file="$artifacts_dir/.batch-${batch_formatted}.watchdog"
+  rm -f "$preempt_file"
+  batch_start=$(date +%s)
+  write_watchdog_file "$watchdog_file" "$batch_start" "$vm_provisioning_model" "$fleet_created" "$vm_machine_type"
 
   # Run the configuration, test, and, teardown in a subshell so we can
   # background it.
@@ -274,77 +621,49 @@ for batch in "${batches[@]}"; do
     # second try. It keeps the name and zone, which everything else tracks it by.
     : "${VM_CONFIGURE_ATTEMPTS:=2}"
     conf_log_file="$artifacts_dir/configure-vm-$batch_formatted.log"
+    attempt_model="$vm_provisioning_model"
+    attempt_type="$vm_machine_type"
+    attempt_created="$fleet_created"
+    attempt_start="$batch_start"
+    attempt_args=( "${vm_create_args[@]}" )
+    retried=false
     : > "$conf_log_file"
-    configured=false
-    for attempt in $(seq 1 "$VM_CONFIGURE_ATTEMPTS"); do
-      echo "$prefix Configuring test VM $vm_name (attempt $attempt). Redirecting log to $conf_log_file."
-      if env ZONE="$zone" "${my_dir}/configure-test-vm" "$vm_name" >> "$conf_log_file" 2>&1; then
-        configured=true
-        break
-      fi
-      [ "$attempt" -lt "$VM_CONFIGURE_ATTEMPTS" ] || break
-      echo "$prefix Configuration of VM $vm_name FAILED; replacing it with a fresh VM."
-      echo "===== attempt $attempt failed; replacing $vm_name =====" >> "$conf_log_file"
-      gcloud --quiet beta compute instances delete "$vm_name" --zone="$zone" --no-graceful-shutdown >> "$conf_log_file" 2>&1
-      if ! gcloud --quiet compute instances create "$vm_name" --zone="$zone" "${vm_create_args[@]}" >> "$conf_log_file" 2>&1; then
-        echo "$prefix Could not create a replacement for $vm_name."
-        break
-      fi
-      label_boot_disk "$vm_name" "$zone" >> "$conf_log_file" 2>&1
-      # vm-ip caches by name and zone, both of which the replacement reuses.
+    while true; do
+      run_batch_attempt
+      [ "$attempt_result" = preempted ] || break
+      find_preempt_retry_blocker
+      [ -z "$blocker" ] || fail_preempted_batch "$blocker"
+
+      # The replacement is on demand, so it can't be preempted in turn.
+      echo "$prefix Retrying batch $batch on on-demand ${retry_type} VM $vm_name in $zone."
+      set_aside_preempted_logs
+      mv "$conf_log_file.retry" "$conf_log_file"
+      # Only the retry's results count.
+      rm -rf "${artifacts_dir:?}/${batch}"
+      echo "RUNNER: This is a rerun on an on-demand VM: the spot VM that first ran batch '$batch' was preempted at ${preempt_at} (${zone})." > "$log_file"
+      write_preempt_record retried
+      attempt_model=STANDARD
+      attempt_type="$retry_type"
+      # shellcheck disable=SC2054 # the comma is gcloud's label separator
+      attempt_args=( "${vm_base_create_args[@]}" --machine-type="$retry_type"
+        --boot-disk-type="$(boot_disk_type_for "$retry_type")"
+        --labels=ci-provisioning=standard,ci-preempt-retry=true )
+      retried=true
+      label_boot_disk "$vm_name" "$zone"
       rm -f "/tmp/vm_ip_${vm_name}_${zone}"
       vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
+      attempt_start=$(date +%s)
+      write_watchdog_file "$watchdog_file" "$attempt_start" STANDARD "$attempt_created" "$attempt_type"
     done
-    if [ "$configured" = true ]; then
-      echo "$prefix Configuration of VM $vm_name SUCCEEDED."
-    else
-      echo "$prefix Configuration of VM $vm_name FAILED.  Log file will be uploaded as artifact $conf_log_file. "
-      exit 1
-    fi
-
-    echo "$prefix Test batch $batch STARTING (sending logs to $log_file)..."
-    run_batch "$my_dir/on-test-vm" "$batch" "$vm_name" "$log_file"
-    rc=$?
-    if [ $rc = 0 ]; then
-      echo "$prefix Test batch $batch SUCCEEDED."
-    else
-      mv "$log_file" "$failed_log_file"
-      echo "$prefix Test batch $batch FAILED.  Log file will be uploaded as artifact $failed_log_file."
-      # Upload alongside the fv-artifacts in GCS (GCS_WORKFLOW_DIR), via gcloud.
-      if [ -n "${GCS_WORKFLOW_DIR:-}" ] && [ -n "${COMPONENT:-}" ]; then
-        failed_log_upload_dir="${GCS_WORKFLOW_DIR}/${COMPONENT}/failed-fv-logs"
-        if [ -n "${JOB_TAG:-}" ]; then
-          failed_log_upload_dir="${failed_log_upload_dir}/${JOB_TAG}"
-        fi
-        gcloud storage cp "$failed_log_file" "${failed_log_upload_dir}/" || true
+    if [ "$retried" = true ]; then
+      if [ "$rc" = 0 ]; then
+        sed -i 's/outcome=retried$/outcome=retried-pass/' "$preempt_file"
+      else
+        sed -i 's/outcome=retried$/outcome=retried-fail/' "$preempt_file"
       fi
     fi
-
-    # The SSH-based teardown steps below are wrapped in 'timeout': if the VM
-    # wedged (e.g. a kernel BPF/vmap teardown deadlock that leaves it
-    # SSH-unreachable), these would otherwise hang until the watchdog kills the
-    # whole batch.  Bounding them lets a batch whose tests already finished
-    # proceed straight to the (control-plane) VM delete.  gcloud delete does not
-    # need SSH, so it reclaims a wedged VM regardless.
-    collect_log_file="$artifacts_dir/collect-artifacts-$batch_formatted.log"
-    if timeout 180 "${ssh_cmd[@]}" COMPONENT="${COMPONENT}" "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" >& "$collect_log_file"; then
-      echo "$prefix Remote artifact collection SUCCEEDED"
-    else
-      echo "$prefix Remote artifact collection FAILED (rc=$?)"
-    fi
-    if timeout 180 scp "${SSH_OPTIONS[@]}" -r -C "ubuntu@${vm_ip}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" >> "$collect_log_file" 2>&1; then
-      echo "$prefix Artifact retrieval SUCCEEDED"
-    else
-      echo "$prefix Artifact retrieval FAILED (rc=$?)"
-    fi
-
-    echo "$prefix Deleting test VM $vm_name"
-    if timeout 300 gcloud --quiet beta compute instances delete "$vm_name" --zone="${zone}" --no-graceful-shutdown; then
-      echo "$prefix Deletion of test VM $vm_name SUCCEEDED"
-    else
-      echo "$prefix Deletion of test VM $vm_name FAILED, will retry at end of job. "
-    fi
-    if [ $rc = 0 ] && [ -n "${BATCH_MEMO_PREFIX:-}" ]; then
+    # Whatever reports a preempted collection left are partial.
+    if [ $rc = 0 ] && [ -n "${BATCH_MEMO_PREFIX:-}" ] && ! grep -qs 'outcome=passed-uncollected$' "$preempt_file"; then
       batch_memo_record "$artifacts_dir" "$batch"
     fi
 
@@ -365,8 +684,6 @@ for batch in "${batches[@]}"; do
   # (in the wait loop below), so there is no PID-reuse race.
   if [ "$watchdog_seconds" -gt 0 ]; then
   (
-    sleep "$watchdog_seconds"
-
     # Distinguish a genuinely hung batch from one that has merely finished but
     # not yet been reaped by the sequential loop below.  We use a marker file
     # rather than 'kill -0 $pid' because a finished-but-unreaped batch is a
@@ -374,12 +691,59 @@ for batch in "${batches[@]}"; do
     # and we would emit a spurious timeout report for a batch that passed.
     batch_formatted="$(format_batch_for_log "$batch")"
     done_marker="$artifacts_dir/.batch-${batch_formatted}.done"
-    if [ -f "$done_marker" ]; then
-      exit 0
+    # Polled, not slept, because a preemption retry moves the deadline.
+    while true; do
+      while true; do
+        [ ! -f "$done_marker" ] || exit 0
+        read -r wd_deadline wd_start wd_model wd_created wd_type < "$watchdog_file"
+        [ "$(date +%s)" -lt "$wd_deadline" ] || break
+        sleep 15
+      done
+      # A hung spot batch may really be a preempted one.  Its VM isn't failing
+      # afresh, so a VM still RUNNING settles the check at once.
+      wd_preempt_at=""
+      if [ "$wd_model" = SPOT ] && [ ! -s "$preempt_file" ] &&
+        wd_preempt_at="$(vm_preemption_check "$vm_name" "$zone" "$wd_created" $(( $(date +%s) - 60 )))"; then
+        # The batch may have settled the preemption itself during the check:
+        # finished, recorded an outcome, or begun its retry.
+        [ ! -f "$done_marker" ] || exit 0
+        if [ -s "$preempt_file" ]; then
+          wd_preempt_at=""
+          break
+        fi
+        read -r _ wd_now_start _ < "$watchdog_file"
+        [ "$wd_now_start" = "$wd_start" ] || continue
+      else
+        wd_preempt_at=""
+      fi
+      break
+    done
+    wd_elapsed=$(( $(date +%s) - wd_start ))
+    wd_limit="job timeout ${JOB_TIMEOUT_MINUTES}m"
+    [ "$wd_deadline" -ge $(( wd_start + watchdog_seconds )) ] ||
+      wd_limit="step deadline, FV_STEP_TIMEOUT_MINUTES ${FV_STEP_TIMEOUT_MINUTES}m"
+    if [ "$batch" = "ut" ]; then
+      report_type="ut"
+    else
+      report_type="fv"
     fi
 
     echo
-    echo "===== WATCHDOG: batch $batch approaching job timeout (${JOB_TIMEOUT_MINUTES}m) ====="
+    echo "===== WATCHDOG: batch $batch approaching its deadline (${wd_limit}) ====="
+
+    if [ -n "$wd_preempt_at" ]; then
+      echo "  Spot VM $vm_name was PREEMPTED at $wd_preempt_at; killing batch $batch (pid $pid)"
+      # Recorded before the kill, because reaping the batch kills this watchdog
+      # too.  The logs are set aside after the reap, once nothing writes them.
+      echo "run=$(spot_run_id) lane=$(spot_lane_id) batch=${batch} vm=${vm_name} type=${wd_type} zone=${zone} at=${wd_preempt_at} outcome=watchdog" \
+        > "$preempt_file"
+      write_preemption_junit "$artifacts_dir/$batch/report/felix_${report_type}_preempted_${batch_formatted}.xml" \
+        "$batch" "batch ${batch}: spot VM preempted at ${wd_preempt_at} (${zone})" \
+        "Spot VM ${vm_name} (${wd_type}). Not retried: the batch hung after the preemption until the watchdog killed it."
+      kill -TERM "-$pid" 2>/dev/null || true
+      echo "==============================================================="
+      exit 0
+    fi
 
     # 1. Serial console via the GCP control plane.  This does not use the VM's
     # network/SSH path, so it still works when the VM is wedged and SSH would
@@ -420,21 +784,16 @@ for batch in "${batches[@]}"; do
 
     # Generate a JUnit XML report for the timed-out batch so it shows up
     # in Semaphore test results as a clear failure.
-    if [ "$batch" = "ut" ]; then
-      report_type="ut"
-    else
-      report_type="fv"
-    fi
     report_dir="$artifacts_dir/$batch/report"
     mkdir -p "$report_dir"
     cat > "$report_dir/felix_${report_type}_timeout_${batch_formatted}.xml" <<JUNIT_EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-  <testsuite name="batch-${batch}" tests="1" failures="1" errors="0" time="$watchdog_seconds">
-    <testcase name="batch ${batch} completion" classname="ci.watchdog" time="$watchdog_seconds">
-      <failure message="Batch ${batch} timed out after ${watchdog_seconds}s (job timeout ${JOB_TIMEOUT_MINUTES}m)">
-The watchdog killed batch ${batch} because it was still running when the job
-approached its ${JOB_TIMEOUT_MINUTES}-minute timeout. Check the batch log file
+  <testsuite name="batch-${batch}" tests="1" failures="1" errors="0" time="$wd_elapsed">
+    <testcase name="batch ${batch} completion" classname="ci.watchdog" time="$wd_elapsed">
+      <failure message="Batch ${batch} timed out after ${wd_elapsed}s (${wd_limit})">
+The watchdog killed batch ${batch} because it was still running as it neared
+its deadline (${wd_limit}). Check the batch log file
 for details on which test was hung.
       </failure>
     </testcase>
@@ -450,8 +809,9 @@ JUNIT_EOF
 
   (
     # Redirect tail's stdin from /dev/null to prevent waiting
-    # forever on reads in semaphore CI
-    tail -f --retry "$log_file" < /dev/null | \
+    # forever on reads in semaphore CI.  Follows the name: a preemption retry
+    # sets the first log aside and starts a new one.
+    tail -F "$log_file" < /dev/null 2>/dev/null | \
       grep --line-buffered --perl "${monitor_pattern}" -B 2 -A 15 | \
       sed 's/.*/'"${prefix}"' &/' | \
       grep --perl --line-buffered -v '^\[batch=[^\]]+\]\s+$';
@@ -469,14 +829,43 @@ echo "===== Waiting for background test runners to finish ===="
 echo
 
 summary=()
+preempt_lines=()
+preempt_retried_pass=0
+preempt_retried_fail=0
+preempt_not_retried=0
+preempt_check_failed=0
+preempt_after_failure=0
+batch_outcomes_file="$artifacts_dir/.batch-outcomes"
+: > "$batch_outcomes_file"
 for i in "${!batches[@]}"; do
   batch=${batches[$i]}
   pid=${test_pid[$i]}
+  batch_formatted="$(format_batch_for_log "$batch")"
+  batch_ok=true
+  preempt_file="$artifacts_dir/.batch-${batch_formatted}.preempt"
+  record=""
+  log_note=""
   if wait "$pid"; then
-    summary+=( "Test batch $batch SUCCEEDED" )
+    batch_line="Test batch $batch SUCCEEDED"
   else
-    batch_formatted="$(format_batch_for_log "$batch")"
+    batch_ok=false
+  fi
+  [ ! -f "$preempt_file" ] || record="$(cat "$preempt_file")"
+  if [ "$batch_ok" = false ]; then
     failed_summary_log="$artifacts_dir/test-$batch_formatted-FAILED.log"
+    case "$record" in
+      *" outcome=no-time" | *" outcome=no-capacity" | *" outcome=delete-timeout" | *" outcome=retries-off" | *" outcome=watchdog")
+        # Whatever log the killed batch left belongs to the preempted attempt.
+        failed_summary_log="$artifacts_dir/test-$batch_formatted-PREEMPTED.log"
+        if [ -f "$artifacts_dir/test-$batch_formatted.log" ]; then
+          mv "$artifacts_dir/test-$batch_formatted.log" "$failed_summary_log" || true
+        fi
+        if [ -f "$artifacts_dir/configure-vm-$batch_formatted.log" ]; then
+          mv "$artifacts_dir/configure-vm-$batch_formatted.log" \
+            "$artifacts_dir/configure-vm-$batch_formatted-PREEMPTED.log" || true
+        fi
+        ;;
+    esac
     if [ ! -f "$failed_summary_log" ] && [ -f "$artifacts_dir/test-$batch_formatted.log" ]; then
       # The batch failed without renaming its own log.  A batch the watchdog
       # kills never reaches that rename, because the kill takes out the process
@@ -499,7 +888,8 @@ for i in "${!batches[@]}"; do
         "$batch" >> "$failed_summary_log" ||
         echo "  Could not mark $failed_summary_log as truncated (rc=$?)"
     fi
-    summary+=( "Test batch $batch FAILED; Log file will be uploaded as artifact $failed_summary_log" )
+    batch_line="Test batch $batch FAILED; Log file will be uploaded as artifact $failed_summary_log"
+    log_note="; Log file will be uploaded as artifact $failed_summary_log"
     final_result=1
   fi
   # Cancel this batch's watchdog now that it has finished, preventing
@@ -509,7 +899,61 @@ for i in "${!batches[@]}"; do
     kill "$wd_pid" 2>/dev/null || true
     wait "$wd_pid" 2>/dev/null || true
   fi
+
+  outcome=completed
+  [ "$batch_ok" = true ] || outcome=failed
+  if [ -n "$record" ]; then
+    # A retry the watchdog killed never recorded how it ended.
+    if [[ "$record" == *" outcome=retried" ]]; then
+      if [ "$batch_ok" = true ]; then record+="-pass"; else record+="-fail"; fi
+    fi
+    outcome="${record##* outcome=}"
+    preempt_at="$(sed -n 's/.* at=\([^ ]*\) .*/\1/p' <<<"$record")"
+    preempt_lines+=( "FV-PREEMPT $record" )
+    case "$outcome" in
+      retried-pass)
+        summary+=( "Test batch $batch PREEMPTED at $preempt_at; retried on on-demand VM: SUCCEEDED" )
+        preempt_retried_pass=$((preempt_retried_pass + 1)) ;;
+      retried-fail)
+        summary+=( "Test batch $batch PREEMPTED at $preempt_at; retried on on-demand VM: FAILED${log_note}" )
+        preempt_retried_fail=$((preempt_retried_fail + 1)) ;;
+      genuine-fail)
+        summary+=( "Test batch $batch had already FAILED when its spot VM was preempted at $preempt_at; not retried${log_note}" )
+        preempt_after_failure=$((preempt_after_failure + 1)) ;;
+      passed-uncollected)
+        summary+=( "Test batch $batch SUCCEEDED; its spot VM was preempted at $preempt_at before artifacts were collected, and there was no rerun" )
+        preempt_not_retried=$((preempt_not_retried + 1)) ;;
+      check-failed)
+        summary+=( "Test batch $batch FAILED and could not check whether its spot VM was preempted; not retried${log_note}" )
+        preempt_check_failed=$((preempt_check_failed + 1)) ;;
+      *)
+        summary+=( "Test batch $batch PREEMPTED at $preempt_at; not retried ($outcome)${log_note}" )
+        preempt_not_retried=$((preempt_not_retried + 1)) ;;
+    esac
+  else
+    summary+=( "$batch_line" )
+  fi
+  echo "$batch $vm_name_prefix$batch ${vm_zone[$vm_name_prefix$batch]} $outcome" >> "$batch_outcomes_file"
 done
+
+if [ "${VM_PROVISIONING_MODEL:-STANDARD}" = SPOT ]; then
+  touch "$capacity_scores_file"
+  # Joins this run's capacity scores with what happened to each batch, for
+  # tuning when to trust spot.
+  jq -n \
+    --arg run "$(spot_run_id)" --arg lane "$(spot_lane_id)" \
+    --arg queried_at "$(cat "${capacity_scores_file}.at" 2>/dev/null)" \
+    --arg provisioning "$vm_provisioning_model" --arg type "$vm_machine_type" \
+    --rawfile scores "$capacity_scores_file" --rawfile batches "$batch_outcomes_file" '
+      def rows: split("\n") | map(select(length > 0) | split(" "));
+      {run: $run, lane: $lane, queried_at: $queried_at,
+       scores: ($scores | rows | map({type: .[0], zone: .[1],
+         obtainability: (.[2] | tonumber? // .), estimated_uptime: .[3]})),
+       created: {provisioning: $provisioning, type: $type},
+       batches: ($batches | rows | map({batch: .[0], vm: .[1], zone: .[2], outcome: .[3]}))}' \
+    > "$artifacts_dir/fv-capacity.json" ||
+    echo "error: could not write fv-capacity.json; carrying on."
+fi
 
 echo
 echo "===== Shutting down test monitors ====="
@@ -523,9 +967,19 @@ echo "  ${vm_create_summary}"
 for s in "${summary[@]}"; do
   echo "  $s"
 done
+if [ ${#preempt_lines[@]} -gt 0 ]; then
+  echo "  Preempted batches: $((preempt_retried_pass + preempt_retried_fail + preempt_not_retried))" \
+    "(retried and passed: $preempt_retried_pass, retried and failed: $preempt_retried_fail, not retried: $preempt_not_retried);" \
+    "failed batches whose preemption check failed: $preempt_check_failed;" \
+    "failed batches preempted only after failing: $preempt_after_failure"
+fi
 echo
+for l in "${preempt_lines[@]}"; do
+  echo "$l"
+done
 
-if [ $final_result = 0 ] && [ -n "${BATCH_MEMO_PREFIX:-}" ]; then
+if [ $final_result = 0 ] && [ -n "${BATCH_MEMO_PREFIX:-}" ] &&
+  ! printf '%s\n' "${preempt_lines[@]}" | grep -q ' outcome=passed-uncollected$'; then
   batch_memo_record_lane "$artifacts_dir" "${all_batches[@]}"
 fi
 if [ -n "${BATCH_MEMO_LANE:-}" ]; then
