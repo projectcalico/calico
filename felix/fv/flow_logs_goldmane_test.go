@@ -480,9 +480,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane nat outgoing flow log tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		infra  infrastructure.DatastoreInfra
-		tc     infrastructure.TopologyContainers
-		client client.Interface
+		infra infrastructure.DatastoreInfra
+		tc    infrastructure.TopologyContainers
 
 		workload1 *workload.Workload
 		workload2 *workload.Workload
@@ -498,24 +497,29 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane nat outgoing flow 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
 
-		tc, client = infrastructure.StartSingleNodeTopology(opts, infra)
-
-		ctx := context.Background()
-
-		// Create an IPPool and assign an IP from that pool to workload1 so the packets are SNAT'd when a connection is
-		// made from workload1 to workload2.
+		// An IPPool and an IP from it for workload1, so the packets are SNAT'd when a connection is made from
+		// workload1 to workload2.  Created before Felix starts because a new no-encap pool makes a running Felix
+		// restart.
 		ippool := api.NewIPPool()
 		ippool.Name = "nat-pool"
 		ippool.Spec.CIDR = "10.244.255.0/24"
 		ippool.Spec.NATOutgoing = true
-		ippool, err = client.IPPools().Create(ctx, ippool, options.SetOptions{})
+		_, err = infra.GetCalicoClient().IPPools().Create(context.Background(), ippool, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
+
+		tc, _ = infrastructure.StartSingleNodeTopology(opts, infra)
 
 		workload1 = workload.Run(tc.Felixes[0], "w1", "default", "10.244.255.1", "8055", "tcp")
 		workload1.ConfigureInInfra(infra)
 
 		workload2 = workload.Run(tc.Felixes[0], "w2", "default", "10.65.0.2", "8055", "tcp")
 		workload2.ConfigureInInfra(infra)
+
+		if BPFMode() {
+			// Not ensureBPFProgramsAttached: with only a no-encap pool there is no tunl0 to wait for.
+			ensureBPFProgramsAttachedOffsetWithIPVersion(1, tc.Felixes[0], true, false,
+				"eth0", workload1.InterfaceName, workload2.InterfaceName)
+		}
 	})
 
 	It("Should report non-zero bytes for an SNAT'd flow", func() {

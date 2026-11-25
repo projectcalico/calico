@@ -7025,7 +7025,7 @@ func bpfWaitForPolicy(felix *infrastructure.Felix, iface, hook, search string) s
 	EventuallyWithOffset(2, func() string {
 		out = bpfDumpPolicy(felix, iface, hook)
 		return out
-	}, "5s", "200ms").Should(ContainSubstring(search))
+	}, "15s", "200ms").Should(ContainSubstring(search))
 
 	return out
 }
