@@ -19,6 +19,7 @@ import (
 	"errors"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,8 +27,6 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 // Two minutes of fixed interval outlasts a calico-apiserver restart. No Cap:
