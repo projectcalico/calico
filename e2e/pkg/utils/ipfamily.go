@@ -67,8 +67,8 @@ func FamilyOf(ip string) (IPFamily, bool) {
 }
 
 // PodIPFor fails the spec rather than returning "": families come from the IP
-// pools, so a pod without an address in one is an IPAM or pool-selector problem
-// worth seeing, not a single-stack cluster.
+// pools (or, without pools, from running pods), so a pod without an address in
+// one is an IPAM or pool-selector problem worth seeing, not a single-stack cluster.
 func PodIPFor(pod *corev1.Pod, f IPFamily) string {
 	for _, ip := range pod.Status.PodIPs {
 		if fam, ok := FamilyOf(ip.IP); ok && fam == f {
