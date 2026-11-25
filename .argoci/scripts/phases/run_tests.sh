@@ -157,6 +157,33 @@ check_component_logs() {
   return 0
 }
 
+# install_calicoctl_pod - give the tests a kube-system/calicoctl pod to exec
+# into when the cluster serves no projectcalico.org/v3 API of its own.
+#
+# `bz tests` installs it for manifest lanes, but the direct-ginkgo path below
+# bypasses that, so CALICOCTL_INSTALL_TYPE=k8s-pod would otherwise be a no-op.
+# The manifest comes from the hashrelease the cluster was installed from, so
+# the pod's calicoctl matches the cluster.
+install_calicoctl_pod() {
+  local url stream kubectl=("${BZ_LOCAL_DIR}/bin/kubectl" --kubeconfig "${BZ_LOCAL_DIR}/kubeconfig")
+
+  url="${DOCS_MANIFEST_URL:-}"
+  if [[ -z "${url}" ]]; then
+    if [[ "${USE_HASH_RELEASE:-true}" != "true" ]]; then
+      echo "[ERROR] CALICOCTL_INSTALL_TYPE=k8s-pod needs DOCS_MANIFEST_URL when USE_HASH_RELEASE is not true"
+      exit 1
+    fi
+    stream=${UPLEVEL_RELEASE_STREAM:-${RELEASE_STREAM}}
+    url="$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${stream}.txt")manifests"
+  fi
+
+  echo "[INFO] installing calicoctl pod from ${url}/calicoctl.yaml"
+  "${kubectl[@]}" apply -f "${url}/calicoctl.yaml" \
+    && "${kubectl[@]}" wait --for=condition=Ready pod/calicoctl -n kube-system --timeout=5m \
+    && "${kubectl[@]}" exec -n kube-system calicoctl -- calicoctl version \
+    || { echo "[ERROR] calicoctl pod did not become usable"; exit 1; }
+}
+
 if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
   pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
   if [[ -n "${E2E_PREBUILT:-}" ]]; then
@@ -261,6 +288,10 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   fi
 
   pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
+
+  if [[ "${CALICOCTL_INSTALL_TYPE:-}" == "k8s-pod" ]]; then
+    install_calicoctl_pod
+  fi
 
   # Pick a runtime image. The local-build path already pulled
   # calico/go-build to compile the binary, so reusing it for the run
