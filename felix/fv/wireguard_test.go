@@ -222,8 +222,20 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				}
 			})
 
+			// Felix only reports ready once its first dataplane apply, which
+			// creates the Wireguard devices, is done. In BPF mode that apply
+			// also attaches programs to every interface first, which can take
+			// longer than the device checks allow.
+			waitForFelixesReady := func() {
+				for _, felix := range topologyContainers.Felixes {
+					felix.WaitForReady()
+				}
+			}
+
 			Context("with Wireguard enabled", func() {
 				BeforeEach(func() {
+					waitForFelixesReady()
+
 					// Check the Wireguard device exists.
 					Eventually(func() error {
 						for i, felix := range topologyContainers.Felixes {
@@ -628,6 +640,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				}
 
 				BeforeEach(func() {
+					waitForFelixesReady()
+
 					// Tunnel readiness checks.
 					// Check the Wireguard device exists.
 					Eventually(func() error {
