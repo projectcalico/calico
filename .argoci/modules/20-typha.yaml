@@ -4,33 +4,42 @@ version: condensed-module
 
 defaults:
   timeout: 1h
-  runOn: vm
-  services:
-    - docker
 
 steps:
   - name: typha-ci
-    env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-    vm:
-      machineType: e2-standard-8
     depends: [build-calico-image, check-go]
-    commands: |
-      sudo apt-get update -y && sudo apt-get install -y make
-      .argoci/scripts/load-cached-images calico
-      cd typha
-      make ci-no-prereqs
-    epilogue: |
-      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/typha/report" typha-report || true
-      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/felix/report" felix-report || true
-      artifact push job typha-report --destination test-results || true
-      artifact push job felix-report --destination test-results-felix || true
+    cache:
+      - {name: calico-image, mode: read, path: /cache/calico-image}
+    checkout: true
+    goCache: read
+    reports: [typha/report:test-results, felix/report:test-results-felix]
+    runOnVM:
+      createVM:
+        # The cache disk's project and zone: a disk attaches only to a machine
+        # in both. A stockout there falls back across families.
+        machineTypes: [e2-standard-8, n2d-standard-8, n2-standard-8, c2d-standard-8]
+        project: tigera-cc-dev
+        zones: [us-central1-a]
+        vmImageProject: unique-caldron-775
+      project: tigera-cc-dev
+      put:
+        - /cache/calico-image/calico.tar:calico-build/calico.tar
+      source: |
+        set -euo pipefail
+        go_env=$(.argoci/scripts/vm-go-cache typha-ci) || exit 1
+        eval "$go_env"
+        export CALICO_IMAGE_TAR="$HOME/calico-build/calico.tar"
+        .argoci/scripts/load-cached-images calico
+        cd typha
+        make ci-no-prereqs
 
   # Depends on the producer only to skip a commit whose first build failed;
   # `clean` discards the cached image anyway.
   - name: typha-fv-ubi
     tiers: []
+    runOn: vm
+    services:
+      - docker
     vm:
       machineType: e2-standard-8
     depends: [build-calico-image, check-go]
