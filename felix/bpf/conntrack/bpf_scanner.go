@@ -185,6 +185,45 @@ func (s *BPFProgCleaner) Run(opts ...RunOpt) (*CleanupContext, error) {
 	return &cr, nil
 }
 
+// RepointContext is the input and result of the repoint program.
+//
+// WARNING: this struct needs to match struct ct_repoint_ctx in
+// conntrack_cleanup.c.
+type RepointContext struct {
+	OldIfindex uint32
+	NewIfindex uint32
+
+	NumRepointed uint64
+}
+
+// RepointIfindex moves conntrack legs recorded on device oldIfindex to newIfindex,
+// for a device replaced by one of the same kind.
+func (s *BPFProgCleaner) RepointIfindex(oldIfindex, newIfindex int) (int, error) {
+	program, err := s.ensureBPFExpiryProgram()
+	if err != nil {
+		return 0, fmt.Errorf("failed to load BPF program: %w", err)
+	}
+	fd, err := program.ProgramFD("conntrack_repoint")
+	if err != nil {
+		return 0, fmt.Errorf("failed to look up BPF program section: %w", err)
+	}
+
+	rc := RepointContext{OldIfindex: uint32(oldIfindex), NewIfindex: uint32(newIfindex)}
+	var programInput [unsafe.Sizeof(rc)]byte
+	if _, err := binary.Encode(programInput[:], binary.LittleEndian, rc); err != nil {
+		return 0, fmt.Errorf("failed to encode repoint program input: %w", err)
+	}
+
+	result, err := bpf.RunBPFProgram(bpf.ProgFD(fd), programInput[:], 1)
+	if err != nil {
+		return 0, fmt.Errorf("failed to run repoint program: %w", err)
+	}
+	if _, err := binary.Decode(result.DataOut, binary.LittleEndian, &rc); err != nil {
+		return 0, fmt.Errorf("failed to parse repoint program result: %w", err)
+	}
+	return int(rc.NumRepointed), nil
+}
+
 func (s *BPFProgCleaner) Close() error {
 	err := s.bpfExpiryProgram.Close()
 	s.bpfExpiryProgram = nil

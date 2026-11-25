@@ -979,6 +979,7 @@ var _ = Describe("VXLANManager in BPF mode", func() {
 	addExistingDevice := func(vniFilter bool, vnis ...uint32) {
 		la := netlink.NewLinkAttrs()
 		la.Name = dataplanedefs.VXLANIfaceNameV4
+		la.Index = 7 // Distinct from the mock's counter-based indexes, which restart on ResetDeltas.
 		vx := &netlink.Vxlan{LinkAttrs: la, FlowBased: true, VniFilter: vniFilter, Port: 4789}
 		Expect(dataplane.LinkAdd(vx)).To(Succeed())
 		for _, vni := range vnis {
@@ -1022,6 +1023,46 @@ var _ = Describe("VXLANManager in BPF mode", func() {
 		vx, ml := vxlanDevice()
 		Expect(vx.VniFilter).To(BeTrue())
 		Expect(ml.VNIs.Slice()).To(ConsistOf(uint32(4096), bpfnat.NodePortVXLANTunnelVNI))
+	})
+
+	Describe("reporting a replaced device", func() {
+		var replaced [][2]int
+		withCallback := func() vxlanMgrOption {
+			return vxlanMgrWithTunnelReplacedCallback(func(oldIfindex, newIfindex int) {
+				replaced = append(replaced, [2]int{oldIfindex, newIfindex})
+			})
+		}
+		BeforeEach(func() {
+			replaced = nil
+		})
+
+		It("reports the old and new ifindex when it recreates the device to add the VNI filter", func() {
+			addExistingDevice(false)
+			_, old := vxlanDevice()
+			Expect(configureDevice(withVNIFilter(), withCallback())).To(Succeed())
+			_, ml := vxlanDevice()
+			Expect(ml.LinkAttrs.Index).NotTo(Equal(old.LinkAttrs.Index))
+			Expect(replaced).To(Equal([][2]int{{old.LinkAttrs.Index, ml.LinkAttrs.Index}}))
+		})
+
+		It("reports the device recreated after someone deleted it", func() {
+			mgr := newMgr(withVNIFilter(), withCallback())
+			Expect(configure(mgr)).To(Succeed())
+			_, old := vxlanDevice()
+
+			Expect(dataplane.LinkDel(old)).To(Succeed())
+			Expect(configure(mgr)).To(Succeed())
+			_, ml := vxlanDevice()
+			Expect(replaced).To(Equal([][2]int{{old.LinkAttrs.Index, ml.LinkAttrs.Index}}))
+		})
+
+		It("reports nothing while the device is unchanged", func() {
+			addExistingDevice(true, 4096, bpfnat.NodePortVXLANTunnelVNI)
+			mgr := newMgr(withVNIFilter(), withCallback())
+			Expect(configure(mgr)).To(Succeed())
+			Expect(configure(mgr)).To(Succeed())
+			Expect(replaced).To(BeEmpty())
+		})
 	})
 
 	It("removes stale VNIs from an existing VNI-filtering device", func() {

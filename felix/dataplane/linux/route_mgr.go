@@ -38,6 +38,9 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+// ifindexUnknown marks a tunnel device not seen yet; the kernel never assigns ifindex 0.
+const ifindexUnknown = 0
+
 type routeManager struct {
 	// Our dependencies.
 	routeTable           routetable.Interface
@@ -85,6 +88,11 @@ type routeManager struct {
 	tunnelVNIs []uint32
 	// vniFilterSupported starts from feature detection and is cleared if the kernel drops the filter.
 	vniFilterSupported bool
+
+	// tunnelIfindex is the tunnel device's ifindex when last configured, ifindexUnknown before that.
+	tunnelIfindex int
+	// onTunnelReplaced, if set, is called with the old and new ifindex when the tunnel device is replaced.
+	onTunnelReplaced func(oldIfindex, newIfindex int)
 }
 
 func newRouteManager(
@@ -632,6 +640,10 @@ func (m *routeManager) configureTunnelDevice(
 			return fmt.Errorf("can't locate created tunnel device %v", m.tunnelDevice)
 		}
 	}
+	if m.tunnelIfindex == ifindexUnknown {
+		// First sight; a recreate below still reports this ifindex as replaced.
+		m.tunnelIfindex = link.Attrs().Index
+	}
 
 	if m.maintainIPOnly {
 		if err := m.ensureAddressOnLink(addr, link); err != nil {
@@ -670,6 +682,8 @@ func (m *routeManager) configureTunnelDevice(
 			m.vniFilterSupported = false
 		}
 	}
+
+	m.detectTunnelReplaced(link.Attrs().Index)
 
 	// Checked every pass: other programs manage VNIs on the shared port and may remove ours.
 	if m.vniFilterSupported {
@@ -715,6 +729,17 @@ func (m *routeManager) configureTunnelDevice(
 	}
 
 	return nil
+}
+
+// detectTunnelReplaced records the ifindex and, if it changed, reports the replaced device for repointing.
+func (m *routeManager) detectTunnelReplaced(ifindex int) {
+	old := m.tunnelIfindex
+	m.tunnelIfindex = ifindex
+	if old == ifindexUnknown || old == ifindex || m.onTunnelReplaced == nil {
+		return
+	}
+	m.logCtx.WithFields(logrus.Fields{"oldIfindex": old, "newIfindex": ifindex}).Info("Tunnel device replaced")
+	m.onTunnelReplaced(old, ifindex)
 }
 
 // vniFilterDropped reports whether want asks for a VNI filter that the kernel left off got.
