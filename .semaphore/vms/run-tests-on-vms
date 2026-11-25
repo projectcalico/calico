@@ -372,6 +372,10 @@ run_batch_attempt() {
     echo "$prefix Configuration of VM $vm_name FAILED; replacing it with a fresh VM."
     echo "===== attempt $attempt failed; replacing $vm_name =====" >> "$conf_log_file"
     gcloud --quiet beta compute instances delete "$vm_name" --zone="$zone" --no-graceful-shutdown >> "$conf_log_file" 2>&1
+    # A spot VM GCE may be deleting would collide with the recreate's name.
+    if [ "$spot_check" != not ]; then
+      vm_wait_gone "$vm_name" "$zone" 300 || echo "$prefix VM $vm_name is still being deleted; recreating anyway."
+    fi
     attempt_created=$(date +%s)
     check_failed=false
     if ! gcloud --quiet compute instances create "$vm_name" --zone="$zone" "${attempt_args[@]}" >> "$conf_log_file" 2>&1; then
@@ -697,7 +701,13 @@ for batch in "${batches[@]}"; do
       wd_preempt_at=""
       if [ "$wd_model" = SPOT ] && [ ! -s "$preempt_file" ] &&
         wd_preempt_at="$(vm_preemption_check "$vm_name" "$zone" "$wd_created" $(( $(date +%s) - 60 )))"; then
-        # The batch may have found the preemption too, and begun its retry.
+        # The batch may have settled the preemption itself during the check:
+        # finished, recorded an outcome, or begun its retry.
+        [ ! -f "$done_marker" ] || exit 0
+        if [ -s "$preempt_file" ]; then
+          wd_preempt_at=""
+          break
+        fi
         read -r _ wd_now_start _ < "$watchdog_file"
         [ "$wd_now_start" = "$wd_start" ] || continue
       else

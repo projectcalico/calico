@@ -96,7 +96,7 @@ capacity_labels() {
 # vm_preemption_check <vm> <zone> <attempt created epoch> <failed epoch>
 #
 # Prints the time GCE preempted <vm> and returns 0 if it did, returns 1 if it
-# didn't, or 2 if GCE couldn't be asked.  Only a preemption after <attempt
+# didn't, or 2 if GCE couldn't be asked at all.  Only a preemption after <attempt
 # created epoch> counts, so an earlier VM of the same name never matches.
 #
 # A preemption's soft shutdown can kill the tests while the VM still shows
@@ -117,8 +117,6 @@ vm_preemption_check() {
           return 0
         fi
       done
-    else
-      list_ok=false
     fi
     now="$(date +%s)"
     if [ "$now" -ge $((failed + 60)) ] && [ "$list_ok" = true ]; then
