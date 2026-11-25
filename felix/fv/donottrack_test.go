@@ -269,6 +269,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 					newNATAffSize := 4000
 					newIpSetMapSize := 5000
 					newCtMapSize := 6000
+
+					oldPIDs := make([]int, len(tc.Felixes))
+					for i, f := range tc.Felixes {
+						oldPIDs[i] = f.GetFelixPID()
+					}
+
 					infrastructure.UpdateFelixConfiguration(client, func(cfg *api.FelixConfiguration) {
 						cfg.Spec.BPFMapSizeRoute = &newRtSize
 						cfg.Spec.BPFMapSizeNATFrontend = &newNATFeSize
@@ -277,6 +283,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 						cfg.Spec.BPFMapSizeIPSets = &newIpSetMapSize
 						cfg.Spec.BPFMapSizeConntrack = &newCtMapSize
 					})
+
+					// The map size change makes every Felix restart.  Wait for the
+					// new process and for it to finish its first dataplane apply;
+					// until then it does not program new policy.  The old process
+					// still reports ready while it sleeps before exiting, so the
+					// PID change must be seen before the readiness wait.
+					for i, f := range tc.Felixes {
+						Eventually(f.GetFelixPIDs, "30s", "100ms").Should(And(
+							Not(BeEmpty()),
+							Not(ContainElement(oldPIDs[i])),
+						), "Felix %s did not restart after the map size change", f.Name)
+						f.WaitForReady()
+					}
+
+					// The restart wait comes out of the outer BeforeEach's ctx
+					// deadline; give the test body a fresh one.
+					cancel()
+					ctx, cancel = context.WithTimeout(context.Background(), 50*time.Second)
 				})
 
 				It("should implement untracked policy correctly", func() {
