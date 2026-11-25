@@ -26,38 +26,60 @@ retryable_vm_create_codes_re='^(ZONE_RESOURCE_POOL_EXHAUSTED|ZONE_RESOURCE_POOL_
 # Creates all the VMs with the first machine type in VM_MACHINE_TYPES that has
 # capacity and quota, in priority order.  After each failed pass over the list
 # it backs off and starts again from the top.  No attempt starts after
-# VM_CREATE_RETRY_MINUTES.  On success, sets vm_machine_type, vm_boot_disk_type
-# and vm_create_summary.
+# VM_CREATE_RETRY_MINUTES.  On success, sets vm_machine_type, vm_boot_disk_type,
+# vm_provisioning_model and vm_create_summary.
+#
+# With VM_PROVISIONING_MODEL=SPOT, it first makes a single pass over
+# VM_SPOT_MACHINE_TYPES as spot, without waiting and whatever the error: the
+# on-demand loop already waits out shortages, and spot ones would only add to
+# the lane's wait.
 bulk_create_vms() {
   local names="$1" region="$2"
   shift 2
-  local -a types
+  local -a types spot_types
   read -r -a types <<<"${VM_MACHINE_TYPES:?}"
   local num_vms
   num_vms=$(tr ',' '\n' <<<"$names" | grep -c .)
   local start=$SECONDS
-  local deadline=$((SECONDS + ${VM_CREATE_RETRY_MINUTES:-15} * 60))
-  local backoff=60 attempt=0 type codes pause
+  local backoff=60 attempt=0 std_attempts=0 type codes pause
   local -a failures=()
 
+  if [ "${VM_PROVISIONING_MODEL:-STANDARD}" = SPOT ]; then
+    read -r -a spot_types <<<"${VM_SPOT_MACHINE_TYPES:-${VM_MACHINE_TYPES}}"
+    echo "Creating ${num_vms} spot test VMs in region ${region}; machine types in priority order: ${spot_types[*]}"
+    for type in "${spot_types[@]}"; do
+      attempt=$((attempt + 1))
+      echo "VM creation attempt ${attempt}: ${num_vms} × ${type} (spot)..."
+      if codes=$(bulk_create_vms_attempt "$type" "$names" "$region" "$@" \
+          --provisioning-model=SPOT --labels=ci-provisioning=spot); then
+        bulk_create_vms_succeeded SPOT
+        return 0
+      fi
+      codes="${codes:-UNKNOWN}"
+      echo "VM creation attempt ${attempt} with ${type} (spot) failed: ${codes//$'\n'/ }"
+      failures+=("${type} spot: ${codes//$'\n'/ }")
+      # The insert may still be running, and would take the on-demand VMs' names.
+      if grep -qx OPERATION_TIMEOUT <<<"$codes"; then
+        echo "===== Test VM creation FAILED: the ${type} spot create did not finish =====" >&2
+        return 1
+      fi
+    done
+    echo "No spot capacity for the fleet; falling back to on-demand."
+  fi
+
+  local deadline=$((SECONDS + ${VM_CREATE_RETRY_MINUTES:-15} * 60))
   echo "Creating ${num_vms} test VMs in region ${region}; machine types in priority order: ${types[*]}"
   while true; do
     for type in "${types[@]}"; do
       # A pass over a long list can outlast the deadline by itself.
-      if [ "$attempt" -gt 0 ] && [ "$SECONDS" -ge "$deadline" ]; then
+      if [ "$std_attempts" -gt 0 ] && [ "$SECONDS" -ge "$deadline" ]; then
         break 2
       fi
       attempt=$((attempt + 1))
+      std_attempts=$((std_attempts + 1))
       echo "VM creation attempt ${attempt}: ${num_vms} × ${type}..."
-      if codes=$(bulk_create_vms_attempt "$type" "$names" "$region" "$@"); then
-        vm_machine_type="$type"
-        vm_boot_disk_type=$(boot_disk_type_for "$type")
-        vm_create_summary="Test VMs: ${num_vms} × ${type} in ${region} (attempt ${attempt}, $((SECONDS - start))s"
-        if [ ${#failures[@]} -gt 0 ]; then
-          vm_create_summary+="; earlier failures: $(IFS=,; echo "${failures[*]}")"
-        fi
-        vm_create_summary+=")"
-        echo "===== ${vm_create_summary} ====="
+      if codes=$(bulk_create_vms_attempt "$type" "$names" "$region" "$@" --labels=ci-provisioning=standard); then
+        bulk_create_vms_succeeded STANDARD
         return 0
       fi
       codes="${codes:-UNKNOWN}"
@@ -76,6 +98,21 @@ bulk_create_vms() {
   done
   echo "===== Test VM creation FAILED: no capacity or quota after ${attempt} attempts over $((SECONDS - start))s =====" >&2
   return 1
+}
+
+# Reads its caller's locals.
+bulk_create_vms_succeeded() {
+  vm_machine_type="$type"
+  vm_boot_disk_type=$(boot_disk_type_for "$type")
+  vm_provisioning_model="$1"
+  local kind=""
+  [ "$1" = SPOT ] && kind=" spot"
+  vm_create_summary="Test VMs: ${num_vms} ×${kind} ${type} in ${region} (attempt ${attempt}, $((SECONDS - start))s"
+  if [ ${#failures[@]} -gt 0 ]; then
+    vm_create_summary+="; earlier failures: $(IFS=,; echo "${failures[*]}")"
+  fi
+  vm_create_summary+=")"
+  echo "===== ${vm_create_summary} ====="
 }
 
 # Newer families boot only from Hyperdisk, which these older ones can't attach;
