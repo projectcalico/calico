@@ -905,6 +905,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					IfaceName:       setLogPrefix(ifaceLog),
 					MaglevLUTSize:   testMaglevLUTSize,
 					IPFragTimeout:   topts.ipfragTimeout,
+					ExtToSvcMark:    topts.extToSvcMark,
 					WgPort:          topts.wgPort,
 				}
 				if topts.flowLogsEnabled {
@@ -1335,6 +1336,7 @@ type testOpts struct {
 	istioDSCP                     int8
 	workloadSrcSpoofingConfigured bool
 	ipfragTimeout                 uint32
+	extToSvcMark                  uint32
 	wgPort                        uint16
 	redirectPeer                  bool
 	rpfEnabled                    bool
@@ -1493,6 +1495,12 @@ func withIstioDSCP(value uint8) testOption {
 func withIPFragTimeout(timeout uint32) testOption {
 	return func(o *testOpts) {
 		o.ipfragTimeout = timeout
+	}
+}
+
+func withExtToSvcMark(mark uint32) testOption {
+	return func(o *testOpts) {
+		o.extToSvcMark = mark
 	}
 }
 
