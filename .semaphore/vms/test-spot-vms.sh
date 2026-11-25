@@ -142,6 +142,25 @@ echo RUNNING >"$STUB_STATE/status"
 vm_preemption_check vm z "$created" $((now - 61)) >/dev/null
 check "RUNNING 60s after the failure ends the check early" [ $? = 1 -a "$(grep -c sleep "$STUB_STATE/calls")" = 0 ]
 
+# Finding a preemption across a region, as for a VM gone before its zone was
+# known.
+fresh
+printf '%s us-central1-a\n%s us-central1-c\n' "$before" "$recent" >"$STUB_STATE/ops-default"
+found=$(vm_preempted vm "$created" region us-central1)
+check "a region lookup gives the later preemption's zone" [ $? = 0 -a "$found" = "$recent us-central1-c" ]
+check "  across the region's zones" grep -q "zone~'/zones/us-central1-'" "$STUB_STATE/calls"
+
+fresh
+: >"$STUB_STATE/ops-default"
+vm_preempted vm "$created" zone us-central1-a >/dev/null
+check "no preemption in a zone" [ $? = 1 ]
+check "  asks only that zone" grep -q -- "--zones=us-central1-a" "$STUB_STATE/calls"
+
+fresh
+echo fail >"$STUB_STATE/ops-default"
+vm_preempted vm "$created" zone us-central1-a >/dev/null
+check "a failed lookup is told apart from none" [ $? = 2 ]
+
 # Waiting for the preempted VM to go.
 fresh
 echo gone-after-3 >"$STUB_STATE/status"

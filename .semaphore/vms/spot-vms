@@ -93,6 +93,32 @@ capacity_labels() {
   echo "ci-cap-obtainability=${obt//./-},ci-cap-uptime=${up//./-}"
 }
 
+# vm_preempted <vm> <since epoch> zone|region <name>
+#
+# Prints "<time> <zone>" of the first preemption of <vm> at or after <since
+# epoch> and returns 0, returns 1 if there was none, or 2 if GCE couldn't be
+# asked.  <since epoch> keeps an earlier VM of the same name from matching.
+vm_preempted() {
+  local vm="$1" since="$2" kind="$3" where="$4" ops t z
+  local filter="operationType=compute.instances.preempted AND targetLink~'/instances/${vm}\$'"
+  local scope=()
+  if [ "$kind" = zone ]; then
+    scope=(--zones="$where")
+  else
+    filter+=" AND zone~'/zones/${where}-'"
+  fi
+  ops="$(gcloud --quiet compute operations list "${scope[@]}" --filter="$filter" \
+    --format='value(insertTime,zone.basename())' 2>/dev/null)" || return 2
+  while read -r t z; do
+    [ -n "$t" ] || continue
+    if [ "$(date -d "$t" +%s 2>/dev/null || echo 0)" -ge "$since" ]; then
+      echo "$t $z"
+      return 0
+    fi
+  done <<<"$ops"
+  return 1
+}
+
 # vm_preemption_check <vm> <zone> <attempt created epoch> <failed epoch>
 #
 # Prints the time GCE preempted <vm> and returns 0 if it did, returns 1 if it
@@ -105,19 +131,14 @@ capacity_labels() {
 # failure is past the 30s shutdown window, so it wasn't preempted.
 vm_preemption_check() {
   local vm="$1" zone="$2" created="$3" failed="$4"
-  local ops t status now list_ok=false
+  local found rc status now list_ok=false
   while true; do
-    if ops="$(gcloud --quiet compute operations list --zones="$zone" \
-      --filter="operationType=compute.instances.preempted AND targetLink~'/instances/${vm}\$'" \
-      --format='value(insertTime)' 2>/dev/null)"; then
-      list_ok=true
-      for t in $ops; do
-        if [ "$(date -d "$t" +%s 2>/dev/null || echo 0)" -ge "$created" ]; then
-          echo "$t"
-          return 0
-        fi
-      done
-    fi
+    rc=0
+    found="$(vm_preempted "$vm" "$created" zone "$zone")" || rc=$?
+    case "$rc" in
+      0) echo "${found%% *}"; return 0 ;;
+      1) list_ok=true ;;
+    esac
     now="$(date +%s)"
     if [ "$now" -ge $((failed + 60)) ] && [ "$list_ok" = true ]; then
       status="$(gcloud --quiet compute instances describe "$vm" --zone="$zone" --format='value(status)' 2>/dev/null)" || status=""

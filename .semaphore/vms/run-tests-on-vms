@@ -205,14 +205,9 @@ for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
   [ -z "${vm_zone[$vm_name]:-}" ] || continue
   if [ "$vm_provisioning_model" = SPOT ] &&
-    vm_z="$(gcloud --quiet compute operations list \
-      --filter="operationType=compute.instances.preempted AND targetLink~'/instances/${vm_name}\$' AND zone~'/zones/${region}-'" \
-      --format='value(insertTime,zone.basename())' |
-      while read -r op_at op_z; do
-        [ "$(date -d "$op_at" +%s 2>/dev/null || echo 0)" -lt "$fleet_created" ] || { echo "$op_z"; break; }
-      done)" && [ -n "$vm_z" ]; then
-    vm_zone["$vm_name"]="$vm_z"
-    echo "  $vm_name -> $vm_z (spot VM already preempted; its batch will rerun on demand)"
+    preempted="$(vm_preempted "$vm_name" "$fleet_created" region "$region")"; then
+    vm_zone["$vm_name"]="${preempted#* }"
+    echo "  $vm_name -> ${preempted#* } (spot VM already preempted; its batch will rerun on demand)"
     continue
   fi
   echo "ERROR: could not determine the zone of VM $vm_name after bulk create." 1>&2
