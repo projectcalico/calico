@@ -104,6 +104,7 @@ fresh() {
 now=$(date +%s)
 created=$((now - 3600))
 recent="$(date -d "@$((now - 30))" --iso-8601=seconds)"
+recent_utc="$(date -u -d "@$((now - 30))" +%Y-%m-%dT%H:%M:%SZ)"
 before="$(date -d "@$((created - 60))" --iso-8601=seconds)"
 
 # Preemption check.  A failure 200s ago is past both polling limits, so these
@@ -111,7 +112,7 @@ before="$(date -d "@$((created - 60))" --iso-8601=seconds)"
 fresh
 echo "$recent" >"$STUB_STATE/ops-default"
 at=$(vm_preemption_check vm z "$created" $((now - 200)))
-check "a preemption after creation is found" [ $? = 0 -a "$at" = "$recent" ]
+check "a preemption after creation is found, in UTC" [ $? = 0 -a "$at" = "$recent_utc" ]
 
 fresh
 echo "$before" >"$STUB_STATE/ops-default"
@@ -133,7 +134,7 @@ fresh
 : >"$STUB_STATE/ops-1"
 echo "$recent" >"$STUB_STATE/ops-2"
 at=$(vm_preemption_check vm z "$created" "$now")
-check "a preemption recorded after the failure is found by polling" [ $? = 0 -a "$at" = "$recent" ]
+check "a preemption recorded after the failure is found by polling" [ $? = 0 -a "$at" = "$recent_utc" ]
 check "  without asking about RUNNING inside 60s" [ "$(grep -c 'instances describe' "$STUB_STATE/calls")" = 0 ]
 
 fresh
@@ -147,7 +148,7 @@ check "RUNNING 60s after the failure ends the check early" [ $? = 1 -a "$(grep -
 fresh
 printf '%s us-central1-a\n%s us-central1-c\n' "$before" "$recent" >"$STUB_STATE/ops-default"
 found=$(vm_preempted vm "$created" region us-central1)
-check "a region lookup gives the later preemption's zone" [ $? = 0 -a "$found" = "$recent us-central1-c" ]
+check "a region lookup gives the later preemption's zone" [ $? = 0 -a "$found" = "$recent_utc us-central1-c" ]
 check "  across the region's zones" grep -q "zone~'/zones/us-central1-'" "$STUB_STATE/calls"
 
 fresh

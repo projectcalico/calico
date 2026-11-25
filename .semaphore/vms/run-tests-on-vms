@@ -410,6 +410,9 @@ run_batch_attempt() {
   run_batch "$my_dir/on-test-vm" "$batch" "$vm_name" "$log_file"
   rc=$?
   if [ $rc != 0 ]; then
+    # The step log follows this batch's log with a 1s-polling tail; let it print
+    # the attempt's last lines before anything about how the attempt ended.
+    sleep 2
     # The verdict can reach us a poll after the tests end, by which time a
     # preemption may have followed a genuine failure.
     check_spot_failure "$(stat -c %Y "$log_file" 2>/dev/null || date +%s)"

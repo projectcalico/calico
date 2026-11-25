@@ -112,7 +112,8 @@ vm_preempted() {
   while read -r t z; do
     [ -n "$t" ] || continue
     if [ "$(date -d "$t" +%s 2>/dev/null || echo 0)" -ge "$since" ]; then
-      echo "$t $z"
+      # GCE reports operation times in Pacific time; the rest of the log is UTC.
+      echo "$(date -u -d "$t" +%Y-%m-%dT%H:%M:%SZ) $z"
       return 0
     fi
   done <<<"$ops"
