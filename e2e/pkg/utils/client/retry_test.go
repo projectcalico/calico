@@ -16,6 +16,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -81,6 +82,12 @@ func TestRetriableAPIError(t *testing.T) {
 	g.Expect(RetriableAPIError(apierrors.NewServiceUnavailable("unexpected EOF"))).To(BeTrue())
 	g.Expect(RetriableAPIError(apierrors.NewInternalError(context.DeadlineExceeded))).To(BeTrue())
 	g.Expect(RetriableAPIError(&meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "projectcalico.org"}})).To(BeTrue())
+	g.Expect(RetriableAPIError(&meta.NoResourceMatchError{PartialResource: schema.GroupVersionResource{Group: "projectcalico.org"}})).To(BeTrue())
+	g.Expect(RetriableAPIError(fmt.Errorf("wrapped: %w", &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "projectcalico.org"}}))).To(BeTrue())
+
+	// A kind outside projectcalico.org is missing because its CRD is not installed.
+	g.Expect(RetriableAPIError(&meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "operator.tigera.io", Kind: "Installation"}})).To(BeFalse())
+	g.Expect(RetriableAPIError(&meta.NoResourceMatchError{PartialResource: schema.GroupVersionResource{Group: "operator.tigera.io"}})).To(BeFalse())
 
 	// Conflict belongs to the callers that re-read the object, not to the wrapper.
 	g.Expect(RetriableAPIError(apierrors.NewConflict(schema.GroupResource{}, "default", nil))).To(BeFalse())
@@ -129,6 +136,26 @@ func TestWithRetryRetriesNoMatch(t *testing.T) {
 
 	g.Expect(c.List(context.Background(), &v3.GlobalNetworkPolicyList{})).To(Succeed())
 	g.Expect(lists).To(Equal(2))
+}
+
+// On a manifest install the operator CRDs are absent, and callers probe for
+// them on every spec; each probe must fail fast.
+func TestWithRetryDoesNotRetryMissingOperatorKind(t *testing.T) {
+	g := NewWithT(t)
+	shrinkRetry(t)
+
+	gets := 0
+	base := newFakeClient(t)
+	c := WithRetry(interceptor.NewClient(base, interceptor.Funcs{
+		Get: func(ctx context.Context, cli ctrlclient.WithWatch, key ctrlclient.ObjectKey, obj ctrlclient.Object, opts ...ctrlclient.GetOption) error {
+			gets++
+			return &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "operator.tigera.io", Kind: "Installation"}}
+		},
+	}))
+
+	err := c.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, &apiregistrationv1.APIService{})
+	g.Expect(meta.IsNoMatchError(err)).To(BeTrue())
+	g.Expect(gets).To(Equal(1))
 }
 
 func TestWithRetryDoesNotRetryNotFound(t *testing.T) {
