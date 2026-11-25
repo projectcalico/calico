@@ -81,6 +81,13 @@ func vxlanMgrWithDualStack() vxlanMgrOption {
 	}
 }
 
+// vxlanMgrWithTunnelReplacedCallback reports a replaced tunnel device so its conntrack legs can be repointed.
+func vxlanMgrWithTunnelReplacedCallback(cb func(oldIfindex, newIfindex int)) vxlanMgrOption {
+	return func(m *vxlanManager) {
+		m.routeMgr.onTunnelReplaced = cb
+	}
+}
+
 // vxlanMgrWithVNIFilter makes the flow-based BPF device accept only Calico's VNIs, so
 // other VXLAN devices can share its port. overlayVNI is the VNI that BPF encapsulates with.
 // BPF decaps the NodePort VNI on host endpoints, so the filter only reserves it.

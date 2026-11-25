@@ -399,6 +399,7 @@ type InternalDataplane struct {
 	vxlanParentIfaceCV6 chan string
 	vxlanManager        *vxlanManager
 	vxlanManagerV6      *vxlanManager
+	tunnelCTRepointer   *bpfconntrack.TunnelIfaceRepointer
 	vxlanFDBs           []*vxlanfdb.VXLANFDB
 
 	linkAddrsManagers []linkaddrs.Interface
@@ -899,6 +900,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	var bpfVXLANOpts []vxlanMgrOption
 	if config.BPFEnabled && dataplaneFeatures.VXLANVNIFilter {
 		bpfVXLANOpts = append(bpfVXLANOpts, vxlanMgrWithVNIFilter(bpfOverlayTunnelID(&config.RulesConfig)))
+	}
+	if config.BPFEnabled {
+		dp.tunnelCTRepointer = bpfconntrack.NewTunnelIfaceRepointer()
+		bpfVXLANOpts = append(bpfVXLANOpts, vxlanMgrWithTunnelReplacedCallback(dp.tunnelCTRepointer.OnTunnelReplaced))
 	}
 
 	if config.RulesConfig.VXLANEnabled {
@@ -3239,6 +3244,10 @@ func startBPFDataplaneComponents(
 	bpfCleaner, err := bpfconntrack.NewBPFProgCleaner(int(ipFamily), config.BPFConntrackTimeouts, ctLogLevel)
 	if err != nil {
 		log.Errorf("error creating the bpf cleaner %v", err)
+	}
+	// The cleaner's loaded object also holds the repoint program; the scanner below keeps using it for expiry.
+	if rp, ok := bpfCleaner.(bpfconntrack.IfindexRepointer); ok && dp.tunnelCTRepointer != nil {
+		dp.tunnelCTRepointer.RegisterFamily(int(ipFamily), rp)
 	}
 
 	workloadRemoveChan := make(chan string, 1000)
