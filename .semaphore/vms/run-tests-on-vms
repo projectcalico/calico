@@ -409,6 +409,9 @@ run_batch_attempt() {
   fi
 
   echo "$prefix Test batch $batch STARTING (sending logs to $log_file)..."
+  if [ "$attempt_model" = SPOT ]; then
+    maybe_simulate_preemption "$batch" "$vm_name" "$zone" 2>&1 | sed "s/^/$prefix /"
+  fi
   run_batch "$my_dir/on-test-vm" "$batch" "$vm_name" "$log_file"
   rc=$?
   if [ $rc != 0 ]; then

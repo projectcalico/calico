@@ -66,6 +66,7 @@ case "$*" in
     echo "create $type" >>"$state/creates"
     [ "$(cat "$state/create-$type" 2>/dev/null)" = ok ]
     ;;
+  *"simulate-maintenance-event"*) [ "$(cat "$state/simulate" 2>/dev/null)" != fail ] ;;
   *"auth print-access-token"*) echo token ;;
   *"config get-value project"*) echo proj ;;
   *"zones list"*) printf 'us-central1-a\nus-central1-b\n' ;;
@@ -196,6 +197,20 @@ fresh
 echo ok >"$STUB_STATE/create-c3d"
 VM_REPLACE_DEADLINE=$((now - 1)) create_on_demand_replacement vm z c3d >/dev/null 2>&1
 check "nothing is tried past the deadline" [ $? = 1 -a ! -f "$STUB_STATE/creates" ]
+
+# Simulated preemption.
+fresh
+FV_SIMULATE_PREEMPT_BATCHES="3 15" maybe_simulate_preemption 1 vm z >/dev/null
+check "an unlisted batch isn't preempted" [ ! -s "$STUB_STATE/calls" ]
+FV_SIMULATE_PREEMPT_BATCHES="3 15" maybe_simulate_preemption 15 vm z >/dev/null
+check "a listed batch's VM is preempted" \
+  grep -qx "\-\-quiet compute instances simulate-maintenance-event vm --zone=z --async" "$STUB_STATE/calls"
+: >"$STUB_STATE/calls"
+FV_SIMULATE_PREEMPT_BATCHES=13 maybe_simulate_preemption 1 vm z >/dev/null
+check "  matching whole batch names only" [ ! -s "$STUB_STATE/calls" ]
+echo fail >"$STUB_STATE/simulate"
+FV_SIMULATE_PREEMPT_BATCHES=15 maybe_simulate_preemption 15 vm z >/dev/null
+check "a refused request doesn't fail the batch" [ $? = 0 ]
 
 # Capacity scores.
 fresh

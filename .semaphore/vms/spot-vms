@@ -153,6 +153,18 @@ vm_preemption_check() {
   done
 }
 
+# maybe_simulate_preemption <batch> <vm> <zone> has GCE preempt <vm> if <batch>
+# is listed in FV_SIMULATE_PREEMPT_BATCHES, so a run can exercise the
+# preemption retry for real.  GCE acts about 2.5 minutes after being asked, so
+# this must be called while the batch has longer than that left to run.
+maybe_simulate_preemption() {
+  local batch="$1" vm="$2" zone="$3"
+  [[ " ${FV_SIMULATE_PREEMPT_BATCHES:-} " == *" $batch "* ]] || return 0
+  echo "Asking GCE to preempt spot VM $vm (batch $batch is in FV_SIMULATE_PREEMPT_BATCHES)."
+  gcloud --quiet compute instances simulate-maintenance-event "$vm" --zone="$zone" --async ||
+    echo "Could not ask GCE to preempt $vm; the batch runs on undisturbed."
+}
+
 # vm_wait_gone <vm> <zone> <seconds> waits for GCE to finish deleting <vm>,
 # which the DELETE termination action may still be doing.
 vm_wait_gone() {
