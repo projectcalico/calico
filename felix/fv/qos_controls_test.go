@@ -349,6 +349,26 @@ var _ = infrastructure.DatastoreDescribe(
 					}
 				}
 
+				// Felix writes the cali_qos entry before it attaches the program
+				// that enforces it; until then the old program passes every
+				// packet without reading the entry. The enforcing program moves
+				// PacketRateTokens off the -1 sentinel on the first packet it
+				// handles, so probe from src to dst until it does.
+				waitForBPFPacketRateEnforced := func(felixId, wlId int, hook string, src, dst *workload.Workload, rate, burst int) {
+					Eventually(func() int16 {
+						_, _ = src.SendPacketsTo(dst.IP, 1, 56)
+						value := getBPFQoSRateValue(felixId, wlId, hook)
+						if value == nil {
+							return -1
+						}
+						return value.PacketRateTokens()
+					}, "10s", "200ms").ShouldNot(BeEquivalentTo(-1), "packet rate limit not enforced by the attached BPF program")
+					// The enforcing program took a token per probe it saw. Wait as
+					// long as an empty bucket needs to refill (burst/rate) so the
+					// peak run starts from a full bucket.
+					time.Sleep(time.Duration(burst) * time.Second / time.Duration(rate))
+				}
+
 				getBPFMaxConnections := func(felixId, wlId int, hook string) func() uint32 {
 					return func() uint32 {
 						value := getBPFQoSConnValue(felixId, wlId, hook)
@@ -601,6 +621,8 @@ var _ = infrastructure.DatastoreDescribe(
 							By("Waiting for the config to appear in the BPF maps on workload 0")
 							Eventually(getBPFPacketRateAndBurst(0, 0, "ingress"), "10s", "1s").Should(Equal("100 200"))
 							Consistently(getBPFPacketRateAndBurst(0, 0, "egress"), "5s", "1s").Should(Equal("0 0"))
+							By("Waiting for the BPF program on workload 0 to enforce the ingress limit")
+							waitForBPFPacketRateEnforced(0, 0, "ingress", w[1], w[0], 100, 200)
 						} else {
 							By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 0")
 							if NFTMode() {
@@ -668,6 +690,8 @@ var _ = infrastructure.DatastoreDescribe(
 							By("Waiting for the config to appear in the BPF maps on workload 1")
 							Eventually(getBPFPacketRateAndBurst(1, 1, "ingress"), "10s", "1s").Should(Equal("0 0"))
 							Eventually(getBPFPacketRateAndBurst(1, 1, "egress"), "10s", "1s").Should(Equal("100 200"))
+							By("Waiting for the BPF program on workload 1 to enforce the egress limit")
+							waitForBPFPacketRateEnforced(1, 1, "egress", w[1], w[0], 100, 200)
 						} else {
 							By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 1")
 							if NFTMode() {
