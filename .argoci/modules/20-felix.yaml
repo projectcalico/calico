@@ -160,10 +160,11 @@ steps:
       # on an on-demand VM.
       - name: VM_PROVISIONING_MODEL
         value: SPOT
-      # C3D first: the best spot capacity and uptime in us-central1 on 24 Nov
-      # 2026.
+      # Spot highcpu-4 VMs are preempted far more often than standard-4 ones
+      # (us-central1, Oct-Nov 2026); C3D is the cheapest standard-4 and C3 the
+      # least preempted.
       - name: VM_SPOT_MACHINE_TYPES
-        value: c3d-highcpu-4 c4d-highcpu-4 c3-highcpu-4
+        value: c3d-standard-4 c3-standard-4
       # The step timeout less the setup before the fleet starts; a preempted
       # batch reruns only if this leaves time for it.
       - name: FV_STEP_TIMEOUT_MINUTES
