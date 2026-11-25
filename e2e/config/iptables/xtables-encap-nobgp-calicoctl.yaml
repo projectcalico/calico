@@ -13,3 +13,5 @@ exclude:
   labels:
     - label: RequiresCalicoAPIServer
       reason: "no aggregated Calico API server (calicoctl mode), so read-path tier RBAC is not enforced"
+    - label: Feature:Tiered-RBAC
+      reason: "calicoctl mode serves no projectcalico.org/v3 API, so there is nothing for tier RBAC to authorize"

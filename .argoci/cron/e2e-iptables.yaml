@@ -57,7 +57,7 @@ steps:
       - name: CALICOCTL_INSTALL_TYPE
         value: k8s-pod
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/xtables-v3crd-aws.yaml
+        value: e2e/config/iptables/xtables-calicoctl-aws.yaml
       - name: PROVISIONER
         value: aws-kubeadm
       - name: USE_API_SERVER
