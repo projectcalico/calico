@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# stage-calico-image <out>: lays out docker/calico/Dockerfile's image as a
+# single-stage buildkit context in <out>, from binaries already built, since
+# rootless buildkit writes an empty tar for a multi-stage build. The context
+# is the Dockerfile's own final stage, with the tree its earlier stages
+# assemble staged as files. A Dockerfile whose earlier stages no longer match
+# what this stages fails here rather than building a different image.
+set -euo pipefail
+
+out=${1:?usage: stage-calico-image <out>}
+arch=amd64
+dockerfile=docker/calico/Dockerfile
+
+fail() { echo "stage-calico-image: $*" >&2; exit 1; }
+
+# The stages before the last, comments and blank lines aside: what the rootfs
+# below reproduces.
+expected=$(cat <<'EOF'
+ARG CALICO_BASE
+ARG UBI_IMAGE
+FROM ${UBI_IMAGE} AS builder
+ARG TARGETARCH
+ARG BIN_DIR
+RUN mkdir -p /shim/usr/bin
+COPY ${BIN_DIR}/calico-${TARGETARCH} /shim/usr/bin/calico
+RUN ln -s calico /shim/usr/bin/calicoctl && \
+    ln -s calico /shim/usr/bin/calico-ipam
+FROM scratch AS source
+ARG TARGETARCH
+ARG BIN_DIR
+COPY --from=builder /shim/ /
+COPY pod2daemon/bin/node-driver-registrar-${TARGETARCH} /usr/bin/csi-node-driver-registrar
+COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
+COPY docker/calico/typha.cfg /etc/calico/typha.cfg
+EOF
+)
+last_from=$(grep -n '^FROM ' "$dockerfile" | tail -n 1 | cut -d: -f1)
+actual=$(head -n "$((last_from - 1))" "$dockerfile" | grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$')
+if [ "$actual" != "$expected" ]; then
+  diff <(echo "$expected") <(echo "$actual") >&2 || true
+  fail "$dockerfile's build stages changed; update what this stages to match"
+fi
+grep -q '^COPY --from=source / /$' "$dockerfile" ||
+  fail "$dockerfile's final stage no longer copies its source stage whole"
+
+rootfs=$out/rootfs
+mkdir -p "$rootfs/usr/bin" "$rootfs/licenses" "$rootfs/etc/calico"
+cp "cmd/calico/bin/calico-$arch" "$rootfs/usr/bin/calico"
+ln -s calico "$rootfs/usr/bin/calicoctl"
+ln -s calico "$rootfs/usr/bin/calico-ipam"
+cp "pod2daemon/bin/node-driver-registrar-$arch" "$rootfs/usr/bin/csi-node-driver-registrar"
+cp cmd/calico/bin/LICENSE "$rootfs/licenses/LICENSE"
+cp docker/calico/typha.cfg "$rootfs/etc/calico/typha.cfg"
+
+# The final stage as written, its FROM's ARG declared first.
+{
+  echo 'ARG CALICO_BASE'
+  tail -n "+$last_from" "$dockerfile" | sed 's|^COPY --from=source / /$|COPY rootfs/ /|'
+} >"$out/Dockerfile"
+grep -q -- '--from' "$out/Dockerfile" && fail "the staged Dockerfile still copies from another stage"
+
+make -s --no-print-directory --eval='print-build-args: ; @echo CALICO_BASE=$(CALICO_BASE); echo GIT_VERSION=$(GIT_VERSION)' \
+  print-build-args >"$out/build-args"
+cat "$out/Dockerfile" "$out/build-args"
