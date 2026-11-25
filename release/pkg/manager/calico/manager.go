@@ -125,7 +125,6 @@ func NewManager(opts ...Option) (*CalicoManager, error) {
 		helmIndex:        true,
 		e2eBinaries:      true,
 		releaseNotes:     false,
-		dryRun:           false,
 		gitRef:           true,
 		githubRelease:    true,
 		imageRegistries:  defaultRegistries,
@@ -216,8 +215,6 @@ type CalicoManager struct {
 	// after a run, and the directory can be uploaded as a CI artifact.
 	logsDir string
 
-	// dryRun is for branch cut and release prep, which do not run a plan.
-	dryRun        bool
 	gitRef        bool
 	githubRelease bool
 	draftRelease  bool
@@ -433,7 +430,7 @@ func (r *CalicoManager) buildPlan() []plan.Node {
 				return (r.isHashRelease && r.manifests) || r.ocpBundle
 			},
 			Do:   r.buildManifests,
-			Done: manifests.Archive(r.manifestsRoot()).Present,
+			Done: func() error { return manifests.Built(r.manifestsRoot(), r.uploadDir(), r.ocpBundle) },
 		},
 		plan.Node{
 			Name: archives.WindowsStep,
@@ -804,7 +801,8 @@ func (r *CalicoManager) releaseUploads() []distribution.Upload {
 				},
 				Notes: notes,
 			},
-			Skip:   !r.githubRelease,
+			// A release is cut from the tag, so no git refs means no release.
+			Skip:   !r.githubRelease || !r.gitRef,
 			Draft:  r.draftRelease,
 			DryRun: r.planOptions.Local,
 			Runner: r.runner,
@@ -1162,7 +1160,7 @@ func (r *CalicoManager) manifestsRoot() string {
 func (r *CalicoManager) binariesBuilt() error {
 	var errs []error
 	if r.binaries {
-		errs = append(errs, binaries.Built(r.repoRoot))
+		errs = append(errs, binaries.Built(r.repoRoot, r.architectures))
 	}
 	if r.e2eBinaries && r.isHashRelease {
 		errs = append(errs, binaries.E2EBuilt(r.architectures, r.uploadDir()))
@@ -1567,7 +1565,7 @@ func (r *CalicoManager) CutBranch() error {
 		ReleaseBranchPrefix: r.releaseBranchPrefix,
 		Validate:            r.validate,
 		Publish:             r.gitRef,
-		DryRun:              r.dryRun,
+		DryRun:              r.planOptions.Local,
 		Plan:                r.cutOptions.OnlyPlan(),
 		BranchCheck:         r.cutOptions.CheckBranch(),
 		Skip:                r.cutOptions.SkipSteps(),
@@ -1783,13 +1781,13 @@ func (r *CalicoManager) pushPrepBranch(baseBranch, prepBranch string) error {
 	}
 
 	args := []string{"push", "--force-with-lease", r.repo.Remote, prepBranch}
-	if r.dryRun {
+	if r.planOptions.Local {
 		args = append(args, "--dry-run")
 	}
 	if _, err := r.git(args...); err != nil {
 		return fmt.Errorf("failed to push %q branch: %w", prepBranch, err)
 	}
-	if r.dryRun {
+	if r.planOptions.Local {
 		logrus.WithField("branch", prepBranch).Warn("Dry run, not creating PR")
 		return r.switchToBaseBranch(baseBranch)
 	}

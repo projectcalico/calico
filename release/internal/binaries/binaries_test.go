@@ -467,15 +467,18 @@ func testArchived(repoRoot string) []archives.DirSource {
 }
 
 func TestBuilt(t *testing.T) {
-	prev := archived
+	prev, prevArch := archived, archBinaries
 	archived = testArchived
-	t.Cleanup(func() { archived = prev })
+	archBinaries = func(repoRoot, arch string) []string {
+		return []string{filepath.Join(sourceDir(repoRoot, "alpha"), "alpha-linux-"+arch)}
+	}
+	t.Cleanup(func() { archived, archBinaries = prev, prevArch })
 
 	t.Run("every archived binary on disk passes", func(t *testing.T) {
 		repoRoot := t.TempDir()
 		writeBinary(t, repoRoot, "alpha", "alpha-linux-amd64")
 		writeBinary(t, repoRoot, "beta", "tool")
-		if err := Built(repoRoot); err != nil {
+		if err := Built(repoRoot, []string{"amd64"}); err != nil {
 			t.Fatalf("Built() = %v, want nil", err)
 		}
 	})
@@ -484,9 +487,19 @@ func TestBuilt(t *testing.T) {
 		repoRoot := t.TempDir()
 		writeBinary(t, repoRoot, "alpha", "alpha-linux-amd64")
 		writeBinary(t, repoRoot, "beta", "some-other-tool")
-		err := Built(repoRoot)
+		err := Built(repoRoot, nil)
 		if err == nil || !strings.Contains(err.Error(), "beta tool binary") {
 			t.Fatalf("Built() = %v, want an error naming beta tool binary", err)
+		}
+	})
+
+	t.Run("a leftover for another arch fails and names the missing one", func(t *testing.T) {
+		repoRoot := t.TempDir()
+		writeBinary(t, repoRoot, "alpha", "alpha-linux-amd64")
+		writeBinary(t, repoRoot, "beta", "tool")
+		err := Built(repoRoot, []string{"amd64", "arm64"})
+		if err == nil || !strings.Contains(err.Error(), "alpha-linux-arm64") {
+			t.Fatalf("Built() = %v, want an error naming alpha-linux-arm64", err)
 		}
 	})
 }

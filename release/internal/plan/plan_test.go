@@ -121,6 +121,23 @@ func TestRun(t *testing.T) {
 				nodes: []Node{{Name: "b", When: func() bool { return false }, Requires: []string{"a"}, Do: noop}},
 			},
 			{
+				name:    "a skipped requirement whose own requirement runs fails as stale",
+				opts:    Options{Skip: map[string]bool{"b": true}},
+				nodes:   []Node{{Name: "a", Do: noop}, {Name: "b", Requires: []string{"a"}, Do: noop, Done: noop}, {Name: "c", Requires: []string{"b"}, Do: noop}},
+				wantErr: `node "c" requires "b", which is off but would be stale: it requires "a", which runs in this run`,
+			},
+			{
+				name:  "a dry run does not check a skipped requirement",
+				opts:  Options{Skip: map[string]bool{"a": true}, Local: true},
+				nodes: []Node{{Name: "a", Do: noop, Done: func() error { return errors.New("not on the remote") }}, {Name: "b", Requires: []string{"a"}, Do: noop}},
+			},
+			{
+				name:    "a dry run still fails a skipped requirement that cannot tell",
+				opts:    Options{Skip: map[string]bool{"a": true}, Local: true},
+				nodes:   []Node{{Name: "a", Do: noop}, {Name: "b", Requires: []string{"a"}, Do: noop}},
+				wantErr: `node "b" requires "a", which is off in this run`,
+			},
+			{
 				name:    "a requirement later in the list fails",
 				nodes:   []Node{{Name: "b", Requires: []string{"a"}, Do: noop}, {Name: "a", Do: noop}},
 				wantErr: `node "b" requires "a", which runs after it`,

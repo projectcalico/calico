@@ -600,7 +600,7 @@ func TestPrepPrereqs(t *testing.T) {
 				runner: f, repoRoot: "/repo", repo: github.Repo{Owner: "projectcalico", Name: "calico", Remote: "origin"},
 				calicoVersion: testVersion(t, "v3.30.0"), operatorVersion: "v1.38.0",
 				releaseBranchPrefix: "release", validate: true, validateBranch: tc.validateBranch,
-				gitRef: true, dryRun: true,
+				gitRef: true, planOptions: plan.Options{Local: true},
 			}
 			hook := logtest.NewGlobal()
 			t.Cleanup(hook.Reset)
@@ -638,17 +638,17 @@ func TestPushPrepBranch(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		gitRef   bool
-		dryRun   bool
+		local    bool
 		wantPush string
 		wantPR   bool
 	}{
 		{name: "pushes and opens a PR", gitRef: true, wantPush: push, wantPR: true},
-		{name: "dry run checks the push and opens no PR", gitRef: true, dryRun: true, wantPush: push + " --dry-run"},
-		{name: "no git ref pushes nothing", dryRun: true},
+		{name: "dry run checks the push and opens no PR", gitRef: true, local: true, wantPush: push + " --dry-run"},
+		{name: "no git ref pushes nothing", local: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFakeRunner()
-			r := &CalicoManager{runner: f, repo: github.Repo{Remote: "origin"}, gitRef: tc.gitRef, dryRun: tc.dryRun}
+			r := &CalicoManager{runner: f, repo: github.Repo{Remote: "origin"}, gitRef: tc.gitRef, planOptions: plan.Options{Local: tc.local}}
 			if err := r.pushPrepBranch("release-v3.30", "build-v3.30.0"); err != nil {
 				t.Fatalf("pushPrepBranch() unexpected error: %v", err)
 			}
@@ -2239,21 +2239,17 @@ func TestPublishRelease(t *testing.T) {
 		}
 	})
 
-	t.Run("not pushing the tag fails a GitHub release before anything publishes", func(t *testing.T) {
-		published := false
+	t.Run("no git refs turns the GitHub release off rather than requiring the tag", func(t *testing.T) {
 		r := &CalicoManager{
 			runner:        newFakeRunner(),
 			calicoVersion: testVersion(t, "v3.30.0"),
 			outputDir:     t.TempDir(),
 			githubRelease: true,
-			operator:      operator.Driver{Do: func() error { published = true; return nil }},
+			operator:      operator.Driver{Do: func() error { return nil }},
 		}
 		err := r.PublishRelease()
-		if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("requires %q, which is off and not done", branch.PushTagStep)) {
-			t.Fatalf("PublishRelease() error = %v, want the release to require the tag", err)
-		}
-		if published {
-			t.Error("published the operator")
+		if err != nil && strings.Contains(err.Error(), fmt.Sprintf("requires %q", branch.PushTagStep)) {
+			t.Fatalf("PublishRelease() error = %v, want no requirement on %s", err, branch.PushTagStep)
 		}
 	})
 
@@ -2282,57 +2278,66 @@ func TestPublishRelease(t *testing.T) {
 		resolveTag  = "git rev-parse --verify --quiet refs/tags/v3.30.0^{commit}"
 		tagCommit   = "1111111111111111111111111111111111111111"
 	)
-	for _, tc := range []struct {
-		step string
-		done func(f *fakeRunner, outputDir string)
-	}{
-		{step: outputs.MetadataStep, done: func(_ *fakeRunner, dir string) {
-			_ = os.WriteFile(filepath.Join(dir, outputs.MetadataFileName), nil, 0o644)
-		}},
-		{step: outputs.ChecksumStep, done: func(_ *fakeRunner, dir string) {
-			_ = os.WriteFile(filepath.Join(dir, outputs.SumsFileName), nil, 0o644)
-		}},
-		{step: branch.PushTagStep, done: func(f *fakeRunner, _ string) {
-			f.on(lsRemoteTag, tagCommit+"\trefs/tags/v3.30.0", nil).on(resolveTag, tagCommit, nil)
-		}},
-	} {
-		release := func(t *testing.T, done bool) (*CalicoManager, *bool) {
+	for _, step := range []string{outputs.MetadataStep, outputs.ChecksumStep} {
+		t.Run("skipping "+step+" while what it requires runs fails as stale before anything publishes", func(t *testing.T) {
 			published := false
-			f := newFakeRunner()
 			r := &CalicoManager{
-				runner:        f,
+				runner:        newFakeRunner(),
 				calicoVersion: testVersion(t, "v3.30.0"),
 				outputDir:     t.TempDir(),
 				repo:          github.Repo{Remote: "origin"},
+				gitRef:        true,
 				githubRelease: true,
 				operator:      operator.Driver{Do: func() error { published = true; return nil }},
-				planOptions:   plan.Options{Skip: map[string]bool{tc.step: true}},
+				planOptions:   plan.Options{Skip: map[string]bool{step: true}},
 			}
-			if done {
-				tc.done(f, r.outputDir)
-			}
-			return r, &published
-		}
-
-		t.Run("skipping "+tc.step+" before an earlier run did it fails before anything publishes", func(t *testing.T) {
-			r, published := release(t, false)
 			err := r.PublishRelease()
-			if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("requires %q, which is off and not done", tc.step)) {
-				t.Fatalf("PublishRelease() error = %v, want the release to require %s", err, tc.step)
+			if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("requires %q, which is off but would be stale", step)) {
+				t.Fatalf("PublishRelease() error = %v, want %s to be stale", err, step)
 			}
-			if *published {
+			if published {
 				t.Error("published the operator")
 			}
 		})
-
-		t.Run("skipping "+tc.step+" after an earlier run did it meets the requirement", func(t *testing.T) {
-			r, _ := release(t, true)
-			err := r.PublishRelease()
-			if err != nil && strings.Contains(err.Error(), fmt.Sprintf("requires %q", tc.step)) {
-				t.Fatalf("PublishRelease() error = %v, want the requirement on %s met", err, tc.step)
-			}
-		})
 	}
+
+	release := func(t *testing.T, f *fakeRunner) (*CalicoManager, *bool) {
+		published := false
+		return &CalicoManager{
+			runner:        f,
+			calicoVersion: testVersion(t, "v3.30.0"),
+			outputDir:     t.TempDir(),
+			recordsDir:    t.TempDir(),
+			repo:          github.Repo{Remote: "origin", Owner: "projectcalico", Name: "calico"},
+			gitRef:        true,
+			githubRelease: true,
+			operator:      operator.Driver{Do: func() error { published = true; return nil }},
+			planOptions:   plan.Options{Skip: map[string]bool{branch.PushTagStep: true}},
+		}, &published
+	}
+	t.Run("skipping push-tag before an earlier run did it fails before anything publishes", func(t *testing.T) {
+		r, published := release(t, newFakeRunner())
+		err := r.PublishRelease()
+		if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("requires %q, which is off and not done", branch.PushTagStep)) {
+			t.Fatalf("PublishRelease() error = %v, want the release to require %s", err, branch.PushTagStep)
+		}
+		if *published {
+			t.Error("published the operator")
+		}
+	})
+	t.Run("skipping push-tag after an earlier run did it meets the requirement", func(t *testing.T) {
+		const (
+			lsRemoteTag = "git ls-remote origin refs/tags/v3.30.0 refs/tags/v3.30.0^{}"
+			resolveTag  = "git rev-parse --verify --quiet refs/tags/v3.30.0^{commit}"
+			tagCommit   = "1111111111111111111111111111111111111111"
+		)
+		f := newFakeRunner().on(lsRemoteTag, tagCommit+"\trefs/tags/v3.30.0", nil).on(resolveTag, tagCommit, nil)
+		r, _ := release(t, f)
+		err := r.PublishRelease()
+		if err != nil && strings.Contains(err.Error(), fmt.Sprintf("requires %q", branch.PushTagStep)) {
+			t.Fatalf("PublishRelease() error = %v, want the requirement on %s met", err, branch.PushTagStep)
+		}
+	})
 
 	t.Run("skipping the operator needs an earlier run to have published it", func(t *testing.T) {
 		for _, tc := range []struct {

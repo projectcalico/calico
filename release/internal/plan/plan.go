@@ -31,8 +31,8 @@ type Node struct {
 	// stays in the list, so Replace and Remove still find it.
 	When func() bool
 
-	// Requires names nodes that must be done before this one runs: on and
-	// earlier in the list, or off with a Done that passes.
+	// Requires names nodes that must be done first: on and earlier, or off
+	// with a passing Done and no requirement on in this run.
 	Requires []string
 
 	// Validate runs for every node that is on, before any node's Do.
@@ -41,9 +41,8 @@ type Node struct {
 	// Do may be nil for a node that only checks.
 	Do func() error
 
-	// Done reports whether this node's output exists: for an off node before
-	// any Do, for an on node straight after its own. It must only read. nil
-	// means the node cannot tell.
+	// Done reports whether this node's output exists, read-only. nil means it
+	// cannot tell.
 	Done func() error
 
 	// Rollback undoes Do when this node's Done or any later node fails.
@@ -53,7 +52,7 @@ type Node struct {
 type Options struct {
 	// Preview runs every Validate, but no Do, and logs what would run.
 	Preview bool
-	// Local skips Done after Do: a dry-run publish leaves nothing to check.
+	// Local skips Done: a dry run publishes nothing to check.
 	Local bool
 	Skip  map[string]bool
 }
@@ -125,6 +124,10 @@ func (p *Plan) Run() (err error) {
 				reqErr = fmt.Errorf("node %q requires %q, which does not exist", n.Name, req)
 			case !p.on[req] && r.Done == nil:
 				reqErr = fmt.Errorf("node %q requires %q, which is off in this run", n.Name, req)
+			case !p.on[req] && p.onRequirement(r) != "":
+				reqErr = fmt.Errorf("node %q requires %q, which is off but would be stale: it requires %q, which runs in this run", n.Name, req, p.onRequirement(r))
+			// A dry run reaches no remote, so it has nothing to check against.
+			case !p.on[req] && p.opts.Local:
 			case !p.on[req]:
 				doneErr, checked := doneErrs[req]
 				if !checked {
@@ -211,6 +214,15 @@ func (p *Plan) Run() (err error) {
 		log.WithField("duration", time.Since(start).Round(time.Second)).Info("Done")
 	}
 	return nil
+}
+
+func (p *Plan) onRequirement(n Node) string {
+	for _, req := range n.Requires {
+		if p.on[req] {
+			return req
+		}
+	}
+	return ""
 }
 
 func rollback(done []Node) error {

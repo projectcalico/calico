@@ -263,14 +263,13 @@ func TestReleaseDone(t *testing.T) {
 			fake:  func(f *fakeReleases) { f.draft("v3.30.0", &github.RepositoryRelease{Draft: github.Bool(true)}) },
 		},
 		{
-			name:  "a published release is not done when the release is a draft",
+			name:  "a draft published by hand is done when the release is a draft",
 			draft: true,
 			fake: func(f *fakeReleases) {
 				f.byTag = map[string]*github.RepositoryRelease{"v3.30.0": {TagName: github.String("v3.30.0")}}
 			},
-			wantErr: "no draft",
 		},
-		{name: "no draft is not done", draft: true, fake: func(*fakeReleases) {}, wantErr: "no draft"},
+		{name: "no draft is not done", draft: true, fake: func(*fakeReleases) {}, wantErr: "no v3.30.0 github release"},
 		{
 			name:    "a failed lookup is not done",
 			fake:    func(f *fakeReleases) { f.getErr = errors.New("rate limited") },

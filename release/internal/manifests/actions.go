@@ -15,6 +15,7 @@
 package manifests
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -53,6 +54,14 @@ func Build(m Manifests, generate, ocpBundle bool, opts ...BuildOption) error {
 		return nil
 	}
 	return s.buildOCPBundle()
+}
+
+func Built(root, outputDir string, ocpBundle bool) error {
+	errs := []error{Archive(root).Present()}
+	if ocpBundle {
+		errs = append(errs, fsutil.FilePresent(BundlePath(outputDir)))
+	}
+	return errors.Join(errs...)
 }
 
 func (s settings) generate() (cleanup func() error, err error) {

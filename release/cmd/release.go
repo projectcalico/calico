@@ -263,7 +263,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 				calico.WithTmpDir(cfg.TmpDir),
 				calico.WithValidation(c.Bool(validationFlag.Name)),
 				calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
-				calico.WithDryRun(c.Bool(localFlag.Name)),
+				calico.WithPlanOptions(plan.Options{Local: c.Bool(localFlag.Name)}),
 			}
 			r, err := calico.NewManager(opts...)
 			if err != nil {

@@ -405,6 +405,37 @@ func TestArchive(t *testing.T) {
 	})
 }
 
+func TestBuilt(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(Dir(root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(Dir(root), "calico.yaml"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := t.TempDir()
+
+	t.Run("names a missing OCP bundle", func(t *testing.T) {
+		err := Built(root, out, true)
+		if err == nil || !strings.Contains(err.Error(), OCPBundleFileName) {
+			t.Errorf("Built() = %v, want an error naming %s", err, OCPBundleFileName)
+		}
+	})
+	t.Run("skips the OCP bundle when not building one", func(t *testing.T) {
+		if err := Built(root, out, false); err != nil {
+			t.Errorf("Built() = %v, want nil", err)
+		}
+	})
+	t.Run("passes once the OCP bundle is built", func(t *testing.T) {
+		if err := os.WriteFile(BundlePath(out), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := Built(root, out, true); err != nil {
+			t.Errorf("Built() = %v, want nil", err)
+		}
+	})
+}
+
 func TestRegistry(t *testing.T) {
 	write := func(t *testing.T, root, image string) {
 		t.Helper()

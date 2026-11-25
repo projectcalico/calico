@@ -204,11 +204,16 @@ func TagUpload(o PushTagOptions) distribution.Upload {
 		DryRun: o.DryRun,
 		git:    command.Git(o.Runner).In(o.RepoRoot),
 	}
+	done := t.Pushed
+	if o.Skip {
+		// The run writes no git refs, so there is no tag to owe.
+		done = func() error { return nil }
+	}
 	return distribution.Upload{
 		Name:    PushTagStep,
 		Skip:    o.Skip,
 		Handler: t,
-		Done:    t.Pushed,
+		Done:    done,
 	}
 }
 

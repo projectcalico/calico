@@ -174,6 +174,16 @@ func TestTagUpload(t *testing.T) {
 		})
 	}
 
+	t.Run("a skipped push owes no tag, so is done without asking the remote", func(t *testing.T) {
+		u, rec := upload(PushTagOptions{Skip: true}, map[string]string{})
+		if err := u.Done(); err != nil {
+			t.Fatalf("Done() = %v, want nil", err)
+		}
+		if calls := gitCalls(rec); len(calls) != 0 {
+			t.Errorf("Done ran %v, want nothing", calls)
+		}
+	})
+
 	t.Run("done", func(t *testing.T) {
 		for _, tc := range []struct {
 			name     string

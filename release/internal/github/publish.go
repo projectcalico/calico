@@ -242,8 +242,9 @@ func (d Release) Publish(ctx context.Context, src string) error {
 	return gh.Publish(ctx, d.Tag, latest)
 }
 
-// Done fails unless the release is in the state Publish leaves it: a draft
-// when Draft is set, else live. GitHub serves a draft only by listing.
+// Done fails unless the release exists, live when Draft is unset. A draft
+// published by hand counts: Create refuses a live release, so a rerun could not
+// redo it. GitHub serves a draft only by listing.
 func (d Release) Done() error {
 	gh, err := d.client()
 	if err != nil {
@@ -260,12 +261,12 @@ func (d Release) Done() error {
 		}
 		return nil
 	}
-	rel, found, err := gh.forTag(ctx, d.Tag)
+	_, found, err := gh.forTag(ctx, d.Tag)
 	if err != nil {
 		return err
 	}
-	if !found || !rel.GetDraft() {
-		return fmt.Errorf("no draft %s", d.Name())
+	if !found {
+		return fmt.Errorf("no %s", d.Name())
 	}
 	return nil
 }

@@ -204,6 +204,12 @@ var builtSources = func(repoRoot string) []archives.DirSource {
 	return archived(repoRoot)
 }
 
+// A leftover from another build can fill a source dir, so presence alone
+// does not show this build's arches were built.
+var archBinaries = func(repoRoot, arch string) []string {
+	return []string{filepath.Join(sourceDir(repoRoot, CalicoctlComponent), CalicoctlComponent+"-linux-"+arch)}
+}
+
 func archiveLabel(name string, qualifier ...string) string {
 	prefix := name
 	if len(qualifier) > 0 {

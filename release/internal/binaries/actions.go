@@ -119,12 +119,18 @@ func (s settings) linkFrom(src, dest string, filters []fsutil.FileFilter) (int, 
 	return len(found), fsutil.LinkOrCopyFiles(src, dest, found)
 }
 
-// Built fails unless every binary the archive takes is on disk.
-func Built(repoRoot string) error {
+// Built fails unless every binary the archive takes is on disk. With no
+// arches it cannot tell which per-arch binaries to expect, so checks none.
+func Built(repoRoot string, arches []string) error {
 	var errs []error
 	for _, src := range builtSources(repoRoot) {
 		if err := src.Present(); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", src.Name(), err))
+		}
+	}
+	for _, arch := range arches {
+		for _, path := range archBinaries(repoRoot, arch) {
+			errs = append(errs, fsutil.FilePresent(path))
 		}
 	}
 	return errors.Join(errs...)
