@@ -35,8 +35,10 @@ steps:
         value: Calico
       - name: INSTALLER
         value: operator
+      # Despite the lane name, the migration swaps only the policy engine: the Azure
+      # CNI and IPAM stay, so Calico ends up policy-only.
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/aks-xtables-encap.yaml
+        value: e2e/config/iptables/aks-xtables-nobgp.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
