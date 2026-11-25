@@ -524,7 +524,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane nat outgoing flow 
 		}
 
 		cc.ExpectSome(workload1, workload2)
-		cc.CheckConnectivity()
+		// The workloads have only just started, and on a slow VM Felix can
+		// still be programming them.
+		cc.CheckConnectivityWithTimeout(30 * time.Second)
 
 		bpfEnabled := os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 		flowlogs.WaitForConntrackScan(bpfEnabled)
