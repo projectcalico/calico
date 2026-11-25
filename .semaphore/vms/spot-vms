@@ -99,16 +99,22 @@ capacity_labels() {
 # epoch> and returns 0, returns 1 if there was none, or 2 if GCE couldn't be
 # asked.  <since epoch> keeps an earlier VM of the same name from matching.
 vm_preempted() {
-  local vm="$1" since="$2" kind="$3" where="$4" ops t z
-  local filter="operationType=compute.instances.preempted AND targetLink~'/instances/${vm}\$'"
-  local scope=()
+  local vm="$1" since="$2" kind="$3" where="$4" ops t z err rc=0
+  local scope=() link="/zones/${where}-[a-z]/instances/${vm}\$"
   if [ "$kind" = zone ]; then
     scope=(--zones="$where")
-  else
-    filter+=" AND zone~'/zones/${where}-'"
+    link="/instances/${vm}\$"
   fi
-  ops="$(gcloud --quiet compute operations list "${scope[@]}" --filter="$filter" \
-    --format='value(insertTime,zone.basename())' 2>/dev/null)" || return 2
+  # GCE rejects a filter on the zone field when listing across zones, so the
+  # region goes in the targetLink match.
+  err="$(mktemp)"
+  ops="$(gcloud --quiet compute operations list "${scope[@]}" \
+    --filter="operationType=compute.instances.preempted AND targetLink~'${link}'" \
+    --format='value(insertTime,zone.basename())' 2>"$err")" || rc=2
+  # A rejected request is only a warning; gcloud still exits 0 with no rows.
+  ! grep -q 'did not succeed' "$err" || rc=2
+  rm -f "$err"
+  [ "$rc" -eq 0 ] || return 2
   while read -r t z; do
     [ -n "$t" ] || continue
     if [ "$(date -d "$t" +%s 2>/dev/null || echo 0)" -ge "$since" ]; then

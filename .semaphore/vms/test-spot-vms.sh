@@ -36,7 +36,8 @@ trap 'rm -rf "$work"' EXIT
 stub_dir="$work/bin"
 mkdir -p "$stub_dir"
 
-# ops-<n>: what the nth operations list prints, or "fail".  status: what
+# ops-<n>: what the nth operations list prints, "fail", or "rejected" for a
+# request GCE refuses (gcloud warns but exits 0).  status: what
 # describe prints, "gone" for a deleted VM, "gone-after-<n>" to delete it on the
 # nth call.  create-<type>: ok or fail.
 cat >"$stub_dir/gcloud" <<'STUB'
@@ -49,6 +50,10 @@ case "$*" in
     f="$state/ops-$(next ops)"
     [ -f "$f" ] || f="$state/ops-default"
     [ "$(cat "$f" 2>/dev/null)" != fail ] || exit 1
+    if [ "$(cat "$f" 2>/dev/null)" = rejected ]; then
+      printf 'WARNING: Some requests did not succeed.\n - Invalid value for field '"'"'filter'"'"'\n' >&2
+      exit 0
+    fi
     cat "$f" 2>/dev/null
     ;;
   *"instances describe"*)
@@ -150,7 +155,12 @@ fresh
 printf '%s us-central1-a\n%s us-central1-c\n' "$before" "$recent" >"$STUB_STATE/ops-default"
 found=$(vm_preempted vm "$created" region us-central1)
 check "a region lookup gives the later preemption's zone" [ $? = 0 -a "$found" = "$recent_utc us-central1-c" ]
-check "  across the region's zones" grep -q "zone~'/zones/us-central1-'" "$STUB_STATE/calls"
+check "  across the region's zones" grep -q "targetLink~'/zones/us-central1-\\[a-z\\]/instances/vm\\$'" "$STUB_STATE/calls"
+
+fresh
+echo rejected >"$STUB_STATE/ops-default"
+vm_preempted vm "$created" region us-central1 >/dev/null
+check "a request GCE rejects is a failed check, not \"no preemption\"" [ $? = 2 ]
 
 fresh
 : >"$STUB_STATE/ops-default"
