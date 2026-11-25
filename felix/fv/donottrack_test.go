@@ -289,12 +289,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 					// until then it does not program new policy.  The old process
 					// still reports ready while it sleeps before exiting, so the
 					// PID change must be seen before the readiness wait.
+					//
+					// Felix.WaitForReady() probes the health port on eth0 from
+					// outside, which the eth0 host endpoint's default-deny ingress
+					// drops.  Probe it over lo from inside the container instead;
+					// wget fails unless the readiness check returns 200.
 					for i, f := range tc.Felixes {
 						Eventually(f.GetFelixPIDs, "30s", "100ms").Should(And(
 							Not(BeEmpty()),
 							Not(ContainElement(oldPIDs[i])),
 						), "Felix %s did not restart after the map size change", f.Name)
-						f.WaitForReady()
+						Eventually(func() error {
+							_, err := f.ExecOutput("wget", "-q", "--content-on-error", "-T", "2", "-O", "-", "http://127.0.0.1:9099/readiness")
+							return err
+						}, "90s", "500ms").ShouldNot(HaveOccurred(),
+							"Felix %s did not become ready after the map size change", f.Name)
 					}
 
 					// The restart wait comes out of the outer BeforeEach's ctx
