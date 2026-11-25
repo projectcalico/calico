@@ -43,7 +43,7 @@
 .argoci/cron/e2e-certification.yaml | standalone-cluster-tests [4-18-27] | (ocp-cert) | -
 .argoci/cron/e2e-certification.yaml | standalone-cluster-tests [4-19-17] | (ocp-cert) | -
 .argoci/cron/e2e-certification.yaml | standalone-cluster-tests [4-20-1] | (ocp-cert) | -
-.argoci/cron/e2e-iptables.yaml | aks-aks-migrate-from-vendored-calico-cni-to-calico-cni | cron/e2e-iptables/aks-aks-migrate-from-vendored-calico-cni-to-calico-cni | 223
+.argoci/cron/e2e-iptables.yaml | aks-aks-migrate-from-vendored-calico-cni-to-calico-cni | cron/e2e-iptables/aks-aks-migrate-from-vendored-calico-cni-to-calico-cni | 206
 .argoci/cron/e2e-iptables.yaml | aks-aks-private-w-aks-cni-overlay | cron/e2e-iptables/aks-aks-private-w-aks-cni-overlay | 206
 .argoci/cron/e2e-iptables.yaml | aks-aks-w-aks-cni | cron/e2e-iptables/aks-aks-w-aks-cni | 206
 .argoci/cron/e2e-iptables.yaml | aks-aks-w-calico-cni [calico] | cron/e2e-iptables/aks-aks-w-calico-cni-calico | 223
