@@ -133,5 +133,19 @@ check "noop: generate=noop"   "$(grep -c 'generate=noop' <<<"$NOOP_OUT")" "1"
 check "noop: HEAD untouched"   "$(git -C "$WORKDIR" rev-parse HEAD)" "$BEFORE_HEAD"
 check "noop: allowlist kept"   "$(cat "$PICK_PATHS_FILE")" "pick_src.go"
 
+# --- carried_labels --------------------------------------------------------
+check "labels: kept, sorted" \
+  "$(printf 'release-note-required\ndocs-not-required\n' | carried_labels)" "docs-not-required,release-note-required"
+check "labels: pick markers dropped" \
+  "$(printf 'cherry-pick-candidate\nskip-bot-cherry-pick\nbug\n' | carried_labels)" "bug"
+check "labels: CI tier labels dropped" \
+  "$(printf 'basic-ci\nskip-ci\ncron-ci\ndocs-not-required\n' | carried_labels)" "docs-not-required"
+check "labels: -ci only as a suffix" \
+  "$(printf 'ci-flake\ntest-ci-approval\n' | carried_labels)" "ci-flake,test-ci-approval"
+check "labels: nothing left" \
+  "$(printf 'basic-ci\n' | carried_labels)" ""
+check "labels: none on the source" \
+  "$(printf '\n' | carried_labels)" ""
+
 echo "${PASS} passed, ${FAIL} failed"
 [ "$FAIL" -eq 0 ]
