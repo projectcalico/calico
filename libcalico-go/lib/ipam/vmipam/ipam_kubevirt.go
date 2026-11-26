@@ -199,10 +199,6 @@ func verifyAndSwapSingleIP(
 				log.WithField("ip", ip).Info("Skipping owner swap: IP is not assigned")
 				return nil
 			}
-			if errors.As(err, new(cerrors.ErrorIPInCooldown)) {
-				log.WithField("ip", ip).Info("Skipping owner swap: IP is released")
-				return nil
-			}
 			return fmt.Errorf("failed to get assignment attributes for IP %s: %w", ip, err)
 		}
 
