@@ -1222,7 +1222,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
-	dp.liveMigrationMonitor.registerListener(epManager)
+	dp.liveMigrationMonitor.registerLiveMigrationListener(epManager)
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 
@@ -1441,7 +1441,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			nil, // arpMaps
 		)
 		dp.RegisterManager(epManagerV6)
-		dp.liveMigrationMonitor.registerListener(epManagerV6)
+		dp.liveMigrationMonitor.registerLiveMigrationListener(epManagerV6)
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))

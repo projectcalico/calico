@@ -45,10 +45,6 @@ type hepListener interface {
 	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
 }
 
-type liveMigrationListener interface {
-	OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState)
-}
-
 type endpointManagerCallbacks struct {
 	addInterface           *common.AddInterfaceFuncs
 	removeInterface        *common.RemoveInterfaceFuncs
@@ -162,10 +158,12 @@ type endpointManager struct {
 
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
-	pendingWlEpUpdates         map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
-	pendingIfaceUpdates        map[string]ifacemonitor.State
-	pendingLiveMigrationStates map[types.WorkloadEndpointID]liveMigrationState
-	dirtyPolicyIDs             set.Set[types.PolicyID]
+	pendingWlEpUpdates  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
+	pendingIfaceUpdates map[string]ifacemonitor.State
+	dirtyPolicyIDs      set.Set[types.PolicyID]
+
+	// Route modifiers, updated/deleted by calls to OnLiveMigrationUpdate.
+	wepRouteModifiers map[types.WorkloadEndpointID]wepLiveMigrationUpdate
 
 	// Active state, updated in CompleteDeferredWork.
 	activeWlEndpoints                map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -343,10 +341,11 @@ func newEndpointManagerWithShims(
 
 		// Pending updates, we store these up as OnUpdate is called, then process them
 		// in CompleteDeferredWork and transfer the important data to the activeXYX fields.
-		pendingWlEpUpdates:         map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		pendingIfaceUpdates:        map[string]ifacemonitor.State{},
-		pendingLiveMigrationStates: map[types.WorkloadEndpointID]liveMigrationState{},
-		dirtyPolicyIDs:             set.New[types.PolicyID](),
+		pendingWlEpUpdates:  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		pendingIfaceUpdates: map[string]ifacemonitor.State{},
+		dirtyPolicyIDs:      set.New[types.PolicyID](),
+
+		wepRouteModifiers: map[types.WorkloadEndpointID]wepLiveMigrationUpdate{},
 
 		activeUpIfaces: set.New[string](),
 
@@ -471,16 +470,18 @@ func (m *endpointManager) OnUpdate(protoBufMsg any) {
 	}
 }
 
-func (m *endpointManager) OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState) {
-	log.WithFields(log.Fields{
-		"id":    id,
-		"state": state,
-	}).Debug("Live migration state update")
-	if state == liveMigrationStateBase {
-		delete(m.pendingLiveMigrationStates, id)
+func (m *endpointManager) OnLiveMigrationUpdate(id types.WorkloadEndpointID, mod *wepLiveMigrationUpdate) {
+	if mod == nil {
+		log.WithField("id", id).Debug("Delete route modifier")
+		delete(m.wepRouteModifiers, id)
 	} else {
-		m.pendingLiveMigrationStates[id] = state
+		log.WithFields(log.Fields{
+			"id":        id,
+			"routeMode": mod.routeMode,
+		}).Debug("Route modifier update")
+		m.wepRouteModifiers[id] = *mod
 	}
+
 	// Mark the endpoint dirty so CompleteDeferredWork re-evaluates its routes.
 	// Only if there isn't already a pending WEP update, to avoid clobbering a
 	// more recent proto with stale activeWlEndpoints data.
@@ -755,7 +756,6 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 		delete(m.activeWlIDToChains, id)
 		m.removeWorkloadARPChains(id)
-		delete(m.pendingLiveMigrationStates, id)
 		if oldWorkload != nil {
 			m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
 			// Remove any routes from the routing table.  The RouteTable will remove any
@@ -867,6 +867,10 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				delete(m.pendingWlEpUpdates, id)
 				delete(m.shadowedWlEndpoints, id)
 
+				// Only here, not in removeActiveWorkload, because a workload that is only being
+				// shadowed still needs its route modifier when it becomes active again.
+				delete(m.wepRouteModifiers, id)
+
 				if oldWorkload != nil {
 					// Check for another endpoint with the same interface name,
 					// that should now become active.
@@ -975,9 +979,10 @@ func (m *endpointManager) calculateRoutes(
 ) (
 	routeTargets []routetable.Target,
 ) {
-	lmState, hasLMState := m.pendingLiveMigrationStates[id]
-	if hasLMState && lmState == liveMigrationStateTarget {
-		logCxt.Debug("Live migration target, suppressing routes")
+	// Note, we rely here on the zero value of the `routeMode` field being `wepRouteModeNormal`.
+	routeModifier := m.wepRouteModifiers[id]
+	if routeModifier.routeMode == wepRouteModeSuppressed {
+		logCxt.Debug("Suppressing routes")
 		return
 	}
 
@@ -1018,23 +1023,29 @@ func (m *endpointManager) calculateRoutes(
 	}
 
 	routePriority := m.cfg.normalRoutePriority
-	if hasLMState {
-		// Live or TimeWait: use elevated priority.
+	var onRouteProgrammed func(ip.CIDR)
+	if routeModifier.routeMode == wepRouteModeElevated {
 		routePriority = m.cfg.elevatedRoutePriority
+		onRouteProgrammed = routeModifier.onRouteProgrammed
 		logCxt.WithField("priority", routePriority).Debug(
-			"Endpoint up, adding routes with elevated priority for live migration")
+			"Endpoint up, adding routes with elevated priority")
 	} else {
 		logCxt.Debug("Endpoint up, adding routes")
 	}
 
 	for _, s := range ipStrings {
-		routeTargets = append(routeTargets, routetable.Target{
+		cidr := ip.MustParseCIDROrIP(s)
+		target := routetable.Target{
 			RouteKey: routetable.RouteKey{
-				CIDR:     ip.MustParseCIDROrIP(s),
+				CIDR:     cidr,
 				Priority: routePriority,
 			},
 			DestMAC: mac,
-		})
+		}
+		if onRouteProgrammed != nil {
+			target.OnProgrammed = func() { onRouteProgrammed(cidr) }
+		}
+		routeTargets = append(routeTargets, target)
 	}
 
 	return
