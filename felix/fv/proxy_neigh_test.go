@@ -189,6 +189,31 @@ var _ = infrastructure.DatastoreDescribe(
 				ContainSubstring("dadfailed"),
 			), "Felix did not defend %s against DAD (address not flagged dadfailed)", podV6)
 		})
+
+		// Felix's NDP socket is bound to the node's link-local address, so it
+		// must rebind when that address is replaced.
+		It("keeps answering NDP after the node's IPv6 link-local address changes", func() {
+			w := workload.New(tc.Felixes[0], "wl-pod", "default", podV4, "8080", "tcp",
+				workload.WithIPv6Address(podV6))
+			Expect(w.Start(infra)).To(Succeed())
+			w.ConfigureInInfra(infra)
+
+			Eventually(func() bool {
+				return extL2.CanConnectTo(podV6, "8080", "tcp").HasConnectivity()
+			}, "30s", "2s").Should(BeTrue(), "proxy NDP not up yet for %s", podV6)
+
+			By("Replacing the link-local address on Felix's eth0")
+			tc.Felixes[0].Exec("ip", "-6", "addr", "flush", "dev", "eth0", "scope", "link")
+			tc.Felixes[0].Exec("ip", "-6", "addr", "add", "fe80::c0de:1/64", "dev", "eth0")
+
+			By("Making the client re-resolve the pod IPv6")
+			extL2.Exec("ip", "-6", "neigh", "flush", "to", podV6, "dev", "eth0")
+
+			Eventually(func() bool {
+				return extL2.CanConnectTo(podV6, "8080", "tcp").HasConnectivity()
+			}, "30s", "2s").Should(BeTrue(),
+				"no NDP answer for %s after Felix's link-local address changed", podV6)
+		})
 	},
 )
 
