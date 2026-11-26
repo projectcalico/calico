@@ -85,7 +85,7 @@ func (k *KeyPair) Secret(namespace string) *corev1.Secret {
 	data[corev1.TLSPrivateKeyKey] = k.PrivateKeyPEM
 	data[corev1.TLSCertKey] = k.CertificatePEM
 
-	labels, annotations := tlsSecretMetadata(k.CertificatePEM)
+	labels, annotations := TLSSecretMetadata(k.CertificatePEM)
 	if v := k.HashAnnotationValue(); v != "" {
 		annotations[k.HashAnnotationKey()] = v
 	}
@@ -180,9 +180,9 @@ func (k *KeyPair) InitContainer(namespace string, securityContext *corev1.Securi
 	return initContainer
 }
 
-// tlsSecretMetadata parses certPEM and returns labels and annotations that surface
+// TLSSecretMetadata parses certPEM and returns labels and annotations that surface
 // certificate metadata on the owning Secret. On parse failure it returns empty maps.
-func tlsSecretMetadata(certPEM []byte) (labels map[string]string, annotations map[string]string) {
+func TLSSecretMetadata(certPEM []byte) (labels map[string]string, annotations map[string]string) {
 	labels = map[string]string{}
 	annotations = map[string]string{}
 
