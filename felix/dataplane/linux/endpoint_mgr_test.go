@@ -2465,9 +2465,9 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 				Context("when routes are suppressed", func() {
 					JustBeforeEach(func() {
-						epMgr.OnRouteModifierUpdate(
+						epMgr.OnLiveMigrationUpdate(
 							types.ProtoToWorkloadEndpointID(&wlEPID1),
-							&wepRouteModifier{mode: wepRouteModeSuppressed},
+							&wepLiveMigrationUpdate{routeMode: wepRouteModeSuppressed},
 						)
 						applyUpdates(epMgr)
 					})
@@ -2478,9 +2478,9 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 					Context("when routes are elevated", func() {
 						JustBeforeEach(func() {
-							epMgr.OnRouteModifierUpdate(
+							epMgr.OnLiveMigrationUpdate(
 								types.ProtoToWorkloadEndpointID(&wlEPID1),
-								&wepRouteModifier{mode: wepRouteModeElevated},
+								&wepLiveMigrationUpdate{routeMode: wepRouteModeElevated},
 							)
 							applyUpdates(epMgr)
 						})
@@ -2491,9 +2491,9 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 						Context("when routes are elevated again", func() {
 							JustBeforeEach(func() {
-								epMgr.OnRouteModifierUpdate(
+								epMgr.OnLiveMigrationUpdate(
 									types.ProtoToWorkloadEndpointID(&wlEPID1),
-									&wepRouteModifier{mode: wepRouteModeElevated},
+									&wepLiveMigrationUpdate{routeMode: wepRouteModeElevated},
 								)
 								applyUpdates(epMgr)
 							})
@@ -2504,7 +2504,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 							Context("when the route modifier is removed", func() {
 								JustBeforeEach(func() {
-									epMgr.OnRouteModifierUpdate(
+									epMgr.OnLiveMigrationUpdate(
 										types.ProtoToWorkloadEndpointID(&wlEPID1),
 										nil,
 									)
@@ -2521,9 +2521,9 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 				Context("when endpoint is removed while its routes are elevated", func() {
 					JustBeforeEach(func() {
-						epMgr.OnRouteModifierUpdate(
+						epMgr.OnLiveMigrationUpdate(
 							types.ProtoToWorkloadEndpointID(&wlEPID1),
-							&wepRouteModifier{mode: wepRouteModeElevated},
+							&wepLiveMigrationUpdate{routeMode: wepRouteModeElevated},
 						)
 						applyUpdates(epMgr)
 						epMgr.OnUpdate(&proto.WorkloadEndpointRemove{Id: &wlEPID1})
@@ -2545,9 +2545,9 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					}
 
 					JustBeforeEach(func() {
-						epMgr.OnRouteModifierUpdate(
+						epMgr.OnLiveMigrationUpdate(
 							types.ProtoToWorkloadEndpointID(&wlEPID1),
-							&wepRouteModifier{mode: wepRouteModeElevated},
+							&wepLiveMigrationUpdate{routeMode: wepRouteModeElevated},
 						)
 						applyUpdates(epMgr)
 						routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
@@ -2573,11 +2573,11 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 					JustBeforeEach(func() {
 						programmedCIDRs = nil
-						epMgr.OnRouteModifierUpdate(
+						epMgr.OnLiveMigrationUpdate(
 							types.ProtoToWorkloadEndpointID(&wlEPID1),
-							&wepRouteModifier{
-								mode:         wepRouteModeElevated,
-								onProgrammed: func(cidr ip.CIDR) { programmedCIDRs = append(programmedCIDRs, cidr) },
+							&wepLiveMigrationUpdate{
+								routeMode:         wepRouteModeElevated,
+								onRouteProgrammed: func(cidr ip.CIDR) { programmedCIDRs = append(programmedCIDRs, cidr) },
 							},
 						)
 						applyUpdates(epMgr)
@@ -2600,7 +2600,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 					Context("when the route modifier is removed", func() {
 						JustBeforeEach(func() {
-							epMgr.OnRouteModifierUpdate(
+							epMgr.OnLiveMigrationUpdate(
 								types.ProtoToWorkloadEndpointID(&wlEPID1),
 								nil,
 							)
@@ -2617,9 +2617,9 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			Context("when a route modifier arrives before the endpoint", func() {
 				JustBeforeEach(func() {
 					// The route modifier arrives but the WEP isn't active yet.
-					epMgr.OnRouteModifierUpdate(
+					epMgr.OnLiveMigrationUpdate(
 						types.ProtoToWorkloadEndpointID(&wlEPID1),
-						&wepRouteModifier{mode: wepRouteModeSuppressed},
+						&wepLiveMigrationUpdate{routeMode: wepRouteModeSuppressed},
 					)
 					// Now the WEP arrives.
 					epMgr.OnUpdate(wlEPUpdate)
