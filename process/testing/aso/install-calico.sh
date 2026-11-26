@@ -45,7 +45,7 @@ export KUBECONFIG="${KUBECONFIG_FILE}"
 echo "Using kubeconfig from: ${KUBECONFIG_FILE}"
 
 : ${PRODUCT:=calient}
-: ${RELEASE_STREAM:="master"} # Default to master
+: ${RELEASE_STREAM:="v3.34"} # Default to v3.34
 : ${HASH_RELEASE:="true"} # Set to true to use hash release
 
 : "${KUBE_VERSION:?Environment variable empty or not defined.}"

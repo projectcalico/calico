@@ -835,7 +835,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: tigera-operator
-          image: quay.io/calico/operator:master
+          image: quay.io/calico/operator:release-v3.34
           imagePullPolicy: IfNotPresent
           command:
             - operator
@@ -857,7 +857,7 @@ spec:
             - name: OPERATOR_NAME
               value: "tigera-operator"
             - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
-              value: master
+              value: release-v3.34
           envFrom:
             - configMapRef:
                 name: kubernetes-services-endpoint
