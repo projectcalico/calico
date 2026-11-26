@@ -7,6 +7,8 @@ globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
   export ARGO_WORKFLOW_NAME="{{workflow.name}}"
   export ARGO_WORKFLOW_UID="{{workflow.uid}}"
+  # Sandcat cannot diagnose API-authorization failures; a lane may override this.
+  export SANDCAT_SPEC_EXCLUDE="${SANDCAT_SPEC_EXCLUDE-\[Feature:Tiered-RBAC\]}"
   export CALICOCTL_INSTALL_TYPE="${CALICOCTL_INSTALL_TYPE:-container}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-upgrade.yml}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
