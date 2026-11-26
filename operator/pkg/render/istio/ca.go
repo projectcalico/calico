@@ -138,13 +138,13 @@ func GenerateCA(trustDomain string) (*CA, error) {
 	}, nil
 }
 
-// SecretData returns the CA in Istio's plug-in layout, trusting only its own roots.
+// SecretData returns the CA in the kubernetes.io/tls layout, trusting only its
+// own roots. tls.crt holds the whole chain, signing certificate first.
 func (c *CA) SecretData() map[string][]byte {
 	return map[string][]byte{
-		CACertKey:    c.CertPEM,
-		CAKeyKey:     c.KeyPEM,
-		CertChainKey: EncodeCertificates(c.Chain...),
-		RootCertKey:  ComposeRootBundle(c.Roots),
+		corev1.TLSCertKey:       EncodeCertificates(c.Chain...),
+		corev1.TLSPrivateKeyKey: c.KeyPEM,
+		tlsRootCertKey:          ComposeRootBundle(c.Roots),
 	}
 }
 

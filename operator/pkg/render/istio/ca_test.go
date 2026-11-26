@@ -28,6 +28,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/operator/pkg/render/istio"
 )
@@ -133,11 +134,10 @@ var _ = Describe("Istio CA", func() {
 
 			// A root CA is its own chain and its own trust anchor.
 			data := ca.SecretData()
-			Expect(data).To(HaveLen(4))
-			Expect(data[istio.CACertKey]).To(Equal(ca.CertPEM))
-			Expect(data[istio.CertChainKey]).To(Equal(ca.CertPEM))
-			Expect(data[istio.RootCertKey]).To(Equal(ca.CertPEM))
-			Expect(data[istio.CAKeyKey]).To(Equal(ca.KeyPEM))
+			Expect(data).To(HaveLen(3))
+			Expect(data[corev1.TLSCertKey]).To(Equal(ca.CertPEM))
+			Expect(data[corev1.TLSPrivateKeyKey]).To(Equal(ca.KeyPEM))
+			Expect(data["ca.crt"]).To(Equal(ca.CertPEM))
 		})
 
 		It("round-trips through LoadCA", func() {
