@@ -149,11 +149,19 @@ func describeBPFAsymTunnelTests() bool {
 			dumpVxlan.AddMatcher("tunneled-reply", regexp.MustCompile(`10\.65\.1\.2\.30444 > 10\.65\.0\.2\.30444`))
 			dumpVxlan.Start(infra, "udp", "and", "dst", "host", "10.65.0.2")
 
-			for round := 1; round <= 3; round += 2 {
+			// Without the forward packet's conntrack entry, the reply is a new flow and passes regardless of the fix.
+			dumpW1 := w1.AttachTCPDump()
+			dumpW1.SetLogEnabled(true)
+			dumpW1.AddMatcher("forward", regexp.MustCompile(`10\.65\.0\.2\.30444 > 10\.65\.1\.2\.30444`))
+			dumpW1.Start(infra, "udp", "and", "dst", "host", "10.65.1.2")
+
+			for i, round := range []int{1, 3} {
 				By("Injecting the forward packet natively via eth20 (src = remote tunneled pod IP)")
 				_, err := extRouter.RunCmd("pktgen", w0.IP, w1.IP, "udp",
 					"--ip-id", fmt.Sprint(round), "--port-src", "30444", "--port-dst", "30444")
 				Expect(err).NotTo(HaveOccurred())
+				Eventually(dumpW1.MatchCountFn("forward"), "5s", "100ms").Should(BeNumerically("==", i+1),
+					"forward packet did not reach the local workload")
 
 				By("Sending the reply from the local workload")
 				_, err = w1.RunCmd("pktgen", w1.IP, w0.IP, "udp",
