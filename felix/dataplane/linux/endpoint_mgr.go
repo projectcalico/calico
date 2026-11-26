@@ -46,43 +46,6 @@ type hepListener interface {
 	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
 }
 
-// wepRouteMode, wepRouteModifier and wepRouteModifierListener provide a way for other dataplane
-// components to tell us when the route programming for a WEP should be modified in some way.
-// Currently the options are for the normal route to be suppressed, or for the route to be
-// programmed at higher than usual priority - both of which are used during live migration.
-type wepRouteMode int
-
-const (
-	wepRouteModeNormal wepRouteMode = iota
-	wepRouteModeSuppressed
-	wepRouteModeElevated
-)
-
-func (m wepRouteMode) String() string {
-	switch m {
-	case wepRouteModeNormal:
-		return "Normal"
-	case wepRouteModeSuppressed:
-		return "Suppressed"
-	case wepRouteModeElevated:
-		return "Elevated"
-	default:
-		return fmt.Sprintf("wepRouteMode(%d)", int(m))
-	}
-}
-
-type wepRouteModifier struct {
-	mode wepRouteMode
-
-	// onProgrammed, when non-nil, is called after each elevated route is written to the kernel.
-	// (And hence is only relevant when mode is wepRouteModeElevated.)
-	onProgrammed func(ip.CIDR)
-}
-
-type wepRouteModifierListener interface {
-	OnRouteModifierUpdate(id types.WorkloadEndpointID, mod *wepRouteModifier)
-}
-
 type endpointManagerCallbacks struct {
 	addInterface           *common.AddInterfaceFuncs
 	removeInterface        *common.RemoveInterfaceFuncs
@@ -202,8 +165,8 @@ type endpointManager struct {
 	pendingIfaceUpdates map[string]ifacemonitor.State
 	dirtyPolicyIDs      set.Set[types.PolicyID]
 
-	// Route modifiers, updated/deleted by calls to OnRouteModifierUpdate.
-	wepRouteModifiers map[types.WorkloadEndpointID]wepRouteModifier
+	// Route modifiers, updated/deleted by calls to OnLiveMigrationUpdate.
+	wepRouteModifiers map[types.WorkloadEndpointID]wepLiveMigrationUpdate
 
 	// Active state, updated in CompleteDeferredWork.
 	activeWlEndpoints                map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -389,7 +352,7 @@ func newEndpointManagerWithShims(
 		pendingIfaceUpdates: map[string]ifacemonitor.State{},
 		dirtyPolicyIDs:      set.New[types.PolicyID](),
 
-		wepRouteModifiers: map[types.WorkloadEndpointID]wepRouteModifier{},
+		wepRouteModifiers: map[types.WorkloadEndpointID]wepLiveMigrationUpdate{},
 
 		activeUpIfaces: set.New[string](),
 
@@ -514,15 +477,14 @@ func (m *endpointManager) OnUpdate(protoBufMsg any) {
 	}
 }
 
-func (m *endpointManager) OnRouteModifierUpdate(id types.WorkloadEndpointID, mod *wepRouteModifier) {
+func (m *endpointManager) OnLiveMigrationUpdate(id types.WorkloadEndpointID, mod *wepLiveMigrationUpdate) {
 	if mod == nil {
 		log.WithField("id", id).Debug("Delete route modifier")
 		delete(m.wepRouteModifiers, id)
 	} else {
 		log.WithFields(log.Fields{
-			"id":              id,
-			"mode":            mod.mode,
-			"hasOnProgrammed": mod.onProgrammed != nil,
+			"id":        id,
+			"routeMode": mod.routeMode,
 		}).Debug("Route modifier update")
 		m.wepRouteModifiers[id] = *mod
 	}
@@ -1044,9 +1006,9 @@ func (m *endpointManager) calculateRoutes(
 ) (
 	routeTargets []routetable.Target,
 ) {
-	// Note, we rely here on the zero value of the `mode` field being `wepRouteModeNormal`.
+	// Note, we rely here on the zero value of the `routeMode` field being `wepRouteModeNormal`.
 	routeModifier := m.wepRouteModifiers[id]
-	if routeModifier.mode == wepRouteModeSuppressed {
+	if routeModifier.routeMode == wepRouteModeSuppressed {
 		logCxt.Debug("Suppressing routes")
 		return
 	}
@@ -1088,10 +1050,10 @@ func (m *endpointManager) calculateRoutes(
 	}
 
 	routePriority := m.cfg.normalRoutePriority
-	var onProgrammed func(ip.CIDR)
-	if routeModifier.mode == wepRouteModeElevated {
+	var onRouteProgrammed func(ip.CIDR)
+	if routeModifier.routeMode == wepRouteModeElevated {
 		routePriority = m.cfg.elevatedRoutePriority
-		onProgrammed = routeModifier.onProgrammed
+		onRouteProgrammed = routeModifier.onRouteProgrammed
 		logCxt.WithField("priority", routePriority).Debug(
 			"Endpoint up, adding routes with elevated priority")
 	} else {
@@ -1107,8 +1069,8 @@ func (m *endpointManager) calculateRoutes(
 			},
 			DestMAC: mac,
 		}
-		if onProgrammed != nil {
-			target.OnProgrammed = func() { onProgrammed(cidr) }
+		if onRouteProgrammed != nil {
+			target.OnProgrammed = func() { onRouteProgrammed(cidr) }
 		}
 		routeTargets = append(routeTargets, target)
 	}

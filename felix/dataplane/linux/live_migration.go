@@ -93,9 +93,9 @@ type liveMigrationMonitor struct {
 
 	// Latest route modifier for each WEP whose FSM has changed state in this batch; nil means
 	// remove the WEP's modifier.
-	pendingModifiers map[types.WorkloadEndpointID]*wepRouteModifier
+	pendingUpdates map[types.WorkloadEndpointID]*wepLiveMigrationUpdate
 
-	listeners       []wepRouteModifierListener
+	listeners       []wepLiveMigrationListener
 	timerC          chan types.WorkloadEndpointID
 	garpC           chan types.WorkloadEndpointID
 	ifaceNames      map[types.WorkloadEndpointID]string
@@ -119,14 +119,14 @@ type liveMigrationMonitor struct {
 
 func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Interface) *liveMigrationMonitor {
 	return &liveMigrationMonitor{
-		roles:            make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
-		fsms:             make(map[types.WorkloadEndpointID]*liveMigrationFSM),
-		pendingModifiers: make(map[types.WorkloadEndpointID]*wepRouteModifier),
-		timerC:           make(chan types.WorkloadEndpointID),
-		garpC:            make(chan types.WorkloadEndpointID),
-		ifaceNames:       make(map[types.WorkloadEndpointID]string),
-		vmiNames:         make(map[types.WorkloadEndpointID]string),
-		wepIPs:           make(map[types.WorkloadEndpointID][]cnet.IP),
+		roles:          make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
+		fsms:           make(map[types.WorkloadEndpointID]*liveMigrationFSM),
+		pendingUpdates: make(map[types.WorkloadEndpointID]*wepLiveMigrationUpdate),
+		timerC:         make(chan types.WorkloadEndpointID),
+		garpC:          make(chan types.WorkloadEndpointID),
+		ifaceNames:     make(map[types.WorkloadEndpointID]string),
+		vmiNames:       make(map[types.WorkloadEndpointID]string),
+		wepIPs:         make(map[types.WorkloadEndpointID][]cnet.IP),
 		newGARPHandle: func(ifaceName string) (garpHandle, error) {
 			return pcapgo.NewEthernetHandle(ifaceName)
 		},
@@ -136,22 +136,58 @@ func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Inte
 	}
 }
 
-// registerRouteModifierListener adds a listener - in production, one endpoint manager per IP
-// version - that should be told when we want to modify the route that is programmed for a WEP.
-func (m *liveMigrationMonitor) registerRouteModifierListener(l wepRouteModifierListener) {
+// registerLiveMigrationListener adds a listener - in production, one endpoint manager per IP
+// version - that needs to know when a WEP is involved in live migration in order to adjust its
+// programming for that WEP.
+func (m *liveMigrationMonitor) registerLiveMigrationListener(l wepLiveMigrationListener) {
 	m.listeners = append(m.listeners, l)
+}
+
+type wepLiveMigrationListener interface {
+	OnLiveMigrationUpdate(id types.WorkloadEndpointID, mod *wepLiveMigrationUpdate)
+}
+
+// Live migration can cause a WEP's usual local route to be suppressed, or for the route to be
+// programmed at higher than usual priority.
+type wepRouteMode int
+
+const (
+	wepRouteModeNormal wepRouteMode = iota
+	wepRouteModeSuppressed
+	wepRouteModeElevated
+)
+
+func (m wepRouteMode) String() string {
+	switch m {
+	case wepRouteModeNormal:
+		return "Normal"
+	case wepRouteModeSuppressed:
+		return "Suppressed"
+	case wepRouteModeElevated:
+		return "Elevated"
+	default:
+		return fmt.Sprintf("wepRouteMode(%d)", int(m))
+	}
+}
+
+type wepLiveMigrationUpdate struct {
+	routeMode wepRouteMode
+
+	// onRouteProgrammed, when non-nil, is called after each elevated route is written to the kernel.
+	// (And hence is only relevant when routeMode is wepRouteModeElevated.)
+	onRouteProgrammed func(ip.CIDR)
 }
 
 // ResolveUpdateBatch drains the pending route modifier updates and forwards them to each
 // registered listener.  This runs before CompleteDeferredWork, so the endpoint managers see the
 // updates before they program the dataplane.
 func (m *liveMigrationMonitor) ResolveUpdateBatch() error {
-	for id, routeModifier := range m.pendingModifiers {
+	for id, routeModifier := range m.pendingUpdates {
 		for _, l := range m.listeners {
-			l.OnRouteModifierUpdate(id, routeModifier)
+			l.OnLiveMigrationUpdate(id, routeModifier)
 		}
 	}
-	clear(m.pendingModifiers)
+	clear(m.pendingUpdates)
 	return nil
 }
 
@@ -480,17 +516,17 @@ func (f *liveMigrationFSM) notifyStateChange(next liveMigrationState) {
 	// When the live migration state changes, we need to tell the endpoint managers how/if to
 	// modify their route programming for the WEP concerned.  The update prepared here will be
 	// dispatched in ResolveUpdateBatch.
-	var routeModifier *wepRouteModifier
+	var update *wepLiveMigrationUpdate
 	switch next {
 	case liveMigrationStateTarget:
-		routeModifier = &wepRouteModifier{mode: wepRouteModeSuppressed}
+		update = &wepLiveMigrationUpdate{routeMode: wepRouteModeSuppressed}
 	case liveMigrationStateLive, liveMigrationStateTimeWait:
-		routeModifier = &wepRouteModifier{mode: wepRouteModeElevated}
+		update = &wepLiveMigrationUpdate{routeMode: wepRouteModeElevated}
 		if f.routeReporter != nil {
-			routeModifier.onProgrammed = f.routeReporter.onRouteProgrammed
+			update.onRouteProgrammed = f.routeReporter.onRouteProgrammed
 		}
 	}
-	f.monitor.pendingModifiers[f.id] = routeModifier
+	f.monitor.pendingUpdates[f.id] = update
 }
 
 func (f *liveMigrationFSM) startGARPDetection() {
