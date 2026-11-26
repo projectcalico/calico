@@ -161,10 +161,17 @@ steps:
         make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
         make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
 
+  # FELIX_TEST_GROUP is parsed for the Ubuntu release, dataplane and UTs, not
+  # just a label.
+  #
+  # The timeout leaves room for a preempted spot batch to rerun in full on
+  # demand, after one spot pass and up to 15 minutes of on-demand creation
+  # retries.  The fleet's own watchdog fires first, so it can capture a hung
+  # VM's console.
   - name: felix-fv
     tiers: []
     depends: [felix-build]
-    timeout: 1h30m
+    timeout: 2h30m
     requests: {cpu: 2000m, memory: 4Gi}
     secretBundles:
       - name: google-service-account-for-gce
@@ -177,6 +184,20 @@ steps:
     env:
       - name: JOB_TIMEOUT_MINUTES
         value: "60"
+      # STANDARD runs every lane on demand.  A preempted batch reruns once
+      # on an on-demand VM.
+      - name: VM_PROVISIONING_MODEL
+        value: SPOT
+      # Standard-4: spot highcpu-4 VMs are preempted far more often
+      # (us-central1, Oct-Nov 2026).  C4D first because C3D runs the BPF lanes
+      # about 1.7x slower, which costs as much as C4D's higher price and adds
+      # ~20 minutes to the lane; C3 is the least preempted.
+      - name: VM_SPOT_MACHINE_TYPES
+        value: c4d-standard-4 c3-standard-4 c3d-standard-4
+      # The step timeout less the setup before the fleet starts; a preempted
+      # batch reruns only if this leaves time for it.
+      - name: FV_STEP_TIMEOUT_MINUTES
+        value: "135"
     matrix:
       - name: iptables-2204
         env:
