@@ -209,27 +209,35 @@ func (ns *nodeService) mount(destinationDir, volumeID string) error {
 
 	// The kubelet publishes the volume again for running pods after it restarts, and
 	// mounting again would stack a second layer on the target.
-	mounted, err := mountinfo.Mounted(destinationDir)
+	tmpfsMounted, err := mountinfo.Mounted(destinationDir)
 	if err != nil {
 		log.Errorf("Mount error: failed to check whether %s is mounted: %v", destinationDir, err)
 		return err
 	}
-	if mounted {
-		log.Infof("%s is already mounted", destinationDir)
-		return nil
-	}
-
-	// Not really needed but attempt to workaround writing to volume mounts that k8s has created:
-	// https://github.com/kubernetes/kubernetes/blob/61ac9d46382884a8bd9e228da22bca5817f6d226/pkg/util/mount/mount_linux.go
-	// TODO: Test if this is really needed now with CSI as opposed to flexvolume which was run on the host.
-	// Run "mount -t tmpfs -o size=8K tmpfs destinationDir"
-	if err := syscall.Mount("tmpfs", destinationDir, "tmpfs", syscall.O_RDWR|syscall.MS_RELATIME, "size=8K"); err != nil {
-		_ = os.RemoveAll(newDir)
-		log.Errorf("Could not mount tmpfs to %s: %v", destinationDir, err)
-		return err
-	}
 
 	newDestinationDir := destinationDir + "/nodeagent"
+	if tmpfsMounted {
+		// A publish that failed part-way can leave the tmpfs without the bind mount.
+		bindMounted, err := mountinfo.Mounted(newDestinationDir)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			log.Errorf("Mount error: failed to check whether %s is mounted: %v", newDestinationDir, err)
+			return err
+		}
+		if bindMounted {
+			log.Infof("%s is already mounted", destinationDir)
+			return nil
+		}
+	} else {
+		// The tmpfs holds the nodeagent directory, so unmounting it leaves the target
+		// empty. The kubelet cannot remove a target that still has anything in it.
+		// Run "mount -t tmpfs -o size=8K tmpfs destinationDir"
+		if err := syscall.Mount("tmpfs", destinationDir, "tmpfs", syscall.O_RDWR|syscall.MS_RELATIME, "size=8K"); err != nil {
+			_ = os.RemoveAll(newDir)
+			log.Errorf("Could not mount tmpfs to %s: %v", destinationDir, err)
+			return err
+		}
+	}
+
 	err = os.MkdirAll(newDestinationDir, 0777)
 	if err != nil {
 		// Run "umount destinationDir"
@@ -317,9 +325,9 @@ func (ns *nodeService) retrievePodInfoFromFile(volumeID string) (*creds.Credenti
 }
 
 func (ns *nodeService) unmount(dir, volumeID string) error {
-	// Loop until the target is no longer a mount point. The kubelet never deletes the pod
-	// while a layer remains, and a node that ran a driver without the publish check can
-	// hold one layer per kubelet restart.
+	// A target can hold several stacked layers, and the kubelet never deletes the pod
+	// while any remain.
+	bindDir := dir + "/nodeagent"
 	for {
 		mounted, err := mountinfo.Mounted(dir)
 		if errors.Is(err, fs.ErrNotExist) {
@@ -334,15 +342,23 @@ func (ns *nodeService) unmount(dir, volumeID string) error {
 		}
 
 		// Unmount the bind mount.
-		err = syscall.Unmount(dir+"/nodeagent", 0)
-		if err != nil {
-			log.WithError(err).WithField("directory", fmt.Sprintf("%s/nodeagent", dir)).Error("Failed to unmount csidriver directory. Ignoring...")
+		bindErr := syscall.Unmount(bindDir, 0)
+		if errors.Is(bindErr, syscall.EINVAL) || errors.Is(bindErr, syscall.ENOENT) {
+			// Not mounted, as after an unpublish that stopped part-way.
+			bindErr = nil
+		}
+		if bindErr != nil {
+			log.WithError(bindErr).WithField("directory", bindDir).Error("Failed to unmount csidriver directory")
 		}
 
 		// Unmount the tmpfs.
 		err = syscall.Unmount(dir, 0)
 		if err != nil {
 			log.WithError(err).WithField("directory", dir).Error("Failed to unmount csidriver directory")
+			if bindErr != nil {
+				// The tmpfs is busy for as long as the bind mount stays on it.
+				return fmt.Errorf("failed to unmount %s: %w: failed to unmount %s: %w", dir, err, bindDir, bindErr)
+			}
 			return err
 		}
 	}

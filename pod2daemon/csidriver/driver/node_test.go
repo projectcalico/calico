@@ -64,6 +64,29 @@ func TestPublishTwiceMountsOnce(t *testing.T) {
 	g.Expect(credsFile(ns)).NotTo(BeAnExistingFile())
 }
 
+func TestPublishCompletesPartialMount(t *testing.T) {
+	if !inMountNamespace(t) {
+		return
+	}
+	g := NewWithT(t)
+	ns, target := setUpMountTest(t)
+
+	// A publish that failed part-way leaves the tmpfs without the bind mount.
+	g.Expect(os.MkdirAll(target, 0o777)).To(Succeed())
+	g.Expect(syscall.Mount("tmpfs", target, "tmpfs", 0, "size=8K")).To(Succeed())
+
+	_, err := ns.NodePublishVolume(context.Background(), publishRequest(target))
+	g.Expect(err).NotTo(HaveOccurred())
+
+	g.Expect(countMounts(t, target)).To(Equal(1))
+	g.Expect(countMounts(t, filepath.Join(target, "nodeagent"))).To(Equal(1))
+	g.Expect(credsFile(ns)).To(BeAnExistingFile())
+
+	_, err = ns.NodeUnpublishVolume(context.Background(), unpublishRequest(target))
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(countMounts(t, target)).To(Equal(0))
+}
+
 func TestUnpublishRemovesStackedLayers(t *testing.T) {
 	if !inMountNamespace(t) {
 		return
@@ -73,7 +96,7 @@ func TestUnpublishRemovesStackedLayers(t *testing.T) {
 
 	_, err := ns.NodePublishVolume(context.Background(), publishRequest(target))
 	g.Expect(err).NotTo(HaveOccurred())
-	// Stack two more layers the way a driver that mounted on every publish did.
+	// A target can hold several stacked layers.
 	workloadDir := filepath.Join(ns.config.NodeAgentWorkloadHomeDir, testVolumeID)
 	for range 2 {
 		g.Expect(syscall.Mount("tmpfs", target, "tmpfs", 0, "size=8K")).To(Succeed())
@@ -120,6 +143,32 @@ func TestUnpublishFailsWhileTargetIsBusy(t *testing.T) {
 	g.Expect(countMounts(t, target)).To(Equal(0))
 	g.Expect(workloadDir).NotTo(BeADirectory())
 	g.Expect(credsFile(ns)).NotTo(BeAnExistingFile())
+}
+
+func TestUnpublishReportsBusyBindMount(t *testing.T) {
+	if !inMountNamespace(t) {
+		return
+	}
+	g := NewWithT(t)
+	ns, target := setUpMountTest(t)
+	bindDir := filepath.Join(target, "nodeagent")
+
+	_, err := ns.NodePublishVolume(context.Background(), publishRequest(target))
+	g.Expect(err).NotTo(HaveOccurred())
+	// An open file keeps the bind mount busy, and the bind mount keeps the tmpfs busy.
+	busy, err := os.Create(filepath.Join(bindDir, "busy"))
+	g.Expect(err).NotTo(HaveOccurred())
+	defer func() { _ = busy.Close() }()
+
+	_, err = ns.NodeUnpublishVolume(context.Background(), unpublishRequest(target))
+	g.Expect(err).To(MatchError(ContainSubstring("failed to unmount " + bindDir)))
+	g.Expect(countMounts(t, target)).To(Equal(1))
+	g.Expect(countMounts(t, bindDir)).To(Equal(1))
+
+	g.Expect(busy.Close()).To(Succeed())
+	_, err = ns.NodeUnpublishVolume(context.Background(), unpublishRequest(target))
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(countMounts(t, target)).To(Equal(0))
 }
 
 func TestUnpublishAfterNodeReboot(t *testing.T) {
