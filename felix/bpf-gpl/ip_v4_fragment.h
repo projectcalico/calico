@@ -332,16 +332,19 @@ static CALI_BPF_INLINE void frags4_record_ct_flags(struct cali_tc_ctx *ctx, __u3
 		return;
 	}
 
+	/* Later fragments carry the header's destination, so a CTLB-reverted one cannot key the entry. */
+	bool ctlb = ctx->state->flags & CALI_ST_CTLB_REVERTED;
+
 	struct frags4_fwd_key k = {
 		.src = ctx->state->pre_nat_ip_src,
-		.dst = ctx->state->pre_nat_ip_dst,
+		.dst = ctlb ? ctx->state->post_nat_ip_dst : ctx->state->pre_nat_ip_dst,
 		.ifindex = ctx->skb->ifindex,
 		.id = ip_hdr(ctx)->id,
 	};
 
 	struct frags4_fwd_value vinit = {
 		.sport = ctx->state->pre_nat_sport,
-		.dport = ctx->state->pre_nat_dport,
+		.dport = ctlb ? ctx->state->post_nat_dport : ctx->state->pre_nat_dport,
 		.marks = ctx->state->fwd.mark,
 		.flags = flags,
 	};
