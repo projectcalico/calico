@@ -15,6 +15,9 @@ steps:
         value: .argoci/scripts/sandcat/with-inline-diag.sh
       - name: SANDCAT_TOTAL_BUDGET
         value: 10m
+      # Sandcat cannot diagnose API-authorization failures.
+      - name: SANDCAT_SPEC_EXCLUDE
+        value: '\[Feature:Tiered-RBAC\]'
     secretBundles:
       - name: sandcat-nightly
         keys:
