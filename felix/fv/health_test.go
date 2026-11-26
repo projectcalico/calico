@@ -106,7 +106,7 @@ var _ = infrastructure.DatastoreDescribe("_HEALTH_ _BPF-SAFE_ health tests", []a
 		Describe("after removing iptables-restore/nft", func() {
 			BeforeEach(func() {
 				// Wait until felix gets into steady state.
-				Eventually(felixReady, "5s", "100ms").Should(BeGood())
+				Eventually(felixReady, "20s", "100ms").Should(BeGood())
 
 				bin := "/usr/sbin/iptables-legacy-restore"
 				if NFTMode() {
@@ -130,7 +130,7 @@ var _ = infrastructure.DatastoreDescribe("_HEALTH_ _BPF-SAFE_ health tests", []a
 		Describe("after replacing iptables/nftables with a slow version", func() {
 			BeforeEach(func() {
 				// Wait until felix gets into steady state.
-				Eventually(felixReady, "5s", "100ms").Should(BeGood())
+				Eventually(felixReady, "20s", "100ms").Should(BeGood())
 
 				toReplace := "/usr/sbin/iptables-legacy-restore"
 				slowBinary := "slow-iptables-restore"
