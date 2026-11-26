@@ -1,0 +1,240 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Spot VM support for the test fleets: capacity scores, preemption detection
+# and the on-demand replacement.  Source it rather than running it.
+#
+# Two log lines are meant for mining, as space-separated key=value pairs:
+#
+#   FV-CAPACITY run=<id> lane=<l> at=<UTC> type=<t> zone=<z> count=<n>
+#     obtainability=<0-1|error> uptime=<60s|600s|3600s|error>
+#   FV-PREEMPT run=<id> lane=<l> batch=<b> vm=<name> type=<t> zone=<z>
+#     at=<time> outcome=<retried-pass|retried-fail|no-time|no-capacity|
+#     delete-timeout|genuine-fail|retries-off|check-failed|watchdog|
+#     passed-uncollected>
+
+spot_run_id() { echo "${CI_WORKFLOW_NAME:-${SEMAPHORE_WORKFLOW_ID:-unknown}}"; }
+spot_lane_id() { echo "${BATCH_MEMO_LANE:-${CI_JOB_LABEL:-unknown}}"; }
+
+# record_capacity_scores <region> <count> <scores file> <type>...
+#
+# Asks GCE's capacity advisor how likely <count> spot VMs of each type are to be
+# obtained, and how long they'd last, in each zone of <region>.  Appends
+# "<type> <zone> <obtainability> <uptime>" lines to <scores file> and logs each
+# as FV-CAPACITY.  Record only: the advisor is a Preview API, so a failure is
+# logged and never fails the lane.  The calls run in parallel, each capped at
+# 10s, so the whole probe stays under a minute.
+record_capacity_scores() {
+  local region="$1" count="$2" scores_file="$3"
+  shift 3
+  local token project zones zone type at tmp i=0
+  at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "$at" >"${scores_file}.at"
+  if ! token="$(timeout 20 gcloud auth print-access-token 2>/dev/null)" ||
+    ! project="$(timeout 20 gcloud config get-value project 2>/dev/null)" || [ -z "$project" ] ||
+    ! zones="$(timeout 20 gcloud --quiet compute zones list \
+      --filter="region:(${region}) AND status=UP" --format='value(name)' 2>/dev/null)" || [ -z "$zones" ]; then
+    echo "FV-CAPACITY run=$(spot_run_id) lane=$(spot_lane_id) at=${at} type=all zone=all count=${count} obtainability=error uptime=error"
+    echo "error: could not query the capacity advisor (no token, project or zones); carrying on." >&2
+    return 0
+  fi
+  tmp="$(mktemp -d)"
+  # From a file in the private temp dir, so the token never shows in ps.
+  printf 'Authorization: Bearer %s\nContent-Type: application/json\n' "$token" >"$tmp/headers"
+  for type in "$@"; do
+    for zone in $zones; do
+      i=$((i + 1))
+      echo "$type $zone" >"$tmp/$i.key"
+      curl -sS --max-time 10 -X POST -H @"$tmp/headers" \
+        "https://compute.googleapis.com/compute/beta/projects/${project}/regions/${region}/advice/capacity" \
+        -d "{\"size\":${count},\"instanceProperties\":{\"scheduling\":{\"provisioningModel\":\"SPOT\"}},\"instanceFlexibilityPolicy\":{\"instanceSelections\":{\"s\":{\"machineTypes\":[\"${type}\"]}}},\"distributionPolicy\":{\"targetShape\":\"ANY_SINGLE_ZONE\",\"zones\":[{\"zone\":\"zones/${zone}\"}]}}" \
+        >"$tmp/$i.json" 2>"$tmp/$i.err" &
+    done
+  done
+  wait
+  local key obt up
+  for key in "$tmp"/*.key; do
+    [ -f "$key" ] || continue
+    read -r type zone <"$key"
+    obt="$(jq -r '.recommendations[0].scores.obtainability // "error"' "${key%.key}.json" 2>/dev/null)" || obt=error
+    up="$(jq -r '.recommendations[0].scores.estimatedUptime // "error"' "${key%.key}.json" 2>/dev/null)" || up=error
+    [ -n "$obt" ] || obt=error
+    [ -n "$up" ] || up=error
+    if [ "$obt" = error ] || [ "$up" = error ]; then
+      echo "error: capacity advisor gave no score for ${type} in ${zone}: $(head -c 300 "${key%.key}.err" "${key%.key}.json" 2>/dev/null | tr '\n' ' ')" >&2
+    fi
+    echo "$type $zone $obt $up" >>"$scores_file"
+    echo "FV-CAPACITY run=$(spot_run_id) lane=$(spot_lane_id) at=${at} type=${type} zone=${zone} count=${count} obtainability=${obt} uptime=${up}"
+  done
+  rm -rf "$tmp"
+  return 0
+}
+
+# capacity_labels <scores file> <type> <zone> prints the ci-cap-* labels for a
+# VM of <type> in <zone>, or nothing if there's no score.  Label values allow
+# no dot, so 0.9 becomes 0-9.
+capacity_labels() {
+  local scores_file="$1" type="$2" zone="$3" obt up
+  [ -f "$scores_file" ] || return 0
+  read -r obt up < <(awk -v t="$type" -v z="$zone" '$1 == t && $2 == z { print $3, $4; exit }' "$scores_file") || return 0
+  [ -n "$obt" ] || return 0
+  echo "ci-cap-obtainability=${obt//./-},ci-cap-uptime=${up//./-}"
+}
+
+# vm_preempted <vm> <since epoch> zone|region <name>
+#
+# Prints "<time> <zone>" of the first preemption of <vm> at or after <since
+# epoch> and returns 0, returns 1 if there was none, or 2 if GCE couldn't be
+# asked.  <since epoch> keeps an earlier VM of the same name from matching.
+vm_preempted() {
+  local vm="$1" since="$2" kind="$3" where="$4" ops t z err rc=0
+  local scope=() link="/zones/${where}-[a-z]/instances/${vm}\$"
+  if [ "$kind" = zone ]; then
+    scope=(--zones="$where")
+    link="/instances/${vm}\$"
+  fi
+  # GCE rejects a filter on the zone field when listing across zones, so the
+  # region goes in the targetLink match.
+  err="$(mktemp)"
+  ops="$(gcloud --quiet compute operations list "${scope[@]}" \
+    --filter="operationType=compute.instances.preempted AND targetLink~'${link}'" \
+    --format='value(insertTime,zone.basename())' 2>"$err")" || rc=2
+  # A rejected request is only a warning; gcloud still exits 0 with no rows.
+  ! grep -q 'did not succeed' "$err" || rc=2
+  rm -f "$err"
+  [ "$rc" -eq 0 ] || return 2
+  while read -r t z; do
+    [ -n "$t" ] || continue
+    if [ "$(date -d "$t" +%s 2>/dev/null || echo 0)" -ge "$since" ]; then
+      # GCE reports operation times in Pacific time; the rest of the log is UTC.
+      echo "$(date -u -d "$t" +%Y-%m-%dT%H:%M:%SZ) $z"
+      return 0
+    fi
+  done <<<"$ops"
+  return 1
+}
+
+# vm_preemption_check <vm> <zone> <attempt created epoch> <failed epoch>
+#
+# Prints the time GCE preempted <vm> and returns 0 if it did, returns 1 if it
+# didn't, or 2 if GCE couldn't be asked at all.  Only a preemption after <attempt
+# created epoch> counts, so an earlier VM of the same name never matches.
+#
+# GCE can record a preemption after the failure surfaces, so this polls rather
+# than looking once.  A preempted VM leaves RUNNING as the preemption starts
+# (within a second, in a simulated one), so one still RUNNING 10s after the
+# failure wasn't preempted.
+vm_preemption_check() {
+  local vm="$1" zone="$2" created="$3" failed="$4"
+  local found rc status now list_ok=false
+  while true; do
+    rc=0
+    found="$(vm_preempted "$vm" "$created" zone "$zone")" || rc=$?
+    case "$rc" in
+      0) echo "${found%% *}"; return 0 ;;
+      1) list_ok=true ;;
+    esac
+    now="$(date +%s)"
+    if [ "$now" -ge $((failed + 10)) ] && [ "$list_ok" = true ]; then
+      status="$(gcloud --quiet compute instances describe "$vm" --zone="$zone" --format='value(status)' 2>/dev/null)" || status=""
+      [ "$status" != RUNNING ] || return 1
+    fi
+    if [ "$now" -ge $((failed + 120)) ]; then
+      [ "$list_ok" = true ] && return 1
+      return 2
+    fi
+    sleep 10
+  done
+}
+
+# maybe_simulate_preemption <batch> <vm> <zone> has GCE preempt <vm> if <batch>
+# is listed in FV_SIMULATE_PREEMPT_BATCHES, so a run can exercise the
+# preemption retry for real.  GCE acts about 2.5 minutes after being asked, so
+# this must be called while the batch has longer than that left to run.
+maybe_simulate_preemption() {
+  local batch="$1" vm="$2" zone="$3"
+  [[ " ${FV_SIMULATE_PREEMPT_BATCHES:-} " == *" $batch "* ]] || return 0
+  echo "Asking GCE to preempt spot VM $vm (batch $batch is in FV_SIMULATE_PREEMPT_BATCHES)."
+  gcloud --quiet compute instances simulate-maintenance-event "$vm" --zone="$zone" --async ||
+    echo "Could not ask GCE to preempt $vm; the batch runs on undisturbed."
+}
+
+# vm_wait_gone <vm> <zone> <seconds> waits for GCE to finish deleting <vm>,
+# which the DELETE termination action may still be doing.
+vm_wait_gone() {
+  local vm="$1" zone="$2" deadline=$(( $(date +%s) + $3 )) err
+  while true; do
+    if ! err="$(gcloud --quiet compute instances describe "$vm" --zone="$zone" --format='value(status)' 2>&1 >/dev/null)" &&
+      grep -q 'was not found' <<<"$err"; then
+      return 0
+    fi
+    [ "$(date +%s)" -lt "$deadline" ] || return 1
+    sleep 10
+  done
+}
+
+# create_on_demand_replacement <vm> <zone> <preempted type> <create args...>
+#
+# Recreates <vm> as on-demand in the same zone, trying the preempted VM's type
+# first and then the rest of VM_MACHINE_TYPES, once each with no waiting: the
+# step's remaining time was budgeted for one create.  <create args> must not
+# carry a machine type, boot disk type or provisioning model, and should carry
+# the labels that mark the VM as on demand.  Prints the type it got.
+#
+# With VM_REPLACE_DEADLINE (an epoch) set, no type is tried after it: a
+# replacement that comes too late is no use to the caller.
+create_on_demand_replacement() {
+  local vm="$1" zone="$2" first="$3"
+  shift 3
+  local -a types
+  local type i=0
+  read -r -a types <<<"${VM_MACHINE_TYPES:?}"
+  for type in "$first" "${types[@]}"; do
+    i=$((i + 1))
+    if [ "$i" -gt 1 ] && [ "$type" = "$first" ]; then
+      continue
+    fi
+    if [ -n "${VM_REPLACE_DEADLINE:-}" ] && [ "$(date +%s)" -ge "$VM_REPLACE_DEADLINE" ]; then
+      echo "Out of time to replace ${vm}." >&2
+      return 1
+    fi
+    if gcloud --quiet compute instances create "$vm" --zone="$zone" \
+      --machine-type="$type" --boot-disk-type="$(boot_disk_type_for "$type")" \
+      "$@" >&2; then
+      echo "$type"
+      return 0
+    fi
+    echo "Could not create on-demand ${type} replacement for ${vm} in ${zone}." >&2
+  done
+  return 1
+}
+
+# write_preemption_junit <report file> <batch> <testcase name> <message>
+# reports a batch that preemption cut short.  <message> must need no XML
+# escaping.
+write_preemption_junit() {
+  local file="$1" batch="$2" name="$3" message="$4"
+  mkdir -p "$(dirname "$file")"
+  cat >"$file" <<JUNIT_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="batch-${batch}" tests="1" failures="1" errors="0">
+    <testcase name="${name}" classname="ci.preemption">
+      <failure message="${message}">${message}</failure>
+    </testcase>
+  </testsuite>
+</testsuites>
+JUNIT_EOF
+}
