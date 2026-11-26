@@ -111,6 +111,16 @@ var _ = Describe("Istio controller certificate authority", func() {
 	operatorNS := common.OperatorNamespace()
 	cacertsKey := types.NamespacedName{Name: istio.CACertsSecretName, Namespace: istio.IstioNamespace}
 	operatorCAKey := types.NamespacedName{Name: istio.OperatorCASecretName, Namespace: operatorNS}
+	// inPluginLayout is a self-signed operator CA, stored in the kubernetes.io/tls
+	// layout, as istiod reads it from cacerts.
+	inPluginLayout := func(data map[string][]byte) map[string][]byte {
+		return map[string][]byte{
+			istio.CACertKey:    data[corev1.TLSCertKey],
+			istio.CAKeyKey:     data[corev1.TLSPrivateKeyKey],
+			istio.CertChainKey: data[corev1.TLSCertKey],
+			istio.RootCertKey:  data["ca.crt"],
+		}
+	}
 	anchorsKey := types.NamespacedName{Name: istio.TrustExportConfigMapName, Namespace: istio.IstioNamespace}
 
 	BeforeEach(func() {
@@ -218,25 +228,24 @@ var _ = Describe("Istio controller certificate authority", func() {
 			reconcileIstio()
 
 			caSecret := getSecret(operatorCAKey)
-			Expect(caSecret.Data).To(HaveLen(4))
+			Expect(caSecret.Data).To(HaveLen(3))
 			Expect(caSecret.OwnerReferences).To(BeEmpty())
 			ca, err := istio.LoadCA(caSecret.Data)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ca.Roots).To(HaveLen(1))
 			Expect(ca.Roots[0].Subject.Organization).To(Equal([]string{"cluster.local"}))
-			Expect(caSecret.Data[istio.CertChainKey]).To(Equal(caSecret.Data[istio.CACertKey]))
-			Expect(caSecret.Data[istio.RootCertKey]).To(Equal(caSecret.Data[istio.CACertKey]))
+			Expect(caSecret.Data[corev1.TLSCertKey]).To(Equal(caSecret.Data["ca.crt"]))
 			Expect(caSecret.Labels).To(HaveKey(certificatemanagement.SignerLabel))
 			Expect(caSecret.Annotations).To(HaveKeyWithValue(certificatemanagement.ExpiryAnnotation,
 				ca.Roots[0].NotAfter.UTC().Format(certificatemanagement.ExpiryFormat)))
 
 			cacerts := getSecret(cacertsKey)
 			Expect(cacerts.Labels).To(HaveKeyWithValue(istio.CACertsLabel, "operatorManaged"))
-			Expect(cacerts.Data).To(Equal(caSecret.Data))
+			Expect(cacerts.Data).To(Equal(inPluginLayout(caSecret.Data)))
 			Expect(cacerts.OwnerReferences).NotTo(BeEmpty())
 
 			cm := getConfigMap(anchorsKey)
-			Expect(cm.Data[istio.RootCertKey]).To(Equal(string(caSecret.Data[istio.CACertKey])))
+			Expect(cm.Data[istio.RootCertKey]).To(Equal(string(caSecret.Data["ca.crt"])))
 			Expect(cm.Data[istio.TrustDomainKey]).To(Equal("cluster.local"))
 
 			istiod := getIstiod()
@@ -282,11 +291,11 @@ var _ = Describe("Istio controller certificate authority", func() {
 			cacerts := getSecret(cacertsKey)
 
 			caSecret := getSecret(operatorCAKey)
-			caSecret.Data[istio.CAKeyKey] = newTestCert("other", nil, true).keyPEM
+			caSecret.Data[corev1.TLSPrivateKeyKey] = newTestCert("other", nil, true).keyPEM
 			Expect(cli.Update(ctx, caSecret)).NotTo(HaveOccurred())
 			reconcileIstio()
 
-			Expect(getSecret(operatorCAKey).Data[istio.CAKeyKey]).To(Equal(caSecret.Data[istio.CAKeyKey]))
+			Expect(getSecret(operatorCAKey).Data[corev1.TLSPrivateKeyKey]).To(Equal(caSecret.Data[corev1.TLSPrivateKeyKey]))
 			Expect(getSecret(cacertsKey).Data).To(Equal(cacerts.Data))
 			expectDegradedMentioning(operatorNS+"/"+istio.OperatorCASecretName, "does not match")
 		})
@@ -497,7 +506,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			Expect(result.RequeueAfter).To(BeZero())
 			cacerts = getSecret(cacertsKey)
 			Expect(transitionRecord(cacerts)).To(BeEmpty())
-			Expect(cacerts.Data).To(Equal(getSecret(operatorCAKey).Data))
+			Expect(cacerts.Data).To(Equal(inPluginLayout(getSecret(operatorCAKey).Data)))
 			expectPublished(opRoot)
 			Expect(istiodHash()).NotTo(Equal(hash))
 			mockStatus.AssertCalled(GinkgoT(), "ClearWarning", caWarningKey)
@@ -591,8 +600,8 @@ var _ = Describe("Istio controller certificate authority", func() {
 			cacerts := getSecret(cacertsKey)
 			op := operatorCA()
 			caSecret := getSecret(operatorCAKey)
-			goodKey := caSecret.Data[istio.CAKeyKey]
-			caSecret.Data[istio.CAKeyKey] = newTestCert("other", nil, true).keyPEM
+			goodKey := caSecret.Data[corev1.TLSPrivateKeyKey]
+			caSecret.Data[corev1.TLSPrivateKeyKey] = newTestCert("other", nil, true).keyPEM
 			Expect(cli.Update(ctx, caSecret)).NotTo(HaveOccurred())
 
 			now = now.Add(wait)
@@ -607,7 +616,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 			expectWarningMentioning("paused at phase 2/4")
 
 			caSecret = getSecret(operatorCAKey)
-			caSecret.Data[istio.CAKeyKey] = goodKey
+			caSecret.Data[corev1.TLSPrivateKeyKey] = goodKey
 			Expect(cli.Update(ctx, caSecret)).NotTo(HaveOccurred())
 			mockStatus.Calls = nil
 			reconcileIstio()
@@ -775,7 +784,7 @@ var _ = Describe("Istio controller certificate authority", func() {
 
 			cacerts := getSecret(cacertsKey)
 			Expect(transitionRecord(cacerts)).To(BeEmpty())
-			Expect(cacerts.Data).To(Equal(getSecret(operatorCAKey).Data))
+			Expect(cacerts.Data).To(Equal(inPluginLayout(getSecret(operatorCAKey).Data)))
 			expectPublished(operatorCA().Roots[0])
 			expectNotDegraded()
 		})
