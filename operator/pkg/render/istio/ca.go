@@ -63,10 +63,10 @@ const (
 
 	DefaultTrustDomain = "cluster.local"
 
-	// The operator-managed CA takes the key type and validity istiod gives its own
-	// self-signed CA, so the two kinds of root behave the same in a mesh.
+	// The operator-managed CA takes the key type istiod gives its own self-signed
+	// CA. Nothing renews it, so it lives as long as the operator's cluster CA.
 	operatorCAKeyBits    = 2048
-	operatorCAValidity   = 3650 * 24 * time.Hour
+	operatorCAValidity   = 100 * 365 * 24 * time.Hour
 	operatorCANamePrefix = "tigera-operator-istio-ca"
 
 	// tlsRootCertKey holds the roots in the kubernetes.io/tls layout.

@@ -112,7 +112,7 @@ func pemBlockCount(data []byte) int {
 
 var _ = Describe("Istio CA", func() {
 	Describe("GenerateCA", func() {
-		It("makes a self-signed RSA 2048 root valid for ten years, like istiod's own self-signed CA", func() {
+		It("makes a self-signed RSA 2048 root valid for 100 years, like the operator's cluster CA", func() {
 			ca, err := istio.GenerateCA("mesh.example")
 			Expect(err).NotTo(HaveOccurred())
 
@@ -126,7 +126,7 @@ var _ = Describe("Istio CA", func() {
 			Expect(cert.Subject.CommonName).To(HavePrefix("tigera-operator-istio-ca@"))
 			Expect(cert.CheckSignatureFrom(cert)).To(Succeed())
 			Expect(cert.PublicKey.(*rsa.PublicKey).N.BitLen()).To(Equal(2048))
-			Expect(cert.NotAfter.Sub(cert.NotBefore)).To(Equal(3650 * 24 * time.Hour))
+			Expect(cert.NotAfter.Sub(cert.NotBefore)).To(Equal(100 * 365 * 24 * time.Hour))
 
 			Expect(ca.Chain).To(Equal([]*x509.Certificate{cert}))
 			Expect(ca.Roots).To(Equal([]*x509.Certificate{cert}))
