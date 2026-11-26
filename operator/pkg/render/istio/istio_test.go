@@ -15,8 +15,10 @@
 package istio_test
 
 import (
+	"crypto/x509"
 	"encoding/json"
 	"strings"
+	"time"
 
 	netattachv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	. "github.com/onsi/ginkgo/v2"
@@ -42,6 +44,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
 	"github.com/projectcalico/calico/operator/pkg/render/istio"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 const testClusterID = "0123456789abcdef0123456789abcdef"
@@ -397,6 +400,261 @@ var _ = Describe("Istio Component Rendering", func() {
 
 			objsToCreate, _ := component.Objects()
 			Expect(cniBinDirHostPath(objsToCreate)).To(Equal("/custom/cni/bin"))
+		})
+	})
+
+	Describe("Certificate authority and trust anchors", func() {
+		var ca *istio.CA
+
+		BeforeEach(func() {
+			var err error
+			ca, err = istio.GenerateCA("cluster.local")
+			Expect(err).NotTo(HaveOccurred())
+			cfg.LocalCA = ca
+			cfg.CASource = istio.CASourceOperatorManaged
+		})
+
+		renderObjects := func() []client.Object {
+			_, component, err := istio.Istio(cfg)
+			Expect(err).ShouldNot(HaveOccurred())
+			objs, _ := component.Objects()
+			return objs
+		}
+
+		cacertsOf := func(objs []client.Object) *corev1.Secret {
+			s, err := rtest.GetResourceOfType[*corev1.Secret](objs, istio.CACertsSecretName, istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			return s
+		}
+
+		It("renders a complete cacerts from the local CA, labelled with its source", func() {
+			cacerts := cacertsOf(renderObjects())
+			Expect(cacerts.Type).To(Equal(corev1.SecretTypeOpaque))
+			Expect(cacerts.Labels).To(HaveKeyWithValue(istio.CACertsLabel, "operatorManaged"))
+			Expect(cacerts.Data).To(HaveLen(4))
+			Expect(cacerts.Data[istio.CACertKey]).To(Equal(ca.CertPEM))
+			Expect(cacerts.Data[istio.CAKeyKey]).To(Equal(ca.KeyPEM))
+			Expect(cacerts.Data[istio.CertChainKey]).To(Equal(istio.EncodeCertificates(ca.Chain...)))
+			Expect(cacerts.Data[istio.RootCertKey]).To(Equal(istio.ComposeRootBundle(ca.Roots)))
+
+			cfg.CASource = istio.CASourceSecret
+			Expect(cacertsOf(renderObjects()).Labels).To(HaveKeyWithValue(istio.CACertsLabel, "secret"))
+		})
+
+		It("appends additional roots and extra roots to root-cert.pem, deduplicated and sorted", func() {
+			a, b := newTestCert("a", nil, true), newTestCert("b", nil, true)
+			ca.ExtraRoots = []*x509.Certificate{b.cert}
+			cfg.AdditionalRoots = []*x509.Certificate{b.cert, a.cert, ca.Roots[0]}
+
+			bundle := cacertsOf(renderObjects()).Data[istio.RootCertKey]
+			Expect(pemBlockCount(bundle)).To(Equal(3))
+			Expect(bundle).To(Equal(istio.ComposeRootBundle(ca.Roots, []*x509.Certificate{a.cert, b.cert})))
+		})
+
+		It("labels cacerts with the signing certificate's issuer and expiry, alongside the transition record", func() {
+			signer, err := certificatemanagement.ParseCertificate(ca.CertPEM)
+			Expect(err).NotTo(HaveOccurred())
+			cfg.Transition = &istio.SignerTransition{Phase: istio.TransitionDistributeRoot}
+
+			cacerts := cacertsOf(renderObjects())
+			Expect(cacerts.Labels).To(HaveKey(certificatemanagement.SignerLabel))
+			Expect(cacerts.Labels).To(HaveKeyWithValue(istio.CACertsLabel, "operatorManaged"))
+			Expect(cacerts.Annotations).To(HaveKeyWithValue(certificatemanagement.IssuerAnnotation, signer.Issuer.CommonName))
+			Expect(cacerts.Annotations).To(HaveKeyWithValue(certificatemanagement.ExpiryAnnotation, signer.NotAfter.UTC().Format(certificatemanagement.ExpiryFormat)))
+			Expect(cacerts.Annotations).To(HaveKey(istio.TransitionPhaseAnnotation))
+		})
+
+		istiodHashOf := func(objs []client.Object) string {
+			d, err := rtest.GetResourceOfType[*appsv1.Deployment](objs, istio.IstioIstiodDeploymentName, istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			return d.Spec.Template.Annotations[istio.CACertsHashAnnotation]
+		}
+
+		It("publishes only its own root and the trust domain", func() {
+			a := newTestCert("a", nil, true)
+			ca.ExtraRoots = []*x509.Certificate{a.cert}
+			cfg.AdditionalRoots = []*x509.Certificate{newTestCert("b", nil, true).cert}
+			cfg.OwnRoots = []*x509.Certificate{newTestCert("ignored", nil, true).cert}
+
+			cm, err := rtest.GetResourceOfType[*corev1.ConfigMap](renderObjects(), istio.TrustExportConfigMapName, istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cm.Data).To(HaveLen(2))
+			Expect(cm.Data[istio.RootCertKey]).To(Equal(string(ca.CertPEM)))
+			Expect(cm.Data[istio.TrustDomainKey]).To(Equal("cluster.local"))
+		})
+
+		It("renders the trust domain to istiod, ztunnel and the published ConfigMap", func() {
+			cfg.Istio.Spec.TrustDomain = ptr.To("mesh.example")
+			objs := renderObjects()
+
+			meshCM, err := rtest.GetResourceOfType[*corev1.ConfigMap](objs, "istio", istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(meshCM.Data["mesh"]).To(ContainSubstring("trustDomain: mesh.example"))
+
+			ztunnel, err := rtest.GetResourceOfType[*appsv1.DaemonSet](objs, istio.IstioZTunnelDaemonSetName, istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			rtest.ExpectEnv(ztunnel.Spec.Template.Spec.Containers[0].Env, "TRUST_DOMAIN", "mesh.example")
+
+			cm, err := rtest.GetResourceOfType[*corev1.ConfigMap](objs, istio.TrustExportConfigMapName, istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cm.Data[istio.TrustDomainKey]).To(Equal("mesh.example"))
+		})
+
+		It("defaults the trust domain to cluster.local", func() {
+			objs := renderObjects()
+			meshCM, err := rtest.GetResourceOfType[*corev1.ConfigMap](objs, "istio", istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(meshCM.Data["mesh"]).To(ContainSubstring("trustDomain: cluster.local"))
+			ztunnel, err := rtest.GetResourceOfType[*appsv1.DaemonSet](objs, istio.IstioZTunnelDaemonSetName, istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			rtest.ExpectEnv(ztunnel.Spec.Template.Spec.Containers[0].Env, "TRUST_DOMAIN", "cluster.local")
+		})
+
+		It("runs istiod as a multi-root mesh", func() {
+			d, err := rtest.GetResourceOfType[*appsv1.Deployment](renderObjects(), istio.IstioIstiodDeploymentName, istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			rtest.ExpectEnv(rtest.GetContainer(d.Spec.Template.Spec.Containers, "discovery").Env, "ISTIO_MULTIROOT_MESH", "true")
+		})
+
+		It("rolls istiod when the bundle changes and not otherwise", func() {
+			objs := renderObjects()
+			hash := istiodHashOf(objs)
+			Expect(hash).To(Equal(rmeta.SecretsAnnotationHash(cacertsOf(objs))))
+			Expect(istiodHashOf(renderObjects())).To(Equal(hash))
+
+			cfg.AdditionalRoots = []*x509.Certificate{newTestCert("a", nil, true).cert}
+			Expect(istiodHashOf(renderObjects())).NotTo(Equal(hash))
+		})
+
+		It("renders no cacerts without a local CA and keeps the hash of the current one", func() {
+			current := cacertsOf(renderObjects())
+			cfg.LocalCA = nil
+			cfg.CurrentCACerts = current
+
+			objs := renderObjects()
+			_, err := rtest.GetResourceOfType[*corev1.Secret](objs, istio.CACertsSecretName, istio.IstioNamespace)
+			Expect(err).To(HaveOccurred())
+			Expect(istiodHashOf(objs)).To(Equal(rmeta.SecretsAnnotationHash(current)))
+			_, err = rtest.GetResourceOfType[*corev1.ConfigMap](objs, istio.TrustExportConfigMapName, istio.IstioNamespace)
+			Expect(err).To(HaveOccurred())
+
+			cfg.OwnRoots = ca.Roots
+			cm, err := rtest.GetResourceOfType[*corev1.ConfigMap](renderObjects(), istio.TrustExportConfigMapName, istio.IstioNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cm.Data[istio.RootCertKey]).To(Equal(string(ca.CertPEM)))
+		})
+
+		It("renders no hash annotation without any cacerts", func() {
+			cfg.LocalCA = nil
+			Expect(istiodHashOf(renderObjects())).To(BeEmpty())
+		})
+
+		Describe("IstiodRolledOut", func() {
+			var (
+				cacerts *corev1.Secret
+				istiod  *appsv1.Deployment
+			)
+
+			BeforeEach(func() {
+				objs := renderObjects()
+				cacerts = cacertsOf(objs)
+				var err error
+				istiod, err = rtest.GetResourceOfType[*appsv1.Deployment](objs, istio.IstioIstiodDeploymentName, istio.IstioNamespace)
+				Expect(err).NotTo(HaveOccurred())
+				replicas := int32(1)
+				if istiod.Spec.Replicas != nil {
+					replicas = *istiod.Spec.Replicas
+				}
+				istiod.Status = appsv1.DeploymentStatus{ObservedGeneration: istiod.Generation, Replicas: replicas, UpdatedReplicas: replicas, AvailableReplicas: replicas}
+			})
+
+			It("is true once every replica serves the cacerts", func() {
+				Expect(istio.IstiodRolledOut(istiod, cacerts)).To(BeTrue())
+			})
+
+			It("is false without a Deployment or cacerts", func() {
+				Expect(istio.IstiodRolledOut(nil, cacerts)).To(BeFalse())
+				Expect(istio.IstiodRolledOut(istiod, nil)).To(BeFalse())
+			})
+
+			It("is false while the template, the controller or the replicas lag", func() {
+				stale := istiod.DeepCopy()
+				stale.Spec.Template.Annotations[istio.CACertsHashAnnotation] = "other"
+				Expect(istio.IstiodRolledOut(stale, cacerts)).To(BeFalse())
+
+				unobserved := istiod.DeepCopy()
+				unobserved.Generation = unobserved.Status.ObservedGeneration + 1
+				Expect(istio.IstiodRolledOut(unobserved, cacerts)).To(BeFalse())
+
+				rolling := istiod.DeepCopy()
+				rolling.Status.Replicas++
+				Expect(istio.IstiodRolledOut(rolling, cacerts)).To(BeFalse())
+
+				unavailable := istiod.DeepCopy()
+				unavailable.Status.AvailableReplicas = 0
+				Expect(istio.IstiodRolledOut(unavailable, cacerts)).To(BeFalse())
+			})
+		})
+
+		Context("during a signer transition", func() {
+			var retiring, incoming, extra *testCert
+
+			BeforeEach(func() {
+				retiring, incoming = newTestCert("retiring", nil, true), newTestCert("incoming", nil, true)
+				extra = newTestCert("extra", nil, true)
+				cfg.AdditionalRoots = []*x509.Certificate{extra.cert}
+				cfg.Transition = &istio.SignerTransition{
+					Phase:    istio.TransitionAwaitDistribution,
+					Deadline: time.Date(2026, 10, 31, 12, 0, 0, 500, time.FixedZone("PCT", -7*60*60)),
+					Retiring: []*x509.Certificate{retiring.cert},
+					Incoming: []*x509.Certificate{incoming.cert},
+				}
+			})
+
+			It("records the phase, the deadline in UTC and both signers' roots on cacerts", func() {
+				cacerts := cacertsOf(renderObjects())
+				Expect(transitionRecord(cacerts)).To(Equal(map[string]string{
+					istio.TransitionPhaseAnnotation:    "2",
+					istio.TransitionDeadlineAnnotation: "2026-10-31T19:00:00Z",
+					istio.TransitionFromAnnotation:     istio.Fingerprint(retiring.cert),
+					istio.TransitionToAnnotation:       istio.Fingerprint(incoming.cert),
+				}))
+				Expect(cacerts.Annotations).To(HaveKeyWithValue(istio.SignerRootsAnnotation, istio.Fingerprints(cfg.LocalCA.Roots)))
+
+				state := istio.ReadTransition(cacerts)
+				Expect(state.Phase).To(Equal(istio.TransitionAwaitDistribution))
+				Expect(state.Deadline.Equal(time.Date(2026, 10, 31, 19, 0, 0, 0, time.UTC))).To(BeTrue())
+				Expect(state.Retiring).To(HaveLen(1))
+				Expect(state.Retiring[0].Raw).To(Equal(retiring.cert.Raw))
+				Expect(state.Incoming).To(HaveLen(1))
+				Expect(state.Incoming[0].Raw).To(Equal(incoming.cert.Raw))
+			})
+
+			It("keeps both signers' roots in root-cert.pem beside the anchors, and publishes both and only both", func() {
+				objs := renderObjects()
+				bundle := cacertsOf(objs).Data[istio.RootCertKey]
+				Expect(pemBlockCount(bundle)).To(Equal(4))
+				Expect(bundle).To(Equal(istio.ComposeRootBundle(ca.Roots, []*x509.Certificate{retiring.cert, incoming.cert, extra.cert})))
+
+				cm, err := rtest.GetResourceOfType[*corev1.ConfigMap](objs, istio.TrustExportConfigMapName, istio.IstioNamespace)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cm.Data[istio.RootCertKey]).To(Equal(string(istio.ComposeRootBundle(ca.Roots, []*x509.Certificate{retiring.cert, incoming.cert}))))
+			})
+
+			It("leaves the deadline off until the clock starts, and starting it does not roll istiod", func() {
+				cfg.Transition.Deadline = time.Time{}
+				objs := renderObjects()
+				Expect(cacertsOf(objs).Annotations).NotTo(HaveKey(istio.TransitionDeadlineAnnotation))
+				hash := istiodHashOf(objs)
+
+				cfg.Transition.Deadline = time.Now()
+				Expect(istiodHashOf(renderObjects())).To(Equal(hash))
+
+				cfg.Transition = nil
+				Expect(istiodHashOf(renderObjects())).NotTo(Equal(hash))
+				Expect(transitionRecord(cacertsOf(renderObjects()))).To(BeEmpty())
+				Expect(cacertsOf(renderObjects()).Annotations).To(HaveKeyWithValue(istio.SignerRootsAnnotation, istio.Fingerprints(cfg.LocalCA.Roots)))
+			})
 		})
 	})
 
@@ -1130,4 +1388,16 @@ func cniBinDirHostPath(objs []client.Object) string {
 	}
 	Fail("istio-cni-node has no cni-bin-dir hostPath volume")
 	return ""
+}
+
+// transitionRecord is the part of a cacerts' annotations that records a signer
+// transition, without the certificate metadata that sits beside it.
+func transitionRecord(s *corev1.Secret) map[string]string {
+	out := map[string]string{}
+	for k, v := range s.Annotations {
+		if strings.HasPrefix(k, "operator.tigera.io/istio-ca-transition-") {
+			out[k] = v
+		}
+	}
+	return out
 }
