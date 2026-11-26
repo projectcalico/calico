@@ -23,7 +23,9 @@ export VM_PROVISIONING_MODEL=${VM_PROVISIONING_MODEL:-SPOT}
 # Cheapest first among europe-west3's spot types with almost no preemptions
 # (capacity history, Oct-Nov 2026).  The boot disk rules out families without
 # hyperdisk.  C4D is preempted often here, and C3D runs the BPF lanes about
-# 1.7x slower, which costs more than on demand.
+# 1.7x slower, which costs more than on demand.  C3 runs batches at about
+# n4-highcpu-4 speed, so the jobs' timeouts still fit; a slower type would
+# need them rechecked against the slowest batch (the jitharden ut, ~40 min).
 export VM_SPOT_MACHINE_TYPES="c3-standard-4 n4-highcpu-4 c4-standard-4"
 
 export NUM_FV_BATCHES=8
