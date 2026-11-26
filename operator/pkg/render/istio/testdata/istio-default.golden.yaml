@@ -3593,6 +3593,7 @@ data:
           "provider": "default"
         },
         "env": {
+          "ISTIO_MULTIROOT_MESH": "true",
           "PILOT_ENABLE_AMBIENT": "true"
         }
       },
@@ -3651,6 +3652,7 @@ data:
       "deploymentAnnotations": {},
       "deploymentLabels": {},
       "env": {
+        "ISTIO_MULTIROOT_MESH": "true",
         "PILOT_ENABLE_AMBIENT": "true"
       },
       "envVarFrom": [],
@@ -3823,6 +3825,7 @@ data:
       },
       "pilot": {
         "env": {
+          "ISTIO_MULTIROOT_MESH": "true",
           "PILOT_ENABLE_AMBIENT": "true"
         }
       },
@@ -3902,6 +3905,11 @@ data:
         },
         "proxy_init": {
           "image": "fake.io/fakeimg/proxyv2:faketag"
+        }
+      },
+      "pilot": {
+        "env": {
+          "ISTIO_MULTIROOT_MESH": "true"
         }
       },
       "profile": "ambient",
@@ -4369,6 +4377,8 @@ spec:
           value: /var/run/secrets/remote/config
         - name: CA_TRUSTED_NODE_ACCOUNTS
           value: calico-system/ztunnel
+        - name: ISTIO_MULTIROOT_MESH
+          value: "true"
         - name: PILOT_ENABLE_AMBIENT
           value: "true"
         - name: PILOT_TRACE_SAMPLING
