@@ -160,6 +160,18 @@ func GenerateCA(trustDomain string) (*CA, error) {
 	}, nil
 }
 
+// NotAfter is when the chain stops verifying. An issuer can expire before the
+// signing certificate, so it is the earliest expiry along the chain.
+func (c *CA) NotAfter() time.Time {
+	var notAfter time.Time
+	for _, cert := range c.Chain {
+		if notAfter.IsZero() || cert.NotAfter.Before(notAfter) {
+			notAfter = cert.NotAfter
+		}
+	}
+	return notAfter
+}
+
 // SecretData returns the CA in Istio's plug-in layout, trusting only its own roots.
 func (c *CA) SecretData() map[string][]byte {
 	return map[string][]byte{

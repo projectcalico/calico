@@ -464,6 +464,24 @@ var _ = Describe("Istio Component Rendering", func() {
 			Expect(cacerts.Annotations).To(HaveKey(istio.TransitionPhaseAnnotation))
 		})
 
+		It("labels cacerts with the earliest expiry on the chain when an issuer expires before the signer", func() {
+			rootExpiry := time.Now().Add(2 * time.Hour).Truncate(time.Second)
+			root := reissueWith(newTestCert("root", nil, true), nil, func(c *x509.Certificate) { c.NotAfter = rootExpiry })
+			intermediate := newTestCert("intermediate", root, true)
+			Expect(intermediate.cert.NotAfter.After(rootExpiry)).To(BeTrue())
+			cfg.LocalCA = &istio.CA{
+				CertPEM: intermediate.certPEM,
+				KeyPEM:  intermediate.keyPEM,
+				Chain:   []*x509.Certificate{intermediate.cert, root.cert},
+				Roots:   []*x509.Certificate{root.cert},
+			}
+			cfg.CASource = istio.CASourceSecret
+
+			cacerts := cacertsOf(renderObjects())
+			Expect(cacerts.Annotations).To(HaveKeyWithValue(certificatemanagement.ExpiryAnnotation, rootExpiry.UTC().Format(certificatemanagement.ExpiryFormat)))
+			Expect(cacerts.Annotations).To(HaveKeyWithValue(certificatemanagement.IssuerAnnotation, "root"))
+		})
+
 		istiodHashOf := func(objs []client.Object) string {
 			d, err := rtest.GetResourceOfType[*appsv1.Deployment](objs, istio.IstioIstiodDeploymentName, istio.IstioNamespace)
 			Expect(err).NotTo(HaveOccurred())
