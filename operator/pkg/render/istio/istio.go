@@ -428,6 +428,9 @@ func (c *IstioComponent) cacertsSecret() *corev1.Secret {
 	}
 	labels, annotations := certificatemanagement.TLSSecretMetadata(ca.CertPEM)
 	labels[CACertsLabel] = string(source)
+	if notAfter := ca.NotAfter(); !notAfter.IsZero() {
+		annotations[certificatemanagement.ExpiryAnnotation] = notAfter.UTC().Format(certificatemanagement.ExpiryFormat)
+	}
 	for k, v := range c.cfg.Transition.annotations() {
 		annotations[k] = v
 	}

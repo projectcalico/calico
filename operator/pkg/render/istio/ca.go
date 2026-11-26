@@ -160,6 +160,18 @@ func GenerateCA(trustDomain string) (*CA, error) {
 	}, nil
 }
 
+// NotAfter is when the chain stops verifying. An issuer can expire before the
+// signing certificate, so it is the earliest expiry along the chain.
+func (c *CA) NotAfter() time.Time {
+	var notAfter time.Time
+	for _, cert := range c.Chain {
+		if notAfter.IsZero() || cert.NotAfter.Before(notAfter) {
+			notAfter = cert.NotAfter
+		}
+	}
+	return notAfter
+}
+
 // SecretData returns the CA in the kubernetes.io/tls layout, trusting only its
 // own roots. tls.crt holds the whole chain, signing certificate first.
 func (c *CA) SecretData() map[string][]byte {
