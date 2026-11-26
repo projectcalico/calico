@@ -165,16 +165,18 @@ var _ = describe.CalicoDescribe(
 		AfterEach(func() {
 			checker.Stop()
 
-			// Clean up any policies / heps we created.
-			err := cli.Delete(context.Background(), defaultAllow)
+			// The HEP goes first: in calicoctl mode every delete is a kubectl exec
+			// into a host-networked pod, and if that pod is on the HEP node,
+			// dropping either allow first strands the HEP behind its own deny.
+			err := cli.Delete(context.Background(), hep)
+			if err != nil && !errors.IsNotFound(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+			err = cli.Delete(context.Background(), defaultAllow)
 			if err != nil && !errors.IsNotFound(err) {
 				Expect(err).NotTo(HaveOccurred())
 			}
 			err = cli.Delete(context.Background(), allowLogCollection)
-			if err != nil && !errors.IsNotFound(err) {
-				Expect(err).NotTo(HaveOccurred())
-			}
-			err = cli.Delete(context.Background(), hep)
 			if err != nil && !errors.IsNotFound(err) {
 				Expect(err).NotTo(HaveOccurred())
 			}
