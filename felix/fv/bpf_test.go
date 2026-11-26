@@ -2098,6 +2098,42 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					}
 				}
 
+				if !testOpts.ipv6 && testOpts.protocol == "udp" && testOpts.udpUnConnected &&
+					testOpts.connTimeEnabled && testOpts.tunnel == "none" && !testOpts.dsr {
+					It("should deliver fragmented UDP a host sends to a service via CTLB", func() {
+						pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
+						pol = updatePolicy(pol)
+
+						testSvc := k8sService("svc-frag", "10.101.0.112", w[0][0], 80, 8055, 0, testOpts.protocol)
+						_, err := k8sClient.CoreV1().Services(testSvc.Namespace).Create(context.Background(),
+							testSvc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1),
+							"Service endpoints didn't get created. Is controller-manager happy?")
+
+						natK := nat.NewNATKey(net.ParseIP(testSvc.Spec.ClusterIP), 80, numericProto)
+						Eventually(func() bool {
+							natmaps, _, _ := dumpNATMapsAny(4, tc.Felixes[1])
+							v, ok := natmaps[natK]
+							return ok && v.Count() == 1
+						}, "10s").Should(BeTrue(), "service backend didn't show up")
+
+						tcpdump := w[0][0].AttachTCPDump()
+						tcpdump.SetLogEnabled(true)
+						tcpdump.AddMatcher("udp-pod-frags", regexp.MustCompile(
+							fmt.Sprintf("%s.* > %s.*", felixIP(1), w[0][0].IP)))
+						tcpdump.Start(infra, "-vvv", "src", "host", felixIP(1), "and", "dst", "host", w[0][0].IP)
+
+						// A new flow, so whichever program records the first fragment applies CTLB's reverse NAT.
+						_, err = hostW[1].RunCmd("pktgen", felixIP(1), testSvc.Spec.ClusterIP, "udp",
+							"--port-src", "30445", "--port-dst", "80", "--ip-dnf=n", "--payload-size=16000", "--udp-sock")
+						Expect(err).NotTo(HaveOccurred())
+
+						// Reassembled at felix 0 and fragmented again for the pod's smaller MTU.
+						Eventually(func() int { return tcpdump.MatchCount("udp-pod-frags") }).Should(Equal(12))
+					})
+				}
+
 				if (testOpts.protocol == "tcp" || (testOpts.protocol == "udp" && !testOpts.udpUnConnected)) &&
 					testOpts.connTimeEnabled && !testOpts.dsr {
 
