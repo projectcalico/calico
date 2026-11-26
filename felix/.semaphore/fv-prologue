@@ -15,7 +15,14 @@ export REGION=europe-west3
 #
 # With each FV batch being quite small, the tests don't use that much RAM, so
 # we can use a high-CPU machine type to save costs.
-export VM_MACHINE_TYPE=n4-highcpu-4
+export VM_MACHINE_TYPES=n4-highcpu-4
+
+# STANDARD runs every lane on demand.  On SPOT, a preempted batch reruns once
+# on an on-demand VM, which needs FV_STEP_TIMEOUT_MINUTES set on the job.
+export VM_PROVISIONING_MODEL=${VM_PROVISIONING_MODEL:-SPOT}
+# Standard-4: spot highcpu-4 VMs are preempted far more often.  C3D runs the
+# BPF lanes about 1.7x slower, so it comes last.
+export VM_SPOT_MACHINE_TYPES="c4d-standard-4 c3-standard-4 c3d-standard-4"
 
 export NUM_FV_BATCHES=8
 
