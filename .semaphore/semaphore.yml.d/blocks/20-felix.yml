@@ -162,10 +162,11 @@
     - "Felix: Build"
   task:
     jobs:
-      # The time limit leaves room for a preempted spot batch to rerun in full
-      # on demand, after one spot pass and up to 15 minutes of on-demand
-      # creation retries.  FV_STEP_TIMEOUT_MINUTES is that limit less the
-      # prologue, so a rerun starts only if it can finish.
+      # In every Felix FV lane below, the time limit leaves room for a
+      # preempted spot batch to rerun in full on demand, after one spot pass
+      # and up to 15 minutes of on-demand creation retries.
+      # FV_STEP_TIMEOUT_MINUTES is that limit less the prologue, so a rerun
+      # starts only if it can finish.
       - name: "Felix: iptables tests on Ubuntu 22.04"
         execution_time_limit:
           minutes: 150
