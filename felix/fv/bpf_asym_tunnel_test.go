@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -21,7 +19,7 @@ import (
 	"fmt"
 	"regexp"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -83,12 +81,12 @@ func describeBPFAsymmetricTunnelTests() bool {
 
 				remote = workload.New(tc.Felixes[0], "remote", "default", "10.65.0.2", "8055", "tcp")
 				assignIP(remote.IP, remote.Name, tc.Felixes[0].Hostname)
-				Expect(remote.Start()).NotTo(HaveOccurred())
+				Expect(remote.Start(infra)).NotTo(HaveOccurred())
 				remote.ConfigureInInfra(infra)
 
 				local = workload.New(tc.Felixes[1], "local", "default", "10.65.1.2", "8055", "tcp")
 				assignIP(local.IP, local.Name, tc.Felixes[1].Hostname)
-				Expect(local.Start()).NotTo(HaveOccurred())
+				Expect(local.Start(infra)).NotTo(HaveOccurred())
 				local.ConfigureInInfra(infra)
 
 				ensureAllNodesBPFProgramsAttached(tc.Felixes)
@@ -105,7 +103,7 @@ func describeBPFAsymmetricTunnelTests() bool {
 					InterfaceName: "eth20",
 					MTU:           1500,
 				}
-				Expect(external.Start()).NotTo(HaveOccurred())
+				Expect(external.Start(infra)).NotTo(HaveOccurred())
 
 				tc.Felixes[1].Exec("ip", "addr", "add", "192.168.20.20/24", "dev", "eth20")
 				tc.Felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
@@ -139,13 +137,13 @@ func describeBPFAsymmetricTunnelTests() bool {
 				dumpExternal := tc.Felixes[1].AttachTCPDump("eth20")
 				dumpExternal.SetLogEnabled(true)
 				dumpExternal.AddMatcher("raw-reply", regexp.MustCompile(rawReply))
-				dumpExternal.Start("-e", "udp", "and", "dst", "host", remote.IP)
+				dumpExternal.Start(infra, "-e", "udp", "and", "dst", "host", remote.IP)
 				defer dumpExternal.Stop()
 
 				dumpVXLAN := tc.Felixes[1].AttachTCPDump("vxlan.calico")
 				dumpVXLAN.SetLogEnabled(true)
 				dumpVXLAN.AddMatcher("tunneled-reply", regexp.MustCompile(rawReply))
-				dumpVXLAN.Start("udp", "and", "dst", "host", remote.IP)
+				dumpVXLAN.Start(infra, "udp", "and", "dst", "host", remote.IP)
 				defer dumpVXLAN.Stop()
 
 				for round := 1; round <= 3; round += 2 {
