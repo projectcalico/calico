@@ -44,33 +44,33 @@ import (
 
 var testConvergenceTime = 30 * time.Second
 
-// fakeRouteModifierListener captures route modifier updates for test assertions.  It keeps the
+// fakeLiveMigrationListener captures route modifier updates for test assertions.  It keeps the
 // route-programmed callback of the latest update apart from the updates themselves, so that tests
 // can compare the updates with Equal.
-type fakeRouteModifierListener struct {
-	updates      []routeModifierUpdate
-	onProgrammed func(ip.CIDR)
+type fakeLiveMigrationListener struct {
+	updates           []routeModifierUpdate
+	onRouteProgrammed func(ip.CIDR)
 }
 
 type routeModifierUpdate struct {
-	id   types.WorkloadEndpointID
-	mode wepRouteMode
+	id        types.WorkloadEndpointID
+	routeMode wepRouteMode
 }
 
-func (f *fakeRouteModifierListener) OnRouteModifierUpdate(
+func (f *fakeLiveMigrationListener) OnLiveMigrationUpdate(
 	id types.WorkloadEndpointID,
-	mod *wepRouteModifier,
+	mod *wepLiveMigrationUpdate,
 ) {
-	update := routeModifierUpdate{id: id, mode: wepRouteModeNormal}
-	f.onProgrammed = nil
+	update := routeModifierUpdate{id: id, routeMode: wepRouteModeNormal}
+	f.onRouteProgrammed = nil
 	if mod != nil {
-		update.mode = mod.mode
-		f.onProgrammed = mod.onProgrammed
+		update.routeMode = mod.routeMode
+		f.onRouteProgrammed = mod.onRouteProgrammed
 	}
 	f.updates = append(f.updates, update)
 }
 
-func (f *fakeRouteModifierListener) drain() []routeModifierUpdate {
+func (f *fakeLiveMigrationListener) drain() []routeModifierUpdate {
 	updates := f.updates
 	f.updates = nil
 	return updates
@@ -87,7 +87,7 @@ func newTestMonitor(t *testing.T, convergenceTime time.Duration) *liveMigrationM
 	m.newGARPHandle = func(ifaceName string) (garpHandle, error) {
 		return newFakeGARPHandle(), nil
 	}
-	m.registerRouteModifierListener(&fakeRouteModifierListener{})
+	m.registerLiveMigrationListener(&fakeLiveMigrationListener{})
 	t.Cleanup(func() {
 		for _, fsm := range m.fsms {
 			stopFSMGoroutines(fsm)
@@ -107,8 +107,8 @@ func stopFSMGoroutines(fsm *liveMigrationFSM) {
 }
 
 // testListener returns the fake listener from a test monitor.
-func testListener(m *liveMigrationMonitor) *fakeRouteModifierListener {
-	return m.listeners[0].(*fakeRouteModifierListener)
+func testListener(m *liveMigrationMonitor) *fakeLiveMigrationListener {
+	return m.listeners[0].(*fakeLiveMigrationListener)
 }
 
 // drainUpdates resolves the current batch and returns the updates delivered to
@@ -163,7 +163,7 @@ func awaitSwap(t *testing.T, calls chan swapCall) swapCall {
 }
 
 // testFSM creates a liveMigrationFSM in the given state, wired to a monitor for
-// pendingModifiers capture.
+// pendingUpdates capture.
 func testFSM(t *testing.T, state liveMigrationState) (*liveMigrationFSM, *liveMigrationMonitor) {
 	m := newTestMonitor(t, testConvergenceTime)
 	id := types.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "test-pod", EndpointId: "ep"}
@@ -252,11 +252,11 @@ func wepRemove(id types.WorkloadEndpointID) *proto.WorkloadEndpointRemove {
 
 func TestFSMTransitionTable(t *testing.T) {
 	tests := []struct {
-		name      string
-		from      liveMigrationState
-		input     liveMigrationInput
-		wantState liveMigrationState
-		wantMode  wepRouteMode
+		name          string
+		from          liveMigrationState
+		input         liveMigrationInput
+		wantState     liveMigrationState
+		wantRouteMode wepRouteMode
 	}{
 		// Base state
 		{"Base+Target→Target", liveMigrationStateBase, liveMigrationInputTarget, liveMigrationStateTarget, wepRouteModeSuppressed},
@@ -299,11 +299,11 @@ func TestFSMTransitionTable(t *testing.T) {
 
 			g.Expect(fsm.currentState).To(Equal(tt.wantState), "FSM state")
 			if tt.wantState != tt.from {
-				g.Expect(m.pendingModifiers).To(HaveLen(1), "should emit one update")
-				g.Expect(m.pendingModifiers).To(HaveKey(fsm.id))
-				g.Expect(modeOf(m.pendingModifiers[fsm.id])).To(Equal(tt.wantMode), "emitted mode")
+				g.Expect(m.pendingUpdates).To(HaveLen(1), "should emit one update")
+				g.Expect(m.pendingUpdates).To(HaveKey(fsm.id))
+				g.Expect(routeModeOf(m.pendingUpdates[fsm.id])).To(Equal(tt.wantRouteMode), "emitted route mode")
 			} else {
-				g.Expect(m.pendingModifiers).To(BeEmpty(), "should not emit any updates")
+				g.Expect(m.pendingUpdates).To(BeEmpty(), "should not emit any updates")
 			}
 		})
 	}
@@ -319,7 +319,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0].mode).To(Equal(wepRouteModeSuppressed))
+		g.Expect(updates[0].routeMode).To(Equal(wepRouteModeSuppressed))
 		g.Expect(updates[0].id).To(Equal(wepID1))
 	})
 
@@ -333,7 +333,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		// Target + NoRole → TimeWait
-		g.Expect(updates[0].mode).To(Equal(wepRouteModeElevated))
+		g.Expect(updates[0].routeMode).To(Equal(wepRouteModeElevated))
 	})
 
 	t.Run("role change TARGET→SOURCE drives Source input", func(t *testing.T) {
@@ -346,7 +346,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		// Target + Source → Base
-		g.Expect(updates[0].mode).To(Equal(wepRouteModeNormal))
+		g.Expect(updates[0].routeMode).To(Equal(wepRouteModeNormal))
 	})
 
 	t.Run("same role repeated is no-op", func(t *testing.T) {
@@ -376,7 +376,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		// Target + Deleted → Base
-		g.Expect(updates[0].mode).To(Equal(wepRouteModeNormal))
+		g.Expect(updates[0].routeMode).To(Equal(wepRouteModeNormal))
 		// Role and iface name should be cleaned up.
 		g.Expect(m.roles).NotTo(HaveKey(wepID1))
 		g.Expect(m.ifaceNames).NotTo(HaveKey(wepID1))
@@ -406,13 +406,13 @@ func TestMonitorMultipleListeners(t *testing.T) {
 
 		// In production the monitor has one listener per IP version; a second
 		// listener here stands in for the IPv6 endpoint manager.
-		second := &fakeRouteModifierListener{}
-		m.registerRouteModifierListener(second)
+		second := &fakeLiveMigrationListener{}
+		m.registerLiveMigrationListener(second)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		g.Expect(m.ResolveUpdateBatch()).NotTo(HaveOccurred())
 
-		expected := []routeModifierUpdate{{id: wepID1, mode: wepRouteModeSuppressed}}
+		expected := []routeModifierUpdate{{id: wepID1, routeMode: wepRouteModeSuppressed}}
 		g.Expect(testListener(m).drain()).To(Equal(expected))
 		g.Expect(second.drain()).To(Equal(expected))
 	})
@@ -442,7 +442,7 @@ func TestFSMLifecycle(t *testing.T) {
 		g.Expect(m.fsms).To(HaveLen(1))
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0].mode).To(Equal(wepRouteModeElevated))
+		g.Expect(updates[0].routeMode).To(Equal(wepRouteModeElevated))
 	})
 
 	t.Run("ResolveUpdateBatch drains and clears buffer", func(t *testing.T) {
@@ -567,15 +567,15 @@ func TestLiveMigrationScenarios(t *testing.T) {
 		m.OnUpdate(wepUpdate(wepID2, proto.LiveMigrationRole_TARGET))
 		updates := drainUpdates(m)
 		g.Expect(updates).To(ConsistOf(
-			routeModifierUpdate{id: wepID1, mode: wepRouteModeSuppressed},
-			routeModifierUpdate{id: wepID2, mode: wepRouteModeSuppressed},
+			routeModifierUpdate{id: wepID1, routeMode: wepRouteModeSuppressed},
+			routeModifierUpdate{id: wepID2, routeMode: wepRouteModeSuppressed},
 		))
 
 		// Drive WEP1 to Live via GARP, WEP2 stays in Target.
 		m.OnGARPDetected(wepID1)
 		updates = drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0]).To(Equal(routeModifierUpdate{id: wepID1, mode: wepRouteModeElevated}))
+		g.Expect(updates[0]).To(Equal(routeModifierUpdate{id: wepID1, routeMode: wepRouteModeElevated}))
 		// WEP2 FSM should still exist in Target.
 		g.Expect(m.fsms).To(HaveKey(wepID2))
 		g.Expect(m.fsms[wepID2].currentState).To(Equal(liveMigrationStateTarget))
@@ -640,7 +640,7 @@ func TestLiveMigrationTimer(t *testing.T) {
 		m.OnTimerPop(wepID1)
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0].mode).To(Equal(wepRouteModeNormal))
+		g.Expect(updates[0].routeMode).To(Equal(wepRouteModeNormal))
 		g.Expect(m.fsms).To(BeEmpty())
 	})
 
@@ -695,7 +695,7 @@ func TestLiveMigrationGARPChannel(t *testing.T) {
 		m.OnGARPDetected(wepID1)
 		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
-		g.Expect(updates[0].mode).To(Equal(wepRouteModeElevated))
+		g.Expect(updates[0].routeMode).To(Equal(wepRouteModeElevated))
 	})
 }
 
@@ -768,30 +768,30 @@ func timerSenderBlocked() bool {
 // block forever and the test would fail by timeout.
 func TestGARPRaceWithTargetExit(t *testing.T) {
 	tests := []struct {
-		name      string
-		exitInput func(m *liveMigrationMonitor)
-		wantModes []wepRouteMode
+		name           string
+		exitInput      func(m *liveMigrationMonitor)
+		wantRouteModes []wepRouteMode
 	}{
 		{
 			name: "migration completes (NO_ROLE)",
 			exitInput: func(m *liveMigrationMonitor) {
 				m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
 			},
-			wantModes: []wepRouteMode{wepRouteModeElevated},
+			wantRouteModes: []wepRouteMode{wepRouteModeElevated},
 		},
 		{
 			name: "re-migration (SOURCE)",
 			exitInput: func(m *liveMigrationMonitor) {
 				m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
 			},
-			wantModes: []wepRouteMode{wepRouteModeNormal},
+			wantRouteModes: []wepRouteMode{wepRouteModeNormal},
 		},
 		{
 			name: "workload removed",
 			exitInput: func(m *liveMigrationMonitor) {
 				m.OnUpdate(wepRemove(wepID1))
 			},
-			wantModes: []wepRouteMode{wepRouteModeNormal},
+			wantRouteModes: []wepRouteMode{wepRouteModeNormal},
 		},
 	}
 
@@ -836,9 +836,9 @@ func TestGARPRaceWithTargetExit(t *testing.T) {
 			}
 
 			updates := drainUpdates(m)
-			g.Expect(updates).To(HaveLen(len(tt.wantModes)))
-			for i, want := range tt.wantModes {
-				g.Expect(updates[i].mode).To(Equal(want))
+			g.Expect(updates).To(HaveLen(len(tt.wantRouteModes)))
+			for i, want := range tt.wantRouteModes {
+				g.Expect(updates[i].routeMode).To(Equal(want))
 			}
 
 			// The aborted detection must not deliver a stale GARP.
@@ -992,15 +992,15 @@ func TestLiveMigrationCompletionOutcomes(t *testing.T) {
 				g.Expect(completionCount(o)-countsBefore[o]).To(Equal(wantIncrease), "count for outcome %s", o)
 			}
 
-			g.Expect(m.pendingModifiers).To(HaveLen(1))
+			g.Expect(m.pendingUpdates).To(HaveLen(1))
 			if tt.wantState == liveMigrationStateBase {
 				// No route elevation, so no reporter, whatever the outcome.
 				g.Expect(fsm.routeReporter).To(BeNil())
-				g.Expect(m.pendingModifiers[fsm.id]).To(BeNil())
+				g.Expect(m.pendingUpdates[fsm.id]).To(BeNil())
 			} else {
 				g.Expect(fsm.routeReporter).NotTo(BeNil())
 				g.Expect(fsm.routeReporter.garpDetectedAt).To(Equal(fsm.garpDetectedAt))
-				g.Expect(m.pendingModifiers[fsm.id].onProgrammed).NotTo(BeNil())
+				g.Expect(m.pendingUpdates[fsm.id].onRouteProgrammed).NotTo(BeNil())
 			}
 		})
 	}
@@ -1017,12 +1017,12 @@ func TestLiveMigrationCompletionOutcomes(t *testing.T) {
 		g.Expect(fsm.currentState).To(Equal(liveMigrationStateTimeWait))
 		g.Expect(completionCount(liveMigrationOutcomeCompletedWithGARP)).To(Equal(countAfterLive))
 		g.Expect(fsm.routeReporter).To(BeIdenticalTo(reporter))
-		g.Expect(m.pendingModifiers[fsm.id].onProgrammed).NotTo(BeNil())
+		g.Expect(m.pendingUpdates[fsm.id].onRouteProgrammed).NotTo(BeNil())
 
 		fsm.handleInput(liveMigrationInputTimerPop)
 		g.Expect(fsm.currentState).To(Equal(liveMigrationStateBase))
 		g.Expect(fsm.routeReporter).To(BeNil())
-		g.Expect(m.pendingModifiers[fsm.id]).To(BeNil())
+		g.Expect(m.pendingUpdates[fsm.id]).To(BeNil())
 	})
 }
 
@@ -1054,7 +1054,7 @@ func TestGARPDetectionTimeSurvivesUnprocessedReport(t *testing.T) {
 	g.Expect(fsm.routeReporter).NotTo(BeNil())
 	g.Expect(fsm.routeReporter.garpDetectedAt).To(BeTemporally(">=", beforeDetection))
 	g.Expect(fsm.routeReporter.garpDetectedAt).To(BeTemporally("<=", afterDetection))
-	g.Expect(testListener(m).onProgrammed).NotTo(BeNil())
+	g.Expect(testListener(m).onRouteProgrammed).NotTo(BeNil())
 }
 
 func TestLiveMigrationRouteReporter(t *testing.T) {
@@ -1177,18 +1177,18 @@ func TestIsGARPOrRARP(t *testing.T) {
 
 // expectUpdate drains pending updates and checks that exactly one update was emitted with
 // the given route mode.
-func expectUpdate(g Gomega, m *liveMigrationMonitor, expectedMode wepRouteMode) {
+func expectUpdate(g Gomega, m *liveMigrationMonitor, expectedRouteMode wepRouteMode) {
 	updates := drainUpdates(m)
 	g.Expect(updates).To(HaveLen(1), "expected exactly one pending update")
-	g.Expect(updates[0].mode).To(Equal(expectedMode))
+	g.Expect(updates[0].routeMode).To(Equal(expectedRouteMode))
 }
 
-// modeOf returns the route mode of a pending update, where nil means no modification.
-func modeOf(mod *wepRouteModifier) wepRouteMode {
+// routeModeOf returns the route mode of a pending update, where nil means no modification.
+func routeModeOf(mod *wepLiveMigrationUpdate) wepRouteMode {
 	if mod == nil {
 		return wepRouteModeNormal
 	}
-	return mod.mode
+	return mod.routeMode
 }
 
 // serializePacket serializes gopacket layers into a gopacket.Packet.

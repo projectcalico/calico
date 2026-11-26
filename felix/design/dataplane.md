@@ -801,7 +801,7 @@ the code" but **"did you fan out to every family's manager"**. A
 singleton holding a *single* reference to its downstream manager
 serves IPv4 only and fails silently — the IPv6 manager never learns
 the state, so its routes keep their default behaviour. Prefer a list
-plus an explicit registration call (`registerRouteModifierListener`) over a
+plus an explicit registration call (`registerLiveMigrationListener`) over a
 single-valued field: a missing family then shows up as a missing call
 at the construction site in `int_dataplane.go`, alongside the
 `RegisterManager` call it belongs with.
