@@ -449,7 +449,7 @@ func checkUse(pool v3.IPPool, use v3.IPPoolAllowedUse) rejectReason {
 // caller declares a use, since callers that predate the check leave the use empty and must keep working.
 func qualifyPoolForIP(ip net.IP, pool v3.IPPool, use v3.IPPoolAllowedUse) error {
 	if use != "" && checkUse(pool, use) != "" {
-		return fmt.Errorf("IP address %s is in IP pool %q, which is not allowed for use %q (allowedUses: %v)", ip, pool.Name, use, accounting.AllowedUses(&pool))
+		return fmt.Errorf("IP address %s is in IP pool %q, which is not allowed for use %q (allowedUses: %v): %w", ip, pool.Name, use, accounting.AllowedUses(&pool), ErrUseNotAllowed)
 	}
 	return nil
 }

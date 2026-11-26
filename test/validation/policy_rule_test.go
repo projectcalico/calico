@@ -563,6 +563,64 @@ func TestEntityRule_NetsFormat(t *testing.T) {
 	}
 }
 
+// global() selects non-namespaced endpoints, so it can't be combined with a
+// namespace label expression.
+func TestEntityRule_GlobalNamespaceSelector(t *testing.T) {
+	const wantErr = "a namespaceSelector that uses global() must be exactly global()"
+	for _, tt := range []struct {
+		selector string
+		wantErr  string
+	}{
+		{selector: "global()"},
+		{selector: " global( ) "},
+		{selector: "has(team)"},
+		{selector: "global() && has(team)", wantErr: wantErr},
+		{selector: "!global()", wantErr: wantErr},
+	} {
+		t.Run(tt.selector, func(t *testing.T) {
+			np := &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np-global"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{Ingress: []v3.Rule{{
+					Action: v3.Allow,
+					Source: v3.EntityRule{NamespaceSelector: tt.selector},
+				}}},
+			}
+			if tt.wantErr != "" {
+				expectCreateFails(t, np, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, np)
+			}
+		})
+	}
+}
+
+// Negating every address leaves a rule that can never match.
+func TestEntityRule_NotNetsCatchAll(t *testing.T) {
+	const wantErr = "a catch-all CIDR in notNets matches no traffic"
+	for _, tt := range []struct {
+		name    string
+		entity  v3.EntityRule
+		wantErr string
+	}{
+		{name: "IPv4 catch-all in notNets", entity: v3.EntityRule{NotNets: []string{"0.0.0.0/0"}}, wantErr: wantErr},
+		{name: "IPv6 catch-all in notNets", entity: v3.EntityRule{NotNets: []string{"::/0"}}, wantErr: wantErr},
+		{name: "catch-all in nets", entity: v3.EntityRule{Nets: []string{"0.0.0.0/0"}}},
+		{name: "narrower CIDR in notNets", entity: v3.EntityRule{NotNets: []string{"10.0.0.0/8"}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			np := &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np-catchall"), Namespace: "default"},
+				Spec:       v3.NetworkPolicySpec{Ingress: []v3.Rule{{Action: v3.Allow, Source: tt.entity}}},
+			}
+			if tt.wantErr != "" {
+				expectCreateFails(t, np, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, np)
+			}
+		})
+	}
+}
+
 // libcalico-go holds a named port to the Kubernetes limit of 15 characters.
 func TestRule_PortLength(t *testing.T) {
 	for _, tt := range []struct {

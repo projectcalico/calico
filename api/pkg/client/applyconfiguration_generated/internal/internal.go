@@ -8,7 +8,7 @@ import (
 	fmt "fmt"
 	sync "sync"
 
-	typed "sigs.k8s.io/structured-merge-diff/v6/typed"
+	typed "sigs.k8s.io/structured-merge-diff/v7/typed"
 )
 
 func Parser() *typed.Parser {

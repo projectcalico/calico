@@ -143,10 +143,8 @@ spec:
                                         properties:
                                           claims:
                                             description: |-
-                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This field depends on the
-                                              DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
                                               description:
@@ -155,13 +153,13 @@ spec:
                                               properties:
                                                 name:
                                                   description: |-
-                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    name must match the name of one entry in pod.spec.resourceClaims of
                                                     the Pod where this field is used. It makes that resource available
                                                     inside a container.
                                                   type: string
                                                 request:
                                                   description: |-
-                                                    Request is the name chosen for a request in the referenced claim.
+                                                    request is the name chosen for a request in the referenced claim.
                                                     If empty, everything from the claim is made available, otherwise
                                                     only the result of this request.
                                                   type: string
@@ -180,8 +178,12 @@ spec:
                                               pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                               x-kubernetes-int-or-string: true
                                             description: |-
-                                              Limits describes the maximum amount of compute resources allowed.
-                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                              limits describes the maximum amount of compute resources allowed.
+                                              For kubelet cgroup enforcement:
+                                              - cpu and memory: a limit of 0 is treated the same as an unspecified limit. If
+                                                neither the container nor the pod specifies a limit, the resource is not limited.
+                                              - hugepages: an unspecified limit is treated the same as a limit of 0.
+                                              More details: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                             type: object
                                           requests:
                                             additionalProperties:
@@ -191,7 +193,7 @@ spec:
                                               pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                               x-kubernetes-int-or-string: true
                                             description: |-
-                                              Requests describes the minimum amount of compute resources required.
+                                              requests describes the minimum amount of compute resources required.
                                               If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
                                               otherwise to an implementation-defined value. Requests cannot exceed Limits.
                                               More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
@@ -225,10 +227,8 @@ spec:
                                         properties:
                                           claims:
                                             description: |-
-                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              claims lists the names of resources, defined in spec.resourceClaims,
                                               that are used by this container.
-                                              This field depends on the
-                                              DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
                                               description:
@@ -237,13 +237,13 @@ spec:
                                               properties:
                                                 name:
                                                   description: |-
-                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    name must match the name of one entry in pod.spec.resourceClaims of
                                                     the Pod where this field is used. It makes that resource available
                                                     inside a container.
                                                   type: string
                                                 request:
                                                   description: |-
-                                                    Request is the name chosen for a request in the referenced claim.
+                                                    request is the name chosen for a request in the referenced claim.
                                                     If empty, everything from the claim is made available, otherwise
                                                     only the result of this request.
                                                   type: string
@@ -262,8 +262,12 @@ spec:
                                               pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                               x-kubernetes-int-or-string: true
                                             description: |-
-                                              Limits describes the maximum amount of compute resources allowed.
-                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                              limits describes the maximum amount of compute resources allowed.
+                                              For kubelet cgroup enforcement:
+                                              - cpu and memory: a limit of 0 is treated the same as an unspecified limit. If
+                                                neither the container nor the pod specifies a limit, the resource is not limited.
+                                              - hugepages: an unspecified limit is treated the same as a limit of 0.
+                                              More details: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                             type: object
                                           requests:
                                             additionalProperties:
@@ -273,7 +277,7 @@ spec:
                                               pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                               x-kubernetes-int-or-string: true
                                             description: |-
-                                              Requests describes the minimum amount of compute resources required.
+                                              requests describes the minimum amount of compute resources required.
                                               If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
                                               otherwise to an implementation-defined value. Requests cannot exceed Limits.
                                               More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
@@ -365,6 +369,7 @@ spec:
                         format: date-time
                         type: string
                       message:
+                        default: ""
                         description: |-
                           message is a human readable message indicating details about the transition.
                           This may be an empty string.
@@ -403,7 +408,6 @@ spec:
                         type: string
                     required:
                       - lastTransitionTime
-                      - message
                       - reason
                       - status
                       - type

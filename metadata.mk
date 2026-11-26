@@ -2,16 +2,16 @@
 # This file contains Makefile configuration parameters and metadata for this branch.
 #################################################################################################
 # The project Go version
-GO_VERSION=1.27.2
+GO_VERSION=1.27.4
 # Version of Kubernetes to use for dependencies, tests, registry.k8s.io/kubectl, and kubectl binary release.
-K8S_VERSION=v1.37.1
+K8S_VERSION=v1.38.0-beta.0
 # The version of LLVM to use for go-build and calico/base images.
-LLVM_VERSION=21.1.8
+LLVM_VERSION=22.1.8
 # Calico toolchain versions and the calico/base image to use.
 # Set when go-build is rebuilt for the same Go/LLVM/Kubernetes versions, which is
 # published as -1, -2 and so on. Empty for a normal tag; clear it whenever any of
 # those three versions moves.
-GO_BUILD_VER_SUFFIX=-2
+GO_BUILD_VER_SUFFIX=-1
 GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)$(GO_BUILD_VER_SUFFIX)
 RUST_BUILD_VER=1.99.1
 
@@ -27,7 +27,7 @@ GITHUB_CLI_VERSION=2.94.0
 GOTESTSUM_VERSION=v1.13.0
 HELM_VERSION=v3.21.1
 # KINDEST_NODE_VERSION is the Kubernetes version of the KIND cluster used in
-# tests, and is deliberately held one minor behind K8S_VERSION: the KubeVirt
+# tests, and is deliberately held behind K8S_VERSION: the KubeVirt
 # live-migration tests deploy KubeVirt (tigera/kubevirt mockvirt-v1.8.1, i.e.
 # KubeVirt 1.8), which only supports Kubernetes 1.33-1.35. On a 1.36 node image
 # VMIs never leave the "Scheduled" phase and the suite times out. v1.35.5 is the
@@ -35,6 +35,9 @@ HELM_VERSION=v3.21.1
 # KubeVirt/mockvirt release that supports the target Kubernetes minor exists.
 KINDEST_NODE_VERSION=v1.35.5
 KIND_VERSION=v0.32.0
+UV_VERSION=0.9.5
+# What the cytopia/yamllint image that yaml-lint runs ships; a native run pins it.
+YAMLLINT_VERSION=1.32.0
 
 # Configuration for Semaphore/Github integration.  This needs to be set
 # differently for a forked repo.

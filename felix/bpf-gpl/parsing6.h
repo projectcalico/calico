@@ -104,6 +104,7 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v6_offset(struct cali_tc_ct
 {
 	// Fill in source ip
 	ipv6hdr_ip_to_ipv6_addr_t(&ctx->state->ip_src, &ip_hdr(ctx)->saddr);
+	ctx->state->pre_nat_ip_src = ctx->state->ip_src;
 	// Fill in dst ip
 	ipv6hdr_ip_to_ipv6_addr_t(&ctx->state->ip_dst, &ip_hdr(ctx)->daddr);
 	// Fill in pre nat ip

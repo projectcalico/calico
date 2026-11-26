@@ -94,6 +94,16 @@ check "cache hit downloads from S3" grep -q "^s3cmd .* get --force " "$stub_log"
 check "cache hit does not save calico image" test "$(grep -c 'docker save -o /tmp/calico-image.tar ' "$stub_log")" = 0
 check "cache hit uploads to GCS" grep -q "^gcloud storage cp /tmp/calico-image.tar.zst gs://" "$stub_log"
 
+# 2b. Under ArgoCI the image is a local tar: compressed from it, not fetched or
+#     re-saved.
+: >"$work/calico.tar"
+CALICO_IMAGE_TAR="$work/calico.tar" CI_ARTIFACT_STORAGE=gs://bucket/run run
+rc=$?
+check "local image tar RC=0" [ "$rc" = 0 ]
+check "local image tar is compressed" grep -q "^zstd -3 -T0 -o /tmp/calico-image.tar.zst $work/calico.tar" "$stub_log"
+check "local image tar is not fetched" test "$(grep -c -E '^(artifact pull|s3cmd)' "$stub_log")" = 0
+check "local image tar is not re-saved" test "$(grep -c 'docker save -o /tmp/calico-image.tar ' "$stub_log")" = 0
+
 # 3. The felix-test image is saved either way — it is this job's own output.
 check "felix-test image always saved" grep -q "^docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64" "$stub_log"
 

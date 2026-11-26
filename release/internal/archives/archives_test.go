@@ -15,15 +15,21 @@
 package archives
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 )
 
 const testVersion = "v1.2.3"
@@ -99,6 +105,88 @@ func TestBuildFailsWhenAContributorFails(t *testing.T) {
 	}
 }
 
+func TestBuild(t *testing.T) {
+	t.Run("keeps each file's bytes, mode and owner", func(t *testing.T) {
+		from := t.TempDir()
+		for name, mode := range map[string]os.FileMode{"calico-bpf": 0o755, "README": 0o644} {
+			if err := os.WriteFile(filepath.Join(from, name), []byte("content of "+name), mode); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(filepath.Join(from, name), mode); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		a := testArchive(testOutputDir(t), DirSource{Label: "bin", To: binDir, From: from})
+		if err := Build(a); err != nil {
+			t.Fatalf("Build() = %v", err)
+		}
+
+		got := map[string]bool{}
+		for hdr, body := range readArchive(t, Path(a)) {
+			if hdr.Typeflag != tar.TypeReg {
+				continue
+			}
+			name := filepath.Base(hdr.Name)
+			got[name] = true
+			src := filepath.Join(from, name)
+			info, err := os.Stat(src)
+			if err != nil {
+				t.Fatalf("%s is not a source file: %v", hdr.Name, err)
+			}
+			want, err := os.ReadFile(src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			st := info.Sys().(*syscall.Stat_t)
+			if string(body) != string(want) {
+				t.Errorf("%s: body %q, want %q", hdr.Name, body, want)
+			}
+			if fs.FileMode(hdr.Mode).Perm() != info.Mode().Perm() {
+				t.Errorf("%s: mode %v, want %v", hdr.Name, fs.FileMode(hdr.Mode).Perm(), info.Mode().Perm())
+			}
+			if hdr.Uid != int(st.Uid) || hdr.Gid != int(st.Gid) {
+				t.Errorf("%s: owner %d:%d, want %d:%d", hdr.Name, hdr.Uid, hdr.Gid, st.Uid, st.Gid)
+			}
+			if !hdr.ModTime.Equal(info.ModTime().Round(time.Second)) {
+				t.Errorf("%s: mtime %v, want %v", hdr.Name, hdr.ModTime, info.ModTime())
+			}
+		}
+		if !got["calico-bpf"] || !got["README"] {
+			t.Errorf("archived %v, want calico-bpf and README", got)
+		}
+	})
+}
+
+func readArchive(t *testing.T, path string) map[*tar.Header][]byte {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	zr, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(zr)
+	out := map[*tar.Header][]byte{}
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			return out
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(tr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out[hdr] = body
+	}
+}
+
 // Path reads the name through FileName rather than spelling it, so replacing
 // FileName is enough for a product that names its archive differently.
 func TestPathNamesTheArchiveOnce(t *testing.T) {
@@ -157,37 +245,10 @@ func TestDirSourceFailsWhenItStagesNothing(t *testing.T) {
 	d := DirSource{
 		To:     binDir,
 		From:   from,
-		Filter: func(_, _, relPath string) bool { return relPath == "calico-bpf" },
+		Filter: []fsutil.FileFilter{fsutil.Recursive, fsutil.Exclude("calico-felix")},
 	}
 	if err := d.Contribute(t.TempDir()); err == nil {
 		t.Error("Contribute() = nil, want an error when nothing is staged")
-	}
-}
-
-// A filter matching a base name would pull a whole subdirectory in with it.
-func TestDirSourceFilterMatchesTheWholeRelativePath(t *testing.T) {
-	from := t.TempDir()
-	for _, name := range []string{"calico-bpf", "bpf/calico-bpf"} {
-		path := filepath.Join(from, name)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(name), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	dest := t.TempDir()
-	d := DirSource{
-		To:     binDir,
-		From:   from,
-		Filter: func(_, _, relPath string) bool { return relPath == "calico-bpf" },
-	}
-	if err := d.Contribute(dest); err != nil {
-		t.Fatalf("Contribute: %v", err)
-	}
-	if want := []string{"bin/calico-bpf"}; !slices.Equal(stagedFiles(t, dest), want) {
-		t.Errorf("staged %v, want %v", stagedFiles(t, dest), want)
 	}
 }
 

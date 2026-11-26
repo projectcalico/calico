@@ -86,7 +86,10 @@ func (m *mockBackendClient) List(_ context.Context, list model.ListInterface, _ 
 	case model.BlockListOptions:
 		return &model.KVPairList{}, nil
 	case model.IPAMHandleListOptions:
-		return &model.KVPairList{}, nil
+		m.mu.Lock()
+		kvps := m.resources[KindIPAMHandle]
+		m.mu.Unlock()
+		return &model.KVPairList{KVPairs: kvps}, nil
 	default:
 		rlo := list.(model.ResourceListOptions)
 		m.mu.Lock()

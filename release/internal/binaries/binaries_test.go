@@ -23,10 +23,13 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/env"
+	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/outputs"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // failingRunner fails a component's build a set number of times before it
@@ -110,7 +113,7 @@ func TestBuildPassesTheVersion(t *testing.T) {
 	if err := Build("/repo", "v1.2.3", testBuilders(""), WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	want := utils.Env(utils.EnvVersion, "v1.2.3")
+	want := env.Var(env.Version, "v1.2.3")
 	for _, c := range f.Calls() {
 		if !slices.Contains(c.Env, want) {
 			t.Errorf("call %v missing %q", c.Args, want)
@@ -128,12 +131,92 @@ func TestBuildPassesABuildersEnv(t *testing.T) {
 	if err := Build("/repo", "v1.2.3", builders, WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	want := utils.Env(utils.EnvArches, "amd64")
+	want := env.Var(env.Arches, "amd64")
 	for _, c := range f.Calls() {
 		if got := slices.Contains(c.Env, want); got != (componentOf(c) == E2EComponent) {
 			t.Errorf("%s built with %q = %v", componentOf(c), want, got)
 		}
 	}
+}
+
+func TestRelease(t *testing.T) {
+	t.Run("every builder takes the requested arches", func(t *testing.T) {
+		want := []string{"amd64", "arm64"}
+		for _, b := range Release("", "amd64", "arm64") {
+			if diff := cmp.Diff(want, b.Arches()); diff != "" {
+				t.Errorf("%s arches (-want +got):\n%s", b.Component(), diff)
+			}
+		}
+	})
+
+	t.Run("no arches leaves the make default", func(t *testing.T) {
+		f := &command.Recorder{}
+		if err := Build("/repo", "v1.2.3", Release(""), WithRunner(f)); err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		for _, c := range f.Calls() {
+			for _, e := range c.Env {
+				if strings.HasPrefix(e, env.Arches+"=") {
+					t.Errorf("%s built with %q, want the make default", componentOf(c), e)
+				}
+			}
+		}
+	})
+}
+
+func TestBuildPrereqs(t *testing.T) {
+	stubPrereqs := func(t *testing.T, m map[string]prereq) {
+		t.Helper()
+		orig := sharedPrereqs
+		sharedPrereqs = func() map[string]prereq { return m }
+		t.Cleanup(func() { sharedPrereqs = orig })
+	}
+
+	t.Run("a shared prereq runs once, before any builder", func(t *testing.T) {
+		shared := prereq{component: "gamma", target: "shared"}
+		stubPrereqs(t, map[string]prereq{"alpha": shared, "beta": shared})
+		f := &command.Recorder{}
+		if err := Build("/repo", "v1.2.3", testBuilders(""), WithRunner(f)); err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		calls := f.Calls()
+		if len(calls) == 0 || componentOf(calls[0]) != "gamma" {
+			t.Fatalf("first call %v, want the gamma prereq", calls)
+		}
+		var n int
+		for _, c := range calls {
+			if componentOf(c) == "gamma" {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Errorf("prereq ran %d times, want 1", n)
+		}
+	})
+
+	t.Run("a failed prereq stops the builders", func(t *testing.T) {
+		stubPrereqs(t, map[string]prereq{"alpha": {component: "gamma", target: "shared"}})
+		f := failingRunner(map[string]int{"gamma": 99})
+		if err := Build("/repo", "v1.2.3", testBuilders(""), WithRunner(f)); err == nil {
+			t.Fatal("Build succeeded, want the prereq failure")
+		}
+		for _, c := range f.Calls() {
+			if componentOf(c) != "gamma" {
+				t.Errorf("ran %s after the prereq failed", componentOf(c))
+			}
+		}
+	})
+
+	t.Run("release and e2e builders share one libbpf build", func(t *testing.T) {
+		f := &command.Recorder{}
+		builders := append(Release(""), E2E([]string{"amd64"}, ""))
+		if err := Build("/repo", "v1.2.3", builders, WithRunner(f)); err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		if got := invocations(f); !slices.Contains(got, FelixComponent+" libbpf") {
+			t.Errorf("ran %v, want felix libbpf", got)
+		}
+	})
 }
 
 // One builder failing must not hide the rest.
@@ -298,7 +381,7 @@ func TestE2EBuildsAndCollectsTheShippedBinaries(t *testing.T) {
 	if err := Build(repoRoot, "v1.2.3", builders, WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if got := invocations(f); !slices.Equal(got, []string{E2EComponent + " " + e2eTarget}) {
+	if got := invocations(f); !slices.Contains(got, E2EComponent+" "+e2eTarget) {
 		t.Errorf("ran %v, want the e2e build target", got)
 	}
 	for _, want := range []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"} {
@@ -321,8 +404,11 @@ func TestE2ENarrowsToSupportedArches(t *testing.T) {
 	if err := Build(repoRoot, "v1.2.3", builders, WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	want := utils.Env(utils.EnvArches, "amd64")
+	want := env.Var(env.Arches, "amd64")
 	for _, c := range f.Calls() {
+		if componentOf(c) != E2EComponent {
+			continue
+		}
 		if !slices.Contains(c.Env, want) {
 			t.Errorf("built without %q, env: %v", want, c.Env)
 		}
@@ -375,7 +461,7 @@ func testArchived(repoRoot string) []archives.DirSource {
 			Label:  "beta tool binary",
 			To:     binDirName,
 			From:   sourceDir(repoRoot, "beta"),
-			Filter: func(_, _, relPath string) bool { return relPath == "tool" },
+			Filter: []fsutil.FileFilter{fsutil.DirFiles, fsutil.Include("tool")},
 		},
 	}
 }
@@ -538,13 +624,32 @@ func TestArchivedIsTheOSSArchiveLayout(t *testing.T) {
 		if got.To != w.to {
 			t.Errorf("%s lands at %q, want %q", got.Label, got.To, w.to)
 		}
+		dir := t.TempDir()
+		for _, name := range append(slices.Clone(w.ships), w.rejects...) {
+			path := filepath.Join(dir, name)
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		filters := got.Filter
+		if filters == nil {
+			filters = []fsutil.FileFilter{fsutil.Recursive}
+		}
+		listed, err := fsutil.ListFiles(dir, filters...)
+		if err != nil {
+			t.Errorf("%s: %v", got.Label, err)
+			continue
+		}
 		for _, name := range w.ships {
-			if got.Filter != nil && !got.Filter("", "", name) {
+			if !slices.Contains(listed, filepath.Join(dir, name)) {
 				t.Errorf("%s does not ship %s", got.Label, name)
 			}
 		}
 		for _, name := range w.rejects {
-			if got.Filter == nil || got.Filter("", "", name) {
+			if slices.Contains(listed, filepath.Join(dir, name)) {
 				t.Errorf("%s ships %s, want it excluded", got.Label, name)
 			}
 		}

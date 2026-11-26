@@ -73,7 +73,8 @@
 static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool decap)
 {
 #ifndef IPVER6
-	if (CALI_F_TO_HOST && ip_is_frag(ip_hdr(ctx))) {
+	/* Later fragments have no L4 header; they take the first fragment's ports and verdict. */
+	if (ip_is_frag(ip_hdr(ctx))) {
 		/* For fragments, we need to skip the FIB lookup as we may not be able to
 		 * forward because of smaller MTU on the next hop. We need to ensure that
 		 * all or none of the fragments go through Linux stack for correct
@@ -822,7 +823,6 @@ do_policy:
 
 	if (CALI_F_TO_WEP && skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_MASQ)) {
 		CALI_DEBUG("MASQ to self - using dest as source for policy.");
-		ctx->state->ip_src_masq = ctx->state->ip_src;
 		ctx->state->ip_src = ctx->state->ip_dst;
 	}
 	CALI_DEBUG("About to jump to policy program.");
@@ -1399,7 +1399,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		if (CALI_F_TO_WEP && skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_MASQ)) {
 			/* Restore state->ip_src */
 			CALI_DEBUG("Accepted MASQ to self - restoring source for conntrack.");
-			ctx->state->ip_src = ctx->state->ip_src_masq;
+			ctx->state->ip_src = ctx->state->pre_nat_ip_src;
 		}
 	}
 

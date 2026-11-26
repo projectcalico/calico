@@ -35,20 +35,26 @@ const (
 	FilterType_FilterTypePolicyName      FilterType = 6
 	FilterType_FilterTypePolicyKind      FilterType = 7
 	FilterType_FilterTypePolicyNamespace FilterType = 8
+	// Namespace and Name collect values from either side of a flow, limited to the sides that match the
+	// filter's either entries.
+	FilterType_FilterTypeNamespace FilterType = 9
+	FilterType_FilterTypeName      FilterType = 10
 )
 
 // Enum value maps for FilterType.
 var (
 	FilterType_name = map[int32]string{
-		0: "FilterTypeUnspecified",
-		1: "FilterTypeDestName",
-		2: "FilterTypeSourceName",
-		3: "FilterTypeDestNamespace",
-		4: "FilterTypeSourceNamespace",
-		5: "FilterTypePolicyTier",
-		6: "FilterTypePolicyName",
-		7: "FilterTypePolicyKind",
-		8: "FilterTypePolicyNamespace",
+		0:  "FilterTypeUnspecified",
+		1:  "FilterTypeDestName",
+		2:  "FilterTypeSourceName",
+		3:  "FilterTypeDestNamespace",
+		4:  "FilterTypeSourceNamespace",
+		5:  "FilterTypePolicyTier",
+		6:  "FilterTypePolicyName",
+		7:  "FilterTypePolicyKind",
+		8:  "FilterTypePolicyNamespace",
+		9:  "FilterTypeNamespace",
+		10: "FilterTypeName",
 	}
 	FilterType_value = map[string]int32{
 		"FilterTypeUnspecified":     0,
@@ -60,6 +66,8 @@ var (
 		"FilterTypePolicyName":      6,
 		"FilterTypePolicyKind":      7,
 		"FilterTypePolicyNamespace": 8,
+		"FilterTypeNamespace":       9,
+		"FilterTypeName":            10,
 	}
 )
 
@@ -1165,8 +1173,10 @@ type Filter struct {
 	Reporter Reporter `protobuf:"varint,9,opt,name=reporter,proto3,enum=goldmane.Reporter" json:"reporter,omitempty"`
 	// Pending/Staged Actions filters on the action field. Combined using logical OR.
 	PendingActions []Action `protobuf:"varint,10,rep,packed,name=pending_actions,json=pendingActions,proto3,enum=goldmane.Action" json:"pending_actions,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Endpoints matches flows by the endpoints on each side. Combined using logical OR.
+	Endpoints     []*FlowEndpointsMatch `protobuf:"bytes,11,rep,name=endpoints,proto3" json:"endpoints,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Filter) Reset() {
@@ -1269,6 +1279,130 @@ func (x *Filter) GetPendingActions() []Action {
 	return nil
 }
 
+func (x *Filter) GetEndpoints() []*FlowEndpointsMatch {
+	if x != nil {
+		return x.Endpoints
+	}
+	return nil
+}
+
+// FlowEndpointsMatch matches a flow by its source and destination endpoints. If the either field is set, the flow
+// matches when its source or its destination matches it, and source and dest are ignored. Otherwise every
+// set end must match its own side of the flow.
+type FlowEndpointsMatch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Source        *EndpointMatch         `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	Dest          *EndpointMatch         `protobuf:"bytes,2,opt,name=dest,proto3" json:"dest,omitempty"`
+	Either        *EndpointMatch         `protobuf:"bytes,3,opt,name=either,proto3" json:"either,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FlowEndpointsMatch) Reset() {
+	*x = FlowEndpointsMatch{}
+	mi := &file_api_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FlowEndpointsMatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FlowEndpointsMatch) ProtoMessage() {}
+
+func (x *FlowEndpointsMatch) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FlowEndpointsMatch.ProtoReflect.Descriptor instead.
+func (*FlowEndpointsMatch) Descriptor() ([]byte, []int) {
+	return file_api_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *FlowEndpointsMatch) GetSource() *EndpointMatch {
+	if x != nil {
+		return x.Source
+	}
+	return nil
+}
+
+func (x *FlowEndpointsMatch) GetDest() *EndpointMatch {
+	if x != nil {
+		return x.Dest
+	}
+	return nil
+}
+
+func (x *FlowEndpointsMatch) GetEither() *EndpointMatch {
+	if x != nil {
+		return x.Either
+	}
+	return nil
+}
+
+// EndpointMatch matches one endpoint by its namespace and name together, against the aggregated values in the
+// flow key, so a pod matches by its workload. An empty field matches any value.
+type EndpointMatch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Namespace     *StringMatch           `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Name          *StringMatch           `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EndpointMatch) Reset() {
+	*x = EndpointMatch{}
+	mi := &file_api_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EndpointMatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EndpointMatch) ProtoMessage() {}
+
+func (x *EndpointMatch) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EndpointMatch.ProtoReflect.Descriptor instead.
+func (*EndpointMatch) Descriptor() ([]byte, []int) {
+	return file_api_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *EndpointMatch) GetNamespace() *StringMatch {
+	if x != nil {
+		return x.Namespace
+	}
+	return nil
+}
+
+func (x *EndpointMatch) GetName() *StringMatch {
+	if x != nil {
+		return x.Name
+	}
+	return nil
+}
+
 type StringMatch struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Value         string                 `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
@@ -1279,7 +1413,7 @@ type StringMatch struct {
 
 func (x *StringMatch) Reset() {
 	*x = StringMatch{}
-	mi := &file_api_proto_msgTypes[9]
+	mi := &file_api_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1291,7 +1425,7 @@ func (x *StringMatch) String() string {
 func (*StringMatch) ProtoMessage() {}
 
 func (x *StringMatch) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[9]
+	mi := &file_api_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1304,7 +1438,7 @@ func (x *StringMatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StringMatch.ProtoReflect.Descriptor instead.
 func (*StringMatch) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{9}
+	return file_api_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *StringMatch) GetValue() string {
@@ -1330,7 +1464,7 @@ type PortMatch struct {
 
 func (x *PortMatch) Reset() {
 	*x = PortMatch{}
-	mi := &file_api_proto_msgTypes[10]
+	mi := &file_api_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1342,7 +1476,7 @@ func (x *PortMatch) String() string {
 func (*PortMatch) ProtoMessage() {}
 
 func (x *PortMatch) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[10]
+	mi := &file_api_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1355,7 +1489,7 @@ func (x *PortMatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PortMatch.ProtoReflect.Descriptor instead.
 func (*PortMatch) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{10}
+	return file_api_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *PortMatch) GetPort() int64 {
@@ -1375,7 +1509,7 @@ type SortOption struct {
 
 func (x *SortOption) Reset() {
 	*x = SortOption{}
-	mi := &file_api_proto_msgTypes[11]
+	mi := &file_api_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1387,7 +1521,7 @@ func (x *SortOption) String() string {
 func (*SortOption) ProtoMessage() {}
 
 func (x *SortOption) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[11]
+	mi := &file_api_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1400,7 +1534,7 @@ func (x *SortOption) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SortOption.ProtoReflect.Descriptor instead.
 func (*SortOption) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{11}
+	return file_api_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SortOption) GetSortBy() SortBy {
@@ -1425,7 +1559,7 @@ type PolicyMatch struct {
 
 func (x *PolicyMatch) Reset() {
 	*x = PolicyMatch{}
-	mi := &file_api_proto_msgTypes[12]
+	mi := &file_api_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1437,7 +1571,7 @@ func (x *PolicyMatch) String() string {
 func (*PolicyMatch) ProtoMessage() {}
 
 func (x *PolicyMatch) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[12]
+	mi := &file_api_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1450,7 +1584,7 @@ func (x *PolicyMatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyMatch.ProtoReflect.Descriptor instead.
 func (*PolicyMatch) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{12}
+	return file_api_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PolicyMatch) GetKind() PolicyKind {
@@ -1497,7 +1631,7 @@ type FlowReceipt struct {
 
 func (x *FlowReceipt) Reset() {
 	*x = FlowReceipt{}
-	mi := &file_api_proto_msgTypes[13]
+	mi := &file_api_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1509,7 +1643,7 @@ func (x *FlowReceipt) String() string {
 func (*FlowReceipt) ProtoMessage() {}
 
 func (x *FlowReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[13]
+	mi := &file_api_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1522,7 +1656,7 @@ func (x *FlowReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FlowReceipt.ProtoReflect.Descriptor instead.
 func (*FlowReceipt) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{13}
+	return file_api_proto_rawDescGZIP(), []int{15}
 }
 
 // FlowUpdate wraps a Flow with additional metadata.
@@ -1536,7 +1670,7 @@ type FlowUpdate struct {
 
 func (x *FlowUpdate) Reset() {
 	*x = FlowUpdate{}
-	mi := &file_api_proto_msgTypes[14]
+	mi := &file_api_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1548,7 +1682,7 @@ func (x *FlowUpdate) String() string {
 func (*FlowUpdate) ProtoMessage() {}
 
 func (x *FlowUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[14]
+	mi := &file_api_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1561,7 +1695,7 @@ func (x *FlowUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FlowUpdate.ProtoReflect.Descriptor instead.
 func (*FlowUpdate) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{14}
+	return file_api_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *FlowUpdate) GetFlow() *Flow {
@@ -1629,7 +1763,7 @@ type FlowKey struct {
 
 func (x *FlowKey) Reset() {
 	*x = FlowKey{}
-	mi := &file_api_proto_msgTypes[15]
+	mi := &file_api_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1641,7 +1775,7 @@ func (x *FlowKey) String() string {
 func (*FlowKey) ProtoMessage() {}
 
 func (x *FlowKey) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[15]
+	mi := &file_api_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1654,7 +1788,7 @@ func (x *FlowKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FlowKey.ProtoReflect.Descriptor instead.
 func (*FlowKey) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{15}
+	return file_api_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *FlowKey) GetSourceName() string {
@@ -1807,7 +1941,7 @@ type Flow struct {
 
 func (x *Flow) Reset() {
 	*x = Flow{}
-	mi := &file_api_proto_msgTypes[16]
+	mi := &file_api_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1819,7 +1953,7 @@ func (x *Flow) String() string {
 func (*Flow) ProtoMessage() {}
 
 func (x *Flow) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[16]
+	mi := &file_api_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1832,7 +1966,7 @@ func (x *Flow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Flow.ProtoReflect.Descriptor instead.
 func (*Flow) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{16}
+	return file_api_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Flow) GetKey() *FlowKey {
@@ -1946,7 +2080,7 @@ type PolicyTrace struct {
 
 func (x *PolicyTrace) Reset() {
 	*x = PolicyTrace{}
-	mi := &file_api_proto_msgTypes[17]
+	mi := &file_api_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1958,7 +2092,7 @@ func (x *PolicyTrace) String() string {
 func (*PolicyTrace) ProtoMessage() {}
 
 func (x *PolicyTrace) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[17]
+	mi := &file_api_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1971,7 +2105,7 @@ func (x *PolicyTrace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyTrace.ProtoReflect.Descriptor instead.
 func (*PolicyTrace) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{17}
+	return file_api_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *PolicyTrace) GetEnforcedPolicies() []*PolicyHit {
@@ -2016,7 +2150,7 @@ type PolicyHit struct {
 
 func (x *PolicyHit) Reset() {
 	*x = PolicyHit{}
-	mi := &file_api_proto_msgTypes[18]
+	mi := &file_api_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2028,7 +2162,7 @@ func (x *PolicyHit) String() string {
 func (*PolicyHit) ProtoMessage() {}
 
 func (x *PolicyHit) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[18]
+	mi := &file_api_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2041,7 +2175,7 @@ func (x *PolicyHit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyHit.ProtoReflect.Descriptor instead.
 func (*PolicyHit) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{18}
+	return file_api_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *PolicyHit) GetKind() PolicyKind {
@@ -2134,7 +2268,7 @@ type StatisticsRequest struct {
 
 func (x *StatisticsRequest) Reset() {
 	*x = StatisticsRequest{}
-	mi := &file_api_proto_msgTypes[19]
+	mi := &file_api_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2146,7 +2280,7 @@ func (x *StatisticsRequest) String() string {
 func (*StatisticsRequest) ProtoMessage() {}
 
 func (x *StatisticsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[19]
+	mi := &file_api_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2159,7 +2293,7 @@ func (x *StatisticsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatisticsRequest.ProtoReflect.Descriptor instead.
 func (*StatisticsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{19}
+	return file_api_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *StatisticsRequest) GetStartTimeGte() int64 {
@@ -2242,7 +2376,7 @@ type StatisticsResult struct {
 
 func (x *StatisticsResult) Reset() {
 	*x = StatisticsResult{}
-	mi := &file_api_proto_msgTypes[20]
+	mi := &file_api_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2254,7 +2388,7 @@ func (x *StatisticsResult) String() string {
 func (*StatisticsResult) ProtoMessage() {}
 
 func (x *StatisticsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[20]
+	mi := &file_api_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2267,7 +2401,7 @@ func (x *StatisticsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatisticsResult.ProtoReflect.Descriptor instead.
 func (*StatisticsResult) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{20}
+	return file_api_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *StatisticsResult) GetPolicy() *PolicyHit {
@@ -2388,7 +2522,7 @@ const file_api_proto_rawDesc = "" +
 	"\n" +
 	"FlowResult\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\"\n" +
-	"\x04flow\x18\x02 \x01(\v2\x0e.goldmane.FlowR\x04flow\"\xaf\x04\n" +
+	"\x04flow\x18\x02 \x01(\v2\x0e.goldmane.FlowR\x04flow\"\xeb\x04\n" +
 	"\x06Filter\x128\n" +
 	"\fsource_names\x18\x01 \x03(\v2\x15.goldmane.StringMatchR\vsourceNames\x12B\n" +
 	"\x11source_namespaces\x18\x02 \x03(\v2\x15.goldmane.StringMatchR\x10sourceNamespaces\x124\n" +
@@ -2402,7 +2536,15 @@ const file_api_proto_rawDesc = "" +
 	"\bpolicies\x18\b \x03(\v2\x15.goldmane.PolicyMatchR\bpolicies\x12.\n" +
 	"\breporter\x18\t \x01(\x0e2\x12.goldmane.ReporterR\breporter\x129\n" +
 	"\x0fpending_actions\x18\n" +
-	" \x03(\x0e2\x10.goldmane.ActionR\x0ependingActions\"L\n" +
+	" \x03(\x0e2\x10.goldmane.ActionR\x0ependingActions\x12:\n" +
+	"\tendpoints\x18\v \x03(\v2\x1c.goldmane.FlowEndpointsMatchR\tendpoints\"\xa3\x01\n" +
+	"\x12FlowEndpointsMatch\x12/\n" +
+	"\x06source\x18\x01 \x01(\v2\x17.goldmane.EndpointMatchR\x06source\x12+\n" +
+	"\x04dest\x18\x02 \x01(\v2\x17.goldmane.EndpointMatchR\x04dest\x12/\n" +
+	"\x06either\x18\x03 \x01(\v2\x17.goldmane.EndpointMatchR\x06either\"o\n" +
+	"\rEndpointMatch\x123\n" +
+	"\tnamespace\x18\x01 \x01(\v2\x15.goldmane.StringMatchR\tnamespace\x12)\n" +
+	"\x04name\x18\x02 \x01(\v2\x15.goldmane.StringMatchR\x04name\"L\n" +
 	"\vStringMatch\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\tR\x05value\x12'\n" +
 	"\x04type\x18\x02 \x01(\x0e2\x13.goldmane.MatchTypeR\x04type\"\x1f\n" +
@@ -2498,7 +2640,7 @@ const file_api_proto_rawDesc = "" +
 	"\n" +
 	"passed_out\x18\n" +
 	" \x03(\x03R\tpassedOut\x12\f\n" +
-	"\x01x\x18\v \x03(\x03R\x01x*\x82\x02\n" +
+	"\x01x\x18\v \x03(\x03R\x01x*\xaf\x02\n" +
 	"\n" +
 	"FilterType\x12\x19\n" +
 	"\x15FilterTypeUnspecified\x10\x00\x12\x16\n" +
@@ -2509,7 +2651,10 @@ const file_api_proto_rawDesc = "" +
 	"\x14FilterTypePolicyTier\x10\x05\x12\x18\n" +
 	"\x14FilterTypePolicyName\x10\x06\x12\x18\n" +
 	"\x14FilterTypePolicyKind\x10\a\x12\x1d\n" +
-	"\x19FilterTypePolicyNamespace\x10\b*>\n" +
+	"\x19FilterTypePolicyNamespace\x10\b\x12\x17\n" +
+	"\x13FilterTypeNamespace\x10\t\x12\x12\n" +
+	"\x0eFilterTypeName\x10\n" +
+	"*>\n" +
 	"\x06Action\x12\x15\n" +
 	"\x11ActionUnspecified\x10\x00\x12\t\n" +
 	"\x05Allow\x10\x01\x12\b\n" +
@@ -2589,7 +2734,7 @@ func file_api_proto_rawDescGZIP() []byte {
 }
 
 var file_api_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
-var file_api_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_api_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_api_proto_goTypes = []any{
 	(FilterType)(0),            // 0: goldmane.FilterType
 	(Action)(0),                // 1: goldmane.Action
@@ -2610,21 +2755,23 @@ var file_api_proto_goTypes = []any{
 	(*FilterHint)(nil),         // 16: goldmane.FilterHint
 	(*FlowResult)(nil),         // 17: goldmane.FlowResult
 	(*Filter)(nil),             // 18: goldmane.Filter
-	(*StringMatch)(nil),        // 19: goldmane.StringMatch
-	(*PortMatch)(nil),          // 20: goldmane.PortMatch
-	(*SortOption)(nil),         // 21: goldmane.SortOption
-	(*PolicyMatch)(nil),        // 22: goldmane.PolicyMatch
-	(*FlowReceipt)(nil),        // 23: goldmane.FlowReceipt
-	(*FlowUpdate)(nil),         // 24: goldmane.FlowUpdate
-	(*FlowKey)(nil),            // 25: goldmane.FlowKey
-	(*Flow)(nil),               // 26: goldmane.Flow
-	(*PolicyTrace)(nil),        // 27: goldmane.PolicyTrace
-	(*PolicyHit)(nil),          // 28: goldmane.PolicyHit
-	(*StatisticsRequest)(nil),  // 29: goldmane.StatisticsRequest
-	(*StatisticsResult)(nil),   // 30: goldmane.StatisticsResult
+	(*FlowEndpointsMatch)(nil), // 19: goldmane.FlowEndpointsMatch
+	(*EndpointMatch)(nil),      // 20: goldmane.EndpointMatch
+	(*StringMatch)(nil),        // 21: goldmane.StringMatch
+	(*PortMatch)(nil),          // 22: goldmane.PortMatch
+	(*SortOption)(nil),         // 23: goldmane.SortOption
+	(*PolicyMatch)(nil),        // 24: goldmane.PolicyMatch
+	(*FlowReceipt)(nil),        // 25: goldmane.FlowReceipt
+	(*FlowUpdate)(nil),         // 26: goldmane.FlowUpdate
+	(*FlowKey)(nil),            // 27: goldmane.FlowKey
+	(*Flow)(nil),               // 28: goldmane.Flow
+	(*PolicyTrace)(nil),        // 29: goldmane.PolicyTrace
+	(*PolicyHit)(nil),          // 30: goldmane.PolicyHit
+	(*StatisticsRequest)(nil),  // 31: goldmane.StatisticsRequest
+	(*StatisticsResult)(nil),   // 32: goldmane.StatisticsResult
 }
 var file_api_proto_depIdxs = []int32{
-	21, // 0: goldmane.FlowListRequest.sort_by:type_name -> goldmane.SortOption
+	23, // 0: goldmane.FlowListRequest.sort_by:type_name -> goldmane.SortOption
 	18, // 1: goldmane.FlowListRequest.filter:type_name -> goldmane.Filter
 	15, // 2: goldmane.FlowListResult.meta:type_name -> goldmane.ListMetadata
 	17, // 3: goldmane.FlowListResult.flows:type_name -> goldmane.FlowResult
@@ -2633,58 +2780,64 @@ var file_api_proto_depIdxs = []int32{
 	18, // 6: goldmane.FilterHintsRequest.filter:type_name -> goldmane.Filter
 	15, // 7: goldmane.FilterHintsResult.meta:type_name -> goldmane.ListMetadata
 	16, // 8: goldmane.FilterHintsResult.hints:type_name -> goldmane.FilterHint
-	26, // 9: goldmane.FlowResult.flow:type_name -> goldmane.Flow
-	19, // 10: goldmane.Filter.source_names:type_name -> goldmane.StringMatch
-	19, // 11: goldmane.Filter.source_namespaces:type_name -> goldmane.StringMatch
-	19, // 12: goldmane.Filter.dest_names:type_name -> goldmane.StringMatch
-	19, // 13: goldmane.Filter.dest_namespaces:type_name -> goldmane.StringMatch
-	19, // 14: goldmane.Filter.protocols:type_name -> goldmane.StringMatch
-	20, // 15: goldmane.Filter.dest_ports:type_name -> goldmane.PortMatch
+	28, // 9: goldmane.FlowResult.flow:type_name -> goldmane.Flow
+	21, // 10: goldmane.Filter.source_names:type_name -> goldmane.StringMatch
+	21, // 11: goldmane.Filter.source_namespaces:type_name -> goldmane.StringMatch
+	21, // 12: goldmane.Filter.dest_names:type_name -> goldmane.StringMatch
+	21, // 13: goldmane.Filter.dest_namespaces:type_name -> goldmane.StringMatch
+	21, // 14: goldmane.Filter.protocols:type_name -> goldmane.StringMatch
+	22, // 15: goldmane.Filter.dest_ports:type_name -> goldmane.PortMatch
 	1,  // 16: goldmane.Filter.actions:type_name -> goldmane.Action
-	22, // 17: goldmane.Filter.policies:type_name -> goldmane.PolicyMatch
+	24, // 17: goldmane.Filter.policies:type_name -> goldmane.PolicyMatch
 	6,  // 18: goldmane.Filter.reporter:type_name -> goldmane.Reporter
 	1,  // 19: goldmane.Filter.pending_actions:type_name -> goldmane.Action
-	2,  // 20: goldmane.StringMatch.type:type_name -> goldmane.MatchType
-	4,  // 21: goldmane.SortOption.sort_by:type_name -> goldmane.SortBy
-	3,  // 22: goldmane.PolicyMatch.kind:type_name -> goldmane.PolicyKind
-	19, // 23: goldmane.PolicyMatch.tier:type_name -> goldmane.StringMatch
-	19, // 24: goldmane.PolicyMatch.namespace:type_name -> goldmane.StringMatch
-	19, // 25: goldmane.PolicyMatch.name:type_name -> goldmane.StringMatch
-	1,  // 26: goldmane.PolicyMatch.action:type_name -> goldmane.Action
-	26, // 27: goldmane.FlowUpdate.flow:type_name -> goldmane.Flow
-	5,  // 28: goldmane.FlowKey.source_type:type_name -> goldmane.EndpointType
-	5,  // 29: goldmane.FlowKey.dest_type:type_name -> goldmane.EndpointType
-	6,  // 30: goldmane.FlowKey.reporter:type_name -> goldmane.Reporter
-	1,  // 31: goldmane.FlowKey.action:type_name -> goldmane.Action
-	27, // 32: goldmane.FlowKey.policies:type_name -> goldmane.PolicyTrace
-	25, // 33: goldmane.Flow.Key:type_name -> goldmane.FlowKey
-	28, // 34: goldmane.PolicyTrace.enforced_policies:type_name -> goldmane.PolicyHit
-	28, // 35: goldmane.PolicyTrace.pending_policies:type_name -> goldmane.PolicyHit
-	3,  // 36: goldmane.PolicyHit.kind:type_name -> goldmane.PolicyKind
-	1,  // 37: goldmane.PolicyHit.action:type_name -> goldmane.Action
-	28, // 38: goldmane.PolicyHit.trigger:type_name -> goldmane.PolicyHit
-	7,  // 39: goldmane.StatisticsRequest.type:type_name -> goldmane.StatisticType
-	8,  // 40: goldmane.StatisticsRequest.group_by:type_name -> goldmane.StatisticsGroupBy
-	22, // 41: goldmane.StatisticsRequest.policy_match:type_name -> goldmane.PolicyMatch
-	28, // 42: goldmane.StatisticsResult.policy:type_name -> goldmane.PolicyHit
-	9,  // 43: goldmane.StatisticsResult.direction:type_name -> goldmane.RuleDirection
-	8,  // 44: goldmane.StatisticsResult.group_by:type_name -> goldmane.StatisticsGroupBy
-	7,  // 45: goldmane.StatisticsResult.type:type_name -> goldmane.StatisticType
-	10, // 46: goldmane.Flows.List:input_type -> goldmane.FlowListRequest
-	12, // 47: goldmane.Flows.Stream:input_type -> goldmane.FlowStreamRequest
-	13, // 48: goldmane.Flows.FilterHints:input_type -> goldmane.FilterHintsRequest
-	24, // 49: goldmane.FlowCollector.Connect:input_type -> goldmane.FlowUpdate
-	29, // 50: goldmane.Statistics.List:input_type -> goldmane.StatisticsRequest
-	11, // 51: goldmane.Flows.List:output_type -> goldmane.FlowListResult
-	17, // 52: goldmane.Flows.Stream:output_type -> goldmane.FlowResult
-	14, // 53: goldmane.Flows.FilterHints:output_type -> goldmane.FilterHintsResult
-	23, // 54: goldmane.FlowCollector.Connect:output_type -> goldmane.FlowReceipt
-	30, // 55: goldmane.Statistics.List:output_type -> goldmane.StatisticsResult
-	51, // [51:56] is the sub-list for method output_type
-	46, // [46:51] is the sub-list for method input_type
-	46, // [46:46] is the sub-list for extension type_name
-	46, // [46:46] is the sub-list for extension extendee
-	0,  // [0:46] is the sub-list for field type_name
+	19, // 20: goldmane.Filter.endpoints:type_name -> goldmane.FlowEndpointsMatch
+	20, // 21: goldmane.FlowEndpointsMatch.source:type_name -> goldmane.EndpointMatch
+	20, // 22: goldmane.FlowEndpointsMatch.dest:type_name -> goldmane.EndpointMatch
+	20, // 23: goldmane.FlowEndpointsMatch.either:type_name -> goldmane.EndpointMatch
+	21, // 24: goldmane.EndpointMatch.namespace:type_name -> goldmane.StringMatch
+	21, // 25: goldmane.EndpointMatch.name:type_name -> goldmane.StringMatch
+	2,  // 26: goldmane.StringMatch.type:type_name -> goldmane.MatchType
+	4,  // 27: goldmane.SortOption.sort_by:type_name -> goldmane.SortBy
+	3,  // 28: goldmane.PolicyMatch.kind:type_name -> goldmane.PolicyKind
+	21, // 29: goldmane.PolicyMatch.tier:type_name -> goldmane.StringMatch
+	21, // 30: goldmane.PolicyMatch.namespace:type_name -> goldmane.StringMatch
+	21, // 31: goldmane.PolicyMatch.name:type_name -> goldmane.StringMatch
+	1,  // 32: goldmane.PolicyMatch.action:type_name -> goldmane.Action
+	28, // 33: goldmane.FlowUpdate.flow:type_name -> goldmane.Flow
+	5,  // 34: goldmane.FlowKey.source_type:type_name -> goldmane.EndpointType
+	5,  // 35: goldmane.FlowKey.dest_type:type_name -> goldmane.EndpointType
+	6,  // 36: goldmane.FlowKey.reporter:type_name -> goldmane.Reporter
+	1,  // 37: goldmane.FlowKey.action:type_name -> goldmane.Action
+	29, // 38: goldmane.FlowKey.policies:type_name -> goldmane.PolicyTrace
+	27, // 39: goldmane.Flow.Key:type_name -> goldmane.FlowKey
+	30, // 40: goldmane.PolicyTrace.enforced_policies:type_name -> goldmane.PolicyHit
+	30, // 41: goldmane.PolicyTrace.pending_policies:type_name -> goldmane.PolicyHit
+	3,  // 42: goldmane.PolicyHit.kind:type_name -> goldmane.PolicyKind
+	1,  // 43: goldmane.PolicyHit.action:type_name -> goldmane.Action
+	30, // 44: goldmane.PolicyHit.trigger:type_name -> goldmane.PolicyHit
+	7,  // 45: goldmane.StatisticsRequest.type:type_name -> goldmane.StatisticType
+	8,  // 46: goldmane.StatisticsRequest.group_by:type_name -> goldmane.StatisticsGroupBy
+	24, // 47: goldmane.StatisticsRequest.policy_match:type_name -> goldmane.PolicyMatch
+	30, // 48: goldmane.StatisticsResult.policy:type_name -> goldmane.PolicyHit
+	9,  // 49: goldmane.StatisticsResult.direction:type_name -> goldmane.RuleDirection
+	8,  // 50: goldmane.StatisticsResult.group_by:type_name -> goldmane.StatisticsGroupBy
+	7,  // 51: goldmane.StatisticsResult.type:type_name -> goldmane.StatisticType
+	10, // 52: goldmane.Flows.List:input_type -> goldmane.FlowListRequest
+	12, // 53: goldmane.Flows.Stream:input_type -> goldmane.FlowStreamRequest
+	13, // 54: goldmane.Flows.FilterHints:input_type -> goldmane.FilterHintsRequest
+	26, // 55: goldmane.FlowCollector.Connect:input_type -> goldmane.FlowUpdate
+	31, // 56: goldmane.Statistics.List:input_type -> goldmane.StatisticsRequest
+	11, // 57: goldmane.Flows.List:output_type -> goldmane.FlowListResult
+	17, // 58: goldmane.Flows.Stream:output_type -> goldmane.FlowResult
+	14, // 59: goldmane.Flows.FilterHints:output_type -> goldmane.FilterHintsResult
+	25, // 60: goldmane.FlowCollector.Connect:output_type -> goldmane.FlowReceipt
+	32, // 61: goldmane.Statistics.List:output_type -> goldmane.StatisticsResult
+	57, // [57:62] is the sub-list for method output_type
+	52, // [52:57] is the sub-list for method input_type
+	52, // [52:52] is the sub-list for extension type_name
+	52, // [52:52] is the sub-list for extension extendee
+	0,  // [0:52] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_init() }
@@ -2698,7 +2851,7 @@ func file_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_rawDesc), len(file_api_proto_rawDesc)),
 			NumEnums:      10,
-			NumMessages:   21,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   3,
 		},

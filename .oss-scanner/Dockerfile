@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Keep in step with GO_BUILD_VER in metadata.mk.
-FROM calico/go-build:1.27.1-llvm21.1.8-k8s1.37.1
+FROM calico/go-build:1.27.4-llvm22.1.8-k8s1.38.0-beta.0-1
 
 # go-build's entrypoint switches to UID 9001, which cannot write /src or use root's build cache.
 ENTRYPOINT []

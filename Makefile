@@ -65,6 +65,27 @@ go-vet: operator-charts
 	$(MAKE) -C felix clone-libbpf
 	$(DOCKER_GO_BUILD) go vet --tags fvtests ./...
 
+# Compiles what go-vet does without running its checks, to fill a build cache:
+# every package and its tests, and what only tests import. `go list -export`
+# compiles for export data and never links, which go build would for every main
+# package, against a libbpf this only has the headers of.
+#
+# Once per way the components build: cgo and the race detector each change the
+# standard library's cache keys, and so every package's above it. The static
+# binaries' pass skips tests, which build with cgo, and keeps going past a
+# package only cgo can build (-e). The cgo passes take the
+# libbpf flags felix, e2e, node and cmd/calico build with, which are part of
+# every cgo package's key.
+GO_COMPILE_CGO_FLAGS = CGO_CFLAGS='-I$(BUILD_REPO_ROOT)/felix/bpf-gpl/libbpf/src -I$(BUILD_REPO_ROOT)/felix/bpf-gpl' \
+	CGO_LDFLAGS='-L$(BUILD_REPO_ROOT)/felix/bpf-gpl/libbpf/src/$(ARCH) -lbpf -lelf -lz'
+go-compile-all: operator-charts
+	$(MAKE) -C felix clone-libbpf
+	$(DOCKER_GO_BUILD) sh -c "$(GO_COMPILE_CGO_FLAGS) go list --tags fvtests -export -test -deps ./..." >/dev/null
+	$(DOCKER_GO_BUILD) sh -c 'CGO_ENABLED=0 go list -e -export -deps ./...' >/dev/null
+	$(DOCKER_GO_BUILD) sh -c "$(GO_COMPILE_CGO_FLAGS) go list -race -export -test -deps ./..." >/dev/null
+	# Its own module, built into the calico image.
+	$(MAKE) -C pod2daemon compile-registrar
+
 update-x-libraries:
 	$(DOCKER_GO_BUILD) sh -c "go get golang.org/x/... && go mod tidy"
 
@@ -99,10 +120,35 @@ test-charts: bin/helm
 	
 # yamllint is single-threaded, so the files are split across cores. Parsable
 # output keeps each problem on one line, so parallel runs can't garble it.
+YAML_LINT_CMD = find . -name .git -prune -o -type f \( -name "*.yaml" -o -name "*.yml" -o -name .yamllint \) -print0 | \
+	xargs -0 -r -P $(or $(GOMAXPROCS),$$(nproc)) -n 50 $(1) -f parsable
+
+# NATIVE_PYTHON=true runs the linter on this machine rather than in its image.
+ifeq ($(NATIVE_PYTHON),true)
+yaml-lint: bin/uv
+	@bin/uv tool install -q yamllint==$(YAMLLINT_VERSION)
+	@$(call YAML_LINT_CMD,"$$(bin/uv tool dir --bin)/yamllint")
+else
 yaml-lint:
 	@docker run --rm -v $(PWD):/data -w /data --entrypoint sh cytopia/yamllint:latest -c \
-	  'find . -name .git -prune -o -type f \( -name "*.yaml" -o -name "*.yml" -o -name .yamllint \) -print0 | \
-	   xargs -0 -r -P $(or $(GOMAXPROCS),$$(nproc)) -n 50 yamllint -f parsable'
+	  '$(call YAML_LINT_CMD,yamllint)'
+endif
+
+# Written under a temporary name: a half-extracted binary looks complete to make.
+# uv names its builds by the kernel's machine name.
+UV_PLATFORM := $(shell uname -m)-unknown-linux-gnu
+# Fetched under its version, so bumping UV_VERSION replaces a uv already here.
+bin/uv: bin/uv-$(UV_VERSION)
+	cp $< $@.tmp
+	mv $@.tmp $@
+
+bin/uv-$(UV_VERSION):
+	rm -f bin/uv-*
+	$(call fetch_file,https://github.com/astral-sh/uv/releases/download/$(UV_VERSION)/uv-$(UV_PLATFORM).tar.gz,bin/.uv.tar.gz)
+	tar -xzf bin/.uv.tar.gz -O uv-$(UV_PLATFORM)/uv > $@.tmp
+	chmod +x $@.tmp
+	mv $@.tmp $@
+	rm -f bin/.uv.tar.gz
 
 protobuf:
 	$(MAKE) -C app-policy protobuf
@@ -295,8 +341,12 @@ E2E_TEST_CONFIG ?= e2e/config/kind/conformance.yaml
 # relative to e2e/config, unless it is absolute or already starts with e2e/config/.
 e2e_config_path = $(abspath $(if $(filter /% e2e/config/%,$(1)),$(1),e2e/config/$(1)))
 E2E_TEST_CONFIG_FLAGS = $(foreach c,$(E2E_TEST_CONFIG),--calico.test-config=$(call e2e_config_path,$(c)))
+# sandcat's inline diagnosis reads the selection from the test's environment, as repo-relative paths.
+E2E_TEST_CONFIG_REL = $(foreach c,$(E2E_TEST_CONFIG),$(patsubst $(REPO_ROOT)/%,%,$(call e2e_config_path,$(c))))
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
+# Prefix for the ginkgo run; it needs the cluster up, so it wraps the run rather than the target.
+E2E_RUN_WRAPPER ?=
 # ClusterNetworkPolicyNamedPorts needs the experimental-channel CRD; we install the standard one.
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
@@ -358,7 +408,7 @@ kind-manifest-install-test:
 e2e-test:
 	$(E2E_BUILD)
 	$(MAKE) kind-up
-	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
+	KUBECONFIG=$(KIND_KUBECONFIG) $(E2E_RUN_WRAPPER) $(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
 
 ## Create a kind cluster with the BPF dataplane plus an external node, and run
 ## the sig-calico BPF e2e tests (including the ExternalNode specs).
@@ -373,13 +423,16 @@ e2e-test-bpf:
 	$(KIND_DIR)/external-node.sh seed
 	$(MAKE) external-node-load-rapidclient
 	# EXT_* / SSH_AUTH_SOCK are passed as environment (the e2e binary reads them
-	# via os.Getenv); KIND_NAME/KUBECONFIG/E2E_TEST_CONFIG are make variables.
+	# via os.Getenv); KIND_NAME/E2E_TEST_CONFIG are make variables. KUBECONFIG is
+	# deliberately both: the wrapper reads it from the environment.
 	# SSH_AUTH_SOCK is cleared so the framework's ssh uses only EXT_KEY and does
 	# not trip over unrelated agent keys.
 	EXT_USER=ubuntu \
 	EXT_IP="$$(cat $(KIND_DIR)/external-node-ip)" \
 	EXT_KEY=$(KIND_DIR)/external-node-key \
 	SSH_AUTH_SOCK= \
+	KUBECONFIG=$(KIND_KUBECONFIG) \
+	$(E2E_RUN_WRAPPER) \
 	$(MAKE) e2e-run \
 		KIND_NAME=kind \
 		KUBECONFIG=$(KIND_KUBECONFIG) \
@@ -425,7 +478,7 @@ endif
 e2e-run: bin/ginkgo
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
-	KUBECONFIG=$(KUBECONFIG) ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --non-blocking-taints=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(E2E_TEST_CONFIG_FLAGS)
+	KUBECONFIG=$(KUBECONFIG) E2E_TEST_CONFIG="$(E2E_TEST_CONFIG_REL)" ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --json-report=report.json --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --non-blocking-taints=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(E2E_TEST_CONFIG_FLAGS)
 
 # Version from go.mod. Built with whichever of Go and docker the host has: the
 # kind lanes have only docker, the remote-cluster lanes only Go.
@@ -462,7 +515,7 @@ e2e-run-cnp:
 # The default GATEWAY_CLASS_NAME ("tigera-gateway-class") matches what the
 # tigera-operator provisions when the GatewayAPI CR omits gatewayClasses.
 ###############################################################################
-GATEWAY_CONFORMANCE_VERSION ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null)
+GATEWAY_CONFORMANCE_VERSION ?= $(shell git -C $(REPO_ROOT) describe --tags --match '$(GIT_VERSION_TAG_MATCH)' --always --dirty 2>/dev/null)
 GATEWAY_CLASS_NAME ?= tigera-gateway-class
 GATEWAY_CONFORMANCE_PROFILES ?= GATEWAY-HTTP
 GATEWAY_CONFORMANCE_MODE ?= default

@@ -26,7 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
-	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	apiextclient "k8s.io/apiextensions-api/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -208,10 +208,16 @@ func TestLifecycle_Mainline(t *testing.T) {
 	g.Expect(gnp.OwnerReferences[0].Name).To(Equal("default"))
 	g.Expect(gnp.OwnerReferences[0].UID).To(Equal(tier1.UID), "OwnerRef UID should be remapped to v3 Tier UID")
 
+	// IPAMHandle with uppercase characters should have its metadata.name lowercased
+	// while preserving the original HandleID in spec.handleID.
+	handle := &apiv3.IPAMHandle{}
+	h.getV3Resource("lb-ccbyvdwersl9wuokfbkypbft2m9xxf822zvhn2yspts", handle)
+	g.Expect(handle.Spec.HandleID).To(Equal("lb-CcByVDWerSL9WUOKfbkyPBft2m9Xxf822Zvhn2YSpts"))
+
 	// Progress tracking should be populated. All migrators are registered
-	// but only the seeded types (Tier, GNP) produce resources; the rest
+	// but only the seeded types (Tier, GNP, IPAMHandle) produce resources; the rest
 	// report zero.
-	g.Expect(dm.Status.Progress.Migrated).To(Equal(int32(3)), "2 tiers + 1 GNP = 3 migrated")
+	g.Expect(dm.Status.Progress.Migrated).To(Equal(int32(4)), "2 tiers + 1 GNP + 1 IPAMHandle = 4 migrated")
 	g.Expect(dm.Status.Progress.TypeDetails).To(HaveLen(len(NewMigrators(bc, fvRTClient))))
 
 	// v3 ClusterInformation should have DatastoreReady=true (unlocked after converging).

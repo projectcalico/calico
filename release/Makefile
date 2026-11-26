@@ -24,10 +24,8 @@ internal/defaults/metadata.mk: ../metadata.mk
 
 bin/release: $(shell find . -name "*.go" -or -name "*.gotmpl") internal/defaults/metadata.mk
 	@mkdir -p bin
-	@$(DOCKER_RUN) \
-		-e CGO_ENABLED=0 \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -o bin/release -v -buildvcs=false -tags with_embed -ldflags "$(LDFLAGS)" ./cmd'
+	@$(DOCKER_GO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) CGO_ENABLED=0 go build -o bin/release -v -buildvcs=false -tags with_embed -ldflags "$(LDFLAGS)" ./cmd'
 
 ###############################################################################
 # Tests
@@ -73,6 +71,8 @@ endif
 .PHONY: st st/hashrelease st/release
 st: st/hashrelease st/release
 
+# st tests the release flow, not the build, and one arch exercises every step.
+st/hashrelease: export ARCHS ?= $(ARCH)
 st/hashrelease: var-require-all-HASHRELEASE_SERVER_BUCKET
 	PLAN=true $(MAKE) hashrelease
 	LOCAL=true BRANCH_CHECK=false $(MAKE) hashrelease

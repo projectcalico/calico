@@ -25,12 +25,12 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/plan"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
 )
@@ -74,7 +74,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				}
 
 				// Generate the release notes.
-				filePath, err := outputs.ReleaseNotes(commandRunner, c.String(orgFlag.Name), cfg.RepoRootDir, "", ver)
+				filePath, err := outputs.ReleaseNotes(github.Client(commandRunner), c.String(orgFlag.Name), cfg.RepoRootDir, "", ver)
 				if err != nil {
 					return fmt.Errorf("failed to generate release notes: %w", err)
 				}
@@ -110,13 +110,12 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithRecordsDir(outputs.RecordsDir(cfg.OutputDir, o.ProductVersion)),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithLogsDir(filepath.Join(cfg.LogsDir, o.ProductVersion)),
-					calico.WithGithubOrg(c.String(orgFlag.Name)),
-					calico.WithRepoName(c.String(repoFlag.Name)),
-					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
+					calico.WithRepo(c.String(orgFlag.Name), c.String(repoFlag.Name), c.String(repoRemoteFlag.Name)),
 					calico.WithImages(c.Bool(imagesFlagName)),
 					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
 					calico.WithImageReleaseDirs(c.StringSlice(imageReleaseDirsFlag.Name)),
 					calico.WithArchiveImages(c.Bool(archiveImagesFlagName)),
+					calico.WithCI(c.Bool(ciFlag.Name)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
 					calico.WithManifests(c.Bool(manifestsFlag.Name)),
 					calico.WithBinaries(c.Bool(binariesFlag.Name)),
@@ -168,9 +167,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithRecordsDir(outputs.RecordsDir(cfg.OutputDir, o.ProductVersion)),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithLogsDir(filepath.Join(cfg.LogsDir, o.ProductVersion)),
-					calico.WithGithubOrg(c.String(orgFlag.Name)),
-					calico.WithRepoName(c.String(repoFlag.Name)),
-					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
+					calico.WithRepo(c.String(orgFlag.Name), c.String(repoFlag.Name), c.String(repoRemoteFlag.Name)),
 					calico.WithImages(c.Bool(imagesFlagName)),
 					calico.WithImageReleaseDirs(c.StringSlice(imageReleaseDirsFlag.Name)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
@@ -248,7 +245,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			outs["operator"] = operatorVer
 
 			// Generate release notes
-			if _, err := outputs.ReleaseNotes(commandRunner, c.String(orgFlag.Name), cfg.RepoRootDir, "", ver); err != nil {
+			if _, err := outputs.ReleaseNotes(github.Client(commandRunner), c.String(orgFlag.Name), cfg.RepoRootDir, "", ver); err != nil {
 				return ver.String(), outs, fmt.Errorf("generate release notes: %w", err)
 			}
 
@@ -258,9 +255,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 				calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 				calico.WithVersion(ver.String()),
 				calico.WithOperatorVersion(operatorVer),
-				calico.WithGithubOrg(c.String(orgFlag.Name)),
-				calico.WithRepoName(c.String(repoFlag.Name)),
-				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
+				calico.WithRepo(c.String(orgFlag.Name), c.String(repoFlag.Name), c.String(repoRemoteFlag.Name)),
 				calico.WithTmpDir(cfg.TmpDir),
 				calico.WithValidation(c.Bool(validationFlag.Name)),
 				calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
@@ -361,7 +356,7 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 				return err
 			}
 
-			postreleaseDir := filepath.Join(cfg.RepoRootDir, utils.ReleaseFolderName, "pkg", "postrelease")
+			postreleaseDir := filepath.Join(cfg.RepoRootDir, releaseDirName, "pkg", "postrelease")
 			args := []string{
 				"--format=testname",
 				"--", "-v", "./...",

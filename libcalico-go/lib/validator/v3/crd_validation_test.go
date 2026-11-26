@@ -734,7 +734,7 @@ func TestCRDValidation_BGPFilter(t *testing.T) {
 					},
 				},
 			},
-			errSubstr: "should have at least 1 properties",
+			errSubstr: "must have at least 1 item",
 		},
 		{
 			name: "operation with two fields set fails maxProperties",

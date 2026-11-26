@@ -836,6 +836,10 @@ func (c *nodeComponent) createPortmapPlugin() map[string]any {
 		},
 	}
 
+	if c.cfg.Installation.IsNftables() {
+		portmapPlugin["backend"] = "nftables"
+	}
+
 	return portmapPlugin
 }
 
@@ -1814,7 +1818,7 @@ func (c *nodeComponent) nodeLifecycle() *corev1.Lifecycle {
 // nodeProbes creates calico/node health probes. It returns in order: startupProbe, livenessProbe, readinessProbe
 func (c *nodeComponent) nodeProbes() (*corev1.Probe, *corev1.Probe, *corev1.Probe) {
 	// Determine liveness and readiness configuration for node.
-	livenessPort := intstr.FromInt(felixHealthPort(c.cfg.FelixConfiguration))
+	livenessPort := intstr.FromInt32(int32(felixHealthPort(c.cfg.FelixConfiguration)))
 	var readinessCmd []string
 
 	readinessCmd = []string{components.CalicoBinaryPath, "component", "node", "health", "--bird-ready", "--felix-ready"}

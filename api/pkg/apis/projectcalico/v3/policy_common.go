@@ -151,6 +151,7 @@ type ICMPFields struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.services) || size(self.services.name) > 0",message="services must specify a service name",reason=FieldValueRequired
 // +kubebuilder:validation:XValidation:rule="!has(self.services) || (!has(self.selector) || size(self.selector) == 0) && (!has(self.notSelector) || size(self.notSelector) == 0)",message="cannot specify Selector/NotSelector and Services on the same rule",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.services) || (!has(self.nets) || size(self.nets) == 0) && (!has(self.notNets) || size(self.notNets) == 0)",message="cannot specify Nets/NotNets and Services on the same rule",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(') || self.namespaceSelector.matches('^ *global[(] *[)] *$')",message="a namespaceSelector that uses global() must be exactly global()",reason=FieldValueInvalid
 type EntityRule struct {
 	// Nets is an optional field that restricts the rule to only apply to traffic that
 	// originates from (or terminates at) IP addresses in any of the given subnets.
@@ -224,6 +225,7 @@ type EntityRule struct {
 	// +kubebuilder:validation:MaxItems=256
 	// +kubebuilder:validation:items:MaxLength=49
 	// +kubebuilder:validation:XValidation:rule="self.all(n, isCIDR(n))",message="notNets entries must be CIDRs",reason=FieldValueInvalid
+	// +kubebuilder:validation:XValidation:rule="self.all(n, n != '0.0.0.0/0' && n != '::/0')",message="a catch-all CIDR in notNets matches no traffic",reason=FieldValueInvalid
 	NotNets []string `json:"notNets,omitempty" validate:"omitempty,dive,net"`
 
 	// NotSelector is the negated version of the Selector field.  See Selector field for
@@ -254,6 +256,7 @@ type ServiceMatch struct {
 	// Namespace specifies the namespace of the given Service. If left empty, the rule
 	// will match within this policy's namespace.
 	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$`
 	Namespace string `json:"namespace,omitempty" validate:"omitempty,name"`
 }
 

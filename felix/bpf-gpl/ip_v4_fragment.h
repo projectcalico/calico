@@ -333,14 +333,14 @@ static CALI_BPF_INLINE void frags4_record_ct_flags(struct cali_tc_ctx *ctx, __u3
 	}
 
 	struct frags4_fwd_key k = {
-		.src = ctx->state->ip_src,
+		.src = ctx->state->pre_nat_ip_src,
 		.dst = ctx->state->pre_nat_ip_dst,
 		.ifindex = ctx->skb->ifindex,
 		.id = ip_hdr(ctx)->id,
 	};
 
 	struct frags4_fwd_value vinit = {
-		.sport = ctx->state->sport,
+		.sport = ctx->state->pre_nat_sport,
 		.dport = ctx->state->pre_nat_dport,
 		.marks = ctx->state->fwd.mark,
 		.flags = flags,

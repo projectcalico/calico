@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -27,15 +29,48 @@ import (
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	"github.com/gopacket/gopacket/pcapgo"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const etherTypeRARP = layers.EthernetType(0x8035)
+
+// Values of the "outcome" label on countLiveMigrationCompletions.
+const (
+	liveMigrationOutcomeCompletedWithGARP = "completed_with_garp"
+	liveMigrationOutcomeCompletedNoGARP   = "completed_no_garp"
+	liveMigrationOutcomeAborted           = "aborted"
+)
+
+var (
+	histogramLiveMigrationRouteProgramming = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "felix_live_migration_route_programming_seconds",
+		Help: "Time from Felix detecting a migrated VM's GARP/RARP on the destination host to Felix " +
+			"writing the VM's elevated-priority route into the kernel.  One observation per route.",
+		// Healthy migrations take tens of milliseconds; the tail of interest is around 1-5s.
+		Buckets: []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 5, 10},
+	})
+	countLiveMigrationCompletions = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "felix_live_migration_completions_total",
+		Help: "Number of live migrations to this host that have finished, by outcome: " +
+			"completed_with_garp (Felix saw the VM's GARP/RARP), completed_no_garp (the migration " +
+			"completed without Felix seeing a GARP/RARP), or aborted (the workload was deleted " +
+			"before the migration completed).",
+	}, []string{"outcome"})
+)
+
+func init() {
+	prometheus.MustRegister(histogramLiveMigrationRouteProgramming)
+	prometheus.MustRegister(countLiveMigrationCompletions)
+}
 
 // garpHandle abstracts an AF_PACKET handle for GARP/RARP detection.
 // Production code uses *pcapgo.EthernetHandle; tests inject fakes.
@@ -44,31 +79,28 @@ type garpHandle interface {
 	gopacket.PacketDataSource
 }
 
-// liveMigrationStateUpdate records a per-workload FSM state change that the
-// liveMigrationMonitor needs to forward to its listeners (the endpoint managers).
-type liveMigrationStateUpdate struct {
-	ID    types.WorkloadEndpointID
-	State liveMigrationState
-}
-
 // liveMigrationMonitor tracks per-workload live migration state that cannot be inferred
-// statelessly from the datastore.  It sees WorkloadEndpoint updates, extracts the live
-// migration role, and drives a per-workload FSM whose state changes are forwarded to the
-// endpoint managers via the liveMigrationListener interface during ResolveUpdateBatch.
+// statelessly from the datastore.  It sees WorkloadEndpoint updates, extracts the live migration
+// role, and drives a per-workload FSM, telling the endpoint managers how each state should modify
+// the WEP's route programming.
 //
-// There is one endpoint manager per IP version, and each keeps its own live migration state,
-// so every state change must be forwarded to all of them: a monitor with only the IPv4
-// manager registered would leave IPv6 workload routes unsuppressed and unelevated.
+// There is one endpoint manager per IP version, and each keeps its own route modifiers, so every
+// update must go to all of them: with only the IPv4 manager registered, IPv6 workload routes would
+// be left unsuppressed and unelevated.
 type liveMigrationMonitor struct {
-	roles           map[types.WorkloadEndpointID]proto.LiveMigrationRole
-	fsms            map[types.WorkloadEndpointID]*liveMigrationFSM
-	pendingUpdates  []liveMigrationStateUpdate
-	listeners       []liveMigrationListener
+	roles map[types.WorkloadEndpointID]proto.LiveMigrationRole
+	fsms  map[types.WorkloadEndpointID]*liveMigrationFSM
+
+	// Latest route modifier for each WEP whose FSM has changed state in this batch; nil means
+	// remove the WEP's modifier.
+	pendingUpdates map[types.WorkloadEndpointID]*wepLiveMigrationUpdate
+
+	listeners       []wepLiveMigrationListener
 	timerC          chan types.WorkloadEndpointID
 	garpC           chan types.WorkloadEndpointID
 	ifaceNames      map[types.WorkloadEndpointID]string
-	migrationUIDs   map[types.WorkloadEndpointID]string
 	vmiNames        map[types.WorkloadEndpointID]string
+	wepIPs          map[types.WorkloadEndpointID][]cnet.IP
 	newGARPHandle   func(string) (garpHandle, error)
 	convergenceTime time.Duration
 
@@ -78,7 +110,7 @@ type liveMigrationMonitor struct {
 	ensureActiveVMOwnerAttrs func(
 		ctx context.Context,
 		ipamClient ipam.Interface,
-		networkName string,
+		ips []cnet.IP,
 		namespace string,
 		vmiName string,
 		targetPodName string,
@@ -87,13 +119,14 @@ type liveMigrationMonitor struct {
 
 func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Interface) *liveMigrationMonitor {
 	return &liveMigrationMonitor{
-		roles:         make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
-		fsms:          make(map[types.WorkloadEndpointID]*liveMigrationFSM),
-		timerC:        make(chan types.WorkloadEndpointID),
-		garpC:         make(chan types.WorkloadEndpointID),
-		ifaceNames:    make(map[types.WorkloadEndpointID]string),
-		migrationUIDs: make(map[types.WorkloadEndpointID]string),
-		vmiNames:      make(map[types.WorkloadEndpointID]string),
+		roles:          make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
+		fsms:           make(map[types.WorkloadEndpointID]*liveMigrationFSM),
+		pendingUpdates: make(map[types.WorkloadEndpointID]*wepLiveMigrationUpdate),
+		timerC:         make(chan types.WorkloadEndpointID),
+		garpC:          make(chan types.WorkloadEndpointID),
+		ifaceNames:     make(map[types.WorkloadEndpointID]string),
+		vmiNames:       make(map[types.WorkloadEndpointID]string),
+		wepIPs:         make(map[types.WorkloadEndpointID][]cnet.IP),
 		newGARPHandle: func(ifaceName string) (garpHandle, error) {
 			return pcapgo.NewEthernetHandle(ifaceName)
 		},
@@ -103,24 +136,78 @@ func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Inte
 	}
 }
 
-// registerListener adds a listener - in production, one endpoint manager per IP version -
-// that should be told about every FSM state change.
-func (m *liveMigrationMonitor) registerListener(l liveMigrationListener) {
+// registerLiveMigrationListener adds a listener - in production, one endpoint manager per IP
+// version - that needs to know when a WEP is involved in live migration in order to adjust its
+// programming for that WEP.
+func (m *liveMigrationMonitor) registerLiveMigrationListener(l wepLiveMigrationListener) {
 	m.listeners = append(m.listeners, l)
 }
 
-// ResolveUpdateBatch drains accumulated FSM state changes and forwards them to each
-// registered listener via the liveMigrationListener interface.  This runs before
-// CompleteDeferredWork, so the endpoint managers see the state changes before they
-// program the dataplane.
+type wepLiveMigrationListener interface {
+	OnLiveMigrationUpdate(id types.WorkloadEndpointID, mod *wepLiveMigrationUpdate)
+}
+
+// Live migration can cause a WEP's usual local route to be suppressed, or for the route to be
+// programmed at higher than usual priority.
+type wepRouteMode int
+
+const (
+	wepRouteModeNormal wepRouteMode = iota
+	wepRouteModeSuppressed
+	wepRouteModeElevated
+)
+
+func (m wepRouteMode) String() string {
+	switch m {
+	case wepRouteModeNormal:
+		return "Normal"
+	case wepRouteModeSuppressed:
+		return "Suppressed"
+	case wepRouteModeElevated:
+		return "Elevated"
+	default:
+		return fmt.Sprintf("wepRouteMode(%d)", int(m))
+	}
+}
+
+type wepLiveMigrationUpdate struct {
+	routeMode wepRouteMode
+
+	// onRouteProgrammed, when non-nil, is called after each elevated route is written to the kernel.
+	// (And hence is only relevant when routeMode is wepRouteModeElevated.)
+	onRouteProgrammed func(ip.CIDR)
+}
+
+// ResolveUpdateBatch drains the pending route modifier updates and forwards them to each
+// registered listener.  This runs before CompleteDeferredWork, so the endpoint managers see the
+// updates before they program the dataplane.
 func (m *liveMigrationMonitor) ResolveUpdateBatch() error {
-	for _, update := range m.pendingUpdates {
+	for id, routeModifier := range m.pendingUpdates {
 		for _, l := range m.listeners {
-			l.OnLiveMigrationStateUpdate(update.ID, update.State)
+			l.OnLiveMigrationUpdate(id, routeModifier)
 		}
 	}
-	m.pendingUpdates = m.pendingUpdates[:0]
+	clear(m.pendingUpdates)
 	return nil
+}
+
+// parseWEPIPs returns the endpoint's /32 and /128 addresses without their prefix lengths.
+func parseWEPIPs(ep *proto.WorkloadEndpoint) []cnet.IP {
+	var ips []cnet.IP
+	for _, s := range slices.Concat(ep.Ipv4Nets, ep.Ipv6Nets) {
+		ip, ipNet, err := net.ParseCIDR(s)
+		if err != nil {
+			continue
+		}
+		if ones, bits := ipNet.Mask.Size(); ones != bits {
+			continue
+		}
+		if ip4 := ip.To4(); ip4 != nil {
+			ip = ip4
+		}
+		ips = append(ips, cnet.IP{IP: ip})
+	}
+	return ips
 }
 
 func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
@@ -128,52 +215,92 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 	case *proto.WorkloadEndpointUpdate:
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
 		m.ifaceNames[id] = msg.Endpoint.Name
-		// Intentionally we don't clear the UID when the LiveMigration resource
-		// is deleted (i.e. when uid becomes "").  If there are any remaining FSM
-		// transitions for this workload, it's clearer for the logs to continue
-		// showing the UID that was associated with the migration.
-		if uid := msg.Endpoint.LiveMigrationUid; uid != "" {
-			m.migrationUIDs[id] = uid
-		}
 		if vmiName := msg.Endpoint.LiveMigrationVmiName; vmiName != "" {
 			m.vmiNames[id] = vmiName
+		}
+		if ips := parseWEPIPs(msg.Endpoint); len(ips) > 0 {
+			m.wepIPs[id] = ips
 		}
 		oldRole := m.roles[id]
 		newRole := msg.Endpoint.LiveMigrationRole
 		m.roles[id] = newRole
+		m.checkForMigrationUIDChange(id, newRole, msg.Endpoint.LiveMigrationUid)
 		if oldRole != newRole {
 			switch newRole {
 			case proto.LiveMigrationRole_NO_ROLE:
-				m.executeFSM(id, liveMigrationInputNoRole)
+				m.executeFSM(id, liveMigrationInputNoRole, "")
 			case proto.LiveMigrationRole_SOURCE:
-				m.executeFSM(id, liveMigrationInputSource)
+				m.executeFSM(id, liveMigrationInputSource, "")
 			case proto.LiveMigrationRole_TARGET:
-				m.executeFSM(id, liveMigrationInputTarget)
+				m.executeFSM(id, liveMigrationInputTarget, msg.Endpoint.LiveMigrationUid)
 			}
 		}
 	case *proto.WorkloadEndpointRemove:
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
 		delete(m.roles, id)
 		delete(m.ifaceNames, id)
-		delete(m.migrationUIDs, id)
 		delete(m.vmiNames, id)
-		m.executeFSM(id, liveMigrationInputDeleted)
+		delete(m.wepIPs, id)
+		m.executeFSM(id, liveMigrationInputDeleted, "")
 	}
 }
 
-func (m *liveMigrationMonitor) executeFSM(id types.WorkloadEndpointID, input liveMigrationInput) {
+// checkForMigrationUIDChange logs if the target-role LiveMigration for a workload with an FSM has a
+// different UID from the last one seen.  We don't expect that, because it means the LiveMigration
+// was replaced mid-migration.  The FSM carries on, and keeps logging the UID that it started with,
+// so that all of its logs can be correlated.
+func (m *liveMigrationMonitor) checkForMigrationUIDChange(
+	id types.WorkloadEndpointID,
+	role proto.LiveMigrationRole,
+	uid string,
+) {
+	fsm := m.fsms[id]
+	if fsm == nil || role != proto.LiveMigrationRole_TARGET ||
+		uid == "" || uid == fsm.latestMigrationUID {
+		// A source-role UID belongs to a different migration, out of this host, and an empty
+		// UID means the LiveMigration has been deleted.
+		return
+	}
+	fsm.logCtx.WithField("newMigrationUID", uid).Info("LiveMigration UID changed")
+	fsm.latestMigrationUID = uid
+}
+
+// newFSM creates the FSM for a workload that is becoming the target of a live migration.  The FSM
+// is discarded when it returns to the Base state, so it normally lives for one migration, and the
+// migration's UID can be fixed in its log context.  That way the UID is still logged after the
+// LiveMigration resource has been deleted, which clears it from the workload.
+func (m *liveMigrationMonitor) newFSM(id types.WorkloadEndpointID, migrationUID string) *liveMigrationFSM {
+	return &liveMigrationFSM{
+		logCtx: logrus.WithFields(logrus.Fields{
+			"id":           id,
+			"migrationUID": migrationUID,
+		}),
+		id:                 id,
+		monitor:            m,
+		currentState:       liveMigrationStateBase,
+		latestMigrationUID: migrationUID,
+	}
+}
+
+// executeFSM delivers an input to the workload's FSM.  No FSM means the Base state, where only a
+// Target input does anything, so only a Target input creates an FSM, with the given migrationUID.
+// For any other input, migrationUID is ignored.
+func (m *liveMigrationMonitor) executeFSM(
+	id types.WorkloadEndpointID,
+	input liveMigrationInput,
+	migrationUID string,
+) {
 	fsm, exists := m.fsms[id]
 	if !exists {
-		fsm = &liveMigrationFSM{
-			logCtx:       logrus.WithField("id", id),
-			id:           id,
-			monitor:      m,
-			currentState: liveMigrationStateBase,
+		if input != liveMigrationInputTarget {
+			logrus.WithFields(logrus.Fields{
+				"id":    id,
+				"input": input,
+			}).Debug("Ignoring live migration input for workload with no FSM")
+			return
 		}
+		fsm = m.newFSM(id, migrationUID)
 		m.fsms[id] = fsm
-	}
-	if uid := m.migrationUIDs[id]; uid != "" {
-		fsm.migrationUID = uid
 	}
 	fsm.handleInput(input)
 	if fsm.currentState == liveMigrationStateBase {
@@ -254,13 +381,26 @@ type liveMigrationFSM struct {
 	id           types.WorkloadEndpointID
 	monitor      *liveMigrationMonitor
 	currentState liveMigrationState
-	migrationUID string
+
+	// latestMigrationUID starts as the UID in logCtx, and changes only if the LiveMigration is
+	// replaced.
+	latestMigrationUID string
+
 	timerStopC   chan struct{}
 	timerWG      sync.WaitGroup
 	pcapHandle   garpHandle
 	garpStopC    chan struct{}
 	garpWG       sync.WaitGroup
 	ipamSwapOnce sync.Once
+
+	// garpDetectedAt is when the GARP detection goroutine saw a GARP/RARP, or zero if it hasn't.
+	// That goroutine writes it before exiting, so it is safe to read once stopGARPDetection has
+	// waited for the goroutine.  It is recorded even when the main loop never gets to process
+	// the GARP, because the end of the migration overtakes it.
+	garpDetectedAt time.Time
+
+	// routeReporter exists in the Live and TimeWait states.
+	routeReporter *liveMigrationRouteReporter
 }
 
 func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
@@ -315,21 +455,23 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 
 	if next != f.currentState {
 		logCtx.WithFields(logrus.Fields{
-			"migrationUID": f.migrationUID,
-			"from":         f.currentState,
-			"to":           next,
+			"from": f.currentState,
+			"to":   next,
 		}).Info("Live migration state transition")
 
 		// Do actions that we should always do when leaving a state.
 		switch f.currentState {
 		case liveMigrationStateTarget:
 			f.stopGARPDetection()
+			f.recordCompletion(input, next)
 		case liveMigrationStateTimeWait:
 			f.stopElevatedRoutingTimer()
 		}
 
 		// Do actions that we should always do when entering a state.
 		switch next {
+		case liveMigrationStateBase:
+			f.routeReporter = nil
 		case liveMigrationStateTarget:
 			f.startGARPDetection()
 		case liveMigrationStateLive:
@@ -341,20 +483,54 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 
 		// Update state.
 		f.currentState = next
-		f.emitStateChange(next)
+		f.notifyStateChange(next)
 	} else {
 		logCtx.Debug("FSM state unchanged")
 	}
 }
 
-func (f *liveMigrationFSM) emitStateChange(next liveMigrationState) {
-	f.monitor.pendingUpdates = append(f.monitor.pendingUpdates, liveMigrationStateUpdate{
-		ID:    f.id,
-		State: next,
-	})
+// recordCompletion is called when the FSM leaves the Target state, i.e. when the migration of
+// the workload to this host has either completed or been aborted.  It counts the outcome and, if
+// the workload's routes are to be elevated, creates the reporter that the endpoint managers call
+// as they write them.
+func (f *liveMigrationFSM) recordCompletion(input liveMigrationInput, next liveMigrationState) {
+	// The outcome depends on the input, not on the next state.  A Source input also leads to Base,
+	// with no route elevation, but it still means that the migration to this host succeeded: a
+	// workload only becomes a migration source when the VM is running in it, whereas after a
+	// failed migration the target workload is deleted.
+	switch {
+	case input == liveMigrationInputDeleted:
+		countLiveMigrationCompletions.WithLabelValues(liveMigrationOutcomeAborted).Inc()
+		return
+	case f.garpDetectedAt.IsZero():
+		countLiveMigrationCompletions.WithLabelValues(liveMigrationOutcomeCompletedNoGARP).Inc()
+	default:
+		countLiveMigrationCompletions.WithLabelValues(liveMigrationOutcomeCompletedWithGARP).Inc()
+	}
+	if next != liveMigrationStateBase {
+		f.routeReporter = newLiveMigrationRouteReporter(f.logCtx, f.garpDetectedAt)
+	}
+}
+
+func (f *liveMigrationFSM) notifyStateChange(next liveMigrationState) {
+	// When the live migration state changes, we need to tell the endpoint managers how/if to
+	// modify their route programming for the WEP concerned.  The update prepared here will be
+	// dispatched in ResolveUpdateBatch.
+	var update *wepLiveMigrationUpdate
+	switch next {
+	case liveMigrationStateTarget:
+		update = &wepLiveMigrationUpdate{routeMode: wepRouteModeSuppressed}
+	case liveMigrationStateLive, liveMigrationStateTimeWait:
+		update = &wepLiveMigrationUpdate{routeMode: wepRouteModeElevated}
+		if f.routeReporter != nil {
+			update.onRouteProgrammed = f.routeReporter.onRouteProgrammed
+		}
+	}
+	f.monitor.pendingUpdates[f.id] = update
 }
 
 func (f *liveMigrationFSM) startGARPDetection() {
+	f.garpDetectedAt = time.Time{}
 	ifaceName := f.monitor.ifaceNames[f.id]
 	if ifaceName == "" {
 		f.logCtx.Warn("No interface name for workload, skipping GARP detection")
@@ -370,7 +546,7 @@ func (f *liveMigrationFSM) startGARPDetection() {
 	f.garpWG.Add(1)
 	go func() {
 		defer f.garpWG.Done()
-		detectGARP(f.logCtx, f.id, handle, f.monitor.garpC, f.garpStopC)
+		f.detectGARP(handle, f.garpStopC)
 	}()
 }
 
@@ -451,7 +627,7 @@ func (f *liveMigrationFSM) stopElevatedRoutingTimer() {
 // OnGARPDetected is called by the main loop when a GARP/RARP packet is
 // detected on a workload's interface.
 func (m *liveMigrationMonitor) OnGARPDetected(id types.WorkloadEndpointID) {
-	m.executeFSM(id, liveMigrationInputGARPDetected)
+	m.executeFSM(id, liveMigrationInputGARPDetected, "")
 }
 
 // OnTimerPop is called by the main loop when a timer fires for a workload.  Stale deliveries are
@@ -464,30 +640,31 @@ func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
 		logrus.WithField("id", id).Debug("Ignoring stale timer pop for workload not in TimeWait")
 		return
 	}
-	m.executeFSM(id, liveMigrationInputTimerPop)
+	m.executeFSM(id, liveMigrationInputTimerPop, "")
 }
 
-// detectGARP reads packets from the given handle and sends the workload ID
-// to garpC when a GARP or RARP packet is detected.  It is a one-shot
-// goroutine: it returns after the first detection, when the handle is closed,
-// or when stopC is closed.
-func detectGARP(logCtx *logrus.Entry, id types.WorkloadEndpointID,
-	handle garpHandle, garpC chan<- types.WorkloadEndpointID, stopC <-chan struct{}) {
+// detectGARP reads packets from the given handle, and records the time and sends the workload ID
+// to garpC when a GARP or RARP packet is detected.  It is a one-shot goroutine: it returns after
+// the first detection, when the handle is closed, or when stopC is closed.
+func (f *liveMigrationFSM) detectGARP(handle garpHandle, stopC <-chan struct{}) {
 	// Note: handle is NOT defer-closed here. The FSM owns the handle lifecycle via
 	// stopGARPDetection(), which closes the handle and causes packetSource.Packets() to return,
 	// ending this goroutine.
 	packetSource := gopacket.NewPacketSource(handle, layers.LayerTypeEthernet)
 	for packet := range packetSource.Packets() {
 		if isGARPOrRARP(packet) {
-			logCtx.Info("Detected GARP/RARP packet on workload interface")
+			// Timestamp before the send to garpC, which can wait for as long as the main loop is
+			// busy.
+			f.garpDetectedAt = time.Now()
+			f.logCtx.Info("Detected GARP/RARP packet on workload interface")
 			// garpC is unbuffered and its only reader is the dataplane main
 			// loop, which may currently be inside stopGARPDetection() waiting
 			// for this goroutine to exit; stopC guarantees this send cannot
 			// block forever in that case.
 			select {
-			case garpC <- id:
+			case f.monitor.garpC <- f.id:
 			case <-stopC:
-				logCtx.Debug("GARP detection stopped while reporting detection")
+				f.logCtx.Debug("GARP detection stopped while reporting detection")
 			}
 			return
 		}
@@ -541,6 +718,11 @@ func (f *liveMigrationFSM) doIPAMOwnerSwap() {
 		f.logCtx.Debug("No VMI name available, skipping IPAM owner swap")
 		return
 	}
+	ips := f.monitor.wepIPs[f.id]
+	if len(ips) == 0 {
+		f.logCtx.Info("No IPs recorded for workload endpoint, skipping IPAM owner swap")
+		return
+	}
 
 	// Parse namespace and pod name from the workload ID (format: "namespace/podName").
 	parts := strings.SplitN(f.id.WorkloadId, "/", 2)
@@ -556,6 +738,7 @@ func (f *liveMigrationFSM) doIPAMOwnerSwap() {
 		"namespace": namespace,
 		"pod":       podName,
 		"vmiName":   vmiName,
+		"ips":       ips,
 	})
 	logCtx.Info("Starting IPAM owner attribute swap for live migration")
 
@@ -566,12 +749,12 @@ func (f *liveMigrationFSM) doIPAMOwnerSwap() {
 		const maxRetries = 5
 		backoff := 100 * time.Millisecond
 		for attempt := 1; attempt <= maxRetries; attempt++ {
-			err := f.monitor.ensureActiveVMOwnerAttrs(ctx, f.monitor.ipamClient, "", namespace, vmiName, podName)
+			err := f.monitor.ensureActiveVMOwnerAttrs(ctx, f.monitor.ipamClient, ips, namespace, vmiName, podName)
 			if err == nil {
 				logCtx.Info("Successfully swapped IPAM owner attributes")
 				return
 			}
-			if errors.Is(err, vmipam.ErrAlternateOwnerEmpty) || errors.Is(err, vmipam.ErrAlternateOwnerMismatch) {
+			if errors.Is(err, vmipam.ErrAlternateOwnerMismatch) {
 				logCtx.WithError(err).Warn("Non-retryable error swapping IPAM owner attributes")
 				return
 			}
@@ -592,6 +775,50 @@ func (f *liveMigrationFSM) doIPAMOwnerSwap() {
 }
 
 func (m *liveMigrationMonitor) CompleteDeferredWork() error {
-	// Nothing to do; state changes are forwarded in ResolveUpdateBatch.
+	// Nothing to do; route modifier updates are forwarded in ResolveUpdateBatch.
 	return nil
+}
+
+// liveMigrationRouteReporter logs, and records in the route programming histogram, when each of a
+// migrated workload's elevated-priority routes is first written into the kernel on this host.
+// There can be several such routes - for each IP version, and for floating IPs - and each is
+// reported once per migration, even if a later resync has to rewrite it.
+//
+// onRouteProgrammed is called from RouteTable apply goroutines, which run concurrently with the
+// dataplane main loop and with each other (IPv4 and IPv6), hence the lock.
+type liveMigrationRouteReporter struct {
+	logCtx         *logrus.Entry
+	garpDetectedAt time.Time
+
+	lock     sync.Mutex
+	reported set.Set[ip.CIDR]
+}
+
+func newLiveMigrationRouteReporter(logCtx *logrus.Entry, garpDetectedAt time.Time) *liveMigrationRouteReporter {
+	return &liveMigrationRouteReporter{
+		logCtx:         logCtx,
+		garpDetectedAt: garpDetectedAt,
+		reported:       set.New[ip.CIDR](),
+	}
+}
+
+func (r *liveMigrationRouteReporter) onRouteProgrammed(cidr ip.CIDR) {
+	programmedAt := time.Now()
+
+	r.lock.Lock()
+	alreadyReported := r.reported.Contains(cidr)
+	r.reported.Add(cidr)
+	r.lock.Unlock()
+	if alreadyReported {
+		return
+	}
+
+	logCtx := r.logCtx.WithField("cidr", cidr)
+	if r.garpDetectedAt.IsZero() {
+		logCtx.Info("Live migration route programmed (no GARP/RARP was detected)")
+		return
+	}
+	sinceGARP := programmedAt.Sub(r.garpDetectedAt)
+	histogramLiveMigrationRouteProgramming.Observe(sinceGARP.Seconds())
+	logCtx.WithField("sinceGARP", sinceGARP.Round(time.Microsecond)).Info("Live migration route programmed")
 }

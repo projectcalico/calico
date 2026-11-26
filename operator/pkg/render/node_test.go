@@ -71,7 +71,7 @@ var _ = Describe("Node rendering tests", func() {
 			var defaultInstance *operatorv1.InstallationSpec
 			var typhaNodeTLS *render.TyphaNodeTLS
 			var k8sServiceEp k8sapi.ServiceEndpoint
-			one := intstr.FromInt(1)
+			one := intstr.FromInt32(1)
 			defaultNumExpectedResources := 10
 			const defaultClusterDomain = "svc.cluster.local"
 			var defaultMode int32 = 420
@@ -499,6 +499,7 @@ var _ = Describe("Node rendering tests", func() {
     {
       "type": "portmap",
       "snat": true,
+      "backend": "nftables",
       "capabilities": {
         "portMappings": true
       }
@@ -1984,7 +1985,7 @@ var _ = Describe("Node rendering tests", func() {
 			})
 
 			It("should render MaxUnavailable if a custom value was set", func() {
-				two := intstr.FromInt(2)
+				two := intstr.FromInt32(2)
 				defaultInstance.NodeUpdateStrategy.RollingUpdate.MaxUnavailable = &two
 				component := render.Node(&cfg)
 				Expect(component.ResolveImages(nil)).To(BeNil())
@@ -2019,6 +2020,26 @@ var _ = Describe("Node rendering tests", func() {
 					}))
 				}
 			})
+
+			DescribeTable("should render the nftables backend for portmap when the dataplane uses nftables", func(dataplane operatorv1.LinuxDataplaneOption) {
+				defaultInstance.CalicoNetwork.LinuxDataplane = &dataplane
+
+				component := render.Node(&cfg)
+				Expect(component.ResolveImages(nil)).To(BeNil())
+				resources, _ := component.Objects()
+				cniCmResource := rtest.GetResource(resources, "cni-config", "calico-system", "", "v1", "ConfigMap")
+				Expect(cniCmResource).ToNot(BeNil())
+
+				var config cniNetworkConfig
+				cniCm := cniCmResource.(*corev1.ConfigMap)
+				Expect(json.Unmarshal([]byte(cniCm.Data["config"]), &config)).NotTo(HaveOccurred())
+				Expect(config.Plugins).To(HaveLen(2))
+				Expect(config.Plugins[1].Type).To(Equal("portmap"))
+				Expect(config.Plugins[1].Backend).To(Equal("nftables"))
+			},
+				Entry("with the nftables dataplane", operatorv1.LinuxDataplaneNftables),
+				Entry("with the BPF dataplane", operatorv1.LinuxDataplaneBPF),
+			)
 
 			It("should render cni config without portmap when HostPorts disabled", func() {
 				expectedResources := []struct {
@@ -3139,14 +3160,14 @@ func verifyProbesAndLifecycle(ds *appsv1.DaemonSet, isOpenshift bool) {
 			HTTPGet: &corev1.HTTPGetAction{
 				Host: "localhost",
 				Path: "/liveness",
-				Port: intstr.FromInt(9099),
+				Port: intstr.FromInt32(9099),
 			},
 		},
 		TimeoutSeconds: 10,
 	}
 
 	if isOpenshift {
-		expectedLiveness.HTTPGet.Port = intstr.FromInt(9199)
+		expectedLiveness.HTTPGet.Port = intstr.FromInt32(9199)
 	}
 
 	var found bool
@@ -3483,5 +3504,7 @@ type cniNetworkConfig struct {
 }
 
 type cniPluginConfig struct {
-	IPAM map[string]any `json:"ipam"`
+	Type    string         `json:"type"`
+	Backend string         `json:"backend"`
+	IPAM    map[string]any `json:"ipam"`
 }

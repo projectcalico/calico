@@ -46,12 +46,21 @@ func (g GitRunner) Branch() (string, error) {
 	return g.Run("rev-parse", "--abbrev-ref", "HEAD")
 }
 
+// VersionTags is the pattern every git describe matches, so a non-version tag
+// near HEAD can never become the repo's version.
+const VersionTags = "v[0-9]*.[0-9]*.[0-9]*"
+
 func (g GitRunner) Version(includeDirty bool) (string, error) {
-	args := []string{"describe", "--tags", "--always", "--long", "--abbrev=12"}
+	args := []string{"describe", "--tags", "--match", VersionTags, "--always", "--long", "--abbrev=12"}
 	if includeDirty {
 		args = append(args, "--dirty")
 	}
 	return g.Run(args...)
+}
+
+// LatestTag returns the newest version tag reachable from ref.
+func (g GitRunner) LatestTag(ref string) (string, error) {
+	return g.Run("describe", "--tags", "--match", VersionTags, "--abbrev=0", ref)
 }
 
 // Dirty reports tracked files with uncommitted changes. Porcelain also counts
@@ -62,14 +71,6 @@ func (g GitRunner) Dirty() (bool, error) {
 		return false, err
 	}
 	return strings.HasSuffix(v, "-dirty"), nil
-}
-
-func (g GitRunner) Porcelain() (bool, error) {
-	out, err := g.Run("status", "--porcelain")
-	if err != nil {
-		return false, err
-	}
-	return out != "", nil
 }
 
 // Resolve returns the commit a ref names.

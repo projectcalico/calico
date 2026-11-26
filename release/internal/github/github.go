@@ -16,6 +16,7 @@
 package github
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -24,9 +25,12 @@ import (
 	"sync"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/defaults"
 )
 
-const baseURL = "https://github.com"
+const host = "github.com"
+
+var baseURL = url.URL{Scheme: "https", Host: host}
 
 var TokenEnvVars = []string{"GITHUB_TOKEN", "GH_TOKEN"}
 
@@ -35,10 +39,62 @@ func Authenticated(r command.CommandRunner) bool {
 	return resolveToken(r) != ""
 }
 
+func DefaultRepo() Repo {
+	return Repo{Owner: defaults.Organization(), Name: defaults.Repo()}
+}
+
+type Repo struct {
+	Owner  string
+	Name   string
+	Branch string
+	Remote string
+}
+
+// Is reports whether two repositories have the same full name.
+func (r Repo) Is(other Repo) bool {
+	return r.FullName() == other.FullName()
+}
+
+func (r Repo) Validate() error {
+	var errs []error
+	if r.Owner == "" {
+		errs = append(errs, fmt.Errorf("no github organization specified"))
+	}
+	if r.Name == "" {
+		errs = append(errs, fmt.Errorf("no github repository specified"))
+	}
+	return errors.Join(errs...)
+}
+
+func (r Repo) FullName() string {
+	return r.Owner + "/" + r.Name
+}
+
+func (r Repo) String() string {
+	return r.FullName()
+}
+
+func (r Repo) CloneURL() string {
+	return fmt.Sprintf("git@%s:%s.git", host, r.FullName())
+}
+
+// URL is the repository's page, or a page under it.
+func (r Repo) URL(path ...string) string {
+	return baseURL.JoinPath(append([]string{r.FullName()}, path...)...).String()
+}
+
 // DownloadURL is where a release's artifacts are downloaded from.
-func DownloadURL(org, repo, version string, file ...string) (string, error) {
-	parts := append([]string{org, repo, "releases", "download", version}, file...)
-	return url.JoinPath(baseURL, parts...)
+func (r Repo) DownloadURL(tag string, file ...string) string {
+	return r.URL(append([]string{"releases", "download", tag}, file...)...)
+}
+
+func (r Repo) BlobURL(ref, path string) string {
+	return r.URL("blob", ref, path)
+}
+
+// OpenPRsURL lists the open pull requests from a head branch.
+func (r Repo) OpenPRsURL(head string) string {
+	return r.URL("pulls") + "?q=" + url.QueryEscape("is:open head:"+head)
 }
 
 type authTransport struct {
@@ -51,7 +107,7 @@ type authTransport struct {
 
 func (g *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Only intercept requests destined for GitHub API endpoints
-	if req.URL.Host == "github.com" || strings.HasSuffix(req.URL.Host, ".github.com") {
+	if req.URL.Host == host || strings.HasSuffix(req.URL.Host, "."+host) {
 		g.once.Do(func() { g.token = resolveToken(command.Runner(g.runner)) })
 		token := g.token
 

@@ -1,23 +1,21 @@
-# The e2e suite's own unit tests. Needs docker: building the test binary splices
-# its own flags into a nested `docker run`.
+# The e2e suite's own unit tests.
 version: condensed-module
 
 defaults:
   timeout: 30m
-  services:
-    - docker
+  # In the build image, with NATIVE_GO_BUILD running each recipe in place rather
+  # than in a nested container.
+  useGoBuild: true
 
 steps:
   - name: e2e-ut
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
+      - name: NATIVE_GO_BUILD
+        value: "true"
     depends: [check-go]
-    requests: {cpu: 4250m, memory: 4.75Gi}
+    requests: {cpu: 4250m, memory: 5Gi}
+    goCache: read
     commands: |
       cd e2e
       make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/e2e"
-      artifact push job report --destination test-results || true
+    reports: [e2e/report:test-results]

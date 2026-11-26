@@ -712,7 +712,7 @@ func fillDefaults(instance *operatorv1.Installation, currentPools *v3.IPPoolList
 	}
 
 	// Default rolling update parameters.
-	one := intstr.FromInt(1)
+	one := intstr.FromInt32(1)
 	if instance.Spec.NodeUpdateStrategy.RollingUpdate == nil {
 		instance.Spec.NodeUpdateStrategy.RollingUpdate = &appsv1.RollingUpdateDaemonSet{}
 	}
@@ -2033,9 +2033,6 @@ func awsVPCAnnotationsUnprotected(ctx context.Context, c client.Client, cni *ope
 	}
 
 	sa := ds.Spec.Template.Spec.ServiceAccountName
-	if sa == "" {
-		sa = ds.Spec.Template.Spec.DeprecatedServiceAccount
-	}
 	if sa == "" {
 		sa = "default"
 	}

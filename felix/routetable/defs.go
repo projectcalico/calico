@@ -102,9 +102,21 @@ type Target struct {
 	Protocol  netlink.RouteProtocol
 	MultiPath []NextHop
 	MTU       int
+
+	// OnProgrammed, if non-nil, is called each time the RouteTable successfully writes this
+	// target's route into the kernel.  It is not called for a route that the kernel already has
+	// in the desired form, because then there is no write.
+	//
+	// It runs on the goroutine that is applying the RouteTable's updates, which can be
+	// concurrent with the dataplane main loop and with other RouteTables (for example, the IPv4
+	// and IPv6 tables), so it must be goroutine-safe and quick.
+	OnProgrammed func()
 }
 
 func (t Target) Equal(t2 Target) bool {
+	// Func values are only DeepEqual when both are nil, and the callback is not part of the
+	// route anyway.
+	t.OnProgrammed, t2.OnProgrammed = nil, nil
 	return reflect.DeepEqual(t, t2)
 }
 

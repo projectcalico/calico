@@ -14,6 +14,8 @@
 
 package command
 
+import "github.com/sirupsen/logrus"
+
 type Option interface {
 	apply(*settings)
 }
@@ -28,6 +30,7 @@ type settings struct {
 	logFile string
 	stdin   string
 	stream  bool
+	timing  *logrus.Entry
 }
 
 func newSettings(opts []Option) *settings {
@@ -71,5 +74,13 @@ func WithStream() Option {
 func WithLogFile(path string) Option {
 	return setting(func(s *settings) {
 		s.logFile = path
+	})
+}
+
+// WithTiming logs how long the command took on log, so the caller's fields
+// name the work. Each run logs its own time, so a retry shows up separately.
+func WithTiming(log *logrus.Entry) Option {
+	return setting(func(s *settings) {
+		s.timing = log
 	})
 }

@@ -91,6 +91,15 @@ func mainlineV1Resources() map[string][]*model.KVPair {
 			},
 		},
 		apiv3.KindClusterInformation: {},
+		KindIPAMHandle: {
+			{
+				Key: model.IPAMHandleKey{HandleID: "lb-CcByVDWerSL9WUOKfbkyPBft2m9Xxf822Zvhn2YSpts"},
+				Value: &model.IPAMHandle{
+					HandleID: "lb-CcByVDWerSL9WUOKfbkyPBft2m9Xxf822Zvhn2YSpts",
+					Block:    map[string]int{"10.0.0.0/26": 1},
+				},
+			},
+		},
 	}
 }
 
@@ -117,6 +126,15 @@ func conflictV1Resources() map[string][]*model.KVPair {
 			},
 		},
 		apiv3.KindClusterInformation: {},
+		KindIPAMHandle: {
+			{
+				Key: model.IPAMHandleKey{HandleID: "lb-CcByVDWerSL9WUOKfbkyPBft2m9Xxf822Zvhn2YSpts"},
+				Value: &model.IPAMHandle{
+					HandleID: "lb-CcByVDWerSL9WUOKfbkyPBft2m9Xxf822Zvhn2YSpts",
+					Block:    map[string]int{"10.0.0.0/26": 1},
+				},
+			},
+		},
 	}
 }
 

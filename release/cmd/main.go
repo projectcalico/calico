@@ -28,7 +28,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/images"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // Config contains overall configuration for the release tool inputs and outputs
@@ -76,13 +75,13 @@ func loadConfig() (*Config, error) {
 
 	logsDir := os.Getenv("LOGS_DIR")
 	if logsDir == "" {
-		logsDir = filepath.Join(repoRoot, utils.ReleaseFolderName, "_logs")
+		logsDir = filepath.Join(repoRoot, releaseDirName, "_logs")
 	}
 
 	config := &Config{
 		RepoRootDir: repoRoot,
-		OutputDir:   filepath.Join(repoRoot, utils.ReleaseFolderName, "_output"),
-		TmpDir:      filepath.Join(repoRoot, utils.ReleaseFolderName, "tmp"),
+		OutputDir:   filepath.Join(repoRoot, releaseDirName, "_output"),
+		TmpDir:      filepath.Join(repoRoot, releaseDirName, "tmp"),
 		LogsDir:     logsDir,
 	}
 	return config, nil

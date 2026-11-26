@@ -349,6 +349,26 @@ var _ = infrastructure.DatastoreDescribe(
 					}
 				}
 
+				// Felix writes the cali_qos entry before it attaches the program
+				// that enforces it; until then the old program passes every
+				// packet without reading the entry. The enforcing program moves
+				// PacketRateTokens off the -1 sentinel on the first packet it
+				// handles, so probe from src to dst until it does.
+				waitForBPFPacketRateEnforced := func(felixId, wlId int, hook string, src, dst *workload.Workload, rate, burst int) {
+					Eventually(func() int16 {
+						_, _ = src.SendPacketsTo(dst.IP, 1, 56)
+						value := getBPFQoSRateValue(felixId, wlId, hook)
+						if value == nil {
+							return -1
+						}
+						return value.PacketRateTokens()
+					}, "10s", "200ms").ShouldNot(BeEquivalentTo(-1), "packet rate limit not enforced by the attached BPF program")
+					// The enforcing program took a token per probe it saw. Wait as
+					// long as an empty bucket needs to refill (burst/rate) so the
+					// peak run starts from a full bucket.
+					time.Sleep(time.Duration(burst) * time.Second / time.Duration(rate))
+				}
+
 				getBPFMaxConnections := func(felixId, wlId int, hook string) func() uint32 {
 					return func() uint32 {
 						value := getBPFQoSConnValue(felixId, wlId, hook)
@@ -573,13 +593,22 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(err).NotTo(HaveOccurred())
 
 						By("Running iperf2 client on workload 1 with no packet rate limits")
-						baselineRate, err := retryIperf2Client(w[1], 5, 5*time.Second, "-c", w[0].IP, "-u", "-l1000", "-b100M", "-t10")
+						// The baseline rate is bounded by the per-packet cost in the sender: both
+						// FV "nodes" share one kernel, so every BPF program on the path runs in the
+						// iperf client's sending context, and with bpfLogLevel=Debug each one does
+						// per-packet debug logging (~100us per packet in total). That caps the
+						// client below 100Mbit/sec of 1000-byte packets. iperf2's -b20M is
+						// 20*2^20 bit/s, about 2600 packets/s (one per ~380us), well within that
+						// budget.
+						const baselineRateMbps = 20
+						baselineRate, err := retryIperf2Client(w[1], 5, 5*time.Second, "-c", w[0].IP, "-u", "-l1000", fmt.Sprintf("-b%dM", baselineRateMbps), "-t10")
 						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("iperf client rate with no packet rate limit (bps): %v", baselineRate)
-						// Expect the baseline rate to be much greater than the bandwidth that we
-						// would get with the packet rate limit we are going to configure just below (within
-						// 20% of the requested 100Mbit/sec).
-						Expect(baselineRate).To(BeNumerically(">=", 100*1e6*0.8))
+						// Expect the baseline rate to be at least 80% of 20*10^6 bit/s, which is
+						// much greater than the bandwidth that we would get with the packet rate
+						// limit we are going to configure just below (0.8Mbit/sec sustained,
+						// 2.88Mbit/sec peak at most).
+						Expect(baselineRate).To(BeNumerically(">=", baselineRateMbps*1e6*0.8))
 
 						By("Setting 100 packets/s limit for ingress on workload 0 (iperf2 server)")
 						w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
@@ -592,6 +621,8 @@ var _ = infrastructure.DatastoreDescribe(
 							By("Waiting for the config to appear in the BPF maps on workload 0")
 							Eventually(getBPFPacketRateAndBurst(0, 0, "ingress"), "10s", "1s").Should(Equal("100 200"))
 							Consistently(getBPFPacketRateAndBurst(0, 0, "egress"), "5s", "1s").Should(Equal("0 0"))
+							By("Waiting for the BPF program on workload 0 to enforce the ingress limit")
+							waitForBPFPacketRateEnforced(0, 0, "ingress", w[1], w[0], 100, 200)
 						} else {
 							By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 0")
 							if NFTMode() {
@@ -659,6 +690,8 @@ var _ = infrastructure.DatastoreDescribe(
 							By("Waiting for the config to appear in the BPF maps on workload 1")
 							Eventually(getBPFPacketRateAndBurst(1, 1, "ingress"), "10s", "1s").Should(Equal("0 0"))
 							Eventually(getBPFPacketRateAndBurst(1, 1, "egress"), "10s", "1s").Should(Equal("100 200"))
+							By("Waiting for the BPF program on workload 1 to enforce the egress limit")
+							waitForBPFPacketRateEnforced(1, 1, "egress", w[1], w[0], 100, 200)
 						} else {
 							By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 1")
 							if NFTMode() {

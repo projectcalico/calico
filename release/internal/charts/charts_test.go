@@ -17,6 +17,7 @@ package charts
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -25,9 +26,13 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"sigs.k8s.io/yaml"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/distribution"
+	"github.com/projectcalico/calico/release/internal/github"
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/yamledit"
@@ -131,6 +136,7 @@ func testChart(t *testing.T) Chart {
 		ProductVersion: "v3.30.0",
 		Names:          []string{"chart-one", "chart-two"},
 		BaseDir:        filepath.Join(dir, "output"),
+		RepoURL:        testRepoURL,
 	}
 }
 
@@ -307,7 +313,7 @@ func TestBuildIndexMergesThePublishedIndex(t *testing.T) {
 	indexDir := filepath.Join(t.TempDir(), "index")
 
 	if err := Build(c, WithRunner(f),
-		WithIndex(testRepoURL, testChartURL, indexDir, filepath.Join(c.RepoRoot, "tmp"))); err != nil {
+		WithIndex(testChartURL, indexDir, filepath.Join(c.RepoRoot, "tmp"))); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 
@@ -359,7 +365,7 @@ func TestBuildIndexUsesUTC(t *testing.T) {
 	f := newFakeRunner(nil)
 
 	if err := Build(c, WithRunner(f),
-		WithIndex(testRepoURL, testChartURL, filepath.Join(t.TempDir(), "index"), t.TempDir())); err != nil {
+		WithIndex(testChartURL, filepath.Join(t.TempDir(), "index"), t.TempDir())); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	if !hasEnv(f.callsTo(helmBinary)[0].Env, "TZ=UTC") {
@@ -376,7 +382,7 @@ func TestBuildIndexIsRepeatable(t *testing.T) {
 
 	for i := range 2 {
 		if err := Build(c, WithRunner(newFakeRunner(nil)),
-			WithIndex(testRepoURL, testChartURL, indexDir, tmp)); err != nil {
+			WithIndex(testChartURL, indexDir, tmp)); err != nil {
 			t.Fatalf("Build run %d: %v", i, err)
 		}
 	}
@@ -391,7 +397,7 @@ func TestBuildIndexLogsBesideTheCharts(t *testing.T) {
 	logs := filepath.Join(t.TempDir(), "logs")
 
 	if err := Build(c, WithRunner(f), WithLogsDir(logs),
-		WithIndex(testRepoURL, testChartURL, filepath.Join(t.TempDir(), "index"), t.TempDir())); err != nil {
+		WithIndex(testChartURL, filepath.Join(t.TempDir(), "index"), t.TempDir())); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	want := filepath.Join(logs, buildStep, "index.log")
@@ -401,15 +407,14 @@ func TestBuildIndexLogsBesideTheCharts(t *testing.T) {
 }
 
 func TestBuildIndexRejectsMissingLocations(t *testing.T) {
-	for _, tc := range []struct{ name, repoURL, chartURL, indexDir string }{
-		{"no repo url", "", testChartURL, "index"},
-		{"no chart url", testRepoURL, "", "index"},
-		{"no index dir", testRepoURL, testChartURL, ""},
+	for _, tc := range []struct{ name, chartURL, indexDir string }{
+		{"no chart url", "", "index"},
+		{"no index dir", testChartURL, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testChart(t)
 			if err := Build(c, WithRunner(newFakeRunner(nil)),
-				WithIndex(tc.repoURL, tc.chartURL, tc.indexDir, t.TempDir())); err == nil {
+				WithIndex(tc.chartURL, tc.indexDir, t.TempDir())); err == nil {
 				t.Fatal("expected an index build missing a location to be rejected")
 			}
 		})
@@ -759,7 +764,7 @@ func TestBuildLeavesTheIndexWhereAsked(t *testing.T) {
 	indexDir := filepath.Join(c.BaseDir, "charts")
 
 	if err := Build(c, WithRunner(newFakeRunner(nil)),
-		WithIndex(testRepoURL, testChartURL, indexDir, filepath.Join(c.RepoRoot, "tmp"))); err != nil {
+		WithIndex(testChartURL, indexDir, filepath.Join(c.RepoRoot, "tmp"))); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(indexDir, indexFileName)); err != nil {
@@ -813,6 +818,21 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+func TestChartRepo(t *testing.T) {
+	for _, tc := range []struct {
+		name, repo, want string
+	}{
+		{name: "an unset repo is the default", want: DefaultRepoURL},
+		{name: "a set repo is kept", repo: "https://staging.example.com/charts", want: "https://staging.example.com/charts"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := (Chart{RepoURL: tc.repo}).Repo(); got != tc.want {
+				t.Errorf("Repo() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // The digest ref must name the resolved version, not the bare suffix.
 func TestPublishRefsNameTheResolvedVersion(t *testing.T) {
 	// A suffix is what makes the resolved version differ from the product one.
@@ -855,7 +875,7 @@ func TestBuildIndexDropsStaleCharts(t *testing.T) {
 
 	f := newFakeRunner(nil)
 	if err := Build(c, WithRunner(f),
-		WithIndex(testRepoURL, testChartURL, filepath.Join(t.TempDir(), "index"), tmp)); err != nil {
+		WithIndex(testChartURL, filepath.Join(t.TempDir(), "index"), tmp)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	if slices.Contains(f.staged, filepath.Base(stale)) {
@@ -936,7 +956,7 @@ func TestModifyValuesFailsWhenAKeyIsMissing(t *testing.T) {
 // the chart's default registry during a release, while everything else came
 // from the release registry.
 func TestCalicoChartEditsRewriteEveryImageRegistry(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "..", chartsDirName, CalicoChart, valuesFileName))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", DirName, CalicoChart, valuesFileName))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -966,7 +986,7 @@ func TestCalicoChartEditsRewriteEveryImageRegistry(t *testing.T) {
 
 func writeChartValues(t *testing.T, root, chart, content string) string {
 	t.Helper()
-	dir := filepath.Join(root, chartsDirName, chart)
+	dir := filepath.Join(root, DirName, chart)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1032,6 +1052,42 @@ func TestMetadata(t *testing.T) {
 		_, err := Metadata(t.TempDir(), c, at, required)
 		if err == nil || !strings.Contains(err.Error(), "chart tigera-operator") {
 			t.Errorf("err = %v, want it to name the chart", err)
+		}
+	})
+}
+
+func TestIndexUpload(t *testing.T) {
+	dir := t.TempDir()
+	u := IndexUpload(IndexOptions{OutputDir: dir, Handler: distribution.S3{URL: url.URL{Scheme: "s3", Host: "bucket"}, Profile: "prof", DryRun: true}})
+
+	t.Run("uploads the index from the charts dir", func(t *testing.T) {
+		if want := filepath.Join(dir, DirName, indexFileName); u.Source != want {
+			t.Errorf("Source = %q, want %q", u.Source, want)
+		}
+	})
+
+	t.Run("uploads to the bucket's charts prefix", func(t *testing.T) {
+		want := distribution.S3{
+			URL:         url.URL{Scheme: "s3", Host: "bucket", Path: "/charts/"},
+			Profile:     "prof",
+			CachePolicy: distribution.MutableCachePolicy,
+			DryRun:      true,
+		}
+		sameURL := cmp.Comparer(func(a, b url.URL) bool { return a.String() == b.String() })
+		if diff := cmp.Diff(want, u.Handler, sameURL, cmpopts.IgnoreUnexported(distribution.S3{})); diff != "" {
+			t.Errorf("handler (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("waits for the images and the GitHub release", func(t *testing.T) {
+		if diff := cmp.Diff([]string{images.Step, github.ReleaseStep}, u.Requires); diff != "" {
+			t.Errorf("Requires (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("skips when asked", func(t *testing.T) {
+		if !IndexUpload(IndexOptions{Skip: true}).Skip {
+			t.Error("Skip = false, want true")
 		}
 	})
 }

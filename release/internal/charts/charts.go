@@ -17,6 +17,7 @@
 package charts
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"net/url"
@@ -24,9 +25,10 @@ import (
 	"slices"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/docs"
 	"github.com/projectcalico/calico/release/internal/github"
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
@@ -37,10 +39,11 @@ const (
 	Step        = "charts"
 	buildStep   = Step + "-build"
 	PublishStep = Step + "-publish"
+	IndexStep   = "helm-index"
 )
 
 const (
-	chartsDirName  = "charts"
+	DirName        = "charts"
 	indexFileName  = "index.yaml"
 	valuesFileName = "values.yaml"
 
@@ -59,25 +62,10 @@ const (
 	ProjectCalicoV3CRDsChart = "projectcalico.org.v3"
 )
 
-var RepoURL = func() (string, error) {
-	return RepoURLAt(docs.BaseURL + "/" + docs.ProductSlug)
-}
+var DefaultRepoURL = docs.URL(DirName)
 
-// RepoURLAt is the Helm repository a site serves under base.
-func RepoURLAt(base string) (string, error) {
-	url, err := url.JoinPath(base, chartsDirName)
-	if err != nil {
-		return "", fmt.Errorf("charts repo URL: %w", err)
-	}
-	return url, nil
-}
-
-var ChartsURL = func(c Chart) (string, error) {
-	url, err := github.DownloadURL(defaults.Organization(), defaults.Repo(), c.ProductVersion)
-	if err != nil {
-		return "", fmt.Errorf("charts download URL: %w", err)
-	}
-	return url, nil
+var ChartsURL = func(c Chart) string {
+	return github.DefaultRepo().DownloadURL(c.ProductVersion)
 }
 
 // All is the set a release ships. It is a var so a product shipping a
@@ -115,6 +103,9 @@ type Chart struct {
 	Names []string
 
 	BaseDir string
+
+	// Empty means DefaultRepoURL.
+	RepoURL string
 }
 
 func (c Chart) validate() error {
@@ -137,6 +128,10 @@ func (c Chart) validate() error {
 	return errors.Join(errs...)
 }
 
+func (c Chart) Repo() string {
+	return cmp.Or(c.RepoURL, DefaultRepoURL)
+}
+
 func (c Chart) Version() string {
 	return Version(c.ProductVersion, c.ChartVersion)
 }
@@ -157,7 +152,7 @@ func FileName(chart, chartVersion string) string {
 
 // Dir returns the output dir with the charts directory appended.
 var Dir = func(outputDir string) string {
-	return filepath.Join(outputDir, chartsDirName)
+	return filepath.Join(outputDir, DirName)
 }
 
 // OutputDir is where a release's charts are built under outputDir.
@@ -168,6 +163,26 @@ var OutputDir = func(outputDir string) string {
 // IndexDir is where a chart index sit under outputDir.
 var IndexDir = func(outputDir string) string {
 	return Dir(outputDir)
+}
+
+type IndexOptions struct {
+	OutputDir string
+	Handler   distribution.S3
+	Skip      bool
+}
+
+// IndexUpload waits for the GitHub release the index links to, and the
+// images its charts pull.
+func IndexUpload(o IndexOptions) distribution.Upload {
+	h := o.Handler.At(DirName, "") // empty element to ensure trailing slash
+	h.CachePolicy = distribution.MutableCachePolicy
+	return distribution.Upload{
+		Name:     IndexStep,
+		Source:   IndexFilePath(IndexDir(o.OutputDir)),
+		Skip:     o.Skip,
+		Requires: []string{images.Step, github.ReleaseStep},
+		Handler:  h,
+	}
 }
 
 // versionedDir keeps one release's charts apart from another's, for a directory
@@ -195,9 +210,7 @@ type settings struct {
 	// index builds the repository index over the charts once they are packaged.
 	index *index
 
-	// repoURL is the Helm repository holding the index to merge with, and
-	// chartURL is where that index tells clients to download charts from.
-	repoURL  string
+	// chartURL is where the index tells clients to download charts from.
 	chartURL string
 
 	// indexDir is where the built index lands.
@@ -225,7 +238,6 @@ func (s *settings) Helm(args []string, env []string, logPath string) (string, er
 
 // index is where a build writes its repository index.
 type index struct {
-	repoURL  string
 	chartURL string
 	dir      string
 }
@@ -295,16 +307,17 @@ func WithEnv(env ...string) BuildOption {
 }
 
 // WithIndex builds the repository index after packaging and leaves it in dir.
-// repoURL holds the index to merge with; chartURL is where it sends clients.
+// It merges with the index the chart's repo serves; chartURL is where it
+// sends clients.
 //
 // helm indexes a whole directory, so the charts are staged under tmpDir to
 // index this release alone, and only the finished index reaches dir.
-func WithIndex(repoURL, chartURL, dir, tmpDir string) BuildOption {
+func WithIndex(chartURL, dir, tmpDir string) BuildOption {
 	return buildSetting(func(s *settings) error {
-		if repoURL == "" || chartURL == "" || dir == "" || tmpDir == "" {
-			return fmt.Errorf("an index needs a repository url, a chart url, a directory and a temp dir")
+		if chartURL == "" || dir == "" || tmpDir == "" {
+			return fmt.Errorf("an index needs a chart url, a directory and a temp dir")
 		}
-		s.index = &index{repoURL: repoURL, chartURL: chartURL, dir: dir}
+		s.index = &index{chartURL: chartURL, dir: dir}
 		s.tmpDir = tmpDir
 		return nil
 	})
@@ -376,7 +389,8 @@ func calicoChartEdits(productVersion, productRegistry string) []ValueEdit {
 // ValueEditsFor points the operator and product charts at the versions a
 // release pins.
 var ValueEditsFor = func(productVersion, productRegistry, operatorImage, operatorVersion, operatorRegistry string) []ValueEdit {
-	return append(slices.Clone(calicoChartEdits(productVersion, productRegistry)),
+	return append(
+		slices.Clone(calicoChartEdits(productVersion, productRegistry)),
 		operatorChartEdits(productVersion, productRegistry, operatorImage, operatorVersion, operatorRegistry)...,
 	)
 }

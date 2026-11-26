@@ -17,18 +17,16 @@ steps:
       git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
       cd release
       make ci
-    epilogue: |
-      # Epilogues don't inherit the commands' `cd` or exports.
-      cd "${CI_HOME}/${CI_GIT_DIR}/release"
-      artifact push job report --destination test-results || true
+    reports: [release/report:test-results]
 
   # Needs docker: `bin/release` splices its own flags into a nested `docker run`.
   - name: release-build
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
     depends: [check-go]
     requests: {cpu: 2750m, memory: 2Gi}
-    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
-    services:
-      - docker
+    goCache: read
     commands: |
       cd release
       make build

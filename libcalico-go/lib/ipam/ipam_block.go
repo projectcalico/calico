@@ -156,12 +156,12 @@ func (b *allocationBlock) autoAssign(num int, handleID *string, affinityCfg Affi
 func (b *allocationBlock) assign(affinityCheck bool, address cnet.IP, handleID *string, attrs map[string]string, affinityCfg AffinityConfig) error {
 	if affinityCheck && b.Affinity != nil && !affinityMatches(affinityCfg, b.AllocationBlock) {
 		// Affinity check is enabled but the host does not match - error.
-		return errors.New("Block host affinity does not match")
+		return affinityMismatchError("Block host affinity does not match")
 	} else if b.Affinity == nil {
 		log.Warnf("Attempting to assign IP from block with no affinity: %v", b)
 		if affinityCheck {
 			// If we're checking strict affinity, we can't assign from a block with no affinity.
-			return fmt.Errorf("Attempt to assign from block %v with no affinity", b.CIDR)
+			return affinityMismatchError(fmt.Sprintf("Attempt to assign from block %v with no affinity", b.CIDR))
 		}
 	}
 
@@ -194,6 +194,21 @@ func (b *allocationBlock) assign(affinityCheck bool, address cnet.IP, handleID *
 		}
 	}
 	return nil
+}
+
+// affinityMismatchError is the message assign returns when strict affinity refuses the block.
+// It matches ErrAffinityMismatch under errors.Is while keeping its message unchanged for
+// callers that log or display it.
+type affinityMismatchError string
+
+// Error returns the message unchanged.
+func (e affinityMismatchError) Error() string {
+	return string(e)
+}
+
+// Unwrap returns ErrAffinityMismatch, so errors.Is matches it.
+func (e affinityMismatchError) Unwrap() error {
+	return ErrAffinityMismatch
 }
 
 // affinityMatches checks if the provided host matches the provided affinity.

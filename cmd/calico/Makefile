@@ -11,8 +11,10 @@ include ../../lib.Makefile
 SRC_FILES := $(call local-deps-go-files,cmd)
 
 # Paths within the build container for BPF source (needed for CGO builds).
-LIBBPF_CONTAINER_PATH = $(BUILD_REPO_ROOT)/felix/bpf-gpl/libbpf/src/
-BPFGPL_CONTAINER_PATH = $(BUILD_REPO_ROOT)/felix/bpf-gpl/
+# Spelled as felix's: cgo's flags are part of a package's build cache key,
+# character for character.
+LIBBPF_CONTAINER_PATH = $(BUILD_REPO_ROOT)/felix/bpf-gpl/libbpf/src
+BPFGPL_CONTAINER_PATH = $(BUILD_REPO_ROOT)/felix/bpf-gpl
 LIBBPF_A = $(REPO_ROOT)/felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
 # When cross-compiling, force lld as the linker — GNU ld is single-target,
@@ -61,15 +63,20 @@ $(BINDIR)/calico-cgo-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 # Race-enabled combined binary for Felix FV runs. The race detector requires
 # CGO so we always build with CGO_ENABLED=1 and pull in libbpf the same way
 # the cgo variant does.
+ifeq ($(NATIVE_GO_BUILD),true)
+RACE_BUILD_RUN = env CGO_ENABLED=1 $(if $(CROSS_CC),CC="$(CROSS_CC)") CGO_CFLAGS=$(CGO_CFLAGS) CGO_LDFLAGS=$(CGO_LDFLAGS)
+else
+RACE_BUILD_RUN = $(DOCKER_RUN) \
+	-e CGO_ENABLED=1 \
+	$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
+	-e CGO_CFLAGS=$(CGO_CFLAGS) \
+	-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
+	$(CALICO_BUILD)
+endif
+
 $(BINDIR)/calico-race-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 	mkdir -p $(BINDIR)
-	$(DOCKER_RUN) \
-		-e CGO_ENABLED=1 \
-		$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
-		-e CGO_CFLAGS=$(CGO_CFLAGS) \
-		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -race -o $@ -v -buildvcs=false -ldflags "$(LDFLAGS)" ./'
+	$(RACE_BUILD_RUN) sh -c '$(GIT_CONFIG_SSH) go build -race -o $@ -v -buildvcs=false -ldflags "$(LDFLAGS)" ./'
 
 $(BINDIR)/LICENSE: $(REPO_ROOT)/LICENSE.md
 	mkdir -p $(BINDIR)

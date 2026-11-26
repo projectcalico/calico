@@ -26,14 +26,13 @@ import (
 
 	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	admissionregv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	apiextenv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextenv1 "k8s.io/apiextensions-api/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -49,6 +48,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rcomp "github.com/projectcalico/calico/operator/pkg/render/common/components"
+	"github.com/projectcalico/calico/operator/pkg/render/common/helm"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
@@ -176,14 +176,6 @@ func renderChart(scheme *runtime.Scheme) (*gatewayAPIResources, error) {
 		return nil, fmt.Errorf("failed to load gateway-helm chart: %w", err)
 	}
 
-	actionConfig := new(action.Configuration)
-	helmClient := action.NewInstall(actionConfig)
-	helmClient.DryRun = true
-	helmClient.ClientOnly = true
-	helmClient.IncludeCRDs = true
-	helmClient.Namespace = DeploymentNamespace
-	helmClient.ReleaseName = ReleaseName
-
 	opts := &helmOpts{
 		Config: &helmConfig{EnvoyGateway: &helmEnvoyGateway{
 			Provider: &helmProvider{
@@ -199,7 +191,7 @@ func renderChart(scheme *runtime.Scheme) (*gatewayAPIResources, error) {
 		return nil, fmt.Errorf("failed to convert helm values: %w", err)
 	}
 
-	rel, err := helmClient.Run(chart, values)
+	rel, err := helm.Render(chart, values, ReleaseName, DeploymentNamespace, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render gateway-helm chart: %w", err)
 	}
@@ -470,9 +462,9 @@ func (pr *gatewayAPIImplementationComponent) ObjectsBeforeOverrides() ([]client.
 	// Helm-rendered envoy-gateway controller in calico-system.
 	objs = append(objs, pr.controllerObjects()...)
 
-	// Render each GatewayClass declared on the CR. The controller patches in
-	// the default [{Name: "tigera-gateway-class"}] when Spec.GatewayClasses is
-	// nil, so this loop is the single source of truth for what gets emitted.
+	// Render each GatewayClass declared on the CR. The controller defaults a nil
+	// Spec.GatewayClasses to [{Name: "tigera-gateway-class"}] in memory, so this
+	// loop is the single source of truth for what gets emitted.
 	for i := range pr.cfg.GatewayAPI.Spec.GatewayClasses {
 		className := pr.cfg.GatewayAPI.Spec.GatewayClasses[i].Name
 		proxy := pr.envoyProxyConfig(className, common.CalicoNamespace, pr.cfg.CustomEnvoyProxies[className], &(pr.cfg.GatewayAPI.Spec.GatewayClasses[i]))

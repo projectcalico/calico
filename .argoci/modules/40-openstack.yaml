@@ -8,9 +8,11 @@ defaults:
 steps:
   - name: openstack-tox
     depends: [check-python]
-    requests: {cpu: 1000m, memory: 1Gi}
-    services:
-      - docker
+    env:
+      - name: NATIVE_PYTHON
+        value: "true"
+    requests: {cpu: 1000m, memory: 3Gi}
+    useGoBuild: true
     commands: |
       cd networking-calico
       # Separate invocations: named as two targets, a parallel make would run

@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -93,7 +94,11 @@ func (r *realCommandRunner) Run(name string, args []string, opts ...Option) (str
 		"cmd": cmd.String(),
 		"dir": s.dir,
 	}).Debugf("Running %s command", name)
+	start := time.Now()
 	err := cmd.Run()
+	if s.timing != nil {
+		s.timing.WithFields(logrus.Fields{"duration": time.Since(start).Round(time.Second), "failed": err != nil}).Info("Finished")
+	}
 	out := strings.TrimSpace(outb.String())
 	if err != nil {
 		code := -1

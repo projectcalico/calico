@@ -12,7 +12,7 @@ function git_current_branch {
 
 # Get the last tag.
 function git_last_tag {
-    git describe --tags --abbrev=0
+    git describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --abbrev=0
 }
 
 # Autogenerate PEP 440 version based on current Git state.
@@ -97,7 +97,7 @@ function git_tags_back_to {
     cursor=HEAD
     num_tags=0
     while [ $num_tags -lt 10 ]; do
-	previous_tag=`git describe --tags --abbrev=0 $cursor`
+	previous_tag=`git describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --abbrev=0 $cursor`
 	if [ $previous_tag = $backstop_tag ]; then
 	    # We've found the last packaged release, so stop.
 	    break

@@ -156,6 +156,12 @@ func (s *PodServer) create(ctx context.Context, f *framework.Framework) (*v1.Pod
 			Selector: map[string]string{"pod-name": s.name},
 		},
 	}
+	if pod.Spec.HostNetwork {
+		// Host-networked servers get no separate IPv6 Service below, so this one
+		// has to carry both families on a dual-stack cluster.
+		preferDual := v1.IPFamilyPolicyPreferDualStack
+		v4Svc.Spec.IPFamilyPolicy = &preferDual
+	}
 	if svcCustomizer != nil {
 		svcCustomizer(v4Svc)
 	}

@@ -37,8 +37,7 @@ BINDIR=bin
 build: $(BINDIR)/node-driver-registrar-$(ARCH)
 
 protobuf proto/udsver.pb.go: proto/udsver.proto
-	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
-		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative udsver.proto'
+	$(DOCKER_GO_BUILD) sh -c 'protoc --proto_path=proto --go_out=proto --go-grpc_out=. --go_opt=paths=source_relative udsver.proto'
 	# Make sure the generated code won't cause a static-checks failure.
 	$(MAKE) fix-changed
 
@@ -47,9 +46,17 @@ UPSTREAM_REGISTRAR_REPO    ?= https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).g
 # https://github.com/kubernetes-csi/node-driver-registrar/commit/2d18e12bc5077c36cbd564be7eab9ea94c0c85fb
 UPSTREAM_REGISTRAR_TAG     ?= 2d18e12bc5077c36cbd564be7eab9ea94c0c85fb
 
-REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
+# Where the build sees the upstream checkout: mounted at its GOPATH location in the
+# build container, or in place when building natively.
+ifeq ($(NATIVE_GO_BUILD),true)
+REGISTRAR_SRC_DIR = $(CURDIR)/$(REGISTRAR_IMAGE)
+else
+REGISTRAR_SRC_DIR = /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT)
+endif
+
+REGISTRAR_TIGERA_BUILD_CMD="cd $(REGISTRAR_SRC_DIR) && \
 	go build -tags $(TAGS) -buildvcs=false -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
-REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
+REGISTRAR_UPSTREAM_BUILD_CMD="cd $(REGISTRAR_SRC_DIR) && make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
 
 ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 CGO_ENABLED=0
@@ -68,12 +75,23 @@ BUILD_PLATFORMS='windows amd64 amd64'
 REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 endif
 
+ifeq ($(NATIVE_GO_BUILD),true)
+REGISTRAR_RUN = env CGO_ENABLED=$(CGO_ENABLED)
+else
+REGISTRAR_RUN = $(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) \
+	-v $(REPO_ROOT)/pod2daemon/$(REGISTRAR_IMAGE):$(REGISTRAR_SRC_DIR):rw \
+	$(CALICO_BUILD)
+endif
+
 $(BINDIR)/node-driver-registrar-%: clone-registrar-upstream
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) \
-			-v $(REPO_ROOT)/pod2daemon/$(REGISTRAR_IMAGE):/go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT):rw \
-			$(CALICO_BUILD) \
-			/bin/bash -c $(REGISTRAR_BUILD_CMD)
-			mv $(REGISTRAR_IMAGE)/$(BINDIR)/csi-node-driver-registrar $@
+	$(REGISTRAR_RUN) /bin/bash -c $(REGISTRAR_BUILD_CMD)
+	mkdir -p $(dir $@)
+	mv $(REGISTRAR_IMAGE)/$(BINDIR)/csi-node-driver-registrar $@
+
+# Compiles what the binary's build does, without linking, to fill a build cache.
+# Same run, tags and directory as the build: each is part of the cache keys.
+compile-registrar: clone-registrar-upstream
+	$(REGISTRAR_RUN) /bin/bash -c "cd $(REGISTRAR_SRC_DIR) && go list -tags $(TAGS) -export -deps ./cmd/csi-node-driver-registrar >/dev/null"
 
 clone-registrar-upstream:
 	$(call fetch_repo,$(UPSTREAM_REGISTRAR_REPO),$(UPSTREAM_REGISTRAR_TAG),$(REGISTRAR_IMAGE))
@@ -100,7 +118,8 @@ clean-registrar:
 ## Run the tests in a container. Useful for CI, Mac dev
 ut: $(SRC_FILES)
 	mkdir -p report
-	$(DOCKER_RUN) --privileged $(CALICO_BUILD) sh -c 'set -o pipefail && cd /go/src/$(PACKAGE_NAME) && go test -v ./... | go-junit-report > ./report/tests.xml'
+	$(if $(DOCKER_GO_BUILD_RECURSIVE),$(DOCKER_RUN) --privileged $(CALICO_BUILD)) \
+		sh -c 'set -o pipefail && go test -v ./... | go-junit-report > ./report/tests.xml'
 
 fv st:
 	@echo "No FVs or STs available"

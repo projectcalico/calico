@@ -34,7 +34,15 @@ func TestGit(t *testing.T) {
 				_, err := g.In("/repo").Version(true)
 				return err
 			},
-			want: Call{Name: "git", Args: []string{"describe", "--tags", "--always", "--long", "--abbrev=12", "--dirty"}, Dir: "/repo"},
+			want: Call{Name: "git", Args: []string{"describe", "--tags", "--match", "v[0-9]*.[0-9]*.[0-9]*", "--always", "--long", "--abbrev=12", "--dirty"}, Dir: "/repo"},
+		},
+		{
+			name: "latest tag matches only version tags, in the bound dir",
+			run: func(g GitRunner) error {
+				_, err := g.In("/repo").LatestTag("master")
+				return err
+			},
+			want: Call{Name: "git", Args: []string{"describe", "--tags", "--match", "v[0-9]*.[0-9]*.[0-9]*", "--abbrev=0", "master"}, Dir: "/repo"},
 		},
 		{
 			name: "branch runs in the bound dir",
@@ -50,7 +58,7 @@ func TestGit(t *testing.T) {
 				_, err := g.In("/repo").Dirty()
 				return err
 			},
-			want: Call{Name: "git", Args: []string{"describe", "--tags", "--always", "--long", "--abbrev=12", "--dirty"}, Dir: "/repo"},
+			want: Call{Name: "git", Args: []string{"describe", "--tags", "--match", "v[0-9]*.[0-9]*.[0-9]*", "--always", "--long", "--abbrev=12", "--dirty"}, Dir: "/repo"},
 		},
 		{
 			name: "repo root runs where the caller is",
@@ -80,8 +88,6 @@ func TestGit(t *testing.T) {
 	}{
 		{name: "dirty sees the -dirty suffix", check: func(g GitRunner) (bool, error) { return g.In("/repo").Dirty() }, out: "v3.30.0-0-gabc-dirty", want: true},
 		{name: "dirty on a clean tree", check: func(g GitRunner) (bool, error) { return g.In("/repo").Dirty() }, out: "v3.30.0-0-gabc"},
-		{name: "porcelain sees any status line", check: func(g GitRunner) (bool, error) { return g.In("/repo").Porcelain() }, out: "?? new.txt", want: true},
-		{name: "porcelain on a clean tree", check: func(g GitRunner) (bool, error) { return g.In("/repo").Porcelain() }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &Recorder{Reply: func(Call) (string, error) { return tc.out, nil }}

@@ -117,6 +117,9 @@ spec:
                               - message: notNets entries must be CIDRs
                                 reason: FieldValueInvalid
                                 rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -234,6 +237,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -271,6 +275,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -454,6 +465,9 @@ spec:
                               - message: notNets entries must be CIDRs
                                 reason: FieldValueInvalid
                                 rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -571,6 +585,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -608,6 +623,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -768,6 +790,9 @@ spec:
                               - message: notNets entries must be CIDRs
                                 reason: FieldValueInvalid
                                 rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -885,6 +910,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -922,6 +948,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                       http:
                         description:
                           HTTP contains match criteria that apply to HTTP
@@ -1105,6 +1138,9 @@ spec:
                               - message: notNets entries must be CIDRs
                                 reason: FieldValueInvalid
                                 rule: self.all(n, isCIDR(n))
+                              - message: a catch-all CIDR in notNets matches no traffic
+                                reason: FieldValueInvalid
+                                rule: self.all(n, n != '0.0.0.0/0' && n != '::/0')
                           notPorts:
                             description: |-
                               NotPorts is the negated version of the Ports field.
@@ -1222,6 +1258,7 @@ spec:
                                   Namespace specifies the namespace of the given Service. If left empty, the rule
                                   will match within this policy's namespace.
                                 maxLength: 253
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$
                                 type: string
                             type: object
                         type: object
@@ -1259,6 +1296,13 @@ spec:
                             rule:
                               "!has(self.services) || (!has(self.nets) || size(self.nets)
                               == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
+                          - message:
+                              a namespaceSelector that uses global() must be exactly
+                              global()
+                            reason: FieldValueInvalid
+                            rule:
+                              "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')
+                              || self.namespaceSelector.matches('^ *global[(] *[)] *$')"
                     required:
                       - action
                     type: object
@@ -1445,6 +1489,17 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
+                - message: services are not allowed in an egress rule source
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))"
+                - message: services are not allowed in an ingress rule destination
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.ingress) || self.ingress.all(r, !has(r.destination)
+                    || !has(r.destination.services))"
+                - message: HTTP match is not allowed in egress rules
+                  reason: FieldValueForbidden
+                  rule: "!has(self.egress) || self.egress.all(r, !has(r.http))"
           required:
             - metadata
             - spec

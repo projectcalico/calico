@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/api/config/crd"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1 "k8s.io/apiextensions-api/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/yaml"

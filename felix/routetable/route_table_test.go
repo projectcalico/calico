@@ -39,7 +39,12 @@ const routePriorityForTest int = 48931
 
 // routeKeyStr builds a mock dataplane route key string that includes table, CIDR, and priority.
 func routeKeyStr(table int, cidr string, priority int) string {
-	return fmt.Sprintf("%d-%s-%d", table, cidr, priority)
+	dst := ip.MustParseCIDROrIP(cidr).ToIPNet()
+	return mocknetlink.KeyForRoute(&netlink.Route{
+		Table:    table,
+		Dst:      &dst,
+		Priority: priority,
+	})
 }
 
 // mainRouteKey builds a route key string for the main routing table with the standard test priority.
@@ -132,7 +137,7 @@ var _ = Describe("RouteTable v6", func() {
 		}
 		rt.SetRoutes(RouteClassLocalWorkload, noopLink.LinkAttrs.Name, []Target{{
 			RouteKey: RouteKey{
-				CIDR:     ip.MustParseCIDROrIP("10.0.0.4/32"),
+				CIDR:     ip.MustParseCIDROrIP("fd00::4/128"),
 				Priority: routePriorityForTest,
 			},
 			DestMAC: mac1,
@@ -143,7 +148,7 @@ var _ = Describe("RouteTable v6", func() {
 		deleteLink := dataplane.AddIface(5, "cali5", true, true)
 		deleteRoute := netlink.Route{
 			LinkIndex: deleteLink.LinkAttrs.Index,
-			Dst:       mustParseCIDR("10.0.0.1/32"),
+			Dst:       mustParseCIDR("fd00::1/128"),
 			Type:      syscall.RTN_UNICAST,
 			Protocol:  FelixRouteProtocol,
 			Scope:     netlink.SCOPE_LINK,
@@ -152,7 +157,7 @@ var _ = Describe("RouteTable v6", func() {
 		dataplane.AddMockRoute(&deleteRoute)
 		deleteRoute2 := netlink.Route{
 			LinkIndex: deleteLink.LinkAttrs.Index,
-			Dst:       mustParseCIDR("10.0.0.2/32"),
+			Dst:       mustParseCIDR("fd00::2/128"),
 			Type:      syscall.RTN_UNICAST,
 			Protocol:  FelixRouteProtocol,
 			Scope:     netlink.SCOPE_LINK,
@@ -194,6 +199,29 @@ var _ = Describe("RouteTable v6", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(routeKeyStr(254, "fd00::1/128", 1024)))
 	})
+
+	DescribeTable("should not reprogram unchanged routes on resync",
+		func(targetType TargetType) {
+			link := dataplane.AddIface(10, "cali10", true, true)
+			rt.OnIfaceStateChanged(link.LinkAttrs.Name, link.LinkAttrs.Index, ifacemonitor.StateUp)
+			rt.RouteUpdate(RouteClassLocalWorkload, link.LinkAttrs.Name, Target{
+				RouteKey: RouteKey{CIDR: ip.MustParseCIDROrIP("fd00::1/128")},
+				Type:     targetType,
+			})
+			Expect(rt.Apply()).To(Succeed())
+			Expect(dataplane.RouteKeyToRoute).To(HaveKey(routeKeyStr(254, "fd00::1/128", 1024)))
+
+			dataplane.ResetDeltas()
+			rt.QueueResync()
+			Expect(rt.Apply()).To(Succeed())
+			Expect(dataplane.UpdatedRouteKeys).To(BeEmpty())
+			Expect(dataplane.AddedRouteKeys).To(BeEmpty())
+		},
+		Entry("workload route (link scope on IPv4)", TargetType("")),
+		Entry("link-local unicast", TargetTypeLinkLocalUnicast),
+		Entry("local (host scope on IPv4)", TargetTypeLocal),
+		Entry("VXLAN", TargetTypeVXLAN),
+	)
 })
 
 var _ = Describe("RouteTable", func() {
@@ -279,6 +307,7 @@ var _ = Describe("RouteTable", func() {
 			}
 			dataplane.AddMockRoute(&cali3Route)
 			gatewayRoute = netlink.Route{
+				Dst:       mustParseCIDR("0.0.0.0/0"),
 				Family:    unix.AF_INET,
 				LinkIndex: eth0.LinkAttrs.Index,
 				Type:      syscall.RTN_UNICAST,
@@ -883,7 +912,6 @@ var _ = Describe("RouteTable", func() {
 					Protocol:  deviceRouteProtocol,
 					Scope:     netlink.SCOPE_UNIVERSE,
 					Table:     unix.RT_TABLE_MAIN,
-					Flags:     syscall.RTNH_F_ONLINK,
 					MultiPath: []*netlink.NexthopInfo{
 						{
 							LinkIndex: addLink.LinkAttrs.Index,
@@ -967,7 +995,6 @@ var _ = Describe("RouteTable", func() {
 					Protocol:  deviceRouteProtocol,
 					Scope:     netlink.SCOPE_UNIVERSE,
 					Table:     unix.RT_TABLE_MAIN,
-					Flags:     syscall.RTNH_F_ONLINK,
 					MultiPath: []*netlink.NexthopInfo{
 						{
 							LinkIndex: addLink.LinkAttrs.Index,
@@ -992,8 +1019,17 @@ var _ = Describe("RouteTable", func() {
 				err = rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
 				// It's ok to have one interface down on a multi-path route.
-				// Kernel keeps the route in place.
-				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(Equal(expectedRoute),
+				// Kernel keeps the route in place, marking the next hop dead.
+				routeWithDeadNextHop := expectedRoute
+				routeWithDeadNextHop.MultiPath = []*netlink.NexthopInfo{
+					{
+						LinkIndex: addLink.LinkAttrs.Index,
+						Gw:        net.ParseIP("10.0.0.6").To4(),
+						Flags:     unix.RTNH_F_ONLINK | unix.RTNH_F_DEAD | unix.RTNH_F_LINKDOWN,
+					},
+					expectedRoute.MultiPath[1],
+				}
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(Equal(routeWithDeadNextHop),
 					"Route should not be removed when only one interface is down")
 
 				By("Bringing other interface down")
@@ -1059,7 +1095,6 @@ var _ = Describe("RouteTable", func() {
 					Protocol:  deviceRouteProtocol,
 					Scope:     netlink.SCOPE_UNIVERSE,
 					Table:     unix.RT_TABLE_MAIN,
-					Flags:     syscall.RTNH_F_ONLINK,
 					MultiPath: []*netlink.NexthopInfo{
 						{
 							LinkIndex: addLink.LinkAttrs.Index,
@@ -1122,7 +1157,6 @@ var _ = Describe("RouteTable", func() {
 					Protocol: deviceRouteProtocol,
 					Scope:    netlink.SCOPE_UNIVERSE,
 					Table:    unix.RT_TABLE_MAIN,
-					Flags:    syscall.RTNH_F_ONLINK,
 					MTU:      1400,
 					MultiPath: []*netlink.NexthopInfo{
 						{
@@ -1748,6 +1782,7 @@ var _ = Describe("RouteTable", func() {
 							LinkIndex: cali1.LinkAttrs.Index,
 							Dst:       mustParseCIDR("10.0.0.22/32"),
 							Type:      syscall.RTN_UNICAST,
+							Protocol:  FelixRouteProtocol,
 							Scope:     netlink.SCOPE_LINK,
 							Table:     unix.RT_TABLE_MAIN,
 						}
@@ -2386,6 +2421,115 @@ var _ = Describe("RouteTable with multiple priorities", func() {
 				Expect(dataplane.DeletedRouteKeys).To(HaveKey(felixKey))
 			})
 		})
+
+		Describe("OnProgrammed callbacks", func() {
+			const cidr = "10.0.0.7/32"
+			var numCalls int
+			key := routeKeyStr(254, cidr, highPriority)
+
+			targetWithCallback := func() Target {
+				return Target{
+					RouteKey: RouteKey{
+						CIDR:     ip.MustParseCIDROrIP(cidr),
+						Priority: highPriority,
+					},
+					OnProgrammed: func() { numCalls++ },
+				}
+			}
+
+			// Simulates something other than Felix deleting the route, so that the next resync
+			// has to write it again.
+			removeRouteBehindFelixsBack := func() {
+				route := dataplane.RouteKeyToRoute[key]
+				dataplane.RemoveMockRoute(&route)
+				rt.QueueResync()
+			}
+
+			BeforeEach(func() {
+				numCalls = 0
+			})
+
+			It("should call the callback once the route is written, and not again while it is unchanged", func() {
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{targetWithCallback()})
+				Expect(numCalls).To(Equal(0), "callback should not be called before Apply")
+				Expect(rt.Apply()).To(Succeed())
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(key))
+				Expect(numCalls).To(Equal(1))
+
+				Expect(rt.Apply()).To(Succeed())
+				rt.QueueResync()
+				Expect(rt.Apply()).To(Succeed())
+				Expect(numCalls).To(Equal(1))
+			})
+
+			It("should call the callback only after a failed write has been retried", func() {
+				// Apply() fails the first write, then retries inline, so both attempts happen
+				// within the one Apply() call.  The callback checks the dataplane itself, to show
+				// that it is only called once the route is really there.
+				var routeInKernelAtEachCall []bool
+				target := targetWithCallback()
+				target.OnProgrammed = func() {
+					_, inKernel := dataplane.RouteKeyToRoute[key]
+					routeInKernelAtEachCall = append(routeInKernelAtEachCall, inKernel)
+				}
+				dataplane.FailuresToSimulate = mocknetlink.FailNextRouteReplace
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{target})
+				Expect(rt.Apply()).To(Succeed())
+
+				Expect(dataplane.FailuresToSimulate).To(BeZero(), "the simulated write failure should have been used")
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(key))
+				Expect(routeInKernelAtEachCall).To(Equal([]bool{true}),
+					"callback should be called once, after the successful retry, and not for the failed write")
+			})
+
+			It("should call the callback again when a resync has to rewrite the route", func() {
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{targetWithCallback()})
+				Expect(rt.Apply()).To(Succeed())
+				removeRouteBehindFelixsBack()
+				Expect(rt.Apply()).To(Succeed())
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(key))
+				Expect(numCalls).To(Equal(2))
+			})
+
+			It("should not call the callback for a route that the kernel already has", func() {
+				dataplane.AddMockRoute(&netlink.Route{
+					Family:    unix.AF_INET,
+					LinkIndex: cali1.LinkAttrs.Index,
+					Dst:       mustParseCIDR(cidr),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  FelixRouteProtocol,
+					Scope:     netlink.SCOPE_LINK,
+					Table:     unix.RT_TABLE_MAIN,
+					Priority:  highPriority,
+				})
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{targetWithCallback()})
+				dataplane.ResetDeltas()
+				Expect(rt.Apply()).To(Succeed())
+				Expect(dataplane.AddedRouteKeys).NotTo(HaveKey(key), "route should not have been rewritten")
+				Expect(dataplane.UpdatedRouteKeys).NotTo(HaveKey(key), "route should not have been rewritten")
+				Expect(numCalls).To(Equal(0))
+			})
+
+			It("should forget the callback when the target is replaced by one without", func() {
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{targetWithCallback()})
+				Expect(rt.Apply()).To(Succeed())
+				target := targetWithCallback()
+				target.OnProgrammed = nil
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{target})
+				removeRouteBehindFelixsBack()
+				Expect(rt.Apply()).To(Succeed())
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(key))
+				Expect(numCalls).To(Equal(1))
+			})
+
+			It("should forget the callback when the route is removed", func() {
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{targetWithCallback()})
+				Expect(rt.Apply()).To(Succeed())
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", nil)
+				Expect(rt.Apply()).To(Succeed())
+				Expect(rt.OnProgrammedCallbacksLen()).To(Equal(0))
+			})
+		})
 	})
 })
 
@@ -2448,6 +2592,7 @@ var _ = Describe("RouteTable (main table)", func() {
 			}
 			dataplane.AddMockRoute(&cali1RouteTable100)
 			gatewayRoute = netlink.Route{
+				Dst:       mustParseCIDR("0.0.0.0/0"),
 				Family:    unix.AF_INET,
 				LinkIndex: eth0.LinkAttrs.Index,
 				Type:      syscall.RTN_UNICAST,
@@ -2552,6 +2697,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 			}
 			dataplane.AddMockRoute(&caliRouteTable100)
 			gatewayRoute = netlink.Route{
+				Dst:       mustParseCIDR("0.0.0.0/0"),
 				Family:    unix.AF_INET,
 				LinkIndex: eth0.LinkAttrs.Index,
 				Type:      syscall.RTN_UNICAST,

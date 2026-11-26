@@ -11,9 +11,10 @@ WINDOWS_IMAGE         ?=$(NODE_IMAGE)-windows
 # using targets within this makefile.
 BUILD_IMAGES ?=$(NODE_IMAGE)
 
-# Paths within the build container for BPF source.
-LIBBPF_CONTAINER_PATH=$(BUILD_REPO_ROOT)/felix/bpf-gpl/libbpf/src/
-BPFGPL_CONTAINER_PATH=$(BUILD_REPO_ROOT)/felix/bpf-gpl/
+# Paths within the build container for BPF source. Spelled as felix's: cgo's
+# flags are part of a package's build cache key, character for character.
+LIBBPF_CONTAINER_PATH=$(BUILD_REPO_ROOT)/felix/bpf-gpl/libbpf/src
+BPFGPL_CONTAINER_PATH=$(BUILD_REPO_ROOT)/felix/bpf-gpl
 LIBBPF_FILE_CREATED=../felix/bpf-gpl/.libbpf-$(LIBBPF_VERSION)
 
 LOCAL_CHECKS = LIBBPF_FILE_CREATED
@@ -308,12 +309,9 @@ UT_PACKAGES_TO_SKIP?=tests/k8st
 ## Run the ginkgo tests.
 ut fv: $(LIBBPF_A) run-k8s-apiserver
 	mkdir -p report
-	$(DOCKER_RUN) \
-	-v $(CERTS_PATH):/home/user/certs \
-	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
-	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
-	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
-	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --skip-package $(UT_PACKAGES_TO_SKIP) --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
+	$(DOCKER_GO_BUILD_WITH_CERTS) sh -c 'cd $(BUILD_REPO_ROOT)/node && \
+		KUBECONFIG=$(TEST_KUBECONFIG) ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 CALICO_API_GROUP=$(CALICO_API_GROUP) \
+		ginkgo -r --skip-package $(UT_PACKAGES_TO_SKIP) --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
 
 ###############################################################################
 # System tests
@@ -466,22 +464,16 @@ release-publish-latest:
 $(WINDOWS_MOD_CACHED_FILES):
 
 $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp%: windows-packaging/config-bgp%
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-        $(GIT_CONFIG_SSH) \
-        cp -r ../confd/$< $@'; \
-        chmod +w $@
+	cp -r ../confd/$< $@
+	chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/%: windows-packaging/conf.d/%
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-        $(GIT_CONFIG_SSH) \
-        cp -r ../confd/$< $@'; \
-        chmod +w $@
+	cp -r ../confd/$< $@
+	chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/confd/templates/%: windows-packaging/templates/%
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-        $(GIT_CONFIG_SSH) \
-        cp -r ../confd/$< $@'; \
-        chmod +w $@
+	cp -r ../confd/$< $@
+	chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1:
 	$(call fetch_file,$(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1,$@)

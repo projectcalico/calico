@@ -24,8 +24,8 @@ import (
 	gomegatypes "github.com/onsi/gomega/types"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	apiextensionsv1 "k8s.io/apiextensions-api/pkg/apis/apiextensions/v1"
+	apiextensionsclient "k8s.io/apiextensions-api/pkg/client/clientset/clientset"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
@@ -600,6 +600,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ live migration route progra
 				Attrs: map[string]string{
 					ipam.AttributeNamespace: "default",
 					ipam.AttributePod:       source.Name,
+					ipam.AttributeVMIName:   vmiName,
 				},
 				Hostname: tc.Felixes[0].Hostname,
 			})
@@ -609,10 +610,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ live migration route progra
 					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNamespace: "default",
 						ipam.AttributePod:       source.Name,
+						ipam.AttributeVMIName:   vmiName,
 					},
 					AlternateOwnerAttrs: map[string]string{
 						ipam.AttributeNamespace: "default",
 						ipam.AttributePod:       target.Name,
+						ipam.AttributeVMIName:   vmiName,
 					},
 				}, nil)
 			Expect(err).NotTo(HaveOccurred())

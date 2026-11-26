@@ -16,6 +16,7 @@ package kubevirt
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"math/big"
@@ -39,6 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/kubernetes/test/e2e/framework"
+	e2ekubectl "k8s.io/kubernetes/test/e2e/framework/kubectl"
 	"k8s.io/utils/ptr"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -294,6 +296,52 @@ func (v *kubeVirtVM) FindVirtLauncherPod(ctx context.Context, f *framework.Frame
 		}
 	}
 	return nil, fmt.Errorf("no running virt-launcher pod found for VM %s (total pods: %d)", v.name, len(pods.Items))
+}
+
+// launcherPodMAC returns the eth0 MAC of the VM's virt-launcher pod on node.
+// With bridge binding KubeVirt moves the CNI-configured MAC off the original
+// eth0 and leaves it on a dummy eth0, so this is still the MAC the CNI set.
+// Matching on node, not phase, picks the target while the source is still up.
+func (v *kubeVirtVM) launcherPodMAC(ctx context.Context, f *framework.Framework, node string) string {
+	GinkgoHelper()
+	var podName string
+	Eventually(func() error {
+		pods, err := f.ClientSet.CoreV1().Pods(v.namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("kubevirt.io=virt-launcher,vm.kubevirt.io/name=%s", v.name),
+		})
+		if err != nil {
+			return err
+		}
+		var names []string
+		for _, pod := range pods.Items {
+			if pod.Spec.NodeName == node && pod.Status.Phase == corev1.PodRunning && pod.DeletionTimestamp == nil {
+				names = append(names, pod.Name)
+			}
+		}
+		if len(names) != 1 {
+			return fmt.Errorf("want one running virt-launcher pod for VM %s on node %s, got %v", v.name, node, names)
+		}
+		podName = names[0]
+		return nil
+	}, 1*time.Minute, 2*time.Second).Should(Succeed())
+
+	out, err := e2ekubectl.NewKubectlCommand(v.namespace,
+		"exec", podName, "-n", v.namespace, "-c", "compute", "--", "cat", "/sys/class/net/eth0/address").
+		WithTimeout(time.After(30 * time.Second)).
+		Exec()
+	Expect(err).NotTo(HaveOccurred(), "reading eth0's MAC in virt-launcher pod %s", podName)
+	return strings.ToLower(strings.TrimSpace(out))
+}
+
+// randomLocalMAC returns a random unicast, locally-administered MAC, so it
+// can't collide with a vendor-assigned address.
+func randomLocalMAC() string {
+	GinkgoHelper()
+	mac := make(net.HardwareAddr, 6)
+	_, err := rand.Read(mac)
+	Expect(err).NotTo(HaveOccurred())
+	mac[0] = (mac[0] | 0x02) &^ 0x01
+	return mac.String()
 }
 
 // setupAntiAffinityPod creates a long-running pod scheduled away from the

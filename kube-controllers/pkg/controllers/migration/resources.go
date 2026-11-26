@@ -16,6 +16,7 @@ package migration
 
 import (
 	"fmt"
+	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -131,7 +132,7 @@ func convertIPAMHandle(kvp *model.KVPair) (*apiv3.IPAMHandle, error) {
 	if !ok {
 		return nil, fmt.Errorf("unexpected key type for IPAMHandle: %T", kvp.Key)
 	}
-	name := handleKey.HandleID
+	name := strings.ToLower(handleKey.HandleID)
 
 	v3Handle := &apiv3.IPAMHandle{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
