@@ -68,23 +68,36 @@ func TestPublishCompletesPartialMount(t *testing.T) {
 	if !inMountNamespace(t) {
 		return
 	}
-	g := NewWithT(t)
-	ns, target := setUpMountTest(t)
 
-	// A publish that failed part-way leaves the tmpfs without the bind mount.
-	g.Expect(os.MkdirAll(target, 0o777)).To(Succeed())
-	g.Expect(syscall.Mount("tmpfs", target, "tmpfs", 0, "size=8K")).To(Succeed())
+	// A publish that failed part-way leaves the tmpfs without the bind mount. The
+	// directory for the bind mount is there only if the publish got as far as making it.
+	for name, bindDirExists := range map[string]bool{
+		"bind directory exists":  true,
+		"bind directory missing": false,
+	} {
+		t.Run(name, func(t *testing.T) {
+			g := NewWithT(t)
+			ns, target := setUpMountTest(t)
+			bindDir := filepath.Join(target, "nodeagent")
 
-	_, err := ns.NodePublishVolume(context.Background(), publishRequest(target))
-	g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(os.MkdirAll(target, 0o777)).To(Succeed())
+			g.Expect(syscall.Mount("tmpfs", target, "tmpfs", 0, "size=8K")).To(Succeed())
+			if bindDirExists {
+				g.Expect(os.Mkdir(bindDir, 0o777)).To(Succeed())
+			}
 
-	g.Expect(countMounts(t, target)).To(Equal(1))
-	g.Expect(countMounts(t, filepath.Join(target, "nodeagent"))).To(Equal(1))
-	g.Expect(credsFile(ns)).To(BeAnExistingFile())
+			_, err := ns.NodePublishVolume(context.Background(), publishRequest(target))
+			g.Expect(err).NotTo(HaveOccurred())
 
-	_, err = ns.NodeUnpublishVolume(context.Background(), unpublishRequest(target))
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(countMounts(t, target)).To(Equal(0))
+			g.Expect(countMounts(t, target)).To(Equal(1))
+			g.Expect(countMounts(t, bindDir)).To(Equal(1))
+			g.Expect(credsFile(ns)).To(BeAnExistingFile())
+
+			_, err = ns.NodeUnpublishVolume(context.Background(), unpublishRequest(target))
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(countMounts(t, target)).To(Equal(0))
+		})
+	}
 }
 
 func TestUnpublishRemovesStackedLayers(t *testing.T) {
@@ -161,9 +174,11 @@ func TestUnpublishReportsBusyBindMount(t *testing.T) {
 	defer func() { _ = busy.Close() }()
 
 	_, err = ns.NodeUnpublishVolume(context.Background(), unpublishRequest(target))
-	g.Expect(err).To(MatchError(ContainSubstring("failed to unmount " + bindDir)))
+	g.Expect(err).To(MatchError(ContainSubstring("nodeagent bind mount: " + syscall.EBUSY.Error())))
 	g.Expect(countMounts(t, target)).To(Equal(1))
 	g.Expect(countMounts(t, bindDir)).To(Equal(1))
+	g.Expect(filepath.Join(ns.config.NodeAgentWorkloadHomeDir, testVolumeID)).To(BeADirectory())
+	g.Expect(credsFile(ns)).To(BeAnExistingFile())
 
 	g.Expect(busy.Close()).To(Succeed())
 	_, err = ns.NodeUnpublishVolume(context.Background(), unpublishRequest(target))
