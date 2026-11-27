@@ -149,6 +149,7 @@ Cross-cutting:
 - **Update rule.** A warranted edit goes in the sub-design covering
   the area; this index is edited when the sub-design table, an
   `applies to` scope, or §1's architecture overview changes.
-- **Tests run under plain `go test`/ginkgo.** All Typha tests,
-  including the FV suite (`typha/fv-tests/`), run in-process with
-  no containers.
+- **Typha's own tests run under plain `go test`/ginkgo.** The UTs
+  and `typha/fv-tests/` run in-process with no containers.
+  `make fv` is different: it runs Felix's k8sfv suite against
+  Typha in the `calico/calico` image.
