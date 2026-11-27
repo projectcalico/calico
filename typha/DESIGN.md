@@ -1,74 +1,155 @@
-# Typha — Architecture
+<!--
+Copyright (c) 2026 Tigera, Inc. All rights reserved.
 
-Typha is a fan-out proxy between Felix instances and the
-datastore. It exists so that large clusters (typically >50
-nodes) can scale without each Felix opening its own datastore
-connection.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-- **Role.** Sits between Felix instances and the datastore
-  (etcd or the Kubernetes API). Connects once upstream, caches,
-  and fans the stream out to many downstream Felix instances.
-- **Effect.** Reduces datastore load and the number of upstream
-  watchers. Datastore latency to Felix becomes
-  Typha-amortised rather than per-Felix.
-- **Deployment.** Optional but recommended for clusters above
-  ~50 nodes. The typical operator-managed deployment runs
-  Typha as a DaemonSet or Deployment in front of the datastore.
+    http://www.apache.org/licenses/LICENSE-2.0
+-->
 
-## Cross-cutting
+# Typha — Architecture & Design Index
 
-- Combined `calico` binary, restart-on-config-change, health
-  reporting, build system: see the root
+Typha is a fan-out proxy for the
+[Syncer API](../design/syncer/DESIGN.md). It watches the
+datastore once — running one syncer per supported type — caches
+the resulting key/value state, and streams it to many clients
+(Felix, confd, `node` helpers) over TCP. Typha may reorder and
+coalesce updates relative to an in-process syncer, but the result
+is still a valid, eventually consistent Syncer stream, so client
+code works unchanged.
+
+This index gives the architecture overview (§1) and maps paths
+to the per-topic sub-designs under [`typha/design/`](./design/)
+(§2). Invariants and review criteria live in the sub-designs.
+
+## 1. Architecture overview
+
+### Why Typha exists
+
+With etcd as the datastore, every component watching the
+datastore directly worked at high scale. With the Kubernetes API
+server it did not: Calico's Node resource is backed by the
+built-in Kubernetes Node resource, which every kubelet updates
+every few seconds, so every watcher receives every kubelet
+heartbeat — O(n²) events in the number of nodes, 99.9% of them
+irrelevant to Calico. The API server struggled beyond ~50–100
+nodes.
+
+Typha fixes this by:
+
+- running **one** copy of each syncer type, so the API server
+  sees a handful of watchers instead of one per node per type;
+- **filtering out no-op updates** after conversion to the Calico
+  data model, so kubelet heartbeats never reach the clients;
+- exposing a **remote version of the Syncer API** so clients need
+  only minimal changes — the same callbacks, delivered over TCP.
+
+Keeping the Syncer API and its invariants unchanged is what made
+Typha cheap to introduce — and it remains a design constraint:
+Typha's output must be a valid Syncer stream. The scope is
+deliberately narrow: Typha only proxies the Syncer API; clients
+still contact the API server directly for everything else
+(writes, and reading the config needed to find Typha in the first
+place).
+
+```mermaid
+flowchart LR
+    kubelet["Kubernetes<br/>(kubelet)"] --> apiserver[API server]
+    cni[CNI plugin] --> apiserver
+    calicoctl --> apiserver
+    etcd[(etcd)] <--> apiserver
+    apiserver == "firehose<br/>of updates" ==> syncers
+    subgraph typha[Typha]
+        syncers["Syncers: convert to Calico<br/>data model, filter no-ops"] --> server[Sync server]
+    end
+    server -- "filtered<br/>updates" --> client
+    subgraph node["Node (× hundreds)"]
+        client[Typha client] --> felix[Felix] <--> dataplane[Dataplane]
+    end
+```
+
+### Data flow
+
+```
+Datastore syncers (one per SyncerType)
+   → SyncerCallbacksDecoupler
+   → ValidationFilter (Felix pipeline also: NodeCounter)
+   → SyncerCallbacksDecoupler
+   → snapcache.Cache ("breadcrumb" snapshot+deltas cache)
+   → syncserver.Server
+   → per-connection goroutines → TCP/TLS → clients
+```
+
+The daemon (`pkg/daemon/daemon.go`) builds one such pipeline per
+`SyncerType` (`felix`, `bgp`, `tunnel-ip-allocation`,
+`node-status` — see `pkg/syncproto`). Each connecting client asks
+for one syncer type in its handshake and is attached to that
+pipeline's cache.
+
+The two design centrepieces:
+
+- **The breadcrumb cache** (`pkg/snapcache`): a copy-on-write
+  B-tree of the datastore state. After each batch of updates the
+  cache publishes a "Breadcrumb" — an O(1) snapshot of the tree
+  plus the deltas since the previous crumb — onto a linked list.
+  A new client sends the current crumb's snapshot, then follows
+  the list, sending only deltas; the cache's writer never blocks
+  on slow clients.
+- **Shared serialization**: KVs are serialized once, in the
+  cache, not per client. When many clients connect at once, the
+  whole compressed snapshot byte-stream is also generated once
+  per syncer type and compression algorithm, and shared
+  (`pkg/syncserver/snap_precalc.go`).
+
+Key orientation files: `pkg/daemon/daemon.go`,
+`pkg/snapcache/cache.go`, `pkg/syncserver/sync_server.go`,
+`pkg/syncproto/sync_proto.go` (protocol doc comment),
+`pkg/syncclient/sync_client.go`.
+
+### Deployment shape
+
+Typha runs as a Deployment (Linux-only), typically sized at
+roughly one replica per 100–200 nodes (a conservative figure;
+one Typha can serve several hundred clients). Clients discover
+Typha instances via the Kubernetes EndpointSlices of the
+`calico-typha` Service and pick one at random (preferring a
+Typha on their own node — see
+[`client.md`](./design/client.md)). Load-balancing across
+replicas is server-driven: each Typha computes a fair-share
+connection cap from the node and Typha counts and sheds random
+connections when over it (see [`server.md`](./design/server.md)).
+Replica count is managed outside this repo (tigera/operator);
+there is no autoscaler in the monorepo.
+
+## 2. Sub-design index
+
+Per-topic design docs under [`typha/design/`](./design/). Each is
+the authoritative source for its area's architecture, invariants,
+and review notes. A PR that touches files across multiple
+"applies to" scopes must load every matching sub-design.
+
+| Topic | Applies to |
+|---|---|
+| [protocol](./design/protocol.md) — wire protocol, handshake, compression, version skew | `typha/pkg/syncproto/**` (and any change to what goes on the wire) |
+| [server](./design/server.md) — daemon pipeline, breadcrumb cache, sync server, connection management | `typha/pkg/daemon/**`, `typha/pkg/calc/**`, `typha/pkg/validator/**`, `typha/pkg/snapcache/**`, `typha/pkg/syncserver/**`, `typha/pkg/k8s/**`, `typha/pkg/config/**` |
+| [client](./design/client.md) — client library, discovery, reconnection | `typha/pkg/syncclient/**`, `typha/pkg/discovery/**`, `typha/pkg/syncclientutils/**`, `typha/pkg/tlsutils/**` |
+
+Cross-cutting:
+
+- The Syncer API contract Typha proxies:
+  [`design/syncer/DESIGN.md`](../design/syncer/DESIGN.md).
+- The consumer side in Felix:
+  [`felix/design/calc-graph.md`](../felix/design/calc-graph.md).
+- Combined `calico` binary, health reporting, build system: root
   [`DESIGN.md`](../DESIGN.md).
-- Felix's view of Typha (the consumer side) is documented in
-  [`felix/DESIGN.md`](../felix/DESIGN.md) §1 under the data
-  flow / lifecycle sections.
 
-## Sync protocol compression
+## 3. For coding agents and reviewers
 
-The Felix-facing sync protocol supports optional compression of the
-server-to-client stream (client-to-server messages are small and stay
-uncompressed).
-
-- **Negotiation.** The client lists the algorithms it supports (zstd,
-  snappy) in its hello message. The server picks the first algorithm
-  from its own preference order that the client supports. The default
-  order is zstd then snappy: zstd compresses the sync data to roughly
-  half the size that snappy manages (see
-  [`docs/compression-analysis.md`](docs/compression-analysis.md)), and
-  snappy remains as the fallback for older clients. Compression also
-  requires the client to support decoder restart; otherwise the stream
-  stays uncompressed.
-- **Switching invariant.** The server changes the stream encoding only
-  via `MsgDecoderRestart`, which is a hard boundary. On the server, the
-  restart message is the last data in the old stream: the server writes
-  it, then closes the stream, and sends no bytes in the new encoding
-  until the client ACKs. On the client, decoding the restart message
-  therefore means the old stream is fully consumed; the client discards
-  its decompressor and creates a fresh one for the new stream, whatever
-  the algorithm. Both sides access compression only through the
-  `Compressor`/`Decompressor` interfaces in `pkg/syncproto`, which
-  document and enforce the contract this depends on: a stream ends on
-  its last byte of data, and a decompressor reads no further. Streams
-  carry no terminator, so a reader that runs past the end of one sees a
-  truncated stream rather than a clean end; the protocol never does,
-  because the restart message says where the stream ends.
-- **Cached binary snapshots.** For each (syncer type × configured
-  algorithm) the server pre-compresses the current snapshot once and
-  streams the same bytes to every new client, instead of re-encoding
-  per connection. The cached stream ends with an embedded
-  `MsgDecoderRestart`; after the client ACKs it, the server starts a
-  fresh compressed stream for delta updates on that connection.
-- **Trust boundaries.** The client drops the connection if a
-  `MsgDecoderRestart` names an algorithm it did not advertise, and its
-  zstd decoder rejects frames that declare a window larger than the cap
-  in `pkg/syncproto` (encoders there stay well under it). Both bound
-  what a misbehaving peer can make the other side do. The server never
-  decompresses client data, and it caps each inbound message at 1MiB.
-
-## Gaps
-
-This doc is currently a stub apart from the compression section.
-Sections to flesh out as the content grows: fan-out architecture
-and connection management, the snapshot+delta protocol Felix
-consumes, scaling characteristics, configuration surface.
+- **Update rule.** A warranted edit goes in the sub-design covering
+  the area; this index is edited when the sub-design table, an
+  `applies to` scope, or §1's architecture overview changes.
+- **Typha's own tests run under plain `go test`/ginkgo.** The UTs
+  and `typha/fv-tests/` run in-process with no containers.
+  `make fv` is different: it runs Felix's k8sfv suite against
+  Typha in the `calico/calico` image.
