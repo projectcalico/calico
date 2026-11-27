@@ -512,7 +512,11 @@ func createAndAttachVxlanHostEP(epName string, hnsNetwork *hcsshim.HNSNetwork, s
 
 	// 1. Check if the HNSEndpoint exists and has the expected settings
 	existingEndpoint, err := hcsshim.GetHNSEndpointByName(epName)
-	if err == nil && existingEndpoint.VirtualNetwork == hnsNetwork.Id {
+	// HNS reports the network ID in upper case on the network but in lower case on the
+	// endpoint's VirtualNetwork field, so the IDs must be compared case-insensitively.
+	// Otherwise the endpoint is always treated as stale and is deleted and recreated on
+	// every CNI ADD.
+	if err == nil && strings.EqualFold(existingEndpoint.VirtualNetwork, hnsNetwork.Id) {
 		// Check policies if there is PA type
 		targetType := "PA"
 		for _, policy := range existingEndpoint.Policies {
