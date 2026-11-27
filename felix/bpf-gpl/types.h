@@ -181,6 +181,9 @@ enum cali_state_flags {
 	/* CALI_ST_HOST_ORIGIN is set when a to-workload packet came from the
 	 * host namespace. */
 	CALI_ST_HOST_ORIGIN	  = 0x20000,
+	/* CALI_ST_CTLB_REVERTED is set when pre_nat_ip_dst/dport hold the CTLB'd
+	 * service, not the header's destination. */
+	CALI_ST_CTLB_REVERTED	  = 0x40000,
 };
 
 struct cali_tc_ctx {

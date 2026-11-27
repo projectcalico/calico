@@ -689,6 +689,7 @@ syn_force_policy:
 			CALI_DEBUG("Got cali_ct_nats entry; flow was NATted by CTLB.");
 			ctx->state->pre_nat_ip_dst = revnat->ip;
 			ctx->state->pre_nat_dport = ctx_port_to_host(revnat->port);
+			ctx->state->flags |= CALI_ST_CTLB_REVERTED;
 		}
 	}
 
