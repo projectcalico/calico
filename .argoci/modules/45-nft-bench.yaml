@@ -7,31 +7,26 @@ defaults:
 
 steps:
   - name: nft-bench
-    timeout: 30m
+    # The test binary builds cold: the go cache disk attaches in one zone only,
+    # and one machine type in one zone stocks out.
+    timeout: 45m
     secretBundles:
       - name: banzai-secrets
         keys:
           - name: LENS_ELASTICSEARCH_USER
           - name: LENS_ELASTICSEARCH_TOKEN
     checkout: true
-    goCache: read
     runOnVM:
       createVM:
         # Two vCPUs, matching what this has always been measured on. Any fixed
         # size works; changing it puts a step in the trend that is not a code
-        # change. The cache disk attaches only in this project and zone.
+        # change.
         machineType: e2-standard-2
-        project: tigera-cc-dev
-        zones: [us-central1-a]
-        vmImageProject: unique-caldron-775
-      project: tigera-cc-dev
       env: [LENS_ELASTICSEARCH_USER, LENS_ELASTICSEARCH_TOKEN]
       source: |
         set -euo pipefail
         # Kept even when the run fails, so a bad number can be looked at.
         trap 'artifact push job artifacts/perf || true' EXIT
-        go_env=$(.argoci/scripts/vm-go-cache nft-bench) || exit 1
-        eval "$go_env"
         sudo apt-get update -y && sudo apt-get install -y nftables
         make -C felix bin/nft.test
         make bin/send-perf-results
