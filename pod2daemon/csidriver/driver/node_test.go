@@ -16,6 +16,7 @@ package driver
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -208,24 +209,32 @@ func TestUnpublishAfterNodeReboot(t *testing.T) {
 // not, it re-runs the test in a child process with its own mount namespace and
 // returns false, so that the caller returns and the child's result stands.
 //
-// The child is root in a new user namespace unless the test already runs as
-// root, so the tests need no privileges and never touch the host's mounts.
+// The child gets a user namespace too when the test is not root, or is root
+// without the right to make a mount namespace, as in an unprivileged container.
+// So the tests need no privileges and never touch the host's mounts.
 func inMountNamespace(t *testing.T) bool {
 	t.Helper()
 	if os.Getenv(mountNamespaceEnv) != "" {
 		return true
 	}
 
-	cmd := exec.Command(os.Args[0], "-test.run=^"+t.Name()+"$", "-test.v")
-	cmd.Env = append(os.Environ(), mountNamespaceEnv+"=1")
-	cmd.SysProcAttr = &syscall.SysProcAttr{Cloneflags: syscall.CLONE_NEWNS}
-	if os.Geteuid() != 0 {
-		cmd.SysProcAttr.Cloneflags |= syscall.CLONE_NEWUSER
-		cmd.SysProcAttr.UidMappings = []syscall.SysProcIDMap{{ContainerID: 0, HostID: os.Getuid(), Size: 1}}
-		cmd.SysProcAttr.GidMappings = []syscall.SysProcIDMap{{ContainerID: 0, HostID: os.Getgid(), Size: 1}}
+	run := func(userNamespace bool) ([]byte, error) {
+		cmd := exec.Command(os.Args[0], "-test.run=^"+t.Name()+"$", "-test.v")
+		cmd.Env = append(os.Environ(), mountNamespaceEnv+"=1")
+		cmd.SysProcAttr = &syscall.SysProcAttr{Cloneflags: syscall.CLONE_NEWNS}
+		if userNamespace {
+			cmd.SysProcAttr.Cloneflags |= syscall.CLONE_NEWUSER
+			cmd.SysProcAttr.UidMappings = []syscall.SysProcIDMap{{ContainerID: 0, HostID: os.Getuid(), Size: 1}}
+			cmd.SysProcAttr.GidMappings = []syscall.SysProcIDMap{{ContainerID: 0, HostID: os.Getgid(), Size: 1}}
+		}
+		return cmd.CombinedOutput()
 	}
 
-	out, err := cmd.CombinedOutput()
+	root := os.Geteuid() == 0
+	out, err := run(!root)
+	if root && errors.Is(err, syscall.EPERM) {
+		out, err = run(true)
+	}
 	t.Logf("output of the test in its own mount namespace:\n%s", out)
 	if err != nil {
 		// Fail rather than skip: a skipped mount test looks like a pass.
